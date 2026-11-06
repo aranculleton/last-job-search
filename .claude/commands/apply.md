@@ -189,8 +189,8 @@ Read only the reference files you do not yet have:
 **Resolve the active template (do this once, reuse everywhere below):** for each `ACTIVE-TEMPLATE` block in `profile/templates/ACTIVE.md` (written by `/add-template`; `cv` for the resume, `cover_letters` for the letter), read its declared **source extension** and **compile command** - these override the stock `.tex`/lualatex (CV) and `.tex`/xelatex (cover letter) defaults for the rest of this workflow. Call these `<CV_EXT>`/`<CV_COMPILE>` and `<COVER_EXT>`/`<COVER_COMPILE>`; where no block is present, they default to `.tex`, the stock lualatex command, and the stock xelatex command respectively. Every `.tex` reference below is really `<CV_EXT>` or `<COVER_EXT>` - stock behavior is unchanged, this only matters when a custom template is active.
 
 Also read the most recent existing CV and cover letter files for concrete structural reference (one of each is enough). In every filename in this command, `<Prefix>` is `identity.file_prefix` in `profile/person.json`:
-- Read any existing `cv/<Prefix>_Resume_*<CV_EXT>` file as a structural reference
-- Read any existing `cover_letters/<Prefix>_Cover_Letter_*<COVER_EXT>` or `cover_letters/Cover_*<COVER_EXT>` file as a structural reference
+- Read any existing `cv/<Prefix>_*_Resume<CV_EXT>` file as a structural reference
+- Read any existing `cover_letters/<Prefix>_*_Cover_Letter<COVER_EXT>` or `cover_letters/Cover_*<COVER_EXT>` file as a structural reference
 
 *A claim is grounded when a file `profile/person.json` `grounding.sources` names carries it (CLAUDE.md, "The person": by default `profile/01-candidate-profile.md`, `profile/CLAUDE.md`'s Candidate Profile section and `profile/bullets.py`), and `01` wins where they disagree. Existing tailored resumes, and an older resume `profile/CLAUDE.md` names, may be read for structure and phrasing only, never as a source of claims: a fact only they carry is written into `01` first. Do **not** read `cv/main_example.tex` as a fact source: it is an unpopulated upstream template and contributes nothing.*
 
@@ -201,7 +201,7 @@ Also read the most recent existing CV and cover letter files for concrete struct
 
 *In both filenames below, `<company>_<role>` is derived by the **Subfolder naming** rule in `documents/README.md` - the same rule `/outcome` Step 1.4 uses for the archive folder, so a `/` or other path character in a company or role name can never split the filename across directories.*
 
-### CV (`cv/<Prefix>_Resume_<ABBR><CV_EXT>`)
+### CV (`cv/<Prefix>_<ABBR>_Resume<CV_EXT>`)
 - In the **Document language** set in `profile/CLAUDE.md`'s Identity section and `profile/person.json` (`documents.spelling`), with only the per-posting exception rule 7 in `03-writing-style.md` allows. Never switch language per posting - the document language is a profile-level choice, so all resumes stay consistent and reusable
 - Follow the moderncv/banking format from `05-cv-templates.md`
 - Tailor the profile statement and experience bullets to the specific role
@@ -215,7 +215,7 @@ Also read the most recent existing CV and cover letter files for concrete struct
   tail sections will spill; cut before the first compile, not after the third.
 - **Grounding Audit:** Before writing to disk, audit all tailored bullet points against the grounding sources (`profile/person.json` `grounding.sources`; by default `profile/01-candidate-profile.md`, `profile/CLAUDE.md`'s Candidate Profile section and `profile/bullets.py`) to verify that all dates, roles, and metrics match exactly (zero profile drift or fabrication).
 
-### Cover Letter (`cover_letters/<Prefix>_Cover_Letter_<ABBR><COVER_EXT>`)
+### Cover Letter (`cover_letters/<Prefix>_<ABBR>_Cover_Letter<COVER_EXT>`)
 - **Write in the Document language** set in `profile/CLAUDE.md`'s Identity section and `profile/person.json` (`documents.spelling`), with only the per-posting exception rule 7 in `03-writing-style.md` allows. A posting requiring a language outside the candidate's Languages table already failed the Language Gate in Step 1 and was never reached here.
 - Follow the structure from `06-cover-letter-templates.md`
 - Use the `cover.cls` template
@@ -340,11 +340,11 @@ Compare every date, employer, job title, and quantitative metric in both drafts 
 ### 4. Drafts to Review
 Both drafts are provided inline below. Do NOT use the Read tool on the draft files - use these exact texts.
 
-<CV_DRAFT file="cv/<Prefix>_Resume_<ABBR><CV_EXT>">
+<CV_DRAFT file="cv/<Prefix>_<ABBR>_Resume<CV_EXT>">
 <INSERT_CV_DRAFT_HERE>
 </CV_DRAFT>
 
-<COVER_LETTER_DRAFT file="cover_letters/<Prefix>_Cover_Letter_<ABBR><COVER_EXT>">
+<COVER_LETTER_DRAFT file="cover_letters/<Prefix>_<ABBR>_Cover_Letter<COVER_EXT>">
 <INSERT_COVER_LETTER_DRAFT_HERE>
 </COVER_LETTER_DRAFT>
 
@@ -361,7 +361,7 @@ Return your feedback in **two parts**:
 A JSON array of concrete edits the drafter can apply directly without re-reading the files. Each edit is an object:
 ```json
 {
-  "file": "cv/<Prefix>_Resume_<ABBR><CV_EXT>" | "cover_letters/<Prefix>_Cover_Letter_<ABBR><COVER_EXT>",
+  "file": "cv/<Prefix>_<ABBR>_Resume<CV_EXT>" | "cover_letters/<Prefix>_<ABBR>_Cover_Letter<COVER_EXT>",
   "old_string": "<exact text currently in the draft>",
   "new_string": "<replacement text>",
   "reason": "<one-line rationale: keyword match / company angle / reframing / style / grounding>"
@@ -412,8 +412,8 @@ Use `<CV_COMPILE>` and `<COVER_COMPILE>` resolved in Step 2H (the active templat
 
 ```bash
 export TEXMFHOME="$PWD/texmf"   # vendored icon fonts, texmf/README.md
-cd cv && lualatex -interaction=nonstopmode <Prefix>_Resume_<ABBR>.tex
-cd ../cover_letters && xelatex -interaction=nonstopmode <Prefix>_Cover_Letter_<ABBR>.tex
+cd cv && lualatex -interaction=nonstopmode <Prefix>_<ABBR>_Resume.tex
+cd ../cover_letters && xelatex -interaction=nonstopmode <Prefix>_<ABBR>_Cover_Letter.tex
 ```
 
 - **Stock CV** uses **lualatex** - pdflatex fails on modern MiKTeX with fontawesome5 font-expansion errors. lualatex handles the same sources cleanly.
@@ -432,9 +432,9 @@ So check the exit code, and do not treat the appearance of a PDF as success:
 
 ```bash
 export TEXMFHOME="$PWD/texmf"   # vendored icon fonts, texmf/README.md
-cd cv && lualatex -interaction=nonstopmode <Prefix>_Resume_<ABBR>.tex; echo "exit=$?"
-cd ../cover_letters && xelatex -interaction=nonstopmode <Prefix>_Cover_Letter_<ABBR>.tex; echo "exit=$?"
-grep -c "fontspec Error" <Prefix>_Cover_Letter_<ABBR>.log
+cd cv && lualatex -interaction=nonstopmode <Prefix>_<ABBR>_Resume.tex; echo "exit=$?"
+cd ../cover_letters && xelatex -interaction=nonstopmode <Prefix>_<ABBR>_Cover_Letter.tex; echo "exit=$?"
+grep -c "fontspec Error" <Prefix>_<ABBR>_Cover_Letter.log
 ```
 
 A non-zero exit, or any `fontspec Error` in the log, is a failed compile whatever the PDF
@@ -444,13 +444,13 @@ looks like. Fix it and re-compile until both exit 0 and the font count is 0.
 
 Read both PDFs via the Read tool and verify:
 
-**CV (`cv/<Prefix>_Resume_<ABBR>.pdf`):**
+**CV (`cv/<Prefix>_<ABBR>_Resume.pdf`):**
 - [ ] **Exactly 1 page** (2 only with the `05-cv-templates.md` exception invoked and named)
 - [ ] No orphaned `\cventry` titles - a job/education title line must never sit alone at the bottom of page 1 with its bullets on page 2. This is the most common failure.
 - [ ] Section headings are not isolated at the top of page 2 with only 1-2 lines below
 - [ ] No awkward whitespace gaps
 
-**Cover letter (`cover_letters/<Prefix>_Cover_Letter_<ABBR>.pdf`):**
+**Cover letter (`cover_letters/<Prefix>_<ABBR>_Cover_Letter.pdf`):**
 - [ ] Exactly 1 page
 - [ ] Signature block visible, not cut off or pushed to a second page
 - [ ] Bullet list font matches surrounding body text (both should be Raleway-Medium)
@@ -476,13 +476,13 @@ An ATS parser reads the PDF's embedded **text layer**, not the rendered page - a
 **1. Extract the text layer:**
 
 ```bash
-python tools/verify_pdf.py cv/<Prefix>_Resume_<ABBR>.pdf --dump-text cv/<Prefix>_Resume_<ABBR>.txt
+python tools/verify_pdf.py cv/<Prefix>_<ABBR>_Resume.pdf --dump-text cv/<Prefix>_<ABBR>_Resume.txt
 ```
 
 The command prints `extractor: pypdf` or `extractor: pdftotext`. Record that name in the Step 6 report. Read the `.txt` file. If that tool is unavailable, the Poppler fallback is:
 
 ```bash
-cd cv && pdftotext -layout -enc UTF-8 <Prefix>_Resume_<ABBR>.pdf <Prefix>_Resume_<ABBR>.txt
+cd cv && pdftotext -layout -enc UTF-8 <Prefix>_<ABBR>_Resume.pdf <Prefix>_<ABBR>_Resume.txt
 ```
 
 **2. Parseability checks** on the extracted text:
@@ -528,8 +528,8 @@ custom-template path, three guards run in one command each and catch what readin
 Run all three. A finding is a revision, not a note in the report.
 
 ```bash
-python3 tools/voice_check.py cover_letters/<Prefix>_Cover_Letter_<ABBR>.tex
-python3 tools/check_numbers.py cv/<Prefix>_Resume_<ABBR>.tex
+python3 tools/voice_check.py cover_letters/<Prefix>_<ABBR>_Cover_Letter.tex
+python3 tools/check_numbers.py cv/<Prefix>_<ABBR>_Resume.tex
 python3 tools/voice_check.py --corpus cover_letters/*.tex documents/applications/*/outreach.md
 ```
 
@@ -567,8 +567,8 @@ One line: what this application argues and the evidence it leads with.
 
 ### Files Created
 List the files written:
-- `cv/<Prefix>_Resume_<ABBR><CV_EXT>`
-- `cover_letters/<Prefix>_Cover_Letter_<ABBR><COVER_EXT>`
+- `cv/<Prefix>_<ABBR>_Resume<CV_EXT>`
+- `cover_letters/<Prefix>_<ABBR>_Cover_Letter<COVER_EXT>`
 
 **Show them, never only point at them.** On the person's page first (CLAUDE.md, "Every output is shown"): the files in the page's own store and `python3 tools/app.py view`, so the role shows under Drafts. Asked in the chat, or where there is no page, the chat gets it in full too, the one way RUNBOOK.md sets ("Delivering in the chat"): per role, one call of the session's file-sending tool (SendUserFile or its equivalent) with its resume and cover letter together, captioned with the role, employer, pay (or "pay not stated"), location and apply link; then one index table in the reply, role | apply link, for a batch and a single application alike. Paste beside it what they need without opening anything: the cover letter's text, the outreach note ready to paste, and the two screening answers marked **(decide per application)**. The paths go underneath as plain text, for the record, never as markdown links (a relative link does not open from the desktop app). "The files are in cv/" is never the whole answer.
 

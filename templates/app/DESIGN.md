@@ -306,8 +306,8 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   belongs where its question was asked (the maintainer, 2026-11-05: "it opens a text box UNDER
   THAT PARTICULAR THING IM QUERYING ... and then the response shows underneath"; More test)
 - The same box serves an ask that belongs to a place rather than a card (`PLACES`): Paste a
-  message under Contacts' header, an interview not on the list under Coming up's, Tell Claude
-  under Settings' Something looks wrong, Tidy these up under Your rules, Bring them back on
+  message under Contacts' header, an interview not on the list under Coming up's, Something looks wrong
+  under Settings (no popup first; the makers' link quiet under its box), Tidy these up under Your rules, Bring them back on
   its own row. The Chat keeps only what is a conversation or needs pictures: setting up, a
   practice interview, screenshots, and how the page works. (the maintainer, 2026-11-05: "quite
   a few places in the app which unecessarily go to chat and could be done inline")
@@ -327,7 +327,9 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
 - On a phone everything is drawn small with a full-size tap area (44px), and hover styles
   apply only on devices that hover, so nothing needs two taps. A switch or a checkbox is reached
   through its whole row, its label. (target probe, layout 14)
-- Three sizes: Smaller, Standard (the default), Larger.
+- Three sizes: Smaller, Standard (the default), Larger, Smaller and Larger each drawn in the
+  size it sets, the control keeping its height and targets. (the maintainer, 4.12; settings
+  fold test)
 
 ## Colour, type and space
 
@@ -418,6 +420,20 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   edge under the row's own value, and a tap's line under both with its Undo at the right; on a
   phone the buttons follow the words. One way to do each thing in it. A short single choice is
   a row of chips, still a radio group, that wraps on a phone. (spaces-its-settings test)
+- File names (Settings > You) is the one place a file name is shown: its value is an example
+  from the person's own name and latest employer, and each chip shows its own, the one
+  recommended for their country marked. It names only the copies they download and send; the
+  files Claude keeps keep theirs. Default: the person, the employer, then the document, the
+  word by their market (docpaths.FILE_NAME_PRESETS). (file names test)
+- Many of one kind in Settings are one row that opens them, never a row each: "Employers
+  you've turned down (N)" with what they left out, each name with its small trash; what Claude
+  learned has one home, "What you have taught it", grouped by area, a rule a line with its day
+  small at the end; Your rules links to it. A long section (Your rules, Jobs you hid, each area
+  of what it learned, What's new) shows its first few with "Show all" or "Show more". Advanced,
+  folded, holds only what can slow things down or use more of the Claude allowance, and says so
+  in one line; everything harmless lives where it belongs (Look, This device). A reason is said
+  in the person's voice ("You cleared these"), never the engine's. (the maintainer, 4.12;
+  settings fold test)
 - Each setting has one home in Settings. Where a setting also has a control elsewhere (the
   Brief's bell, a break from To do), both open the same sheet and can never disagree.
 - Every control does something visible (the sweep test taps all of them) and every action

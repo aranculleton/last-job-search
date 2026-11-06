@@ -493,6 +493,19 @@ def _learned_review() -> str:
     return f"{len(got)} pair(s) of your rules may contradict each other" if got else ""
 
 
+def _built_in_rules() -> str:
+    """Pending while a rule the person taught may only repeat something the app now does by
+    itself (learned.BUILT_IN) and has not been judged against it: once after each update that
+    adds such a behaviour, never again for the same one (learned.built_in_done)."""
+    import learned
+    try:
+        got = learned.built_in_candidates()
+    except Exception:  # noqa: BLE001  no rules file yet: nothing to judge
+        return ""
+    return (f"{len(got)} of the rules you taught may now be done by the app itself"
+            if got else "")
+
+
 def _public_holidays() -> str:
     """Pending where no rules cover the person's country and their own list has no date
     in the coming year: follow-ups would count every public holiday as a working day."""
@@ -952,6 +965,16 @@ def _old_sweep_cursor() -> str:
     old = person.state("documents", "rounds", ".sweep.json")
     return ("documents/rounds/.sweep.json sits among your round summaries, where a check "
             "that every file there is a round reads it" if os.path.exists(old) else "")
+
+
+def _old_jobs_tweaks() -> str:
+    """4.10 kept the record of tweaks to the person's search at documents/rounds/tweaks.json,
+    among the round summaries, and a person's own test that reads every documents/rounds/*.json
+    as a round failed on it (the maintainer's copy, 2026-11-06), as it had on the sweep cursor
+    (sweep-cursor-moved). Moving it is instant: no web, no question."""
+    old = person.state("documents", "rounds", "tweaks.json")
+    return ("documents/rounds/tweaks.json sits among your round summaries, where a check that "
+            "every file there is a round reads it" if os.path.exists(old) else "")
 
 
 def _job_alerts_retired() -> str:
@@ -1579,6 +1602,15 @@ REGISTRY: tuple[Upgrade, ...] = (
             "is drafted, goes on their page: `python3 tools/learned.py ask <older> <newer>`. "
             "Then `python3 tools/learned.py tidy --reviewed`",
             "edit", "~3 min", priority=3),
+    Upgrade("built-in-rules", "2026-11-06",
+            "rules you taught it that the app now does by itself come off your list, marked "
+            "Now part of the app, so the list holds only what is yours",
+            _built_in_rules, "`python3 tools/learned.py built-in` lists each rule the app may "
+            "now do by itself, beside what the app does; put one away only where that covers "
+            "all of it (`python3 tools/learned.py built-in --retire <n>=<id>`), leave the rest, "
+            "then `python3 tools/learned.py built-in --done`. The line it prints for the person "
+            "is the commit's body, word for word; with none, the body says nothing changed",
+            "edit", "~2 min", priority=4),
     Upgrade("brief-daily", "2026-10-29",
             "a short note every morning on your Brief: what is due today, and news that matters "
             "to your search",
@@ -1799,7 +1831,7 @@ REGISTRY: tuple[Upgrade, ...] = (
             why_ask="A form, a letter and an interview pack each read one of them, and a "
                     "recruiter remembers whichever they heard first."),
     Upgrade("process-postings", "2026-10-19",
-            "every hiring process folder holds a job_posting.md, so your own checks stay green",
+            "every hiring process folder keeps a copy of its job posting, so your own checks stay green",
             _process_postings, "python3 tools/interview_pack.py postings", "instant",
             command=("python3", "tools/interview_pack.py", "postings"),
             paths=("documents/applications/*/job_posting.md",), priority=1, conditional=True),
@@ -1830,8 +1862,12 @@ REGISTRY: tuple[Upgrade, ...] = (
             "(a job board through tools/offline_boards.py), keeping every assertion's intent. "
             "Never weaken a test to pass; one that uses a part the update removed is rewritten "
             "through the app's public names, or retired, by Claude with nothing asked "
-            "(RUNBOOK.md, \"Your own tests fail after an update\"). Run python3 -m pytest profile/tests -q before "
-            "committing", "edit", "~15 min", priority=2, conditional=True),
+            "(RUNBOOK.md, \"Your own tests fail after an update\"). Change only what the update "
+            "changed (the CHANGELOG lines of the versions it took say what), only in "
+            "profile/tests, never the person's own data or profile. Run python3 -m pytest "
+            "profile/tests -q before committing, with the body \"Your own checks were brought in "
+            "line with the update.\" Until this runs, each save sets the tests the update broke "
+            "aside and lands the work", "edit", "~15 min", priority=2, conditional=True),
     Upgrade("message-texts", "2026-10-19",
             "your messages that got replies kept with their words, so drafts follow what "
             "worked for you rather than the app's defaults",
@@ -1900,6 +1936,13 @@ REGISTRY: tuple[Upgrade, ...] = (
             _old_sweep_cursor, "python3 tools/scrape_wide.py --move-cursor", "instant",
             command=("python3", "tools/scrape_wide.py", "--move-cursor"),
             paths=("documents/rounds/.sweep.json", "documents/rounds/.sweep/cursor.json"),
+            priority=1),
+    Upgrade("tweaks-record-moved", "2026-11-06",
+            "the record of changes you asked for to your search moved out from among your round "
+            "summaries, so a check that every file there is a round passes again",
+            _old_jobs_tweaks, "python3 tools/tweak.py move-record", "instant",
+            command=("python3", "tools/tweak.py", "move-record"),
+            paths=("documents/rounds/tweaks.json", "documents/rounds/tweaks/tweaks.json"),
             priority=1),
     Upgrade("read-break", "2026-10-19",
             "the pause between bursts of profile reads written in your profile, yours to change",
@@ -2137,6 +2180,11 @@ SAFE_DEFAULTS: dict[str, str] = {
                                  "nudge), as before it was a setting",
     "networking.EXPORT_EVERY_DAYS": "unset, the brief asks for a new LinkedIn download once the "
                                     "last is 14 days old; 0 never asks",
+    "networking.EXPORT_REMIND": "\"auto\": the LinkedIn download is asked for weekly while "
+                                "the person has sent notes or messages in the last two "
+                                "weeks, every two weeks otherwise (their own "
+                                "EXPORT_EVERY_DAYS, where set, as before); the page's "
+                                "Settings or the reminder's trash writes another",
     "networking.SUBJECT": "none: the InMail subject is built from roles.py, who you are",
     "networking.TEMPLATES": "none: the phrase bank, then the person's OPENER and ASK, as before",
     "networking.PROFILE_READ_UNPLACED": "10 people nothing has placed yet on a day's list",
@@ -2193,6 +2241,9 @@ SAFE_DEFAULTS: dict[str, str] = {
     "person.json:documents.resume_pages": "one page, what every older repo printed; a long "
                                           "career sets two in /setup --section documents",
     "person.json:documents.section_order": "the standard order every older repo printed",
+    "person.json:documents.file_names": "the person, the employer, then the document "
+                                        "(docpaths.FILE_NAMES_DEFAULT), the order every repo "
+                                        "makes from 2026-11-06; Settings > File names changes it",
     "person.json:documents.letter_paper": "follows documents.paper, then the country",
     "person.json:identity.places_told": "none: every employer hears the person's own place, "
                                         "what every older repo assumed; tools/told.py records "
@@ -2676,7 +2727,10 @@ def remember_listed(rows: list[tuple[Upgrade, str]], elsewhere: bool = False,
     got = {"sync": sha, "ids": [u.id for u, _ in rows], "day": day,
            "since": {u.id: str(since.get(u.id) or day) for u, _ in rows},
            "elsewhere": bool(elsewhere)}
-    if isinstance(was.get("started"), dict) and was["started"].get("day") == day:
+    # A start stands for the update it was made for: a second update the same day (the
+    # master channel takes several) is owed its own, or own tests it broke waited for tomorrow.
+    if isinstance(was.get("started"), dict) and was["started"].get("day") == day \
+            and was.get("sync") in (sha, None):
         got["started"] = was["started"]
     for key in ("not_now", "held"):
         kept = {c: v for c, v in (was.get(key) or {}).items()
@@ -2685,6 +2739,46 @@ def remember_listed(rows: list[tuple[Upgrade, str]], elsewhere: bool = False,
         if kept:
             got[key] = kept
     _save_listed(got)
+
+
+def queue_own_tests(root: str | None = None, today: dt.date | None = None) -> bool:
+    """The own-tests improvement queued for this copy's latest update, at once: a landing that
+    finds the person's own tests an update broke (an update another chat took, so no sync
+    here listed it) sets them aside for its save and queues this, and the app's hook has the
+    next chat that is not on one big job start it in the background. One already listed and
+    not started stays as it is; one started for an earlier update is owed again. True when
+    it is queued."""
+    global ROOT
+    was_root = ROOT
+    ROOT = root or ROOT
+    try:
+        sha = _sync_head()[0]
+        if not sha:
+            return False
+        got = _listed()
+        day = _day(today)
+        if got.get("sync") != sha:
+            got = {"sync": sha, "ids": [], "day": day, "since": {}, "elsewhere": False}
+        ids = [i for i in (got.get("ids") or []) if isinstance(i, str)]
+        if "own-tests" in ids:
+            # Listed for this update already: waiting, started (a background agent may be on
+            # it now), or another chat's. Left exactly as it is: popping the start had the hook
+            # hold the next chat for a second agent on the same tests, and every chat's
+            # "not now" for the day was deleted (the release review, 2026-11-06).
+            return True
+        started = got.get("started") if isinstance(got.get("started"), dict) else None
+        if started is not None and not isinstance(started.get("ids"), list):
+            started["ids"] = list(ids)   # the start covers what was listed then, not this
+        ids.append("own-tests")
+        got["ids"] = ids
+        since = got.get("since") if isinstance(got.get("since"), dict) else {}
+        since.setdefault("own-tests", day)
+        got["since"] = since
+        return _save_listed(got)
+    except Exception:  # noqa: BLE001  a landing must never stop on it
+        return False
+    finally:
+        ROOT = was_root
 
 
 def listed_ids() -> list[str]:
@@ -2748,7 +2842,12 @@ def unstarted(today: dt.date | None = None, chat: str = "") -> list[tuple[str, s
             return []
         started = got.get("started") if isinstance(got.get("started"), dict) else None
         if started and (str(got.get("day") or day) < day or started.get("day") == day):
-            return []
+            # A start covers what was listed when it was made: own-tests queued after it
+            # (queue_own_tests) is owed on its own, and nothing the start took is owed twice.
+            covered = started.get("ids")
+            if not isinstance(covered, list):
+                return []
+            ids = [i for i in ids if i not in covered]
         done = _done_since(str(got.get("sync") or ""))
         since = got.get("since") if isinstance(got.get("since"), dict) else {}
         known = {u.id: u for u in REGISTRY}
@@ -3087,8 +3186,11 @@ def say_changed() -> list[str]:
     r = _git("diff", "--name-only", f"{sha}^1", sha, "--", *HELD_FILES)
     out = []
     for p in sorted(p for p in r.stdout.split() if p) if r.returncode == 0 else []:
-        out.append(f"Claude: {p} changed. A chat that was already open is still following the "
-                   f"copy it read when it started: read {p} again now, before going on.")
+        # Only a chat that has read it holds an old copy: one that never loaded this skill
+        # reads the new one when it first needs it, and re-reading every changed skill cost an
+        # open chat 70 to 110 KB a release for nothing (the cost audit, 4.12).
+        out.append(f"Claude: {p} changed. If this chat has already read it, it is following the "
+                   f"old copy: read {p} again now, before going on. If not, nothing to do.")
     return out
 
 

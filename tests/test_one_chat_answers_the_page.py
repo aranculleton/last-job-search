@@ -681,13 +681,16 @@ def test_a_helper_nested_too_deep_keeps_answering_and_the_brief_starts_the_fresh
     line = app_listen.renew_line(app_listen.renewal(rec, db, "session_deep", now), now)
     assert "python3 tools/app.py nested" in line and "the next brief run starts" in line
     # Refused: the chat says so, with a read of the page, and its record carries it.
-    d = copy.dump("deep")
+    # A folder with a space, as a Windows user folder may be: the batch was printed mid-line,
+    # so its path read as two words (the Windows run of 4.11.0, under "<first> <last>").
+    d = copy.dump("deep folder")
     os.makedirs(os.path.join(d, "meta"), exist_ok=True)
     with open(os.path.join(d, "meta", "listen.json"), "w", encoding="utf-8") as fh:
         json.dump(dict(rec, _v=3), fh)
     said = copy.run("nested", d, "--chat", "session_deep", "--now", "2026-10-31T07:05:00Z")
     assert "keeps answering the page" in said
-    batch = next(w for w in said.split() if w.endswith(".json"))
+    (batch,) = [ln for ln in said.splitlines() if ln.endswith(".json")]
+    assert os.path.isfile(batch), said
     with open(batch, encoding="utf-8") as fh:
         writes = json.load(fh)
     assert writes[0]["doc_id"] == "listen" and writes[0]["if_version"] == 3

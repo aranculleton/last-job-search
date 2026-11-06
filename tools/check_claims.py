@@ -26,7 +26,7 @@ missed, add it to the profile's claims.py (a fact about the candidate) or to
 app_rules() below (a rule about writing).
 
 Usage:
-    python3 tools/check_claims.py cv/<Prefix>_Resume_ACME.tex ...
+    python3 tools/check_claims.py cv/<Prefix>_ACME_Resume.tex ...
     python3 tools/check_claims.py cv/*.tex cover_letters/*.tex
 
 Exit status 1 if any ERROR-level finding fires.
@@ -191,7 +191,7 @@ LETTER_SEVERITY = {"unheld-skill": "WARN"}
 
 
 def is_letter(path: str) -> bool:
-    """A cover letter, by its folder or its name (<Prefix>_Cover_Letter_<ABBR>)."""
+    """A cover letter, by its folder or its name (<Prefix>_<ABBR>_Cover_Letter)."""
     return (os.path.basename(os.path.dirname(os.path.abspath(path))) == "cover_letters"
             or "cover_letter" in os.path.basename(path).lower())
 

@@ -249,7 +249,7 @@ class Noun(NamedTuple):
     """A banned document noun and the two ways it is looked for.
 
     `document` is every use: in a resume or a letter the word can only be the
-    document, and in its filename (<Name>_CV_<Employer>.pdf) a word boundary does
+    document, and in its filename (<Name>_<Employer>_CV.pdf) a word boundary does
     not separate it, so letters are what bound it. `message` is only where it is
     the document: "resume" is also a verb, and "happy to resume the conversation"
     is ordinary English in a message.

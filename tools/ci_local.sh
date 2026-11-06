@@ -25,7 +25,8 @@
 #
 #     ./tools/ci_local.sh            everything available
 #     ./tools/ci_local.sh --quick    skip the LaTeX compile, and the floor leg's second run
-#                                    of the person's own tests (they ran once already)
+#                                    of the person's own tests (they ran once already); in a
+#                                    person's copy, never the app's own suite (tests/)
 #     ./tools/ci_local.sh --full     everything, even when only the person's own files changed
 #
 # In a person's repo, when every change since master is their own (contacts, tracker,
@@ -69,6 +70,15 @@ case "$(git remote get-url origin 2>/dev/null)" in
   *) IS_COPY=1 ;;
 esac
 [ -f profile/person.json ] && IS_COPY=1
+# --quick in a person's copy (the check before every save) never runs the app's own suite,
+# whatever changed: it tests the app, which its own CI tests where it is made. Whether a change
+# was "only theirs" was the one gate, and it failed open: on the master channel the app moves
+# several times a day, so an app file a landing brought in matched neither master nor the
+# app's newest master, and every save ran the whole suite twice (once more on Python 3.9),
+# over ten minutes each, side by side (the maintainer's copy, 2026-11-06). ./tools/ci_local.sh
+# without --quick still runs it there when the app's files changed.
+NO_APP_SUITE=0
+[ "$QUICK" = "1" ] && [ "$IS_COPY" = "1" ] && [ "$FULL" = "0" ] && NO_APP_SUITE=1
 if [ "$FULL" = "0" ] && [ "$IS_COPY" = "1" ]; then
   CHANGED="$("$PY" tools/personal_paths.py --only-personal-changed 2>/dev/null)"
   case $? in
@@ -85,6 +95,8 @@ app_check() {                  # app_check <runner> <name> <args...>
   local runner="$1" name="$2"; shift 2
   if [ "$APP_RELEASE" = "1" ]; then
     skip "$name" "the app's own release, tested before it shipped; --full runs it"
+  elif [ "$NO_APP_SUITE" = "1" ]; then
+    skip "$name" "$QUICK_SKIP"
   elif [ "$DATA_ONLY" = "1" ]; then
     skip "$name" "only your own files changed; --full runs it"
   else
@@ -92,6 +104,7 @@ app_check() {                  # app_check <runner> <name> <args...>
   fi
 }
 
+QUICK_SKIP="--quick in your copy: the app's own checks run where the app is made; ./tools/ci_local.sh runs them"
 PASS=0; FAIL=0; SKIP=0
 failed_names=""
 
@@ -232,6 +245,8 @@ elif [ "$DATA_ONLY" = "1" ]; then
   echo "  only your own files changed since master ($(printf '%s\n' "$CHANGED" | grep -c .)): the app's"
   echo "  own suites test the app, which did not change, so they are skipped (--full runs them)"
   skip "pytest (the app's suite, on the example person)" "only your own files changed"
+elif [ "$NO_APP_SUITE" = "1" ]; then
+  skip "pytest (the app's suite, on the example person)" "$QUICK_SKIP"
 else
   # shellcheck disable=SC2086
   run_py_module pytest "pytest (the app's suite, on the example person)" "$PY" -m pytest tests -q $PAR
@@ -268,14 +283,28 @@ fi
 # can be (41 seconds against nearly five minutes for one person's 1,600 tests, the same
 # results, 2026-11-03), and once more in one process only when that fails, so a test that
 # fails only beside another never holds up a save.
+# The person's own tests an update broke, which a landing sets aside (tools/land.py names
+# them in the file LJS_OWN_TESTS_ASIDE points at) while a background step brings them in line:
+# their finished work was held behind them until a chat noticed (the maintainer, 2026-11-06).
+ASIDE=()
+if [ -n "${LJS_OWN_TESTS_ASIDE:-}" ] && [ -f "$LJS_OWN_TESTS_ASIDE" ]; then
+  while IFS= read -r t || [ -n "$t" ]; do
+    t="${t%$'\r'}"
+    [ -n "$t" ] && ASIDE+=(--deselect "$t")
+  done < "$LJS_OWN_TESTS_ASIDE"
+fi
 own_tests() {
   # shellcheck disable=SC2086
-  if [ -n "$PAR" ] && "$PY" -m pytest profile/tests -q $PAR > /dev/null 2>&1; then return 0; fi
-  "$PY" -m pytest profile/tests -q
+  if [ -n "$PAR" ] && "$PY" -m pytest profile/tests -q $PAR ${ASIDE[@]+"${ASIDE[@]}"} > /dev/null 2>&1; then return 0; fi
+  "$PY" -m pytest profile/tests -q ${ASIDE[@]+"${ASIDE[@]}"}
 }
 if [ -d profile/tests ]; then
   before=$FAIL
   # No compiled copies in profile/tests/__pycache__ for a forced add to commit.
+  if [ "${#ASIDE[@]}" -gt 0 ]; then
+    echo "  $(( ${#ASIDE[@]} / 2 )) of your own tests an update changed are set aside for this save,"
+    echo "  while they are brought in line"
+  fi
   PYTHONDONTWRITEBYTECODE=1 run_py_module pytest "pytest (profile/tests, on this person)" own_tests
   # A failure here is often an update that changed or removed what the test pinned: say
   # which, and what to do, rather than leave a list of names to guess from.
@@ -313,6 +342,9 @@ FLOOR_PY="$(command -v python$FLOOR_VERSION || true)"
 if [ "$DATA_ONLY" = "1" ] && { [ "$QUICK" = "1" ] || ! printf '%s\n' "$CHANGED" | grep -q '^profile/tests/'; }; then
   FLOOR_PY="skip"
 fi
+# --quick in a copy: the app's suite is not run here, and their own tests ran once above.
+[ "$NO_APP_SUITE" = "1" ] && FLOOR_PY="skip"
+
 if [ -z "$FLOOR_PY" ] && command -v py >/dev/null 2>&1; then      # Windows' launcher
   # -X utf8: the path as Git Bash reads it, where a Python on Windows writes its code page.
   FLOOR_PY="$(py -$FLOOR_VERSION -X utf8 -c 'import sys; print(sys.executable)' 2>/dev/null | tr -d '\r' || true)"
@@ -324,7 +356,9 @@ if [ -z "$FLOOR_PY" ] && command -v uv >/dev/null 2>&1; then
     FLOOR_PY="$(uv python find $FLOOR_VERSION 2>/dev/null || true)"
   fi
 fi
-if [ "$FLOOR_PY" = "skip" ]; then
+if [ "$FLOOR_PY" = "skip" ] && [ "$NO_APP_SUITE" = "1" ] && [ "$DATA_ONLY" = "0" ]; then
+  skip "$FLOOR_NAME" "$QUICK_SKIP"
+elif [ "$FLOOR_PY" = "skip" ]; then
   skip "$FLOOR_NAME" "only your own files changed"
 elif [ -z "$FLOOR_PY" ]; then
   skip "$FLOOR_NAME" "no python$FLOOR_VERSION here, and no uv to fetch one"
@@ -346,7 +380,7 @@ else
         skip "$FLOOR_NAME, profile/tests" "--quick: your own tests ran once above"
       else
         PYTHONDONTWRITEBYTECODE=1 run "$FLOOR_NAME, profile/tests" "$FLOOR_ENV_PY" \
-          -m pytest profile/tests -q -p no:cacheprovider
+          -m pytest profile/tests -q -p no:cacheprovider ${ASIDE[@]+"${ASIDE[@]}"}
       fi
     fi
   else

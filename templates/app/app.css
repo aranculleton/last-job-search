@@ -866,6 +866,11 @@ dialog.work-sheet { position: fixed; inset: auto 0 0 0; margin: 0; width: 100%; 
 @media (hover: hover) { .title-link:hover { text-decoration: underline; } }
 .toggle-label { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex: 1 1 100%; min-width: 0; min-height: var(--target); cursor: pointer; }
 .toggle-row input[type="checkbox"] { width: 24px; height: 24px; accent-color: var(--mark); margin: 0; flex: none; }
+/* A job site that needs a key: "Needs a free key" where its tick would be, opening on the
+   steps to get one (Settings, Job sites). */
+.checks-list li.site-key { display: block; }
+.checks-list li.site-key > .state, .checks-list li.site-key > .state-wrap { padding: 0 16px; }
+.site-key-fold[open] > .set-sum::after { transform: rotate(-135deg); }
 
 /* Chat: the box pinned at the bottom (4.9) */
 .talk { display: flex; flex-direction: column; gap: 12px; min-height: calc(100dvh * var(--tz) - 56px - var(--tabs-h) - 48px - env(safe-area-inset-bottom, 0px)); }
@@ -1245,6 +1250,13 @@ li:first-child > .fb-row, .fb-row:first-child { border-top: 0; }
 .set-body .pills .choice:has(input:checked) { background: var(--surface); box-shadow: inset 0 0 0 1px var(--mark); }
 /* A short word ("On", "Off") still has its full target. */
 .set-body .pills .choice label { white-space: nowrap; min-width: var(--target); text-align: center; }
+/* A chip with its own example under its words (File names): a soft card rather than a
+   pill, its words left, the example wrapping anywhere on a phone rather than running off. */
+.set-body .pills .choice.has-ex { border-radius: var(--r-sm); padding-block: 8px; align-items: flex-start; flex: 1 1 auto; max-width: 100%; min-width: 0; }
+.set-body .pills .choice.has-ex input { margin-top: 4px !important; flex: none; }
+.set-body .pills .choice.has-ex label { white-space: normal; text-align: left; min-width: 0; flex: 1 1 auto; }
+.chip-ex { overflow-wrap: anywhere; }
+.chip-rec { color: var(--muted); font-weight: 400; }
 /* Claude's browser: a small panel bottom right on a wide screen, a bottom sheet on a phone.
    Close hides it; the reading carries on. */
 .bp-host { position: fixed; z-index: 40; right: 16px; bottom: 16px; width: min(360px, calc(100vw - 32px)); }
@@ -1996,3 +2008,22 @@ ul.bp-news { max-width: 80ch; }
 /* On a phone the search takes its own row under the switch, which it squeezed unreadable. */
 @media (max-width: 759px) { .controls:has(> .segctl):has(> .searchf) { flex-wrap: wrap; } .controls:has(> .segctl) > .searchf { order: 9; flex-basis: 100%; } }
 .talk-earlier-msgs { list-style: none; text-align: center; }
+
+/* Settings, 4.12: employers turned down as one list with a small trash each; what it learned
+   grouped by area, a rule a line with its day small at the end; long lists' "Show all". */
+.dec-list, .l-list, ul.news, ul.upgrades { display: grid; gap: 0; }
+.dec-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-block: 4px; border-top: 1px solid var(--line); }
+.dec-row:first-child { border-top: 0; }
+.dec-name { min-width: 0; overflow-wrap: anywhere; }
+.l-group + .l-group { margin-top: 12px; }
+.l-item { padding-block: 0; }
+.l-sum { display: flex; align-items: baseline; gap: 8px; list-style: none; cursor: pointer; min-height: var(--target); padding-block: 4px; }
+.l-sum::-webkit-details-marker { display: none; }
+.l-say { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.l-on { flex: 0 0 auto; white-space: nowrap; }
+.few-more { padding-block: 4px; }
+ul.news .news-line { padding-block: 4px; }
+.makers-link { margin-top: 8px; }
+.makers-link a { color: var(--muted); }
+/* Text size: Smaller and Larger drawn in their own size; the control keeps its height. */
+.size-choice .look-name { line-height: 1; }

@@ -662,3 +662,5 @@ View Juno’s             # LinkedIn's own line over a pasted conversation, test
 Larkmoor Bank           # invented employer, tests/test_a_booking_can_wait_on_their_confirmation.py
 Odo Quillan             # invented, tests/test_records_follow_what_was_said.py
 Hi Odo                  # the invented Odo Quillan greeted, the same test
+Average Monthly Visitors # a field on Adzuna's sign-up form, tools/portals.py
+Mossgate Freight Ltd    # invented employer, tests/test_a_search_of_named_employers_holds_only_them.py

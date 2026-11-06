@@ -414,7 +414,11 @@ def test_a_chat_that_cannot_publish_sets_up_in_the_chat_and_is_not_asked_again(t
     c.run("published", "none")
     again = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "profile_upgrades.py")],
                            env=c.env(), capture_output=True, encoding="utf-8", timeout=300)
-    assert "page" not in again.stdout
+    # The publishing step itself, not the word: from 2026-11-17 the example's no to the
+    # LinkedIn download (2026-10-18) is REASK_DAYS old and asked again, "on the page as a To do
+    # card", and a check for the bare word failed on the clock moved on (4.11.0's 30-day run).
+    assert "page is not published yet" not in again.stdout, again.stdout
+    assert "app.py page" not in again.stdout and "published" not in again.stdout, again.stdout
     assert "app.py page" not in c.run("start", "--on", "test", "--tools", "none")
 
 

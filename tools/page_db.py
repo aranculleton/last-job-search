@@ -1462,8 +1462,6 @@ def pin(db: dict, work_id: str, now: dt.datetime, out_dir: str, stage=None, line
         fields.update(left_s=max(0, int(left_s)), left_at=at)
     w = Writes(out_dir)
     w.add("update", "work", work_id, fields, if_version=doc["version"])
-    if dump_dir:
-        _keep_dump(dump_dir, "work", work_id, dict(item, **fields), int(doc["version"] or 1) + 1)
     # The other postings of a batch, renewed with it and shown at its stage: pinned alone, the
     # leader kept its lease while they read "may have stopped" half an hour in and were
     # handed to a second job (engine audit, 2026-11-03). One they asked to stop is named, for
@@ -1482,12 +1480,18 @@ def pin(db: dict, work_id: str, now: dt.datetime, out_dir: str, stage=None, line
             if k in fields:
                 mf[k] = fields[k]
         w.add("update", "work", mid, mf, if_version=mdoc["version"])
-        if dump_dir:
-            _keep_dump(dump_dir, "work", mid, dict(m, **mf), int(mdoc["version"] or 1) + 1)
+    batches = w.save("pin")
+    if dump_dir:
+        # The folder as it will be once the pin lands, kept the way every other batch is
+        # (keep_landed), so a refused pin is put back whole by `app.py version`. Moved on
+        # outside that record, a pin refused for one posting left the leader and the rest one
+        # ahead of the page, and the pin run again was refused for them (the maintainer's
+        # copy, 2026-11-06: if_version 3 with the page at 2).
+        keep_landed(dump_dir, batches)
     return {"work": work_id, "stop_asked": False, "stage": fields.get("stage", item.get("stage")),
             "count": fields.get("count", item.get("count")),
             "left_s": fields.get("left_s", item.get("left_s")),
-            **({"stopped": stopped} if stopped else {}), "batches": w.save("pin")}
+            **({"stopped": stopped} if stopped else {}), "batches": batches}
 
 
 def members(db: dict, work_id: str) -> dict:

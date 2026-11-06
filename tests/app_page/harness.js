@@ -667,6 +667,9 @@ function layoutMeasure() {
     if (!vis(el) || !inView(el)) continue;
     for (const c of el.classList) if (c.startsWith("tone-")) tones.add(c);
     if (![...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())) continue;
+    // Text size's Smaller and Larger are drawn in the size they set (DESIGN.md, 4.12): a sample
+    // of another size, not one of the screen's type styles.
+    if (el.matches('[data-size="smaller"], [data-size="larger"]')) continue;
     const cs = getComputedStyle(el);
     const pair = cs.fontSize + "/" + cs.fontWeight;
     if (!pairs.has(pair)) pairWhere[pair] = (el.tagName + "." + [...el.classList].join(".")).slice(0, 40);
@@ -834,8 +837,9 @@ S.engine = async (a) => {
     if (st.submit) { await page.locator("dialog [data-k=sheet-go]").click(); await turn(page, 6); }
     if (st.wait) { await page.waitForTimeout(st.wait); await turn(page, 6); }
     // A chat, played: every action so far applied, then the next state of the model.
+    // `refuse`: the engine's own words for a tap it would not do, as its receipt carries them.
     if (st.receipts) {
-      for (const k of store.list("actions/")) { const id = k.split("/")[1]; if (!store.get("receipts/" + id)) store.chat("receipts/" + id, {applied_at: new Date().toISOString(), by: "cloud-1", result: "ok", note: ""}); }
+      for (const k of store.list("actions/")) { const id = k.split("/")[1]; if (!store.get("receipts/" + id)) store.chat("receipts/" + id, {applied_at: new Date().toISOString(), by: "cloud-1", result: st.refuse ? "conflict" : "ok", note: st.refuse || "", ...(st.later ? {later: st.later} : {})}); }
       await turn(page, 6);
     }
     if (st.view) { for (const [k, v] of Object.entries(st.view)) store.chat("view/" + k, {made_at: "2026-10-25T09:00:00Z", data: v}); await turn(page, 8); }
@@ -1679,7 +1683,7 @@ S.wake = async (a) => {
 // Reading LinkedIn in the desktop app: the page checks by itself when it opens there, and
 // says how to sign in when signed out (2026-10-29).
 S.reading = async (a) => {
-  const o = await open({html: a.html, hash: a.hash || "todo", seed: a.seed || {}, model: a.model, look: a.look, noStorage: !!a.noStorage, clock: a.clock, fake: {canSend: a.canSend || "no_session", mcp: {browser: {inApp: a.inApp !== false, signedIn: !!a.signedIn, askFirst: !!a.askFirst, signInLater: !!a.signInLater, signOutAfter: a.signOutAfter || 0, check: a.check || 0, declined: !!a.declined, slowSections: !!a.slowSections, closeOnProfile: !!a.closeOnProfile}}}});
+  const o = await open({html: a.html, hash: a.hash || "todo", seed: a.seed || {}, model: a.model, look: a.look, noStorage: !!a.noStorage, clock: a.clock, timezoneId: a.timezoneId, fake: {canSend: a.canSend || "no_session", mcp: {browser: {inApp: a.inApp !== false, signedIn: !!a.signedIn, askFirst: !!a.askFirst, signInLater: !!a.signInLater, signOutAfter: a.signOutAfter || 0, check: a.check || 0, declined: !!a.declined, slowSections: !!a.slowSections, closeOnProfile: !!a.closeOnProfile}}}});
   await o.page.waitForTimeout(2500);
   // Until the page has finished reading (each page that draws late adds a moment).
   await o.page.waitForFunction(() => { const s = window.LJS.state().reading; return !s.busy && s.panel !== "run" && s.panel !== "check-run"; }, null, {timeout: 30000}).catch(() => {});
@@ -1738,7 +1742,7 @@ S.reading = async (a) => {
       const refused = (g.refuse || []).indexOf(d.item) >= 0;
       o.store.chat("receipts/" + p.slice(8), {applied_at: new Date().toISOString(), by: "cloud-1", result: refused ? "refused" : "ok", note: refused ? "Their page did not load." : ""});
     }
-    const o2 = await open({html: a.html, hash: a.hash || "todo", store: o.store, look: g.look, noStorage: !!a.noStorage, clock: g.clock || a.clock, fake: {canSend: a.canSend || "no_session", mcp: {browser: {inApp: true, signedIn: g.signedIn === undefined ? !!a.signedIn : !!g.signedIn}}}});
+    const o2 = await open({html: a.html, hash: a.hash || "todo", store: o.store, look: g.look, noStorage: !!a.noStorage, clock: g.clock || a.clock, timezoneId: a.timezoneId, fake: {canSend: a.canSend || "no_session", mcp: {browser: {inApp: true, signedIn: g.signedIn === undefined ? !!a.signedIn : !!g.signedIn}}}});
     await o2.page.waitForTimeout(2500);
     await o2.page.waitForFunction(() => { const s = window.LJS.state().reading; return !s.busy && s.panel !== "run" && s.panel !== "check-run"; }, null, {timeout: 30000}).catch(() => {});
     await turn(o2.page, 8);

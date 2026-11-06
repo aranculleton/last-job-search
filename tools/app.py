@@ -1192,16 +1192,37 @@ def cmd_pin(a) -> int:
                 return 2
         print(_dump({"blocked": works, "batches": batches}), end="")
         return 0
-    got_all = []
+    # A posting claimed `with` another item named here is renewed and moved by that item's own
+    # pin. Written again on its own, from the same read, it went in two batches pinned to one
+    # version: whichever was sent second was refused, and a refused leader's batch left the
+    # folder one ahead of the page (the maintainer's copy, 2026-11-06).
+    named = {page_db.safe_id(w) for w in works}
+    led: dict = {}
     for wid in works:
+        for mid in page_db.members(db, page_db.safe_id(wid)):
+            if mid in named and mid != page_db.safe_id(wid):
+                led.setdefault(mid, wid)
+    got_by: dict = {}
+    for wid in works:
+        if page_db.safe_id(wid) in led and led[page_db.safe_id(wid)] not in led:
+            continue
         try:
-            got_all.append(page_db.pin(db, wid, now, out if len(works) == 1 else
-                                       os.path.join(out, page_db.safe_id(wid)),
-                                       stage=stage, line=a.line, count=count, left_s=left,
-                                       dump_dir=a.dump, chat=a.chat))
+            got_by[wid] = page_db.pin(db, wid, now, out if len(works) == 1 else
+                                      os.path.join(out, page_db.safe_id(wid)),
+                                      stage=stage, line=a.line, count=count, left_s=left,
+                                      dump_dir=a.dump, chat=a.chat)
         except KeyError as e:
             print(f"app: {e.args[0]}", file=sys.stderr)
             return 2
+    got_all = []
+    for wid in works:
+        if wid in got_by:
+            got_all.append(got_by[wid])
+            continue
+        lead = got_by.get(led[page_db.safe_id(wid)]) or {}
+        got_all.append({"work": wid, "with": led[page_db.safe_id(wid)],
+                        "stop_asked": page_db.safe_id(wid) in (lead.get("stopped") or []),
+                        "stage": lead.get("stage"), "batches": []})
     if len(got_all) == 1:
         print(_dump(got_all[0]), end="")
     else:
@@ -1379,7 +1400,9 @@ def cmd_published(a) -> int:
         got = app_listen.close_republish(page_db.load(a.dump), out, now)
         if got["batches"]:
             print("app: the page no longer shows this update as waiting: send this batch "
-                  f"(ArtifactData batch, url {a.url}): " + " ".join(got["batches"]))
+                  f"(ArtifactData batch, url {a.url}):")
+            for path in got["batches"]:      # a line each: a folder name may hold a space
+                print(path)
     return 0
 
 
@@ -2016,9 +2039,12 @@ def cmd_nested(a) -> int:
     if batches:
         import app_setup
         url = app_setup.page_record().get("url") or "<the page>"
-        out.append(f"send, as one ArtifactData batch (url {url}, its entries as writes): "
-                   + " ".join(batches) + " (it tells the brief's run to start the fresh helper; "
-                   "refused: leave it, this chat's next check-in carries on as it is)")
+        # Each file on a line of its own, as wake prints them: a person's folder may hold a
+        # space (a Windows user folder named "First Last"), and a path mid-sentence then reads as two.
+        out.append(f"send, as one ArtifactData batch (url {url}, its entries as writes; it tells "
+                   "the brief's run to start the fresh helper; refused: leave it, this chat's "
+                   "next check-in carries on as it is):")
+        out += batches
     print("\n".join(out))
     return 0
 

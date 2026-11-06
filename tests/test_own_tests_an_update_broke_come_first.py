@@ -36,7 +36,8 @@ def _repo(tmp_path, passing=False):
                  ("GIT_COMMITTER_NAME", "t"), ("GIT_COMMITTER_EMAIL", "t@example.com")):
         os.environ.setdefault(k, v)
     root = str(tmp_path / "copy")
-    subprocess.run(["git", "init", "-q", root], check=True)
+    # Named, never the machine's default: a newer git (the Mac runner's) starts on "main".
+    subprocess.run(["git", "init", "-q", "-b", "master", root], check=True)
     write(root, "tools/state_rule.py", "LIMIT = 2\n")
     write(root, "profile/tests/test_mine.py",
           "import os, sys\nsys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'tools'))\n"
@@ -58,9 +59,11 @@ def test_the_step_comes_first_until_the_tests_pass_and_then_never(tmp_path):
     _update(root, 3)
     sync_app.own_tests(root)
     step = sync_app.own_tests_step(root)
-    assert step.startswith("Claude, first, before any other work: 1 of the person's own tests "
-                           "fail after an update"), step
-    assert "test_limit" in step and "--own-tests" in step and sync_app.OWN_CHECKS_SAID in step
+    # Since 2026-11-06 it holds no work: saves set them aside and the own-tests improvement is
+    # queued for the background (tests/test_saves_queue_and_check_quickly.py).
+    assert step.startswith("Claude: 1 of the person's own tests fail after an update"), step
+    assert "test_limit" in step and "own-tests" in step and sync_app.OWN_CHECKS_SAID in step
+    assert "Nothing waits on them" in step and "before any other work" not in step
     # Said again by every command that starts work, until they pass: brought in line here
     # (not committed yet), it is checked again and goes.
     assert sync_app.own_tests_step(root) == step
@@ -116,14 +119,15 @@ def test_master_bringing_in_an_update_checks_them_here_too(tmp_path, monkeypatch
     monkeypatch.setattr(sync_app, "own_tests", lambda r=None: ran.append(r))
     monkeypatch.setattr(sync_app, "_driver", lambda: None)
     origin = str(tmp_path / "origin.git")
-    git(tmp_path, "init", "-q", "--bare", origin)
+    # The bare origin names master as its own HEAD. Left to the machine's default, a newer
+    # git (the Mac runner's, 2026-11-06) points it at "main", which nothing pushed: the clone
+    # then checks out no files, the write below is untracked, and `commit -a` finds nothing.
+    git(tmp_path, "init", "-q", "--bare", "-b", "master", origin)
     git(root, "remote", "add", "origin", origin)
     git(root, "push", "-q", "origin", "HEAD:master")
     other = str(tmp_path / "other")
     git(tmp_path, "clone", "-q", origin, other)
-    # A clone takes no identity: a Mac runner has no global one, and the commit failed there.
-    git(other, "config", "user.name", "Test")
-    git(other, "config", "user.email", "test@example.com")
+    assert os.path.isfile(os.path.join(other, "tools", "state_rule.py"))
     write(other, "tools/state_rule.py", "LIMIT = 5\n")
     git(other, "commit", "-q", "-am", "Sync from the app: 1 new commit(s)")
     git(other, "push", "-q", "origin", "HEAD:master")

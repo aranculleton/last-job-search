@@ -226,7 +226,7 @@ _SOURCE_WORDS = (
     (r"job_posting", "the job posting"),
     (r"outcome\.md", "this interview's record"),
     (r"draft\.json|cover_letter|Cover_Letter|outreach\.md", "what you sent"),
-    (r"(?:^|/)cv/|_CV_|_Resume_", "the resume you sent"),
+    (r"(?:^|/)cv/|_(?:CV|Resume)(?:_|\.|$)", "the resume you sent"),
     (r"interview_prep", "an earlier prep"),
     (r"learned|liked", "what you told Claude"),
     (r"asked\.json|interview_bank|question_bank", "your past interviews"),
@@ -5410,7 +5410,7 @@ _COUNTED = re.compile(r"\b(\d+) (\w+)\((e?s)\)")
 
 def _file_words(name) -> str:
     """A file an older document named in its text, as the person knows it."""
-    if re.search(r"(?:^|/)cv/|_CV_|_Resume_", name):
+    if re.search(r"(?:^|/)cv/|_(?:CV|Resume)(?:_|\.|$)", name):
         return "your %s" % _noun()
     if re.search(r"cover_letter|Cover_Letter", name):
         return "your cover letter"

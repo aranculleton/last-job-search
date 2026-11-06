@@ -1245,6 +1245,61 @@ def build_tasks(on: dict[str, bool], pages: int) -> list[tuple]:
     return tasks
 
 
+def named_tasks(on: dict[str, bool], pages: int, employers) -> list[tuple]:
+    """The requests of a search limited to employers the person named (run_round.py
+    --employers), in build_tasks' shape: each name searched with the profile's employer
+    queries (SCRAPE_EMPLOYER_QUERIES, else the name alone) at its employer places (else its
+    places), the first place two pages deep at most and the rest one, as the named-employer
+    pass already searches. On a person's own portals, page one at the first place, for an
+    employer whose own board a round does not already read. Far fewer requests than a whole
+    search: the whole search filtered afterwards cost every request of a round. The paced
+    boards' cursor is left where it is: this is not their round."""
+    li, fh = on.get("linkedin-search"), on.get("freehire-search")
+    names = [str(e).strip() for e in employers or () if str(e).strip()]
+    asks = [t for t in EMPLOYER_QUERIES if str(t).strip()]
+    places = EMPLOYER_LOCATIONS or LOCATIONS
+    remote = EMPLOYER_REMOTE or REMOTE_LOCATIONS
+    tasks: list[tuple] = []
+    PLAN.clear()
+    queries = [f"{emp} {t}" if t else emp for emp in names for t in (asks or [""])]
+    for q in queries:
+        if li:
+            for loc in places:
+                depth = min(pages, 2) if loc.startswith(DEEP) else 1
+                tasks += [("li", q, loc, pg) for pg in range(1, depth + 1)]
+            tasks += [("lir", q, loc, 1) for loc in remote]
+        if fh:
+            tasks.append(("fh", q, None, 1))
+    covered = _covered_by_ats()
+    try:
+        from company_key import key as _key
+    except Exception:  # pragma: no cover
+        def _key(x):
+            return x
+    for skill in contract_portals(on):
+        first = portal_locations(skill)[0]
+        tasks += [(skill, f"{emp} {t}" if t else emp, first, 1)
+                  for emp in names if _key(emp) not in covered for t in (asks or [""])]
+    return tasks
+
+
+def named_boards(employers, boards: dict | None = None) -> tuple[dict, list[str]]:
+    """({employer: board} for the employers named that have their own board on file, in
+    profile/boards.py, matched as the app matches employer names; [the names with none])."""
+    from company_key import key as _key
+    import ats_boards
+    boards = ats_boards.BOARDS if boards is None else boards
+    by_key = {_key(e): e for e in boards}
+    mine, none = {}, []
+    for n in employers or ():
+        e = by_key.get(_key(n))
+        if e:
+            mine[e] = boards[e]
+        else:
+            none.append(n)
+    return mine, none
+
+
 PARTIAL = "partial_rows.json"
 
 
@@ -1357,18 +1412,25 @@ def finish(out: str, seen: dict, today: dt.date, jobage: int, n_tasks: int,
 
 
 def _employer_boards(today: dt.date, seen: str | None = None,
-                     keep_ruled_out: bool = False) -> tuple[list[dict], dict[str, str], dict[str, str]]:
+                     keep_ruled_out: bool = False,
+                     employers=None) -> tuple[list[dict], dict[str, str], dict[str, str]]:
     """(rows, {employer: why it was quiet}, {employer: what it left out}) from every
     employer board in profile/boards.py (tools/ats_boards.py). An error is raised to
     whoever waits for the answer, which reports it and carries on. `seen` and
     `keep_ruled_out` are the round's own: a replayed round, or one run with
-    --no-seen-read, judged careers-site pages against the repo's file instead."""
+    --no-seen-read, judged careers-site pages against the repo's file instead. With
+    `employers` (a search limited to them), only their boards are read."""
     from ats_boards import fetch_all as _ats_fetch
     notes: dict[str, str] = {}
     # Passed only when given, so a stand-in for fetch_all written before they existed (a
     # person's own tests have one) still works for an ordinary round.
     extra = dict(({"seen": seen} if seen else {}),
                  **({"keep_ruled_out": True} if keep_ruled_out else {}))
+    if employers is not None:
+        mine, _ = named_boards(employers)
+        if not mine:
+            return [], {}, {}
+        extra["boards"] = mine
     rows, quiet = _ats_fetch(notes=notes, today=today, **extra)
     return rows, quiet, notes
 
@@ -1407,6 +1469,9 @@ def main() -> int:
     ap.add_argument("--before", default=None,
                     help="a widening: the round before's scrape folder; its postings are "
                          "carried over and the requests it had answered are not sent again")
+    ap.add_argument("--employers-file", dest="employers_file", default=None,
+                    help="a search limited to these employers (run_round.py --employers writes "
+                         "the file): their own boards and searches by their names alone")
     a = ap.parse_args()
     if a.move_cursor:
         said = move_cursor()
@@ -1500,7 +1565,15 @@ def main() -> int:
     for skill in [k for k, v in on.items() if v and portals.short(k) in skipped]:
         on[skill] = False
 
-    tasks = build_tasks(on, pages)
+    employers = None
+    if a.employers_file:
+        from run_round import named_employers
+        employers = named_employers(a.employers_file)
+        _, no_board = named_boards(employers)
+        print(f"employers: searching {len(employers)} named employers by name"
+              + (f"; no board of their own on file for {', '.join(no_board)} "
+                 "(tools/ats_boards.py --find \"<employer>\" finds one)" if no_board else ""))
+    tasks = named_tasks(on, pages, employers) if employers is not None else build_tasks(on, pages)
     if not tasks:
         print("portals: none of the portals this scrape can call is on, so this "
               "round is the employer boards alone (python3 tools/portals.py)")
@@ -1589,6 +1662,8 @@ def main() -> int:
 
     def read_boards():
         try:
+            if employers is not None:
+                return _employer_boards(today, a.seen, a.keep_ruled_out, employers)
             return _employer_boards(today, a.seen, a.keep_ruled_out)
         finally:
             boards_took.append(time.monotonic() - searching)

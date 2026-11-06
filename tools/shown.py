@@ -7,7 +7,8 @@ which every tool, and every employer chat's stored prompt, reads by that name. S
 is, each one arrived as "interview_prep.md" or "prep.md", and two employers' documents
 looked the same in the chat (a person's report, 2026-10-22). So what is sent is a copy
 named for the person: "Fernhill Freight Demand Planner interview prep.md", "Wren Allard
-(Fernhill Freight) call prep.md". The copy goes in documents/to_send/, which git ignores
+(Fernhill Freight) call prep.md"; a made resume or letter goes under the name the person
+chose in Settings > File names ("Morgan_Ellis_Fernhill_Freight_CV.pdf"). The copy goes in documents/to_send/, which git ignores
 and every send writes again: the kept file stays the record.
 
     python3 tools/shown.py <document>...    # prints each copy's path: send that file
@@ -142,6 +143,29 @@ def _contact(contact_id, root) -> tuple:
     return name, company
 
 
+def _document_name(rel, root) -> str:
+    """A made resume or letter (cv/, cover_letters/) under the name the person chose in
+    Settings > File names (docpaths.send_name), without its extension: the employer and the
+    role read off the tracker row that names it. "" for any other file."""
+    import docpaths
+    try:
+        if not docpaths.doc_abbr(rel):
+            return ""
+        company = role = ""
+        tracker = os.path.join(root, "job_search_tracker.csv")
+        if os.path.exists(tracker):
+            import csv_store
+            stem = os.path.splitext(rel)[0]
+            for r in reversed(csv_store.dict_rows(tracker, refuse=False)):
+                if any(os.path.splitext(str(r.get(c) or "").strip())[0] == stem
+                       for c in ("cv_file", "cover_letter_file")):
+                    company, role = (r.get("company") or "").strip(), (r.get("role") or "")
+                    break
+        return os.path.splitext(docpaths.send_name(rel, company, role))[0]
+    except Exception:  # noqa: BLE001  no profile: the file keeps its own name
+        return ""
+
+
 def name_for(path, root=None) -> str:
     """The name the person sees for this document, without its extension. `root` is the
     person's files (person.state() unless a tool was given another)."""
@@ -149,6 +173,10 @@ def name_for(path, root=None) -> str:
     rel = local_path.rel(os.path.abspath(path), root).replace(os.sep, "/")
     parts = rel.split("/")
     stem = os.path.splitext(parts[-1])[0]
+    if len(parts) == 2 and parts[0] in ("cv", "cover_letters"):
+        sent = _document_name(rel, root)
+        if sent:
+            return sent
     label = _label(stem)
     if len(parts) >= 4 and parts[:2] == ["documents", "applications"]:
         company, role = _application(parts[2], root)

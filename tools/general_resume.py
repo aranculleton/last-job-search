@@ -49,7 +49,7 @@ import docpaths  # noqa: E402
 import local_path  # noqa: E402
 import person  # noqa: E402
 
-COMPANY = "General"       # the draft's employer: names its files <Prefix>_<Noun>_General
+COMPANY = "General"       # the draft's employer: names its files <Prefix>_General_<Noun>
 SLUG = "general"
 KEEP_SUFFIX = "current"   # documents/cv/<Prefix>_<Noun>_current.pdf: current_resume() finds it
 TITLES = 3                # how many of the search's titles the description names
@@ -220,10 +220,10 @@ def keep_paths(for_contact: str = "") -> tuple[str, str]:
     the place of the person's own (a person's copy, 2026-11-05: one made for a recruiter
     replaced "Your resume", and nothing on his card said it had been made for him)."""
     if for_contact:
-        stem = docpaths.resume_stem(for_contact_word(for_contact))
+        stem = docpaths.general_stem(for_contact_word(for_contact))
         folder = person.state("documents", "network", for_contact)
         return os.path.join(folder, stem + ".pdf"), os.path.join(folder, stem + ".txt")
-    stem = docpaths.resume_stem(KEEP_SUFFIX)
+    stem = docpaths.general_stem(KEEP_SUFFIX)
     folder = person.state(*docpaths.GENERAL_DIR)
     return os.path.join(folder, stem + ".pdf"), os.path.join(folder, stem + ".txt")
 

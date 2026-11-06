@@ -735,16 +735,15 @@ def test_the_app_watch_runs_once_a_day_not_on_every_sync(tmp_path, monkeypatch):
     """The app watch (the maintainer's own repo only) builds the denylist from the whole history
     of the state files and reads every branch of the app; run on every sync, a `--on` run on a
     day with no update took over two minutes (the maintainer's copy, 2026-11-05). Once a day,
-    and again after an update; anyone else's repo starts nothing."""
+    and again after an update; anyone else's repo starts nothing. Each look is started in a
+    process of its own (test_the_app_watch_never_holds_the_days_check)."""
     sys.path.insert(0, os.path.join(ROOT, "tools"))
     import sync_app
     calls = []
 
-    def fake_run(cmd, **kw):
+    def fake_popen(cmd, **kw):
         calls.append(cmd)
-        return subprocess.CompletedProcess(cmd, 0, stdout="App watch: clean (nothing new).\n",
-                                           stderr="")
-    monkeypatch.setattr(sync_app.subprocess, "run", fake_run)
+    monkeypatch.setattr(sync_app.subprocess, "Popen", fake_popen)
     monkeypatch.setattr(sync_app, "_git_dirs", lambda root: (str(tmp_path), str(tmp_path)))
     monkeypatch.setattr(sync_app, "maintainers", lambda: False)
     sync_app.app_watch()
@@ -755,3 +754,48 @@ def test_the_app_watch_runs_once_a_day_not_on_every_sync(tmp_path, monkeypatch):
     assert len(calls) == 1
     sync_app.app_watch(landed=True)
     assert len(calls) == 2
+
+
+def test_the_app_watch_never_holds_the_days_check(tmp_path, monkeypatch, capsys, request):
+    """The day's first --if-stale in the maintainer's copy ran past two minutes, so the chat
+    moved it to the background and the search it was about to start waited (2026-11-06): the
+    app watch, which reads every branch of the app against the whole history of the state
+    files, ran in the foreground. It is started in a process of its own; what it finds is said
+    once, first, by the next sync or --if-stale, and only a look that reached the app marks
+    the day, as before."""
+    sys.path.insert(0, os.path.join(ROOT, "tools"))
+    import sync_app
+    ran, started = [], []
+
+    def fake_run(cmd, **kw):
+        ran.append(cmd)
+        return subprocess.CompletedProcess(cmd, 1, stdout="APP LEAK: 1 match(es) in the public "
+                                           "app's files, all of them 'an invented name'.\n",
+                                           stderr="")
+    monkeypatch.setattr(sync_app.subprocess, "run", fake_run)
+    monkeypatch.setattr(sync_app.subprocess, "Popen", lambda cmd, **kw: started.append(cmd))
+    monkeypatch.setattr(sync_app, "_git_dirs", lambda root: (str(tmp_path), str(tmp_path)))
+    monkeypatch.setattr(sync_app, "maintainers", lambda: True)
+    sync_app.app_watch()
+    # Handed to its own process; nothing of the look itself ran in the sync.
+    assert started and started[0][1:] == [os.path.abspath(sync_app.__file__), "--app-watch-run"]
+    assert ran == []
+    # The look, in that process: what it printed is kept, and a finding marks no day.
+    assert sync_app.run_app_watch() == 0
+    assert ran and ran[0][1].endswith("app_watch.py")
+    assert not os.path.exists(tmp_path / sync_app.WATCHED)
+    assert not os.path.exists(tmp_path / sync_app.WATCH_LOCK)
+    # Said once, first, by the next --if-stale of the same day.
+    capsys.readouterr()
+    rc, _steps = request.getfixturevalue("sync_steps")("--if-stale", stale=False)
+    out = capsys.readouterr().out
+    assert rc == 0 and out.splitlines()[1].startswith("APP LEAK:"), out
+    sync_app.app_watch_said()
+    assert "APP LEAK" not in capsys.readouterr().out
+    # A clean look marks the day, and says its one line once.
+    monkeypatch.setattr(sync_app.subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(
+        cmd, 0, stdout="App watch: clean (nothing new).\n", stderr=""))
+    sync_app.run_app_watch()
+    assert os.path.exists(tmp_path / sync_app.WATCHED)
+    sync_app.app_watch_said()
+    assert capsys.readouterr().out.strip() == "App watch: clean (nothing new)."

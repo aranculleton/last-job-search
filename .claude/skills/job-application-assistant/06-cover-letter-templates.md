@@ -1,5 +1,5 @@
 ---
-framework_version: 2.1.6
+framework_version: 2.1.7
 ---
 
 # Cover Letter Templates and Tailoring Guide
@@ -8,7 +8,7 @@ framework_version: 2.1.6
 
 Cover letters use a custom LaTeX document class (`cover.cls`) with Lato/Raleway fonts.
 
-**Output file:** `cover_letters/<Prefix>_Cover_Letter_<ABBR>.tex`, where `<Prefix>` is `identity.file_prefix` in `profile/person.json` (see the File naming table in `05-cv-templates.md`)
+**Output file:** `cover_letters/<Prefix>_<ABBR>_Cover_Letter.tex`, where `<Prefix>` is `identity.file_prefix` in `profile/person.json` (see the File naming table in `05-cv-templates.md`)
 **Compile with:** XeLaTeX (cover.cls requires fontspec)
 **Font directory:** `cover_letters/OpenFonts/fonts/`
 **Colour:** the letter takes its resume's style (`templates/doc_style.py`, "Styles" in `05-cv-templates.md`): the name and the bullet marks in the accent, the contact line grey as always. With no style set, the letter is exactly as it always was.
@@ -17,16 +17,16 @@ Cover letters use a custom LaTeX document class (`cover.cls`) with Lato/Raleway 
 ### Compile command
 
 ```bash
-cd cover_letters && xelatex -interaction=nonstopmode <Prefix>_Cover_Letter_<ABBR>.tex
+cd cover_letters && xelatex -interaction=nonstopmode <Prefix>_<ABBR>_Cover_Letter.tex
 ```
 
-Expected output: `Output written on <Prefix>_Cover_Letter_<ABBR>.pdf (1 page, ...)`. Any page count other than 1 is a failure that must be fixed before presenting to the user.
+Expected output: `Output written on <Prefix>_<ABBR>_Cover_Letter.pdf (1 page, ...)`. Any page count other than 1 is a failure that must be fixed before presenting to the user.
 
 ## Compile-and-Inspect Loop (MANDATORY)
 
 After writing the cover letter and before presenting to the user, always compile and visually inspect the PDF. Iterate until the layout is clean:
 
-1. Run `xelatex -interaction=nonstopmode <Prefix>_Cover_Letter_<ABBR>.tex`
+1. Run `xelatex -interaction=nonstopmode <Prefix>_<ABBR>_Cover_Letter.tex`
 2. Confirm page count is exactly 1 and compile succeeded
 3. Read the PDF via the Read tool and visually check: signature fits at the bottom, no text cut off, bullet font matches body
 
@@ -207,7 +207,7 @@ is weaker, the concessions were doing real work. If it is stronger, they were no
 - [ ] Spelling follows the profile's variant (`documents.spelling` in `profile/person.json`) throughout (rule 7)
 - [ ] Uses the profile's noun for the document (`documents.noun`), never one of `documents.banned_nouns`
 - [ ] At most one gap sentence, mid-letter, never in the closing (rule 8)
-- [ ] Filename follows `<Prefix>_Cover_Letter_<ABBR>`
+- [ ] Filename follows `<Prefix>_<ABBR>_Cover_Letter`
 - [ ] No cliches or empty filler
 - [ ] Every claim backed by specific example
 - [ ] Forward-looking framing: focuses on tasks you'll solve, not just past duties

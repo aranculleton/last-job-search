@@ -67,7 +67,7 @@ novel number, and it was LaTeX residue. The documents are already grounded, so
 this is a regression guard rather than a repair, the same shape as voice_check.
 
 Usage:
-    python3 tools/check_numbers.py cv/<Prefix>_Resume_ACME.tex
+    python3 tools/check_numbers.py cv/<Prefix>_ACME_Resume.tex
     python3 tools/check_numbers.py cv/*.tex
     python3 tools/check_numbers.py --drafts rounds/r1/drafts.json [cv/*.tex]
 Exit 0 clean, 1 an ungrounded number, 2 a bad invocation.

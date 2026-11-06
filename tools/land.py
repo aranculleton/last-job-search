@@ -64,9 +64,12 @@ page update that took master since (app_setup.take_master) adds only a merge com
 is no reason to say "not merged"; newer work of the chat's own is kept, with master merged
 into it, and merges that hold nothing master lacks are no newer work.
 
-While it runs it holds a lock in the checkout's git folder, and a page update takes no
-master meanwhile (app_setup.take_master); a git command refused because another one holds
-git's own index.lock is tried again for a few seconds.
+While it runs it holds a lock in the checkout's git folder, taken in one step (O_CREAT |
+O_EXCL), and a page update takes no master meanwhile (app_setup.take_master); a git command
+refused because another one holds git's own index.lock is tried again for a few seconds.
+Saves queue: one landing at a time a checkout. A landing (or --detach) asked for while one
+runs is recorded (WANTED_FILE) and taken by the running one before it lets go, or by the next,
+so only one check ever runs and later work is never dropped.
 
 Each git command is its own call, nothing is ever force-pushed, and everything printed is for
 Claude, never the person (CLAUDE.md, "Saving"), but a line that says "tell the person". Exit
@@ -248,7 +251,42 @@ def landing(root: str = ROOT) -> bool:
     d = git_dir(root)
     if not d:
         return False
-    p = os.path.join(d, LOCK_FILE)
+    return _live(os.path.join(d, LOCK_FILE))
+
+
+def lock_text(when: float | None = None, token: str = "") -> str:
+    """The lock's one line: this process, when the landing last said it was alive (on its own
+    clock), and the token of the run that holds it. A lock an older version wrote has no token
+    and is read the same way."""
+    return "%d %s%s\n" % (os.getpid(), time.strftime(LOCK_STAMP, time.gmtime(when)),
+                          (" " + token) if token else "")
+
+
+# The landing lock is taken in one step (os.open with O_CREAT | O_EXCL, which Windows has too):
+# looking for it and then writing it let two landings started together both take it, and each
+# ran its own check side by side (the maintainer's copy, 2026-11-06). _MINE: the tokens this
+# process holds, by (git folder, thread); _RUN: where a detached run holds it for all its
+# rounds, so the landing and the after-merge step inside it are that run's.
+_MINE: dict = {}
+_RUN: set = set()
+
+
+def _lock_key(d: str) -> tuple[str, int]:
+    import threading
+    return (os.path.normcase(os.path.realpath(d)), threading.get_ident())
+
+
+def _lock_words(p: str) -> list[str]:
+    try:
+        with open(p, encoding="utf-8") as fh:
+            return fh.read().split()
+    except OSError:
+        return []
+
+
+def _live(p: str) -> bool:
+    """Is the lock at `p` a landing running now: its process alive and its stamp younger than
+    LOCK_STALE_S (a landing killed part way leaves one behind)?"""
     try:
         with open(p, encoding="utf-8") as fh:
             words = fh.read().split()
@@ -266,34 +304,201 @@ def landing(root: str = ROOT) -> bool:
     return time.time() - began < LOCK_STALE_S and (pid <= 0 or _alive(pid))
 
 
-def lock_text(when: float | None = None) -> str:
-    """The lock's one line: this process, and when the landing began on its own clock."""
-    return "%d %s\n" % (os.getpid(), time.strftime(LOCK_STAMP, time.gmtime(when)))
-
-
-@contextlib.contextmanager
-def _holding(root: str):
-    """The landing's lock, for as long as it runs; False when another landing holds it."""
+def _take_lock(root: str) -> str:
+    """The landing lock, taken atomically: its token, or "" while another landing holds it.
+    A stale one is moved aside under a name of this run's own and taken over; one found live
+    after all (judged from an older reading) is put back. "-" where there is no git folder or
+    the lock cannot be written: nothing to hold, as before."""
+    import uuid
     d = git_dir(root)
     if not d:
-        yield True
-        return
-    if landing(root):
-        yield False
-        return
+        return "-"
     p = os.path.join(d, LOCK_FILE)
-    try:
-        with open(p, "w", encoding="utf-8", newline="\n") as fh:
-            fh.write(lock_text())
-    except OSError:
-        pass
-    try:
-        yield True
-    finally:
+    for _ in range(3):
+        token = uuid.uuid4().hex
+        try:
+            fd = os.open(p, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+        except FileExistsError:
+            if _live(p):
+                return ""
+            aside = "%s.stale-%d-%s" % (p, os.getpid(), token[:8])
+            try:
+                os.rename(p, aside)
+            except OSError:
+                continue                    # another landing moved it first: try again
+            if _live(aside):
+                # Never over a third one: a link, or Windows' rename, never replaces a file.
+                try:
+                    os.link(aside, p)
+                    os.remove(aside)
+                except FileExistsError:
+                    pass                    # a third landing holds it now: never over it
+                except (OSError, AttributeError):
+                    # No links here (some file systems): a rename, only while nothing is
+                    # there, since on POSIX a rename replaces what it lands on.
+                    if not os.path.exists(p):
+                        try:
+                            os.rename(aside, p)
+                        except OSError:
+                            pass
+                return ""
+            try:
+                os.remove(aside)
+            except OSError:
+                pass
+            continue
+        except OSError:
+            return "-"
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write(lock_text(token=token))
+        _MINE[_lock_key(d)] = token
+        return token
+    return ""
+
+
+def _drop_lock(root: str, token: str) -> None:
+    """Let the lock go, only where it is still this run's own."""
+    d = git_dir(root)
+    if not d or not token or token == "-":
+        return
+    _MINE.pop(_lock_key(d), None)
+    _RUN.discard(_lock_key(d))
+    p = os.path.join(d, LOCK_FILE)
+    words = _lock_words(p)
+    if len(words) >= 3 and words[2] == token:
         try:
             os.remove(p)
         except OSError:
             pass
+
+
+def _restamp(p: str, pid: str, token: str) -> None:
+    try:
+        with open(p, "r+", encoding="utf-8", newline="\n") as fh:
+            fh.write("%s %s %s\n" % (pid, time.strftime(LOCK_STAMP, time.gmtime()), token))
+            fh.truncate()
+    except OSError:
+        pass
+
+
+def _beat(root: str) -> None:
+    """Say the landing is still alive: its stamp moved on, so a long check is never taken for
+    a landing killed part way (LOCK_STALE_S) with a second one started beside it."""
+    d = git_dir(root)
+    token = _MINE.get(_lock_key(d)) if d else None
+    if not token or token == "-":
+        return
+    p = os.path.join(d, LOCK_FILE)
+    words = _lock_words(p)
+    if len(words) >= 3 and words[2] == token:
+        _restamp(p, words[0], token)
+
+
+def _hand_over(root: str, token: str, pid) -> None:
+    """The lock detach took, given to the process it started to hold it."""
+    d = git_dir(root)
+    if not d or not token or token == "-":
+        return
+    _MINE.pop(_lock_key(d), None)
+    p = os.path.join(d, LOCK_FILE)
+    words = _lock_words(p)
+    # Only the lock this run took: the process started may have ended and let it go, and
+    # another landing taken it, already.
+    if len(words) >= 3 and words[2] == token:
+        _restamp(p, str(pid if isinstance(pid, int) else 0), token)
+
+
+def _adopt(root: str, token: str) -> str:
+    """The lock detach took and handed to this process: its token, where it is still there."""
+    d = git_dir(root)
+    if not d or not token:
+        return ""
+    words = _lock_words(os.path.join(d, LOCK_FILE))
+    if len(words) >= 3 and words[2] == token:
+        _MINE[_lock_key(d)] = token
+        _restamp(os.path.join(d, LOCK_FILE), str(os.getpid()), token)
+        return token
+    return ""
+
+
+@contextlib.contextmanager
+def _holding(root: str, pass_on: bool = True):
+    """The landing's lock, for as long as it runs; False when another landing holds it. Inside
+    a detached run, which holds it for all its rounds, it is that run's. With `pass_on`, a save
+    asked for while it was held (by the after-merge step, a page update taking master) is
+    started once it is let go: whoever holds the lock passes the queue on."""
+    d = git_dir(root)
+    if not d:
+        yield True
+        return
+    if _lock_key(d) in _RUN:
+        yield True
+        return
+    token = _take_lock(root)
+    if not token:
+        yield False
+        return
+    try:
+        yield True
+    finally:
+        _drop_lock(root, token)
+        if pass_on and _asked(root):
+            _next(root)
+
+
+def _next(root: str) -> None:
+    """The landing a queued save waits for, started now (in a process of its own)."""
+    try:
+        with contextlib.redirect_stdout(io.StringIO()):
+            detach(root, "")
+    except Exception:  # noqa: BLE001  the request stays asked; the next landing takes it
+        pass
+
+
+def _ask(root: str, message: str = "") -> None:
+    """A save asked for while one runs: kept (WANTED_FILE) for the running one, or the next."""
+    d = git_dir(root)
+    if not d:
+        return
+    try:
+        with open(os.path.join(d, WANTED_FILE), encoding="utf-8") as fh:
+            got = json.load(fh)
+        had = str(got.get("message") or "") if isinstance(got, dict) else ""
+    except (OSError, ValueError):
+        had = ""
+    both = "; ".join(m for m in dict.fromkeys((had, message or "")) if m.strip())
+    _mark(root, WANTED_FILE, json.dumps({"message": both, "at": time.time()}) + "\n")
+
+
+def _asked(root: str) -> bool:
+    """A save asked for and not taken yet, however long ago (wanted() ages it for the hook)."""
+    d = git_dir(root)
+    return bool(d) and os.path.exists(os.path.join(d, WANTED_FILE))
+
+
+def _take_ask(root: str) -> tuple[bool, str]:
+    """(asked, its message), the request taken in one step: one asked a moment later is a new
+    file, kept for the next round."""
+    d = git_dir(root)
+    if not d:
+        return False, ""
+    p = os.path.join(d, WANTED_FILE)
+    taken = "%s.taken-%d" % (p, os.getpid())
+    try:
+        os.replace(p, taken)
+    except OSError:
+        return False, ""
+    try:
+        with open(taken, encoding="utf-8") as fh:
+            got = json.load(fh)
+        msg = str(got.get("message") or "") if isinstance(got, dict) else ""
+    except (OSError, ValueError):
+        msg = ""
+    try:
+        os.remove(taken)
+    except OSError:
+        pass
+    return True, msg
 
 
 def _record_pushed(root: str, name: str) -> None:
@@ -358,6 +563,155 @@ def _check_command(root: str, check) -> list[str]:
     except Exception:  # noqa: BLE001
         pass
     return [shell or "bash", os.path.join("tools", "ci_local.sh"), "--quick"]
+
+
+CHECKED_ALREADY = "the same commit the last landing checked green and pushed\n"
+BEAT_S = 60
+
+
+ASIDE_ENV = "LJS_OWN_TESTS_ASIDE"     # ci_local.sh: a file of the person's tests to set aside
+ASIDE_FILE = "ljs-own-tests-aside.txt"
+
+
+def _node_id(root: str, name: str) -> str:
+    """pytest's id of a test from the name its junit report gives ("profile.tests.test_x.
+    TestA::test_b[1]" is "profile/tests/test_x.py::TestA::test_b[1]"), or ""."""
+    if ".py::" in name:
+        return name.replace("\\", "/")       # a check's own FAILED line gives the id itself
+    dotted, _, test = name.rpartition("::")
+    parts = dotted.split(".") if dotted else []
+    for i in range(len(parts), 0, -1):
+        path = "/".join(parts[:i]) + ".py"
+        if os.path.isfile(os.path.join(root, *parts[:i]) + ".py"):
+            return "::".join([path, *parts[i:], test])
+    return ""
+
+
+def _set_aside(root: str, names: list[str]) -> str:
+    """The file the check reads to set these of the person's own tests aside, or ""."""
+    ids = [n for n in (_node_id(root, x) for x in names) if n.startswith("profile/tests/")]
+    d = git_dir(root)
+    if not ids or not d:
+        return ""
+    p = os.path.join(d, ASIDE_FILE)
+    try:
+        with open(p, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write("\n".join(ids) + "\n")
+    except OSError:
+        return ""
+    return p
+
+
+# The longest a landing check may run. The lock is kept alive while it runs (_beat), so a
+# check that hung would otherwise hold every save in the copy for ever; before the lock was
+# kept alive it went stale after LOCK_STALE_S, and this keeps that bound (the release review,
+# 2026-11-06).
+CHECK_DEADLINE_S = LOCK_STALE_S
+CHECK_STOPPED = ("land: the check ran past %d minute(s) and was stopped; nothing was pushed "
+                 "to master, and the work is kept\n")
+
+
+def _stop(p: subprocess.Popen) -> None:
+    """End the check and what it started: its process group on POSIX, the process elsewhere."""
+    try:
+        if os.name == "posix":
+            import signal
+            os.killpg(p.pid, signal.SIGKILL)
+        else:
+            p.kill()
+    except OSError:
+        try:
+            p.kill()
+        except OSError:
+            pass
+
+
+def _run_check(root: str, cmd: list[str], aside: str = "") -> tuple[int, str]:
+    """The landing check: (its exit code, what it printed). The lock's stamp is moved on each
+    minute it runs, so a long check is never taken for a landing killed part way, and past
+    CHECK_DEADLINE_S it is stopped and counts as not green. `aside`: the file naming the
+    person's own tests an update broke, which the check sets aside."""
+    env = dict(os.environ)
+    env.pop(ASIDE_ENV, None)
+    if aside:
+        env[ASIDE_ENV] = aside
+    # A process group of its own, so a stop ends pytest's workers with it.
+    kw = {"start_new_session": True} if os.name == "posix" else \
+        {"creationflags": getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)}
+    try:
+        p = subprocess.Popen(cmd, cwd=root, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                             text=True, encoding="utf-8", errors="replace",
+                             stdin=subprocess.DEVNULL, env=env, **kw)
+    except OSError as e:
+        return 1, "the check could not start: %s\n" % e
+    out = err = ""
+    until = time.monotonic() + CHECK_DEADLINE_S
+    while True:
+        left = until - time.monotonic()
+        if left <= 0:
+            _stop(p)
+            try:
+                out, err = p.communicate(timeout=30)
+            except (subprocess.TimeoutExpired, ValueError):
+                out, err = "", ""
+            return 1, (out or "") + (err or "") + CHECK_STOPPED % max(1, CHECK_DEADLINE_S // 60)
+        try:
+            out, err = p.communicate(timeout=min(BEAT_S, left))
+            break
+        except subprocess.TimeoutExpired:
+            _beat(root)
+    return p.returncode, (out or "") + (err or "")
+
+
+def _own_tests_owed(root: str) -> list[str]:
+    """The person's own tests an update broke that are not brought in line yet, before the
+    landing's check runs: those the last run recorded (sync_app.own_tests_owed, run again
+    only when something they check changed), and, where this landing carries an update their
+    tests were never run against (a chat that took it elsewhere, a fresh computer with no
+    record), a run of them now. [] where there are none, or it cannot be told."""
+    if not os.path.isdir(os.path.join(root, "profile", "tests")):
+        return []
+    try:
+        import sync_app
+        owed = sync_app.own_tests_owed(root)
+        if owed:
+            return owed
+        rec = sync_app.own_tests_record(root) or {}
+        app = sync_app.app_tree(root)
+        if not app or rec.get("app") == app:
+            return []
+        # No update in this landing: the app's code is master's own, and the check runs them.
+        if _git(root, "rev-parse", "origin/master:tools").stdout.strip() == app:
+            return []
+        failures = sync_app.own_test_failures(root)
+        sync_app.record_own_tests(root, failures)
+        return [str(n) for n, _m in failures or []]
+    except Exception:  # noqa: BLE001  unsure: the check itself says
+        return []
+
+
+def _recorded_failures(root: str) -> list[tuple[str, str]]:
+    """[(test, message)] the record of the person's own tests holds as failing now."""
+    try:
+        import sync_app
+        rec = sync_app.own_tests_record(root) or {}
+    except Exception:  # noqa: BLE001
+        return []
+    return [(str(f[0]), str(f[1]) if len(f) > 1 else "") for f in rec.get("failures") or []
+            if f]
+
+
+def _work_since_push(root: str) -> bool:
+    """Anything a queued save would add: files no commit holds, or commits since the last
+    push."""
+    try:
+        import save_state
+        if save_state.unsaved(root):
+            return True
+    except Exception:  # noqa: BLE001  unsure: land, which finds out
+        return True
+    sent = pushed(root)
+    return bool(sent) and _git(root, "rev-parse", "HEAD").stdout.strip() != sent
 
 
 def failing(out: str) -> list[str]:
@@ -839,6 +1193,25 @@ MADE = ("draft.json", "drafts.json", "cost.json", "verify.json", "tweaks.json", 
         "screening_answers.md")
 MADE_EXT = (".tex", ".pdf")
 _DOC_ABBR = re.compile(r"_(?:Resume|CV|Cover_Letter)_([A-Za-z0-9_]+)$")
+# The order made since 2026-11-06, <Prefix>_<ABBR>_<kind>: the kind last.
+_DOC_KIND_LAST = re.compile(r"^(.+?)_(?:Resume|CV|Cover_Letter)$")
+_KINDS = ("Resume", "CV", "Cover_Letter")
+
+
+def _doc_abbr(stem: str) -> str:
+    """The abbreviation in a resume or letter's name, in either order. The profile's own
+    prefix and noun tell where the abbreviation starts (docpaths.doc_abbr); without a
+    profile, the name before its kind word stands for it, the same for both documents."""
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import docpaths
+        got = docpaths.doc_abbr(stem)
+        if got:
+            return got
+    except Exception:  # noqa: BLE001  no profile here: the plain reading below
+        pass
+    m = _DOC_ABBR.search(stem) or _DOC_KIND_LAST.search(stem)
+    return m.group(1) if m else ""
 
 
 def _key(text: str) -> str:
@@ -888,9 +1261,9 @@ def units(root: str, paths, revs: tuple[str, ...]) -> tuple[dict[str, str], dict
         if top + "/" not in APP_DOCS or "/" in name or not name:
             continue
         stem = name.split(".", 1)[0]
-        abbr = next((a for a in named if stem.endswith("_" + a)), "")
-        m = _DOC_ABBR.search(stem)
-        out[p] = _key(abbr or (m.group(1) if m else "")) or "doc:" + stem
+        abbr = next((a for a in named if stem.endswith("_" + a)
+                     or any(stem.endswith("_%s_%s" % (a, k)) for k in _KINDS)), "")
+        out[p] = _key(abbr or _doc_abbr(stem)) or "doc:" + stem
     docs = set(out.values())
     homes: dict[str, str] = {}
     for p in paths:
@@ -1079,12 +1452,33 @@ def land(root: str = ROOT, message: str = "", check=None, sleep=time.sleep) -> i
         print("land: this is the app itself, which lands through its own pull request and CI "
               "(MAINTAINING.md); nothing was pushed")
         return 2
-    with _holding(root) as mine:
+    with _holding(root, pass_on=False) as mine:
         if not mine:
-            print("land: another landing is running in this checkout; nothing was pushed. When "
-                  "it ends it says whether this work still waits; land again then")
-            return 2
+            # Queued, never run beside it: the running one takes it before it lets go, or the
+            # next one does (two checks side by side each took over ten minutes, 2026-11-06).
+            _ask(root, message)
+            print("land: another landing is running in this checkout; it saves this work too "
+                  "when it ends. Nothing to do or say")
+            return 0
         code = _land(root, message, check, sleep)
+        # A save asked for while this ran (another chat, a tap): taken here, one at a time,
+        # while this still holds the lock. A detached run takes its own between rounds.
+        d = git_dir(root)
+        inside = bool(d) and _lock_key(d) in _RUN
+        n = 0
+        while not inside and code == 0 and n < QUEUED_ROUNDS and _asked(root):
+            n += 1
+            _asked_too, msg = _take_ask(root)
+            if not _work_since_push(root):
+                continue
+            print("land: work asked for while this ran is saved too; where steps follow, they "
+                  "replace any above")
+            code = _land(root, msg or message, check, sleep)
+    if not inside and _asked(root):
+        # Asked in the moment this one let go, or while it ran and it stopped short: another
+        # chat was told its work is saved too, so the next one is started for it now, whatever
+        # this one's own end (its result kept for a chat in RESULT_FILE).
+        _next(root)
     # Work written while this ran (a second turn, a quick tap) was in no commit, and nothing
     # started a landing for it once this one ended (the stranger audit, 2026-11-03, X-62).
     try:
@@ -1164,12 +1558,52 @@ def _land(root: str, message: str, check, sleep) -> int:
         print("land: nothing to land")
         return 0
 
-    cmd = _check_command(root, check)
-    c = subprocess.run(cmd, cwd=root, capture_output=True, text=True, encoding="utf-8",
-                       errors="replace")
-    out = c.stdout + c.stderr
-    if c.returncode != 0:
+    # The person's own tests an update broke, not in line yet: set aside for this save, never
+    # holding it, and their bringing in line queued for a background step that needs nobody
+    # (the own-tests improvement). A job's chat that was told to fix them first missed the
+    # line, and its finished work was stuck behind five tests an update changed (the
+    # maintainer's copy, 2026-11-06). Any other failure still stops the save.
+    owed = _own_tests_owed(root)
+    aside = _set_aside(root, owed)
+    if owed:
+        queued = False
+        try:
+            import profile_upgrades
+            queued = profile_upgrades.queue_own_tests(root)
+        except Exception:  # noqa: BLE001  the landing goes on; the next sync lists it
+            pass
+        print("land: %d of the person's own tests an update changed are set aside for this "
+              "save%s; nothing to say about it" % (
+                  len(owed), "; bringing them in line is queued for the background"
+                  if queued else ""))
+    head = _git(root, "rev-parse", "HEAD").stdout.strip()
+    if head and head == pushed(root):
+        # Exactly what the last landing checked green and pushed: never checked again (a save
+        # queued behind another, with nothing new, ran a second ten-minute check).
+        rc, out = 0, CHECKED_ALREADY
+    else:
+        rc, out = _run_check(root, _check_command(root, check), aside)
+    if rc != 0:
         own = own_tests_only(out)
+        if own:
+            # More of their own tests the update broke than the record knew (a run on another
+            # computer, a test that fails only beside another): set aside with the rest, the
+            # bringing in line queued, and checked once more, never held for them.
+            known = _recorded_failures(root)
+            names = [n for n, _m in own if n not in {k for k, _ in known}]
+            _record_own(root, known + [(n, m) for n, m in own if n in names])
+            aside = _set_aside(root, [k for k, _ in known] + names)
+            try:
+                import profile_upgrades
+                profile_upgrades.queue_own_tests(root)
+            except Exception:  # noqa: BLE001
+                pass
+            rc, out = _run_check(root, _check_command(root, check), aside)
+            own = own_tests_only(out) if rc != 0 else None
+            if rc == 0:
+                print("land: %d more of the person's own tests an update changed are set aside "
+                      "for this save; nothing to say about it" % len(names))
+    if rc != 0:
         if own is not None:
             # Only the person's own tests, which an update changed what they check: said as
             # that, with the step, never as a generic failure (a person's copy, 2026-11-05:
@@ -1184,7 +1618,8 @@ def _land(root: str, message: str, check, sleep) -> int:
         for ln in failing(out):
             print(ln)
         return 1
-    if re.search(r"^\s+pytest \(profile/tests, on this person\)\s+PASS", out, re.M):
+    if not aside and re.search(r"^\s+pytest \(profile/tests, on this person\)\s+PASS", out,
+                               re.M):
         _record_own(root, [])             # they pass now: no command says the step again
 
     name, why = _own_branch(root)
@@ -1344,10 +1779,31 @@ def wanted(root: str = ROOT) -> bool:
     LOCK_STALE_S)?"""
     d = git_dir(root)
     p = os.path.join(d, WANTED_FILE) if d else ""
-    try:
-        return bool(p) and time.time() - os.path.getmtime(p) < LOCK_STALE_S
-    except OSError:
+    if not p:
         return False
+    # Aged on the clock that wrote it, its own "at", as the lock is (landing): the file's
+    # time is the disk's clock, and on a clock moved a month on, a mark a second old read as
+    # stale, so the hook held the turn the background save was already taking (4.11.0's
+    # clock-moved-on runs). A mark with no stamp is aged by the file.
+    try:
+        with open(p, encoding="utf-8") as fh:
+            began = float(json.loads(fh.read() or "{}").get("at"))
+    except (OSError, ValueError, TypeError, AttributeError):
+        try:
+            began = os.path.getmtime(p)
+        except OSError:
+            return False
+    age = time.time() - began
+    if age >= LOCK_STALE_S:
+        return False
+    # Owned only while a landing is alive to take it (or for the moment one takes to start):
+    # a save queued behind one that then stopped, or behind an older version's landing that
+    # never reads the queue, sat here unowned while the hook held nobody for it, and the work
+    # could go with the chat's computer (the release review, 2026-11-06).
+    return age < WANTED_GRACE_S or landing(root)
+
+
+WANTED_GRACE_S = 60
 
 
 def _mark(root: str, name: str, text: str = "") -> str:
@@ -1374,13 +1830,16 @@ def _unmark(root: str, name: str) -> None:
 
 def detach(root: str = ROOT, message: str = "", popen=subprocess.Popen) -> int:
     """Start the landing in a process of its own and return at once: one line, nothing to
-    wait for. A landing already running is only asked to land again once it ends."""
+    wait for. A landing already running is only asked to land again once it ends: the lock is
+    taken here, in one step, and handed to the process started, so two asked together never
+    start two (each started its own, and each ran the check, 2026-11-06)."""
     if _the_app(root):
         print("land: this is the app itself, which lands through its own pull request and CI "
               "(MAINTAINING.md); nothing was pushed")
         return 2
-    _mark(root, WANTED_FILE, json.dumps({"message": message, "at": time.time()}) + "\n")
-    if landing(root):
+    _ask(root, message)
+    token = _take_lock(root)
+    if not token:
         print("land: saving in the background (one already running saves this too).")
         return 0
     d = git_dir(root)
@@ -1393,14 +1852,16 @@ def detach(root: str = ROOT, message: str = "", popen=subprocess.Popen) -> int:
         {"creationflags": getattr(subprocess, "DETACHED_PROCESS", 0)
          | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)}
     try:
-        popen([sys.executable, os.path.abspath(__file__), "--run-detached", "--message",
-               message], cwd=root, stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT,
-              close_fds=True, **kw)
+        child = popen([sys.executable, os.path.abspath(__file__), "--run-detached", "--message",
+                       message, "--lock", token], cwd=root, stdin=subprocess.DEVNULL,
+                      stdout=out, stderr=subprocess.STDOUT, close_fds=True, **kw)
     except OSError as e:
+        _drop_lock(root, token)
         _unmark(root, WANTED_FILE)
         print("land: the background save could not start (%s): run python3 tools/land.py in "
               "the background instead" % e)
         return 2
+    _hand_over(root, token, getattr(child, "pid", 0))
     print("land: saving in the background; nothing to wait for or say.")
     return 0
 
@@ -1481,15 +1942,41 @@ def github_waiting(root: str = ROOT) -> str:
 
 
 def run_detached(root: str = ROOT, message: str = "", check=None, sleep=time.sleep,
-                 land_fn=None, finish=None) -> int:
+                 land_fn=None, finish=None, token: str = "") -> int:
     """The detached landing itself: land, then the pull request and its merge on GitHub, then
-    the branch moved to master; again for work written while it ran, DETACHED_ROUNDS at most.
+    the branch moved to master, all under one lock (the one detach took and handed over, or
+    taken here); again for every save asked for while it ran, and for work written while it
+    ran (DETACHED_ROUNDS of those at most). A save asked for during its last round is never
+    dropped: past QUEUED_ROUNDS it is left asked and the next landing is started for it.
     Everything it prints goes to its log; what a chat must still do goes to RESULT_FILE."""
     land_fn = land_fn or land
     finish = finish or finish_on_github
-    code = 0
-    for _ in range(DETACHED_ROUNDS):
-        _unmark(root, WANTED_FILE)
+    token = _adopt(root, token) or _take_lock(root)
+    if not token:
+        print("land: another landing is running in this checkout; it saves this too")
+        return 0
+    d = git_dir(root)
+    if d:
+        _RUN.add(_lock_key(d))
+    try:
+        code = _rounds(root, message, check, sleep, land_fn, finish)
+    finally:
+        _drop_lock(root, token)
+    if _asked(root):
+        _next(root)            # asked after the last round it would take: the next one, now
+    return code
+
+
+QUEUED_ROUNDS = 12
+
+
+def _rounds(root: str, message: str, check, sleep, land_fn, finish) -> int:
+    code, written, n = 0, 0, 0
+    while n < QUEUED_ROUNDS:
+        n += 1
+        _asked_too, msg = _take_ask(root)
+        message = msg or message
+        _beat(root)
         READY.clear()
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
@@ -1510,9 +1997,12 @@ def run_detached(root: str = ROOT, message: str = "", check=None, sleep=time.sle
                                "calls:" % why] + \
                     [ln for ln in said[at:].splitlines()[1:] if ln.strip()]
         _keep_result(root, keep)
-        if not wanted(root) and "were written while this ran" not in said:
-            break
-    _unmark(root, WANTED_FILE)
+        if _asked(root):
+            continue                   # a save asked for while this round ran: always taken
+        if "were written while this ran" in said and written < DETACHED_ROUNDS - 1:
+            written += 1
+            continue
+        break
     return code
 
 
@@ -1537,7 +2027,11 @@ def main(argv: list[str] | None = None, root: str = ROOT, check=None, sleep=time
         if "--message" in argv and argv.index("--message") + 1 < len(argv):
             msg = argv[argv.index("--message") + 1]
         if "--run-detached" in argv:
-            return run_detached(root, msg, check=check, sleep=sleep)
+            # The lock detach took for this process; started by an older version, none.
+            token = ""
+            if "--lock" in argv and argv.index("--lock") + 1 < len(argv):
+                token = argv[argv.index("--lock") + 1]
+            return run_detached(root, msg, check=check, sleep=sleep, token=token)
         return detach(root, msg)
     if "--waiting" in argv:
         fetch_waiting(root)

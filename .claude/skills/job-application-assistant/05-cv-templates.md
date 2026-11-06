@@ -1,5 +1,5 @@
 ---
-framework_version: 2.1.14
+framework_version: 2.1.15
 ---
 
 # Resume Templates and Tailoring Guide
@@ -10,7 +10,7 @@ framework_version: 2.1.14
 
 All resumes use the moderncv LaTeX package with the "banking" style and black text (the "black" color scheme).
 
-**Output file:** `cv/<Prefix>_Resume_<ABBR>.tex`, where `<Prefix>` is `identity.file_prefix` in `profile/person.json`
+**Output file:** `cv/<Prefix>_<ABBR>_Resume.tex`, where `<Prefix>` is `identity.file_prefix` in `profile/person.json`
 **Compile with:** **lualatex** on MiKTeX/TeX Live for the template; **xelatex** for a design (see "Designs" below; the `.tex` names its engine on its `Compile with:` line). pdflatex often fails on modern MiKTeX installs with `fontawesome5` font-expansion errors; lualatex handles the same sources cleanly.
 **Fact source:** the grounding sources CLAUDE.md, "The person", defines: the files
 `profile/person.json` `grounding.sources` names (by default `profile/01-candidate-profile.md`,
@@ -18,7 +18,7 @@ the Candidate Profile section of `profile/CLAUDE.md` and `profile/bullets.py`), 
 winning where they disagree. A fact only an older resume carries is written into `01` before
 it is used. **Never `cv/main_example.tex`**: it is an
 unpopulated upstream template whose bullets are `[YOUR_NAME]`-style placeholders, and reading it
-contributes no facts. Previously generated `cv/<Prefix>_Resume_<ABBR>.tex` files may be read
+contributes no facts. Previously generated `cv/<Prefix>_<ABBR>_Resume.tex` files may be read
 for structure and phrasing, never as a source of claims.
 
 ## File naming (applies to every generated document)
@@ -29,8 +29,12 @@ attachment. Never emit a machine-shaped name like
 
 | Document | Pattern | Example |
 |---|---|---|
-| Resume | `<Prefix>_Resume_<Name>.tex` / `.pdf` | `<Prefix>_Resume_HarbourFreight.pdf` |
-| Cover letter | `<Prefix>_Cover_Letter_<Name>.tex` / `.pdf` | `<Prefix>_Cover_Letter_HarbourFreight.pdf` |
+| Resume | `<Prefix>_<Name>_Resume.tex` / `.pdf` | `<Prefix>_HarbourFreight_Resume.pdf` |
+| Cover letter | `<Prefix>_<Name>_Cover_Letter.tex` / `.pdf` | `<Prefix>_HarbourFreight_Cover_Letter.pdf` |
+
+The person, then the employer, then the kind of document (`tools/docpaths.py` names them). A
+document made until 2026-11-06 has the kind second (`<Prefix>_Resume_<Name>`) and keeps that
+name: it may have gone to an employer under it, and every tool still finds it.
 
 **`<Name>` is not chosen by hand. `tools/doc_name.py` derives it**, and
 `render_application.py` calls it, so a draft that supplies its own `abbr` only gets it if it
@@ -50,7 +54,7 @@ hand-naming a file.
 
 **This used to ask for a 2-to-4 character UPPERCASE abbreviation, and that was wrong.** It is
 right for a company that writes itself that way and wrong for every company that does not.
-Applied to the rest it produces `<Prefix>_Resume_HARBOURFREIGHT.pdf` and `_QUAYSIDE.pdf`: not
+Applied to the rest it produces `<Prefix>_HARBOURFREIGHT_Resume.pdf` and `_QUAYSIDE.pdf`: not
 abbreviations, just the company name shouted. A shouted name looks machine-generated, which is
 the one thing a filename on an attachment must never do. `doc_name.is_shouty()` is the check,
 and `tools/stage_picks.py stage` runs it on every name it picks.
@@ -111,10 +115,10 @@ any, live in the cover letter and are capped at one sentence there.
 
 ```bash
 export TEXMFHOME="$PWD/texmf"   # vendored icon fonts, texmf/README.md
-cd cv && lualatex -interaction=nonstopmode <Prefix>_Resume_<ABBR>.tex
+cd cv && lualatex -interaction=nonstopmode <Prefix>_<ABBR>_Resume.tex
 ```
 
-Expected output: `Output written on <Prefix>_Resume_<ABBR>.pdf (1 page, ...)`. Any page count other than 1 is a failure that must be fixed before presenting to the user, unless the two-page exception below has been explicitly invoked.
+Expected output: `Output written on <Prefix>_<ABBR>_Resume.pdf (1 page, ...)`. Any page count other than 1 is a failure that must be fixed before presenting to the user, unless the two-page exception below has been explicitly invoked.
 
 ## Document Structure
 
@@ -388,7 +392,7 @@ Related trap: a bullet whose text begins with a literal `[` must be braced - `\i
 
 After writing the resume and before presenting to the user, always compile and visually inspect the PDF. Iterate until the layout is clean. Workflow:
 
-1. Run `lualatex -interaction=nonstopmode <Prefix>_Resume_<ABBR>.tex` with `TEXMFHOME` set to the repo's `texmf/` (see `texmf/README.md`)
+1. Run `lualatex -interaction=nonstopmode <Prefix>_<ABBR>_Resume.tex` with `TEXMFHOME` set to the repo's `texmf/` (see `texmf/README.md`)
 2. Check the output page count: must be exactly 1 (or exactly 2 where the exception is invoked)
 3. Read the PDF via the Read tool and visually inspect both pages
 4. Check for **orphaned entries**: a `\cventry` title line must never sit alone at the bottom of page 1 with its bullets on page 2
@@ -534,7 +538,7 @@ of a full page permanently. It now adds bullets back and keeps any that still fi
 Most employers run resumes through an ATS before a human sees them, and the ATS reads the PDF's embedded **text layer**, not the rendered page. A resume can pass visual inspection and still extract as garbage. After the layout passes the compile-and-inspect loop, verify the text layer:
 
 ```bash
-python tools/verify_pdf.py cv/<Prefix>_Resume_<ABBR>.pdf --dump-text cv/<Prefix>_Resume_<ABBR>.txt
+python tools/verify_pdf.py cv/<Prefix>_<ABBR>_Resume.pdf --dump-text cv/<Prefix>_<ABBR>_Resume.txt
 ```
 
 Extraction tries **pypdf** first (`pip install pypdf`, BSD license), then Poppler `pdftotext`. If a fallback still uses `pdftotext -layout`, it must also pass `-enc UTF-8`: Xpdf-based builds default to Latin-1, which makes every non-ASCII character in a perfectly good resume read back as a replacement character. If neither extractor is available, skip the mechanical check with a warning and rely on the visual PDF read for keyword coverage.

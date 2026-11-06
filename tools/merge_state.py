@@ -158,6 +158,7 @@ JSON_FILES = {
     # only ever added, each dated with when it ran. The lists in an entry are written with it.
     "documents/applications/*/tweaks.json": {"stamps": ("at",), "indent": 1, "sort": "all"},
     "documents/network/*/tweaks.json": {"stamps": ("at",), "indent": 1, "sort": "all"},
+    "documents/rounds/tweaks/tweaks.json": {"stamps": ("at",), "indent": 1, "sort": "all"},
     # ---- the profile
     # Which version of each part of the build made what this copy has (build_versions.record:
     # {method: {version, date}}). The app's own record: the higher version stands, always.
@@ -386,7 +387,9 @@ JSON_NAMES = {
                      "02_hydrated.json", "03_screened.json", "03_screened_all.json",
                      "04_opportunity.json", "05_ranked.json", "06_shortlist.json",
                      "06_skipped.json", "kept.json", "dropped.json", "scraped.json",
-                     "sent.json", "partial_rows.json", "tools/run_round.py: .json"), _ROUND),
+                     "sent.json", "partial_rows.json", "tools/run_round.py: .json",
+                     # a search limited to named employers: its names and the rows at them
+                     "employers.json", "named.json"), _ROUND),
     **dict.fromkeys(("apps_in.json", "picks.json", "draft_args.json", "pack.json", "held.json",
                      "staged_roles.json", "packet.json", "drafts.json",
                      "tools/draft_audit.py: outreach_*.json",

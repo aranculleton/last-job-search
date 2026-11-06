@@ -204,12 +204,24 @@ def take_master() -> str:
         return ""
     try:
         import land
-        if land.landing(ROOT):
+        held = land._holding(ROOT)
+        mine = held.__enter__()
+    except Exception:  # noqa: BLE001  an older land.py: taken as before
+        held, mine = None, True
+    try:
+        if not mine:
             # The landing merges master itself, and two merges at once fought over git's
-            # index (the release review, 2026-11-03): the page is drawn from the copy as it is.
+            # index (the release review, 2026-11-03): the page is drawn from the copy as it
+            # is. The landing's own lock, taken in one step for the merge below, so a landing
+            # starting this moment waits its turn too (2026-11-06).
             return ""
-    except Exception:  # noqa: BLE001
-        pass
+        return _take_master()
+    finally:
+        if held is not None:
+            held.__exit__(None, None, None)
+
+
+def _take_master() -> str:
     if _merging():
         # A merge being settled by hand: a merge here failed on it, and the abort that
         # followed threw the settling away (the release review, 2026-11-03).
@@ -1003,6 +1015,26 @@ def is_migration(ref: str) -> bool:
                              for ln in diff.splitlines())
 
 
+# A word only code uses: a file name, a test's name, a snake_case name, anything in backticks.
+# "Changes made for you" read "Brought test_a_referral_in_flight... in line" and named
+# networking.py (the maintainer, 4.12): the person reads plain words only.
+CODE_WORD = re.compile(r"`|\b[\w-]+\.(?:py|md|json|csv|js|txt|ya?ml|sh|tex|toml)\b|\btest_\w+|"
+                       r"\b[a-z0-9]+_[a-z0-9_]+\b|\b(?:tools|tests|profile)/")
+OWN_TESTS_LINE = "Your own checks were brought in line with the update."
+
+
+def plain_change(said: str, gives: str = "") -> str:
+    """A background change in the person's words: the commit's own line where it is plain,
+    else the upgrade's own description, else a plain fallback; never a file or a test name."""
+    for line in (said, gives):
+        line = " ".join(str(line or "").split())
+        if line and not CODE_WORD.search(line):
+            return (line[:1].upper() + line[1:]).rstrip(".") + "."
+    if re.search(r"\btest_\w+|\btests?/", str(said or "")):
+        return OWN_TESTS_LINE
+    return "An improvement to your search."
+
+
 def updates_section(today: dt.date, targets: dict) -> dict:
     """The model's `updates`: the version here and the newest, an update waiting (with an
     "Update now" for someone who chose to say when), what changed in plain lines, what the
@@ -1060,11 +1092,14 @@ def updates_section(today: dt.date, targets: dict) -> dict:
     try:
         import profile_upgrades
         gives = {u.id: u.gives for u in profile_upgrades.REGISTRY}
+        seen_lines = set()
         for c in _upgrade_commits():
             uid = f"upg-{c['sha'][:10]}"
-            line = c["said"] or gives.get(c["id"], "")
-            line = (line[:1].upper() + line[1:]).rstrip(".") + "." if line else \
-                "An improvement to your search."
+            line = plain_change(c["said"], gives.get(c["id"], ""))
+            # The same change logged several times shows once, the newest (4.12).
+            if line.lower() in seen_lines:
+                continue
+            seen_lines.add(line.lower())
             item = {"id": uid, "line": line, "on": c["date"],
                     "undone": c["reverted"], "undo": None if c["reverted"] else "upgrade.undo",
                     "rev": app_model.rev_of(c["sha"], c["reverted"])}

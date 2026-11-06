@@ -39,7 +39,6 @@ import os
 import re
 import subprocess
 import sys
-import urllib.parse
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 for _p in (os.path.join(_HERE, "network"), _HERE):
@@ -47,6 +46,7 @@ for _p in (os.path.join(_HERE, "network"), _HERE):
         sys.path.insert(0, _p)
 
 import person  # noqa: E402
+from docpaths import FILE_NAME_PRESETS  # noqa: E402
 
 MODEL = 1
 # Clock fields: true of the moment the model was made, not of the state it shows.
@@ -670,7 +670,24 @@ def _app(ctx: Ctx, targets: dict) -> dict:
             # How many pieces of the person's work have waited a day or more without being
             # saved (land.stranded, read offline): the page says so, so work that never
             # reached their copy is never silent (the stranger audit, X-30).
-            "not_saved": _not_saved()}
+            "not_saved": _not_saved(),
+            # In the app maker's own copy only: complaints about how the app behaves, kept as
+            # app bugs rather than rules (learned.route_about_app), for Settings' Something
+            # looks wrong. Everyone else's is always empty.
+            "app_bugs": _app_bugs()}
+
+
+def _app_bugs() -> list:
+    try:
+        import learned
+        rows = learned.app_bugs()
+        if not rows or not learned._maintainers():
+            return []
+    except Exception:  # noqa: BLE001  no profile yet: nothing kept
+        return []
+    return [{"said": " ".join(str(r.get("said") or "").split())[:200],
+             "on": str(r.get("date") or "")[:10] or None, "link": r.get("link") or None}
+            for r in rows][-20:]
 
 
 def _not_saved() -> int:
@@ -1881,6 +1898,7 @@ def files_missing(ctx=None) -> list:
 
 
 def _files(row) -> list:
+    import docpaths
     out = []
     for kind, col in (("resume", "cv_file"), ("letter", "cover_letter_file")):
         tex = str(row.get(col) or "").strip()
@@ -1890,6 +1908,12 @@ def _files(row) -> list:
         full = person.state(*pdf.split("/"))
         there = os.path.isfile(full)
         out.append({"kind": kind, "name": os.path.basename(pdf),
+                    # Downloaded under the name the person chose in Settings > File names
+                    # (the person, the employer, then the document, unless they chose
+                    # otherwise), whichever order the kept file was made in
+                    # (docpaths.send_name).
+                    "send": docpaths.send_name(pdf, row.get("company") or "",
+                                               row.get("role") or ""),
                     "asset": asset_for(pdf) if there else None,
                     "path": pdf, "pages": _pages(full) if there else None,
                     "made": there})
@@ -2105,7 +2129,8 @@ def _ready(ctx: Ctx, targets: dict) -> list:
                 "company": row.get("company") or "", "role": row.get("role") or "",
                 "pay": pay, "place": str(draft.get("location") or ""),
                 "apply": apply_link(_link_on_row(row, draft)),
-                "files": [{k: f[k] for k in ("kind", "name", "asset", "path", "pages", "made")}
+                "files": [{k: f[k] for k in ("kind", "name", "send", "asset", "path", "pages",
+                                             "made")}
                           for f in files],
                 "checks": _with_verify(_checks(files, expect, noun), verify_items(folder)),
                 "outreach": _outreach(folder, names),
@@ -4115,7 +4140,11 @@ def _learned(ctx: Ctx, targets: dict) -> list:
         first = ""
     out = []
     for n, e in enumerate(learned.load(), 1):
-        if e.get("status") == "retired":
+        # A rule put away because the app now does it by itself stays on the page, folded
+        # with the earlier rules, saying so (learned.NOW_PART); every other retired rule
+        # leaves it.
+        part = e.get("status") == "retired" and bool(e.get("built_in"))
+        if e.get("status") == "retired" and not part:
             continue
         lid = f"learned-{n}"
         item = {"id": lid, "n": n, "area": str(e.get("area") or "other"),
@@ -4125,6 +4154,11 @@ def _learned(ctx: Ctx, targets: dict) -> list:
                 "on": str(e.get("date") or e.get("recorded") or "")[:10] or None,
                 "via": str(e.get("via") or "") or None,
                 "rev": rev_of(lid, e.get("rule"), e.get("status"))}
+        if part:
+            b = learned._BUILT_IN.get(str(e.get("built_in"))) or {}
+            item.update({"retired": True, "why": learned.NOW_PART,
+                         "app_does": b.get("does") or None,
+                         "retired_on": str(e.get("retired_on") or "")[:10] or None})
         out.append(item)
         targets[lid] = {"kind": "learned", "n": n, "rev": item["rev"]}
     return out[::-1]
@@ -4380,27 +4414,66 @@ def _you(ctx: Ctx, targets: dict) -> dict | None:
 # ------------------------------------------------------------------ your search
 
 
-# A job site's name as people write it: "linkedin-search" is LinkedIn, never "Linkedin".
-_BRANDS = {"linkedin": "LinkedIn", "freehire": "Freehire", "jobbank": "Job Bank",
-           "indeed": "Indeed", "glassdoor": "Glassdoor"}
-
-
 def portal_label(name: str) -> str:
-    """A job site's name as the person knows it: the brand, else the address it lives at
-    ("builtintoronto.com"), never a name made from its folder ("Builtintoronto", the 3
-    November audit)."""
-    base = re.sub(r"-search$", "", str(name or ""))
-    if base.lower() in _BRANDS:
-        return _BRANDS[base.lower()]
+    """A job site's plain name as the person knows it ("Adzuna", never "api.adzuna.com", the
+    maintainer, 2026-11-06): tools/portals.py holds every site's name and note in one place."""
+    import portals as portals_mod
     try:
-        import portals as portals_mod
-        host = re.sub(r"^www\.", "", urllib.parse.urlparse(portals_mod.url(name)).netloc.lower())
-    except Exception:  # noqa: BLE001  no frontmatter: the folder's name below
-        host = ""
-    if host:
-        return host
-    words = re.split(r"[-_]+", base)
-    return " ".join(w if w.isupper() else w[:1].upper() + w[1:] for w in words if w)
+        return portals_mod.label(name)
+    except Exception:  # noqa: BLE001  a name must never break the page
+        return portals_mod.short(str(name or ""))
+
+
+def _sites(sites: dict, targets: dict) -> list[dict]:
+    """Settings, Job sites: each site's plain name, its one line, whether it is on, and for a
+    site that needs a key this computer does not hold, `key` (free, steps) in place of a tick
+    that could be ticked. Each site is its own item, so a tap on one is never refused because
+    another changed, and a refusal is said on its own row (the maintainer, 2026-11-06: a tick
+    that "unticks itself after I leave")."""
+    import portals as portals_mod
+    out = []
+    for name, on in sorted(sites.items()):
+        try:
+            help_ = {} if portals_mod.has_key(name) else portals_mod.key_help(name)
+            words = portals_mod.note(name)
+        except Exception:  # noqa: BLE001  one odd portal never hides the rest
+            help_, words = {}, portals_mod.DEFAULT_NOTE
+        sid = f"site-{seg(portals_mod.short(name))[:60]}"
+        row = {"id": sid, "name": name, "label": portal_label(name), "note": words,
+               "on": bool(on), "key": help_ or None}
+        row["rev"] = rev_of(row)
+        targets[sid] = {"kind": "search", "site": name, "rev": row["rev"]}
+        out.append(row)
+    return out
+
+
+# A hidden job's reason as the person would say it, first match wins: the trash's own words
+# ("pay", "employer", "old"), a closed posting, the week's automatic clear-out, and anything
+# cleared by hand, never "at the person's request" (the maintainer, 4.12).
+HID_LABELS = (
+    (r"^(?:the )?pay\b|salary", "The pay"),
+    (r"^(?:the )?place\b|location|commute", "The place"),
+    (r"^(?:not my )?field\b", "Not my field"),
+    (r"^(?:role|not this role|not this one)\b", "Not this one"),
+    (r"^(?:employer|no more roles from|no more from)\b", "Not this employer"),
+    (r"^(?:old|too old|posted too long ago)\b", "Posted too long ago"),
+    (r"\bclosed\b|no longer open|expired|been filled", "The job closed"),
+    (r"automatic|after a week|after 7 days|unpicked|not picked|stale", "Cleared automatically after a week"),
+    (r"request|\bcleared\b|said on the page|not for me|taken back|by hand|on the page",
+     "You cleared these"),
+)
+
+
+def hid_label(words: str) -> str:
+    """The plain label of a reason the person hid jobs for (Settings, Jobs you hid)."""
+    said = " ".join(str(words or "").split()).strip()
+    low = said.lower()
+    for rx, label in HID_LABELS:
+        if re.search(rx, low):
+            return label
+    said = re.sub(r"\bthe (?:person|candidate)'s\b", "your", said, flags=re.I)
+    said = re.sub(r"\bthe (?:person|candidate)\b", "you", said, flags=re.I)
+    return (said[:1].upper() + said[1:]) if said else "Hidden by you"
 
 
 def _search(ctx: Ctx, targets: dict) -> dict:
@@ -4423,8 +4496,6 @@ def _search(ctx: Ctx, targets: dict) -> dict:
         sites = portals_mod.enabled()
     except Exception:  # noqa: BLE001
         sites = {}
-    why = {"linkedin-search": "LinkedIn's own job search.",
-           "freehire-search": "A free board that lists jobs from many sites."}
     seen = ctx.seen
     mine = [e for e in seen.values() if str(e.get("status") or "").lower() == "excluded"
             and e.get("basis") == "person"]
@@ -4447,13 +4518,24 @@ def _search(ctx: Ctx, targets: dict) -> dict:
         company = html.unescape(str(e.get("company") or "")).strip()
         if title and len(seen_by.setdefault(g, [])) < 5:
             seen_by[g].append(f"{title} at {company}" if company else title)
+    # One row a plain reason, in the person's words: the trash's "employer" read "Employer: 1
+    # job" and a chat's ruling "at the person's request" (the maintainer, 4.12). Reasons that
+    # say the same thing are one row, and Bring back lifts all of them.
+    by_label: dict = {}
+    for words, n in groups.most_common():
+        label = hid_label(said_as.get(words) or words)
+        row = by_label.setdefault(label, {"groups": [], "count": 0, "examples": []})
+        row["groups"].append(words)
+        row["count"] += n
+        row["examples"] += [x for x in seen_by.get(words, []) if len(row["examples"]) < 5]
     rules = []
-    for words, n in groups.most_common(20):
-        rid = f"rule-{seg(words)[:60]}"
-        rules.append({"id": rid, "words": words, "label": said_as.get(words) or words[:1].upper() + words[1:],
-                      "count": n, "basis": "person",
-                      "examples": seen_by.get(words, []), "rev": rev_of(rid, n)})
-        targets[rid] = {"kind": "rule", "words": words, "rev": rules[-1]["rev"]}
+    for label, row in sorted(by_label.items(), key=lambda kv: -kv[1]["count"])[:20]:
+        rid = f"rule-{seg(label)[:60]}"
+        rules.append({"id": rid, "words": row["groups"][0], "label": label, "count": row["count"],
+                      "basis": "person", "examples": row["examples"][:5],
+                      "rev": rev_of(rid, row["count"], row["groups"])})
+        targets[rid] = {"kind": "rule", "words": row["groups"][0], "groups": row["groups"],
+                        "rev": rules[-1]["rev"]}
     dnt = _json(person.state("job_scraper", "do_not_target.json"), {})
     dnt = dnt.get("entries") if isinstance(dnt, dict) and "entries" in dnt else dnt
     for e in (dnt if isinstance(dnt, list) else []):
@@ -4482,8 +4564,7 @@ def _search(ctx: Ctx, targets: dict) -> dict:
                     "cut": got("SALARY_CUT_BELOW"), "currency": got("CURRENCY_CODE")},
             "window_days": got("JOB_AGE_DAYS", 14),
             "employers": [str(x) for x in got("SCRAPE_EMPLOYERS", []) or []],
-            "portals": [{"name": k, "label": portal_label(k), "on": bool(v), "why": why.get(k, "")}
-                        for k, v in sorted(sites.items())],
+            "portals": _sites(sites, targets),
             "boards": [{"employer": k, "system": (v[0] if isinstance(v, (list, tuple)) and v
                                                    else str(v))} for k, v in sorted(followed.items())],
             "boards_left_out": len(boards) - len(followed),
@@ -4615,7 +4696,7 @@ EXPORT_STATES = ("missing", "requested", "fresh", "due")
 
 def _linkedin(ctx: Ctx, targets: dict) -> dict:
     """The LinkedIn data download (tools/network/export.py: asked for, taken, how old, due by
-    the fortnightly rule, what the last held and what changed since the one before; the
+    export.every_days, how often the person wants it asked for, what the last held and what changed since the one before; the
     steps and the files the page lets the person add) and the page's own reading of
     LinkedIn (place.page_reads: read a page lately; the profiles queued for it)."""
     import claude_surfaces
@@ -4634,7 +4715,7 @@ def _linkedin(ctx: Ctx, targets: dict) -> dict:
         "taken_on": st["taken_on"] or None,
         "age_days": (ctx.today - taken).days if taken else None,
         "due_on": st["due_on"] or None, "due": state in ("missing", "due"),
-        "every_days": export.EXPORT_EVERY_DAYS,
+        "every_days": st["every_days"],
         "counts": rec.get("counts") or rec.get("rows") or {},
         # What a chat reads from the export, said for the person: never a tool's name
         # ("(export.py pending lists them)" was the card's last words, 2026-11-03).
@@ -4648,6 +4729,17 @@ def _linkedin(ctx: Ctx, targets: dict) -> dict:
                                  export_block["counts"])
     targets["linkedin-export"] = {"kind": "linkedin", "id": "linkedin-export",
                                   "rev": export_block["rev"]}
+    # How often it is asked for (export.every_days), as a setting: its row is in Settings >
+    # LinkedIn beside the download, and the reminder's trash sets the same item, so the two
+    # never disagree.
+    key, label, choices = EXPORT_REMIND
+    choice = export.remind_choice()
+    sid = f"setting-{key}"
+    export_block["reminder"] = {"id": sid, "key": key, "label": label, "kind": "choice",
+                                "value": choice, "choices": choices, "help": EXPORT_REMIND_HELP,
+                                "rev": rev_of(key, choice)}
+    targets[sid] = {"kind": "setting", "key": key, "value": choice,
+                    "rev": export_block["reminder"]["rev"]}
     pr = place.page_reads_record()
     from network import schema as _net_schema
     book = ctx._once("book", lambda: {str(c.get("contact_id") or "").strip(): c
@@ -4816,6 +4908,8 @@ def setting_values() -> dict:
         out["linkedin_plan"] = "free"
     import app_alerts
     out["suggestions"] = app_alerts.setting()
+    import docpaths
+    out["file_names"] = docpaths.file_names()
     for key, default in SETTING_DEFAULTS.items():
         got = str(person.get(key, default) or default)
         allowed = [c[0] for k, _, ch in SETTINGS if k == key for c in ch]
@@ -4827,6 +4921,11 @@ def setting_values() -> dict:
         out["profile_reads"] = "browser" if reading.reads_now() == "browser" else "paste"
     except Exception:  # noqa: BLE001  no networking settings: the default
         out["profile_reads"] = "browser"
+    try:
+        import export
+        out["export_remind"] = export.remind_choice()
+    except Exception:  # noqa: BLE001  no networking tools here: the rule
+        out["export_remind"] = "auto"
     try:
         out["time_zone"] = zone_words(person.home_zone_named(person.directory()))
     except person.NoProfile:
@@ -4856,24 +4955,66 @@ SETTINGS = (
     # The person's, not the app's (4.7): how early the Brief puts the next interview first,
     # and when the calendar events the page makes remind them. The values 4.6 fixed are the
     # defaults.
-    ("prep_days", "Your next interview on the Brief", [["2", "From 2 days before"],
+    # The day before is the shortest (the maintainer, 4.12: "From the day before").
+    ("prep_days", "Your next interview on the Brief", [["1", "From the day before"],
+                                                        ["2", "From 2 days before"],
                                                         ["7", "From a week before"],
                                                         ["14", "From two weeks before"]]),
     ("calendar_reminder", "Calendar reminders", [["15", "15 minutes before"],
                                                  ["60", "An hour before"],
+                                                 ["120", "Two hours before"],
                                                  ["1440", "The day before"], ["off", "None"]]),
     # The brief's headline sent to the phone (tools/brief.py push_due): off unless the person
     # chose it, when the brief is set up or asked once after (profile_upgrades brief-push)
     # (the maintainer, 2026-11-04: "make it off by default but maybe part of the setup").
     ("brief_push", "Phone notification", [["off", "Off"], ["on", "On"]]),
+    # What the PDFs the person downloads and uploads are called (docpaths.FILE_NAME_PRESETS,
+    # person.json documents.file_names): the person, the employer, then the document unless
+    # they choose otherwise. Each choice's own example is the item's `examples`.
+    ("file_names", "File names", [[k, label] for k, label, _parts in FILE_NAME_PRESETS]),
 )
 SETTING_DEFAULTS = {"prep_days": "7", "calendar_reminder": "60", "brief_push": "off"}
+
+# How often the LinkedIn download is asked for (export.REMIND_CHOICES, networking.py
+# EXPORT_REMIND). Not in SETTINGS: its one home is the download's own place in Settings >
+# LinkedIn, drawn from model.linkedin.export.reminder, and the reminder's trash offers the
+# last three (the maintainer, 2026-11-06).
+EXPORT_REMIND = ("export_remind", "Reminder to download it",
+                 [["auto", "Weekly while messaging"], ["fortnightly", "Every 2 weeks"],
+                  ["monthly", "Every month"], ["off", "Off"]])
+EXPORT_REMIND_HELP = ("Weekly while you have sent notes or messages in the last two weeks, "
+                      "every two weeks otherwise.")
+
+
+def setting_choices() -> tuple:
+    """Every setting the page can set by setting.set, with its choices: SETTINGS and the
+    LinkedIn download's reminder."""
+    return SETTINGS + (EXPORT_REMIND,)
 
 
 # The person's own time zone (person.json `time_zone`), said in their words ("Toronto",
 # "Eastern", "Mississauga") and read by person.zone_in: every time on the page, "today", and
 # every calendar link use it. Never the brief's schedule zone (the audit, 2026-11-03).
 TIME_ZONE = ("time_zone", "Your time zone")
+
+
+def file_name_examples(ctx: Ctx | None = None) -> dict:
+    """The File names setting's examples: each choice as a resume of theirs would leave, from
+    their own name and the employer and role of their latest application ("Employer" and
+    "Analyst" before there is one), and which choice is recommended for their market."""
+    import docpaths
+    employer = role = ""
+    for row in reversed(list(getattr(ctx, "tracker", None) or [])):
+        if str(row.get("company") or "").strip():
+            employer, role = str(row.get("company")).strip(), str(row.get("role") or "")
+            break
+    try:
+        examples = {k: docpaths.example_file_name(k, employer, role)
+                    for k, _label, _parts in docpaths.FILE_NAME_PRESETS}
+        country = str(person.get("identity.country", "") or "")
+    except person.NoProfile:
+        return {}
+    return {"examples": examples, "recommended": docpaths.recommended_file_names(country)}
 
 
 def _settings(ctx: Ctx, targets: dict) -> list:
@@ -4883,6 +5024,8 @@ def _settings(ctx: Ctx, targets: dict) -> list:
         sid = f"setting-{key}"
         item = {"id": sid, "key": key, "label": label, "kind": "choice",
                 "value": values[key], "choices": choices, "rev": rev_of(key, values[key])}
+        if key == "file_names":
+            item.update(file_name_examples(ctx))
         out.append(item)
         targets[sid] = {"kind": "setting", "key": key, "value": values[key], "rev": item["rev"]}
     key, label = TIME_ZONE

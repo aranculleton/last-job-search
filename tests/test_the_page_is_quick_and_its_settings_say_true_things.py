@@ -238,7 +238,9 @@ def test_your_search_is_said_in_plain_words(tmp_path, monkeypatch):
         if hasattr(mod, "_cache"):
             mod._cache.clear()
     monkeypatch.setattr(portals, "url", lambda name, root=None: "https://www.builtexample.com/jobs" if name == "builtexample-search" else "")
-    assert app_model.portal_label("builtexample-search") == "builtexample.com"
+    # Never its address (the maintainer, 2026-11-06: "api.adzuna.com" stood for Adzuna): with
+    # no SKILL.md title to name it, its folder's words.
+    assert app_model.portal_label("builtexample-search") == "Builtexample"
     assert app_model.portal_label("linkedin-search") == "LinkedIn"
     seen = {"https://jobs.example/1": {"status": "excluded", "basis": "person", "exclusion_reason": "Harbourline Bank: not this one",
                                        "title": "Senior Analyst, Credit Risk &amp; Collections", "company": "Harbourline Bank", "date": "2026-10-20"},
@@ -249,7 +251,8 @@ def test_your_search_is_said_in_plain_words(tmp_path, monkeypatch):
     by = {r["words"]: r for r in s["rules"]}
     assert by["harbourline bank"]["label"] == "Harbourline Bank"
     assert by["harbourline bank"]["examples"] == ["Senior Analyst, Credit Risk & Collections at Harbourline Bank"]
-    assert by["cleared from the list at the person's request"]["label"] == "Cleared from the list at the person's request"
+    # In the person's voice, never "at the person's request" (the maintainer, 4.12).
+    assert by["cleared from the list at the person's request"]["label"] == "You cleared these"
     assert [b["employer"] for b in s["boards"]] == ["Ellerwick Trust", "Harbourline Bank"] and s["boards_left_out"] == 1
     assert "robots" not in json.dumps(s["portals"]) and "crawlers" not in json.dumps(s["portals"])
 
@@ -299,7 +302,7 @@ def test_the_profile_summary_counts_roles_degrees_and_certificates(run, tmp_path
     assert "4 roles · 5 skills · 1 degree · 3 certificates" in got["after"][0]["text"], got["after"][0]["text"]
 
 
-def test_what_you_taught_it_opens_on_the_newest_five_with_a_search_and_speaks_to_you(run, tmp_path):
+def test_what_you_taught_it_opens_on_the_newest_few_of_each_area_with_a_search_and_speaks_to_you(run, tmp_path):
     m = _sample()
     m["learned"] = [{"id": "learned-%d" % i, "area": "messages", "rule": "Rule number %d about notes" % i, "say": "Rule number %d about notes" % i,
                      "said": "", "on": "2026-10-%02d" % (1 + i % 24), "retired": False, "rev": "l%d" % i} for i in range(30)]
@@ -307,7 +310,8 @@ def test_what_you_taught_it_opens_on_the_newest_five_with_a_search_and_speaks_to
     got = _go(run, tmp_path, [{"hash": "settings", "open": "info-sum:learned", "read": '[data-k="det:info:learned"]',
                                "count": '[data-k="det:info:learned"] .learned', "eval": "!!document.getElementById('q-learned')"}], PHONE, model=m)
     r = got["after"][0]
-    assert r["count"] == 5 and "25 more rules" in r["text"] and r["eval"], (r["count"], r["text"][:300])
+    # Grouped by area since 4.12, each area its newest three with Show all.
+    assert r["count"] == 3 and "Messages (30)" in r["text"] and "Show all" in r["text"] and r["eval"], (r["count"], r["text"][:300])
     assert "Answer the question you actually asked" in r["text"] and "he actually asked" not in r["text"]
 
 
@@ -416,7 +420,8 @@ def test_a_search_months_in_is_not_offered_the_tour_and_settings_say_what_they_h
     ], WIDE)
     assert got["after"][0]["count"] == 0, "a search with applications is not new"
     groups = got["after"][1]["eval"]
-    assert "Appearance" in groups and "Look" not in groups, groups
+    # "Look" again in 4.12, its row "Light or dark", with text size and the keyboard there.
+    assert "Look" in groups and "Appearance" not in groups and "Advanced" in groups, groups
     assert "usual" not in got["after"][1]["text"], got["after"][1]["text"]
     mark, tips, size = got["after"][2]["eval"]
     assert mark in ('""', "none") and tips == "switch" and size == "Text size", (mark, tips, size)

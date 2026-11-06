@@ -343,7 +343,10 @@ def test_every_section_full_shows_its_items_in_plain_words(run, pages):
         assert got["heading"] == label, (sid, got["heading"])
         assert got["overflow"]["sw"] <= got["overflow"]["cw"], sid
         assert not JARGON.search(got["text"]), (sid, JARGON.search(got["text"]).group(0))
-        assert not re.search(r"\b\d+\.\d+\.\d+\b", got["text"]), (sid, "a version number")
+        # A version number only on Settings' What's new row, where the maintainer asked for it
+        # ("4.11.0 · Up to date", 4.12); nowhere else.
+        said = re.sub(r"What's new\n\d+\.\d+\.\d+ · ", "What's new\n", got["text"]) if sid == "settings" else got["text"]
+        assert not re.search(r"\b\d+\.\d+\.\d+\b", said), (sid, "a version number")
         assert "—" not in got["text"] and "–" not in got["text"], sid
         heads = re.findall(r"^(?:To do here|Needs your answer|Due or late|Next 7 days|Later)$", got["text"], re.M)
         assert not OLD_NAMES.search(" ".join(heads)), sid
@@ -374,8 +377,8 @@ def test_every_section_full_shows_its_items_in_plain_words(run, pages):
     assert "Every application" in r["progress"]["text"] and "earlier, finished" in r["progress"]["text"]
     settings = r["settings"]["text"]
     assert "An update is waiting" in settings and "4.0.1" not in settings
-    # How the app runs waits, folded, at the end (4.3).
-    assert "How the app runs" in settings and "Auto" in settings and "Your profile" in settings
+    # Advanced waits, folded, at the end (4.3; named Advanced in 4.12).
+    assert "Advanced" in settings and "Auto" in settings and "Your profile" in settings
 
 
 @pytest.mark.parametrize("viewport", [PHONE, WIDE])
@@ -873,7 +876,7 @@ def test_stop_says_what_is_kept(run, pages):
 def test_both_files_download_in_one_tap_and_a_draft_with_none_gets_them_by_itself(run, pages):
     r = run("downloads", html=pages["sample"])
     _clean(r)
-    assert [s["filename"] for s in r["saves"]] == ["Morgan_Ellis_CV_Ellerwick_Trust.pdf", "Morgan_Ellis_Cover_Letter_Ellerwick_Trust.pdf"]  # named for the reader since 2026-11-05
+    assert [s["filename"] for s in r["saves"]] == ["Morgan_Ellis_Ellerwick_Trust_CV.pdf", "Morgan_Ellis_Ellerwick_Trust_Cover_Letter.pdf"]  # named for the reader since 2026-11-05; the employer before the document since 2026-11-06
     assert all(s["blob"] and s["size"] > 100 for s in r["saves"])
     assert any("Saved." in n for n in r["note"])
     # What Claude can do by itself is never a button (the maintainer, 2026-11-05): no "Get my

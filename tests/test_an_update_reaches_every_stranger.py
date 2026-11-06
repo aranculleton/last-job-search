@@ -481,8 +481,10 @@ def test_an_update_that_changed_the_app_skill_says_so(copy, monkeypatch, capsys)
         "Sync from the app: 1 new commit(s)", "app")
     monkeypatch.setenv(U.LANDED, "1")
     said = U.say_changed()
-    assert said == ["Claude: .claude/skills/app/SKILL.md changed. A chat that was already open "
-                    "is still following the copy it read when it started: read "
-                    ".claude/skills/app/SKILL.md again now, before going on."]
+    # Re-read only by a chat that already read it (the cost audit, 4.12): the chat that
+    # answers the page has, so it still reads the new one.
+    assert said == ["Claude: .claude/skills/app/SKILL.md changed. If this chat has already read "
+                    "it, it is following the old copy: read .claude/skills/app/SKILL.md again "
+                    "now, before going on. If not, nothing to do."]
     monkeypatch.setenv(U.LANDED, "0")
     assert U.say_changed() == []

@@ -37,8 +37,9 @@ What it gives:
   PENDING_DAYS, oldest first, for the person to withdraw on LinkedIn themselves;
 - **what changed since the last download**, said first by `take`: new connections,
   requests accepted, replies, and requests still waiting. The day it was taken is kept
-  in documents/network/linkedin_export.json, and once it is EXPORT_EVERY_DAYS old
-  (fortnightly unless the person set otherwise) the brief asks for a new one (`due`).
+  in documents/network/linkedin_export.json, and once it is `every_days` old (weekly while
+  the person is messaging people, fortnightly otherwise, unless they chose) the brief asks
+  for a new one (`due`).
 
     python3 tools/network/export.py take <zip|folder|csv>...        # given an export: this, first
     python3 tools/network/export.py take --find                     # the newest one on this computer
@@ -519,7 +520,72 @@ try:
     EXPORT_EVERY_DAYS = max(int(getattr(_NET, "EXPORT_EVERY_DAYS", 14) or 0), 0)
 except (TypeError, ValueError):                  # a typo there: the app's fortnight
     EXPORT_EVERY_DAYS = 14
-STEPS = "python3 tools/claude_surfaces.py steps linkedin-export-files"
+# Set by the person in profile/networking.py, a number of their own: kept under "auto".
+_OWN_EVERY = _NET is not None and getattr(_NET, "EXPORT_EVERY_DAYS", None) is not None
+
+# How often the reminder asks (the maintainer, 2026-11-06): weekly while the person has sent
+# connection notes or messages in the last two weeks, when who accepted and who replied moves
+# fast; every two weeks otherwise. The person can choose instead, from the reminder's trash
+# or Settings (EXPORT_REMIND in profile/networking.py): every two weeks, every month, or not
+# at all. "auto", the default, is the rule.
+REMIND_CHOICES = ("auto", "fortnightly", "monthly", "off")
+REMIND_DAYS = {"fortnightly": 14, "monthly": 30, "off": 0}
+BUSY_EVERY_DAYS = 7
+BUSY_WINDOW_DAYS = 14
+
+
+def remind_choice() -> str:
+    """The person's choice of how often the reminder asks, read from the file each time so a
+    change made on the page counts in the same run; anything the app does not know is auto."""
+    try:
+        got = str(getattr(person.module("networking"), "EXPORT_REMIND", "auto") or "auto")
+    except Exception:  # noqa: BLE001  no networking.py: the rule
+        return "auto"
+    got = got.strip().lower()
+    return got if got in REMIND_CHOICES else "auto"
+
+
+def messaging(today, threads=None) -> bool:
+    """Whether the person sent a connection note or a message in the BUSY_WINDOW_DAYS up to
+    `today`, read from the message log (a call is not a message)."""
+    st = _state()
+    today = st._need_date(today, "today")
+    if threads is None:
+        threads = st.load_threads() if os.path.exists(st.THREADS_CSV) else []
+    for r in threads:
+        if st.direction(r) != "out" or st.is_call(r):
+            continue
+        d = st.as_date(r.get("date"))
+        if d and d <= today and (today - d).days < BUSY_WINDOW_DAYS:
+            return True
+    return False
+
+
+def every_days(today, threads=None) -> int:
+    """How many days after the last download (or the day the reminder was last put away) a
+    new one is asked for; 0 never asks. One place, so the brief, the page and every chat
+    agree."""
+    choice = remind_choice()
+    if choice in REMIND_DAYS:
+        return REMIND_DAYS[choice]
+    if _OWN_EVERY or EXPORT_EVERY_DAYS != 14:
+        return EXPORT_EVERY_DAYS                 # the person's own number, as before
+    return BUSY_EVERY_DAYS if messaging(today, threads) else EXPORT_EVERY_DAYS
+
+
+def put_off_on():
+    """The day the person last put the reminder away from its trash, or None: the next ask
+    counts from it when it is later than the last download."""
+    return _state().as_date(load_record().get("put_off_on"))
+
+
+def _counted_from(taken):
+    off = put_off_on()
+    days = [d for d in (taken, off) if d]
+    return max(days) if days else None
+
+
+STEPS ="python3 tools/claude_surfaces.py steps linkedin-export-files"
 # The column each file dates its rows by.
 _DATED = {"connections": "Connected On", "messages": "DATE", "invitations": "Sent At"}
 
@@ -590,12 +656,13 @@ def last_taken(threads=None) -> tuple:
 
 
 def due(today, threads=None) -> str:
-    """The brief's line once the last download is EXPORT_EVERY_DAYS old, else "". Nothing
+    """The brief's line once the last download is `every_days` old, else "". Nothing
     when there has never been one: the connections-export upgrade asks for the first."""
     st = _state()
     today = st._need_date(today, "today")
     taken, _how = last_taken(threads)
-    if not EXPORT_EVERY_DAYS or taken is None or (today - taken).days < EXPORT_EVERY_DAYS:
+    every = every_days(today, threads)
+    if not every or taken is None or (today - _counted_from(taken)).days < every:
         return ""
     asked = st.as_date(load_record().get("requested_on"))
     if asked and asked > taken and (today - asked).days <= REQUEST_WAIT_DAYS:
@@ -644,8 +711,8 @@ def status(today=None, tools=(), found=None, threads=None) -> dict:
 
     `take`: a download on this computer is newer than the last one taken (one the browser
     fetched, or one the person saved themselves). `fresh`: the last one is younger than
-    EXPORT_EVERY_DAYS (or the person's 0, never asked again). `waiting`: asked for within
-    REQUEST_WAIT_DAYS and not here yet. `request`: none taken, or the last is due, and none
+    `every_days` (or 0, never asked again), or the person put the reminder away until then
+    or said stop asking. `waiting`: asked for within REQUEST_WAIT_DAYS and not here yet. `request`: none taken, or the last is due, and none
     asked for. `tools` is the chat's browser tools (browser, chrome, enable): with one,
     Claude does the step in that browser; without, the person is given the steps once.
     `found` stands for the downloads find_exports() would see."""
@@ -657,11 +724,12 @@ def status(today=None, tools=(), found=None, threads=None) -> dict:
     asked = st.as_date(rec.get("requested_on"))
     if asked and taken and asked <= taken:
         asked = None                               # that request was the one taken since
-    due_on = (taken + datetime.timedelta(days=EXPORT_EVERY_DAYS)) if taken and \
-        EXPORT_EVERY_DAYS else None
+    every = every_days(today, threads)
+    base = _counted_from(taken)
+    due_on = (base + datetime.timedelta(days=every)) if base and every else None
     out = {"taken_on": taken.isoformat() if taken else "", "path": "",
            "requested_on": asked.isoformat() if asked else "",
-           "due_on": due_on.isoformat() if due_on else ""}
+           "due_on": due_on.isoformat() if due_on else "", "every_days": every}
     path = _found_since(taken, found)
     if path:
         return dict(out, state="take", path=path,
@@ -670,10 +738,18 @@ def status(today=None, tools=(), found=None, threads=None) -> dict:
                        "and imports its history, and says what changed")
     # Taken in a chat whose folder is gone (a cloud chat kept nothing before 4.3): the
     # connections it held are not on file, so it is asked for again rather than called fresh.
-    if taken and (not EXPORT_EVERY_DAYS or today < due_on) and _holds_any(default_folder()):
+    if taken and (not every or today < due_on) and _holds_any(default_folder()):
         return dict(out, state="fresh",
                     line=f"fresh: taken {taken.isoformat()}"
                          + (f"; the next is due {due_on.isoformat()}" if due_on else ""),
+                    do="nothing")
+    # Put away by the person from the reminder's trash, or "Stop asking": nothing is asked
+    # until the day their choice comes round again, whatever the files say.
+    stopped = remind_choice() == "off"
+    if not asked and (stopped or (put_off_on() and due_on and today < due_on)):
+        return dict(out, state="fresh",
+                    line="fresh: not asked for" + (", the person said stop asking" if stopped
+                                                   else f" until {due_on.isoformat()}"),
                     do="nothing")
     if asked and (today - asked).days <= REQUEST_WAIT_DAYS:
         if have:
@@ -2436,7 +2512,7 @@ def main(argv=None) -> int:
     t.add_argument("--find", action="store_true")
     t.add_argument("--contacts", default=st.CONTACTS_CSV)
     t.add_argument("--threads", default=st.THREADS_CSV)
-    d = sub.add_parser("due", help="one line once the last download is EXPORT_EVERY_DAYS old")
+    d = sub.add_parser("due", help="one line once the last download is due again (every_days)")
     d.add_argument("--today", default=datetime.date.today().isoformat())
     stt = sub.add_parser("status", help="the next step for the download: request, waiting, "
                                         "take or fresh")

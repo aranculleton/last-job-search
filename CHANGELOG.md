@@ -20,6 +20,99 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Added
+
+- **Rules the app now does by itself come off your list.** After an update, a rule you taught
+  that the app now does for everyone (how your resume files are named, follow-ups written as
+  soon as you ask) is put away once, marked "Now part of the app", and you hear one line
+  saying how many. Profile upgrade: `built-in-rules`.
+- **A search of the employers you name.** Say "search these 20 employers" (in a chat, or in
+  Find jobs' note) and only those are searched, on their own job boards and by their names.
+  Your list holds only them, with room for every one that has a job passing your rules, and
+  it says plainly which had no open roles.
+- **A complaint about the app is never kept as one of your rules.** "Why is it so slow" or a
+  button that does nothing is about the app, not how you want your work done: Claude works
+  round it instead of reading it before every draft.
+
+### Changed
+
+- **Documents are named you, the employer, then the document**: `Morgan_Ellis_Acme_Resume.pdf`
+  and `Morgan_Ellis_Acme_Cover_Letter.pdf`, for the kept file and the one you download. Documents
+  already made keep their names, and everything still finds them. Settings, under You, has
+  **File names**: three ways to name the files you download and send, each shown as an example
+  from your own name and latest employer.
+- **Settings is shorter and says things plainly.** Employers you turned down are one row,
+  "Employers you've turned down", with how many jobs they left out; it opens their names, each
+  with its own small trash. What Claude learned from you has one home, "What you have taught
+  it", grouped by area (messages, documents, jobs and so on), each rule one line with the day it
+  was learned; Your rules has one row that opens it. Long lists show their first few with Show
+  all.
+- **Something looks wrong opens its box right there**, begun with where you were and the
+  version, with Ask Claude and Cancel; telling the app's makers is a quiet link under it.
+- **What's new shows your version on its row** ("4.11.0 · Up to date"); inside, the newest few
+  lines with Show more, and the changes made for you in plain words, each once.
+- **Jobs you hid say why in your words**: "You cleared these", "Cleared automatically after a
+  week", "Not this employer", "The job closed".
+- **Text size**: Smaller and Larger are drawn in the size they set.
+- **Advanced holds only what can slow things down or use more of your Claude allowance** (where
+  Claude works, suggestions); keyboard shortcuts and text size are under Look, and checking
+  this device under This device.
+- **More choices for timing**: your next interview can go to the top of the Brief from the day
+  before, and calendar reminders can come two hours before.
+- **Your LinkedIn download, as often as you use it.** It is asked for weekly while you have
+  sent notes or messages in the last two weeks, and every two weeks otherwise.
+- **Remind me less.** The reminder's trash offers Every 2 weeks, Every month and Stop asking:
+  one tap, with Undo. Settings > LinkedIn has the same choice, to change any time.
+- **No stale "Done." on the LinkedIn download.** Its line shows just after you add one, and
+  never says that only a chat can take it back.
+- **Updates cost an open chat less.** After an update, a chat re-reads only the instructions
+  it had already read, never every one the update changed.
+
+### Fixed
+
+- **Your brief comes at the time you pick, and your page shows when it really comes.** A time
+  you choose stays exactly as you set it (8:00 is no longer turned into 7:38). Where the app
+  chose the time itself, or Claude's service starts it a few minutes late, your page shows the
+  real time and says why in one line.
+- **Every job site has a plain name and a line saying what it is.** Settings, Job sites says
+  "Adzuna", never "api.adzuna.com", with a short note under each site.
+- **A site that needs a key says what it needs.** Its row says so instead of a tick, and opens
+  on the steps to get one. Adzuna says it needs a paid plan: its free plan allows 25 searches in
+  total, and one search here uses about 74. Adzuna looked ticked, then unticked itself after a
+  visit.
+- **No tick on Job sites flips back without saying why.** Each site is changed on its own, so a
+  tap on one is never undone because another changed, and a tap that could not be done says
+  why on that site's row, with the tick back as it really is.
+- **Changing your search no longer starts a search by itself.** A job site turned on or off, or
+  a change to roles, places, pay or how far back to look, is saved and used from your next
+  search; its row says so, with Find jobs beside it to search now. Switching on a site had
+  quietly started a whole search.
+- **Your own notes in your search settings are kept.** Turning a site on or off, or changing any
+  search setting from the page, keeps the notes you wrote beside it, where it had put a bare
+  line in their place.
+- **LinkedIn reading waits for your own tomorrow.** A read cut short holds the automatic reads until the next day where you live, not by your computer's own date when it is set somewhere else.
+- **A folder with a space in its name is read whole.** When the page's helper hands Claude a file to send to your page, it is on a line of its own, so a user folder such as "First Last" is never read as two.
+- **A background save is never held up by a computer's clock.** A save Claude started in the background counts as under way by the time it was asked for, not by the disk's clock.
+- **The app's own checks pass on every computer.** Six of them had assumed something about the computer they ran on (its time zone, its date, a Mac's or Windows' own ways, the newest Python); each now checks the same thing anywhere.
+- **Saving is quick again.** The check before each save no longer runs the app's own tests on
+  your copy, which had made every save take over ten minutes; your own checks still run.
+- **Saves wait their turn.** When a save is asked for while another is running, it is added to
+  the one running (or the next) instead of starting its own check beside it, so only one check
+  runs at a time and nothing written in the meantime is left out.
+- **An update never holds your work back.** When an update changes something one of your own
+  checks relied on, your work is still saved, and Claude puts that check right in the
+  background, with nothing for you or a busy chat to do.
+- **The record of changes you asked for to your job search has its own folder.** It used to sit
+  among your saved searches, where a check that reads every saved search tripped over it.
+  Profile upgrade: tweaks-record-moved (done for you, nothing to do).
+- **A job's progress is saved to your page the first time.** A batch of drafts with each one
+  named wrote the same draft twice, and a save the page refused left the next one a step
+  ahead, so it was refused again until Claude read the page afresh. Each draft is now written
+  once, and a refused save is made again exactly as the page holds it.
+- **The day's update check no longer holds up a search.** Its slowest part, a check of the
+  public app that only the app maintainer's own copy runs, now runs on its own while the work
+  goes on; what it finds is said by the next check.
+
 ## [4.11.0] - 2026-11-06
 
 ### Added

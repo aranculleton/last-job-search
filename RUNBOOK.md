@@ -215,6 +215,15 @@ everything ruled out is fetched, screened and scored again and can reach the sho
 which is what it is for after the rules change. Postings are still aged from when they
 were first seen.
 
+**When the person names employers** ("search these 20 employers"), the round searches only
+them: `--employers "A, B, C"` (or a file, one name a line). Their own boards on file and
+searches by their names are all it sends; only their postings are fetched, ranked and cut,
+names matched as the app matches employers ("Acme" is "Acme Ltd"). The list keeps the number
+asked for, or one place for each employer named when that is more, so every one with a job
+that passes every rule is on it, and the round says which had none ("No open roles found at
+X, Y"): pass that on. The round keeps the names, so `--recut` and a wider round keep to them,
+and `--recut --employers "..."` limits a round already run.
+
 **Read the exit code.** 0 means the yield target was met, 2 means it was missed, 1 means
 a stage actually broke. A thin market and a broken pipeline are different answers. A scrape
 where more than a quarter of the portal requests failed is neither: the round carries on
@@ -443,7 +452,7 @@ written as words included; the summary and the letter bullets against the profil
 the opening and close also against the posting and p2), and a letter bullet that repeats a
 resume bullet. The resume's filename
 noun is the profile's own word (`documents.noun`), so a profile that says "CV" writes
-`cv/<Prefix>_CV_<ABBR>`.
+`cv/<Prefix>_<ABBR>_CV`.
 
 `outreach` writes `documents/applications/<slug>/job_posting.md` and `outreach.md`. The
 outreach note is a sub-80-word message to the hiring manager or recruiter built from the
@@ -462,7 +471,7 @@ is the resume's text layer as an ATS parses it), and report it in one line (all 
 passed, or `verify_batch.sh`'s last line), plus each item that failed or needs the person's
 call; never the whole list. A finding is fixed in the draft object and rendered again, never
 by hand in the `.tex`. Bullets are **allocated per posting** by `tools/allocate.py`, never
-hand-picked, and filenames are human-looking (`<Prefix>_Resume_<ABBR>`, the File naming table
+hand-picked, and filenames are human-looking (`<Prefix>_<ABBR>_Resume`, the File naming table
 in `05-cv-templates.md`).
 
 Deliver the batch on the person's page first (CLAUDE.md, "Every output is shown"): the files
@@ -739,6 +748,8 @@ anything updated: show the new version, not where it went.
 
 1. **Per role, one file-sending call** holding that role's resume and cover letter
    together, captioned: role, employer, pay (or "pay not stated"), location, apply link.
+   Send the copies `python3 tools/shown.py <resume pdf> <letter pdf>` makes, named as the
+   person chose in Settings, File names.
    With no SendUserFile in the chat, the caption's line and the two files' full paths,
    one a line, in its place.
 2. **Then one index table in the reply**: role | apply link, the full web address, one row
@@ -761,6 +772,22 @@ the other, in their words), and one a later rule replaced. Show each with its re
 the page, as one To do card, and retire (`learned.py retire`) only what they say yes to.
 Nothing goes unasked (2026-10-30).
 
+**Rules the app has since built in are retired once, after the update that built them in.**
+The app lists what it now does by itself (`learned.py` `BUILT_IN`); while a rule may only
+repeat one, the `built-in-rules` improvement is pending and the background `/upgrade` runs
+`python3 tools/learned.py built-in`. Put a rule away only where what the app does covers all
+of it (`built-in --retire <n>=<id>`, kept as "Now part of the app" and shown so on the page),
+then `built-in --done`, and the person hears the one line it prints and nothing else. It is
+never proposed again for the same behaviour (2026-11-06).
+
+**A complaint about the app is never a rule of theirs.** "Why is it so slow", a button that
+does nothing, a crash: that is how the app behaves, not how they want their work done. Record
+it with `python3 tools/learned.py record --about-app --said "<their words>"`, which keeps no
+rule and clears it from the turn. In the app maker's own copy it is kept as an app bug and
+they are told so in one line (`learned.py app-bugs` lists them); for anyone else, work round
+it, the best honest way the app allows. A record that reads as one is refused until you say
+which it is (`--about-app`, or `--not-about-app` for a rule that truly is theirs).
+
 The app's defaults (the voice of a first note, the questions an interview pack asks, who is
 worth contacting, how roles rank) are where everyone starts, and they stay. The person's own
 reactions outrank every default, and **they are kept for good in `profile/learned.json`**
@@ -772,7 +799,9 @@ The hook and the four steps are in CLAUDE.md ("Learning the person"); this is th
   `TITLE_SETS`), `search.py` (the bar, the scoring words), `profile/CLAUDE.md` (how they
   want to come across, document rules), `07-interview-prep.md`, and for how a page looks
   ("bigger font", "less cramped", "centre my name") `person.json` `documents.design` through
-  `python3 templates/doc_design.py adjust <change>`. A job they dislike is `python3
+  `python3 templates/doc_design.py adjust <change>`; how the files they send are named
+  ("put the role in", "just my name and CV") `person.json` `documents.file_names`, one of
+  `docpaths.FILE_NAME_PRESETS` (Settings, File names). A job they dislike is `python3
   tools/exclude.py add <url> --basis person --reason "<their words>"`. A person they do not
   want contacted is a `closed` contact with their reason. A *kind* of job or person becomes
   the rule that covers all of them.
@@ -893,7 +922,7 @@ slash command** are the table below, each with what it does, its flags and its e
 | `python3 tools/network/profile_facts.py` | The candidate half of a prep doc, read out of `01-candidate-profile.md` and `tools/bridges.py`. `prep.py` calls it automatically; run it directly to see what it extracts. |
 | `python3 tools/network/surface.py` | The one check before anyone is shown as someone to write to: the contact book (by id, LinkedIn address in any form, or name at either employer), their whole thread on every channel, the bar, `do_not_target.json`, a hold. `"<name>" --company --url` for one person, `--file <people.json>` for a list a chat made, `--queue` for everyone waiting on a first note, `--id` for book rows. Prints SHOW or NOT with the reason. |
 | `python3 tools/network/state.py follow-ups [--write]` | Each conversation waiting on a reply, with the day its follow-up falls due by the person's rule (`FOLLOW_UP_DAYS`, `MAX_UNANSWERED`), or that no more go; `--write` puts it on the contact row, never over a next action the person wrote. |
-| `python3 tools/network/export.py due` | One line once the last LinkedIn download is a fortnight old (`EXPORT_EVERY_DAYS`), for the brief; nothing otherwise. |
+| `python3 tools/network/export.py due` | One line once the last LinkedIn download is due again (`export.every_days`: weekly while the person is messaging people, a fortnight otherwise, or their `EXPORT_REMIND`), for the brief; nothing otherwise. |
 | `python3 tools/open_actions.py` | Everything owed, employers first, derived from the three state files: live applications, contacts owed a reply, and **follow-ups due** on applications that have gone quiet. `--company <name>` for one employer. **`--due`** prints only what is due today or overdue, both halves, most urgent first, with the counts on line one and the first five lines written to stand alone: it is what the daily routine pastes into a push notification. A contact whose `next_action` opens on HOLD or FREEZE is not due until the date after "until" arrives. Requests nobody accepted are one section to withdraw together, and anything owed more than 45 days with nothing done (`state.OLD_OWED_DAYS`, most often old LinkedIn history) is counted on line one, not listed; `state.py` still lists each, and a date of the person's own on the row keeps it live. An interview booked in an application's `outcome.md` is due once it is a week away with no pack for that stage, and its thank-you for a week after it until one is on file. This is the one view; `tools/followups.py` is the nudge half of it and still runs on its own when that is all you want. |
 | `python3 tools/what_works.py brief <messages\|documents\|search\|interviews>` | What has worked, counted from the state files with no model call: reply rates and the messages that drew replies, the applications that reached an interview with the resume and letter they used, the interview rate by fit band and route, and (`interviews`) how far applications get by the stages ticked in each `outcome.md`, with the questions the bank says keep coming up and the stories that landed. A difference is reported only when the groups are big enough and the gap is unlikely to be chance. `event --contact <id>` and `event --company <name>` are the one-line audit when a result arrives. |
 | `python3 tools/interview_pack.py pack "<company>"` | The one living prep document `/interview` builds for a hiring process, one screen first (what they are assessing and want to hear, three to five things to say, likely questions with the story or answer for each, two or three questions to ask, hooks, the money, the one or two things not to say), in plain words with no file, command or status code in it, then your answers to write as said, what the employer's people and papers have been told (conflicts flagged), who you are meeting and the question for each, the format, and the detail, every fact sourced. `--stage`, `--date`, `--time`, `--with`, `--format` (case, coding, behavioural, technical, presentation, screen), `--map <json>` and `--write` (beside the application, as `interview_prep.md`, keeping what the person wrote). `book "<company>" [--stage ...] [--date ...] --time HH:MM [--zone <as written>]` saves an interview's day and time on its record (its `outcome.md` line), the one place the page reads it: a time said in the chat, an invite or a message is saved this way at once, never left for the person to add. `times` saves every time a note or a logged message gives for a booked interview that has none (logging a message or a note, and every wake of the chat that answers the page, run it). `process "<company>" --contact <id> --role "<role>" [--time HH:MM] [--posting <file or link>]` registers a process with no application (a referral or a recruiter's call) and writes its document in one command; `postings` gives every process folder that has none a `job_posting.md`. `motive "<question>" --answer "<their words>" [--suits ...] [--not-for ...]` keeps the person's own reasons in `profile/07-interview-prep.md` for every later employer. `check` exits 1 while an answer is unwritten or reads as written, a question waits on the person's own reasons, or research is still to do. `campaign --yes "<chat>"\|--no` records the one-time offer of a chat for that employer. `asked` adds a question an interview asked to `documents/interview/question_bank.csv`; `rework` adds an answer to work on, which a rebuild keeps. |
@@ -942,8 +971,11 @@ not a bug in the update. **A person's own tests (`profile/tests`) use the app's 
 only**, so fewer break: a name that starts with an underscore, and anything inside
 `tools/openroles/`, can change in any release; a job board is faked through
 `tools/offline_boards.py`. **When they fail after an update**, bringing them in line is
-Claude's job, done in the same turn and committed with the sync's work: never a question or
-a to-do for the person, who hears one plain line at most.
+Claude's job, done by a background step that needs nobody (the `own-tests` improvement, queued
+the moment the update's run finds them, and started by the app's hook in the next chat not on
+one big job): never a question or a to-do for the person, who hears one plain line at most.
+Nothing waits on it: until it is done, each save sets the tests the update broke aside and
+lands the work (`tools/land.py`), so no chat is held or has to notice a step.
 
 1. `python3 tools/sync_app.py --own-tests` sorts every failing test into two kinds and says
    what to do. The sync and `ci_local.sh` print the same by themselves.
@@ -957,13 +989,15 @@ a to-do for the person, who hears one plain line at most.
    test in line all the same; in the maintainer's own repo, report it the way its
    `profile/CLAUDE.md` says. Anyone else is never told: a failing test would hold the whole
    update back, and the app's problems are the maintainer's, not theirs.
-4. **All of it is Claude's, in the same turn, with nothing asked.** Rewrite, retire and bring
-   in line, run them again, and commit with the sync's work, naming each test in the commit so
-   a revert brings any back. The person hears one plain line at most (`OWN_CHECKS_SAID` in
+4. **All of it is Claude's, in the background, with nothing asked.** Rewrite, retire and
+   bring in line, changing only what the update changed (the CHANGELOG lines of the versions
+   taken) and never the person's own data, run them again, and commit it as `Profile upgrade:
+   own-tests` with the body "Your own checks were brought in line with the update.", naming
+   each test, so a revert brings any back. The person hears one plain line at most (`OWN_CHECKS_SAID` in
    `tools/sync_app.py`); most have never seen a test, and a question or a to-do about one is
    one they cannot act on.
-5. Run `./tools/ci_local.sh`, then land on master as usual. Until it is green, master stays
-   on the old version and nothing breaks.
+5. Land as usual. A test the update broke and nobody has brought in line yet is set aside by
+   the save, never a reason to hold it; any other failure still stops the save.
 
 `python3 tools/sync_app.py --own-test-risks` names the tests that will break the next time
 the app changes a private part, before it does; `ci_local.sh` prints it as a note.

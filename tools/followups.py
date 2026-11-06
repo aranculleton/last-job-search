@@ -174,8 +174,8 @@ _PLACEHOLDER_ROLE = re.compile(
 # Who a nudge goes to. Every draft opened "Hi [name]" and nothing said who that
 # was, so most drafts were addressed to nobody. A template to nobody is a
 # research task dressed as a message, so it now says which it is.
-_ABBR = re.compile(re.escape(docpaths.prefix()) + "_" + re.escape(docpaths.noun_word())
-                   + r"_([A-Za-z0-9]+)")
+# Either order: <Prefix>_<ABBR>_Resume, or <Prefix>_Resume_<ABBR> until 2026-11-06.
+_ABBR = docpaths.resume_name_rx()
 _SEND_ON = re.compile(r"^Send on (?P<channel>[^,\n]+?) to (?P<who>[^,.\n]+)", re.M)
 NO_RECIPIENT = ("no recipient on file: find the recruiter or hiring manager first, "
                 "then put the name in the tracker row's contact_person column")

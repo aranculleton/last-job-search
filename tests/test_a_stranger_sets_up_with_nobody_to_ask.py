@@ -207,15 +207,15 @@ def test_a_part_of_the_page_that_breaks_reaches_the_report_by_its_kind(run, tmp_
         {"hash": "jobs", "eval": "(function () { const r = document.querySelector('#main'); "
                                  "return r ? 'ok' : ''; })()"},
         {"hash": "settings", "click": "Something looks wrong", "exact": False,
-         "fake": {}, "eval": "(document.querySelector('dialog [data-k=\"report-makers\"]') || {}).href || ''"}])
+         "fake": {}, "eval": "(document.querySelector('#main [data-k=\"report-makers\"]') || {}).href || ''"}])
     body = parse_qs(urlsplit(got["steps"][-1]["eval"]).query)["body"][0]
     assert "Page version" in body
     js = _read("templates", "app", "app.js")
     guarded = js[js.index("function guarded(fn, fallback)"):]
     guarded = guarded[:guarded.index("\n  }\n")]
     assert "S.drawFault" in guarded and "e.name" in guarded
-    report = js[js.index("function reportWrong(version)"):]
-    assert "S.drawFault" in report[:report.index("sheet({")]
+    report = js[js.index("function makersUrl(version"):]
+    assert "S.drawFault" in report[:report.index("encodeURIComponent")]
 
 
 # ------------------------------------------------------------------ X-29 a stalled setup

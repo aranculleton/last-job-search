@@ -164,6 +164,11 @@ Only draft unprompted if the user has explicitly said to in that request.
   reading its robots.txt again.
   `python3 tools/portals.py` prints what the next round will search, and the boards
   researched for the person (`PORTAL_RESEARCH`) that have no portal yet.
+- **A site that needs a key** (an API such as Adzuna's) shows on the page as what it
+  needs ("Needs a free key"; Adzuna "Needs a paid plan") with the steps to get it (`tools/portals.py` `SITES`, `key_help`), and cannot be
+  ticked until this computer holds it. When the person says "I have my <site> key", show
+  them where it goes the way SETUP.md, "A job site that needs a key", says: never asked
+  for in the chat itself, never written into the repo.
 - **Employer boards are the third source, and not a portal.** `tools/ats_boards.py` reads
   the employers named in `profile/boards.py` straight from their ATS (every system the
   vendored openroles reads: Greenhouse, Lever, Ashby, Workday, Personio, Teamtailor and the
@@ -192,7 +197,7 @@ Only draft unprompted if the user has explicitly said to in that request.
 
 ## One command
 
-`python3 tools/run_round.py --jobage 14` runs every stage of a round in order and stops at the ranked shortlist. Leave `--out` off: the round names itself, `r` and the next number, and prints its folder (`round: r12, its files in ...`), which is the folder `--recut` and a progress pin name. See `RUNBOOK.md`. When it cannot run, `manual-round.md` beside this file has every stage written out to do by hand: read it only then. Its step numbers are the ones cited below.
+`python3 tools/run_round.py --jobage 14` runs every stage of a round in order and stops at the ranked shortlist. When the person names employers ("search these 20 employers"), add `--employers "A, B, C"`: only those are searched (their own boards and searches by their names), the list holds only them with a place for each, and the round names any with no open roles ("No open roles found at X, Y"), which you pass on (RUNBOOK.md step 1). Leave `--out` off: the round names itself, `r` and the next number, and prints its folder (`round: r12, its files in ...`), which is the folder `--recut` and a progress pin name. See `RUNBOOK.md`. When it cannot run, `manual-round.md` beside this file has every stage written out to do by hand: read it only then. Its step numbers are the ones cited below.
 
 ## How It Works
 

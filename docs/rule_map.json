@@ -826,7 +826,7 @@
   {
    "id": "own-tests-fail",
    "was": "App-owned files and personal files",
-   "rule": "When they fail after an update, Claude brings them in line in the same turn, never a question for the person.",
+   "rule": "When they fail after an update, Claude brings them in line by a background step that needs nobody, never a question for the person; saves set them aside meanwhile.",
    "bold": "When they fail after an update",
    "home": "RUNBOOK.md",
    "anchor": "never a question or a to-do for the person, who hears one plain line at most",
@@ -3658,6 +3658,35 @@
    "anchor": "No skill is loaded and nothing is drafted one by one.",
    "needed_by": [
     "page"
+   ]
+  },
+  {
+   "id": "built-in-retired",
+   "was": "new in 4.0",
+   "rule": "Rules the app has since built in are retired once, after the update that built them in, as Now part of the app, with one plain line to the person (the maintainer, 2026-11-06).",
+   "bold": "Rules the app has since built in are retired once, after the update that built them in.",
+   "home": "RUNBOOK.md",
+   "anchor": "**Rules the app has since built in are retired once, after the update that built them in.**",
+   "needed_by": [
+    "start",
+    "/upgrade"
+   ]
+  },
+  {
+   "id": "complaint-not-a-rule",
+   "was": "new in 4.0",
+   "rule": "A complaint about how the app behaves is never saved as a personal rule: in the maintainer's own copy it is kept as an app bug, for anyone else it is worked around (the maintainer, 2026-11-06).",
+   "bold": "A complaint about the app is never a rule of theirs.",
+   "home": "RUNBOOK.md",
+   "anchor": "**A complaint about the app is never a rule of theirs.**",
+   "needed_by": [
+    "/apply",
+    "/network",
+    "/reply",
+    "/interview",
+    "/prep",
+    "/outcome",
+    "/rank"
    ]
   }
  ]

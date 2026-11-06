@@ -42,7 +42,9 @@ def test_claude_brings_them_in_line_itself_and_asks_the_person_nothing():
                      [("mine::test_old_shape", "AssertionError: 1 != 2")]):
         text = sync_app.own_tests_report(failures, ROOT)
         do = text.splitlines()[-2]
-        assert do.startswith("Claude: do it now, in this turn, with no question to the person")
+        # Done by a background step that needs nobody, never holding the work (2026-11-06).
+        assert do.startswith("Claude: nothing waits on them") and "needs nobody" in do
+        assert "no question to the person" in do
         assert "commit" in do and sync_app.OWN_CHECKS_SAID in do
         low = text.lower()
         for asking in ("ask once", "their yes", "yes (recommended)", "for you to", "the person's call"):

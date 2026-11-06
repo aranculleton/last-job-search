@@ -19,6 +19,7 @@ from __future__ import annotations
 import ast
 import json
 import os
+import re
 import sys
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -97,6 +98,86 @@ def get(name: str, key: str):
         return None
 
 
+def _comments(text: str) -> list[str]:
+    """Every comment in `text`, in order, as written."""
+    import io
+    import tokenize
+    out = []
+    try:
+        for tok in tokenize.generate_tokens(io.StringIO(text).readline):
+            if tok.type == tokenize.COMMENT:
+                out.append(tok.string)
+    except (tokenize.TokenError, IndentationError, SyntaxError):
+        pass
+    return out
+
+
+def _same(a, b) -> bool:
+    """Equal and of the same type, all the way down: True is not 1, nor 1.0 (`==` says so)."""
+    if type(a) is not type(b):
+        return False
+    if isinstance(a, dict):
+        return a.keys() == b.keys() and all(_same(a[k], b[k]) for k in a)
+    if isinstance(a, (list, tuple)):
+        return len(a) == len(b) and all(_same(x, y) for x, y in zip(a, b))
+    return a == b
+
+
+def _in_place(src: str, n, value) -> str | None:
+    """`src` with a dict setting changed entry by entry, so every comment on and between its
+    entries stays where the person wrote it: `PORTALS = {"adzuna-search": False,  # why}` keeps
+    its why when it is turned on. None where that cannot be done (not a dict both ways, an
+    entry taken away, a key that is not plain text): the caller writes the line whole."""
+    node = n.value
+    if not (isinstance(node, ast.Dict) and isinstance(value, dict)):
+        return None
+    try:
+        keys = [ast.literal_eval(k) if k is not None else None for k in node.keys]
+        old = [ast.literal_eval(v) for v in node.values]
+    except ValueError:
+        return None
+    if None in keys or any(k not in value for k in keys):
+        return None
+    data = src.encode("utf-8")
+    starts = [0]
+    for line in data.splitlines(keepends=True):
+        starts.append(starts[-1] + len(line))
+
+    def at(line, col):           # ast's offsets are a line and a byte within it
+        return starts[line - 1] + col
+
+    edits = [(at(v.lineno, v.col_offset), at(v.end_lineno, v.end_col_offset),
+              _literal(value[k]).encode("utf-8"))
+             for k, v, was in zip(keys, node.values, old) if not _same(value[k], was)]
+    added = [k for k in value if k not in keys]
+    if added:
+        close = at(node.end_lineno, node.end_col_offset) - 1         # the closing brace
+        last = at(node.values[-1].end_lineno, node.values[-1].end_col_offset) if keys else None
+        between = data[last:close].decode("utf-8") if keys else ""
+        comma = "," in re.sub(r"#[^\n]*", "", between)
+        entries = [f"{_literal(k)}: {_literal(value[k])}" for k in added]
+        line0 = starts[node.end_lineno - 1]
+        if node.lineno != node.end_lineno and not data[line0:close].strip():
+            # One entry a line, as the person wrote them, before the line with the brace.
+            pad = " " * (node.keys[0].col_offset if keys else node.col_offset + 4)
+            if keys and not comma:
+                edits.append((last, last, b","))
+            edits.append((line0, line0, "".join(f"{pad}{e},\n" for e in entries).encode("utf-8")))
+        else:
+            lead = "" if not keys else " " if comma else ", "
+            edits.append((close, close, (lead + ", ".join(entries)).encode("utf-8")))
+    for a, b, text in sorted(edits, key=lambda e: e[0], reverse=True):
+        data = data[:a] + text + data[b:]
+    out = data.decode("utf-8")
+    try:
+        got = _node(ast.parse(out), n.targets[0].id if isinstance(n, ast.Assign) else n.target.id)
+        if got is None or not _same(ast.literal_eval(got.value), value):
+            return None
+    except (SyntaxError, ValueError):
+        return None
+    return out
+
+
 def set_line(name: str, key: str, value) -> dict:
     """Write `KEY = value` into profile/<name>, in place of the line or lines it was, or at
     the end. Returns {"file", "key", "before"}: the text of the lines it replaced, or None
@@ -112,6 +193,7 @@ def set_line(name: str, key: str, value) -> dict:
     n = _node(tree, key)
     lines = src.splitlines(keepends=True)
     before = None
+    above = 0
     if n is not None:
         try:
             ast.literal_eval(n.value)
@@ -120,15 +202,30 @@ def set_line(name: str, key: str, value) -> dict:
                           "by hand") from None
         start, end = n.lineno - 1, n.end_lineno
         before = "".join(lines[start:end])
-        lines[start:end] = [text + "\n"]
-        out = "".join(lines)
+        out = _in_place(src, n, value)
+        if out is None:
+            # Every comment the old lines held is kept, above the new line: turning a job site
+            # on put a bare line where the person's note said why it was off (the maintainer,
+            # 2026-11-06).
+            kept = _comments(before)
+            if len(kept) == 1 and n.lineno == n.end_lineno:
+                # One line with its note after it keeps it there: `X = 21  # why`.
+                lines[start:end] = [f"{text}  {kept[0]}\n"]
+                kept = []
+            else:
+                lines[start:end] = [c + "\n" for c in kept] + [text + "\n"]
+            above = len(kept)
+            out = "".join(lines)
     else:
         out = src.rstrip("\n") + ("\n\n" if src.strip() else "") + text + "\n"
     ast.parse(out)
     with open(path, "w", encoding="utf-8", newline="") as fh:
         fh.write(out)
     person.reset()
-    return {"file": name, "key": key, "before": before, "lapsed": _lapsed(name, key)}
+    out = {"file": name, "key": key, "before": before, "lapsed": _lapsed(name, key)}
+    if above:
+        out["above"] = above        # the comments moved above the line, which restore takes back
+    return out
 
 
 def restore(record: dict) -> None:
@@ -142,6 +239,10 @@ def restore(record: dict) -> None:
         return
     lines = src.splitlines(keepends=True)
     start, end = n.lineno - 1, n.end_lineno
+    # The comments set_line moved above the line go back inside what it replaced.
+    above = int(record.get("above") or 0)
+    if above and start >= above and all(x.lstrip().startswith("#") for x in lines[start - above:start]):
+        start -= above
     lines[start:end] = [record["before"]] if record.get("before") else []
     out = "".join(lines)
     ast.parse(out)

@@ -66,13 +66,13 @@ def _sample():
         return json.load(fh)
 
 
-def _go(run, tmp_path, steps, vp, model=None, seed=None, fake=None, clock=None, settle=False):
+def _go(run, tmp_path, steps, vp, model=None, seed=None, fake=None, clock=None, settle=False, zone=None):
     model = model or _sample()
     path = os.path.join(str(tmp_path), "page.html")
     with open(path, "w", encoding="utf-8") as fh:
         fh.write(app_page.standalone(app_page.render(model)))
     got = run("engine", html=path, viewport=vp, steps=steps, seed=seed or {}, fake=fake or {"canSend": "available"}, clock=clock,
-              **({"settle": True} if settle else {}))
+              **({"settle": True} if settle else {}), **({"timezoneId": zone} if zone else {}))
     assert not got["errors"], got["errors"]
     return got
 
@@ -141,7 +141,7 @@ def test_a_draft_is_downloaded_marked_applied_and_its_follow_up_is_done_from_to_
         {"hash": "todo", "read": '[data-item="due-ellerwick-follow"]'},
         {"click": "Done: Follow up with Ellerwick Trust"},
     ], vp)
-    assert [c["filename"] for c in got["after"][0]["calls"]] == ["Morgan_Ellis_CV_Ellerwick_Trust.pdf", "Morgan_Ellis_Cover_Letter_Ellerwick_Trust.pdf"]  # named for the reader since 2026-11-05
+    assert [c["filename"] for c in got["after"][0]["calls"]] == ["Morgan_Ellis_Ellerwick_Trust_CV.pdf", "Morgan_Ellis_Ellerwick_Trust_Cover_Letter.pdf"]  # named for the reader since 2026-11-05; the employer before the document since 2026-11-06
     a = _one(got, "ready.applied")
     assert a["value"]["on"] and a["rev_seen"] == "a1"
     row = got["after"][2]["text"]

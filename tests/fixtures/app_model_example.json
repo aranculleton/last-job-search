@@ -1,20 +1,21 @@
 {
  "model": 1,
  "made_at": "2026-10-25T18:00:00Z",
- "rev": "7e9ee6131899",
+ "rev": "55a10acada93",
  "app": {
-  "version": "4.10.1",
+  "version": "4.11.0",
   "url": null,
   "update_waiting": null,
   "news": [
-   "One helper chat, and two only while one hands over to the next.",
-   "The README and the start guide say the pencil and the trash.",
-   "The page never says \"Connected\" for a moment while it is still reconnecting."
+   "The Brief fits a laptop screen.",
+   "One way to stop Claude.",
+   "A card's answer offers what it made."
   ],
   "privacy": "Only you can open this page unless you share it. It holds first names, employers, your drafts and your setup answers, so keep it unshared.",
   "repo": "https://github.com/aranculleton/last-job-search",
-  "page": 64,
-  "not_saved": 0
+  "page": 73,
+  "not_saved": 0,
+  "app_bugs": []
  },
  "person": {
   "first_name": "Morgan",
@@ -76,7 +77,7 @@
  ],
  "jobs": {
   "round": "r9",
-  "made_at": "2026-11-05T22:56:23Z",
+  "made_at": "2026-11-06T02:31:18Z",
   "met": false,
   "summary": "3 roles from the last search to look at, 1 of them scoring 75 or more. 3 left out, each with its reason.",
   "rows": [
@@ -485,6 +486,7 @@
     {
      "kind": "resume",
      "name": "Morgan_Ellis_CV_Fernhill.pdf",
+     "send": "Morgan_Ellis_Fernhill_Freight_CV.pdf",
      "asset": null,
      "path": "cv/Morgan_Ellis_CV_Fernhill.pdf",
      "pages": null,
@@ -493,6 +495,7 @@
     {
      "kind": "letter",
      "name": "Morgan_Ellis_Cover_Letter_Fernhill.pdf",
+     "send": "Morgan_Ellis_Fernhill_Freight_Cover_Letter.pdf",
      "asset": null,
      "path": "cover_letters/Morgan_Ellis_Cover_Letter_Fernhill.pdf",
      "pages": null,
@@ -568,6 +571,7 @@
     {
      "kind": "resume",
      "name": "Morgan_Ellis_CV_Kestrel.pdf",
+     "send": "Morgan_Ellis_Kestrel_Mutual_CV.pdf",
      "asset": null,
      "path": "cv/Morgan_Ellis_CV_Kestrel.pdf",
      "pages": 1,
@@ -576,6 +580,7 @@
     {
      "kind": "letter",
      "name": "Morgan_Ellis_Cover_Letter_Kestrel.pdf",
+     "send": "Morgan_Ellis_Kestrel_Mutual_Cover_Letter.pdf",
      "asset": null,
      "path": "cover_letters/Morgan_Ellis_Cover_Letter_Kestrel.pdf",
      "pages": 1,
@@ -999,7 +1004,7 @@
    "when": "2026-10-28",
    "prep": {
     "path": "documents/applications/thornbury_bank_risk_analyst_thornbury/interview_prep.md",
-    "updated": "2026-11-05T22:56:23Z"
+    "updated": "2026-11-06T02:31:18Z"
    },
    "questions": 2,
    "all_day": true,
@@ -1323,6 +1328,10 @@
    "value": "7",
    "choices": [
     [
+     "1",
+     "From the day before"
+    ],
+    [
      "2",
      "From 2 days before"
     ],
@@ -1353,6 +1362,10 @@
      "An hour before"
     ],
     [
+     "120",
+     "Two hours before"
+    ],
+    [
      "1440",
      "The day before"
     ],
@@ -1380,6 +1393,34 @@
     ]
    ],
    "rev": "bfec526fd79b"
+  },
+  {
+   "id": "setting-file_names",
+   "key": "file_names",
+   "label": "File names",
+   "kind": "choice",
+   "value": "name_employer_document",
+   "choices": [
+    [
+     "name_employer_document",
+     "Name, employer, document"
+    ],
+    [
+     "name_document",
+     "Name, document"
+    ],
+    [
+     "name_employer_role_document",
+     "Name, employer, role, document"
+    ]
+   ],
+   "rev": "65bfac5a79cf",
+   "examples": {
+    "name_employer_document": "Morgan_Ellis_Thornbury_Bank_CV.pdf",
+    "name_document": "Morgan_Ellis_CV.pdf",
+    "name_employer_role_document": "Morgan_Ellis_Thornbury_Bank_Risk_Analyst_CV.pdf"
+   },
+   "recommended": "name_employer_document"
   },
   {
    "id": "setting-time_zone",
@@ -1489,11 +1530,23 @@
   ]
  },
  "updates": {
-  "version": "4.10.1",
-  "newest": "4.10.1",
+  "version": "4.11.0",
+  "newest": "4.11.0",
   "mode": "auto",
   "waiting": null,
   "changed": [
+   {
+    "version": "4.11.0",
+    "date": "2026-11-06",
+    "lines": [
+     "The Brief fits a laptop screen.",
+     "One way to stop Claude.",
+     "A card's answer offers what it made.",
+     "Answers are never lost.",
+     "A bigger chat bubble.",
+     "Something else, on every card, answered under that card."
+    ]
+   },
    {
     "version": "4.10.1",
     "date": "2026-11-05",
@@ -1504,18 +1557,6 @@
      "Every screen is the whole width.",
      "Icons only is its own section at the top of the side menu.",
      "A long job title fills its line before it wraps."
-    ]
-   },
-   {
-    "version": "4.10.0",
-    "date": "2026-11-05",
-    "lines": [
-     "A calmer page that does more by itself.",
-     "Questions on the form.",
-     "Jobs is one list.",
-     "Claude fixes a draft and puts its files on your page by itself.",
-     "The pencil.",
-     "What costs Claude's time shows."
     ]
    }
   ],
@@ -1742,7 +1783,34 @@
      ]
     }
    ],
-   "rev": "3f18bb475638"
+   "rev": "3f18bb475638",
+   "reminder": {
+    "id": "setting-export_remind",
+    "key": "export_remind",
+    "label": "Reminder to download it",
+    "kind": "choice",
+    "value": "auto",
+    "choices": [
+     [
+      "auto",
+      "Weekly while messaging"
+     ],
+     [
+      "fortnightly",
+      "Every 2 weeks"
+     ],
+     [
+      "monthly",
+      "Every month"
+     ],
+     [
+      "off",
+      "Off"
+     ]
+    ],
+    "help": "Weekly while you have sent notes or messages in the last two weeks, every two weeks otherwise.",
+    "rev": "67d894b3b570"
+   }
   },
   "reading": {
    "id": "linkedin-reader",
@@ -1859,23 +1927,29 @@
   "employers": [],
   "portals": [
    {
+    "id": "site-freehire",
     "name": "freehire-search",
     "label": "Freehire",
+    "note": "A free board that gathers jobs from many sites.",
     "on": true,
-    "why": "A free board that lists jobs from many sites."
+    "key": null,
+    "rev": "78de22b0d1e5"
    },
    {
+    "id": "site-linkedin",
     "name": "linkedin-search",
     "label": "LinkedIn",
+    "note": "LinkedIn's own job search, in every country.",
     "on": true,
-    "why": "LinkedIn's own job search."
+    "key": null,
+    "rev": "82a9034fa6e3"
    }
   ],
   "boards": [],
   "boards_left_out": 0,
   "rules": [],
   "pause": null,
-  "rev": "f523c2612e37"
+  "rev": "90bc84bb0074"
  },
  "where": {
   "id": "where",
@@ -1913,6 +1987,7 @@
    "due.done",
    "due.snooze",
    "due.undo",
+   "export.later",
    "export.requested",
    "export.unrequested",
    "hint.seen",
@@ -1983,6 +2058,8 @@
    6
   ],
   "time": "07:38",
+  "real_time": "07:38",
+  "why": "Comes at 7:38: a few minutes before the hour, when the service is less busy.",
   "zone": "Europe/London",
   "paused": null,
   "waiting": 0,
@@ -1995,7 +2072,7 @@
    "on": "brief.on"
   },
   "id": "schedule",
-  "rev": "43cc79b6d1d5"
+  "rev": "d4d7eaafae1e"
  },
  "you": {
   "id": "you",

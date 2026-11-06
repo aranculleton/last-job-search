@@ -27,8 +27,12 @@ copy set up before 4.3 gets it by itself. It is bound to the chat that answers y
 with no page to the chat set-up ran in, every day at 7:38 your time (5:38 on the US west coast
 and in Mountain time, where 7:38 falls in the hours the scheduler runs late), and a first one
 runs a few minutes later so you see it work (`python3 tools/routines.py brief` prints the
-calls). No new chat is made. Change its days or time, or turn it off, from the same bell or in
-Settings, Your brief; take a break from the whole search there too. With no page, say "move
+calls). 7:38 is the app's own choice for 8:00, a few minutes before the hour because a run set
+on the hour can start several minutes late, and your page says so in one line. No new chat is
+made. Change its days or time, or turn it off, from the same bell or in Settings, Your brief: a
+time you pick there is kept to the minute, 8:00 stays 8:00. Your page shows when it really
+comes, the scheduler's own late start included where it reports one. Take a break from the
+whole search there too. With no page, say "move
 my brief" or "stop my brief" in any chat. It is one short run each morning in a chat that
 already exists, so it never adds a chat. If set-up stops before its end, one reminder runs a
 day after your page went up, saying only that set-up waits there.
@@ -106,6 +110,14 @@ only the person can, in theirs.
   `can_take`) and starts the helper where there is none. Never make a desktop scheduled task
   for the brief, never start a cloud chat from your own shell, and never make a routine for
   it from there.
+- **A time the person picks is kept to the minute.** Only the app's own default moves off the
+  hour (8:00 to 7:38, Claude's scheduling guidance), and `record --asked` keeps what it stood
+  for so the page says why. A time asked for on the page or in a chat ("move my brief to 8")
+  goes through `python3 tools/routines.py move --time 08:00` and its owed `update_trigger`
+  carries exactly that minute: never move it off the hour or half hour yourself, whatever a
+  tool's own guidance says, since their choice wins. What the scheduler reports of a late start
+  (`next_run_at`, the last run's `fired_at`) is kept by `routines.py brief --triggers` and the
+  daily tidy-up, and the page shows that time with one line why, never the time it is set for.
 - The lines `routines.py brief` prints are for you: act on them, and tell the person only the
   one line it gives (where and when it comes, and how to change it), never its file, id or
   task name.
@@ -150,8 +162,8 @@ Claude lists your scheduled tasks and runs `python3 tools/routines.py brief --tr
 page>`, so a brief that already exists, under any name, is never made twice. With none, it
 binds a task to the chat doing the work (`create_trigger` with that chat's id, `CRON_TZ=<your
 zone> 38 7 * * *`, the morning brief stub below as its prompt, no connectors), and a one-off
-first run a few minutes later bound to the same chat; then `routines.py record` writes
-`profile/routines.json` and it lands on master. You answer nothing: the days and the time are
+first run a few minutes later bound to the same chat; then `routines.py record` (with `--asked
+08:00`, what 7:38 stands for) writes `profile/routines.json` and it lands on master. You answer nothing: the days and the time are
 defaults, and the zone is the one your profile names. Without a page, set-up binds it to the
 cloud chat it ran in, and the brief says so the first time it comes.
 

@@ -195,8 +195,8 @@ def test_the_compiled_pages_print_what_the_values_say(tmp_path):
     assert "CHECK" not in fit.stdout
     import pdftext
     abbr = json.loads(drafts.read_text(encoding="utf-8"))[0]["abbr"]
-    resume = pdftext.text(str(state / "cv" / f"Morgan_Ellis_CV_{abbr}.pdf"))
-    letter = pdftext.text(str(state / "cover_letters" / f"Morgan_Ellis_Cover_Letter_{abbr}.pdf"))
+    resume = pdftext.text(str(state / "cv" / f"Morgan_Ellis_{abbr}_CV.pdf"))
+    letter = pdftext.text(str(state / "cover_letters" / f"Morgan_Ellis_{abbr}_Cover_Letter.pdf"))
     assert "SECRET" not in resume + letter
     flat = " ".join(resume.split())
     for line in ("morgan_ellis@example.com", "linkedin.com/in/morgan--ellis-example",
@@ -206,7 +206,7 @@ def test_the_compiled_pages_print_what_the_values_say(tmp_path):
     assert "morgan_ellis@example.com" in " ".join(letter.split())
     from pypdf import PdfReader
     uris = [an.get_object().get("/A", {}).get("/URI")
-            for page in PdfReader(str(state / "cv" / f"Morgan_Ellis_CV_{abbr}.pdf")).pages
+            for page in PdfReader(str(state / "cv" / f"Morgan_Ellis_{abbr}_CV.pdf")).pages
             for an in page.get("/Annots") or []]
     assert "https://www.linkedin.com/in/example-jos%C3%A9-garc%C3%ADa" in uris
     assert "mailto:morgan_ellis@example.com" in uris

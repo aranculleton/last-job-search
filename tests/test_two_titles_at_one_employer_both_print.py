@@ -120,7 +120,7 @@ def test_the_general_resume_renders_and_passes_its_check(tmp_path):
     out = r.stdout + r.stderr
     assert "CHRONO" not in out and "BATCH: ALL PASS" in out, out[-3000:]
     import pdftext
-    pdf = os.path.join(str(tmp_path / "state"), "cv", "Morgan_Ellis_CV_General.pdf")
+    pdf = os.path.join(str(tmp_path / "state"), "cv", "Morgan_Ellis_General_CV.pdf")
     text = re.sub(r"\s+", " ", pdftext.text(pdf))
     assert "Senior Operations Analyst" in text and "Mar 2023 - Present" in text
     assert "Jun 2022 - Feb 2023" in text and "Fernhill Freight" in text
