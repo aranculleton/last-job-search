@@ -68,6 +68,10 @@ make sense to somebody whose repo just received it.
   so it stopped. The chat that answers your page now starts its fresh helper directly from
   your copy; where it cannot, it keeps answering and your next brief starts it.
 
+### Removed
+
+- **Names your own checks might have used were retired**: `app_listen.fresh_task`, `app_listen.FRESH_FROM_TASK` and `app_listen.TASK_AHEAD_S`. The fresh page helper is now started by the chat that answers your page, never by a scheduled task.
+
 ## [4.12.0] - 2026-11-06
 
 ### Added
