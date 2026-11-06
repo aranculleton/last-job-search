@@ -33,11 +33,11 @@
   },
   "networking": {
     "date": "2026-11-05",
-    "version": 82
+    "version": 83
   },
   "page": {
     "date": "2026-11-05",
-    "version": 65
+    "version": 70
   },
   "prep-docs": {
     "date": "2026-11-03",
@@ -49,7 +49,7 @@
   },
   "routines": {
     "date": "2026-11-05",
-    "version": 35
+    "version": 36
   },
   "screening": {
     "date": "2026-11-05",

@@ -63,6 +63,7 @@ make sense to somebody whose repo just received it.
 - **Search Contacts by surname.** The search box in Contacts now searches, and a surname finds the person.
 - **A resume made for someone is theirs.** It shows on their card to get, is found by their name, and never replaces your own resume.
 - **One person, one card.** Someone closed as the same person as another is no longer listed beside them; their messages show on the card you keep, and that card takes the employer and title it was missing.
+- **People already kept twice are joined by themselves.** Two contacts that logged the same message are made one, and someone you knew only by first name gets the surname, employer and title your LinkedIn download shows when exactly one connection is them; nothing unsure is changed, and each change is noted on the contact. Profile upgrade: `one-record`.
 - **Your LinkedIn download finds people already in your contacts.** Someone you know by first name, or whose message is already logged, is matched instead of added twice, and their missing employer, title and address are filled in.
 - **A save your page turned down is made again.** When your page changed while Claude was saving, the save is made again on top of it, never dropped.
 - **The page chat stays small all day.** Each tap is answered by a short-lived helper whose work is thrown away afterwards, so the chat that looks after your page grows by a line a tap instead of thousands.
@@ -233,6 +234,12 @@ make sense to somebody whose repo just received it.
 - The box under a card stays visible when the pointer is over the card.
 - A work line on a card names its task ("Answers for the form · waking Claude").
 - "I sent it" on one message to someone no longer marks the next message to them as sent.
+- The unread count on your page's comments no longer builds up: the daily tidy clears the page's own notes to Claude every day.
+- On a phone, Latest in Chat stops with the text box at the bottom of the screen, with no empty space under it.
+- Claude's answer waits until the change it made is on your page, so it never says "see the updated message" while the old one still shows.
+- On a laptop, a full Brief fills the window with its panels lined up edge to edge, and a quiet one keeps its panels as tall as what they hold rather than stretching them into big empty boxes; either way it fits without scrolling.
+- Your progress: this week's bar is blue and past weeks are rose, at full strength, with the dates and the line under them in the main text colour, so nothing reads as grey in the dark look.
+- The links in the news are underlined in their own colour, a little thinner, and the menu's words sit level with their icons.
 
 ## [4.10.1] - 2026-11-05
 

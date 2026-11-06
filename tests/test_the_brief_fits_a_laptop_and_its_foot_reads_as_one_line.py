@@ -127,3 +127,43 @@ def test_the_privacy_details_read_as_one_paragraph_across_the_column(run, tmp_pa
     assert r["lines"] == 1 or r["reach"] > 0.7, r   # the Brief keeps the Chat button's room at its right
     if size["width"] == 1440 and screen == "todo":
         assert r["lines"] == 1, r
+
+
+GAP = r"""(() => {
+  // In each row, the tallest panel's empty space under its last line: a row stretched to the
+  // window drew its panels as big empty boxes.
+  const g = document.querySelector('#main .brief-grid');
+  const panels = [...g.children].filter((p) => p.getClientRects().length);
+  const rows = {};
+  for (const p of panels) { const t = Math.round(p.getBoundingClientRect().top); (rows[t] = rows[t] || []).push(p); }
+  // Measured to the panel's foot (its buttons sit at the bottom whatever the height), from
+  // the last thing its body shows.
+  return Object.values(rows).map((ps) => Math.min(...ps.map((p) => {
+    const body = p.querySelector(':scope > .bp-body') || p;
+    const kids = [...body.querySelectorAll('*')].filter((c) => c.getClientRects().length && !c.closest('.bp-foot'));
+    const last = Math.max(p.getBoundingClientRect().top, ...kids.map((c) => c.getBoundingClientRect().bottom));
+    const foot = p.querySelector(':scope > .bp-foot');
+    const end = foot && foot.getClientRects().length ? foot.getBoundingClientRect().top : p.getBoundingClientRect().bottom;
+    return Math.round(end - last);
+  })));
+})()"""
+
+
+def test_a_tall_window_never_stretches_the_panels_into_empty_boxes(run, tmp_path):
+    # The maintainer, 2026-11-05, on the README's picture at 1600 by 1250: "wtf is that pic?
+    # WHERES THE BOTTOM PANELS?" Every row was stretched to share the window's height, so its
+    # panels were mostly empty. A row is as tall as its fullest panel holds.
+    got = _go(run, tmp_path, [{"hash": "brief", "eval": GAP}], {"width": 1600, "height": 1250}, model=_full(), clock=T)
+    gaps = got["after"][0]["eval"]
+    assert gaps and max(gaps) <= 40, f"the fullest panel in a row has {max(gaps)}px of empty space: {gaps}"
+
+
+def test_a_full_brief_on_a_laptop_lines_its_panels_up_to_the_foot(run, tmp_path):
+    # Polished at a glance (the maintainer, 2026-11-06): a Brief that nearly fills the window
+    # is stretched to its foot, the panels lined up edge to edge; a sparse one on a tall
+    # window is not (the test above).
+    filled = "document.querySelector('#main .brief-grid').classList.contains('is-filled')"
+    got = _go(run, tmp_path, [{"hash": "brief", "eval": filled}], {"width": 1280, "height": 720}, model=_full(), clock=T)
+    assert got["after"][0]["eval"] is True
+    tall = _go(run, tmp_path, [{"hash": "brief", "eval": filled}], {"width": 1600, "height": 1250}, model=_full(), clock=T)
+    assert tall["after"][0]["eval"] is False

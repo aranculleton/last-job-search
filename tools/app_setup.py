@@ -782,6 +782,15 @@ def doorbells_pending() -> bool:
     return bool(page_record().get("url")) and not said_once().get(DOORBELLS)
 
 
+def doorbells_due(today) -> bool:
+    """The page's rings have not been cleared today. Every tap that wakes Claude leaves a
+    comment, and one resolved by no wake (a ring during a busy pass, a subagent's wake, a
+    quick answer) stayed unread in the Claude app: cleared once ever, they had piled up to 18
+    (the maintainer, 2026-11-05: "still says 18 unread up top"). The daily tidy clears them."""
+    day = today.isoformat() if hasattr(today, "isoformat") else str(today or "")
+    return bool(page_record().get("url")) and str(said_once().get(DOORBELLS) or "") < day
+
+
 def told(key: str) -> str:
     """The day the person was told, or did, `key` (an OUTSIDE card or a report), or ""."""
     return str(said_once().get(key) or "")

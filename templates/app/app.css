@@ -189,7 +189,10 @@ bdi { unicode-bidi: isolate; }
 .side-list a[aria-current="page"] { background: var(--accent-soft); font-weight: 600; }
 .side-list a[aria-current="page"]::before { content: ""; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 3px; background: var(--mark); }
 @media (hover: hover) { .side-list a:hover .count, .side-list a[aria-current="page"] .count { color: var(--ink); } }
-.side-label { margin-right: auto; }
+/* The capitals centred on the icon, not the line box: with room below for descenders the
+   words sat a few pixels above the icons' middle (the maintainer, 2026-11-06). Where text-box is
+   not supported the line box stays centred, as before. */
+.side-label { margin-right: auto; text-box: trim-both cap alphabetic; }
 .count { font: 600 var(--t-sm) var(--font-data); color: var(--muted); }
 /* Settings last, under the one rule: 12px above the rule and 12px below it (the menu's own
    gap is 20px), nothing after it (the maintainer, 2026-11-05: "why's the spacing here weird"). */
@@ -1585,6 +1588,9 @@ body.has-fab .shell { padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-b
 /* News is read whole: cut at four lines it stopped mid-sentence with nothing to open it
    (2026-10-30). */
 .bp-news .bp-text { -webkit-line-clamp: unset; display: block; overflow: visible; }
+/* A source in the news reads as part of the sentence: its underline the text's own colour and
+   a hair thinner, never the accent (the maintainer, 2026-11-06). */
+.bp-news a { color: inherit; text-decoration-color: currentColor; text-decoration-thickness: 1px; }
 .bp-go { flex: none; font-size: var(--t-sm); }
 .bp-steps li { align-items: baseline; }
 .bp-steps { counter-reset: step; }
@@ -1749,21 +1755,25 @@ ul.bp-news { gap: 12px; }
 .prep-live { margin: 8px 0 0; }
 .prep-doc { max-width: 76ch; }
 /* The numbers card: what the bars are, and how far applications went, opened in place. */
-.bp-spark-cap { margin: 4px 0 0; }
+.bp-spark-cap { margin: 4px 0 0; color: var(--ink); }
 /* The weekly bars: boxes on a baseline, each at most 20px wide and rounded only at the top,
    this week in the accent, a week with none a flat line. */
 .bp-spark { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); align-items: end; gap: 4px; height: 48px; border-bottom: 1px solid var(--line); }
 .bp-spark .bp-col { height: 100%; display: flex; align-items: flex-end; justify-content: center; cursor: pointer; }
-.bp-spark .bp-bar { display: block; width: 100%; max-width: 28px; border-radius: 3px 3px 0 0; background: var(--chart-a); opacity: 0.55; transition: opacity 0.15s; }
-.bp-spark .bp-col.is-now .bp-bar, .bp-spark .bp-col.is-on .bp-bar { background: var(--mark); opacity: 1; }
+/* Past weeks in the rose at full strength, this week in the second chart colour (the
+   maintainer, 2026-11-06: "the latest one as the blue bar and the rest as that colour"): faded
+   to 55% the rose read as a dull grey on the dark look, and below 3:1 on the light one. */
+.bp-spark .bp-bar { display: block; width: 100%; max-width: 28px; border-radius: 3px 3px 0 0; background: var(--chart-a); opacity: 1; transition: opacity 0.15s; }
+.bp-spark .bp-col.is-now .bp-bar, .bp-spark .bp-col.is-on .bp-bar { background: var(--chart-b); opacity: 1; }
 .bp-spark .bp-bar.is-zero { background: var(--line); }
 .bp-spark .bp-col:focus { outline: none; }
 .bp-spark .bp-col:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
-.bp-spark.has-on .bp-col:not(.is-on) .bp-bar { opacity: 0.3; }
+.bp-spark.has-on .bp-col:not(.is-on) .bp-bar { opacity: 0.4; }
 /* The week each bar is, the same columns as the bars. */
 .bp-wks { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 4px; margin-top: 4px; }
-.bp-wk { text-align: center; font-size: var(--t-sm); line-height: 1.2; color: var(--muted); white-space: nowrap; overflow: hidden; }
-.bp-wk.is-now { color: var(--ink); font-weight: 600; }
+/* The dates and the line under the bars in the text's own colour, never grey (2026-11-06). */
+.bp-wk { text-align: center; font-size: var(--t-sm); line-height: 1.2; color: var(--ink); white-space: nowrap; overflow: hidden; }
+.bp-wk.is-now { color: var(--ink); opacity: 1; font-weight: 600; }
 /* On a phone eight dates ran into one another ("28 Sep" cut, 2026-11-03): every other one, and
    this week's, is said; each bar still says its own week when tapped. */
 @media (max-width: 759px) { .bp-wk:nth-last-child(even):not(.is-now) { visibility: hidden; } }

@@ -915,6 +915,24 @@ def _export_repeats() -> str:
     return ("%d message(s) from your LinkedIn download logged twice" % n) if n else ""
 
 
+def _one_record() -> str:
+    """One person kept as two rows, or as a first name with nothing else, in a book made
+    before the export matched people by a shared message or a surname in the record: one
+    recruiter showed as two cards, the one kept with no employer (2026-11-05). Only what the
+    message log or exactly one of their own connections makes certain is counted."""
+    found = _probe("import export; g = export.one_record(dry=True); "
+                   "print(sum(len(r) for _, r in g['joined']), len(g['filled']))").split()
+    n, f = (int(x) for x in found) if len(found) == 2 and all(x.isdigit() for x in found) \
+        else (0, 0)
+    said = []
+    if n:
+        said.append("%d contact(s) kept twice, the same message logged under both" % n)
+    if f:
+        said.append("%d contact(s) known by a first name only that your LinkedIn download names"
+                    % f)
+    return "; ".join(said)
+
+
 def _follow_up_dates() -> str:
     """Contacts waiting on a reply with no follow-up date on their row: the brief reads the
     date from the row, so a thread imported from LinkedIn's download, or logged before the
@@ -1864,6 +1882,12 @@ REGISTRY: tuple[Upgrade, ...] = (
             _export_repeats, "python3 tools/network/export.py tidy", "instant",
             command=("python3", "tools/network/export.py", "tidy"),
             paths=("network_threads.csv", "network_contacts.csv"), priority=2),
+    Upgrade("one-record", "2026-11-05",
+            "anyone kept twice in your contacts joined into one, and people you knew only by "
+            "first name given the surname, employer and title your LinkedIn download shows",
+            _one_record, "python3 tools/network/export.py one-record", "instant",
+            command=("python3", "tools/network/export.py", "one-record"),
+            paths=("network_contacts.csv", "network_threads.csv"), priority=2),
     Upgrade("dropped-rows", "2026-10-19",
             "people you set aside before writing, kept apart from real dead ends and easy to "
             "reopen",

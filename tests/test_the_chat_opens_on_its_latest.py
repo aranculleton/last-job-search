@@ -65,3 +65,40 @@ def test_a_question_the_quick_answer_fails_goes_to_claude(run, tmp_path):
     talk = [w for w in got["work"] if w.get("kind") == "talk"]
     assert len(talk) == 1, (got["work"], got["quick"])
     assert not any("That did not work" in t for t in got["quick"]), got["quick"]
+
+
+def test_latest_on_a_phone_stops_with_the_field_at_the_foot_of_the_screen(run, tmp_path):
+    # On a phone, Latest scrolled to the page's own end, past the field and its note to the
+    # privacy line, and left a band of empty page under the field (the maintainer, 2026-11-05).
+    html = _write(tmp_path, "talkphone", _sample())
+    gap = ("(() => { const f = document.querySelector('#main .talk-form'); const t = document.querySelector('.tabs');"
+           " const under = t && getComputedStyle(t).position === 'fixed' ? t.getBoundingClientRect().height : 0;"
+           " return Math.round(window.innerHeight - under - f.getBoundingClientRect().bottom); })()")
+    got = run("engine", html=html, viewport={"width": 390, "height": 760}, clock=CLOCK, seed=_talk(), steps=[
+        {"hash": "chat", "wait": 300},
+        {"eval": "(window.scrollTo(0, 0), window.dispatchEvent(new Event('scroll')), 1)"},
+        {"click": "Go to the latest message", "wait": 300, "eval": gap},
+    ])
+    assert not got["errors"], got["errors"]
+    left = got["after"][2]["eval"]
+    assert 0 <= left <= 40, f"{left}px of empty page under the field"
+
+
+def test_an_answer_waits_until_the_page_has_what_its_work_changed(run, tmp_path):
+    # The answer said "see the updated message" while the card still showed the old draft
+    # (reported from a person's copy, 2026-11-05): an answer written with its work after the
+    # page's newest view says it is putting the change on the page first, for five minutes at
+    # most; one older than the page's view reads as written.
+    html = _write(tmp_path, "held", _sample())
+    def seed(at):
+        return {"talk/cloud-1": {"to": "cloud", "conv": "1", "title": "Questions", "created_at": "2026-10-25T17:00:00Z", "_v": 1},
+                "talk/cloud-1/messages/q1": {"from": "you", "text": "Make the note shorter", "at": "2026-10-25T17:59:00Z", "work": "talk~1", "_v": 1},
+                "talk/cloud-1/messages/a1": {"from": "cloud", "text": "Done: see the updated message on the card.", "at": at, "work": "talk~1", "_v": 1}}
+    texts = "[...document.querySelectorAll('#main .talk-msg .talk-text')].map((e) => e.textContent)"
+    fresh = run("engine", html=html, viewport=WIDE, clock=CLOCK, seed=seed("2026-10-25T18:29:00Z"), steps=[{"hash": "chat", "eval": texts}])
+    assert not fresh["errors"], fresh["errors"]
+    said = " ".join(fresh["after"][0]["eval"])
+    assert "Putting the change on your page first" in said and "see the updated message" not in said, said
+    old = run("engine", html=html, viewport=WIDE, clock=CLOCK, seed=seed("2026-10-25T18:00:00Z"), steps=[{"hash": "chat", "eval": texts}])
+    said = " ".join(old["after"][0]["eval"])
+    assert "see the updated message" in said, said

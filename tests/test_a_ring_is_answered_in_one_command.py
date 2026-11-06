@@ -572,3 +572,18 @@ def test_old_rings_are_cleared_once_and_the_upgrade_notes_it(tmp_path, monkeypat
     assert u.pending()
     assert app.main(["doorbells", "--done"]) == 0
     assert not u.pending()
+
+
+def test_rings_no_wake_resolved_are_cleared_every_day_not_once(tmp_path, monkeypatch):
+    # Cleared once ever, the rings no wake resolved (one during a busy pass, a subagent's, a
+    # quick answer's) piled up to 18 unread in the Claude app (the maintainer, 2026-11-05).
+    # The daily tidy clears them each day; the one-time upgrade stays done.
+    import datetime as dt
+    monkeypatch.setattr(app_setup, "profile_dir", lambda: str(tmp_path))
+    day = dt.date(2026, 11, 5)
+    assert not app_setup.doorbells_due(day), "no page, nothing to clear"
+    (tmp_path / "app.json").write_text('{"url": "https://claude.ai/artifact/EXAMPLE"}')
+    assert app_setup.doorbells_due(day)
+    app_setup.save_said(app_setup.DOORBELLS, "2026-11-05")
+    assert not app_setup.doorbells_due(day), "cleared today"
+    assert app_setup.doorbells_due(day + dt.timedelta(days=1)), "and due again tomorrow"
