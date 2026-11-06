@@ -114,8 +114,9 @@ METHODS: dict[str, dict] = {
             (25, "2026-10-30", False, "an employer board's posting is judged by its own location, its office tags only where it names no place; searches already run stay as they are"),
             (26, "2026-11-03", False, "a site this chat's cloud settings refuse is said as that, with the one fix, never only as unconfirmed"),
             (27, "2026-11-06", False, "every job site has a plain name and a one-line note, and one that needs a key says so with the steps to get one (Adzuna: a paid plan, since its free plan's 25 searches go within one search here); /add-portal writes label, note and the key's lines; nothing to build again"),
+            (28, "2026-11-06", False, "the app's example person lists only the app's own job sites, never the copy's own, so the app's checks pass in a person's copy; nothing to build again"),
         ),
-        "fingerprint": "3aa38eac278f5cba",
+        "fingerprint": "aa2a181fb70cedd8",
     },
     "search": {
         "setup": True, "by": "upgrade", "priority": 2, "time": "~20 min",
@@ -381,8 +382,9 @@ METHODS: dict[str, dict] = {
             (79, "2026-11-06", False, "the run book says rules the app has since built in are retired once after an update, and a complaint about the app is never kept as a rule; no document changes; RUNBOOK.md says the brief asks for a new LinkedIn download once it is due by export.every_days (weekly while the person is messaging people, a fortnight otherwise, or as they chose); documents render and are checked as before; the run book says the person's own tests an update broke are brought in line by a background step while each save sets them aside; the run book says how a search limited to the employers the person names is run (run_round.py --employers)"),
             (80, "2026-11-06", False, "a new resume and letter are named the person, the employer, then the document (<Prefix>_<ABBR>_Resume, <Prefix>_<ABBR>_Cover_Letter); one made before keeps its name and every reader finds both orders; the file you download or send is named by Settings, File names; nothing made before needs making again"),
             (81, "2026-11-06", False, "the landing steps unsubscribe from a save's pull request as soon as it is opened, before its merge, so a save no longer wakes the chat twice more"),
+            (82, "2026-11-06", False, "a general resume's summary goes through the grounding audit's own questions, a written one with its claim map (stage_picks.py general --claims-file), and one questioned is never made; its draft is kept (documents/cv/general/draft.json) so the pencil changes its bullets, its look and its summary as an application's, the summary through both audits, which ask a general draft only grounding questions; one made before has no pencil until a fresh one is made, and nothing made before needs making again"),
         ),
-        "fingerprint": "288cc90b6b404422",
+        "fingerprint": "f285a8033e8cb7ae",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -847,8 +849,9 @@ METHODS: dict[str, dict] = {
             (77, "2026-11-06", False, "a new text size fits the Brief to the window again: the fit was kept by the window's size alone"),
             (78, "2026-11-06", True, "profile reading never loads a page in the tab in front of the person: every automatic look and read goes to the page's own tab, opened only by a tap, a sign-out met while reading by itself is one To do card that says where the reading happens, a run left unfinished tries again two hours on, someone dropped on the page is not read; an I sent it tap that kept no version counts only for its own words; a follow-up row shows its person's work being drafted however it was asked for"),
             (79, "2026-11-06", False, "Cancel under a draft's pencil puts back the words edited by hand; Done editing keeps them"),
+            (80, "2026-11-06", False, "Your CV's card has the pencil where its draft is kept: the Tweak panel opens on Bullets, each a choice, the ones ticked swapped for another true one from the same job and never kept as a usual"),
         ),
-        "fingerprint": "3a94f0d668edbbe6",
+        "fingerprint": "ff3b6a0ce05d8da5",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

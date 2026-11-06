@@ -52,6 +52,7 @@ for _p in (os.path.join(ROOT, "templates"), os.path.join(_HERE, "network"), _HER
 import person  # noqa: E402
 
 TWEAKS_FILE = "tweaks.json"
+GENERAL_ID = "resume-current"          # the page's general resume (app_model._resume)
 BUTTONS_FILE = "tweaks.json"            # profile/tweaks.json: the person's own buttons
 # The record of tweaks to the person's search, in a folder of its own. Kept at
 # documents/rounds/tweaks.json, it sat among the round summaries, where every reader of
@@ -356,6 +357,20 @@ def resolve(work: dict) -> dict:
         os.makedirs(folder, exist_ok=True)
         return {"output": output, "item": item, "folder": folder,
                 "file": os.path.join(folder, "interview_prep.md")}
+    if output == "resume" and tid == GENERAL_ID:
+        # The person's own general resume (tools/general_resume.py): its kept draft, changed
+        # as an application's is, and kept again as the one sent when nobody named a role.
+        import general_resume
+        model, _ = app_model.build(only={"resume"})
+        item = model.get("resume") or {}
+        path = general_resume.draft_file()
+        if not os.path.isfile(path):
+            raise Refused("Make a fresh one first: this one was made before it could be changed "
+                          "here.")
+        return {"output": output, "item": {"id": tid, "rev": item.get("rev") or "",
+                                           "slug": "general", "general": True,
+                                           "status": "drafted"},
+                "folder": os.path.dirname(path), "file": path}
     if output in ("resume", "letter"):
         model, _ = app_model.build(only={"ready"})
         item = next((i for i in model.get("ready") or [] if i["id"] == tid), None)
@@ -459,7 +474,11 @@ def _invalid(row: dict, v) -> str:
     """Why `v` is not a value this row takes, or "" when it is."""
     control, values = row["control"], row["values"]
     if control == "per-bullet":
-        return "" if isinstance(v, dict) and v.get("swap") else "say which bullet to swap"
+        # One bullet ({"swap": id}), or the ones the person ticked on the panel (a list).
+        ids = v.get("swap") if isinstance(v, dict) else v
+        ids = ids if isinstance(ids, list) else [ids]
+        return "" if ids and all(isinstance(x, str) and x.strip() for x in ids) \
+            else "say which bullet to swap"
     if control == "text":
         ok = isinstance(v, str) and 0 < len(v.strip()) <= 80
         return "" if ok else "give a name" + (", or say the team" if row["p"] == "L5" else "")
@@ -677,6 +696,10 @@ def _render(where: dict) -> tuple[bool, str]:
     last = (out.strip().splitlines() or [""])[-1]
     if code not in (0, 3):
         return False, "A check failed after the change: " + last
+    if where["item"].get("general"):
+        # Made and checked: it is the general resume now, its PDF and text kept again.
+        import general_resume
+        general_resume.keep_again(where["file"])
     return True, last
 
 
@@ -738,11 +761,18 @@ def _style(d: dict, v) -> str:
 
 
 def _bullets(d: dict, v) -> str:
+    """Swap each bullet named ({"swap": id or [ids]}, or a list of ids) for the strongest true
+    one from the same employer that is not on the page and does not repeat one that is."""
+    ids = v.get("swap") if isinstance(v, dict) else v
+    said = [_swap_one(d, str(b)) for b in (ids if isinstance(ids, list) else [ids])]
+    return "; ".join(dict.fromkeys(said))
+
+
+def _swap_one(d: dict, old: str) -> str:
     """Swap one bullet for the strongest true one from the same employer that is not on the
     page and does not repeat one that is (bullet_library CONFLICTS)."""
     import allocate
     from bullet_library import CONFLICTS, LIB
-    old = str(v.get("swap"))
     jobs = d.get("jobs") or []
     job = next((j for j in jobs if old in (j.get("bullets") or [])), None)
     if job is None:
@@ -1639,6 +1669,8 @@ def keep(work: dict, where: dict, p: dict) -> tuple[list, str]:
     for c in p["changes"]:
         if params and c["p"] not in params or c["p"] not in BY_P:
             continue
+        if c["p"] == "R6":
+            continue                    # which bullets is this resume's, never a usual
         recs, where_to = _keep_one(c, where, scope)
         records += recs
         names += where_to
@@ -2066,8 +2098,12 @@ def merge(work: dict, round_dir: str, today: dt.date | None = None) -> dict:
         return {"status": "refused", "summary": "More changed than was asked ("
                 + ", ".join(PART_NAMES.get(f, f) for f in moved) + "): nothing was kept."}
     before = _snapshot(where)
-    import outreach
-    outreach.write(dict(a), {}, today.isoformat())
+    if where["item"].get("general"):
+        # The general resume has no application folder: its kept draft is written back.
+        _save_draft(where, [a], set())
+    else:
+        import outreach
+        outreach.write(dict(a), {}, today.isoformat())
     ok, line = _render(where)
     if not ok:
         _restore(where, before)

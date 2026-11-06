@@ -108,3 +108,32 @@ def test_the_panel_leads_with_your_own_words_and_has_one_button(run, tmp_path, v
     assert got["rows"] == 2
     assert "Start now" not in got["all"] and "With your next chat" not in got["all"]
     assert "Your usual:" not in got["all"]
+
+
+def test_the_general_resumes_pencil_opens_its_bullets_and_sends_the_ones_ticked(run, tmp_path, vp):
+    """The maintainer, 2026-11-06: "You can't choose which bullets go on a general resume."
+    Its card carries its bullets where its draft is kept, and its pencil opens the Tweak panel
+    with Bullets first: each one a choice, the ones ticked sent as the engine's R6 for the
+    general resume, never kept as a usual (its Keep box is off for it). One made before its draft was kept has no pencil."""
+    m = _model()
+    m["resume"].update(id="resume-current", rev="r-general")
+    m["resume"]["bullets"] = [
+        {"id": "EX_ONE", "employer": "Brindle & Hart Logistics",
+         "text": "Built weekly demand-forecasting models across 2,400 SKUs and six distribution "
+                 "centres, cutting forecast error from 22% to 14%."},
+        {"id": "EX_TWO", "employer": "Oakmere Foods", "text": "Cut waste by reading the shelf data."}]
+    path = _write(tmp_path, "gr", m)
+    got = run("tweak", html=path, viewport=vp, hash="drafts", entry=": your CV",
+              exact=False, choose=[["R6", "EX_TWO"]], apply=True)
+    assert not got["errors"], got["errors"]
+    assert got["text"].split("\n").count("Bullets") >= 1 and "Cut waste by reading the shelf data." in got["all"]
+    assert "centres, cutting forecast error from 22% to 14%." not in got["all"]   # a long one is clipped
+    work = [d for _, d in got["work"] if d.get("kind") == "tweak"]
+    assert work, got["work"]
+    args = work[-1]["args"]
+    assert args["target"]["id"] == "resume-current" and args["target"]["output"] == "resume"
+    assert args["changes"] == [{"p": "R6", "v": ["EX_TWO"]}], args
+    assert args.get("keep") is None, args        # never a usual: its Keep box stays off
+    m["resume"]["bullets"] = []
+    got = _go(run, tmp_path, [{"hash": "drafts", "count": '[data-k^="tweak:resume:resume-current"]'}], vp, model=m)
+    assert got["after"][0]["count"] == 0, got

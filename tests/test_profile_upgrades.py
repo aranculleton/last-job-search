@@ -1089,3 +1089,26 @@ def test_a_tailored_resume_never_saved_is_made_again_from_its_draft(profile):
         os.makedirs(os.path.join(state, os.path.dirname(rel)), exist_ok=True)
         open(os.path.join(state, rel), "w").close()
     assert u.pending() == ""
+
+
+def test_a_general_resume_made_before_its_draft_was_kept_is_made_again(profile):
+    """4.13 keeps the general resume's draft beside its PDF, so its pencil can change its
+    bullets (the maintainer, 2026-11-06). One made before has no pencil until it is made
+    again, which Claude does with no one asking; no general resume, nothing to do."""
+    import general_resume
+    state = os.environ[person.STATE_ENV]
+    u = U.by_id("general-resume-draft")
+    assert u.needs == "nobody" and "stage_picks.py general" in u.run
+    pdf, _txt = general_resume.keep_paths()
+    for name in os.listdir(os.path.dirname(pdf)) if os.path.isdir(os.path.dirname(pdf)) else ():
+        if name.endswith("_current.pdf"):
+            os.remove(os.path.join(os.path.dirname(pdf), name))
+    assert u.pending() == ""                              # no general resume: nothing to make
+    os.makedirs(os.path.dirname(pdf), exist_ok=True)
+    open(pdf, "wb").close()
+    assert "pencil" in u.pending()
+    path = os.path.join(state, *general_resume.DRAFT_DIR, "draft.json")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump([{"general": True}], fh)
+    assert u.pending() == ""

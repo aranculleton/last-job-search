@@ -254,3 +254,53 @@ def test_the_entry_point_is_stage_picks_general():
     r = subprocess.run([sys.executable, str(ROOT / "tools" / "stage_picks.py"), "general",
                         "--help"], capture_output=True, text=True, encoding="utf-8")
     assert r.returncode == 0 and "--summary-file" in r.stdout and "--style" in r.stdout
+
+
+# ------------------------------------------------------------------ the grounding audit
+
+INFLATED = ("Operations analyst who managed the whole company's strategy at Brindle & Hart "
+            "Logistics as its head of operations.")
+INVENTED = ("Operations analyst who led a team of 40 engineers at Brindle & Hart Logistics and "
+            "cut costs by 63% using Kubernetes and Rust.")
+HONEST = ("Operations analyst who built weekly demand-forecasting models in Python and SQL "
+          "across 2,400 SKUs and six distribution centres.")
+
+
+def test_a_general_resume_goes_through_the_grounding_audit_a_posting_resume_gets(tmp_path,
+                                                                                  monkeypatch):
+    """The maintainer, 2026-11-06: the fact-checking against the profile only ran on resumes
+    made for a posting. A general resume with a summary claiming a scope the profile never
+    gives ("managed the whole company's strategy") passed every check and was kept. Its
+    summary now goes through the grounding audit's own questions, with its claim map as a
+    posting's draft carries one; the profile's own summary rests on the profile; anything
+    questioned is never rendered or kept, and says why."""
+    monkeypatch.setenv("LJS_STATE", str(tmp_path))
+    assert G.grounding(G.draft()) == []                       # the profile's own words
+    cite = lambda s: [{"sentence": s, "cites": ["BH_FORECAST"]}]  # noqa: E731
+    asked = G.grounding(G.draft(summary=INFLATED), cite(INFLATED))
+    assert asked and asked[0].startswith("scope-not-in-cited:"), asked
+    asked = G.grounding(G.draft(summary=INVENTED), cite(INVENTED))
+    assert {x.split(":")[0] for x in asked} >= {"number-not-in-cited", "scope-not-in-cited",
+                                                 "unknown-name"}, asked
+    assert G.grounding(G.draft(summary=HONEST), cite(HONEST)) == []
+    # Written with no claim map, nothing says what it rests on: questioned.
+    assert G.grounding(G.draft(summary=HONEST))[0].startswith("unmapped:")
+    got = G.make(str(tmp_path / "general"), summary=INFLATED, claims=cite(INFLATED))
+    assert not got["kept"] and got["grounding"] and not got["pdf"]
+    import docpaths
+    assert not docpaths.current_resume()
+
+
+def test_the_command_refuses_a_questioned_summary_in_plain_words(tmp_path):
+    import subprocess
+    summary, claims = tmp_path / "summary.txt", tmp_path / "claims.json"
+    summary.write_text(INFLATED, encoding="utf-8")
+    claims.write_text(json.dumps([{"sentence": INFLATED, "cites": ["BH_FORECAST"]}]),
+                      encoding="utf-8")
+    env = dict(os.environ, LJS_STATE=str(tmp_path / "state"))
+    r = subprocess.run([sys.executable, str(ROOT / "tools" / "stage_picks.py"), "general",
+                        str(tmp_path / "g"), "--summary-file", str(summary), "--claims-file",
+                        str(claims)], capture_output=True, text=True, encoding="utf-8", env=env)
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert "the summary claims what the profile does not show, so nothing was kept" in r.stdout
+    assert "\"managed\" is not in the text of BH_FORECAST" in r.stdout

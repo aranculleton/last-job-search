@@ -977,6 +977,21 @@ def _old_jobs_tweaks() -> str:
             "every file there is a round reads it" if os.path.exists(old) else "")
 
 
+def _general_draft_kept() -> str:
+    """4.12 kept a general resume as its PDF alone; from 4.13 its draft is kept beside it
+    (documents/cv/general/draft.json), which its pencil changes. One made before has no
+    pencil until it is made again from the profile, by the same command, which checks it."""
+    try:
+        import docpaths
+        import general_resume
+        have = docpaths.current_resume()
+        kept = os.path.isfile(general_resume.draft_file())
+    except Exception:  # noqa: BLE001  no profile, no resume: nothing to make again
+        return ""
+    return ("your resume for when no job is named was made before it could be changed with "
+            "its pencil" if have and not kept else "")
+
+
 def _job_alerts_retired() -> str:
     """Retired 2026-10-22, with the job-alert reader it asked about. It asked to read the
     person's LinkedIn alert emails into each round, and came back every month after a no;
@@ -1937,6 +1952,13 @@ REGISTRY: tuple[Upgrade, ...] = (
             command=("python3", "tools/scrape_wide.py", "--move-cursor"),
             paths=("documents/rounds/.sweep.json", "documents/rounds/.sweep/cursor.json"),
             priority=1),
+    Upgrade("general-resume-draft", "2026-11-06",
+            "the resume you send when no job is named can be changed with its pencil: its "
+            "bullets, its look and its summary",
+            _general_draft_kept, "python3 tools/stage_picks.py general <a scratch folder>: "
+            "it makes the general resume again from the profile, checks it and keeps its draft; "
+            "if a check fails, leave the one there and say nothing", "edit", "~2 min",
+            conditional=True, priority=3),
     Upgrade("tweaks-record-moved", "2026-11-06",
             "the record of changes you asked for to your search moved out from among your round "
             "summaries, so a check that every file there is a round passes again",

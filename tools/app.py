@@ -629,7 +629,7 @@ def late_taps(dump: str, chat: str, now, out_dir: str) -> dict:
     if new:
         lines.append(LATE_WORK.format(ids=", ".join(new[:6]) + (" ..." if len(new) > 6 else ""),
                      dump=dump, chat=chat))
-    page_reads.late_handled(dump, again=bool(new))
+    page_reads.late_handled(dump, again=bool(new), ids=new, chat=chat, now=now)
     return {"batches": batches, "lines": lines}
 
 

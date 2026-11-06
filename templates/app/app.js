@@ -8448,7 +8448,30 @@
     return arr(obj(M().tweaks).rows).filter((r) => arr(r.outputs).includes(out) && !r.page_only && txt(r.control) !== "per-bullet"
       && (arr(r.values).length || txt(r.control) === "text"));
   }
+  // A resume that carries its bullets (the general resume, model.resume.bullets) is given a
+  // Bullets row first: each bullet a choice, the ones ticked swapped for another true one from
+  // the same job (the engine's R6, code only). The person could not choose them (the
+  // maintainer, 2026-11-06).
+  const BULLET_WORDS = 70;
+  function bulletLabel(b) {
+    const t = txt(b.text).replace(/\s+/g, " ").trim();
+    if (t.length <= BULLET_WORDS) return t;
+    const cut = t.slice(0, BULLET_WORDS);
+    return cut.slice(0, Math.max(cut.lastIndexOf(" "), 40)) + "...";
+  }
+  function bulletRow(output, item) {
+    const bs = output === "resume" ? arr(obj(item).bullets).filter((b) => b && txt(b.id)) : [];
+    if (!bs.length) return null;
+    return {p: "R6", label: "Bullets", multi: true, state: 1, engine: true, bullets: true,
+      values: bs.map((b) => ({v: txt(b.id), label: bulletLabel(b), state: 1})),
+      hint: "Tick any to swap it for another true one from the same job. Nothing is invented."};
+  }
   function tweakRows(output, item) {
+    const row = bulletRow(output, item);
+    const rows = tweakRowsOf(output, item);
+    return row ? [row].concat(rows.filter((r) => r.p !== "R6")) : rows;
+  }
+  function tweakRowsOf(output, item) {
     const spec = TWEAK[output];
     const fromItem = arr(obj(obj(item).tweaks).rows);
     const recOf = (p, fallback) => {
@@ -8650,7 +8673,8 @@
       apply.disabled = !st.changes.length && !st.text;
       when.hidden = !chat;
       when.replaceChildren(nowBtn(true, "Start now"), nowBtn(false, "With your next chat"));
-      const keepable = st.changes.filter((c) => !c.page && c.p !== "near");
+      // Which bullets is this resume's own, never a usual for every one.
+      const keepable = st.changes.filter((c) => !c.page && c.p !== "near" && c.p !== "R6");
       keepBox.disabled = !keepable.length && !st.text;
       keepRead.hidden = !st.keep;
       scope.hidden = !st.keep || !item.company || spec.search;
@@ -8760,7 +8784,7 @@
       const cost = tweakCost({changes: chat, text: st.text, spec: st.spec});
       const shape = {target: target.id, changes: chat.map((c) => [c.p, c.v]), text: st.text};
       const args = {v: 1, target, changes: chat.map((c) => ({p: c.p, v: c.v})), text: st.text || null,
-        keep: st.keep ? {scope: st.scope === "employer" && target.company ? "employer:" + target.company : "all", params: chat.filter((c) => c.p !== "near").map((c) => c.p)} : null,
+        keep: st.keep ? {scope: st.scope === "employer" && target.company ? "employer:" + target.company : "all", params: chat.filter((c) => c.p !== "near" && c.p !== "R6").map((c) => c.p)} : null,
         cost: {state: cost.state, writes: cost.writes, est_s: cost.est_s}};
       const est = Math.max(30, cost.est_s);
       const scale = est / stageSeconds(st.spec.search ? "search" : "tweak");
@@ -8781,10 +8805,10 @@
   function hintSeen() { return !!obj(M().hints).tweak || pref("hint:tweak", "") === "seen"; }
   function tweakButton(output, item, label) {
     if (!TWEAK[output]) return null;
-    const live = output === "resume" || output === "letter" ? readyLive(item) : output === "message" ? msgLive(item) : true;
+    const live = item.general ? true : output === "resume" || output === "letter" ? readyLive(item) : output === "message" ? msgLive(item) : true;
     if (!live) return null;
     // The visible words are the start of the name, and the item ends it (WCAG 2.5.3).
-    const whose = output === "message" ? whoAt(item.first_name, item.employer) : txt(item.company);
+    const whose = output === "message" ? whoAt(item.first_name, item.employer) : item.general ? "your " + noun() : txt(item.company);
     const b = btn([icon("tweak"), h("span", {}, label || "Edit"), whose ? h("span", {class: "sr-only"}, ": " + whose) : null], () => openTweak(output, item),
       {small: true, kind: "secondary", key: "tweak:" + output + ":" + txt(item.id || output)});
     b.setAttribute("title", "Change how this looks or reads");
@@ -10808,12 +10832,15 @@
     const getLabel = r.stale ? "Get this one anyway" : "Get it";
     const get = breaks.length ? null : file.asset ? btn(r.stale ? getLabel : "Get it", () => getFiles({id: txt(r.id) || "resume-general", company: ""}, [file]), {kind: r.stale ? "quiet" : "primary", small: true, key: "gen-get"}) :
       g.kind ? btn(r.stale ? getLabel : "Get it", () => requestWork([{id: "files~" + seg(txt(r.id) || "resume"), kind: txt(g.kind), title: "Your " + noun() + ", ready to download", args: Object.assign({files: [file.name]}, obj(g.args)), redo: true}]), {kind: r.stale ? "quiet" : "primary", small: true, key: "gen-ready"}) : null;
+    // Its pencil, where its draft is kept: the Tweak panel changes its bullets, its look and its
+    // summary, as a resume made for a posting (DESIGN.md, "Cards and lists").
+    const pencil = !breaks.length && arr(r.bullets).length ? tweakIcon("resume", {id: txt(r.id), rev: r.rev, bullets: arr(r.bullets), general: true, company: ""}) : null;
     return card("article", {class: "card app quiet-card", "aria-labelledby": "gen-resume", "data-item": txt(r.id) || "resume-general"},
       h("div", {class: "job-top"}, h("h3", {id: "gen-resume", class: "card-title"}, "Your " + noun()), breaks.length ? stateWord("Not to send", "bad") : r.stale ? stateWord("Out of date", "warn") : null),
       h("p", {class: "meta"}, breaks.length ? "This one breaks your own rules: " + breaks.join("; ") + ". Make a fresh one to send." :
         "The one to send when a job doesn't need its own." + (r.made_on ? " Made " + fmtDay(r.made_on) + "." : "") +
         (r.stale ? " Your profile has changed since, so make a fresh one." : "")),
-      h("div", {class: "card-actions"}, r.stale || breaks.length ? [fresh(true), get] : get,
+      h("div", {class: "card-actions"}, r.stale || breaks.length ? [fresh(true), get] : get, pencil,
         r.stale || breaks.length ? null : more("resume-general", "your " + noun(), [h("p", {class: "cost"}, costNode(costLine(txt(w.kind) || "general_resume"))), h("div", {class: "more-acts"}, fresh(false))])),
       r.stale || breaks.length ? h("p", {class: "cost"}, costNode(costLine(txt(w.kind) || "general_resume"))) : null,
       noteFor("dl:" + (txt(r.id) || "resume-general")));

@@ -18,8 +18,9 @@ plain-text copy in documents/cv/ (`<Prefix>_<Noun>_current.pdf` and `.txt`), the
 app looks for the resume to send when no role is named (tools/docpaths.py current_resume).
 
 The summary is the profile's own Canonical Summary Statement (01-candidate-profile.md)
-unless Claude wrote one for this resume (`--summary-file`), which the grounding auditor reads
-first like any summary. Its colour: the draft's own `--style`, else person.json
+unless Claude wrote one for this resume (`--summary-file`, with its claim map in
+`--claims-file`), which the grounding audit reads as it reads any summary (`grounding`): a
+question it raises keeps the resume from being made. Its colour: the draft's own `--style`, else person.json
 `documents.styles` `default`, else the style mapped to the kind of employer most of their
 target employers are (profile/boards.py, as templates/doc_style.py reads a kind), else black.
 
@@ -175,6 +176,44 @@ def draft(role: str = "", style: str = "", summary: str = "") -> dict:
     return a
 
 
+def grounding(a: dict, claims=None) -> list[str]:
+    """The grounding audit's own questions of the general resume's summary, each in one line,
+    or [] when it rests on the profile: the code half of the audit every resume made for a
+    posting gets (tools/draft_audit.py grounding_flags), never a second set of rules. The
+    profile's own Canonical Summary Statement rests on it word for word (SUMMARY); a summary
+    Claude wrote carries its claim map (`claims`: each sentence with the ids it rests on,
+    from draft_pack's evidence), and any question code raises keeps it from being kept: a
+    general resume has no model auditor to rule on one, so it is written again from what the
+    cited text says. A general resume took a written summary with no audit at all (the
+    maintainer, 2026-11-06: "the fact-checking against the profile only runs on resumes
+    made for a posting")."""
+    import draft_audit
+    text = str(a.get("summary") or "").strip()
+    if not text:
+        return []
+    d = {"summary": text, "claim_map": claim_map(a, claims)}
+    flags = draft_audit.grounding_flags(d, {"company": COMPANY, "role": a.get("role") or ""},
+                                        a.get("posting") or "", None)
+    import check_claims
+    out = [f"{f['flag']}: \"{f['sentence']}\": {f['detail']}" for f in flags]
+    out += [f"{name}: \"{snip}\": {why}" for sev, name, snip, why in check_claims.check_text(text)
+            if sev == "ERROR"]
+    return out
+
+
+def claim_map(a: dict, claims=None) -> list[dict]:
+    """The summary's claim map: the one given, or, for the profile's own Canonical Summary
+    Statement, each sentence resting on it (SUMMARY). Kept on the draft, so a summary reworded
+    from the pencil is audited against what it rested on, as an application's is."""
+    import draft_audit
+    text = str(a.get("summary") or "").strip()
+    if claims is None and text and text == canonical_summary().strip():
+        claims = [{"field": "summary", "sentence": s, "cites": ["SUMMARY"]}
+                  for s in draft_audit._sentences(text)]
+    return [dict(c, field=c.get("field") or "summary") for c in claims or []
+            if isinstance(c, dict)]
+
+
 def plain_text(a: dict, short: bool = False) -> str:
     """The resume as plain text, in page order, from the same lines the PDF is checked
     against (verify_pdf.roundtrip_fields). `short` keeps the name, the summary, each role's
@@ -229,6 +268,62 @@ def keep_paths(for_contact: str = "") -> tuple[str, str]:
 
 
 FOR_CONTACT_RECORD = "resume.json"     # in documents/network/<id>/: the resume made for them
+# The person's own general resume as a draft, beside its PDF: what the Tweak panel changes (its
+# bullets, its look, its summary through both audits, tools/tweak.py), as an application's
+# documents/applications/<slug>/draft.json is. The person could not choose its bullets (the
+# maintainer, 2026-11-06).
+DRAFT_DIR = ("documents", "cv", "general")
+
+
+def draft_file() -> str:
+    """documents/cv/general/draft.json: the kept draft of the person's own general resume."""
+    return person.state(*DRAFT_DIR, "draft.json")
+
+
+def keep_draft(a: dict) -> str:
+    """Keep the general draft as rendered (its bullets chosen), for the Tweak panel."""
+    path = draft_file()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
+        json.dump([a], fh, indent=1, ensure_ascii=False)
+        fh.write("\n")
+    return path
+
+
+def keep_again(path: str = "") -> bool:
+    """After a change made to the kept draft (tools/tweak.py renders and checks it), the
+    resume sent when nobody named a role is that one: its PDF and plain-text copy in
+    documents/cv/ made again from it. False when there is no rendered PDF to keep."""
+    import fit_to_page as F
+    path = path or draft_file()
+    try:
+        apps, _read_in = F.load(path)
+    except (OSError, ValueError):
+        return False
+    if not apps:
+        return False
+    a = apps[0]
+    src = docpaths.resume_pdf(a.get("abbr") or "")
+    if not a.get("abbr") or not os.path.isfile(src):
+        return False
+    pdf, txt = keep_paths()
+    os.makedirs(os.path.dirname(pdf), exist_ok=True)
+    shutil.copyfile(src, pdf)
+    with open(txt, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(plain_text(a))
+    return True
+
+
+def bullets_on(a: dict) -> list[dict]:
+    """The bullets on the kept general resume, in page order: {id, employer, text}, the text
+    plain, for the Tweak panel's Bullets row."""
+    import bullet_rewording
+    out = []
+    for j in a.get("jobs") or []:
+        for b in j.get("bullets") or []:
+            text = bullet_rewording.plain(bullet_rewording.original(b) or "") or b
+            out.append({"id": b, "employer": str(j.get("employer") or ""), "text": text})
+    return out
 
 
 def for_contact_word(contact_id: str) -> str:
@@ -275,14 +370,20 @@ def _verify(drafts_path: str) -> tuple[int, str]:
 
 
 def make(out_dir: str, role: str = "", style: str = "", summary: str = "",
-         keep: bool = True, check: bool = True, for_contact: str = "") -> dict:
+         keep: bool = True, check: bool = True, for_contact: str = "", claims=None) -> dict:
     """Draft, render and fit it, check it, and keep it. Returns what happened:
-    {"draft", "drafts", "pages", "lines", "verify", "verify_out", "pdf", "txt", "kept"}."""
+    {"draft", "drafts", "pages", "lines", "verify", "verify_out", "pdf", "txt", "kept",
+    "grounding"}. A summary the grounding audit questions (`grounding`) is never rendered."""
     import fit_to_page as F
     import render_application as R
     os.makedirs(out_dir, exist_ok=True)
     os.makedirs(person.state("cv"), exist_ok=True)
     a = draft(role, style, summary)
+    asked = grounding(a, claims)
+    a["claim_map"] = claim_map(a, claims)
+    if asked:
+        return {"draft": a, "drafts": "", "pages": 0, "lines": 0, "verify": 1,
+                "verify_out": "", "pdf": "", "txt": "", "kept": False, "grounding": asked}
     # Never over an application's files: an employer whose name shortens to "General".
     R.check_batch([a])
     (pages, lines), _letter = F.fit(a)
@@ -291,7 +392,8 @@ def make(out_dir: str, role: str = "", style: str = "", summary: str = "",
         json.dump([a], fh, indent=1, ensure_ascii=False)
         fh.write("\n")
     got = {"draft": a, "drafts": drafts, "pages": pages, "lines": lines, "verify": None,
-           "verify_out": "", "pdf": docpaths.resume_pdf(a["abbr"]), "txt": "", "kept": False}
+           "verify_out": "", "pdf": docpaths.resume_pdf(a["abbr"]), "txt": "", "kept": False,
+           "grounding": []}
     if check:
         got["verify"], got["verify_out"] = _verify(drafts)
     if keep and (not check or got["verify"] == 0) and 1 <= pages <= F.PAGES:
@@ -303,6 +405,8 @@ def make(out_dir: str, role: str = "", style: str = "", summary: str = "",
         got.update(pdf=pdf, txt=txt, kept=True)
         if for_contact:
             keep_for_contact(for_contact, pdf)
+        else:
+            keep_draft(a)
     return got
 
 
@@ -316,6 +420,10 @@ def main(argv=None) -> int:
                                                 "doc_style.py --list)")
     ap.add_argument("--summary-file", default="",
                     help="the summary Claude wrote for it, else the profile's own")
+    ap.add_argument("--claims-file", default="",
+                    help="with --summary-file: its claim map, a JSON list of {\"sentence\", "
+                         "\"cites\": [ids from the drafting pack]}, read by the grounding "
+                         "audit as a posting's draft is")
     ap.add_argument("--for-contact", default="", metavar="CONTACT_ID",
                     help="made for this contact, who asked for one: kept in their folder, named "
                          "for them, never in place of your own")
@@ -326,13 +434,24 @@ def main(argv=None) -> int:
     if a.summary_file:
         with open(a.summary_file, encoding="utf-8") as fh:
             summary = fh.read().strip()
+    claims = None
     try:
+        if a.claims_file:
+            with open(a.claims_file, encoding="utf-8") as fh:
+                claims = json.load(fh)
         if a.for_contact and not re.match(r"^[\w.-]+$", a.for_contact):
             raise ValueError(f"not a contact id: {a.for_contact!r}")
         got = make(a.out_dir, a.role, a.style, summary, keep=not a.no_keep,
-                   for_contact=a.for_contact)
+                   for_contact=a.for_contact, claims=claims)
     except Exception as exc:  # the compile, a missing profile file: said in one line
         print(f"general: not made: {exc}", file=sys.stderr)
+        return 1
+    if got.get("grounding"):
+        print("general: not made: the summary claims what the profile does not show, so "
+              "nothing was kept. Write it again saying only what the cited text says (python3 "
+              "tools/draft_pack.py show lists the ids), with its claim map (--claims-file), or leave "
+              "out --summary-file to use the profile's own summary:\n"
+              + "\n".join("- " + x for x in got["grounding"]))
         return 1
     d = got["draft"]
     print(f"general: {d['role']} | {got['pages']} page(s), {got['lines']} lines | style "

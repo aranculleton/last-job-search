@@ -4280,9 +4280,33 @@ def _resume(ctx: Ctx, targets: dict) -> dict | None:
                 "kind": "files", "id": "files~resume-current",
                 "args": {"resume": rel_path, "files": [os.path.basename(rel_path)]}},
             "work": regen, "rev": ""}
-    item["rev"] = rev_of("resume-current", rel_path, item["made_on"], stale, breaks)
+    # Its bullets, where it was made with its draft kept (general_resume.keep_draft): the
+    # pencil's Tweak panel changes them, its look and its summary, as an application's
+    # (the maintainer, 2026-11-06: "you can't choose which bullets go on a general resume").
+    item["bullets"] = _general_bullets() if not breaks else []
+    item["rev"] = rev_of("resume-current", rel_path, item["made_on"], stale, breaks,
+                         [b["id"] for b in item["bullets"]])
     targets["resume-current"] = {"kind": "resume", "path": rel_path, "rev": item["rev"]}
     return item
+
+
+def _general_draft() -> str:
+    import general_resume
+    return general_resume.draft_file()
+
+
+def _general_bullets() -> list[dict]:
+    """The bullets on the general resume's kept draft, {id, employer, text}; [] when it was
+    made before its draft was kept, or the draft cannot be read."""
+    import general_resume
+    path = _general_draft()
+    try:
+        with open(path, encoding="utf-8") as fh:
+            got = json.load(fh)
+        a = got[0] if isinstance(got, list) and got else {}
+        return general_resume.bullets_on(a) if isinstance(a, dict) else []
+    except (OSError, ValueError, KeyError, TypeError):
+        return []
 
 
 _BREAKS: dict = {}

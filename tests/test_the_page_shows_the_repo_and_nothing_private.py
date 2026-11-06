@@ -32,6 +32,9 @@ APP = os.path.join(ROOT, "tools", "app.py")
 def _app(state, *args, profile=app_state.EXAMPLE, ok=(0,)):
     env = dict(os.environ, LJS_PROFILE=profile, LJS_STATE=state, LJS_COPY="private")
     env.pop("LJS_TODAY", None)
+    # The example's model alone, as the fixture is made (tests/app_state.py): never the cloud
+    # chat's own cards when the test runs in one.
+    env.pop("CLAUDE_CODE_REMOTE", None)
     r = subprocess.run([sys.executable, APP, *args], env=env, capture_output=True,
                        encoding="utf-8", errors="replace", timeout=120)
     assert r.returncode in ok, r.stdout + r.stderr
@@ -72,6 +75,28 @@ def test_the_fixture_is_the_model_of_the_example_search(small):
     with open(FIXTURE, encoding="utf-8") as fh:
         kept = json.load(fh)
     assert _comparable(model(small)) == _comparable(kept)
+
+
+def test_the_example_search_never_takes_the_copys_own_job_sites(small, tmp_path, monkeypatch):
+    """Run in a person's copy, the example's page took that copy's own job sites (portals
+    built with /add-portal), and the fixture test failed there (the maintainer's copy,
+    2026-11-06). The example person has none of their own: only the app's sites are listed,
+    while the person's own profile still lists theirs. The board here is invented."""
+    import portals
+    skills = tmp_path / "skills"
+    for name in (*portals.APP_PORTALS, "examplejobs-search"):
+        (skills / name).mkdir(parents=True)
+        (skills / name / "SKILL.md").write_text(f"---\nname: {name}\nenabled: true\n---\n",
+                                                encoding="utf-8")
+    monkeypatch.setattr(portals, "SKILLS", str(skills))
+    monkeypatch.setattr(portals, "_CHECKOUT_SKILLS", str(skills), raising=False)
+    monkeypatch.setenv("LJS_PROFILE", app_state.EXAMPLE)
+    assert sorted(portals.defaults()) == sorted(portals.APP_PORTALS)
+    own = tmp_path / "profile"
+    own.mkdir()
+    (own / "person.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setenv("LJS_PROFILE", str(own))
+    assert "examplejobs-search" in portals.defaults()
 
 
 def test_the_model_keeps_the_contract(small):

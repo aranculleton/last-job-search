@@ -422,6 +422,49 @@ def test_follow_ups_tapped_while_a_pass_ran_are_taken_and_written_by_claude(
     assert not [ln for ln in got.get("for_claude") or [] if ln.startswith("late: ")], got
 
 
+def test_work_named_at_a_pass_end_and_left_holds_the_helpers_turn_once(ring, monkeypatch):
+    """Tapped follow-ups sat on "starts in a moment" after the pass that named them ended
+    without taking them (the maintainer's notes, 2026-11-06). As land.py's WANTED_FILE has
+    the running save take a save asked for meanwhile, the chat that answers the page is held
+    at its turn's end, once, while work its last pass named is still waiting; taken, nothing
+    holds it."""
+    import datetime as dt
+    import fake_db
+    import learned
+    import page_reads
+    first, _ = read(ring, "r1")
+    wake(ring, first)
+    assert view(ring, first)[1]
+    d, _ = read(ring, "r2", now="2026-10-25T18:05:00Z")
+    assert all(R.land(ring, wake(ring, d, now="2026-10-25T18:05:00Z")))
+    ring.queue("talk~late", kind="talk", asked_at="2026-10-25T18:06:00Z")
+    got = end(ring, d, "2026-10-25T18:07:00Z")
+    assert [ln for ln in got.get("for_claude") or [] if ln.startswith("late: ")], got
+    assert all(fake_db.apply(ring.db, b) for b in got["batches"])
+    for k, v in ring.env(LJS_PAGE_MIRROR=ring.mirror, LJS_CHAT=R.CHAT).items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setattr(page_reads, "_now",
+                        lambda: dt.datetime(2026, 10, 25, 18, 8, tzinfo=dt.timezone.utc))
+    stop = {"hook_event_name": "Stop", "transcript_path": "", "session_id": R.CHAT}
+
+    def held():
+        out = learned.hook(dict(stop))
+        said = (out.get("hookSpecificOutput") or {}).get("additionalContext") or \
+            out.get("reason") or ""
+        return "talk~late" in said and "the app skill, step 0" in said
+
+    assert "talk~late" in page_reads.late_waiting(R.CHAT)
+    assert page_reads.late_waiting("session_EXAMPLEOTHER") == []      # another chat: never
+    assert held()
+    assert not held()                                                 # once, never a loop
+    # Taken by the wake the line names and ended again, nothing is waiting.
+    assert all(R.land(ring, wake(ring, d, now="2026-10-25T18:09:00Z")))
+    assert ring.stored("work", "talk~late")["data"]["claimed_by"] == R.CHAT
+    got = end(ring, d, "2026-10-25T18:10:00Z")
+    assert not [ln for ln in got.get("for_claude") or [] if "talk~late" in ln], got
+    assert "talk~late" not in page_reads.late_waiting(R.CHAT)
+
+
 def test_a_page_update_that_ends_a_batch_clears_saving_and_starts_no_save_outside_a_copy(ring):
     import fake_db
     first, _ = read(ring, "r1")

@@ -2377,6 +2377,10 @@ def _undone(event: dict, items: list) -> list[str]:
             profile_upgrades.mark_started(today)
         if any(_WORK_CHAT.search(t) for _n, _k, t in items) or _job_chat(event):
             return out                  # a chat started for one big job: it lands its own work
+        late = _late_work(chat)
+        if late:
+            out.append(LATE_STEPS.format(ids=", ".join(late[:6]) + (" ..." if len(late) > 6
+                                                                    else "")))
         ids = profile_upgrades.unstarted(today, chat)
         if ids and profile_upgrades.hold_once(chat, today):
             out.append(UPGRADE_STEPS.format(n=len(ids), s="s" if len(ids) != 1 else "",
@@ -2391,6 +2395,22 @@ def _undone(event: dict, items: list) -> list[str]:
     except Exception:  # noqa: BLE001  a hook must never break the chat it runs in
         return out
     return out
+
+
+LATE_STEPS = ("work the person asked for on their page while the last pass ran is still waiting "
+              "({ids}): it was named at that pass's end and never taken. Take it now, as a ring "
+              "is taken (the app skill, step 0: the same Agent call, its notification \"work "
+              "waiting after the last pass: {ids}\"), then end the turn; nothing to say about it.")
+
+
+def _late_work(chat: str) -> list[str]:
+    """The work the last pass of the page's helper named at its end and never took, for this
+    chat (page_reads.late_waiting), the hold kept as made so it is made once."""
+    import page_reads
+    late = page_reads.late_waiting(chat)
+    if late:
+        page_reads.late_held()
+    return late
 
 
 _WORK_CHAT = re.compile(r"tools/app\.py start\b[^\n]*--work \S")

@@ -110,6 +110,19 @@ make sense to somebody whose repo just received it.
 ### Removed
 
 - **Names your own checks might have used were retired**: `app_listen.fresh_task`, `app_listen.FRESH_FROM_TASK` and `app_listen.TASK_AHEAD_S`. The fresh page helper is now started by the chat that answers your page, never by a scheduled task.
+- **Your general resume is checked against your profile like every other.** The one you send
+  when no job is named now goes through the same fact-check as a resume made for a job: a
+  summary that claims more than your profile shows is never made, and says why.
+- **You can choose the bullets on your general resume.** Its card has the pencil: Bullets comes
+  first, each one a choice, and the ones you tick are swapped for other true ones from the same
+  job. Its look and its summary change there too, as on any resume. One made before this update
+  is made again for you so it has the pencil. Profile upgrade: `general-resume-draft`.
+- **Follow-ups you tap while Claude is busy on your page no longer sit on "starts in a
+  moment".** When Claude finishes what it was doing and work you asked for meanwhile is still
+  waiting, it now takes that work before it stops, instead of leaving it for your next tap.
+- **The app's own checks pass in your copy when you have job sites of your own.** The example
+  search they build took your copy's own job sites, so one check failed there; the example now
+  lists only the app's sites, and yours are untouched.
 
 ## [4.12.0] - 2026-11-06
 
