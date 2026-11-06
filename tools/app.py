@@ -2485,7 +2485,7 @@ def _cleared(entries: list, wid: str) -> None:
             with open(e["file_path"], encoding="utf-8") as fh:
                 data = json.load(fh)
             data.update({"note": None, "needs": None, "asked_you_at": None, "choices": None})
-            with open(e["file_path"], "w", encoding="utf-8") as fh:
+            with open(e["file_path"], "w", encoding="utf-8", newline="\n") as fh:
                 json.dump(data, fh)
 
 
