@@ -2220,6 +2220,9 @@ SAFE_DEFAULTS: dict[str, str] = {
     "person.json:documents.resume_pages": "one page, what every older repo printed; a long "
                                           "career sets two in /setup --section documents",
     "person.json:documents.section_order": "the standard order every older repo printed",
+    "person.json:documents.file_names": "the person, the employer, then the document "
+                                        "(docpaths.FILE_NAMES_DEFAULT), the order every repo "
+                                        "makes from 2026-11-06; Settings > File names changes it",
     "person.json:documents.letter_paper": "follows documents.paper, then the country",
     "person.json:identity.places_told": "none: every employer hears the person's own place, "
                                         "what every older repo assumed; tools/told.py records "

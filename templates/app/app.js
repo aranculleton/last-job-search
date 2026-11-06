@@ -2487,7 +2487,7 @@
     if (!m || !m[3]) return n;
     const co = txt(company).normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/&/g, "and").replace(/['’.]/g, "")
       .replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40);
-    return m[1] + "_" + (co || m[3]) + "_" + m[2] + m[4];
+    return m[1] + (co ? "_" + co : "") + "_" + m[2] + m[4];
   }
   async function download(file, key) {
     const set = (text, tone) => { S.notes.set(key, {text, tone}); scheduleRender(); };
@@ -13603,10 +13603,14 @@
     brief_push: {label: "Phone notification", hint: "A notification on your phone each morning when your brief is ready. Your brief still comes here either way."},
     // The person's own zone, apart from when the brief comes (the audit, 2026-11-03).
     time_zone: {label: "Your time zone", hint: "Every time on this page, and each calendar link, is in it. Say your city or the zone: Toronto, Eastern, UK time."},
+    // What the files you download and upload are called (docpaths.FILE_NAME_PRESETS): each
+    // chip shows its own example, from your name and your latest employer (the maintainer,
+    // 2026-11-06). The files Claude keeps keep their names.
+    file_names: {label: "File names", hint: "What your files are called when you download them to send. A posting that asks for another name comes first."},
   };
   const SYNTH = [{key: "suggestions", label: "Suggestions", kind: "choice", value: "on", choices: [["on", "On"], ["urgent", "Only urgent"], ["off", "Off"]]}];
   // The usual value of each setting, for the summary's "changed from the usual".
-  const USUAL = {suggestions: "on", app_updates: "auto", tips: "on", prep_days: "7", calendar_reminder: "60", brief_push: "off"};
+  const USUAL = {suggestions: "on", app_updates: "auto", tips: "on", prep_days: "7", calendar_reminder: "60", brief_push: "off", file_names: "name_employer_document"};
   function settingLabel(s) { return (SETTING_COPY[txt(s.key)] || {}).label || txt(s.label); }
   function allSettings() {
     const list = arr(M().settings).slice();
@@ -13637,7 +13641,7 @@
     const wrap = h("section", {class: "sec", "aria-labelledby": "h-settings" + (where ? "-" + where : "")}, screenHead("settings", "Settings", sum, null, where));
     const byKey = new Map(all.map((s) => [txt(s.key), s]));
     const pick = (keys) => keys.map((k) => byKey.get(k)).filter(Boolean);
-    const known = new Set(["suggestions", "app_updates", "tips", "linkedin_plan", "profile_reads", "prep_days", "calendar_reminder", "brief_push", "time_zone"]);
+    const known = new Set(["suggestions", "app_updates", "tips", "linkedin_plan", "profile_reads", "prep_days", "calendar_reminder", "brief_push", "time_zone", "file_names"]);
     const others = all.filter((s) => !known.has(txt(s.key)));
     if (waiting) put(wrap, settingsGroup("", [updateRow(waiting)]));
     // Questions an update brought live here, never in To do: nothing is late about them.
@@ -13648,7 +13652,7 @@
     // maintainer, 2026-10-29: "why would one choose to run long tasks in the cloud or in
     // local? even i dont know what changing these settings does").
     put(wrap, settingsGroup("You", [h("button", {type: "button", class: "setting-row act-row prof-row", "data-k": "open-profile", onclick: () => go("profile", {focus: true})},
-      h("span", {class: "set-name"}, "Your profile", h("span", {class: "hint block"}, profileSummary())), h("span", {class: "set-go", "aria-hidden": "true"}, "›"))].concat(pick(["time_zone"]).map((x) => settingRow(x)))));
+      h("span", {class: "set-name"}, "Your profile", h("span", {class: "hint block"}, profileSummary())), h("span", {class: "set-go", "aria-hidden": "true"}, "›"))].concat(pick(["time_zone", "file_names"]).map((x) => settingRow(x)))));
     const search = searchRows().filter(Boolean);
     if (search.length) put(wrap, settingsGroup("Your search", search));
     const yours = yourRulesRows();
@@ -13692,6 +13696,8 @@
     const copy = SETTING_COPY[txt(s.key)] || {};
     const v = txt(settingValue(s));
     if (s.kind === "toggle") return settingValue(s) ? "On" : "Off";
+    // A setting with examples (File names) says the example of the one chosen.
+    if (s.kind === "choice" && txt(obj(s.examples)[v])) return txt(obj(s.examples)[v]);
     if (s.kind === "choice") {
       const c = arr(s.choices).find((x) => txt(x[0]) === v);
       const word = c ? ((copy.choices || {})[v] || [txt(c[1])])[0] : v;
@@ -13728,14 +13734,21 @@
       // A few short choices with nothing more to say about each sit side by side as chips,
       // wrapping on a phone; still a radio group, so arrow keys and a screen reader work as
       // before (the maintainer, 2026-11-04: four reminders stacked down a wide panel).
-      const chips = arr(s.choices).length <= 5 && arr(s.choices).every((c) => !wordsOf(c)[1] && txt(wordsOf(c)[0]).length <= 24);
+      // Each chip of a setting with examples (File names) shows its own under its words,
+      // and the one recommended for the person's country says so.
+      const ex = obj(s.examples);
+      const withEx = arr(s.choices).some((c) => txt(ex[txt(c[0])]));
+      const chips = withEx || (arr(s.choices).length <= 5 && arr(s.choices).every((c) => !wordsOf(c)[1] && txt(wordsOf(c)[0]).length <= 24));
       const opts = arr(s.choices).map((c, i) => {
         const words = wordsOf(c);
-        const hid = words[1] ? sid + "-" + i + "-h" : null;
-        return h("div", {class: "choice"},
+        const shown = txt(ex[txt(c[0])]);
+        const under = shown || words[1];
+        const hid = under ? sid + "-" + i + "-h" : null;
+        const rec = withEx && txt(s.recommended) === txt(c[0]) ? h("span", {class: "chip-rec"}, " · recommended") : null;
+        return h("div", {class: "choice" + (shown ? " has-ex" : "")},
           h("input", {type: "radio", name: sid, id: sid + "-" + i, "data-k": sid + "-" + i, value: txt(c[0]), checked: txt(v) === txt(c[0]), "aria-describedby": hid,
             onchange: () => saveSoon(s, c[0], words[0])}),
-          h("label", {for: sid + "-" + i}, words[0], words[1] ? h("span", {class: "hint block", id: hid}, words[1]) : null));
+          h("label", {for: sid + "-" + i}, words[0], rec, under ? h("span", {class: "hint block" + (shown ? " chip-ex" : ""), id: hid}, under) : null));
       });
       body = h("fieldset", {class: "setting" + (chips ? " pills" : "")}, h("legend", {class: "sr-only"}, settingLabel(s)), copy.hint ? h("p", {class: "hint"}, copy.hint) : null,
         chips ? h("div", {class: "pill-row"}, opts) : opts);

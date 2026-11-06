@@ -1250,6 +1250,13 @@ li:first-child > .fb-row, .fb-row:first-child { border-top: 0; }
 .set-body .pills .choice:has(input:checked) { background: var(--surface); box-shadow: inset 0 0 0 1px var(--mark); }
 /* A short word ("On", "Off") still has its full target. */
 .set-body .pills .choice label { white-space: nowrap; min-width: var(--target); text-align: center; }
+/* A chip with its own example under its words (File names): a soft card rather than a
+   pill, its words left, the example wrapping anywhere on a phone rather than running off. */
+.set-body .pills .choice.has-ex { border-radius: var(--r-sm); padding-block: 8px; align-items: flex-start; }
+.set-body .pills .choice.has-ex input { margin-top: 3px !important; }
+.set-body .pills .choice.has-ex label { white-space: normal; text-align: left; min-width: 0; }
+.chip-ex { overflow-wrap: anywhere; }
+.chip-rec { color: var(--muted); font-weight: 400; }
 /* Claude's browser: a small panel bottom right on a wide screen, a bottom sheet on a phone.
    Close hides it; the reading carries on. */
 .bp-host { position: fixed; z-index: 40; right: 16px; bottom: 16px; width: min(360px, calc(100vw - 32px)); }

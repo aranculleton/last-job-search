@@ -349,28 +349,176 @@ def doc_abbr(name: str) -> str:
     return m.group(1) if m else ""
 
 
-def send_name(name: str, company: str = "") -> str:
-    """The name a made document is downloaded and uploaded under: the person, the employer
-    written plainly, then the kind of document (<Prefix>_Kestrel_Foods_Resume.pdf), whichever
-    order the kept file was made in. The kept copy keeps its own name. With no employer
-    (a resume for no posting) the kept name's own word stands in its place; a name that is
-    not an app-made document's comes back as it is."""
+# ------------------------------------------------------------ the name an employer sees
+#
+# What the PDF the person downloads and uploads is called (the maintainer, 2026-11-06: "a
+# setting for what to put for file names ... don't overwhelm the user, sensible defaults ...
+# use standards"). The kept file in cv/ and cover_letters/ is always <Prefix>_<ABBR>_<Noun>,
+# whatever is chosen: the tracker names it, and two applications' files must never share a
+# name, which "your name and the document" alone would. So the setting shapes only the copy
+# that leaves: the page's download (app_model files' `send`) and the chat's copy
+# (tools/shown.py). What the guidance says, read 2026-11-06:
+#   - CSUN Career Center, "The (Simple) Guidelines You Should Follow When Naming Your Resume
+#     and Cover Letter Files" (nazariancareers.csun.edu/blog/2021/08/26/the-simple-
+#     guidelines-you-should-follow-when-naming-your-resume-and-cover-letter-files/): your
+#     first and last name and what the file is; the position and organisation optional, to
+#     show it was tailored; a posting's own naming instruction comes first; no slashes, no
+#     version numbers.
+#   - StylingCV, "How to name your resume file" (stylingcv.com/blog/how-to-name-your-resume-
+#     file-2026/): FirstName-LastName-Resume, or with the company and position when tailored;
+#     standard ASCII characters; no spaces or symbols (@ # $ % & *); "aim for under 40
+#     characters".
+#   - Resume Worded (resumeworded.com/resume-file-name-cover-letter-filename-key-advice):
+#     your name, "resume" or "cover letter" and the position; A-Z, 0-9, dashes and
+#     underscores only, no accents; spaces can become "%20" in some tracking systems; "it
+#     doesn't matter which order"; it would leave the company out, the one source that does.
+#   - CV Wizard (cvwizard.com/uk/articles/resume-cv-difference) and LiveCareer UK
+#     (livecareer.co.uk/cv/resume-vs-cv): "CV" in the UK and Ireland, "resume" in the US and
+#     most of Canada, either in Australia. That word is the person's documents.noun, which
+#     /setup takes from their market (tools/markets/<cc>.json, documents "noun").
+# None of them makes the parts or their order depend on industry, role or seniority (an
+# academic CV is a different document, not a different name), and none differs by country
+# beyond the word for the document. So one default everywhere, the word by market: the
+# person, the employer (they apply to many, and download many), then the document.
+FILE_NAMES_KEY = "documents.file_names"
+FILE_NAME_PRESETS = (
+    ("name_employer_document", "Name, employer, document", ("employer",)),
+    ("name_document", "Name, document", ()),
+    ("name_employer_role_document", "Name, employer, role, document", ("employer", "role")),
+)
+FILE_NAMES_DEFAULT = "name_employer_document"
+# The most a name runs to before its extension: under the 40 to 50 the guidance asks for
+# where it can be, with the person's name and the document word never cut.
+FILE_NAME_MAX = 50
+
+
+def recommended_file_names(country: str = "") -> str:
+    """The preset recommended for a market: the same in every one (the sources above differ
+    by country only in the document's word, which documents.noun carries)."""
+    return FILE_NAMES_DEFAULT
+
+
+def file_names() -> str:
+    """The person's choice (person.json documents.file_names), else the recommended one."""
+    try:
+        got = str(person.get(FILE_NAMES_KEY, "") or "").strip()
+    except Exception:  # noqa: BLE001  no profile: the default
+        got = ""
+    known = [p[0] for p in FILE_NAME_PRESETS]
+    if got in known:
+        return got
+    try:
+        country = str(person.get("identity.country", "") or "")
+    except Exception:  # noqa: BLE001
+        country = ""
+    return recommended_file_names(country)
+
+
+def _plain_words(text: str) -> list[str]:
+    """Words safe in any file name on any portal: ASCII letters and digits, accents folded,
+    "&" as "and", apostrophes and full stops dropped (Kestrel & Co. -> Kestrel_and_Co)."""
+    import doc_name
+    t = doc_name.ascii_name(str(text or "")).replace("&", " and ")
+    t = re.sub(r"['’.]", "", t)
+    return re.findall(r"[A-Za-z0-9]+", t)
+
+
+# Words that only join others: a cut never ends on one ("Head_of").
+_JOINERS = {"of", "for", "and", "the", "in", "at", "to", "de", "du", "la", "le", "et", "und",
+            "y", "e", "da", "do", "di", "van", "von"}
+
+
+def _employer_words(employer: str) -> list[str]:
+    """The employer as people say it: its legal and generic tail dropped, as the kept name's
+    own (doc_name.GENERIC: "Kestrel Foods & Co." is Kestrel_Foods), never to nothing."""
+    import doc_name
+    words = _plain_words(employer)
+    while len(words) > 1 and (words[-1].lower() in doc_name.GENERIC
+                              or words[-1].lower() in _JOINERS):
+        words.pop()
+    if len(words) > 1 and words[0].lower() == "the":
+        words.pop(0)
+    return words
+
+
+def _trim_end(words: list[str], room: int) -> list[str]:
+    """The first words that fit in `room` characters, never ending on a joining word."""
+    out = []
+    for w in words:
+        if len("_".join(out + [w])) > room:
+            break
+        out.append(w)
+    while out and out[-1].lower() in _JOINERS:
+        out.pop()
+    return out
+
+
+def _role_words(words: list[str], room: int) -> list[str]:
+    """A role cut to `room` characters the way a title reads: whole where it fits; "Head of
+    Supply Chain Planning" keeps its head and the words after it that fit (Head_of_Supply_
+    Chain); otherwise the words before its last are what go ("Senior Demand Planning Analyst"
+    is Demand_Planning_Analyst, then Planning_Analyst, then Analyst), since the last word is
+    the job. [] when not even that fits."""
+    if len("_".join(words)) <= room:
+        return list(words)
+    at = next((i for i, w in enumerate(words) if i and w.lower() in ("of", "for")), None)
+    if at is not None:
+        got = _trim_end(words, room)
+        return got if len(got) > at + 1 else []
+    for i in range(1, len(words)):
+        if len("_".join(words[i:])) <= room:
+            return words[i:]
+    return []
+
+
+def file_name(kind_word: str, employer: str = "", role: str = "", preset: str | None = None,
+              ext: str = ".pdf", fallback: str = "") -> str:
+    """The name a document leaves under, by the preset (the person's own when None): the
+    person's prefix, then the employer and the role where the preset has them, then the
+    document's word (their noun, or Cover_Letter), in at most FILE_NAME_MAX characters. The
+    person's name and the document's word are never cut; the role is cut first, the way a
+    title reads (_role_words), then the employer from its end. `fallback` stands for an
+    employer that has no letter to show."""
+    import doc_name
+    preset = preset or file_names()
+    has = dict((p[0], p[2]) for p in FILE_NAME_PRESETS).get(preset, ("employer",))
+    head = "_".join(_plain_words(prefix().replace("_", " "))) or prefix()
+    room = FILE_NAME_MAX - len(head) - len(kind_word) - 2
+    emp = (_employer_words(employer) or _employer_words(fallback)) if "employer" in has else []
+    # With a role to follow, the employer takes at most half the room, so the role's last
+    # word (the job) still fits; alone, all of it.
+    emp_room = room // 2 if "role" in has and role else room
+    emp = _trim_end(emp, emp_room) or emp[:1]
+    parts = ["_".join(emp)] if emp else []
+    if "role" in has:
+        left = room - (len(parts[0]) + 1 if parts else 0)
+        got = _role_words(_plain_words(doc_name.role_core(role) or role), left)
+        if got:
+            parts.append("_".join(got))
+    return "_".join([head, *parts, kind_word]) + ext
+
+
+def example_file_name(preset: str | None = None, employer: str = "", role: str = "") -> str:
+    """What a resume would leave as under a preset, for the setting's own row: the person's
+    own name and, where given, a real recent employer and role."""
+    return file_name(noun_word(), employer or "Employer", role or "Analyst", preset)
+
+
+def send_name(name: str, company: str = "", role: str = "", preset: str | None = None) -> str:
+    """The name a made document is downloaded and uploaded under (file_name), whichever order
+    the kept file was made in. With no employer (a resume for no posting) it is the person's
+    name and the document; a name that is not an app-made document's comes back as it is."""
     base = os.path.basename(str(name or "").strip())
     stem, ext = os.path.splitext(base)
     try:
         words = list(dict.fromkeys((noun_word(), *KIND_WORDS)))
-        pre = prefix()
+        prefix()
     except Exception:  # noqa: BLE001  no profile: the name as it is
         return base
     for w in words:
         m = _name_rx(w).fullmatch(stem)
-        if not m:
-            continue
-        import doc_name
-        co = doc_name.fold(company).replace("&", "and")
-        co = re.sub(r"['\u2019.]", "", co)
-        co = re.sub(r"[^A-Za-z0-9]+", "_", co).strip("_")[:40].strip("_")
-        return f"{pre}_{co or m.group(1)}_{w}{ext}"
+        if m:
+            return file_name(w, company, role, preset, ext)
     return base
 
 
