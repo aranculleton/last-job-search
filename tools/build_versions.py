@@ -828,8 +828,9 @@ METHODS: dict[str, dict] = {
             (69, "2026-11-06", False, "a laptop's Brief that nearly fills the window is stretched to its foot, panels lined up edge to edge; a sparse one keeps each row to what it holds"),
             (70, "2026-11-06", False, "this week's bar in the second chart colour and past weeks in the rose; the dates and the line under the bars in the text's colour; news links underlined in their own colour, thinner; the menu's words centred on their icons"),
             (71, "2026-11-06", False, "the weekly bars' dates show every other week and this week's at every width, never cut"),
+            (72, "2026-11-06", False, "Settings: employers turned down are one row, learned rules one home grouped by area, long lists show their first few, Something looks wrong opens in place, What's new shows the version, Smaller and Larger drawn in their size, Advanced only for what costs time"),
         ),
-        "fingerprint": "30d7c343ad588f5c",
+        "fingerprint": "5a0ac2529f34aa5d",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",
