@@ -377,8 +377,9 @@ METHODS: dict[str, dict] = {
             (76, "2026-11-05", False, "a role kept for a referral in progress carries its note (referral_note) into the picks and the tracker row; documents are made as before"),
             (77, "2026-11-05", False, "a skill question has a third answer, just for this role: the skill goes on that role's resume and bullets through the draft's own yes, never into the profile or onto another role, which a later posting asks again; a yes and a no work as before, so nothing made before needs making again"),
             (78, "2026-11-05", False, "a resume made for a contact who asked for one with no role named is kept in their own folder, named for them and shown on their card, never in place of the person's own; nothing made before needs making again"),
+            (79, "2026-11-06", False, "RUNBOOK.md says the brief asks for a new LinkedIn download once it is due by export.every_days (weekly while the person is messaging people, a fortnight otherwise, or as they chose); documents render and are checked as before"),
         ),
-        "fingerprint": "f6d1baa4bb4a6a5b",
+        "fingerprint": "0cd0863b03d3bc86",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -567,9 +568,9 @@ METHODS: dict[str, dict] = {
             (81, "2026-11-05", False, "where someone lives is read from their profile as read when their row has none, so the person's own place rule holds every follow-up as it holds a first note: none is drafted for them, one written by hand is not kept, and the item says why once; held people come off the due list by themselves, so nothing older needs redoing"),
             (82, "2026-11-05", False, "LinkedIn's download finds someone already in the book by a message already logged, or by their first name with the surname in the record's id or notes, before listing them as new, and fills the employer, title and address the record lacks; a row closed as the same person as another gives it what it lacks (state.py same-person), and the check names two rows sharing one message; nothing older needs redoing"),
             (83, "2026-11-05", False, "export.py one-record joins two rows the message log shows are one person (one message, the same day and words, under exactly two rows and nothing on them saying two people) and fills a first-name-only row from the one connection that is them, each change written in the row's notes; the one-record upgrade does it for every older book by itself, so nothing needs redoing here"),
-            (84, "2026-11-06", False, "the LinkedIn download is asked for weekly while the person has sent notes or messages in the last two weeks, every two weeks otherwise, or as they chose (EXPORT_REMIND: every two weeks, every month, or not at all), worked out once in export.every_days; put away from its trash, the next ask counts from that day; nothing older needs redoing"),
+            (84, "2026-11-06", False, "the LinkedIn download is asked for weekly while the person has sent notes or messages in the last two weeks, every two weeks otherwise, or as they chose (EXPORT_REMIND: every two weeks, every month, or not at all), worked out once in export.every_days and said so in /network; put away from its trash, the next ask counts from that day; nothing older needs redoing"),
         ),
-        "fingerprint": "f92a607a1dd4753d",
+        "fingerprint": "dcde239aeb58273f",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
