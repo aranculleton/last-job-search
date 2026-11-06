@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -208,7 +209,8 @@ def _runs(rec):
 def test_two_landings_started_at_once_run_one_check_at_a_time(chat, tmp_path):
     check, rec = _slow_check(tmp_path)
     (chat / "profile" / "notes.md").write_text("second\n", encoding="utf-8")
-    env = dict(os.environ, LJS_LAND_CHECK=" ".join(check))
+    # Quoted, so a Windows path keeps its backslashes through the reader's shlex.split.
+    env = dict(os.environ, LJS_LAND_CHECK=shlex.join(check))
     for k in ("LJS_PROFILE", "LJS_STATE"):
         env.pop(k, None)
     run = ("import sys; sys.path.insert(0, %r); import land; "
