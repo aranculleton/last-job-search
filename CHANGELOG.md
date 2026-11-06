@@ -53,6 +53,10 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **Your brief comes at the time you pick, and your page shows when it really comes.** A time
+  you choose stays exactly as you set it (8:00 is no longer turned into 7:38). Where the app
+  chose the time itself, or Claude's service starts it a few minutes late, your page shows the
+  real time and says why in one line.
 - **Every job site has a plain name and a line saying what it is.** Settings, Job sites says
   "Adzuna", never "api.adzuna.com", with a short note under each site.
 - **A site that needs a key says so.** Its row says "Needs a free key" instead of a tick, and
