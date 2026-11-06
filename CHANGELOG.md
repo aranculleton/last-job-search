@@ -20,6 +20,8 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+## [4.13.0] - 2026-11-06
+
 ### Changed
 
 - **A search asked for in a chat costs less of your Claude allowance.** The search now writes
