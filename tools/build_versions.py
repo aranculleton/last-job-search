@@ -852,7 +852,7 @@ METHODS: dict[str, dict] = {
             (80, "2026-11-06", False, "Your CV's card has the pencil where its draft is kept: the Tweak panel opens on Bullets, each a choice, the ones ticked swapped for another true one from the same job and never kept as a usual"),
             (81, "2026-11-06", False, "a toast shows its time left as a ring round its close, two at most with the rest counted; a job tapped keeps its place on Jobs while the person stays; a job left out as not a fit says why in Claude's work and never offers Try again"),
         ),
-        "fingerprint": "40a27933d54fef2e",
+        "fingerprint": "2d0782ccbfbeaf17",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

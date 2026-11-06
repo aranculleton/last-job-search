@@ -2130,14 +2130,18 @@
     box.replaceChildren(...shown.map((t, i) => {
       const undoable = t.ids.length && t.ids.some((id) => !S.receipts.has(id) && actionState(id) === "saved");
       const hold = () => { t.held = true; const r = box.querySelector('[data-toast="' + t.key + '"]'); if (r) r.classList.add("is-held"); };
-      const release = () => { t.held = false; t.until = Math.max(t.until, now() + 3000); t.from = now(); renderToasts(); };
+      // Its ring starts again from the new time left, drawn after this event: a focus leaving a
+      // toast that a redraw is removing fired this inside that redraw (4.13's page tests).
+      const release = () => { t.held = false; t.until = Math.max(t.until, now() + 3000); t.from = now(); setTimeout(renderToasts, 0); };
       // How long it has left, as a ring round its close that empties (the maintainer,
       // 2026-11-06: "a circle that fills up ... make me less incentivised to close it"): still
       // while pointed at or focused, and never moving with reduced motion.
       const life = Math.max(1, t.until - (t.from || t.made));
       const gone = Math.min(life, Math.max(0, now() - (t.from || t.made)));
-      const ring = svg("svg", {class: "toast-ring", viewBox: "0 0 24 24", "aria-hidden": "true", focusable: "false"},
-        [svg("circle", {cx: "12", cy: "12", r: "10", pathLength: "100", style: "animation-duration:" + life + "ms;animation-delay:-" + gone + "ms"})]);
+      const arc = svg("circle", {cx: "12", cy: "12", r: "10", pathLength: "100"});
+      arc.style.animationDuration = life + "ms";
+      arc.style.animationDelay = "-" + gone + "ms";
+      const ring = svg("svg", {class: "toast-ring", viewBox: "0 0 24 24", "aria-hidden": "true", focusable: "false"}, [arc]);
       return h("div", {class: "toast" + (t.bad ? " bad" : "") + (t.held ? " is-held" : ""), "data-toast": t.key, onmouseenter: hold, onmouseleave: release,
         onfocusin: hold, onfocusout: (e) => { if (!e.currentTarget.contains(e.relatedTarget)) release(); }},
         h("span", {class: "toast-text"}, t.text),
