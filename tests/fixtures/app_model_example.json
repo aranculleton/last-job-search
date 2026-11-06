@@ -1,7 +1,7 @@
 {
  "model": 1,
  "made_at": "2026-10-25T18:00:00Z",
- "rev": "72c7bc371299",
+ "rev": "7b998d034ff0",
  "app": {
   "version": "4.11.0",
   "url": null,
@@ -77,7 +77,7 @@
  ],
  "jobs": {
   "round": "r9",
-  "made_at": "2026-11-06T01:48:40Z",
+  "made_at": "2026-11-06T01:53:30Z",
   "met": false,
   "summary": "3 roles from the last search to look at, 1 of them scoring 75 or more. 3 left out, each with its reason.",
   "rows": [
@@ -1000,7 +1000,7 @@
    "when": "2026-10-28",
    "prep": {
     "path": "documents/applications/thornbury_bank_risk_analyst_thornbury/interview_prep.md",
-    "updated": "2026-11-06T01:48:40Z"
+    "updated": "2026-11-06T01:53:30Z"
    },
    "questions": 2,
    "all_day": true,
@@ -2026,6 +2026,8 @@
    6
   ],
   "time": "07:38",
+  "real_time": "07:38",
+  "why": "Comes at 7:38: a few minutes before the hour, when the service is less busy.",
   "zone": "Europe/London",
   "paused": null,
   "waiting": 0,
@@ -2038,7 +2040,7 @@
    "on": "brief.on"
   },
   "id": "schedule",
-  "rev": "43cc79b6d1d5"
+  "rev": "d4d7eaafae1e"
  },
  "you": {
   "id": "you",

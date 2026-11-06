@@ -165,8 +165,9 @@ def test_where_it_comes_is_said_and_nothing_promises_a_push(tmp_path):
     """X-1, X-11: 'Your brief is on ... the bell on your Brief' was said with no page and no
     bell, never which chat it came to, and the docs said silence meant failure."""
     assert routines.default("America/New_York", page=False)["say"] == (
-        "Your morning brief comes to this chat every day at 7:38, New York time. Say \"move my "
-        "brief\" or \"stop my brief\" in any chat to change it.")
+        "Your morning brief comes to this chat every day at 7:38, New York time. It comes a few "
+        "minutes before the hour, when the service is less busy. Say \"move my brief\" or "
+        "\"stop my brief\" in any chat to change it.")
     assert "bell" in routines.default("America/New_York", page=True)["say"]
     for said in (routines.default("Europe/Paris", page=False)["say"],
                  routines.default("Europe/Paris", page=True)["say"]):

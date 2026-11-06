@@ -10765,7 +10765,9 @@
     }
     return {sc, item, setUp, on: setUp && (sw ? sw.doc.action === "brief.on" : !sc.off),
       asked: !setUp && !!setup && ACTIVE.has(txt(setup[1].status) || "queued"), setupId: setup ? setup[0] : null,
-      days, time, when: briefWhen(days, time) || txt(sc.when), paused: briefPaused()};
+      // The time it really comes, from the engine (the scheduler's late start, the app's own
+      // move off the hour), and why in one line; a change just tapped shows as tapped.
+      days, time, when: (mv ? briefWhen(days, time) : txt(sc.when)) || briefWhen(days, time), why: mv ? "" : txt(sc.why), paused: briefPaused()};
   }
   function briefWord(st) {
     return !st.setUp ? (st.asked ? "Being set up" : "Off") : !st.on ? "Off" : st.paused ? "Resting until " + fmtDay(st.paused) : st.when || "On";
@@ -10809,11 +10811,12 @@
         {id: "when", type: "radio", label: "When", required: true, value: !st.on ? "off" : set ? set[0] : "some",
           options: BRIEF_DAY_SETS.map(([k, l]) => [k, l]).concat([["some", "Some days"], ["off", "Off"]])},
         {id: "days", type: "checks", label: "Which days", options: DAY_NAMES.map((d) => [d.toLowerCase(), d]), value: st.days.map((x) => DAY_NAMES[(x + 6) % 7].toLowerCase()), showIf: ["when", "some"]},
-        {id: "time", type: "time", label: "Time", value: st.time || "07:38"},
+        // Kept to the minute: the time picked is the time set, never moved (2026-11-06).
+        {id: "time", type: "time", label: "Time", value: st.time || "08:00", hint: st.why || "Kept exactly as you set it."},
         // The time zone can be changed here (2026-10-30: "this wouldnt let me edit the timezone").
         {id: "zone", type: "select", label: "Time zone", value: txt(st.sc.zone) || "", options: zoneOptions(txt(st.sc.zone))}],
       submit: "Save",
-      validate: (v) => (v.when === "some" && !arr(v.days).length ? "Choose at least one day." : v.when !== "off" && !/^\d{1,2}:\d{2}$/.test(txt(v.time)) ? "Give the time as hours and minutes, like 07:38." : null),
+      validate: (v) => (v.when === "some" && !arr(v.days).length ? "Choose at least one day." : v.when !== "off" && !/^\d{1,2}:\d{2}$/.test(txt(v.time)) ? "Give the time as hours and minutes, like 08:00." : null),
       onSubmit: (v) => {
         const doc = (action, value) => ({item: st.item, action, value, rev: txt(st.sc.rev) || null});
         if (v.when === "off") {
@@ -10870,6 +10873,7 @@
       : !st.on ? "Off. Your days and time are kept for when you turn it back on." : st.when + (txt(sc.zone) ? ", " + zoneName(txt(sc.zone)) + " time" : "") + ".";
     return [
       infoRow("brief-when", "When it comes", briefWord(st), foldBody([h("p", {}, line),
+        st.setUp && st.on && st.why ? h("p", {class: "hint brief-why"}, st.why) : null,
         arr(sc.waiting).length || Number(sc.waiting) > 0 ? h("p", {class: "hint"}, "Claude makes the change next time it works on your search.") : null],
         st.asked ? btn("See its progress", openWork, {small: true, key: "brief-see"}) :
           btn(!st.setUp || !st.on ? "Turn it on" : "Change it", briefSheet, {small: true, key: "brief-move"}),

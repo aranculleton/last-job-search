@@ -200,11 +200,15 @@ def test_the_defaults_are_every_day_at_738_their_time():
     assert got["when"] == "Every day at 7:38"
     # Where it comes, and in whose time: the page's Brief, or with no page, this chat (X-11).
     assert routines.default("America/Chicago", page=True)["say"] == (
-        "Your brief is on: every day at 7:38, Chicago time, on your page's Brief. Change it or "
-        "turn it off from the bell there.")
+        "Your brief is on: every day at 7:38, Chicago time, on your page's Brief. It comes a "
+        "few minutes before the hour, when the service is less busy. Change it or turn it off "
+        "from the bell there.")
     assert routines.default("America/Chicago", page=False)["say"] == (
-        "Your morning brief comes to this chat every day at 7:38, Chicago time. Say \"move my "
-        "brief\" or \"stop my brief\" in any chat to change it.")
+        "Your morning brief comes to this chat every day at 7:38, Chicago time. It comes a few "
+        "minutes before the hour, when the service is less busy. Say \"move my brief\" or "
+        "\"stop my brief\" in any chat to change it.")
+    # The app moved it off 8:00, and says so; what it stood for is kept beside the cron.
+    assert routines.default("America/Chicago")["asked"] == "08:00"
     assert routines.default("")["cron"] == "" or routines.default("")["zone"]
     # Other day sets are said the way a person says them.
     assert routines.day_words([1, 2, 3, 4, 5]) == "Weekdays"

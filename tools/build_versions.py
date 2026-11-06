@@ -732,8 +732,9 @@ METHODS: dict[str, dict] = {
             (34, "2026-11-05", False, "routines.py brief and the tidy-up check that the brief's task fires in the chat answering the page, and print the move where it still fires in a chat that handed the page on, never \"set up\" or \"nothing to tidy\" over it"),
             (35, "2026-11-05", False, "the tidy-up knows a page helper by the page's own record of the chats that answered it as one, however it was started and whatever it is called: a finished old helper the person started from the page is put away, the live one kept"),
             (36, "2026-11-05", False, "the daily tidy clears the page's open rings every day, not once, so none stay unread in the Claude app"),
+            (37, "2026-11-06", False, "a brief time the person picks is kept to the minute, 8:00 stays 8:00; only the app's own default is moved off the hour, recorded beside what it stood for (record --asked) and said in one line; what the scheduler reports of a late start (next_run_at, the last fired time) is kept from the task listing by routines.py brief and the daily tidy-up so the page shows the real time; a brief made before keeps its schedule and is read the same way"),
         ),
-        "fingerprint": "f8da4c449d89c153",
+        "fingerprint": "01ec4a435f1396f0",
     },
     "expand": {
         "by": "upgrade", "priority": 4, "time": "~15 min",
@@ -831,9 +832,9 @@ METHODS: dict[str, dict] = {
             (69, "2026-11-06", False, "a laptop's Brief that nearly fills the window is stretched to its foot, panels lined up edge to edge; a sparse one keeps each row to what it holds"),
             (70, "2026-11-06", False, "this week's bar in the second chart colour and past weeks in the rose; the dates and the line under the bars in the text's colour; news links underlined in their own colour, thinner; the menu's words centred on their icons"),
             (71, "2026-11-06", False, "the weekly bars' dates show every other week and this week's at every width, never cut"),
-            (72, "2026-11-06", True, "Settings: employers turned down are one row, learned rules one home grouped by area with what is now part of the app folded, long lists show their first few, Something looks wrong opens in place, What's new shows the version, Smaller and Larger drawn in their size, Advanced only for what costs time; Job sites each by its plain name with one line, a site needing a key says what it needs (Adzuna: a paid plan, its free 25 searches gone within one search here) with the steps, and a refused tick says why on its own row; a search setting changed starts no search, its row saying Used from your next search with Find jobs beside it; the LinkedIn download reminder's trash offers Every 2 weeks, Every month and Stop asking, one tap with Undo, and Settings > LinkedIn has the same choice as chips; the download's line there shows only just after a tap, never a Done from days ago nor that only a chat can take it back"),
+            (72, "2026-11-06", True, "Settings: employers turned down are one row, learned rules one home grouped by area with what is now part of the app folded, long lists show their first few, Something looks wrong opens in place, What's new shows the version, Smaller and Larger drawn in their size, Advanced only for what costs time; Job sites each by its plain name with one line, a site needing a key says what it needs (Adzuna: a paid plan, its free 25 searches gone within one search here) with the steps, and a refused tick says why on its own row; a search setting changed starts no search, its row saying Used from your next search with Find jobs beside it; the LinkedIn download reminder's trash offers Every 2 weeks, Every month and Stop asking, one tap with Undo, and Settings > LinkedIn has the same choice as chips; the download's line there shows only just after a tap, never a Done from days ago nor that only a chat can take it back; Your brief shows the time it really comes, with one line where it is not the time asked for (the app's own 7:38 for 8:00, or the scheduler starting it late), and a time picked in its sheet is kept to the minute"),
         ),
-        "fingerprint": "9ae26b7e79e439a2",
+        "fingerprint": "6dc4da3ff2826fec",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",
