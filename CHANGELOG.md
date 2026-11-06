@@ -20,6 +20,8 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+## [4.12.0] - 2026-11-06
+
 ### Added
 
 - **Rules the app now does by itself come off your list.** After an update, a rule you taught
@@ -40,7 +42,8 @@ make sense to somebody whose repo just received it.
   and `Morgan_Ellis_Acme_Cover_Letter.pdf`, for the kept file and the one you download. Documents
   already made keep their names, and everything still finds them. Settings, under You, has
   **File names**: three ways to name the files you download and send, each shown as an example
-  from your own name and latest employer.
+  from your own name and latest employer. A check of your own that expects a new resume's file
+  under the old order is brought in line by itself after the update, and never holds a save.
 - **Settings is shorter and says things plainly.** Employers you turned down are one row,
   "Employers you've turned down", with how many jobs they left out; it opens their names, each
   with its own small trash. What Claude learned from you has one home, "What you have taught
