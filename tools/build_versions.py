@@ -377,8 +377,9 @@ METHODS: dict[str, dict] = {
             (76, "2026-11-05", False, "a role kept for a referral in progress carries its note (referral_note) into the picks and the tracker row; documents are made as before"),
             (77, "2026-11-05", False, "a skill question has a third answer, just for this role: the skill goes on that role's resume and bullets through the draft's own yes, never into the profile or onto another role, which a later posting asks again; a yes and a no work as before, so nothing made before needs making again"),
             (78, "2026-11-05", False, "a resume made for a contact who asked for one with no role named is kept in their own folder, named for them and shown on their card, never in place of the person's own; nothing made before needs making again"),
+            (79, "2026-11-06", False, "the run book says rules the app has since built in are retired once after an update, and a complaint about the app is never kept as a rule; no document changes"),
         ),
-        "fingerprint": "f6d1baa4bb4a6a5b",
+        "fingerprint": "7c268c26bd906837",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",

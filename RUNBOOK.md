@@ -761,6 +761,22 @@ the other, in their words), and one a later rule replaced. Show each with its re
 the page, as one To do card, and retire (`learned.py retire`) only what they say yes to.
 Nothing goes unasked (2026-10-30).
 
+**Rules the app has since built in are retired once, after the update that built them in.**
+The app lists what it now does by itself (`learned.py` `BUILT_IN`); while a rule may only
+repeat one, the `built-in-rules` improvement is pending and the background `/upgrade` runs
+`python3 tools/learned.py built-in`. Put a rule away only where what the app does covers all
+of it (`built-in --retire <n>=<id>`, kept as "Now part of the app" and shown so on the page),
+then `built-in --done`, and the person hears the one line it prints and nothing else. It is
+never proposed again for the same behaviour (2026-11-06).
+
+**A complaint about the app is never a rule of theirs.** "Why is it so slow", a button that
+does nothing, a crash: that is how the app behaves, not how they want their work done. Record
+it with `python3 tools/learned.py record --about-app --said "<their words>"`, which keeps no
+rule and clears it from the turn. In the app maker's own copy it is kept as an app bug and
+they are told so in one line (`learned.py app-bugs` lists them); for anyone else, work round
+it, the best honest way the app allows. A record that reads as one is refused until you say
+which it is (`--about-app`, or `--not-about-app` for a rule that truly is theirs).
+
 The app's defaults (the voice of a first note, the questions an interview pack asks, who is
 worth contacting, how roles rank) are where everyone starts, and they stay. The person's own
 reactions outrank every default, and **they are kept for good in `profile/learned.json`**

@@ -670,7 +670,24 @@ def _app(ctx: Ctx, targets: dict) -> dict:
             # How many pieces of the person's work have waited a day or more without being
             # saved (land.stranded, read offline): the page says so, so work that never
             # reached their copy is never silent (the stranger audit, X-30).
-            "not_saved": _not_saved()}
+            "not_saved": _not_saved(),
+            # In the app maker's own copy only: complaints about how the app behaves, kept as
+            # app bugs rather than rules (learned.route_about_app), for Settings' Something
+            # looks wrong. Everyone else's is always empty.
+            "app_bugs": _app_bugs()}
+
+
+def _app_bugs() -> list:
+    try:
+        import learned
+        rows = learned.app_bugs()
+        if not rows or not learned._maintainers():
+            return []
+    except Exception:  # noqa: BLE001  no profile yet: nothing kept
+        return []
+    return [{"said": " ".join(str(r.get("said") or "").split())[:200],
+             "on": str(r.get("date") or "")[:10] or None, "link": r.get("link") or None}
+            for r in rows][-20:]
 
 
 def _not_saved() -> int:
@@ -4115,7 +4132,11 @@ def _learned(ctx: Ctx, targets: dict) -> list:
         first = ""
     out = []
     for n, e in enumerate(learned.load(), 1):
-        if e.get("status") == "retired":
+        # A rule put away because the app now does it by itself stays on the page, folded
+        # with the earlier rules, saying so (learned.NOW_PART); every other retired rule
+        # leaves it.
+        part = e.get("status") == "retired" and bool(e.get("built_in"))
+        if e.get("status") == "retired" and not part:
             continue
         lid = f"learned-{n}"
         item = {"id": lid, "n": n, "area": str(e.get("area") or "other"),
@@ -4125,6 +4146,11 @@ def _learned(ctx: Ctx, targets: dict) -> list:
                 "on": str(e.get("date") or e.get("recorded") or "")[:10] or None,
                 "via": str(e.get("via") or "") or None,
                 "rev": rev_of(lid, e.get("rule"), e.get("status"))}
+        if part:
+            b = learned._BUILT_IN.get(str(e.get("built_in"))) or {}
+            item.update({"retired": True, "why": learned.NOW_PART,
+                         "app_does": b.get("does") or None,
+                         "retired_on": str(e.get("retired_on") or "")[:10] or None})
         out.append(item)
         targets[lid] = {"kind": "learned", "n": n, "rev": item["rev"]}
     return out[::-1]
