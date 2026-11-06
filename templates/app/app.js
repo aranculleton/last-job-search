@@ -1089,7 +1089,9 @@
       claimed: "Claude is doing this now.",
       // A download that brought nothing says so: "Saved: 0 messages" read as a count of
       // something (the maintainer, 2026-11-04).
-      applied: t.doc.action === "undo" ? "Changed back." : r && r.nothing_new ? "Done. Nothing new in that download." : "Done.",
+      // A change the engine says waits for later says when ("Done. Used from your next
+      // search.": a setting never starts a search by itself, the maintainer, 2026-11-06).
+      applied: t.doc.action === "undo" ? "Changed back." : r && r.nothing_new ? "Done. Nothing new in that download." : r && txt(r.later) ? "Done. " + txt(r.later) : "Done.",
       refused: refusedWords(r),
       failed: FAILED_AGAIN[txt(t.doc.action)] ? "Not saved. Tap " + FAILED_AGAIN[txt(t.doc.action)] + " again." : "Not saved.",
       unsaved: "Not saved: this page cannot keep answers here. Open it in the Claude app.",
@@ -10441,7 +10443,7 @@
       }
       if (what === "roles" || what === "places") {
         const now = list(what === "roles" ? s.roles : s.places);
-        sheet({title: label, intro: "Untick any to take off, and add new ones. Claude looks again for job sites and employers that fit.",
+        sheet({title: label, intro: "Untick any to take off, and add new ones. Your next search uses them.",
           fields: [now.length ? {id: "keep", type: "checks", label: "Searched now", options: now.map((x) => [x, x]), value: now} : null,
             {id: "add", type: "text", long: true, max: 600, label: what === "roles" ? "Add roles" : "Add places", hint: "One a line."}].filter(Boolean),
           submit: "Save", onSubmit: (v) => {
@@ -10471,7 +10473,7 @@
     const body = (what, value) => (what === "pay" && pay.floor ? "A job whose stated pay tops out under " + money(pay.floor) + " is flagged as under what you would take." : value || "Not set");
     const plain = (what, name, value, items, full) => infoRow("search-" + what, name, few(value, items) || "Not set", foldBody([items && items.length > 1 ? chips(items, full) : h("p", {}, body(what, value)),
       what === "avoid" ? h("p", {class: "small muted"}, "Say what to leave out under Something else. Trashing a job in Jobs leaves out ones like it too.") : null],
-      ["roles", "places", "pay"].includes(what) ? change(what, name, value) : avoidChange(), stateLine(sid, "search:" + what)));
+      ["roles", "places", "pay"].includes(what) ? change(what, name, value) : avoidChange(), [stateLine(sid, "search:" + what), nextSearchBtn(sid, "search:" + what)]));
     // What to avoid is changed where the search is changed, in the person's own words; the
     // bin on a job teaches it too (2026-11-02: the row had no Change, only "use the bin").
     const avoidChange = () => btn("Change", () => openTweak("jobs", jobsBlock()), {small: true, key: "search-change:avoid", aria: "Change what to avoid"});
@@ -10512,13 +10514,23 @@
       search: (b) => txt(b.employer), searchLabel: "Employer", render: (b) => h("li", {}, h("bdi", {}, txt(b.employer))), box: (kids) => h("ul", {class: "plain"}, kids)};
   }
   // Settings, Job sites (model.search.portals, app_model._sites): every site by its plain name
-  // with one line saying what it is. A site that needs a key this computer lacks says "Needs a
-  // free key" where its tick would be, and opens on the numbered steps to get one: no tick is
+  // with one line saying what it is. A site that needs a key this computer lacks says what it
+  // needs ("Needs a paid plan") where its tick would be, and opens on the numbered steps: no tick is
   // drawn that could only turn itself off again. Each site is its own item, so its tick shows
   // what the engine holds (the tap while it is on its way, then the model), and a tap the
   // engine refused says why on the site's own row, in its words (stateLine), with the tick back
   // as it truly is. Adzuna, listed as "api.adzuna.com", looked ticked and then unticked itself
   // after a visit, with nothing said (the maintainer, 2026-11-06).
+  // A search setting changed here starts no search: once saved its line says "Done. Used from
+  // your next search." (the engine's `later`), and Find jobs stands beside it, the same
+  // control as everywhere else, for a search now (the maintainer, 2026-11-06: switching on a
+  // job site "queued a full search with no warning on the page").
+  function nextSearchBtn(item, key) {
+    const t = lastTouch(item);
+    const r = t && t.state === "applied" ? S.receipts.get(t.id) : null;
+    if (!r || !txt(r.later) || t.doc.action !== "search.set" || now() - (tms(r.applied_at) || now()) > DONE_LINE_MS) return null;
+    return h("div", {class: "next-search"}, runBtn("search", "Find jobs", () => askSearch(), {small: true, key: "next-search:" + key, wakes: "search"}));
+  }
   function jobSitesRow(s, portals) {
     const on = (p) => {
       const e = effective(txt(p.id), ["search.set"]);
@@ -10527,7 +10539,8 @@
     };
     const name = (p) => txt(p.label) || cap1(txt(p.name).replace(/-search$/, "").replace(/[-_]/g, " "));
     const note = (p) => (txt(p.note) || txt(p.why) ? h("span", {class: "hint block"}, txt(p.note) || txt(p.why)) : null);
-    const needs = (p) => (obj(p.key).free ? "Needs a free key" : "Needs a key");
+    // What the site needs, in the engine's words (portals.needs_words): "Needs a paid plan" for Adzuna.
+    const needs = (p) => "Needs " + (txt(obj(p.key).needs) || (obj(p.key).free ? "a free key" : "a key"));
     const searched = portals.filter((p) => !p.key && on(p)).length;
     return infoRow("search-portals", "Job sites", searched + " searched", h("ul", {class: "plain checks-list"}, portals.map((p) => {
       const label = name(p);
@@ -10537,13 +10550,13 @@
         return h("li", {class: "site-key", "data-item": item}, det("site-key:" + pid, false, {class: "site-key-fold"},
           h("summary", {class: "set-sum", "data-k": "site-key-sum:" + pid}, h("span", {class: "set-name"}, label, note(p)), h("span", {class: "set-value", "data-k": "site-needs:" + pid}, needs(p))),
           h("div", {class: "set-body"}, h("p", {}, "To get one:"), h("ol", {class: "setup-steps", "data-k": "site-steps:" + pid}, arr(obj(p.key).steps).map((x) => h("li", {}, txt(x)))))),
-          stateLine(item, "site:" + pid));
+          stateLine(item, "site:" + pid), nextSearchBtn(item, pid));
       }
       // A row from before each site was its own item names its site in the value.
       const tap = (want) => act([{item, action: "search.set", value: {what: "sites", name: txt(p.name), on: want}, rev: txt(p.rev) || txt(s.rev) || null}], label + (want ? ": on" : ": off"));
       return h("li", {class: "toggle-row", "data-item": item}, toggleLabel(pid, [label, note(p)],
         h("input", {type: "checkbox", role: "switch", id: pid, "data-k": pid, checked: on(p), onchange: (e) => tap(e.target.checked)})),
-        stateLine(item, "site:" + pid));
+        stateLine(item, "site:" + pid), nextSearchBtn(item, pid));
     })));
   }
   // G14. Your profile (model.you): the jobs, skills, education and certificates every resume

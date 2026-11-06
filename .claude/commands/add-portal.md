@@ -115,8 +115,15 @@ These conventions are what make portal skills interchangeable for `/scrape` and 
   ```
 
   A board that needs a key (Step 2.5) also says which variables its CLI reads and where a
-  person signs up, so the page shows "Needs a free key" with the steps until the key is there
-  (`tools/portals.py` `key_help`):
+  person signs up, so the page shows what it needs ("Needs a free key", "Needs a key") with the
+  steps until the key is there (`tools/portals.py` `key_help`). Where the free allowance would
+  not last one round, say so in its `note:` and leave `key-free` out, as Adzuna's does:
+
+  ```yaml
+  note: <what it is>. Needs a paid plan: the free one allows <N> searches in total, and one search here uses about <M>.
+  ```
+
+  The key's lines:
 
   ```yaml
   key-env: <SERVICE>_API_TOKEN      # every variable the CLI reads its key from, comma separated

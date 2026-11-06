@@ -2262,9 +2262,9 @@ def _search_set(r: Run) -> dict:
         if on and not portals.has_key(name):
             # On with no key, it is never searched: the page shows the steps instead of a tick
             # (the maintainer, 2026-11-06: "looks ticked and then unticks itself").
-            raise Refused(f"{portals.label(name)} needs a "
-                          f"{'free ' if portals.key_help(name).get('free') else ''}key before "
-                          "it can be searched. Open it for the steps to get one.")
+            raise Refused(f"{portals.label(name)} "
+                          f"{portals.needs_words(portals.key_help(name)).lower()} before it can "
+                          "be searched. Open it for the steps.")
         v = {name: on}
     if what == "pay" and isinstance(v, str):
         # The first number written, never every digit run together ("90,000, hoping for
@@ -2283,6 +2283,11 @@ def _search_set(r: Run) -> dict:
         if got.get("status") not in ("done", "cached"):
             raise Refused(got.get("summary") or "It could not be changed.")
         for n, item in enumerate(got.get("then") or []):
+            if item["kind"] == "search":
+                # Never a whole search started by a setting: the next one uses it, and the row
+                # says so with Find jobs beside it (the maintainer, 2026-11-06: "Switching on a
+                # job site queued a full search with no warning on the page").
+                continue
             wid = page_db.safe_id(f"{item['kind']}~setting~{got.get('key')}~{n}")
             if _on_its_way(r, wid):
                 continue            # the one already queued runs with the setting as it is now
@@ -2302,11 +2307,16 @@ def _search_set(r: Run) -> dict:
         if not steps:
             raise Refused("Nothing to change.")
         notes = [one(c).get("summary") for c in steps]
-        return {"note": "; ".join(n for n in notes if n) or "Changed.", "undo": None}
+        return {"note": "; ".join(n for n in notes if n) or "Changed.", "undo": None,
+                "later": NEXT_SEARCH}
     got = one(v)
-    return {"note": got.get("summary") or "Changed.",
+    return {"note": got.get("summary") or "Changed.", "later": NEXT_SEARCH,
             "undo": {"action": "search.unset", "target": dict(r.target),
                      "value": {"key": got.get("key")}} if got.get("status") == "done" else None}
+
+
+# What a changed search setting says once saved: it starts nothing itself (_search_set).
+NEXT_SEARCH = "Used from your next search."
 
 
 def _search_unset(r: Run) -> dict:
@@ -3924,7 +3934,7 @@ def _one(aid: str, act: dict, index: Index, db: dict, w, chat: str, zone: str,
     after = got.get("target_after") or (undo or {}).get("target") or target
     out = _receipt("ok", got["note"], chat, now, aid, shown, undo=undo,
                    guard_after=guard(after) if after.get("kind") != "work" else "")
-    for k in ("counts", "remove_assets", "lines", "why", "nothing_new"):
+    for k in ("counts", "remove_assets", "lines", "why", "nothing_new", "later"):
         if k in got:
             out[k] = got[k]
     if not undo and not got.get("nothing_new") and shown.get("action") != "undo":

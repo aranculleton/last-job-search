@@ -296,7 +296,8 @@ your plan offers those. On your own computer, export it in your shell's profile.
 A site whose listings come through its own API (Adzuna's, for one) needs a key, and a portal
 built for it by `/add-portal` reads the key from the variables its `key-env:` line names (or,
 for one built before that line, the ones its CLI names beside `MISSING_CREDENTIALS`). Until
-those are set, the page shows the site as "Needs a free key" with the steps to get one
+those are set, the page shows what the site needs ("Needs a free key"; Adzuna's "Needs a paid
+plan", since its free plan's 25 searches go within one search here) with the steps to get it
 (`tools/portals.py` `SITES`), and its tick cannot be turned on. When the person says they
 have it:
 

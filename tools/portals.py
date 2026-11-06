@@ -198,10 +198,14 @@ SITES: dict[str, dict] = {
     "freehire": {"label": "Freehire", "note": "A free board that gathers jobs from many sites."},
     "adzuna": {
         "label": "Adzuna",
-        "note": "Jobs gathered from many sites in the UK and over a dozen other countries, "
-                "many of them from agencies.",
+        # Its free plan allows 25 searches in all, and one search here sends about 74 (the
+        # maintainer's own round, 2026-11-06): what it needs is a paid plan, said on its row
+        # whether or not a key is here.
+        "note": "Jobs from many sites in the UK and other countries. Needs a paid plan: the "
+                "free one allows 25 searches in total, and one search here uses about 74.",
         "key": {
-            "free": True,
+            "free": False,
+            "needs": "a paid plan",
             "url": "https://developer.adzuna.com/signup",
             "source": ("https://developer.adzuna.com/signup",
                        "https://developer.adzuna.com/overview",
@@ -215,6 +219,8 @@ SITES: dict[str, dict] = {
                 "Under \"Your application of the Adzuna API\", choose \"Personal job search\".",
                 "Under \"Average Monthly Visitors\", choose \"N/A\".",
                 "Choose your market, then register.",
+                "In your Adzuna account, choose a paid plan: the free plan's 25 searches run "
+                "out within one search here.",
                 "Keep the two codes Adzuna gives you: an app ID and an app key.",
             ),
         },
@@ -227,6 +233,11 @@ SITES: dict[str, dict] = {
 }
 # What a site's row says where no line says more.
 DEFAULT_NOTE = "A job site Claude set up for your search."
+# What a site with no key says where its tick would be: "Needs a paid plan".
+def needs_words(help_: dict) -> str:
+    return "Needs " + (help_.get("needs") or ("a free key" if help_.get("free") else "a key"))
+
+
 # The last step of every key's steps: how the key reaches the app, in a chat.
 KEY_LAST_STEP = ("In a chat with Claude, say \"I have my {label} key\". Claude shows you "
                  "the safe place for it, and the site is searched from then on.")
@@ -363,8 +374,9 @@ def has_key(name: str, root: str | None = None, env=None) -> bool:
 
 
 def key_help(name: str, root: str | None = None) -> dict:
-    """For a site that needs a key: whether it is free and the numbered steps to get it, one
-    action a line, ending with how it reaches the app. {} for a site that needs none."""
+    """For a site that needs a key: whether it is free, what it needs ("a paid plan", "a free
+    key": `needs_words`), and the numbered steps to get it, one action a line, ending with
+    how it reaches the app. {} for a site that needs none."""
     if not needs_key(name, root):
         return {}
     plain = label(name, root)
@@ -377,7 +389,8 @@ def key_help(name: str, root: str | None = None) -> dict:
         where = re.sub(r"^https?://(www\.)?", "", own.get("key-url", "").strip() or url(name, root))
         steps = [f"Open {where} and sign up for {'a free' if free else 'a'} key."
                  if where else f"Sign up with {plain} for {'a free' if free else 'a'} key."]
-    return {"free": free, "steps": steps + [KEY_LAST_STEP.format(label=plain)]}
+    needs = known.get("needs") or ("a free key" if free else "a key")
+    return {"free": free, "needs": needs, "steps": steps + [KEY_LAST_STEP.format(label=plain)]}
 
 
 def follows_contract(name: str, root: str | None = None) -> bool:
