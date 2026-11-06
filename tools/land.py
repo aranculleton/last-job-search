@@ -1841,23 +1841,29 @@ def keep(root: str = ROOT, message: str = "", sleep=time.sleep) -> int:
             print("land: another landing is running in this checkout; it saves this work too "
                   "when it ends. Nothing to do or say")
             return 0
-        ok, why = _stage(root)
-        if not ok:
-            print("land: saving stopped: %s; nothing was pushed" % why)
+        return _keep(root, message, sleep)
+
+
+def _keep(root: str, message: str, sleep) -> int:
+    """keep's own steps, under a lock the caller holds: staged, committed, pushed to this
+    chat's branch."""
+    ok, why = _stage(root)
+    if not ok:
+        print("land: saving stopped: %s; nothing was pushed" % why)
+        return 2
+    if _git(root, "diff", "--cached", "--quiet").returncode != 0:
+        r = _git(root, "commit", "-q", "-m", message.strip() or DEFAULT_MESSAGE)
+        if r.returncode != 0:
+            print("land: the commit was refused: %s; nothing was pushed" % _said(r))
             return 2
-        if _git(root, "diff", "--cached", "--quiet").returncode != 0:
-            r = _git(root, "commit", "-q", "-m", message.strip() or DEFAULT_MESSAGE)
-            if r.returncode != 0:
-                print("land: the commit was refused: %s; nothing was pushed" % _said(r))
-                return 2
-        _retried(root, "fetch", "-q", "origin", "master", sleep=sleep)
-        if _git(root, "rev-list", "--count", "origin/master..HEAD").stdout.strip() in ("", "0"):
-            print("land: nothing to keep: this copy holds no work master lacks")
-            return 0
-        _wait_on_branch(root, "land: kept, not checked", sleep)
-        name = _remote_name(branch(root))
-        there = _git(root, "rev-parse", "-q", "--verify", "refs/remotes/origin/" + name)
-        return 0 if there.stdout.strip() == _git(root, "rev-parse", "HEAD").stdout.strip() else 2
+    _retried(root, "fetch", "-q", "origin", "master", sleep=sleep)
+    if _git(root, "rev-list", "--count", "origin/master..HEAD").stdout.strip() in ("", "0"):
+        print("land: nothing to keep: this copy holds no work master lacks")
+        return 0
+    _wait_on_branch(root, "land: kept, not checked", sleep)
+    name = _remote_name(branch(root))
+    there = _git(root, "rev-parse", "-q", "--verify", "refs/remotes/origin/" + name)
+    return 0 if there.stdout.strip() == _git(root, "rev-parse", "HEAD").stdout.strip() else 2
 
 
 def rest_create(owner: str, repo: str, head: str, title: str, body: str) -> str:
@@ -2162,7 +2168,7 @@ def run_detached(root: str = ROOT, message: str = "", check=None, sleep=time.sle
     if d:
         _RUN.add(_lock_key(d))
     try:
-        _settle(root, sleep)
+        _settle(root, sleep, message)
         code = _rounds(root, message, check, sleep, land_fn, finish)
     finally:
         _drop_lock(root, token)
@@ -2201,9 +2207,28 @@ def _mark_landed(root: str) -> None:
         pass
 
 
-def _settle(root: str, sleep) -> None:
-    """Wait out what is left of SETTLE_S since the last landing, the lock kept alive."""
+def _answers_page(root: str) -> bool:
+    """Is this chat the one that answers the page, by this checkout's own record of it
+    (app_listen's cache in the git folder)? A job's chat, or any chat about to end, is not."""
+    try:
+        import app_listen
+        me = app_listen.this_chat()
+        with open(os.path.join(git_dir(root), "ljs-listener.json"), encoding="utf-8") as fh:
+            rec = (json.load(fh) or {}).get("listener") or {}
+    except Exception:  # noqa: BLE001  unsure: never wait
+        return False
+    return bool(me) and str(rec.get("chat") or "") == me
+
+
+def _settle(root: str, sleep, message: str = "") -> None:
+    """Wait out what is left of SETTLE_S since the last landing, the lock kept alive: only
+    in the chat that answers the page, and only once its work is committed and pushed to its
+    own branch (_keep), so the wait delays the pull request, never the work's safety."""
     left = SETTLE_S - (time.time() - _landed_at(root))
+    if left <= 0 or not _answers_page(root):
+        return
+    with contextlib.redirect_stdout(io.StringIO()):
+        _keep(root, message, sleep)
     while left > 0:
         step = min(left, BEAT_S)
         sleep(step)
@@ -2216,7 +2241,7 @@ def _rounds(root: str, message: str, check, sleep, land_fn, finish) -> int:
     while n < QUEUED_ROUNDS:
         n += 1
         if n > 1:
-            _settle(root, sleep)         # what was asked meanwhile goes in one pull request
+            _settle(root, sleep, message)  # what was asked meanwhile goes in one pull request
         _asked_too, msg = _take_ask(root)
         message = msg or message
         _beat(root)

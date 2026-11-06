@@ -54,7 +54,57 @@ def chat(tmp_path, monkeypatch):
     return c
 
 
-def test_a_dozen_saves_in_a_burst_make_one_or_two_pull_requests(chat):
+HELPER = "session_EXAMPLEPAGEHELPER"
+
+
+def _answers_the_page(chat, monkeypatch, who=HELPER):
+    """This checkout's own record that `who` answers the page (app_listen's cache)."""
+    monkeypatch.setenv("LJS_CHAT", HELPER)
+    d = git(chat, "rev-parse", "--absolute-git-dir").stdout.strip()
+    with open(os.path.join(d, "ljs-listener.json"), "w", encoding="utf-8") as fh:
+        json.dump({"listener": {"chat": who}}, fh)
+
+
+def _finish(opened):
+    def finish(r, ready):
+        opened.append(ready["head"])
+        git(r, "push", "-q", "origin", "HEAD:refs/heads/master")      # GitHub's merge
+        return True, str(len(opened))
+    return finish
+
+
+def test_during_the_wait_the_work_is_already_on_its_branch(chat, monkeypatch):
+    """The wait only delays the pull request: the work is committed and pushed to this chat's
+    own branch before it starts, so a container that goes meanwhile loses nothing."""
+    _answers_the_page(chat, monkeypatch)
+    root, opened, seen = str(chat), [], []
+    (chat / "profile" / "notes.md").write_text("one\n", encoding="utf-8")
+    land.run_detached(root, "one", check=GREEN, sleep=lambda s: None, finish=_finish(opened))
+    (chat / "profile" / "notes.md").write_text("two\n", encoding="utf-8")
+
+    def sleep(_s):
+        seen.append(git(chat, "ls-remote", "origin", "refs/heads/claude/page").stdout.split()[:1])
+        if len(seen) == 1:
+            got = subprocess.run(["git", "-C", root, "show", "origin/claude/page:profile/notes.md"],
+                                 capture_output=True, text=True)
+            seen.append(got.stdout.strip())
+
+    land.run_detached(root, "two", check=GREEN, sleep=sleep, finish=_finish(opened))
+    assert seen and seen[1] == "two", seen
+
+
+def test_a_chat_that_does_not_answer_the_page_never_waits(chat, monkeypatch):
+    _answers_the_page(chat, monkeypatch, who="session_EXAMPLEOTHERCHAT")
+    root, opened, waited = str(chat), [], []
+    (chat / "profile" / "notes.md").write_text("one\n", encoding="utf-8")
+    land.run_detached(root, "one", check=GREEN, sleep=lambda s: None, finish=_finish(opened))
+    (chat / "profile" / "notes.md").write_text("two\n", encoding="utf-8")
+    land.run_detached(root, "two", check=GREEN, sleep=waited.append, finish=_finish(opened))
+    assert sum(waited) < 30 and len(opened) == 2, (waited, opened)
+
+
+def test_a_dozen_saves_in_a_burst_make_one_or_two_pull_requests(chat, monkeypatch):
+    _answers_the_page(chat, monkeypatch)
     root = str(chat)
     opened = []
 
