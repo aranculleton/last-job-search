@@ -35,7 +35,7 @@ After creating or updating a CV or cover letter, verify **all** of the following
 - [ ] **The profile's spelling throughout** (`person.json` `documents.spelling`), and never mixed within a document
 - [ ] **No em or en dashes anywhere** (`---` and `--` in LaTeX are both)
 - [ ] The profile's word for the document (`documents.noun`) used, never one of `documents.banned_nouns`, in anything the employer sees
-- [ ] **Filenames are human-looking**: `<Prefix>_Resume_<ABBR>` and `<Prefix>_Cover_Letter_<ABBR>`, no requisition numbers, dates or role slugs unless disambiguating two roles at one employer
+- [ ] **Filenames are human-looking**: `<Prefix>_<ABBR>_Resume` and `<Prefix>_<ABBR>_Cover_Letter`, no requisition numbers, dates or role slugs unless disambiguating two roles at one employer
 - [ ] Resume content was **selected for this posting**, not pasted from the profile: bullets swapped where an "Additional detail available for tailoring" entry matches better, skills list trimmed to what the posting asks for
 
 ### Compiled PDF verification (MANDATORY - never skip)
@@ -47,7 +47,7 @@ Both documents MUST be compiled and visually inspected via the Read tool on the 
 - [ ] **Cover letter bullet font matches body font** - `\lettercontent{}` must not wrap `\begin{itemize}...\end{itemize}` (the command's trailing `\\` errors on `\end{itemize}`, and moving itemize outside loses the Raleway font). Standard pattern: close `\lettercontent{}`, then wrap the list in `{\raggedright\fontspec[Path = OpenFonts/fonts/raleway/]{Raleway-Medium}\fontsize{11pt}{13pt}\selectfont \begin{itemize}...\end{itemize}\par}`
 
 ### ATS & keyword verification (resume)
-ATS parsers read the PDF's embedded text layer, not the rendered page. Extract it with `python tools/verify_pdf.py cv/<Prefix>_Resume_<ABBR>.pdf --dump-text cv/<Prefix>_Resume_<ABBR>.txt` (pypdf, then `pdftotext -layout -enc UTF-8`) and verify what a parser sees. If both extractors are missing, skip the parseability items with a warning and check keyword coverage from the visual PDF read instead.
+ATS parsers read the PDF's embedded text layer, not the rendered page. Extract it with `python tools/verify_pdf.py cv/<Prefix>_<ABBR>_Resume.pdf --dump-text cv/<Prefix>_<ABBR>_Resume.txt` (pypdf, then `pdftotext -layout -enc UTF-8`) and verify what a parser sees. If both extractors are missing, skip the parseability items with a warning and check keyword coverage from the visual PDF read instead.
 - [ ] Every line the draft put on the page is in the text layer, in order (`verify_pdf.py --roundtrip`, run by `verify_batch.sh` as ROUNDTRIP)
 - [ ] Resume text layer extracts cleanly - no `(cid:*)` markers, `�` replacement characters, or text visible in the PDF but absent from the extraction
 - [ ] **pypdf reads the words with their spaces.** `verify_pdf.py` fails a text layer whose words run together. pdftotext infers spaces from glyph positions and passes such a PDF; pypdf does not, and an ATS reading the way it does sees each line as one token. The usual cause is a font or engine change: LuaLaTeX or XeLaTeX with some OpenType fonts emit no space glyphs, while pdfLaTeX with `\pdfinterwordspaceon` writes real ones

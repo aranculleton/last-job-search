@@ -443,7 +443,7 @@ written as words included; the summary and the letter bullets against the profil
 the opening and close also against the posting and p2), and a letter bullet that repeats a
 resume bullet. The resume's filename
 noun is the profile's own word (`documents.noun`), so a profile that says "CV" writes
-`cv/<Prefix>_CV_<ABBR>`.
+`cv/<Prefix>_<ABBR>_CV`.
 
 `outreach` writes `documents/applications/<slug>/job_posting.md` and `outreach.md`. The
 outreach note is a sub-80-word message to the hiring manager or recruiter built from the
@@ -462,7 +462,7 @@ is the resume's text layer as an ATS parses it), and report it in one line (all 
 passed, or `verify_batch.sh`'s last line), plus each item that failed or needs the person's
 call; never the whole list. A finding is fixed in the draft object and rendered again, never
 by hand in the `.tex`. Bullets are **allocated per posting** by `tools/allocate.py`, never
-hand-picked, and filenames are human-looking (`<Prefix>_Resume_<ABBR>`, the File naming table
+hand-picked, and filenames are human-looking (`<Prefix>_<ABBR>_Resume`, the File naming table
 in `05-cv-templates.md`).
 
 Deliver the batch on the person's page first (CLAUDE.md, "Every output is shown"): the files

@@ -1881,6 +1881,7 @@ def files_missing(ctx=None) -> list:
 
 
 def _files(row) -> list:
+    import docpaths
     out = []
     for kind, col in (("resume", "cv_file"), ("letter", "cover_letter_file")):
         tex = str(row.get(col) or "").strip()
@@ -1890,6 +1891,9 @@ def _files(row) -> list:
         full = person.state(*pdf.split("/"))
         there = os.path.isfile(full)
         out.append({"kind": kind, "name": os.path.basename(pdf),
+                    # Downloaded as <Prefix>_<Employer>_<Kind>.pdf, whichever order the kept
+                    # file was made in (docpaths.send_name).
+                    "send": docpaths.send_name(pdf, row.get("company") or ""),
                     "asset": asset_for(pdf) if there else None,
                     "path": pdf, "pages": _pages(full) if there else None,
                     "made": there})
@@ -2105,7 +2109,8 @@ def _ready(ctx: Ctx, targets: dict) -> list:
                 "company": row.get("company") or "", "role": row.get("role") or "",
                 "pay": pay, "place": str(draft.get("location") or ""),
                 "apply": apply_link(_link_on_row(row, draft)),
-                "files": [{k: f[k] for k in ("kind", "name", "asset", "path", "pages", "made")}
+                "files": [{k: f[k] for k in ("kind", "name", "send", "asset", "path", "pages",
+                                             "made")}
                           for f in files],
                 "checks": _with_verify(_checks(files, expect, noun), verify_items(folder)),
                 "outreach": _outreach(folder, names),

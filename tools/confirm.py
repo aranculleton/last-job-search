@@ -8,7 +8,7 @@
     python3 tools/confirm.py reopen <rows...>        # a draft they set aside, back among the drafts
     python3 tools/confirm.py check [--ticks <file>]
 
-A row is named by its file name (the ABBR in <Prefix>_Resume_<ABBR>), its round slug (the
+A row is named by its file name (the ABBR in <Prefix>_<ABBR>_Resume), its round slug (the
 employer as staging writes it), the employer, `Employer::title words`, or a whole round:
 `all from round r3 except Acme Kestrel::pricing`. Every name is resolved before anything is
 written: one that matches no row, or more than one where one was meant, changes nothing
@@ -82,11 +82,10 @@ def takes(action: str, row) -> bool:
 
 
 def abbr(row) -> str:
-    """The ABBR in the row's resume file name, <Prefix>_Resume_<ABBR>."""
+    """The ABBR in the row's resume file name: <Prefix>_<ABBR>_Resume, or
+    <Prefix>_Resume_<ABBR> for one made until 2026-11-06 (docpaths.doc_abbr)."""
     import docpaths
-    stem = os.path.splitext(os.path.basename(str(row.get("cv_file") or "")))[0]
-    m = re.search(r"_(?:Resume|CV|%s)_(.+)$" % re.escape(docpaths.noun_word()), stem)
-    return m.group(1) if m else ""
+    return docpaths.doc_abbr(row.get("cv_file") or "")
 
 
 _abbr = abbr  # the module's own name for it; other modules call abbr

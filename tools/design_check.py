@@ -299,8 +299,11 @@ def all_designs(out_dir=None):
             stem = d.get("abbr") or "Larkspur"
             pdfs = {}
             for kind, folder in (("resume", "cv"), ("letter", "cover_letters")):
+                # Either order: <Prefix>_<ABBR>_Resume.pdf now, <Prefix>_Resume_<ABBR>.pdf before.
                 hits = [f for f in os.listdir(os.path.join(app, folder))
-                        if f.endswith(f"_{stem}.pdf") and (("Cover_Letter" in f) == (kind == "letter"))]
+                        if (f.endswith(f"_{stem}.pdf") or re.search(
+                            rf"_{re.escape(stem)}_(?:Resume|CV|Cover_Letter)\.pdf$", f))
+                        and (("Cover_Letter" in f) == (kind == "letter"))]
                 pdfs[kind] = os.path.join(app, folder, hits[0]) if hits else None
             page = None
             if not found:
@@ -354,7 +357,7 @@ def page_for(drafts_path, abbr, kind="resume"):
 def is_letter(pdf):
     """A cover letter, by its folder or its name, as tools/check_claims.py tells one."""
     return (os.path.basename(os.path.dirname(os.path.abspath(pdf))) == "cover_letters"
-            or "_Cover_Letter_" in os.path.basename(pdf))
+            or "_Cover_Letter" in os.path.basename(pdf))
 
 
 def resume_pages():

@@ -22,7 +22,7 @@ compile by hand:
 
 ```bash
 export TEXMFHOME="$PWD/texmf"     # from the repo root
-cd cv && lualatex <Prefix>_Resume_<ABBR>.tex
+cd cv && lualatex <Prefix>_<ABBR>_Resume.tex
 ```
 
 Nothing links `~/texmf` (kpathsea's default `TEXMFHOME`) to this directory, on purpose:

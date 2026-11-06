@@ -831,7 +831,9 @@ def test_compile() -> None:
         dest = os.path.join(work, folder)
         shutil.copytree(os.path.join(ROOT, folder), dest,
                         ignore=shutil.ignore_patterns("*.pdf", "*.aux", "*.log", "*_Resume_*",
-                                                      "*_CV_*", "*_Cover_Letter_*"))
+                                                      "*_CV_*", "*_Cover_Letter_*",
+                                                      "*_Resume.*", "*_CV.*",
+                                                      "*_Cover_Letter.*"))
         code, out = _run([_which(engine), "-interaction=nonstopmode", "-halt-on-error", tex],
                          timeout=600, env=env, cwd=dest)
         if not os.path.exists(os.path.join(dest, tex[:-4] + ".pdf")):

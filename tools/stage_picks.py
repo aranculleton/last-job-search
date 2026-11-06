@@ -249,8 +249,9 @@ def file_taken(abbr: str, root: str = ROOT) -> bool:
     checkout is also opened on macOS, where `_Acme.tex` and `_ACME.tex`
     are the same file.
     """
-    for folder, stem in (("cv", docpaths.resume_stem(abbr) + ".tex"),
-                         ("cover_letters", docpaths.letter_stem(abbr) + ".tex")):
+    # Both orders: a name taken until 2026-11-06 (<Prefix>_Resume_<ABBR>) is still taken.
+    for folder, stem in [("cv", st + ".tex") for st in docpaths.resume_stems(abbr)] + \
+            [("cover_letters", st + ".tex") for st in docpaths.letter_stems(abbr)]:
         try:
             names = os.listdir(os.path.join(root, folder))
         except OSError:

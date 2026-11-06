@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 """Where a person's documents live and what they are called. One place.
 
-A resume is cv/<Prefix>_Resume_<ABBR>.tex and its letter is
-cover_letters/<Prefix>_Cover_Letter_<ABBR>.tex, where <Prefix> is
+A resume is cv/<Prefix>_<ABBR>_Resume.tex and its letter is
+cover_letters/<Prefix>_<ABBR>_Cover_Letter.tex, where <Prefix> is
 identity.file_prefix in the profile (the person's name, "First_Last") and
-<ABBR> is the human-looking suffix tools/doc_name.py derives from the company.
+<ABBR> is the human-looking name tools/doc_name.py derives from the company:
+the person, then the employer, then the kind of document. Until 2026-11-06 the kind
+came second (<Prefix>_Resume_<ABBR>); a document made then keeps that name,
+since it may have gone to an employer under it, and every reader here knows
+both orders (resume_name_rx, letter_name_rx, doc_abbr).
 The prefix used to be a literal in about ten tools that had to agree, and the
 tracker stores these paths, so tools/doc_name.py matches against them: they
 come from here or they drift.
@@ -42,12 +46,63 @@ def noun_word() -> str:
     return noun[:1].upper() + noun[1:] if noun.islower() else noun
 
 
-def resume_stem(abbr: str) -> str:
+LETTER_WORD = "Cover_Letter"
+
+
+def new_resume_stem(abbr: str) -> str:
+    """The name a resume made now takes: <Prefix>_<ABBR>_<Noun> (the maintainer, 2026-11-06:
+    the person, the employer, then the kind of document)."""
+    return f"{prefix()}_{abbr}_{noun_word()}"
+
+
+def new_letter_stem(abbr: str) -> str:
+    return f"{prefix()}_{abbr}_{LETTER_WORD}"
+
+
+def old_resume_stem(abbr: str) -> str:
+    """The name a resume made until 2026-11-06 has: <Prefix>_<Noun>_<ABBR>."""
     return f"{prefix()}_{noun_word()}_{abbr}"
 
 
+def old_letter_stem(abbr: str) -> str:
+    return f"{prefix()}_{LETTER_WORD}_{abbr}"
+
+
+def general_stem(word: str) -> str:
+    """A resume for no employer, named by what it is ("current", "For_Sam"):
+    <Prefix>_<Noun>_<word>. No employer sits between the person and the document, so the
+    word that says which one comes last, as it always has, and a kept one is still found."""
+    return old_resume_stem(word)
+
+
+def _made_as(folder: str, stem: str) -> bool:
+    """Whether a document with this name is on disk in any form (.tex, .pdf, a template's own
+    source)."""
+    import glob
+    return bool(glob.glob(glob.escape(person.state(folder, stem)) + ".*"))
+
+
+def resume_stems(abbr: str) -> list[str]:
+    """Every name this application's resume may have, the new order first."""
+    return list(dict.fromkeys((new_resume_stem(abbr), old_resume_stem(abbr))))
+
+
+def letter_stems(abbr: str) -> list[str]:
+    return list(dict.fromkeys((new_letter_stem(abbr), old_letter_stem(abbr))))
+
+
+def resume_stem(abbr: str) -> str:
+    """This application's resume name: the one it was made under when it is on disk in the
+    old order only (it may have been sent so, and its tracker row names it), else the new
+    order. A redraft of an older application writes over its own files, never beside them."""
+    new, old = new_resume_stem(abbr), old_resume_stem(abbr)
+    return old if new != old and not _made_as("cv", new) and _made_as("cv", old) else new
+
+
 def letter_stem(abbr: str) -> str:
-    return f"{prefix()}_Cover_Letter_{abbr}"
+    new, old = new_letter_stem(abbr), old_letter_stem(abbr)
+    return (old if new != old and not _made_as("cover_letters", new)
+            and _made_as("cover_letters", old) else new)
 
 
 def resume_rel(abbr: str, ext: str = ".tex") -> str:
@@ -153,7 +208,7 @@ def current_resume() -> str:
     # The one the app made (general_resume.py: <Prefix>_<Noun>_current.pdf), first: beside
     # a hand-made "..._CURRENT_2026-09.pdf", two names said current, only one was dated, and
     # nothing could be told, so the fresh one the person asked for was never offered.
-    own = "/".join(GENERAL_DIR + (resume_stem("current") + ".pdf",))
+    own = "/".join(GENERAL_DIR + (general_stem("current") + ".pdf",))
     if own in files:
         return own
 
@@ -197,7 +252,7 @@ def resume_to_offer() -> str:
     breaks none of the person's rules and which their profile does not say never to send. An
     older hand-made file is never it, however it is named (2026-11-04: reply guidance pointed
     at a ..._CURRENT_2026-09.pdf the person's rules forbid). "" means make one for them."""
-    own = "/".join(GENERAL_DIR + (resume_stem("current") + ".pdf",))
+    own = "/".join(GENERAL_DIR + (general_stem("current") + ".pdf",))
     if own not in general_resumes() or never_sent(own) or resume_problems(own):
         return ""
     return own
@@ -256,9 +311,67 @@ _PLAIN_RULE = {"em-dash": "a dash your rules ban", "british-ise-spelling": "Brit
                "figure-drift": "a figure that differs from your profile"}
 
 
+def _name_rx(word: str) -> re.Pattern:
+    """A document's filename in either order, <Prefix>_<ABBR>_<word> (now) or
+    <Prefix>_<word>_<ABBR> (until 2026-11-06), capturing the ABBR as group 1."""
+    p, w = re.escape(prefix()), re.escape(word)
+    return re.compile(p + "_(?=" + w + "_|[A-Za-z0-9_]*?_" + w + "(?![A-Za-z0-9_]))"
+                      "(?:" + w + "_)?([A-Za-z0-9_]+?)(?:_" + w + ")?(?![A-Za-z0-9_])")
+
+
 def resume_name_rx() -> re.Pattern:
-    """Matches a resume filename and captures its ABBR."""
-    return re.compile(re.escape(prefix()) + "_" + re.escape(noun_word()) + r"_([A-Za-z0-9_]+)")
+    """Matches a resume filename, in the order made now or the order used until 2026-11-06, and
+    captures its ABBR."""
+    return _name_rx(noun_word())
+
+
+def letter_name_rx() -> re.Pattern:
+    """Matches a cover letter's filename, in either order, and captures its ABBR."""
+    return _name_rx(LETTER_WORD)
+
+
+# The words an app-made document's name has carried for its kind, whatever the profile's
+# noun is now: a row written under "Resume" stays readable after the noun became "CV".
+KIND_WORDS = ("Resume", "CV", LETTER_WORD)
+
+
+def doc_abbr(name: str) -> str:
+    """The ABBR in an app-made resume or letter's file name or path, in either order, or ""."""
+    stem = os.path.splitext(os.path.basename(str(name or "").strip()))[0]
+    words = list(dict.fromkeys((noun_word(), *KIND_WORDS)))
+    for w in words:
+        m = _name_rx(w).fullmatch(stem)
+        if m:
+            return m.group(1)
+    alt = "|".join(re.escape(w) for w in words)
+    m = re.search(r"_(?:%s)_([A-Za-z0-9_]+)$" % alt, stem) or \
+        re.search(r"^[A-Za-z0-9]+_[A-Za-z0-9]+_([A-Za-z0-9_]+?)_(?:%s)$" % alt, stem)
+    return m.group(1) if m else ""
+
+
+def send_name(name: str, company: str = "") -> str:
+    """The name a made document is downloaded and uploaded under: the person, the employer
+    written plainly, then the kind of document (<Prefix>_Kestrel_Foods_Resume.pdf), whichever
+    order the kept file was made in. The kept copy keeps its own name. With no employer
+    (a resume for no posting) the kept name's own word stands in its place; a name that is
+    not an app-made document's comes back as it is."""
+    base = os.path.basename(str(name or "").strip())
+    stem, ext = os.path.splitext(base)
+    try:
+        words = list(dict.fromkeys((noun_word(), *KIND_WORDS)))
+        pre = prefix()
+    except Exception:  # noqa: BLE001  no profile: the name as it is
+        return base
+    for w in words:
+        m = _name_rx(w).fullmatch(stem)
+        if not m:
+            continue
+        import doc_name
+        co = doc_name.fold(company).replace("&", "and")
+        co = re.sub(r"['\u2019.]", "", co)
+        co = re.sub(r"[^A-Za-z0-9]+", "_", co).strip("_")[:40].strip("_")
+        return f"{pre}_{co or m.group(1)}_{w}{ext}"
+    return base
 
 
 def _ere(s: str) -> str:

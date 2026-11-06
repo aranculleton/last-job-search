@@ -74,9 +74,13 @@ cv/*.txt
 # cv/main_*, so it gets the same default-ignore treatment and the same git add -f.
 cv/*_Resume_*.*
 cv/*_CV_*.*
+# The order made since 2026-11-06: <Prefix>_<ABBR>_Resume, the kind of document last.
+cv/*_Resume.*
+cv/*_CV.*
 cover_letters/cover_*.*
 cover_letters/Cover_*.*
 cover_letters/*_Cover_Letter_*.*
+cover_letters/*_Cover_Letter.*
 !cover_letters/cover_example.tex
 
 # documents/ subfolder contents are personal — only README and folder structure are tracked

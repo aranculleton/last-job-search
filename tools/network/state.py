@@ -4252,7 +4252,7 @@ def _cli_dropped_rows(argv) -> int:
 # marker, in a message row's summary, worded exactly as tools/network/export.py words an
 # attachment LinkedIn's export records: "a resume attached (<file>)", or "an attachment
 # attached (<file>)" for anything that is not a resume. The file is the path inside the
-# repo (cv/<Prefix>_Resume_<ABBR>.pdf), so every chat finds the same one. No column: the
+# repo (cv/<Prefix>_<ABBR>_Resume.pdf), so every chat finds the same one. No column: the
 # summary is the row's own account of what went, and every reader already has it.
 _ATTACHED = re.compile(r"\b(a (?:resume|r[eé]sum[eé]|cv)|an attachment) attached"
                        r"(?: \(([^()]*)\))?", re.I)
@@ -4282,7 +4282,7 @@ def _doc_rx() -> str:
 def is_resume_file(path) -> bool:
     """Is this file a resume (a CV), rather than a letter or anything else?
 
-    By its name ("<Prefix>_Resume_Acme.pdf", "Morgan_Ellis_CV.pdf", "resume-2026.pdf"),
+    By its name ("<Prefix>_Acme_Resume.pdf", "Morgan_Ellis_CV.pdf", "resume-2026.pdf"),
     or by where it sits (cv/, documents/cv/). A cover letter never is, wherever it sits."""
     p = str(path or "").replace("\\", "/").strip()
     base = os.path.basename(p)
@@ -4804,7 +4804,8 @@ def resolve_attachment(path, root=None) -> str:
 
     It must be in this copy of the repo, named by a kept application (a draft.json in
     documents/applications/ names its resume and letter), or carry the name the app gives
-    this person's resume or letter (cv/<Prefix>_<Noun>_<ABBR>.pdf): a drafting chat
+    this person's resume or letter (cv/<Prefix>_<ABBR>_<Noun>.pdf, or the order before
+    2026-11-06, cv/<Prefix>_<Noun>_<ABBR>.pdf): a drafting chat
     working at the same time may have made it, and it arrives when both chats' work is
     merged. A file outside the repo is refused: no other chat could ever find it."""
     root = os.path.normpath(root or person.state())
@@ -4827,7 +4828,7 @@ def resolve_attachment(path, root=None) -> str:
     try:
         import docpaths
         made = (docpaths.resume_name_rx().search(os.path.basename(rel))
-                or re.search(re.escape(docpaths.prefix()) + r"_Cover_Letter_", rel))
+                or docpaths.letter_name_rx().search(os.path.basename(rel)))
     except Exception:  # noqa: BLE001  no profile: only a file that is there
         made = None
     if made and rel.startswith(("cv/", "cover_letters/")):
@@ -4857,9 +4858,10 @@ def _kept_outputs(root) -> set:
         for draft in got if isinstance(got, list) else [got]:
             abbr = str((draft or {}).get("abbr") or "").strip() if isinstance(draft, dict) else ""
             if abbr:
+                # Both orders: one made until 2026-11-06 keeps its name.
                 for ext in (".pdf", ".tex"):
-                    out.add(docpaths.resume_rel(abbr, ext))
-                    out.add(docpaths.letter_rel(abbr, ext))
+                    out.update(f"cv/{st}{ext}" for st in docpaths.resume_stems(abbr))
+                    out.update(f"cover_letters/{st}{ext}" for st in docpaths.letter_stems(abbr))
     return out
 
 

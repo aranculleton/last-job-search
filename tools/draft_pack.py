@@ -131,8 +131,11 @@ def letter_paths() -> list[str]:
         pre = person.get("identity.file_prefix")
     except Exception:
         return []
-    return sorted(glob.glob(os.path.join(glob.escape(person.state("cover_letters")),
-                                    f"{glob.escape(pre)}_Cover_Letter_*.tex")))
+    # Either order: <Prefix>_<ABBR>_Cover_Letter now, <Prefix>_Cover_Letter_<ABBR> before.
+    folder = glob.escape(person.state("cover_letters"))
+    return sorted({p for pat in (f"{glob.escape(pre)}_Cover_Letter_*.tex",
+                                 f"{glob.escape(pre)}_*_Cover_Letter.tex")
+                   for p in glob.glob(os.path.join(folder, pat))})
 
 
 def note_paths() -> list[str]:

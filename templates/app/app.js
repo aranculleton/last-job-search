@@ -2472,17 +2472,20 @@
     return "/_blob/" + encodeURIComponent(a);
   }
   // What the person attaches is named for the reader and for their own folder of downloads:
-  // "Morgan_Ellis_Resume_Kestrel_Foods.pdf", the employer written plainly, never the working name with
-  // the role run together after it (the maintainer, 2026-11-05: "this is quite a robotic name
-  // for a resume right?" and "it might be helpful to have the company name after if im
-  // downloading loads"). The kept copy keeps its full name.
-  function sendName(name, company) {
+  // "Morgan_Ellis_Kestrel_Foods_Resume.pdf", the person, the employer written plainly, then the
+  // kind of document, never the working name with the role run together (the maintainer,
+  // 2026-11-05: "this is quite a robotic name for a resume right?", and 2026-11-06: name, place,
+  // document). The engine names it (docpaths.send_name, the file's `send`); a file with none,
+  // made in the order before 2026-11-06 (<Prefix>_Resume_<ABBR>), is put in that order here.
+  // The kept copy keeps its full name.
+  function sendName(name, company, send) {
+    if (txt(send)) return txt(send);
     const n = txt(name);
-    const m = /^(.+?_(?:Resume|R[eé]sum[eé]|CV|Cover_Letter))(?:_[^.]*)?(\.[A-Za-z0-9]+)$/i.exec(n);
-    if (!m) return n;
+    const m = /^(.+?)_(Resume|R[eé]sum[eé]|CV|Cover_Letter)(?:_([^.]*))?(\.[A-Za-z0-9]+)$/i.exec(n);
+    if (!m || !m[3]) return n;
     const co = txt(company).normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/&/g, "and").replace(/['’.]/g, "")
       .replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40);
-    return m[1] + (co ? "_" + co : "") + m[2];
+    return m[1] + "_" + (co || m[3]) + "_" + m[2] + m[4];
   }
   async function download(file, key) {
     const set = (text, tone) => { S.notes.set(key, {text, tone}); scheduleRender(); };
@@ -2497,7 +2500,7 @@
       blob = await r.blob();
     } catch (e) { set("Could not get the file. Try again in a moment.", "bad"); return; }
     try {
-      const res = await dl.save({filename: sendName(file.name, file.company) || "document.pdf", data: blob});
+      const res = await dl.save({filename: sendName(file.name, file.company, file.send) || "document.pdf", data: blob});
       set(res && res.status === "delivered" ? "Sent where you chose." : "Saved.", "ok");
       announce(txt(file.name) + " saved.");
     } catch (e) {
