@@ -22,8 +22,6 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [os.path.join(ROOT, "tools"), os.path.join(ROOT, "tests")]
 
-import pytest  # noqa: E402
-
 import land  # noqa: E402
 import page_db  # noqa: E402
 import tidy  # noqa: E402

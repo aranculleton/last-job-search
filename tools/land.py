@@ -1514,7 +1514,7 @@ def _move_rounds(root: str, moves) -> None:
         text = _git(root, "cat-file", "blob", "%s:%s" % (side, old)).stdout
         if "/filtered/" in old:
             name = os.path.splitext(os.path.basename(new))[0]
-            text = _ROUND_SAYS.sub(lambda m: m.group(1) + name + '"', text, count=1)
+            text = _ROUND_SAYS.sub(lambda m, name=name: m.group(1) + name + '"', text, count=1)
         full = os.path.join(root, new)
         os.makedirs(os.path.dirname(full), exist_ok=True)
         with open(full, "w", encoding="utf-8", newline="\n") as fh:
