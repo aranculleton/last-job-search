@@ -113,8 +113,9 @@ METHODS: dict[str, dict] = {
             (24, "2026-10-29", False, "unused helpers removed (workday_paths, PortalDown); boards are read as before"),
             (25, "2026-10-30", False, "an employer board's posting is judged by its own location, its office tags only where it names no place; searches already run stay as they are"),
             (26, "2026-11-03", False, "a site this chat's cloud settings refuse is said as that, with the one fix, never only as unconfirmed"),
+            (27, "2026-11-06", False, "every job site has a plain name and a one-line note, and one that needs a key says so with the steps to get one; /add-portal writes label, note and the key's lines; nothing to build again"),
         ),
-        "fingerprint": "721b0da475fb1b55",
+        "fingerprint": "6b9d4fd756b20e3f",
     },
     "search": {
         "setup": True, "by": "upgrade", "priority": 2, "time": "~20 min",
@@ -828,8 +829,9 @@ METHODS: dict[str, dict] = {
             (69, "2026-11-06", False, "a laptop's Brief that nearly fills the window is stretched to its foot, panels lined up edge to edge; a sparse one keeps each row to what it holds"),
             (70, "2026-11-06", False, "this week's bar in the second chart colour and past weeks in the rose; the dates and the line under the bars in the text's colour; news links underlined in their own colour, thinner; the menu's words centred on their icons"),
             (71, "2026-11-06", False, "the weekly bars' dates show every other week and this week's at every width, never cut"),
+            (72, "2026-11-06", True, "Settings, Job sites: each site by its plain name with one line, a site needing a key says Needs a free key and opens on the steps, and a tick the engine refused says why on its own row, back as it truly is"),
         ),
-        "fingerprint": "30d7c343ad588f5c",
+        "fingerprint": "2f4a8993f0743afd",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",
