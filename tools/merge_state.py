@@ -387,7 +387,9 @@ JSON_NAMES = {
                      "02_hydrated.json", "03_screened.json", "03_screened_all.json",
                      "04_opportunity.json", "05_ranked.json", "06_shortlist.json",
                      "06_skipped.json", "kept.json", "dropped.json", "scraped.json",
-                     "sent.json", "partial_rows.json", "tools/run_round.py: .json"), _ROUND),
+                     "sent.json", "partial_rows.json", "tools/run_round.py: .json",
+                     # a search limited to named employers: its names and the rows at them
+                     "employers.json", "named.json"), _ROUND),
     **dict.fromkeys(("apps_in.json", "picks.json", "draft_args.json", "pack.json", "held.json",
                      "staged_roles.json", "packet.json", "drafts.json",
                      "tools/draft_audit.py: outreach_*.json",
