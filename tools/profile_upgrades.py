@@ -3114,8 +3114,11 @@ def say_changed() -> list[str]:
     r = _git("diff", "--name-only", f"{sha}^1", sha, "--", *HELD_FILES)
     out = []
     for p in sorted(p for p in r.stdout.split() if p) if r.returncode == 0 else []:
-        out.append(f"Claude: {p} changed. A chat that was already open is still following the "
-                   f"copy it read when it started: read {p} again now, before going on.")
+        # Only a chat that has read it holds an old copy: one that never loaded this skill
+        # reads the new one when it first needs it, and re-reading every changed skill cost an
+        # open chat 70 to 110 KB a release for nothing (the cost audit, 4.12).
+        out.append(f"Claude: {p} changed. If this chat has already read it, it is following the "
+                   f"old copy: read {p} again now, before going on. If not, nothing to do.")
     return out
 
 

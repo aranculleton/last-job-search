@@ -56,6 +56,8 @@ make sense to somebody whose repo just received it.
   one tap, with Undo. Settings > LinkedIn has the same choice, to change any time.
 - **No stale "Done." on the LinkedIn download.** Its line shows just after you add one, and
   never says that only a chat can take it back.
+- **Updates cost an open chat less.** After an update, a chat re-reads only the instructions
+  it had already read, never every one the update changed.
 
 ### Fixed
 
