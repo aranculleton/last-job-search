@@ -55,11 +55,20 @@ make sense to somebody whose repo just received it.
 
 - **Every job site has a plain name and a line saying what it is.** Settings, Job sites says
   "Adzuna", never "api.adzuna.com", with a short note under each site.
-- **A site that needs a key says so.** Its row says "Needs a free key" instead of a tick, and
-  opens on the steps to get one. Adzuna looked ticked, then unticked itself after a visit.
+- **A site that needs a key says what it needs.** Its row says so instead of a tick, and opens
+  on the steps to get one. Adzuna says it needs a paid plan: its free plan allows 25 searches in
+  total, and one search here uses about 74. Adzuna looked ticked, then unticked itself after a
+  visit.
 - **No tick on Job sites flips back without saying why.** Each site is changed on its own, so a
   tap on one is never undone because another changed, and a tap that could not be done says
   why on that site's row, with the tick back as it really is.
+- **Changing your search no longer starts a search by itself.** A job site turned on or off, or
+  a change to roles, places, pay or how far back to look, is saved and used from your next
+  search; its row says so, with Find jobs beside it to search now. Switching on a site had
+  quietly started a whole search.
+- **Your own notes in your search settings are kept.** Turning a site on or off, or changing any
+  search setting from the page, keeps the notes you wrote beside it, where it had put a bare
+  line in their place.
 
 ## [4.11.0] - 2026-11-06
 

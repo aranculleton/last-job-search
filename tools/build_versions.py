@@ -113,9 +113,9 @@ METHODS: dict[str, dict] = {
             (24, "2026-10-29", False, "unused helpers removed (workday_paths, PortalDown); boards are read as before"),
             (25, "2026-10-30", False, "an employer board's posting is judged by its own location, its office tags only where it names no place; searches already run stay as they are"),
             (26, "2026-11-03", False, "a site this chat's cloud settings refuse is said as that, with the one fix, never only as unconfirmed"),
-            (27, "2026-11-06", False, "every job site has a plain name and a one-line note, and one that needs a key says so with the steps to get one; /add-portal writes label, note and the key's lines; nothing to build again"),
+            (27, "2026-11-06", False, "every job site has a plain name and a one-line note, and one that needs a key says so with the steps to get one (Adzuna: a paid plan, since its free plan's 25 searches go within one search here); /add-portal writes label, note and the key's lines; nothing to build again"),
         ),
-        "fingerprint": "6b9d4fd756b20e3f",
+        "fingerprint": "3aa38eac278f5cba",
     },
     "search": {
         "setup": True, "by": "upgrade", "priority": 2, "time": "~20 min",
@@ -830,9 +830,9 @@ METHODS: dict[str, dict] = {
             (69, "2026-11-06", False, "a laptop's Brief that nearly fills the window is stretched to its foot, panels lined up edge to edge; a sparse one keeps each row to what it holds"),
             (70, "2026-11-06", False, "this week's bar in the second chart colour and past weeks in the rose; the dates and the line under the bars in the text's colour; news links underlined in their own colour, thinner; the menu's words centred on their icons"),
             (71, "2026-11-06", False, "the weekly bars' dates show every other week and this week's at every width, never cut"),
-            (72, "2026-11-06", True, "Settings: employers turned down are one row, learned rules one home grouped by area with what is now part of the app folded, long lists show their first few, Something looks wrong opens in place, What's new shows the version, Smaller and Larger drawn in their size, Advanced only for what costs time; Job sites each by its plain name with one line, a site needing a key says Needs a free key with the steps, and a refused tick says why on its own row"),
+            (72, "2026-11-06", True, "Settings: employers turned down are one row, learned rules one home grouped by area with what is now part of the app folded, long lists show their first few, Something looks wrong opens in place, What's new shows the version, Smaller and Larger drawn in their size, Advanced only for what costs time; Job sites each by its plain name with one line, a site needing a key says what it needs (Adzuna: a paid plan, its free 25 searches gone within one search here) with the steps, and a refused tick says why on its own row; a search setting changed starts no search, its row saying Used from your next search with Find jobs beside it"),
         ),
-        "fingerprint": "256dfeead30d2bd6",
+        "fingerprint": "031c1405ef6255ca",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",
