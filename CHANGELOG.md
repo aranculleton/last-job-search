@@ -20,6 +20,14 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Changed
+
+- **A search asked for in a chat costs less of your Claude allowance.** The search now writes
+  out the table of jobs it found itself, highest score first, with anyone you know there
+  already noted against the job, and Claude passes it on as it is instead of making it from
+  the search's files. That saves about 10,000 tokens each search. What a search finds, how it
+  scores them and the order are exactly as before.
+
 ## [4.12.0] - 2026-11-06
 
 ### Added

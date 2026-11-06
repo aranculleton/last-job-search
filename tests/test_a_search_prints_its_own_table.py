@@ -135,3 +135,18 @@ def test_the_golden_round_prints_its_table_and_writes_the_same_files(tmp_path, m
     again = F.free_stages(F.KEPT, str(tabled / "r1"), str(tabled), extra=["--recut", "--table"])
     assert again.returncode == 0, again.stdout[-2000:] + again.stderr[-2000:]
     assert _printed(again.stdout) == want
+
+
+# ------------------------------------------------- the skill passes it on
+
+def test_the_skill_runs_the_round_with_table_and_names_its_columns():
+    with open(os.path.join(F.ROOT, ".claude", "skills", "job-scraper", "SKILL.md"),
+              encoding="utf-8") as fh:
+        skill = " ".join(fh.read().split())
+    assert "python3 tools/run_round.py --jobage 14 --table" in skill
+    assert "never build it from the JSON" in skill
+    # The columns it names are the ones the round prints, in the same order.
+    cols = [c.strip() for c in run_round.TABLE_HEAD.splitlines()[0].strip("|").split("|")]
+    assert "`" + " | ".join(cols) + "`" in skill
+    # The template it used to have the chat fill in is gone.
+    assert "| 1 | 82 | Strong fit |" not in skill

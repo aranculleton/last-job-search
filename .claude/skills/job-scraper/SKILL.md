@@ -197,7 +197,7 @@ Only draft unprompted if the user has explicitly said to in that request.
 
 ## One command
 
-`python3 tools/run_round.py --jobage 14` runs every stage of a round in order and stops at the ranked shortlist. When the person names employers ("search these 20 employers"), add `--employers "A, B, C"`: only those are searched (their own boards and searches by their names), the list holds only them with a place for each, and the round names any with no open roles ("No open roles found at X, Y"), which you pass on (RUNBOOK.md step 1). Leave `--out` off: the round names itself, `r` and the next number, and prints its folder (`round: r12, its files in ...`), which is the folder `--recut` and a progress pin name. See `RUNBOOK.md`. When it cannot run, `manual-round.md` beside this file has every stage written out to do by hand: read it only then. Its step numbers are the ones cited below.
+`python3 tools/run_round.py --jobage 14` runs every stage of a round in order and stops at the ranked shortlist; asked in the chat, add `--table` and it ends by printing the table to show (Step 5). When the person names employers ("search these 20 employers"), add `--employers "A, B, C"`: only those are searched (their own boards and searches by their names), the list holds only them with a place for each, and the round names any with no open roles ("No open roles found at X, Y"), which you pass on (RUNBOOK.md step 1). Leave `--out` off: the round names itself, `r` and the next number, and prints its folder (`round: r12, its files in ...`), which is the folder `--recut` and a progress pin name. See `RUNBOOK.md`. When it cannot run, `manual-round.md` beside this file has every stage written out to do by hand: read it only then. Its step numbers are the ones cited below.
 
 ## How It Works
 
@@ -230,16 +230,16 @@ the chat shows it in full this way too: one line of counts, then the table, then
 for what is off. Never more. Asked on the page, the chat says only the counts line and where
 it is.
 
-```
-**P of N cleared the pass bar (60+), Q of them strong (75+); target 5 and 2: met** (or: missed after R rounds)
-
-| # | Score | Verdict | Title | Company | Location | Salary | Deadline | Check | Apply |
-|---|-------|---------|-------|---------|----------|--------|----------|-------|-------|
-| 1 | 82 | Strong fit | ... | ... | ... | stated range, or `not stated` | ... | what to check first | [Apply](https://...) |
-```
+**The round prints the table; never build it from the JSON.** Asked in the chat, run the round
+with `--table` (`python3 tools/run_round.py --jobage 14 --table`; `--recut --out <the round's
+folder> --table` prints it again after a recut). Under `table for the person` it prints the
+counts line and the table, columns `# | Score | Verdict | Title | Company | Location | Salary |
+Deadline | Check | Apply`, each row's warm route already in Check. Pass both on exactly as
+printed, then the lines for what is off (below). Reading the shortlist's JSON to make it costs
+about 10k tokens a search and adds nothing.
 
 - **Sorted by score, highest first**, with the score shown. Never alphabetically, by portal or
-  by posting date, and never an unscored posting.
+  by posting date, and never an unscored posting. The printed table already is.
 - **The number asked for is filled from the next rows that pass every rule.** The round's cut
   (`run_round.hard_rules`, the one path every row a search brings back goes through) passes
   over a row failing a hard rule (no score, the search window, the candidate's bar with a
@@ -264,7 +264,9 @@ it is.
   floor, an unstated on-site expectation, a language level below the posting's bar. An absent
   salary range is not a red flag. A row's warm route from the contact book goes here too
   (`warm_route_note`: "DO NOT APPLY COLD" and who; `outreach_pending_note`): those are the
-  referral links.
+  referral links. The printed Check holds all of these that the round read; one you find
+  in a posting yourself (a mass-posting pattern, an on-site expectation) goes in the line
+  under the table, never edited into a row.
 - **A line only when something is off**: `skipped (disabled): <portals>` when a portal is
   switched off (`python3 tools/portals.py` says which), so an opt-out is never silent;
   `fallback (websearch): <portals>` when results came from the search fallback, which can be
@@ -296,6 +298,8 @@ A yes to the second is recorded with `python3 tools/confirm.py applied` (`--new 
 it has it), never by editing the tracker, and the lines it prints, the applications it covered,
 are shown to them. Each
 pick goes to `/apply`, which reuses the round's score and asks nothing already answered here.
+A number the person picks is a row of the printed table, so name the pick by that row's
+employer and title (`Employer::title words`), never by the number alone.
 
 Do **not** suggest `/rank` after a normal run: the run already scored everything it presented (a round's scores are in `documents/rounds/<round>.json`; on the manual path `manual-round.md` Step 3 wrote them to `ranked`), so `/rank` would only score them again. `/rank` is for the two cases `/scrape` does not cover: re-scoring after a change to the candidate profile or `profile/12-scoring-brief.md` (`/rank --all`, which skips permanent exclusions), and scoring a backlog added outside the normal flow. (`/rank` sets the `ranked` and `expired` status values in `seen_jobs.json`. Treat both as already seen: a round shows a `ranked` posting again while it is live, and never one `expired` past its stated deadline, which holds by its own link only, since a posting re-issued under a new link is a new one.)
 
