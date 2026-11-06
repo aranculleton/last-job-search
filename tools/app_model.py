@@ -46,6 +46,7 @@ for _p in (os.path.join(_HERE, "network"), _HERE):
         sys.path.insert(0, _p)
 
 import person  # noqa: E402
+from docpaths import FILE_NAME_PRESETS  # noqa: E402
 
 MODEL = 1
 # Clock fields: true of the moment the model was made, not of the state it shows.
@@ -1897,6 +1898,7 @@ def files_missing(ctx=None) -> list:
 
 
 def _files(row) -> list:
+    import docpaths
     out = []
     for kind, col in (("resume", "cv_file"), ("letter", "cover_letter_file")):
         tex = str(row.get(col) or "").strip()
@@ -1906,6 +1908,12 @@ def _files(row) -> list:
         full = person.state(*pdf.split("/"))
         there = os.path.isfile(full)
         out.append({"kind": kind, "name": os.path.basename(pdf),
+                    # Downloaded under the name the person chose in Settings > File names
+                    # (the person, the employer, then the document, unless they chose
+                    # otherwise), whichever order the kept file was made in
+                    # (docpaths.send_name).
+                    "send": docpaths.send_name(pdf, row.get("company") or "",
+                                               row.get("role") or ""),
                     "asset": asset_for(pdf) if there else None,
                     "path": pdf, "pages": _pages(full) if there else None,
                     "made": there})
@@ -2121,7 +2129,8 @@ def _ready(ctx: Ctx, targets: dict) -> list:
                 "company": row.get("company") or "", "role": row.get("role") or "",
                 "pay": pay, "place": str(draft.get("location") or ""),
                 "apply": apply_link(_link_on_row(row, draft)),
-                "files": [{k: f[k] for k in ("kind", "name", "asset", "path", "pages", "made")}
+                "files": [{k: f[k] for k in ("kind", "name", "send", "asset", "path", "pages",
+                                             "made")}
                           for f in files],
                 "checks": _with_verify(_checks(files, expect, noun), verify_items(folder)),
                 "outreach": _outreach(folder, names),
@@ -4899,6 +4908,8 @@ def setting_values() -> dict:
         out["linkedin_plan"] = "free"
     import app_alerts
     out["suggestions"] = app_alerts.setting()
+    import docpaths
+    out["file_names"] = docpaths.file_names()
     for key, default in SETTING_DEFAULTS.items():
         got = str(person.get(key, default) or default)
         allowed = [c[0] for k, _, ch in SETTINGS if k == key for c in ch]
@@ -4957,6 +4968,10 @@ SETTINGS = (
     # chose it, when the brief is set up or asked once after (profile_upgrades brief-push)
     # (the maintainer, 2026-11-04: "make it off by default but maybe part of the setup").
     ("brief_push", "Phone notification", [["off", "Off"], ["on", "On"]]),
+    # What the PDFs the person downloads and uploads are called (docpaths.FILE_NAME_PRESETS,
+    # person.json documents.file_names): the person, the employer, then the document unless
+    # they choose otherwise. Each choice's own example is the item's `examples`.
+    ("file_names", "File names", [[k, label] for k, label, _parts in FILE_NAME_PRESETS]),
 )
 SETTING_DEFAULTS = {"prep_days": "7", "calendar_reminder": "60", "brief_push": "off"}
 
@@ -4983,6 +4998,25 @@ def setting_choices() -> tuple:
 TIME_ZONE = ("time_zone", "Your time zone")
 
 
+def file_name_examples(ctx: Ctx | None = None) -> dict:
+    """The File names setting's examples: each choice as a resume of theirs would leave, from
+    their own name and the employer and role of their latest application ("Employer" and
+    "Analyst" before there is one), and which choice is recommended for their market."""
+    import docpaths
+    employer = role = ""
+    for row in reversed(list(getattr(ctx, "tracker", None) or [])):
+        if str(row.get("company") or "").strip():
+            employer, role = str(row.get("company")).strip(), str(row.get("role") or "")
+            break
+    try:
+        examples = {k: docpaths.example_file_name(k, employer, role)
+                    for k, _label, _parts in docpaths.FILE_NAME_PRESETS}
+        country = str(person.get("identity.country", "") or "")
+    except person.NoProfile:
+        return {}
+    return {"examples": examples, "recommended": docpaths.recommended_file_names(country)}
+
+
 def _settings(ctx: Ctx, targets: dict) -> list:
     values = setting_values()
     out = []
@@ -4990,6 +5024,8 @@ def _settings(ctx: Ctx, targets: dict) -> list:
         sid = f"setting-{key}"
         item = {"id": sid, "key": key, "label": label, "kind": "choice",
                 "value": values[key], "choices": choices, "rev": rev_of(key, values[key])}
+        if key == "file_names":
+            item.update(file_name_examples(ctx))
         out.append(item)
         targets[sid] = {"kind": "setting", "key": key, "value": values[key], "rev": item["rev"]}
     key, label = TIME_ZONE

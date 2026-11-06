@@ -235,7 +235,7 @@ def test_a_resume_that_breaks_their_rules_is_never_offered(prof):
     got = stage_picks.general_resume_for("pell", today=TODAY)
     assert got["file"] == "" and got["problems"]
     # The one the app makes and checks is the one offered, beside the old file.
-    good = os.path.join(cvs, docpaths.resume_stem("current") + ".pdf")
+    good = os.path.join(cvs, docpaths.general_stem("current") + ".pdf")
     _text_pdf(good, "Standardised the reporting. Mar 2023 - Present")
     assert docpaths.current_resume() == "documents/cv/" + os.path.basename(good)
     r = app_model._resume(None, {})

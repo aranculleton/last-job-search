@@ -41,7 +41,7 @@ about a human, so it needs a real sample and reports at a lower severity.
 
 Usage:
     python3 tools/voice_check.py --text "..."
-    python3 tools/voice_check.py cover_letters/<Prefix>_Cover_Letter_ACME.tex
+    python3 tools/voice_check.py cover_letters/<Prefix>_ACME_Cover_Letter.tex
     python3 tools/voice_check.py --json drafts.json
 Exit 0 clean, 1 findings, 2 a bad invocation.
 """

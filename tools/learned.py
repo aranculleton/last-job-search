@@ -827,8 +827,9 @@ NOW_PART = "Now part of the app"
 
 BUILT_IN = (
     {"id": "document-file-names", "version": "3.0.0", "since": "2026-10-14",
-     "does": "Your resume and cover letter files are named for you: your name, Resume (or "
-             "CV) or Cover_Letter, and the employer as it writes its own name.",
+     "does": "Your resume and cover letter files are named for you: your name, the employer "
+             "as it writes its own name, then Resume (or CV) or Cover_Letter; Settings, File "
+             "names, chooses another way.",
      "areas": ("documents", "other"),
      "match": (r"\b(?:file ?names?|named|name (?:the|my|each|every) (?:file|pdf|resume|cv|"
                r"letter|document)s?|call (?:the|my) (?:file|pdf)s?)\b|\.pdf\b|_(?:resume|cv|"

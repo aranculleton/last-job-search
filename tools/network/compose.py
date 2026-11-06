@@ -2346,7 +2346,7 @@ def email(name, subject, context, body, ask, sign_off=None, attachment=True,
     shape exists to prevent.
 
     The attachment is named in the body so the filename is visible to the tone
-    check: a file called First_Last_CV_Employer.pdf contradicts a message that
+    check: a file called First_Last_Employer_CV.pdf contradicts a message that
     says resume, and the reader sees both. The word is the person's
     (documents.noun).
     """

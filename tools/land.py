@@ -1193,6 +1193,25 @@ MADE = ("draft.json", "drafts.json", "cost.json", "verify.json", "tweaks.json", 
         "screening_answers.md")
 MADE_EXT = (".tex", ".pdf")
 _DOC_ABBR = re.compile(r"_(?:Resume|CV|Cover_Letter)_([A-Za-z0-9_]+)$")
+# The order made since 2026-11-06, <Prefix>_<ABBR>_<kind>: the kind last.
+_DOC_KIND_LAST = re.compile(r"^(.+?)_(?:Resume|CV|Cover_Letter)$")
+_KINDS = ("Resume", "CV", "Cover_Letter")
+
+
+def _doc_abbr(stem: str) -> str:
+    """The abbreviation in a resume or letter's name, in either order. The profile's own
+    prefix and noun tell where the abbreviation starts (docpaths.doc_abbr); without a
+    profile, the name before its kind word stands for it, the same for both documents."""
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import docpaths
+        got = docpaths.doc_abbr(stem)
+        if got:
+            return got
+    except Exception:  # noqa: BLE001  no profile here: the plain reading below
+        pass
+    m = _DOC_ABBR.search(stem) or _DOC_KIND_LAST.search(stem)
+    return m.group(1) if m else ""
 
 
 def _key(text: str) -> str:
@@ -1242,9 +1261,9 @@ def units(root: str, paths, revs: tuple[str, ...]) -> tuple[dict[str, str], dict
         if top + "/" not in APP_DOCS or "/" in name or not name:
             continue
         stem = name.split(".", 1)[0]
-        abbr = next((a for a in named if stem.endswith("_" + a)), "")
-        m = _DOC_ABBR.search(stem)
-        out[p] = _key(abbr or (m.group(1) if m else "")) or "doc:" + stem
+        abbr = next((a for a in named if stem.endswith("_" + a)
+                     or any(stem.endswith("_%s_%s" % (a, k)) for k in _KINDS)), "")
+        out[p] = _key(abbr or _doc_abbr(stem)) or "doc:" + stem
     docs = set(out.values())
     homes: dict[str, str] = {}
     for p in paths:

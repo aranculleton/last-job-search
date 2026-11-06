@@ -452,7 +452,7 @@ written as words included; the summary and the letter bullets against the profil
 the opening and close also against the posting and p2), and a letter bullet that repeats a
 resume bullet. The resume's filename
 noun is the profile's own word (`documents.noun`), so a profile that says "CV" writes
-`cv/<Prefix>_CV_<ABBR>`.
+`cv/<Prefix>_<ABBR>_CV`.
 
 `outreach` writes `documents/applications/<slug>/job_posting.md` and `outreach.md`. The
 outreach note is a sub-80-word message to the hiring manager or recruiter built from the
@@ -471,7 +471,7 @@ is the resume's text layer as an ATS parses it), and report it in one line (all 
 passed, or `verify_batch.sh`'s last line), plus each item that failed or needs the person's
 call; never the whole list. A finding is fixed in the draft object and rendered again, never
 by hand in the `.tex`. Bullets are **allocated per posting** by `tools/allocate.py`, never
-hand-picked, and filenames are human-looking (`<Prefix>_Resume_<ABBR>`, the File naming table
+hand-picked, and filenames are human-looking (`<Prefix>_<ABBR>_Resume`, the File naming table
 in `05-cv-templates.md`).
 
 Deliver the batch on the person's page first (CLAUDE.md, "Every output is shown"): the files
@@ -748,6 +748,8 @@ anything updated: show the new version, not where it went.
 
 1. **Per role, one file-sending call** holding that role's resume and cover letter
    together, captioned: role, employer, pay (or "pay not stated"), location, apply link.
+   Send the copies `python3 tools/shown.py <resume pdf> <letter pdf>` makes, named as the
+   person chose in Settings, File names.
    With no SendUserFile in the chat, the caption's line and the two files' full paths,
    one a line, in its place.
 2. **Then one index table in the reply**: role | apply link, the full web address, one row
@@ -797,7 +799,9 @@ The hook and the four steps are in CLAUDE.md ("Learning the person"); this is th
   `TITLE_SETS`), `search.py` (the bar, the scoring words), `profile/CLAUDE.md` (how they
   want to come across, document rules), `07-interview-prep.md`, and for how a page looks
   ("bigger font", "less cramped", "centre my name") `person.json` `documents.design` through
-  `python3 templates/doc_design.py adjust <change>`. A job they dislike is `python3
+  `python3 templates/doc_design.py adjust <change>`; how the files they send are named
+  ("put the role in", "just my name and CV") `person.json` `documents.file_names`, one of
+  `docpaths.FILE_NAME_PRESETS` (Settings, File names). A job they dislike is `python3
   tools/exclude.py add <url> --basis person --reason "<their words>"`. A person they do not
   want contacted is a `closed` contact with their reason. A *kind* of job or person becomes
   the rule that covers all of them.

@@ -482,7 +482,7 @@ employer sees:
 - The document's noun is the profile's (`documents.noun`), never one of
   `documents.banned_nouns`, in anything the employer sees.
 - **No em or en dashes anywhere.**
-- Filenames are human-looking: `<Prefix>_Resume_<ABBR>`, where `<Prefix>` is
+- Filenames are human-looking: `<Prefix>_<ABBR>_Resume`, where `<Prefix>` is
   `identity.file_prefix` in `profile/person.json`, no requisition numbers or date stamps
   unless disambiguating two roles at one employer.
 - Any document rule of the candidate's own, in `profile/CLAUDE.md`, is followed exactly

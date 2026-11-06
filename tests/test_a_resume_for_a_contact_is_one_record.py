@@ -16,6 +16,7 @@ from __future__ import annotations
 import csv
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -233,7 +234,8 @@ def test_a_resume_drafted_for_a_contact_is_filed_under_them(repo):
     md = (d / "outreach.md").read_text(encoding="utf-8")
     assert "## This goes to Quillon Varga, who asked for it" in md
     assert "They asked on 2026-10-14" in md and "pass it on to the planning lead" in md
-    assert f"state.py message {CID} --attached cv/Morgan_Ellis_CV_" in md
+    # The person, the employer, then the kind of document (docpaths, since 2026-11-06).
+    assert re.search(rf"state.py message {CID} --attached cv/Morgan_Ellis_\w+_CV\.pdf", md), md
     assert "I've just applied" not in md and "hiring manager or the recruiter" not in md
     assert json.loads((d / "draft.json").read_text(encoding="utf-8"))[0]["for_contact"] == CID
 

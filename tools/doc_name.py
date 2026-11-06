@@ -4,7 +4,7 @@ The employer sees the filename on the attachment, so it has to read like a
 person named it. The rule used to ask for a 2-to-4 character UPPERCASE
 abbreviation, which is right for a company that genuinely writes itself that
 way (IBM, SAP) and wrong for every company that does not. Applied to the rest
-it produced <Name>_Resume_ACMEWIDGETS.pdf: not an abbreviation at all, just the
+it produced <Name>_ACMEWIDGETS_Resume.pdf: not an abbreviation at all, just the
 company name shouted, and a name like that reads as machine-generated.
 
 So: a company writes its own name, and this returns it. A name styled with an
@@ -40,7 +40,7 @@ KNOWN = dict(getattr(_EMP, "ABBREVIATIONS", {}))
 # Dropped from the END of a name before shortening. They identify the legal
 # entity, not the company anybody names in conversation. Only ever from the
 # end: "Co" leads "Co-Ventures", and stripping it from the front left the
-# file named <Name>_Resume_Ventures. The profile adds its market's words
+# file named <Name>_Ventures_Resume. The profile adds its market's words
 # (employers.py NAME_FILLER: a country name, so "Acme Ireland" is Acme).
 GENERIC = {"inc", "incorporated", "ltd", "limited", "pty", "llc", "llp", "lp", "corp",
            "corporation", "company", "co", "group", "holdings", "plc", "gmbh",
@@ -116,7 +116,7 @@ def _fallback(company: str) -> str:
 
 
 def suffix(company: str, role_token: str = "", legacy: bool = False) -> str:
-    """The `<Name>` in <Prefix>_Resume_<Name>.tex.
+    """The `<Name>` in <Prefix>_<Name>_Resume.tex.
 
     `role_token` is appended only when applying to two different roles at one
     employer, which is the one case where the company name alone collides.
@@ -211,8 +211,11 @@ def owners(name: str, rows: list[dict]) -> list[dict]:
     """Tracker rows whose recorded resume or letter already carries this name."""
     # Case-folded: `_Acme.tex` and `_ACME.tex` are one file on macOS and
     # Windows, so a second Acme role would replace the documents already sent.
-    stems = {docpaths.resume_rel(name, "").casefold(),
-             docpaths.letter_rel(name, "").casefold()}
+    # Both orders: a row written until 2026-11-06 names <Prefix>_Resume_<ABBR>.
+    stems = {f"{folder}/{st}".casefold()
+             for folder, sts in (("cv", docpaths.resume_stems(name)),
+                                 ("cover_letters", docpaths.letter_stems(name)))
+             for st in sts}
     return [r for r in rows
             if any(os.path.splitext((r.get(col) or "").strip())[0].casefold() in stems
                    for col in ("cv_file", "cover_letter_file"))]

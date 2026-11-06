@@ -110,17 +110,21 @@ REQUIRED_IGNORE_RULES = [
     "linkedin_Profile.pdf",
     "cv/main_*.*",
     "!cv/main_example.tex",
-    # Human-readable naming from 05-cv-templates.md, <Prefix>_Resume_<ABBR>;
-    # same personal data as cv/main_*. Any prefix: the prefix is a name.
+    # Human-readable naming from 05-cv-templates.md, <Prefix>_<ABBR>_Resume (and
+    # <Prefix>_Resume_<ABBR>, the order until 2026-11-06); same personal data as
+    # cv/main_*. Any prefix: the prefix is a name.
     "cv/*_Resume_*.*",
+    "cv/*_Resume.*",
     # The same for a profile whose document noun is CV (docpaths.noun_word).
     "cv/*_CV_*.*",
+    "cv/*_CV.*",
     # ATS text extractions (/apply step 5d) carry the CV's full text.
     "cv/*.txt",
     "cover_letters/cover_*.*",
     # /apply also recognizes the uppercase Cover_* naming variant.
     "cover_letters/Cover_*.*",
     "cover_letters/*_Cover_Letter_*.*",
+    "cover_letters/*_Cover_Letter.*",
     "documents/cv/**",
     "documents/linkedin/**",
     "documents/diplomas/**",

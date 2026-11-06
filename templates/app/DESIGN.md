@@ -420,6 +420,11 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   edge under the row's own value, and a tap's line under both with its Undo at the right; on a
   phone the buttons follow the words. One way to do each thing in it. A short single choice is
   a row of chips, still a radio group, that wraps on a phone. (spaces-its-settings test)
+- File names (Settings > You) is the one place a file name is shown: its value is an example
+  from the person's own name and latest employer, and each chip shows its own, the one
+  recommended for their country marked. It names only the copies they download and send; the
+  files Claude keeps keep theirs. Default: the person, the employer, then the document, the
+  word by their market (docpaths.FILE_NAME_PRESETS). (file names test)
 - Many of one kind in Settings are one row that opens them, never a row each: "Employers
   you've turned down (N)" with what they left out, each name with its small trash; what Claude
   learned has one home, "What you have taught it", grouped by area, a rule a line with its day

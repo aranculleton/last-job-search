@@ -3050,6 +3050,14 @@ def _setting_set(r: Run) -> dict:
         profile_set.set_line("networking.py", "PROFILE_READS", value)
     elif key == "export_remind":
         return _set_export_remind(r, value, old)
+    elif key == "file_names":
+        # person.json documents.file_names (docpaths.file_names): only the name the files
+        # leave under changes; the kept files keep theirs.
+        person.put(["documents", "file_names"], value)
+        import docpaths
+        return {"note": "Your files are named like " + docpaths.example_file_name(value) + ".",
+                "undo": {"action": "setting.set", "target": dict(r.target),
+                         "value": {"value": old}}}
     label = dict(next(ch for k, _, ch in app_model.SETTINGS if k == key))[value]
     return {"note": f"Changed: {label}.",
             "undo": {"action": "setting.set", "target": dict(r.target), "value": {"value": old}}}
