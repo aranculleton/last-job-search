@@ -36,7 +36,8 @@ def _repo(tmp_path, passing=False):
                  ("GIT_COMMITTER_NAME", "t"), ("GIT_COMMITTER_EMAIL", "t@example.com")):
         os.environ.setdefault(k, v)
     root = str(tmp_path / "copy")
-    subprocess.run(["git", "init", "-q", root], check=True)
+    # Named, never the machine's default: a newer git (the Mac runner's) starts on "main".
+    subprocess.run(["git", "init", "-q", "-b", "master", root], check=True)
     write(root, "tools/state_rule.py", "LIMIT = 2\n")
     write(root, "profile/tests/test_mine.py",
           "import os, sys\nsys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'tools'))\n"
@@ -116,14 +117,15 @@ def test_master_bringing_in_an_update_checks_them_here_too(tmp_path, monkeypatch
     monkeypatch.setattr(sync_app, "own_tests", lambda r=None: ran.append(r))
     monkeypatch.setattr(sync_app, "_driver", lambda: None)
     origin = str(tmp_path / "origin.git")
-    git(tmp_path, "init", "-q", "--bare", origin)
+    # The bare origin names master as its own HEAD. Left to the machine's default, a newer
+    # git (the Mac runner's, 2026-11-06) points it at "main", which nothing pushed: the clone
+    # then checks out no files, the write below is untracked, and `commit -a` finds nothing.
+    git(tmp_path, "init", "-q", "--bare", "-b", "master", origin)
     git(root, "remote", "add", "origin", origin)
     git(root, "push", "-q", "origin", "HEAD:master")
     other = str(tmp_path / "other")
     git(tmp_path, "clone", "-q", origin, other)
-    # A clone takes no identity: a Mac runner has no global one, and the commit failed there.
-    git(other, "config", "user.name", "Test")
-    git(other, "config", "user.email", "test@example.com")
+    assert os.path.isfile(os.path.join(other, "tools", "state_rule.py"))
     write(other, "tools/state_rule.py", "LIMIT = 5\n")
     git(other, "commit", "-q", "-am", "Sync from the app: 1 new commit(s)")
     git(other, "push", "-q", "origin", "HEAD:master")
