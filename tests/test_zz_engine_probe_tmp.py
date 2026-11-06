@@ -43,7 +43,7 @@ BRIEF = r"""(() => { const R = %s;
 @pytest.mark.parametrize("size", [{"width": 1000, "height": 560}, {"width": 1280, "height": 720}, {"width": 1440, "height": 900}], ids=["1000", "1280", "1440"])
 def test_probe_brief(run, tmp_path, size):
     got = _go(run, tmp_path, [{"hash": "brief", "wait": 400, "eval": BRIEF}], size, model=_full(), clock=T, zone=PERSON_ZONE)
-    assert False, "PROBE " + json.dumps(got["after"][0]["eval"], separators=(",", ":"))
+    raise AssertionError("PROBE " + json.dumps(got["after"][0]["eval"], separators=(",", ":")))
 
 
 CHAT = r"""(() => { const R = %s;
@@ -66,7 +66,7 @@ def test_probe_chat_phone(run, tmp_path):
         {"click": "Go to the latest message", "wait": 400, "eval": CHAT},
     ])
     a = got["after"]
-    assert False, "PROBE " + json.dumps({"errors": got["errors"], "open": a[0]["eval"], "top": a[2]["eval"], "latest": a[3]["eval"]}, separators=(",", ":"))
+    raise AssertionError("PROBE " + json.dumps({"errors": got["errors"], "open": a[0]["eval"], "top": a[2]["eval"], "latest": a[3]["eval"]}, separators=(",", ":")))
 
 
 CHIP = r"""(() => { const R = %s;
@@ -91,7 +91,7 @@ def test_probe_chip_phone(run, tmp_path):
         {"hash": "settings"}, {"open": "set-sum:file_names", "wait": 300, "eval": CHIP},
         {"eval": "(document.querySelector('[data-k=\"set-file_names-2\"]').click(), 1)"}, {"wait": 1200, "eval": CHIP}])
     a = got["after"]
-    assert False, "PROBE " + json.dumps({"errors": got["errors"], "open": a[1]["eval"], "after": a[3]["eval"]}, separators=(",", ":"))
+    raise AssertionError("PROBE " + json.dumps({"errors": got["errors"], "open": a[1]["eval"], "after": a[3]["eval"]}, separators=(",", ":")))
 
 
 JOBS = r"""(() => { const R = %s;
@@ -104,4 +104,4 @@ JOBS = r"""(() => { const R = %s;
 
 def test_probe_jobs_wide(run, tmp_path):
     got = _go(run, tmp_path, [{"hash": "jobs", "wait": 300, "eval": JOBS}], {"width": 1400, "height": 900})
-    assert False, "PROBE " + json.dumps(got["after"][0]["eval"], separators=(",", ":"))
+    raise AssertionError("PROBE " + json.dumps(got["after"][0]["eval"], separators=(",", ":")))
