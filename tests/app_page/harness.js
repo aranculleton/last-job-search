@@ -667,6 +667,9 @@ function layoutMeasure() {
     if (!vis(el) || !inView(el)) continue;
     for (const c of el.classList) if (c.startsWith("tone-")) tones.add(c);
     if (![...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())) continue;
+    // Text size's Smaller and Larger are drawn in the size they set (DESIGN.md, 4.12): a sample
+    // of another size, not one of the screen's type styles.
+    if (el.matches('[data-size="smaller"], [data-size="larger"]')) continue;
     const cs = getComputedStyle(el);
     const pair = cs.fontSize + "/" + cs.fontWeight;
     if (!pairs.has(pair)) pairWhere[pair] = (el.tagName + "." + [...el.classList].join(".")).slice(0, 40);

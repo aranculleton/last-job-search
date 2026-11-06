@@ -13707,6 +13707,9 @@
   // A switch's whole row is its label, a full tap target on a phone: a 20px box beside an 18px
   // label was all there was to tap (the review, 2026-11-05).
   function toggleLabel(id, words, input) {
+    // Its own name too, so two switches never share one ("on") for a tool reading names.
+    const said = [words].flat().find((w) => typeof w === "string");
+    if (said && input && input.setAttribute && !input.getAttribute("aria-label")) input.setAttribute("aria-label", said);
     return h("label", {for: id, class: "toggle-label"}, h("span", {class: "set-name"}, words), input);
   }
   // An opened fold: what it says, what it does, and the line a tap leaves. On a wide screen the
