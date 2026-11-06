@@ -968,14 +968,24 @@ def built_in_line(n: int) -> str:
 # chat says which it is, and the chat's own flag (`record --about-app`), which routes it
 # (`route_about_app`) instead of keeping it and clears it from the turn's list.
 
+# Slow, frozen, crashed or buggy only with the app as what is (a recruiter slow to reply, a
+# crash course, the bug they fixed at their last job and interviews that froze are theirs:
+# an independent review, 2026-11-06). Where unsure, the person's rule is kept.
+_APP_SUBJECT = (r"(?:the app|this app|the page|this page|my page|the site|it|claude|the search|"
+                r"searching|the chat|(?:a|the|this|that) button|buttons|loading|everything|"
+                r"the sync|the update|updates|the screen)")
+_APP_VERB_TO = r"(?:load|open|start|save|update|search|respond|answer|come up|show)"
 ABOUT_APP = re.compile("|".join([
-    r"\b(?:so|too|really|very|painfully|super|incredibly|bit)\s+slow\b",
-    r"\bslow(?:ly|ness)?\s+(?:to|at)\s+(?:load|open|start|answer|respond|save|update|search)\b",
-    r"\b(?:is|was|it'?s|so|how)\s+slow\b",
-    r"\btak(?:es?|ing|en)\s+(?:forever|ages|so long|too long|far too long|an age)\b",
-    r"\bcrash\w*\b", r"\bfro(?:ze|zen)\b", r"\bfreez\w*\b",
+    r"\b" + _APP_SUBJECT + r"\s+(?:\w+\s+){0,2}slow(?:er)?\b(?!\s+to\s+(?!" + _APP_VERB_TO
+    + r"\b)\w)",
+    r"\bhow slow " + _APP_SUBJECT + r"\b",
+    r"\b" + _APP_SUBJECT + r"\s+(?:\w+\s+){0,2}tak(?:es?|ing|en)\s+(?:forever|ages|so long|"
+    r"too long|far too long|an age)\b",
+    r"\b" + _APP_SUBJECT + r"\s+(?:\w+\s+){0,2}(?:crash(?:ed|es|ing)|fro(?:ze|zen)|"
+    r"freez(?:es|ing)|buggy|glitch(?:ed|es|ing|y)?)\b",
     r"\b(?:it|app|page|screen|chat)\s+(?:hangs|hung|is hanging)\b",
-    r"\bbuggy\b", r"\b(?:a|the|this|another)\s+bug\b", r"\bglitch\w*\b",
+    r"\b(?:a|the|this|another)\s+(?:bug|glitch)\s+(?:in|on|with)\s+(?:the|this|my)\s+(?:app|"
+    r"page|site|search|chat|button|screen)\b",
     r"\b(?:it|app|page|screen|button|link|tab|chat|claude|sync|update|search)\s+(?:\w+\s+){0,2}"
     r"(?:doesn'?t|does not|isn'?t|is not|won'?t|will not|didn'?t|did not|never|stopped)\s+"
     r"(?:work(?:ing|s)?|load(?:ing|s)?|open(?:ing|s)?|respond(?:ing|s)?|sav(?:e|ing|es)"
@@ -2216,11 +2226,12 @@ def hook(event: dict) -> dict:
                 "hookEventName": "UserPromptSubmit",
                 "additionalContext": (
                     f"The person reacted (\"{cue}\"), and it reads as about how the app itself "
-                    f"behaves (\"{app_cue}\"), not how they want their work done. If it is: it "
-                    "is never a rule of theirs. Run python3 tools/learned.py record --about-app "
-                    "--said \"<their words>\" (it routes it and clears it) and work round it "
-                    "now, saying only what it prints to say. If it truly is how they want their "
-                    "own work done, record it as a rule with --not-about-app.")}}
+                    f"behaves (\"{app_cue}\"). Judge it. Only if it is plainly about the app and "
+                    "says nothing about how they want their own work done: python3 "
+                    "tools/learned.py record --about-app --said \"<their words>\" (it routes it "
+                    "and clears it) and work round it now, saying only what it prints to say. "
+                    "If it says how they want their work done, or you are not sure, it is "
+                    "theirs: record it as usual, adding --not-about-app.")}}
         return {"hookSpecificOutput": {
             "hookEventName": "UserPromptSubmit",
             "additionalContext": (
@@ -2793,8 +2804,8 @@ def main(argv=None) -> int:
             "they want their work done, and a complaint about the app is never a rule of "
             "theirs. If it is about the app: python3 tools/learned.py record --about-app "
             "--said \"<their words>\" (it routes it and clears it from this turn), then work "
-            "round it. If it truly is how they want their own work "
-            "done, run the same record again with --not-about-app.")
+            "round it. If it says how they want their own work done, or you are not sure, "
+            "it is theirs: run the same record again with --not-about-app.")
     elif a.cmd == "record":
         e = record(a.area, a.said, a.rule, a.applied_to, a.never_say, overrides=a.overrides,
                    replaces=a.replaces, length=a.length, via=a.via, output=a.output)
