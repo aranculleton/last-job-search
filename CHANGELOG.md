@@ -20,6 +20,16 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Added
+
+- **Rules the app now does by itself come off your list.** After an update, a rule you taught
+  that the app now does for everyone (how your resume files are named, follow-ups written as
+  soon as you ask) is put away once, marked "Now part of the app", and you hear one line
+  saying how many. Profile upgrade: `built-in-rules`.
+- **A complaint about the app is never kept as one of your rules.** "Why is it so slow" or a
+  button that does nothing is about the app, not how you want your work done: Claude works
+  round it instead of reading it before every draft.
+
 ### Changed
 
 - **Settings is shorter and says things plainly.** Employers you turned down are one row,
