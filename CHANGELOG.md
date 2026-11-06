@@ -26,6 +26,10 @@ make sense to somebody whose repo just received it.
   that the app now does for everyone (how your resume files are named, follow-ups written as
   soon as you ask) is put away once, marked "Now part of the app", and you hear one line
   saying how many. Profile upgrade: `built-in-rules`.
+- **A search of the employers you name.** Say "search these 20 employers" (in a chat, or in
+  Find jobs' note) and only those are searched, on their own job boards and by their names.
+  Your list holds only them, with room for every one that has a job passing your rules, and
+  it says plainly which had no open roles.
 - **A complaint about the app is never kept as one of your rules.** "Why is it so slow" or a
   button that does nothing is about the app, not how you want your work done: Claude works
   round it instead of reading it before every draft.

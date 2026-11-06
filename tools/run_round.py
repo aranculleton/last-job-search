@@ -887,8 +887,119 @@ def leave_out(passed, summary_dir: str, name: str, seen_path: str, today: str,
     return mine + old
 
 
+# A search limited to employers the person names ("search these 20 employers"). The round
+# could not do it: its shortlist was the overall top 10, so the page showed other companies
+# too, and the maintainer filtered the 20 by hand from 06_shortlist.json (2026-11-06). The
+# names are kept in the round's own folder, so a widening and a --recut keep to them.
+NAMED_FILE = "employers.json"
+NAMED_SCRAPE = os.path.join("00_scrape", "named.json")
+
+
+def named_employers(given) -> list[str]:
+    """The employers a search is limited to (--employers): names separated by commas,
+    semicolons or new lines, or a file holding them, one a line or a JSON list (a round's
+    own employers.json too). Each employer once, as the app matches employer names
+    (company_key.key: "Acme Ltd" and "Acme" are one), in the order given."""
+    from company_key import key as company_key
+    text = str(given or "")
+    names: list = []
+    if text and os.path.isfile(text):
+        with open(text, encoding="utf-8") as fh:
+            body = fh.read()
+        try:
+            got = json.loads(body)
+        except ValueError:
+            got = None
+        if isinstance(got, dict):
+            got = got.get("named")
+        names = ([str(n) for n in got] if isinstance(got, list)
+                 else body.splitlines())
+    else:
+        names = re.split(r"[,;\n]+", text)
+    out, seen = [], set()
+    for n in names:
+        n = " ".join(str(n).split()).strip(" -*\t")
+        k = company_key(n) if n else ""
+        if k and k not in seen:
+            seen.add(k)
+            out.append(n)
+    return out
+
+
+def named_keys(names) -> dict[str, str]:
+    """{employer key: the name as the person gave it}."""
+    from company_key import key as company_key
+    return {company_key(n): n for n in names or () if company_key(n)}
+
+
+def at_named(rows, names) -> list[dict]:
+    """The rows at one of the employers named, in their order."""
+    from company_key import key as company_key
+    keys = named_keys(names)
+    return [r for r in rows or () if isinstance(r, dict)
+            and company_key(str(r.get("company") or "")) in keys]
+
+
+def read_named(out_dir: str) -> tuple[list[str], set | None]:
+    """The employers a round was limited to and the keys of those it found postings at (None
+    when it never said), from its own folder; ([], None) for an ordinary round."""
+    path = os.path.join(out_dir, NAMED_FILE)
+    if not os.path.isfile(path):
+        return [], None
+    try:
+        got = _read_json(path)
+    except Exception:  # noqa: BLE001  unreadable: read as names, one a line
+        return named_employers(path), None
+    names = named_employers(path)
+    found = got.get("found") if isinstance(got, dict) else None
+    return names, (set(named_keys(found)) if isinstance(found, list) else None)
+
+
+def write_named(out_dir: str, names, found=None) -> str:
+    """The round's own record of the employers it was limited to, and those it found
+    postings at. Its path."""
+    path = os.path.join(out_dir, NAMED_FILE)
+    data: dict = {"named": list(names)}
+    if found is not None:
+        data["found"] = list(found)
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
+        json.dump(data, fh, indent=1, ensure_ascii=False)
+        fh.write("\n")
+    return path
+
+
+def named_room(show, names) -> int:
+    """How many a search limited to named employers keeps: the number asked for, or one for
+    each employer named when that is more, so every named employer with a posting that passes
+    every rule has a place even past 10. The throttle keeps one role per employer, so that is
+    every one of them; write_summary still adds a named employer's best row if the room is full
+    of second roles."""
+    return max(shown(show), len(names or ()))
+
+
+def say_named(names, rows, found=None, jobage=None) -> list[str]:
+    """The lines a search limited to named employers says about the ones with nothing on its
+    list: no posting found there at all, or postings found and none passing the rules."""
+    from company_key import key as company_key
+    on = {company_key(str(r.get("company") or "")) for r in rows or () if isinstance(r, dict)}
+    missing = [n for n in names or () if company_key(n) not in on]
+    if not missing:
+        return []
+    window = f" in the last {jobage} days" if jobage else ""
+    if found is None:
+        return [f"No open roles on this list at {', '.join(missing)}."]
+    none = [n for n in missing if company_key(n) not in found]
+    cut = [n for n in missing if company_key(n) in found]
+    lines = []
+    if none:
+        lines.append(f"No open roles found at {', '.join(none)}{window}.")
+    if cut:
+        lines.append(f"Open roles found at {', '.join(cut)}, but none that passes your rules.")
+    return lines
+
+
 def write_summary(shortlist_path, out_dir, name, scraped_path=None, show=None, rules=None,
-                  report=None, links=None):
+                  report=None, links=None, named=None):
     """The compact shortlist, and where it was written. With `scraped_path` (the round's
     scrape), each kept row's apply link is checked against what the round read
     (link_checks), so a card says where to apply and whether it is still listed; `links`
@@ -898,7 +1009,13 @@ def write_summary(shortlist_path, out_dir, name, scraped_path=None, show=None, r
     every hard rule until it has the number asked for or runs out. It took the first N and
     nothing after: a search asked for 10, rows failing a rule were cut from those 10, and 7
     came back with good rows left below them (2026-11-03). `report`, a dict, is given the
-    number asked for, the number found and the rows passed over, with why."""
+    number asked for, the number found and the rows passed over, with why.
+
+    With `named` (the employers a search is limited to, --employers), only rows at those
+    employers are taken, the rest left as they are (never a ruling: the person did not ask
+    about them), and the room is named_room: the number asked for, or one for each employer
+    named when that is more. Once it is full, a named employer with nothing on the list yet
+    still gets its best row that passes, so none is left off for a second role elsewhere."""
     try:
         rows = _read_json(shortlist_path)
     except Exception:
@@ -906,6 +1023,12 @@ def write_summary(shortlist_path, out_dir, name, scraped_path=None, show=None, r
     rows = rows if isinstance(rows, list) else list(rows.values())
     rows.sort(key=lambda r: -(r.get("priority") or 0))
     want = shown(show)
+    keys = named_keys(named) if named else {}
+    taken: set = set()
+    if keys:
+        from company_key import key as company_key
+        want = named_room(show, named)
+        rows = [r for r in rows if company_key(str(r.get("company") or "")) in keys]
     links = links or {}
     check = None
     if scraped_path:
@@ -918,7 +1041,10 @@ def write_summary(shortlist_path, out_dir, name, scraped_path=None, show=None, r
     kept, passed = [], []
     for r in rows:
         if len(kept) >= want:
-            break
+            if not keys:
+                break
+            if company_key(str(r.get("company") or "")) in taken:
+                continue
         why = rules(r) if rules else ""
         if why:
             passed.append({**r, "skip_reason": why})
@@ -935,6 +1061,8 @@ def write_summary(shortlist_path, out_dir, name, scraped_path=None, show=None, r
                                                "lists it"})
             continue
         kept.append(r)
+        if keys:
+            taken.add(company_key(str(r.get("company") or "")))
     if report is not None:
         report.update(asked=want, found=len(kept), passed_over=passed)
     out = [{k: (pay_text(r) if k == "salary" else r.get(k)) for k in SUMMARY_FIELDS}
@@ -1018,21 +1146,23 @@ def trim(path, top=KEEP_TOP):
     return max(0, before - os.path.getsize(path))
 
 
-def prune(out_dir, keep=(), hold=()):
+def prune(out_dir, keep=(), hold=(), top=KEEP_TOP):
     """Delete the stage files, keeping the round directory, its log, the shortlist and `keep`.
 
     The log is small, is already gitignored as `*.log`, and is the funnel
     record somebody reads when a round looks wrong. The shortlist is what a
-    draft is staged from. Anything named in `keep` is slimmed rather than deleted,
-    and anything in `hold` is left as it is, for the caller to delete later.
+    draft is staged from, cut to `top` rows (None: every one, for a search limited to
+    named employers, which holds only theirs). Anything named in `keep` is slimmed rather
+    than deleted, and anything in `hold` is left as it is, for the caller to delete later.
+    The employers a search was limited to (NAMED_FILE) stay, for a --recut.
     """
     freed = 0
     for name in os.listdir(out_dir):
-        if name == "round.log" or name in hold:
+        if name in ("round.log", NAMED_FILE) or name in hold:
             continue
         path = os.path.join(out_dir, name)
         if name == SHORTLIST:
-            freed += trim(path)
+            freed += trim(path, top)
             continue
         if name in keep:
             freed += slim(path)
@@ -1255,13 +1385,26 @@ def recut(a) -> int:
     scraped = os.path.join(a.out, SCRAPED, "kept.json")
     report: dict = {}
     seen = a.seen or person.state("job_scraper", "seen_jobs.json")
+    # The employers the round was limited to, kept in its folder, or named now: a recut with
+    # --employers limits an ordinary round's list to them, and keeps to them after.
+    names, found = read_named(a.out)
+    if a.employers:
+        given = named_employers(a.employers)
+        if not given:
+            sys.exit("--employers names no employer: give their names, separated by commas.")
+        if named_keys(given) != named_keys(names):
+            names, found = given, None
+            write_named(a.out, names)
     rules = hard_rules(a.jobage, a.today, seen, a.no_seen_read, dump=a.dump, name=name,
                        tracker=a.tracker, own=links)
     path = write_summary(short, where, name,
                          scraped_path=scraped if os.path.isfile(scraped) else None,
-                         show=a.show, rules=rules, report=report, links=links)
-    for line in say_cut(report, a.show):
+                         show=a.show, rules=rules, report=report, links=links, named=names)
+    for line in say_cut(report, None if names else a.show):
         print(line)
+    if names and path:
+        for line in say_named(names, _read_json(path), found, a.jobage):
+            print(line)
     say_left(leave_out(report.get("passed_over"), where, name, seen, a.today,
                        links=rules.had.links, record=not a.no_seen_write))
     if path:
@@ -1353,6 +1496,12 @@ def main():
                     help="a page dump holding its actions and receipts, read when the "
                          "shortlist is cut: a job set aside on the page and not yet applied "
                          "is passed over and the next taken")
+    ap.add_argument("--employers", default=None,
+                    help="search only these employers, as the person named them: names "
+                         "separated by commas (\"A, B, C\"), or a file holding them, one a "
+                         "line. Their own boards and searches by their names are what is "
+                         "searched; the shortlist holds only them, one place for each at "
+                         "least, and says which had no open roles")
     ap.add_argument("--recut", action="store_true",
                     help="search nothing: cut the round in --out again, every hard rule "
                          "applied as it stands now (a ruling or a judgement made since), "
@@ -1377,6 +1526,11 @@ def main():
             pass
     if a.recut:
         return recut(a)
+    names: list = []
+    if a.employers:
+        names = named_employers(a.employers)
+        if not names:
+            ap.error("--employers names no employer: give their names, separated by commas")
     import scrape_wide
     pages, workers, _ = scrape_wide.defaults()
     a.pages = a.pages or pages
@@ -1386,6 +1540,10 @@ def main():
     log = open(f("round.log"), "a", encoding="utf-8", errors="replace", newline="\n")
     log.write(round_stamp(os.path.basename(os.path.abspath(a.out)), a.work))
     log.flush()
+    if names:
+        write_named(a.out, names)
+        print(f"employers: this search is limited to the {len(names)} named: "
+              + ", ".join(names))
     # One monotonic ceiling for the whole round. Every stage gets the
     # smaller of its own budget and what is left of this.
     started = time.monotonic()
@@ -1437,7 +1595,10 @@ def main():
                    # was given another.
                    + (["--seen", a.seen] if a.seen else [])
                    + (["--keep-ruled-out"] if a.no_seen_read else [])
-                   + (["--before", a.scrape_before] if a.scrape_before else []),
+                   + (["--before", a.scrape_before] if a.scrape_before else [])
+                   # Aimed at the employers named: their own boards and searches by their
+                   # names, never the whole search filtered afterwards.
+                   + (["--employers-file", f(NAMED_FILE)] if names else []),
                    log, deadline, ok=(0, SCRAPE_PARTIAL))
         ON_TIMEOUT.pop("scrape_wide.py", None)
         keep_requests(log, requests)
@@ -1449,13 +1610,31 @@ def main():
                        "portals and why), so this round is not a full picture of the market")
     scraped = os.path.join(scrape_dir, "kept.json")
     RESUME["scrape"] = scraped
+    # A search limited to named employers goes on with their postings alone, before anything
+    # is fetched, screened or ranked: filtered first, then ranked and cut.
+    stage_in = scraped
+    if names:
+        try:
+            got = _read_json(scraped)
+            got = got if isinstance(got, list) else list(got.values())
+        except Exception:  # noqa: BLE001  no scrape to read: the prefilter says so
+            got = []
+        mine = at_named(got, names)
+        stage_in = f(NAMED_SCRAPE)
+        with open(stage_in, "w", encoding="utf-8", newline="\n") as fh:
+            json.dump(mine, fh, indent=1)
+            fh.write("\n")
+        here = set(named_keys([str(r.get("company") or "") for r in mine]))
+        write_named(a.out, names, [n for n in names if n and named_keys([n]).keys() & here])
+        print(f"employers: {len(mine)} of the {len(got)} postings found are at the employers "
+              "named, and only those go on")
 
     # `--seen` is what stops hydrate paying for postings this search already
     # ruled out. The check is throttle.ruled_out() either way; running it here
     # rather than only at the end saves one HTTP call plus four free stages per
     # repeat, and on the 2,910 postings in seen_jobs 16% of everything reaching
     # hydrate was in that state.
-    prefilter = [sys.executable, f"{T}/prefilter.py", scraped, "--out", f("01_prefiltered.json"),
+    prefilter = [sys.executable, f"{T}/prefilter.py", stage_in, "--out", f("01_prefiltered.json"),
                  "--dropped", f("01_dropped.json"), "--jobage", str(a.jobage),
                  "--today", a.today]
     # Read even with --no-seen-read: it is also when each posting was first seen.
@@ -1521,7 +1700,7 @@ def main():
     summary = write_summary(f("06_shortlist.json"),
                             a.summary_dir or person.state(SUMMARY_DIR),
                             os.path.basename(os.path.abspath(a.out)), scraped_path=scraped,
-                            show=a.show, rules=rules, report=cut)
+                            show=a.show, rules=rules, report=cut, named=names)
     # Counted on the list the person is shown, after the hard rules cut it: counted on the
     # ranked rows before the cut, 60 and more of them, a round met its target with rows the
     # cut then dropped, and never widened (the release review, 2026-11-03).
@@ -1529,13 +1708,20 @@ def main():
     # A search asked for N widens until N score 60 or more: a top-up of ten starts on one page
     # of each site (the app skill) and stopped at five (2026-11-03).
     want = max(YIELD_60, min(a.show or 0, 60))
-    met = good >= want and strong >= YIELD_75
+    want_75 = YIELD_75
+    if names:
+        # One role per employer: a search of three employers can never show five.
+        want, want_75 = min(want, len(names)), min(YIELD_75, len(names))
+    met = good >= want and strong >= want_75
     print(f"yield: {good} scoring 60+ (target {want}), "
-          f"{strong} scoring 75+ (target {YIELD_75}) -> {'MET' if met else 'MISSED'}")
+          f"{strong} scoring 75+ (target {want_75}) -> {'MET' if met else 'MISSED'}")
     if partial:
         print(f"warning: {partial}")
-    for line in say_cut(cut, a.show):
+    for line in say_cut(cut, None if names else a.show):
         print(line)
+    if names and summary:
+        for line in say_named(names, _read_json(summary), read_named(a.out)[1], a.jobage):
+            print(line)
     if summary:
         print(f"shortlist summary: {local_path.rel(summary, ROOT)} "
               f"(top {KEEP_TOP}, no posting bodies) - commit this one")
@@ -1574,7 +1760,8 @@ def main():
         # those survive with their posting bodies stripped. A round
         # about to widen holds its hydrated bodies back for the next one.
         freed = prune(a.out, keep=() if met else DIAGNOSTICS,
-                      hold=(HYDRATED, SCRAPED) if widen else ())
+                      hold=(HYDRATED, SCRAPED) if widen else (),
+                      top=None if names else KEEP_TOP)
         print(f"pruned {freed // (1024 * 1024)}MB of reproducible stage files "
               f"(--keep-intermediates to retain them)"
               + ("" if met else f"; kept {', '.join(DIAGNOSTICS)} without bodies"))
@@ -1616,7 +1803,8 @@ def main():
             + (["--tracker", a.tracker] if a.tracker else [])
             + (["--seen", a.seen] if a.seen else [])
             + (["--no-seen-write"] if a.no_seen_write else [])
-            + (["--no-seen-read"] if a.no_seen_read else []))
+            + (["--no-seen-read"] if a.no_seen_read else [])
+            + (["--employers", f(NAMED_FILE)] if names else []))
         if not a.keep:
             try:
                 os.remove(cache)
@@ -1634,7 +1822,7 @@ def main():
     else:
         why_not = ""
     print(f"\nYIELD TARGET MISSED after round {a.round}{why_not}.")
-    print(f"  got {good} at 60+ and {strong} at 75+; wanted {YIELD_60} and {YIELD_75}")
+    print(f"  got {good} at 60+ and {strong} at 75+; wanted {want if names else YIELD_60} and {want_75}")
 
     # Before anything about the market, say whether a board was even answering.
     # A portal that has gone quiet produces exactly this message, and every
@@ -1656,9 +1844,15 @@ def main():
           "or first seen too long ago, and 03_screened_all.json for the stated-fact "
           "knockouts. Each was kept (without posting bodies) precisely because this "
           "round missed.")
-    print("  widen next, in this order: more title variants, the remaining priority "
-          "categories, wider PASS-set locations, adjacent target sectors and named "
-          "employers, then the WebSearch fallback.")
+    if names:
+        print("  this search was limited to the employers named, so it widens no further "
+              "than their own boards and searches by their names; those with no open roles "
+              "are named above. An employer with no board on file: "
+              "tools/ats_boards.py --find \"<employer>\" finds one.")
+    else:
+        print("  widen next, in this order: more title variants, the remaining priority "
+              "categories, wider PASS-set locations, adjacent target sectors and named "
+              "employers, then the WebSearch fallback.")
     # Coverage is the other lever. A board that serves this person's market and
     # has no portal here contributes nothing to any round, however wide.
     gaps = _boards_not_built()
