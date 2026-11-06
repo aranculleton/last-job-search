@@ -81,6 +81,9 @@ make sense to somebody whose repo just received it.
   named wrote the same draft twice, and a save the page refused left the next one a step
   ahead, so it was refused again until Claude read the page afresh. Each draft is now written
   once, and a refused save is made again exactly as the page holds it.
+- **The day's update check no longer holds up a search.** Its slowest part, a check of the
+  public app that only the app maintainer's own copy runs, now runs on its own while the work
+  goes on; what it finds is said by the next check.
 
 ## [4.11.0] - 2026-11-06
 
