@@ -302,3 +302,92 @@ def test_a_lock_an_older_version_left_is_read_and_a_dead_one_is_taken_over(chat)
     assert got and land.landing(root)
     land._drop_lock(root, got)
     assert not os.path.exists(p)
+
+
+# --------------------------------------------------------------------------- an update's tests
+
+def _update_in_this_landing(chat, own_test: str):
+    """The person's own test, on master; then an app update this chat took, not on master."""
+    (chat / "profile" / "tests").mkdir(exist_ok=True)
+    (chat / "profile" / "tests" / "test_mine.py").write_text(own_test, encoding="utf-8")
+    (chat / "tools").mkdir(exist_ok=True)
+    (chat / "tools" / "thing.py").write_text("SHAPE = 'old'\n", encoding="utf-8")
+    _git(chat, "add", "-A")
+    _git(chat, "commit", "-qm", "their test")
+    _git(chat, "push", "-q", "origin", "HEAD:master")
+    _git(chat, "fetch", "-q", "origin")
+    (chat / "tools" / "thing.py").write_text("SHAPE = 'new'\n", encoding="utf-8")
+    _git(chat, "add", "-A")
+    _git(chat, "commit", "-qm", "Sync from the app: the newest version")
+    (chat / "profile" / "notes.md").write_text("today's work\n", encoding="utf-8")
+
+
+PINNED = ("import os\n"
+          "def test_shape():\n"
+          "    here = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))\n"
+          "    text = open(os.path.join(here, 'tools', 'thing.py')).read()\n"
+          "    assert \"'old'\" in text\n")
+
+
+def _marker_check(tmp_path):
+    ran = tmp_path / "check-ran"
+    return ran, [sys.executable, "-c", "open(%r, 'w').close()" % str(ran)]
+
+
+def test_a_landing_never_checks_against_own_tests_an_update_just_broke(chat, tmp_path, capsys):
+    """An update this landing carries broke one of the person's own tests, and nothing had run
+    them against it (another chat took it): the landing runs them first, holds the work on its
+    branch and says the step, and the long check is never run on them."""
+    _update_in_this_landing(chat, PINNED)
+    ran, check = _marker_check(tmp_path)
+    code = land.main(["--message", "Notes"], root=str(chat), check=check)
+    out = capsys.readouterr().out
+    assert code == 1 and land.OWN_TESTS_DO in out and "test_shape" in out, out
+    assert not ran.exists()
+    assert "the work waits on" in out                       # pushed, never lost
+    import sync_app
+    assert sync_app.own_tests_step(str(chat))               # every command says it first
+    # Brought in line: the check runs, and the work lands.
+    (chat / "profile" / "tests" / "test_mine.py").write_text(
+        PINNED.replace("'old'", "'new'"), encoding="utf-8")
+    code = land.main(["--message", "Notes"], root=str(chat), check=check)
+    out = capsys.readouterr().out
+    assert code == 0 and ran.exists() and "land: ready" in out, out
+
+
+def test_own_tests_that_pass_after_an_update_hold_nothing(chat, tmp_path, capsys):
+    _update_in_this_landing(chat, "def test_fine():\n    assert True\n")
+    ran, check = _marker_check(tmp_path)
+    code = land.main(["--message", "Notes"], root=str(chat), check=check)
+    assert code == 0 and ran.exists(), capsys.readouterr().out
+
+
+# --------------------------------------------------------------------------- the round folder
+
+def test_the_search_tweak_record_is_never_among_the_round_summaries(tmp_path, monkeypatch):
+    """documents/rounds/*.json is the round summaries, each a list of rows, and every reader
+    (the app's, and a person's own tests) reads each as one. The record of tweaks to the
+    search was written there (documents/rounds/tweaks.json) and broke a person's own test; an
+    old one is moved, by the upgrade or the next tweak, its entries kept."""
+    import person
+    import profile_upgrades
+    import tweak
+    monkeypatch.setenv(person.STATE_ENV, str(tmp_path))
+    rounds = tmp_path / "documents" / "rounds"
+    rounds.mkdir(parents=True)
+    (rounds / "2026-11-05.json").write_text('[{"url": "https://example.com/1"}]\n')
+    (rounds / "tweaks.json").write_text('{"k1": {"at": "2026-11-05"}}\n')
+    assert profile_upgrades._old_jobs_tweaks()
+    where = tweak.resolve({"args": {"target": {"id": "jobs", "output": "jobs"}}})
+    assert os.path.realpath(where["folder"]) == os.path.realpath(rounds / "tweaks")
+    assert tweak.log(where) == {"k1": {"at": "2026-11-05"}}
+    assert not profile_upgrades._old_jobs_tweaks()
+    # Every file directly in the round folder is still a round's list of rows.
+    for name in os.listdir(rounds):
+        if name.endswith(".json"):
+            with open(rounds / name, encoding="utf-8") as fh:
+                assert isinstance(json.load(fh), list), name
+    # The upgrade's own command, on a copy that has not tweaked since.
+    (rounds / "tweaks.json").write_text('{"k2": {"at": "2026-11-06"}}\n')
+    assert tweak.main(["move-record"]) == 0
+    assert set(tweak.log(where)) == {"k1", "k2"} and not (rounds / "tweaks.json").exists()

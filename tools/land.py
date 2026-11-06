@@ -578,6 +578,33 @@ def _run_check(root: str, cmd: list[str]) -> tuple[int, str]:
     return p.returncode, (out or "") + (err or "")
 
 
+def _own_tests_owed(root: str) -> list[str]:
+    """The person's own tests an update broke that are not brought in line yet, before the
+    landing's check runs: those the last run recorded (sync_app.own_tests_owed, run again
+    only when something they check changed), and, where this landing carries an update their
+    tests were never run against (a chat that took it elsewhere, a fresh computer with no
+    record), a run of them now. [] where there are none, or it cannot be told."""
+    if not os.path.isdir(os.path.join(root, "profile", "tests")):
+        return []
+    try:
+        import sync_app
+        owed = sync_app.own_tests_owed(root)
+        if owed:
+            return owed
+        rec = sync_app.own_tests_record(root) or {}
+        app = sync_app.app_tree(root)
+        if not app or rec.get("app") == app:
+            return []
+        # No update in this landing: the app's code is master's own, and the check runs them.
+        if _git(root, "rev-parse", "origin/master:tools").stdout.strip() == app:
+            return []
+        failures = sync_app.own_test_failures(root)
+        sync_app.record_own_tests(root, failures)
+        return [str(n) for n, _m in failures or []]
+    except Exception:  # noqa: BLE001  unsure: the check itself says
+        return []
+
+
 def _work_since_push(root: str) -> bool:
     """Anything a queued save would add: files no commit holds, or commits since the last
     push."""
@@ -1413,6 +1440,16 @@ def _land(root: str, message: str, check, sleep) -> int:
         print("land: nothing to land")
         return 0
 
+    owed = _own_tests_owed(root)
+    if owed:
+        # An update broke some of the person's own tests and they are not in line yet: the
+        # check would only fail on them, minutes later, so it is not run. The work waits on
+        # its branch and lands with them once they pass (the maintainer, 2026-11-06).
+        _wait_on_branch(root, OWN_TESTS_HEAD, sleep)
+        print(OWN_TESTS_DO)
+        print("land: their own tests that fail: %s" % "; ".join(owed[:6]) +
+              ("; and %d more" % (len(owed) - 6) if len(owed) > 6 else ""))
+        return 1
     head = _git(root, "rev-parse", "HEAD").stdout.strip()
     if head and head == pushed(root):
         # Exactly what the last landing checked green and pushed: never checked again (a save
@@ -1781,7 +1818,8 @@ def _rounds(root: str, message: str, check, sleep, land_fn, finish) -> int:
         sys.stdout.write(said)
         keep = [ln for ln in said.splitlines()
                 if "tell the person" in ln.lower() or "Tell the person" in ln
-                or REFUSED_SAY in ln or DISK_FULL_SAY in ln]
+                or REFUSED_SAY in ln or DISK_FULL_SAY in ln or ln == OWN_TESTS_DO
+                or ln.startswith("land: their own tests that fail: ")]
         if code == 0 and READY:
             ok, why = finish(root, dict(READY))
             if ok:

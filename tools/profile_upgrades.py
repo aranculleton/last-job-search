@@ -954,6 +954,16 @@ def _old_sweep_cursor() -> str:
             "that every file there is a round reads it" if os.path.exists(old) else "")
 
 
+def _old_jobs_tweaks() -> str:
+    """4.10 kept the record of tweaks to the person's search at documents/rounds/tweaks.json,
+    among the round summaries, and a person's own test that reads every documents/rounds/*.json
+    as a round failed on it (the maintainer's copy, 2026-11-06), as it had on the sweep cursor
+    (sweep-cursor-moved). Moving it is instant: no web, no question."""
+    old = person.state("documents", "rounds", "tweaks.json")
+    return ("documents/rounds/tweaks.json sits among your round summaries, where a check that "
+            "every file there is a round reads it" if os.path.exists(old) else "")
+
+
 def _job_alerts_retired() -> str:
     """Retired 2026-10-22, with the job-alert reader it asked about. It asked to read the
     person's LinkedIn alert emails into each round, and came back every month after a no;
@@ -1900,6 +1910,13 @@ REGISTRY: tuple[Upgrade, ...] = (
             _old_sweep_cursor, "python3 tools/scrape_wide.py --move-cursor", "instant",
             command=("python3", "tools/scrape_wide.py", "--move-cursor"),
             paths=("documents/rounds/.sweep.json", "documents/rounds/.sweep/cursor.json"),
+            priority=1),
+    Upgrade("tweaks-record-moved", "2026-11-06",
+            "the record of changes you asked for to your search moved out from among your round "
+            "summaries, so a check that every file there is a round passes again",
+            _old_jobs_tweaks, "python3 tools/tweak.py move-record", "instant",
+            command=("python3", "tools/tweak.py", "move-record"),
+            paths=("documents/rounds/tweaks.json", "documents/rounds/tweaks/tweaks.json"),
             priority=1),
     Upgrade("read-break", "2026-10-19",
             "the pause between bursts of profile reads written in your profile, yours to change",
