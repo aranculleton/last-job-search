@@ -163,6 +163,9 @@ def chat(tmp_path):
     _git(tmp_path, "init", "-q", "--bare", "-b", "master", str(origin))
     c = tmp_path / "chat"
     _git(tmp_path, "init", "-q", "-b", "master", str(c))
+    # The copy's own identity: the landing commits with it, and a CI runner has no global one.
+    _git(c, "config", "user.name", "Test")
+    _git(c, "config", "user.email", "test@example.com")
     (c / "profile").mkdir()
     (c / "profile" / "person.json").write_text('{"name": "Example"}\n', encoding="utf-8")
     (c / "profile" / "notes.md").write_text("first\n", encoding="utf-8")
@@ -213,7 +216,8 @@ def test_two_landings_started_at_once_run_one_check_at_a_time(chat, tmp_path):
            % (os.path.join(ROOT, "tools"), str(chat)))
     # Both see no lock at the same moment: the old look-then-write let both in.
     procs = [subprocess.Popen([sys.executable, "-c", run], cwd=chat, env=env,
-                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                              encoding="utf-8", errors="replace")
              for _ in range(2)]
     outs = [p.communicate(timeout=120)[0] for p in procs]
     spans = _runs(rec)
@@ -431,3 +435,108 @@ def test_the_search_tweak_record_is_never_among_the_round_summaries(tmp_path, mo
     (rounds / "tweaks.json").write_text('{"k2": {"at": "2026-11-06"}}\n')
     assert tweak.main(["move-record"]) == 0
     assert set(tweak.log(where)) == {"k1", "k2"} and not (rounds / "tweaks.json").exists()
+
+
+# --------------------------------------------------------------------------- the review's finds
+
+def test_queueing_own_tests_again_never_restarts_what_an_agent_has_started(chat, monkeypatch):
+    """A background agent started on the update's improvements, and another chat's landing
+    queued own-tests again while it worked: the start was dropped and every chat's "not now"
+    deleted, so the hook held the next chat for a second agent on the same tests."""
+    import profile_upgrades as pu
+    monkeypatch.setattr(pu, "ROOT", str(chat))
+    _update_in_this_landing(chat, PINNED)
+    assert pu.queue_own_tests(str(chat))
+    pu.mark_started()
+    pu.not_now("on a call", chat="chat b")
+    before = pu._listed()
+    assert pu.queue_own_tests(str(chat))
+    assert pu._listed() == before
+    assert pu.unstarted(chat="a chat") == [] and pu.unstarted(chat="chat b") == []
+
+
+def test_own_tests_queued_after_a_start_is_owed_alone(chat, monkeypatch):
+    """Started on what the sync listed, without own-tests: own-tests queued later is owed on
+    its own, and nothing the start took is owed twice."""
+    import profile_upgrades as pu
+    monkeypatch.setattr(pu, "ROOT", str(chat))
+    _update_in_this_landing(chat, PINNED)
+    day = pu._day()
+    pu._save_listed({"sync": pu._sync_head()[0], "ids": ["sweep-cursor-moved"], "day": day,
+                     "since": {}, "elsewhere": False, "started": {"day": day}})
+    assert pu.unstarted(chat="a chat") == []
+    assert pu.queue_own_tests(str(chat))
+    assert pu.unstarted(chat="a chat") == [("own-tests", day)]
+
+
+def test_a_save_queued_behind_one_that_stopped_short_is_started_next(chat, monkeypatch, capsys):
+    """Chat B was told its work is saved too while chat A's landing ran; A's stopped short
+    (not green), and B's request sat with nothing to take it while the hook held nobody."""
+    root = str(chat)
+    started = []
+
+    def a_lands(r, message, check, sleep):
+        assert land.main(["--message", "B's work"], root=r) == 0      # B, queued behind A
+        return 1                                                       # A: not green
+    monkeypatch.setattr(land, "_land", a_lands)
+    monkeypatch.setattr(land, "_next", lambda r: started.append(r))
+    assert land.main(["--message", "A's work"], root=root) == 1
+    assert started == [root], capsys.readouterr().out
+
+
+def test_a_queued_save_is_owned_only_while_a_landing_lives(chat):
+    root = str(chat)
+    p = os.path.join(land.git_dir(root), land.WANTED_FILE)
+    with open(p, "w", encoding="utf-8") as fh:
+        json.dump({"message": "B", "at": time.time() - 5}, fh)
+    assert land.wanted(root)                       # a moment old: one is starting for it
+    with open(p, "w", encoding="utf-8") as fh:
+        json.dump({"message": "B", "at": time.time() - 300}, fh)
+    assert not land.wanted(root)                   # nobody alive to take it: the hook holds
+    token = land._take_lock(root)
+    try:
+        assert land.wanted(root)
+    finally:
+        land._drop_lock(root, token)
+
+
+def test_a_check_that_hangs_is_stopped_and_the_work_kept(chat, tmp_path, monkeypatch, capsys):
+    """The lock is kept alive while the check runs, so a hung check held every save for ever."""
+    monkeypatch.setattr(land, "CHECK_DEADLINE_S", 2)
+    monkeypatch.setattr(land, "BEAT_S", 1)
+    (chat / "profile" / "notes.md").write_text("second\n", encoding="utf-8")
+    hang = [sys.executable, "-c", "import time; time.sleep(40)"]
+    start = time.monotonic()
+    code = land.main(["--message", "Notes"], root=str(chat), check=hang)
+    out = capsys.readouterr().out
+    assert time.monotonic() - start < 30, out
+    assert code == 1 and "was stopped" in out and "the work waits on" in out, out
+    assert not land.landing(str(chat))
+
+
+def test_a_handed_over_lock_another_landing_holds_now_is_left_alone(chat):
+    root = str(chat)
+    p = os.path.join(land.git_dir(root), land.LOCK_FILE)
+    with open(p, "w", encoding="utf-8") as fh:
+        fh.write("4242 %s other-token\n" % time.strftime(land.LOCK_STAMP, time.gmtime()))
+    land._hand_over(root, "my-token", 99)
+    assert land._lock_words(p)[::2] == ["4242", "other-token"]
+
+
+def test_a_lock_put_back_never_lands_over_a_third_landings(chat, monkeypatch):
+    """Judged stale, moved aside, found live after all; meanwhile a third landing took the
+    lock: putting it back must never replace the third one's."""
+    root = str(chat)
+    p = os.path.join(land.git_dir(root), land.LOCK_FILE)
+    with open(p, "w", encoding="utf-8") as fh:
+        fh.write("1 %s first\n" % time.strftime(land.LOCK_STAMP, time.gmtime()))
+    calls = []
+    monkeypatch.setattr(land, "_live", lambda path: calls.append(path) or len(calls) > 1)
+
+    def third_takes_it(src, dst):
+        with open(dst, "w", encoding="utf-8") as fh:
+            fh.write("2 %s third\n" % time.strftime(land.LOCK_STAMP, time.gmtime()))
+        raise FileExistsError(dst)
+    monkeypatch.setattr(land.os, "link", third_takes_it)
+    assert land._take_lock(root) == ""
+    assert land._lock_words(p)[2] == "third"
