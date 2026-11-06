@@ -1,5 +1,5 @@
 ---
-framework_version: 2.1.7
+framework_version: 2.1.8
 ---
 
 # Verification checklist

@@ -1,5 +1,5 @@
 ---
-framework_version: 2.1.14
+framework_version: 2.1.15
 ---
 
 # Resume Templates and Tailoring Guide
