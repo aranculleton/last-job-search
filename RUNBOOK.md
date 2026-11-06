@@ -958,8 +958,11 @@ not a bug in the update. **A person's own tests (`profile/tests`) use the app's 
 only**, so fewer break: a name that starts with an underscore, and anything inside
 `tools/openroles/`, can change in any release; a job board is faked through
 `tools/offline_boards.py`. **When they fail after an update**, bringing them in line is
-Claude's job, done in the same turn and committed with the sync's work: never a question or
-a to-do for the person, who hears one plain line at most.
+Claude's job, done by a background step that needs nobody (the `own-tests` improvement, queued
+the moment the update's run finds them, and started by the app's hook in the next chat not on
+one big job): never a question or a to-do for the person, who hears one plain line at most.
+Nothing waits on it: until it is done, each save sets the tests the update broke aside and
+lands the work (`tools/land.py`), so no chat is held or has to notice a step.
 
 1. `python3 tools/sync_app.py --own-tests` sorts every failing test into two kinds and says
    what to do. The sync and `ci_local.sh` print the same by themselves.
@@ -973,13 +976,15 @@ a to-do for the person, who hears one plain line at most.
    test in line all the same; in the maintainer's own repo, report it the way its
    `profile/CLAUDE.md` says. Anyone else is never told: a failing test would hold the whole
    update back, and the app's problems are the maintainer's, not theirs.
-4. **All of it is Claude's, in the same turn, with nothing asked.** Rewrite, retire and bring
-   in line, run them again, and commit with the sync's work, naming each test in the commit so
-   a revert brings any back. The person hears one plain line at most (`OWN_CHECKS_SAID` in
+4. **All of it is Claude's, in the background, with nothing asked.** Rewrite, retire and
+   bring in line, changing only what the update changed (the CHANGELOG lines of the versions
+   taken) and never the person's own data, run them again, and commit it as `Profile upgrade:
+   own-tests` with the body "Your own checks were brought in line with the update.", naming
+   each test, so a revert brings any back. The person hears one plain line at most (`OWN_CHECKS_SAID` in
    `tools/sync_app.py`); most have never seen a test, and a question or a to-do about one is
    one they cannot act on.
-5. Run `./tools/ci_local.sh`, then land on master as usual. Until it is green, master stays
-   on the old version and nothing breaks.
+5. Land as usual. A test the update broke and nobody has brought in line yet is set aside by
+   the save, never a reason to hold it; any other failure still stops the save.
 
 `python3 tools/sync_app.py --own-test-risks` names the tests that will break the next time
 the app changes a private part, before it does; `ci_local.sh` prints it as a note.

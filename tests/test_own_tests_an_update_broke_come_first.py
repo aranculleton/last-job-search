@@ -59,9 +59,11 @@ def test_the_step_comes_first_until_the_tests_pass_and_then_never(tmp_path):
     _update(root, 3)
     sync_app.own_tests(root)
     step = sync_app.own_tests_step(root)
-    assert step.startswith("Claude, first, before any other work: 1 of the person's own tests "
-                           "fail after an update"), step
-    assert "test_limit" in step and "--own-tests" in step and sync_app.OWN_CHECKS_SAID in step
+    # Since 2026-11-06 it holds no work: saves set them aside and the own-tests improvement is
+    # queued for the background (tests/test_saves_queue_and_check_quickly.py).
+    assert step.startswith("Claude: 1 of the person's own tests fail after an update"), step
+    assert "test_limit" in step and "own-tests" in step and sync_app.OWN_CHECKS_SAID in step
+    assert "Nothing waits on them" in step and "before any other work" not in step
     # Said again by every command that starts work, until they pass: brought in line here
     # (not committed yet), it is checked again and goes.
     assert sync_app.own_tests_step(root) == step

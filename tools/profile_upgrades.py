@@ -967,6 +967,16 @@ def _old_sweep_cursor() -> str:
             "that every file there is a round reads it" if os.path.exists(old) else "")
 
 
+def _old_jobs_tweaks() -> str:
+    """4.10 kept the record of tweaks to the person's search at documents/rounds/tweaks.json,
+    among the round summaries, and a person's own test that reads every documents/rounds/*.json
+    as a round failed on it (the maintainer's copy, 2026-11-06), as it had on the sweep cursor
+    (sweep-cursor-moved). Moving it is instant: no web, no question."""
+    old = person.state("documents", "rounds", "tweaks.json")
+    return ("documents/rounds/tweaks.json sits among your round summaries, where a check that "
+            "every file there is a round reads it" if os.path.exists(old) else "")
+
+
 def _job_alerts_retired() -> str:
     """Retired 2026-10-22, with the job-alert reader it asked about. It asked to read the
     person's LinkedIn alert emails into each round, and came back every month after a no;
@@ -1852,8 +1862,12 @@ REGISTRY: tuple[Upgrade, ...] = (
             "(a job board through tools/offline_boards.py), keeping every assertion's intent. "
             "Never weaken a test to pass; one that uses a part the update removed is rewritten "
             "through the app's public names, or retired, by Claude with nothing asked "
-            "(RUNBOOK.md, \"Your own tests fail after an update\"). Run python3 -m pytest profile/tests -q before "
-            "committing", "edit", "~15 min", priority=2, conditional=True),
+            "(RUNBOOK.md, \"Your own tests fail after an update\"). Change only what the update "
+            "changed (the CHANGELOG lines of the versions it took say what), only in "
+            "profile/tests, never the person's own data or profile. Run python3 -m pytest "
+            "profile/tests -q before committing, with the body \"Your own checks were brought in "
+            "line with the update.\" Until this runs, each save sets the tests the update broke "
+            "aside and lands the work", "edit", "~15 min", priority=2, conditional=True),
     Upgrade("message-texts", "2026-10-19",
             "your messages that got replies kept with their words, so drafts follow what "
             "worked for you rather than the app's defaults",
@@ -1922,6 +1936,13 @@ REGISTRY: tuple[Upgrade, ...] = (
             _old_sweep_cursor, "python3 tools/scrape_wide.py --move-cursor", "instant",
             command=("python3", "tools/scrape_wide.py", "--move-cursor"),
             paths=("documents/rounds/.sweep.json", "documents/rounds/.sweep/cursor.json"),
+            priority=1),
+    Upgrade("tweaks-record-moved", "2026-11-06",
+            "the record of changes you asked for to your search moved out from among your round "
+            "summaries, so a check that every file there is a round passes again",
+            _old_jobs_tweaks, "python3 tools/tweak.py move-record", "instant",
+            command=("python3", "tools/tweak.py", "move-record"),
+            paths=("documents/rounds/tweaks.json", "documents/rounds/tweaks/tweaks.json"),
             priority=1),
     Upgrade("read-break", "2026-10-19",
             "the pause between bursts of profile reads written in your profile, yours to change",
@@ -2703,7 +2724,10 @@ def remember_listed(rows: list[tuple[Upgrade, str]], elsewhere: bool = False,
     got = {"sync": sha, "ids": [u.id for u, _ in rows], "day": day,
            "since": {u.id: str(since.get(u.id) or day) for u, _ in rows},
            "elsewhere": bool(elsewhere)}
-    if isinstance(was.get("started"), dict) and was["started"].get("day") == day:
+    # A start stands for the update it was made for: a second update the same day (the
+    # master channel takes several) is owed its own, or own tests it broke waited for tomorrow.
+    if isinstance(was.get("started"), dict) and was["started"].get("day") == day \
+            and was.get("sync") in (sha, None):
         got["started"] = was["started"]
     for key in ("not_now", "held"):
         kept = {c: v for c, v in (was.get(key) or {}).items()
@@ -2712,6 +2736,43 @@ def remember_listed(rows: list[tuple[Upgrade, str]], elsewhere: bool = False,
         if kept:
             got[key] = kept
     _save_listed(got)
+
+
+def queue_own_tests(root: str | None = None, today: dt.date | None = None) -> bool:
+    """The own-tests improvement queued for this copy's latest update, at once: a landing that
+    finds the person's own tests an update broke (an update another chat took, so no sync
+    here listed it) sets them aside for its save and queues this, and the app's hook has the
+    next chat that is not on one big job start it in the background. One already listed and
+    not started stays as it is; one started for an earlier update is owed again. True when
+    it is queued."""
+    global ROOT
+    was_root = ROOT
+    ROOT = root or ROOT
+    try:
+        sha = _sync_head()[0]
+        if not sha:
+            return False
+        got = _listed()
+        day = _day(today)
+        if got.get("sync") != sha:
+            got = {"sync": sha, "ids": [], "day": day, "since": {}, "elsewhere": False}
+        ids = [i for i in (got.get("ids") or []) if isinstance(i, str)]
+        if "own-tests" in ids and not got.get("started"):
+            return True
+        if "own-tests" not in ids:
+            ids.append("own-tests")
+        got["ids"] = ids
+        since = got.get("since") if isinstance(got.get("since"), dict) else {}
+        since.setdefault("own-tests", day)
+        got["since"] = since
+        got["elsewhere"] = False
+        got.pop("started", None)
+        got.pop("not_now", None)
+        return _save_listed(got)
+    except Exception:  # noqa: BLE001  a landing must never stop on it
+        return False
+    finally:
+        ROOT = was_root
 
 
 def listed_ids() -> list[str]:

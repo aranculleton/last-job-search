@@ -85,6 +85,17 @@ make sense to somebody whose repo just received it.
 - **A folder with a space in its name is read whole.** When the page's helper hands Claude a file to send to your page, it is on a line of its own, so a user folder such as "First Last" is never read as two.
 - **A background save is never held up by a computer's clock.** A save Claude started in the background counts as under way by the time it was asked for, not by the disk's clock.
 - **The app's own checks pass on every computer.** Six of them had assumed something about the computer they ran on (its time zone, its date, a Mac's or Windows' own ways, the newest Python); each now checks the same thing anywhere.
+- **Saving is quick again.** The check before each save no longer runs the app's own tests on
+  your copy, which had made every save take over ten minutes; your own checks still run.
+- **Saves wait their turn.** When a save is asked for while another is running, it is added to
+  the one running (or the next) instead of starting its own check beside it, so only one check
+  runs at a time and nothing written in the meantime is left out.
+- **An update never holds your work back.** When an update changes something one of your own
+  checks relied on, your work is still saved, and Claude puts that check right in the
+  background, with nothing for you or a busy chat to do.
+- **The record of changes you asked for to your job search has its own folder.** It used to sit
+  among your saved searches, where a check that reads every saved search tripped over it.
+  Profile upgrade: tweaks-record-moved (done for you, nothing to do).
 
 ## [4.11.0] - 2026-11-06
 

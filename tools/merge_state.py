@@ -158,6 +158,7 @@ JSON_FILES = {
     # only ever added, each dated with when it ran. The lists in an entry are written with it.
     "documents/applications/*/tweaks.json": {"stamps": ("at",), "indent": 1, "sort": "all"},
     "documents/network/*/tweaks.json": {"stamps": ("at",), "indent": 1, "sort": "all"},
+    "documents/rounds/tweaks/tweaks.json": {"stamps": ("at",), "indent": 1, "sort": "all"},
     # ---- the profile
     # Which version of each part of the build made what this copy has (build_versions.record:
     # {method: {version, date}}). The app's own record: the higher version stands, always.

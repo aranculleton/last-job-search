@@ -1572,11 +1572,14 @@ def own_tests_report(failures: list[tuple[str, str]], root: str | None = None) -
     # Nothing here is the person's to do or to answer: a chat told them "I'll flag those for
     # you to update yourself" (2026-10-22), and the maintainer's word is that the app does
     # everything with no input from them.
-    lines.append("Claude: do it now, in this turn, with no question to the person: rewrite, "
-                 "retire and bring in line as above, run them again, and commit with the "
-                 "rest of this sync's work, naming each test in the commit (a revert brings "
-                 "any back). Tell the person nothing about it beyond one plain line at most: "
-                 f"\"{OWN_CHECKS_SAID}\"")
+    # Never held for: saves set these aside meanwhile (tools/land.py), and the own-tests
+    # improvement is queued for a background agent (2026-11-06).
+    lines.append("Claude: nothing waits on them: saves set them aside, and bringing them in "
+                 "line is queued as a background improvement (own-tests) that needs nobody; "
+                 "it rewrites, retires and brings in line as above, changing only what the "
+                 "update changed, and commits it as \"Your own checks were brought in line with "
+                 "the update.\" with no question to the person. Tell the person nothing about it "
+                 f"beyond one plain line at most: \"{OWN_CHECKS_SAID}\"")
     lines.append("`python3 tools/sync_app.py --own-tests` says this again at any time.")
     return "\n".join(lines)
 
@@ -1782,12 +1785,16 @@ def own_tests_owed(root: str | None = None, clean_too: bool = False) -> list[str
 # while it holds, until they pass: a page helper took two jobs after an update had left five
 # of the person's own tests failing, and neither could be saved, since every landing runs them
 # (a person's copy, 2026-11-05). For Claude; the person hears OWN_CHECKS_SAID at most.
-OWN_TESTS_STEP = ("Claude, first, before any other work: {n} of the person's own tests fail "
-                  "after an update ({names}), and nothing can be saved until they pass, since "
-                  "every save runs them. Bring them in line now: python3 tools/sync_app.py "
-                  "--own-tests says which and how (RUNBOOK.md, \"Your own tests fail after an "
-                  "update\"); run it again until it says they pass, commit them, then take the "
-                  "work. Nothing to ask the person; tell them at most: \"{said}\"")
+# Since 2026-11-06 nothing waits on them: each save sets the tests an update broke aside
+# (tools/land.py) and bringing them in line is queued as the own-tests improvement, which the
+# app's hook has a chat start in the background. A short job's chat told to do it first
+# missed the line, and five tests held its finished work (the maintainer's copy).
+OWN_TESTS_STEP = ("Claude: {n} of the person's own tests fail after an update ({names}). "
+                  "Nothing waits on them: saves set them aside, and bringing them in line is "
+                  "queued as a background improvement (own-tests) that needs nobody. Go on with "
+                  "the work; where this chat is not on one big job and nothing has started it, "
+                  "start one background agent (model sonnet) that follows "
+                  ".claude/commands/upgrade.md for own-tests. Tell the person at most: \"{said}\"")
 
 
 def own_tests_step(root: str | None = None) -> str:
@@ -1813,6 +1820,13 @@ def own_tests(root: str | None = None) -> None:
     root = root or ROOT
     failures = own_test_failures(root)
     record_own_tests(root, failures)
+    if failures:
+        # Queued at once for the background step that brings them in line (own-tests).
+        try:
+            import profile_upgrades
+            profile_upgrades.queue_own_tests(root)
+        except Exception:  # noqa: BLE001  the sync's own listing names it too
+            pass
     text = own_tests_report(failures or [], root)
     if text:
         print(text)

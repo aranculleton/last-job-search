@@ -786,12 +786,13 @@ def test_a_landing_holds_a_lock_and_a_second_one_waits_for_it(copy, capsys, monk
     assert _run(chat, capsys=capsys)[0] == 0
     assert seen == [True] and not os.path.exists(lock) and not land.landing(str(chat))
     monkeypatch.undo()
-    # Another landing's lock, live: nothing is done.
+    # Another landing's lock, live: nothing is done here, and the save is queued for it
+    # (tests/test_saves_queue_and_check_quickly.py), never run beside it.
     with open(lock, "w", encoding="utf-8") as fh:
         fh.write(land.lock_text())
     write(chat, "profile/notes.md", "third\n")
     code, out = _run(chat, check=NEVER, capsys=capsys)
-    assert code == 2 and "another landing is running" in out
+    assert code == 0 and "another landing is running" in out and land.wanted(str(chat))
     # One left by a landing killed long ago is stale, and ignored: aged by its stamp, and
     # where it has none, by the file.
     with open(lock, "w", encoding="utf-8") as fh:

@@ -53,6 +53,41 @@ import person  # noqa: E402
 
 TWEAKS_FILE = "tweaks.json"
 BUTTONS_FILE = "tweaks.json"            # profile/tweaks.json: the person's own buttons
+# The record of tweaks to the person's search, in a folder of its own. Kept at
+# documents/rounds/tweaks.json, it sat among the round summaries, where every reader of
+# documents/rounds/*.json (the app's, and a person's own tests) takes each file as a round's
+# list of rows, and a person's own test failed on it (the maintainer's copy, 2026-11-06).
+# The tweaks-record-moved upgrade moves an old one (move_jobs_record).
+JOBS_FOLDER = ("documents", "rounds", "tweaks")
+OLD_JOBS_RECORD = ("documents", "rounds", TWEAKS_FILE)
+
+
+def move_jobs_record() -> str:
+    """Move the search's tweak record from among the round summaries into its own folder,
+    its entries kept (merged with any already there); what happened, in words."""
+    old = person.state(*OLD_JOBS_RECORD)
+    if not os.path.isfile(old):
+        return "nothing to move"
+    new = person.state(*JOBS_FOLDER, TWEAKS_FILE)
+    try:
+        with open(old, encoding="utf-8") as fh:
+            moved = json.load(fh)
+    except (OSError, ValueError):
+        moved = {}
+    have = {}
+    try:
+        with open(new, encoding="utf-8") as fh:
+            have = json.load(fh)
+    except (OSError, ValueError):
+        pass
+    merged = dict(moved if isinstance(moved, dict) else {})
+    merged.update(have if isinstance(have, dict) else {})
+    os.makedirs(os.path.dirname(new), exist_ok=True)
+    with open(new, "w", encoding="utf-8", newline="\n") as fh:
+        json.dump(merged, fh, indent=1, ensure_ascii=False, sort_keys=True)
+        fh.write("\n")
+    os.remove(old)
+    return "moved %s to %s" % ("/".join(OLD_JOBS_RECORD), "/".join(JOBS_FOLDER + (TWEAKS_FILE,)))
 WISH_MAX = 400
 BUTTONS_PER_KIND = 2
 PROMOTE_AFTER = 3
@@ -302,8 +337,13 @@ def resolve(work: dict) -> dict:
         return {"output": output, "item": {"id": tid}, "folder": "", "file": ""}
     if output in ("jobs", "brief"):
         # The person's search and brief settings: the record of what was changed and how to
-        # take it back lives beside the rounds and the briefs.
-        folder = person.state("documents", "rounds" if output == "jobs" else "briefs")
+        # take it back lives in a folder of its own under the rounds (never among the round
+        # summaries, JOBS_FOLDER), and beside the briefs.
+        if output == "jobs":
+            move_jobs_record()
+            folder = person.state(*JOBS_FOLDER)
+        else:
+            folder = person.state("documents", "briefs")
         os.makedirs(folder, exist_ok=True)
         return {"output": output, "item": {"id": tid or output}, "folder": folder, "file": ""}
     if output == "interview":
@@ -2429,12 +2469,17 @@ def main(argv=None) -> int:
     m = sub.add_parser("merge")
     m.add_argument("--work", required=True, action="append")
     m.add_argument("--round", required=True)
+    sub.add_parser("move-record", help="move documents/rounds/tweaks.json, where an older "
+                   "version kept the search's tweak record, into documents/rounds/tweaks/")
     pr = sub.add_parser("promote")
     pr.add_argument("--add", type=int, default=0, help="add offer N (from 1) as a button")
     pr.add_argument("--today", default=None)
     a = ap.parse_args(argv)
     if a.cmd == "table":
         print(json.dumps(table(a.output), indent=1, ensure_ascii=False))
+        return 0
+    if a.cmd == "move-record":
+        print("tweak: " + move_jobs_record())
         return 0
     if a.cmd == "promote":
         today = dt.date.fromisoformat(a.today) if a.today else None
