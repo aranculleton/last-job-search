@@ -3118,7 +3118,15 @@ def _people(ctx: Ctx, targets: dict) -> list:
         due = str(c.get("next_action_due") or "").strip()
         msgs = ctx.by_contact.get(cid) or []
         if theirs.get(cid):
-            msgs = sorted(list(msgs) + theirs[cid], key=lambda m: str(m.get("date") or ""))
+            # The message both rows logged, which is how the two were found to be one
+            # person, is shown once.
+            def said(m):
+                return (str(m.get("date") or "")[:10], state.direction(m),
+                        " ".join(str(m.get("full_text") or "").split()).lower())
+            have = {said(m) for m in msgs if str(m.get("full_text") or "").strip()}
+            more = [m for m in theirs[cid] if not str(m.get("full_text") or "").strip()
+                    or said(m) not in have]
+            msgs = sorted(list(msgs) + more, key=lambda m: str(m.get("date") or ""))
         last = max((str(m.get("date") or "")[:10] for m in msgs), default="") or None
         days = app_lists.ago(last, ctx.today)
         hold = surface.held(c, msgs, status, replying=status in schema.OWED_BY_US,

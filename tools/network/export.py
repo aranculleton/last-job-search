@@ -51,6 +51,7 @@ What it gives:
     python3 tools/network/export.py pending [--from <zip|folder>] [--days N] [--all]
     python3 tools/network/export.py withdrawn <name|profile address|contact id>... \\
         [--oldest N] [--reason "..."] [--from <zip|folder>]
+    python3 tools/network/export.py one-record [--dry]            # one person, one record
 """
 
 from __future__ import annotations
@@ -1824,6 +1825,240 @@ def filled_line(filled) -> str:
             "day you connected; nothing already recorded was changed.")
 
 
+# ---------------------------------------------------------------- one person, one record
+
+# A message is evidence of one person only when it is long enough to be theirs alone and two
+# rows carry it: a line logged under three or more rows is a template sent to several people.
+SHARED_MIN_CHARS = 20
+JOINED_NOTE = "Joined by the app on %s"
+FILLED_NOTE = "Filled from your LinkedIn connections on %s"
+
+
+def _said_key(r) -> tuple | None:
+    st = _state()
+    words = _norm(r.get("full_text"))
+    way = st.direction(r)
+    if len(words) < SHARED_MIN_CHARS or not way:
+        return None
+    return (str(r.get("date") or "")[:10], way, words)
+
+
+def _not_same(a, b) -> bool:
+    """A row whose notes say it is not the same person as the other."""
+    for x, y in ((a, b), (b, a)):
+        other = str(y.get("contact_id") or "").strip().lower()
+        if other and re.search(r"\bnot (?:the )?same (?:person|one) as\s+%s\b" % re.escape(other),
+                               " ".join(str(x.get(k) or "") for k in ("notes", "outcome")).lower()):
+            return True
+    return False
+
+
+def _could_be_one(a, b) -> bool:
+    """Nothing on the two rows says two people: the same first name, the same surname where
+    both have one, the same employer and profile address where both have one."""
+    st = _state()
+    na, nb = st.person_name(a.get("name")).split(), st.person_name(b.get("name")).split()
+    if not na or not nb or st._slug(na[0]) != st._slug(nb[0]):
+        return False
+    if len(na) > 1 and len(nb) > 1 and st._slug(na[-1]) != st._slug(nb[-1]):
+        return False
+    ha, hb = st.profile_handle(a.get("linkedin_url")), st.profile_handle(b.get("linkedin_url"))
+    if ha and hb and ha != hb:
+        return False
+
+    def firm(c):
+        return str(c.get("company_key") or "").strip() or (
+            st.company_key(c.get("company")) if str(c.get("company") or "").strip() else "")
+    fa, fb = firm(a), firm(b)
+    if fa and fb and fa != fb:
+        return False
+    return not _not_same(a, b)
+
+
+def same_people(contacts, threads) -> list:
+    """[(the row to keep, [the rows to close as the same person])] for each set of rows the
+    message log makes certain are one person: one message (the same day, the same way, the
+    same words) logged under exactly two of them, and nothing on the rows saying two people.
+    A name alone never joins anyone. The row kept is the one still open, then the one with
+    their latest reply, then the latest message, then the older row."""
+    st = _state()
+    closed_as = st.duplicate_of(contacts)
+    by = {str(c.get("contact_id") or "").strip(): c for c in contacts}
+    live = {cid for cid in by if cid and cid not in closed_as}
+    said: dict = {}
+    for r in threads:
+        cid = str(r.get("contact_id") or "").strip()
+        k = _said_key(r) if cid in live else None
+        if k:
+            said.setdefault(k, set()).add(cid)
+    parent: dict = {}
+
+    def root(x):
+        while parent.get(x, x) != x:
+            x = parent[x]
+        return x
+
+    for cids in said.values():
+        if len(cids) == 2:
+            a, b = sorted(cids)
+            if _could_be_one(by[a], by[b]):
+                parent.setdefault(a, a)
+                parent.setdefault(b, b)
+                parent[root(b)] = root(a)
+    groups: dict = {}
+    for cid in parent:
+        groups.setdefault(root(cid), set()).add(cid)
+    order = {id(c): i for i, c in enumerate(contacts)}
+    last_in: dict = {}
+    last_any: dict = {}
+    for r in threads:
+        cid = str(r.get("contact_id") or "").strip()
+        when = str(r.get("date") or "")[:10]
+        last_any[cid] = max(last_any.get(cid, ""), when)
+        if st.direction(r) == "in":
+            last_in[cid] = max(last_in.get(cid, ""), when)
+    out = []
+    for cids in groups.values():
+        rows = [by[c] for c in cids]
+        # Every pair in the set has to be able to be one person, not only the ones that share
+        # a message: a chain through a common first name is not evidence.
+        if any(not _could_be_one(x, y) for i, x in enumerate(rows) for y in rows[i + 1:]):
+            continue
+
+        def rank(c):
+            cid = str(c.get("contact_id") or "").strip()
+            return (str(c.get("status") or "").strip() not in st.schema.TERMINAL,
+                    last_in.get(cid, ""), last_any.get(cid, ""), -order[id(c)])
+        rows.sort(key=rank, reverse=True)
+        out.append((rows[0], rows[1:]))
+    out.sort(key=lambda g: order[id(g[0])])
+    return out
+
+
+def name_gaps(contacts, src=None) -> list:
+    """[(contact, company, title, full name, profile address)] for each row known by a first
+    name only, with an employer, title or profile address missing, that exactly one row of
+    the person's own Connections.csv matches: that first name, and the surname the row's id
+    or notes carry (`match_more`), at the same employer and address where the row has one.
+    Two connections that could be them, or one who could be either of two rows, or one
+    already in the book under their full name or address, and nothing is filled."""
+    st = _state()
+    try:
+        conns = read("connections", src)
+    except (OSError, ValueError, zipfile.BadZipFile):
+        return []
+    if not conns["usable"]:
+        return []
+    closed_as = st.duplicate_of(contacts)
+    short: dict = {}
+    for c in contacts:
+        cid = str(c.get("contact_id") or "").strip()
+        nm = st.person_name(c.get("name")).split()
+        if cid in closed_as or len(nm) != 1:
+            continue
+        if all(str(c.get(k) or "").strip() for k in ("company", "title", "linkedin_url")):
+            continue
+        short.setdefault(st._slug(nm[0]), []).append(c)
+    if not short:
+        return []
+    index = contact_index(contacts)
+    hits: dict = {}
+    for r in conns["rows"]:
+        full = " ".join(x.strip() for x in (r.get("First Name") or "", r.get("Last Name") or "")
+                        if x.strip())
+        parts = st.person_name(full).split()
+        if len(parts) < 2 or st._slug(parts[0]) not in short:
+            continue
+        url, firm = (r.get("URL") or "").strip(), (r.get("Company") or "").strip()
+        c, _how = match_more(short[st._slug(parts[0])], (), full, url, (), firm)
+        if c is None:
+            continue
+        h = st.profile_handle(url)
+        known = index["by_handle"].get(h) if h else None
+        elsewhere = (known is not None and known is not c) or any(
+            o is not c for o, _ in index["by_name"].get(name_key(full), ()))
+        hits.setdefault(id(c), []).append(
+            None if elsewhere else (c, firm, (r.get("Position") or "").strip(), full, url))
+    return [got[0] for got in hits.values() if len(got) == 1 and got[0] is not None]
+
+
+def _note(c, line: str) -> None:
+    c["notes"] = "; ".join(x for x in (str(c.get("notes") or "").strip(), line) if x)
+
+
+def one_record(contacts_path: str | None = None, threads_path: str | None = None,
+               dry: bool = False, src=None, today=None) -> dict:
+    """What the books already hold made one record a person: the rows the message log makes
+    certain are one person joined (`same_people`, closed as `state.same_person` closes them,
+    with the full name carried as well), then the gaps a first-name-only row has filled from
+    the person's own Connections.csv where exactly one connection is them (`name_gaps`).
+    Each change is written in the row's notes, so it can be undone; anything unsure is left
+    for `reconcile` to list. Only the contact book is written: each row keeps its own
+    messages, and the page shows both on the one kept.
+
+    {"joined": [(kept id, [closed ids])], "filled": [(contact id, [fields])]}."""
+    st = _state()
+    cp, tp = contacts_path or st.CONTACTS_CSV, threads_path or st.THREADS_CSV
+    contacts = st.load_contacts(cp)
+    threads = st.load_threads(tp)
+    day = (today or person.today()).isoformat()
+    groups = same_people(contacts, threads)
+    joined = [(str(k.get("contact_id")), [str(c.get("contact_id")) for c in rest])
+              for k, rest in groups]
+    # A dry run changes the rows it loaded and writes nothing, so what a join carries over
+    # is counted as it will be: a gap a join fills is not a gap.
+    for kept, rest in groups:
+        kid = str(kept.get("contact_id") or "").strip()
+        for c in rest:
+            cid = str(c.get("contact_id") or "").strip()
+            was = str(c.get("status") or "").strip()
+            outcome = str(c.get("outcome") or "").strip()
+            step = " ".join(x for x in (str(c.get("next_action") or "").strip(),
+                                        str(c.get("next_action_due") or "").strip()) if x)
+            mine = st.person_name(kept.get("name")).split()
+            theirs = st.person_name(c.get("name")).split()
+            got = st.same_person(contacts, cid, kid)
+            if len(mine) == 1 and len(theirs) > 1:
+                old = kept.get("name")
+                kept["name"] = c.get("name")
+                _note(kept, "name from %s (the same person; was \"%s\")" % (cid, old))
+            _note(c, (JOINED_NOTE % day) + ": the same message is logged under this row and "
+                  "%s, so it was closed as the same person%s; it was %s%s" % (
+                      kid, " and gave it %s" % ", ".join(got["filled"]) if got["filled"] else "",
+                      was or "with no status", "" if not outcome else " (%s)" % outcome)
+                  + ("" if not step else ", next step %s" % step))
+    filled = []
+    for c, firm, title, full, url in name_gaps(contacts, src):
+        old = str(c.get("name") or "")
+        got = fill_who([(c, firm, title, full, url)])
+        if not got:
+            continue
+        fields = got[0][1]
+        words = [("name (was \"%s\")" % old) if f == "name" else FILL_WORDS[f] for f in fields]
+        _note(c, (FILLED_NOTE % day) + ": " + ", ".join(words))
+        filled.append((str(c.get("contact_id")), fields))
+    if not dry and (joined or filled):
+        st.save_contacts(contacts, cp)
+    return {"joined": joined, "filled": filled}
+
+
+def one_record_line(got) -> str:
+    """One plain line for what `one_record` did, or "" when it did nothing."""
+    n = sum(len(rest) for _, rest in got["joined"])
+    f = len(got["filled"])
+    said = []
+    if n:
+        said.append(f"joined {n} contact{'s' if n != 1 else ''} that "
+                    f"{'were' if n != 1 else 'was'} the same person as another")
+    if f:
+        said.append(f"filled in the missing details of {f} contact{'s' if f != 1 else ''} "
+                    "from your LinkedIn download")
+    if not said:
+        return ""
+    text = ", and ".join(said)
+    return text[0].upper() + text[1:] + "."
+
+
 def settle(contacts, threads, ids) -> list:
     """For each contact in `ids`, a stored status the log decides set to what it says.
     Returns [(contact_id, old, new)] for the ones changed."""
@@ -2237,10 +2472,28 @@ def main(argv=None) -> int:
     td.add_argument("--contacts", default=st.CONTACTS_CSV)
     td.add_argument("--threads", default=st.THREADS_CSV)
     td.add_argument("--dry", action="store_true")
+    one = sub.add_parser("one-record", help="rows the message log shows are one person joined, "
+                                            "and first-name-only rows filled from Connections.csv "
+                                            "where exactly one connection is them")
+    one.add_argument("--contacts", default=st.CONTACTS_CSV)
+    one.add_argument("--threads", default=st.THREADS_CSV)
+    one.add_argument("--from", dest="src", default=None)
+    one.add_argument("--dry", action="store_true")
     a = ap.parse_args(argv)
     return {"take": _cli_take, "files": _cli_files, "save": _cli_save, "history": _cli_history,
             "pending": _cli_pending, "withdrawn": _cli_withdrawn, "due": _cli_due,
-            "status": _cli_status, "requested": _cli_requested, "tidy": _cli_tidy}[a.cmd](a)
+            "status": _cli_status, "requested": _cli_requested, "tidy": _cli_tidy,
+            "one-record": _cli_one_record}[a.cmd](a)
+
+
+def _cli_one_record(a) -> int:
+    got = one_record(a.contacts, a.threads, a.dry, a.src)
+    line = one_record_line(got)
+    if a.dry:
+        print("one-record (nothing changed): " + (line or "nothing to join or fill in."))
+    elif line:
+        print(line)
+    return 0
 
 
 def _cli_tidy(a) -> int:

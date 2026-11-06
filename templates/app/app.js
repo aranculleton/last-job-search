@@ -5000,6 +5000,8 @@
   }
   // Written only where it changes: the same mark written again is still a change to the page.
   function fitHide(li, v) { if (li.hidden !== v) li.hidden = v; }
+  // How much of the window a Brief must already fill to be stretched to its foot.
+  const FILL_SHARE = 0.75;
   function fitBrief() {
     const grid = document.querySelector("#main .brief-grid");
     if (!grid) return;
@@ -5064,14 +5066,17 @@
       if (!best) break;
       best.li.hidden = true;
     }
-    // The grid then fills the window to its foot, its rows sharing what is left, and each
-    // panel shows what more there is room for.
+    // Each panel then shows what more there is room for, and a Brief that nearly fills the
+    // window is stretched to its foot, its rows sharing the height, so the panels line up edge
+    // to edge (the maintainer, 2026-11-06: "polished ... nice to look at at a single glance").
+    // A Brief that fills much less of it (a tall window, a quiet day) keeps each row to what it
+    // holds: stretched, its panels were big empty boxes (2026-11-05: "WHERES THE BOTTOM
+    // PANELS?").
     if (one) {
       const z = parseFloat(document.body.style.zoom) || 1;
       const top = grid.getBoundingClientRect().top + window.scrollY;
-      // Only a Brief that fits is stretched: rows that share the height are equal, and a
-      // Brief too tall for the window keeps each row to what it holds.
-      if (bottom() <= room + 1) fitFill(grid, Math.max(0, Math.floor((room - top - 2) / z)) + "px");
+      const tall = room - top;
+      if (bottom() <= room + 1 && bottom() - top >= FILL_SHARE * tall) fitFill(grid, Math.max(0, Math.floor((room - top - 2) / z)) + "px");
       for (const l of lists) {
         const panel = l.closest(".bpanel");
         if (!panel) continue;
@@ -7214,6 +7219,20 @@
   // question, the one still going as its work line (Saved, In line, Claude is on it, Cancel), and
   // the box while it is open. A finished exchange stays two days, then folds away by itself;
   // Hide puts it away sooner, and the next question brings it back.
+  // An answer Claude wrote with its work is shown once the page holds what that work changed:
+  // it said "see the updated message" while the card still showed the old one (reported from
+  // a person's copy, 2026-11-05). Until a view made after it arrives, and for five minutes at
+  // most, it says it is putting the change on the page first.
+  const HELD_SAID = "Putting the change on your page first. The answer follows in a moment.";
+  function pageMadeAt() {
+    let at = txt(obj(S.model).made_at);
+    for (const v of S.views.values()) if (v && txt(v.made_at) > at) at = txt(v.made_at);
+    return at;
+  }
+  function heldAnswer(m) {
+    if (!m || m.from === "you" || m.from === "note" || m.node || !txt(m.work) || !txt(m.at)) return false;
+    return txt(m.at) > pageMadeAt() && (tms(m.at) || 0) > now() - 5 * 60000;
+  }
   function cardTalk(kind, id, label, o) {
     o = o || {};
     const th = cardThread(kind, id);
@@ -7245,6 +7264,7 @@
     // An answer: whole while new; read and a day old, its first line and Show all; a long one
     // clipped with Show all whatever its age.
     const answerOf = (m, key) => {
+      if (heldAnswer(m)) return h("p", {class: "ct-a muted", role: "status"}, h("span", {class: "ct-who"}, "Claude"), " " + HELD_SAID);
       const old = (tms(m.at) || 0) < now() - DAY;
       return clipBlock(txt(m.text), key, {lines: old ? 1 : 12, chars: old ? 90 : 1200, cls: "ct-a", node: talkNames(txt(m.text), kind, id),
         lead: [h("span", {class: "ct-who"}, "Claude"), " "]});
@@ -12511,7 +12531,7 @@
     return h("li", {class: "talk-msg from-" + seg(m.from === "you" ? "you" : m.from === "note" ? "note" : "claude")},
       m.from === "note" ? null : h("p", {class: "talk-who"}, m.from === "you" ? "You" : "Claude", h("span", {class: "muted small"}, " " + ago(m.at))),
       imgs.length ? h("div", {class: "talk-pics"}, imgs.map((id, i) => threadPic(id, i, imgs.length))) : null,
-      txt(m.text) || !imgs.length ? h("p", {class: "talk-text"}, txt(m.text)) : null,
+      heldAnswer(m) ? h("p", {class: "talk-text muted", role: "status"}, HELD_SAID) : txt(m.text) || !imgs.length ? h("p", {class: "talk-text"}, txt(m.text)) : null,
       // A message of yours that got no answer before your next one says so, so it never reads
       // the same as one Claude answered (2026-11-03: one asked again three days later).
       unanswered ? h("p", {class: "small muted talk-unanswered"}, "No answer to this one") : null);
@@ -12667,11 +12687,30 @@
     const box = dockOpen && dockBox && talkBody && talkBody.parentNode === dockBox ? dockBox : null;
     return box || document.scrollingElement || document.documentElement;
   }
-  function nearEnd(sc) { return !sc || sc.scrollHeight - sc.scrollTop - sc.clientHeight < 80; }
+  // The end of the conversation on the Chat page is the field with its note at the foot of the
+  // window, above the tabs: the page's own end lies past it, under the privacy line, and Latest
+  // left a gap of empty page under the field (the maintainer, 2026-11-05).
+  function chatEndTop(sc) {
+    if (!sc) return 0;
+    const whole = sc.scrollHeight - sc.clientHeight;
+    if (sc !== (document.scrollingElement || document.documentElement) || !talkForm || !talkForm.isConnected) return whole;
+    // The field is sticky, so where it sits on screen says nothing: the end is the bottom of
+    // the conversation's own section, where the field rests when it is not held (its inner
+    // block is display: contents and has no box).
+    const tabs = document.querySelector(".tabs");
+    const under = tabs && getComputedStyle(tabs).position === "fixed" && !tabs.hidden ? tabs.getBoundingClientRect().height : 0;
+    const block = talkForm.closest("section") || talkForm.parentElement;
+    const want = sc.scrollTop + block.getBoundingClientRect().bottom - (window.innerHeight - under - 8);
+    return Math.max(0, Math.min(whole, Math.round(want)));
+  }
+  function nearEnd(sc) { return !sc || chatEndTop(sc) - sc.scrollTop < 80; }
   function chatShownHere(box) { return !!box || S.section === "chat"; }
   function toChatEnd(box) {
     const sc = box || chatScroller();
-    requestAnimationFrame(() => { try { sc.scrollTop = sc.scrollHeight; } catch (e) { /* no layout */ } S.chatStick = true; jumpShown(); });
+    // Twice: the first move can re-draw what is above (the jump button going, a sticky field
+    // letting go), and the second puts the field where it ends up.
+    const go = () => { try { sc.scrollTop = chatEndTop(sc); } catch (e) { /* no layout */ } };
+    requestAnimationFrame(() => { go(); requestAnimationFrame(go); S.chatStick = true; jumpShown(); });
   }
   let talkJump = null;
   function jumpShown() {

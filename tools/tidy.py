@@ -1088,6 +1088,13 @@ def run_plan(a) -> int:
               f"--chat {me or '<this chat id>'}, keep the chat that task is in (archive nothing "
               "for it) and carry on with the rest; the fresh helper the brief's next run "
               "starts moves it. Say nothing about it.")
+    import app_setup
+    rings = app_setup.doorbells_due(today)
+    if rings:
+        # Every day, not once: rings no wake resolved stayed unread in the Claude app, 18 of
+        # them (the maintainer, 2026-11-05).
+        print("rings: python3 tools/app.py doorbells, and do what it says (it resolves the "
+              "page's open rings only). Say nothing about it.")
     for c in got["archive"]:
         print(f"archive {c['id']}: {c['title']} ({c['why']})")
     if got["archive"]:
@@ -1107,7 +1114,7 @@ def run_plan(a) -> int:
                   f"if one is, send_later {json.dumps({'delay_minutes': RECHECK_MIN, 'message': RECHECK})} "
                   "once, and that check-in tries again"
                   if me and me == listener.get("chat") else "the next tidy-up tries again"))
-    elif got["brief"] or got.get("moves") or got.get("upkeep") or got.get("mend"):
+    elif got["brief"] or got.get("moves") or got.get("upkeep") or got.get("mend") or rings:
         # Never "nothing to tidy" over calls still to make: the helper took it as the brief
         # already moved (the maintainer's copy, 2026-11-05).
         print("tidy: no chat to archive; make the calls above, then python3 tools/tidy.py done")
