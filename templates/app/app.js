@@ -4078,6 +4078,17 @@
     // Its count is what it still folds: once opened the line goes (CSS) and the first card it
     // showed takes the focus. "Show 1 more" stayed over the card it had shown (the
     // maintainer, 2026-11-05: "it shows something else but still says show 1 more").
+    // One more is shown, never folded: a whole-width "Show 1 more" over a single card was a
+    // tap for nothing (the maintainer, 2026-11-06).
+    if (restN === 1) {
+      // Into its own band where that band is shown already, so its heading is not said twice.
+      for (const sec of [...rest.children]) {
+        const id = txt(sec.getAttribute("aria-labelledby")).replace("band-rest-", "band-");
+        const there = [...wrap.querySelectorAll("section.band")].find((b) => b.getAttribute("aria-labelledby") === id);
+        if (there) [...sec.children].slice(1).forEach((c) => there.appendChild(c)); else put(wrap, sec);
+      }
+      restN = 0;
+    }
     if (restN) put(wrap, det("todo-rest", false, {class: "band-more", ontoggle: (e) => {
       const d = e.currentTarget;
       const first = d.open && d.dataset.tapped ? d.querySelector("[data-card]") : null;
@@ -4100,8 +4111,13 @@
     const order = {answer: 0, now: 1, week: 2, later: 3};
     items.sort((a, b) => (order[a.band] - order[b.band]) || itemSort(a, b));
     const first = items[0];
+    // The rest are here too, one tap below, as every long list folds: "+1 more in To do" sent
+    // the person away for something this screen could show (the maintainer, 2026-11-06: "why
+    // would to do have it but not the jobs page?").
+    const rest = items.slice(1);
     return h("div", {class: "orphan"}, first.node({where: tab, section: tab}),
-      items.length > 1 ? h("p", {class: "fold"}, "+" + (items.length - 1) + " more in ", navLink("todo", "To do")) : null);
+      rest.length === 1 ? rest[0].node({where: tab, section: tab}) : rest.length ? det("tab-todos:" + tab, false, {class: "band-more"}, h("summary", {class: "band-more-sum", "data-k": "tab-todos-more:" + tab}, "Show " + rest.length + " more"),
+        h("div", {class: "stack"}, rest.map((i) => i.node({where: tab, section: tab})))) : null);
   }
   function comingUp(iv, ctx) {
     ctx = ctx || {};
