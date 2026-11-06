@@ -4615,7 +4615,7 @@ EXPORT_STATES = ("missing", "requested", "fresh", "due")
 
 def _linkedin(ctx: Ctx, targets: dict) -> dict:
     """The LinkedIn data download (tools/network/export.py: asked for, taken, how old, due by
-    the fortnightly rule, what the last held and what changed since the one before; the
+    export.every_days, how often the person wants it asked for, what the last held and what changed since the one before; the
     steps and the files the page lets the person add) and the page's own reading of
     LinkedIn (place.page_reads: read a page lately; the profiles queued for it)."""
     import claude_surfaces
@@ -4634,7 +4634,7 @@ def _linkedin(ctx: Ctx, targets: dict) -> dict:
         "taken_on": st["taken_on"] or None,
         "age_days": (ctx.today - taken).days if taken else None,
         "due_on": st["due_on"] or None, "due": state in ("missing", "due"),
-        "every_days": export.EXPORT_EVERY_DAYS,
+        "every_days": st["every_days"],
         "counts": rec.get("counts") or rec.get("rows") or {},
         # What a chat reads from the export, said for the person: never a tool's name
         # ("(export.py pending lists them)" was the card's last words, 2026-11-03).
@@ -4648,6 +4648,17 @@ def _linkedin(ctx: Ctx, targets: dict) -> dict:
                                  export_block["counts"])
     targets["linkedin-export"] = {"kind": "linkedin", "id": "linkedin-export",
                                   "rev": export_block["rev"]}
+    # How often it is asked for (export.every_days), as a setting: its row is in Settings >
+    # LinkedIn beside the download, and the reminder's trash sets the same item, so the two
+    # never disagree.
+    key, label, choices = EXPORT_REMIND
+    choice = export.remind_choice()
+    sid = f"setting-{key}"
+    export_block["reminder"] = {"id": sid, "key": key, "label": label, "kind": "choice",
+                                "value": choice, "choices": choices, "help": EXPORT_REMIND_HELP,
+                                "rev": rev_of(key, choice)}
+    targets[sid] = {"kind": "setting", "key": key, "value": choice,
+                    "rev": export_block["reminder"]["rev"]}
     pr = place.page_reads_record()
     from network import schema as _net_schema
     book = ctx._once("book", lambda: {str(c.get("contact_id") or "").strip(): c
@@ -4828,6 +4839,11 @@ def setting_values() -> dict:
     except Exception:  # noqa: BLE001  no networking settings: the default
         out["profile_reads"] = "browser"
     try:
+        import export
+        out["export_remind"] = export.remind_choice()
+    except Exception:  # noqa: BLE001  no networking tools here: the rule
+        out["export_remind"] = "auto"
+    try:
         out["time_zone"] = zone_words(person.home_zone_named(person.directory()))
     except person.NoProfile:
         out["time_zone"] = ""
@@ -4868,6 +4884,22 @@ SETTINGS = (
     ("brief_push", "Phone notification", [["off", "Off"], ["on", "On"]]),
 )
 SETTING_DEFAULTS = {"prep_days": "7", "calendar_reminder": "60", "brief_push": "off"}
+
+# How often the LinkedIn download is asked for (export.REMIND_CHOICES, networking.py
+# EXPORT_REMIND). Not in SETTINGS: its one home is the download's own place in Settings >
+# LinkedIn, drawn from model.linkedin.export.reminder, and the reminder's trash offers the
+# last three (the maintainer, 2026-11-06).
+EXPORT_REMIND = ("export_remind", "Reminder to download it",
+                 [["auto", "Weekly while messaging"], ["fortnightly", "Every 2 weeks"],
+                  ["monthly", "Every month"], ["off", "Off"]])
+EXPORT_REMIND_HELP = ("Weekly while you have sent notes or messages in the last two weeks, "
+                      "every two weeks otherwise.")
+
+
+def setting_choices() -> tuple:
+    """Every setting the page can set by setting.set, with its choices: SETTINGS and the
+    LinkedIn download's reminder."""
+    return SETTINGS + (EXPORT_REMIND,)
 
 
 # The person's own time zone (person.json `time_zone`), said in their words ("Toronto",

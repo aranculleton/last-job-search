@@ -23,6 +23,10 @@ LINKEDIN_PLAN = "premium"
 # How old their LinkedIn download may get before the brief asks for a new one, in days
 # (tools/network/export.py); unset, 14, and 0 never asks.
 # EXPORT_EVERY_DAYS = 14
+# How often the page reminds them to download it: unset, "auto", weekly while they have
+# sent notes or messages in the last two weeks and every two weeks otherwise; "fortnightly",
+# "monthly" or "off" as they choose in Settings or from the reminder's trash.
+# EXPORT_REMIND = "auto"
 
 # How a person's LinkedIn profile is read before a note is written to them
 # (tools/network/reading.py): unset, "browser", in the browser a chat on their computer

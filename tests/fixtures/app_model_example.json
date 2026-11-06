@@ -1,7 +1,7 @@
 {
  "model": 1,
  "made_at": "2026-10-25T18:00:00Z",
- "rev": "7e9ee6131899",
+ "rev": "a1857ea10ce1",
  "app": {
   "version": "4.10.1",
   "url": null,
@@ -1742,7 +1742,34 @@
      ]
     }
    ],
-   "rev": "3f18bb475638"
+   "rev": "3f18bb475638",
+   "reminder": {
+    "id": "setting-export_remind",
+    "key": "export_remind",
+    "label": "Reminder to download it",
+    "kind": "choice",
+    "value": "auto",
+    "choices": [
+     [
+      "auto",
+      "Weekly while messaging"
+     ],
+     [
+      "fortnightly",
+      "Every 2 weeks"
+     ],
+     [
+      "monthly",
+      "Every month"
+     ],
+     [
+      "off",
+      "Off"
+     ]
+    ],
+    "help": "Weekly while you have sent notes or messages in the last two weeks, every two weeks otherwise.",
+    "rev": "67d894b3b570"
+   }
   },
   "reading": {
    "id": "linkedin-reader",
@@ -1913,6 +1940,7 @@
    "due.done",
    "due.snooze",
    "due.undo",
+   "export.later",
    "export.requested",
    "export.unrequested",
    "hint.seen",

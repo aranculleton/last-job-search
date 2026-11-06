@@ -2137,6 +2137,11 @@ SAFE_DEFAULTS: dict[str, str] = {
                                  "nudge), as before it was a setting",
     "networking.EXPORT_EVERY_DAYS": "unset, the brief asks for a new LinkedIn download once the "
                                     "last is 14 days old; 0 never asks",
+    "networking.EXPORT_REMIND": "\"auto\": the LinkedIn download is asked for weekly while "
+                                "the person has sent notes or messages in the last two "
+                                "weeks, every two weeks otherwise (their own "
+                                "EXPORT_EVERY_DAYS, where set, as before); the page's "
+                                "Settings or the reminder's trash writes another",
     "networking.SUBJECT": "none: the InMail subject is built from roles.py, who you are",
     "networking.TEMPLATES": "none: the phrase bank, then the person's OPENER and ASK, as before",
     "networking.PROFILE_READ_UNPLACED": "10 people nothing has placed yet on a day's list",
