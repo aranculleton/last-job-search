@@ -112,6 +112,17 @@ def _comments(text: str) -> list[str]:
     return out
 
 
+def _same(a, b) -> bool:
+    """Equal and of the same type, all the way down: True is not 1, nor 1.0 (`==` says so)."""
+    if type(a) is not type(b):
+        return False
+    if isinstance(a, dict):
+        return a.keys() == b.keys() and all(_same(a[k], b[k]) for k in a)
+    if isinstance(a, (list, tuple)):
+        return len(a) == len(b) and all(_same(x, y) for x, y in zip(a, b))
+    return a == b
+
+
 def _in_place(src: str, n, value) -> str | None:
     """`src` with a dict setting changed entry by entry, so every comment on and between its
     entries stays where the person wrote it: `PORTALS = {"adzuna-search": False,  # why}` keeps
@@ -137,7 +148,7 @@ def _in_place(src: str, n, value) -> str | None:
 
     edits = [(at(v.lineno, v.col_offset), at(v.end_lineno, v.end_col_offset),
               _literal(value[k]).encode("utf-8"))
-             for k, v, was in zip(keys, node.values, old) if value[k] != was]
+             for k, v, was in zip(keys, node.values, old) if not _same(value[k], was)]
     added = [k for k in value if k not in keys]
     if added:
         close = at(node.end_lineno, node.end_col_offset) - 1         # the closing brace
@@ -160,7 +171,7 @@ def _in_place(src: str, n, value) -> str | None:
     out = data.decode("utf-8")
     try:
         got = _node(ast.parse(out), n.targets[0].id if isinstance(n, ast.Assign) else n.target.id)
-        if got is None or ast.literal_eval(got.value) != value:
+        if got is None or not _same(ast.literal_eval(got.value), value):
             return None
     except (SyntaxError, ValueError):
         return None

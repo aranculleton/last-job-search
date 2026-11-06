@@ -240,6 +240,15 @@ def test_turning_a_site_on_keeps_every_note_the_person_wrote(tmp_path, monkeypat
         'PORTALS = {"adzuna-search": True, "freehire-search": True}  # off: needs a paid plan\n'
 
 
+def test_an_entry_changed_in_place_takes_the_new_type_true_is_never_left_as_one(tmp_path, monkeypatch):
+    import profile_set
+    path = _profile(tmp_path, monkeypatch, 'PORTALS = {"adzuna-search": 1}  # why\n')
+    profile_set.set_line("search.py", "PORTALS", {"adzuna-search": True})
+    assert open(path, encoding="utf-8").read() == 'PORTALS = {"adzuna-search": True}  # why\n'
+    got = profile_set.get("search.py", "PORTALS")["adzuna-search"]
+    assert got is True, got
+
+
 def test_a_line_written_whole_keeps_its_notes_above_it_and_undo_puts_it_back(tmp_path, monkeypatch):
     import profile_set
     path = _profile(tmp_path, monkeypatch, NOTED)
