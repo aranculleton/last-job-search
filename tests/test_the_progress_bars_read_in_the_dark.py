@@ -49,3 +49,11 @@ def test_the_menus_words_are_centred_on_their_icons_and_news_links_read_as_text(
     assert re.search(r"\.side-label \{[^}]*text-box: trim-both cap alphabetic", css)
     news = re.search(r"\.bp-news a \{[^}]*\}", css).group(0)
     assert "currentColor" in news and "1px" in news
+
+
+def test_the_week_dates_are_every_other_one_in_every_width():
+    # "quite cluttered" (the maintainer, 2026-11-06): eight dates ran into one another and were
+    # cut in a laptop's Brief panel; every other one shows, this week's always, at any width.
+    css = open(os.path.join(ROOT, "templates", "app", "app.css"), encoding="utf-8").read()
+    rule = re.search(r"(^|\n)\.bp-wk:nth-last-child\(even\):not\(\.is-now\) \{ visibility: hidden; \}", css)
+    assert rule, "the alternate dates are hidden outside any media query"

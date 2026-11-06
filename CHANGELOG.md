@@ -242,7 +242,7 @@ make sense to somebody whose repo just received it.
 - On a phone, Latest in Chat stops with the text box at the bottom of the screen, with no empty space under it.
 - Claude's answer waits until the change it made is on your page, so it never says "see the updated message" while the old one still shows.
 - On a laptop, a full Brief fills the window with its panels lined up edge to edge, and a quiet one keeps its panels as tall as what they hold rather than stretching them into big empty boxes; either way it fits without scrolling.
-- Your progress: this week's bar is blue and past weeks are rose, at full strength, with the dates and the line under them in the main text colour, so nothing reads as grey in the dark look.
+- Your progress: this week's bar is blue and past weeks are rose, at full strength, with every other week's date (and this week's) under them in the main text colour, so nothing is cramped or reads as grey in the dark look.
 - The links in the news are underlined in their own colour, a little thinner, and the menu's words sit level with their icons.
 
 ## [4.10.1] - 2026-11-05
