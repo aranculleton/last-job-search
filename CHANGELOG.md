@@ -20,6 +20,13 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Fixed
+
+- **LinkedIn reading waits for your own tomorrow.** A read cut short holds the automatic reads until the next day where you live, not by your computer's own date when it is set somewhere else.
+- **A folder with a space in its name is read whole.** When the page's helper hands Claude a file to send to your page, it is on a line of its own, so a user folder such as "First Last" is never read as two.
+- **A background save is never held up by a computer's clock.** A save Claude started in the background counts as under way by the time it was asked for, not by the disk's clock.
+- **The app's own checks pass on every computer.** Six of them had assumed something about the computer they ran on (its time zone, its date, a Mac's or Windows' own ways, the newest Python); each now checks the same thing anywhere.
+
 ## [4.11.0] - 2026-11-06
 
 ### Added
