@@ -77,6 +77,10 @@ make sense to somebody whose repo just received it.
 - **Your own notes in your search settings are kept.** Turning a site on or off, or changing any
   search setting from the page, keeps the notes you wrote beside it, where it had put a bare
   line in their place.
+- **A job's progress is saved to your page the first time.** A batch of drafts with each one
+  named wrote the same draft twice, and a save the page refused left the next one a step
+  ahead, so it was refused again until Claude read the page afresh. Each draft is now written
+  once, and a refused save is made again exactly as the page holds it.
 
 ## [4.11.0] - 2026-11-06
 
