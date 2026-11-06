@@ -10365,13 +10365,19 @@
     const search = items.length > 5 ? controlRow([searchField("learned", lo)]) : null;
     if (txt(listState("learned").q).trim()) return [intro, search, listView("learned", lo)];
     const by = new Map();
-    for (const x of items) { const k = AREA_NAMES[txt(x.area)] ? txt(x.area) : "other"; if (!by.has(k)) by.set(k, []); by.get(k).push(x); }
+    for (const x of items.filter((y) => !y.retired)) { const k = AREA_NAMES[txt(x.area)] ? txt(x.area) : "other"; if (!by.has(k)) by.set(k, []); by.get(k).push(x); }
+    // Rules the app has since built in: put away once after an update (learned.py built-in),
+    // kept here folded under their own heading with what the app now does.
+    const part = items.filter((y) => y.retired).sort(newest);
     const groups = Object.keys(AREA_NAMES).filter((k) => by.has(k)).map((k) => {
       const list = by.get(k).slice().sort(newest);
       return h("section", {class: "l-group", "data-area": k, "aria-label": AREA_NAMES[k]}, h("h4", {class: "small-head"}, AREA_NAMES[k] + " (" + list.length + ")"),
         h("ul", {class: "plain l-list"}, shortList("learned-" + k, list.map(learnedRow), 3, "Show all")));
     });
-    return [intro, search].concat(groups);
+    const partBox = part.length ? det("learned-part", false, {class: "l-group l-part"}, h("summary", {class: "small-head", "data-k": "l-part"}, "Now part of the app (" + part.length + ")"),
+      h("ul", {class: "plain l-list"}, shortList("learned-part", part.map((x) => h("li", {class: "learned l-item", "data-item": txt(x.id)},
+        h("p", {class: "l-say"}, txt(x.say) || txt(x.rule)), h("p", {class: "hint"}, [txt(x.why) || "Now part of the app", txt(x.app_does)].filter(Boolean).join(": ")))), 3, "Show all"))) : null;
+    return [intro, search].concat(groups, [partBox]);
   }
 
   // The lowest pay, as people write it: "90k" is 90,000, and a range or anything that is not

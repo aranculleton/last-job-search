@@ -219,3 +219,16 @@ def test_the_interview_and_the_reminder_have_their_new_choices():
         assert upcoming.reminder_minutes() == 120
     finally:
         upcoming.person.get = orig
+
+
+def test_a_rule_the_app_now_keeps_is_folded_under_now_part_of_the_app_and_not_counted(run, tmp_path):
+    m = _model(declined=0, learned=6)
+    m["learned"].append({"id": "learned-99", "n": 99, "area": "documents", "rule": "Name the resume file after me", "say": "Name the resume file after you",
+                         "said": "", "on": "2026-09-01", "retired": True, "why": "Now part of the app", "app_does": "Every resume file carries your name.",
+                         "retired_on": "2026-10-20", "rev": "l99"})
+    got = _go(run, tmp_path, [
+        {"hash": "settings", "open": "info-sum:learned", "read": '[data-k="det:info:learned"]', "count": '[data-k="det:info:learned"] .l-group[data-area] .l-item'},
+        {"open": "l-part", "read": '[data-k="det:learned-part"]'},
+    ], WIDE, model=m)
+    assert got["after"][0]["count"] == 6 and "Now part of the app (1)" in got["after"][0]["text"], got["after"][0]["text"][:400]
+    assert "Every resume file carries your name." in got["after"][1]["text"]
