@@ -20,6 +20,8 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+## [4.11.0] - 2026-11-06
+
 ### Added
 
 - **The Brief fits a laptop screen.** On a laptop the Brief is two rows of panels that fill the
@@ -211,7 +213,9 @@ make sense to somebody whose repo just received it.
 - Claude no longer says your morning brief has moved to the page chat, or is already set up, until your list of scheduled tasks shows it running there; one still running in an older chat is moved.
 - A role you mark as applied leaves the To apply list straight away instead of waiting at the bottom of it.
 - Applied opens on what you applied to today or yesterday, shown as a filter with Clear all beside it so the whole list is one tap away.
-- A contact marked as in conversation, or with a call booked, when nothing from them is logged now shows what the messages say instead (waiting on their reply, or connected with no reply yet), so the page no longer asks you to answer a reply that was never sent. The contact check lists each one as something to fix.
+- A contact marked as in conversation whose only logged contact is your own connection request now shows what the messages say instead (waiting on their reply, or connected with no reply yet), so the page no longer asks you to answer a reply that was never sent. A call booked, a message you sent or a status you set yourself keeps it as it is. The contact check lists each one as something to fix.
+- Someone you dropped or closed is taken off the list of profiles the page reads.
+- A job at an employer where someone has put your name forward now stays on your list, marked not to apply cold, instead of disappearing: the role is the one the referral can carry.
 - One role per employer on Jobs, whichever search found it. The best fit stays; any other role there is set aside ("Another role at <employer> is already on your list") with Bring back, and a role you added, kept, drafted or applied for always stays.
 - Strong roles at one employer no longer all score 100. A live contact or an earlier interview there is counted before the top of the scale, so those roles keep their order.
 - Marking something (applied, not applying, I sent it, set aside, put off) no longer wakes Claude or starts a new helper: the page shows it at once, and Claude keeps it the next time it works on your search. Such a mark never makes the page say Claude is not listening.
@@ -238,7 +242,7 @@ make sense to somebody whose repo just received it.
 - On a phone, Latest in Chat stops with the text box at the bottom of the screen, with no empty space under it.
 - Claude's answer waits until the change it made is on your page, so it never says "see the updated message" while the old one still shows.
 - On a laptop, a full Brief fills the window with its panels lined up edge to edge, and a quiet one keeps its panels as tall as what they hold rather than stretching them into big empty boxes; either way it fits without scrolling.
-- Your progress: this week's bar is blue and past weeks are rose, at full strength, with the dates and the line under them in the main text colour, so nothing reads as grey in the dark look.
+- Your progress: this week's bar is blue and past weeks are rose, at full strength, with every other week's date (and this week's) under them in the main text colour, so nothing is cramped or reads as grey in the dark look.
 - The links in the news are underlined in their own colour, a little thinner, and the menu's words sit level with their icons.
 
 ## [4.10.1] - 2026-11-05

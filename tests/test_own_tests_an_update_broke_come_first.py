@@ -121,6 +121,9 @@ def test_master_bringing_in_an_update_checks_them_here_too(tmp_path, monkeypatch
     git(root, "push", "-q", "origin", "HEAD:master")
     other = str(tmp_path / "other")
     git(tmp_path, "clone", "-q", origin, other)
+    # A clone takes no identity: a Mac runner has no global one, and the commit failed there.
+    git(other, "config", "user.name", "Test")
+    git(other, "config", "user.email", "test@example.com")
     write(other, "tools/state_rule.py", "LIMIT = 5\n")
     git(other, "commit", "-q", "-am", "Sync from the app: 1 new commit(s)")
     git(other, "push", "-q", "origin", "HEAD:master")

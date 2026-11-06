@@ -1776,7 +1776,11 @@ ul.bp-news { gap: 12px; }
 .bp-wk.is-now { color: var(--ink); opacity: 1; font-weight: 600; }
 /* On a phone eight dates ran into one another ("28 Sep" cut, 2026-11-03): every other one, and
    this week's, is said; each bar still says its own week when tapped. */
-@media (max-width: 759px) { .bp-wk:nth-last-child(even):not(.is-now) { visibility: hidden; } }
+/* And in every width since 4.11: in a Brief panel the eight dates ran into one another on a
+   laptop too ("quite cluttered", the maintainer, 2026-11-06), "14 Sept" cut to "14 Sep". Every
+   other one, and this week's, each free to run into the empty space beside it. */
+.bp-wk:nth-last-child(even):not(.is-now) { visibility: hidden; }
+.bp-wk { overflow: visible; }
 /* Each week is a column that answers the pointer, a tap or the keyboard; the one pointed at
    stays full and the others step back, and the line under them says its week. */
 /* Where a conversation is, as one line of words with ticks: outlined pills beside the buttons

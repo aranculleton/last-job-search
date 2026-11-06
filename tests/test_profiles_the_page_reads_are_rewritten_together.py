@@ -217,3 +217,15 @@ def test_their_recent_posts_are_kept_from_the_activity_page(page):
         "r = reading.parse(t, name='Tamsin Varga', company='Kestrel Mutual', source='browser')\n"
         "print(json.dumps([i['kind'] + ': ' + i['text'] for i in r['items']]))"))
     assert got == ["post: We just opened two analyst roles on the pricing team."]
+
+
+def test_someone_dropped_or_closed_is_never_read(page):
+    # The page opened the profiles of people the person had turned away (reported from a
+    # person's copy, 2026-11-06): a dropped or closed contact leaves the page's reading list.
+    assert _queue(page, VARGA, SMITH).returncode == 0
+    assert {x["contact"] for x in page.model()["linkedin"]["reading"]["queue"]} == {VARGA, SMITH}
+    out = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "network", "state.py"), "set", SMITH,
+                          "--status", "closed", "--note", "not for me"], env=page.env(), capture_output=True,
+                         encoding="utf-8", cwd=ROOT)
+    assert out.returncode == 0, out.stdout + out.stderr
+    assert [x["contact"] for x in page.model()["linkedin"]["reading"]["queue"]] == [VARGA]

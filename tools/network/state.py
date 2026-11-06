@@ -1549,7 +1549,10 @@ def effective_status(contact, thread_rows) -> str:
 # The statuses that claim they took part. Imported from earlier notes ("varying engagement")
 # with nothing but our own unaccepted request in the log, one kept "Talking" for good and
 # the page queued "Write to <name>" off a reply never sent (the maintainer, 2026-11-05).
-CLAIMS_THEIR_WORD = frozenset({"in_conversation", "call_booked"})
+# Only "talking": a call booked is the person's own word that they agreed one, and reading it
+# as awaiting_reply would nudge someone the person has a call with (the 4.11 rehearsal on the
+# maintainer's own tests, 2026-11-06), and drop the referral holds that rest on it.
+CLAIMS_THEIR_WORD = frozenset({"in_conversation"})
 
 
 # What `set_contact` writes into the notes when the person says, on the page or in a chat,
@@ -1561,9 +1564,9 @@ _A_CALL = re.compile(r"\ACall on \d{4}-\d{2}-\d{2}\b")
 
 
 def unheard(contact, rows, derived=None) -> bool:
-    """Does the row claim a conversation or a call when the log, which has rows, holds no
-    message from them and no call, and nothing else says so: no call day on the row (Call
-    booked, or one that is over) and no status the person set themselves? An empty log is
+    """Does the row say they are talking when the log, which has rows, holds nothing but our
+    own connection requests, and nothing else says so: no call day on the row and no status
+    the person set themselves? An empty log is
     the log behind (`effective_status`), and one the log cannot read at all keeps the row."""
     stored = str(contact.get("status") or "").strip()
     if stored not in CLAIMS_THEIR_WORD or not rows:
@@ -1571,6 +1574,10 @@ def unheard(contact, rows, derived=None) -> bool:
     if (derived or derive_status(rows)) == "not_contacted":
         return False
     if any(said_something(r) or is_call(r) for r in rows):
+        return False
+    # Only where the log shows nothing but our own connection requests: a message we sent
+    # means a channel was open, and a conversation may be going on where the log cannot see.
+    if not all(is_request(r) for r in rows if _direction(r)):
         return False
     if _A_CALL.match(" ".join(str(contact.get("next_action") or "").split())):
         return False

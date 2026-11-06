@@ -4649,13 +4649,16 @@ def _linkedin(ctx: Ctx, targets: dict) -> dict:
     targets["linkedin-export"] = {"kind": "linkedin", "id": "linkedin-export",
                                   "rev": export_block["rev"]}
     pr = place.page_reads_record()
+    from network import schema as _net_schema
     book = ctx._once("book", lambda: {str(c.get("contact_id") or "").strip(): c
                                       for c in ctx.contacts})
     queue = []
     for q in reading.page_queue():
         cid = q["contact"]
         c = book.get(cid)
-        if c is None:
+        # Someone the person dropped or closed is never read: the page opened the profiles
+        # of people already turned away (reported from a person's copy, 2026-11-06).
+        if c is None or str(c.get("status") or "").strip() in _net_schema.TERMINAL:
             continue
         rid = f"read-{cid}"
         item = {"id": rid, "contact": cid, "first_name": first_name(c.get("name")),
