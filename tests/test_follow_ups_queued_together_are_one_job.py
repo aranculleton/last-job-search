@@ -231,29 +231,30 @@ def test_a_follow_up_put_to_the_person_before_is_taken_back_and_drafted(ring):
     assert not doc.get("needs") and not doc.get("note"), doc
 
 
-def test_one_finish_refused_keeps_the_rest_of_the_batch(ring, monkeypatch):
+def test_one_finish_refused_keeps_the_rest_of_the_batch(ring):
     """A name with a full stop in it made one finish read as two sentences, and the refusal
-    lost the writes of every follow-up already finished in the batch (2026-11-06)."""
-    import app
-    import app_model
-    import person
+    lost the writes of every follow-up already finished in the batch (2026-11-06). Run as the
+    command runs, in a process of its own, with every finish's own words refused: run in this
+    one, the tools' paths were the ones the first test in the process had read, and other
+    tests read this test's state after it (CI, 2026-11-06)."""
+    import subprocess
+    import repo_files
     d = ring.read("wake1")
     assert all(land(ring, ring.wake(d)))
-    for k, v in ring.env().items():
-        if k.startswith("LJS_"):
-            monkeypatch.setenv(k, v)
-    person._modules.clear()
-    person._data.clear()
-    monkeypatch.setattr(app, "FOLLOW_UP_DONE", "Ready. Your follow-up to {first} is written.")
-    try:
-        got = app.follow_ups(d, CHAT, app_model.parse_time(NOW), "2026-10-25",
-                             os.path.join(ring.root, "out-refused"))
-    finally:
-        person._modules.clear()
-        person._data.clear()
-    assert len(got["done"]) == 9 and not got["not_finished"], got
+    driver = os.path.join(ring.root, "refused_finish.py")
+    with open(driver, "w", encoding="utf-8") as fh:
+        fh.write("import sys\n"
+                 f"sys.path[:0] = [{os.path.join(ROOT, 'tools')!r}, {os.path.join(ROOT, 'tools', 'network')!r}]\n"
+                 "import app\n"
+                 "app.FOLLOW_UP_DONE = 'Ready. Your follow-up to {first} is written.'\n"
+                 "sys.exit(app.main(sys.argv[1:]))\n")
+    r = subprocess.run([*repo_files.python_on_github(driver), "follow-ups", d, "--chat", CHAT,
+                        "--now", NOW, "--today", "2026-10-25"], env=ring.env(), capture_output=True,
+                       encoding="utf-8", errors="replace", timeout=120)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert r.stdout.startswith("follow-ups: 9 finished"), r.stdout
     import fake_db
-    assert all(fake_db.apply(ring.db, b) for b in got["batches"]), got
+    assert all(fake_db.apply(ring.db, b) for b in batches(r.stdout)), r.stdout
     for cid in ring.ids:
         doc = ring.stored("work", "follow_up~" + cid)["data"]
         assert doc["status"] == "done" and doc["result"]["summary"] == "Your follow-up is ready to send.", doc
