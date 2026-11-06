@@ -74,6 +74,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from personal_paths import _regex  # noqa: E402
@@ -1304,7 +1305,7 @@ def _utf8_stdio() -> None:
 
 # The runs that are the day's check: a plain run, --if-stale and --update.
 _NOT_THE_CHECK = ("--check", "--adopt", "--own-tests", "--own-test-risks", "--pull",
-                  "--worktree", "-h", "--help")
+                  "--worktree", "--app-watch-run", "-h", "--help")
 
 
 def main(argv: list[str]) -> int:
@@ -1338,6 +1339,9 @@ def _main(argv: list[str]) -> int:
     mode.add_argument("--worktree", metavar="NAME",
                       help="a folder of this chat's own, inside this one, on a new branch from "
                            "master: for a second chat on the same computer")
+    # The app watch's own process, started by a sync (app_watch): never run by hand.
+    mode.add_argument("--app-watch-run", dest="app_watch_run", action="store_true",
+                      help=argparse.SUPPRESS)
     ap.add_argument("--on", default="", metavar="MODEL",
                     help="the model this session runs on: the day's work is checked against it")
     ap.add_argument("--tools", default=None, metavar="LIST",
@@ -1364,6 +1368,8 @@ def _main(argv: list[str]) -> int:
         return 0
     if a.worktree:
         return worktree(a.worktree)
+    if a.app_watch_run:
+        return run_app_watch()
     if (a.pull or a.if_stale) and not is_the_app():
         hint = own_folder()
         if hint:
@@ -1379,7 +1385,9 @@ def _main(argv: list[str]) -> int:
             # A new chat on a day already checked still hears these: each chat runs on its
             # own cloud computer, so blocked job sites are checked for every chat. The page
             # first: a chat kept open for days heard about it only from the day's first
-            # check, last, under the job sites' block (the stranger audit, X-52).
+            # check, last, under the job sites' block (the stranger audit, X-52). What the
+            # app watch found in the background since, before all of it.
+            app_watch_said()
             say_page()
             network_check()
             place_check(a.tools)
@@ -1858,20 +1866,50 @@ def own_tests_after_sync(root: str | None = None) -> None:
 
 
 WATCHED = "ljs-app-watch-day"       # in the git folder: the day the app watch last finished
+# In the git folder: what the last look in the background printed, said once by the next sync
+# or --if-stale; when one was last started; and the lock a running look holds.
+WATCH_SAID = "ljs-app-watch-said"
+WATCH_STARTED = "ljs-app-watch-started"
+WATCH_LOCK = "ljs-app-watch-running"
+WATCH_AGAIN_S = 3600                # a look started this long ago that never marked the day
+WATCH_LOCK_S = 600                  # a lock older than this is a look that died
 
 
-def app_watch(landed: bool = False) -> None:
+def _watch_file(name: str) -> str | None:
+    dirs = _git_dirs(ROOT)
+    return os.path.join(dirs[0], name) if dirs else None
+
+
+def app_watch_said() -> None:
+    """What the last look in the background printed (a finding, or that it could not reach
+    the app), said once, where the look itself used to say it."""
+    path = _watch_file(WATCH_SAID)
+    try:
+        with open(path, encoding="utf-8") as fh:
+            said = fh.read().rstrip()
+        os.remove(path)
+    except (OSError, TypeError):
+        return
+    if said:
+        print(said)
+
+
+def app_watch(landed: bool = False, popen=None) -> None:
     """In the maintainer's own repo only: the public app checked for this repo's names
     (tools/app_watch.py), once a day with the sync, and again when the sync took an update.
     Anyone else's repo prints nothing. A finding goes first in the reply; it never changes
     the sync's exit code. It builds the denylist from the whole history of the state files
     and reads every branch of the app, and it ran on every sync: a `--on` run on a day with
-    no update took over two minutes (the maintainer's copy, 2026-11-05)."""
+    no update took over two minutes (the maintainer's copy, 2026-11-05). Once a day it still
+    held the day's first --if-stale past two minutes, so the chat moved it to the background
+    and the search waited (2026-11-06): the look now runs in a process of its own
+    (`--app-watch-run`), and what it prints is said by the next sync or --if-stale."""
     script = os.path.join(ROOT, "tools", "app_watch.py")
     if not os.path.isfile(script) or not maintainers():
         return
-    dirs = _git_dirs(ROOT)
-    mark = os.path.join(dirs[0], WATCHED) if dirs else None
+    app_watch_said()
+    mark = _watch_file(WATCHED)
+    started = _watch_file(WATCH_STARTED)
     if mark and not landed:
         try:
             with open(mark, encoding="utf-8") as fh:
@@ -1879,18 +1917,72 @@ def app_watch(landed: bool = False) -> None:
                     return
         except OSError:
             pass
+        try:
+            if time.time() - os.path.getmtime(started) < WATCH_AGAIN_S:
+                return                  # started lately: it says what it found when it ends
+        except (OSError, TypeError):
+            pass
+    kw = {"start_new_session": True} if os.name == "posix" else \
+        {"creationflags": getattr(subprocess, "DETACHED_PROCESS", 0)
+         | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)}
     try:
-        r = subprocess.run([sys.executable, script], cwd=ROOT, text=True,
-                           capture_output=True, timeout=300, encoding="utf-8", errors="replace")
-        if (r.stdout or "").strip():
-            print(r.stdout.rstrip())
+        (popen or subprocess.Popen)(
+            [sys.executable, os.path.abspath(__file__), "--app-watch-run"], cwd=ROOT,
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            close_fds=True, **kw)
+    except OSError:
+        return                          # the next sync tries again
+    if started:
+        try:
+            with open(started, "w", encoding="utf-8", newline="\n") as fh:
+                fh.write(_day_line() + "\n")
+        except OSError:
+            pass
+
+
+def run_app_watch() -> int:
+    """The look itself, in its own process (`--app-watch-run`): what it prints is kept for the
+    next sync to say, and the day is marked as before. One look at a time."""
+    script = os.path.join(ROOT, "tools", "app_watch.py")
+    lock = _watch_file(WATCH_LOCK)
+    if not os.path.isfile(script) or not lock:
+        return 0
+    try:
+        if time.time() - os.path.getmtime(lock) > WATCH_LOCK_S:
+            os.remove(lock)
+    except OSError:
+        pass
+    try:
+        os.close(os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+    except OSError:
+        return 0                        # another look is running: it covers this one
+    try:
+        try:
+            r = subprocess.run([sys.executable, script], cwd=ROOT, text=True,
+                               capture_output=True, timeout=300, encoding="utf-8",
+                               errors="replace")
+            said, rc = (r.stdout or "").rstrip(), r.returncode
+        except (OSError, subprocess.TimeoutExpired):
+            said, rc = "App watch: did not finish in five minutes; the next sync tries again.", 2
+        if said:
+            path = _watch_file(WATCH_SAID)
+            tmp = f"{path}.{os.getpid()}.tmp"
+            with open(tmp, "w", encoding="utf-8", newline="\n") as fh:
+                fh.write(said + "\n")
+            os.replace(tmp, path)
         # Only a look that reached the app counts as the day's: a finding is said again at
         # every sync until it is gone, and a failed reach tries again at the next.
-        if mark and r.returncode == 0:
-            with open(mark, "w", encoding="utf-8", newline="\n") as fh:
+        if rc == 0:
+            with open(_watch_file(WATCHED), "w", encoding="utf-8", newline="\n") as fh:
                 fh.write(_day_line() + "\n")
-    except (OSError, subprocess.TimeoutExpired):
-        print("App watch: did not finish in five minutes; the next sync tries again.")
+    except OSError:
+        pass
+    finally:
+        try:
+            os.remove(lock)
+        except OSError:
+            pass
+    return 0
 
 
 def network_check() -> None:
