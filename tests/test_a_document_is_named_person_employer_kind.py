@@ -72,7 +72,7 @@ def test_the_tracker_row_names_the_new_order(st):
 def test_the_download_is_named_person_employer_kind(st):
     for names in (NEW, OLD):
         assert docpaths.send_name(names["cv"].replace(".tex", ".pdf"), "Wrenfield Freight & Co.") \
-            == "Morgan_Ellis_Wrenfield_Freight_and_Co_CV.pdf"
+            == "Morgan_Ellis_Wrenfield_Freight_CV.pdf"
         assert docpaths.send_name(names["letter"].replace(".tex", ".pdf"), "Wrenfield") \
             == "Morgan_Ellis_Wrenfield_Cover_Letter.pdf"
     assert docpaths.send_name("documents/cv/my own.pdf", "Wrenfield") == "my own.pdf"

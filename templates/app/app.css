@@ -1253,7 +1253,7 @@ li:first-child > .fb-row, .fb-row:first-child { border-top: 0; }
 /* A chip with its own example under its words (File names): a soft card rather than a
    pill, its words left, the example wrapping anywhere on a phone rather than running off. */
 .set-body .pills .choice.has-ex { border-radius: var(--r-sm); padding-block: 8px; align-items: flex-start; flex: 1 1 auto; max-width: 100%; min-width: 0; }
-.set-body .pills .choice.has-ex input { margin-top: 3px !important; flex: none; }
+.set-body .pills .choice.has-ex input { margin-top: 4px !important; flex: none; }
 .set-body .pills .choice.has-ex label { white-space: normal; text-align: left; min-width: 0; flex: 1 1 auto; }
 .chip-ex { overflow-wrap: anywhere; }
 .chip-rec { color: var(--muted); font-weight: 400; }

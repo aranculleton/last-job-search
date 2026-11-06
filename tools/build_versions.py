@@ -381,7 +381,7 @@ METHODS: dict[str, dict] = {
             (79, "2026-11-06", False, "the run book says rules the app has since built in are retired once after an update, and a complaint about the app is never kept as a rule; no document changes; RUNBOOK.md says the brief asks for a new LinkedIn download once it is due by export.every_days (weekly while the person is messaging people, a fortnight otherwise, or as they chose); documents render and are checked as before"),
             (80, "2026-11-06", False, "a new resume and letter are named the person, the employer, then the document (<Prefix>_<ABBR>_Resume, <Prefix>_<ABBR>_Cover_Letter); one made before keeps its name and every reader finds both orders; the file you download or send is named by Settings, File names; nothing made before needs making again"),
         ),
-        "fingerprint": "9a82d819de52449b",
+        "fingerprint": "59c40189aeadc1fa",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -837,7 +837,7 @@ METHODS: dict[str, dict] = {
             (72, "2026-11-06", True, "Settings: employers turned down are one row, learned rules one home grouped by area with what is now part of the app folded, long lists show their first few, Something looks wrong opens in place, What's new shows the version, Smaller and Larger drawn in their size, Advanced only for what costs time; Job sites each by its plain name with one line, a site needing a key says what it needs (Adzuna: a paid plan, its free 25 searches gone within one search here) with the steps, and a refused tick says why on its own row; a search setting changed starts no search, its row saying Used from your next search with Find jobs beside it; the LinkedIn download reminder's trash offers Every 2 weeks, Every month and Stop asking, one tap with Undo, and Settings > LinkedIn has the same choice as chips; the download's line there shows only just after a tap, never a Done from days ago nor that only a chat can take it back"),
             (73, "2026-11-06", False, "Settings, under You, has File names: three ways to name the files you download, each shown as an example from your own name and latest employer, the person, employer, document recommended; a download takes the engine's name for it"),
         ),
-        "fingerprint": "2591664eb6ee938d",
+        "fingerprint": "2106d4433afa1128",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

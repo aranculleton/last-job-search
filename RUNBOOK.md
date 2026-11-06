@@ -738,9 +738,9 @@ anything updated: show the new version, not where it went.
 **Applications, one or a batch, are delivered one way** (2026-10-23):
 
 1. **Per role, one file-sending call** holding that role's resume and cover letter
-   together, as the copies `python3 tools/shown.py <resume pdf> <letter pdf>` makes (named as
-   the person chose in Settings, File names), captioned: role, employer, pay (or "pay not
-   stated"), location, apply link.
+   together, captioned: role, employer, pay (or "pay not stated"), location, apply link.
+   Send the copies `python3 tools/shown.py <resume pdf> <letter pdf>` makes, named as the
+   person chose in Settings, File names.
    With no SendUserFile in the chat, the caption's line and the two files' full paths,
    one a line, in its place.
 2. **Then one index table in the reply**: role | apply link, the full web address, one row
