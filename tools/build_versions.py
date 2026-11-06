@@ -567,8 +567,9 @@ METHODS: dict[str, dict] = {
             (81, "2026-11-05", False, "where someone lives is read from their profile as read when their row has none, so the person's own place rule holds every follow-up as it holds a first note: none is drafted for them, one written by hand is not kept, and the item says why once; held people come off the due list by themselves, so nothing older needs redoing"),
             (82, "2026-11-05", False, "LinkedIn's download finds someone already in the book by a message already logged, or by their first name with the surname in the record's id or notes, before listing them as new, and fills the employer, title and address the record lacks; a row closed as the same person as another gives it what it lacks (state.py same-person), and the check names two rows sharing one message; nothing older needs redoing"),
             (83, "2026-11-05", False, "export.py one-record joins two rows the message log shows are one person (one message, the same day and words, under exactly two rows and nothing on them saying two people) and fills a first-name-only row from the one connection that is them, each change written in the row's notes; the one-record upgrade does it for every older book by itself, so nothing needs redoing here"),
+            (84, "2026-11-06", False, "the LinkedIn download is asked for weekly while the person has sent notes or messages in the last two weeks, every two weeks otherwise, or as they chose (EXPORT_REMIND: every two weeks, every month, or not at all), worked out once in export.every_days; put away from its trash, the next ask counts from that day; nothing older needs redoing"),
         ),
-        "fingerprint": "37f5d1904b5b04b1",
+        "fingerprint": "f92a607a1dd4753d",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
@@ -828,8 +829,9 @@ METHODS: dict[str, dict] = {
             (69, "2026-11-06", False, "a laptop's Brief that nearly fills the window is stretched to its foot, panels lined up edge to edge; a sparse one keeps each row to what it holds"),
             (70, "2026-11-06", False, "this week's bar in the second chart colour and past weeks in the rose; the dates and the line under the bars in the text's colour; news links underlined in their own colour, thinner; the menu's words centred on their icons"),
             (71, "2026-11-06", False, "the weekly bars' dates show every other week and this week's at every width, never cut"),
+            (72, "2026-11-06", False, "the LinkedIn download reminder's trash offers Every 2 weeks, Every month and Stop asking, one tap with Undo, and Settings > LinkedIn has the same choice as chips; the download's line there shows only just after a tap, never a Done from days ago nor that only a chat can take it back"),
         ),
-        "fingerprint": "30d7c343ad588f5c",
+        "fingerprint": "d864d5278714da75",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

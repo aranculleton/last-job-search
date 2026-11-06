@@ -20,6 +20,15 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Changed
+
+- **Your LinkedIn download, as often as you use it.** It is asked for weekly while you have
+  sent notes or messages in the last two weeks, and every two weeks otherwise.
+- **Remind me less.** The reminder's trash offers Every 2 weeks, Every month and Stop asking:
+  one tap, with Undo. Settings > LinkedIn has the same choice, to change any time.
+- **No stale "Done." on the LinkedIn download.** Its line shows just after you add one, and
+  never says that only a chat can take it back.
+
 ## [4.11.0] - 2026-11-06
 
 ### Added
