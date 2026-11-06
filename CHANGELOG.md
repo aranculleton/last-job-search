@@ -30,6 +30,8 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **A new text size fits your Brief to the window again.** After Smaller or Larger it kept
+  its old fit, a little short of the window or past it.
 - **The Chat button can sit on the left.** The arrow at the top of the Chat panel moves it and
   its button to the other side, big or small, and Settings > Look has the same choice. The
   panel's Open in Chat and Close are now buttons like the rest of the page.
