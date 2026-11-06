@@ -34,7 +34,9 @@ make sense to somebody whose repo just received it.
 
 - **Documents are named you, the employer, then the document**: `Morgan_Ellis_Acme_Resume.pdf`
   and `Morgan_Ellis_Acme_Cover_Letter.pdf`, for the kept file and the one you download. Documents
-  already made keep their names, and everything still finds them.
+  already made keep their names, and everything still finds them. Settings, under You, has
+  **File names**: three ways to name the files you download and send, each shown as an example
+  from your own name and latest employer.
 - **Settings is shorter and says things plainly.** Employers you turned down are one row,
   "Employers you've turned down", with how many jobs they left out; it opens their names, each
   with its own small trash. What Claude learned from you has one home, "What you have taught

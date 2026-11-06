@@ -379,8 +379,9 @@ METHODS: dict[str, dict] = {
             (77, "2026-11-05", False, "a skill question has a third answer, just for this role: the skill goes on that role's resume and bullets through the draft's own yes, never into the profile or onto another role, which a later posting asks again; a yes and a no work as before, so nothing made before needs making again"),
             (78, "2026-11-05", False, "a resume made for a contact who asked for one with no role named is kept in their own folder, named for them and shown on their card, never in place of the person's own; nothing made before needs making again"),
             (79, "2026-11-06", False, "the run book says rules the app has since built in are retired once after an update, and a complaint about the app is never kept as a rule; no document changes; RUNBOOK.md says the brief asks for a new LinkedIn download once it is due by export.every_days (weekly while the person is messaging people, a fortnight otherwise, or as they chose); documents render and are checked as before"),
+            (80, "2026-11-06", False, "a new resume and letter are named the person, the employer, then the document (<Prefix>_<ABBR>_Resume, <Prefix>_<ABBR>_Cover_Letter); one made before keeps its name and every reader finds both orders; the file you download or send is named by Settings, File names; nothing made before needs making again"),
         ),
-        "fingerprint": "bcb7bc7370acdb43",
+        "fingerprint": "9a82d819de52449b",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -421,8 +422,9 @@ METHODS: dict[str, dict] = {
             (27, "2026-11-02", False, "a stage is booked with its kind (due by a day, or a meeting), its length and its time zone's own name (interview_pack.py book --due --minutes, --zone America/Toronto), so Coming up reads them rather than guessing from English words; packs are built as before; a time given on rebooking makes a test a meeting, and a zone it cannot place gives no time"),
             (28, "2026-11-03", True, "a stage booked with no day yet says so in its notes instead of an empty date; the prep reads in plain words for the minutes before a call: one screen with what they are checking, three to five things to say and two or three questions to ask, the one or two things not to say that matter (the rest kept under the gaps), every source said as what it is to you (never a file, a path or a command), contacts' states in words, what you sent named as your resume and cover letter, notes never repeated under Likely questions, \"Draft\" only above an answer that is one, and what Claude still has to look up or ask said plainly; the whole prep reaches the page, never cut; a stage keeps the zone its time was given in, its length and where it is, an invitation that offers several days keeps them and the day to answer by until one is chosen, a round moved under another name is moved rather than booked twice, the next round is the earliest by its day, a test is ticked when done, and a thank-you sent some other way is marked as sent; the outcome keeps one status once resolved, and a pack's stock answers follow the place and the band each employer heard; a manager's leadership answer leads with the team they ran; a pack asked for in a chat is given in the chat in full as well as on the page"),
             (29, "2026-11-05", False, "a booked round can be not confirmed yet, written on its line and cleared when booked again without it; a new day for the same round keeps its prep current, and a prep for an earlier plan of rounds is updated by itself; nothing made before needs making again"),
+            (30, "2026-11-06", False, "a pack knows a resume or letter by either order of its name (<Prefix>_<ABBR>_Resume, or <Prefix>_Resume_<ABBR> before); packs are built as before"),
         ),
-        "fingerprint": "a1f8d18b6e5e6332",
+        "fingerprint": "02cdda28c6590f65",
     },
     "research": {
         "by": "upgrade", "priority": 3, "applies": "live_applications", "time": "~5 min each",
@@ -570,8 +572,9 @@ METHODS: dict[str, dict] = {
             (82, "2026-11-05", False, "LinkedIn's download finds someone already in the book by a message already logged, or by their first name with the surname in the record's id or notes, before listing them as new, and fills the employer, title and address the record lacks; a row closed as the same person as another gives it what it lacks (state.py same-person), and the check names two rows sharing one message; nothing older needs redoing"),
             (83, "2026-11-05", False, "export.py one-record joins two rows the message log shows are one person (one message, the same day and words, under exactly two rows and nothing on them saying two people) and fills a first-name-only row from the one connection that is them, each change written in the row's notes; the one-record upgrade does it for every older book by itself, so nothing needs redoing here"),
             (84, "2026-11-06", False, "the LinkedIn download is asked for weekly while the person has sent notes or messages in the last two weeks, every two weeks otherwise, or as they chose (EXPORT_REMIND: every two weeks, every month, or not at all), worked out once in export.every_days and said so in /network; put away from its trash, the next ask counts from that day; nothing older needs redoing"),
+            (85, "2026-11-06", False, "a logged resume or letter is known by either order of its name (<Prefix>_<ABBR>_Resume, or <Prefix>_Resume_<ABBR> before); nothing older needs redoing"),
         ),
-        "fingerprint": "dcde239aeb58273f",
+        "fingerprint": "25ff5d9a3c1248a3",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
@@ -832,8 +835,9 @@ METHODS: dict[str, dict] = {
             (70, "2026-11-06", False, "this week's bar in the second chart colour and past weeks in the rose; the dates and the line under the bars in the text's colour; news links underlined in their own colour, thinner; the menu's words centred on their icons"),
             (71, "2026-11-06", False, "the weekly bars' dates show every other week and this week's at every width, never cut"),
             (72, "2026-11-06", True, "Settings: employers turned down are one row, learned rules one home grouped by area with what is now part of the app folded, long lists show their first few, Something looks wrong opens in place, What's new shows the version, Smaller and Larger drawn in their size, Advanced only for what costs time; Job sites each by its plain name with one line, a site needing a key says what it needs (Adzuna: a paid plan, its free 25 searches gone within one search here) with the steps, and a refused tick says why on its own row; a search setting changed starts no search, its row saying Used from your next search with Find jobs beside it; the LinkedIn download reminder's trash offers Every 2 weeks, Every month and Stop asking, one tap with Undo, and Settings > LinkedIn has the same choice as chips; the download's line there shows only just after a tap, never a Done from days ago nor that only a chat can take it back"),
+            (73, "2026-11-06", False, "Settings, under You, has File names: three ways to name the files you download, each shown as an example from your own name and latest employer, the person, employer, document recommended; a download takes the engine's name for it"),
         ),
-        "fingerprint": "9ae26b7e79e439a2",
+        "fingerprint": "2591664eb6ee938d",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

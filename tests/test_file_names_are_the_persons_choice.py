@@ -84,7 +84,7 @@ def test_a_long_role_and_employer_are_cut_the_way_they_read():
     # keeps its last words, the job.
     assert n == "Morgan_Ellis_Kestrel_Foods_Planning_Analyst_CV.pdf", n
     head = docpaths.file_name("CV", "Harbourline", "Head of Supply Chain Planning and "
-                              "Inventory Optimisation", "name_employer_role_document")
+                              "inventory optimisation", "name_employer_role_document")
     assert head.startswith("Morgan_Ellis_Harbourline_Head_of_") and not head.endswith(
         "_of_CV.pdf"), head
     for preset in PRESETS:

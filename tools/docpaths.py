@@ -402,7 +402,7 @@ def recommended_file_names(country: str = "") -> str:
 def file_names() -> str:
     """The person's choice (person.json documents.file_names), else the recommended one."""
     try:
-        got = str(person.get(FILE_NAMES_KEY, "") or "").strip()
+        got = str(person.get("documents.file_names", "") or "").strip()
     except Exception:  # noqa: BLE001  no profile: the default
         got = ""
     known = [p[0] for p in FILE_NAME_PRESETS]
