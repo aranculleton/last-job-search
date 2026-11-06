@@ -1541,33 +1541,37 @@ body.has-fab .shell { padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-b
   .brief-grid .bp-list, .brief-grid .bp-lead-list, .brief-grid ul.bp-news { gap: 4px; }
 }
 .bp-head-numbers { display: none; }
-@media (min-width: 960px) and (max-height: 660px) {
-  .bp-head-numbers { display: block; }
-  .brief-grid > .bp-numbers { display: none; }
-  .brief-grid > .bpanel.w12-s3 { grid-column: span 3; }
-  .brief-grid > .bpanel.w12-s4 { grid-column: span 4; }
-  .brief-grid > .bpanel.w12-s5 { grid-column: span 5; }
-  .brief-grid > .bpanel.w12-s6 { grid-column: span 6; }
-  .brief-grid > .bpanel.w12-s8 { grid-column: span 8; }
-  .brief-grid > .bpanel.w12-s12 { grid-column: span 12; }
-  .brief-grid .bp-iv .btn { margin-top: 0; }
-  .brief-grid .bp-foot > :is(.btn, a):not(.icon-only) { padding-inline: 8px; }
+/* The compact Brief: the numbers a line under the greeting, the head and foot on one line each.
+   Chosen by fitBrief, not by a fixed height: a window of 661 to about 800px whose Your progress
+   could not shrink scrolled by up to 107px (the maintainer, 2026-11-06: "a bit of scroll room"
+   in a window, none full screen). It is used whenever the whole Brief does not fit without it. */
+@media (min-width: 960px) {
+  html.brief-short .bp-head-numbers { display: block; }
+  html.brief-short .brief-grid > .bp-numbers { display: none; }
+  html.brief-short .brief-grid > .bpanel.w12-s3 { grid-column: span 3; }
+  html.brief-short .brief-grid > .bpanel.w12-s4 { grid-column: span 4; }
+  html.brief-short .brief-grid > .bpanel.w12-s5 { grid-column: span 5; }
+  html.brief-short .brief-grid > .bpanel.w12-s6 { grid-column: span 6; }
+  html.brief-short .brief-grid > .bpanel.w12-s8 { grid-column: span 8; }
+  html.brief-short .brief-grid > .bpanel.w12-s12 { grid-column: span 12; }
+  html.brief-short .brief-grid .bp-iv .btn { margin-top: 0; }
+  html.brief-short .brief-grid .bp-foot > :is(.btn, html.brief-short a):not(.icon-only) { padding-inline: 8px; }
   /* The greeting, its day and the numbers on one line. */
-  .brief-hello { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 12px; }
-  .brief-hello .summary { display: flex; flex-wrap: wrap; gap: 0 12px; }
-  .brief-hello .sum-small { margin: 0; }
-  .brief-head { align-items: center; flex-wrap: nowrap; }
-  .brief-head .head-tools { flex-wrap: nowrap; }
-  .brief-head .head-tools .btn { padding-inline: 8px; }
-  .brief-head .head-tools .btn > span:not(.sr-only) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  html.brief-short .brief-hello { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 12px; }
+  html.brief-short .brief-hello .summary { display: flex; flex-wrap: wrap; gap: 0 12px; }
+  html.brief-short .brief-hello .sum-small { margin: 0; }
+  html.brief-short .brief-head { align-items: center; flex-wrap: nowrap; }
+  html.brief-short .brief-head .head-tools { flex-wrap: nowrap; }
+  html.brief-short .brief-head .head-tools .btn { padding-inline: 8px; }
+  html.brief-short .brief-head .head-tools .btn > span:not(.sr-only) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   /* The tip on one line beside the privacy line, its whole text a tap on it away (title). */
-  .bp-bottom { flex-wrap: nowrap; min-height: 56px; }
-  .bp-bottom .foot-line { flex: none; }
-  .bp-bottom .bp-tip { flex: 1 1 0; min-width: 0; flex-wrap: nowrap; padding-block: 4px; }
-  .bp-bottom .bp-tip-t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 auto; }
-  .bp-bottom .bp-tip .btn { white-space: nowrap; flex: none; }
-  .bp-bottom .foot-line.open { flex: 1 1 auto; }
-  .bp-bottom:has(.foot-line.open) .bp-tip { display: none; }
+  html.brief-short .bp-bottom { flex-wrap: nowrap; min-height: 56px; }
+  html.brief-short .bp-bottom .foot-line { flex: none; }
+  html.brief-short .bp-bottom .bp-tip { flex: 1 1 0; min-width: 0; flex-wrap: nowrap; padding-block: 4px; }
+  html.brief-short .bp-bottom .bp-tip-t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 auto; }
+  html.brief-short .bp-bottom .bp-tip .btn { white-space: nowrap; flex: none; }
+  html.brief-short .bp-bottom .foot-line.open { flex: 1 1 auto; }
+  html.brief-short .bp-bottom:has(.foot-line.open) .bp-tip { display: none; }
 }
 /* A narrow Coming up shows this week's seven days; the list and "All coming up" hold the rest. */
 @container (max-width: 420px) {
@@ -2030,3 +2034,13 @@ ul.news .news-line { padding-block: 4px; }
 .makers-link a { color: var(--muted); }
 /* Text size: Smaller and Larger drawn in their own size; the control keeps its height. */
 .size-choice .look-name { line-height: 1; }
+/* A number on the Brief opens where those things are: the tile is the tap, no underline. */
+a.bp-stat { color: inherit; text-decoration: none; border-radius: var(--r-sm); }
+a.bp-stat:hover { text-decoration: none; }
+a.bp-stat .bp-n { color: var(--ink); }
+@media (hover: hover) { a.bp-stat:hover { box-shadow: inset 0 0 0 1px var(--line); } }
+/* A Brief stretched to the window's foot: Your progress's weekly chart takes the room its
+   panel has, never a short chart over empty space (the maintainer, 2026-11-06: "are the panels
+   actually dynamic and filling the room"). */
+.brief-grid.is-filled .bp-numbers .bp-body > .bp-spark-wrap { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
+.brief-grid.is-filled .bp-numbers .bp-spark { flex: 1 1 auto; height: auto; min-height: 32px; max-height: 200px; }

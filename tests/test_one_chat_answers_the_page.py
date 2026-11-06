@@ -624,14 +624,17 @@ def test_a_helper_is_a_fresh_chat_once_a_day_with_a_short_hand_over(copy, tmp_pa
     # The first wake of the next day: a fresh helper, with a hand-over of a few lines.
     got = renews(dt.datetime(2026, 10, 31, 7, 0, tzinfo=dt.timezone.utc), "b")
     assert len(got) == 1, got
-    task, call = renew_calls(got[0])
-    # Started by a one-time scheduled task, never as this chat's child: each helper started
-    # the next one a level deeper, and at the eighth could start nothing (2026-11-05).
-    assert task["create_new_session_on_fire"] is True and task["run_once_at"] > "2026-10-31T07:00"
-    assert task["prompt"].startswith(app_listen.WAKE_PROMPT)
-    assert app_listen.WAKE_COMMAND in task["prompt"] and "add_repo" in task["prompt"]
-    assert task["prompt"].endswith("Asked last: Is my resume ok?.")
+    call = renew_call(got[0])
+    # Started by this chat itself with create_session, from the person's copy, never through a
+    # scheduled task: the chat a one-time task started had no copy of the files, no add_repo
+    # and no create_session, and stopped (the maintainer, 2026-11-06).
+    assert "create_trigger" not in got[0] and "scheduled task that starts" not in got[0]
+    assert call["source_url"] == "https://github.com/someone/my-job-search"
+    assert call["title"] == app_listen.HELPER_CHAT_TITLE
     assert call["prompt"].startswith(app_listen.WAKE_PROMPT)
+    assert call["prompt"].endswith("Asked last: Is my resume ok?.")
+    # Where this chat cannot start one, it keeps answering and says why, never a dead end.
+    assert "python3 tools/app.py nested" in got[0]
     note = call["prompt"][len(app_listen.WAKE_PROMPT):].strip()
     assert note == ("In flight: Resume and letter: Quillon Data, Analyst.\n"
                     "Asked last: Is my resume ok?."), note
@@ -653,13 +656,10 @@ def test_a_helper_is_a_fresh_chat_once_a_day_with_a_short_hand_over(copy, tmp_pa
     assert took["role"] == "listener" and not any("archive_session" in ln for ln in took["lines"])
 
 
-def renew_calls(line: str) -> tuple[dict, dict]:
-    """(the create_trigger call, the create_session one) a `listen: renew:` line names."""
-    dec = json.JSONDecoder()
-    at = line.index("create_trigger ") + len("create_trigger ")
-    task, end = dec.raw_decode(line, at)
-    at = line.index("create_session ", end) + len("create_session ")
-    return task, dec.raw_decode(line, at)[0]
+def renew_call(line: str) -> dict:
+    """The create_session call a `listen: renew:` line names."""
+    at = line.index("create_session ") + len("create_session ")
+    return json.JSONDecoder().raw_decode(line, at)[0]
 
 
 def test_a_helper_nested_too_deep_keeps_answering_and_the_brief_starts_the_fresh_one(
@@ -709,8 +709,8 @@ def test_a_helper_nested_too_deep_keeps_answering_and_the_brief_starts_the_fresh
     monkeypatch.setattr(app_listen, "this_chat", lambda c="": "session_brief")
     lines = app_listen.view_renewal(marked, "brief", later)
     assert len(lines) == 1 and lines[0].startswith("listen: renew:"), lines
-    task, call = renew_calls(lines[0])
-    assert task["create_new_session_on_fire"] and call["source_url"].endswith("/my-job-search")
+    call = renew_call(lines[0])
+    assert "create_trigger" not in lines[0] and call["source_url"].endswith("/my-job-search")
     # Not without the mark, and not from a chat that is not the brief's run.
     assert app_listen.view_renewal({"meta": {"listener": {"data": rec, "version": 3}},
                                     "work": {}}, "brief", later) == []
@@ -810,6 +810,42 @@ def test_a_helper_never_renews_while_its_own_hand_over_is_open(copy, tmp_path, m
     assert app_listen.renewal(rec, db, "session_new", later) is None       # the old one still there
     monkeypatch.setattr(tidy, "archived", lambda: [{"id": "session_old"}])
     assert app_listen.renewal(rec, db, "session_new", later)               # put away: it may
+
+
+def test_the_first_page_update_of_a_new_day_renews_after_yesterdays_hand_over(copy, tmp_path):
+    """The maintainer's copy, 2026-11-06: the helper took the page at 20:12 London (15:12
+    Toronto) on 5 November, from an old helper put away by hand, so no tidy-up recorded it.
+    The first page update of 6 November, at 08:25 London (03:25 Toronto), a new day in both,
+    printed no renewal: the open hand-over held it for 24 hours by the clock. A hand-over from
+    an earlier day, in the person's own zone, holds no renewal. Run as the helper does it:
+    `app.py view --chat <id> --end` in a cloud chat on UTC, the person in Toronto."""
+    copy.page()
+    with open(os.path.join(copy.profile, "person.json"), encoding="utf-8") as fh:
+        person = json.load(fh)
+    person["time_zone"] = "America/Toronto"
+    with open(os.path.join(copy.profile, "person.json"), "w", encoding="utf-8") as fh:
+        json.dump(person, fh)
+    os.makedirs(os.path.join(copy.db, "meta"), exist_ok=True)
+    rec = {"chat": "session_NEWHELPER", "kind": "cloud", "helper": True,
+           "since": "2026-11-05T20:12:00Z", "answered_at": "2026-11-05T21:00:00Z",
+           "took_from": "session_OLDHELPER", "took_from_helper": True,
+           "handed_by": "session_OLDHELPER", "watching": True}
+    with open(os.path.join(copy.db, "meta", "listener.json"), "w", encoding="utf-8") as fh:
+        json.dump({"data": rec, "version": 7}, fh)
+    os.makedirs(os.path.join(copy.db, "work"), exist_ok=True)
+    cloud = {"CLAUDE_CODE_REMOTE": "true", "CLAUDE_CODE_REMOTE_SESSION_ID": "cse_NEWHELPER",
+             "CLAUDE_CONFIG_DIR": str(tmp_path / "no-history"), "TZ": "UTC"}
+
+    def renews(now):
+        got = json.loads(copy.run("view", os.path.join(copy.root, "v-" + now[:13]), "--dump",
+                                  copy.dump(), "--chat", "session_NEWHELPER", "--now", now,
+                                  "--end", **cloud))
+        return [ln for ln in got.get("for_claude") or [] if ln.startswith("listen: renew:")]
+
+    # The same evening, the hand-over still open: never a third chat.
+    assert not renews("2026-11-05T23:30:00Z")
+    # The next morning in Toronto and in London: renewed.
+    assert renews("2026-11-06T08:25:00Z")
 
 
 def _view(copy, chat, *extra, base=None, now=NOW, sha=None):

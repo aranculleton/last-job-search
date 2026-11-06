@@ -546,62 +546,34 @@ def _setting_up(chat: str) -> bool:
         return False
 
 
-# The fresh helper starts outside the chain of chats that answered the page. Each helper
-# started the next with create_session, one level deeper every day, and at the eighth the
-# helper could start neither a chat nor a scheduled task (the maintainer's copy, 2026-11-05):
-# its renewal, its job chats and the tidy-up's move of the brief all failed there. A one-time
-# scheduled task that starts a new chat (create_trigger, create_new_session_on_fire) is the
-# account's, not this chat's child. That such a chat starts nested at no depth is assumed,
-# not documented; the claude_surfaces registry (chat-push) records that such a chat has no
-# copy of the files, so its prompt gets one first (routines.COPY_LINE), and where it cannot,
-# it starts the helper as a chat of its own with the call a renewal always made.
-TASK_AHEAD_S = 5 * 60
-FRESH_FROM_TASK = ("A one-time scheduled task started this chat to look after the person's job "
-                   "search page as its fresh helper, outside the chat that looked after it "
-                   "before. {copy}Then run {command} there and do what it prints. If this chat "
-                   "cannot get the copy (no add_repo here), start the helper as a chat of its "
-                   "own instead, then end, saying nothing: create_session {call}")
+# The fresh helper is started by the chat that answers the page itself, with create_session,
+# from the person's copy (the call renewal builds). A one-time scheduled task that started a
+# new chat for it (4.11 to 4.12) started a chat with no copy of the files, no add_repo and no
+# create_session: it could neither run the start command nor start the helper, and stopped
+# (the maintainer, 2026-11-06). Where this chat cannot start one (no create_session here, or
+# refused because chats nest only so deep, 2026-11-05), it keeps answering (NESTED) and the
+# brief's next run starts the fresh helper. A chat on a computer is never renewed (renewal):
+# it keeps answering the page for as long as it runs.
 NESTED = ("python3 tools/app.py nested --chat <this chat's id> (with \"$D\" first where there "
           "is a read of the page), send any batch it prints, keep answering the page as "
           "before, and say nothing to the person: the next brief run starts the fresh helper")
 
 
-def fresh_task(renew: dict, now: dt.datetime) -> dict:
-    """The create_trigger call that starts the fresh helper from a one-time scheduled task,
-    a few minutes on (the account's own, not a chat this one starts), for the session call
-    `renew` (renewal): its prompt is the page's words, how to get the copy, and that call
-    where no copy can be had, then the short hand-over."""
-    import routines
-    repo = str(renew.get("source_url") or "").replace("https://github.com/", "")
-    owner, _, name = repo.partition("/")
-    note = str(renew.get("prompt") or "")[len(WAKE_PROMPT):].strip()
-    copy = routines.COPY_LINE.format(repo=repo, owner=owner, name=name) if name else ""
-    prompt = WAKE_PROMPT + "\n\n" + FRESH_FROM_TASK.format(
-        copy=copy, command=WAKE_COMMAND, call=json.dumps(renew, ensure_ascii=False)) + \
-        (f"\n\n{note}" if note else "")
-    return {"name": HELPER_CHAT_TITLE, "create_new_session_on_fire": True,
-            "run_once_at": _stamp(now + dt.timedelta(seconds=TASK_AHEAD_S)), "prompt": prompt,
-            "initiation": "own_initiative", "notifications": {}}
-
-
 def renew_line(renew: dict, now: dt.datetime | None = None) -> str:
-    """What the listener does when its day is up: start its fresh helper, unasked, once this
-    chat's own work is saved (a fresh helper started mid-brief took the page while the brief
-    was still saving, the stranger audit, X-27), from a one-time scheduled task so chats
-    never nest deeper (fresh_task). Where this chat can start neither, it keeps answering and
-    the brief's next run starts it (NESTED): never a dead end."""
-    now = now or dt.datetime.now(dt.timezone.utc)
+    """What the listener does when its day is up: start its fresh helper itself with
+    create_session, unasked, once this chat's own work is saved (a fresh helper started
+    mid-brief took the page while the brief was still saving, the stranger audit, X-27).
+    Where this chat can start none, it keeps answering and the brief's next run starts it
+    (NESTED): never a dead end. `now` is kept for the callers' sake."""
     return ("listen: renew: a new day (or this chat's history is near the most a chat can "
             "hold), and it has no small job of its own in hand. Once this turn's work is "
             "saved (python3 tools/land.py --detach started, or nothing to save), start its "
-            "fresh helper from outside this chat, unasked and saying nothing to the person: "
-            "create_trigger " + json.dumps(fresh_task(renew, now), ensure_ascii=False) +
-            " (a one-time scheduled task that starts a new chat; where run_once_at has passed, "
-            "a time two minutes from now). Only where create_trigger is not among this chat's "
-            "tools: create_session " + json.dumps(renew, ensure_ascii=False) +
-            ". If it is refused because this chat cannot start any more chats or scheduled "
-            "tasks: " + NESTED + ". The new chat takes the page as it starts; until then this "
-            "one still answers.")
+            "fresh helper from this chat yourself, unasked and saying nothing to the person: "
+            "create_session " + json.dumps(renew, ensure_ascii=False) +
+            " (never through a scheduled task: the chat one starts has no copy of the files "
+            "and cannot start the helper). Where create_session is not among this chat's "
+            "tools, or it is refused because this chat cannot start any more chats: " + NESTED +
+            ". The new chat takes the page as it starts; until then this one still answers.")
 
 
 def mark_nested(chat: str, now: dt.datetime) -> None:

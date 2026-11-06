@@ -5077,7 +5077,11 @@ def _brief(ctx: Ctx, targets: dict) -> dict | None:
                             for t in re.split(r"(?<=[.!?])\s+(?=[A-Z*])", sec["text"]) if t.strip()]
     out = {"date": os.path.basename(path)[:10], "lines": lines,
            "items": [dict(text=x, **brief_link(ctx, x)) for x in lines],
-           "sections": sections, "watch": _watch(), "watch_again": _watch_again()}
+           "sections": sections, "watch": _watch(), "watch_again": _watch_again(),
+           # How many news points the page shows: the person's own choice under Edit the
+           # brief (News items), 3 when unset. The page showed up to five whatever it said,
+           # four long paragraphs a morning (the maintainer, 2026-11-06: "3 bullets max").
+           "news_max": _news_max()}
     if news_date:
         out["news_date"] = news_date
         if searched and news_date < out["date"]:
@@ -5164,13 +5168,37 @@ _NEWS_LINE = re.compile(r"^(?P<what>.+?)\s*\((?P<src>[^()]{2,80}?),\s*(?:(?P<dat
                         r"(?P<url>https?://[^\s()]+)\)\.?\s*(?P<use>.*)$")
 
 
+def _news_max() -> int:
+    try:
+        import brief
+        return int(brief.setting("news"))
+    except Exception:  # noqa: BLE001  no profile: the app's own default
+        return 3
+
+
+# The same point written "<what happened>. Use it: <how>. [source](<link>)": shown as one
+# paragraph, its use and its link inside the words (the maintainer's page, 2026-11-06: "too
+# much of a wall of text").
+_NEWS_USE = re.compile(r"^(?P<what>.+?[.!?])\s+Use it:\s*(?P<use>.+?)\s*"
+                       r"(?:\[(?P<src>[^\]]{1,80})\]\((?P<url>https?://[^\s()]+)\))?\.?$")
+
+
 def news_parts(line: str) -> dict:
     """A news point in its parts, so the page sets what happened, how to use it and where it
     is from apart: {what, use, src, date, url}, or {} for a line in another shape, shown as
     it is."""
     m = _NEWS_LINE.match(str(line or "").strip())
     if not m:
-        return {}
+        u = _NEWS_USE.match(str(line or "").strip())
+        if not u:
+            return {}
+        what, use = brief_line(u.group("what")).rstrip(" ."), brief_line(u.group("use")).rstrip(" .")
+        if not what:
+            return {}
+        src = (u.group("src") or "").strip()
+        return {"what": what + ".", "use": (use[:1].upper() + use[1:] + ".") if use else "",
+                "src": scrub(src, ()) if src.lower() != "source" else "", "date": None,
+                "url": (u.group("url") or "").rstrip(".,;") or None}
     what, use = brief_line(m.group("what")).rstrip(" ."), brief_line(m.group("use")).rstrip(" .")
     if not what:
         return {}

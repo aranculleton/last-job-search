@@ -33,8 +33,8 @@ def test_drafting_several_follow_ups_is_one_line_and_a_word_a_row(run, page, mod
         {"hash": "todo", "eval": "(() => { const s = document.querySelector('.group-card .g-summary'); return {summary: s ? s.textContent : '', long: document.querySelectorAll('.group-card .g-row .work-inline').length, words: [...document.querySelectorAll('.group-card .g-state')].map((e) => e.textContent.trim())}; })()"}])
     assert not got["errors"], got["errors"]
     e = got["after"][0]["eval"]
-    assert "Drafting 4" in e["summary"] and "1 being written" in e["summary"] and "3 in line" in e["summary"] and "Stop Claude" in e["summary"], e   # "Stop Claude" (the maintainer, 2026-11-05)
-    assert e["long"] == 0 and "Writing" in e["words"] and "In line" in e["words"], e
+    assert "Drafting 4" in e["summary"] and "1 being written" in e["summary"] and "3 waiting their turn" in e["summary"] and "Stop Claude" in e["summary"], e   # "Stop Claude" (the maintainer, 2026-11-05)
+    assert e["long"] == 0 and "Writing" in e["words"] and "Waiting its turn" in e["words"], e
 
 
 def test_finished_answers_are_one_card_in_claudes_work(run, page):

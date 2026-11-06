@@ -30,11 +30,43 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **Your Brief uses its room.** News shows three points unless you choose another number
+  under Edit the brief, each split into what happened and how you can use it rather than one
+  long paragraph. Jobs lists a couple more where there is room, with "All" opening the rest.
+  Your progress's chart fills its panel, and each number opens where those things are:
+  applications on Jobs' Applied tab, replies in Contacts, interviews in Coming up.
+- **Your Brief no longer scrolls a little in a window.** Between about 660 and 800 pixels tall
+  it now takes its compact shape, the numbers on one line under the greeting.
+- **"Something else" in a To do card's trash opens a box right under that card**, instead of
+  taking you to Contacts.
+- **"In line" now says "Waiting its turn"**, for work Claude will start once what is ahead of it
+  is done.
 - **Your Brief fits a laptop's window in Safari and Firefox too.** Safari measured the page
   before its own text size was applied, so the Brief gave up rows it had room for and the
   Chat's "Latest" stopped short of the box you type in on a phone; Firefox on a computer with
   no mouse it could see drew phone-sized text, so the Brief scrolled and a job's details
   took two lines. Both now draw the page as Chrome does.
+- **A search whose save runs out of time keeps what it found.** The chat doing a job sends its
+  work to GitHub before the long check that comes before every save, so a chat that runs out
+  of time, or closes, part way through that check leaves its work waiting there, and the next
+  save from any chat brings it to your page. It used to be lost with that chat.
+- **Two searches never get the same name.** A new search's number counts the searches already
+  on GitHub as well as this chat's own. Where two searches running at once still took the
+  same name (two r43s), the save that brings them together renames one to the next free
+  number, with its list of jobs left out, so both shortlists are kept whole; one search on
+  its own keeps its files exactly as before.
+- **Work a chat finished but could not save is never left unsaid.** When a job's chat ends
+  before its work reached GitHub, the chat that answers your page asks it once to save its
+  work. If there is still nothing, the work's own card says plainly that its results were lost,
+  with Try again, once, and that chat is put away instead of sitting in your list.
+- **A new day brings a fresh page helper even after yesterday's hand-over.** When the old helper
+  had been put away by hand, the first page update of the morning still counted yesterday's
+  hand-over as open and asked for no fresh helper until a full day had passed. A hand-over from
+  an earlier day in your own time zone now holds nothing back.
+- **The fresh page helper is started by the helper itself.** It used to be started by a one-time
+  scheduled task, whose new chat had no copy of your search and could not start the helper,
+  so it stopped. The chat that answers your page now starts its fresh helper directly from
+  your copy; where it cannot, it keeps answering and your next brief starts it.
 
 ## [4.12.0] - 2026-11-06
 

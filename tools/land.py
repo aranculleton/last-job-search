@@ -11,6 +11,11 @@ once a turn, after its answer is out, and makes only the GitHub calls it prints:
     python3 tools/land.py --detach [--message "<what changed>"]
     python3 tools/land.py --after-merge
     python3 tools/land.py --waiting
+    python3 tools/land.py --keep [--message "<what changed>"]
+
+--keep (a finished job chat asked by the chat that answers the page, tidy.py close): the work
+saved and pushed to this chat's own branch in seconds, with no check, no merge and no pull
+request, so the next landing anywhere brings it in.
 
 --detach (the chat that answers the page, once per batch of its work): the same landing in a
 process of its own, started from an ordinary foreground call that returns at once, so its end
@@ -41,7 +46,11 @@ second --detach while one runs only asks it to. What it could not do on GitHub i
    an application this chat changed (its resume, letter and draft) keeps every file of it as
    this chat has it; the other chat's versions stay in the saved history.
 4. Nothing ahead of origin/master: "land: nothing to land", exit 0, and no check is run.
-5. ./tools/ci_local.sh --quick. Not green: its failing lines, exit 1.
+5. This chat's branch pushed (as in 6), saying nothing, then ./tools/ci_local.sh --quick. Not
+   green: its failing lines, exit 1. Pushed first, a chat whose time runs out mid-check, or
+   a container that goes, leaves its work waiting on GitHub for the next landing: the
+   "Finding jobs" chat timed out in its check and its shortlist was lost (2026-11-06). Work
+   another landing took to master meanwhile is landed, with nothing to open (--after-merge).
 6. git push -u origin HEAD, a network failure retried four times (2, 4, 8 and 16 s).
 7. "land: ready <branch>", then the two GitHub calls to make (open the pull request, merge
    it) and --after-merge.
@@ -607,8 +616,9 @@ def _set_aside(root: str, names: list[str]) -> str:
 # kept alive it went stale after LOCK_STALE_S, and this keeps that bound (the release review,
 # 2026-11-06).
 CHECK_DEADLINE_S = LOCK_STALE_S
-CHECK_STOPPED = ("land: the check ran past %d minute(s) and was stopped; nothing was pushed "
-                 "to master, and the work is kept\n")
+# Never "nothing was pushed": the branch went to GitHub before the check began (_send_early).
+CHECK_STOPPED = ("land: the check ran past %d minute(s) and was stopped, so this is not on "
+                 "master yet\n")
 
 
 def _stop(p: subprocess.Popen) -> None:
@@ -835,6 +845,29 @@ def _push(root: str, name: str, sleep) -> tuple[str, subprocess.CompletedProcess
         return there, _retried(root, "push", "-q", "-u", "origin", "HEAD", sleep=sleep)
     return there, _retried(root, "push", "-q", "-u", "origin", "HEAD:refs/heads/" + there,
                            sleep=sleep)
+
+
+def _send_early(root: str, sleep) -> None:
+    """This chat's branch pushed before the long check, never forced and saying nothing: a
+    chat whose time ran out mid-check, or a container that went, left its work on no branch
+    at all, and its shortlist was lost with it (the "Finding jobs" chat, 2026-11-06). Pushed,
+    it waits on GitHub for the next landing anywhere (waiting()). A push that fails here is
+    tried again after the check, which says what went wrong."""
+    name, _why = _own_branch(root)
+    if name:
+        _push(root, name, sleep)
+
+
+def _taken_meanwhile(root: str, sleep) -> bool:
+    """Did another chat's landing take this work to master while the check ran (it waited on
+    GitHub from _send_early)? Then there is no pull request to open: it is landed."""
+    if _retried(root, "fetch", "-q", "origin", "master", sleep=sleep).returncode != 0:
+        return False
+    if _git(root, "rev-list", "--count", "origin/master..HEAD").stdout.strip() != "0":
+        return False
+    print("land: another chat's landing took this work to master while the check ran, so "
+          "there is no pull request to open")
+    return True
 
 
 def _wait_on_branch(root: str, head: str, sleep) -> None:
@@ -1396,6 +1429,126 @@ def _take(root: str, path: str, side: str) -> bool:
     return r.returncode == 0
 
 
+# A search's committed files, by its round's name (run_round.py ROUND_NAME): its summary
+# (documents/rounds/<name>.json) and its left-out list (filtered/<name>.json), which names
+# the round inside it. Two job chats are two fresh clones, and each named its search r43
+# (the maintainer's copy, 2026-11-06): merged, the driver made one list of the two, or one
+# was kept over the other.
+ROUND_FILE = re.compile(r"^documents/rounds/(?:filtered/)?r(\d+)((?:_round\d+)?)\.json$")
+_ROUND_SAYS = re.compile(r'("round"\s*:\s*")r\d+((?:_round\d+)?")')
+
+
+def _round_blobs(root: str, rev: str) -> dict[str, str]:
+    """{path: blob} of every round file `rev` holds, or {} where it holds none."""
+    r = _git(root, "ls-tree", "-r", rev, "--", "documents/rounds/")
+    out = {}
+    for ln in r.stdout.splitlines() if r.returncode == 0 else []:
+        meta, _, path = ln.partition("\t")
+        parts = meta.split()
+        if len(parts) == 3 and ROUND_FILE.match(path):
+            out[path] = parts[2]
+    return out
+
+
+def _round_numbers(root: str, *maps: dict) -> set[int]:
+    """Every round number named anywhere this landing can see: the revisions read, and here
+    the summaries and the round folders this copy has on disk."""
+    nums = {int(ROUND_FILE.match(p).group(1)) for m in maps for p in m}
+    for folder in (os.path.join(root, "documents", "rounds"), os.path.join(root, "rounds")):
+        try:
+            names = os.listdir(folder)
+        except OSError:
+            continue
+        nums |= {int(m.group(1)) for n in names
+                 for m in [re.match(r"^r(\d+)(?:_round\d+)?(?:\.json)?$", n)] if m}
+    return nums
+
+
+def _summaries(blobs: dict[str, str], num: int) -> dict[str, str]:
+    return {p: b for p, b in blobs.items() if "/filtered/" not in p
+            and int(ROUND_FILE.match(p).group(1)) == num}
+
+
+def _round_clash(root: str, ref: str) -> tuple[list[tuple[str, str, str, str]], list[str]]:
+    """([(side renamed, side kept, path, new path)], lines for Claude) for a merge of `ref`
+    into HEAD: each round number both sides gave a different search since they parted. The
+    one master holds keeps its name (master's own merge renames this chat's); else this
+    chat's keeps it and the one brought in takes the next free number. The same search met
+    twice (one summary on both sides) is never renamed."""
+    base = _git(root, "merge-base", "HEAD", ref).stdout.strip()
+    if not base:
+        return [], []
+    was, ours, theirs = (_round_blobs(root, r) for r in (base, "HEAD", ref))
+    master = _round_blobs(root, "origin/master") if ref != "origin/master" else theirs
+    added = {side: {p: b for p, b in got.items() if p not in was}
+             for side, got in (("HEAD", ours), (ref, theirs))}
+    nums = sorted({int(ROUND_FILE.match(p).group(1)) for p in added["HEAD"]} &
+                  {int(ROUND_FILE.match(p).group(1)) for p in added[ref]})
+    taken = _round_numbers(root, was, ours, theirs, master)
+    moves: list[tuple[str, str, str, str]] = []
+    said: list[str] = []
+    for n in nums:
+        mine, other = _summaries(added["HEAD"], n), _summaries(added[ref], n)
+        if not mine or not other or mine == other:
+            continue
+        held = _summaries(master, n)
+        side = "HEAD" if ref == "origin/master" or (held and held == other) else ref
+        keep = ref if side == "HEAD" else "HEAD"
+        new = max(taken, default=0) + 1
+        taken.add(new)
+        for p in sorted(added[side]):
+            m = ROUND_FILE.match(p)
+            if int(m.group(1)) == n:
+                moves.append((side, keep, p, p.replace("r%d%s.json" % (n, m.group(2)),
+                                                       "r%d%s.json" % (new, m.group(2)))))
+        said.append("two searches were both named r%d; the one %s is r%d now, and both are "
+                    "kept. Nothing to say about it" % (
+                        n, "this chat made" if side == "HEAD" else "from " + ref, new))
+    return moves, said
+
+
+def _move_rounds(root: str, moves) -> None:
+    """Each renamed search, in the merge under way: its files under their new names (the name
+    inside its left-out list too), and the old names as the side kept has them."""
+    for side, keep, old, new in moves:
+        text = _git(root, "cat-file", "blob", "%s:%s" % (side, old)).stdout
+        if "/filtered/" in old:
+            name = os.path.splitext(os.path.basename(new))[0]
+            text = _ROUND_SAYS.sub(lambda m: m.group(1) + name + '"', text, count=1)
+        full = os.path.join(root, new)
+        os.makedirs(os.path.dirname(full), exist_ok=True)
+        with open(full, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write(text)
+        _git(root, "add", "-f", "--", new)
+        _take(root, old, keep)
+
+
+def _move_round_folders(root: str, moves) -> None:
+    """This chat's own round folders (never saved: rounds/<name>) renamed with their search,
+    and the name its round.log gives, which page_db.search_run reads."""
+    seen = set()
+    for side, _keep, old, new in moves:
+        if side != "HEAD" or "/filtered/" in old:
+            continue
+        a, b = (os.path.splitext(os.path.basename(p))[0] for p in (old, new))
+        if a in seen:
+            continue
+        seen.add(a)
+        src, dst = os.path.join(root, "rounds", a), os.path.join(root, "rounds", b)
+        if not os.path.isdir(src) or os.path.exists(dst):
+            continue
+        try:
+            os.rename(src, dst)
+            log = os.path.join(dst, "round.log")
+            if os.path.isfile(log):
+                with open(log, encoding="utf-8", errors="replace") as fh:
+                    text = fh.read()
+                with open(log, "w", encoding="utf-8", newline="\n") as fh:
+                    fh.write(re.sub(r"(?m)^round: %s\s*$" % re.escape(a), "round: " + b, text))
+        except OSError:
+            pass
+
+
 def merge_in(root: str, ref: str, mine=None, sweep: bool = True) -> tuple[bool, list[str]]:
     """git merge --no-edit <ref>, with every conflicted file of the person's settled
     (merge_state.settle) and the merge committed. (merged, lines for Claude). Not merged: the
@@ -1410,7 +1563,12 @@ def merge_in(root: str, ref: str, mine=None, sweep: bool = True) -> tuple[bool, 
     import merge_state
     _driver(root)
     held, told = _held(root, ref, mine, sweep)
-    if not held:
+    # Two searches under one name: one renamed, neither merged into the other (_round_clash).
+    moves, named = _round_clash(root, ref)
+    for _side, _keep, p, _new in moves:
+        held.pop(p, None)
+    told = told + named
+    if not held and not moves:
         r = _git(root, "merge", "--no-edit", ref)
         if r.returncode == 0:
             return True, []
@@ -1430,6 +1588,7 @@ def merge_in(root: str, ref: str, mine=None, sweep: bool = True) -> tuple[bool, 
             except OSError:
                 pass
     bad = [p for p, side in sorted(held.items()) if not _take(root, p, side)]
+    _move_rounds(root, moves)
     done, left = merge_state.settle(root)
     left = bad + left
     still = [p for p in _git(root, "diff", "--name-only", "--diff-filter=U").stdout.splitlines()
@@ -1437,6 +1596,7 @@ def merge_in(root: str, ref: str, mine=None, sweep: bool = True) -> tuple[bool, 
     if not left and not still:
         c = _git(root, "commit", "--no-edit", "-q")
         if c.returncode == 0:
+            _move_round_folders(root, moves)
             return True, told + ["two chats changed the same file at once (%s): %s" % (ref, d)
                                  for d in done]
         left = ["the commit: " + _said(c)]
@@ -1582,7 +1742,10 @@ def _land(root: str, message: str, check, sleep) -> int:
         # queued behind another, with nothing new, ran a second ten-minute check).
         rc, out = 0, CHECKED_ALREADY
     else:
+        _send_early(root, sleep)
         rc, out = _run_check(root, _check_command(root, check), aside)
+        if _taken_meanwhile(root, sleep):
+            return _after_merge(root, sleep)
     if rc != 0:
         own = own_tests_only(out)
         if own:
@@ -1655,6 +1818,42 @@ def _land(root: str, message: str, check, sleep) -> int:
     print("    " + rest_create(owner, repo, there, title, body))
     print("    " + rest_merge(owner, repo))
     return 0
+
+
+def keep(root: str = ROOT, message: str = "", sleep=time.sleep) -> int:
+    """--keep: this chat's work saved and pushed to its own branch, with no check, no merge
+    and no pull request, in seconds: what a finished job chat whose work never reached GitHub
+    is asked to do (tidy.py close). The next landing anywhere brings it in (waiting())."""
+    if _git(root, "rev-parse", "--git-dir").returncode != 0:
+        print("land: not a git checkout; nothing was pushed")
+        return 2
+    if _the_app(root):
+        print("land: this is the app itself, which lands through its own pull request and CI "
+              "(MAINTAINING.md); nothing was pushed")
+        return 2
+    with _holding(root, pass_on=False) as mine:
+        if not mine:
+            _ask(root, message)
+            print("land: another landing is running in this checkout; it saves this work too "
+                  "when it ends. Nothing to do or say")
+            return 0
+        ok, why = _stage(root)
+        if not ok:
+            print("land: saving stopped: %s; nothing was pushed" % why)
+            return 2
+        if _git(root, "diff", "--cached", "--quiet").returncode != 0:
+            r = _git(root, "commit", "-q", "-m", message.strip() or DEFAULT_MESSAGE)
+            if r.returncode != 0:
+                print("land: the commit was refused: %s; nothing was pushed" % _said(r))
+                return 2
+        _retried(root, "fetch", "-q", "origin", "master", sleep=sleep)
+        if _git(root, "rev-list", "--count", "origin/master..HEAD").stdout.strip() in ("", "0"):
+            print("land: nothing to keep: this copy holds no work master lacks")
+            return 0
+        _wait_on_branch(root, "land: kept, not checked", sleep)
+        name = _remote_name(branch(root))
+        there = _git(root, "rev-parse", "-q", "--verify", "refs/remotes/origin/" + name)
+        return 0 if there.stdout.strip() == _git(root, "rev-parse", "HEAD").stdout.strip() else 2
 
 
 def rest_create(owner: str, repo: str, head: str, title: str, body: str) -> str:
@@ -2022,6 +2221,10 @@ def main(argv: list[str] | None = None, root: str = ROOT, check=None, sleep=time
         return 0
     if "--after-merge" in argv:
         return after_merge(root, sleep=sleep)
+    if "--keep" in argv:
+        msg = argv[argv.index("--message") + 1] if "--message" in argv and \
+            argv.index("--message") + 1 < len(argv) else ""
+        return keep(root, msg, sleep=sleep)
     if "--detach" in argv or "--run-detached" in argv:
         msg = ""
         if "--message" in argv and argv.index("--message") + 1 < len(argv):

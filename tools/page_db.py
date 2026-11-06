@@ -995,6 +995,31 @@ def fail_stranded(db: dict, now: dt.datetime, out_dir: str) -> dict:
     return {"ended": ids, "batches": w.save("stranded")}
 
 
+# Work whose chat finished it but could not save it before it closed (its save timed out, and
+# asked once more it had nothing to save: tidy.py close and plan). Its card said done over a
+# result nobody could see (the "Finding jobs" chat, 2026-11-06).
+LOST_SAID = ("It finished, but its results could not be saved before its chat closed, so "
+             "they are lost. Tap Try again to do it once more.")
+
+
+def lose(db: dict, ids, now: dt.datetime, out_dir: str) -> list[str]:
+    """The batch that says, on each finished item's own card, that its results were lost:
+    failed with LOST_SAID, so the card offers Try again. Only items still done, each pinned
+    to the version read; [] where there is none."""
+    import app_model
+    w = Writes(out_dir)
+    work = db.get("work") or {}
+    for wid in dict.fromkeys(ids):
+        doc = work.get(wid) or {}
+        if str((doc.get("data") or {}).get("status") or "") != "done" \
+                or doc.get("version") is None:
+            continue
+        w.add("update", "work", wid, {
+            "status": "failed", "error": LOST_SAID, "lost_at": app_model.stamp(now),
+            "result": {"summary": LOST_SAID, "links": []}}, if_version=doc["version"])
+    return w.save("lost") if w.entries else []
+
+
 def _is_migration(item: dict) -> bool:
     return item.get("kind") == "update" and bool((item.get("args") or {}).get("migration"))
 

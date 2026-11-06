@@ -183,7 +183,7 @@ def test_ten_replies_pasted_in_a_row_each_show_on_their_own_card(run, page, mode
     # Claude working: the running one spins and says so; the others say their place.
     work_now = got["after"][2]["eval"]
     assert work_now[ids[0]] == {"words": "Claude is on it", "spin": True}, work_now[ids[0]]
-    assert work_now[ids[1]]["words"] == "Next" and work_now[ids[2]]["words"] == "In line", (work_now[ids[1]], work_now[ids[2]])
+    assert work_now[ids[1]]["words"] == "Next" and work_now[ids[2]]["words"] == "Waiting its turn", (work_now[ids[1]], work_now[ids[2]])
     assert not any(work_now[c]["spin"] for c in ids[1:]), work_now
     # A reload keeps each card's own state: it is read from the work items, not this tab.
     assert got["after"][3]["eval"] == work_now, (got["after"][3]["eval"], work_now)

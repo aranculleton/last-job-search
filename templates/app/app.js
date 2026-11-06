@@ -206,6 +206,11 @@
     // A card's own questions (Something else): its thread's id while its box is open, and the
     // threads themselves, kept apart from the Chat's (cardTalk).
     cardAsk: new Set(),
+    // A card's box opened in To do from its trash: {card: the To do card's key, kind, id}.
+    askHere: null,
+    // What was last tapped, so a trash sheet knows which card it was opened from (Safari never
+    // focuses a tapped button, so the focus cannot say).
+    lastTap: null,
     // A draft's pencil box open with its words as a field (Edit the words yourself).
     penEdit: new Set(),
     cardThreads: new Map(),
@@ -3903,6 +3908,14 @@
     return [{label: "Tomorrow", key: "later-1", run: () => go(1, "Tomorrow")}, {label: "Next week", key: "later-7", run: () => go(7, "Next week")}];
   }
   function withHide(i, node) {
+    // The card's own box, opened here by its trash's Something else (openCardAsk): under this
+    // card in To do, never a jump to Contacts (the maintainer, 2026-11-06: "it led to the
+    // contacts page instead of a text box").
+    if (node && node.setAttribute && i.key) {
+      node.setAttribute("data-todo", i.key);
+      const a = S.askHere;
+      if (a && a.card === i.key) { const t = guarded(() => cardTalk(a.kind, a.id, askLabel(a.kind, a.id)), () => null); if (t) node.appendChild(t); }
+    }
     if (!node || !node.querySelector || i.stay) return node;
     // A card that already has its own bin (with its own choices) keeps that one alone: two
     // bins side by side stood on a card (the maintainer, 2026-11-05).
@@ -4299,12 +4312,12 @@
       const st = txt(w.status) || "queued";
       return st === "running" || st === "claimed" ? h("p", {class: "g-state"}, h("span", {class: "spin", "aria-hidden": "true"}), " Writing")
         : st === "needs_you" ? h("p", {class: "g-state tone-warn"}, "Has a question")
-        : h("p", {class: "g-state muted"}, h("span", {class: "dot is-waiting", "aria-hidden": "true"}), " In line");
+        : h("p", {class: "g-state muted"}, h("span", {class: "dot is-waiting", "aria-hidden": "true"}), " Waiting its turn");
     };
     const summary = compact ? (() => {
       const run = working.filter(([, w]) => ["running", "claimed"].includes(txt(w.status))).length;
       const doneN = ds.filter((d) => { const w = kind ? dueWork(d, kind) : null; return w && txt(w.status) === "done"; }).length;
-      const words2 = ["Drafting " + (working.length + doneN), doneN ? doneN + " written" : "", run ? run + " being written" : "", working.length - run ? (working.length - run) + " in line" : ""].filter(Boolean);
+      const words2 = ["Drafting " + (working.length + doneN), doneN ? doneN + " written" : "", run ? run + " being written" : "", working.length - run ? (working.length - run) + " waiting their turn" : ""].filter(Boolean);
       return h("div", {class: "g-summary", role: "status"}, h("p", {}, run ? h("span", {class: "spin", "aria-hidden": "true"}) : h("span", {class: "dot is-waiting", "aria-hidden": "true"}), " " + words2[0] + ": " + words2.slice(1).join(", ")),
         h("div", {class: "card-actions"}, stopClaude("all " + working.length, () => working.forEach(([id]) => stopWork(id)), "fg-stop:" + where + ":" + g + ":" + band)));
     })() : null;
@@ -5019,20 +5032,26 @@
   function fitHide(li, v) { if (li.hidden !== v) li.hidden = v; }
   // How much of the window a Brief must already fill to be stretched to its foot.
   const FILL_SHARE = 0.75;
-  function fitBrief() {
+  // The compact Brief (the numbers a line under the greeting): a short window always, and any
+  // window where the whole Brief does not fit without it (fitBrief decides; app.css).
+  function briefShort(v) { const r = document.documentElement; if (r.classList.contains("brief-short") !== !!v) r.classList.toggle("brief-short", !!v); }
+  function fitBrief(forceShort) {
     const grid = document.querySelector("#main .brief-grid");
-    if (!grid) return;
+    if (!grid) { briefShort(false); return; }
     const lists = [...grid.querySelectorAll("[data-fit]")];
     const fit = fitOf;
     const name = fitName;
     const key = fitKey(lists);
     if (fitMemo.key === key && fitMemo.counts) {
+      briefShort(fitMemo.short);
       for (const l of lists) { const n = fitMemo.counts[name(l)]; const {base} = fit(l); [...l.children].forEach((li, i) => { fitHide(li, i >= (n === undefined ? base : n)); }); }
       fitFill(grid, fitMemo.fill || "");
       fitMore(lists);
       return;
     }
-    const remember = () => { fitMemo = {key, fill: grid.style.height, counts: Object.fromEntries(lists.map((l) => [name(l), [...l.children].filter((li) => !li.hidden).length]))}; };
+    const short = window.innerWidth >= 960 && (forceShort === true || window.innerHeight <= 660);
+    briefShort(short);
+    const remember = () => { fitMemo = {key, short, fill: grid.style.height, counts: Object.fromEntries(lists.map((l) => [name(l), [...l.children].filter((li) => !li.hidden).length]))}; };
     for (const l of lists) { const {base} = fit(l); [...l.children].forEach((li, i) => { fitHide(li, i >= base); }); }
     fitFill(grid, "");
     if (window.innerWidth < 760 || getComputedStyle(grid).gridTemplateColumns.split(" ").length < 2) { remember(); return; }
@@ -5103,6 +5122,13 @@
           if (bottom() > room + 1 || panel.scrollHeight > panel.clientHeight + 1) { li.hidden = true; break; }
         }
       }
+      // Still past the window with Your progress as a panel, which cannot give way: the compact
+      // Brief, its numbers a line under the greeting, fitted again from the start.
+      if (!short && bottom() > room + 1 && grid.querySelector(":scope > .bp-numbers")) { fitBrief(true); return; }
+      // The last few px the sums above cannot see (rounding under the zoom, a window inside
+      // the Claude app): what still scrolls comes off the stretched rows.
+      const over = Math.ceil((document.scrollingElement || document.documentElement).scrollHeight - window.innerHeight);
+      if (over > 0 && over <= 48 && grid.style.height) fitFill(grid, Math.max(0, parseFloat(grid.style.height) - Math.ceil(over / z)) + "px");
     }
     remember();
     fitMore(lists);
@@ -5529,10 +5555,14 @@
       h("a", {href: "#jobs/" + id, class: "bp-text bp-link", "data-k": "bp-job:" + id, onclick: (e) => { e.preventDefault(); go("jobs", {focus: true, item: id}); }},
         h("strong", {}, txt(title)), h("span", {class: "bp-at"}, txt(company))),
       score != null ? h("span", {class: "bp-score tone-" + (txt(band) || "plain"), title: SCORE_MEANS}, String(score)) : null);
-    put(grid, briefPanel("jobs", "Jobs", [sendLine, best.length ? h("ul", {class: "plain bp-list", "data-fit": "2,3,2"}, best.slice(0, 5).map((r) => jobLi(r.id, r.title, r.company, r.score, r.band)))
-      : readyRows.length ? h("ul", {class: "plain bp-list", "data-fit": "2,3,2"}, readyRows.slice(0, 5).map(({a, j}) => jobLi(a.id, a.role || a.title, a.company, j && j.score != null ? j.score : null, j ? j.band : null)))
+    // Up to eight, as many as the panel has room for at their own spacing (fitBrief): five at
+    // most left half of a tall panel empty (the maintainer, 2026-11-06: "list a couple more,
+    // but dont cramp them"); "All N" opens the rest on Jobs.
+    const JOBS_MAX = 8;
+    put(grid, briefPanel("jobs", "Jobs", [sendLine, best.length ? h("ul", {class: "plain bp-list", "data-fit": "2,3,2"}, best.slice(0, JOBS_MAX).map((r) => jobLi(r.id, r.title, r.company, r.score, r.band)))
+      : readyRows.length ? h("ul", {class: "plain bp-list", "data-fit": "2,3,2"}, readyRows.slice(0, JOBS_MAX).map(({a, j}) => jobLi(a.id, a.role || a.title, a.company, j && j.score != null ? j.score : null, j ? j.band : null)))
       : searching ? h("p", {class: "muted"}, "Searching now.") : toSend ? null : h("p", {class: "muted"}, "Nothing new to look at.")],
-      [best.length ? navLink("jobs", "All " + best.length + " new") : null,
+      [best.length ? navLink("jobs", "All " + best.length + " new") : readyRows.length > 1 ? navLink("drafts", "All " + readyRows.length + " drafts") : null,
         !searching ? h("button", {type: "button", class: "btn link", "data-k": "bp-search", onclick: () => askSearch()}, "Find jobs") : null],
       {icon: "jobs", w: 3, ws: 4}));
     // News that matters to the search, in points (the maintainer, 2026-10-31).
@@ -5544,7 +5574,7 @@
       // Two quiet lines: the news, then what to do with it and where it is from, in grey
       // with no underline or bold (the maintainer, 2026-11-02: "weird lines and underlines and
       // bold spammed").
-      const src = txt(it.url) ? inlineMd("[" + txt(it.src).replace(/[\[\]]/g, "") + (txt(it.date) ? ", " + fmtDayMonth(txt(it.date)) : "") + "](" + txt(it.url) + ")") : null;
+      const src = txt(it.url) ? inlineMd("[" + (txt(it.src).replace(/[\[\]]/g, "") || "source") + (txt(it.date) ? ", " + fmtDayMonth(txt(it.date)) : "") + "](" + txt(it.url) + ")") : null;
       return h("li", {}, h("span", {class: "bp-text"}, inlineMd(shortLinks(txt(it.what)))),
         txt(it.use) || src ? h("span", {class: "bp-meta"}, txt(it.use) ? h("span", {class: "bp-use"}, inlineMd(txt(it.use).replace(/\.$/, ""))) : null,
           txt(it.use) && src ? " \u00b7 " : null, src ? h("span", {class: "bp-src"}, src) : null) : null);
@@ -5552,7 +5582,11 @@
     // As many points as the window has room for, like every list on the Brief: all of them on
     // a phone, and on a wider screen down to three only when the Brief would run past the
     // bottom (fitBrief; the maintainer, 2026-11-03: "news is dynamic like the rest?").
-    if (news.length) put(grid, briefPanel("news", "News", h("ul", {class: "bp-lead-list bp-news", "data-fit": "3," + Math.min(news.length, 5) + ",1"}, news.slice(0, 5).map(newsPoint)),
+    // At most as many as the person chose under Edit the brief (News items, 3 unless they
+    // chose otherwise): five long points read as a wall of text (the maintainer, 2026-11-06).
+    const newsMax = b.news_max === undefined || b.news_max === null ? 3 : Math.max(0, Math.min(5, Number(b.news_max) || 0));
+    const newsShown = news.slice(0, newsMax);
+    if (newsShown.length) put(grid, briefPanel("news", "News", h("ul", {class: "bp-lead-list bp-news", "data-fit": Math.min(3, newsShown.length) + "," + newsShown.length + ",1"}, newsShown.map(newsPoint)),
       // What the window had no room for opens in place: News has no screen of its own.
       [h("button", {type: "button", class: "btn link", "data-k": "bp-news-more", "data-fit-more": "news", hidden: true, onclick: (e) => fitOpenFrom(e.currentTarget)}, ""),
         newsAsOf(b.news_date || b.date, b.news_searched)],
@@ -5565,8 +5599,17 @@
     // A share needs enough applications to mean something: "100% of applied" from one read as
     // a boast (the walk-through, 2026-11-03).
     const SHARE_FROM = 5;
-    const tile = (k, one, many, share) => { const v = Number(c[k]) || 0; return h("div", {class: "bp-stat"}, h("span", {class: "bp-n"}, String(v)), h("span", {class: "bp-l"}, v === 1 ? one : many),
-      share && sent >= SHARE_FROM && v ? h("span", {class: "bp-share"}, Math.round((v / sent) * 100) + "% of applied") : null); };
+    // Each number opens where those things are (the maintainer, 2026-11-06: "applied went to
+    // jobs page applied, contacts went to contacts, interviews went to interviews part of
+    // coming up"): applications and offers on Jobs' Applied tab, replies in Contacts, interviews
+    // in Coming up's Interviews. A nought opens nothing.
+    const TILE_TO = {applied: ["jobs", () => setPref("jobs:tab", "applied")], offers: ["jobs", () => setPref("jobs:tab", "applied")],
+      replies: ["contacts", null], interviews: ["interviews", () => setPref("up:view", "interviews")]};
+    const tile = (k, one, many, share) => { const v = Number(c[k]) || 0; const to = v ? TILE_TO[k] : null;
+      const parts = [h("span", {class: "bp-n"}, String(v)), h("span", {class: "bp-l"}, v === 1 ? one : many),
+        share && sent >= SHARE_FROM && v ? h("span", {class: "bp-share"}, Math.round((v / sent) * 100) + "% of applied") : null];
+      return to ? h("a", {href: "#" + to[0], class: "bp-stat bp-link", "data-k": "bp-stat:" + k, onclick: (e) => { e.preventDefault(); if (to[1]) to[1](); go(to[0], {focus: true}); }}, parts)
+        : h("div", {class: "bp-stat"}, parts); };
     // The panel's title says what its numbers cover; with the weeks' chart under them it is
     // "Your progress", the numbers' own days said over them ("Your last 30 days" sat over an
     // eight-week chart, the walk-through, 2026-11-03).
@@ -7229,16 +7272,24 @@
   // and Cancel, and nothing for anything else). It only opens the box, so it carries no
   // gauge: the box's Ask Claude does.
   function elseChoice(kind, id) {
-    return {label: "Something else", key: "else", after: () => openCardAsk(kind, id)};
+    // The To do card the trash was tapped on, if any: its box opens under that card.
+    const t = S.lastTap && S.lastTap.closest ? S.lastTap.closest("[data-todo]") : null;
+    const todo = t && S.section === "todo" ? t.getAttribute("data-todo") : null;
+    return {label: "Something else", key: "else", after: () => openCardAsk(kind, id, todo)};
+  }
+  function askLabel(kind, id) {
+    if (kind === "person") { const p = personById(txt(id)); if (p) return whoAt(txt(p.first_name), txt(p.employer)); }
+    return "this";
   }
   // Opens a card's box where the card is: here when this screen draws it (a job in Jobs, an
   // interview in To do), else on the card's own place (a person's box is in Contacts).
-  function openCardAsk(kind, id) {
+  function openCardAsk(kind, id, todo) {
     const th = cardThread(kind, id);
     const key = "ct-text:" + th;
     S.cardAsk.add(th);
     sset("local", "ljs:ct-hide:" + th, null);
     S.focusAfter = {key};
+    if (todo && S.section === "todo") S.askHere = {card: todo, kind, id: txt(id)};
     render();
     if (refocus(document, key) || !CARD_HOME[kind]) return;
     go(CARD_HOME[kind], {focus: false, item: txt(id)});
@@ -12155,7 +12206,7 @@
     // Its own chat stopped on a question to the person (tools/page_db.py mark_blocked): said
     // as that, never as a job that may have stopped (the stranger audit, X-7 and X-8).
     const blocked = (st === "running" || st === "claimed") && !!txt(w.blocked_at);
-    const label = p.stopping ? "Stopping after this step" : picked ? "Starting" : st === "queued" ? (unsent ? "Not sent yet" : late ? "No answer yet" : inLine ? (place.pos === 1 ? "Next" : "In line") : ahead ? (ahead.pos === 1 ? "Next" : "In line") : waking ? (freshHeartbeat() ? "Sent" : "Waking Claude") : "Waiting for Claude") : st === "running" || st === "claimed" ? (blocked ? "Waiting for you" : slow ? "May have stopped" : null) : st === "done" && notOnPageYet(w) ? "Putting on page" : WORK_WORDS[st] || cap1(st);
+    const label = p.stopping ? "Stopping after this step" : picked ? "Starting" : st === "queued" ? (unsent ? "Not sent yet" : late ? "No answer yet" : inLine ? (place.pos === 1 ? "Next" : "Waiting its turn") : ahead ? (ahead.pos === 1 ? "Next" : "Waiting its turn") : waking ? (freshHeartbeat() ? "Sent" : "Waking Claude") : "Waiting for Claude") : st === "running" || st === "claimed" ? (blocked ? "Waiting for you" : slow ? "May have stopped" : null) : st === "done" && notOnPageYet(w) ? "Putting on page" : WORK_WORDS[st] || cap1(st);
     const tone = p.stopping ? "held" : {done: "ok", failed: "bad", stopped: "held", needs_you: "warn"}[st] || (blocked || slow || late || unsent ? "warn" : null);
     const cur = p.stages[Math.min(p.i, p.n - 1)];
     // The newest line Claude wrote on it, from after it was asked (or answered).
@@ -12180,7 +12231,7 @@
         said ? said :
         helperStarting() ? "Claude's helper is starting up. It takes this in a minute or two." :
         inLine ? (place.pos === 1 ? "Starts as soon as one of the " + place.busy + " jobs running now is done." : plural(place.pos - 1, "job", "jobs") + " before it, once one of the " + place.busy + " running now is done.") :
-        ahead ? (ahead.pos === 1 ? "Next, after " : "In line, after ") + quoted(ahead.after) + "." :
+        ahead ? (ahead.pos === 1 ? "Next, after " : "Waiting its turn, after ") + quoted(ahead.after) + "." :
         late ? (p.sentAt ? "No answer from Claude in " + aboutMins((now() - p.sentAt) / 1000) + "." + ((S.tries.get(id) || 0) < RING_TRIES ? " It is sent again with your next tap here." : "") + (phoneNow() ? "" : " If its chat has closed, open Claude.") : "Claude has not picked this up yet.") :
         // One short state, said once: the card's chip is not drawn beside it (workCard), and
         // its clock follows ("Waking Claude · 1m 4s"; the maintainer, 2026-11-05).
@@ -12941,6 +12992,7 @@
     jumpShown();
   }
   window.addEventListener("scroll", onChatScroll, {passive: true});
+  document.addEventListener("click", (e) => { S.lastTap = e.target; }, true);
   function endPractice() {
     const m = S.quick.mode;
     if (!m) return;
@@ -13902,7 +13954,7 @@
   }
   function navLink(id, label) {
     const r = resolveSection(id) || {section: "todo"};
-    return h("a", {href: "#" + id, class: "navlink", "data-k": "nl:" + id + ":" + label, onclick: (e) => { e.preventDefault(); if (r.work) openWork(); else go(r.section, {focus: true, drafts: r.drafts}); }}, label);
+    return h("a", {href: "#" + id, class: "navlink", "data-k": "nl:" + id + ":" + label, onclick: (e) => { e.preventDefault(); if (r.work) openWork(); else { if (r.applied) setPref("jobs:tab", "applied"); go(r.section, {focus: true, drafts: r.drafts}); } }}, label);
   }
   function parseHash() {
     let raw = (location.hash || "").replace(/^#/, "");

@@ -72,7 +72,7 @@ def test_a_job_being_drafted_says_where_its_draft_stands_with_cancel_and_stays_c
     queued, tab, summary, going, finished, tab2 = (got["after"][i]["text"] for i in range(1, 7))
     # "Stop Claude" wherever Claude's work is called off (the maintainer, 2026-11-05).
     assert "Stop Claude" in queued and "Drafting" not in queued, queued
-    assert any(w.lower() in queued.lower() for w in ("Waiting for Claude", "In line", "Next", "Sent", "Waking Claude")), queued
+    assert any(w.lower() in queued.lower() for w in ("Waiting for Claude", "Waiting its turn", "Next", "Sent", "Waking Claude")), queued
     assert tab == before and tab2 == before, (before, tab, tab2)
     assert "3 to send, 2 still to make" in summary, summary
     assert ("Claude is on it" in going or "Draft" in going) and "Stop Claude" in going, going

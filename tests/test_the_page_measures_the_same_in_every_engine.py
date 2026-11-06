@@ -70,3 +70,17 @@ def test_a_computer_with_no_pointer_gets_the_laptops_type():
     assert laptop, "the laptop's own rules were found"
     for q in laptop:
         assert "(pointer: none)" in q, ("a computer reporting no pointer misses this laptop rule", q.strip())
+
+
+SCROLLS = "document.documentElement.scrollHeight - innerHeight"
+
+
+@pytest.mark.parametrize("size", [(1003, 701), (1003, 777), (1180, 701), (1180, 777), (1366, 640), (1512, 861)], ids=lambda s: "%dx%d" % s)
+def test_a_full_brief_never_scrolls_in_a_window_of_any_laptop_size(run, tmp_path, size):
+    # The maintainer, 2026-11-06: full screen it was perfect, in a window "there was a bit of
+    # scroll room". Between 661 and about 800px tall Your progress could not give way and the
+    # Brief scrolled by up to 107px; it now takes the compact Brief, numbers under the greeting.
+    from test_the_page_journeys import _go
+    got = _go(run, tmp_path, [{"hash": "brief", "wait": 300, "eval": SCROLLS}], {"width": size[0], "height": size[1]},
+              model=_full(), clock=T, zone=PERSON_ZONE)
+    assert got["after"][0]["eval"] <= 0, ("the Brief scrolls in a window", size, got["after"][0]["eval"])

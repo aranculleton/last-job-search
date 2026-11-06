@@ -1304,13 +1304,54 @@ class _Parser(argparse.ArgumentParser):
 ROUND_NAME = re.compile(r"^r\d+(?:_round\d+)?$")
 
 
+def _names_on_github(summary_dir: str) -> list[str]:
+    """The file names in the same folder on master and on every branch on GitHub that master
+    does not hold yet (a job chat's work waiting there), as the last fetch saw them. Two job
+    chats are two fresh clones, and each counted only its own folder: both named their search
+    r43 (the maintainer's copy, 2026-11-06). Read from this copy's own git, never fetched
+    here; [] where the folder is in no copy or git cannot say."""
+    import subprocess
+
+    def run(*args: str) -> str:
+        try:
+            r = subprocess.run(["git", "-C", top, *args], capture_output=True, text=True,
+                               encoding="utf-8", errors="replace", timeout=30)
+        except (OSError, subprocess.SubprocessError):
+            return ""
+        return r.stdout if r.returncode == 0 else ""
+
+    top = os.path.abspath(summary_dir)
+    while top and not os.path.isdir(top):
+        top = os.path.dirname(top)
+    if not top:
+        return []
+    root = run("rev-parse", "--show-toplevel").strip()
+    if not root:
+        return []
+    rel = os.path.relpath(os.path.abspath(summary_dir), root).replace(os.sep, "/")
+    if rel.startswith(".."):
+        return []
+    top = root
+    refs = ["origin/master"] if run("rev-parse", "-q", "--verify", "origin/master") else []
+    if refs:
+        refs += [x.strip() for x in run("for-each-ref", "--format=%(refname:short)",
+                                        "--no-merged", "origin/master",
+                                        "refs/remotes/origin/").splitlines() if x.strip()][:200]
+    names: list[str] = []
+    for ref in refs:
+        names += [os.path.basename(p) for p in run("ls-tree", "--name-only", ref, "--",
+                                                   rel + "/").splitlines()]
+    return names
+
+
 def next_round(summary_dir: str) -> str:
-    """The next round's name: "r" and one more than the highest number saved, so a new round
-    never overwrites an earlier one's shortlist."""
+    """The next round's name: "r" and one more than the highest number saved, here or on
+    GitHub (_names_on_github), so a new round never overwrites an earlier one's shortlist."""
     try:
         names = os.listdir(summary_dir)
     except OSError:
         names = []
+    names = list(names) + _names_on_github(summary_dir)
     nums = [int(m.group(1)) for n in names
             for m in [re.match(r"^r(\d+)(?:_round\d+)?\.json$", n)] if m]
     return f"r{max(nums, default=0) + 1}"
