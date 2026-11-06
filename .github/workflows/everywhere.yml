@@ -20,6 +20,23 @@ on:
   schedule:
     - cron: "41 5 * * 1"
   workflow_dispatch:
+    # By hand, a few files in one or two engines: a failure reproduced in minutes, not the
+    # whole page in all eight (Safari's and Firefox's findings at 4.12, which this container
+    # cannot draw). Empty runs everything, as before.
+    inputs:
+      variants:
+        description: "Page variants only (safari firefox mac-type windows-type french german ahead behind); empty: all"
+        required: false
+        default: ""
+      tests:
+        description: "Test files only, space separated; empty: all"
+        required: false
+        default: ""
+      suite:
+        description: "Run the suite job too"
+        type: boolean
+        required: false
+        default: true
 
 permissions:
   contents: read
@@ -58,7 +75,17 @@ jobs:
         with:
           python-version: "3.13"
       - run: pip install pyyaml pytest pytest-xdist
+      - name: The variants asked for
+        id: want
+        env:
+          ASKED: ${{ inputs.variants }}
+          MINE: ${{ matrix.variants }}
+        run: |
+          v="$MINE"
+          if [ -n "$ASKED" ]; then v=""; for m in $MINE; do case " $ASKED " in *" $m "*) v="$v $m" ;; esac; done; fi
+          echo "variants=$(echo $v)" >> "$GITHUB_OUTPUT"
       - name: Playwright, the engine this job needs, and a Mac's and Windows' type
+        if: ${{ steps.want.outputs.variants != '' }}
         env:
           PW: "1.56.1"            # the Playwright the page's harness is tested with
           ENGINES: ${{ matrix.engines }}
@@ -67,14 +94,16 @@ jobs:
           npx -y "playwright@$PW" install --with-deps $ENGINES
           sudo apt-get install -y -q fonts-inter fonts-liberation > /dev/null
       - name: The page in each
+        if: ${{ steps.want.outputs.variants != '' }}
         env:
           EVERYWHERE_STRICT: "1"
-          VARIANTS: ${{ matrix.variants }}
+          EVERYWHERE_TESTS: ${{ inputs.tests }}
+          VARIANTS: ${{ steps.want.outputs.variants }}
         run: tools/everywhere.sh page $VARIANTS
 
   suite:
     name: suite everywhere (the clock moved on, far time zones, an odd folder, the newest Python)
-    if: ${{ github.event_name == 'workflow_dispatch' || (!github.event.repository.private && (github.event_name == 'schedule' || startsWith(github.event.pull_request.title, 'Release '))) }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.suite != false) || (!github.event.repository.private && (github.event_name == 'schedule' || startsWith(github.event.pull_request.title, 'Release '))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -93,4 +122,5 @@ jobs:
           EVERYWHERE_STRICT: "1"
           PY: python
           PY_NEWEST: python3.14
+          EVERYWHERE_TESTS: ${{ inputs.tests }}
         run: tools/everywhere.sh suite

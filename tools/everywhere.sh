@@ -90,7 +90,7 @@ run() {
   local log="$OUT/$kind-$name.txt" par=""
   "$py" -c "import xdist" > /dev/null 2>&1 && par="-n auto --dist loadfile"
   # shellcheck disable=SC2086
-  (cd "$dir" && env ${envs[@]+"${envs[@]}"} "$py" -m pytest -q -p no:cacheprovider $par -rf --tb=line "$@") > "$log" 2>&1
+  (cd "$dir" && env ${envs[@]+"${envs[@]}"} "$py" -m pytest -q -p no:cacheprovider $par -rf --tb=line -o verbosity_assertions=2 "$@") > "$log" 2>&1
   local code=$? last
   last="$(grep -aE '[0-9]+ (passed|failed|error)' "$log" | tail -1)"
   if [ $code -eq 0 ]; then
@@ -99,6 +99,10 @@ run() {
     printf '  %-16s FAIL  %s\n' "$name" "${last:-exit $code, see $log}"
     note "$name: FAIL, ${last:-exit $code}"
     while IFS= read -r l; do note "    ${l:0:300}"; done < <(grep -aE '^(FAILED|ERROR) ' "$log" | head -8)
+    # Each failure's own message whole (--tb=line: file:line: the error and what it measured):
+    # the summary line above is cut, and a cut dict ("'panels': 6, ...}") hid which promise
+    # Safari broke at 4.12.
+    while IFS= read -r l; do note "      ${l:0:2400}"; done < <(grep -aE '^[^ ]+\.py:[0-9]+: ' "$log" | head -8)
   fi
 }
 
