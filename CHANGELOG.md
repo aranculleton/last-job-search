@@ -50,6 +50,12 @@ make sense to somebody whose repo just received it.
   this device under This device.
 - **More choices for timing**: your next interview can go to the top of the Brief from the day
   before, and calendar reminders can come two hours before.
+- **Your LinkedIn download, as often as you use it.** It is asked for weekly while you have
+  sent notes or messages in the last two weeks, and every two weeks otherwise.
+- **Remind me less.** The reminder's trash offers Every 2 weeks, Every month and Stop asking:
+  one tap, with Undo. Settings > LinkedIn has the same choice, to change any time.
+- **No stale "Done." on the LinkedIn download.** Its line shows just after you add one, and
+  never says that only a chat can take it back.
 
 ### Fixed
 

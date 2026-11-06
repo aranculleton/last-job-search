@@ -31,8 +31,8 @@ a copy of its rules:
     person.status      state.py set (status, next action, due)  undone by person.status
     consent.yes / .no  the answer on its work item (db only)    undone by the other one
     setting.set        person.json, tips.py, LINKEDIN_PLAN,     undone by setting.set
-                       PROFILE_READS
-    needs.answer       learned.py decide; a fact written where  undone by needs.unanswer
+                       PROFILE_READS, EXPORT_REMIND
+    needs.answer      learned.py decide; a fact written where  undone by needs.unanswer
                        its [CONFIRM] mark was                   (a fact), or by saying so
     due.done           state.py set, a contact's dated next     undone by due.undo
                        action cleared; or "followed up <day>"
@@ -221,8 +221,8 @@ ACTIONS = {
     "person.status": (("person", "message"), "state.py set", "person.status"),
     "consent.yes": (("work",), "the work item's answers (db only)", "consent.no"),
     "consent.no": (("work",), "the work item's answers (db only)", "consent.yes"),
-    "setting.set": (("setting",), "person.json, tips.py, networking.py LINKEDIN_PLAN and "
-                    "PROFILE_READS",
+    "setting.set": (("setting",), "person.json, tips.py, networking.py LINKEDIN_PLAN, "
+                    "PROFILE_READS and EXPORT_REMIND",
                     "setting.set"),
     "needs.answer": (("offer", "fact", "upgrade_ask", "rule_ask", "skill_ask"),
                      "learned.py decide; the profile at its mark; an update's question "
@@ -274,6 +274,9 @@ ACTIONS = {
     "export.requested": (("linkedin",), "export.py requested: the day the LinkedIn download "
                                         "was asked for", "export.unrequested"),
     "export.unrequested": (("linkedin",), "the day it was asked for put back", "export.requested"),
+    "export.later": (("linkedin",), "linkedin_export.json put_off_on: the reminder put away "
+                                    "from its trash, the next ask counted from today",
+                     "export.later"),
     "export.take": (("linkedin",), "export.py take on the files the page added (fetched by the "
                                    "chat into --assets): saved, history imported, counted",
                     ""),
@@ -441,6 +444,8 @@ def _sections_for(item_id: str) -> tuple:
         return ("resume",)
     if item_id == "upcoming-add" or item_id.startswith("up-"):
         return ("upcoming",)
+    if item_id == "setting-export_remind":
+        return ("linkedin",)          # drawn with the LinkedIn download (app_model._linkedin)
     if item_id.startswith("setting-"):
         return ("settings",)
     if re.search(r"-f?\d+$", item_id):
@@ -2610,6 +2615,22 @@ def _export_unrequested(r: Run) -> dict:
                                            "target": dict(r.target)}}
 
 
+def _export_later(r: Run) -> dict:
+    """The reminder put away from its trash, beside the choice of how often (setting.set
+    export_remind, sent in the same tap): the next ask counts from today. Its Undo puts back
+    the day it was put away before (`from`, "" for none)."""
+    import export
+    before = str(export.load_record().get("put_off_on") or "")
+    if "from" in r.value:
+        export.save_record({"put_off_on": str(r.value.get("from") or "")})
+        return {"note": "Back as it was.",
+                "undo": {"action": "export.later", "target": dict(r.target), "value": {}}}
+    export.save_record({"put_off_on": r.day.isoformat()})
+    return {"note": "Put away: your LinkedIn download is asked for again when its time comes.",
+            "undo": {"action": "export.later", "target": dict(r.target),
+                     "value": {"from": before}}}
+
+
 def _assets_given(r: Run) -> list:
     """[(asset id, the file name it stands for, its part)], only names the app reads. A file
     over the page store's 20 MiB comes as parts (`part`, from 1), each a whole number of
@@ -2996,7 +3017,7 @@ def _setting_set(r: Run) -> dict:
     key = r.target.get("key")
     if key == "time_zone":
         return _set_time_zone(r)
-    choices = {k: [c[0] for c in ch] for k, _, ch in app_model.SETTINGS}
+    choices = {k: [c[0] for c in ch] for k, _, ch in app_model.setting_choices()}
     value = str(r.value.get("value") or "").strip()
     if value not in choices.get(key, ()):
         raise Refused(f"{value or 'nothing'} is not one of the choices.")
@@ -3014,9 +3035,32 @@ def _setting_set(r: Run) -> dict:
     elif key == "profile_reads":
         import profile_set
         profile_set.set_line("networking.py", "PROFILE_READS", value)
+    elif key == "export_remind":
+        return _set_export_remind(r, value, old)
     label = dict(next(ch for k, _, ch in app_model.SETTINGS if k == key))[value]
     return {"note": f"Changed: {label}.",
             "undo": {"action": "setting.set", "target": dict(r.target), "value": {"value": old}}}
+
+
+# What the LinkedIn download's reminder says once its choice is made, from its trash or
+# Settings: what happens from now on, in a sentence (DESIGN.md, "The trash").
+EXPORT_REMIND_SAY = {
+    "auto": "Your LinkedIn download is asked for weekly while you are messaging people, "
+            "every two weeks otherwise.",
+    "fortnightly": "Your LinkedIn download is asked for every two weeks.",
+    "monthly": "Your LinkedIn download is asked for every month.",
+    "off": "Your LinkedIn download is not asked for any more. Settings turns it back on.",
+}
+
+
+def _set_export_remind(r: Run, value: str, old) -> dict:
+    """How often the LinkedIn download is asked for (networking.py EXPORT_REMIND, read by
+    export.every_days)."""
+    import profile_set
+    profile_set.set_line("networking.py", "EXPORT_REMIND", value)
+    return {"note": EXPORT_REMIND_SAY[value],
+            "undo": {"action": "setting.set", "target": dict(r.target),
+                     "value": {"value": old or "auto"}}}
 
 
 # ---- tweaks
@@ -3685,7 +3729,7 @@ HANDLERS = {
     "pin.answer": _pin_answer,
     "work.stop": _work_stop, "work.resume": lambda r: _work_stop(r, stop=False),
     "export.requested": _export_requested, "export.unrequested": _export_unrequested,
-    "export.take": _export_take, "reader.checked": _reader_checked,
+    "export.later": _export_later, "export.take": _export_take, "reader.checked": _reader_checked,
     "reading.done": _reading_done,
     "learned.retire": _learned_retire, "learned.unretire": lambda r: _learned_retire(r, False),
     "tip.seen": _tip_seen, "requests.withdrawn": _withdrawn,
@@ -3743,7 +3787,8 @@ MARKS = frozenset({
     "suggest.dismiss", "suggest.undismiss", "hint.seen", "tip.seen", "pin.answer",
     "rule.keep", "rules.seen", "learned.retire", "learned.unretire",
     "upcoming.add", "upcoming.remove", "requests.withdrawn", "requests.unwithdrawn",
-    "export.requested", "export.unrequested", "reader.checked", "referral.agreed",
+    "export.requested", "export.unrequested", "export.later", "reader.checked",
+    "referral.agreed",
     "referral.ended", "outcome.rejected", "outcome.withdrawn", "outcome.no_response",
     "outcome.offer", "outcome.undo"})
 assert MARKS <= set(HANDLERS) and not MARKS & DB_ONLY

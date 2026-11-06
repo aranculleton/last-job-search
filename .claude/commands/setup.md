@@ -212,7 +212,7 @@ cited. Where they were not asked, use the default and never a question:
 | Notice period, achievements the resume gave no number for | `[CONFIRM: ...]`, asked in later sessions |
 | Reading LinkedIn profiles | `PROFILE_READS = "browser"`, written without asking wherever setup runs: their page reads profiles in the Claude desktop app, and "I paste them" in its Settings turns it off |
 | LinkedIn Premium | Unset: notes keep to a free account's limits; asked later |
-| Their LinkedIn download | Asked on the page (a To do card, and Settings, LinkedIn), and again by the brief once it is a fortnight old |
+| Their LinkedIn download | Asked on the page (a To do card, and Settings, LinkedIn), and again by the brief once it is due: weekly while they are messaging people, a fortnight otherwise, or as they chose |
 
 Then the state files (setup-sections.md, the last section), and commit and push.
 

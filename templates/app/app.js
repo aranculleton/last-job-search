@@ -11035,6 +11035,36 @@
     const state = txt(x.state);
     return !!x.due || state === "due" || state === "missing" || state === "requested";
   }
+  // How often the download is asked for (the engine's export.every_days): weekly while the
+  // person is messaging people, every two weeks otherwise, or what they chose. A setting
+  // whose one home is Settings > LinkedIn; the reminder's trash sets the same item.
+  function exportReminder() { const r = obj(exportInfo().reminder); return txt(r.key) ? r : null; }
+  const REMIND_AWAY_DAYS = {auto: 7, fortnightly: 14, monthly: 30};
+  // Put away from its trash: it leaves To do at once, before Claude has caught up, for as
+  // long as the choice says; the engine's own due day speaks after that.
+  function exportPutAway() {
+    const e = effective(EXPORT_ID(), ["export.later"]);
+    const s = exportReminder();
+    if (!e || !s) return false;
+    const choice = txt(settingValue(s));
+    if (choice === "off") return true;
+    return now() - (tms(e.doc.at) || now()) < (REMIND_AWAY_DAYS[choice] || 7) * DAY;
+  }
+  // The trash's choices (the maintainer, 2026-11-06): one tap sets how often and puts this
+  // reminder away, with Undo in its toast for both.
+  const REMIND_TRASH = [["fortnightly", "Every 2 weeks", "Put away. Your LinkedIn download is asked for every 2 weeks from now on."],
+    ["monthly", "Every month", "Put away. Your LinkedIn download is asked for every month from now on."],
+    ["off", "Stop asking", "Put away. Your LinkedIn download is not asked for any more."]];
+  function exportTrash(x) {
+    const s = exportReminder();
+    if (!s) return null;
+    const put = (v, words) => act([{item: setId(s), action: "setting.set", value: v, rev: txt(s.rev) || null},
+      {item: EXPORT_ID(), action: "export.later", value: {day: todayIso()}, rev: txt(x.rev) || null}], words);
+    return h("button", {type: "button", class: "btn quiet icon-only small hide-x", "data-k": "export-trash", "data-bin": "1",
+      "aria-label": "Put away: the LinkedIn download reminder", title: "Put away",
+      onclick: () => sheet({title: "Remind you less often?", intro: "How often to ask for your LinkedIn download from now on.",
+        choices: REMIND_TRASH.map(([v, label, words]) => ({label, key: "remind-" + v, run: () => { put(v, words); }}))})}, icon("bin"));
+  }
   function exportTodo() {
     const x = exportInfo();
     if (!Object.keys(x).length) return null;
@@ -11044,6 +11074,7 @@
     // next 7 days thing"). For as long as its line shows, the model may still say it is due
     // (it catches up with the next update); after that, the model's own state asks again.
     const got = exportTaken();
+    if (!got && txt(x.state) !== "requested" && !exportAsked(x) && exportPutAway()) return null;
     const done = !!got && !got.pending && receiptOk(got);
     if (done && (now() - (tms(got.applied_at) || now()) < DONE_LINE_MS || !exportNeedsCard(x))) return null;
     const taken = done ? null : got;
@@ -11082,7 +11113,7 @@
           asked ? addDownloadBtn(x, "card") : null)];
     }
     return card("article", {class: "card todo export", "aria-labelledby": "export-title", "data-item": "linkedin-export"},
-      h("div", {class: "todo-top"}, kindMark("message")), body, noteFor("export"), stateLine(EXPORT_ID(), "export"));
+      h("div", {class: "todo-top"}, kindMark("message"), taken || asked ? null : exportTrash(x)), body, noteFor("export"), stateLine(EXPORT_ID(), "export"));
   }
   // One button for one download: it takes the zip, or the files from inside it (a Mac opens a
   // zip by itself), chosen together. "Choose its folder" beside it was a second way to give
@@ -11256,12 +11287,39 @@
           steps.length ? h("ol", {class: "steps"}, steps.map((s) => h("li", {}, s))) : h("p", {class: "muted"}, "The steps arrive with the next update of this page."),
           link ? h("p", {}, h("a", {href: link, target: "_blank", rel: "noopener noreferrer", class: "btn secondary small", "data-k": "export-open:settings"}, "Open LinkedIn's download page", h("span", {class: "sr-only"}, " (opens in a new tab)"))) : null,
           obj(x.steps).checked ? h("p", {class: "hint"}, "Steps checked " + fmtDay(obj(x.steps).checked) + ".") : null)],
-        waiting ? null : addDownloadBtn(x, "settings"), [noteFor("export"), stateLine(EXPORT_ID(), "export:settings")])),
+        waiting ? null : addDownloadBtn(x, "settings"), [noteFor("export"), exportLine()])),
+      exportReminderRow(),
       // One row for one choice: whether Claude reads profiles, and checking that it can, are
       // the profile_reads setting's own row (renderSettings); a second row beside it read as
       // two settings (the walk-through, 2026-11-03).
       settingItem("profile_reads") ? null : infoRow("linkedin-reading", "Let Claude read LinkedIn profiles", st === "off" ? "Off" : rw, readingBody()),
     ];
+  }
+  // The download's line on its place in Settings: what a tap is doing while it is done, and
+  // its confirmation just after (EXPORT_LINE_MS, as a finished reply's line goes), never a
+  // "Done." from days ago nor "Only a chat can take this back" (the maintainer, 2026-11-06).
+  const EXPORT_LINE_MS = 10 * 60000;
+  function exportFresh(item) {
+    const t = lastTouch(item);
+    if (!t || t.state !== "applied") return true;
+    const r = S.receipts.get(t.id);
+    return !!r && now() - (tms(r.applied_at) || 0) <= EXPORT_LINE_MS;
+  }
+  function exportLine() {
+    const t = lastTouch(EXPORT_ID());
+    if (!t || !exportFresh(EXPORT_ID())) return null;
+    const r = t.state === "applied" ? S.receipts.get(t.id) : null;
+    if (r && !r.undo && t.doc.action !== "undo") return h("p", {class: "state tone-ok"}, h("span", {class: "state-text"}, r.nothing_new ? "Done. Nothing new in that download." : "Done."));
+    return stateLine(EXPORT_ID(), "export:settings");
+  }
+  // How often it is asked for, as a row of chips under the download (settingRow), its line
+  // kept to just after a change as the download's is.
+  function exportReminderRow() {
+    const s = exportReminder();
+    if (!s) return null;
+    const row = settingRow(s);
+    if (!exportFresh(setId(s)) && row && row.querySelectorAll) for (const el of row.querySelectorAll(":scope > .state, :scope > .state-wrap")) el.remove();
+    return row;
   }
   function readingBody() {
     const st = readingState();
@@ -11280,7 +11338,8 @@
   function exportFootLink() {
     const x = exportInfo();
     if (!Object.keys(x).length) return null;
-    const old = txt(x.state) === "missing" || !txt(x.taken_on) || Number(x.age_days) > 14 || x.due === true;
+    // Due by the engine's own day (export.every_days, or the person's choice), as To do's card is.
+    const old = typeof x.due === "boolean" ? x.due : txt(x.state) === "missing" || !txt(x.taken_on) || Number(x.age_days) > 14;
     if (!old || exportTaken()) return null;
     // A soft pill, never underlined text alone at the foot of the list (the review, 2026-11-05).
     return h("div", {class: "card-actions export-foot"}, btn("Add your LinkedIn download", () => { openState.set("det:info:linkedin-download", true); go("settings", {focus: false}); },
