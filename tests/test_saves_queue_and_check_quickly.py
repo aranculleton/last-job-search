@@ -500,6 +500,7 @@ def test_a_queued_save_is_owned_only_while_a_landing_lives(chat):
         land._drop_lock(root, token)
 
 
+@pytest.mark.timing
 def test_a_check_that_hangs_is_stopped_and_the_work_kept(chat, tmp_path, monkeypatch, capsys):
     """The lock is kept alive while the check runs, so a hung check held every save for ever."""
     monkeypatch.setattr(land, "CHECK_DEADLINE_S", 2)
