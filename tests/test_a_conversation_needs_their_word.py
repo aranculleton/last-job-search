@@ -52,8 +52,9 @@ def test_connected_on_linkedin_reads_as_connected_no_reply(tmp_path, monkeypatch
     assert state.effective_status(REED, [REQUEST]) == "connected_no_reply"
     # By name too, where the row has no profile address.
     assert state.effective_status({**REED, "linkedin_url": ""}, [REQUEST]) == "connected_no_reply"
-    for status in ("in_conversation", "call_booked"):
-        assert state.effective_status({**REED, "status": status}, [REQUEST]) == "connected_no_reply"
+    # A call booked stands on the person's own word: read as a reply owed, it would nudge
+    # someone they have a call with (the 4.11 rehearsal, 2026-11-06).
+    assert state.effective_status({**REED, "status": "call_booked"}, [REQUEST]) == "call_booked"
 
 
 def test_a_word_or_a_call_from_them_keeps_the_conversation(tmp_path, monkeypatch):
@@ -91,3 +92,12 @@ def test_the_persons_own_word_or_a_booked_call_keeps_the_status(tmp_path, monkey
     assert state.effective_status(booked, [REQUEST]) == "call_booked"
     over = {**REED, "next_action": "Call on 2026-11-01 is over: thank them and ask how it went"}
     assert state.effective_status(over, [REQUEST]) == "in_conversation"
+
+
+def test_a_message_we_sent_keeps_the_conversation_the_log_cannot_see(tmp_path, monkeypatch):
+    # Talking with only our own messages logged is often a conversation on another channel;
+    # only our unanswered connection request alone is read as what the log shows.
+    monkeypatch.setattr(state.person, "local_state", lambda *a: str(tmp_path / "none.csv"))
+    dm = {**REQUEST, "date": "2026-09-02", "scenario": "follow_up", "channel": "linkedin_dm", "summary": "Following up"}
+    assert state.effective_status(REED, [REQUEST, dm]) == "in_conversation"
+    assert not [p for p in state.reconcile([REED], [REQUEST, dm]) if p["reason"] == "no_word_from_them"]

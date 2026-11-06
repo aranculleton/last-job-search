@@ -20,6 +20,8 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+## [4.11.0] - 2026-11-06
+
 ### Added
 
 - **The Brief fits a laptop screen.** On a laptop the Brief is two rows of panels that fill the
@@ -211,7 +213,9 @@ make sense to somebody whose repo just received it.
 - Claude no longer says your morning brief has moved to the page chat, or is already set up, until your list of scheduled tasks shows it running there; one still running in an older chat is moved.
 - A role you mark as applied leaves the To apply list straight away instead of waiting at the bottom of it.
 - Applied opens on what you applied to today or yesterday, shown as a filter with Clear all beside it so the whole list is one tap away.
-- A contact marked as in conversation, or with a call booked, when nothing from them is logged now shows what the messages say instead (waiting on their reply, or connected with no reply yet), so the page no longer asks you to answer a reply that was never sent. The contact check lists each one as something to fix.
+- A contact marked as in conversation whose only logged contact is your own connection request now shows what the messages say instead (waiting on their reply, or connected with no reply yet), so the page no longer asks you to answer a reply that was never sent. A call booked, a message you sent or a status you set yourself keeps it as it is. The contact check lists each one as something to fix.
+- Someone you dropped or closed is taken off the list of profiles the page reads.
+- A job at an employer where someone has put your name forward now stays on your list, marked not to apply cold, instead of disappearing: the role is the one the referral can carry.
 - One role per employer on Jobs, whichever search found it. The best fit stays; any other role there is set aside ("Another role at <employer> is already on your list") with Bring back, and a role you added, kept, drafted or applied for always stays.
 - Strong roles at one employer no longer all score 100. A live contact or an earlier interview there is counted before the top of the scale, so those roles keep their order.
 - Marking something (applied, not applying, I sent it, set aside, put off) no longer wakes Claude or starts a new helper: the page shows it at once, and Claude keeps it the next time it works on your search. Such a mark never makes the page say Claude is not listening.
