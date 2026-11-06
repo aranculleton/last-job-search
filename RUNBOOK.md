@@ -215,6 +215,15 @@ everything ruled out is fetched, screened and scored again and can reach the sho
 which is what it is for after the rules change. Postings are still aged from when they
 were first seen.
 
+**When the person names employers** ("search these 20 employers"), the round searches only
+them: `--employers "A, B, C"` (or a file, one name a line). Their own boards on file and
+searches by their names are all it sends; only their postings are fetched, ranked and cut,
+names matched as the app matches employers ("Acme" is "Acme Ltd"). The list keeps the number
+asked for, or one place for each employer named when that is more, so every one with a job
+that passes every rule is on it, and the round says which had none ("No open roles found at
+X, Y"): pass that on. The round keeps the names, so `--recut` and a wider round keep to them,
+and `--recut --employers "..."` limits a round already run.
+
 **Read the exit code.** 0 means the yield target was met, 2 means it was missed, 1 means
 a stage actually broke. A thin market and a broken pipeline are different answers. A scrape
 where more than a quarter of the portal requests failed is neither: the round carries on

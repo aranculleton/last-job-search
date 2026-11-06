@@ -378,9 +378,9 @@ METHODS: dict[str, dict] = {
             (76, "2026-11-05", False, "a role kept for a referral in progress carries its note (referral_note) into the picks and the tracker row; documents are made as before"),
             (77, "2026-11-05", False, "a skill question has a third answer, just for this role: the skill goes on that role's resume and bullets through the draft's own yes, never into the profile or onto another role, which a later posting asks again; a yes and a no work as before, so nothing made before needs making again"),
             (78, "2026-11-05", False, "a resume made for a contact who asked for one with no role named is kept in their own folder, named for them and shown on their card, never in place of the person's own; nothing made before needs making again"),
-            (79, "2026-11-06", False, "the run book says rules the app has since built in are retired once after an update, and a complaint about the app is never kept as a rule; no document changes; RUNBOOK.md says the brief asks for a new LinkedIn download once it is due by export.every_days (weekly while the person is messaging people, a fortnight otherwise, or as they chose); documents render and are checked as before; the run book says the person's own tests an update broke are brought in line by a background step while each save sets them aside"),
+            (79, "2026-11-06", False, "the run book says rules the app has since built in are retired once after an update, and a complaint about the app is never kept as a rule; no document changes; RUNBOOK.md says the brief asks for a new LinkedIn download once it is due by export.every_days (weekly while the person is messaging people, a fortnight otherwise, or as they chose); documents render and are checked as before; the run book says the person's own tests an update broke are brought in line by a background step while each save sets them aside; the run book says how a search limited to the employers the person names is run (run_round.py --employers)"),
         ),
-        "fingerprint": "ee5392256dc4690a",
+        "fingerprint": "68e6d29ba1220684",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",

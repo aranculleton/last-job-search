@@ -468,9 +468,9 @@ def state_copy(root: str) -> str:
 
 
 def free_stages(kept: str, out: str, work: str, delays: dict | None = None,
-                workers: int = 4) -> subprocess.CompletedProcess:
+                workers: int = 4, extra=()) -> subprocess.CompletedProcess:
     """tools/run_round.py --from-scraped over a saved scrape, offline, writing nothing
-    into the repo or the state the other tests share."""
+    into the repo or the state the other tests share. `extra`: more of the round's options."""
     state = state_copy(work)
     cli = os.path.join(work, "linkedin_detail.mjs")
     with open(cli, "w") as fh:
@@ -489,7 +489,7 @@ def free_stages(kept: str, out: str, work: str, delays: dict | None = None,
         [sys.executable, os.path.join(TOOLS, "run_round.py"), "--from-scraped", kept,
          "--out", out, "--today", TODAY, "--workers", str(workers), "--keep-intermediates",
          "--no-seen-write", "--seen", seen, "--tracker", tracker,
-         "--summary-dir", os.path.join(work, "summary")],
+         "--summary-dir", os.path.join(work, "summary"), *extra],
         cwd=ROOT, env=env, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=600)
 
 
