@@ -1328,8 +1328,9 @@ def _names_on_github(summary_dir: str) -> list[str]:
     root = run("rev-parse", "--show-toplevel").strip()
     if not root:
         return []
-    rel = os.path.relpath(os.path.abspath(summary_dir), root).replace(os.sep, "/")
-    if rel.startswith(".."):
+    import local_path
+    rel = local_path.rel(os.path.abspath(summary_dir), root)
+    if rel.startswith("..") or os.path.isabs(rel):     # outside this copy, or another drive
         return []
     top = root
     refs = ["origin/master"] if run("rev-parse", "-q", "--verify", "origin/master") else []

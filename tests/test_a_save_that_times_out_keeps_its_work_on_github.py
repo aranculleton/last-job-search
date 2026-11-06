@@ -107,7 +107,7 @@ def test_a_chat_that_ends_mid_check_leaves_its_work_for_the_next_landing(copy, t
     for k in ("LJS_PROFILE", "LJS_STATE"):
         env.pop(k, None)
     p = subprocess.run([sys.executable, "-c", run], cwd=chat, env=env, capture_output=True,
-                       text=True, timeout=120)
+                       text=True, encoding="utf-8", errors="replace", timeout=120)
     assert p.returncode == -signal.SIGKILL, p.stdout + p.stderr
     assert "documents/rounds/r7.json" in git(origin, "ls-tree", "-r", "--name-only",
                                              "claude/finding-jobs").stdout

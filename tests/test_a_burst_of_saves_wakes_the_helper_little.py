@@ -85,8 +85,9 @@ def test_during_the_wait_the_work_is_already_on_its_branch(chat, monkeypatch):
     def sleep(_s):
         seen.append(git(chat, "ls-remote", "origin", "refs/heads/claude/page").stdout.split()[:1])
         if len(seen) == 1:
-            got = subprocess.run(["git", "-C", root, "show", "origin/claude/page:profile/notes.md"],
-                                 capture_output=True, text=True)
+            got = subprocess.run(["git", "-C", root, "show",
+                                  "origin/claude/page:profile/notes.md"], capture_output=True,
+                                 text=True, encoding="utf-8", errors="replace")
             seen.append(got.stdout.strip())
 
     land.run_detached(root, "two", check=GREEN, sleep=sleep, finish=_finish(opened))
