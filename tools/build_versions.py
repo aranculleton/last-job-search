@@ -832,7 +832,7 @@ METHODS: dict[str, dict] = {
             (71, "2026-11-06", False, "the weekly bars' dates show every other week and this week's at every width, never cut"),
             (72, "2026-11-06", True, "Settings: employers turned down are one row, learned rules one home grouped by area with what is now part of the app folded, long lists show their first few, Something looks wrong opens in place, What's new shows the version, Smaller and Larger drawn in their size, Advanced only for what costs time; Job sites each by its plain name with one line, a site needing a key says Needs a free key with the steps, and a refused tick says why on its own row"),
         ),
-        "fingerprint": "256dfeead30d2bd6",
+        "fingerprint": "dc2f9a78411042f8",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",
