@@ -1983,7 +1983,13 @@ def referral_ask(name, context, role, link, close=None, work_auth=None,
     return _gate("referral_ask", text, "referral ask", name=name, seniority=seniority)
 
 
-def follow_up(name, thread, reason, close=None, today=None) -> str:
+# Ways to open a follow-up on the person's own last message, each saying which one ("my note
+# from October"): one opener for every one in a batch read as a form letter (2026-11-06).
+FOLLOW_UP_OPENERS = ("following up on my {word}{when}", "a quick follow-up to my {word}{when}",
+                     "coming back to my {word}{when}", "picking up my {word}{when}")
+
+
+def follow_up(name, thread, reason, close=None, today=None, vary: str = "") -> str:
     """A follow-up to the person's own last message, which nobody has answered: it opens on
     that message by its month ("following up on my note from August"), then `reason`, the
     one thing to answer now, never what that message already said. A nudge, held to a
@@ -2002,7 +2008,11 @@ def follow_up(name, thread, reason, close=None, today=None) -> str:
         when = on.strftime("%B") + ("" if on.year == today.year else
                                     " last year" if on.year == today.year - 1 else f" {on.year}")
     word = "email" if state.channel_of(last) == "email" else "note"
-    opener = f"following up on my {word}" + (f" from {when}" if when else "")
+    # `vary` (their contact id) picks the opener, so a batch varies and a redraft does not.
+    import hashlib
+    form = FOLLOW_UP_OPENERS[int(hashlib.sha1(vary.encode()).hexdigest(), 16)
+                             % len(FOLLOW_UP_OPENERS)] if vary else FOLLOW_UP_OPENERS[0]
+    opener = form.format(word=word, when=f" from {when}" if when else "")
     return nudge(name, reason, close=close, opener=opener, thread=thread)
 
 

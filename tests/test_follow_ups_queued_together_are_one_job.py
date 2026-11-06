@@ -175,3 +175,85 @@ def test_no_follow_up_is_drafted_for_someone_living_where_the_persons_rules_excl
     card = next(m for m in model["messages"] if m["contact"] == unknown)
     assert card["where_unknown"] is True, card
     assert not any(m["contact"] in (away, read_away) for m in model["messages"]), model["messages"]
+
+
+# ------------------------------------------------------------------ never asked to write it
+# A person's copy, 2026-11-06: eight follow-ups with nothing new came back as eight questions
+# for the person ("What should the follow-up to ... say?"), once each. What code cannot write is
+# Claude's to write, after looking for something new; the person is asked nothing.
+
+
+def _plain_off(ring):
+    with open(os.path.join(ring.profile, "networking.py"), "a", encoding="utf-8") as fh:
+        fh.write("\nPLAIN_NUDGE = False\n")
+
+
+def test_follow_ups_with_nothing_new_ask_the_person_nothing(ring):
+    _plain_off(ring)
+    d = ring.read("wake1")
+    assert all(land(ring, ring.wake(d)))
+    got = follow_ups(ring, d)
+    assert "0 put to the person" in got and "9 to write here" in got, got
+    assert got.count("look first:") == 9 and "news at" in got and "nobody is asked anything" in got, got
+    import fake_db
+    assert all(fake_db.apply(ring.db, b) for b in batches(got)), got
+    for cid in ring.ids:
+        assert ring.stored("work", "follow_up~" + cid)["data"]["status"] == "running", cid
+    # Claude looked and found nothing new: each is finished saying so, nobody asked.
+    again = follow_ups(ring, d, "--written", "-",
+                       stdin=json.dumps([{"id": cid, "none": "nothing new yet"} for cid in ring.ids]))
+    assert again.startswith("follow-ups: 9 finished"), again
+    assert all(fake_db.apply(ring.db, b) for b in batches(again)), again
+    for cid in ring.ids:
+        doc = ring.stored("work", "follow_up~" + cid)["data"]
+        assert doc["status"] == "done" and doc["result"]["summary"].startswith("No follow-up to "), doc
+        assert not doc.get("needs"), doc
+
+
+def test_a_follow_up_put_to_the_person_before_is_taken_back_and_drafted(ring):
+    """A follow-up an older run put to the person could be answered only from the page: the
+    command takes back its own question and drafts it with the rest (2026-11-06)."""
+    import app
+    asked = ring.ids[0]
+    ring.put("work", "follow_up~" + asked, {
+        "kind": "follow_up", "status": "needs_you", "to": "either", "asked_at": "2026-10-25T16:00:00Z",
+        "title": "Follow up with someone", "args": {"contact": asked}, "claimed_by": None,
+        "note": app.FOLLOW_UP_ASK.format(first="Ana", why="nothing on file to follow up on"),
+        "needs": {"question": "What should the follow-up to Ana say?", "work": "follow_up~" + asked}})
+    d = ring.read("wake1")
+    assert all(land(ring, ring.wake(d)))
+    got = follow_ups(ring, d)
+    assert got.startswith("follow-ups: 9 finished"), got
+    import fake_db
+    assert all(fake_db.apply(ring.db, b) for b in batches(got)), got
+    doc = ring.stored("work", "follow_up~" + asked)["data"]
+    assert doc["status"] == "done" and doc["result"]["summary"].startswith("Your follow-up to "), doc
+    assert not doc.get("needs") and not doc.get("note"), doc
+
+
+def test_one_finish_refused_keeps_the_rest_of_the_batch(ring, monkeypatch):
+    """A name with a full stop in it made one finish read as two sentences, and the refusal
+    lost the writes of every follow-up already finished in the batch (2026-11-06)."""
+    import app
+    import app_model
+    import person
+    d = ring.read("wake1")
+    assert all(land(ring, ring.wake(d)))
+    for k, v in ring.env().items():
+        if k.startswith("LJS_"):
+            monkeypatch.setenv(k, v)
+    person._modules.clear()
+    person._data.clear()
+    monkeypatch.setattr(app, "FOLLOW_UP_DONE", "Ready. Your follow-up to {first} is written.")
+    try:
+        got = app.follow_ups(d, CHAT, app_model.parse_time(NOW), "2026-10-25",
+                             os.path.join(ring.root, "out-refused"))
+    finally:
+        person._modules.clear()
+        person._data.clear()
+    assert len(got["done"]) == 9 and not got["not_finished"], got
+    import fake_db
+    assert all(fake_db.apply(ring.db, b) for b in got["batches"]), got
+    for cid in ring.ids:
+        doc = ring.stored("work", "follow_up~" + cid)["data"]
+        assert doc["status"] == "done" and doc["result"]["summary"] == "Your follow-up is ready to send.", doc

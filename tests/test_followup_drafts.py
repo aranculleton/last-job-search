@@ -61,11 +61,19 @@ def test_a_posting_at_their_employer_is_the_new_reason_for_a_reader_allowed_the_
     assert d["chars"] <= d["limit"] and d["findings"] == []
 
 
+def _openers():
+    sys.path.insert(0, os.path.join(ROOT, "tools", "network"))
+    import compose
+    return compose.FOLLOW_UP_OPENERS
+
+
 def _plain(d, name="Juno"):
     """A short plain follow-up: on our own note by its month, one question, never the role,
     never our note's question again, within the nudge's limit."""
     assert d["status"] in ("ready", "check") and d["source"] == "code", d
-    assert d["text"].startswith("Hi %s, following up on my note from October. " % name), d["text"]
+    # One of the openers on our own note by its month, chosen by contact (compose.FOLLOW_UP_OPENERS).
+    assert any(d["text"].startswith("Hi %s, %s. " % (name, o.format(word="note", when=" from October")))
+               for o in _openers()), d["text"]
     assert d["text"].rstrip().endswith("?") and d["text"].count("?") == 1, d["text"]
     assert "Demand Planning" not in d["text"] and "posted" not in d["text"]
     import learned
@@ -102,8 +110,8 @@ def test_a_recruiter_gets_the_plain_ask_and_a_nudge_with_no_words_logged_is_stil
     recruiter = _contact("fernhill_halloway", title="Talent Acquisition Partner")
     d = F.draft(_nudge_item("fernhill_halloway"), {"fernhill_halloway": recruiter},
                 {"fernhill_halloway": THREAD}, (), {}, [], today=TODAY.isoformat())
-    assert d["status"] in ("ready", "check") and d["text"].startswith(
-        "Hi Juno, following up on my note from October. "), d
+    assert d["status"] in ("ready", "check") and any(d["text"].startswith(
+        "Hi Juno, %s. " % o.format(word="note", when=" from October")) for o in _openers()), d
     assert "your team" not in d["text"]
     # Owed with nothing of ours in the log (their history predates it): a follow-up all the
     # same, never written as a first message.
@@ -118,7 +126,7 @@ def test_the_persons_own_rule_keeps_a_nudge_for_something_new(monkeypatch):
     net = person.module("networking")
     monkeypatch.setattr(net, "PLAIN_NUDGE", False, raising=False)
     d = _draft(_nudge_item("fernhill_halloway"), _contact("fernhill_halloway", title="Data Analyst"))
-    assert d["status"] == "write" and d["who"] == "you" and "your own rule" in d["why"], d
+    assert d["status"] == "write" and d["who"] == "here" and d.get("look") and "your own rule" in d["why"], d   # Claude looks first, never the person (2026-11-06)
     # A posting is still something new, and is still said.
     assert _draft(_nudge_item("fernhill_halloway"), _contact("fernhill_halloway"))["status"] in ("ready", "check")
 
@@ -142,6 +150,28 @@ def test_a_rule_in_their_own_words_sets_it_either_way(monkeypatch):
     assert F.plain_nudge_allowed() is False
     d = _draft(_nudge_item("fernhill_halloway"), _contact("fernhill_halloway", title="Data Analyst"))
     assert d["status"] == "write" and "your own rule" in d["why"]
+
+
+def test_a_rule_about_not_repeating_never_switches_plain_follow_ups_off(monkeypatch):
+    """A rule from 2026-10-21, "never repeat what the earlier message already said; refer back to
+    it and add something new", is about the words of a follow-up. Read as "only follow up with
+    something new", every follow-up with nothing new came back as a question for the person
+    (2026-11-06)."""
+    import learned
+    said = "in a follow-up, never repeat what the earlier message already said"
+    rule = "Never repeat what the earlier message already said; refer back to it and add something new"
+    assert learned.known_settings("messages", said, rule) == []
+    row = {"date": "2026-10-21", "area": "messages", "said": said, "rule": rule, "status": "active"}
+    monkeypatch.setattr(learned, "entries", lambda area=None: [row])
+    monkeypatch.setattr(learned, "superseded", lambda rows=None: {})
+    import person
+    monkeypatch.delattr(person.module("networking"), "PLAIN_NUDGE", raising=False)
+    assert F.plain_nudge_allowed() is True
+    d = _draft(_nudge_item("fernhill_halloway"), _contact("fernhill_halloway", title="Data Analyst"), rows=[])
+    assert d["status"] in ("ready", "check") and d["who"] != "you", d
+    # Said as when one goes, it still does.
+    assert learned.known_settings("messages", "only follow up with something new, and never repeat myself",
+                                  "") == [("profile/networking.py PLAIN_NUDGE", False)]
 
 
 def test_a_stored_draft_the_gate_refuses_is_kept_to_rewrite_with_its_findings():
@@ -269,7 +299,7 @@ def test_a_first_note_waiting_on_a_read_is_the_persons_to_unlock(tmp_path, monke
             "Hi Juno, I build demand forecasts in Manchester.\n")
     d = _draft(_first_note_item("fernhill_halloway"), _contact("fernhill_halloway", status="not_contacted"),
                rows=[], threads=[])
-    assert d["status"] == "write" and d["who"] == "you" and "read of their profile" in d["why"]
+    assert d["status"] == "write" and d["who"] == "read" and "read of their profile" in d["why"]
 
 
 def test_a_queued_note_with_nothing_read_is_refused_by_the_gate_and_kept(tmp_path, monkeypatch):
@@ -280,3 +310,36 @@ def test_a_queued_note_with_nothing_read_is_refused_by_the_gate_and_kept(tmp_pat
                rows=[], threads=[])
     assert d["kind"] == "connection" and d["source"] == "stored"
     assert d["status"] == "write" and any(f.startswith("no_reading") for f in d["findings"])
+
+
+# ------------------------------------------------------------------ the plain follow-up
+# A person's copy, 2026-11-06: with nothing new to say, code's plain follow-up greeted "Hi S.
+# <whole name>", opened every one the same way, and left out what the person's newer rule for
+# messages asked for. Invented people only.
+
+def test_the_plain_follow_up_greets_by_the_given_name_and_varies_its_opener():
+    d = _draft(_nudge_item("fernhill_castellan"), _contact("fernhill_castellan", title="Data Analyst",
+                                                           name="J. Juno Castellan"),
+               rows=[], threads=[dict(THREAD[0], contact_id="fernhill_castellan")])
+    assert d["status"] in ("ready", "check") and d["text"].startswith("Hi Juno, "), d
+    openers = set()
+    for n in range(8):
+        cid = f"fernhill_person_{n}"
+        got = _draft(_nudge_item(cid), _contact(cid, title="Data Analyst"), rows=[],
+                     threads=[dict(THREAD[0], contact_id=cid)])
+        assert got["status"] in ("ready", "check"), got
+        openers.add(got["text"].split(",", 1)[1].split(" from ")[0].strip())
+    assert len(openers) >= 2, openers
+
+
+def test_the_plain_follow_up_goes_to_claude_to_fit_the_persons_own_rules(monkeypatch):
+    import learned
+    rule = {"date": "2026-11-01", "area": "messages", "said": "always say I'm in Manchester and looking "
+            "for analytics roles, and thank them", "rule": "say where I am, the roles I want, and thank them",
+            "status": "active"}
+    monkeypatch.setattr(learned, "entries", lambda area=None: [rule] if area in (None, "messages") else [])
+    monkeypatch.setattr(learned, "superseded", lambda rows=None: {})
+    monkeypatch.setattr(learned, "approved_examples", lambda *a, **k: [])
+    d = _draft(_nudge_item("fernhill_halloway"), _contact("fernhill_halloway", title="Data Analyst"), rows=[])
+    assert d["status"] == "check" and F.RULES_TO_FIT in d["warnings"], d
+    assert d["who"] != "you", d

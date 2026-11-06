@@ -478,6 +478,12 @@ def first_name(name) -> str:
     tokens = [t for w in names for t in _NAME_TOKEN.findall(w)]
     if not tokens:
         return ""
+    # A leading initial before a given name and a surname ("J. Juno Castellan") is skipped:
+    # the name in whole was greeted "Hi J. Juno Castellan" and broke a one-sentence summary on
+    # its full stop (2026-11-06).
+    full = [t for t in tokens if len(t) > 1]
+    if len(tokens[0]) == 1 and len(full) >= 2:
+        return full[0]
     if len(tokens[0]) == 1:
         return " ".join(names).strip(" ,")
     if titles and len(tokens) == 1:

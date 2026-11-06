@@ -37,6 +37,30 @@ make sense to somebody whose repo just received it.
   panel's Open in Chat and Close are now buttons like the rest of the page.
 - **The Chat no longer scrolls back to its first day by itself.** It opens on its last day, and
   earlier messages come only when you tap Show.
+- **Someone who only accepted your request is no longer shown as talking to you.** A contact
+  marked as in conversation, whose log holds only your request and their acceptance with not a
+  word either way, now shows as connected, so nothing asks you for a reply they never wrote.
+- **LinkedIn no longer opens in front of you by itself.** Reading profiles happens in a tab of
+  Claude's own browser that only your tap opens, never the tab you are looking at. Without one,
+  nothing loads by itself, and the card says once what one tap does. Signed out, one To do card
+  says so plainly, with where the reading happens and what to do.
+- **Reading profiles picks itself up again.** A read left unfinished tries again by itself two
+  hours later instead of waiting for the next day.
+- **Someone you drop or close is taken off the list of profiles to read**, whichever way you
+  closed them, and is never read after you tap it on the page.
+- **A note waiting on a profile says why and where.** Its card says Claude reads their profile in
+  its own browser in the Claude app on your computer, then rewrites the note.
+- **"I sent it" on an earlier message never marks a newer one as sent**, including a tap made on
+  an older page that kept no record of which message it was.
+- **You are never asked to write a follow-up.** What Claude's code cannot write, Claude writes,
+  after looking for something new to say: their profile, news and roles at their employer, and
+  your own profile. A question asked before is taken back and drafted.
+- **An old rule about not repeating yourself no longer stops plain follow-ups.**
+- **Plain follow-ups read less alike.** They open in a few different ways, greet someone whose
+  name starts with an initial by their first name, and are fitted to your own rules for messages before you see them.
+- **A follow-up being drafted shows on its card**, however it was asked for, so it no longer
+  looks idle.
+- **One follow-up Claude could not finish no longer loses the others drafted with it.**
 - **Your Brief uses its room.** News shows three points unless you choose another number
   under Edit the brief, each split into what happened and how you can use it rather than one
   long paragraph. Jobs lists a couple more where there is room, with "All" opening the rest.

@@ -228,6 +228,14 @@ _NEWS_WORDS = re.compile(r"\b(?:nothing (?:new|to say)|something new|anything ne
                          r"only with) (?:some )?news)\b", re.I)
 _PLAIN_ON = re.compile(r"\b(?:even|anyway|still|regardless|always)\b", re.I)
 _PLAIN_OFF = re.compile(r"\b(?:only|unless|never|don'?t|do not|stop|no|not|without)\b", re.I)
+# A rule about what a follow-up says, never whether one goes: "never repeat what the earlier
+# message already said; refer back to it and add something new" is about not saying the same
+# thing twice, and read as "only follow up with something new" it turned every plain follow-up
+# into a question for the person (2026-11-06). It sets the switch only where it also says
+# when one goes (only, unless, without).
+_REPEAT_WORDS = re.compile(r"\b(?:repeat\w*|restat\w*|already said|said before|same (?:thing|words|point))\b",
+                           re.I)
+_SEND_GATE = re.compile(r"\b(?:only|unless|without)\b", re.I)
 
 
 def known_settings(area: str, said: str, rule: str) -> list[tuple[str, object]]:
@@ -238,7 +246,8 @@ def known_settings(area: str, said: str, rule: str) -> list[tuple[str, object]]:
     text = f"{said} {rule}"
     out: list[tuple[str, object]] = []
     if area in ("messages", "voice", "people", "other") and _NUDGE_WORDS.search(text) \
-            and _NEWS_WORDS.search(text):
+            and _NEWS_WORDS.search(text) \
+            and not (_REPEAT_WORDS.search(text) and not _SEND_GATE.search(text)):
         # "still nudge with no news" is a yes. Read wrongly, a yes only drafts (nothing is
         # ever sent), while a wrong no leaves the follow-ups unwritten: a yes is read first.
         if _PLAIN_ON.search(text):

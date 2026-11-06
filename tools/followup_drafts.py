@@ -292,10 +292,14 @@ def nudge_from_posting(contact: dict, posting: dict) -> str:
 
 # ---------------------------------------------------------------- drafting
 
-def _new(status, kind="", text="", why="", who="", source="", warnings=(), findings=()):
-    return {"status": status, "kind": kind, "text": text, "why": why, "who": who,
-            "source": source, "warnings": list(warnings), "findings": list(findings),
-            "chars": len(text or ""), "limit": limit_of(kind) if kind else 0}
+def _new(status, kind="", text="", why="", who="", source="", warnings=(), findings=(),
+         look=False):
+    out = {"status": status, "kind": kind, "text": text, "why": why, "who": who,
+           "source": source, "warnings": list(warnings), "findings": list(findings),
+           "chars": len(text or ""), "limit": limit_of(kind) if kind else 0}
+    if look:
+        out["look"] = True
+    return out
 
 
 def draft(item: dict, contacts_by_id: dict, threads_index: dict, tracker, earlier: dict,
@@ -347,7 +351,8 @@ def draft(item: dict, contacts_by_id: dict, threads_index: dict, tracker, earlie
         # to unlock. A reply's is not read: it may answer a message of theirs since overtaken.
         queued, card_only, waits = _queued_note(cid)
         if waits:
-            return _new("write", kind=kind, who="you", source="stored",
+            # Nobody is asked to write it: it is rewritten once their profile is read.
+            return _new("write", kind=kind, who="read", source="stored",
                         why="the note waits on a read of their profile (/network)")
         stored = queued
     old = earlier.get(cid)
@@ -369,7 +374,7 @@ def draft(item: dict, contacts_by_id: dict, threads_index: dict, tracker, earlie
         return refused or _new("write", kind=kind, who="here",
                                why="a reply answers what they said, which is in the log")
     if item.get("kind") == "first_message":
-        return refused or _new("write", kind=kind, who="you",
+        return refused or _new("write", kind=kind, who="here",
                     why="they accepted and nothing has been said: a first message is written "
                         "from what was read about them (/network)")
     if item.get("kind") != "nudge":
@@ -384,7 +389,7 @@ def draft(item: dict, contacts_by_id: dict, threads_index: dict, tracker, earlie
         try:
             text = nudge_from_posting(contact, posting)
         except ValueError as e:
-            return _new("write", kind=kind, who="you",
+            return _new("write", kind=kind, who="here",
                         why="the nudge about %s's %s posting did not pass: %s"
                             % (company, _clean_title(posting.get("title")), _one_line(e)))
         got = _checked(text, kind, name=name, title=title, company=company, contact=cid,
@@ -404,7 +409,7 @@ def draft(item: dict, contacts_by_id: dict, threads_index: dict, tracker, earlie
             text = compose.follow_up(name, msgs, reason % (company or "your company"),
                                      close=close, today=today or None)
         except ValueError as e:
-            return refused or _new("write", kind=kind, who="you",
+            return refused or _new("write", kind=kind, who="here",
                                    why="the follow-up on their offer did not pass: " + _one_line(e))
         got = _checked(text, kind, name=name, title=title, company=company, contact=cid,
                        their_message=their, source="code", today=today)
@@ -417,20 +422,41 @@ def draft(item: dict, contacts_by_id: dict, threads_index: dict, tracker, earlie
     # Nothing new to say: a short plain follow-up all the same, never a refusal that leaves
     # the page's Follow up doing nothing. Code wrote one for 1 of 19 due (2026-11-04).
     if not plain_nudge_allowed():
-        return _new("write", kind=kind, who="you",
+        # Claude looks for something new before anyone is asked anything (LOOK_FIRST); the
+        # person is never asked to write it (2026-11-06).
+        return _new("write", kind=kind, who="here", look=True,
                     why="nothing new to say on file, and your own rule is to follow up only "
                         "with something new (a role they posted, news at %s, something you "
                         "have done since)" % (company or "their employer"))
     try:
         text = plain_nudge(contact or {"contact_id": cid, "name": name}, msgs, today=today)
     except ValueError as e:
-        return _new("write", kind=kind, who="you",
+        return _new("write", kind=kind, who="here", look=True,
                     why="the plain follow-up did not pass: " + _one_line(e))
     got = _checked(text, kind, name=name, title=title, company=company, contact=cid,
                    their_message=their, source="code", today=today)
     if got["status"] != "write":
         got["why"] = "nothing new to say, so a short plain follow-up"
+        if _message_rules():
+            # Code cannot read the person's own rules for messages (where they are, the roles
+            # they want, a thanks): its plain draft goes to Claude to fit them, never as it is
+            # (2026-11-06: the plain follow-up left out what a newer rule asked for).
+            got["status"] = "check"
+            got["warnings"] = list(got.get("warnings") or []) + [RULES_TO_FIT]
     return got
+
+
+RULES_TO_FIT = ("code's plain follow-up has not been fitted to your own rules for messages "
+                "(listed at the top): rewrite it to them")
+
+
+def _message_rules() -> list[str]:
+    """The person's active rules for messages, as `learned.brief` lists them, or []."""
+    try:
+        import learned
+        return [ln for ln in learned.brief("messages").splitlines() if ln.startswith("- ")]
+    except Exception:  # noqa: BLE001  an unreadable learned file sets no rule
+        return []
 
 
 def plain_nudge_allowed() -> bool:
@@ -491,7 +517,7 @@ def plain_nudge(contact: dict, msgs, today: str = "") -> str:
                    if len(learned.content_words(words) & said) < 2), ordered[0][0])
     name = str(contact.get("name") or "")
     if last is not None:
-        return compose.follow_up(name, msgs, reason, today=today or None)
+        return compose.follow_up(name, msgs, reason, today=today or None, vary=cid)
     # Owed, with no words of ours in the log (their history predates it): said as a follow-up
     # all the same, never as a first message.
     word = "email" if state.channel_of(contact) == "email" else "note"
@@ -565,8 +591,8 @@ def _checked(text, kind, name="", title="", company="", contact="", their_messag
         findings, warnings = gate(text, kind, name=name, title=title, company=company,
                                   contact=contact, their_message=their_message,
                                   card_only=card_only, today=today)
-    except ValueError as e:                 # a reaction waiting, an unknown kind
-        return _new("write", kind=kind, who="you", why=_one_line(e), source=source)
+    except ValueError as e:                 # a reaction waiting, an unknown kind: Claude's
+        return _new("write", kind=kind, who="here", why=_one_line(e), source=source)
     if findings:
         return _new("write", kind=kind, who="here", source=source, findings=findings,
                     text=text, why="the gate refused it: " + "; ".join(findings)[:300])
@@ -793,12 +819,44 @@ def context(ids, contacts, threads, today: str, got=None) -> str:
             out.append("  flagged: " + f)
         if d.get("why") and d.get("status") == "write":
             out.append("why code did not: " + d["why"])
+        if d.get("look"):
+            out.append(LOOK_FIRST % {"company": c.get("company") or "their employer"})
+            seen = _what_was_read(cid)
+            if seen:
+                out.append("their profile as read: " + seen)
         out.append("")
     if ids:
         out.append("Write each in the person's voice, claiming nothing the thread or the "
                    "profile does not hold, then: python3 tools/followup_drafts.py check "
                    "<file.json> --pack, with [{\"id\": \"<contact id>\", \"text\": \"...\"}]")
     return "\n".join(out).rstrip() + "\n"
+
+
+# Nothing new on file: what Claude looks at before writing, and what it does when nothing
+# turns up. The person is never asked to write a follow-up (2026-11-06).
+LOOK_FIRST = ("look first: their profile as read (below), news at %(company)s this month, roles "
+              "%(company)s has posted since your note, and anything new in your own profile "
+              "(01-candidate-profile.md). Use the one true thing you find; if nothing turns up, "
+              "write a short plain follow-up, or where your rule is to follow up only with "
+              "something new, pass {\"id\": \"<contact id>\", \"none\": \"nothing new yet\"} "
+              "and nobody is asked anything")
+
+
+def _what_was_read(cid: str) -> str:
+    """Their stored profile read, in a line: headline, where they are, the start of About."""
+    try:
+        import reading
+        got = reading.load(cid) or {}
+    except (ImportError, OSError, ValueError):
+        return ""
+    if not isinstance(got, dict):
+        return ""
+    parts = [str(got.get(k) or "").strip() for k in ("headline", "location")]
+    about = str(got.get("about") or "").strip()
+    line = "; ".join(x for x in parts if x)
+    if about:
+        line = (line + "; about: " if line else "about: ") + about
+    return _clip(line, 300) if line else ""
 
 
 def _clip(text, n: int = 400) -> str:

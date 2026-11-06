@@ -2528,7 +2528,10 @@ def _messages(ctx: Ctx, targets: dict) -> list:
         channel = _channel(c, kind)
         hold = None
         if kind == "first_note" and raw.startswith(reading.WAITS_ON_A_READ):
-            hold = "Written before their profile was read: read it first"
+            # Why it waits and where the reading happens, in a line: "Written before their
+            # profile was read: read it first" on every note drafted in the cloud said neither
+            # (2026-11-06).
+            hold = READ_HOLD.get(ctx._once("reads_now", reading.reads_now), READ_HOLD["browser"])
         mid = f"msg-{cid}"
         from network import state as _st
         subject, body = _st.split_subject(text)
@@ -2654,6 +2657,15 @@ def _app_followups(ctx: Ctx, targets: dict) -> list:
                         "role": role, "text": body, "subject": subject, "msg_kind": "follow_up",
                         "type": "follow_up", "channel": channel, "rev": item["rev"]}
     return out
+
+
+# A first note written before their profile was read, said on its card: why it waits, and
+# where the reading happens (networking.py PROFILE_READS).
+READ_HOLD = {
+    "browser": "Waiting for their profile: Claude reads it in its own browser in the Claude app "
+               "on your computer, then rewrites this note",
+    "paste": "Waiting for their profile: paste it here and Claude rewrites this note",
+}
 
 
 # One plain word for each status, and what the row offers when something is owed by the

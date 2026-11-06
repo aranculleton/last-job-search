@@ -573,8 +573,9 @@ METHODS: dict[str, dict] = {
             (83, "2026-11-05", False, "export.py one-record joins two rows the message log shows are one person (one message, the same day and words, under exactly two rows and nothing on them saying two people) and fills a first-name-only row from the one connection that is them, each change written in the row's notes; the one-record upgrade does it for every older book by itself, so nothing needs redoing here"),
             (84, "2026-11-06", False, "the LinkedIn download is asked for weekly while the person has sent notes or messages in the last two weeks, every two weeks otherwise, or as they chose (EXPORT_REMIND: every two weeks, every month, or not at all), worked out once in export.every_days and said so in /network; put away from its trash, the next ask counts from that day; nothing older needs redoing"),
             (85, "2026-11-06", False, "a logged resume or letter is known by either order of its name (<Prefix>_<ABBR>_Resume, or <Prefix>_Resume_<ABBR> before); nothing older needs redoing"),
+            (86, "2026-11-06", True, "a follow-up code cannot write goes to Claude after it looks for something new (their profile as read, news and roles at their employer, the person's own profile), never to the person as a question, and a question an older run asked is taken back; a rule about not repeating a message never switches plain follow-ups off; a plain follow-up varies its opener, greets a name with a leading initial by the given name and goes to Claude to fit the person's own message rules; a contact whose log holds only our request and their acceptance reads as connected"),
         ),
-        "fingerprint": "25ff5d9a3c1248a3",
+        "fingerprint": "0e51ed6a3bbe66c9",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
@@ -843,8 +844,9 @@ METHODS: dict[str, dict] = {
             (75, "2026-11-06", False, "the Brief takes its compact shape whenever the whole of it does not fit, so a window between 661 and about 800px tall no longer scrolls; News shows the number of points chosen under Edit the brief (3 unless chosen), a point written with \"Use it:\" set in its two parts; Jobs lists up to eight where it has room; Your progress's chart takes its panel's room and each number opens where those things are; a person's trash in To do opens their box under that card; \"In line\" says \"Waiting its turn\""),
             (76, "2026-11-06", False, "the Chat button and its panel sit at the right or the left, chosen by the panel's arrow or Settings > Look, big or small; its Open in Chat and Close are soft pills; earlier messages come only by Show"),
             (77, "2026-11-06", False, "a new text size fits the Brief to the window again: the fit was kept by the window's size alone"),
+            (78, "2026-11-06", True, "profile reading never loads a page in the tab in front of the person: every automatic look and read goes to the page's own tab, opened only by a tap, a sign-out met while reading by itself is one To do card that says where the reading happens, a run left unfinished tries again two hours on, someone dropped on the page is not read; an I sent it tap that kept no version counts only for its own words; a follow-up row shows its person's work being drafted however it was asked for"),
         ),
-        "fingerprint": "de4828a3575e317b",
+        "fingerprint": "3dfb8f4dbc17aa27",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

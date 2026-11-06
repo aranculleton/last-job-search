@@ -123,6 +123,12 @@ def test_greetings_never_use_an_initial_a_title_alone_or_a_credential():
     assert tone.first_name("Dr Smith") == "Dr Smith"
     assert tone.first_name("Ph.D. Jane Doe") == "Jane"
     assert tone.first_name("Halloway, Wren") == "Wren"
+    # A leading initial before a given name and a surname: greeted by the given name, never
+    # "Hi J. Juno Castellan", whose full stop also broke a one-sentence summary (2026-11-06).
+    assert tone.first_name("J. Juno Castellan") == "Juno"
+    assert tone.greeting_name("J Juno Castellan") == "Juno"
+    import app_model
+    assert app_model.first_name("J. Juno Castellan") == "Juno"
 
 
 def test_the_data_driven_rules_are_named():

@@ -243,6 +243,28 @@ def load_contacts(path: str = CONTACTS_CSV) -> list[dict]:
 
 def save_contacts(rows, path: str = CONTACTS_CSV) -> None:
     _write_csv(path, rows, schema.CONTACT_COLUMNS)
+    _unqueue_closed(rows, path)
+
+
+def _unqueue_closed(rows, path: str) -> None:
+    """Everyone the book now holds as dropped or closed is taken off the page's reading list
+    (documents/network/page_reads_queue.json), whichever command closed them: the list kept
+    them, and only the page's own build left them out (2026-11-06). Only for the person's own
+    book, never a copy saved elsewhere."""
+    try:
+        if os.path.abspath(path) != os.path.abspath(person.state("network_contacts.csv")):
+            return
+        gone = {str(r.get("contact_id") or "").strip() for r in rows or ()
+                if str(r.get("status") or "").strip() in schema.TERMINAL}
+        if not gone:
+            return
+        import reading
+        rows_ = reading.page_queue()
+        left = [q for q in rows_ if q["contact"] not in gone]
+        if len(left) != len(rows_):
+            reading._save_queue(left)
+    except Exception:  # noqa: BLE001  the book is saved whatever the list does
+        pass
 
 
 def load_threads(path: str = THREADS_CSV) -> list[dict]:
@@ -1565,7 +1587,7 @@ _A_CALL = re.compile(r"\ACall on \d{4}-\d{2}-\d{2}\b")
 
 def unheard(contact, rows, derived=None) -> bool:
     """Does the row say they are talking when the log, which has rows, holds nothing but our
-    own connection requests, and nothing else says so: no call day on the row and no status
+    own connection requests (and their acceptance), and nothing else says so: no call day on the row and no status
     the person set themselves? An empty log is
     the log behind (`effective_status`), and one the log cannot read at all keeps the row."""
     stored = str(contact.get("status") or "").strip()
@@ -1575,9 +1597,12 @@ def unheard(contact, rows, derived=None) -> bool:
         return False
     if any(said_something(r) or is_call(r) for r in rows):
         return False
-    # Only where the log shows nothing but our own connection requests: a message we sent
-    # means a channel was open, and a conversation may be going on where the log cannot see.
-    if not all(is_request(r) for r in rows if _direction(r)):
+    # Only where the log shows nothing but our own connection requests, and their acceptance
+    # or their own request with no note, none of which says anything: a message we sent means
+    # a channel was open, and a conversation may be going on where the log cannot see. A
+    # request they accepted, with not a word either way, kept "Talking" (2026-11-06).
+    if not all(is_request(r) or is_withdrawal(r) or is_acceptance(r) or is_bare_invitation(r)
+               or is_auto_reply(r) for r in rows if _direction(r)):
         return False
     if _A_CALL.match(" ".join(str(contact.get("next_action") or "").split())):
         return False
