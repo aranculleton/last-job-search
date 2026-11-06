@@ -30,6 +30,8 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **Cancel under a draft's pencil puts your words back.** Words changed by hand and then
+  cancelled stayed changed; now only Done editing keeps them.
 - **A new text size fits your Brief to the window again.** After Smaller or Larger it kept
   its old fit, a little short of the window or past it.
 - **The Chat button can sit on the left.** The arrow at the top of the Chat panel moves it and

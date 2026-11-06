@@ -370,18 +370,18 @@ def test_taps_made_while_the_work_ran_are_applied_before_the_batch_ends(ring):
     assert not [ln for ln in got.get("for_claude") or [] if ln.startswith("late: ")], got
 
 
-def test_follow_ups_tapped_while_a_pass_ran_are_taken_and_their_questions_are_on_their_cards(
+def test_follow_ups_tapped_while_a_pass_ran_are_taken_and_written_by_claude(
         ring):
     """Two follow-ups queued while a pass of the helper ran sat on "starts in a moment" for
     minutes after it ended; it said each waited on a question, but neither was taken and no
     card asked anything (the maintainer's copy, 2026-11-05). The pass's end names them until
-    they are taken; taken, one command drafts them; and each that needs the person waits as a
-    question on its own card, its words where the card shows them."""
+    they are taken; taken, one command drafts them, and one with nothing new to say is
+    Claude's to write, never a question for the person."""
     import fake_db
     import subprocess
     import app_state
     import repo_files
-    # The person's own rule: no follow-up with nothing new to say, so code asks them instead.
+    # The person's own rule: no follow-up with nothing new to say, so code cannot write it.
     with open(os.path.join(ring.profile, "networking.py"), "a", encoding="utf-8") as fh:
         fh.write("\nPLAIN_NUDGE = False\n")
     ids = app_state.nudges_due(ring.state, 2)
@@ -409,14 +409,14 @@ def test_follow_ups_tapped_while_a_pass_ran_are_taken_and_their_questions_are_on
                           "--today", "2026-10-25"], env=ring.env(LJS_PAGE_MIRROR=ring.mirror),
                          capture_output=True, encoding="utf-8", timeout=120)
     assert ran.returncode == 0, ran.stdout + ran.stderr
-    assert "2 put to the person as a question" in ran.stdout, ran.stdout
+    # With nothing new to say they are Claude's to write, never the person's to answer (the
+    # maintainer, 2026-11-06: "Asking the person should never be the fallback").
+    assert "0 put to the person as a question" in ran.stdout and "2 to write here" in ran.stdout, ran.stdout
     for b in [ln for ln in ran.stdout.splitlines() if ln.endswith(".json")]:
         assert fake_db.apply(ring.db, b), b
     for w in work:
         item = ring.stored("work", w)["data"]
-        assert item["status"] == "needs_you" and item["note"].startswith(
-            "What should the follow-up to "), item
-        assert item["needs"]["question"] == item["note"] and item["needs"]["work"] == w, item
+        assert item["status"] != "needs_you" and not item.get("needs"), item
     # Nothing is left for the pass to take: its end names nothing.
     got = end(ring, d, "2026-10-25T18:09:00Z")
     assert not [ln for ln in got.get("for_claude") or [] if ln.startswith("late: ")], got

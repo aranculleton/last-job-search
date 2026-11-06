@@ -846,8 +846,9 @@ METHODS: dict[str, dict] = {
             (76, "2026-11-06", False, "the Chat button and its panel sit at the right or the left, chosen by the panel's arrow or Settings > Look, big or small; its Open in Chat and Close are soft pills; earlier messages come only by Show"),
             (77, "2026-11-06", False, "a new text size fits the Brief to the window again: the fit was kept by the window's size alone"),
             (78, "2026-11-06", True, "profile reading never loads a page in the tab in front of the person: every automatic look and read goes to the page's own tab, opened only by a tap, a sign-out met while reading by itself is one To do card that says where the reading happens, a run left unfinished tries again two hours on, someone dropped on the page is not read; an I sent it tap that kept no version counts only for its own words; a follow-up row shows its person's work being drafted however it was asked for"),
+            (79, "2026-11-06", False, "Cancel under a draft's pencil puts back the words edited by hand; Done editing keeps them"),
         ),
-        "fingerprint": "3dfb8f4dbc17aa27",
+        "fingerprint": "3a94f0d668edbbe6",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

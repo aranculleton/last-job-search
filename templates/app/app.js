@@ -213,6 +213,8 @@
     lastTap: null,
     // A draft's pencil box open with its words as a field (Edit the words yourself).
     penEdit: new Set(),
+    // The words as they were when Edit the words yourself was tapped: Cancel puts them back.
+    penBefore: new Map(),
     cardThreads: new Map(),
     views: new Map(),
     caps: {},
@@ -6883,11 +6885,14 @@
           btn("Ask Claude", () => askClaude(askField.value), {kind: "primary", lead: true, small: true, key: "pengo:" + m.id, aria: "Ask Claude to change the " + what + " to " + name, wakes: true}),
           costEl({state: WORK_COST.tweak === undefined ? 1 : WORK_COST.tweak}, "tweak", "cost-pen-" + seg(m.id)),
           // A word or two changed by hand: the words themselves become the field, free.
-          btn(editing ? "Done editing" : "Edit the words yourself", () => { if (S.penEdit.has(m.id)) S.penEdit.delete(m.id); else S.penEdit.add(m.id); scheduleRender(); },
+          btn(editing ? "Done editing" : "Edit the words yourself", () => { if (S.penEdit.has(m.id)) { S.penEdit.delete(m.id); S.penBefore.delete(m.id); } else { S.penEdit.add(m.id); S.penBefore.set(m.id, draftGet(penKey)); } scheduleRender(); },
             {kind: "secondary", small: true, key: "penedit:" + m.id, aria: (editing ? "Done editing the " : "Edit the words of the ") + what + " to " + name, pressed: editing}),
           // Closed without asking anything: what was typed in the box waits for next time
           // (the maintainer, 2026-11-05: "i cant see a way to close that").
-          btn("Cancel", () => { S.penOpen.delete(m.id); S.penEdit.delete(m.id); scheduleRender(); },
+          // Cancel undoes what was typed into the words since Edit the words yourself (the
+          // maintainer, 2026-11-06: "when i ... change/delete the words, and then cancel, it
+          // still shows the edits i made"); Done editing keeps them.
+          btn("Cancel", () => { if (S.penBefore.has(m.id)) { draftSet(penKey, S.penBefore.get(m.id)); S.penBefore.delete(m.id); } S.penOpen.delete(m.id); S.penEdit.delete(m.id); scheduleRender(); },
             {kind: "secondary", small: true, key: "penx:" + m.id, aria: "Close the box: no change to the " + what + " to " + name}))) : null,
       held ? h("p", {class: "small hint-line msg-check msg-held", "data-k": "held:" + m.id}, "Not ready to send: " + lc1(held) + ".") : null,
       sendsLine(m),
