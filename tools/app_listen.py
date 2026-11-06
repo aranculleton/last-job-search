@@ -504,14 +504,17 @@ def decide(db: dict, chat: str, out_dir: str, now: dt.datetime | None = None,
         return {"role": "listener", "lines": lines, "batches": w.save("listen"), "record": new}
     else:
         _remember(rec, now)
-        return {"role": "other", "batches": [], "record": rec,
-                "lines": [f"listen: another chat answers the page (it last answered "
-                          f"{_ago(rec.get('answered_at') or rec.get('since'), now)}). This "
-                          "chat neither publishes the page nor watches it, and says nothing "
-                          "about that to the person.",
-                          "listen: if this chat watches the page from before (ArtifactComments, "
-                          "action watch with no url, lists this chat's watches), stop that "
-                          "watch: action watch, url <the page>, on: false."]}
+        said = [f"listen: another chat answers the page (it last answered "
+                f"{_ago(rec.get('answered_at') or rec.get('since'), now)}). This "
+                "chat neither publishes the page nor watches it, and says nothing "
+                "about that to the person.",
+                "listen: if this chat watches the page from before (ArtifactComments, "
+                "action watch with no url, lists this chat's watches), stop that "
+                "watch: action watch, url <the page>, on: false."]
+        if handed_on(rec, {chat}):
+            # The helper the fresh one took over from: no more work from here (retired_here).
+            said.append(RETIRED_LINE.format(chat=chat))
+        return {"role": "other", "batches": [], "record": rec, "lines": said}
     _remember(rec, now)
     return {"role": "listener", "lines": lines, "batches": w.save("listen"), "record": rec}
 
@@ -674,6 +677,26 @@ def handed_on(rec: dict, mine: set) -> bool:
             and "handed_by" not in rec:
         return True
     return any(c in (seen().get("handed_on") or {}) for c in mine)
+
+
+# A helper that has handed the page on stays open until it is put away, and any message,
+# notification or ring meanwhile ran a whole turn on a nearly full chat, which can compact it:
+# one handed over at 762,632 tokens against a compaction point of 784,000 (the maintainer's
+# copy, 2026-11-06). Once it knows another chat answers (its own check-in, kept here), every
+# turn is this one command and one line (the app's hook says so before anything is read), and
+# it puts itself away once its own save has landed (app.py retired).
+RETIRED_LINE = ("listen: this chat handed the page to a fresh helper and does no more work: "
+                "read nothing, run python3 tools/app.py retired --chat {chat}, do only what it "
+                "prints, and end the turn with one line.")
+
+
+def retired_here(chat: str = "") -> bool:
+    """Has this chat handed the page on, by what this checkout knows (no read of the page):
+    it handed it over itself, or its last check-in found the helper it started answering."""
+    me = this_chat(chat)
+    if not me:
+        return False
+    return handed_on(seen().get("listener") or {}, {me})
 
 
 def handed_here(chat: str, now: dt.datetime) -> None:
