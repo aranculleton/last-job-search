@@ -2757,17 +2757,20 @@ def queue_own_tests(root: str | None = None, today: dt.date | None = None) -> bo
         if got.get("sync") != sha:
             got = {"sync": sha, "ids": [], "day": day, "since": {}, "elsewhere": False}
         ids = [i for i in (got.get("ids") or []) if isinstance(i, str)]
-        if "own-tests" in ids and not got.get("started"):
+        if "own-tests" in ids:
+            # Listed for this update already: waiting, started (a background agent may be on
+            # it now), or another chat's. Left exactly as it is: popping the start had the hook
+            # hold the next chat for a second agent on the same tests, and every chat's
+            # "not now" for the day was deleted (the release review, 2026-11-06).
             return True
-        if "own-tests" not in ids:
-            ids.append("own-tests")
+        started = got.get("started") if isinstance(got.get("started"), dict) else None
+        if started is not None and not isinstance(started.get("ids"), list):
+            started["ids"] = list(ids)   # the start covers what was listed then, not this
+        ids.append("own-tests")
         got["ids"] = ids
         since = got.get("since") if isinstance(got.get("since"), dict) else {}
         since.setdefault("own-tests", day)
         got["since"] = since
-        got["elsewhere"] = False
-        got.pop("started", None)
-        got.pop("not_now", None)
         return _save_listed(got)
     except Exception:  # noqa: BLE001  a landing must never stop on it
         return False
@@ -2836,7 +2839,12 @@ def unstarted(today: dt.date | None = None, chat: str = "") -> list[tuple[str, s
             return []
         started = got.get("started") if isinstance(got.get("started"), dict) else None
         if started and (str(got.get("day") or day) < day or started.get("day") == day):
-            return []
+            # A start covers what was listed when it was made: own-tests queued after it
+            # (queue_own_tests) is owed on its own, and nothing the start took is owed twice.
+            covered = started.get("ids")
+            if not isinstance(covered, list):
+                return []
+            ids = [i for i in ids if i not in covered]
         done = _done_since(str(got.get("sync") or ""))
         since = got.get("since") if isinstance(got.get("since"), dict) else {}
         known = {u.id: u for u in REGISTRY}

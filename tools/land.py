@@ -331,11 +331,16 @@ def _take_lock(root: str) -> str:
                 try:
                     os.link(aside, p)
                     os.remove(aside)
+                except FileExistsError:
+                    pass                    # a third landing holds it now: never over it
                 except (OSError, AttributeError):
-                    try:
-                        os.rename(aside, p)
-                    except OSError:
-                        pass
+                    # No links here (some file systems): a rename, only while nothing is
+                    # there, since on POSIX a rename replaces what it lands on.
+                    if not os.path.exists(p):
+                        try:
+                            os.rename(aside, p)
+                        except OSError:
+                            pass
                 return ""
             try:
                 os.remove(aside)
@@ -395,7 +400,12 @@ def _hand_over(root: str, token: str, pid) -> None:
     if not d or not token or token == "-":
         return
     _MINE.pop(_lock_key(d), None)
-    _restamp(os.path.join(d, LOCK_FILE), str(pid if isinstance(pid, int) else 0), token)
+    p = os.path.join(d, LOCK_FILE)
+    words = _lock_words(p)
+    # Only the lock this run took: the process started may have ended and let it go, and
+    # another landing taken it, already.
+    if len(words) >= 3 and words[2] == token:
+        _restamp(p, str(pid if isinstance(pid, int) else 0), token)
 
 
 def _adopt(root: str, token: str) -> str:
@@ -592,24 +602,61 @@ def _set_aside(root: str, names: list[str]) -> str:
     return p
 
 
+# The longest a landing check may run. The lock is kept alive while it runs (_beat), so a
+# check that hung would otherwise hold every save in the copy for ever; before the lock was
+# kept alive it went stale after LOCK_STALE_S, and this keeps that bound (the release review,
+# 2026-11-06).
+CHECK_DEADLINE_S = LOCK_STALE_S
+CHECK_STOPPED = ("land: the check ran past %d minute(s) and was stopped; nothing was pushed "
+                 "to master, and the work is kept\n")
+
+
+def _stop(p: subprocess.Popen) -> None:
+    """End the check and what it started: its process group on POSIX, the process elsewhere."""
+    try:
+        if os.name == "posix":
+            import signal
+            os.killpg(p.pid, signal.SIGKILL)
+        else:
+            p.kill()
+    except OSError:
+        try:
+            p.kill()
+        except OSError:
+            pass
+
+
 def _run_check(root: str, cmd: list[str], aside: str = "") -> tuple[int, str]:
     """The landing check: (its exit code, what it printed). The lock's stamp is moved on each
-    minute it runs, so a long check is never taken for a landing killed part way. `aside`:
-    the file naming the person's own tests an update broke, which the check sets aside."""
+    minute it runs, so a long check is never taken for a landing killed part way, and past
+    CHECK_DEADLINE_S it is stopped and counts as not green. `aside`: the file naming the
+    person's own tests an update broke, which the check sets aside."""
     env = dict(os.environ)
     env.pop(ASIDE_ENV, None)
     if aside:
         env[ASIDE_ENV] = aside
+    # A process group of its own, so a stop ends pytest's workers with it.
+    kw = {"start_new_session": True} if os.name == "posix" else \
+        {"creationflags": getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)}
     try:
         p = subprocess.Popen(cmd, cwd=root, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                              text=True, encoding="utf-8", errors="replace",
-                             stdin=subprocess.DEVNULL, env=env)
+                             stdin=subprocess.DEVNULL, env=env, **kw)
     except OSError as e:
         return 1, "the check could not start: %s\n" % e
     out = err = ""
+    until = time.monotonic() + CHECK_DEADLINE_S
     while True:
+        left = until - time.monotonic()
+        if left <= 0:
+            _stop(p)
+            try:
+                out, err = p.communicate(timeout=30)
+            except (subprocess.TimeoutExpired, ValueError):
+                out, err = "", ""
+            return 1, (out or "") + (err or "") + CHECK_STOPPED % max(1, CHECK_DEADLINE_S // 60)
         try:
-            out, err = p.communicate(timeout=BEAT_S)
+            out, err = p.communicate(timeout=min(BEAT_S, left))
             break
         except subprocess.TimeoutExpired:
             _beat(root)
@@ -1408,8 +1455,11 @@ def land(root: str = ROOT, message: str = "", check=None, sleep=time.sleep) -> i
             print("land: work asked for while this ran is saved too; where steps follow, they "
                   "replace any above")
             code = _land(root, msg or message, check, sleep)
-    if not inside and code == 0 and _asked(root):
-        _next(root)            # asked in the moment this one let go: the next one, started now
+    if not inside and _asked(root):
+        # Asked in the moment this one let go, or while it ran and it stopped short: another
+        # chat was told its work is saved too, so the next one is started for it now, whatever
+        # this one's own end (its result kept for a chat in RESULT_FILE).
+        _next(root)
     # Work written while this ran (a second turn, a quick tap) was in no commit, and nothing
     # started a landing for it once this one ended (the stranger audit, 2026-11-03, X-62).
     try:
@@ -1724,7 +1774,17 @@ def wanted(root: str = ROOT) -> bool:
             began = os.path.getmtime(p)
         except OSError:
             return False
-    return time.time() - began < LOCK_STALE_S
+    age = time.time() - began
+    if age >= LOCK_STALE_S:
+        return False
+    # Owned only while a landing is alive to take it (or for the moment one takes to start):
+    # a save queued behind one that then stopped, or behind an older version's landing that
+    # never reads the queue, sat here unowned while the hook held nobody for it, and the work
+    # could go with the chat's computer (the release review, 2026-11-06).
+    return age < WANTED_GRACE_S or landing(root)
+
+
+WANTED_GRACE_S = 60
 
 
 def _mark(root: str, name: str, text: str = "") -> str:
