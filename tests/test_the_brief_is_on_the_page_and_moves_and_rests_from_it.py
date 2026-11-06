@@ -152,16 +152,19 @@ def test_a_page_left_behind_by_an_update_is_published_again_by_the_brief(monkeyp
 
 def test_the_brief_moves_to_new_days_and_a_time_and_a_chat_moves_the_task(tmp_path):
     s = Search(tmp_path)
+    # The time picked is kept to the minute, on the hour too (the maintainer, 2026-11-06: the
+    # app turned 8:00 into 7:38 without saying so).
     out = s.run("routines.py", "move", "--days", "tue,fri", "--time", "9:00")
-    assert "tell them: Your brief comes Tuesdays and Fridays at 8:38 from now on." in out
+    assert "tell them: Your brief comes Tuesdays and Fridays at 9:00 from now on." in out
     r = next(x for x in s.registry()["routines"] if x["key"] == "morning_brief")
-    assert r["cron"] == "CRON_TZ=Europe/London 38 8 * * 2,5"
+    assert r["cron"] == "CRON_TZ=Europe/London 0 9 * * 2,5"
+    assert r["asked"] == {"time": "09:00", "by": "person"}
     assert s.run("routines.py", "check").strip() == "routines.json: clean"
     owed = json.loads(s.run("routines.py", "calls"))
     assert owed == [{"tool": "update_trigger", "for": "move", "n": 1,
                      "args": {"trigger_id": "trig_EXAMPLEBRIEF",
-                              "cron_expression": "CRON_TZ=Europe/London 38 8 * * 2,5"},
-                     "why": "the brief now comes Tuesdays and Fridays at 8:38"}]
+                              "cron_expression": "CRON_TZ=Europe/London 0 9 * * 2,5"},
+                     "why": "the brief now comes Tuesdays and Fridays at 9:00"}]
     # Moved twice before a chat made the call: one call, the newest.
     s.run("routines.py", "move", "--time", "18:15")
     owed = json.loads(s.run("routines.py", "calls"))
@@ -205,11 +208,14 @@ def test_the_brief_turns_off_and_on_again_on_its_own_days_and_nothing_else_stops
     assert next(x for x in s.registry()["routines"] if x["key"] == "morning_brief")["off"] is True
 
 
-def test_a_time_off_the_hour_is_kept_and_a_bad_one_changes_nothing(tmp_path):
+def test_a_time_picked_is_kept_to_the_minute_and_a_bad_one_changes_nothing(tmp_path):
     import routines
     assert routines.cron_for("1,4", "07:38", "Europe/London")["cron"] == \
         "CRON_TZ=Europe/London 38 7 * * 1,4"
-    assert routines.cron_for("Mondays and Thursdays", "8am", "Europe/London")["time"] == "07:38"
+    # A time on the hour is kept as picked: only the app's own default is moved off it.
+    assert routines.cron_for("Mondays and Thursdays", "8am", "Europe/London")["time"] == "08:00"
+    assert routines.cron_for("1,4", "8:30", "Europe/London")["cron"] == \
+        "CRON_TZ=Europe/London 30 8 * * 1,4"
     assert routines.read_cron("CRON_TZ=Europe/London 56 7 * * 1-5")["days"] == [1, 2, 3, 4, 5]
     s = Search(tmp_path)
     before = s.registry()

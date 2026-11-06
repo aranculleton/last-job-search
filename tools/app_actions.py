@@ -2514,8 +2514,10 @@ def _brief_move(r: Run) -> dict:
     import routines
     cron = r.words("cron")
     days = r.value.get("days")
+    asked = r.value.get("asked") if isinstance(r.value.get("asked"), dict) else None
     try:
-        got = routines.move(cron=cron) if cron else routines.move(
+        # The time picked is kept to the minute (routines.cron_for): 8:00 stays 8:00.
+        got = routines.move(cron=cron, asked=asked) if cron else routines.move(
             days=days if days not in (None, "", []) else None, time=r.words("time") or None,
             zone=r.words("zone") or "")
     except ValueError as e:
@@ -2524,7 +2526,8 @@ def _brief_move(r: Run) -> dict:
         return {"note": f"Your brief already comes {got['when']}.", "undo": None}
     return {"note": got["say"] + _waiting(got),
             "undo": {"action": "brief.move", "target": dict(r.target),
-                     "value": {"cron": got["old"]}} if got.get("old") else None}
+                     "value": {"cron": got["old"], "asked": got.get("old_asked")}}
+            if got.get("old") else None}
 
 
 def _brief_pause(r: Run) -> dict:

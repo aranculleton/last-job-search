@@ -16,10 +16,11 @@ whenever ci_local.sh runs, and the app's tests check the example's.
                                              # to the chat that answers it (--page-chat, else
                                              # the one this copy last saw)
     python3 tools/routines.py default        # the brief's days, time and zone, and the line
-    python3 tools/routines.py record --session <id> --trigger <id> [--cron "<cron>"] [--own-chat]
+    python3 tools/routines.py record --session <id> --trigger <id> [--cron "<cron>"] [--asked HH:MM] [--own-chat]
                                              # write the brief made into profile/routines.json
-    python3 tools/routines.py move --days weekdays --time 07:38
-                                             # the brief's new days and time, written here
+    python3 tools/routines.py move --days weekdays --time 08:00
+                                             # the brief's new days and time, written here,
+                                             # the time kept to the minute
     python3 tools/routines.py pause --until <YYYY-MM-DD> | resume
                                              # a break: the brief and every follow-up held
     python3 tools/routines.py off | on       # the brief alone turned off, or on again
@@ -36,7 +37,10 @@ queues the change (its actions brief.move, brief.pause, brief.resume, brief.off,
 the chat that applies them, or the next one that starts, makes the calls. `calls` first
 mends what code can (heal: a break whose day passed, a zone this computer does not know, a
 brief that did not come). Setup turns the brief on, every day at 7:38 their time unless they
-choose other days; the bell on their Brief, or Settings, changes it or turns it off.
+choose other days (the app's own default, moved off 8:00 and said so); the bell on their
+Brief, or Settings, changes it or turns it off, and a time picked there is kept to the minute.
+The page shows when it really comes (real_time): the scheduler's late start where a listing
+reports one (saw), and why, in one line.
 
 Three set-ups are recognised (`setup` in the registry; automation/README.md
 walks through the first two):
@@ -237,6 +241,7 @@ def listing(got) -> tuple[list, bool]:
         out.append({"id": t.get("id", ""), "name": t.get("name", ""), "prompt": prompt,
                     "enabled": t.get("enabled", True), "last_run": t.get("last_run") or {},
                     "cron": t.get("cron_expression", ""),
+                    "next_run_at": t.get("next_run_at") or "",
                     "session": t.get("persistent_session_id") or ""})
     return out, more
 
@@ -508,12 +513,20 @@ def _cron_days(days) -> str:
     return "*" if d == list(range(7)) else ",".join(str(x) for x in d)
 
 
+def _back(name: str = BRIEF_NAME) -> int:
+    """How many minutes before the hour Claude's scheduling guidance moves a task called
+    `name`: the letters in its name, mod 29, plus 1 (create_trigger). 22 for the brief."""
+    return sum(c.isalpha() for c in name) % 29 + 1
+
+
 def brief_minute(name: str = BRIEF_NAME, hour: int = 8) -> tuple[int, int]:
-    """(hour, minute) for a brief meant for `hour` o'clock: moved off the hour by the
-    scheduler's own rule (letters in the task's name, mod 29, plus 1, minutes earlier),
-    because most tasks start on the hour and those can start late. 8:00 is 7:38."""
-    back = sum(c.isalpha() for c in name) % 29 + 1
-    return (hour - 1, 60 - back)
+    """(hour, minute) for the app's own default brief meant for `hour` o'clock: moved off the
+    hour by Claude's scheduling guidance (letters in the task's name, mod 29, plus 1, minutes
+    earlier), because a run set on the hour can start several minutes late (code.claude.com
+    docs/en/routines, "Runs on the hour"). 8:00 is 7:38. Only the app's default is moved: a
+    time the person picks is kept to the minute (cron_for), and the page says why a moved
+    one comes when it does (real_time)."""
+    return (hour - 1, 60 - _back(name))
 
 
 def home_zone() -> str:
@@ -577,7 +590,9 @@ def default(zone: str = "", days=BRIEF_DAYS, hour: int = 8, page: bool | None = 
     """The brief as it is first made, with no questions: every day at 7:38 their time, or
     5:38 where 7:38 falls in the scheduler's slow window (US Pacific and Mountain, X-69). Its
     line says where it comes and in whose time: the page's Brief, or with no page this chat,
-    which the person can change by saying so (X-11, X-1)."""
+    which the person can change by saying so (X-11, X-1), and why it is not 8:00, since the
+    app moved it (the maintainer, 2026-11-06: "the app turns 8:00 into 7:38 without saying
+    so"). `asked` is the time it stands for, recorded beside the one set (record)."""
     zone = zone or home_zone()
     if zone and not zone_ok(zone):
         zone = ""
@@ -586,13 +601,15 @@ def default(zone: str = "", days=BRIEF_DAYS, hour: int = 8, page: bool | None = 
         h = next((x for x in (h - 2, h + 2) if not _slow(zone, x, m)), h)
     named = day_words(days)
     page = has_page() if page is None else page
+    asked = f"{hour:02d}:00"
+    why = "It comes " + moved_why(asked, f"{h:02d}:{m:02d}") + "."
     at = f"{in_sentence(named)} at {h}:{m:02d}" + (f", {city_of(zone)} time" if zone else "")
-    say = (f"Your brief is on: {at}, on your page's Brief. Change it or turn it off from the "
-           f"bell there." if page else
-           f"Your morning brief comes to this chat {at}. Say \"move my brief\" or \"stop my "
-           f"brief\" in any chat to change it.")
+    say = (f"Your brief is on: {at}, on your page's Brief. {why} Change it or turn it off "
+           f"from the bell there." if page else
+           f"Your morning brief comes to this chat {at}. {why} Say \"move my brief\" or \"stop "
+           f"my brief\" in any chat to change it.")
     return {"zone": zone, "cron": f"CRON_TZ={zone} {m} {h} * * {_cron_days(days)}" if zone else "",
-            "when": f"{named} at {h}:{m:02d}", "say": say}
+            "when": f"{named} at {h}:{m:02d}", "say": say, "asked": asked}
 
 
 def _page_chat() -> str:
@@ -635,7 +652,7 @@ def plan(owner: str, name: str, zone: str = "", now: datetime.datetime | None = 
                         "run_once_at": first.strftime("%Y-%m-%dT%H:%M:%SZ"),
                         "prompt": stub_text, "initiation": initiation},
         "record": (f"python3 tools/routines.py record --session {sid} --trigger "
-                   f"<the task's id> --cron \"{d['cron']}\""),
+                   f"<the task's id> --cron \"{d['cron']}\" --asked {d['asked']}"),
         "say": d["say"], "zone": d["zone"], "chat": chat}
     return out
 
@@ -649,6 +666,8 @@ def where_line(reg: dict) -> str:
     got = read_cron(r.get("cron") or "")
     if not got.get("when"):
         return ""
+    real = real_time(r)
+    got["when"] = real.get("when") or got["when"]
     zone = got.get("zone", "")
     city = f", {city_of(zone)} time" if zone_ok(zone) else ""
     page = has_page()
@@ -656,7 +675,8 @@ def where_line(reg: dict) -> str:
     where += " and to your page's Brief" if page else ""
     change = ("Change it from the bell on your Brief." if page else
               "Say \"move my brief\" or \"stop my brief\" in any chat to change it.")
-    return f"Your brief comes {where} {in_sentence(got['when'])}{city}. {change}"
+    why = (" " + real["said"]) if real.get("said") else ""
+    return f"Your brief comes {where} {in_sentence(got['when'])}{city}.{why} {change}"
 
 
 def where_once(write: bool = False, path: str | None = None) -> str:
@@ -727,12 +747,16 @@ def reminded(trigger: str, path: str | None = None) -> str:
 
 
 def record(session: str, trigger: str, cron: str = "", path: str | None = None,
-           setup: str = "chat_per_briefing", title: str = "", own_chat: bool = False) -> str:
+           setup: str = "chat_per_briefing", title: str = "", own_chat: bool = False,
+           asked: str = "") -> str:
     """Write the brief just made into profile/routines.json, keeping every other task. The
     chat it runs in is named only when it was made for it; bound to the chat that answers
     the page, it is that chat's id alone. In the older ops set-up it is named only with
     `own_chat` (the brief moved out of a lost ops chat): a chat recording a re-listed id
-    names itself, and a `chat` there would stop the relay to the phone."""
+    names itself, and a `chat` there would stop the relay to the phone. `asked` is the time
+    the app's default stood for ("08:00" for 7:38, plan() passes it), kept beside the cron so
+    the page says why it comes when it does; a brief moved to another chat on the same
+    schedule keeps what was asked before."""
     if path is None:
         import person
         path = person.path("routines.json")
@@ -741,7 +765,9 @@ def record(session: str, trigger: str, cron: str = "", path: str | None = None,
     except (OSError, ValueError):
         reg = {}
     reg.pop("_about", None) if reg.get("_about", "").startswith("The example person's") else None
-    cron = cron or default()["cron"]
+    if not cron:
+        d = default()
+        cron, asked = d["cron"], asked or d["asked"]
     m = re.match(r"CRON_TZ=(\S+) ", cron)
     if m and not zone_ok(m.group(1)):
         raise ValueError(f"{m.group(1)!r} is not a time zone this computer knows; make the task "
@@ -758,6 +784,11 @@ def record(session: str, trigger: str, cron: str = "", path: str | None = None,
     was = next((r for r in reg.get("routines") or [] if _is_brief(r)), None) or {}
     if was.get("off"):
         entry["off"] = True
+    if re.fullmatch(r"\d{1,2}:\d{2}", asked or ""):
+        h, m = _clock(asked)
+        entry["asked"] = {"time": f"{h:02d}:{m:02d}", "by": "app"}
+    elif isinstance(was.get("asked"), dict) and was.get("cron") == cron:
+        entry["asked"] = was["asked"]
     # The day it was made, so a brief due before it existed is never read as one that did not
     # come (overdue); and its prompt is the stub with the line that gets the copy (plan()).
     entry["made"] = was.get("made") or datetime.date.today().isoformat()
@@ -923,18 +954,14 @@ def _clock(value) -> tuple[int, int]:
 
 
 def cron_for(days, time, zone: str, name: str = BRIEF_NAME) -> dict:
-    """The cron for the brief on these days at this time, in their zone, and the words for
-    it. A time on the hour or half hour moves a few minutes earlier, by the scheduler's own
-    rule (brief_minute), because tasks on the hour start late."""
+    """The cron for the brief on these days at exactly this time, in their zone, and the words
+    for it. A time the person picks is kept to the minute, on the hour too: the app moved 8:00
+    to 7:38 without saying so, and the person's choice wins over the scheduling guidance
+    (the maintainer, 2026-11-06). Only the app's own default is moved (brief_minute)."""
     d = _days(days)
     if not d:
         raise ValueError("name at least one day")
     h, m = _clock(time)
-    back = sum(c.isalpha() for c in name) % 29 + 1
-    if m == 0 and h != 0:                       # midnight is left as asked
-        h, m = h - 1, 60 - back
-    elif m == 30:
-        m = 30 - back
     return {"cron": f"CRON_TZ={zone} {m} {h} * * {_cron_days(d)}",
             "when": f"{day_words(d)} at {h}:{m:02d}", "days": d, "time": f"{h:02d}:{m:02d}"}
 
@@ -959,6 +986,139 @@ def read_cron(cron: str) -> dict:
     h, mi = int(m.group(3)), int(m.group(2))
     return {"zone": m.group(1), "days": days, "time": f"{h:02d}:{mi:02d}",
             "when": (day_words(days) if days else "") + f" at {h}:{mi:02d}"}
+
+
+def _hm(hhmm: str) -> tuple[int, int]:
+    h, m = str(hhmm).split(":")
+    return int(h), int(m)
+
+
+def _say_time(hhmm: str) -> str:
+    """"07:38" as a person says it: "7:38"."""
+    h, m = _hm(hhmm)
+    return f"{h}:{m:02d}"
+
+
+def moved_why(asked: str, set_at: str) -> str:
+    """Why the app set `set_at` for a brief asked for at `asked` ("HH:MM"), as the end of a
+    sentence: a few minutes before the hour or half hour, or hours earlier, out of the
+    scheduler's slow morning window."""
+    ah, am = _hm(asked)
+    sh, sm = _hm(set_at)
+    gap = ((ah * 60 + am) - (sh * 60 + sm)) % 1440
+    if gap >= 60:
+        return (f"earlier than {_say_time(asked)}, outside the hours when the service often "
+                "starts late")
+    return ("a few minutes before the " + ("half hour" if am == 30 else "hour")
+            + ", when the service is less busy")
+
+
+def asked_of(r: dict | None) -> dict:
+    """What the brief's time was asked for, {time, by}: "person" for a time picked on the page
+    or in a chat, kept to the minute; "app" for the app's own default, moved off the hour.
+    Recorded beside the cron (`asked`); a copy made before it was recorded is read from the
+    minute itself, since only the app's rule ever set :38 or :08 (8:00 and 8:30 moved 22
+    minutes earlier). {} where nothing is known."""
+    r = r or {}
+    got = r.get("asked")
+    if isinstance(got, dict) and re.fullmatch(r"\d{2}:\d{2}", str(got.get("time") or "")):
+        return {"time": got["time"], "by": "app" if got.get("by") == "app" else "person"}
+    sched = read_cron(r.get("cron") or "")
+    if not sched:
+        return {}
+    h, m = _hm(sched["time"])
+    if m == 60 - _back():
+        return {"time": f"{(h + 1) % 24:02d}:00", "by": "app"}
+    if m == 30 - _back():
+        return {"time": f"{h:02d}:30", "by": "app"}
+    return {}
+
+
+def _late(stamp, zone: str, hhmm: str) -> int:
+    """How many minutes after `hhmm` in `zone` the instant `stamp` falls, where that is 2 to
+    59 (the scheduler's own late start); else 0."""
+    at = _at(stamp)
+    if at is None or not zone_ok(zone):
+        return 0
+    import zoneinfo
+    local = at.astimezone(zoneinfo.ZoneInfo(zone))
+    h, m = _hm(hhmm)
+    gap = ((local.hour * 60 + local.minute) - (h * 60 + m)) % 1440
+    return gap if 2 <= gap < 60 else 0
+
+
+def real_time(r: dict | None, zone: str = "") -> dict:
+    """When the brief really comes: {set, time, when, why, said}. `set` is the stored schedule's own
+    time; `time` is that, or later where the scheduler reports it starts the run late (its
+    next_run_at, or the time the last run fired, as `saw` recorded them against this same
+    schedule; the docs: "if you schedule a run exactly on the hour, such as 9:00, it can start
+    several minutes late", code.claude.com/docs/en/routines). `why` is one plain line where the
+    time is not the one asked for: the scheduler's delay, or the app's own move off the hour;
+    "" where it is the time the person picked. `said` is the same reason as a sentence of its
+    own, for a line that has already named the time."""
+    r = r or {}
+    sched = read_cron(r.get("cron") or "")
+    if not sched:
+        return {}
+    zone = sched.get("zone") or zone
+    out = {"set": sched["time"], "time": sched["time"], "when": sched["when"], "why": "",
+           "said": ""}
+    seen = r.get("seen") or {}
+    late = 0
+    if isinstance(seen, dict) and seen.get("cron") == r.get("cron"):
+        late = max(_late(seen.get("next_run_at"), zone, sched["time"]),
+                   _late(seen.get("fired_at"), zone, sched["time"]))
+    if late:
+        h, m = _hm(sched["time"])
+        t = (h * 60 + m + late) % 1440
+        out["time"] = f"{t // 60:02d}:{t % 60:02d}"
+        out["when"] = (day_words(sched["days"]) if sched["days"] else "") + \
+            f" at {_say_time(out['time'])}"
+        out["said"] = (f"The service starts it a few minutes after {_say_time(sched['time'])}, "
+                       "the time it is set for.")
+        out["why"] = f"Comes at about {_say_time(out['time'])}: t" + out["said"][1:]
+        if m == 0:
+            out["why"] += " A time a few minutes past the hour starts on time."
+        return out
+    asked = asked_of(r)
+    if asked.get("by") == "app" and asked["time"] != sched["time"]:
+        why = moved_why(asked["time"], sched["time"])
+        out["why"] = f"Comes at {_say_time(sched['time'])}: {why}."
+        out["said"] = f"It comes {why}."
+    return out
+
+
+def saw(triggers, path: str | None = None) -> bool:
+    """Keep what the scheduler reports of the brief's task (its next_run_at and the time its
+    last run fired, from a list_triggers listing as `listing` gives it) beside the schedule it
+    was seen against, so the page shows the time the brief really comes (real_time). True when
+    the registry changed."""
+    path = _path(path)
+    try:
+        reg = load(path)
+    except (OSError, ValueError):
+        return False
+    r = _brief(reg)
+    if not r:
+        return False
+    live = next((t for t in triggers or [] if r.get("trigger_id") and t.get("id") == r["trigger_id"]),
+                None)
+    if live is None:
+        return False
+    run = live.get("last_run") or {}
+    got = {"cron": r.get("cron") or "",
+           **({"next_run_at": live["next_run_at"]} if live.get("next_run_at") else {}),
+           **({"fired_at": run["fired_at"]} if run.get("fired_at") else {})}
+    if len(got) == 1:
+        return False
+    old = r.get("seen") or {}
+    if old.get("cron") == got["cron"]:
+        got = {**{k: v for k, v in old.items() if k in ("next_run_at", "fired_at")}, **got}
+    if got == old:
+        return False
+    r["seen"] = got
+    _save(reg, path)
+    return True
 
 
 def _path(path: str | None) -> str:
@@ -1165,16 +1325,21 @@ def _task_ref(r: dict, reg: dict) -> dict:
     return out
 
 
-def move(days=None, time=None, cron: str = "", path: str | None = None, zone: str = "") -> dict:
+def move(days=None, time=None, cron: str = "", path: str | None = None, zone: str = "",
+         asked: dict | None = None) -> dict:
     """New days and a new time for the brief: written into the registry, and the one call
-    that moves the task itself kept until a chat makes it. `cron` sets it outright (an undo).
-    `zone` moves it to another time zone, the page's own choice (2026-10-30)."""
+    that moves the task itself kept until a chat makes it. `cron` sets it outright (an undo,
+    with the `asked` it had). `zone` moves it to another time zone, the page's own choice
+    (2026-10-30). A time the person picks is kept to the minute and recorded as theirs
+    (`asked`), so nothing moves it again; the same time sent back with new days leaves what
+    was asked as it was."""
     path = _path(path)
     reg = load(path)
     r = _brief(reg)
     if r is None:
         raise ValueError("there is no brief yet to move")
     old = r.get("cron") or ""
+    old_asked = r.get("asked")
     if zone:
         try:
             import zoneinfo
@@ -1204,10 +1369,16 @@ def move(days=None, time=None, cron: str = "", path: str | None = None, zone: st
         if not got:
             raise ValueError(f"{cron!r} is not a brief's schedule")
         new = {"cron": cron, **got}
+        if isinstance(asked, dict) and asked.get("time"):
+            r["asked"] = asked
+        else:
+            r.pop("asked", None)
     else:
         was = read_cron(old)
         new = cron_for(days if days not in (None, "", []) else was.get("days") or BRIEF_DAYS,
                        time or was.get("time") or "08:00", zone)
+        if time and new["time"] != was.get("time"):
+            r["asked"] = {"time": new["time"], "by": "person"}
     r["cron"] = new["cron"]
     if new["cron"] != old:
         _owe(reg, {"tool": "update_trigger", "for": "move",
@@ -1219,8 +1390,9 @@ def move(days=None, time=None, cron: str = "", path: str | None = None, zone: st
     _save(reg, path)
     return {"cron": new["cron"], "when": new["when"], "old": old,
             "say": f"Your brief comes {in_sentence(new['when'])} from now on.",
-            "undo": {"action": "brief.move", "value": {"cron": old}} if old else None,
-            "calls": reg.get("owed") or []}
+            "undo": {"action": "brief.move", "value": {"cron": old, "asked": old_asked}}
+            if old else None,
+            "old_asked": old_asked, "calls": reg.get("owed") or []}
 
 
 def off(path: str | None = None) -> dict:
@@ -1471,15 +1643,22 @@ def page_part(path: str | None = None, now: datetime.datetime | None = None,
         reg = {}
     r = _brief(reg)
     got = read_cron((r or {}).get("cron") or "")
+    real = real_time(r) if got else {}
     p = reg.get("pause") or {}
     try:
         late = late_line(overdue(reg, now) or "", today)
     except Exception:  # noqa: BLE001  never breaks the page
         late = ""
+    # `when` is the time it really comes (the scheduler's late start where it reports one);
+    # `time` is the time it is set for, which the sheet edits; `why` says in one line why
+    # they differ, or why the app's own default is not on the hour (the maintainer,
+    # 2026-11-06: "The page should show the real time").
     return {"set_up": r is not None, "off": bool((r or {}).get("off")),
             **({"late": late} if late else {}),
-            "when": got.get("when", ""), "days": got.get("days", []),
-            "time": got.get("time", ""), "zone": got.get("zone") or reg.get("timezone", ""),
+            "when": real.get("when") or got.get("when", ""), "days": got.get("days", []),
+            "time": got.get("time", ""), "real_time": real.get("time", ""),
+            "why": real.get("why", ""),
+            "zone": got.get("zone") or reg.get("timezone", ""),
             "paused": {"until": p["until"], "since": p.get("since", "")} if p else None,
             "waiting": len(reg.get("owed") or []),
             # The run sends its own phone notification (brief.push_due), so Settings offers
@@ -1580,6 +1759,15 @@ def main(argv: list[str]) -> int:
         found = existing_brief(reg, triggers, here=here,
                                page=page_chat if str(page_chat).startswith("session_") else "")
         print(f"{found['state']}: {found['say']}")
+        # What the scheduler reports of its time (next_run_at, the last run's fired_at), kept
+        # so the page shows when the brief really comes, never only the time it is set for.
+        if found["state"] == "registered" and triggers:
+            try:
+                if saw(triggers):
+                    print("saw: the brief's real time from the scheduler is kept in "
+                          "profile/routines.json; commit it with the rest, and say nothing")
+            except Exception:  # noqa: BLE001  never stops the check over a record
+                pass
         if found["state"] == "elsewhere" and found.get("calls"):
             for i, c in enumerate(found["calls"], 1):
                 print(f"move {i}: " + (f"{c['tool']} {json.dumps(c['args'], ensure_ascii=False)}"
@@ -1649,7 +1837,7 @@ def main(argv: list[str]) -> int:
         return 0 if got["zone"] else 1
     if argv[0] == "record":
         opt = {k: argv[argv.index(k) + 1] for k in ("--session", "--trigger", "--cron", "--setup",
-                                                    "--title")
+                                                    "--title", "--asked")
                if k in argv and argv.index(k) + 1 < len(argv)}
         if not opt.get("--trigger") or (opt.get("--setup", "chat_per_briefing") ==
                                         "chat_per_briefing" and not opt.get("--session")):
@@ -1659,7 +1847,8 @@ def main(argv: list[str]) -> int:
         try:
             path = record(opt.get("--session", ""), opt["--trigger"], opt.get("--cron", ""),
                           setup=opt.get("--setup", "chat_per_briefing"),
-                          title=opt.get("--title", ""), own_chat="--own-chat" in argv)
+                          title=opt.get("--title", ""), own_chat="--own-chat" in argv,
+                          asked=opt.get("--asked", ""))
         except ValueError as e:
             print(f"routines.json: nothing recorded: {e}")
             return 1

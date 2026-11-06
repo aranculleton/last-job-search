@@ -981,6 +981,12 @@ def run_plan(a) -> int:
     for page in _pages(a.triggers) + _as_pages(given.get("triggers")):
         tasks += routines.listing(page)[0]
     try:
+        # The brief's real time as the scheduler reports it (a late start on the hour), kept
+        # for the page each day the listing is read (routines.saw).
+        routines.saw(tasks)
+    except Exception:  # noqa: BLE001  never stops the tidy-up over a record
+        pass
+    try:
         reg = routines.load()
     except Exception:  # noqa: BLE001  no registry: no brief, no ops chat
         reg = {}
