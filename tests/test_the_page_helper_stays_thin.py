@@ -208,8 +208,8 @@ def test_a_detached_save_returns_at_once_and_the_hook_waits_for_it(landing_copy,
     """Each system detaches its own way, and both are checked on every runner: a new session
     on Linux and Mac, and on Windows, where Popen has no sessions, a process with no console
     of its own in a group of its own (the creation flags, docs.python.org/3/library/
-    subprocess.html, "Windows Constants"). The test asked for a session on Windows too, and
-    the Windows run of 4.11.0 failed on it."""
+    subprocess.html). The test asked for a session on Windows too, and the Windows run of
+    4.11.0 failed on it."""
     _origin, chat, _other = landing_copy
     write(chat, "profile/notes.md", "changed\n")
     assert land.save_due(str(chat), "a chat", "2026-11-05")       # unsaved: held, as before
