@@ -444,6 +444,8 @@ def _sections_for(item_id: str) -> tuple:
         return ("resume",)
     if item_id == "upcoming-add" or item_id.startswith("up-"):
         return ("upcoming",)
+    if item_id == "setting-export_remind":
+        return ("linkedin",)          # drawn with the LinkedIn download (app_model._linkedin)
     if item_id.startswith("setting-"):
         return ("settings",)
     if re.search(r"-f?\d+$", item_id):
