@@ -141,7 +141,7 @@ def test_a_draft_is_downloaded_marked_applied_and_its_follow_up_is_done_from_to_
         {"hash": "todo", "read": '[data-item="due-ellerwick-follow"]'},
         {"click": "Done: Follow up with Ellerwick Trust"},
     ], vp)
-    assert [c["filename"] for c in got["after"][0]["calls"]] == ["Morgan_Ellis_CV_Ellerwick_Trust.pdf", "Morgan_Ellis_Cover_Letter_Ellerwick_Trust.pdf"]  # named for the reader since 2026-11-05
+    assert [c["filename"] for c in got["after"][0]["calls"]] == ["Morgan_Ellis_Ellerwick_Trust_CV.pdf", "Morgan_Ellis_Ellerwick_Trust_Cover_Letter.pdf"]  # named for the reader since 2026-11-05; the employer before the document since 2026-11-06
     a = _one(got, "ready.applied")
     assert a["value"]["on"] and a["rev_seen"] == "a1"
     row = got["after"][2]["text"]

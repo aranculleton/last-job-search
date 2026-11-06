@@ -20,6 +20,12 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Changed
+
+- **Documents are named you, the employer, then the document**: `Morgan_Ellis_Acme_Resume.pdf`
+  and `Morgan_Ellis_Acme_Cover_Letter.pdf`, for the kept file and the one you download. Documents
+  already made keep their names, and everything still finds them.
+
 ## [4.11.0] - 2026-11-06
 
 ### Added

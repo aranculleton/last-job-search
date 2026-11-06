@@ -88,4 +88,38 @@ def test_a_downloaded_resume_is_named_for_its_reader(run, page):
         {"wait": 800, "calls": "downloads"}])
     assert not got["errors"], got["errors"]
     names = [c["filename"] for c in got["after"][1]["calls"]]
-    assert sorted(names) == ["Morgan_Ellis_CV_Ellerwick_Trust.pdf", "Morgan_Ellis_Cover_Letter_Ellerwick_Trust.pdf"], names
+    # The sample's files were made in the order before 2026-11-06 (<Prefix>_CV_<ABBR>) and
+    # carry no `send`: the page puts them in the person, employer, kind order itself.
+    assert sorted(names) == ["Morgan_Ellis_Ellerwick_Trust_CV.pdf", "Morgan_Ellis_Ellerwick_Trust_Cover_Letter.pdf"], names
+
+
+def _ellerwick(m):
+    """The sample's Ellerwick application, wherever the model holds it."""
+    stack = [m]
+    while stack:
+        x = stack.pop()
+        if isinstance(x, dict):
+            if x.get("id") == "app-ellerwick-insight" and isinstance(x.get("files"), list):
+                return x
+            stack.extend(x.values())
+        elif isinstance(x, list):
+            stack.extend(x)
+    raise AssertionError("no Ellerwick application in the sample")
+
+
+def test_a_download_takes_the_name_the_engine_gives_it(run, tmp_path):
+    # Made since 2026-11-06: <Prefix>_<ABBR>_<kind>, and the engine's `send` (docpaths.send_name)
+    # names the download: the person, the employer, then the kind of document.
+    m = copy.deepcopy(_sample())
+    for f in _ellerwick(m)["files"]:
+        kind = "CV" if f["kind"] == "resume" else "Cover_Letter"
+        f["name"] = f"Morgan_Ellis_Ellerwick_{kind}.pdf"
+        f["path"] = os.path.dirname(f["path"]) + "/" + f["name"]
+        f["send"] = f"Morgan_Ellis_Ellerwick_Trust_{kind}.pdf"
+    html = _write(tmp_path, "send", m)
+    got = run("engine", html=html, viewport=WIDE, clock=CLOCK, steps=[
+        {"hash": "jobs", "eval": "(document.querySelector('[data-k=\"dl:app-ellerwick-insight\"]').click(), 1)"},
+        {"wait": 800, "calls": "downloads"}])
+    assert not got["errors"], got["errors"]
+    names = [c["filename"] for c in got["after"][1]["calls"]]
+    assert sorted(names) == ["Morgan_Ellis_Ellerwick_Trust_CV.pdf", "Morgan_Ellis_Ellerwick_Trust_Cover_Letter.pdf"], names
