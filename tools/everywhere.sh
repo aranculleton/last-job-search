@@ -31,7 +31,7 @@ mkdir -p "$OUT"
 
 PAGE_VARIANTS="safari firefox mac-type windows-type french german ahead behind"
 SUITE_VARIANTS="30-days 90-days 400-days ahead behind odd-folder newest-python"
-BROWSER_TESTS="$(grep -lE 'app_page/harness\.js|journeys\.browser\(\)|_node_env|test_the_page_journeys import|import test_the_page_journeys' tests/*.py)"
+BROWSER_TESTS="$(grep -lE 'app_page/harness\.js|journeys\.browser\(\)|_node_env|test_the_page_journeys import|import test_the_page_journeys|test_the_page_works_in_a_browser import|import test_the_page_works_in_a_browser' tests/*.py)"
 PY_NEWEST="${PY_NEWEST:-python3.14}"
 
 kind="${1:-}"
