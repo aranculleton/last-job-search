@@ -1344,10 +1344,21 @@ def wanted(root: str = ROOT) -> bool:
     LOCK_STALE_S)?"""
     d = git_dir(root)
     p = os.path.join(d, WANTED_FILE) if d else ""
-    try:
-        return bool(p) and time.time() - os.path.getmtime(p) < LOCK_STALE_S
-    except OSError:
+    if not p:
         return False
+    # Aged on the clock that wrote it, its own "at", as the lock is (landing): the file's
+    # time is the disk's clock, and on a clock moved a month on, a mark a second old read as
+    # stale, so the hook held the turn the background save was already taking (4.11.0's
+    # clock-moved-on runs). A mark with no stamp is aged by the file.
+    try:
+        with open(p, encoding="utf-8") as fh:
+            began = float(json.loads(fh.read() or "{}").get("at"))
+    except (OSError, ValueError, TypeError, AttributeError):
+        try:
+            began = os.path.getmtime(p)
+        except OSError:
+            return False
+    return time.time() - began < LOCK_STALE_S
 
 
 def _mark(root: str, name: str, text: str = "") -> str:

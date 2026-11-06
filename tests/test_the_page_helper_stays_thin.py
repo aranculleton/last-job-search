@@ -21,6 +21,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [os.path.join(ROOT, "tools"), os.path.join(ROOT, "tests")]
@@ -232,6 +233,21 @@ def test_a_detached_save_returns_at_once_and_the_hook_waits_for_it(landing_copy,
     # Asked for and not finished: the hook holds no turn for it.
     assert land.wanted(str(chat))
     assert land.save_due(str(chat), "a chat", "2026-11-05") == []
+
+
+def test_a_save_asked_for_is_aged_on_the_clock_that_asked(landing_copy):
+    """The mark was aged by the file's time, the disk's clock: on a clock moved a month on (the
+    4.11.0 clock runs) a mark a second old read as stale, and the hook held the turn the
+    background save was already taking. It is aged by its own "at", as the lock is."""
+    _origin, chat, _other = landing_copy
+    p = land._mark(str(chat), land.WANTED_FILE, json.dumps({"message": "Notes", "at": time.time()}) + "\n")
+    old = time.time() - 40 * 86400
+    os.utime(p, (old, old))                        # the disk's clock, far from this one
+    assert land.wanted(str(chat))
+    land._mark(str(chat), land.WANTED_FILE, json.dumps({"message": "Notes", "at": old}) + "\n")
+    assert not land.wanted(str(chat))              # asked a month ago, never finished: stale
+    land._mark(str(chat), land.WANTED_FILE, "\n")  # no stamp: aged by the file, as before
+    assert land.wanted(str(chat))
 
 
 def test_a_detached_save_opens_and_merges_its_pull_request_itself(landing_copy, capsys):
