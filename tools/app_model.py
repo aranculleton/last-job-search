@@ -4403,6 +4403,35 @@ def portal_label(name: str) -> str:
     return " ".join(w if w.isupper() else w[:1].upper() + w[1:] for w in words if w)
 
 
+# A hidden job's reason as the person would say it, first match wins: the trash's own words
+# ("pay", "employer", "old"), a closed posting, the week's automatic clear-out, and anything
+# cleared by hand, never "at the person's request" (the maintainer, 4.12).
+HID_LABELS = (
+    (r"^(?:the )?pay\b|salary", "The pay"),
+    (r"^(?:the )?place\b|location|commute", "The place"),
+    (r"^(?:not my )?field\b", "Not my field"),
+    (r"^(?:role|not this role|not this one)\b", "Not this one"),
+    (r"^(?:employer|no more roles from|no more from)\b", "Not this employer"),
+    (r"^(?:old|too old|posted too long ago)\b", "Posted too long ago"),
+    (r"\bclosed\b|no longer open|expired|been filled", "The job closed"),
+    (r"automatic|after a week|after 7 days|unpicked|not picked|stale", "Cleared automatically after a week"),
+    (r"request|\bcleared\b|said on the page|not for me|taken back|by hand|on the page",
+     "You cleared these"),
+)
+
+
+def hid_label(words: str) -> str:
+    """The plain label of a reason the person hid jobs for (Settings, Jobs you hid)."""
+    said = " ".join(str(words or "").split()).strip()
+    low = said.lower()
+    for rx, label in HID_LABELS:
+        if re.search(rx, low):
+            return label
+    said = re.sub(r"\bthe (?:person|candidate)'s\b", "your", said, flags=re.I)
+    said = re.sub(r"\bthe (?:person|candidate)\b", "you", said, flags=re.I)
+    return (said[:1].upper() + said[1:]) if said else "Hidden by you"
+
+
 def _search(ctx: Ctx, targets: dict) -> dict:
     """The search as the person's own setting files hold it (profile/search.py, boards.py,
     the rulings that hide a kind of job), for Settings' "Your search": each changed through
@@ -4447,13 +4476,24 @@ def _search(ctx: Ctx, targets: dict) -> dict:
         company = html.unescape(str(e.get("company") or "")).strip()
         if title and len(seen_by.setdefault(g, [])) < 5:
             seen_by[g].append(f"{title} at {company}" if company else title)
+    # One row a plain reason, in the person's words: the trash's "employer" read "Employer: 1
+    # job" and a chat's ruling "at the person's request" (the maintainer, 4.12). Reasons that
+    # say the same thing are one row, and Bring back lifts all of them.
+    by_label: dict = {}
+    for words, n in groups.most_common():
+        label = hid_label(said_as.get(words) or words)
+        row = by_label.setdefault(label, {"groups": [], "count": 0, "examples": []})
+        row["groups"].append(words)
+        row["count"] += n
+        row["examples"] += [x for x in seen_by.get(words, []) if len(row["examples"]) < 5]
     rules = []
-    for words, n in groups.most_common(20):
-        rid = f"rule-{seg(words)[:60]}"
-        rules.append({"id": rid, "words": words, "label": said_as.get(words) or words[:1].upper() + words[1:],
-                      "count": n, "basis": "person",
-                      "examples": seen_by.get(words, []), "rev": rev_of(rid, n)})
-        targets[rid] = {"kind": "rule", "words": words, "rev": rules[-1]["rev"]}
+    for label, row in sorted(by_label.items(), key=lambda kv: -kv[1]["count"])[:20]:
+        rid = f"rule-{seg(label)[:60]}"
+        rules.append({"id": rid, "words": row["groups"][0], "label": label, "count": row["count"],
+                      "basis": "person", "examples": row["examples"][:5],
+                      "rev": rev_of(rid, row["count"], row["groups"])})
+        targets[rid] = {"kind": "rule", "words": row["groups"][0], "groups": row["groups"],
+                        "rev": rules[-1]["rev"]}
     dnt = _json(person.state("job_scraper", "do_not_target.json"), {})
     dnt = dnt.get("entries") if isinstance(dnt, dict) and "entries" in dnt else dnt
     for e in (dnt if isinstance(dnt, list) else []):
@@ -4856,11 +4896,14 @@ SETTINGS = (
     # The person's, not the app's (4.7): how early the Brief puts the next interview first,
     # and when the calendar events the page makes remind them. The values 4.6 fixed are the
     # defaults.
-    ("prep_days", "Your next interview on the Brief", [["2", "From 2 days before"],
+    # The day before is the shortest (the maintainer, 4.12: "From the day before").
+    ("prep_days", "Your next interview on the Brief", [["1", "From the day before"],
+                                                        ["2", "From 2 days before"],
                                                         ["7", "From a week before"],
                                                         ["14", "From two weeks before"]]),
     ("calendar_reminder", "Calendar reminders", [["15", "15 minutes before"],
                                                  ["60", "An hour before"],
+                                                 ["120", "Two hours before"],
                                                  ["1440", "The day before"], ["off", "None"]]),
     # The brief's headline sent to the phone (tools/brief.py push_due): off unless the person
     # chose it, when the brief is set up or asked once after (profile_upgrades brief-push)

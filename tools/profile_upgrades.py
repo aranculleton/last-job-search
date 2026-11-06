@@ -1799,7 +1799,7 @@ REGISTRY: tuple[Upgrade, ...] = (
             why_ask="A form, a letter and an interview pack each read one of them, and a "
                     "recruiter remembers whichever they heard first."),
     Upgrade("process-postings", "2026-10-19",
-            "every hiring process folder holds a job_posting.md, so your own checks stay green",
+            "every hiring process folder keeps a copy of its job posting, so your own checks stay green",
             _process_postings, "python3 tools/interview_pack.py postings", "instant",
             command=("python3", "tools/interview_pack.py", "postings"),
             paths=("documents/applications/*/job_posting.md",), priority=1, conditional=True),

@@ -2323,14 +2323,16 @@ def _rule_lift(r: Run) -> dict:
         return {"note": f"{t['company']} is searched again.",
                 "undo": {"action": "rule.restore", "target": dict(t), "value": {"dnt": gone}}}
     data = exclude.load_seen(path)
+    # A row of Jobs you hid holds every reason that says the same thing (app_model.hid_label).
+    wanted = set(t.get("groups") or [t.get("words")])
     keys = [k for k, e in (data.get("seen") or {}).items() if isinstance(e, dict)
             and str(e.get("status") or "").lower() == "excluded" and e.get("basis") == "person"
-            and exclude.reason_group(str(e.get("exclusion_reason") or "")) == t.get("words")]
+            and exclude.reason_group(str(e.get("exclusion_reason") or "")) in wanted]
     if not keys:
         raise Refused("Nothing is left out for that reason any more.")
     exclude.lift(urls=[data["seen"][k].get("url") or k for k in keys],
                  why="brought back on the page", today=r.day.isoformat(), path=path)
-    return {"note": f"Brought back: {len(keys)} left out for \"{t.get('words')}\".",
+    return {"note": f"Brought back: {len(keys)} {'job' if len(keys) == 1 else 'jobs'}.",
             "undo": {"action": "rule.restore", "target": dict(t), "value": {"keys": keys}}}
 
 

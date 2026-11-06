@@ -20,6 +20,27 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Changed
+
+- **Settings is shorter and says things plainly.** Employers you turned down are one row,
+  "Employers you've turned down", with how many jobs they left out; it opens their names, each
+  with its own small trash. What Claude learned from you has one home, "What you have taught
+  it", grouped by area (messages, documents, jobs and so on), each rule one line with the day it
+  was learned; Your rules has one row that opens it. Long lists show their first few with Show
+  all.
+- **Something looks wrong opens its box right there**, begun with where you were and the
+  version, with Ask Claude and Cancel; telling the app's makers is a quiet link under it.
+- **What's new shows your version on its row** ("4.11.0 · Up to date"); inside, the newest few
+  lines with Show more, and the changes made for you in plain words, each once.
+- **Jobs you hid say why in your words**: "You cleared these", "Cleared automatically after a
+  week", "Not this employer", "The job closed".
+- **Text size**: Smaller and Larger are drawn in the size they set.
+- **Advanced holds only what can slow things down or use more of your Claude allowance** (where
+  Claude works, suggestions); keyboard shortcuts and text size are under Look, and checking
+  this device under This device.
+- **More choices for timing**: your next interview can go to the top of the Brief from the day
+  before, and calendar reminders can come two hours before.
+
 ## [4.11.0] - 2026-11-06
 
 ### Added

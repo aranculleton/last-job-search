@@ -1996,3 +1996,22 @@ ul.bp-news { max-width: 80ch; }
 /* On a phone the search takes its own row under the switch, which it squeezed unreadable. */
 @media (max-width: 759px) { .controls:has(> .segctl):has(> .searchf) { flex-wrap: wrap; } .controls:has(> .segctl) > .searchf { order: 9; flex-basis: 100%; } }
 .talk-earlier-msgs { list-style: none; text-align: center; }
+
+/* Settings, 4.12: employers turned down as one list with a small trash each; what it learned
+   grouped by area, a rule a line with its day small at the end; long lists' "Show all". */
+.dec-list, .l-list, ul.news, ul.upgrades { display: grid; gap: 0; }
+.dec-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-block: 4px; border-top: 1px solid var(--line); }
+.dec-row:first-child { border-top: 0; }
+.dec-name { min-width: 0; overflow-wrap: anywhere; }
+.l-group + .l-group { margin-top: 12px; }
+.l-item { padding-block: 0; }
+.l-sum { display: flex; align-items: baseline; gap: 8px; list-style: none; cursor: pointer; min-height: var(--target); padding-block: 4px; }
+.l-sum::-webkit-details-marker { display: none; }
+.l-say { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.l-on { flex: 0 0 auto; white-space: nowrap; }
+.few-more { padding-block: 4px; }
+ul.news .news-line { padding-block: 4px; }
+.makers-link { margin-top: 8px; }
+.makers-link a { color: var(--muted); }
+/* Text size: Smaller and Larger drawn in their own size; the control keeps its height. */
+.size-choice .look-name { line-height: 1; }

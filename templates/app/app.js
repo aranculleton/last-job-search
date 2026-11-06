@@ -6295,9 +6295,64 @@
   // Your rules, in Settings: each rule one sentence, the day it was set and the person's own
   // words, what it left out lately, its pencil and its bin, and a quiet "Still right?" where it
   // is old and busy (rules_view.still_right). Nothing here asks to be done.
+  // Employers turned down are one row and learned rules one link (the maintainer, 4.12: "every
+  // No more from <employer> is its own full-width row and the list is a wall"; 210 learned
+  // rules each a row titled "Learned from you", and the same again under What you have taught
+  // it). The rest stay a row a rule.
   function yourRulesRows() {
     const r = obj(M().rules);
-    return arr(r.rows).filter((x) => !effective(txt(x.id), ["rule.drop"])).map((x) => {
+    const live = arr(r.rows).filter((x) => !effective(txt(x.id), ["rule.drop"]));
+    const declined = live.filter((x) => txt(x.kind) === "declined");
+    const out = [];
+    for (const x of live) {
+      if (txt(x.kind) === "learned") continue;
+      if (txt(x.kind) === "declined") { if (x === declined[0]) out.push(declinedRow(declined)); continue; }
+      out.push(ruleRow(x));
+    }
+    const n = learnedLive().length;
+    if (n) out.push(actionRow("Learned from you: " + plural(n, "rule", "rules"), openLearned, "rules-learned"));
+    return out;
+  }
+  function openLearned() {
+    openState.set("det:info:learned", true);
+    S.focusAfter = {key: "info-sum:learned"};
+    scheduleRender();
+  }
+  function learnedLive() { return arr(M().learned).filter((x) => !x.retired && !effective(txt(x.id), ["learned.retire"])); }
+  // "Employers you've turned down (N)", with what they left out lately; it opens the names, each
+  // with its own small trash, which takes that employer off the list.
+  function declinedRow(list) {
+    const known = list.some((x) => x.left_out !== null && x.left_out !== undefined);
+    const left = list.reduce((t, x) => t + (Number(x.left_out) || 0), 0);
+    const value = known ? (left ? left.toLocaleString(LOC) + " left out lately" : "None left out lately") : null;
+    const rows = list.slice().sort((a, b) => txt(a.name).localeCompare(txt(b.name))).map((x) => {
+      const id = txt(x.id);
+      const who = txt(x.name).replace(/^No more from /, "");
+      const n = Number(x.left_out);
+      return h("li", {class: "dec-row", "data-item": id}, h("span", {class: "dec-name"}, who, n ? h("span", {class: "small muted"}, " · " + plural(n, "job", "jobs") + " left out") : null),
+        x.drop ? btn("", () => act([{item: id, action: "rule.drop", rev: txt(x.rev) || null}], "Taken off: " + who + ". Its jobs come back."), {kind: "quiet icon-only", small: true, icon: "bin", key: "rule-bin:" + id, aria: "Take " + who + " off the list"}) : null,
+        stateLine(id, "rule:" + id));
+    });
+    return infoRow("rules-declined", "Employers you've turned down (" + list.length + ")", value,
+      [h("p", {class: "small muted"}, "Their jobs are left out of your search. Take one off and its jobs come back."), h("ul", {class: "plain dec-list"}, shortList("declined", rows, 5, "Show all"))]);
+  }
+  // The first few of a long list, and one "Show all" (or "Show more") for the rest, remembered
+  // while the page is open; the first row it shows takes the focus.
+  function shortList(key, rows, first, label) {
+    rows = arr(rows).filter(Boolean);
+    if (rows.length <= first + 1) return rows;
+    if (openState.get("few:" + key) === true) {
+      const at = rows[first];
+      if (at && at.setAttribute) { at.setAttribute("data-k", "few-first:" + key); at.setAttribute("tabindex", "-1"); }
+      return rows;
+    }
+    const more = rows.length - first;
+    const name = label || "Show all";
+    return rows.slice(0, first).concat([h("li", {class: "few-more"}, btn(name, () => { openState.set("few:" + key, true); S.focusAfter = {key: "few-first:" + key}; scheduleRender(); },
+      {kind: "link", small: true, key: "few:" + key, aria: name + ": " + more + " more"}))]);
+  }
+  function ruleRow(x) {
+    {
       const id = txt(x.id);
       const n = Number(x.left_out);
       const kept = effective(id, ["rule.keep"]);
@@ -6309,7 +6364,7 @@
         x.drop ? btn("", () => act([{item: id, action: "rule.drop", rev: txt(x.rev) || null}], "Taken off: " + txt(x.name)), {kind: "quiet icon-only", small: true, icon: "bin", key: "rule-bin:" + id, aria: "Take this rule off: " + txt(x.name)}) : null];
       return infoRow("rule-" + seg(id), txt(x.name), value, foldBody([h("p", {}, txt(x.sentence)), facts.length ? h("p", {class: "small muted"}, facts.join(" · ")) : null,
         x.still_right && !kept ? h("p", {class: "small"}, "Set a while ago and still leaving out a lot. If it still suits you, keep it; Claude does not ask again for three months.") : null], acts, stateLine(id, "rule:" + id)));
-    });
+    }
   }
 
   // ------------------------------------------------------------------ Drafts: applications and messages
@@ -7372,7 +7427,8 @@
       field,
       // The box's own row, as They replied's: its one filled step while it is open, and Cancel.
       h("div", {class: "card-actions"}, btn("Ask Claude", send, {kind: "primary", small: true, key: "ct-go:" + th, wakes: "talk", lead: true, aria: "Ask Claude about " + label}),
-        btn("Cancel", () => { S.cardAsk.delete(th); scheduleRender(); }, {kind: "secondary", small: true, key: "ct-x:" + th, aria: "Cancel the question about " + label})));
+        btn("Cancel", () => { S.cardAsk.delete(th); scheduleRender(); }, {kind: "secondary", small: true, key: "ct-x:" + th, aria: "Cancel the question about " + label})),
+      o.after || null);
   }
   // The question is written to the card's own thread and its work, and only then rung, while the
   // tap still counts, as the Chat's own messages are (handOff). Claude answers in that thread
@@ -10274,6 +10330,24 @@
   }
 
   // G9. What it has learned, each rule in plain words, with Remove.
+  // What it learned, grouped by area (messages, documents, jobs ...), each rule a row of its own
+  // words cut to a line with the day it was learned small at its end, opening to the whole
+  // rule and its Remove; each area its first few with Show all. A word in the search box
+  // looks through all of them. Before 4.12 it was one list of 210, and Your rules listed the
+  // same rules again, each titled only "Learned from you" (the maintainer, 4.12).
+  const AREA_NAMES = {messages: "Messages", documents: "Documents", jobs: "Jobs", search: "The search", targets: "Employers to aim for",
+    people: "People", voice: "Your voice", interview: "Interviews", questions: "Questions", other: "Everything else"};
+  function learnedRow(x) {
+    const id = txt(x.id);
+    const words = txt(x.say) || txt(x.rule);
+    const gone = !!effective(id, ["learned.retire"]);
+    return h("li", {class: "learned l-item", "data-item": id}, det("learned:" + id, false, {class: "l-row"},
+      h("summary", {class: "l-sum", "data-k": "l-sum:" + id}, h("span", {class: "l-say"}, words), x.on ? h("span", {class: "l-on small muted"}, fmtDay(txt(x.on))) : null),
+      foldBody([h("p", {}, words), x.said ? h("p", {class: "hint"}, "You said: " + txt(x.said)) : null],
+        id && !x.retired ? btn(gone ? "Removed" : "Remove", () => act([{item: id, action: "learned.retire", value: null, rev: txt(x.rev)}], "Removed: " + clip(txt(x.rule), 40)),
+          {kind: "quiet", small: true, key: "unlearn:" + id, aria: "Remove: " + txt(x.rule), pressed: gone}) : null,
+        id ? stateLine(id, "learned:" + id) : null)));
+  }
   function learnedRows() {
     const items = arr(M().learned);
     if (!items.length) return h("p", {class: "muted"}, "Nothing yet. When you say what you like or do not, it is kept here.");
@@ -10285,17 +10359,19 @@
       h("p", {class: "small muted"}, "Everything you have told Claude about how you like things. Each one shapes what it writes and finds, so if one is wrong, it is usually better to say in Chat what you want instead; Remove is still here."),
       [btn("Tidy these up", () => { askPlace("rules", "Tidy what I have taught you: find rules the app now does by itself, rules that say the same thing, and rules a later one replaced, and show me each before anything goes."); },
         {small: true, kind: "secondary", key: "learned-tidy", wakes: "talk"})], placeTalk("rules"), {class: "learned-intro"});
-    // The newest five, then the rest one tap below, with a search: all 173 at once were a wall
-    // 32,700px tall on a phone (the 3 November audit). Each is said to the person ("say").
-    const lo = {items, name: "what you have taught it", one: "rule", many: "rules", fold: (x) => !!x.retired, foldLabel: (k) => plural(k, "earlier rule", "earlier rules"),
-      first: 5, firstLabel: (k) => plural(k, "more rule", "more rules"), search: (x) => [x.say, x.rule, x.said, x.area].map(txt).join(" "), searchLabel: "A word in a rule",
-      sort: (a, b) => txt(b.on).localeCompare(txt(a.on)),
-      render: (x) => foldBody([h("p", {}, txt(x.say) || txt(x.rule)),
-        x.said ? h("p", {class: "hint"}, "You said: " + txt(x.said) + (x.on ? ", " + fmtDay(x.on) : "")) : null],
-        x.id && !x.retired ? btn(effective(txt(x.id), ["learned.retire"]) ? "Removed" : "Remove", () => act([{item: txt(x.id), action: "learned.retire", value: null, rev: txt(x.rev)}], "Removed: " + clip(txt(x.rule), 40)),
-          {kind: "quiet", small: true, key: "unlearn:" + txt(x.id), aria: "Remove: " + txt(x.rule), pressed: !!effective(txt(x.id), ["learned.retire"])}) : null,
-        x.id ? stateLine(txt(x.id), "learned:" + txt(x.id)) : null, {class: "learned fb-row", "data-item": txt(x.id)})};
-    return [intro, items.length > 5 ? controlRow([searchField("learned", lo)]) : null, listView("learned", lo)];
+    const newest = (a, b) => txt(b.on).localeCompare(txt(a.on));
+    const lo = {items, name: "what you have taught it", one: "rule", many: "rules", sort: newest,
+      search: (x) => [x.say, x.rule, x.said, x.area].map(txt).join(" "), searchLabel: "A word in a rule", render: learnedRow, box: (kids) => h("ul", {class: "plain l-list"}, kids)};
+    const search = items.length > 5 ? controlRow([searchField("learned", lo)]) : null;
+    if (txt(listState("learned").q).trim()) return [intro, search, listView("learned", lo)];
+    const by = new Map();
+    for (const x of items) { const k = AREA_NAMES[txt(x.area)] ? txt(x.area) : "other"; if (!by.has(k)) by.set(k, []); by.get(k).push(x); }
+    const groups = Object.keys(AREA_NAMES).filter((k) => by.has(k)).map((k) => {
+      const list = by.get(k).slice().sort(newest);
+      return h("section", {class: "l-group", "data-area": k, "aria-label": AREA_NAMES[k]}, h("h4", {class: "small-head"}, AREA_NAMES[k] + " (" + list.length + ")"),
+        h("ul", {class: "plain l-list"}, shortList("learned-" + k, list.map(learnedRow), 3, "Show all")));
+    });
+    return [intro, search].concat(groups);
   }
 
   // The lowest pay, as people write it: "90k" is 90,000, and a range or anything that is not
@@ -10314,16 +10390,25 @@
   // link carries the page's version and the screen only, never a word of the person's: they
   // write what happened there themselves. A suggestion goes the same way.
   const APP_ISSUES = "https://github.com/aranculleton/last-job-search/issues/new";
-  function reportWrong(version) {
-    const where = labelOf(S.section) || "the page";
+  // The makers' public page, carrying the page's version and the screen only (and a part that
+  // could not be drawn), never a word of the person's.
+  function makersUrl(version, where) {
     const fault = S.drawFault ? "\nA part that could not be drawn: " + S.drawFault.where + " (" + S.drawFault.kind + ")" : "";
-    const url = APP_ISSUES + "?title=" + encodeURIComponent("From the page: something looks wrong, or a suggestion (version " + version + ")") +
+    return APP_ISSUES + "?title=" + encodeURIComponent("From the page: something looks wrong, or a suggestion (version " + version + ")") +
       "&body=" + encodeURIComponent("Page version: " + version + "\nScreen: " + where + fault + "\n\nWhat happened, or what would be better (this page is public: no names, please):\n");
-    sheet({title: "Something looks wrong?", intro: "Tell Claude, and it is looked into and worked round for you. Or tell the app's makers, so it is fixed for everyone.",
-      choices: [{label: "Tell Claude", key: "claude", run: () => { setTimeout(() => openPlace("wrong", "On " + where + " (page version " + version + "): "), 0); }}],
-      after: h("p", {}, h("a", {href: url, target: "_blank", rel: "noopener noreferrer", "data-k": "report-makers"}, "Tell the app's makers", h("span", {class: "sr-only"}, " (opens a public page in a new tab: leave out names)")),
-        h("span", {class: "hint block"}, "A public page: it carries this page's version and nothing of yours. Leave out names.")),
-      cancel: "Not now"});
+  }
+  // The screen the person came from, for "Something looks wrong" in Settings.
+  function wrongWhere() { return labelOf(S.cameFrom && S.cameFrom !== "settings" ? S.cameFrom : S.section) || "the page"; }
+  // Something looks wrong opens its box in place, under the row, begun with where and the
+  // version; no popup first (the maintainer, 4.12). Telling the makers stays a quiet link under
+  // the box, for everyone, with its note about names.
+  function reportWrong(version) {
+    openPlace("wrong", "On " + wrongWhere() + " (version " + version + "): ");
+  }
+  function makersLink(version) {
+    return h("p", {class: "small makers-link"}, h("a", {href: makersUrl(version, wrongWhere()), target: "_blank", rel: "noopener noreferrer", "data-k": "report-makers", class: "quiet-link"}, "Tell the app's makers",
+      h("span", {class: "sr-only"}, " (opens a public page in a new tab: leave out names)")),
+      h("span", {class: "hint block"}, "A public page: it carries this page's version and nothing of yours. Leave out names."));
   }
   // G10. Your search: what it looks for and where, each row its value and what changes it
   // (model.search and search.set, CONTRACT 6.14 and 6.15).
@@ -10409,7 +10494,7 @@
       // Jobs you hid, in your words: "Hidden by you: 233 jobs", never the engine's "cleared from
       // the list · 233"; and bringing back more than a handful asks first, since one tap put
       // 233 old jobs back into Jobs (the 3 November audit).
-      infoRow("search-rules", "Jobs you hid", rules.length ? plural(rules.reduce((n, r) => n + (Number(r.count) || 0), 0), "job", "jobs") : "None", rules.length ? h("ul", {class: "plain"}, rules.map((r) => {
+      infoRow("search-rules", "Jobs you hid", rules.length ? plural(rules.reduce((n, r) => n + (Number(r.count) || 0), 0), "job", "jobs") : "None", rules.length ? h("ul", {class: "plain"}, shortList("hid", rules.map((r) => {
         const n = Number(r.count) || 0;
         const name = txt(r.label) || cap1(txt(r.words));
         const lift = () => act([{item: txt(r.id), action: "rule.lift", value: null, rev: txt(r.rev) || txt(s.rev) || null}], "Brought back: " + name);
@@ -10418,7 +10503,7 @@
           btn("Bring back", () => (n > 5 ? sheet({title: "Bring back " + plural(n, "job", "jobs") + "?", intro: "All " + n + " go back into Jobs, to look through again.", fields: [], submit: "Bring them back", onSubmit: lift}) : lift()),
             {kind: "quiet", small: true, key: "lift:" + txt(r.id), aria: "Bring back: " + name}),
           stateLine(txt(r.id), "rule:" + txt(r.id)), {class: "fb-row"}));
-      })) : h("p", {class: "muted"}, "No kind of job is hidden.")),
+      }), 5, "Show all")) : h("p", {class: "muted"}, "No kind of job is hidden.")),
     ];
   }
 
@@ -13457,33 +13542,37 @@
     const search = searchRows().filter(Boolean);
     if (search.length) put(wrap, settingsGroup("Your search", search));
     const yours = yourRulesRows();
-    if (yours.length) put(wrap, settingsGroup("Your rules", yours));
+    if (yours.length) put(wrap, settingsGroup("Your rules", shortList("rules", yours, 6, "Show all")));
     // The phone notification only where the brief's own run sends it (model.schedule.push_here).
     put(wrap, settingsGroup("Your brief", briefRows().concat(pick(obj(M().schedule).push_here ? ["brief_push", "prep_days"] : ["prep_days"]).map(settingRow))));
     const cal = pick(["calendar_reminder"]).map(settingRow);
     if (cal.length) put(wrap, settingsGroup("Coming up", cal));
-    put(wrap, settingsGroup("Appearance", [lookRow(), sizeRow()]));
+    // Look: how the page looks and is used here, harmless to change (the maintainer, 4.12).
+    put(wrap, settingsGroup("Look", [lookRow(), sizeRow(), touchOnly() ? null : keysRow()]));
     put(wrap, settingsGroup("LinkedIn", linkedinRows().concat(pick(["profile_reads"]).map((s) => settingRow(s, txt(settingValue(s)) === "paste" ? null : readingBody())), pick(["linkedin_plan"]).map((s) => settingRow(s)))));
     put(wrap, settingsGroup("Help", [actionRow("Show me around", () => showTour(0), "help-tour"),
       // The chat bubble, where the person is, rather than taking them away to Chat (2026-10-30).
       actionRow("Ask Claude how something works", () => openDock({text: "How does "}), "help-how"),
-      actionRow("Something looks wrong", () => reportWrong(txt(obj(M().app).version || u.version)), "help-wrong"), placeTalk("wrong")].concat(pick(["tips"]).map(settingRow))));
+      actionRow("Something looks wrong", () => reportWrong(pageVersion()), "help-wrong"), placeTalk("wrong", {after: makersLink(pageVersion())})].concat(pick(["tips"]).map(settingRow))));
+    // What's new says the version on its row, before it is opened ("4.11.0 · Up to date").
+    const ver = txt(u.version) || txt(obj(M().app).version);
+    const held = txt(settingOf("app_updates", "auto")) !== "auto";
     put(wrap, settingsGroup("Your data", [infoRow("privacy", "Where your data lives", null, h("p", {}, privacyText())),
       infoRow("device-link", "Open on another device", null, anotherDeviceBody()),
-      infoRow("news", "What's new", waiting ? null : "Up to date", updatesBody()),
-      infoRow("learned", "What you have taught it", plural(arr(M().learned).filter((x) => !x.retired && !effective(txt(x.id), ["learned.retire"])).length, "rule", "rules"), learnedRows())]));
-    // How the app runs: the usual is right for nearly everyone, so it waits behind one line.
-    // "How updates arrive" shows only to someone holding updates, so they can let them in
-    // again: held, a fix never reached them (the brief that stopped, 2026-10-31), and it served
-    // nobody else (the maintainer, 2026-10-31: "is there a genuine point of this setting").
-    // Holding them is still said in a chat, where Claude writes it (CLAUDE.md).
-    const held = txt(settingOf("app_updates", "auto")) !== "auto";
-    const adv = [infoRow("where", "Where Claude works", whereSummary(), whereRows())].concat(pick(held ? ["suggestions", "app_updates"] : ["suggestions"]).concat(others).map(settingRow),
-      [touchOnly() ? null : keysRow(), infoRow("device", "Check this device", null, deviceList())]).filter(Boolean);
-    put(wrap, det("set-advanced", false, {class: "set-group set-advanced"}, h("summary", {class: "group"}, "How the app runs"),
-      h("p", {class: "small muted set-intro"}, "The usual settings suit nearly everyone. Change these only if Claude suggests it."), h("div", {class: "set-rows"}, adv)));
+      infoRow("news", "What's new", [ver, waiting ? "An update is waiting" : "Up to date"].filter(Boolean).join(" · "), updatesBody()),
+      // "How updates arrive" shows only to someone holding updates, so they can let them in
+      // again (the maintainer, 2026-10-31); holding them is said in a chat.
+      ...pick(held ? ["app_updates"] : []).map(settingRow),
+      infoRow("learned", "What you have taught it", plural(learnedLive().length, "rule", "rules"), learnedRows())].concat(others.map(settingRow))));
+    put(wrap, settingsGroup("This device", [infoRow("device", "Check this device", null, deviceList())]));
+    // Advanced, folded: only what can slow things down or use more of the Claude allowance
+    // (the maintainer, 4.12); everything harmless lives where it belongs (Look, This device).
+    const adv = [infoRow("where", "Where Claude works", whereSummary(), whereRows())].concat(pick(["suggestions"]).map(settingRow)).filter(Boolean);
+    put(wrap, det("set-advanced", false, {class: "set-group set-advanced"}, h("summary", {class: "group"}, "Advanced"),
+      h("p", {class: "small muted set-intro"}, "These can slow things down or use more of your Claude allowance. The usual settings suit nearly everyone."), h("div", {class: "set-rows"}, adv)));
     return wrap;
   }
+  function pageVersion() { return txt(obj(M().app).version || obj(M().updates).version); }
   function settingsGroup(title, rows) {
     const list = arr(rows).filter(Boolean);
     if (!list.length) return null;
@@ -13565,7 +13654,12 @@
     return h("div", {class: "setting-row look-row"}, h("span", {class: "set-name", id: "size-name"}, "Text size"),
       h("div", {class: "segctl", role: "radiogroup", "aria-labelledby": "size-name"}, opts.map(([v, label]) => {
         const id = "size-" + v;
-        return h("label", {class: "seg-opt look-choice", for: id}, h("input", {type: "radio", name: "size", id, "data-k": id, value: v, checked: (S.size || "standard") === v, onchange: () => setSize(v)}), h("span", {class: "look-name"}, label));
+        // Smaller and Larger are drawn in the size they set, against the size the page is in
+        // now; the control keeps its height and its targets (the maintainer, 4.12).
+        const sizes = window.innerWidth < 760 ? PHONE_SIZES : SIZES;
+        const ratio = sizes[v] / (sizes[S.size || "standard"] || sizes.standard);
+        return h("label", {class: "seg-opt look-choice size-choice", for: id}, h("input", {type: "radio", name: "size", id, "data-k": id, value: v, checked: (S.size || "standard") === v, onchange: () => setSize(v)}),
+          h("span", {class: "look-name", "data-size": v, style: v === "standard" ? null : "font-size:" + ratio.toFixed(3) + "em"}, label));
       })));
   }
   // A phone or tablet with no mouse: keyboard shortcuts are not offered there (the 3 November audit).
@@ -13614,22 +13708,23 @@
     // Which version this page runs, in one line (the maintainer, 2026-10-31).
     if (txt(u.version)) put(box, h("p", {class: "small muted", "data-k": "version"}, "You're on version " + txt(u.version) + (u.since ? ", with fixes made since." : ".")));
     const changed = arr(u.changed).length ? arr(u.changed) : arr(app.news).length ? [{version: "", date: "", lines: app.news}] : [];
-    if (changed.length) {
-      put(box, listView("news", {items: changed.map((c, i) => Object.assign({i}, c)), name: "what's new",
-        fold: (c) => c.i > 0, foldLabel: (k) => plural(k, "earlier update", "earlier updates"),
-        render: (c) => h("div", {class: "news"}, c.date ? h("p", {class: "muted small"}, fmtDay(c.date)) : null, h("ul", {}, arr(c.lines).map((l) => h("li", {}, txt(l)))))}));
+    // The newest few lines, then Show more, for the updates and for the changes made for you
+    // (the maintainer, 4.12): a release's six lines and its own heading each were a wall.
+    const lines = [];
+    for (const c of changed) {
+      arr(c.lines).forEach((l, i) => lines.push(h("li", {class: "news-line"}, i === 0 && (c.version || c.date) ? h("span", {class: "muted small news-when"}, [c.version, c.date ? fmtDay(c.date) : ""].filter(Boolean).join(" · ") + " ") : null, txt(l))));
     }
+    if (lines.length) put(box, h("ul", {class: "plain news"}, shortList("news", lines, 3, "Show more")));
     // Every change ever made, for more than the last few (the maintainer, 2026-10-31).
     const log = safeUrl(u.changelog);
     if (log) put(box, h("p", {class: "small"}, h("a", {href: log, target: "_blank", rel: "noopener noreferrer", class: "btn link", "data-k": "changelog"}, "See every change", h("span", {class: "sr-only"}, " (opens the full list of changes in a new tab)"))));
-    const done = arr(u.done).filter((d) => !d.undone);
+    // In plain words, each change once: the engine (app_setup.plain_change) keeps file and
+    // test names out and the same change logged several times to one line. No Undo: taking
+    // one back reverses work later changes stand on (the maintainer, 2026-10-30).
+    const done = arr(u.done).filter((d) => !d.undone).slice().sort((a, b) => txt(b.on).localeCompare(txt(a.on)));
     if (done.length) {
-      put(box, h("h4", {class: "small-head"}, "Changes made for you"), listView("upgrades", {items: done, name: "changes made for you",
-        fold: (d) => daysSince(d.on) !== null && daysSince(d.on) > 30, sort: (a, b) => txt(b.on).localeCompare(txt(a.on)),
-        // No Undo: taking one back reverses work later changes stand on, and the next update
-        // would only make it again (the maintainer, 2026-10-30: "would a user even want to undo
-        // many of these?"). Anything unwanted is said in Chat, where it is kept as a rule.
-        render: (d) => h("div", {class: "upgrade"}, h("p", {}, txt(d.line)), stateLine(txt(d.id), "upg:" + d.id))}),
+      put(box, h("h4", {class: "small-head"}, "Changes made for you"),
+        h("ul", {class: "plain upgrades"}, shortList("upgrades", done.map((d) => h("li", {class: "upgrade", "data-item": txt(d.id)}, h("p", {}, txt(d.line), d.on ? h("span", {class: "small muted"}, " · " + fmtDay(txt(d.on))) : null), stateLine(txt(d.id), "upg:" + d.id))), 3, "Show more")),
         h("p", {class: "small muted"}, "Not what you wanted? Say so in Chat and Claude puts it right."));
     }
     if (!box.childNodes.length) put(box, h("p", {class: "muted"}, txt(u.mode) === "when_asked" ? "Up to date. Updates wait until you say." : "Up to date. Updates arrive by themselves."));
@@ -13704,6 +13799,7 @@
     if (r.work) { openWork(); return; }
     // The messages to send are in Contacts now, each on its person's card (2026-11-04).
     if (o.drafts === "messages") r = {section: "contacts"};
+    if (S.section !== r.section) S.cameFrom = S.section;
     S.section = r.section;
     if (r.section === "drafts") setPref("drafts:view", "apps");
     if (!o.keepSplit) S.split = null;
