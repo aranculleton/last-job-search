@@ -387,9 +387,10 @@ FILE_NAME_PRESETS = (
     ("name_employer_role_document", "Name, employer, role, document", ("employer", "role")),
 )
 FILE_NAMES_DEFAULT = "name_employer_document"
-# The most a name runs to before its extension: under the 40 to 50 the guidance asks for
-# where it can be, with the person's name and the document word never cut.
-FILE_NAME_MAX = 50
+# The most a name runs to before its extension, measured with the letter's word (twelve
+# letters) so a resume and its letter are cut alike: a resume then stays near the 40 to 50
+# the guidance asks for. The person's name and the document's word are never cut.
+FILE_NAME_MAX = 60
 
 
 def recommended_file_names(country: str = "") -> str:
@@ -483,16 +484,16 @@ def file_name(kind_word: str, employer: str = "", role: str = "", preset: str | 
     preset = preset or file_names()
     has = dict((p[0], p[2]) for p in FILE_NAME_PRESETS).get(preset, ("employer",))
     head = "_".join(_plain_words(prefix().replace("_", " "))) or prefix()
-    room = FILE_NAME_MAX - len(head) - len(kind_word) - 2
+    room = FILE_NAME_MAX - len(head) - max(len(kind_word), len(LETTER_WORD)) - 2
     emp = (_employer_words(employer) or _employer_words(fallback)) if "employer" in has else []
-    # With a role to follow, the employer takes at most half the room, so the role's last
-    # word (the job) still fits; alone, all of it.
-    emp_room = room // 2 if "role" in has and role else room
+    role_words = _plain_words(doc_name.role_core(role) or role) if "role" in has else []
+    # With a role to follow, the employer leaves room for the role's last word (the job).
+    emp_room = room - (len(role_words[-1]) + 1 if role_words else 0)
     emp = _trim_end(emp, emp_room) or emp[:1]
     parts = ["_".join(emp)] if emp else []
     if "role" in has:
         left = room - (len(parts[0]) + 1 if parts else 0)
-        got = _role_words(_plain_words(doc_name.role_core(role) or role), left)
+        got = _role_words(role_words, left)
         if got:
             parts.append("_".join(got))
     return "_".join([head, *parts, kind_word]) + ext
