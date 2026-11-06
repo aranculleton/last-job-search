@@ -10,7 +10,7 @@ maintainer's notes (MAINTAINING.md, "How a builder works").
   window (innerHeight, scrollTop) turns a measured box into the window's px first
   (`screenPerPx`, `screenY` in app.js; the tests' `__drawnRect`). Chrome can measure Safari's way
   in a test (`measureBeforeZoom` in the harness), so the ordinary run holds it.
-- **A computer that reports no pointer is a computer.** Headless Firefox, a remote desktop and a
+- **A computer that reports no pointer is a computer.** Firefox run headless, a remote desktop and a
   keyboard alone report `pointer: none`; every laptop rule lists it beside `pointer: fine`.
 - **Everywhere by hand takes `variants` and `tests`**, and its summary prints each failure's
   message whole (`--tb=line`, `verbosity_assertions=2`). A probe test that raises its
