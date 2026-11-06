@@ -1284,8 +1284,15 @@ li:first-child > .fb-row, .fb-row:first-child { border-top: 0; }
    width, and its own text and fields ran off the right (the maintainer, 2026-10-26). */
 dialog.work-sheet :is(form, div, label, fieldset) { min-width: 0; }
 dialog.work-sheet :is(select, input, textarea) { width: 100%; max-width: 100%; min-width: 0; text-overflow: ellipsis; }
-.band-more > summary { list-style: none; cursor: pointer; text-align: center; padding: 8px 16px; margin-top: 8px; min-height: var(--target); display: grid; place-items: center;
-  border: 1px solid var(--line-strong); border-radius: 999px; font-weight: 600; font-size: var(--t-sm); }
+/* A fold at a list's end is a quiet line with its arrow, never a bar the width of the page:
+   three of them stacked read as three big buttons (the maintainer, 2026-11-06: "think it needs
+   better design"). */
+.band-more > summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; margin: 4px 0 0 -8px;
+  min-height: var(--target); border-radius: var(--r-sm); font-weight: 600; font-size: var(--t-sm); color: var(--muted); }
+.band-more > summary::after { content: "\203A"; display: inline-block; transition: transform 0.15s; }
+.band-more[open] > summary::after { transform: rotate(90deg); }
+@media (hover: hover) { .band-more > summary:hover { color: var(--ink); background: var(--raised); } }
+@media (prefers-reduced-motion: reduce) { .band-more > summary::after { transition: none; } }
 .band-more > summary::-webkit-details-marker { display: none; }
 .band-more[open] > summary { margin-bottom: 12px; }
 /* "Show N more" says what it still folds: once open it holds nothing back, so it goes. */

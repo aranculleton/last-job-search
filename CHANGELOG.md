@@ -20,6 +20,12 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Jobs shows all its questions itself**, never "+1 more in To do", and a single card left over
+  on To do is shown rather than folded. The folds at the end of a list are quiet lines, not bars
+  the width of the page.
+
 ## [4.13.0] - 2026-11-06
 
 ### Changed

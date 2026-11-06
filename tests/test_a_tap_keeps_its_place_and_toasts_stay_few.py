@@ -88,3 +88,20 @@ def test_a_job_left_out_says_why_and_offers_no_try_again(run, tmp_path, summary_
     r = got["after"][1]["eval"]
     assert r["said"] and r["again"] == 0, ("Try again offered on a job ruled out", r)
     assert not [w for w in got["work"] if w.get("kind") == "draft" and w.get("status") == "queued"], got["work"]
+
+
+FOLDS = ("(() => ({one: [...document.querySelectorAll('#main summary')].some((s) => /^Show 1 more$/.test(s.textContent.trim())),"
+         " away: /more in To do/.test(document.querySelector('#main').textContent),"
+         " bars: [...document.querySelectorAll('#main .band-more > summary')].map((s) => Math.round(s.getBoundingClientRect().width))}))()")
+
+
+@pytest.mark.parametrize("where", ["todo", "jobs"])
+def test_one_more_is_shown_never_folded_and_folds_are_quiet_lines(run, tmp_path, where):
+    # The maintainer, 2026-11-06: "+1 more in to do? why would to do have it but not the jobs
+    # page?", and of To do's foot: "show 1 more etc those 3 options at the end ... needs better
+    # design". One card left over is shown in place, nothing sends the person to To do from
+    # Jobs, and a fold is a short line, never a bar the width of the page.
+    got = _go(run, tmp_path, [{"hash": where, "wait": 200, "eval": FOLDS}], WIDE, model=_finds(), clock=T)
+    r = got["after"][0]["eval"]
+    assert not r["one"] and not r["away"], r
+    assert all(w < WIDE["width"] / 2 for w in r["bars"]), r
