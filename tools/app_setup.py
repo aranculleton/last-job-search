@@ -204,12 +204,24 @@ def take_master() -> str:
         return ""
     try:
         import land
-        if land.landing(ROOT):
+        held = land._holding(ROOT)
+        mine = held.__enter__()
+    except Exception:  # noqa: BLE001  an older land.py: taken as before
+        held, mine = None, True
+    try:
+        if not mine:
             # The landing merges master itself, and two merges at once fought over git's
-            # index (the release review, 2026-11-03): the page is drawn from the copy as it is.
+            # index (the release review, 2026-11-03): the page is drawn from the copy as it
+            # is. The landing's own lock, taken in one step for the merge below, so a landing
+            # starting this moment waits its turn too (2026-11-06).
             return ""
-    except Exception:  # noqa: BLE001
-        pass
+        return _take_master()
+    finally:
+        if held is not None:
+            held.__exit__(None, None, None)
+
+
+def _take_master() -> str:
     if _merging():
         # A merge being settled by hand: a merge here failed on it, and the abort that
         # followed threw the settling away (the release review, 2026-11-03).
