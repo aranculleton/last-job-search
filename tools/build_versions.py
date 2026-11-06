@@ -850,8 +850,9 @@ METHODS: dict[str, dict] = {
             (78, "2026-11-06", True, "profile reading never loads a page in the tab in front of the person: every automatic look and read goes to the page's own tab, opened only by a tap, a sign-out met while reading by itself is one To do card that says where the reading happens, a run left unfinished tries again two hours on, someone dropped on the page is not read; an I sent it tap that kept no version counts only for its own words; a follow-up row shows its person's work being drafted however it was asked for"),
             (79, "2026-11-06", False, "Cancel under a draft's pencil puts back the words edited by hand; Done editing keeps them"),
             (80, "2026-11-06", False, "Your CV's card has the pencil where its draft is kept: the Tweak panel opens on Bullets, each a choice, the ones ticked swapped for another true one from the same job and never kept as a usual"),
+            (81, "2026-11-06", False, "a toast shows its time left as a ring round its close, two at most with the rest counted; a job tapped keeps its place on Jobs while the person stays; a job left out as not a fit says why in Claude's work and never offers Try again"),
         ),
-        "fingerprint": "ff3b6a0ce05d8da5",
+        "fingerprint": "40a27933d54fef2e",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

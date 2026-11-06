@@ -2053,3 +2053,11 @@ a.bp-stat .bp-n { color: var(--ink); }
   html.dock-left.nav-mini .bp-bottom { padding-left: calc(3 * var(--target)); }
 }
 .dock-top .btn { flex: none; }
+/* A toast's time left: a thin ring round its close that empties, still while it is held. */
+.toast-x { position: relative; }
+.toast-ring { position: absolute; inset: 4px; width: calc(100% - 8px); height: calc(100% - 8px); transform: rotate(-90deg); pointer-events: none; }
+.toast-ring circle { fill: none; stroke: currentColor; stroke-width: 2; opacity: 0.6; stroke-dasharray: 100; stroke-dashoffset: 0; animation-name: toast-ring; animation-timing-function: linear; animation-fill-mode: forwards; }
+.toast.is-held .toast-ring circle { animation-play-state: paused; }
+@keyframes toast-ring { to { stroke-dashoffset: 100; } }
+@media (prefers-reduced-motion: reduce) { .toast-ring circle { animation: none; } }
+.toast-more { white-space: nowrap; }

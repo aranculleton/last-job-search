@@ -937,7 +937,7 @@
       if (p.status !== w.status) {
         if (w.status === "done") announce(txt(w.title) + ": ready.");
         else if (w.status === "failed") announce(txt(w.title) + ": did not finish.");
-        else if (w.status === "stopped") announce(txt(w.title) + ": stopped. Anything already saved is kept.");
+        else if (w.status === "stopped") announce(txt(w.title) + (leftOut(w) ? ": not drafted, " + lc1(leftOut(w)).replace(/\.?$/, ".") : ": stopped. Anything already saved is kept."));
         else if (w.status === "claimed" || w.status === "running") announce(txt(w.title) + ": started.");
       } else if (p.stage !== w.stage && w.status === "running") {
         const st = stagesFor(w)[Math.max(0, parseInt(w.stage, 10) || 0)];
@@ -2030,9 +2030,18 @@
   // Asked again in the last minute: a second Try again is the same tap.
   const justAsked = (w) => !!w && txt(w.status) === "queued" && now() - (tms(w.asked_at) || 0) < 60000;
   const retriedAt = new Map();
+  // Why a job's draft ended with the job ruled out, from its result (app.py done --left-out),
+  // or "" for any other ending.
+  // A job left out before this field was kept says so in its summary ("Not drafted: ...").
+  function leftOut(w) {
+    const r = obj(obj(w).result);
+    if (txt(r.left_out)) return txt(r.left_out);
+    const m = /^Not drafted: (.+)$/.exec(txt(r.summary));
+    return m && txt(obj(w).status) === "stopped" ? m[1] : "";
+  }
   function retryWork(id) {
     const w = workDoc(id);
-    if (!w) return;
+    if (!w || leftOut(w)) return;
     // A double tap, or a tap while the last is still being written, is that tap (robustness
     // audit 2); a second Try again is the same tap.
     if (workWriting.has(id) || justAsked(w)) return;
@@ -2103,7 +2112,7 @@
     t.made = now();
     t.until = now() + (t.bad ? 2 * TOAST_MS : TOAST_MS);
     t.held = false;
-    S.toasts = S.toasts.filter((x) => !x.gone).concat([t]).slice(-3);
+    S.toasts = S.toasts.filter((x) => !x.gone).concat([t]).slice(-8);
     renderToasts();
   }
   function renderToasts() {
@@ -2113,18 +2122,32 @@
     S.toasts = S.toasts.filter((t) => !t.gone && (t.held || t0 < t.until));
     box.classList.toggle("above-bulk", !!document.querySelector(".bulk"));
     const focusKey = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.k : null;
-    box.replaceChildren(...S.toasts.map((t) => {
+    // Two at most: a burst of finished work stacked three toasts up a phone's screen (the
+    // maintainer, 2026-11-06: "is there a limit so it doesnt fill the screen with stacking?").
+    // The rest are counted on the newest, "+3 more", which opens Claude's work, where each is.
+    const shown = S.toasts.slice(-2);
+    const more = S.toasts.length - shown.length;
+    box.replaceChildren(...shown.map((t, i) => {
       const undoable = t.ids.length && t.ids.some((id) => !S.receipts.has(id) && actionState(id) === "saved");
-      const hold = () => { t.held = true; };
-      const release = () => { t.held = false; t.until = Math.max(t.until, now() + 3000); };
-      return h("div", {class: "toast" + (t.bad ? " bad" : ""), "data-toast": t.key, onmouseenter: hold, onmouseleave: release,
+      const hold = () => { t.held = true; const r = box.querySelector('[data-toast="' + t.key + '"]'); if (r) r.classList.add("is-held"); };
+      const release = () => { t.held = false; t.until = Math.max(t.until, now() + 3000); t.from = now(); renderToasts(); };
+      // How long it has left, as a ring round its close that empties (the maintainer,
+      // 2026-11-06: "a circle that fills up ... make me less incentivised to close it"): still
+      // while pointed at or focused, and never moving with reduced motion.
+      const life = Math.max(1, t.until - (t.from || t.made));
+      const gone = Math.min(life, Math.max(0, now() - (t.from || t.made)));
+      const ring = svg("svg", {class: "toast-ring", viewBox: "0 0 24 24", "aria-hidden": "true", focusable: "false"},
+        [svg("circle", {cx: "12", cy: "12", r: "10", pathLength: "100", style: "animation-duration:" + life + "ms;animation-delay:-" + gone + "ms"})]);
+      return h("div", {class: "toast" + (t.bad ? " bad" : "") + (t.held ? " is-held" : ""), "data-toast": t.key, onmouseenter: hold, onmouseleave: release,
         onfocusin: hold, onfocusout: (e) => { if (!e.currentTarget.contains(e.relatedTarget)) release(); }},
         h("span", {class: "toast-text"}, t.text),
         undoable ? h("button", {type: "button", class: "btn quiet small", "data-k": "toast-undo:" + t.key, onclick: () => undo(t.ids)}, "Undo") : null,
         t.retry ? h("button", {type: "button", class: "btn quiet small", "data-k": "toast-retry:" + t.key, onclick: () => { t.gone = true; t.retry(); }}, "Try again") : null,
         t.see ? h("button", {type: "button", class: "btn quiet small", "data-k": "toast-see:" + t.key, onclick: () => { t.gone = true; t.see(); renderToasts(); }}, t.seeLabel || "See it") : null,
-        h("button", {type: "button", class: "btn quiet small icon", "aria-label": "Close this message", "data-k": "toast-x:" + t.key,
-          onclick: () => { t.gone = true; renderToasts(); if (arr(t.ids).length) scheduleRender(); }}, "×"));
+        more && i === shown.length - 1 ? h("button", {type: "button", class: "btn quiet small toast-more", "data-k": "toast-more", "aria-label": more + " more: open Claude's work",
+          onclick: () => { S.toasts.forEach((x) => { x.gone = true; }); renderToasts(); openWork(); }}, "+" + more + " more") : null,
+        h("button", {type: "button", class: "btn quiet small icon toast-x", "aria-label": "Close this message", "data-k": "toast-x:" + t.key,
+          onclick: () => { t.gone = true; renderToasts(); if (arr(t.ids).length) scheduleRender(); }}, ring, h("span", {"aria-hidden": "true"}, "×")));
     }));
     if (focusKey) refocus(box, focusKey);
   }
@@ -5928,7 +5951,12 @@
     }
     // Drafts first: one needing your answer or a fix, then those ready to send, then one being
     // written, then the finds by the sort chosen.
-    const stage = (r) => { const d = listDraft(r); if (d) return readyLive(d) ? (readyQuestions(d).length || alertsOf(d).some((x) => x.kind === "checks") ? 0 : 1) : 2; const st = jobStatus(r); return st === "asking" ? 0 : st === "drafting" ? 3 : 4; };
+    const stageNow = (r) => { const d = listDraft(r); if (d) return readyLive(d) ? (readyQuestions(d).length || alertsOf(d).some((x) => x.kind === "checks") ? 0 : 1) : 2; const st = jobStatus(r); return st === "asking" ? 0 : st === "drafting" ? 3 : 4; };
+    // A card keeps the place it had when Jobs was opened, for as long as the person stays: a
+    // job tapped Draft this jumped to the top among the drafts, and had to be found again (the
+    // maintainer, 2026-11-06). The next visit to Jobs draws each in its stage.
+    const held = S.jobsHeld || (S.jobsHeld = new Map());
+    const stage = (r) => { const k = txt(r.id); if (!held.has(k)) held.set(k, stageNow(r)); return held.get(k); };
     const bySort = jobSort();
     const lo = {items: inThis, name: "jobs", one: "job", many: "jobs", chips: tab === "dismissed" ? [] : jobChips(), sort: (a, b) => (stage(a) - stage(b)) || bySort(a, b),
 
@@ -8907,6 +8935,9 @@
       const said = o.done ? o.done(w) : "Done.";
       return box("tone-ok", said || [h("span", {class: "spin", "aria-hidden": "true"}), " Finished: putting it on your page."]);
     }
+    // Left out: the job is not one they can take, said as its reason, never as a failure with
+    // Try again (the maintainer, 2026-11-06: Try again drafted a job already ruled out).
+    if (st === "stopped" && leftOut(w)) return box("", "Not drafted: " + lc1(leftOut(w)).replace(/\.?$/, "."));
     if (st === "stopped") {
       // Called off before Claude began: it is gone at once, as nothing was done.
       if (!w.claimed_at && !w.stage_at) return null;
@@ -12327,7 +12358,7 @@
     // Its own chat stopped on a question to the person (tools/page_db.py mark_blocked): said
     // as that, never as a job that may have stopped (the stranger audit, X-7 and X-8).
     const blocked = (st === "running" || st === "claimed") && !!txt(w.blocked_at);
-    const label = p.stopping ? "Stopping after this step" : picked ? "Starting" : st === "queued" ? (unsent ? "Not sent yet" : late ? "No answer yet" : inLine ? (place.pos === 1 ? "Next" : "Waiting its turn") : ahead ? (ahead.pos === 1 ? "Next" : "Waiting its turn") : waking ? (freshHeartbeat() ? "Sent" : "Waking Claude") : "Waiting for Claude") : st === "running" || st === "claimed" ? (blocked ? "Waiting for you" : slow ? "May have stopped" : null) : st === "done" && notOnPageYet(w) ? "Putting on page" : WORK_WORDS[st] || cap1(st);
+    const label = p.stopping ? "Stopping after this step" : picked ? "Starting" : st === "queued" ? (unsent ? "Not sent yet" : late ? "No answer yet" : inLine ? (place.pos === 1 ? "Next" : "Waiting its turn") : ahead ? (ahead.pos === 1 ? "Next" : "Waiting its turn") : waking ? (freshHeartbeat() ? "Sent" : "Waking Claude") : "Waiting for Claude") : st === "running" || st === "claimed" ? (blocked ? "Waiting for you" : slow ? "May have stopped" : null) : st === "done" && notOnPageYet(w) ? "Putting on page" : st === "stopped" && leftOut(w) ? "Not drafted" : WORK_WORDS[st] || cap1(st);
     const tone = p.stopping ? "held" : {done: "ok", failed: "bad", stopped: "held", needs_you: "warn"}[st] || (blocked || slow || late || unsent ? "warn" : null);
     const cur = p.stages[Math.min(p.i, p.n - 1)];
     // The newest line Claude wrote on it, from after it was asked (or answered).
@@ -12405,7 +12436,8 @@
     let now1 = ws.now1;
     if (st === "running" || st === "claimed" || picked || st === "queued") {
       // said by workSay
-    } else if (st === "stopped") now1 = "Stopped. Anything already saved is kept.";
+    } else if (st === "stopped" && leftOut(w)) now1 = "Not drafted: " + lc1(leftOut(w)).replace(/\.?$/, ".");
+    else if (st === "stopped") now1 = "Stopped. Anything already saved is kept.";
     else if (st === "failed") now1 = (typeof w.error === "string" ? w.error : txt(obj(w.error).plain)) || "It stopped part way. Anything already saved is kept.";
     else if (st === "needs_you") now1 = txt(obj(obj(w.needs).answer).kind) && txt(obj(obj(w.needs).answer).kind) !== "text" ? "" : txt(w.note) || "It has a question for you.";
     else if (st === "done") now1 = firstSentence(txt(obj(w.result).summary));
@@ -12478,7 +12510,7 @@
     // be reached is there a link to start a chat by hand.
     const canWake = canRing();
     const tries = Number(w.attempt) || 1;
-    if ((st === "failed" || (st === "stopped" && !w.stop_asked) || (slow && ACTIVE.has(st) && !limitHit() && !lead)) && tries < 3) {
+    if ((st === "failed" || (st === "stopped" && !w.stop_asked && !leftOut(w)) || (slow && ACTIVE.has(st) && !limitHit() && !lead)) && tries < 3) {
       put(acts, btn("Try again", () => retryWork(id), {kind: "secondary", small: true, key: "retry:" + id, aria: "Try again: " + txt(w.title), wakes: txt(w.kind)}));
     }
     // No "Ask Claude again": a ring that went unanswered goes again with the person's next
@@ -14148,6 +14180,8 @@
     o = o || {};
     let r = resolveSection(id) || (SECTION_IDS.has(id) ? {section: id} : null);
     if (!r) return;
+    // Leaving Jobs lets its cards take their stages again next time (renderJobs, held).
+    if (r.section !== S.section) S.jobsHeld = null;
     if (r.work) { openWork(); return; }
     // The messages to send are in Contacts now, each on its person's card (2026-11-04).
     if (o.drafts === "messages") r = {section: "contacts"};
@@ -14689,6 +14723,8 @@
   // that arrives while the person is selecting or typing in the main part.
   function render(skipMain) {
     if (S.owner !== true) return;
+    // Away from Jobs however it was left (a link, Back): its cards take their stages again.
+    if (S.section !== "jobs" && S.section !== "drafts") S.jobsHeld = null;
     const t0 = performance.now();
     try { drawPage(skipMain); } finally { if (skipMain !== true) { drawnAt = performance.now(); drawMs = drawnAt - t0; } }
   }

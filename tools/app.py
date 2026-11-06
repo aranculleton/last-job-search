@@ -2332,7 +2332,7 @@ def cmd_done(a) -> int:
                              error=a.failed, links=_links(a.link), reply=reply, thread=a.thread,
                              chat_kind=a.kind or app_listen.chat_kind(), dump_dir=a.dump,
                              chat=a.chat, question=a.question, about=a.about,
-                             answer=_answer(a), answered=a.answered)
+                             answer=_answer(a), answered=a.answered, left_out=left)
     except (KeyError, ValueError) as e:
         print(f"app: not finished: {e.args[0] if e.args else e}", file=sys.stderr)
         return 2

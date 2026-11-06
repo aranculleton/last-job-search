@@ -30,6 +30,12 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **A job ruled out while it was being drafted says why, and is never drafted again.** Claude's
+  work said "Stopped" with Try again, which started a second draft of a job already set aside;
+  it now says "Not drafted" and the reason.
+- **A job you tap keeps its place on Jobs** while you stay there, instead of jumping to the top.
+- **Messages at the foot of the page show how long they have left** as a ring round their close,
+  and only two show at once, with "+3 more" opening Claude's work for the rest.
 - **Cancel under a draft's pencil puts your words back.** Words changed by hand and then
   cancelled stayed changed; now only Done editing keeps them.
 - **A new text size fits your Brief to the window again.** After Smaller or Larger it kept

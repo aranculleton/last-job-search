@@ -228,6 +228,9 @@ def test_a_draft_that_stops_on_a_hard_rule_takes_its_job_off_jobs(tmp_path, monk
     assert w[wid]["status"] == "stopped"
     assert w[wid]["result"]["summary"] == ("Not drafted: the posting says the role is only "
                                            "open in Dublin.")
+    # Its reason is kept as a left-out, so the page says it and offers no Try again (the
+    # maintainer, 2026-11-06: Try again drafted a job already ruled out).
+    assert w[wid]["result"]["left_out"] == "the posting says the role is only open in Dublin", w[wid]
     found, _drafts = _lists()
     assert "Netherby Grocers" not in found
     seen = exclude.load_seen(str(st / "job_scraper" / "seen_jobs.json"))["seen"]
