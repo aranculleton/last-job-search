@@ -10393,13 +10393,7 @@
       plain("places", "Where", join(s.places), list(s.places).map((x) => String(x).split(",")[0].trim()), list(s.places)),
       plain("pay", "Pay", payWords),
       avoid ? plain("avoid", "Avoid", avoid) : null,
-      portals.length ? infoRow("search-portals", "Job sites", portals.filter((p) => p.on !== false).length + " searched", h("ul", {class: "plain checks-list"}, portals.map((p) => {
-        const pid = "portal-" + seg(txt(p.name));
-        const label = txt(p.label) || cap1(txt(p.name).replace(/-search$/, "").replace(/[-_]/g, " "));
-        return h("li", {class: "toggle-row"}, toggleLabel(pid, [label, p.why ? h("span", {class: "hint block"}, txt(p.why)) : null],
-          h("input", {type: "checkbox", role: "switch", id: pid, "data-k": pid, checked: p.on !== false,
-            onchange: (e) => set("sites", {name: txt(p.name), on: e.target.checked}, label + (e.target.checked ? ": on" : ": off"))})));
-      }))) : null,
+      portals.length ? jobSitesRow(s, portals) : null,
       // A long list opens on its first few, with a search: 106 names were a wall 2,045px tall
       // (the 3 November audit). Employers the person ruled out are not among them.
       boards.length ? infoRow("search-boards", "Employers you follow", String(boards.length), h("div", {class: "d-stack"},
@@ -10425,6 +10419,41 @@
   function followList(boards) {
     return {items: boards, name: "employers you follow", one: "employer", many: "employers", first: 12, firstLabel: (k) => plural(k, "more employer", "more employers"),
       search: (b) => txt(b.employer), searchLabel: "Employer", render: (b) => h("li", {}, h("bdi", {}, txt(b.employer))), box: (kids) => h("ul", {class: "plain"}, kids)};
+  }
+  // Settings, Job sites (model.search.portals, app_model._sites): every site by its plain name
+  // with one line saying what it is. A site that needs a key this computer lacks says "Needs a
+  // free key" where its tick would be, and opens on the numbered steps to get one: no tick is
+  // drawn that could only turn itself off again. Each site is its own item, so its tick shows
+  // what the engine holds (the tap while it is on its way, then the model), and a tap the
+  // engine refused says why on the site's own row, in its words (stateLine), with the tick back
+  // as it truly is. Adzuna, listed as "api.adzuna.com", looked ticked and then unticked itself
+  // after a visit, with nothing said (the maintainer, 2026-11-06).
+  function jobSitesRow(s, portals) {
+    const on = (p) => {
+      const e = effective(txt(p.id), ["search.set"]);
+      const v = e ? obj(e.doc.value) : null;
+      return v && v.what === "sites" && (txt(p.id) || txt(v.name) === txt(p.name)) ? v.on !== false : p.on !== false;
+    };
+    const name = (p) => txt(p.label) || cap1(txt(p.name).replace(/-search$/, "").replace(/[-_]/g, " "));
+    const note = (p) => (txt(p.note) || txt(p.why) ? h("span", {class: "hint block"}, txt(p.note) || txt(p.why)) : null);
+    const needs = (p) => (obj(p.key).free ? "Needs a free key" : "Needs a key");
+    const searched = portals.filter((p) => !p.key && on(p)).length;
+    return infoRow("search-portals", "Job sites", searched + " searched", h("ul", {class: "plain checks-list"}, portals.map((p) => {
+      const label = name(p);
+      const item = txt(p.id) || "search-settings";
+      const pid = "portal-" + seg(txt(p.name));
+      if (p.key) {
+        return h("li", {class: "site-key", "data-item": item}, det("site-key:" + pid, false, {class: "site-key-fold"},
+          h("summary", {class: "set-sum", "data-k": "site-key-sum:" + pid}, h("span", {class: "set-name"}, label, note(p)), h("span", {class: "set-value", "data-k": "site-needs:" + pid}, needs(p))),
+          h("div", {class: "set-body"}, h("p", {}, "To get one:"), h("ol", {class: "setup-steps", "data-k": "site-steps:" + pid}, arr(obj(p.key).steps).map((x) => h("li", {}, txt(x)))))),
+          stateLine(item, "site:" + pid));
+      }
+      // A row from before each site was its own item names its site in the value.
+      const tap = (want) => act([{item, action: "search.set", value: {what: "sites", name: txt(p.name), on: want}, rev: txt(p.rev) || txt(s.rev) || null}], label + (want ? ": on" : ": off"));
+      return h("li", {class: "toggle-row", "data-item": item}, toggleLabel(pid, [label, note(p)],
+        h("input", {type: "checkbox", role: "switch", id: pid, "data-k": pid, checked: on(p), onchange: (e) => tap(e.target.checked)})),
+        stateLine(item, "site:" + pid));
+    })));
   }
   // G14. Your profile (model.you): the jobs, skills, education and certificates every resume
   // is built from. Each change is one `profile` work item: a chat writes it into the profile

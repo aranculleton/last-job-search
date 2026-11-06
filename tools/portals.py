@@ -176,6 +176,210 @@ def url(name: str, root: str | None = None) -> str:
     return meta(name, root).get("url", "")
 
 
+# ------------------------------------------------------------ what a site is, in plain words
+#
+# Every job site the page shows has a plain name and one line saying what it is, and a site
+# that needs a key says so with the steps to get one. This is the one place that holds it:
+# the page's Settings, Job sites, reads it through tools/app_model.py. "api.adzuna.com" stood
+# where "Adzuna" should have, and its tick turned itself off after a visit because the site
+# had no key (the maintainer, 2026-11-06).
+#
+# A person's own portal can say all of it in its SKILL.md frontmatter (/add-portal writes
+# these): `label: Built In Toronto`, `note: <one line>`, `key-env: CITYBOARD_API_TOKEN`
+# (the variables its CLI reads), `key-url: <where to sign up>` and `key-free: true`. A site
+# named here needs none of them, and a portal built before those lines existed still shows
+# its key: its CLI's own MISSING_CREDENTIALS check names the variables (`key_names`).
+#
+# A sign-up's steps are the job site's own, read from its official page on `checked`
+# (`source`, for Claude); the last step is always the chat, where Claude shows the person
+# where the key goes (SETUP.md, "A job site that needs a key").
+SITES: dict[str, dict] = {
+    "linkedin": {"label": "LinkedIn", "note": "LinkedIn's own job search, in every country."},
+    "freehire": {"label": "Freehire", "note": "A free board that gathers jobs from many sites."},
+    "adzuna": {
+        "label": "Adzuna",
+        "note": "Jobs gathered from many sites in the UK and over a dozen other countries, "
+                "many of them from agencies.",
+        "key": {
+            "free": True,
+            "url": "https://developer.adzuna.com/signup",
+            "source": ("https://developer.adzuna.com/signup",
+                       "https://developer.adzuna.com/overview",
+                       "https://developer.adzuna.com/docs/terms_of_service"),
+            "checked": "2026-11-06",
+            "steps": (
+                "Open developer.adzuna.com/signup.",
+                "Fill in a username, your email and a password.",
+                "For the organisation's name and website, give your own name and a page "
+                "about you.",
+                "Under \"Your application of the Adzuna API\", choose \"Personal job search\".",
+                "Under \"Average Monthly Visitors\", choose \"N/A\".",
+                "Choose your market, then register.",
+                "Keep the two codes Adzuna gives you: an app ID and an app key.",
+            ),
+        },
+    },
+    "indeed": {"label": "Indeed", "note": "One of the largest job boards, in many countries."},
+    "glassdoor": {"label": "Glassdoor", "note": "Jobs beside what staff say about working there."},
+    "jobbank": {"label": "Job Bank", "note": "The Government of Canada's own job board."},
+    "reed": {"label": "Reed", "note": "A large UK job board."},
+    "cvlibrary": {"label": "CV-Library", "note": "A large UK job board."},
+}
+# What a site's row says where no line says more.
+DEFAULT_NOTE = "A job site Claude set up for your search."
+# The last step of every key's steps: how the key reaches the app, in a chat.
+KEY_LAST_STEP = ("In a chat with Claude, say \"I have my {label} key\". Claude shows you "
+                 "the safe place for it, and the site is searched from then on.")
+# The words of a host that are never the site's name.
+_HOST_NOISE = {"www", "api", "jobs", "job", "careers", "developer", "m", "app",
+               "com", "co", "org", "net", "uk", "ca", "au", "nz", "ie", "de", "fr",
+               "in", "io", "gov", "gc"}
+
+
+def _words(text: str) -> list[str]:
+    return [w for w in re.split(r"[^a-z0-9]+", str(text or "").lower()) if w]
+
+
+def site_of(name: str, root: str | None = None) -> str:
+    """The SITES entry a portal is, by its folder's words or its address's ("" for none):
+    `adzuna-search` and a portal at api.adzuna.com are both "adzuna"."""
+    import urllib.parse
+    folder = _words(short(name))
+    host = _words(urllib.parse.urlparse(url(name, root)).netloc)
+    joined = "".join(folder)
+    for key in SITES:
+        if key in folder or key in host or key == joined:
+            return key
+    return ""
+
+
+def _heading(name: str, root: str | None = None) -> str:
+    """The portal's own SKILL.md title, less "Search Skill": "# Built In Toronto Job Search"
+    is Built In Toronto."""
+    root = root or SKILLS
+    try:
+        with open(os.path.join(root, name, "SKILL.md"), encoding="utf-8") as fh:
+            text = fh.read(8000)
+    except OSError:
+        return ""
+    m = re.search(r"^# +(.+?)\s*$", text, re.M)
+    if not m:
+        return ""
+    words = re.sub(r"(?:\s+(?:jobs?\s+search|search|skill|cli))+$", "",
+                   m.group(1).strip(), flags=re.I).strip()
+    return words if words and "." not in words else ""
+
+
+def label(name: str, root: str | None = None) -> str:
+    """A site's plain name, never its address ("api.adzuna.com") nor a folder's
+    ("adzuna-search"): its own `label:`, the name SITES gives it, its SKILL.md title, then
+    its folder's words."""
+    own = meta(name, root).get("label", "").strip()
+    if own:
+        return own
+    key = site_of(name, root)
+    if key:
+        return SITES[key]["label"]
+    heading = _heading(name, root)
+    if heading:
+        return heading
+    words = [w for w in re.split(r"[-_]+", short(name)) if w and w.lower() not in _HOST_NOISE]
+    return " ".join(w if w.isupper() else w[:1].upper() + w[1:] for w in words) or short(name)
+
+
+def note(name: str, root: str | None = None) -> str:
+    """One line saying what the site is: its own `note:`, SITES's, what the board research
+    found it covers (PORTAL_RESEARCH `covers`), else a plain default."""
+    own = meta(name, root).get("note", "").strip()
+    if own:
+        return own
+    key = site_of(name, root)
+    if key:
+        return SITES[key]["note"]
+    import urllib.parse
+    host = urllib.parse.urlparse(url(name, root)).netloc.lower().removeprefix("www.")
+    for r in research():
+        at = urllib.parse.urlparse(str(r.get("url") or "")).netloc.lower().removeprefix("www.")
+        same = (host and at and host == at) or r.get("portal") == name
+        if same and str(r.get("covers") or "").strip():
+            said = str(r["covers"]).strip()
+            return said[:1].upper() + said[1:] + ("" if said.endswith(".") else ".")
+    return DEFAULT_NOTE
+
+
+# A variable a portal's CLI reads its key from: `process.env.X`, `Bun.env["X"]`.
+_ENV_READ = re.compile(r"(?:process\.env|Bun\.env|import\.meta\.env)"
+                       r"(?:\.([A-Z][A-Z0-9_]*)|\[\s*['\"]([A-Z][A-Z0-9_]*)['\"]\s*\])")
+_KEYISH = re.compile(r"KEY|TOKEN|SECRET|APP_ID|CLIENT_ID|PASSWORD")
+
+
+def key_names(name: str, root: str | None = None) -> list[str]:
+    """The variables a portal reads its key from: its `key-env:` line, else the ones its
+    CLI's sources read where they say MISSING_CREDENTIALS (/add-portal's contract), [] for
+    a site that needs none."""
+    own = meta(name, root).get("key-env", "")
+    if own.strip():
+        return [x for x in re.split(r"[\s,]+", own) if x]
+    root = root or SKILLS
+    src = os.path.join(root, name, "cli", "src")
+    texts = []
+    for folder, _dirs, files in os.walk(src):
+        for f in files:
+            if f.endswith((".ts", ".js", ".mjs")):
+                try:
+                    with open(os.path.join(folder, f), encoding="utf-8") as fh:
+                        texts.append(fh.read(200_000))
+                except OSError:
+                    continue
+    if not any("MISSING_CREDENTIALS" in t for t in texts):
+        return []
+    found = []
+    for t in texts:
+        for m in _ENV_READ.finditer(t):
+            var = m.group(1) or m.group(2)
+            if _KEYISH.search(var) and var not in found:
+                found.append(var)
+    return found
+
+
+def needs_key(name: str, root: str | None = None) -> bool:
+    key = site_of(name, root)
+    return bool(key_names(name, root)) or bool(key and SITES[key].get("key"))
+
+
+def has_key(name: str, root: str | None = None, env=None) -> bool:
+    """Whether this computer holds the key a site needs (True for a site that needs none).
+    The variables it names must all be set; a site named in SITES whose CLI names none has
+    its key where any variable of its name holding a key or token is set."""
+    env = os.environ if env is None else env
+    if not needs_key(name, root):
+        return True
+    names = key_names(name, root)
+    if names:
+        return all(str(env.get(n) or "").strip() for n in names)
+    stem = (site_of(name, root) or short(name)).upper().replace("-", "_") + "_"
+    return any(k.startswith(stem) and _KEYISH.search(k) and str(v or "").strip()
+               for k, v in env.items())
+
+
+def key_help(name: str, root: str | None = None) -> dict:
+    """For a site that needs a key: whether it is free and the numbered steps to get it, one
+    action a line, ending with how it reaches the app. {} for a site that needs none."""
+    if not needs_key(name, root):
+        return {}
+    plain = label(name, root)
+    key = site_of(name, root)
+    known = dict(SITES[key].get("key") or {}) if key else {}
+    own = meta(name, root)
+    free = own.get("key-free", "").lower() in ("true", "yes", "1") or bool(known.get("free"))
+    steps = list(known.get("steps") or ())
+    if not steps:
+        where = re.sub(r"^https?://(www\.)?", "", own.get("key-url", "").strip() or url(name, root))
+        steps = [f"Open {where} and sign up for {'a free' if free else 'a'} key."
+                 if where else f"Sign up with {plain} for {'a free' if free else 'a'} key."]
+    return {"free": free, "steps": steps + [KEY_LAST_STEP.format(label=plain)]}
+
+
 def follows_contract(name: str, root: str | None = None) -> bool:
     """Whether the portal says it takes the round's calls (`contract: 1`, which
     /add-portal writes once its CLI accepts `search -q -l --jobage --page

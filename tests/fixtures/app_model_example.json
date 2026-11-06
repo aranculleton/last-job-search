@@ -1,7 +1,7 @@
 {
  "model": 1,
  "made_at": "2026-10-25T18:00:00Z",
- "rev": "7e9ee6131899",
+ "rev": "03e0a851e496",
  "app": {
   "version": "4.10.1",
   "url": null,
@@ -1859,23 +1859,29 @@
   "employers": [],
   "portals": [
    {
+    "id": "site-freehire",
     "name": "freehire-search",
     "label": "Freehire",
+    "note": "A free board that gathers jobs from many sites.",
     "on": true,
-    "why": "A free board that lists jobs from many sites."
+    "key": null,
+    "rev": "78de22b0d1e5"
    },
    {
+    "id": "site-linkedin",
     "name": "linkedin-search",
     "label": "LinkedIn",
+    "note": "LinkedIn's own job search, in every country.",
     "on": true,
-    "why": "LinkedIn's own job search."
+    "key": null,
+    "rev": "82a9034fa6e3"
    }
   ],
   "boards": [],
   "boards_left_out": 0,
   "rules": [],
   "pause": null,
-  "rev": "f523c2612e37"
+  "rev": "90bc84bb0074"
  },
  "where": {
   "id": "where",

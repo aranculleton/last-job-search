@@ -834,8 +834,9 @@ S.engine = async (a) => {
     if (st.submit) { await page.locator("dialog [data-k=sheet-go]").click(); await turn(page, 6); }
     if (st.wait) { await page.waitForTimeout(st.wait); await turn(page, 6); }
     // A chat, played: every action so far applied, then the next state of the model.
+    // `refuse`: the engine's own words for a tap it would not do, as its receipt carries them.
     if (st.receipts) {
-      for (const k of store.list("actions/")) { const id = k.split("/")[1]; if (!store.get("receipts/" + id)) store.chat("receipts/" + id, {applied_at: new Date().toISOString(), by: "cloud-1", result: "ok", note: ""}); }
+      for (const k of store.list("actions/")) { const id = k.split("/")[1]; if (!store.get("receipts/" + id)) store.chat("receipts/" + id, {applied_at: new Date().toISOString(), by: "cloud-1", result: st.refuse ? "conflict" : "ok", note: st.refuse || ""}); }
       await turn(page, 6);
     }
     if (st.view) { for (const [k, v] of Object.entries(st.view)) store.chat("view/" + k, {made_at: "2026-10-25T09:00:00Z", data: v}); await turn(page, 8); }
