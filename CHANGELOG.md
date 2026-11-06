@@ -67,6 +67,9 @@ make sense to somebody whose repo just received it.
   scheduled task, whose new chat had no copy of your search and could not start the helper,
   so it stopped. The chat that answers your page now starts its fresh helper directly from
   your copy; where it cannot, it keeps answering and your next brief starts it.
+- **The page helper it replaced goes quietly.** Once a fresh helper answers your page, the old
+  one does no more work: anything that reaches it gets one line, it finishes saving its own
+  work, and then it puts itself away at once instead of waiting for the tidy-up.
 
 ### Removed
 

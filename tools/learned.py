@@ -2188,6 +2188,18 @@ _ANSWERED = re.compile(r"learned\.py[\"']?\s+(?:record|skip|approve)\b"
                        r"|\blearned\.(?:record|skip|approve)\(")
 
 
+def _retired() -> str:
+    """The one line for a chat that has handed the page on (app_listen.retired_here), or "".
+    Never raises."""
+    try:
+        import app_listen
+        if app_listen.retired_here():
+            return app_listen.RETIRED_LINE.format(chat=app_listen.this_chat())
+    except Exception:  # noqa: BLE001  the hook never breaks a chat
+        pass
+    return ""
+
+
 def hook(event: dict) -> dict:
     """The Claude Code hook (the one the app ships, allowlisted in security_guards.py).
 
@@ -2200,6 +2212,14 @@ def hook(event: dict) -> dict:
     if path is None or person.in_example(path):
         return {}                     # the app itself, before /setup, or its example person
     name = event.get("hook_event_name") or ""
+    retired = _retired()
+    if retired and name == "UserPromptSubmit":
+        # A helper that handed the page on: one line a turn, nothing read (app_listen
+        # RETIRED_LINE). A turn on a nearly full chat can compact it (2026-11-06).
+        return {"hookSpecificOutput": {"hookEventName": "UserPromptSubmit",
+                                       "additionalContext": retired}}
+    if retired and name == "Stop":
+        return {}                     # never held for work: it does none (app.py retired)
     if name == "UserPromptSubmit":
         text = str(event.get("prompt") or "")
         cue = reaction(text)

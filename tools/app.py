@@ -2008,6 +2008,57 @@ NESTED_JOB = (" If the create_session is refused because this chat cannot start 
               "and this one is taken again that way once its claim lapses.")
 
 
+RETIRED_WAIT_S = 40 * 60
+
+
+def _saved_on_github(root: str) -> bool:
+    """Is everything of this chat's on GitHub: nothing unsaved, no landing running, and its
+    commit on master or on a branch GitHub holds (where the next landing brings it in)?"""
+    import land
+    import save_state
+    if land.landing(root) or save_state.unsaved(root):
+        return False
+    head = land._git(root, "rev-parse", "HEAD").stdout.strip()
+    if not head:
+        return False
+    if land._git(root, "merge-base", "--is-ancestor", "HEAD", "origin/master").returncode == 0:
+        return True
+    return bool(land._git(root, "branch", "-r", "--contains", "HEAD").stdout.strip())
+
+
+def cmd_retired(a) -> int:
+    """A helper that has handed the page on (app_listen.retired_here): no more work. Its own
+    save is started where it is not on GitHub yet, with a wait that wakes it once it ends;
+    saved, it archives itself at once. A chat that still answers the page is told so."""
+    import app_listen
+    import person
+    chat = app_listen.this_chat(a.chat)
+    if not chat or not app_listen.retired_here(chat):
+        print("retired: this chat answers the page, or never did: carry on as before.")
+        return 0
+    root = person.state()
+    if getattr(a, "wait", False):
+        import time
+        import land
+        until = time.monotonic() + RETIRED_WAIT_S
+        while land.landing(root) and time.monotonic() < until:
+            time.sleep(5)
+        print("retired: its save has ended: python3 tools/app.py retired --chat " + chat)
+        return 0
+    if _saved_on_github(root):
+        print("retired: its work is saved. Put this chat away now, as the last call of the "
+              "turn: archive_session " + json.dumps({"session_id": chat}) + ". Where "
+              "archive_session is not among this chat's tools, end the turn: the tidy-up in "
+              "the chat that answers the page puts it away. Say nothing about it.")
+        return 0
+    print("retired: its own save is not on GitHub yet. Run python3 tools/land.py --detach "
+          "--message \"The last work of the helper before\" (an ordinary call, it returns at "
+          "once), then, in the background (run_in_background), python3 tools/app.py retired "
+          f"--chat {chat} --wait, which wakes this chat once the save has ended. End the turn "
+          "with one line: \"This chat has handed your page on.\"")
+    return 0
+
+
 def cmd_nested(a) -> int:
     """The platform refused this chat a new chat or scheduled task because chats nest only so
     deep (each helper started the next, one level deeper a day, 2026-11-05). Kept in this
@@ -2763,6 +2814,10 @@ def main(argv=None) -> int:
     p.add_argument("--chat", default="")
     p.add_argument("--out", default="", help="where the batch goes (default <dump>/nested)")
     p.add_argument("--now", default=None)
+    p = sub.add_parser("retired", help="a helper that handed the page on: its one step, its "
+                                       "save, then archiving itself")
+    p.add_argument("--chat", default="")
+    p.add_argument("--wait", action="store_true", help="wait for its save to end, then say so")
     p = sub.add_parser("republish", help="ask the listener to publish the page's new code")
     p.add_argument("out_dir")
     p.add_argument("--now", default=None)
@@ -2886,7 +2941,7 @@ def main(argv=None) -> int:
             "files-saved": cmd_files_saved, "propose": cmd_propose, "listen": cmd_listen,
             "republish": cmd_republish, "pinned": cmd_pinned, "told": cmd_told, "doorbells": cmd_doorbells, "done": cmd_done,
             "ask": cmd_ask, "wake": cmd_wake, "version": cmd_version, "reads": cmd_reads, "search-drafts": cmd_search_drafts,
-            "follow-ups": cmd_follow_ups, "nested": cmd_nested,
+            "follow-ups": cmd_follow_ups, "nested": cmd_nested, "retired": cmd_retired,
             "answer": cmd_answer}[a.cmd](a)
 
 

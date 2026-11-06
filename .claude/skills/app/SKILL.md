@@ -110,7 +110,12 @@ checks in first, on every wake (`app.py listen`, in code), and its batch goes fi
 any batches that give a page an older version made its records' new names (once). A read it
 asks for is made into the same `$D` before running it again. If it says another chat answers
 the page, stop your watch (ArtifactComments, action `watch`, the url, `on: false`), write
-nothing else and end the turn: that chat takes it. A `listen: renew:` line is this chat's
+nothing else and end the turn: that chat takes it. Where it says this chat handed the page to
+a fresh helper, from then on every turn here (a ring, a notification, a message) is only
+`python3 tools/app.py retired --chat <your chat id>` and what it prints, with nothing read and
+one line: it starts this chat's own save if it is not on GitHub yet, and once it is, this chat
+archives itself (the app's hook says so at each turn, as a turn on a nearly full chat can
+compact it). A `listen: renew:` line is this chat's
 daily renewal: make its `create_session` call yourself, from this chat, once this turn's work
 has landed, unasked, and say nothing about it. Never through a scheduled task: the chat a
 one-time task started had no copy of the files, no add_repo and no create_session, and stopped
