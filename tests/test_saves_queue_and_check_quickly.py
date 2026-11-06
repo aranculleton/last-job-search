@@ -88,13 +88,15 @@ def _python_that_records(tmp_path):
     return env_dir, log
 
 
-def _quick(checkout, tmp_path, origin_url):
+def _quick(checkout, tmp_path, origin_url, **more):
     env_dir, log = _python_that_records(tmp_path)
-    env = dict(os.environ, VIRTUAL_ENV=str(env_dir), PYTHONDONTWRITEBYTECODE="1",
+    env = dict(os.environ, **more, VIRTUAL_ENV=str(env_dir), PYTHONDONTWRITEBYTECODE="1",
                TMPDIR=str(tmp_path), PATH=str(tmp_path / "bin") + os.pathsep +
                os.environ.get("PATH", ""), LJS_APP_URL="https://github.com/example-owner/x")
     for k in ("LJS_PROFILE", "LJS_STATE", "CLAUDE_CODE_REMOTE", "GITHUB_ACTIONS"):
         env.pop(k, None)
+    if land.ASIDE_ENV not in more:
+        env.pop(land.ASIDE_ENV, None)
     _git(checkout, "remote", "add", "origin", origin_url)
     r = subprocess.run([BASH, "tools/ci_local.sh", "--quick"], cwd=checkout, env=env,
                        capture_output=True, text=True, encoding="utf-8", errors="replace",
@@ -125,9 +127,17 @@ def test_the_quick_check_in_a_copy_never_runs_the_apps_suite(tmp_path, needs_she
     (c / "profile" / "notes.md").write_text("today's work\n", encoding="utf-8")
     _git(c, "add", "-A")
     _git(c, "commit", "-qm", "a landing brought in an update")
-    out, ran = _quick(c, tmp_path, "https://github.com/example-owner/my-search")
+    # One of their own tests an update broke, set aside by the landing while it is brought
+    # in line (tools/land.py): the check leaves it out, by its id, spaces and all.
+    aside = tmp_path / "aside.txt"
+    aside.write_text("profile/tests/test_mine.py::test_mine[a b]\r\n", encoding="utf-8")
+    out, ran = _quick(c, tmp_path, "https://github.com/example-owner/my-search",
+                      **{land.ASIDE_ENV: str(aside)})
     assert not any(a.startswith("-m pytest tests") for a in ran), (ran, out)
-    assert any("profile/tests" in a for a in ran), (ran, out)
+    own = [a for a in ran if "profile/tests" in a]
+    assert own and all("--deselect profile/tests/test_mine.py::test_mine[a b]" in a
+                       for a in own), (ran, out)
+    assert "1 of your own tests an update changed are set aside" in out, out
     line = next(ln for ln in out.splitlines() if "pytest (the app's suite" in ln)
     assert "SKIP" in line and "--quick in your copy" in line, out
 
@@ -334,25 +344,55 @@ def _marker_check(tmp_path):
     return ran, [sys.executable, "-c", "open(%r, 'w').close()" % str(ran)]
 
 
-def test_a_landing_never_checks_against_own_tests_an_update_just_broke(chat, tmp_path, capsys):
-    """An update this landing carries broke one of the person's own tests, and nothing had run
-    them against it (another chat took it): the landing runs them first, holds the work on its
-    branch and says the step, and the long check is never run on them."""
+def test_an_update_that_broke_own_tests_never_holds_the_save(chat, tmp_path, capsys,
+                                                             monkeypatch):
+    """An update this landing carries changed what one of the person's own tests pinned, and
+    nothing had run them against it (another chat took it, a short job's chat missed the step):
+    the save lands with that test set aside, and bringing it in line is queued at once for the
+    background step that needs nobody (the own-tests improvement). Never held, never nagging."""
+    import profile_upgrades
+    import sync_app
+    monkeypatch.setattr(profile_upgrades, "ROOT", str(chat))
     _update_in_this_landing(chat, PINNED)
-    ran, check = _marker_check(tmp_path)
+    got = tmp_path / "aside-seen"
+    check = [sys.executable, "-c",
+             "import os, shutil; p = os.environ.get(%r, ''); "
+             "shutil.copy(p, %r) if p else open(%r, 'w').close()"
+             % (land.ASIDE_ENV, str(got), str(got))]
     code = land.main(["--message", "Notes"], root=str(chat), check=check)
     out = capsys.readouterr().out
-    assert code == 1 and land.OWN_TESTS_DO in out and "test_shape" in out, out
-    assert not ran.exists()
-    assert "the work waits on" in out                       # pushed, never lost
-    import sync_app
-    assert sync_app.own_tests_step(str(chat))               # every command says it first
-    # Brought in line: the check runs, and the work lands.
+    assert code == 0 and "land: ready" in out, out
+    assert land.OWN_TESTS_DO not in out and "1 of the person's own tests" in out, out
+    assert got.read_text(encoding="utf-8").split() == [
+        "profile/tests/test_mine.py::test_shape"]
+    # Queued at once, for the next chat's hook to start in the background.
+    assert "own-tests" in profile_upgrades.listed_ids()
+    assert ("own-tests", profile_upgrades._day()) in profile_upgrades.unstarted(chat="a chat")
+    # The record still says it fails: the improvement's own check sees the work owed.
+    assert sync_app.own_tests_owed(str(chat)) == ["profile.tests.test_mine::test_shape"]
+    # Brought in line: nothing is set aside any more.
     (chat / "profile" / "tests" / "test_mine.py").write_text(
         PINNED.replace("'old'", "'new'"), encoding="utf-8")
+    got.unlink()
+    (chat / "profile" / "notes.md").write_text("more work\n", encoding="utf-8")
     code = land.main(["--message", "Notes"], root=str(chat), check=check)
     out = capsys.readouterr().out
-    assert code == 0 and ran.exists() and "land: ready" in out, out
+    assert code == 0 and got.read_text(encoding="utf-8") == "", out
+
+
+def test_the_own_tests_improvement_is_owed_again_for_a_second_update_the_same_day(chat,
+                                                                                  monkeypatch):
+    import profile_upgrades
+    monkeypatch.setattr(profile_upgrades, "ROOT", str(chat))
+    _update_in_this_landing(chat, PINNED)
+    assert profile_upgrades.queue_own_tests(str(chat))
+    profile_upgrades.mark_started()
+    assert profile_upgrades.unstarted(chat="a chat") == []
+    (chat / "tools" / "thing.py").write_text("SHAPE = 'newer'\n", encoding="utf-8")
+    _git(chat, "add", "-A")
+    _git(chat, "commit", "-qm", "Sync from the app: a second version today")
+    assert profile_upgrades.queue_own_tests(str(chat))
+    assert [i for i, _ in profile_upgrades.unstarted(chat="a chat")] == ["own-tests"]
 
 
 def test_own_tests_that_pass_after_an_update_hold_nothing(chat, tmp_path, capsys):

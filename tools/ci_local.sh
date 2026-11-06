@@ -283,14 +283,28 @@ fi
 # can be (41 seconds against nearly five minutes for one person's 1,600 tests, the same
 # results, 2026-11-03), and once more in one process only when that fails, so a test that
 # fails only beside another never holds up a save.
+# The person's own tests an update broke, which a landing sets aside (tools/land.py names
+# them in the file LJS_OWN_TESTS_ASIDE points at) while a background step brings them in line:
+# their finished work was held behind them until a chat noticed (the maintainer, 2026-11-06).
+ASIDE=()
+if [ -n "${LJS_OWN_TESTS_ASIDE:-}" ] && [ -f "$LJS_OWN_TESTS_ASIDE" ]; then
+  while IFS= read -r t || [ -n "$t" ]; do
+    t="${t%$'\r'}"
+    [ -n "$t" ] && ASIDE+=(--deselect "$t")
+  done < "$LJS_OWN_TESTS_ASIDE"
+fi
 own_tests() {
   # shellcheck disable=SC2086
-  if [ -n "$PAR" ] && "$PY" -m pytest profile/tests -q $PAR > /dev/null 2>&1; then return 0; fi
-  "$PY" -m pytest profile/tests -q
+  if [ -n "$PAR" ] && "$PY" -m pytest profile/tests -q $PAR ${ASIDE[@]+"${ASIDE[@]}"} > /dev/null 2>&1; then return 0; fi
+  "$PY" -m pytest profile/tests -q ${ASIDE[@]+"${ASIDE[@]}"}
 }
 if [ -d profile/tests ]; then
   before=$FAIL
   # No compiled copies in profile/tests/__pycache__ for a forced add to commit.
+  if [ "${#ASIDE[@]}" -gt 0 ]; then
+    echo "  $(( ${#ASIDE[@]} / 2 )) of your own tests an update changed are set aside for this save,"
+    echo "  while they are brought in line"
+  fi
   PYTHONDONTWRITEBYTECODE=1 run_py_module pytest "pytest (profile/tests, on this person)" own_tests
   # A failure here is often an update that changed or removed what the test pinned: say
   # which, and what to do, rather than leave a list of names to guess from.
@@ -366,7 +380,7 @@ else
         skip "$FLOOR_NAME, profile/tests" "--quick: your own tests ran once above"
       else
         PYTHONDONTWRITEBYTECODE=1 run "$FLOOR_NAME, profile/tests" "$FLOOR_ENV_PY" \
-          -m pytest profile/tests -q -p no:cacheprovider
+          -m pytest profile/tests -q -p no:cacheprovider ${ASIDE[@]+"${ASIDE[@]}"}
       fi
     fi
   else

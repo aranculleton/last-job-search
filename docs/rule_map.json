@@ -826,7 +826,7 @@
   {
    "id": "own-tests-fail",
    "was": "App-owned files and personal files",
-   "rule": "When they fail after an update, Claude brings them in line in the same turn, never a question for the person.",
+   "rule": "When they fail after an update, Claude brings them in line by a background step that needs nobody, never a question for the person; saves set them aside meanwhile.",
    "bold": "When they fail after an update",
    "home": "RUNBOOK.md",
    "anchor": "never a question or a to-do for the person, who hears one plain line at most",

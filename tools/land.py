@@ -559,13 +559,51 @@ CHECKED_ALREADY = "the same commit the last landing checked green and pushed\n"
 BEAT_S = 60
 
 
-def _run_check(root: str, cmd: list[str]) -> tuple[int, str]:
+ASIDE_ENV = "LJS_OWN_TESTS_ASIDE"     # ci_local.sh: a file of the person's tests to set aside
+ASIDE_FILE = "ljs-own-tests-aside.txt"
+
+
+def _node_id(root: str, name: str) -> str:
+    """pytest's id of a test from the name its junit report gives ("profile.tests.test_x.
+    TestA::test_b[1]" is "profile/tests/test_x.py::TestA::test_b[1]"), or ""."""
+    if ".py::" in name:
+        return name.replace("\\", "/")       # a check's own FAILED line gives the id itself
+    dotted, _, test = name.rpartition("::")
+    parts = dotted.split(".") if dotted else []
+    for i in range(len(parts), 0, -1):
+        path = "/".join(parts[:i]) + ".py"
+        if os.path.isfile(os.path.join(root, *parts[:i]) + ".py"):
+            return "::".join([path, *parts[i:], test])
+    return ""
+
+
+def _set_aside(root: str, names: list[str]) -> str:
+    """The file the check reads to set these of the person's own tests aside, or ""."""
+    ids = [n for n in (_node_id(root, x) for x in names) if n.startswith("profile/tests/")]
+    d = git_dir(root)
+    if not ids or not d:
+        return ""
+    p = os.path.join(d, ASIDE_FILE)
+    try:
+        with open(p, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write("\n".join(ids) + "\n")
+    except OSError:
+        return ""
+    return p
+
+
+def _run_check(root: str, cmd: list[str], aside: str = "") -> tuple[int, str]:
     """The landing check: (its exit code, what it printed). The lock's stamp is moved on each
-    minute it runs, so a long check is never taken for a landing killed part way."""
+    minute it runs, so a long check is never taken for a landing killed part way. `aside`:
+    the file naming the person's own tests an update broke, which the check sets aside."""
+    env = dict(os.environ)
+    env.pop(ASIDE_ENV, None)
+    if aside:
+        env[ASIDE_ENV] = aside
     try:
         p = subprocess.Popen(cmd, cwd=root, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                              text=True, encoding="utf-8", errors="replace",
-                             stdin=subprocess.DEVNULL)
+                             stdin=subprocess.DEVNULL, env=env)
     except OSError as e:
         return 1, "the check could not start: %s\n" % e
     out = err = ""
@@ -603,6 +641,17 @@ def _own_tests_owed(root: str) -> list[str]:
         return [str(n) for n, _m in failures or []]
     except Exception:  # noqa: BLE001  unsure: the check itself says
         return []
+
+
+def _recorded_failures(root: str) -> list[tuple[str, str]]:
+    """[(test, message)] the record of the person's own tests holds as failing now."""
+    try:
+        import sync_app
+        rec = sync_app.own_tests_record(root) or {}
+    except Exception:  # noqa: BLE001
+        return []
+    return [(str(f[0]), str(f[1]) if len(f) > 1 else "") for f in rec.get("failures") or []
+            if f]
 
 
 def _work_since_push(root: str) -> bool:
@@ -1440,25 +1489,52 @@ def _land(root: str, message: str, check, sleep) -> int:
         print("land: nothing to land")
         return 0
 
+    # The person's own tests an update broke, not in line yet: set aside for this save, never
+    # holding it, and their bringing in line queued for a background step that needs nobody
+    # (the own-tests improvement). A job's chat that was told to fix them first missed the
+    # line, and its finished work was stuck behind five tests an update changed (the
+    # maintainer's copy, 2026-11-06). Any other failure still stops the save.
     owed = _own_tests_owed(root)
+    aside = _set_aside(root, owed)
     if owed:
-        # An update broke some of the person's own tests and they are not in line yet: the
-        # check would only fail on them, minutes later, so it is not run. The work waits on
-        # its branch and lands with them once they pass (the maintainer, 2026-11-06).
-        _wait_on_branch(root, OWN_TESTS_HEAD, sleep)
-        print(OWN_TESTS_DO)
-        print("land: their own tests that fail: %s" % "; ".join(owed[:6]) +
-              ("; and %d more" % (len(owed) - 6) if len(owed) > 6 else ""))
-        return 1
+        queued = False
+        try:
+            import profile_upgrades
+            queued = profile_upgrades.queue_own_tests(root)
+        except Exception:  # noqa: BLE001  the landing goes on; the next sync lists it
+            pass
+        print("land: %d of the person's own tests an update changed are set aside for this "
+              "save%s; nothing to say about it" % (
+                  len(owed), "; bringing them in line is queued for the background"
+                  if queued else ""))
     head = _git(root, "rev-parse", "HEAD").stdout.strip()
     if head and head == pushed(root):
         # Exactly what the last landing checked green and pushed: never checked again (a save
         # queued behind another, with nothing new, ran a second ten-minute check).
         rc, out = 0, CHECKED_ALREADY
     else:
-        rc, out = _run_check(root, _check_command(root, check))
+        rc, out = _run_check(root, _check_command(root, check), aside)
     if rc != 0:
         own = own_tests_only(out)
+        if own:
+            # More of their own tests the update broke than the record knew (a run on another
+            # computer, a test that fails only beside another): set aside with the rest, the
+            # bringing in line queued, and checked once more, never held for them.
+            known = _recorded_failures(root)
+            names = [n for n, _m in own if n not in {k for k, _ in known}]
+            _record_own(root, known + [(n, m) for n, m in own if n in names])
+            aside = _set_aside(root, [k for k, _ in known] + names)
+            try:
+                import profile_upgrades
+                profile_upgrades.queue_own_tests(root)
+            except Exception:  # noqa: BLE001
+                pass
+            rc, out = _run_check(root, _check_command(root, check), aside)
+            own = own_tests_only(out) if rc != 0 else None
+            if rc == 0:
+                print("land: %d more of the person's own tests an update changed are set aside "
+                      "for this save; nothing to say about it" % len(names))
+    if rc != 0:
         if own is not None:
             # Only the person's own tests, which an update changed what they check: said as
             # that, with the step, never as a generic failure (a person's copy, 2026-11-05:
@@ -1473,7 +1549,8 @@ def _land(root: str, message: str, check, sleep) -> int:
         for ln in failing(out):
             print(ln)
         return 1
-    if re.search(r"^\s+pytest \(profile/tests, on this person\)\s+PASS", out, re.M):
+    if not aside and re.search(r"^\s+pytest \(profile/tests, on this person\)\s+PASS", out,
+                               re.M):
         _record_own(root, [])             # they pass now: no command says the step again
 
     name, why = _own_branch(root)
@@ -1818,8 +1895,7 @@ def _rounds(root: str, message: str, check, sleep, land_fn, finish) -> int:
         sys.stdout.write(said)
         keep = [ln for ln in said.splitlines()
                 if "tell the person" in ln.lower() or "Tell the person" in ln
-                or REFUSED_SAY in ln or DISK_FULL_SAY in ln or ln == OWN_TESTS_DO
-                or ln.startswith("land: their own tests that fail: ")]
+                or REFUSED_SAY in ln or DISK_FULL_SAY in ln]
         if code == 0 and READY:
             ok, why = finish(root, dict(READY))
             if ok:

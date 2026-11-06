@@ -20,6 +20,20 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Saving is quick again.** The check before each save no longer runs the app's own tests on
+  your copy, which had made every save take over ten minutes; your own checks still run.
+- **Saves wait their turn.** When a save is asked for while another is running, it is added to
+  the one running (or the next) instead of starting its own check beside it, so only one check
+  runs at a time and nothing written in the meantime is left out.
+- **An update never holds your work back.** When an update changes something one of your own
+  checks relied on, your work is still saved, and Claude puts that check right in the
+  background, with nothing for you or a busy chat to do.
+- **The record of changes you asked for to your job search has its own folder.** It used to sit
+  among your saved searches, where a check that reads every saved search tripped over it.
+  Profile upgrade: tweaks-record-moved (done for you, nothing to do).
+
 ## [4.11.0] - 2026-11-06
 
 ### Added
