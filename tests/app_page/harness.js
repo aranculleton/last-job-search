@@ -2480,6 +2480,11 @@ S.sweep = async (a) => {
       // A row the Brief left out for want of room on this page (its lists fit the window, 4.6)
       // is not there for a person to tap either: noted, never counted as broken.
       if (await el.evaluate((e) => !!e.closest("[data-fit] > [hidden]")).catch(() => false)) { out.fitted = (out.fitted || 0) + 1; out.tapped++; await o.ctx.close(); continue; }
+      // A control the page itself hides for where the person is (Chat's "Latest", shown only
+      // while scrolled up from the end) is not there to tap on a page opened at its end: noted
+      // as fitted, never counted as broken (CI, 2026-11-06: found while the first page was still
+      // placing the conversation, then hidden on the fresh one).
+      if (k === "talk-jump" && await el.evaluate((e) => !!e.closest("[hidden]")).catch(() => false)) { out.fitted = (out.fitted || 0) + 1; out.tapped++; await o.ctx.close(); continue; }
       let chose = false;
       page.on("filechooser", () => { chose = true; });
       const before = await snap(page);
