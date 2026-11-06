@@ -1679,7 +1679,7 @@ S.wake = async (a) => {
 // Reading LinkedIn in the desktop app: the page checks by itself when it opens there, and
 // says how to sign in when signed out (2026-10-29).
 S.reading = async (a) => {
-  const o = await open({html: a.html, hash: a.hash || "todo", seed: a.seed || {}, model: a.model, look: a.look, noStorage: !!a.noStorage, clock: a.clock, fake: {canSend: a.canSend || "no_session", mcp: {browser: {inApp: a.inApp !== false, signedIn: !!a.signedIn, askFirst: !!a.askFirst, signInLater: !!a.signInLater, signOutAfter: a.signOutAfter || 0, check: a.check || 0, declined: !!a.declined, slowSections: !!a.slowSections, closeOnProfile: !!a.closeOnProfile}}}});
+  const o = await open({html: a.html, hash: a.hash || "todo", seed: a.seed || {}, model: a.model, look: a.look, noStorage: !!a.noStorage, clock: a.clock, timezoneId: a.timezoneId, fake: {canSend: a.canSend || "no_session", mcp: {browser: {inApp: a.inApp !== false, signedIn: !!a.signedIn, askFirst: !!a.askFirst, signInLater: !!a.signInLater, signOutAfter: a.signOutAfter || 0, check: a.check || 0, declined: !!a.declined, slowSections: !!a.slowSections, closeOnProfile: !!a.closeOnProfile}}}});
   await o.page.waitForTimeout(2500);
   // Until the page has finished reading (each page that draws late adds a moment).
   await o.page.waitForFunction(() => { const s = window.LJS.state().reading; return !s.busy && s.panel !== "run" && s.panel !== "check-run"; }, null, {timeout: 30000}).catch(() => {});
@@ -1738,7 +1738,7 @@ S.reading = async (a) => {
       const refused = (g.refuse || []).indexOf(d.item) >= 0;
       o.store.chat("receipts/" + p.slice(8), {applied_at: new Date().toISOString(), by: "cloud-1", result: refused ? "refused" : "ok", note: refused ? "Their page did not load." : ""});
     }
-    const o2 = await open({html: a.html, hash: a.hash || "todo", store: o.store, look: g.look, noStorage: !!a.noStorage, clock: g.clock || a.clock, fake: {canSend: a.canSend || "no_session", mcp: {browser: {inApp: true, signedIn: g.signedIn === undefined ? !!a.signedIn : !!g.signedIn}}}});
+    const o2 = await open({html: a.html, hash: a.hash || "todo", store: o.store, look: g.look, noStorage: !!a.noStorage, clock: g.clock || a.clock, timezoneId: a.timezoneId, fake: {canSend: a.canSend || "no_session", mcp: {browser: {inApp: true, signedIn: g.signedIn === undefined ? !!a.signedIn : !!g.signedIn}}}});
     await o2.page.waitForTimeout(2500);
     await o2.page.waitForFunction(() => { const s = window.LJS.state().reading; return !s.busy && s.panel !== "run" && s.panel !== "check-run"; }, null, {timeout: 30000}).catch(() => {});
     await turn(o2.page, 8);

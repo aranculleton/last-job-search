@@ -11180,8 +11180,11 @@
   //   ready    read here this visit, or the engine saw a read in the last two weeks
   //   sign_in  in the desktop app and not signed in yet, or LinkedIn's check is showing
   //   desktop  not in the desktop app: nothing to do here but open the page there
-  function todayLocal() { const d = new Date(now()); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
-  function readingPaused() { const u = txt(readingInfo().paused_until); return !!u && todayLocal() < u; }
+  // The person's own day (todayIso, their time zone), as the engine's paused_until and the
+  // day's looks and reads count it. The device's own date was used here: 14 hours ahead of
+  // the person, or 10 behind, the day's hold ended or began hours apart from them (4.11.0's
+  // far time zone runs).
+  function readingPaused() { const u = txt(readingInfo().paused_until); return !!u && todayIso() < u; }
   function readingState() {
     const ri = readingInfo();
     if (txt(ri.setting) === "paste") return "off";
@@ -11428,7 +11431,7 @@
     if (!rec && db) { try { const d = await within(db.doc(AUTO_READS).get(), CAP_WAIT_MS); if (d && d !== "timeout" && d.exists) rec = d.data(); } catch (e) { /* none kept */ } }
     if (!obj(rec).day) { try { rec = JSON.parse(sget("local", AUTO_READS_LOCAL) || "null"); } catch (e) { rec = null; } }
     rec = obj(rec);
-    return txt(rec.day) === todayLocal() ? rec : {day: todayLocal(), running: false, cut: false};
+    return txt(rec.day) === todayIso() ? rec : {day: todayIso(), running: false, cut: false};
   }
   function keepAutoReads(rec) {
     S.autoReads = rec;
