@@ -1100,8 +1100,9 @@ def _writes(c: dict, where: dict, keep: bool) -> tuple[list, list, list]:
             raise Refused(f"{', '.join(bad)} is not a job site this search has.")
         now = dict(_search_get("PORTALS", {}) or {})
         now.update(v)
+        # Said by the site's plain name ("Adzuna on"), never its folder's.
         return [("line", "search.py", "PORTALS", now)], [search], \
-            [f"{k} {'on' if on else 'off'}" for k, on in v.items()]
+            [f"{portals_mod.label(k)} {'on' if on else 'off'}" for k, on in v.items()]
     if p == "J12":
         cut = _search_get("SALARY_CUT_BELOW", 0) or 0
         if v < cut:

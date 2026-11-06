@@ -45,6 +45,10 @@ file and which no sync touches:
     python3 tools/learned.py locked              # the settings no upgrade may change
     python3 tools/learned.py offers              # app improvements waiting on their choice
     python3 tools/learned.py decide <n> keep|switch
+    python3 tools/learned.py built-in            # after an update: rules the app now does itself
+    python3 tools/learned.py built-in --retire <n>=<id>... --done   # "Now part of the app", once
+    python3 tools/learned.py record --about-app --said "..."  # a complaint about the app: never a rule
+    python3 tools/learned.py app-bugs [--all] [--close <n>]   # the maintainer's own copy only
 
 **A reaction is recorded, not remembered.** Writing "record each reaction" in CLAUDE.md
 did not make it happen: one chat redrafted nine times on the person's corrections ("rude",
@@ -171,9 +175,19 @@ def _writable() -> str:
     return path
 
 
+def _first_write(data: dict, path: str) -> dict:
+    """A rules file made for the first time starts with every behaviour the app already does
+    by itself counted as checked (`built_in_done`): a person who sets up today never has a
+    rule they give later put away for something the app did before they gave it."""
+    if not os.path.exists(path) and "built_in" not in data:
+        data["built_in"] = {"checked": [b["id"] for b in BUILT_IN],
+                            "on": dt.date.today().isoformat()}
+    return data
+
+
 def save_entries(rows: list[dict], offers_: list[dict] | None = None) -> None:
     path = _writable()
-    data = _data()                       # what else the file keeps (the skips) stays
+    data = _first_write(_data(), path)   # what else the file keeps (the skips) stays
     data.update({"entries": rows, "offers": offers_ if offers_ is not None else all_offers()})
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(data, fh, indent=2, ensure_ascii=False)
@@ -509,6 +523,7 @@ def settle(answer: str, today: str | None = None) -> str:
 
 def _write_data(data: dict) -> None:
     path = _writable()
+    _first_write(data, path)
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(data, fh, indent=2, ensure_ascii=False)
         fh.write("\n")
@@ -777,13 +792,274 @@ def record_edit(draft: str, sent: str, where: str = "", today: str | None = None
     return entry
 
 
-def retire(n: int) -> dict:
-    """The person changed their mind: entry n stops applying, and stays as history."""
+def retire(n: int, why: str = "") -> dict:
+    """The person changed their mind: entry n stops applying, and stays as history. `why`
+    is kept with it (NOW_PART for a rule the app now does by itself)."""
     rows = load()
     if not 1 <= n <= len(rows):
         raise SystemExit(f"learned: no entry {n}; there are {len(rows)}")
     rows[n - 1]["status"] = "retired"
+    if str(why or "").strip():
+        rows[n - 1]["retired_why"] = " ".join(str(why).split())
     _save(rows)
+    return rows[n - 1]
+
+
+# ------------------------------------------------------------------ what the app now does itself
+#
+# A person teaches the app something ("name my resume file after me and the employer"), and
+# a later version does it for everyone. Their rule then only repeats the app, adds to a list
+# they have to read, and nothing ever retired it (the maintainer, 2026-11-06: rules the app
+# has since built in are retired after each update, "Now part of the app", once). So the app
+# keeps a registry of the behaviours it now does by itself; after an update the copy's
+# Claude lists the active rules that may only say one of them again (`built_in_candidates`),
+# judges each, retires the ones truly covered with NOW_PART (`retire_built_in`), and records
+# the registry as checked (`built_in_done`), so nothing is proposed twice. The profile
+# upgrade `built-in-rules` (tools/profile_upgrades.py) is pending while there is one to judge.
+#
+# Each behaviour: `id`, the `version` it arrived in and its day (`since`), `does` (one plain
+# sentence of what the app does now), `areas` (the rule areas it can cover) and `match`
+# (patterns, every one of which must be found in the rule or in what they said). A match is
+# only a candidate: Claude retires a rule only where the behaviour covers all of it. Add a
+# behaviour here when a release builds in something people used to have to ask for.
+
+NOW_PART = "Now part of the app"
+
+BUILT_IN = (
+    {"id": "document-file-names", "version": "3.0.0", "since": "2026-10-14",
+     "does": "Your resume and cover letter files are named for you: your name, Resume (or "
+             "CV) or Cover_Letter, and the employer as it writes its own name.",
+     "areas": ("documents", "other"),
+     "match": (r"\b(?:file ?names?|named|name (?:the|my|each|every) (?:file|pdf|resume|cv|"
+               r"letter|document)s?|call (?:the|my) (?:file|pdf)s?)\b|\.pdf\b|_(?:resume|cv|"
+               r"cover)",)},
+    {"id": "follow-ups-at-once", "version": "4.10.0", "since": "2026-11-05",
+     "does": "Follow-ups you ask for on your page are written straight away, all together in "
+             "one go, and show in Messages ready to copy.",
+     "areas": ("messages", "other"),
+     "match": (r"\bfollow[- ]?ups?\b",
+               r"\b(?:at once|straight away|immediately|right away|as soon as|the moment|"
+               r"together|in one go|all of them|without (?:waiting|asking)|when i (?:tap|ask|"
+               r"press))\b")},
+    {"id": "messages-fixed-by-themselves", "version": "4.10.0", "since": "2026-11-05",
+     "does": "A message that breaks your rules (too long for LinkedIn, a phrase that reads "
+             "machine-written, asking for a job) is rewritten by itself before you see it.",
+     "areas": ("messages", "voice", "other"),
+     "match": (r"\b(?:fix|rewrite|redraft|correct|shorten|check)\w*\b",
+               r"\b(?:before (?:i see|showing|you show)|by (?:it|your)sel(?:f|ves)|without "
+               r"(?:me|asking|being asked)|automatically)\b")},
+    {"id": "files-on-the-page", "version": "4.10.0", "since": "2026-11-05",
+     "does": "Once a draft is made, its files are put on your page by themselves, ready to "
+             "save, with no button to press first.",
+     "areas": ("documents", "other"),
+     "match": (r"\b(?:files?|pdfs?|downloads?|documents?|resumes?|cvs?|letters?)\b",
+               r"\b(?:on|to|onto|in) (?:the|my) (?:page|app)\b")},
+    {"id": "closed-postings-set-aside", "version": "4.10.0", "since": "2026-11-05",
+     "does": "A job whose posting has closed is set aside by itself, with Bring back if you "
+             "want it again.",
+     "areas": ("jobs", "search", "other"),
+     "match": (r"\b(?:closed|expired|no longer (?:open|accepting|available|live)|taken down)\b",
+               r"\b(?:jobs?|postings?|roles?|listings?|adverts?|openings?)\b")},
+    {"id": "one-role-per-employer", "version": "4.10.1", "since": "2026-11-05",
+     "does": "Jobs shows one role per employer, the best fit, with the others set aside and "
+             "any role you added, drafted or applied for kept.",
+     "areas": ("jobs", "search", "targets", "other"),
+     "match": (r"\b(?:one|1|a single|single|only one)\s+(?:role|job|posting|position|"
+               r"application)s?\s+(?:per|at each|for each|from each|at any|at a|at one)\s+"
+               r"(?:employer|company|firm|organi[sz]ation)\b"
+               r"|\b(?:several|multiple|many|lots of|two|2|more than one)\s+(?:roles?|jobs?|"
+               r"postings?)\s+(?:at|from)\s+(?:the same|one|a single)\s+(?:employer|company|"
+               r"firm)\b",)},
+)
+_BUILT_IN = {b["id"]: b for b in BUILT_IN}
+
+
+def built_in_checked(data: dict | None = None) -> set[str]:
+    """The behaviours whose rules have been judged already (`built_in_done`)."""
+    got = (data if data is not None else file_data()).get("built_in") or {}
+    return {str(x) for x in (got.get("checked") or []) if isinstance(x, str)}
+
+
+def built_in_new(data: dict | None = None) -> list[dict]:
+    """The behaviours this copy's rules have not been judged against yet."""
+    seen = built_in_checked(data)
+    return [b for b in BUILT_IN if b["id"] not in seen]
+
+
+def covers(b: dict, entry: dict) -> bool:
+    """Might behaviour `b` cover this rule? Every one of its patterns found in the rule or in
+    what they said, in one of its areas. A candidate, never a verdict."""
+    if entry.get("area") not in b.get("areas", AREAS):
+        return False
+    text = " ".join(str(entry.get(k) or "") for k in ("rule", "said"))
+    return all(re.search(p, text, re.I) for p in b["match"])
+
+
+def built_in_candidates(data: dict | None = None) -> list[tuple[int, dict, dict]]:
+    """[(n, entry, behaviour)]: each active rule a behaviour not judged yet may cover, with
+    the first such behaviour, oldest rule first."""
+    data = file_data() if data is None else data
+    new = built_in_new(data)
+    if not new:
+        return []
+    rows = [r for r in (data.get("entries") or []) if isinstance(r, dict)]
+    out = []
+    for n, r in enumerate(rows, 1):
+        if r.get("status", "active") != "active":
+            continue
+        b = next((b for b in new if covers(b, r)), None)
+        if b:
+            out.append((n, r, b))
+    return out
+
+
+def retire_built_in(n: int, bid: str, today: str | None = None) -> dict:
+    """Entry n retired because behaviour `bid` now does what it asked: kept as history with
+    NOW_PART, shown so on the page, and never proposed again (it is no longer active)."""
+    if bid not in _BUILT_IN:
+        raise SystemExit(f"learned: no behaviour {bid!r}; one of {', '.join(_BUILT_IN)}")
+    rows = load()
+    if not 1 <= n <= len(rows):
+        raise SystemExit(f"learned: no entry {n}; there are {len(rows)}")
+    r = rows[n - 1]
+    if r.get("status", "active") != "active":
+        raise SystemExit(f"learned: entry {n} is not in use already")
+    r["status"] = "retired"
+    r["retired_why"] = NOW_PART
+    r["built_in"] = bid
+    r["retired_on"] = today or dt.date.today().isoformat()
+    _save(rows)
+    return r
+
+
+def built_in_done(today: str | None = None) -> tuple[int, str]:
+    """Every behaviour in the registry recorded as judged, so this happens once for each.
+    Returns (how many rules this pass put away as part of the app, the one line for the
+    person, "" when there is nothing to say). Writes nothing where there is no rules file."""
+    path = _path()
+    if not path or not os.path.exists(path) or person.in_example(path):
+        return 0, ""
+    data = file_data()
+    new = {b["id"] for b in built_in_new(data)}
+    n = sum(1 for r in (data.get("entries") or []) if isinstance(r, dict)
+            and r.get("built_in") in new and r.get("status") == "retired")
+    data["built_in"] = {"checked": [b["id"] for b in BUILT_IN],
+                        "on": today or dt.date.today().isoformat()}
+    _write_data(data)
+    return n, built_in_line(n)
+
+
+def built_in_line(n: int) -> str:
+    """The one plain line the person is told, or "" for none."""
+    if n <= 0:
+        return ""
+    if n == 1:
+        return "1 of your rules is now part of the app, so it's off your list."
+    return f"{n} of your rules are now part of the app, so they're off your list."
+
+
+# ------------------------------------------------------------------ about the app, never a rule
+#
+# "Why is it so slow" is about the app, not about how the person wants their work done. Kept
+# as a rule it was read before every draft and changed nothing (the maintainer, 2026-11-06:
+# a complaint about how the app behaves is never saved as a personal rule; in the
+# maintainer's own copy it is reported to them as an app bug, and for anyone else it is
+# worked around). Two checks: a cheap pattern (`about_app`) that refuses a record until the
+# chat says which it is, and the chat's own flag (`record --about-app`), which routes it
+# (`route_about_app`) instead of keeping it and clears it from the turn's list.
+
+ABOUT_APP = re.compile("|".join([
+    r"\b(?:so|too|really|very|painfully|super|incredibly|bit)\s+slow\b",
+    r"\bslow(?:ly|ness)?\s+(?:to|at)\s+(?:load|open|start|answer|respond|save|update|search)\b",
+    r"\b(?:is|was|it'?s|so|how)\s+slow\b",
+    r"\btak(?:es?|ing|en)\s+(?:forever|ages|so long|too long|far too long|an age)\b",
+    r"\bcrash\w*\b", r"\bfro(?:ze|zen)\b", r"\bfreez\w*\b",
+    r"\b(?:it|app|page|screen|chat)\s+(?:hangs|hung|is hanging)\b",
+    r"\bbuggy\b", r"\b(?:a|the|this|another)\s+bug\b", r"\bglitch\w*\b",
+    r"\b(?:it|app|page|screen|button|link|tab|chat|claude|sync|update|search)\s+(?:\w+\s+){0,2}"
+    r"(?:doesn'?t|does not|isn'?t|is not|won'?t|will not|didn'?t|did not|never|stopped)\s+"
+    r"(?:work(?:ing|s)?|load(?:ing|s)?|open(?:ing|s)?|respond(?:ing|s)?|sav(?:e|ing|es)"
+    r"|updat(?:e|ing|es)|show(?:ing|s)? up|do(?:es)? anything)\b",
+    r"\b(?:the|this|that|a)\s+(?:button|link|page|screen|app|tab)\s+(?:does nothing|is dead|"
+    r"is blank|went blank|is empty|is stuck|is broken|broke)\b",
+    r"\b(?:app|page|it|claude|everything|the site)\s+(?:is\s+)?broken\b",
+    r"\bstuck (?:on|loading|at)\b", r"\bspinn(?:er|ing)\b", r"\bloading\s+(?:forever|for ages)\b",
+    r"\b(?:an?|the)\s+error\s+(?:message|came up|popped up|appeared|keeps)\b",
+    r"\b(?:gave|gives|throws?|threw|shows?|showed)\s+(?:me\s+)?an?\s+error\b",
+    r"\bwhy\s+(?:does|did|is|do|won'?t|can'?t|isn'?t|doesn'?t)\s+(?:the app|the page|this app|"
+    r"this page|my page|claude)\b(?!\s+(?:keep\s+)?(?:say|write|use|put|add|include|open|start|"
+    r"end|word|phrase|suggest|pick|choose|show me)\w*)",
+    r"\bkeeps?\s+(?:crashing|failing|freezing|logging me out|asking me to (?:allow|approve|"
+    r"sign in|press))\b",
+]), re.I)
+
+
+def about_app(text: str) -> str:
+    """The words that make `text` read as about how the app behaves, or "". A cue for the
+    chat to decide, never the decision: the chat says which with `--about-app` or
+    `--not-about-app`."""
+    m = ABOUT_APP.search(own_words(str(text or "").replace("’", "'")))
+    return m.group(0) if m else ""
+
+
+ABOUT_APP_WHY = "about the app, worked around"
+ABOUT_APP_BUG = "about the app, kept as an app bug for its maker"
+
+
+def _maintainers() -> bool:
+    """This is the app maintainer's own copy (tools/sync_app.py maintainers())."""
+    try:
+        import sync_app
+        return bool(sync_app.maintainers())
+    except Exception:  # noqa: BLE001  no git, no copy: anyone's
+        return False
+
+
+def route_about_app(said: str, today: str | None = None,
+                    maintainer: bool | None = None) -> dict:
+    """A complaint about how the app behaves, never kept as a rule. In the maintainer's own
+    copy it is kept as an app bug (`app_bugs`, with a link to open it on the app's page,
+    tools/report.py link); for anyone else it is set aside with ABOUT_APP_WHY and worked
+    around. Either way it leaves the turn's list, so the end of the turn is not held for it."""
+    said = str(said or "").strip()
+    if not said:
+        raise SystemExit("learned: --about-app needs what they said")
+    mine = _maintainers() if maintainer is None else bool(maintainer)
+    day = today or dt.date.today().isoformat()
+    row = skip(said, ABOUT_APP_BUG if mine else ABOUT_APP_WHY, today=day)
+    row["route"] = "maintainer" if mine else "worked_around"
+    if mine:
+        try:
+            import report
+            link = report.link()
+        except Exception:  # noqa: BLE001  no link to build: kept all the same
+            link = ""
+        data = file_data()
+        bug = {"date": day, "said": said, "status": "open"}
+        if link:
+            bug["link"] = link
+        data.setdefault("app_bugs", []).append(bug)
+        _write_data(data)
+        row["link"] = link
+    return row
+
+
+def app_bugs(include_closed: bool = False) -> list[dict]:
+    """The complaints about the app kept as app bugs in the maintainer's own copy."""
+    rows = [r for r in (file_data().get("app_bugs") or []) if isinstance(r, dict)]
+    return rows if include_closed else [r for r in rows if r.get("status", "open") == "open"]
+
+
+def close_app_bug(n: int, today: str | None = None) -> dict:
+    """App bug n (numbered as `app-bugs --all` lists them), fixed or let go."""
+    data = file_data()
+    rows = [r for r in (data.get("app_bugs") or []) if isinstance(r, dict)]
+    if not 1 <= n <= len(rows):
+        raise SystemExit(f"learned: no app bug {n}; there are {len(rows)}")
+    rows[n - 1]["status"] = "closed"
+    rows[n - 1]["closed_on"] = today or dt.date.today().isoformat()
+    data["app_bugs"] = rows
+    _write_data(data)
     return rows[n - 1]
 
 
@@ -1236,6 +1512,7 @@ def approve(said: str, text: str, channel: str = "", reader: str = "", contact_i
         return {**row, "already": True}
     rows.append(row)
     data["approved"] = rows
+    _first_write(data, path)
     data.setdefault("entries", load())
     data.setdefault("offers", all_offers())
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
@@ -1780,6 +2057,7 @@ def skip(said: str, why: str, today: str | None = None, via: str = "",
         row["output"] = str(output).strip()
     path = _writable()
     if path:
+        _first_write(data, path)
         data.setdefault("skipped", []).append(row)
         data.setdefault("entries", load())
         data.setdefault("offers", all_offers())
@@ -1930,6 +2208,19 @@ def hook(event: dict) -> dict:
         if not cue:
             return {}
         note_reaction(text, cue, again=True)
+        app_cue = about_app(text)
+        if app_cue:
+            # A complaint about the app itself is never a rule of theirs: it is routed, and
+            # the routing clears it from the list, so the turn is not held for it (2026-11-06).
+            return {"hookSpecificOutput": {
+                "hookEventName": "UserPromptSubmit",
+                "additionalContext": (
+                    f"The person reacted (\"{cue}\"), and it reads as about how the app itself "
+                    f"behaves (\"{app_cue}\"), not how they want their work done. If it is: it "
+                    "is never a rule of theirs. Run python3 tools/learned.py record --about-app "
+                    "--said \"<their words>\" (it routes it and clears it) and work round it "
+                    "now, saying only what it prints to say. If it truly is how they want their "
+                    "own work done, record it as a rule with --not-about-app.")}}
         return {"hookSpecificOutput": {
             "hookEventName": "UserPromptSubmit",
             "additionalContext": (
@@ -2383,9 +2674,10 @@ def main(argv=None) -> int:
     li = sub.add_parser("list")
     li.add_argument("area", nargs="?")
     r = sub.add_parser("record")
-    r.add_argument("--area", required=True)
+    # --area and --rule are needed for a rule, and not with --about-app (`record` says so).
+    r.add_argument("--area", default="")
     r.add_argument("--said", required=True)
-    r.add_argument("--rule", required=True)
+    r.add_argument("--rule", default="")
     r.add_argument("--applied-to", action="append", default=[])
     r.add_argument("--never-say", action="append", default=[],
                    help="a phrase never to use: in lower case, matched anywhere; capitalised "
@@ -2400,6 +2692,22 @@ def main(argv=None) -> int:
                         "<kind>[:<reader>]=<words>, e.g. inmail=170")
     r.add_argument("--via", default="", help="where it was said: \"page tweak\" for the page's box")
     r.add_argument("--output", default="", help="the kind of output it was about: resume, letter, message")
+    r.add_argument("--about-app", action="store_true",
+                   help="it is about how the app behaves (slow, broken, a button that does "
+                        "nothing), not how they want their work done: never kept as a rule, "
+                        "routed (an app bug in the maintainer's own copy, else worked around)")
+    r.add_argument("--not-about-app", action="store_true",
+                   help="it reads as about the app, but it is truly how they want their own "
+                        "work done: keep it as a rule")
+    bi = sub.add_parser("built-in", help="rules the app now does by itself, judged after an update")
+    bi.add_argument("--retire", action="append", default=[], metavar="N=ID",
+                    help="entry N is now part of the app, by behaviour ID")
+    bi.add_argument("--done", action="store_true",
+                    help="every behaviour judged: record it, so this happens once")
+    bi.add_argument("--all", action="store_true", help="every behaviour the app does by itself")
+    ab = sub.add_parser("app-bugs", help="complaints about the app kept for its maker")
+    ab.add_argument("--all", action="store_true")
+    ab.add_argument("--close", type=int, action="append", default=[])
     k = sub.add_parser("skip")
     k.add_argument("--said", required=True)
     k.add_argument("--why", required=True)
@@ -2411,6 +2719,7 @@ def main(argv=None) -> int:
     sub.add_parser("pending")
     t = sub.add_parser("retire")
     t.add_argument("n", type=int, nargs="+")
+    t.add_argument("--why", default="", help="kept with it, and shown on their page")
     t = sub.add_parser("ask")
     t.add_argument("older", type=int)
     t.add_argument("later", type=int)
@@ -2461,6 +2770,31 @@ def main(argv=None) -> int:
                       else row.get("status", "active"))
             print(f"{i:3}. [{status}] {row.get('date')} {row.get('area')}: "
                   f"{row.get('rule')}  (said: \"{row.get('said')}\")")
+    elif a.cmd == "record" and a.about_app:
+        got = route_about_app(a.said)
+        if got["route"] == "maintainer":
+            print("learned: not kept as a rule: it is about how the app behaves, and this is the "
+                  "app maker's own copy, so it is kept as an app bug (python3 tools/learned.py "
+                  "app-bugs lists them).")
+            print("Say to them, in one line: That one's the app's, not a rule of yours: I've "
+                  "kept it as an app bug to fix" + (f" (open it on the app's page: {got['link']})"
+                                                   if got.get("link") else "")
+                  + ", and worked round it for now.")
+        else:
+            print("learned: not kept as a rule: it is about how the app behaves, not how they "
+                  "want their work done. Work round it for them now, the best honest way the "
+                  "app allows, and never trouble them with the app's problems (CLAUDE.md, "
+                  "\"App-owned files and personal files\").")
+        print("Then work round it in this turn; nothing is waiting on it.")
+    elif a.cmd == "record" and not a.not_about_app and about_app(a.said + " \n " + a.rule):
+        cue = about_app(a.said + " \n " + a.rule)
+        raise SystemExit(
+            f"learned: not recorded: \"{cue}\" reads as about how the app behaves, not how "
+            "they want their work done, and a complaint about the app is never a rule of "
+            "theirs. If it is about the app: python3 tools/learned.py record --about-app "
+            "--said \"<their words>\" (it routes it and clears it from this turn), then work "
+            "round it. If it truly is how they want their own work "
+            "done, run the same record again with --not-about-app.")
     elif a.cmd == "record":
         e = record(a.area, a.said, a.rule, a.applied_to, a.never_say, overrides=a.overrides,
                    replaces=a.replaces, length=a.length, via=a.via, output=a.output)
@@ -2516,7 +2850,7 @@ def main(argv=None) -> int:
         return 1 if rows else 0
     elif a.cmd == "retire":
         for n in a.n:
-            e = retire(n)
+            e = retire(n, a.why)
             print(f"retired: {e.get('rule')}")
     elif a.cmd == "ask":
         why = ask(a.older, a.later)
@@ -2547,6 +2881,54 @@ def main(argv=None) -> int:
                   f"{d['for']}: {d['why']}")
         print(f"learned: {len(got)} rule(s) {'to tidy' if a.dry else 'tidied'}" if got else
               "learned: nothing to tidy")
+    elif a.cmd == "built-in" and a.all:
+        for b in BUILT_IN:
+            print(f"{b['id']} (since {b['version']}): {b['does']}")
+    elif a.cmd == "built-in" and (a.retire or a.done):
+        for spec in a.retire:
+            n, _, bid = str(spec).partition("=")
+            if not n.strip().isdigit() or not bid.strip():
+                raise SystemExit(f"learned: --retire {spec!r}; give it as <n>=<behaviour id>")
+            e = retire_built_in(int(n), bid.strip())
+            print(f"{NOW_PART}: {e.get('rule')}")
+        if a.done:
+            _n, line = built_in_done()
+            print("learned: every behaviour the app now does by itself is checked against "
+                  "their rules; this is not asked again until the app does something new.")
+            print(f"Say to the person, in one line: {line}" if line else
+                  "Nothing to say to the person: none of their rules was put away.")
+    elif a.cmd == "built-in":
+        got = built_in_candidates()
+        if not got:
+            built_in_done()
+            print("learned: none of their rules repeats what the app now does by itself")
+        for n, e, b in got:
+            extra = []
+            if e.get("never_say"):
+                extra.append("bans " + ", ".join('"%s"' % p for p in e["never_say"]))
+            if e.get("applied_to"):
+                extra.append("shaped " + ", ".join(e["applied_to"]))
+            print(f"  entry {n} ({e.get('date')}, {e.get('area')}): {e.get('rule')} (said: "
+                  f"\"{' '.join(str(e.get('said') or '').split())[:120]}\")"
+                  + (f" [{'; '.join(extra)}]" if extra else ""))
+            print(f"    may be {b['id']} (since {b['version']}): {b['does']}")
+        if got:
+            print(f"learned: {len(got)} rule(s) to judge. Put one away only where what the app "
+                  "now does covers all of it; a rule that asks for more, or for something "
+                  "different (its own wording, a ban, a setting it shaped), stays. For each "
+                  "covered: python3 tools/learned.py built-in --retire <n>=<id>. Then, judged or "
+                  "not, python3 tools/learned.py built-in --done, and say the one line it prints.")
+    elif a.cmd == "app-bugs" and a.close:
+        for n in a.close:
+            got = close_app_bug(n)
+            print(f"closed: {got.get('said')}")
+    elif a.cmd == "app-bugs":
+        shown = 0
+        for i, r in enumerate(app_bugs(include_closed=True), 1):   # numbered as --close reads
+            if a.all or r.get("status", "open") == "open":
+                shown += 1
+                print(f"{i:3}. [{r.get('status', 'open')}] {r.get('date')}: \"{r.get('said')}\"")
+        print(f"{shown} app bug(s)" + ("" if a.all else " open"))
     elif a.cmd == "locked":
         for item in locked():
             print(item)

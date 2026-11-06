@@ -20,11 +20,64 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Added
+
+- **Rules the app now does by itself come off your list.** After an update, a rule you taught
+  that the app now does for everyone (how your resume files are named, follow-ups written as
+  soon as you ask) is put away once, marked "Now part of the app", and you hear one line
+  saying how many. Profile upgrade: `built-in-rules`.
+- **A complaint about the app is never kept as one of your rules.** "Why is it so slow" or a
+  button that does nothing is about the app, not how you want your work done: Claude works
+  round it instead of reading it before every draft.
+
 ### Changed
 
 - **Documents are named you, the employer, then the document**: `Morgan_Ellis_Acme_Resume.pdf`
   and `Morgan_Ellis_Acme_Cover_Letter.pdf`, for the kept file and the one you download. Documents
   already made keep their names, and everything still finds them.
+- **Settings is shorter and says things plainly.** Employers you turned down are one row,
+  "Employers you've turned down", with how many jobs they left out; it opens their names, each
+  with its own small trash. What Claude learned from you has one home, "What you have taught
+  it", grouped by area (messages, documents, jobs and so on), each rule one line with the day it
+  was learned; Your rules has one row that opens it. Long lists show their first few with Show
+  all.
+- **Something looks wrong opens its box right there**, begun with where you were and the
+  version, with Ask Claude and Cancel; telling the app's makers is a quiet link under it.
+- **What's new shows your version on its row** ("4.11.0 · Up to date"); inside, the newest few
+  lines with Show more, and the changes made for you in plain words, each once.
+- **Jobs you hid say why in your words**: "You cleared these", "Cleared automatically after a
+  week", "Not this employer", "The job closed".
+- **Text size**: Smaller and Larger are drawn in the size they set.
+- **Advanced holds only what can slow things down or use more of your Claude allowance** (where
+  Claude works, suggestions); keyboard shortcuts and text size are under Look, and checking
+  this device under This device.
+- **More choices for timing**: your next interview can go to the top of the Brief from the day
+  before, and calendar reminders can come two hours before.
+- **Your LinkedIn download, as often as you use it.** It is asked for weekly while you have
+  sent notes or messages in the last two weeks, and every two weeks otherwise.
+- **Remind me less.** The reminder's trash offers Every 2 weeks, Every month and Stop asking:
+  one tap, with Undo. Settings > LinkedIn has the same choice, to change any time.
+- **No stale "Done." on the LinkedIn download.** Its line shows just after you add one, and
+  never says that only a chat can take it back.
+
+### Fixed
+
+- **Every job site has a plain name and a line saying what it is.** Settings, Job sites says
+  "Adzuna", never "api.adzuna.com", with a short note under each site.
+- **A site that needs a key says what it needs.** Its row says so instead of a tick, and opens
+  on the steps to get one. Adzuna says it needs a paid plan: its free plan allows 25 searches in
+  total, and one search here uses about 74. Adzuna looked ticked, then unticked itself after a
+  visit.
+- **No tick on Job sites flips back without saying why.** Each site is changed on its own, so a
+  tap on one is never undone because another changed, and a tap that could not be done says
+  why on that site's row, with the tick back as it really is.
+- **Changing your search no longer starts a search by itself.** A job site turned on or off, or
+  a change to roles, places, pay or how far back to look, is saved and used from your next
+  search; its row says so, with Find jobs beside it to search now. Switching on a site had
+  quietly started a whole search.
+- **Your own notes in your search settings are kept.** Turning a site on or off, or changing any
+  search setting from the page, keeps the notes you wrote beside it, where it had put a bare
+  line in their place.
 
 ## [4.11.0] - 2026-11-06
 

@@ -99,7 +99,8 @@ LinkedIn is never fetched from a session.
    their computer first. `export.py history` lists who in it is not in the contact book.
    `take` says first what changed since the last download (new connections, requests
    accepted, replies, requests still waiting) and writes each contact's follow-up date; the
-   brief asks for a new download once the last is a fortnight old (`export.py due`).
+   brief asks for a new download once it is due (`export.py due`: weekly while they are
+   messaging people, a fortnight otherwise, or as they chose).
    Nothing is sent.
    **Their own profile, now and then:** `python3 tools/network/own_profile.py due` prints one line
    only when a look is worth it, and nothing otherwise. Act on that line alone: ask its question

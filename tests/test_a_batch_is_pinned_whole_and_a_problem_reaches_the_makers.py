@@ -145,7 +145,7 @@ def test_something_looks_wrong_reaches_the_makers_with_no_chat_and_nothing_of_th
     html = _write(tmp_path, "report", m)
     got = run("script", html=html, clock="2026-10-25T09:00:00Z", steps=[
         {"hash": "settings", "click": "Something looks wrong", "exact": False,
-         "eval": "(document.querySelector('dialog [data-k=\"report-makers\"]') || {}).href || ''"}])
+         "eval": "(document.querySelector('#main [data-k=\"report-makers\"]') || {}).href || ''"}])
     assert not got["errors"], got["errors"]
     step = got["steps"][-1]
     href = step["eval"]
@@ -157,4 +157,5 @@ def test_something_looks_wrong_reaches_the_makers_with_no_chat_and_nothing_of_th
     for p in m["people"]:
         assert p["first_name"] not in body and p["employer"] not in body
     assert m["person"]["first_name"] not in body
-    assert "Tell Claude" in step["dialog"]
+    # No popup since 4.12: the box opens in place, the makers' link quiet under it.
+    assert not step.get("dialog")

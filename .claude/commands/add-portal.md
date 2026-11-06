@@ -110,6 +110,25 @@ These conventions are what make portal skills interchangeable for `/scrape` and 
   detail: true                      # false where the posting page may not be fetched
   pages: 2                          # how deep each query goes; 2 suits most boards
   canary-query: <word>              # one word the board always has postings for (the round's health probe)
+  label: <Board name>               # its plain name as people say it ("Adzuna"), never its address
+  note: <one line>                  # what it is and where it searches, in plain words, for the page
+  ```
+
+  A board that needs a key (Step 2.5) also says which variables its CLI reads and where a
+  person signs up, so the page shows what it needs ("Needs a free key", "Needs a key") with the
+  steps until the key is there (`tools/portals.py` `key_help`). Where the free allowance would
+  not last one round, say so in its `note:` and leave `key-free` out, as Adzuna's does:
+
+  ```yaml
+  note: <what it is>. Needs a paid plan: the free one allows <N> searches in total, and one search here uses about <M>.
+  ```
+
+  The key's lines:
+
+  ```yaml
+  key-env: <SERVICE>_API_TOKEN      # every variable the CLI reads its key from, comma separated
+  key-url: https://<where to sign up>
+  key-free: true                    # only where the key costs nothing
   ```
 
   Write `contract: 1` only once Step 4 has shown the CLI takes `search -q <q> [-l <place>] [--remote] --jobage <n> --page <n> --format json` and `detail <id> --format json`: a round sends exactly that, and a portal that rejects a flag fails every request.

@@ -206,8 +206,11 @@ def test_the_search_settings_are_read_and_written_through_the_profiles_own_file(
     got = search.apply()
     assert got["ok"] == [aid], search.receipt(aid)
     assert search.model()["search"]["pay"]["floor"] == 45000
+    # Saved for the next search, never a search started by the setting (the maintainer,
+    # 2026-11-06: a site switched on "queued a full search with no warning on the page").
     batch = json.load(open(got["batches"][0], encoding="utf-8"))
-    assert any(e["collection"] == "work" and e["doc_id"].startswith("search~") for e in batch)
+    assert not any(e["collection"] == "work" and e["doc_id"].startswith("search~") for e in batch)
+    assert search.receipt(aid)["later"] == "Used from your next search."
     search.written_back()
     back = search.act("undo", None, value={"undoes": aid})
     assert search.apply()["ok"] == [back]

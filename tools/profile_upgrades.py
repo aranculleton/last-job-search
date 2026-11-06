@@ -493,6 +493,19 @@ def _learned_review() -> str:
     return f"{len(got)} pair(s) of your rules may contradict each other" if got else ""
 
 
+def _built_in_rules() -> str:
+    """Pending while a rule the person taught may only repeat something the app now does by
+    itself (learned.BUILT_IN) and has not been judged against it: once after each update that
+    adds such a behaviour, never again for the same one (learned.built_in_done)."""
+    import learned
+    try:
+        got = learned.built_in_candidates()
+    except Exception:  # noqa: BLE001  no rules file yet: nothing to judge
+        return ""
+    return (f"{len(got)} of the rules you taught may now be done by the app itself"
+            if got else "")
+
+
 def _public_holidays() -> str:
     """Pending where no rules cover the person's country and their own list has no date
     in the coming year: follow-ups would count every public holiday as a working day."""
@@ -1579,6 +1592,15 @@ REGISTRY: tuple[Upgrade, ...] = (
             "is drafted, goes on their page: `python3 tools/learned.py ask <older> <newer>`. "
             "Then `python3 tools/learned.py tidy --reviewed`",
             "edit", "~3 min", priority=3),
+    Upgrade("built-in-rules", "2026-11-06",
+            "rules you taught it that the app now does by itself come off your list, marked "
+            "Now part of the app, so the list holds only what is yours",
+            _built_in_rules, "`python3 tools/learned.py built-in` lists each rule the app may "
+            "now do by itself, beside what the app does; put one away only where that covers "
+            "all of it (`python3 tools/learned.py built-in --retire <n>=<id>`), leave the rest, "
+            "then `python3 tools/learned.py built-in --done`. The line it prints for the person "
+            "is the commit's body, word for word; with none, the body says nothing changed",
+            "edit", "~2 min", priority=4),
     Upgrade("brief-daily", "2026-10-29",
             "a short note every morning on your Brief: what is due today, and news that matters "
             "to your search",
@@ -1799,7 +1821,7 @@ REGISTRY: tuple[Upgrade, ...] = (
             why_ask="A form, a letter and an interview pack each read one of them, and a "
                     "recruiter remembers whichever they heard first."),
     Upgrade("process-postings", "2026-10-19",
-            "every hiring process folder holds a job_posting.md, so your own checks stay green",
+            "every hiring process folder keeps a copy of its job posting, so your own checks stay green",
             _process_postings, "python3 tools/interview_pack.py postings", "instant",
             command=("python3", "tools/interview_pack.py", "postings"),
             paths=("documents/applications/*/job_posting.md",), priority=1, conditional=True),
@@ -2137,6 +2159,11 @@ SAFE_DEFAULTS: dict[str, str] = {
                                  "nudge), as before it was a setting",
     "networking.EXPORT_EVERY_DAYS": "unset, the brief asks for a new LinkedIn download once the "
                                     "last is 14 days old; 0 never asks",
+    "networking.EXPORT_REMIND": "\"auto\": the LinkedIn download is asked for weekly while "
+                                "the person has sent notes or messages in the last two "
+                                "weeks, every two weeks otherwise (their own "
+                                "EXPORT_EVERY_DAYS, where set, as before); the page's "
+                                "Settings or the reminder's trash writes another",
     "networking.SUBJECT": "none: the InMail subject is built from roles.py, who you are",
     "networking.TEMPLATES": "none: the phrase bank, then the person's OPENER and ASK, as before",
     "networking.PROFILE_READ_UNPLACED": "10 people nothing has placed yet on a day's list",

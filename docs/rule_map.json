@@ -3659,6 +3659,35 @@
    "needed_by": [
     "page"
    ]
+  },
+  {
+   "id": "built-in-retired",
+   "was": "new in 4.0",
+   "rule": "Rules the app has since built in are retired once, after the update that built them in, as Now part of the app, with one plain line to the person (the maintainer, 2026-11-06).",
+   "bold": "Rules the app has since built in are retired once, after the update that built them in.",
+   "home": "RUNBOOK.md",
+   "anchor": "**Rules the app has since built in are retired once, after the update that built them in.**",
+   "needed_by": [
+    "start",
+    "/upgrade"
+   ]
+  },
+  {
+   "id": "complaint-not-a-rule",
+   "was": "new in 4.0",
+   "rule": "A complaint about how the app behaves is never saved as a personal rule: in the maintainer's own copy it is kept as an app bug, for anyone else it is worked around (the maintainer, 2026-11-06).",
+   "bold": "A complaint about the app is never a rule of theirs.",
+   "home": "RUNBOOK.md",
+   "anchor": "**A complaint about the app is never a rule of theirs.**",
+   "needed_by": [
+    "/apply",
+    "/network",
+    "/reply",
+    "/interview",
+    "/prep",
+    "/outcome",
+    "/rank"
+   ]
   }
  ]
 }

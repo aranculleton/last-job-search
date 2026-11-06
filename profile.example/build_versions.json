@@ -1,15 +1,15 @@
 {
   "boards": {
-    "date": "2026-11-03",
-    "version": 26
+    "date": "2026-11-06",
+    "version": 27
   },
   "documents": {
     "date": "2026-11-03",
     "version": 5
   },
   "drafts": {
-    "date": "2026-11-05",
-    "version": 78
+    "date": "2026-11-06",
+    "version": 79
   },
   "expand": {
     "date": "2026-10-15",
@@ -32,12 +32,12 @@
     "version": 42
   },
   "networking": {
-    "date": "2026-11-05",
-    "version": 83
+    "date": "2026-11-06",
+    "version": 84
   },
   "page": {
-    "date": "2026-11-05",
-    "version": 71
+    "date": "2026-11-06",
+    "version": 72
   },
   "prep-docs": {
     "date": "2026-11-03",

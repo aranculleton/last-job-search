@@ -54,7 +54,8 @@ For each `needs: "nobody"` entry, until the budget is spent:
    print `done`. If it does not, undo what you changed for it and record why.
 5. Commit only what this upgrade changed, on its own:
    `Profile upgrade: <id>` as the subject, one line saying what was written as the body,
-   in plain words for the person: the page's Updates section shows that line, with an undo
+   in plain words for the person, never a file name, a test's name or a code word: the page's
+   Updates section shows that line, with an undo
    (`app.py apply` runs `git revert` of this commit when they tap it), so each commit is one
    change and nothing else.
 6. **On the page.** Where the person has a page (`profile/app.json` holds its address) and

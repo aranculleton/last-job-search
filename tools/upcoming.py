@@ -574,7 +574,7 @@ def reminder_minutes() -> int | None:
         got = str(person.get("calendar_reminder", "60") or "60")
     except Exception:  # noqa: BLE001  no profile: the usual hour
         got = "60"
-    return None if got == "off" else int(got) if got in ("15", "60", "1440") else 60
+    return None if got == "off" else int(got) if got in ("15", "60", "120", "1440") else 60
 
 
 def vevent(item: dict, page_url: str = "", stamp: dt.datetime | dt.date | None = None) -> str:
