@@ -119,3 +119,20 @@ def test_a_filled_brief_gives_progress_its_room(run, tmp_path):
     got = _go(run, tmp_path, [{"hash": "brief", "eval": look}], WIDE, model=_full(), clock=T, zone=PERSON_ZONE)
     r = got["after"][0]["eval"]
     assert r["filled"] and r["empty"] <= 40, ("Your progress has empty room under its chart", r)
+
+
+FOOT = ("(() => { const s = document.getElementById('shell') || document.body; const g = document.querySelector('#main .brief-grid');"
+        " return {gap: Math.round(innerHeight - s.__drawnRect().bottom), scroll: document.documentElement.scrollHeight - innerHeight,"
+        " filled: g.classList.contains('is-filled')}; })()")
+
+
+@pytest.mark.parametrize("size", ["smaller", "larger"])
+def test_a_new_text_size_fits_the_brief_again(run, tmp_path, size):
+    # The maintainer, 2026-11-06: "pressing smaller size shrunk the brief". The fit was kept by
+    # the window's size alone, so after Smaller the rows kept the old height at the new zoom.
+    got = _go(run, tmp_path, [{"hash": "brief", "wait": 200, "eval": FOOT},
+                              {"hash": "settings", "eval": "(document.querySelector('[data-k=\"size-%s\"]').click(), 1)" % size, "wait": 200},
+                              {"hash": "brief", "wait": 300, "eval": FOOT}], WIDE, model=_full(), clock=T, zone=PERSON_ZONE)
+    before, after = got["after"][0]["eval"], got["after"][2]["eval"]
+    assert before["filled"] and before["gap"] <= 24, before
+    assert after["scroll"] <= 0 and (not after["filled"] or after["gap"] <= 24), (size, after)

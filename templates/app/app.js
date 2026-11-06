@@ -5012,7 +5012,9 @@
   // moved the window and a tap on Brief showed the rest (the maintainer, 4.9.0: "when I
   // press the top one for brief it's not the same as what's originally displayed").
   const fitHeld = (l) => { let n = 0; const t = l.textContent; for (let i = 0; i < t.length; i++) n = (n * 31 + t.charCodeAt(i)) | 0; return fitName(l) + "=" + l.children.length + ":" + n; };
-  const fitKey = (lists) => window.innerWidth + "x" + window.innerHeight + ":" + lists.map(fitHeld).join("|");
+  // The text size is part of it: a fit kept from before Smaller was chosen left the Brief a
+  // tenth short of the window (the maintainer, 2026-11-06: "pressing smaller size shrunk the brief").
+  const fitKey = (lists) => window.innerWidth + "x" + window.innerHeight + "@" + (document.body ? document.body.style.zoom : "") + ":" + lists.map(fitHeld).join("|");
   // The counts last worked out, put on a Brief drawn afresh before it is compared with the one
   // on screen (patch): without them the two never matched, and every live update, and the
   // minute's redraw, tore the whole Brief down and built it again, which a phone scrolling
