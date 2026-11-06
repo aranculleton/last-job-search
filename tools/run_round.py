@@ -1364,6 +1364,128 @@ def say_cut(report: dict, show) -> list[str]:
     return lines
 
 
+def targets(show, names) -> tuple[int, int]:
+    """The yield a round is held to: (how many at 60 or more, how many at 75 or more)."""
+    # A search asked for N widens until N score 60 or more: a top-up of ten starts on one page
+    # of each site (the app skill) and stopped at five (2026-11-03).
+    want, want_75 = max(YIELD_60, min(show or 0, 60)), YIELD_75
+    if names:
+        # One role per employer: a search of three employers can never show five.
+        want, want_75 = min(want, len(names)), min(YIELD_75, len(names))
+    return want, want_75
+
+
+# The table the person is shown at the end of a search asked for in the chat (the job-scraper
+# skill, Step 5), printed here with --table. The chat built it from the shortlist's JSON,
+# about 10k tokens a search (the 4.12 cost audit); printed, it is passed on as it is.
+TABLE_HEAD = ("| # | Score | Verdict | Title | Company | Location | Salary | Deadline | Check | Apply |\n"
+              "|---|-------|---------|-------|---------|----------|--------|----------|-------|-------|")
+# The framework's bands (04-job-evaluation.md, Thresholds; /rank step 2).
+VERDICTS = ((75, "Strong fit"), (60, "Good fit"), (45, "Moderate fit"), (30, "Weak fit"))
+# The notes a row carries, in the order Check gives them: who to ask first, then what is
+# already running at the employer. Each as throttle.py wrote it.
+CHECK_NOTES = ("warm_route_note", "referral_note", "outreach_pending_note",
+               "silent_application_note", "drafted_note", "throttle_override_note")
+# A screen's note about its own reading, not something the person checks.
+THIN_BODY = "posting body too short"
+
+
+def score_of(row) -> int | None:
+    """The 0-100 score a row is shown with, as the page shows it: its fit, else its priority."""
+    s = row.get("fit") if row.get("fit") is not None else row.get("priority")
+    return round(s) if isinstance(s, (int, float)) and not isinstance(s, bool) else None
+
+
+def verdict_of(score) -> str:
+    if score is None:
+        return ""
+    return next((name for floor, name in VERDICTS if score >= floor), "Poor fit")
+
+
+def _cell(text) -> str:
+    return " ".join(str(text or "").split()).replace("|", "\\|")
+
+
+def _short(text: str) -> str:
+    """A screen's flag to its first clause: the quote and the reasoning after it stay in the
+    round's files."""
+    text = " ".join(str(text or "").split())
+    cuts = [i for i in (text.find("; "), text.find(". "), text.find(': "')) if i > 0]
+    return text[:min(cuts)] if cuts else text
+
+
+def check_of(row, more=None) -> str:
+    """What to check before applying: the row's warm route and what is already running at
+    the employer, then what the round read in the posting (a place it only flagged, a stated
+    range under the target, years or a degree asked) and a tool asked for that the person
+    holds one like."""
+    more = more or {}
+    said = [str(row[k]).strip() for k in CHECK_NOTES if str(row.get(k) or "").strip()]
+    if str(more.get("location_verdict") or "").upper() == "FLAG":
+        said.append("location: " + _short(more.get("location_reason") or "only flagged"))
+    said += [_short(f) for f in more.get("flags") or []
+             if isinstance(f, str) and f.strip() and not f.startswith(THIN_BODY)]
+    said += [f"asked for {x.get('asked')}, you have {x.get('have')}"
+             for x in row.get("near") or [] if isinstance(x, dict) and x.get("asked")]
+    return "; ".join(s.rstrip(". ") for s in said) or "nothing flagged"
+
+
+def _rounds(n: int) -> str:
+    return f"{n} round" if n == 1 else f"{n} rounds"
+
+
+def table(summary_path, out_dir=None, show=None, names=None, rounds=1) -> str:
+    """The counts line and the ranked table for the person, as the job-scraper skill's Step 5
+    sets it out, from the round's saved shortlist: highest score first (the round's own order
+    between equal scores), each row's warm route in its Check, and no row under the pass bar.
+    `out_dir` is the round's own folder, whose shortlist still holds each posting's deadline
+    and what its screen flagged; without it those read as not stated. Reads only."""
+    try:
+        rows = _read_json(summary_path)
+    except Exception:
+        return ""
+    rows = [r for r in (rows if isinstance(rows, list) else []) if isinstance(r, dict)]
+    more: dict = {}
+    if out_dir:
+        try:
+            got = _read_json(os.path.join(out_dir, SHORTLIST))
+        except Exception:
+            got = []
+        for r in got if isinstance(got, list) else []:
+            if isinstance(r, dict) and r.get("url"):
+                more.setdefault(r["url"], r)
+    good, strong = yield_of(summary_path)
+    want, want_75 = targets(show, names)
+    met = good >= want and strong >= want_75
+    lines = [f"**{good} of {len(rows)} cleared the pass bar (60+), {strong} of them strong "
+             f"(75+); target {want} and {want_75}: "
+             + ("met" if met else f"missed after {_rounds(rounds)}") + "**"]
+    shown_rows = sorted((r for r in rows if (score_of(r) or 0) >= 60),
+                        key=lambda r: -(score_of(r) or 0))
+    if shown_rows:
+        import apply_link
+        lines += ["", TABLE_HEAD]
+        for n, r in enumerate(shown_rows, 1):
+            extra = more.get(r.get("url")) or {}
+            score = score_of(r)
+            link = r.get("apply_url") or apply_link.clean(r.get("url") or "") or ""
+            lines.append("| " + " | ".join(_cell(c) for c in (
+                n, score, verdict_of(score), r.get("title"), r.get("company"),
+                r.get("location"), r.get("salary") or "not stated",
+                extra.get("deadline") or "not stated", check_of(r, extra))) + " | "
+                + (f"[Apply]({link})" if link else "no link") + " |")
+    below = len(rows) - len(shown_rows)
+    if below:
+        lines += ["", f"{below} more scored under 60 and are left off this table."]
+    return "\n".join(lines)
+
+
+def say_table(text: str) -> None:
+    if text:
+        print("\ntable for the person (pass it on as it is, nothing added to its rows):")
+        print(text)
+
+
 def recut(a) -> int:
     """--recut: the round's shortlist cut again, nothing searched. A ruling or a judgement
     made since the round ran (exclude.py add, bar.py judge) is a hard rule the cut now
@@ -1410,6 +1532,9 @@ def recut(a) -> int:
     if path:
         print(f"shortlist summary: {local_path.rel(path, ROOT)} ({report.get('found', 0)} "
               "rows) - commit this one")
+        if a.table:
+            m = re.search(r"_round(\d+)$", name)
+            say_table(table(path, a.out, a.show, names, int(m.group(1)) if m else 1))
     return 0
 
 
@@ -1506,6 +1631,11 @@ def main():
                     help="search nothing: cut the round in --out again, every hard rule "
                          "applied as it stands now (a ruling or a judgement made since), "
                          "refilled from the next rows to --show")
+    ap.add_argument("--table", action="store_true",
+                    help="end by printing the counts line and the ranked table for the person "
+                         "(the job-scraper skill, Step 5), warm routes in its Check, to pass "
+                         "on as it is; with --recut, the round's table again. Writes nothing "
+                         "more: the round's files are the same with or without it")
     a = ap.parse_args()
     if a.recut:
         if not a.out:
@@ -1705,14 +1835,8 @@ def main():
     # ranked rows before the cut, 60 and more of them, a round met its target with rows the
     # cut then dropped, and never widened (the release review, 2026-11-03).
     good, strong = yield_of(summary) if summary else (0, 0)
-    # A search asked for N widens until N score 60 or more: a top-up of ten starts on one page
-    # of each site (the app skill) and stopped at five (2026-11-03).
-    want = max(YIELD_60, min(a.show or 0, 60))
-    want_75 = YIELD_75
-    if names:
-        # One role per employer: a search of three employers can never show five.
-        want, want_75 = min(want, len(names)), min(YIELD_75, len(names))
-    met = good >= want and strong >= want_75
+    want, want_75 = targets(a.show, names)
+    met =good >= want and strong >= want_75
     print(f"yield: {good} scoring 60+ (target {want}), "
           f"{strong} scoring 75+ (target {want_75}) -> {'MET' if met else 'MISSED'}")
     if partial:
@@ -1754,6 +1878,10 @@ def main():
     # scrape (--from-scraped) is exactly the round that still owes its widening, and one
     # that never widened missed the yield rule's three rounds. It is said before it runs.
     widen = not met and a.expand and a.round < MAX_ROUNDS
+    if a.table and summary and not widen:
+        # Read before the prune: the round's own shortlist holds each posting's deadline.
+        # A round about to widen prints none; the widest one prints the table.
+        say_table(table(summary, a.out, a.show, names, a.round))
     if not a.keep:
         # The shortlist survives every prune, for drafting. A round that missed
         # is also read for exactly the files the MISSED message below names, so
@@ -1804,6 +1932,7 @@ def main():
             + (["--seen", a.seen] if a.seen else [])
             + (["--no-seen-write"] if a.no_seen_write else [])
             + (["--no-seen-read"] if a.no_seen_read else [])
+            + (["--table"] if a.table else [])
             + (["--employers", f(NAMED_FILE)] if names else []))
         if not a.keep:
             try:
