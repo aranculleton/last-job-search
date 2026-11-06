@@ -433,7 +433,7 @@ def _sections_for(item_id: str) -> tuple:
         return ("learned",)
     if item_id.startswith("tip-"):
         return ("help",)
-    if item_id.startswith(("rule-", "search-")):
+    if item_id.startswith(("rule-", "search-", "site-")):
         return ("search",)
     if item_id == "schedule":
         return ("schedule",)
@@ -2248,8 +2248,19 @@ def _search_set(r: Run) -> dict:
                      + [{"remove": str(x).strip()} for x in rem or [] if str(x).strip()])
         elif isinstance(v, list):
             raise Refused("Say what to add or take off, one at a time.")
-    if what == "sites" and r.value.get("name"):
-        v = {str(r.value["name"]): bool(r.value.get("on"))}
+    if what == "sites" and (r.value.get("name") or r.target.get("site")):
+        # A site's own row (`site-<name>`, app_model._sites) names its site; the whole
+        # search's item names it in the value.
+        import portals
+        name = str(r.target.get("site") or r.value["name"])
+        on = bool(r.value.get("on"))
+        if on and not portals.has_key(name):
+            # On with no key, it is never searched: the page shows the steps instead of a tick
+            # (the maintainer, 2026-11-06: "looks ticked and then unticks itself").
+            raise Refused(f"{portals.label(name)} needs a "
+                          f"{'free ' if portals.key_help(name).get('free') else ''}key before "
+                          "it can be searched. Open it for the steps to get one.")
+        v = {name: on}
     if what == "pay" and isinstance(v, str):
         # The first number written, never every digit run together ("90,000, hoping for
         # 110,000" was once read as 90000110000).

@@ -51,6 +51,16 @@ make sense to somebody whose repo just received it.
 - **More choices for timing**: your next interview can go to the top of the Brief from the day
   before, and calendar reminders can come two hours before.
 
+### Fixed
+
+- **Every job site has a plain name and a line saying what it is.** Settings, Job sites says
+  "Adzuna", never "api.adzuna.com", with a short note under each site.
+- **A site that needs a key says so.** Its row says "Needs a free key" instead of a tick, and
+  opens on the steps to get one. Adzuna looked ticked, then unticked itself after a visit.
+- **No tick on Job sites flips back without saying why.** Each site is changed on its own, so a
+  tap on one is never undone because another changed, and a tap that could not be done says
+  why on that site's row, with the tick back as it really is.
+
 ## [4.11.0] - 2026-11-06
 
 ### Added

@@ -39,7 +39,6 @@ import os
 import re
 import subprocess
 import sys
-import urllib.parse
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 for _p in (os.path.join(_HERE, "network"), _HERE):
@@ -4406,27 +4405,37 @@ def _you(ctx: Ctx, targets: dict) -> dict | None:
 # ------------------------------------------------------------------ your search
 
 
-# A job site's name as people write it: "linkedin-search" is LinkedIn, never "Linkedin".
-_BRANDS = {"linkedin": "LinkedIn", "freehire": "Freehire", "jobbank": "Job Bank",
-           "indeed": "Indeed", "glassdoor": "Glassdoor"}
-
-
 def portal_label(name: str) -> str:
-    """A job site's name as the person knows it: the brand, else the address it lives at
-    ("builtintoronto.com"), never a name made from its folder ("Builtintoronto", the 3
-    November audit)."""
-    base = re.sub(r"-search$", "", str(name or ""))
-    if base.lower() in _BRANDS:
-        return _BRANDS[base.lower()]
+    """A job site's plain name as the person knows it ("Adzuna", never "api.adzuna.com", the
+    maintainer, 2026-11-06): tools/portals.py holds every site's name and note in one place."""
+    import portals as portals_mod
     try:
-        import portals as portals_mod
-        host = re.sub(r"^www\.", "", urllib.parse.urlparse(portals_mod.url(name)).netloc.lower())
-    except Exception:  # noqa: BLE001  no frontmatter: the folder's name below
-        host = ""
-    if host:
-        return host
-    words = re.split(r"[-_]+", base)
-    return " ".join(w if w.isupper() else w[:1].upper() + w[1:] for w in words if w)
+        return portals_mod.label(name)
+    except Exception:  # noqa: BLE001  a name must never break the page
+        return portals_mod.short(str(name or ""))
+
+
+def _sites(sites: dict, targets: dict) -> list[dict]:
+    """Settings, Job sites: each site's plain name, its one line, whether it is on, and for a
+    site that needs a key this computer does not hold, `key` (free, steps) in place of a tick
+    that could be ticked. Each site is its own item, so a tap on one is never refused because
+    another changed, and a refusal is said on its own row (the maintainer, 2026-11-06: a tick
+    that "unticks itself after I leave")."""
+    import portals as portals_mod
+    out = []
+    for name, on in sorted(sites.items()):
+        try:
+            help_ = {} if portals_mod.has_key(name) else portals_mod.key_help(name)
+            words = portals_mod.note(name)
+        except Exception:  # noqa: BLE001  one odd portal never hides the rest
+            help_, words = {}, portals_mod.DEFAULT_NOTE
+        sid = f"site-{seg(portals_mod.short(name))[:60]}"
+        row = {"id": sid, "name": name, "label": portal_label(name), "note": words,
+               "on": bool(on), "key": help_ or None}
+        row["rev"] = rev_of(row)
+        targets[sid] = {"kind": "search", "site": name, "rev": row["rev"]}
+        out.append(row)
+    return out
 
 
 # A hidden job's reason as the person would say it, first match wins: the trash's own words
@@ -4478,8 +4487,6 @@ def _search(ctx: Ctx, targets: dict) -> dict:
         sites = portals_mod.enabled()
     except Exception:  # noqa: BLE001
         sites = {}
-    why = {"linkedin-search": "LinkedIn's own job search.",
-           "freehire-search": "A free board that lists jobs from many sites."}
     seen = ctx.seen
     mine = [e for e in seen.values() if str(e.get("status") or "").lower() == "excluded"
             and e.get("basis") == "person"]
@@ -4548,8 +4555,7 @@ def _search(ctx: Ctx, targets: dict) -> dict:
                     "cut": got("SALARY_CUT_BELOW"), "currency": got("CURRENCY_CODE")},
             "window_days": got("JOB_AGE_DAYS", 14),
             "employers": [str(x) for x in got("SCRAPE_EMPLOYERS", []) or []],
-            "portals": [{"name": k, "label": portal_label(k), "on": bool(v), "why": why.get(k, "")}
-                        for k, v in sorted(sites.items())],
+            "portals": _sites(sites, targets),
             "boards": [{"employer": k, "system": (v[0] if isinstance(v, (list, tuple)) and v
                                                    else str(v))} for k, v in sorted(followed.items())],
             "boards_left_out": len(boards) - len(followed),

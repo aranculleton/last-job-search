@@ -238,7 +238,9 @@ def test_your_search_is_said_in_plain_words(tmp_path, monkeypatch):
         if hasattr(mod, "_cache"):
             mod._cache.clear()
     monkeypatch.setattr(portals, "url", lambda name, root=None: "https://www.builtexample.com/jobs" if name == "builtexample-search" else "")
-    assert app_model.portal_label("builtexample-search") == "builtexample.com"
+    # Never its address (the maintainer, 2026-11-06: "api.adzuna.com" stood for Adzuna): with
+    # no SKILL.md title to name it, its folder's words.
+    assert app_model.portal_label("builtexample-search") == "Builtexample"
     assert app_model.portal_label("linkedin-search") == "LinkedIn"
     seen = {"https://jobs.example/1": {"status": "excluded", "basis": "person", "exclusion_reason": "Harbourline Bank: not this one",
                                        "title": "Senior Analyst, Credit Risk &amp; Collections", "company": "Harbourline Bank", "date": "2026-10-20"},

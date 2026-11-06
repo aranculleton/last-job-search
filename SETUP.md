@@ -291,6 +291,28 @@ your plan offers those. On your own computer, export it in your shell's profile.
 
 ---
 
+## A job site that needs a key
+
+A site whose listings come through its own API (Adzuna's, for one) needs a key, and a portal
+built for it by `/add-portal` reads the key from the variables its `key-env:` line names (or,
+for one built before that line, the ones its CLI names beside `MISSING_CREDENTIALS`). Until
+those are set, the page shows the site as "Needs a free key" with the steps to get one
+(`tools/portals.py` `SITES`), and its tick cannot be turned on. When the person says they
+have it:
+
+- **In a cloud chat:** the environment's variables, named exactly as the portal reads them
+  (the steps: `python3 tools/claude_surfaces.py steps cloud-environment`, checked against
+  its page that day). Anyone who uses that environment can read them. A network secret
+  does not serve a key the site takes in its address (Adzuna's `app_id` and `app_key`),
+  only one sent in a header. A new chat picks the variables up.
+- **On their own computer:** a line for each in the shell's profile (`export NAME=...`),
+  which they paste the key into themselves; a new chat picks it up.
+
+The key is never asked for in a chat and never written into the repo (`.env` is ignored for
+that reason). Once a chat holds it, `python3 tools/app.py view` shows the site as a tick.
+
+---
+
 ## Resetting
 
 `/reset` removes your profile, your search's state or your documents folder, after you

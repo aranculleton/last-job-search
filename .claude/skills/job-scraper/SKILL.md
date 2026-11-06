@@ -164,6 +164,11 @@ Only draft unprompted if the user has explicitly said to in that request.
   reading its robots.txt again.
   `python3 tools/portals.py` prints what the next round will search, and the boards
   researched for the person (`PORTAL_RESEARCH`) that have no portal yet.
+- **A site that needs a key** (an API such as Adzuna's) shows on the page as "Needs a free
+  key" with the steps to get one (`tools/portals.py` `SITES`, `key_help`), and cannot be
+  ticked until this computer holds it. When the person says "I have my <site> key", show
+  them where it goes the way SETUP.md, "A job site that needs a key", says: never asked
+  for in the chat itself, never written into the repo.
 - **Employer boards are the third source, and not a portal.** `tools/ats_boards.py` reads
   the employers named in `profile/boards.py` straight from their ATS (every system the
   vendored openroles reads: Greenhouse, Lever, Ashby, Workday, Personio, Teamtailor and the
