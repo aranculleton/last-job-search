@@ -732,9 +732,9 @@ METHODS: dict[str, dict] = {
             (34, "2026-11-05", False, "routines.py brief and the tidy-up check that the brief's task fires in the chat answering the page, and print the move where it still fires in a chat that handed the page on, never \"set up\" or \"nothing to tidy\" over it"),
             (35, "2026-11-05", False, "the tidy-up knows a page helper by the page's own record of the chats that answered it as one, however it was started and whatever it is called: a finished old helper the person started from the page is put away, the live one kept"),
             (36, "2026-11-05", False, "the daily tidy clears the page's open rings every day, not once, so none stay unread in the Claude app"),
-            (37, "2026-11-06", False, "a brief time the person picks is kept to the minute, 8:00 stays 8:00; only the app's own default is moved off the hour, recorded beside what it stood for (record --asked) and said in one line; what the scheduler reports of a late start (next_run_at, the last fired time) is kept from the task listing by routines.py brief and the daily tidy-up so the page shows the real time; a brief made before keeps its schedule and is read the same way"),
+            (37, "2026-11-06", False, "a brief time the person picks is kept to the minute, 8:00 stays 8:00; only the app's own default is moved off the hour, recorded beside what it stood for (record --asked) and said in one line; what the scheduler reports of a late start (next_run_at, the last fired time) is kept from the task listing by routines.py brief and the daily tidy-up so the page shows the real time; a brief made before keeps its schedule and is read the same way; where both earlier times fall in the slow hours (Alaska, 9:38) the line says later than 8:00, never earlier"),
         ),
-        "fingerprint": "01ec4a435f1396f0",
+        "fingerprint": "0c998010820d30c5",
     },
     "expand": {
         "by": "upgrade", "priority": 4, "time": "~15 min",
