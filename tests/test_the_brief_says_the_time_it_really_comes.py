@@ -117,6 +117,14 @@ def test_an_older_copy_with_a_moved_minute_and_no_record_is_shown_its_real_time_
                                "asked": {"time": "08:00", "by": "app"}})
     assert west["why"] == ("Comes at 5:38: earlier than 8:00, outside the hours when the service "
                            "often starts late.")
+    # Each side of the slow window says which way it moved: Alaska's 7:38 and 5:38 both fall
+    # in it, so its brief is set later, at 9:38, and says later, never earlier.
+    for zone, at, said in (("America/Los_Angeles", "5:38", "earlier than 8:00"),
+                           ("America/Anchorage", "9:38", "later than 8:00"),
+                           ("America/New_York", "7:38", "a few minutes before the hour")):
+        d = routines.default(zone, page=True)
+        assert d["when"] == f"Every day at {at}", zone
+        assert f"It comes {said}" in d["say"], (zone, d["say"])
     # A time nobody moved has nothing to explain.
     assert routines.page_part(_registry(tmp_path, f"CRON_TZ={LONDON} 15 9 * * *"))["why"] == ""
 

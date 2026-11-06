@@ -1002,13 +1002,14 @@ def _say_time(hhmm: str) -> str:
 def moved_why(asked: str, set_at: str) -> str:
     """Why the app set `set_at` for a brief asked for at `asked` ("HH:MM"), as the end of a
     sentence: a few minutes before the hour or half hour, or hours earlier, out of the
-    scheduler's slow morning window."""
+    scheduler's slow morning window, or hours later where both earlier times fall in it
+    (Alaska: 9:38)."""
     ah, am = _hm(asked)
     sh, sm = _hm(set_at)
-    gap = ((ah * 60 + am) - (sh * 60 + sm)) % 1440
-    if gap >= 60:
-        return (f"earlier than {_say_time(asked)}, outside the hours when the service often "
-                "starts late")
+    gap = (ah * 60 + am) - (sh * 60 + sm)       # signed: the brief's times stay within one day
+    if gap >= 60 or gap < 0:
+        return (f"{'earlier' if gap > 0 else 'later'} than {_say_time(asked)}, outside the "
+                "hours when the service often starts late")
     return ("a few minutes before the " + ("half hour" if am == 30 else "hour")
             + ", when the service is less busy")
 
