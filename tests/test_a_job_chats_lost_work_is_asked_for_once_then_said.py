@@ -177,7 +177,7 @@ def test_keep_saves_the_work_to_its_branch_with_no_check(tmp_path, monkeypatch):
 
     def git(cwd, *args):
         return subprocess.run(["git", "-C", str(cwd), *args], capture_output=True, text=True,
-                              check=True)
+                              encoding="utf-8", errors="replace", check=True)
 
     origin, chat = tmp_path / "origin.git", tmp_path / "chat"
     git(tmp_path, "init", "-q", "--bare", "-b", "master", str(origin))

@@ -998,8 +998,8 @@ def fail_stranded(db: dict, now: dt.datetime, out_dir: str) -> dict:
 # Work whose chat finished it but could not save it before it closed (its save timed out, and
 # asked once more it had nothing to save: tidy.py close and plan). Its card said done over a
 # result nobody could see (the "Finding jobs" chat, 2026-11-06).
-LOST_SAID = ("It finished, but its results could not be saved before its chat closed, so "
-             "they are lost. Tap Try again to do it once more.")
+LOST_SAID = ("It finished, but its results could not be saved, so they are lost. Tap Try "
+             "again to do it once more.")
 
 
 def lose(db: dict, ids, now: dt.datetime, out_dir: str) -> list[str]:
