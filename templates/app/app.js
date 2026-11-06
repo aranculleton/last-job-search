@@ -292,6 +292,18 @@
     return k > 0 ? k : 1;
   }
   function pageWidth() { return window.innerWidth / (parseFloat(document.body.style.zoom) || 1); }
+  // The window's px in one measured px: 1 in Chrome and Firefox, the zoom in Safari, whose
+  // measures are taken before it. A measure set against the window's own height (innerHeight,
+  // scrollTop) is turned into the window's px first: compared as it came, Safari's Brief gave
+  // up rows it had room for and its Latest scrolled short of the field (4.12's Safari run).
+  function screenPerPx() { return (parseFloat(document.body && document.body.style.zoom) || 1) / drawnPerPx(); }
+  // A measured top or bottom in the window's px (the tests' __drawnRect, the same sum).
+  function screenY(y) {
+    const d = screenPerPx();
+    if (Math.abs(d - 1) < 0.001) return y;
+    const sy = window.scrollY || 0;
+    return (y + sy) * d - sy;
+  }
   function applySize(z) {
     const phone = window.innerWidth < 760;
     const f = (phone ? PHONE_SIZES : SIZES)[z] || (phone ? PHONE_SIZES : SIZES).standard;
@@ -5030,7 +5042,8 @@
     // fills the rest, its rows sharing the height; the lists grow into it and give way below.
     const one = getComputedStyle(grid).gridTemplateColumns.split(" ").length >= 12;
     const shellEl = document.getElementById("shell") || document.body;
-    const tail = Math.max(0, shellEl.getBoundingClientRect().bottom - grid.getBoundingClientRect().bottom);
+    const sp = screenPerPx();
+    const tail = Math.max(0, shellEl.getBoundingClientRect().bottom - grid.getBoundingClientRect().bottom) * sp;
     const shown = (l) => [...l.children].filter((li) => !li.hidden);
     // Grow: one more at a time, kept only while its panel neither grows the row nor overflows.
     for (const l of lists) {
@@ -5054,7 +5067,7 @@
     const room = one ? window.innerHeight - tail : window.innerHeight - 64;
     // The lowest panel, not the grid's own box: a grid given its height keeps it while a row
     // that has grown runs out of it.
-    const bottom = () => Math.max(grid.getBoundingClientRect().bottom, ...[...grid.children].map((p) => p.getBoundingClientRect().bottom)) + (one ? window.scrollY : 0);
+    const bottom = () => screenY(Math.max(grid.getBoundingClientRect().bottom, ...[...grid.children].map((p) => p.getBoundingClientRect().bottom))) + (one ? window.scrollY : 0);
     // Each list first gives way to its fewest; on a laptop, past that, to one, so the window
     // holds the whole Brief rather than scrolling (every list's "All" opens the rest).
     for (const floor of one ? [(l) => Math.max(1, fit(l).min), (l) => Math.min(1, fit(l).min)] : [(l) => Math.max(1, fit(l).min)])
@@ -5079,7 +5092,7 @@
     // PANELS?").
     if (one) {
       const z = parseFloat(document.body.style.zoom) || 1;
-      const top = grid.getBoundingClientRect().top + window.scrollY;
+      const top = screenY(grid.getBoundingClientRect().top) + window.scrollY;
       const tall = room - top;
       if (bottom() <= room + 1 && bottom() - top >= FILL_SHARE * tall) fitFill(grid, Math.max(0, Math.floor((room - top - 2) / z)) + "px");
       for (const l of lists) {
@@ -12900,9 +12913,10 @@
     // the conversation's own section, where the field rests when it is not held (its inner
     // block is display: contents and has no box).
     const tabs = document.querySelector(".tabs");
-    const under = tabs && getComputedStyle(tabs).position === "fixed" && !tabs.hidden ? tabs.getBoundingClientRect().height : 0;
+    const sp = screenPerPx();
+    const under = tabs && getComputedStyle(tabs).position === "fixed" && !tabs.hidden ? tabs.getBoundingClientRect().height * sp : 0;
     const block = talkForm.closest("section") || talkForm.parentElement;
-    const want = sc.scrollTop + block.getBoundingClientRect().bottom - (window.innerHeight - under - 8);
+    const want = sc.scrollTop + screenY(block.getBoundingClientRect().bottom) - (window.innerHeight - under - 8);
     return Math.max(0, Math.min(whole, Math.round(want)));
   }
   function nearEnd(sc) { return !sc || chatEndTop(sc) - sc.scrollTop < 80; }

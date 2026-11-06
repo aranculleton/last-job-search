@@ -32,7 +32,8 @@ BRIEF = r"""(() => { const R = %s;
   const m = (f) => { const s = document.createElement('span'); s.style.font = f; s.textContent = 'The quick brown fox jumps over the lazy dog'; document.body.appendChild(s); const w = s.getBoundingClientRect().width; s.remove(); return Math.round(w * 10) / 10; };
   const cs = getComputedStyle(document.body);
   const shell = document.getElementById('shell');
-  return {ih: innerHeight, sh: document.documentElement.scrollHeight, gh: g.style.height, filled: g.classList.contains('is-filled'),
+  const mq = ['(pointer: fine)', '(pointer: coarse)', '(pointer: none)', '(hover: hover)', '(any-pointer: fine)'].filter((q) => matchMedia(q).matches);
+  return {mq, ih: innerHeight, sh: document.documentElement.scrollHeight, gh: g.style.height, filled: g.classList.contains('is-filled'),
     cols: getComputedStyle(g).gridTemplateColumns.split(' ').length, rows: getComputedStyle(g).gridTemplateRows,
     grid: R(g), shell: R(shell), main: R(document.querySelector('#main')), foot: [...document.querySelectorAll('.foot-line, .bp-tip, #main > .sec > *:last-child')].filter((e) => e.getClientRects().length).map((e) => [e.className, R(e)]),
     font: cs.fontFamily.slice(0, 60), fs: cs.fontSize, lh: cs.lineHeight, w16: m('16px ' + cs.fontFamily), w14: m('14px ' + cs.fontFamily), zoom: document.body.style.zoom,

@@ -98,11 +98,11 @@ run() {
   else
     printf '  %-16s FAIL  %s\n' "$name" "${last:-exit $code, see $log}"
     note "$name: FAIL, ${last:-exit $code}"
-    while IFS= read -r l; do note "    ${l:0:300}"; done < <(grep -aE '^(FAILED|ERROR) ' "$log" | head -8)
+    while IFS= read -r l; do note "    ${l:0:300}"; done < <(grep -aE '^(FAILED|ERROR) ' "$log" | head -16)
     # Each failure's own message whole (--tb=line: file:line: the error and what it measured):
     # the summary line above is cut, and a cut dict ("'panels': 6, ...}") hid which promise
     # Safari broke at 4.12.
-    while IFS= read -r l; do note "      ${l:0:2400}"; done < <(grep -aE '^[^ ]+\.py:[0-9]+: ' "$log" | head -8)
+    while IFS= read -r l; do note "      ${l:0:2400}"; done < <(grep -aE '^[^ ]+\.py:[0-9]+: ' "$log" | head -16)
   fi
 }
 

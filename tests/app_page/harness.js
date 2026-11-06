@@ -125,6 +125,16 @@ const DRAWN_RECT = `Element.prototype.__drawnRect = function () {
   const sx = window.scrollX || 0, sy = window.scrollY || 0;
   return new DOMRect((r.x + sx) * d - sx, (r.y + sy) * d - sy, r.width * d, r.height * d);
 };`;
+const MEASURE_BEFORE_ZOOM = `(function () {
+  const g = Element.prototype.getBoundingClientRect;
+  Element.prototype.getBoundingClientRect = function () {
+    const r = g.call(this), b = document.body;
+    const z = b ? parseFloat(b.style.zoom) || 1 : 1;
+    if (!b || z === 1 || !b.contains(this)) return r;
+    const sx = window.scrollX || 0, sy = window.scrollY || 0;
+    return new DOMRect((r.x + sx) / z - sx, (r.y + sy) / z - sy, r.width / z, r.height / z);
+  };
+})();`;
 async function open(o) {
   // A named phone (`device`, one of Playwright's own, such as "iPhone 13"): its screen, its
   // browser's name, touch and a phone's viewport, drawn at one pixel a point. Firefox's engine
@@ -167,6 +177,10 @@ async function open(o) {
   // measure after that zoom and Safari before it (probed 2026-10-29), so a Safari box read
   // 10 to 15% too big against the screen. The page's own code is left to measure natively.
   await ctx.addInitScript({content: DRAWN_RECT});
+  // Safari's way of measuring, in any engine: a box inside the zoomed page measured before
+  // the zoom, as WebKit does. The page's sums against the window broke only in Safari (4.12),
+  // so this lets Chrome's own run hold them.
+  if (o.measureBeforeZoom) await ctx.addInitScript({content: MEASURE_BEFORE_ZOOM});
   // What this viewer chose before (kept on their device), the Claude app's own appearance
   // choice on the root, or storage refused altogether: each set before any page script runs.
   if (o.look) await ctx.addInitScript({content: "try { " + Object.entries(o.look).map(([k, v]) => "localStorage.setItem(" + JSON.stringify("ljs:" + k) + ", " + JSON.stringify(v) + ");").join(" ") + " } catch (e) {}"});
@@ -793,7 +807,7 @@ async function evalThrough(page, code) {
 }
 
 S.engine = async (a) => {
-  const o = await open({html: a.html, viewport: a.viewport, scheme: a.scheme, seed: a.seed || {}, fake: a.fake, clipboard: a.clipboard, clock: a.clock, timezoneId: a.timezoneId, touch: a.touch});
+  const o = await open({html: a.html, viewport: a.viewport, scheme: a.scheme, seed: a.seed || {}, fake: a.fake, clipboard: a.clipboard, clock: a.clock, timezoneId: a.timezoneId, touch: a.touch, measureBeforeZoom: a.measureBeforeZoom});
   const {page, store} = o;
   // A page expected to reload itself first (a newer version published): wait for that load,
   // so no step's own navigation or read lands in the middle of it (Firefox, 4.7).

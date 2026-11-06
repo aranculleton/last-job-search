@@ -435,7 +435,7 @@ details.more.split[open] { flex-basis: auto; }
 .m-rows :is(.file-kind, .file-name) { font-weight: 400; color: inherit; }
 .m-rows details.send { border-top: 0; }
 .m-rows details.send > summary { padding: 0; }
-@media (min-width: 760px) and (pointer: fine) { .m-rows details.send > summary { min-height: 24px; } }
+@media (min-width: 760px) and (pointer: fine), (min-width: 760px) and (pointer: none) { .m-rows details.send > summary { min-height: 24px; } }
 /* The rarer actions under More are the soft grey pills of the card's own row. */
 .m-rows .more-acts .btn.secondary { background: var(--sunk); border-color: transparent; }
 @media (hover: hover) { .m-rows .more-acts .btn.secondary:hover { background: var(--raised); } }
@@ -763,7 +763,7 @@ textarea { width: 100%; resize: vertical; line-height: 1.45; }
   /* A small circle drawn inside a 44px target, the size of every control on a phone; on a
      wider screen the target is the circle's own size, so it never takes a line of its own. */
   background: radial-gradient(circle at center, transparent 0 10px, var(--line-strong) 10px 11px, transparent 11.5px); vertical-align: middle; }
-@media (min-width: 760px) and (pointer: fine) { .q { width: 24px; height: 24px; min-width: 24px; margin: -4px 0 -4px 4px; } }
+@media (min-width: 760px) and (pointer: fine), (min-width: 760px) and (pointer: none) { .q { width: 24px; height: 24px; min-width: 24px; margin: -4px 0 -4px 4px; } }
 .orphan { display: grid; gap: 8px; }
 .near-line { font-size: 0.875rem; color: var(--muted); }
 
@@ -958,7 +958,7 @@ p.count.tone-warn { color: var(--st-overdue); }
 .facts .info-toggle { font: inherit; font-weight: 600; }
 /* A document's words and its pencil keep together: a pencil alone on a line named nothing. */
 .checks .doc-part { white-space: nowrap; }
-@media (min-width: 760px) and (pointer: fine) {
+@media (min-width: 760px) and (pointer: fine), (min-width: 760px) and (pointer: none) {
   .facts .info-toggle { display: inline; min-height: 0; padding: 0 2px; }
   .facts .btn.icon-only, .checks .btn.icon-only { min-height: 0; padding: 2px 8px; margin-block: -4px; vertical-align: middle; }
 }
@@ -1306,7 +1306,10 @@ dialog.work-sheet :is(select, input, textarea) { width: 100%; max-width: 100%; m
    (the maintainer, 2026-10-26). Touch screens keep the full size. */
 /* With a mouse, the size Claude's own app uses (14px text), so a screen holds what it
    should; phones keep their larger, touch-sized type (the maintainer, 2026-10-28). */
-@media (pointer: fine) and (min-width: 760px) {
+/* A computer that reports no pointer at all (a keyboard alone, a remote desktop, Firefox with
+   no mouse it can see) is a computer, not a phone: drawn at 16px its Brief scrolled and its
+   job cards' facts took two lines (4.12's Firefox run). Touch screens alone keep the full size. */
+@media (pointer: fine) and (min-width: 760px), (pointer: none) and (min-width: 760px) {
   html { font-size: 87.5%; }
   :root { --target: 36px; --top-h: 52px; }
   .card { padding: 12px 16px; }

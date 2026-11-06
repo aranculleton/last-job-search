@@ -55,14 +55,16 @@ FIT = r"""(() => {
   const spill = panels.filter((p) => { const r = p.getBoundingClientRect();
     return [...p.querySelectorAll(':scope > .bp-body > *, :scope > .bp-foot')].some((c) => c.getClientRects().length && c.getBoundingClientRect().bottom > r.bottom + 1); })
     .map((p) => p.getAttribute('data-k'));
-  const out = panels.filter((p) => p.getBoundingClientRect().bottom > vh + 1).map((p) => p.getAttribute('data-k'));
+  // Against the window in its own px (__drawnRect): Safari measures before the page's zoom,
+  // and its Brief read as past the window while it fitted (4.12's Safari run).
+  const out = panels.filter((p) => p.__drawnRect().bottom > vh + 1).map((p) => p.getAttribute('data-k'));
   const tip = document.querySelector('#main .bp-tip');
   const priv = [...document.querySelectorAll('.foot-line')].filter((e) => e.getClientRects().length);
   const lists = [...g.querySelectorAll('[data-fit]')].map((l) => [l.closest('.bpanel').getAttribute('data-k'), [...l.children].filter((x) => !x.hidden).length, l.children.length]);
   const more = [...g.querySelectorAll('[data-fit-more]')].filter((b) => !b.hidden).map((b) => b.textContent);
   return {scroll: document.documentElement.scrollHeight - vh, out, spill, panels: panels.length,
-    tip: tip ? tip.getBoundingClientRect().bottom <= vh + 1 : null, priv: priv.map((e) => e.getBoundingClientRect().bottom <= vh + 1),
-    lists, more};
+    tip: tip ? tip.__drawnRect().bottom <= vh + 1 : null, priv: priv.map((e) => e.__drawnRect().bottom <= vh + 1),
+    lists, more, filled: g.classList.contains('is-filled')};
 })()"""
 
 
@@ -78,6 +80,9 @@ def test_a_full_brief_fits_a_laptop_window_without_scrolling(run, tmp_path, size
     assert r["scroll"] <= 1, ("the Brief scrolls on a laptop", size, r)
     assert not r["out"] and not r["spill"], r
     assert r["panels"] >= 6 and r["tip"] is True and r["priv"] == [True], r
+    # A full Brief fills the window to its foot on every laptop: Safari, measuring before the
+    # zoom, thought it had less room and gave up rows at 1000 by 560 (4.12's Safari run).
+    assert r["filled"] is True, r
     # Every list shows at least one, and News, with no screen of its own, says what it holds
     # past the window ("2 more") rather than dropping it.
     assert all(shown >= 1 or key == "bp:today" for key, shown, _n in r["lists"]), r["lists"]
@@ -109,7 +114,7 @@ FOOT_READ = r"""(() => {
   const lines = [...document.querySelectorAll('.foot-line')].filter((e) => e.getClientRects().length);
   const p = lines[0];
   const col = document.querySelector('#main > .sec').getBoundingClientRect();
-  const r = p.getBoundingClientRect();
+  const r = p.__drawnRect();
   const lh = parseFloat(getComputedStyle(p).lineHeight) || 20;
   const z = parseFloat(document.body.style.zoom) || 1;
   // Where the paragraph's text ends on the right: a narrow block in a wide strip ends far short.

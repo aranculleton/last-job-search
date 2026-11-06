@@ -28,6 +28,14 @@ make sense to somebody whose repo just received it.
   the search's files. That saves about 10,000 tokens each search. What a search finds, how it
   scores them and the order are exactly as before.
 
+### Fixed
+
+- **Your Brief fits a laptop's window in Safari and Firefox too.** Safari measured the page
+  before its own text size was applied, so the Brief gave up rows it had room for and the
+  Chat's "Latest" stopped short of the box you type in on a phone; Firefox on a computer with
+  no mouse it could see drew phone-sized text, so the Brief scrolled and a job's details
+  took two lines. Both now draw the page as Chrome does.
+
 ## [4.12.0] - 2026-11-06
 
 ### Added
