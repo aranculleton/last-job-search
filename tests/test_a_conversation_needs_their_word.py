@@ -101,3 +101,20 @@ def test_a_message_we_sent_keeps_the_conversation_the_log_cannot_see(tmp_path, m
     dm = {**REQUEST, "date": "2026-09-02", "scenario": "follow_up", "channel": "linkedin_dm", "summary": "Following up"}
     assert state.effective_status(REED, [REQUEST, dm]) == "in_conversation"
     assert not [p for p in state.reconcile([REED], [REQUEST, dm]) if p["reason"] == "no_word_from_them"]
+
+
+def test_a_request_they_accepted_with_no_word_either_way_is_connected(tmp_path, monkeypatch):
+    # Talking with only our request and their acceptance in the log: nobody has said anything,
+    # so the page says what the log shows, never "Talking" with a reply owed (2026-11-06).
+    monkeypatch.setattr(state.person, "local_state", lambda *a: str(tmp_path / "none.csv"))
+    accepted = {**REQUEST, "date": "2026-09-01", "direction": "in", "scenario": "connection_accepted",
+                "summary": "Accepted the connection request"}
+    assert state.is_acceptance(accepted)
+    assert state.effective_status(REED, [REQUEST, accepted]) == "connected_no_reply"
+    found = [p["reason"] for p in state.reconcile([REED], [REQUEST, accepted])]
+    assert "no_word_from_them" in found, found
+    # A word from them after it, answered, keeps the conversation.
+    theirs = {**accepted, "date": "2026-09-02", "scenario": "reply", "channel": "linkedin_dm",
+              "summary": "Good to connect"}
+    ours = {**REQUEST, "date": "2026-09-03", "scenario": "reply", "channel": "linkedin_dm", "summary": "Thanks"}
+    assert state.effective_status(REED, [REQUEST, accepted, theirs, ours]) == "in_conversation"

@@ -31,7 +31,7 @@ mkdir -p "$OUT"
 
 PAGE_VARIANTS="safari firefox mac-type windows-type french german ahead behind"
 SUITE_VARIANTS="30-days 90-days 400-days ahead behind odd-folder newest-python"
-BROWSER_TESTS="$(grep -lE 'app_page/harness\.js|journeys\.browser\(\)|_node_env|test_the_page_journeys import|import test_the_page_journeys' tests/*.py)"
+BROWSER_TESTS="$(grep -lE 'app_page/harness\.js|journeys\.browser\(\)|_node_env|test_the_page_journeys import|import test_the_page_journeys|test_the_page_works_in_a_browser import|import test_the_page_works_in_a_browser' tests/*.py)"
 PY_NEWEST="${PY_NEWEST:-python3.14}"
 
 kind="${1:-}"
@@ -90,7 +90,7 @@ run() {
   local log="$OUT/$kind-$name.txt" par=""
   "$py" -c "import xdist" > /dev/null 2>&1 && par="-n auto --dist loadfile"
   # shellcheck disable=SC2086
-  (cd "$dir" && env ${envs[@]+"${envs[@]}"} "$py" -m pytest -q -p no:cacheprovider $par -rf --tb=line "$@") > "$log" 2>&1
+  (cd "$dir" && env ${envs[@]+"${envs[@]}"} "$py" -m pytest -q -p no:cacheprovider $par -rf --tb=line -o verbosity_assertions=2 "$@") > "$log" 2>&1
   local code=$? last
   last="$(grep -aE '[0-9]+ (passed|failed|error)' "$log" | tail -1)"
   if [ $code -eq 0 ]; then
@@ -98,7 +98,11 @@ run() {
   else
     printf '  %-16s FAIL  %s\n' "$name" "${last:-exit $code, see $log}"
     note "$name: FAIL, ${last:-exit $code}"
-    while IFS= read -r l; do note "    ${l:0:300}"; done < <(grep -aE '^(FAILED|ERROR) ' "$log" | head -8)
+    while IFS= read -r l; do note "    ${l:0:300}"; done < <(grep -aE '^(FAILED|ERROR) ' "$log" | head -16)
+    # Each failure's own message whole (--tb=line: file:line: the error and what it measured):
+    # the summary line above is cut, and a cut dict ("'panels': 6, ...}") hid which promise
+    # Safari broke at 4.12.
+    while IFS= read -r l; do note "      ${l:0:2400}"; done < <(grep -aE '^[^ ]+\.py:[0-9]+: ' "$log" | head -16)
   fi
 }
 

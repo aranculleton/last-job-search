@@ -456,6 +456,9 @@ JSON_NAMES = {
                     "company_research/*.json"),
     ".sweep.json": "documents/rounds/.sweep.json",
     "tools/run_round.py: %s.json": "documents/rounds/*.json",
+    # A search renamed when two took one name (land._round_clash): its summary and left-out
+    # list under the new name, merged as the round files they are.
+    "tools/land.py: r%d%s.json": "documents/rounds/*.json",
     "tools/network/parts.py: .json": ("a composed note's parts wait in this computer's "
                                       "ledger until a draft adopts them; " + _OUTSIDE),
     "tools/company_research.py: .json": ("company_research/<key>.json, wired; and a fetched "

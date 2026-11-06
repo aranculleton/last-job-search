@@ -20,6 +20,116 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Changed
+
+- **A search asked for in a chat costs less of your Claude allowance.** The search now writes
+  out the table of jobs it found itself, highest score first, with anyone you know there
+  already noted against the job, and Claude passes it on as it is instead of making it from
+  the search's files. That saves about 10,000 tokens each search. What a search finds, how it
+  scores them and the order are exactly as before.
+
+### Fixed
+
+- **A job ruled out while it was being drafted says why, and is never drafted again.** Claude's
+  work said "Stopped" with Try again, which started a second draft of a job already set aside;
+  it now says "Not drafted" and the reason.
+- **A job you tap keeps its place on Jobs** while you stay there, instead of jumping to the top.
+- **Messages at the foot of the page show how long they have left** as a ring round their close,
+  and only two show at once, with "+3 more" opening Claude's work for the rest.
+- **Cancel under a draft's pencil puts your words back.** Words changed by hand and then
+  cancelled stayed changed; now only Done editing keeps them.
+- **A new text size fits your Brief to the window again.** After Smaller or Larger it kept
+  its old fit, a little short of the window or past it.
+- **The Chat button can sit on the left.** The arrow at the top of the Chat panel moves it and
+  its button to the other side, big or small, and Settings > Look has the same choice. The
+  panel's Open in Chat and Close are now buttons like the rest of the page.
+- **The Chat no longer scrolls back to its first day by itself.** It opens on its last day, and
+  earlier messages come only when you tap Show.
+- **Someone who only accepted your request is no longer shown as talking to you.** A contact
+  marked as in conversation, whose log holds only your request and their acceptance with not a
+  word either way, now shows as connected, so nothing asks you for a reply they never wrote.
+- **LinkedIn no longer opens in front of you by itself.** Reading profiles happens in a tab of
+  Claude's own browser that only your tap opens, never the tab you are looking at. Without one,
+  nothing loads by itself, and the card says once what one tap does. Signed out, one To do card
+  says so plainly, with where the reading happens and what to do.
+- **Reading profiles picks itself up again.** A read left unfinished tries again by itself two
+  hours later instead of waiting for the next day.
+- **Someone you drop or close is taken off the list of profiles to read**, whichever way you
+  closed them, and is never read after you tap it on the page.
+- **A note waiting on a profile says why and where.** Its card says Claude reads their profile in
+  its own browser in the Claude app on your computer, then rewrites the note.
+- **"I sent it" on an earlier message never marks a newer one as sent**, including a tap made on
+  an older page that kept no record of which message it was.
+- **You are never asked to write a follow-up.** What Claude's code cannot write, Claude writes,
+  after looking for something new to say: their profile, news and roles at their employer, and
+  your own profile. A question asked before is taken back and drafted.
+- **An old rule about not repeating yourself no longer stops plain follow-ups.**
+- **Plain follow-ups read less alike.** They open in a few different ways, greet someone whose
+  name starts with an initial by their first name, and are fitted to your own rules for messages before you see them.
+- **A follow-up being drafted shows on its card**, however it was asked for, so it no longer
+  looks idle.
+- **One follow-up Claude could not finish no longer loses the others drafted with it.**
+- **Your Brief uses its room.** News shows three points unless you choose another number
+  under Edit the brief, each split into what happened and how you can use it rather than one
+  long paragraph. Jobs lists a couple more where there is room, with "All" opening the rest.
+  Your progress's chart fills its panel, and each number opens where those things are:
+  applications on Jobs' Applied tab, replies in Contacts, interviews in Coming up.
+- **Your Brief no longer scrolls a little in a window.** Between about 660 and 800 pixels tall
+  it now takes its compact shape, the numbers on one line under the greeting.
+- **"Something else" in a To do card's trash opens a box right under that card**, instead of
+  taking you to Contacts.
+- **"In line" now says "Waiting its turn"**, for work Claude will start once what is ahead of it
+  is done.
+- **Your Brief fits a laptop's window in Safari and Firefox too.** Safari measured the page
+  before its own text size was applied, so the Brief gave up rows it had room for and the
+  Chat's "Latest" stopped short of the box you type in on a phone; Firefox on a computer with
+  no mouse it could see drew phone-sized text, so the Brief scrolled and a job's details
+  took two lines. Both now draw the page as Chrome does.
+- **A search whose save runs out of time keeps what it found.** The chat doing a job sends its
+  work to GitHub before the long check that comes before every save, so a chat that runs out
+  of time, or closes, part way through that check leaves its work waiting there, and the next
+  save from any chat brings it to your page. It used to be lost with that chat.
+- **Two searches never get the same name.** A new search's number counts the searches already
+  on GitHub as well as this chat's own. Where two searches running at once still took the
+  same name (two r43s), the save that brings them together renames one to the next free
+  number, with its list of jobs left out, so both shortlists are kept whole; one search on
+  its own keeps its files exactly as before.
+- **Work a chat finished but could not save is never left unsaid.** When a job's chat ends
+  before its work reached GitHub, the chat that answers your page asks it once to save its
+  work. If there is still nothing, the work's own card says plainly that its results were lost,
+  with Try again, once, and that chat is put away instead of sitting in your list.
+- **A new day brings a fresh page helper even after yesterday's hand-over.** When the old helper
+  had been put away by hand, the first page update of the morning still counted yesterday's
+  hand-over as open and asked for no fresh helper until a full day had passed. A hand-over from
+  an earlier day in your own time zone now holds nothing back.
+- **The fresh page helper is started by the helper itself.** It used to be started by a one-time
+  scheduled task, whose new chat had no copy of your search and could not start the helper,
+  so it stopped. The chat that answers your page now starts its fresh helper directly from
+  your copy; where it cannot, it keeps answering and your next brief starts it.
+- **The page helper it replaced goes quietly.** Once a fresh helper answers your page, the old
+  one does no more work: anything that reaches it gets one line, it finishes saving its own
+  work, and then it puts itself away at once instead of waiting for the tidy-up.
+- **Saving no longer keeps Claude busy.** Saves made a few minutes apart are now taken together,
+  and each save stops GitHub telling Claude about it, so a burst of taps on your page no
+  longer makes Claude stop a dozen times to read messages about its own saves.
+
+### Removed
+
+- **Names your own checks might have used were retired**: `app_listen.fresh_task`, `app_listen.FRESH_FROM_TASK` and `app_listen.TASK_AHEAD_S`. The fresh page helper is now started by the chat that answers your page, never by a scheduled task.
+- **Your general resume is checked against your profile like every other.** The one you send
+  when no job is named now goes through the same fact-check as a resume made for a job: a
+  summary that claims more than your profile shows is never made, and says why.
+- **You can choose the bullets on your general resume.** Its card has the pencil: Bullets comes
+  first, each one a choice, and the ones you tick are swapped for other true ones from the same
+  job. Its look and its summary change there too, as on any resume. One made before this update
+  is made again for you so it has the pencil. Profile upgrade: `general-resume-draft`.
+- **Follow-ups you tap while Claude is busy on your page no longer sit on "starts in a
+  moment".** When Claude finishes what it was doing and work you asked for meanwhile is still
+  waiting, it now takes that work before it stops, instead of leaving it for your next tap.
+- **The app's own checks pass in your copy when you have job sites of your own.** The example
+  search they build took your copy's own job sites, so one check failed there; the example now
+  lists only the app's sites, and yours are untouched.
+
 ## [4.12.0] - 2026-11-06
 
 ### Added

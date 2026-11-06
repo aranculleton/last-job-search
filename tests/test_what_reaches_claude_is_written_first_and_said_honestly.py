@@ -336,7 +336,7 @@ def test_work_waiting_its_turn_stays_in_line_and_a_batch_speaks_with_its_first_i
     ], WIDE, seed=_crowd(), fake=FAKE, clock=T)
     d, e, b, a, todo, e2 = got["after"]
     assert "Next" in d["text"] and "Waiting its turn: three jobs are running now." in d["text"]
-    assert "In line" in e["text"] and "1 job before it" in e["text"]
+    assert "Waiting its turn" in e["text"] and "1 job before it" in e["text"]
     for t in (d["text"], e["text"]):
         assert "No answer" not in t and "not picked this up" not in t
     assert "May have stopped" not in b["text"] and "Drafted in one go with Harbourline Bank" in b["text"] and "Writing the CV" in b["text"]
@@ -344,7 +344,7 @@ def test_work_waiting_its_turn_stays_in_line_and_a_batch_speaks_with_its_first_i
     # "Stop Claude" everywhere (the maintainer, 2026-11-05).
     assert a["attr"] == "Stop Claude's work on Draft: Harbourline Bank and the 2 drafts written with it"
     assert todo["count"] == 0 and todo["attr"] == "live", "jobs running are Claude being there"
-    assert "In line" in e2["text"] and "Starting" not in e2["text"]
+    assert "Waiting its turn" in e2["text"] and "Starting" not in e2["text"]
 
 
 def test_a_batch_member_with_a_question_speaks_for_itself(run, tmp_path):

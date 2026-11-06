@@ -56,6 +56,11 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   opens and closes the panel on the right, as the menu's "Icons only" folds, remembered on the
   device (open beside every screen but the Brief until the person chooses); narrower, it opens
   as a panel on the right, and on a phone as a sheet from the bottom. (pill tests)
+- The Chat button and its panel sit at the right, or at the left where the person chose it (Settings >
+  Look, Chat button, or the panel's own arrow; the same choice, kept on the device), small or big.
+  The panel's controls are the page's own soft pills (Open in Chat, Close), never underlined words.
+  The conversation opens on its last day; earlier messages come only by its Show, never by
+  scrolling up (the maintainer, 2026-11-06). (chat panel tests)
 - In Claude's work, four or more of one kind waiting, or finished, are one card with their
   count and the first few names; Show lists them. Nobody scrolls past fifty cards. (run test)
 - Claude's work says its count once, in the header's pill: no line under its title repeats
@@ -157,7 +162,7 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   reply work) and frees the box at once, so ten replies go in one after another without
   waiting for any. Why: someone talking to many people pastes several in a row.
 - From then the card says where its reply stands, in one line in Claude's work words, read
-  the way its work card reads it (Saved, Waiting for Claude, Next, In line, Claude is on it
+  the way its work card reads it (Saved, Waiting for Claude, Next, Waiting its turn, Claude is on it
   with the spinner and, after a few seconds, its clock). Read from the tap and its work item,
   never from this tab's memory, so it is the same after a reload or a live update. Claude's
   draft lands in that same card, ready to Copy and "I sent it". Why: with ten queued, each
@@ -231,8 +236,8 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   never in the trash as well.
 - A trash sheet whose card has a box (a person, a message, a job, a draft, an interview) ends
   with **Something else**: the sheet closes and that card's box opens under it, its field
-  focused, as Something else under More does; a person's trash in To do opens their box on
-  their card in Contacts. Why: none of the reasons fitted what was going on, and there was no
+  focused, as Something else under More does; a person's trash in To do opens their box
+  under that To do card, never a jump to Contacts (the maintainer, 2026-11-06). Why: none of the reasons fitted what was going on, and there was no
   way to say it in words (the maintainer, 2026-11-05). (trash something-else test)
 - Tomorrow and Next week put a dated row off to that day in the engine: put off is never done.
   It leaves To do with "1 put off: Show" at its end, never under Done today nor in "x of N
@@ -290,7 +295,7 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   under that card ("Anything else about Juno at Lark?", Ask Claude, Cancel), and what is sent
   goes to Claude as work about that card, in the card's own thread (`talk/card-<kind>-<id>`,
   `args.about`), never in the Chat. The question and Claude's answer show under the card, the
-  work line between (Saved, In line, Claude is on it, Cancel); a finished exchange stays two days
+  work line between (Saved, Waiting its turn, Claude is on it, Cancel); a finished exchange stays two days
   with Ask more and Hide, then folds away. It is the way to ask or tell Claude anything the
   card's buttons do not cover, so it is not counted in More's five and carries no gauge: the
   box's Ask Claude does. Under the answer, the one or two next steps it made, read from the
@@ -342,11 +347,11 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
 
 - Running work turns a small spinner and sweeps its bar; waiting work breathes; an update is a
   moving line under the header. Reduced motion stills all of it. (motion test)
-- Work says where it stands in words: running, Next, In line, Not sent yet, Waking Claude,
+- Work says where it stands in words: running, Next, Waiting its turn, Not sent yet, Waking Claude,
   Sent, No answer yet, Waiting for Claude (with when it was asked), in the same chat. "Claude
   is on it" only for work Claude has begun; a step's clock only from a few seconds in, and
   none where the work counts its own progress. The top pill names the one thing running.
-  Work waiting its turn behind the big jobs stays "In line" however long it waits, and drafts
+  Work waiting its turn behind the big jobs stays "Waiting its turn" however long it waits ("In line" left people asking what it meant, the maintainer, 2026-11-06), and drafts
   written together show their batch's progress and one Stop. The chat's line under a message
   is the same words as its card. (what-reaches-Claude tests)
 - A tap's write has the Chat's own limit, 20 seconds: past a few seconds its card says

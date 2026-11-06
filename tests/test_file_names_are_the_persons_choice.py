@@ -216,7 +216,7 @@ def test_the_row_shows_the_example_and_a_chip_saves_the_setting(run, tmp_path):
                   {"eval": "(document.querySelector('[data-k=\"set-file_names-2\"]').click(), 1)",
                   },
                   {"wait": 1200},
-                  {"eval": "(() => { const r = document.querySelector('[data-k=\"set-file_names-2\"]').closest('.choice').getBoundingClientRect();"
+                  {"eval": "(() => { const r = document.querySelector('[data-k=\"set-file_names-2\"]').closest('.choice').__drawnRect();"
                            " return r.right <= window.innerWidth && r.left >= 0; })()"}])
     assert not got["errors"], got["errors"]
     row = got["after"][0]["text"]

@@ -602,11 +602,26 @@ def defaults(root: str | None = None) -> dict[str, bool]:
     out = {}
     if not os.path.isdir(root):
         return out
+    # The example person has no job sites of their own: the app's tests that build their
+    # page ran in a person's copy and picked up that copy's own sites, so the example's page
+    # was no longer the fixture it is tested against (the maintainer's copy, 2026-11-06).
+    only_app = root == _CHECKOUT_SKILLS and _example_in_use()
     for name in sorted(os.listdir(root)):
         skill = os.path.join(root, name, "SKILL.md")
-        if os.path.isfile(skill):
+        if os.path.isfile(skill) and (name in APP_PORTALS or not only_app):
             out[name] = _flag(skill)
     return out
+
+
+_CHECKOUT_SKILLS = SKILLS
+
+
+def _example_in_use() -> bool:
+    """Is the profile in use the app's example person (profile.example/)?"""
+    try:
+        return person.in_example(os.path.join(person.directory(), "person.json"))
+    except Exception:  # noqa: BLE001  no profile: not the example
+        return False
 
 
 def overrides() -> dict[str, bool]:

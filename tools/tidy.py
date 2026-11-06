@@ -44,6 +44,7 @@ remembered (profile/tidy.json `runs`) until it is old enough to tidy.
                                [--details <file>...] [--chat <id>] [--today YYYY-MM-DD]
     python3 tools/tidy.py done [<session id>...] [--titles <json>]
     python3 tools/tidy.py close <session id> --work <id> --dump <dir> --details <file>
+                               [--now <time>]
     python3 tools/tidy.py closed <session id>...     once archive_session has taken it
     python3 tools/tidy.py undo                       the calls that bring them all back
 
@@ -210,7 +211,8 @@ def finished_jobs(db: dict, skip: str = "") -> dict:
 def retiring(listener: dict | None, now: dt.datetime | None = None) -> str:
     """The helper the chat that answers the page took it over from, while it is still to be
     put away: one the app started (never the person's own chat), not recorded as archived yet,
-    within a day of the hand-over. "" when there is none."""
+    within 24 hours of the hand-over and on its own day in the person's zone (given `now`).
+    "" when there is none."""
     import app_model
     mine = listener or {}
     old = str(mine.get("took_from") or "")
@@ -224,6 +226,17 @@ def retiring(listener: dict | None, now: dt.datetime | None = None) -> str:
         return ""
     if now is not None and (now - since).total_seconds() >= RETIRE_FOR_S:
         return ""
+    # A later day in the person's own zone than the hand-over's ends it too: an old helper put
+    # away by hand leaves no record here, and its open hand-over held the next morning's
+    # renewal for the rest of 24 hours (the maintainer's copy, 2026-11-06). The day's tidy-up
+    # puts away any old helper still there by its name.
+    if now is not None:
+        try:
+            import app_listen
+            if app_listen.new_day(mine, now):
+                return ""
+        except Exception:  # noqa: BLE001  no zone known: the 24 hours alone decide
+            pass
     return old
 
 
@@ -309,6 +322,76 @@ def mark_recheck(now: dt.datetime) -> None:
 def _record_path() -> str:
     import person
     return person.path(FILE)
+
+
+# A finished job chat whose work is neither on master nor waiting on any branch on GitHub: its
+# save timed out, and its shortlist was in its container alone (the "Finding jobs" chat,
+# 2026-11-06). It is asked once to save its work (land.py --keep, seconds, no check), then
+# judged again when it answers, or SAVE_WAIT_S on with no answer: still not there, its work's
+# own card says it was lost, with Try again (page_db.lose), once, and the chat is put away.
+SAVE_WAIT_S = 30 * 60
+SAVE_ANSWER_S = 60
+SAVE_ASK = ("[app] Save {work}: your work for it is not on GitHub yet, so the page cannot show "
+            "it. Run python3 tools/land.py --keep (it saves your work to GitHub in a minute, "
+            "with no check), then tell the chat that answers the page in one message: "
+            "send_message, session_id {listener}, message \"[app] Finished {work}, not landed, "
+            "in chat <your own id>: saved.\" Do nothing else, and never write to the person.")
+
+
+def saves() -> dict:
+    """{chat id: {work, asked, lost}}: the finished job chats asked to save their work."""
+    try:
+        with open(_record_path(), encoding="utf-8") as fh:
+            got = json.load(fh).get("saves") or {}
+        return got if isinstance(got, dict) else {}
+    except (OSError, ValueError, AttributeError):
+        return {}
+
+
+def _note_save(sid: str, **fields) -> None:
+    path = _record_path()
+    try:
+        with open(path, encoding="utf-8") as fh:
+            got = json.load(fh)
+    except (OSError, ValueError):
+        got = {}
+    rows = got.get("saves") if isinstance(got.get("saves"), dict) else {}
+    rows[sid] = dict(rows.get(sid) or {}, **fields)
+    got["saves"] = rows
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
+        json.dump(got, fh, indent=2, ensure_ascii=False)
+        fh.write("\n")
+
+
+def unsaved(sid: str, now: dt.datetime, record: dict, answered: bool = False) -> str:
+    """What is next for a finished job chat whose work never reached GitHub: "ask" (not asked
+    yet), "wait" (asked lately), "lost" (asked, and it answered or SAVE_WAIT_S went by with the
+    work still not there) or "said" (its card says so already)."""
+    import app_model
+    rec = (record or {}).get(sid) or {}
+    asked = app_model.parse_time(rec.get("asked"))
+    if asked is None:
+        return "ask"
+    if rec.get("lost"):
+        return "said"
+    age = (now - asked).total_seconds()
+    return "lost" if age >= SAVE_WAIT_S or (answered and age >= SAVE_ANSWER_S) else "wait"
+
+
+def job_items(db: dict) -> dict:
+    """{chat id: {"all": [work ids], "done": [the ids done]}}, by the chat each was claimed by."""
+    out: dict = {}
+    for wid, doc in sorted((db.get("work") or {}).items()):
+        d = doc.get("data") or {}
+        who = str(d.get("claimed_by") or "")
+        if not who.startswith("session_"):
+            continue
+        got = out.setdefault(who, {"all": [], "done": []})
+        got["all"].append(wid)
+        if str(d.get("status") or "") == "done":
+            got["done"].append(wid)
+    return out
 
 
 def archived() -> list[dict]:
@@ -527,11 +610,16 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
          this_chat: str, repo: str, today: dt.date, campaigns: set[str],
          branches: set[str] | None, done_before: set[str],
          jobs: dict | None = None, now: dt.datetime | None = None,
-         on_github: set[str] | None = None) -> dict:
+         on_github: set[str] | None = None, saves: dict | None = None,
+         job_items: dict | None = None) -> dict:
     """{"ask": [ids to read with get_session], "archive": [{id, title, why}],
-    "keep": [{id, title, why}], "brief": [calls] or []}. `jobs` is finished_jobs(): a chat in
-    it is not kept for being used lately. `now` (else noon of `today`) times recent use;
-    `on_github`, every branch GitHub holds, tells a branch never pushed from one merged."""
+    "keep": [{id, title, why}], "brief": [calls] or [], "save": [{id, title, work}],
+    "lost": [{id, title, work: [ids]}]}. `jobs` is finished_jobs(): a chat in it is not kept
+    for being used lately. `now` (else noon of `today`) times recent use; `on_github`, every
+    branch GitHub holds, tells a branch never pushed from one merged. With `job_items`
+    (job_items(), the page's records) and `saves` (the record of asks), a finished job chat
+    whose work never reached GitHub is asked to save it once ("save"), then its work said lost
+    ("lost") and the chat put away (unsaved)."""
     jobs = jobs or {}
     import routines
     now = now or dt.datetime.combine(today, dt.time(12), tzinfo=dt.timezone.utc)
@@ -558,7 +646,7 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
     ops = str((reg.get("ops_session") or {}).get("id") or "")
     brief = next((r for r in reg.get("routines") or [] if routines._is_brief(r)), None) or {}
     brief_chat = str((brief.get("chat") or {}).get("session_id") or "")
-    out: dict = {"ask": [], "archive": [], "keep": [], "brief": []}
+    out: dict = {"ask": [], "archive": [], "keep": [], "brief": [], "save": [], "lost": []}
 
     # A brief stays where it works (the builder's decision, 2026-11-03: a working brief is
     # never moved, turned off or made again). It moves into the chat that answers the page
@@ -783,6 +871,24 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
         # on the person's computer). Merged branches stay on GitHub (land.py never deletes
         # them), so lately it is kept; one quiet for days is put away as before.
         local = [b for b in own if on_github is not None and b not in on_github]
+        if local and sid in jobs and job_items is not None:
+            # Finished, not landed, nothing pushed: asked once, then said (unsaved).
+            items = job_items.get(sid) or {}
+            next_step = unsaved(sid, now, saves or {})
+            if next_step == "ask":
+                out["save"].append({"id": sid, "title": title,
+                                    "work": (items.get("all") or [""])[0]})
+                keep("its work is not on GitHub yet; it is asked once to save it")
+                continue
+            if next_step == "wait":
+                keep("it was asked to save its work a short while ago")
+                continue
+            if next_step == "lost":
+                out["lost"].append({"id": sid, "title": title, "work": items.get("done") or []})
+            out["archive"].append({"id": sid, "title": title,
+                                   "why": "its job finished, but its work never reached GitHub "
+                                          "and is lost; its card on the page says so"})
+            continue
         if local and quiet < IDLE_DAYS:
             keep("its work is not on GitHub yet (" + ", ".join(local) + ")")
             continue
@@ -1019,12 +1125,14 @@ def run_plan(a) -> int:
     runs, extra = run_chats(tasks, _remembered_runs(), done, {s.get("id") for s in listed})
     _remember_runs(runs)
     jobs: dict = {}
+    pagedb: dict | None = None
     if a.dump:
         try:
             import page_db
-            jobs = finished_jobs(page_db.load(a.dump), listener.get("chat") or "")
+            pagedb = page_db.load(a.dump)
+            jobs = finished_jobs(pagedb, listener.get("chat") or "")
         except Exception:  # noqa: BLE001  not a dump: no finished jobs known, the days rule holds
-            jobs = {}
+            jobs, pagedb = {}, None
     import app_model
     now = app_model.parse_time(a.now) if a.now else None
     if now is None and not a.today:
@@ -1035,12 +1143,34 @@ def run_plan(a) -> int:
     got = plan(listed + extra, tasks,
                details(_pages(a.details) + _as_pages(given.get("details"))), reg,
                listener, me, repo, today,
-               _campaign_chats(), unmerged(), done, jobs, now=now, on_github=on_github())
+               _campaign_chats(), unmerged(), done, jobs, now=now, on_github=on_github(),
+               saves=saves(), job_items=job_items(pagedb) if pagedb is not None else None)
     if got["ask"]:
         print("tidy: read these chats first, each with get_session, and run this again with "
               "what each returned under \"details\" in the same standard input (or --details "
               "<each file>): " + " ".join(got["ask"]))
         return 0
+    at = now or dt.datetime.combine(today, dt.time(12), tzinfo=dt.timezone.utc)
+    import app_model
+    for c in got.get("save") or []:
+        ask = SAVE_ASK.format(work=c["work"] or "its job",
+                              listener=listener.get("chat") or me or "<your chat id>")
+        print(f"save {c['id']}: {c['title']} (its job finished, but its work never reached "
+              f"GitHub): send_message {json.dumps({'session_id': c['id'], 'message': ask}, ensure_ascii=False)}, "
+              "once, and keep the chat. Say nothing about it.")
+        _note_save(c["id"], work=c["work"], asked=app_model.stamp(at))
+    for c in got.get("lost") or []:
+        import page_db
+        paths = page_db.lose(pagedb or {}, c["work"], at,
+                             os.path.join(a.dump, "lost", c["id"]))
+        _note_save(c["id"], lost=app_model.stamp(at))
+        if paths:
+            print(f"lost {c['id']}: {c['title']} (its job finished, but its work never reached "
+                  "GitHub and is lost): send this batch (ArtifactData batch), asking nobody; the "
+                  "work's own card says so in plain words, with Try again. Say nothing else "
+                  "about it.")
+            for p in paths:
+                print(p)
     if app_listen.nested(me):
         # This chat can make no scheduled task (chats nest only so deep, 2026-11-05): the
         # brief, the shortlist and the upkeep stay where they are and keep their chats, and
@@ -1198,12 +1328,16 @@ def run_done(ids: list[str], titles: dict, today: str) -> str:
 
 def close(sid: str, work: str, db: dict, info: dict, listener: dict, this_chat: str,
           repo: str, branches: set[str] | None,
-          github: set[str] | None = None) -> tuple[str, str]:
+          github: set[str] | None = None, now: dt.datetime | None = None,
+          record: dict | None = None) -> tuple[str, str]:
     """A big job's chat that reported back: ("archive", its title) when it is one of the app's
     own job chats on this copy, its job (and every item claimed with it) has ended and its
     work is on master; else ("keep", why). `info` is get_session's record of that chat, so the
     title judged and recorded is the one it has now. Still running is expected: its report is
-    the last thing it does. `github`: every branch GitHub holds (on_github)."""
+    the last thing it does. `github`: every branch GitHub holds (on_github). Given `now` and
+    `record` (saves()), a finished one whose work is on no branch GitHub holds is ("save",
+    why) the first time and ("lost", its title) once it answers with the work still not
+    there."""
     import page_db
     d = info.get(sid) or {}
     title = str(d.get("title") or "").strip()
@@ -1230,6 +1364,15 @@ def close(sid: str, work: str, db: dict, info: dict, listener: dict, this_chat: 
     if left:
         return "keep", "its work is not on master yet (" + ", ".join(left) + ")"
     local = [b for b in own if github is not None and b not in github]
+    if local and now is not None:
+        # It reported, finished, with its work on no branch GitHub holds: asked once to save
+        # it, and once it has answered with the work still not there, said lost (unsaved).
+        step = unsaved(sid, now, record or {}, answered=True)
+        if step == "ask":
+            return "save", "its work is not on GitHub yet (" + ", ".join(local) + ")"
+        if step == "wait":
+            return "keep", "it was asked to save its work a short while ago"
+        return ("lost" if step == "lost" else "archive"), title
     if local:
         return "keep", "its work is not on GitHub yet (" + ", ".join(local) + ")"
     return "archive", title
@@ -1242,8 +1385,33 @@ def run_close(a) -> int:
         db = page_db.load(a.dump)
     except Exception:  # noqa: BLE001  no dump: nothing can be judged
         db = {}
-    what, said = close(a.id, a.work, db, details(_pages(a.details)), _listener(a.dump),
-                       app_listen.this_chat(a.chat), _repo(), unmerged(), on_github())
+    import app_model
+    now = app_model.parse_time(a.now) if a.now else None
+    now = now or dt.datetime.now(dt.timezone.utc)
+    listener = _listener(a.dump)
+    me = app_listen.this_chat(a.chat)
+    record = saves()
+    what, said = close(a.id, a.work, db, details(_pages(a.details)), listener, me, _repo(),
+                       unmerged(), on_github(), now=now, record=record)
+    if what == "save":
+        print(f"save {a.id}: {said}, and its job has finished: it is asked once to save it. "
+              f"send_message {json.dumps({'session_id': a.id, 'message': SAVE_ASK.format(work=a.work, listener=listener.get('chat') or me or '<your chat id>')}, ensure_ascii=False)}. "
+              "Keep the chat; its answer comes back here. Say nothing about it.")
+        _note_save(a.id, work=a.work, asked=app_model.stamp(now))
+        return 0
+    if what == "lost":
+        ids = [k for k, v in (db.get("work") or {}).items()
+               if k == a.work or str((v.get("data") or {}).get("with") or "") == a.work]
+        paths = page_db.lose(db, ids, now, os.path.join(a.dump, "lost"))
+        _note_save(a.id, lost=app_model.stamp(now))
+        if paths:
+            print(f"lost {a.id}: its job finished, but its work never reached GitHub and it "
+                  "had nothing to save when asked, so it is lost. Send this batch "
+                  "(ArtifactData batch), asking nobody: the work's own card says so in plain "
+                  "words, with Try again. Say nothing else about it.")
+            for p in paths:
+                print(p)
+        what = "archive"
     if what != "archive":
         print(f"keep {a.id}: {said}. Leave it: the daily tidy-up puts it away once it can. "
               "Say nothing about it.")
@@ -1283,6 +1451,7 @@ def main(argv: list[str]) -> int:
     c.add_argument("--dump", required=True)
     c.add_argument("--details", action="append", default=[])
     c.add_argument("--chat", default="")
+    c.add_argument("--now", default="")
     k = sub.add_parser("closed")
     k.add_argument("ids", nargs="+")
     k.add_argument("--today", default="")

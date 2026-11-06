@@ -348,7 +348,7 @@ jobs:
           npx -y "playwright@$PW" install --with-deps chromium
       - name: Browser tests
         run: |
-          files=$(grep -lE 'app_page/harness\.js|journeys\.browser\(\)|_node_env|test_the_page_journeys import|import test_the_page_journeys' tests/*.py)
+          files=$(grep -lE 'app_page/harness\.js|journeys\.browser\(\)|_node_env|test_the_page_journeys import|import test_the_page_journeys|test_the_page_works_in_a_browser import|import test_the_page_works_in_a_browser' tests/*.py)
           python -m pytest -q -n auto --dist loadfile $files
 
   dependency-review:

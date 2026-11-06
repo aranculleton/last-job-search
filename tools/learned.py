@@ -228,6 +228,14 @@ _NEWS_WORDS = re.compile(r"\b(?:nothing (?:new|to say)|something new|anything ne
                          r"only with) (?:some )?news)\b", re.I)
 _PLAIN_ON = re.compile(r"\b(?:even|anyway|still|regardless|always)\b", re.I)
 _PLAIN_OFF = re.compile(r"\b(?:only|unless|never|don'?t|do not|stop|no|not|without)\b", re.I)
+# A rule about what a follow-up says, never whether one goes: "never repeat what the earlier
+# message already said; refer back to it and add something new" is about not saying the same
+# thing twice, and read as "only follow up with something new" it turned every plain follow-up
+# into a question for the person (2026-11-06). It sets the switch only where it also says
+# when one goes (only, unless, without).
+_REPEAT_WORDS = re.compile(r"\b(?:repeat\w*|restat\w*|already said|said before|same (?:thing|words|point))\b",
+                           re.I)
+_SEND_GATE = re.compile(r"\b(?:only|unless|without)\b", re.I)
 
 
 def known_settings(area: str, said: str, rule: str) -> list[tuple[str, object]]:
@@ -238,7 +246,8 @@ def known_settings(area: str, said: str, rule: str) -> list[tuple[str, object]]:
     text = f"{said} {rule}"
     out: list[tuple[str, object]] = []
     if area in ("messages", "voice", "people", "other") and _NUDGE_WORDS.search(text) \
-            and _NEWS_WORDS.search(text):
+            and _NEWS_WORDS.search(text) \
+            and not (_REPEAT_WORDS.search(text) and not _SEND_GATE.search(text)):
         # "still nudge with no news" is a yes. Read wrongly, a yes only drafts (nothing is
         # ever sent), while a wrong no leaves the follow-ups unwritten: a yes is read first.
         if _PLAIN_ON.search(text):
@@ -2188,6 +2197,25 @@ _ANSWERED = re.compile(r"learned\.py[\"']?\s+(?:record|skip|approve)\b"
                        r"|\blearned\.(?:record|skip|approve)\(")
 
 
+GITHUB_EVENT = re.compile(r"<event\b[^>]*\bsource=\"github\"", re.I)
+GITHUB_EVENT_SAID = ("A GitHub event about a save's pull request: nothing waits on it here. "
+                     "Read nothing and run nothing else; where this chat has "
+                     "unsubscribe_pr_activity, make that one call for this pull request, then "
+                     "end the turn with no text.")
+
+
+def _retired() -> str:
+    """The one line for a chat that has handed the page on (app_listen.retired_here), or "".
+    Never raises."""
+    try:
+        import app_listen
+        if app_listen.retired_here():
+            return app_listen.RETIRED_LINE.format(chat=app_listen.this_chat())
+    except Exception:  # noqa: BLE001  the hook never breaks a chat
+        pass
+    return ""
+
+
 def hook(event: dict) -> dict:
     """The Claude Code hook (the one the app ships, allowlisted in security_guards.py).
 
@@ -2200,6 +2228,20 @@ def hook(event: dict) -> dict:
     if path is None or person.in_example(path):
         return {}                     # the app itself, before /setup, or its example person
     name = event.get("hook_event_name") or ""
+    retired = _retired()
+    if retired and name == "UserPromptSubmit":
+        # A helper that handed the page on: one line a turn, nothing read (app_listen
+        # RETIRED_LINE). A turn on a nearly full chat can compact it (2026-11-06).
+        return {"hookSpecificOutput": {"hookEventName": "UserPromptSubmit",
+                                       "additionalContext": retired}}
+    if retired and name == "Stop":
+        return {}                     # never held for work: it does none (app.py retired)
+    if name == "UserPromptSubmit" and GITHUB_EVENT.search(str(event.get("prompt") or "")):
+        # A save's pull request, which the cloud chat was subscribed to by itself: nothing in
+        # a person's copy waits on one (CLAUDE.md, "Saving"), and each woke the chat twice a
+        # save (the maintainer's copy, 2026-11-06).
+        return {"hookSpecificOutput": {"hookEventName": "UserPromptSubmit",
+                                       "additionalContext": GITHUB_EVENT_SAID}}
     if name == "UserPromptSubmit":
         text = str(event.get("prompt") or "")
         cue = reaction(text)
@@ -2335,6 +2377,10 @@ def _undone(event: dict, items: list) -> list[str]:
             profile_upgrades.mark_started(today)
         if any(_WORK_CHAT.search(t) for _n, _k, t in items) or _job_chat(event):
             return out                  # a chat started for one big job: it lands its own work
+        late = _late_work(chat)
+        if late:
+            out.append(LATE_STEPS.format(ids=", ".join(late[:6]) + (" ..." if len(late) > 6
+                                                                    else "")))
         ids = profile_upgrades.unstarted(today, chat)
         if ids and profile_upgrades.hold_once(chat, today):
             out.append(UPGRADE_STEPS.format(n=len(ids), s="s" if len(ids) != 1 else "",
@@ -2349,6 +2395,22 @@ def _undone(event: dict, items: list) -> list[str]:
     except Exception:  # noqa: BLE001  a hook must never break the chat it runs in
         return out
     return out
+
+
+LATE_STEPS = ("work the person asked for on their page while the last pass ran is still waiting "
+              "({ids}): it was named at that pass's end and never taken. Take it now, as a ring "
+              "is taken (the app skill, step 0: the same Agent call, its notification \"work "
+              "waiting after the last pass: {ids}\"), then end the turn; nothing to say about it.")
+
+
+def _late_work(chat: str) -> list[str]:
+    """The work the last pass of the page's helper named at its end and never took, for this
+    chat (page_reads.late_waiting), the hold kept as made so it is made once."""
+    import page_reads
+    late = page_reads.late_waiting(chat)
+    if late:
+        page_reads.late_held()
+    return late
 
 
 _WORK_CHAT = re.compile(r"tools/app\.py start\b[^\n]*--work \S")

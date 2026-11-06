@@ -688,7 +688,11 @@ def rule_findings(d: dict, pick: dict, posting: str, corpus: dict | None = None,
         if len(_sentences(_bullet_text(b))) > 1:
             findings.append(_finding("budget", f"cl_bullets[{i}]", _bullet_text(b)[:80],
                                      "a letter bullet is one sentence"))
-    if not d.get("requirement_map"):
+    # A general resume (tools/general_resume.py) answers no posting: there is nothing to map
+    # its requirements to, nor a posting's skill to write into its work; every grounding
+    # question is asked of it as of any other.
+    general = bool(d.get("general"))
+    if not d.get("requirement_map") and not general:
         findings.append(_finding("missing-field", "requirement_map", "",
                                  "map every stated requirement to its evidence or bridge"))
     # The tools line: held skills only; a yes is added by the renderer.
@@ -720,7 +724,7 @@ def rule_findings(d: dict, pick: dict, posting: str, corpus: dict | None = None,
     # A skill the person holds or said yes to, which the posting names, on the skills line
     # alone while a bullet on this page could name it: written into the work, never asked.
     # The page's bullets are the allocator's, which is code, so they are known now.
-    if posting.strip():
+    if posting.strip() and not general:
         try:
             import render_application as R
             probe = dict(d, posting=posting)

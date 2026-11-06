@@ -422,9 +422,12 @@ def late_read(dump: str) -> bool:
     return isinstance(p, dict) and bool(p.get("late_asked")) and not p.get("late_done")
 
 
-def late_handled(dump: str, again: bool = False) -> None:
+def late_handled(dump: str, again: bool = False, ids=(), chat: str = "",
+                 now: dt.datetime | None = None) -> None:
     """The late reads are applied. `again`: work came in with them, which this chat takes
-    before ending, so the next end of the batch reads once more, from when these were asked."""
+    before ending, so the next end of the batch reads once more, from when these were asked;
+    the work named (`ids`, for `chat`) is kept as waiting until an end finds none, so the
+    chat that answers the page is held at its turn's end while it waits (`late_waiting`)."""
     path = os.path.join(dump, PLAN)
     p = _read(path)
     if not isinstance(p, dict):
@@ -432,9 +435,46 @@ def late_handled(dump: str, again: bool = False) -> None:
     if again:
         p["late_from"] = p.get("late_asked")
         p.pop("late_asked", None)
+        p["late_waiting"] = {"ids": [str(i) for i in ids], "chat": str(chat or ""),
+                             "at": _stamp(now or _now())}
     else:
         p["late_done"] = True
+        p.pop("late_waiting", None)
     _write(path, p)
+
+
+# The hold lasts this long after the work was named: past it, the next ring or brief takes it.
+LATE_HOLD_S = 2 * 3600
+
+
+def late_waiting(chat: str, now: dt.datetime | None = None) -> list[str]:
+    """The work a pass of the page's helper named at its end and never took (`late_handled`),
+    in the folder the last wake read (the mirror's `last_dump`), for `chat`, named in the last
+    LATE_HOLD_S and not held for yet. A pass that ended with two follow-ups named left them
+    on "starts in a moment" until a pass was started by hand (the maintainer's copy,
+    2026-11-05): the chat's turn is held once for them, as land.py's WANTED_FILE has the
+    running save take a save asked for meanwhile. [] when there is none."""
+    dump = str(_meta().get("last_dump") or "")
+    p = _read(os.path.join(dump, PLAN)) if dump else None
+    if not isinstance(p, dict) or p.get("late_done"):
+        return []
+    w = p.get("late_waiting")
+    if not isinstance(w, dict) or w.get("held") or not chat or str(w.get("chat") or "") != chat:
+        return []
+    at = _time(w.get("at"))
+    if at is None or ((now or _now()) - at).total_seconds() > LATE_HOLD_S:
+        return []
+    return [str(i) for i in w.get("ids") or [] if i]
+
+
+def late_held() -> None:
+    """The turn was held once for the work `late_waiting` named: never again for it."""
+    dump = str(_meta().get("last_dump") or "")
+    path = os.path.join(dump, PLAN) if dump else ""
+    p = _read(path) if path else None
+    if isinstance(p, dict) and isinstance(p.get("late_waiting"), dict):
+        p["late_waiting"]["held"] = True
+        _write(path, p)
 
 
 def needs(dump: str) -> list[str]:

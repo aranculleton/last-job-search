@@ -71,9 +71,10 @@ def test_latest_on_a_phone_stops_with_the_field_at_the_foot_of_the_screen(run, t
     # On a phone, Latest scrolled to the page's own end, past the field and its note to the
     # privacy line, and left a band of empty page under the field (the maintainer, 2026-11-05).
     html = _write(tmp_path, "talkphone", _sample())
+    # In the window's own px (__drawnRect): Safari measures before the page's zoom.
     gap = ("(() => { const f = document.querySelector('#main .talk-form'); const t = document.querySelector('.tabs');"
-           " const under = t && getComputedStyle(t).position === 'fixed' ? t.getBoundingClientRect().height : 0;"
-           " return Math.round(window.innerHeight - under - f.getBoundingClientRect().bottom); })()")
+           " const under = t && getComputedStyle(t).position === 'fixed' ? t.__drawnRect().height : 0;"
+           " return Math.round(window.innerHeight - under - f.__drawnRect().bottom); })()")
     got = run("engine", html=html, viewport={"width": 390, "height": 760}, clock=CLOCK, seed=_talk(), steps=[
         {"hash": "chat", "wait": 300},
         {"eval": "(window.scrollTo(0, 0), window.dispatchEvent(new Event('scroll')), 1)"},

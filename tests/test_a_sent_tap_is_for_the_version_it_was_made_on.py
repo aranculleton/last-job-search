@@ -54,3 +54,24 @@ def test_a_tap_on_an_older_version_leaves_the_new_draft_to_send(run, tmp_path):
 def test_a_tap_on_this_version_still_counts(run, tmp_path):
     text = _juno(run, tmp_path, "m1", _tap("m1"))
     assert "Hi Juno, thank you for coming back" not in text, text[:600]
+
+
+def _old_tap(words):
+    # A tap that kept no version (rev_seen null), as an older page sent it.
+    got = _tap(None)
+    got["actions/act~msg-juno-1~msg.sent~old"]["value"]["text"] = words
+    return got
+
+
+JUNO_NOW = ("Hi Juno, thank you for coming back to me so quickly. Thursday at 12 suits me well. I would "
+            "love to hear how the planning team splits its week between stores and suppliers.")
+
+
+def test_a_tap_with_no_version_on_an_earlier_message_leaves_the_new_one_to_send(run, tmp_path):
+    text = _juno(run, tmp_path, "m1", _old_tap("Hi Juno, just checking in on my note from last week."))
+    assert "Hi Juno, thank you for coming back" in text, text[:600]
+
+
+def test_a_tap_with_no_version_on_these_words_still_counts(run, tmp_path):
+    text = _juno(run, tmp_path, "m1", _old_tap(JUNO_NOW))
+    assert "Hi Juno, thank you for coming back" not in text, text[:600]

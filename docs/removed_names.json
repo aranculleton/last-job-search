@@ -266,6 +266,27 @@
    "date": "2026-11-02",
    "reason": "the brief decides no kind of news for anyone: what it watches is the person's own list (person.json brief.watch)",
    "changelog": "**Names your own checks might have used were retired**: `brief.CENTRAL_BANK`, `brief.BANK_DECISION`, `brief.EURO`, `brief.COUNTRY`, `brief.LANGUAGE`, `brief.NEVER_OFF`, `brief.country_name`, `brief.rights_term` and `brief.target_names`. The brief no longer decides any kind of news for anyone, so its tables of central banks and countries went with the fixed searches."
+  },
+  {
+   "module": "tools/app_listen.py",
+   "name": "fresh_task",
+   "date": "2026-11-06",
+   "reason": "a chat a scheduled task started had no copy of the person's files and could not start the helper; the listener starts it with create_session",
+   "changelog": "**Names your own checks might have used were retired**: `app_listen.fresh_task`, `app_listen.FRESH_FROM_TASK` and `app_listen.TASK_AHEAD_S`. The fresh page helper is now started by the chat that answers your page, never by a scheduled task."
+  },
+  {
+   "module": "tools/app_listen.py",
+   "name": "FRESH_FROM_TASK",
+   "date": "2026-11-06",
+   "reason": "a chat a scheduled task started had no copy of the person's files and could not start the helper; the listener starts it with create_session",
+   "changelog": "**Names your own checks might have used were retired**: `app_listen.fresh_task`, `app_listen.FRESH_FROM_TASK` and `app_listen.TASK_AHEAD_S`. The fresh page helper is now started by the chat that answers your page, never by a scheduled task."
+  },
+  {
+   "module": "tools/app_listen.py",
+   "name": "TASK_AHEAD_S",
+   "date": "2026-11-06",
+   "reason": "a chat a scheduled task started had no copy of the person's files and could not start the helper; the listener starts it with create_session",
+   "changelog": "**Names your own checks might have used were retired**: `app_listen.fresh_task`, `app_listen.FRESH_FROM_TASK` and `app_listen.TASK_AHEAD_S`. The fresh page helper is now started by the chat that answers your page, never by a scheduled task."
   }
  ]
 }

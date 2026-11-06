@@ -39,7 +39,8 @@ nothing read first:
 
 Its answer is one line. One that starts `agent:` is an Agent call to make as it is printed
 (`run_in_background: true`; a subagent cannot start one); anything else is said to nobody.
-Then end the turn, with no text. **Why the line falls there** (measured on an invented page
+Then end the turn, with no text. Held at that end because work the pass named is still
+waiting, make the same call once more for it, as the hold says. **Why the line falls there** (measured on an invented page
 with two months of use): a wake done in the listener printed about 30,000 characters into it
 (the read's list of some 590 records, the wake's batches, the page update), every one read
 again at every later step of its day; the same wake in a subagent leaves about 300 in the
@@ -52,7 +53,7 @@ ring and end, with no subagent.
 
 **In the subagent** (its prompt names this section): this chat's id is the listener's own
 (`app.py` reads it from the session), so claims are the listener's. Do steps 1 to 5 below for
-this one wake, and the daily tidy, a renewal's `create_trigger` and resolving the ring
+this one wake, and the daily tidy, a renewal's `create_session` and resolving the ring
 (ArtifactComments `resolve`) when they come up. End by ending the batch: `python3 tools/app.py
 view "$D/view" --dump "$D" --chat <your chat id> --end --message "<what changed>"` once, its
 batch sent (it starts the save in a process of its own and keeps what the wake cost). It
@@ -110,15 +111,20 @@ checks in first, on every wake (`app.py listen`, in code), and its batch goes fi
 any batches that give a page an older version made its records' new names (once). A read it
 asks for is made into the same `$D` before running it again. If it says another chat answers
 the page, stop your watch (ArtifactComments, action `watch`, the url, `on: false`), write
-nothing else and end the turn: that chat takes it. A `listen: renew:` line is this chat's
-daily renewal: make its `create_trigger` call once this turn's work has landed, unasked, and
-say nothing about it: a one-time scheduled task starts the fresh helper, so it is never this
-chat's child (each helper starting the next one level deeper left the eighth unable to start a
-chat or a scheduled task at all, 2026-11-05). The fresh helper takes the page as it starts, and
-this chat carries on until its next check-in finds that. Refused because this chat can start no
+nothing else and end the turn: that chat takes it. Where it says this chat handed the page to
+a fresh helper, from then on every turn here (a ring, a notification, a message) is only
+`python3 tools/app.py retired --chat <your chat id>` and what it prints, with nothing read and
+one line: it starts this chat's own save if it is not on GitHub yet, and once it is, this chat
+archives itself (the app's hook says so at each turn, as a turn on a nearly full chat can
+compact it). A `listen: renew:` line is this chat's
+daily renewal: make its `create_session` call yourself, from this chat, once this turn's work
+has landed, unasked, and say nothing about it. Never through a scheduled task: the chat a
+one-time task started had no copy of the files, no add_repo and no create_session, and stopped
+(2026-11-06). The fresh helper takes the page as it starts, and this chat carries on until its
+next check-in finds that. No create_session here, or refused because this chat can start no
 more: `python3 tools/app.py nested "$D" --chat <your chat id>` and its batch, then keep
 answering; big jobs then run as background agents, and the brief's next run starts the fresh
-helper. Never a dead end, and nothing said to the person. A chat that takes the page asks to watch it
+helper. A chat on a computer is never renewed: it keeps answering the page while it runs. Never a dead end, and nothing said to the person. A chat that takes the page asks to watch it
 (ArtifactComments, action `watch`), as `listen` prints. A chat whose first message is the
 page's own words, "Look after my job search page from now on.", starts with `python3
 tools/app.py start --listen --helper`, and says only the two lines it prints for the person:
@@ -170,7 +176,7 @@ page, so never ask it again):
 | search | `run_round.py --show <args.size>` (10 when it is not given; 0 is every one that fits, up to 60) `--work <its id>` (it names the item in the round's log, so `app.py done` waits for this round's own shortlist), then the shortlist (the job-scraper skill); `args.note` is what the person typed about it, followed like any instruction of theirs: a note naming employers ("only these: A, B, C", "search these 20 employers") is `--employers "A, B, C"`, which searches only them, keeps a place for each and says which had no open roles. A top-up (a size of 15 or fewer, or "find N more"): add `--pages 1 --expand`, one page of each site first, wider only when fewer than the size pass every rule (a full read of every site for ten roles took 23 minutes, 2026-11-03). What the round rules out is off Jobs in the same step, each with its reason (`left out: N ...`): never cleared by hand. `args.draft` (the page's "Draft every one as it is found"): one job, the search drafting each job that passes as it is found, in its own chat, as its steps say (`app.py search-drafts`) |
 | draft, resume_for_contact | a draft that stops because the role is not one they can take (where it is open, eligibility, a hard cut) finishes with `app.py done --work <its id> --chat <the claim> --left-out "<why, plain>"`, which takes the job off Jobs in the same step, ruled out with that reason, so the Brief and Jobs stop counting it (one stopped for Figma stayed in "10 jobs to look at", 2026-10-30); one run for the item and each in `with` (drafts queued together are one batch: `stage_picks.py stage` takes them all), by the drafting path in RUNBOOK.md step 2 (`stage_picks.py stage`, `consent` from the item's `answers`, or from `args.answers` (each question with the person's answer) when the page queued it, and only what they answered: a skill question nobody answered is already on their page, once for every draft, and the draft goes on without the skill, waiting on it, never a no and never a `--question` of its own; the workflow, both audits, `assemble`, RUNBOOK step 3), and its PDFs reach the page's file store by themselves: its `app.py done` queues one `files` item, for every draft whose files the page lacks, for the chat that answers the page (a job's own chat cannot upload: Artifact is not among its tools), so no card asks the person to "Get my files ready" and nobody uploads by hand. `resume_for_contact`: `stage_picks.py --for-contact <args.contact>` for `args.job`, or, when `job` is null, `stage_picks.py general <dir> --for-contact <args.contact>`: one made for them, kept in their folder and shown on their card, never in place of the person's own; `args.note` is what they typed. `args.resume_only` (the page's "Draft the resume only") stages with `--resume-only`: the resume without a letter, and nothing names a letter |
 | evaluate | /apply Step 1 on `args.url` or `args.text`, then `added_jobs.py add <row.json>`; with `applied_on`, `confirm.py applied --new`; with `contact` (who sent it), that person is the job's referral route: `network/state.py set <contact> --next-action "apply via <first name>'s referral" --note "sent <role> at <employer>"`, never by hand, and `result.summary` says who it is linked to; with `draft: true`, once it is scored queue its `draft` work as tapping Draft does (`app_actions.py` `_job_draft`); with `from_name` (someone not in the contact book), add "sent by <name>" to the role's notes |
-| general_resume | `stage_picks.py general` |
+| general_resume | `stage_picks.py general` (the profile's own summary; one Claude writes goes with `--summary-file` and its claim map, `--claims-file`, and one the grounding audit questions is never made). Its pencil's changes are `tweak` work like any resume's |
 | prep | `/interview` for `args.interview`; with `args.contact`, `network/prep.py "<contact>"`; `args.note` is what they typed |
 | network, reply | `/network` (`args.count`: how many people this run brings back at most, 5 when not given; `args.note`: what the person typed about this run, an employer, a team or a kind of person, followed like any instruction of theirs; `args.company`: one employer's own Find people; `args.rewrite`: that contact's waiting note, rewritten on the profile just read), `/reply` (`args.received` names their logged message, and with none it is their latest one in the log; `args.want`, what they want to say back, in their words; `args.update`, news for a referrer; `args.kind: thank_you` a thank-you, `args.kind: referral_ask` with `args.job` the referral ask for that one role, `compose.referral_ask()`), the networking skill |
 | follow_up | follow-ups queued together are claimed together (`with` one another), and one run does them all: `python3 tools/app.py follow-ups "$D" --chat <your chat id>` drafts each in code, gated, keeps it where Messages shows it and finishes them in one batch. What code could not write comes back in one context block: write those in one go and pass them back with `--written -`. No skill is loaded and nothing is drafted one by one. One with `args.application` (or `args.interview`) is an application's or an interview's follow-up: `/outcome` Step 2b, never the networking skill |
@@ -298,7 +304,10 @@ send its batch, so the results are on the page. Then close that chat: `get_sessi
 --work <id> --dump "$D" --details <that file>`; do what it prints (`archive_session`, then
 `tidy.py closed <its id>`). It names the archive only for one of the app's own job chats on
 this copy whose job has ended and whose work is on master; any other it keeps, for the daily
-tidy-up. Then `wake` with the same folder (step 3 again), so a job waiting for a free place
+tidy-up. A finished one whose work never reached GitHub gets a `save` line (make its
+send_message, once: that chat saves its work and reports again) and, if it still is not
+there, a `lost` line (send its batch: the work's own card says so, with Try again) and the
+archive; the daily tidy-up does the same for one that never reported. Then `wake` with the same folder (step 3 again), so a job waiting for a free place
 starts now, and land this turn's work (step 5).
 
 Drafting and audits are never moved below this chat's model. The other chats are never

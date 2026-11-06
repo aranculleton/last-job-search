@@ -36,7 +36,7 @@ def page(tmp_path_factory):
 
 def test_the_latest_button_is_on_a_phones_screen(run, page):
     on = ("(() => { const j = document.querySelector('[data-k=\"talk-jump\"]'); if (!j || j.hidden) return null;"
-          " const r = j.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight; })()")
+          " const r = j.__drawnRect(); return r.top >= 0 && r.bottom <= innerHeight; })()")
     got = run("engine", html=page, viewport=PHONE, clock=CLOCK, seed=_talk(), steps=[
         {"hash": "chat", "wait": 300},
         {"eval": "(window.scrollTo(0, 0), window.dispatchEvent(new Event('scroll')), 1)"},

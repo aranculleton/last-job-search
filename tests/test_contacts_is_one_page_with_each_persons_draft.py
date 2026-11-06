@@ -183,7 +183,7 @@ def test_ten_replies_pasted_in_a_row_each_show_on_their_own_card(run, page, mode
     # Claude working: the running one spins and says so; the others say their place.
     work_now = got["after"][2]["eval"]
     assert work_now[ids[0]] == {"words": "Claude is on it", "spin": True}, work_now[ids[0]]
-    assert work_now[ids[1]]["words"] == "Next" and work_now[ids[2]]["words"] == "In line", (work_now[ids[1]], work_now[ids[2]])
+    assert work_now[ids[1]]["words"] == "Next" and work_now[ids[2]]["words"] == "Waiting its turn", (work_now[ids[1]], work_now[ids[2]])
     assert not any(work_now[c]["spin"] for c in ids[1:]), work_now
     # A reload keeps each card's own state: it is read from the work items, not this tab.
     assert got["after"][3]["eval"] == work_now, (got["after"][3]["eval"], work_now)
@@ -559,3 +559,27 @@ def test_an_answer_is_done_never_putting_it_on_your_page(run, page, model):
     # the page.
     words = got["after"][0]["eval"]
     assert words and not any(w in t.lower() for t in words for w in ("putting it on your page", "putting on page")), words
+
+
+def test_cancel_puts_back_the_words_edited_by_hand(run, page, model):
+    """The maintainer, 2026-11-06: "when i press edit the words myself, change/delete the
+    words, and then cancel, it still shows the edits i made". Cancel puts the words back as
+    they were; Done editing keeps them."""
+    rafe = "kestrel_foods_thorne"
+    words = "(() => { const b = document.querySelector('" + _card(rafe) + " .sendbox'); return b ? b.textContent : ''; })()"
+    typed = "(() => { const t = document.querySelector('[data-k=\"pentext:msg-%s\"]'); t.value = 'Hi'; t.dispatchEvent(new Event('input', {bubbles: true})); return 1; })()" % rafe
+    got = run("engine", html=page, viewport=PHONE, clock=CLOCK, seed=fixed(model), steps=[
+        {"hash": "contacts", "eval": words},
+        {"open": "pen:msg-" + rafe},
+        {"open": "penedit:msg-" + rafe},
+        {"eval": typed},
+        {"open": "penx:msg-" + rafe, "eval": words},
+        {"open": "pen:msg-" + rafe},
+        {"open": "penedit:msg-" + rafe},
+        {"eval": typed},
+        {"open": "penedit:msg-" + rafe, "eval": words},
+    ])
+    assert not got["errors"], got["errors"]
+    before, cancelled, kept = got["after"][0]["eval"], got["after"][4]["eval"], got["after"][8]["eval"]
+    assert len(before) > 20 and cancelled == before, (before, cancelled)
+    assert "Hi" in kept and kept != before, kept

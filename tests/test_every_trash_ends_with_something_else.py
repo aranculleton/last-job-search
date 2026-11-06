@@ -67,16 +67,23 @@ def test_the_trash_ends_with_something_else_which_opens_the_cards_box(run, tmp_p
     assert not got["actions"] and not got["work"], (got["actions"], got["work"])
 
 
-def test_a_persons_trash_in_to_do_opens_their_box_in_contacts(run, tmp_path):
+def test_a_persons_trash_in_to_do_opens_their_box_under_that_card(run, tmp_path):
+    # The maintainer, 2026-11-06: Something else in a To do card's trash "led to the contacts
+    # page instead of a text box". The box opens under the card it was asked from, in To do.
     page = _write(tmp_path, "page", _sample())
     bins = ("(() => { const b = [...document.querySelectorAll('#main [data-k]')].find((x) => /bin/.test(x.getAttribute('data-k'))"
             " && /^Not Juno/.test(x.getAttribute('aria-label') || '')); if (b) b.click(); return b ? b.getAttribute('data-k') : null; })()")
+    under = ("(() => { const a = document.activeElement; const card = a && a.closest('[data-todo]');"
+             " return {focus: a ? a.getAttribute('data-k') : null, hash: location.hash, card: card ? card.getAttribute('data-todo') : null,"
+             " binHere: !!(card && card.querySelector('[aria-label^=\"Not Juno\"]'))}; })()")
     got = run("engine", html=page, viewport=WIDE, fake={"canSend": "available"}, clock=CLOCK, steps=[
         {"hash": "todo", "eval": bins},
-        {"click": "Something else", "within": "dialog[open]", "exact": True, "eval": FOCUS},
+        {"click": "Something else", "within": "dialog[open]", "exact": True, "eval": under},
     ])
     assert not got["errors"], got["errors"]
     assert got["after"][0]["eval"], "Juno's row in To do has the trash"
     after = got["after"][1]["eval"]
     assert after["focus"] == "ct-text:card-person-larkspur_retail_castellan", after
-    assert after["hash"].startswith("#contacts"), after
+    assert after["hash"].startswith("#todo"), after
+    assert after["card"] and after["binHere"], ("the box is under the card whose trash was tapped", after)
+    assert not got["actions"] and not got["work"], (got["actions"], got["work"])

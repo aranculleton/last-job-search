@@ -995,6 +995,31 @@ def fail_stranded(db: dict, now: dt.datetime, out_dir: str) -> dict:
     return {"ended": ids, "batches": w.save("stranded")}
 
 
+# Work whose chat finished it but could not save it before it closed (its save timed out, and
+# asked once more it had nothing to save: tidy.py close and plan). Its card said done over a
+# result nobody could see (the "Finding jobs" chat, 2026-11-06).
+LOST_SAID = ("It finished, but its results could not be saved, so they are lost. Tap Try "
+             "again to do it once more.")
+
+
+def lose(db: dict, ids, now: dt.datetime, out_dir: str) -> list[str]:
+    """The batch that says, on each finished item's own card, that its results were lost:
+    failed with LOST_SAID, so the card offers Try again. Only items still done, each pinned
+    to the version read; [] where there is none."""
+    import app_model
+    w = Writes(out_dir)
+    work = db.get("work") or {}
+    for wid in dict.fromkeys(ids):
+        doc = work.get(wid) or {}
+        if str((doc.get("data") or {}).get("status") or "") != "done" \
+                or doc.get("version") is None:
+            continue
+        w.add("update", "work", wid, {
+            "status": "failed", "error": LOST_SAID, "lost_at": app_model.stamp(now),
+            "result": {"summary": LOST_SAID, "links": []}}, if_version=doc["version"])
+    return w.save("lost") if w.entries else []
+
+
 def _is_migration(item: dict) -> bool:
     return item.get("kind") == "update" and bool((item.get("args") or {}).get("migration"))
 
@@ -1658,7 +1683,7 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
            status: str = "done", error: str = "", links=(), reply: str = "", thread: str = "",
            chat_kind: str = "cloud", dump_dir: str = "", chat: str = "",
            question: str = "", about: str = "", answer: dict | None = None,
-           answered=()) -> dict:
+           answered=(), left_out: str = "") -> dict:
     """The batch that finishes one work item (the app skill, step 5): the item `done` (or
     `failed`, with `error` in plain words, or `stopped` after their Stop), its one-sentence
     summary and links, pinned to the version read; each of its locks the dump holds, deleted
@@ -1734,6 +1759,11 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
         said = [" ".join(str(q).split())[:300] for q in answered or () if str(q).strip()]
         if said:
             fields["result"]["questions"] = said
+        # A job's draft that ended because the job is not one they can take: its reason, so the
+        # page says it and never offers Try again, which drafted a job already ruled out (the
+        # maintainer, 2026-11-06).
+        if str(left_out or "").strip():
+            fields["result"]["left_out"] = " ".join(str(left_out).split())[:300]
     w = Writes(out_dir)
     mid = ""
     if str(reply or "").strip():

@@ -229,3 +229,17 @@ def test_someone_dropped_or_closed_is_never_read(page):
                          encoding="utf-8", cwd=ROOT)
     assert out.returncode == 0, out.stdout + out.stderr
     assert [x["contact"] for x in page.model()["linkedin"]["reading"]["queue"]] == [VARGA]
+    # Off the reading list itself (documents/network/page_reads_queue.json), not only the
+    # page's view of it, whatever closed them (2026-11-06).
+    assert _queued(page) == [VARGA], _queued(page)
+
+
+def test_a_note_waiting_on_a_read_says_why_and_where_the_reading_happens(page):
+    """Every note drafted in the cloud said "Written before their profile was read: read it
+    first", and nothing said where or how the reading happens (2026-11-06)."""
+    assert _queue(page, VARGA).returncode == 0
+    _waiting(page, VARGA)
+    m = page.model()
+    (msg,) = [x for x in m["messages"] if x["contact"] == VARGA]
+    assert msg["hold"] == ("Waiting for their profile: Claude reads it in its own browser in the "
+                           "Claude app on your computer, then rewrites this note"), msg["hold"]

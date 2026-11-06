@@ -435,7 +435,7 @@ details.more.split[open] { flex-basis: auto; }
 .m-rows :is(.file-kind, .file-name) { font-weight: 400; color: inherit; }
 .m-rows details.send { border-top: 0; }
 .m-rows details.send > summary { padding: 0; }
-@media (min-width: 760px) and (pointer: fine) { .m-rows details.send > summary { min-height: 24px; } }
+@media (min-width: 760px) and (pointer: fine), (min-width: 760px) and (pointer: none) { .m-rows details.send > summary { min-height: 24px; } }
 /* The rarer actions under More are the soft grey pills of the card's own row. */
 .m-rows .more-acts .btn.secondary { background: var(--sunk); border-color: transparent; }
 @media (hover: hover) { .m-rows .more-acts .btn.secondary:hover { background: var(--raised); } }
@@ -763,7 +763,7 @@ textarea { width: 100%; resize: vertical; line-height: 1.45; }
   /* A small circle drawn inside a 44px target, the size of every control on a phone; on a
      wider screen the target is the circle's own size, so it never takes a line of its own. */
   background: radial-gradient(circle at center, transparent 0 10px, var(--line-strong) 10px 11px, transparent 11.5px); vertical-align: middle; }
-@media (min-width: 760px) and (pointer: fine) { .q { width: 24px; height: 24px; min-width: 24px; margin: -4px 0 -4px 4px; } }
+@media (min-width: 760px) and (pointer: fine), (min-width: 760px) and (pointer: none) { .q { width: 24px; height: 24px; min-width: 24px; margin: -4px 0 -4px 4px; } }
 .orphan { display: grid; gap: 8px; }
 .near-line { font-size: 0.875rem; color: var(--muted); }
 
@@ -958,7 +958,7 @@ p.count.tone-warn { color: var(--st-overdue); }
 .facts .info-toggle { font: inherit; font-weight: 600; }
 /* A document's words and its pencil keep together: a pencil alone on a line named nothing. */
 .checks .doc-part { white-space: nowrap; }
-@media (min-width: 760px) and (pointer: fine) {
+@media (min-width: 760px) and (pointer: fine), (min-width: 760px) and (pointer: none) {
   .facts .info-toggle { display: inline; min-height: 0; padding: 0 2px; }
   .facts .btn.icon-only, .checks .btn.icon-only { min-height: 0; padding: 2px 8px; margin-block: -4px; vertical-align: middle; }
 }
@@ -1306,7 +1306,10 @@ dialog.work-sheet :is(select, input, textarea) { width: 100%; max-width: 100%; m
    (the maintainer, 2026-10-26). Touch screens keep the full size. */
 /* With a mouse, the size Claude's own app uses (14px text), so a screen holds what it
    should; phones keep their larger, touch-sized type (the maintainer, 2026-10-28). */
-@media (pointer: fine) and (min-width: 760px) {
+/* A computer that reports no pointer at all (a keyboard alone, a remote desktop, Firefox with
+   no mouse it can see) is a computer, not a phone: drawn at 16px its Brief scrolled and its
+   job cards' facts took two lines (4.12's Firefox run). Touch screens alone keep the full size. */
+@media (pointer: fine) and (min-width: 760px), (pointer: none) and (min-width: 760px) {
   html { font-size: 87.5%; }
   :root { --target: 36px; --top-h: 52px; }
   .card { padding: 12px 16px; }
@@ -1538,33 +1541,37 @@ body.has-fab .shell { padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-b
   .brief-grid .bp-list, .brief-grid .bp-lead-list, .brief-grid ul.bp-news { gap: 4px; }
 }
 .bp-head-numbers { display: none; }
-@media (min-width: 960px) and (max-height: 660px) {
-  .bp-head-numbers { display: block; }
-  .brief-grid > .bp-numbers { display: none; }
-  .brief-grid > .bpanel.w12-s3 { grid-column: span 3; }
-  .brief-grid > .bpanel.w12-s4 { grid-column: span 4; }
-  .brief-grid > .bpanel.w12-s5 { grid-column: span 5; }
-  .brief-grid > .bpanel.w12-s6 { grid-column: span 6; }
-  .brief-grid > .bpanel.w12-s8 { grid-column: span 8; }
-  .brief-grid > .bpanel.w12-s12 { grid-column: span 12; }
-  .brief-grid .bp-iv .btn { margin-top: 0; }
-  .brief-grid .bp-foot > :is(.btn, a):not(.icon-only) { padding-inline: 8px; }
+/* The compact Brief: the numbers a line under the greeting, the head and foot on one line each.
+   Chosen by fitBrief, not by a fixed height: a window of 661 to about 800px whose Your progress
+   could not shrink scrolled by up to 107px (the maintainer, 2026-11-06: "a bit of scroll room"
+   in a window, none full screen). It is used whenever the whole Brief does not fit without it. */
+@media (min-width: 960px) {
+  html.brief-short .bp-head-numbers { display: block; }
+  html.brief-short .brief-grid > .bp-numbers { display: none; }
+  html.brief-short .brief-grid > .bpanel.w12-s3 { grid-column: span 3; }
+  html.brief-short .brief-grid > .bpanel.w12-s4 { grid-column: span 4; }
+  html.brief-short .brief-grid > .bpanel.w12-s5 { grid-column: span 5; }
+  html.brief-short .brief-grid > .bpanel.w12-s6 { grid-column: span 6; }
+  html.brief-short .brief-grid > .bpanel.w12-s8 { grid-column: span 8; }
+  html.brief-short .brief-grid > .bpanel.w12-s12 { grid-column: span 12; }
+  html.brief-short .brief-grid .bp-iv .btn { margin-top: 0; }
+  html.brief-short .brief-grid .bp-foot > :is(.btn, html.brief-short a):not(.icon-only) { padding-inline: 8px; }
   /* The greeting, its day and the numbers on one line. */
-  .brief-hello { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 12px; }
-  .brief-hello .summary { display: flex; flex-wrap: wrap; gap: 0 12px; }
-  .brief-hello .sum-small { margin: 0; }
-  .brief-head { align-items: center; flex-wrap: nowrap; }
-  .brief-head .head-tools { flex-wrap: nowrap; }
-  .brief-head .head-tools .btn { padding-inline: 8px; }
-  .brief-head .head-tools .btn > span:not(.sr-only) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  html.brief-short .brief-hello { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 12px; }
+  html.brief-short .brief-hello .summary { display: flex; flex-wrap: wrap; gap: 0 12px; }
+  html.brief-short .brief-hello .sum-small { margin: 0; }
+  html.brief-short .brief-head { align-items: center; flex-wrap: nowrap; }
+  html.brief-short .brief-head .head-tools { flex-wrap: nowrap; }
+  html.brief-short .brief-head .head-tools .btn { padding-inline: 8px; }
+  html.brief-short .brief-head .head-tools .btn > span:not(.sr-only) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   /* The tip on one line beside the privacy line, its whole text a tap on it away (title). */
-  .bp-bottom { flex-wrap: nowrap; min-height: 56px; }
-  .bp-bottom .foot-line { flex: none; }
-  .bp-bottom .bp-tip { flex: 1 1 0; min-width: 0; flex-wrap: nowrap; padding-block: 4px; }
-  .bp-bottom .bp-tip-t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 auto; }
-  .bp-bottom .bp-tip .btn { white-space: nowrap; flex: none; }
-  .bp-bottom .foot-line.open { flex: 1 1 auto; }
-  .bp-bottom:has(.foot-line.open) .bp-tip { display: none; }
+  html.brief-short .bp-bottom { flex-wrap: nowrap; min-height: 56px; }
+  html.brief-short .bp-bottom .foot-line { flex: none; }
+  html.brief-short .bp-bottom .bp-tip { flex: 1 1 0; min-width: 0; flex-wrap: nowrap; padding-block: 4px; }
+  html.brief-short .bp-bottom .bp-tip-t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 auto; }
+  html.brief-short .bp-bottom .bp-tip .btn { white-space: nowrap; flex: none; }
+  html.brief-short .bp-bottom .foot-line.open { flex: 1 1 auto; }
+  html.brief-short .bp-bottom:has(.foot-line.open) .bp-tip { display: none; }
 }
 /* A narrow Coming up shows this week's seven days; the list and "All coming up" hold the rest. */
 @container (max-width: 420px) {
@@ -2027,3 +2034,30 @@ ul.news .news-line { padding-block: 4px; }
 .makers-link a { color: var(--muted); }
 /* Text size: Smaller and Larger drawn in their own size; the control keeps its height. */
 .size-choice .look-name { line-height: 1; }
+/* A number on the Brief opens where those things are: the tile is the tap, no underline. */
+a.bp-stat { color: inherit; text-decoration: none; border-radius: var(--r-sm); }
+a.bp-stat:hover { text-decoration: none; }
+a.bp-stat .bp-n { color: var(--ink); }
+@media (hover: hover) { a.bp-stat:hover { box-shadow: inset 0 0 0 1px var(--line); } }
+/* A Brief stretched to the window's foot: Your progress's weekly chart takes the room its
+   panel has, never a short chart over empty space (the maintainer, 2026-11-06: "are the panels
+   actually dynamic and filling the room"). */
+.brief-grid.is-filled .bp-numbers .bp-body > .bp-spark-wrap { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
+.brief-grid.is-filled .bp-numbers .bp-spark { flex: 1 1 auto; height: auto; min-height: 32px; max-height: 200px; }
+/* The Chat button and its panel on the left, where the person chose it (Settings > Look, or
+   the panel's arrow): mirrored, big or small, and the Brief's foot keeps clear of it there. */
+@media (min-width: 760px) {
+  html.dock-left .chat-fab, html.dock-left .chat-dock { right: auto; left: max(16px, env(safe-area-inset-left, 0px)); }
+  html.dock-left .bp-bottom { padding-right: 0; }
+  /* Beside the menu's names the button sits over the menu; with icons only it reaches the page. */
+  html.dock-left.nav-mini .bp-bottom { padding-left: calc(3 * var(--target)); }
+}
+.dock-top .btn { flex: none; }
+/* A toast's time left: a thin ring round its close that empties, still while it is held. */
+.toast-x { position: relative; }
+.toast-ring { position: absolute; inset: 4px; width: calc(100% - 8px); height: calc(100% - 8px); transform: rotate(-90deg); pointer-events: none; }
+.toast-ring circle { fill: none; stroke: currentColor; stroke-width: 2; opacity: 0.6; stroke-dasharray: 100; stroke-dashoffset: 0; animation-name: toast-ring; animation-timing-function: linear; animation-fill-mode: forwards; }
+.toast.is-held .toast-ring circle { animation-play-state: paused; }
+@keyframes toast-ring { to { stroke-dashoffset: 100; } }
+@media (prefers-reduced-motion: reduce) { .toast-ring circle { animation: none; } }
+.toast-more { white-space: nowrap; }

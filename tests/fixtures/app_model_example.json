@@ -1,19 +1,19 @@
 {
  "model": 1,
  "made_at": "2026-10-25T18:00:00Z",
- "rev": "55a10acada93",
+ "rev": "78746ad40b07",
  "app": {
-  "version": "4.11.0",
+  "version": "4.12.0",
   "url": null,
   "update_waiting": null,
   "news": [
-   "The Brief fits a laptop screen.",
-   "One way to stop Claude.",
-   "A card's answer offers what it made."
+   "Rules the app now does by itself come off your list. (set up for you)",
+   "A search of the employers you name.",
+   "A complaint about the app is never kept as one of your rules."
   ],
   "privacy": "Only you can open this page unless you share it. It holds first names, employers, your drafts and your setup answers, so keep it unshared.",
   "repo": "https://github.com/aranculleton/last-job-search",
-  "page": 73,
+  "page": 80,
   "not_saved": 0,
   "app_bugs": []
  },
@@ -77,7 +77,7 @@
  ],
  "jobs": {
   "round": "r9",
-  "made_at": "2026-11-06T02:31:18Z",
+  "made_at": "2026-11-06T11:00:19Z",
   "met": false,
   "summary": "3 roles from the last search to look at, 1 of them scoring 75 or more. 3 left out, each with its reason.",
   "rows": [
@@ -1004,7 +1004,7 @@
    "when": "2026-10-28",
    "prep": {
     "path": "documents/applications/thornbury_bank_risk_analyst_thornbury/interview_prep.md",
-    "updated": "2026-11-06T02:31:18Z"
+    "updated": "2026-11-06T11:00:19Z"
    },
    "questions": 2,
    "all_day": true,
@@ -1483,7 +1483,8 @@
     "every": "month"
    }
   ],
-  "watch_again": []
+  "watch_again": [],
+  "news_max": 3
  },
  "setup": {
   "state": "done",
@@ -1530,11 +1531,23 @@
   ]
  },
  "updates": {
-  "version": "4.11.0",
-  "newest": "4.11.0",
+  "version": "4.12.0",
+  "newest": "4.12.0",
   "mode": "auto",
   "waiting": null,
   "changed": [
+   {
+    "version": "4.12.0",
+    "date": "2026-11-06",
+    "lines": [
+     "Rules the app now does by itself come off your list. (set up for you)",
+     "A search of the employers you name.",
+     "A complaint about the app is never kept as one of your rules.",
+     "Documents are named you, the employer, then the document.",
+     "Settings is shorter and says things plainly.",
+     "Something looks wrong opens its box right there."
+    ]
+   },
    {
     "version": "4.11.0",
     "date": "2026-11-06",
@@ -1545,18 +1558,6 @@
      "Answers are never lost.",
      "A bigger chat bubble.",
      "Something else, on every card, answered under that card."
-    ]
-   },
-   {
-    "version": "4.10.1",
-    "date": "2026-11-05",
-    "lines": [
-     "One helper chat, and two only while one hands over to the next.",
-     "The README and the start guide say the pencil and the trash.",
-     "The page never says \"Connected\" for a moment while it is still reconnecting.",
-     "Every screen is the whole width.",
-     "Icons only is its own section at the top of the side menu.",
-     "A long job title fills its line before it wraps."
     ]
    }
   ],

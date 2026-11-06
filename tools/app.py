@@ -629,7 +629,7 @@ def late_taps(dump: str, chat: str, now, out_dir: str) -> dict:
     if new:
         lines.append(LATE_WORK.format(ids=", ".join(new[:6]) + (" ..." if len(new) > 6 else ""),
                      dump=dump, chat=chat))
-    page_reads.late_handled(dump, again=bool(new))
+    page_reads.late_handled(dump, again=bool(new), ids=new, chat=chat, now=now)
     return {"batches": batches, "lines": lines}
 
 
@@ -2008,6 +2008,57 @@ NESTED_JOB = (" If the create_session is refused because this chat cannot start 
               "and this one is taken again that way once its claim lapses.")
 
 
+RETIRED_WAIT_S = 40 * 60
+
+
+def _saved_on_github(root: str) -> bool:
+    """Is everything of this chat's on GitHub: nothing unsaved, no landing running, and its
+    commit on master or on a branch GitHub holds (where the next landing brings it in)?"""
+    import land
+    import save_state
+    if land.landing(root) or save_state.unsaved(root):
+        return False
+    head = land._git(root, "rev-parse", "HEAD").stdout.strip()
+    if not head:
+        return False
+    if land._git(root, "merge-base", "--is-ancestor", "HEAD", "origin/master").returncode == 0:
+        return True
+    return bool(land._git(root, "branch", "-r", "--contains", "HEAD").stdout.strip())
+
+
+def cmd_retired(a) -> int:
+    """A helper that has handed the page on (app_listen.retired_here): no more work. Its own
+    save is started where it is not on GitHub yet, with a wait that wakes it once it ends;
+    saved, it archives itself at once. A chat that still answers the page is told so."""
+    import app_listen
+    import person
+    chat = app_listen.this_chat(a.chat)
+    if not chat or not app_listen.retired_here(chat):
+        print("retired: this chat answers the page, or never did: carry on as before.")
+        return 0
+    root = person.state()
+    if getattr(a, "wait", False):
+        import time
+        import land
+        until = time.monotonic() + RETIRED_WAIT_S
+        while land.landing(root) and time.monotonic() < until:
+            time.sleep(5)
+        print("retired: its save has ended: python3 tools/app.py retired --chat " + chat)
+        return 0
+    if _saved_on_github(root):
+        print("retired: its work is saved. Put this chat away now, as the last call of the "
+              "turn: archive_session " + json.dumps({"session_id": chat}) + ". Where "
+              "archive_session is not among this chat's tools, end the turn: the tidy-up in "
+              "the chat that answers the page puts it away. Say nothing about it.")
+        return 0
+    print("retired: its own save is not on GitHub yet. Run python3 tools/land.py --detach "
+          "--message \"The last work of the helper before\" (an ordinary call, it returns at "
+          "once), then, in the background (run_in_background), python3 tools/app.py retired "
+          f"--chat {chat} --wait, which wakes this chat once the save has ended. End the turn "
+          "with one line: \"This chat has handed your page on.\"")
+    return 0
+
+
 def cmd_nested(a) -> int:
     """The platform refused this chat a new chat or scheduled task because chats nest only so
     deep (each helper started the next, one level deeper a day, 2026-11-05). Kept in this
@@ -2281,7 +2332,7 @@ def cmd_done(a) -> int:
                              error=a.failed, links=_links(a.link), reply=reply, thread=a.thread,
                              chat_kind=a.kind or app_listen.chat_kind(), dump_dir=a.dump,
                              chat=a.chat, question=a.question, about=a.about,
-                             answer=_answer(a), answered=a.answered)
+                             answer=_answer(a), answered=a.answered, left_out=left)
     except (KeyError, ValueError) as e:
         print(f"app: not finished: {e.args[0] if e.args else e}", file=sys.stderr)
         return 2
@@ -2383,6 +2434,17 @@ def _held_why(why: str) -> str:
     first, _, rest = why.partition(" ")
     return (first.lower() + " " + rest).strip() if first in ("No", "Your", "Their") else why
 FOLLOW_UP_ASK = "What should the follow-up to {first} say? I could not write one: {why}."
+# Never asked of the person any more (2026-11-06): what code cannot write is Claude's, a note
+# waiting on a read is rewritten once it is read, and with nothing new found under a rule to
+# follow up only with something new, the item says so and asks nothing.
+FOLLOW_UP_WAITS = "The note to {first} waits until their profile is read."
+FOLLOW_UP_NOTHING = "No follow-up to {first} yet: nothing new turned up to say."
+# What a finish says when its own words are refused (a name it could not shorten): the batch's
+# other items keep their writes.
+FOLLOW_UP_PLAIN = {"done": "Your follow-up is ready to send.", "none": "No follow-up is owed now.",
+                   "held": "No follow-up: your own rules stop it.",
+                   "waits": "The note waits until their profile is read.",
+                   "nothing": "No follow-up yet: nothing new turned up to say."}
 
 
 def _next_dir(base: str) -> str:
@@ -2390,6 +2452,41 @@ def _next_dir(base: str) -> str:
     while os.path.exists(os.path.join(base, str(n))):
         n += 1
     return os.path.join(base, str(n))
+
+
+def _take_back_asks(db: dict, chat: str, now, dump: str) -> dict:
+    """Every follow-up an earlier run put to the person with FOLLOW_UP_ASK, taken back by
+    `chat`: {work id: (the fields that claim it again, its version)}. The dump holds it as
+    claimed at the version it has, so the run's one write to it (its finish, or the claim
+    itself when it is left to write) goes at that version."""
+    import app_model
+    import page_db
+    lead = FOLLOW_UP_ASK.split("{first}")[0]
+    got = {}
+    at = app_model.stamp(now)
+    until = app_model.stamp(now + dt.timedelta(minutes=30))
+    for wid, doc in sorted((db.get("work") or {}).items()):
+        item = doc["data"]
+        if item.get("kind") != "follow_up" or str(item.get("status") or "") != "needs_you":
+            continue
+        if not str(item.get("note") or "").startswith(lead):
+            continue
+        fields = {"status": "claimed", "claimed_by": chat, "claimed_at": at, "lease_until": until,
+                  "note": None, "needs": None, "asked_you_at": None, "choices": None}
+        page_db._keep_dump(dump, "work", wid, dict(item, **fields), int(doc["version"] or 1))
+        got[wid] = (fields, doc["version"])
+    return got
+
+
+def _cleared(entries: list, wid: str) -> None:
+    """The finish of a follow-up taken back from the person also clears its question."""
+    for e in entries:
+        if e.get("collection") == "work" and e.get("doc_id") == wid and e.get("file_path"):
+            with open(e["file_path"], encoding="utf-8") as fh:
+                data = json.load(fh)
+            data.update({"note": None, "needs": None, "asked_you_at": None, "choices": None})
+            with open(e["file_path"], "w", encoding="utf-8", newline="\n") as fh:
+                json.dump(data, fh)
 
 
 def follow_ups(dump: str, chat: str, now, today: str, out_dir: str,
@@ -2405,14 +2502,26 @@ def follow_ups(dump: str, chat: str, now, today: str, out_dir: str,
     import followup_drafts
     import page_db
     db = page_db.load(dump)
+    out = {"done": [], "to_write": [], "asked": [], "by_hand": [], "refused": [],
+           "context": "", "batches": [], "taken_back": [], "not_finished": []}
+    # Its own questions taken back: a follow-up an earlier run put to the person ("What should
+    # the follow-up to ... say?") is this command's to answer, so it is claimed again here and
+    # drafted with the rest. Only the page could answer one before (2026-11-06).
+    entries: list[dict] = []
+    taken = _take_back_asks(db, chat, now, dump)
+    if taken:
+        out["taken_back"] = sorted(taken)
+        db = page_db.load(dump)
     held = sorted(((str(d["data"].get("asked_at") or ""), wid) for wid, d in
                    (db.get("work") or {}).items()
                    if d["data"].get("kind") == "follow_up"
                    and str(d["data"].get("status") or "") in page_db.ACTIVE
                    and str(d["data"].get("claimed_by") or "") == chat))
-    out = {"done": [], "to_write": [], "asked": [], "by_hand": [], "refused": [],
-           "context": "", "batches": []}
     if not held:
+        if entries:
+            w = page_db.Writes(out_dir)
+            w.entries = entries
+            out["batches"] = w.save("follow-ups")
         return out
     with followup_drafts.FoldersOnce():
         items, contacts, threads, tracker = followup_drafts.load(today)
@@ -2422,6 +2531,11 @@ def follow_ups(dump: str, chat: str, now, today: str, out_dir: str,
                  for c in contacts}
         passed: dict = {}
         stopped: dict = {}
+        # {"id", "none": "<why>"}: Claude looked and found nothing new, under a rule to follow
+        # up only with something new: finished saying so, nobody asked.
+        nothing = {str(e.get("id") or "").strip() for e in written or ()
+                   if isinstance(e, dict) and e.get("none") and not str(e.get("text") or "").strip()}
+        written = [e for e in written or () if str((e or {}).get("id") or "").strip() not in nothing]
         if written:
             checked = followup_drafts.check(written, contacts, threads, today, got)
             followup_drafts.keep_checked(checked, contacts)
@@ -2446,19 +2560,21 @@ def follow_ups(dump: str, chat: str, now, today: str, out_dir: str,
             rule = (due or {}).get("rule") or {}
             stop = stopped.get(cid) or (rule.get("said") or "" if (due or {}).get("held") else "")
             if stop and cid not in passed:
-                finishes.append({"work": wid, "summary": FOLLOW_UP_HELD.format(
+                finishes.append({"work": wid, "plain": "held", "summary": FOLLOW_UP_HELD.format(
                     first=first, why=_held_why(stop))})
             elif cid in passed:
-                finishes.append({"work": wid, "summary": FOLLOW_UP_DONE.format(first=first)})
+                finishes.append({"work": wid, "plain": "done", "summary": FOLLOW_UP_DONE.format(first=first)})
+            elif cid in nothing:
+                finishes.append({"work": wid, "plain": "nothing",
+                                 "summary": FOLLOW_UP_NOTHING.format(first=first)})
             elif due is None or d.get("status") == "none":
-                finishes.append({"work": wid, "summary": FOLLOW_UP_NONE.format(first=first)})
+                finishes.append({"work": wid, "plain": "none", "summary": FOLLOW_UP_NONE.format(first=first)})
             elif d.get("status") == "ready" and not answered:
                 keep.append(due)
-                finishes.append({"work": wid, "summary": FOLLOW_UP_DONE.format(first=first)})
-            elif d.get("status") == "write" and d.get("who") == "you" and not answered:
-                why = " ".join(str(d.get("why") or "").split()).rstrip(".")
-                finishes.append({"work": wid, "question": FOLLOW_UP_ASK.format(
-                    first=first, why=why or "nothing on file to follow up on")})
+                finishes.append({"work": wid, "plain": "done", "summary": FOLLOW_UP_DONE.format(first=first)})
+            elif d.get("status") == "write" and d.get("who") == "read" and not answered:
+                finishes.append({"work": wid, "plain": "waits",
+                                 "summary": FOLLOW_UP_WAITS.format(first=first)})
             else:
                 # Advise flagged code's draft, a reply is owed, or the person answered a
                 # question about it: written here, from the thread, in one go with the rest.
@@ -2470,17 +2586,43 @@ def follow_ups(dump: str, chat: str, now, today: str, out_dir: str,
         if out["to_write"]:
             out["context"] = followup_drafts.context(
                 [t["contact"] for t in out["to_write"]], contacts, threads, today, got)
-    entries: list[dict] = []
     for f in finishes:
-        res = page_db.finish(page_db.load(dump), f["work"], now,
-                             os.path.join(out_dir, "each", f["work"].replace("~", "@")),
-                             summary=f.get("summary", ""), chat=chat, dump_dir=dump,
-                             question=f.get("question", ""),
-                             answer={"kind": "text"} if f.get("question") else None)
+        each = os.path.join(out_dir, "each", f["work"].replace("~", "@"))
+        try:
+            res = page_db.finish(page_db.load(dump), f["work"], now, each,
+                                 summary=f.get("summary", ""), chat=chat, dump_dir=dump,
+                                 question=f.get("question", ""),
+                                 answer={"kind": "text"} if f.get("question") else None)
+        except ValueError:
+            # Its own words refused (a name with a full stop read as two sentences): said
+            # plainly instead, and the batch's other items keep their writes (2026-11-06).
+            try:
+                res = page_db.finish(page_db.load(dump), f["work"], now, each,
+                                     summary=FOLLOW_UP_PLAIN.get(f.get("plain") or "", "Done."),
+                                     chat=chat, dump_dir=dump)
+            except (ValueError, KeyError):
+                out["not_finished"].append(f["work"])
+                continue
+        except KeyError:
+            out["not_finished"].append(f["work"])
+            continue
+        mine = []
         for path in res["batches"]:
             with open(path, encoding="utf-8") as fh:
-                entries += json.load(fh)
+                mine += json.load(fh)
+        if f["work"] in taken:
+            _cleared(mine, f["work"])
+        entries += mine
         out["asked" if f.get("question") else "done"].append(f["work"])
+    # One taken back and left to write here: its claim is written, so the page shows it being
+    # drafted rather than waiting on the person.
+    finished = set(out["done"]) | set(out["asked"])
+    if any(wid not in finished for wid in taken):
+        w0 = page_db.Writes(os.path.join(out_dir, "taken"))
+        for wid, (fields, version) in sorted(taken.items()):
+            if wid not in finished:
+                w0.add("update", "work", wid, fields, if_version=version)
+        entries = list(w0.entries) + entries
     if entries:
         w = page_db.Writes(out_dir)
         w.entries = entries
@@ -2763,6 +2905,10 @@ def main(argv=None) -> int:
     p.add_argument("--chat", default="")
     p.add_argument("--out", default="", help="where the batch goes (default <dump>/nested)")
     p.add_argument("--now", default=None)
+    p = sub.add_parser("retired", help="a helper that handed the page on: its one step, its "
+                                       "save, then archiving itself")
+    p.add_argument("--chat", default="")
+    p.add_argument("--wait", action="store_true", help="wait for its save to end, then say so")
     p = sub.add_parser("republish", help="ask the listener to publish the page's new code")
     p.add_argument("out_dir")
     p.add_argument("--now", default=None)
@@ -2886,7 +3032,7 @@ def main(argv=None) -> int:
             "files-saved": cmd_files_saved, "propose": cmd_propose, "listen": cmd_listen,
             "republish": cmd_republish, "pinned": cmd_pinned, "told": cmd_told, "doorbells": cmd_doorbells, "done": cmd_done,
             "ask": cmd_ask, "wake": cmd_wake, "version": cmd_version, "reads": cmd_reads, "search-drafts": cmd_search_drafts,
-            "follow-ups": cmd_follow_ups, "nested": cmd_nested,
+            "follow-ups": cmd_follow_ups, "nested": cmd_nested, "retired": cmd_retired,
             "answer": cmd_answer}[a.cmd](a)
 
 

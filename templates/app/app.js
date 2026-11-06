@@ -206,8 +206,15 @@
     // A card's own questions (Something else): its thread's id while its box is open, and the
     // threads themselves, kept apart from the Chat's (cardTalk).
     cardAsk: new Set(),
+    // A card's box opened in To do from its trash: {card: the To do card's key, kind, id}.
+    askHere: null,
+    // What was last tapped, so a trash sheet knows which card it was opened from (Safari never
+    // focuses a tapped button, so the focus cannot say).
+    lastTap: null,
     // A draft's pencil box open with its words as a field (Edit the words yourself).
     penEdit: new Set(),
+    // The words as they were when Edit the words yourself was tapped: Cancel puts them back.
+    penBefore: new Map(),
     cardThreads: new Map(),
     views: new Map(),
     caps: {},
@@ -292,6 +299,18 @@
     return k > 0 ? k : 1;
   }
   function pageWidth() { return window.innerWidth / (parseFloat(document.body.style.zoom) || 1); }
+  // The window's px in one measured px: 1 in Chrome and Firefox, the zoom in Safari, whose
+  // measures are taken before it. A measure set against the window's own height (innerHeight,
+  // scrollTop) is turned into the window's px first: compared as it came, Safari's Brief gave
+  // up rows it had room for and its Latest scrolled short of the field (4.12's Safari run).
+  function screenPerPx() { return (parseFloat(document.body && document.body.style.zoom) || 1) / drawnPerPx(); }
+  // A measured top or bottom in the window's px (the tests' __drawnRect, the same sum).
+  function screenY(y) {
+    const d = screenPerPx();
+    if (Math.abs(d - 1) < 0.001) return y;
+    const sy = window.scrollY || 0;
+    return (y + sy) * d - sy;
+  }
   function applySize(z) {
     const phone = window.innerWidth < 760;
     const f = (phone ? PHONE_SIZES : SIZES)[z] || (phone ? PHONE_SIZES : SIZES).standard;
@@ -918,7 +937,7 @@
       if (p.status !== w.status) {
         if (w.status === "done") announce(txt(w.title) + ": ready.");
         else if (w.status === "failed") announce(txt(w.title) + ": did not finish.");
-        else if (w.status === "stopped") announce(txt(w.title) + ": stopped. Anything already saved is kept.");
+        else if (w.status === "stopped") announce(txt(w.title) + (leftOut(w) ? ": not drafted, " + lc1(leftOut(w)).replace(/\.?$/, ".") : ": stopped. Anything already saved is kept."));
         else if (w.status === "claimed" || w.status === "running") announce(txt(w.title) + ": started.");
       } else if (p.stage !== w.stage && w.status === "running") {
         const st = stagesFor(w)[Math.max(0, parseInt(w.stage, 10) || 0)];
@@ -2011,9 +2030,18 @@
   // Asked again in the last minute: a second Try again is the same tap.
   const justAsked = (w) => !!w && txt(w.status) === "queued" && now() - (tms(w.asked_at) || 0) < 60000;
   const retriedAt = new Map();
+  // Why a job's draft ended with the job ruled out, from its result (app.py done --left-out),
+  // or "" for any other ending.
+  // A job left out before this field was kept says so in its summary ("Not drafted: ...").
+  function leftOut(w) {
+    const r = obj(obj(w).result);
+    if (txt(r.left_out)) return txt(r.left_out);
+    const m = /^Not drafted: (.+)$/.exec(txt(r.summary));
+    return m && txt(obj(w).status) === "stopped" ? m[1] : "";
+  }
   function retryWork(id) {
     const w = workDoc(id);
-    if (!w) return;
+    if (!w || leftOut(w)) return;
     // A double tap, or a tap while the last is still being written, is that tap (robustness
     // audit 2); a second Try again is the same tap.
     if (workWriting.has(id) || justAsked(w)) return;
@@ -2084,7 +2112,7 @@
     t.made = now();
     t.until = now() + (t.bad ? 2 * TOAST_MS : TOAST_MS);
     t.held = false;
-    S.toasts = S.toasts.filter((x) => !x.gone).concat([t]).slice(-3);
+    S.toasts = S.toasts.filter((x) => !x.gone).concat([t]).slice(-8);
     renderToasts();
   }
   function renderToasts() {
@@ -2094,18 +2122,36 @@
     S.toasts = S.toasts.filter((t) => !t.gone && (t.held || t0 < t.until));
     box.classList.toggle("above-bulk", !!document.querySelector(".bulk"));
     const focusKey = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.k : null;
-    box.replaceChildren(...S.toasts.map((t) => {
+    // Two at most: a burst of finished work stacked three toasts up a phone's screen (the
+    // maintainer, 2026-11-06: "is there a limit so it doesnt fill the screen with stacking?").
+    // The rest are counted on the newest, "+3 more", which opens Claude's work, where each is.
+    const shown = S.toasts.slice(-2);
+    const more = S.toasts.length - shown.length;
+    box.replaceChildren(...shown.map((t, i) => {
       const undoable = t.ids.length && t.ids.some((id) => !S.receipts.has(id) && actionState(id) === "saved");
-      const hold = () => { t.held = true; };
-      const release = () => { t.held = false; t.until = Math.max(t.until, now() + 3000); };
-      return h("div", {class: "toast" + (t.bad ? " bad" : ""), "data-toast": t.key, onmouseenter: hold, onmouseleave: release,
+      const hold = () => { t.held = true; const r = box.querySelector('[data-toast="' + t.key + '"]'); if (r) r.classList.add("is-held"); };
+      // Its ring starts again from the new time left, drawn after this event: a focus leaving a
+      // toast that a redraw is removing fired this inside that redraw (4.13's page tests).
+      const release = () => { t.held = false; t.until = Math.max(t.until, now() + 3000); t.from = now(); setTimeout(renderToasts, 0); };
+      // How long it has left, as a ring round its close that empties (the maintainer,
+      // 2026-11-06: "a circle that fills up ... make me less incentivised to close it"): still
+      // while pointed at or focused, and never moving with reduced motion.
+      const life = Math.max(1, t.until - (t.from || t.made));
+      const gone = Math.min(life, Math.max(0, now() - (t.from || t.made)));
+      const arc = svg("circle", {cx: "12", cy: "12", r: "10", pathLength: "100"});
+      arc.style.animationDuration = life + "ms";
+      arc.style.animationDelay = "-" + gone + "ms";
+      const ring = svg("svg", {class: "toast-ring", viewBox: "0 0 24 24", "aria-hidden": "true", focusable: "false"}, [arc]);
+      return h("div", {class: "toast" + (t.bad ? " bad" : "") + (t.held ? " is-held" : ""), "data-toast": t.key, onmouseenter: hold, onmouseleave: release,
         onfocusin: hold, onfocusout: (e) => { if (!e.currentTarget.contains(e.relatedTarget)) release(); }},
         h("span", {class: "toast-text"}, t.text),
         undoable ? h("button", {type: "button", class: "btn quiet small", "data-k": "toast-undo:" + t.key, onclick: () => undo(t.ids)}, "Undo") : null,
         t.retry ? h("button", {type: "button", class: "btn quiet small", "data-k": "toast-retry:" + t.key, onclick: () => { t.gone = true; t.retry(); }}, "Try again") : null,
         t.see ? h("button", {type: "button", class: "btn quiet small", "data-k": "toast-see:" + t.key, onclick: () => { t.gone = true; t.see(); renderToasts(); }}, t.seeLabel || "See it") : null,
-        h("button", {type: "button", class: "btn quiet small icon", "aria-label": "Close this message", "data-k": "toast-x:" + t.key,
-          onclick: () => { t.gone = true; renderToasts(); if (arr(t.ids).length) scheduleRender(); }}, "×"));
+        more && i === shown.length - 1 ? h("button", {type: "button", class: "btn quiet small toast-more", "data-k": "toast-more", "aria-label": more + " more: open Claude's work",
+          onclick: () => { S.toasts.forEach((x) => { x.gone = true; }); renderToasts(); openWork(); }}, "+" + more + " more") : null,
+        h("button", {type: "button", class: "btn quiet small icon toast-x", "aria-label": "Close this message", "data-k": "toast-x:" + t.key,
+          onclick: () => { t.gone = true; renderToasts(); if (arr(t.ids).length) scheduleRender(); }}, ring, h("span", {"aria-hidden": "true"}, "×")));
     }));
     if (focusKey) refocus(box, focusKey);
   }
@@ -3891,6 +3937,14 @@
     return [{label: "Tomorrow", key: "later-1", run: () => go(1, "Tomorrow")}, {label: "Next week", key: "later-7", run: () => go(7, "Next week")}];
   }
   function withHide(i, node) {
+    // The card's own box, opened here by its trash's Something else (openCardAsk): under this
+    // card in To do, never a jump to Contacts (the maintainer, 2026-11-06: "it led to the
+    // contacts page instead of a text box").
+    if (node && node.setAttribute && i.key) {
+      node.setAttribute("data-todo", i.key);
+      const a = S.askHere;
+      if (a && a.card === i.key) { const t = guarded(() => cardTalk(a.kind, a.id, askLabel(a.kind, a.id)), () => null); if (t) node.appendChild(t); }
+    }
     if (!node || !node.querySelector || i.stay) return node;
     // A card that already has its own bin (with its own choices) keeps that one alone: two
     // bins side by side stood on a card (the maintainer, 2026-11-05).
@@ -4287,12 +4341,12 @@
       const st = txt(w.status) || "queued";
       return st === "running" || st === "claimed" ? h("p", {class: "g-state"}, h("span", {class: "spin", "aria-hidden": "true"}), " Writing")
         : st === "needs_you" ? h("p", {class: "g-state tone-warn"}, "Has a question")
-        : h("p", {class: "g-state muted"}, h("span", {class: "dot is-waiting", "aria-hidden": "true"}), " In line");
+        : h("p", {class: "g-state muted"}, h("span", {class: "dot is-waiting", "aria-hidden": "true"}), " Waiting its turn");
     };
     const summary = compact ? (() => {
       const run = working.filter(([, w]) => ["running", "claimed"].includes(txt(w.status))).length;
       const doneN = ds.filter((d) => { const w = kind ? dueWork(d, kind) : null; return w && txt(w.status) === "done"; }).length;
-      const words2 = ["Drafting " + (working.length + doneN), doneN ? doneN + " written" : "", run ? run + " being written" : "", working.length - run ? (working.length - run) + " in line" : ""].filter(Boolean);
+      const words2 = ["Drafting " + (working.length + doneN), doneN ? doneN + " written" : "", run ? run + " being written" : "", working.length - run ? (working.length - run) + " waiting their turn" : ""].filter(Boolean);
       return h("div", {class: "g-summary", role: "status"}, h("p", {}, run ? h("span", {class: "spin", "aria-hidden": "true"}) : h("span", {class: "dot is-waiting", "aria-hidden": "true"}), " " + words2[0] + ": " + words2.slice(1).join(", ")),
         h("div", {class: "card-actions"}, stopClaude("all " + working.length, () => working.forEach(([id]) => stopWork(id)), "fg-stop:" + where + ":" + g + ":" + band)));
     })() : null;
@@ -4620,6 +4674,16 @@
     if (txt(d.interview)) ids.push("prep~" + seg(d.interview), "follow_up~" + sub + "~" + seg(d.interview));
     for (const id of ids) { const w = workDoc(id); if (w && (id.indexOf("~due~") > 0 || id.startsWith(sub === "prep" || sub === "interview" ? "prep~" : "follow_up~"))) return [id, w]; }
     for (const [id, w] of allWork()) if (txt(obj(w.args).due) === txt(d.id)) return [id, w];
+    // The same work for this person asked another way (from their card, or taken back from a
+    // question by the chat): the row shows it being drafted, never idle with Draft offered
+    // again (2026-11-06: eight follow-ups drafting while the card showed nothing).
+    const cid = isPerson(dueContact(d)) ? dueContact(d) : "";
+    if (cid && kind) {
+      for (const [id, w] of allWork()) {
+        const a = obj(w.args);
+        if (txt(w.kind) === kind && txt(a.contact || a.contact_id) === cid && !["done", "failed", "stopped"].includes(txt(w.status))) return [id, w];
+      }
+    }
     return null;
   }
   function dueRow(d, ctx) {
@@ -4987,7 +5051,9 @@
   // moved the window and a tap on Brief showed the rest (the maintainer, 4.9.0: "when I
   // press the top one for brief it's not the same as what's originally displayed").
   const fitHeld = (l) => { let n = 0; const t = l.textContent; for (let i = 0; i < t.length; i++) n = (n * 31 + t.charCodeAt(i)) | 0; return fitName(l) + "=" + l.children.length + ":" + n; };
-  const fitKey = (lists) => window.innerWidth + "x" + window.innerHeight + ":" + lists.map(fitHeld).join("|");
+  // The text size is part of it: a fit kept from before Smaller was chosen left the Brief a
+  // tenth short of the window (the maintainer, 2026-11-06: "pressing smaller size shrunk the brief").
+  const fitKey = (lists) => window.innerWidth + "x" + window.innerHeight + "@" + (document.body ? document.body.style.zoom : "") + ":" + lists.map(fitHeld).join("|");
   // The counts last worked out, put on a Brief drawn afresh before it is compared with the one
   // on screen (patch): without them the two never matched, and every live update, and the
   // minute's redraw, tore the whole Brief down and built it again, which a phone scrolling
@@ -5007,20 +5073,26 @@
   function fitHide(li, v) { if (li.hidden !== v) li.hidden = v; }
   // How much of the window a Brief must already fill to be stretched to its foot.
   const FILL_SHARE = 0.75;
-  function fitBrief() {
+  // The compact Brief (the numbers a line under the greeting): a short window always, and any
+  // window where the whole Brief does not fit without it (fitBrief decides; app.css).
+  function briefShort(v) { const r = document.documentElement; if (r.classList.contains("brief-short") !== !!v) r.classList.toggle("brief-short", !!v); }
+  function fitBrief(forceShort) {
     const grid = document.querySelector("#main .brief-grid");
-    if (!grid) return;
+    if (!grid) { briefShort(false); return; }
     const lists = [...grid.querySelectorAll("[data-fit]")];
     const fit = fitOf;
     const name = fitName;
     const key = fitKey(lists);
     if (fitMemo.key === key && fitMemo.counts) {
+      briefShort(fitMemo.short);
       for (const l of lists) { const n = fitMemo.counts[name(l)]; const {base} = fit(l); [...l.children].forEach((li, i) => { fitHide(li, i >= (n === undefined ? base : n)); }); }
       fitFill(grid, fitMemo.fill || "");
       fitMore(lists);
       return;
     }
-    const remember = () => { fitMemo = {key, fill: grid.style.height, counts: Object.fromEntries(lists.map((l) => [name(l), [...l.children].filter((li) => !li.hidden).length]))}; };
+    const short = window.innerWidth >= 960 && (forceShort === true || window.innerHeight <= 660);
+    briefShort(short);
+    const remember = () => { fitMemo = {key, short, fill: grid.style.height, counts: Object.fromEntries(lists.map((l) => [name(l), [...l.children].filter((li) => !li.hidden).length]))}; };
     for (const l of lists) { const {base} = fit(l); [...l.children].forEach((li, i) => { fitHide(li, i >= base); }); }
     fitFill(grid, "");
     if (window.innerWidth < 760 || getComputedStyle(grid).gridTemplateColumns.split(" ").length < 2) { remember(); return; }
@@ -5030,7 +5102,8 @@
     // fills the rest, its rows sharing the height; the lists grow into it and give way below.
     const one = getComputedStyle(grid).gridTemplateColumns.split(" ").length >= 12;
     const shellEl = document.getElementById("shell") || document.body;
-    const tail = Math.max(0, shellEl.getBoundingClientRect().bottom - grid.getBoundingClientRect().bottom);
+    const sp = screenPerPx();
+    const tail = Math.max(0, shellEl.getBoundingClientRect().bottom - grid.getBoundingClientRect().bottom) * sp;
     const shown = (l) => [...l.children].filter((li) => !li.hidden);
     // Grow: one more at a time, kept only while its panel neither grows the row nor overflows.
     for (const l of lists) {
@@ -5054,7 +5127,7 @@
     const room = one ? window.innerHeight - tail : window.innerHeight - 64;
     // The lowest panel, not the grid's own box: a grid given its height keeps it while a row
     // that has grown runs out of it.
-    const bottom = () => Math.max(grid.getBoundingClientRect().bottom, ...[...grid.children].map((p) => p.getBoundingClientRect().bottom)) + (one ? window.scrollY : 0);
+    const bottom = () => screenY(Math.max(grid.getBoundingClientRect().bottom, ...[...grid.children].map((p) => p.getBoundingClientRect().bottom))) + (one ? window.scrollY : 0);
     // Each list first gives way to its fewest; on a laptop, past that, to one, so the window
     // holds the whole Brief rather than scrolling (every list's "All" opens the rest).
     for (const floor of one ? [(l) => Math.max(1, fit(l).min), (l) => Math.min(1, fit(l).min)] : [(l) => Math.max(1, fit(l).min)])
@@ -5079,7 +5152,7 @@
     // PANELS?").
     if (one) {
       const z = parseFloat(document.body.style.zoom) || 1;
-      const top = grid.getBoundingClientRect().top + window.scrollY;
+      const top = screenY(grid.getBoundingClientRect().top) + window.scrollY;
       const tall = room - top;
       if (bottom() <= room + 1 && bottom() - top >= FILL_SHARE * tall) fitFill(grid, Math.max(0, Math.floor((room - top - 2) / z)) + "px");
       for (const l of lists) {
@@ -5090,6 +5163,13 @@
           if (bottom() > room + 1 || panel.scrollHeight > panel.clientHeight + 1) { li.hidden = true; break; }
         }
       }
+      // Still past the window with Your progress as a panel, which cannot give way: the compact
+      // Brief, its numbers a line under the greeting, fitted again from the start.
+      if (!short && bottom() > room + 1 && grid.querySelector(":scope > .bp-numbers")) { fitBrief(true); return; }
+      // The last few px the sums above cannot see (rounding under the zoom, a window inside
+      // the Claude app): what still scrolls comes off the stretched rows.
+      const over = Math.ceil((document.scrollingElement || document.documentElement).scrollHeight - window.innerHeight);
+      if (over > 0 && over <= 48 && grid.style.height) fitFill(grid, Math.max(0, parseFloat(grid.style.height) - Math.ceil(over / z)) + "px");
     }
     remember();
     fitMore(lists);
@@ -5516,10 +5596,14 @@
       h("a", {href: "#jobs/" + id, class: "bp-text bp-link", "data-k": "bp-job:" + id, onclick: (e) => { e.preventDefault(); go("jobs", {focus: true, item: id}); }},
         h("strong", {}, txt(title)), h("span", {class: "bp-at"}, txt(company))),
       score != null ? h("span", {class: "bp-score tone-" + (txt(band) || "plain"), title: SCORE_MEANS}, String(score)) : null);
-    put(grid, briefPanel("jobs", "Jobs", [sendLine, best.length ? h("ul", {class: "plain bp-list", "data-fit": "2,3,2"}, best.slice(0, 5).map((r) => jobLi(r.id, r.title, r.company, r.score, r.band)))
-      : readyRows.length ? h("ul", {class: "plain bp-list", "data-fit": "2,3,2"}, readyRows.slice(0, 5).map(({a, j}) => jobLi(a.id, a.role || a.title, a.company, j && j.score != null ? j.score : null, j ? j.band : null)))
+    // Up to eight, as many as the panel has room for at their own spacing (fitBrief): five at
+    // most left half of a tall panel empty (the maintainer, 2026-11-06: "list a couple more,
+    // but dont cramp them"); "All N" opens the rest on Jobs.
+    const JOBS_MAX = 8;
+    put(grid, briefPanel("jobs", "Jobs", [sendLine, best.length ? h("ul", {class: "plain bp-list", "data-fit": "2,3,2"}, best.slice(0, JOBS_MAX).map((r) => jobLi(r.id, r.title, r.company, r.score, r.band)))
+      : readyRows.length ? h("ul", {class: "plain bp-list", "data-fit": "2,3,2"}, readyRows.slice(0, JOBS_MAX).map(({a, j}) => jobLi(a.id, a.role || a.title, a.company, j && j.score != null ? j.score : null, j ? j.band : null)))
       : searching ? h("p", {class: "muted"}, "Searching now.") : toSend ? null : h("p", {class: "muted"}, "Nothing new to look at.")],
-      [best.length ? navLink("jobs", "All " + best.length + " new") : null,
+      [best.length ? navLink("jobs", "All " + best.length + " new") : readyRows.length > 1 ? navLink("drafts", "All " + readyRows.length + " drafts") : null,
         !searching ? h("button", {type: "button", class: "btn link", "data-k": "bp-search", onclick: () => askSearch()}, "Find jobs") : null],
       {icon: "jobs", w: 3, ws: 4}));
     // News that matters to the search, in points (the maintainer, 2026-10-31).
@@ -5531,7 +5615,7 @@
       // Two quiet lines: the news, then what to do with it and where it is from, in grey
       // with no underline or bold (the maintainer, 2026-11-02: "weird lines and underlines and
       // bold spammed").
-      const src = txt(it.url) ? inlineMd("[" + txt(it.src).replace(/[\[\]]/g, "") + (txt(it.date) ? ", " + fmtDayMonth(txt(it.date)) : "") + "](" + txt(it.url) + ")") : null;
+      const src = txt(it.url) ? inlineMd("[" + (txt(it.src).replace(/[\[\]]/g, "") || "source") + (txt(it.date) ? ", " + fmtDayMonth(txt(it.date)) : "") + "](" + txt(it.url) + ")") : null;
       return h("li", {}, h("span", {class: "bp-text"}, inlineMd(shortLinks(txt(it.what)))),
         txt(it.use) || src ? h("span", {class: "bp-meta"}, txt(it.use) ? h("span", {class: "bp-use"}, inlineMd(txt(it.use).replace(/\.$/, ""))) : null,
           txt(it.use) && src ? " \u00b7 " : null, src ? h("span", {class: "bp-src"}, src) : null) : null);
@@ -5539,7 +5623,11 @@
     // As many points as the window has room for, like every list on the Brief: all of them on
     // a phone, and on a wider screen down to three only when the Brief would run past the
     // bottom (fitBrief; the maintainer, 2026-11-03: "news is dynamic like the rest?").
-    if (news.length) put(grid, briefPanel("news", "News", h("ul", {class: "bp-lead-list bp-news", "data-fit": "3," + Math.min(news.length, 5) + ",1"}, news.slice(0, 5).map(newsPoint)),
+    // At most as many as the person chose under Edit the brief (News items, 3 unless they
+    // chose otherwise): five long points read as a wall of text (the maintainer, 2026-11-06).
+    const newsMax = b.news_max === undefined || b.news_max === null ? 3 : Math.max(0, Math.min(5, Number(b.news_max) || 0));
+    const newsShown = news.slice(0, newsMax);
+    if (newsShown.length) put(grid, briefPanel("news", "News", h("ul", {class: "bp-lead-list bp-news", "data-fit": Math.min(3, newsShown.length) + "," + newsShown.length + ",1"}, newsShown.map(newsPoint)),
       // What the window had no room for opens in place: News has no screen of its own.
       [h("button", {type: "button", class: "btn link", "data-k": "bp-news-more", "data-fit-more": "news", hidden: true, onclick: (e) => fitOpenFrom(e.currentTarget)}, ""),
         newsAsOf(b.news_date || b.date, b.news_searched)],
@@ -5552,8 +5640,17 @@
     // A share needs enough applications to mean something: "100% of applied" from one read as
     // a boast (the walk-through, 2026-11-03).
     const SHARE_FROM = 5;
-    const tile = (k, one, many, share) => { const v = Number(c[k]) || 0; return h("div", {class: "bp-stat"}, h("span", {class: "bp-n"}, String(v)), h("span", {class: "bp-l"}, v === 1 ? one : many),
-      share && sent >= SHARE_FROM && v ? h("span", {class: "bp-share"}, Math.round((v / sent) * 100) + "% of applied") : null); };
+    // Each number opens where those things are (the maintainer, 2026-11-06: "applied went to
+    // jobs page applied, contacts went to contacts, interviews went to interviews part of
+    // coming up"): applications and offers on Jobs' Applied tab, replies in Contacts, interviews
+    // in Coming up's Interviews. A nought opens nothing.
+    const TILE_TO = {applied: ["jobs", () => setPref("jobs:tab", "applied")], offers: ["jobs", () => setPref("jobs:tab", "applied")],
+      replies: ["contacts", null], interviews: ["interviews", () => setPref("up:view", "interviews")]};
+    const tile = (k, one, many, share) => { const v = Number(c[k]) || 0; const to = v ? TILE_TO[k] : null;
+      const parts = [h("span", {class: "bp-n"}, String(v)), h("span", {class: "bp-l"}, v === 1 ? one : many),
+        share && sent >= SHARE_FROM && v ? h("span", {class: "bp-share"}, Math.round((v / sent) * 100) + "% of applied") : null];
+      return to ? h("a", {href: "#" + to[0], class: "bp-stat bp-link", "data-k": "bp-stat:" + k, onclick: (e) => { e.preventDefault(); if (to[1]) to[1](); go(to[0], {focus: true}); }}, parts)
+        : h("div", {class: "bp-stat"}, parts); };
     // The panel's title says what its numbers cover; with the weeks' chart under them it is
     // "Your progress", the numbers' own days said over them ("Your last 30 days" sat over an
     // eight-week chart, the walk-through, 2026-11-03).
@@ -5858,7 +5955,12 @@
     }
     // Drafts first: one needing your answer or a fix, then those ready to send, then one being
     // written, then the finds by the sort chosen.
-    const stage = (r) => { const d = listDraft(r); if (d) return readyLive(d) ? (readyQuestions(d).length || alertsOf(d).some((x) => x.kind === "checks") ? 0 : 1) : 2; const st = jobStatus(r); return st === "asking" ? 0 : st === "drafting" ? 3 : 4; };
+    const stageNow = (r) => { const d = listDraft(r); if (d) return readyLive(d) ? (readyQuestions(d).length || alertsOf(d).some((x) => x.kind === "checks") ? 0 : 1) : 2; const st = jobStatus(r); return st === "asking" ? 0 : st === "drafting" ? 3 : 4; };
+    // A card keeps the place it had when Jobs was opened, for as long as the person stays: a
+    // job tapped Draft this jumped to the top among the drafts, and had to be found again (the
+    // maintainer, 2026-11-06). The next visit to Jobs draws each in its stage.
+    const held = S.jobsHeld || (S.jobsHeld = new Map());
+    const stage = (r) => { const k = txt(r.id); if (!held.has(k)) held.set(k, stageNow(r)); return held.get(k); };
     const bySort = jobSort();
     const lo = {items: inThis, name: "jobs", one: "job", many: "jobs", chips: tab === "dismissed" ? [] : jobChips(), sort: (a, b) => (stage(a) - stage(b)) || bySort(a, b),
 
@@ -6437,10 +6539,16 @@
   // Every message to one person carries one id (msg-<contact>), so a tap on the last one was
   // read against the next: "I sent it" on a check-in hid the reply drafted after it and said
   // "Message sent" (2026-11-05). A tap counts only for the version it was made on.
+  // A tap that kept no version (made before taps kept one, or sent on by an older page) is read
+  // by its words: "I sent it" with other words than this draft's was for an earlier message,
+  // and counted against every later one to that person for good.
+  const sameWords = (a, b) => txt(a).replace(/\s+/g, " ").trim() === txt(b).replace(/\s+/g, " ").trim();
   function msgStatus(m) {
     const e = effective(m.id, ["msg.sent", "msg.skip"]);
     if (!e) return "to_send";
     if (txt(e.doc.rev_seen) && txt(m.rev) && txt(e.doc.rev_seen) !== txt(m.rev)) return "to_send";
+    const said = txt(obj(e.doc.value).text);
+    if (!txt(e.doc.rev_seen) && e.doc.action === "msg.sent" && said && !sameWords(said, msgParts(m).body) && !sameWords(said, m.text)) return "to_send";
     return e.doc.action === "msg.sent" ? "sent" : "skipped";
   }
   // A message already drafted is shown, never drafted again: "Draft the follow-up" queued new
@@ -6809,11 +6917,14 @@
           btn("Ask Claude", () => askClaude(askField.value), {kind: "primary", lead: true, small: true, key: "pengo:" + m.id, aria: "Ask Claude to change the " + what + " to " + name, wakes: true}),
           costEl({state: WORK_COST.tweak === undefined ? 1 : WORK_COST.tweak}, "tweak", "cost-pen-" + seg(m.id)),
           // A word or two changed by hand: the words themselves become the field, free.
-          btn(editing ? "Done editing" : "Edit the words yourself", () => { if (S.penEdit.has(m.id)) S.penEdit.delete(m.id); else S.penEdit.add(m.id); scheduleRender(); },
+          btn(editing ? "Done editing" : "Edit the words yourself", () => { if (S.penEdit.has(m.id)) { S.penEdit.delete(m.id); S.penBefore.delete(m.id); } else { S.penEdit.add(m.id); S.penBefore.set(m.id, draftGet(penKey)); } scheduleRender(); },
             {kind: "secondary", small: true, key: "penedit:" + m.id, aria: (editing ? "Done editing the " : "Edit the words of the ") + what + " to " + name, pressed: editing}),
           // Closed without asking anything: what was typed in the box waits for next time
           // (the maintainer, 2026-11-05: "i cant see a way to close that").
-          btn("Cancel", () => { S.penOpen.delete(m.id); S.penEdit.delete(m.id); scheduleRender(); },
+          // Cancel undoes what was typed into the words since Edit the words yourself (the
+          // maintainer, 2026-11-06: "when i ... change/delete the words, and then cancel, it
+          // still shows the edits i made"); Done editing keeps them.
+          btn("Cancel", () => { if (S.penBefore.has(m.id)) { draftSet(penKey, S.penBefore.get(m.id)); S.penBefore.delete(m.id); } S.penOpen.delete(m.id); S.penEdit.delete(m.id); scheduleRender(); },
             {kind: "secondary", small: true, key: "penx:" + m.id, aria: "Close the box: no change to the " + what + " to " + name}))) : null,
       held ? h("p", {class: "small hint-line msg-check msg-held", "data-k": "held:" + m.id}, "Not ready to send: " + lc1(held) + ".") : null,
       sendsLine(m),
@@ -7216,16 +7327,24 @@
   // and Cancel, and nothing for anything else). It only opens the box, so it carries no
   // gauge: the box's Ask Claude does.
   function elseChoice(kind, id) {
-    return {label: "Something else", key: "else", after: () => openCardAsk(kind, id)};
+    // The To do card the trash was tapped on, if any: its box opens under that card.
+    const t = S.lastTap && S.lastTap.closest ? S.lastTap.closest("[data-todo]") : null;
+    const todo = t && S.section === "todo" ? t.getAttribute("data-todo") : null;
+    return {label: "Something else", key: "else", after: () => openCardAsk(kind, id, todo)};
+  }
+  function askLabel(kind, id) {
+    if (kind === "person") { const p = personById(txt(id)); if (p) return whoAt(txt(p.first_name), txt(p.employer)); }
+    return "this";
   }
   // Opens a card's box where the card is: here when this screen draws it (a job in Jobs, an
   // interview in To do), else on the card's own place (a person's box is in Contacts).
-  function openCardAsk(kind, id) {
+  function openCardAsk(kind, id, todo) {
     const th = cardThread(kind, id);
     const key = "ct-text:" + th;
     S.cardAsk.add(th);
     sset("local", "ljs:ct-hide:" + th, null);
     S.focusAfter = {key};
+    if (todo && S.section === "todo") S.askHere = {card: todo, kind, id: txt(id)};
     render();
     if (refocus(document, key) || !CARD_HOME[kind]) return;
     go(CARD_HOME[kind], {focus: false, item: txt(id)});
@@ -8361,7 +8480,30 @@
     return arr(obj(M().tweaks).rows).filter((r) => arr(r.outputs).includes(out) && !r.page_only && txt(r.control) !== "per-bullet"
       && (arr(r.values).length || txt(r.control) === "text"));
   }
+  // A resume that carries its bullets (the general resume, model.resume.bullets) is given a
+  // Bullets row first: each bullet a choice, the ones ticked swapped for another true one from
+  // the same job (the engine's R6, code only). The person could not choose them (the
+  // maintainer, 2026-11-06).
+  const BULLET_WORDS = 70;
+  function bulletLabel(b) {
+    const t = txt(b.text).replace(/\s+/g, " ").trim();
+    if (t.length <= BULLET_WORDS) return t;
+    const cut = t.slice(0, BULLET_WORDS);
+    return cut.slice(0, Math.max(cut.lastIndexOf(" "), 40)) + "...";
+  }
+  function bulletRow(output, item) {
+    const bs = output === "resume" ? arr(obj(item).bullets).filter((b) => b && txt(b.id)) : [];
+    if (!bs.length) return null;
+    return {p: "R6", label: "Bullets", multi: true, state: 1, engine: true, bullets: true,
+      values: bs.map((b) => ({v: txt(b.id), label: bulletLabel(b), state: 1})),
+      hint: "Tick any to swap it for another true one from the same job. Nothing is invented."};
+  }
   function tweakRows(output, item) {
+    const row = bulletRow(output, item);
+    const rows = tweakRowsOf(output, item);
+    return row ? [row].concat(rows.filter((r) => r.p !== "R6")) : rows;
+  }
+  function tweakRowsOf(output, item) {
     const spec = TWEAK[output];
     const fromItem = arr(obj(obj(item).tweaks).rows);
     const recOf = (p, fallback) => {
@@ -8563,7 +8705,8 @@
       apply.disabled = !st.changes.length && !st.text;
       when.hidden = !chat;
       when.replaceChildren(nowBtn(true, "Start now"), nowBtn(false, "With your next chat"));
-      const keepable = st.changes.filter((c) => !c.page && c.p !== "near");
+      // Which bullets is this resume's own, never a usual for every one.
+      const keepable = st.changes.filter((c) => !c.page && c.p !== "near" && c.p !== "R6");
       keepBox.disabled = !keepable.length && !st.text;
       keepRead.hidden = !st.keep;
       scope.hidden = !st.keep || !item.company || spec.search;
@@ -8673,7 +8816,7 @@
       const cost = tweakCost({changes: chat, text: st.text, spec: st.spec});
       const shape = {target: target.id, changes: chat.map((c) => [c.p, c.v]), text: st.text};
       const args = {v: 1, target, changes: chat.map((c) => ({p: c.p, v: c.v})), text: st.text || null,
-        keep: st.keep ? {scope: st.scope === "employer" && target.company ? "employer:" + target.company : "all", params: chat.filter((c) => c.p !== "near").map((c) => c.p)} : null,
+        keep: st.keep ? {scope: st.scope === "employer" && target.company ? "employer:" + target.company : "all", params: chat.filter((c) => c.p !== "near" && c.p !== "R6").map((c) => c.p)} : null,
         cost: {state: cost.state, writes: cost.writes, est_s: cost.est_s}};
       const est = Math.max(30, cost.est_s);
       const scale = est / stageSeconds(st.spec.search ? "search" : "tweak");
@@ -8694,10 +8837,10 @@
   function hintSeen() { return !!obj(M().hints).tweak || pref("hint:tweak", "") === "seen"; }
   function tweakButton(output, item, label) {
     if (!TWEAK[output]) return null;
-    const live = output === "resume" || output === "letter" ? readyLive(item) : output === "message" ? msgLive(item) : true;
+    const live = item.general ? true : output === "resume" || output === "letter" ? readyLive(item) : output === "message" ? msgLive(item) : true;
     if (!live) return null;
     // The visible words are the start of the name, and the item ends it (WCAG 2.5.3).
-    const whose = output === "message" ? whoAt(item.first_name, item.employer) : txt(item.company);
+    const whose = output === "message" ? whoAt(item.first_name, item.employer) : item.general ? "your " + noun() : txt(item.company);
     const b = btn([icon("tweak"), h("span", {}, label || "Edit"), whose ? h("span", {class: "sr-only"}, ": " + whose) : null], () => openTweak(output, item),
       {small: true, kind: "secondary", key: "tweak:" + output + ":" + txt(item.id || output)});
     b.setAttribute("title", "Change how this looks or reads");
@@ -8796,6 +8939,9 @@
       const said = o.done ? o.done(w) : "Done.";
       return box("tone-ok", said || [h("span", {class: "spin", "aria-hidden": "true"}), " Finished: putting it on your page."]);
     }
+    // Left out: the job is not one they can take, said as its reason, never as a failure with
+    // Try again (the maintainer, 2026-11-06: Try again drafted a job already ruled out).
+    if (st === "stopped" && leftOut(w)) return box("", "Not drafted: " + lc1(leftOut(w)).replace(/\.?$/, "."));
     if (st === "stopped") {
       // Called off before Claude began: it is gone at once, as nothing was done.
       if (!w.claimed_at && !w.stage_at) return null;
@@ -10721,12 +10867,15 @@
     const getLabel = r.stale ? "Get this one anyway" : "Get it";
     const get = breaks.length ? null : file.asset ? btn(r.stale ? getLabel : "Get it", () => getFiles({id: txt(r.id) || "resume-general", company: ""}, [file]), {kind: r.stale ? "quiet" : "primary", small: true, key: "gen-get"}) :
       g.kind ? btn(r.stale ? getLabel : "Get it", () => requestWork([{id: "files~" + seg(txt(r.id) || "resume"), kind: txt(g.kind), title: "Your " + noun() + ", ready to download", args: Object.assign({files: [file.name]}, obj(g.args)), redo: true}]), {kind: r.stale ? "quiet" : "primary", small: true, key: "gen-ready"}) : null;
+    // Its pencil, where its draft is kept: the Tweak panel changes its bullets, its look and its
+    // summary, as a resume made for a posting (DESIGN.md, "Cards and lists").
+    const pencil = !breaks.length && arr(r.bullets).length ? tweakIcon("resume", {id: txt(r.id), rev: r.rev, bullets: arr(r.bullets), general: true, company: ""}) : null;
     return card("article", {class: "card app quiet-card", "aria-labelledby": "gen-resume", "data-item": txt(r.id) || "resume-general"},
       h("div", {class: "job-top"}, h("h3", {id: "gen-resume", class: "card-title"}, "Your " + noun()), breaks.length ? stateWord("Not to send", "bad") : r.stale ? stateWord("Out of date", "warn") : null),
       h("p", {class: "meta"}, breaks.length ? "This one breaks your own rules: " + breaks.join("; ") + ". Make a fresh one to send." :
         "The one to send when a job doesn't need its own." + (r.made_on ? " Made " + fmtDay(r.made_on) + "." : "") +
         (r.stale ? " Your profile has changed since, so make a fresh one." : "")),
-      h("div", {class: "card-actions"}, r.stale || breaks.length ? [fresh(true), get] : get,
+      h("div", {class: "card-actions"}, r.stale || breaks.length ? [fresh(true), get] : get, pencil,
         r.stale || breaks.length ? null : more("resume-general", "your " + noun(), [h("p", {class: "cost"}, costNode(costLine(txt(w.kind) || "general_resume"))), h("div", {class: "more-acts"}, fresh(false))])),
       r.stale || breaks.length ? h("p", {class: "cost"}, costNode(costLine(txt(w.kind) || "general_resume"))) : null,
       noteFor("dl:" + (txt(r.id) || "resume-general")));
@@ -11389,7 +11538,7 @@
     if (txt(ri.setting) === "paste") return "off";
     if (readingPaused()) return "paused";
     if (S.reading.ok) return "ready";
-    if (S.reading.signedOut || S.reading.panel === "sign_in" || S.reading.panel === "check") return "sign_in";
+    if (S.reading.signedOut || S.reading.liCheck || S.reading.panel === "sign_in" || S.reading.panel === "check") return "sign_in";
     const fresh = ri.ok === true && ri.page_reads === true;
     if (S.reading.here === true) return fresh ? "ready" : "sign_in";
     if (fresh) return "ready";
@@ -11421,10 +11570,45 @@
   // rather than opening another each time (2026-10-30: "it opens an actual tab ... which i
   // have to close").
   const READING_TAB = "ljs:reading-tab";
-  function rememberTab(t) { S.reading.tab = t; sset("local", READING_TAB, t === undefined ? null : JSON.stringify(t)); }
+  // Kept in the search's own store too, so an opening whose storage the Claude app hands back
+  // empty still has its tab, and never falls back to the one the person is looking at.
+  const READING_TAB_DOC = "meta/reading-tab";
+  function rememberTab(t) {
+    S.reading.tab = t;
+    sset("local", READING_TAB, t === undefined ? null : JSON.stringify(t));
+    const db = S.caps.db;
+    if (db) { try { db.doc(READING_TAB_DOC).set({tab: t === undefined ? null : t, at: iso()}).catch(() => {}); } catch (e) { /* this device keeps it */ } }
+  }
   function keptTab() {
     if (S.reading.tab === undefined) { try { const t = JSON.parse(sget("local", READING_TAB) || "null"); if (t !== null) S.reading.tab = t; } catch (e) { /* none kept */ } }
     return S.reading.tab;
+  }
+  async function loadTab() {
+    if (keptTab() !== undefined || S.reading.tabLooked) return keptTab();
+    S.reading.tabLooked = true;
+    const db = S.caps.db;
+    if (db) {
+      try {
+        const d = await within(db.doc(READING_TAB_DOC).get(), CAP_WAIT_MS);
+        const t = d && d !== "timeout" && d.exists ? obj(d.data()).tab : null;
+        if (t !== null && t !== undefined) S.reading.tab = t;
+      } catch (e) { /* none kept */ }
+    }
+    return keptTab();
+  }
+  // Profile reading never puts a page in front of the person (the maintainer, 2026-11-06: "the
+  // browser opened to some random dudes page"). A call with no tab goes to the tab the person
+  // is on (Anthropic's built-in-browser skill: omitting tabId targets the active tab), so every
+  // read and every look goes to the one tab this page opened for itself, and only a tap opens
+  // that tab. With none kept, nothing is loaded by itself: the card says what one tap does.
+  const LI_FEED = "https://www.linkedin.com/feed/";
+  async function ensureTab(cap, tapped) {
+    if ((await loadTab()) !== undefined) return true;
+    if (!tapped) { S.reading.needTab = true; return false; }
+    // browserCall keeps the tab preview_start names.
+    try { await browserCall(cap, "preview_start", {url: LI_FEED}); } catch (e) { readingRefused(e); return false; }
+    S.reading.needTab = keptTab() === undefined;
+    return !S.reading.needTab;
   }
   // The tab a call answered with (preview_start opens one and names it), or undefined.
   function tabOf(got) {
@@ -11436,7 +11620,8 @@
   // whichever tab the person is on.
   const BROWSER_CALL_MS = 90000;
   async function browserCall(cap, tool, want, own) {
-    keptTab();
+    // `own`: this page's own tab, or no call at all, never the person's (ensureTab).
+    if (own && keptTab() === undefined && tool !== "preview_start") throw Object.assign(new Error("no tab of its own"), {code: "no_tab"});
     S.reading.schemas = S.reading.schemas || {};
     if (!S.reading.schemas[tool]) {
       try { S.reading.schemas[tool] = obj(obj(await cap.describeTool(BROWSER, tool)).inputSchema); } catch (e) { S.reading.schemas[tool] = {}; }
@@ -11577,26 +11762,26 @@
         // again. The panel says how to sign in, and the tab this page keeps is read as it
         // stands: signed in there since, that is the check.
         S.reading.signedOut = true;
-        S.reading.panel = "sign_in";
-        await openReading(true, true);
+        await openReading(true, true, true);
       }
       else if (readingOkHere()) { S.reading.ok = true; scheduleRender(); }
       else {
         // Never LinkedIn loaded by itself again today after a look or a read that was cut short
         // (Claude's browser closed, the page left): then the kept tab only, as it stands.
         const rec = await autoReadsToday();
-        if (rec.running || rec.cut) await openReading(true, true);
+        if (autoHeld(rec)) await openReading(true, true, true);
         else {
-          keepAutoReads(Object.assign({}, rec, {running: true, at: iso()}));
-          await openReading(true);
-          const failed = S.reading.ok !== true && S.reading.panel !== "sign_in" && S.reading.panel !== "check";
+          keepAutoReads(Object.assign({}, rec, {running: true, cut: false, at: iso()}));
+          await openReading(true, false, true);
+          const failed = S.reading.ok !== true && !S.reading.signedOut && !S.reading.liCheck && !S.reading.needTab;
           keepAutoReads(Object.assign({}, obj(S.autoReads), {running: false, cut: !!obj(S.autoReads).cut || failed}));
         }
       }
     }
     await maybeAutoRead();
   }
-  function waitingReads() { return arr(readingInfo().queue).filter((q) => !effective(txt(q.id), ["reading.done"])); }
+  // Someone dropped or closed on this page is never read, before a chat has caught up.
+  function waitingReads() { return arr(readingInfo().queue).filter((q) => !effective(txt(q.id), ["reading.done"]) && !personClosedHere(personById(txt(q.contact)) || {id: txt(q.contact)})); }
   // Someone queued whose read was tried today, from any opening (their reading.done in the
   // store, whatever the engine made of it): read again tomorrow, or at the person's own tap.
   // Their profile opened in Claude's browser at every switch back to the page (2026-11-04).
@@ -11609,7 +11794,7 @@
   async function maybeAutoRead() {
     if (!S.owner || S.reading.busy || S.reading.here !== true || readingState() !== "ready") return;
     const rec = await autoReadsToday();
-    if (rec.running || rec.cut || S.reading.busy) return;
+    if (autoHeld(rec) || S.reading.busy) return;
     const fresh = waitingReads().filter((q) => !S.reading.tried.has(txt(q.id)) && !readToday(q));
     if (fresh.length) readProfiles(fresh, "reading", true).catch(() => {});
   }
@@ -11624,6 +11809,16 @@
   // its check) is not cut short: its own panel says what to do, and it reads again after.
   const AUTO_READS = "meta/reads";
   const AUTO_READS_LOCAL = "ljs:auto-reads";
+  // A run cut short, or left running by an opening that went, holds the automatic reads for two
+  // hours, then they try again by themselves in the page's own tab (never left waiting on the
+  // person, 2026-11-06); the hold ends at midnight too, as before.
+  const AUTO_RETRY_MS = 2 * 3600000;
+  function autoHeld(rec) {
+    rec = obj(rec);
+    if (!rec.running && !rec.cut) return false;
+    const at = tms(rec.at);
+    return at === null || now() - at < AUTO_RETRY_MS;
+  }
   async function autoReadsToday() {
     let rec = S.autoReads;
     const db = S.caps.db;
@@ -11656,7 +11851,11 @@
   function readingRefused(e) {
     const code = txt(obj(e).code);
     S.reading.panel = null;
-    if (code === "not_in_manifest" || code === "cancelled" || code === "approval_required" || code === "blocked_by_policy") {
+    if (code === "no_tab" || (code === "tool_error" && keptTab() === undefined)) {
+      // Its own tab was closed (or there never was one): nothing more loads by itself. The
+      // reading card says what one tap does.
+      S.reading.needTab = true;
+    } else if (code === "not_in_manifest" || code === "cancelled" || code === "approval_required" || code === "blocked_by_policy") {
       S.reading.declined = true;
       S.reading.line = "Claude's browser was not allowed here. Press Check it works to be asked again.";
     } else if (code === "server_not_connected" || code === "not_granted" || code === "capability_disabled" || code === "capability_removed" || code === "page_cannot_fill") {
@@ -11669,12 +11868,14 @@
   }
   // LinkedIn signed out or asking to check it is you: reading stops, the engine is told once
   // (a check stops the day's reads there too), and the panel says what to do.
-  function readingStopped(kind) {
+  function readingStopped(kind, auto) {
     S.reading.ok = false;
     sset("local", READING_OK, null);
     S.reading.signedOut = kind === "signin";
     S.reading.sawOut = true;
-    S.reading.panel = kind === "check" ? "check" : "sign_in";
+    S.reading.liCheck = kind === "check";
+    // Met while reading by itself: the To do card says it, never a panel over the page.
+    if (!auto) S.reading.panel = kind === "check" ? "check" : "sign_in";
     // Told once per change, and once a day, so every other opening knows (checkToday).
     if (readingInfo().ok !== false || kind === "check" || checkToday() !== "signed_out") act([{item: txt(readingInfo().id) || "linkedin-reader", action: "reader.checked", value: {ok: false, said: kind === "check" ? "LinkedIn asked to check it was them" : "signed out of LinkedIn", kind}, rev: txt(readingInfo().rev) || null}], kind === "check" ? "LinkedIn asked to check it's you" : "Signed out of LinkedIn");
   }
@@ -11687,10 +11888,10 @@
   let recheckAt = 0;
   async function recheckReading() {
     const p = S.reading.panel;
-    if (p !== "sign_in" && p !== "check") return;
+    if (p !== "sign_in" && p !== "check" && !S.reading.signedOut && !S.reading.liCheck && !S.readingOpened) return;
     if (now() - recheckAt < 10000) return;
     recheckAt = now();
-    await openReading(true, !(S.readingOpened || S.reading.sawOut));
+    await openReading(true, !(S.readingOpened || S.reading.sawOut), !(p === "sign_in" || p === "check"));
     S.reading.tried.clear();
     await maybeAutoRead();
   }
@@ -11718,6 +11919,10 @@
     const st = readingState();
     const queue = waitingReads();
     const untaken = readsUntaken();
+    // Signed out, or LinkedIn's check, met while reading by itself: this one card says so first.
+    if ((S.reading.signedOut || S.reading.liCheck) && st === "sign_in" && !readingHidden()) {
+      return {key: "reading", kind: "setup", band: "first", employer: null, tab: "contacts", counts: false, node: () => readingCard()};
+    }
     if (untaken.length && !rungFor(untaken)) {
       return {key: "reads-taken", kind: "message", band: "first", employer: null, tab: "contacts", counts: false, node: () => readsTakenCard(untaken)};
     }
@@ -11752,8 +11957,11 @@
     const desktop = st !== "desktop";
     return card("article", {class: "card todo reading", "aria-labelledby": "reading-title", "data-item": "reading-card"},
       h("div", {class: "todo-top"}, kindMark("setup"), stateWord("For networking", "info")),
-      h("p", {class: "card-title", id: "reading-title"}, "Let Claude read LinkedIn profiles for you"),
-      h("p", {}, "So each note to someone rests on what their own profile says."),
+      h("p", {class: "card-title", id: "reading-title"}, S.reading.liCheck ? "LinkedIn wants to check it's you" : S.reading.signedOut ? "You're not signed in to LinkedIn in Claude's browser" : "Let Claude read LinkedIn profiles for you"),
+      // Said once, plainly: why the notes wait and where the reading happens (2026-11-06).
+      h("p", {}, S.reading.liCheck ? "Claude reads profiles in its own browser, in the Claude app on this computer. Finish LinkedIn's check there, and reading carries on by itself." :
+        S.reading.signedOut ? "Claude reads profiles in its own browser, in the Claude app on this computer, so your notes wait until you sign in there once. Then it reads by itself." :
+        "So each note to someone rests on what their own profile says."),
       desktop ? h("ol", {class: "steps"},
         h("li", {}, "Allow this page to use Claude's browser when it asks."),
         h("li", {}, "Press Open LinkedIn and sign in there once. The page checks by itself when you come back.")) :
@@ -11768,13 +11976,16 @@
   }
   function readQueueCard(queue, st) {
     const names = queue.map((q) => txt(q.first_name)).filter(Boolean);
+    // Where and how they are read, said once: the notes they hold back wait on this card.
     const why = st === "paused" ? "LinkedIn asked Claude to slow down, so these wait until tomorrow." :
-      st === "desktop" ? "They are read next time you open this page in the Claude app on your computer." : "";
+      st === "desktop" ? "Claude reads them in its own browser in the Claude app on your computer, next time this page is open there. Their notes wait until then." :
+      S.reading.needTab ? "Claude reads them in a tab of its own in Claude's browser, out of your way. Press Read them once to open that tab; after that it reads by itself." : "";
     return card("article", {class: "card todo", "aria-labelledby": "rq-title", "data-item": "reading-queue"},
       h("div", {class: "todo-top"}, kindMark("message")),
       h("p", {class: "card-title", id: "rq-title"}, "Read " + nWord(queue.length, "profile", "profiles") + " before Claude writes"),
       names.length ? h("p", {class: "small muted"}, names.slice(0, 5).join(", ") + (names.length > 5 ? " and " + (names.length - 5) + " more" : "")) : null,
-      why ? h("p", {class: "small"}, why) :
+      why ? h("p", {class: "small"}, why) : null,
+      why && st !== "ready" ? null :
         h("div", {class: "card-actions"}, btn("Read them", () => { S.reading.tried.clear(); readProfiles(queue, "reading"); }, {kind: "primary", small: true, key: "read-them"})),
       // No computer: the card had no button and came back every week (the stranger audit,
       // X-53). Pasting works on any device, and the setting takes the queue with it.
@@ -11827,30 +12038,36 @@
   // Signed in, the card ticks itself off and the engine is told; signed out, the panel says
   // how to sign in. `lookOnly`: the kept tab alone, nothing loaded (a page opened again on a day
   // already checked, or come back to from another chat).
-  async function openReading(check, lookOnly) {
+  // `auto`: started by the page itself, so it looks only in its own tab, and a sign-out is said
+  // on one To do card rather than a panel over the page.
+  async function openReading(check, lookOnly, auto) {
     const cap = await browserCap();
     // Never a tap that does nothing: where Claude has no browser here, the card says where it does.
     if (!cap || !(await inDesktop())) { S.reading.panel = "none"; S.reading.line = "This works in the Claude app on your computer, where Claude has a browser of its own."; scheduleRender(); return; }
     if (!check) { scheduleRender(); return; }
     const was = S.reading.panel;
-    S.reading.panel = "check-run";
+    S.reading.panel = auto ? was : "check-run";
     S.reading.at = "your LinkedIn feed";
+    S.reading.checking = true;
     scheduleRender();
     try {
+      await loadTab();
       let text = await peekTab(cap);
       if (!signedInText(text)) {
-        if (lookOnly) { S.reading.panel = was; scheduleRender(); return; }
-        await browserCall(cap, "navigate", {url: "https://www.linkedin.com/feed/"});
-        text = await browserCall(cap, "get_page_text", {});
+        if (lookOnly || !(await ensureTab(cap, !auto))) { S.reading.panel = was; S.reading.checking = false; scheduleRender(); return; }
+        await browserCall(cap, "navigate", {url: LI_FEED}, true);
+        text = await browserCall(cap, "get_page_text", {}, true);
       }
       const kind = pageKind(text);
-      if (kind === "check") { readingStopped("check"); scheduleRender(); return; }
+      if (kind === "check") { readingStopped("check", auto); S.reading.checking = false; scheduleRender(); return; }
       const signedIn = signedInText(text) || (kind !== "signin" && /feed|start a post|home \| linkedin/i.test(text) && !/sign in|join now/i.test(text.slice(0, 400)));
       S.reading.ok = signedIn;
       S.reading.signedOut = !signedIn;
       if (!signedIn) S.reading.sawOut = true;
       sset("local", READING_OK, signedIn ? new Date(now() + READING_OK_MS).toISOString() : null);
-      S.reading.panel = signedIn ? null : "sign_in";
+      // Signed out at a look the page made by itself: one To do card says so (readingCard),
+      // never a panel over the page.
+      S.reading.panel = signedIn ? (auto ? was : null) : (auto ? was : "sign_in");
       S.reading.line = signedIn ? "Ready: Claude can read LinkedIn profiles here." : null;
       // Told once per change, again when the engine's record has gone stale (two weeks with
       // no read), and once a day, so every other opening knows today's look (checkToday):
@@ -11860,6 +12077,7 @@
     } catch (e) {
       readingRefused(e);
     }
+    S.reading.checking = false;
     if (S.reading.panel === "check-run") S.reading.panel = null;
     scheduleRender();
   }
@@ -11874,18 +12092,18 @@
   function pageTop(t) { const s = txt(t); const i = s.indexOf("\n---\n"); return (i >= 0 ? s.slice(i + 5) : s).split("\n").map((l) => l.trim()).filter(Boolean).slice(0, 3).join("\n"); }
   async function readOne(cap, url) {
     const base = url.replace(/[?#].*$/, "").replace(/\/+$/, "") + "/";
-    await browserCall(cap, "navigate", {url: base});
-    const first = await browserCall(cap, "get_page_text", {});
+    await browserCall(cap, "navigate", {url: base}, true);
+    const first = await browserCall(cap, "get_page_text", {}, true);
     if (pageKind(first) !== "profile") return {kind: pageKind(first)};
     const parts = [first], pages = ["profile"], tried = [];
     for (const [name, path, heading] of SECTION_PAGES) {
       tried.push(name);
-      await browserCall(cap, "navigate", {url: base + path});
-      let t = await browserCall(cap, "get_page_text", {});
+      await browserCall(cap, "navigate", {url: base + path}, true);
+      let t = await browserCall(cap, "get_page_text", {}, true);
       if (pageKind(t) !== "profile") return {kind: pageKind(t)};
       if (!heading.test(pageTop(t))) {
         await new Promise((ok) => setTimeout(ok, 1500));
-        t = await browserCall(cap, "get_page_text", {});
+        t = await browserCall(cap, "get_page_text", {}, true);
         if (pageKind(t) !== "profile") return {kind: pageKind(t)};
       }
       if (heading.test(pageTop(t))) { parts.push(t); pages.push(name); }
@@ -11902,6 +12120,8 @@
     if (!cap || !(await inDesktop())) { S.reading.panel = "none"; S.reading.line = "This works in the Claude app on your computer, where Claude has a browser of its own."; scheduleRender(); return; }
     const r = S.reading;
     if (r.busy) return;
+    // Its own tab, or nothing by itself: a tap opens one (ensureTab).
+    if (!(await ensureTab(cap, !auto))) { scheduleRender(); return; }
     r.busy = true;
     r.panel = "run";
     r.total = queue.length;
@@ -11920,7 +12140,7 @@
         let got;
         try { got = await readOne(cap, url); }
         catch (e) { readingRefused(e); cut = true; break; }
-        if (got.kind !== "profile") { readingStopped(got.kind); break; }
+        if (got.kind !== "profile") { readingStopped(got.kind, auto); break; }
         act([{item: txt(q.id), action: "reading.done", value: {text: got.text, mode: txt(q.mode) || "browser", url, pages: got.pages, tried: got.tried}, rev: txt(q.rev) || null}], "Read " + txt(q.first_name) + "'s profile");
         r.read += 1;
         r.done += 1;
@@ -12142,7 +12362,7 @@
     // Its own chat stopped on a question to the person (tools/page_db.py mark_blocked): said
     // as that, never as a job that may have stopped (the stranger audit, X-7 and X-8).
     const blocked = (st === "running" || st === "claimed") && !!txt(w.blocked_at);
-    const label = p.stopping ? "Stopping after this step" : picked ? "Starting" : st === "queued" ? (unsent ? "Not sent yet" : late ? "No answer yet" : inLine ? (place.pos === 1 ? "Next" : "In line") : ahead ? (ahead.pos === 1 ? "Next" : "In line") : waking ? (freshHeartbeat() ? "Sent" : "Waking Claude") : "Waiting for Claude") : st === "running" || st === "claimed" ? (blocked ? "Waiting for you" : slow ? "May have stopped" : null) : st === "done" && notOnPageYet(w) ? "Putting on page" : WORK_WORDS[st] || cap1(st);
+    const label = p.stopping ? "Stopping after this step" : picked ? "Starting" : st === "queued" ? (unsent ? "Not sent yet" : late ? "No answer yet" : inLine ? (place.pos === 1 ? "Next" : "Waiting its turn") : ahead ? (ahead.pos === 1 ? "Next" : "Waiting its turn") : waking ? (freshHeartbeat() ? "Sent" : "Waking Claude") : "Waiting for Claude") : st === "running" || st === "claimed" ? (blocked ? "Waiting for you" : slow ? "May have stopped" : null) : st === "done" && notOnPageYet(w) ? "Putting on page" : st === "stopped" && leftOut(w) ? "Not drafted" : WORK_WORDS[st] || cap1(st);
     const tone = p.stopping ? "held" : {done: "ok", failed: "bad", stopped: "held", needs_you: "warn"}[st] || (blocked || slow || late || unsent ? "warn" : null);
     const cur = p.stages[Math.min(p.i, p.n - 1)];
     // The newest line Claude wrote on it, from after it was asked (or answered).
@@ -12167,7 +12387,7 @@
         said ? said :
         helperStarting() ? "Claude's helper is starting up. It takes this in a minute or two." :
         inLine ? (place.pos === 1 ? "Starts as soon as one of the " + place.busy + " jobs running now is done." : plural(place.pos - 1, "job", "jobs") + " before it, once one of the " + place.busy + " running now is done.") :
-        ahead ? (ahead.pos === 1 ? "Next, after " : "In line, after ") + quoted(ahead.after) + "." :
+        ahead ? (ahead.pos === 1 ? "Next, after " : "Waiting its turn, after ") + quoted(ahead.after) + "." :
         late ? (p.sentAt ? "No answer from Claude in " + aboutMins((now() - p.sentAt) / 1000) + "." + ((S.tries.get(id) || 0) < RING_TRIES ? " It is sent again with your next tap here." : "") + (phoneNow() ? "" : " If its chat has closed, open Claude.") : "Claude has not picked this up yet.") :
         // One short state, said once: the card's chip is not drawn beside it (workCard), and
         // its clock follows ("Waking Claude · 1m 4s"; the maintainer, 2026-11-05).
@@ -12220,7 +12440,8 @@
     let now1 = ws.now1;
     if (st === "running" || st === "claimed" || picked || st === "queued") {
       // said by workSay
-    } else if (st === "stopped") now1 = "Stopped. Anything already saved is kept.";
+    } else if (st === "stopped" && leftOut(w)) now1 = "Not drafted: " + lc1(leftOut(w)).replace(/\.?$/, ".");
+    else if (st === "stopped") now1 = "Stopped. Anything already saved is kept.";
     else if (st === "failed") now1 = (typeof w.error === "string" ? w.error : txt(obj(w.error).plain)) || "It stopped part way. Anything already saved is kept.";
     else if (st === "needs_you") now1 = txt(obj(obj(w.needs).answer).kind) && txt(obj(obj(w.needs).answer).kind) !== "text" ? "" : txt(w.note) || "It has a question for you.";
     else if (st === "done") now1 = firstSentence(txt(obj(w.result).summary));
@@ -12293,7 +12514,7 @@
     // be reached is there a link to start a chat by hand.
     const canWake = canRing();
     const tries = Number(w.attempt) || 1;
-    if ((st === "failed" || (st === "stopped" && !w.stop_asked) || (slow && ACTIVE.has(st) && !limitHit() && !lead)) && tries < 3) {
+    if ((st === "failed" || (st === "stopped" && !w.stop_asked && !leftOut(w)) || (slow && ACTIVE.has(st) && !limitHit() && !lead)) && tries < 3) {
       put(acts, btn("Try again", () => retryWork(id), {kind: "secondary", small: true, key: "retry:" + id, aria: "Try again: " + txt(w.title), wakes: txt(w.kind)}));
     }
     // No "Ask Claude again": a ring that went unanswered goes again with the person's next
@@ -12792,12 +13013,8 @@
       const row = h("li", {class: "talk-earlier-msgs fold"}, h("span", {}, plural(from, "earlier message", "earlier messages") + ": "),
         btn("Show", more, {kind: "link", key: "talk-earlier-msgs"}));
       items.unshift(row);
-      // Scrolled to the top, the next twenty come by themselves.
-      if (window.IntersectionObserver) {
-        if (S.chatSeer) S.chatSeer.disconnect();
-        S.chatSeer = new IntersectionObserver((es) => { if (es.some((e) => e.isIntersecting) && S.chatStick === false) more(); }, {root: box || null});
-        requestAnimationFrame(() => { if (row.isConnected) S.chatSeer.observe(row); });
-      }
+      // Only Show brings earlier ones: scrolling to the top loaded twenty more by itself, and
+      // the whole history could be scrolled back to its first day (the maintainer, 2026-11-06).
     }
     if (S.sending) items.push(h("li", {class: "talk-msg pending"}, h("p", {class: "talk-text muted"}, "Adding your pictures…")));
     if (!viewing) {
@@ -12900,9 +13117,10 @@
     // the conversation's own section, where the field rests when it is not held (its inner
     // block is display: contents and has no box).
     const tabs = document.querySelector(".tabs");
-    const under = tabs && getComputedStyle(tabs).position === "fixed" && !tabs.hidden ? tabs.getBoundingClientRect().height : 0;
+    const sp = screenPerPx();
+    const under = tabs && getComputedStyle(tabs).position === "fixed" && !tabs.hidden ? tabs.getBoundingClientRect().height * sp : 0;
     const block = talkForm.closest("section") || talkForm.parentElement;
-    const want = sc.scrollTop + block.getBoundingClientRect().bottom - (window.innerHeight - under - 8);
+    const want = sc.scrollTop + screenY(block.getBoundingClientRect().bottom) - (window.innerHeight - under - 8);
     return Math.max(0, Math.min(whole, Math.round(want)));
   }
   function nearEnd(sc) { return !sc || chatEndTop(sc) - sc.scrollTop < 80; }
@@ -12927,6 +13145,7 @@
     jumpShown();
   }
   window.addEventListener("scroll", onChatScroll, {passive: true});
+  document.addEventListener("click", (e) => { S.lastTap = e.target; }, true);
   function endPractice() {
     const m = S.quick.mode;
     if (!m) return;
@@ -13458,6 +13677,28 @@
   const DOCK_BIG = "ljs:dock-big";
   let dockBig = sget("local", DOCK_BIG) === "1";
   let dockSizeBtn = null;
+  // Which side the Chat button and its panel sit on, chosen on this device (the maintainer,
+  // 2026-11-06: "one that puts it to the left side of the screen if desired, and back to the
+  // right"): the panel's own arrow and Settings > Look set the same thing.
+  const DOCK_SIDE = "ljs:dock-side";
+  let dockLeft = sget("local", DOCK_SIDE) === "left";
+  let dockSideBtn = null;
+  function dockSideSay() {
+    document.documentElement.classList.toggle("dock-left", dockLeft);
+    if (dockSideBtn) {
+      const words = dockLeft ? "Move the chat to the right" : "Move the chat to the left";
+      dockSideBtn.setAttribute("aria-label", words);
+      dockSideBtn.title = words;
+      dockSideBtn.replaceChildren(icon(dockLeft ? "to-right" : "to-left"));
+    }
+  }
+  function setDockSide(left) {
+    dockLeft = !!left;
+    sset("local", DOCK_SIDE, dockLeft ? "left" : null);
+    dockSideSay();
+    announce(dockLeft ? "Chat on the left." : "Chat on the right.");
+    scheduleRender();
+  }
   function dockSizeSay() {
     if (!dockEl) return;
     dockEl.classList.toggle("is-big", dockBig);
@@ -13485,9 +13726,12 @@
     dockEl = h("section", {class: "chat-dock", id: "chat-dock", role: "dialog", "aria-modal": "false", "aria-labelledby": "h-dock", hidden: true,
       onkeydown: (e) => { if (e.key === "Escape" && !e.defaultPrevented) { e.preventDefault(); e.stopPropagation(); closeDock(true); } }},
       h("div", {class: "dock-top"}, h("h2", {id: "h-dock", class: "dock-title", tabindex: "-1"}, "Chat"),
-        (dockSizeBtn = h("button", {type: "button", class: "btn quiet small icon-only dock-size", "data-k": "dock-size", onclick: () => toggleDockSize()})),
-        h("a", {href: "#chat", class: "btn quiet small", "data-k": "dock-full", onclick: (e) => { e.preventDefault(); openInChat(); }}, "Open in Chat"),
-        h("button", {type: "button", class: "btn quiet small", "data-k": "dock-close", "aria-label": "Close the chat panel", onclick: () => closeDock(true)}, "Close")),
+        (dockSideBtn = h("button", {type: "button", class: "btn secondary small icon-only dock-side", "data-k": "dock-side", onclick: () => setDockSide(!dockLeft)})),
+        (dockSizeBtn = h("button", {type: "button", class: "btn secondary small icon-only dock-size", "data-k": "dock-size", onclick: () => toggleDockSize()})),
+        // The page's own soft pills, as every other control beside them: two underlined words
+        // read as links, not buttons (the maintainer, 2026-11-06).
+        h("a", {href: "#chat", class: "btn secondary small", "data-k": "dock-full", onclick: (e) => { e.preventDefault(); openInChat(); }}, "Open in Chat"),
+        h("button", {type: "button", class: "btn secondary small", "data-k": "dock-close", "aria-label": "Close the chat panel", onclick: () => closeDock(true)}, "Close")),
       dockBox);
     fabEl = h("button", {type: "button", class: "chat-fab", id: "chat-fab", "data-k": "chat-fab", "aria-label": "Chat with Claude", "aria-haspopup": "dialog",
       "aria-controls": "chat-dock", "aria-expanded": "false", hidden: true, onclick: (e) => openDock({opener: e.currentTarget})},
@@ -13496,6 +13740,7 @@
     document.body.appendChild(dockEl);
     document.body.appendChild(fabEl);
     dockSizeSay();
+    dockSideSay();
   }
   // Chat opens on the end of its conversation: the newest message, the box under it. The box
   // sticks to the foot of the screen on a phone, so placing the box itself moved the page a
@@ -13564,6 +13809,7 @@
       dockBackTo = op && op.dataset && op.dataset.k ? op.dataset.k : null;
     }
     dockOpen = true;
+    S.chatBack = 0;
     sset("session", "ljs:dock", "1");
     renderDock();
     focusTalk(o.text);
@@ -13669,7 +13915,7 @@
     const cal = pick(["calendar_reminder"]).map(settingRow);
     if (cal.length) put(wrap, settingsGroup("Coming up", cal));
     // Look: how the page looks and is used here, harmless to change (the maintainer, 4.12).
-    put(wrap, settingsGroup("Look", [lookRow(), sizeRow(), touchOnly() ? null : keysRow()]));
+    put(wrap, settingsGroup("Look", [lookRow(), sizeRow(), window.innerWidth >= 760 ? sideRow() : null, touchOnly() ? null : keysRow()]));
     put(wrap, settingsGroup("LinkedIn", linkedinRows().concat(pick(["profile_reads"]).map((s) => settingRow(s, txt(settingValue(s)) === "paste" ? null : readingBody())), pick(["linkedin_plan"]).map((s) => settingRow(s)))));
     put(wrap, settingsGroup("Help", [actionRow("Show me around", () => showTour(0), "help-tour"),
       // The chat bubble, where the person is, rather than taking them away to Chat (2026-10-30).
@@ -13792,6 +14038,15 @@
           h("span", {class: "look-name", "data-size": v, style: v === "standard" ? null : "font-size:" + ratio.toFixed(3) + "em"}, label));
       })));
   }
+  // Where the Chat button and its panel sit, on this device: the panel's arrow sets the same.
+  function sideRow() {
+    const opts = [["right", "Right"], ["left", "Left"]];
+    return h("div", {class: "setting-row look-row"}, h("span", {class: "set-name", id: "side-name"}, "Chat button"),
+      h("div", {class: "segctl", role: "radiogroup", "aria-labelledby": "side-name"}, opts.map(([v, label]) => {
+        const id = "side-" + v;
+        return h("label", {class: "seg-opt look-choice", for: id}, h("input", {type: "radio", name: "dock-side", id, "data-k": id, value: v, checked: (dockLeft ? "left" : "right") === v, onchange: () => setDockSide(v === "left")}), h("span", {class: "look-name"}, label));
+      })));
+  }
   // A phone or tablet with no mouse: keyboard shortcuts are not offered there (the 3 November audit).
   function touchOnly() { try { return window.matchMedia("(hover: none) and (pointer: coarse)").matches; } catch (e) { return false; } }
   function keysRow() {
@@ -13888,7 +14143,7 @@
   }
   function navLink(id, label) {
     const r = resolveSection(id) || {section: "todo"};
-    return h("a", {href: "#" + id, class: "navlink", "data-k": "nl:" + id + ":" + label, onclick: (e) => { e.preventDefault(); if (r.work) openWork(); else go(r.section, {focus: true, drafts: r.drafts}); }}, label);
+    return h("a", {href: "#" + id, class: "navlink", "data-k": "nl:" + id + ":" + label, onclick: (e) => { e.preventDefault(); if (r.work) openWork(); else { if (r.applied) setPref("jobs:tab", "applied"); go(r.section, {focus: true, drafts: r.drafts}); } }}, label);
   }
   function parseHash() {
     let raw = (location.hash || "").replace(/^#/, "");
@@ -13929,6 +14184,8 @@
     o = o || {};
     let r = resolveSection(id) || (SECTION_IDS.has(id) ? {section: id} : null);
     if (!r) return;
+    // Leaving Jobs lets its cards take their stages again next time (renderJobs, held).
+    if (r.section !== S.section) S.jobsHeld = null;
     if (r.work) { openWork(); return; }
     // The messages to send are in Contacts now, each on its person's card (2026-11-04).
     if (o.drafts === "messages") r = {section: "contacts"};
@@ -14021,6 +14278,8 @@
     progress: "M4 20V10M10 20V4M16 20v-7M22 20H2",
     expand: "M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5",
     shrink: "M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5",
+    "to-left": "M19 12H5M11 6l-6 6 6 6",
+    "to-right": "M5 12h14M13 6l6 6-6 6",
     // A rounded gear, the shape of Lucide's "settings" (ISC License, Copyright (c) Lucide
     // Contributors): the angular one read as odd beside the rounded icons (the maintainer,
     // 2026-11-04: "settings icon looks weird").
@@ -14468,6 +14727,8 @@
   // that arrives while the person is selecting or typing in the main part.
   function render(skipMain) {
     if (S.owner !== true) return;
+    // Away from Jobs however it was left (a link, Back): its cards take their stages again.
+    if (S.section !== "jobs" && S.section !== "drafts") S.jobsHeld = null;
     const t0 = performance.now();
     try { drawPage(skipMain); } finally { if (skipMain !== true) { drawnAt = performance.now(); drawMs = drawnAt - t0; } }
   }

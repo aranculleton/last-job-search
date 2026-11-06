@@ -265,6 +265,8 @@
       // its text. A profile shows only its top card until scrolled; its Experience and
       // Education pages show everything. `slowSections` draws each of those late, once.
       const at = String(br.at || "");
+      // A tab nothing has been loaded in yet is a blank one, never a LinkedIn page.
+      if (!at) return {payload: {text: "Title: New tab\nURL: about:blank\nSource element: <main>\n---\n"}};
       const feed = /linkedin\.com\/(login|feed)/.test(at);
       const section = (/\/details\/(experience|education)\//.exec(at) || [])[1] || (/\/recent-activity\//.test(at) ? "activity" : "");
       if (!feed && !section) br.reads = (br.reads || 0) + 1;
