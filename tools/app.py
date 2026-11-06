@@ -1379,7 +1379,9 @@ def cmd_published(a) -> int:
         got = app_listen.close_republish(page_db.load(a.dump), out, now)
         if got["batches"]:
             print("app: the page no longer shows this update as waiting: send this batch "
-                  f"(ArtifactData batch, url {a.url}): " + " ".join(got["batches"]))
+                  f"(ArtifactData batch, url {a.url}):")
+            for path in got["batches"]:      # a line each: a folder name may hold a space
+                print(path)
     return 0
 
 
@@ -2016,9 +2018,12 @@ def cmd_nested(a) -> int:
     if batches:
         import app_setup
         url = app_setup.page_record().get("url") or "<the page>"
-        out.append(f"send, as one ArtifactData batch (url {url}, its entries as writes): "
-                   + " ".join(batches) + " (it tells the brief's run to start the fresh helper; "
-                   "refused: leave it, this chat's next check-in carries on as it is)")
+        # Each file on a line of its own, as wake prints them: a person's folder may hold a
+        # space (a Windows user folder named "First Last"), and a path mid-sentence then reads as two.
+        out.append(f"send, as one ArtifactData batch (url {url}, its entries as writes; it tells "
+                   "the brief's run to start the fresh helper; refused: leave it, this chat's "
+                   "next check-in carries on as it is):")
+        out += batches
     print("\n".join(out))
     return 0
 

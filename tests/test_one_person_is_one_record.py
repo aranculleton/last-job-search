@@ -9,8 +9,11 @@ on Contacts, and the one kept had no employer to show or be found by. Invented p
 """
 from __future__ import annotations
 
+import datetime
 import os
 import sys
+
+import pytest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [os.path.join(ROOT, "tools"), os.path.join(ROOT, "tools", "network"),
@@ -22,6 +25,15 @@ from test_the_message_log_says_what_happened import ME, _messages  # noqa: E402
 
 THEM = "https://www.linkedin.com/in/" + "ACoAAB9x" + "ExampleRobinVale"   # the export's member-id form, built so no scan reads it as a real handle
 NOTE = "Hi Robin, thanks for getting in touch about the analytics roles you are hiring for."
+
+
+@pytest.fixture(autouse=True)
+def _utc_clock(monkeypatch):
+    """The download's times are UTC, read on the person's own clock (export.HERE, this
+    computer's): its days here are pinned on a UTC clock, as tests/test_linkedin_export.py
+    pins them. Left on the computer's, a reply at 09:00 UTC on the 4th was the 3rd 11 hours
+    behind (4.11.0's far time zone run)."""
+    monkeypatch.setattr(export, "HERE", datetime.timezone.utc)
 
 
 def _robin(**kw):

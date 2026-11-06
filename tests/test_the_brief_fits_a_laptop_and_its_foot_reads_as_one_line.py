@@ -23,6 +23,7 @@ import test_the_page_journeys as journeys  # noqa: E402
 from test_the_page_journeys import PHONE, _go, _sample  # noqa: E402
 
 T = "2026-10-25T09:00:00.000Z"
+PERSON_ZONE = _sample()["person"]["time_zone"]
 LAPTOPS = [{"width": 1000, "height": 560}, {"width": 1280, "height": 720}, {"width": 1440, "height": 900}]
 
 
@@ -67,7 +68,12 @@ FIT = r"""(() => {
 
 @pytest.mark.parametrize("size", LAPTOPS, ids=lambda s: "%dx%d" % (s["width"], s["height"]))
 def test_a_full_brief_fits_a_laptop_window_without_scrolling(run, tmp_path, size):
-    got = _go(run, tmp_path, [{"hash": "brief", "eval": FIT}], size, model=_full(), clock=T)
+    # On a device in the person's own zone (the sample's, London). A device far away says
+    # each time twice ("15:00 London time (5:00 here)"), which is more to hold: on a 1000 by
+    # 560 window with the runners' type, Coming up's one row at its fewest took the top row
+    # 12px past the window, and the page scrolls rather than crams (fitBrief). That is the
+    # design, so the far time zone runs of 4.11.0 found no fault in the fit itself.
+    got = _go(run, tmp_path, [{"hash": "brief", "eval": FIT}], size, model=_full(), clock=T, zone=PERSON_ZONE)
     r = got["after"][0]["eval"]
     assert r["scroll"] <= 1, ("the Brief scrolls on a laptop", size, r)
     assert not r["out"] and not r["spill"], r

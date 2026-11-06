@@ -19,7 +19,9 @@ import datetime as dt
 import json
 import os
 import re
+import subprocess
 import sys
+import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [os.path.join(ROOT, "tools"), os.path.join(ROOT, "tests")]
@@ -200,20 +202,52 @@ def test_what_a_refusal_means_is_said_once_not_beside_every_batch(ring):
     assert all(len(w) < 120 or "python3 tools/app.py version" in w for w in whys), whys
 
 
-def test_a_detached_save_returns_at_once_and_the_hook_waits_for_it(landing_copy, capsys):
+@pytest.mark.parametrize("system", ["posix", "nt"])
+def test_a_detached_save_returns_at_once_and_the_hook_waits_for_it(landing_copy, capsys,
+                                                                   monkeypatch, system):
+    """Each system detaches its own way, and both are checked on every runner: a new session
+    on Linux and Mac, and on Windows, where Popen has no sessions, a process with no console
+    of its own in a group of its own (the creation flags, docs.python.org/3/library/
+    subprocess.html). The test asked for a session on Windows too, and the Windows run of
+    4.11.0 failed on it."""
     _origin, chat, _other = landing_copy
     write(chat, "profile/notes.md", "changed\n")
     assert land.save_due(str(chat), "a chat", "2026-11-05")       # unsaved: held, as before
     started = []
-    code = land.detach(str(chat), "Notes", popen=lambda *a, **k: started.append((a, k)))
+    with monkeypatch.context() as m:
+        m.setattr(os, "name", system)
+        if system == "nt":       # Windows' own values, where Linux and Mac have none
+            m.setattr(subprocess, "DETACHED_PROCESS", 0x00000008, raising=False)
+            m.setattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0x00000200, raising=False)
+        code = land.detach(str(chat), "Notes", popen=lambda *a, **k: started.append((a, k)))
     out = capsys.readouterr().out
     assert code == 0 and out.strip() == "land: saving in the background; nothing to wait for or say."
     (args,), kw = started[0]
-    assert "--run-detached" in args and kw.get("start_new_session") is True
+    assert "--run-detached" in args
+    if system == "posix":
+        assert kw.get("start_new_session") is True and "creationflags" not in kw, kw
+    else:
+        assert "start_new_session" not in kw, kw
+        assert kw["creationflags"] == 0x00000008 | 0x00000200, kw
     assert kw["stdin"] is not None and kw["stdout"] is not None    # nothing reaches the chat
     # Asked for and not finished: the hook holds no turn for it.
     assert land.wanted(str(chat))
     assert land.save_due(str(chat), "a chat", "2026-11-05") == []
+
+
+def test_a_save_asked_for_is_aged_on_the_clock_that_asked(landing_copy):
+    """The mark was aged by the file's time, the disk's clock: on a clock moved a month on (the
+    4.11.0 clock runs) a mark a second old read as stale, and the hook held the turn the
+    background save was already taking. It is aged by its own "at", as the lock is."""
+    _origin, chat, _other = landing_copy
+    p = land._mark(str(chat), land.WANTED_FILE, json.dumps({"message": "Notes", "at": time.time()}) + "\n")
+    old = time.time() - 40 * 86400
+    os.utime(p, (old, old))                        # the disk's clock, far from this one
+    assert land.wanted(str(chat))
+    land._mark(str(chat), land.WANTED_FILE, json.dumps({"message": "Notes", "at": old}) + "\n")
+    assert not land.wanted(str(chat))              # asked a month ago, never finished: stale
+    land._mark(str(chat), land.WANTED_FILE, "\n")  # no stamp: aged by the file, as before
+    assert land.wanted(str(chat))
 
 
 def test_a_detached_save_opens_and_merges_its_pull_request_itself(landing_copy, capsys):

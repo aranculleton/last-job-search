@@ -12,8 +12,8 @@
 """
 from __future__ import annotations
 
+import concurrent.futures
 import json
-import multiprocessing
 import os
 import subprocess
 import sys
@@ -68,9 +68,13 @@ def _judge_one(args):
 
 
 def test_judgements_made_at_once_are_all_kept(judged_file):
+    # Twelve processes at once, started from threads: each judgement is its own Python
+    # already, so a pool of processes only added a pool to start, and on Python 3.14 (whose
+    # multiprocessing starts its workers from a fork server on Linux) that pool died with
+    # "Broken pipe" under the test runner's own workers (4.11.0's newest-Python run).
     n = 12
-    with multiprocessing.Pool(n) as pool:
-        codes = pool.map(_judge_one, [(str(judged_file), i) for i in range(n)])
+    with concurrent.futures.ThreadPoolExecutor(n) as pool:
+        codes = list(pool.map(_judge_one, [(str(judged_file), i) for i in range(n)]))
     assert codes == [0] * n
     kept = json.loads(judged_file.read_text(encoding="utf-8"))
     assert len(kept) == n

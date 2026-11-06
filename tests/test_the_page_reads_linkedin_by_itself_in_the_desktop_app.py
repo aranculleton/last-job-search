@@ -212,7 +212,15 @@ def _profiles(calls):
     return [c["input"]["url"] for c in calls if c["tool"] == "navigate" and "/in/" in c["input"].get("url", "")]
 
 
-def test_a_read_cut_short_holds_every_automatic_read_until_tomorrow(run, queued):
+# "That day" is the person's own day (their time zone, todayIso), whatever the device's clock
+# says: the hold went by the device's own date, so a device 14 hours ahead of the person or 10
+# behind held a different day from the one the day's reads were counted on (4.11.0's far time
+# zone runs). Each is run on the device's zone and on both far ones, on every runner.
+DEVICE_ZONES = [None, "Pacific/Kiritimati", "Pacific/Honolulu"]
+
+
+@pytest.mark.parametrize("device", DEVICE_ZONES)
+def test_a_read_cut_short_holds_every_automatic_read_until_tomorrow(run, queued, device):
     """The maintainer, 2026-11-05, over several versions: back on the pinned page, "Reading
     someone's profile, 0 of 4" and their LinkedIn opened in Claude's browser, which they closed at
     once, every time. Only a finished read was remembered, so each opening started the same one
@@ -220,7 +228,7 @@ def test_a_read_cut_short_holds_every_automatic_read_until_tomorrow(run, queued)
     reads, and Read them waits on its card meanwhile."""
     html, seed = queued
     r = run("reading", html=html, seed=seed, signedIn=True, closeOnProfile=True, noStorage=True, clock=SAME_DAY,
-            again=[{"clock": LATER, "backFrom": True}, {"clock": NEXT_DAY}])
+            timezoneId=device, again=[{"clock": LATER, "backFrom": True}, {"clock": NEXT_DAY}])
     assert all(d["at"] >= NEXT_DAY[:10] for d in _did(r, "reading.done")), _did(r, "reading.done")
     assert _profiles(r["browser"]), r["browser"]
     assert _profiles(r["again0"]["browser"]) == [], r["again0"]["browser"]
@@ -228,12 +236,14 @@ def test_a_read_cut_short_holds_every_automatic_read_until_tomorrow(run, queued)
     assert _profiles(r["again1"]["browser"]), r["again1"]["browser"]
 
 
-def test_an_opening_that_went_mid_read_holds_them_and_read_them_still_reads(run, queued):
+@pytest.mark.parametrize("device", DEVICE_ZONES)
+def test_an_opening_that_went_mid_read_holds_them_and_read_them_still_reads(run, queued, device):
     """The page left while a read ran (its run never finished): the next opening that day loads
     no profile by itself, and the person's own Read them still reads at once."""
     html, seed = queued
     seed = dict(seed, **{"meta/reads": {"day": "2026-10-25", "running": True, "cut": False}})
-    r = run("reading", html=html, seed=seed, signedIn=True, clock=SAME_DAY, tap="read-them")
+    r = run("reading", html=html, seed=seed, signedIn=True, clock=SAME_DAY, tap="read-them",
+            timezoneId=device)
     assert _profiles(r["browser"]) == [], r["browser"]
     assert len(_did(r, "reading.done")) == 3 and _profiles(r["browserAll"]), r["acts"]
 
