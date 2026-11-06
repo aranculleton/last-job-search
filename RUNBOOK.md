@@ -532,9 +532,9 @@ master cannot see work sitting on another chat's branch, and builds it a second 
    `./tools/ci_local.sh --quick`, and only when that is green `git push -u origin HEAD`
    (a network failure is retried; nothing is ever forced). In the turn its ending wakes:
    - `land: ready <branch>`: make the calls it prints, each its own step:
-     `create_pull_request` (head that branch, base master); then `merge_pull_request`,
-     with `unsubscribe_pr_activity` in the same message as a separate call (a cloud chat is
-     subscribed to a pull request it opens by itself, 2026-10-30); then `python3
+     `create_pull_request` (head that branch, base master); at once `unsubscribe_pr_activity`
+     for it (a cloud chat is subscribed to a pull request it opens by itself, 2026-10-30, and
+     each save then woke it twice more, 2026-11-06); then `merge_pull_request`; then `python3
      tools/land.py --after-merge`, which starts this same branch from master again, so the
      next piece of work needs no stash and no checkout of master. **merge refused** (not
      mergeable: two chats landed at once, and GitHub's merge has no row-by-row driver): run

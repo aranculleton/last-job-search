@@ -75,6 +75,9 @@ make sense to somebody whose repo just received it.
 - **The page helper it replaced goes quietly.** Once a fresh helper answers your page, the old
   one does no more work: anything that reaches it gets one line, it finishes saving its own
   work, and then it puts itself away at once instead of waiting for the tidy-up.
+- **Saving no longer keeps Claude busy.** Saves made a few minutes apart are now taken together,
+  and each save stops GitHub telling Claude about it, so a burst of taps on your page no
+  longer makes Claude stop a dozen times to read messages about its own saves.
 
 ### Removed
 

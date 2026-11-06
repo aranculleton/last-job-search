@@ -380,8 +380,9 @@ METHODS: dict[str, dict] = {
             (78, "2026-11-05", False, "a resume made for a contact who asked for one with no role named is kept in their own folder, named for them and shown on their card, never in place of the person's own; nothing made before needs making again"),
             (79, "2026-11-06", False, "the run book says rules the app has since built in are retired once after an update, and a complaint about the app is never kept as a rule; no document changes; RUNBOOK.md says the brief asks for a new LinkedIn download once it is due by export.every_days (weekly while the person is messaging people, a fortnight otherwise, or as they chose); documents render and are checked as before; the run book says the person's own tests an update broke are brought in line by a background step while each save sets them aside; the run book says how a search limited to the employers the person names is run (run_round.py --employers)"),
             (80, "2026-11-06", False, "a new resume and letter are named the person, the employer, then the document (<Prefix>_<ABBR>_Resume, <Prefix>_<ABBR>_Cover_Letter); one made before keeps its name and every reader finds both orders; the file you download or send is named by Settings, File names; nothing made before needs making again"),
+            (81, "2026-11-06", False, "the landing steps unsubscribe from a save's pull request as soon as it is opened, before its merge, so a save no longer wakes the chat twice more"),
         ),
-        "fingerprint": "bbfe599c4c2d7945",
+        "fingerprint": "288cc90b6b404422",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",

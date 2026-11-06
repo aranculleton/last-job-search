@@ -1807,9 +1807,13 @@ def _land(root: str, message: str, check, sleep) -> int:
     print("land: next, each its own call, and nothing said to the person:")
     print('  1. create_pull_request: owner "%s", repo "%s", head "%s", base "master", '
           'title "%s", body "%s"' % (owner, repo, there, title.replace('"', "'"), body))
+    # A cloud chat is subscribed to each pull request it opens, and every save then woke it
+    # twice more, "subscribed" and "merged": a dozen saves in 20 minutes (the maintainer's
+    # copy, 2026-11-06). Unsubscribed at once, before the merge can send its event.
+    print('  1b. at once, before anything else: unsubscribe_pr_activity: owner "%s", repo "%s", '
+          'pullNumber <the number 1 gave>, where this chat has that tool' % (owner, repo))
     print('  2. merge_pull_request: owner "%s", repo "%s", pullNumber <the number 1 gave>, '
-          'merge_method "merge"; in the same message, as a separate call, '
-          'unsubscribe_pr_activity for it where this chat has that tool' % (owner, repo))
+          'merge_method "merge"' % (owner, repo))
     print("  3. python3 tools/land.py --after-merge")
     print("  " + MERGE_REFUSED)
     # Plain REST calls: `gh pr create` and `gh pr merge` are refused in a cloud chat, and
@@ -2158,6 +2162,7 @@ def run_detached(root: str = ROOT, message: str = "", check=None, sleep=time.sle
     if d:
         _RUN.add(_lock_key(d))
     try:
+        _settle(root, sleep)
         code = _rounds(root, message, check, sleep, land_fn, finish)
     finally:
         _drop_lock(root, token)
@@ -2167,12 +2172,51 @@ def run_detached(root: str = ROOT, message: str = "", check=None, sleep=time.sle
 
 
 QUEUED_ROUNDS = 12
+# A save in the background asked for within SETTLE_S of the last one that landed waits out
+# the rest of it, holding the lock, so every tap meanwhile is queued for it and one pull
+# request takes them all: a dozen saves in 20 minutes opened a dozen, each waking the chat
+# that answers the page twice (the maintainer's copy, 2026-11-06). The first save of a
+# quiet spell goes at once.
+SETTLE_S = 5 * 60
+LANDED_FILE = "ljs-landed-at"
+
+
+def _landed_at(root: str) -> float:
+    d = git_dir(root)
+    try:
+        with open(os.path.join(d, LANDED_FILE), encoding="utf-8") as fh:
+            return float(fh.read().strip() or 0)
+    except (OSError, ValueError):
+        return 0.0
+
+
+def _mark_landed(root: str) -> None:
+    d = git_dir(root)
+    if not d:
+        return
+    try:
+        with open(os.path.join(d, LANDED_FILE), "w", encoding="utf-8", newline="\n") as fh:
+            fh.write("%f\n" % time.time())
+    except OSError:
+        pass
+
+
+def _settle(root: str, sleep) -> None:
+    """Wait out what is left of SETTLE_S since the last landing, the lock kept alive."""
+    left = SETTLE_S - (time.time() - _landed_at(root))
+    while left > 0:
+        step = min(left, BEAT_S)
+        sleep(step)
+        _beat(root)
+        left -= step
 
 
 def _rounds(root: str, message: str, check, sleep, land_fn, finish) -> int:
     code, written, n = 0, 0, 0
     while n < QUEUED_ROUNDS:
         n += 1
+        if n > 1:
+            _settle(root, sleep)         # what was asked meanwhile goes in one pull request
         _asked_too, msg = _take_ask(root)
         message = msg or message
         _beat(root)
@@ -2188,6 +2232,7 @@ def _rounds(root: str, message: str, check, sleep, land_fn, finish) -> int:
         if code == 0 and READY:
             ok, why = finish(root, dict(READY))
             if ok:
+                _mark_landed(root)
                 with contextlib.redirect_stdout(io.StringIO()):
                     after_merge(root, sleep=sleep)
             else:

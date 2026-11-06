@@ -2188,6 +2188,13 @@ _ANSWERED = re.compile(r"learned\.py[\"']?\s+(?:record|skip|approve)\b"
                        r"|\blearned\.(?:record|skip|approve)\(")
 
 
+GITHUB_EVENT = re.compile(r"<event\b[^>]*\bsource=\"github\"", re.I)
+GITHUB_EVENT_SAID = ("A GitHub event about a save's pull request: nothing waits on it here. "
+                     "Read nothing and run nothing else; where this chat has "
+                     "unsubscribe_pr_activity, make that one call for this pull request, then "
+                     "end the turn with no text.")
+
+
 def _retired() -> str:
     """The one line for a chat that has handed the page on (app_listen.retired_here), or "".
     Never raises."""
@@ -2220,6 +2227,12 @@ def hook(event: dict) -> dict:
                                        "additionalContext": retired}}
     if retired and name == "Stop":
         return {}                     # never held for work: it does none (app.py retired)
+    if name == "UserPromptSubmit" and GITHUB_EVENT.search(str(event.get("prompt") or "")):
+        # A save's pull request, which the cloud chat was subscribed to by itself: nothing in
+        # a person's copy waits on one (CLAUDE.md, "Saving"), and each woke the chat twice a
+        # save (the maintainer's copy, 2026-11-06).
+        return {"hookSpecificOutput": {"hookEventName": "UserPromptSubmit",
+                                       "additionalContext": GITHUB_EVENT_SAID}}
     if name == "UserPromptSubmit":
         text = str(event.get("prompt") or "")
         cue = reaction(text)
