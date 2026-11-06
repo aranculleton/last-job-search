@@ -135,10 +135,24 @@ def test_a_complaint_about_the_app_is_refused_as_a_rule(profile, capsys):
     for said in ("too formal", "why does the app say passionate", "name my resume after me",
                  "that opener is not working for me"):
         assert not learned.about_app(said), said
+    # Their own rules that only share a word with a complaint are kept as rules, with no
+    # flag needed (an independent review, 2026-11-06).
+    for said in ("keep notes short, the page is slow to read on my phone",
+                 "the recruiter was slow to reply, so follow up after 3 days",
+                 "never say crash course in a letter",
+                 "dont mention the bug I fixed at my last job",
+                 "my interviews froze up"):
+        assert not learned.about_app(said), said
+        _cli("record", "--area", "other", "--said", said, "--rule", said)
+        assert learned.entries()[-1]["said"] == said
+        hooked = learned.hook({"hook_event_name": "UserPromptSubmit", "prompt": said})
+        assert "--about-app" not in str(hooked), said
+    for e in list(learned.entries()):
+        learned.retire(learned.load().index(e) + 1)
     with pytest.raises(SystemExit) as e:
         _cli("record", "--area", "other", "--said", "why is it so slow", "--rule", "be quicker")
     assert "about how the app behaves" in str(e.value) and "--about-app" in str(e.value)
-    assert learned.load() == []
+    assert learned.entries() == []
     # Claude may say it is truly theirs: then it is kept.
     _cli("record", "--area", "other", "--said", "the page takes too long to read, keep notes "
          "short", "--rule", "keep notes short", "--not-about-app")
@@ -179,6 +193,6 @@ def test_a_complaint_goes_to_the_maker_in_their_copy_and_is_worked_round_elsewhe
 def test_the_hook_says_a_complaint_is_routed_not_recorded(profile):
     got = learned.hook({"hook_event_name": "UserPromptSubmit", "prompt": "I hate how slow it is"})
     said = got["hookSpecificOutput"]["additionalContext"]
-    assert "--about-app" in said and "never a rule" in said
+    assert "--about-app" in said and "not sure, it is theirs" in said
     plain = learned.hook({"hook_event_name": "UserPromptSubmit", "prompt": "too formal"})
     assert "--about-app" not in plain["hookSpecificOutput"]["additionalContext"]
