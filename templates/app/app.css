@@ -2044,3 +2044,12 @@ a.bp-stat .bp-n { color: var(--ink); }
    actually dynamic and filling the room"). */
 .brief-grid.is-filled .bp-numbers .bp-body > .bp-spark-wrap { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
 .brief-grid.is-filled .bp-numbers .bp-spark { flex: 1 1 auto; height: auto; min-height: 32px; max-height: 200px; }
+/* The Chat button and its panel on the left, where the person chose it (Settings > Look, or
+   the panel's arrow): mirrored, big or small, and the Brief's foot keeps clear of it there. */
+@media (min-width: 760px) {
+  html.dock-left .chat-fab, html.dock-left .chat-dock { right: auto; left: max(16px, env(safe-area-inset-left, 0px)); }
+  html.dock-left .bp-bottom { padding-right: 0; }
+  /* Beside the menu's names the button sits over the menu; with icons only it reaches the page. */
+  html.dock-left.nav-mini .bp-bottom { padding-left: calc(3 * var(--target)); }
+}
+.dock-top .btn { flex: none; }

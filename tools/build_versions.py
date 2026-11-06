@@ -841,8 +841,9 @@ METHODS: dict[str, dict] = {
             (73, "2026-11-06", False, "Settings, under You, has File names: three ways to name the files you download, each shown as an example from your own name and latest employer, the person, employer, document recommended; a download takes the engine's name for it"),
             (74, "2026-11-06", False, "Safari's measures are turned into the window's own px, so its laptop Brief fills the window and Latest stops at the field; a computer reporting no pointer gets the laptop's type, as Firefox with no mouse it could see did not"),
             (75, "2026-11-06", False, "the Brief takes its compact shape whenever the whole of it does not fit, so a window between 661 and about 800px tall no longer scrolls; News shows the number of points chosen under Edit the brief (3 unless chosen), a point written with \"Use it:\" set in its two parts; Jobs lists up to eight where it has room; Your progress's chart takes its panel's room and each number opens where those things are; a person's trash in To do opens their box under that card; \"In line\" says \"Waiting its turn\""),
+            (76, "2026-11-06", False, "the Chat button and its panel sit at the right or the left, chosen by the panel's arrow or Settings > Look, big or small; its Open in Chat and Close are soft pills; earlier messages come only by Show"),
         ),
-        "fingerprint": "3eda4b9d95d52312",
+        "fingerprint": "57f550a395bdee77",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

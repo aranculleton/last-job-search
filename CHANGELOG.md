@@ -30,6 +30,11 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **The Chat button can sit on the left.** The arrow at the top of the Chat panel moves it and
+  its button to the other side, big or small, and Settings > Look has the same choice. The
+  panel's Open in Chat and Close are now buttons like the rest of the page.
+- **The Chat no longer scrolls back to its first day by itself.** It opens on its last day, and
+  earlier messages come only when you tap Show.
 - **Your Brief uses its room.** News shows three points unless you choose another number
   under Edit the brief, each split into what happened and how you can use it rather than one
   long paragraph. Jobs lists a couple more where there is room, with "All" opening the rest.

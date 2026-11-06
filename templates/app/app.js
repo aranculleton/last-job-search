@@ -12856,12 +12856,8 @@
       const row = h("li", {class: "talk-earlier-msgs fold"}, h("span", {}, plural(from, "earlier message", "earlier messages") + ": "),
         btn("Show", more, {kind: "link", key: "talk-earlier-msgs"}));
       items.unshift(row);
-      // Scrolled to the top, the next twenty come by themselves.
-      if (window.IntersectionObserver) {
-        if (S.chatSeer) S.chatSeer.disconnect();
-        S.chatSeer = new IntersectionObserver((es) => { if (es.some((e) => e.isIntersecting) && S.chatStick === false) more(); }, {root: box || null});
-        requestAnimationFrame(() => { if (row.isConnected) S.chatSeer.observe(row); });
-      }
+      // Only Show brings earlier ones: scrolling to the top loaded twenty more by itself, and
+      // the whole history could be scrolled back to its first day (the maintainer, 2026-11-06).
     }
     if (S.sending) items.push(h("li", {class: "talk-msg pending"}, h("p", {class: "talk-text muted"}, "Adding your pictures…")));
     if (!viewing) {
@@ -13524,6 +13520,28 @@
   const DOCK_BIG = "ljs:dock-big";
   let dockBig = sget("local", DOCK_BIG) === "1";
   let dockSizeBtn = null;
+  // Which side the Chat button and its panel sit on, chosen on this device (the maintainer,
+  // 2026-11-06: "one that puts it to the left side of the screen if desired, and back to the
+  // right"): the panel's own arrow and Settings > Look set the same thing.
+  const DOCK_SIDE = "ljs:dock-side";
+  let dockLeft = sget("local", DOCK_SIDE) === "left";
+  let dockSideBtn = null;
+  function dockSideSay() {
+    document.documentElement.classList.toggle("dock-left", dockLeft);
+    if (dockSideBtn) {
+      const words = dockLeft ? "Move the chat to the right" : "Move the chat to the left";
+      dockSideBtn.setAttribute("aria-label", words);
+      dockSideBtn.title = words;
+      dockSideBtn.replaceChildren(icon(dockLeft ? "to-right" : "to-left"));
+    }
+  }
+  function setDockSide(left) {
+    dockLeft = !!left;
+    sset("local", DOCK_SIDE, dockLeft ? "left" : null);
+    dockSideSay();
+    announce(dockLeft ? "Chat on the left." : "Chat on the right.");
+    scheduleRender();
+  }
   function dockSizeSay() {
     if (!dockEl) return;
     dockEl.classList.toggle("is-big", dockBig);
@@ -13551,9 +13569,12 @@
     dockEl = h("section", {class: "chat-dock", id: "chat-dock", role: "dialog", "aria-modal": "false", "aria-labelledby": "h-dock", hidden: true,
       onkeydown: (e) => { if (e.key === "Escape" && !e.defaultPrevented) { e.preventDefault(); e.stopPropagation(); closeDock(true); } }},
       h("div", {class: "dock-top"}, h("h2", {id: "h-dock", class: "dock-title", tabindex: "-1"}, "Chat"),
-        (dockSizeBtn = h("button", {type: "button", class: "btn quiet small icon-only dock-size", "data-k": "dock-size", onclick: () => toggleDockSize()})),
-        h("a", {href: "#chat", class: "btn quiet small", "data-k": "dock-full", onclick: (e) => { e.preventDefault(); openInChat(); }}, "Open in Chat"),
-        h("button", {type: "button", class: "btn quiet small", "data-k": "dock-close", "aria-label": "Close the chat panel", onclick: () => closeDock(true)}, "Close")),
+        (dockSideBtn = h("button", {type: "button", class: "btn secondary small icon-only dock-side", "data-k": "dock-side", onclick: () => setDockSide(!dockLeft)})),
+        (dockSizeBtn = h("button", {type: "button", class: "btn secondary small icon-only dock-size", "data-k": "dock-size", onclick: () => toggleDockSize()})),
+        // The page's own soft pills, as every other control beside them: two underlined words
+        // read as links, not buttons (the maintainer, 2026-11-06).
+        h("a", {href: "#chat", class: "btn secondary small", "data-k": "dock-full", onclick: (e) => { e.preventDefault(); openInChat(); }}, "Open in Chat"),
+        h("button", {type: "button", class: "btn secondary small", "data-k": "dock-close", "aria-label": "Close the chat panel", onclick: () => closeDock(true)}, "Close")),
       dockBox);
     fabEl = h("button", {type: "button", class: "chat-fab", id: "chat-fab", "data-k": "chat-fab", "aria-label": "Chat with Claude", "aria-haspopup": "dialog",
       "aria-controls": "chat-dock", "aria-expanded": "false", hidden: true, onclick: (e) => openDock({opener: e.currentTarget})},
@@ -13562,6 +13583,7 @@
     document.body.appendChild(dockEl);
     document.body.appendChild(fabEl);
     dockSizeSay();
+    dockSideSay();
   }
   // Chat opens on the end of its conversation: the newest message, the box under it. The box
   // sticks to the foot of the screen on a phone, so placing the box itself moved the page a
@@ -13630,6 +13652,7 @@
       dockBackTo = op && op.dataset && op.dataset.k ? op.dataset.k : null;
     }
     dockOpen = true;
+    S.chatBack = 0;
     sset("session", "ljs:dock", "1");
     renderDock();
     focusTalk(o.text);
@@ -13735,7 +13758,7 @@
     const cal = pick(["calendar_reminder"]).map(settingRow);
     if (cal.length) put(wrap, settingsGroup("Coming up", cal));
     // Look: how the page looks and is used here, harmless to change (the maintainer, 4.12).
-    put(wrap, settingsGroup("Look", [lookRow(), sizeRow(), touchOnly() ? null : keysRow()]));
+    put(wrap, settingsGroup("Look", [lookRow(), sizeRow(), window.innerWidth >= 760 ? sideRow() : null, touchOnly() ? null : keysRow()]));
     put(wrap, settingsGroup("LinkedIn", linkedinRows().concat(pick(["profile_reads"]).map((s) => settingRow(s, txt(settingValue(s)) === "paste" ? null : readingBody())), pick(["linkedin_plan"]).map((s) => settingRow(s)))));
     put(wrap, settingsGroup("Help", [actionRow("Show me around", () => showTour(0), "help-tour"),
       // The chat bubble, where the person is, rather than taking them away to Chat (2026-10-30).
@@ -13856,6 +13879,15 @@
         const ratio = sizes[v] / (sizes[S.size || "standard"] || sizes.standard);
         return h("label", {class: "seg-opt look-choice size-choice", for: id}, h("input", {type: "radio", name: "size", id, "data-k": id, value: v, checked: (S.size || "standard") === v, onchange: () => setSize(v)}),
           h("span", {class: "look-name", "data-size": v, style: v === "standard" ? null : "font-size:" + ratio.toFixed(3) + "em"}, label));
+      })));
+  }
+  // Where the Chat button and its panel sit, on this device: the panel's arrow sets the same.
+  function sideRow() {
+    const opts = [["right", "Right"], ["left", "Left"]];
+    return h("div", {class: "setting-row look-row"}, h("span", {class: "set-name", id: "side-name"}, "Chat button"),
+      h("div", {class: "segctl", role: "radiogroup", "aria-labelledby": "side-name"}, opts.map(([v, label]) => {
+        const id = "side-" + v;
+        return h("label", {class: "seg-opt look-choice", for: id}, h("input", {type: "radio", name: "dock-side", id, "data-k": id, value: v, checked: (dockLeft ? "left" : "right") === v, onchange: () => setDockSide(v === "left")}), h("span", {class: "look-name"}, label));
       })));
   }
   // A phone or tablet with no mouse: keyboard shortcuts are not offered there (the 3 November audit).
@@ -14087,6 +14119,8 @@
     progress: "M4 20V10M10 20V4M16 20v-7M22 20H2",
     expand: "M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5",
     shrink: "M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5",
+    "to-left": "M19 12H5M11 6l-6 6 6 6",
+    "to-right": "M5 12h14M13 6l6 6-6 6",
     // A rounded gear, the shape of Lucide's "settings" (ISC License, Copyright (c) Lucide
     // Contributors): the angular one read as odd beside the rounded icons (the maintainer,
     // 2026-11-04: "settings icon looks weird").

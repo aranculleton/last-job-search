@@ -56,6 +56,11 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   opens and closes the panel on the right, as the menu's "Icons only" folds, remembered on the
   device (open beside every screen but the Brief until the person chooses); narrower, it opens
   as a panel on the right, and on a phone as a sheet from the bottom. (pill tests)
+- The Chat button and its panel sit at the right, or at the left where the person chose it (Settings >
+  Look, Chat button, or the panel's own arrow; the same choice, kept on the device), small or big.
+  The panel's controls are the page's own soft pills (Open in Chat, Close), never underlined words.
+  The conversation opens on its last day; earlier messages come only by its Show, never by
+  scrolling up (the maintainer, 2026-11-06). (chat panel tests)
 - In Claude's work, four or more of one kind waiting, or finished, are one card with their
   count and the first few names; Show lists them. Nobody scrolls past fifty cards. (run test)
 - Claude's work says its count once, in the header's pill: no line under its title repeats
