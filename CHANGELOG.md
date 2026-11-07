@@ -25,6 +25,12 @@ make sense to somebody whose repo just received it.
 - **Jobs shows all its questions itself**, never "+1 more in To do", and a single card left over
   on To do is shown rather than folded. The folds at the end of a list are quiet lines, not bars
   the width of the page.
+- **On a laptop the Brief's panels use their room** instead of packing everything at the top
+  with a gap above the buttons. Next three's steps, and a short list of people or jobs, each sit
+  in their own soft box and spread out a little; a panel with little to show keeps its buttons
+  just under it; Your progress's chart grows taller; and Jobs says "New, best fit first" over
+  its new jobs, so they no longer read as the drafts ready to apply. It is worked out from your
+  own window, so it holds at any size, at any zoom and in Safari.
 
 ## [4.13.0] - 2026-11-06
 
