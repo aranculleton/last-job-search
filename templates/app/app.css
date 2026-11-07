@@ -1533,6 +1533,26 @@ body.has-fab .shell { padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-b
   .brief-grid .bp-body { gap: 8px; }
   .bpanel.bp-upcoming { container-type: inline-size; }
   .brief-page .bp-tip { padding: 8px 16px; }
+  /* The room a row gives a panel past its content is the panel's to use, never a gap above its
+     foot (the maintainer, 2026-11-07: "u see how its bunched at the top?"). The body reaches
+     the foot, and fitAir (app.js) spends what it measures there: a short list's rows each in a
+     soft box of their own, as Coming up's are, then the rows a step further apart, up to 24px,
+     and past that the foot's pills follow the content (follow). */
+  .brief-grid .bp-body { flex: 1 1 auto; }
+  .brief-grid .bpanel:not([data-air~="sub"]) .bp-sub { display: none; }
+  .brief-grid .bpanel [data-gap="12"] { row-gap: 12px; }
+  .brief-grid .bpanel [data-gap="16"] { row-gap: 16px; }
+  .brief-grid .bpanel [data-gap="20"] { row-gap: 20px; }
+  .brief-grid .bpanel [data-gap="24"] { row-gap: 24px; }
+  .brief-grid .bpanel[data-air~="roomy"] .bp-body > .bp-list > li { padding: 8px 12px; border-radius: var(--r-sm); background: var(--sunk); }
+  .brief-grid .bpanel[data-air~="follow"] > .bp-body { flex: 0 1 auto; }
+  .brief-grid .bpanel[data-air~="follow"] > .bp-foot { margin-top: 0; }
+  /* Your progress: the weeks' chart grows into the panel's free height, up to 160px, the dates
+     and the line under it following. Its height in the row's sums stays its own (flex grows only
+     into room the row already gives), so it never makes a row taller: in a row that is not
+     stretched to the window's foot (a tall window) it sat short over empty space. */
+  .brief-grid .bp-numbers .bp-body > .bp-spark-wrap { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
+  .brief-grid .bp-numbers .bp-spark { flex: 1 1 auto; max-height: 160px; }
 }
 /* A short laptop window (720 or less) draws the Brief closer: the greeting smaller, its panels'
    numbers four across in a narrow panel, the foot's pills a little lower, so two rows fit. */
@@ -1607,6 +1627,8 @@ body.has-fab .shell { padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-b
 .bp-body { display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow: hidden; }
 /* The brief's lead is its point: said in full, never cut off with "...". */
 .bp-lead { margin: 0; line-height: 1.55; }
+/* A list's own small heading inside a panel ("New, best fit first" under the drafts' line). */
+.bp-sub { margin: 0; }
 .bp-list { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; }
 .bp-list li { display: flex; gap: 8px; align-items: center; line-height: 1.45; min-width: 0; }
 .bp-text { flex: 1; min-width: 0; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
@@ -2048,9 +2070,9 @@ a.bp-stat .bp-n { color: var(--ink); }
 @media (hover: hover) { a.bp-stat:hover { box-shadow: inset 0 0 0 1px var(--line); } }
 /* A Brief stretched to the window's foot: Your progress's weekly chart takes the room its
    panel has, never a short chart over empty space (the maintainer, 2026-11-06: "are the panels
-   actually dynamic and filling the room"). */
-.brief-grid.is-filled .bp-numbers .bp-body > .bp-spark-wrap { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
-.brief-grid.is-filled .bp-numbers .bp-spark { flex: 1 1 auto; height: auto; min-height: 32px; max-height: 200px; }
+   actually dynamic and filling the room"), and may shrink to 32px to let the rows fit. Its
+   growth in any laptop row, filled or not, is with the Brief's other room (fitAir, above). */
+.brief-grid.is-filled .bp-numbers .bp-spark { height: auto; min-height: 32px; }
 /* The Chat button and its panel on the left, where the person chose it (Settings > Look, or
    the panel's arrow): mirrored, big or small, and the Brief's foot keeps clear of it there. */
 @media (min-width: 760px) {
