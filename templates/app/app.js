@@ -659,6 +659,11 @@
     const m = Math.max(1, Math.round(stageSeconds(kind) / 60));
     return "About " + plural(m, "minute", "minutes") + ". " + COST_WORDS[WORK_COST[kind] === undefined ? 2 : WORK_COST[kind]] + ". Nothing is sent.";
   }
+  // The same line for an engine cost that carries its own seconds (app_alerts.cost_of_seconds).
+  function costLineOf(c) {
+    const m = Math.max(1, Math.round(Number(obj(c).seconds) / 60));
+    return "About " + plural(m, "minute", "minutes") + ". " + (COST_WORDS[Number(obj(c).state)] || COST_WORDS[2]) + ". Nothing is sent.";
+  }
   function gauge(st) {
     st = Math.max(0, Math.min(3, Number(st) || 0));
     return svg("svg", {viewBox: "0 0 14 12", class: "gauge", "aria-hidden": "true", focusable: "false"},
@@ -707,7 +712,9 @@
     const c = obj(cost);
     const st = Number(c.state);
     if (!(st > 0)) return h("span", {class: "cost", id}, costText(cost, kind));
-    const sec = STAGES[txt(kind)] ? stageSeconds(txt(kind)) * Math.max(1, Number(times) || 1) : 0;
+    // An engine cost with its own seconds (app_alerts.cost_of_seconds) says those.
+    const sec = Number(c.seconds) > 0 ? Number(c.seconds) * Math.max(1, Number(times) || 1)
+      : STAGES[txt(kind)] ? stageSeconds(txt(kind)) * Math.max(1, Number(times) || 1) : 0;
     const time = sec ? (sec < 100 ? "1 min" : sec >= 5400 ? "about " + Math.round(sec / 3600) + " h" : Math.round(sec / 60) + " min") : "";
     // Its one line, on hover, a long press and to a screen reader (DESIGN.md, the gauge).
     const words = sec ? cap1(aboutTime(sec)) + " of Claude's time, from your Claude allowance" : (COST_WORDS[st] || COST_WORDS[2]);
@@ -3645,7 +3652,9 @@
     const seen = new Set();
     const out = [];
     for (const m of src) {
-      if ((!all && !msgLive(m)) || msgStopped(m)) continue;
+      // A note waiting for their profile is not ready to send: To do's one reading card has it
+      // (the engine's to_send leaves it out too; a model made before that still lists it).
+      if ((!all && !msgLive(m)) || msgStopped(m) || txt(m.hold)) continue;
       const k = txt(m.contact) || "msg:" + txt(m.id);
       if (seen.has(k)) continue;
       seen.add(k);
@@ -6895,7 +6904,7 @@
     const sid = "msgs-" + seg(m.id);
     const heading = (DRAFT_WORD[txt(m.type)] || DRAFT_WORD[txt(m.kind)] || "Your message") + (CHANNEL[txt(m.channel)] ? " · " + CHANNEL[txt(m.channel)] : "");
     const area = editing ? h("textarea", {id: tid, class: "sendtext big pen-text", rows: 5, "data-k": "pentext:" + m.id, "aria-label": "The " + what + " to " + name + ", to change",
-      oninput: (e) => { draftSet(penKey, e.target.value); const c = $("cnt-" + seg(m.id)); const w = countWords(m, e.target.value.length); if (c && w) { c.textContent = w.text; c.className = "count tone-" + w.tone; } }}, body) : null;
+      oninput: (e) => { draftSet(penKey, e.target.value); const c = $("cnt-" + seg(m.id)); const w = countWords(m, e.target.value.length, true); if (c && w) { c.textContent = w.text; c.className = "count tone-" + w.tone; } }}, body) : null;
     const askId = "pa-" + seg(m.id);
     // Room for their whole message pasted in, growing with what is put in it (the maintainer,
     // 2026-11-05: "the actual text box is too short, i was gonna paste his reply there").
@@ -6942,9 +6951,11 @@
           // still shows the edits i made"); Done editing keeps them.
           btn("Cancel", () => { if (S.penBefore.has(m.id)) { draftSet(penKey, S.penBefore.get(m.id)); S.penBefore.delete(m.id); } S.penOpen.delete(m.id); S.penEdit.delete(m.id); scheduleRender(); },
             {kind: "secondary", small: true, key: "penx:" + m.id, aria: "Close the box: no change to the " + what + " to " + name}))) : null,
-      held ? h("p", {class: "small hint-line msg-check msg-held", "data-k": "held:" + m.id}, "Not ready to send: " + lc1(held) + ".") : null,
+      // Why it waits and when that happens, said once (the maintainer, 2026-11-07: the line and
+      // an alert under it said the same thing twice).
+      held ? holdLine(m) : null,
       sendsLine(m),
-      h("span", {id: "cnt-" + seg(m.id), class: "cnt-wrap"}, charCount(m, body)),
+      h("span", {id: "cnt-" + seg(m.id), class: "cnt-wrap"}, charCount(m, body, editing)),
       // Where they live is not on record, so the person's own rule about where people are cannot
       // be checked (2026-11-03): a fact of the card, never a fix.
       m.where_unknown === true ? h("p", {class: "small hint-line msg-check"}, "Where they live is not on record: check their profile before you send.") : null,
@@ -6955,14 +6966,47 @@
       tweakResult(m));
     // Rare, so under More: their profile link, Claude's ideas, its notes, reading their profile
     // (2026-11-04: More is for what is rare, never editing, never the card's facts).
+    // "Paste their profile": for a note waiting on its read, the alternative beside its one line,
+    // a soft pill in the card's row where this page cannot read it now, and nothing where it
+    // reads by itself; for any other first note, rare, under More.
+    const paste = txt(m.kind) === "first_note" && txt(m.contact) ? pasteProfileBtn({id: m.contact, contact: m.contact, first_name: m.first_name, rev: revOf(txt(m.contact)), paste: m.paste},
+      (held ? "hpaste:" : "paste:") + m.id, held ? "secondary" : null) : null;
     const extra = [openLink(m),
       held ? null : cardNotes(m, {where: "contacts", section: "contacts", item: m.id}, true),
       moreAlerts(m, {where: "contacts", section: "contacts", item: m.id}),
-      txt(m.kind) === "first_note" && txt(m.contact) ? pasteProfileBtn({id: m.contact, contact: m.contact, first_name: m.first_name, rev: revOf(txt(m.contact))}, "paste:" + m.id) : null];
-    // A note held for their profile has no Copy: Claude's suggestion (read it first) is its next
-    // step, so it stays on the card's face.
-    const notes = held ? cardNotes(m, {where: "contacts", section: "contacts", item: m.id}, true) : null;
-    return {box, notes, act: sentBtn, extra, blocked: fixing === "failed", fixing: fixing === "going", line: stateLine(m.id, "msg:" + m.id)};
+      held ? null : paste];
+    // A note held for their profile has no Copy and nothing else on its face: its one line says
+    // why and when, and Paste is its row's one pill.
+    return {box, notes: null, act: held ? paste : sentBtn, extra, blocked: fixing === "failed", fixing: fixing === "going", line: stateLine(m.id, "msg:" + m.id)};
+  }
+  // Where reading LinkedIn stands for this opening of the page: readingState, except that a
+  // read that worked lately elsewhere is no read here unless this page is open in the Claude
+  // app on a computer, where Claude's browser is ("desktop": a phone, the web).
+  function readHere() { const st = readingState(); return st === "ready" && S.reading.here !== true ? "desktop" : st; }
+  // Which of the engine's lines (linkedin.reading.hold, app_model READ_HOLD) says where a note
+  // waiting on its read stands: read by this page by itself where it is open in the Claude app
+  // on a computer, and said where to open it everywhere else (the maintainer, 2026-11-07:
+  // "when exactly is this waiting for claude thing going to happen?"). Null: the note's own.
+  function holdKey(m) {
+    const st = readHere();
+    if (st === "off") return "paste";
+    if (st === "paused" || st === "sign_in") return st;
+    if (st !== "ready") return "browser";
+    const cid = txt(m.contact);
+    const q = arr(readingInfo().queue).find((x) => txt(x.contact) === cid);
+    if (!q) return null;
+    if (S.reading.busy && S.reading.cur === cid) return "reading";
+    if (effective(txt(q.id), ["reading.done"])) return "read";
+    if (S.reading.needTab) return "tab";
+    if (S.reading.tried.has(txt(q.id)) || readToday(q)) return "again";
+    return "next";
+  }
+  function holdLine(m) {
+    const k = holdKey(m);
+    const said = txt(obj(readingInfo().hold)[k]) || txt(m.hold);
+    const running = k === "reading";
+    return h("p", {class: "small hint-line msg-check msg-held", "data-k": "held:" + m.id, "data-hold": k || "own", role: running ? "status" : null},
+      running ? [h("span", {class: "spin", "aria-hidden": "true"}), " "] : null, said.replace(/[.…\s]+$/, "") + (running ? "…" : "."));
   }
   // "To Juno at Acme", or "To Juno" where no employer is on file: never a dangling "at".
   function toWho(m) {
@@ -7523,6 +7567,8 @@
     const rows = talkRecords(kind, id).msgs.filter((m) => !(m.id in seen) || txt(seen[m.id]) !== txt(m.rev)).slice(0, 2).map((m) => {
       const who = personName(txt(m.contact), txt(m.first_name), "ts:" + m.id);
       if (!msgLive(m)) return msgStatus(m) === "sent" ? h("p", {class: "small muted ts-row", "data-ts": m.id}, who, " · Sent") : null;
+      // A note waiting for their profile is not ready: its own card says why and when.
+      if (txt(m.hold)) return null;
       const d = draftParts(m, {noWhy: true});
       const copy = d.box && d.box.querySelector ? d.box.querySelector(".bubble-copy") : null;
       return h("div", {class: "ts-row", "data-ts": m.id}, h("p", {class: "small ts-what"}, "The message to ", who, " is ready"),
@@ -9419,18 +9465,25 @@
   }
   // The count against the plan's limit: always on a first note, near or over the limit on
   // anything else. Amber near it, red over it; nothing is ever cut.
-  function countWords(m, n) {
-    const limit = Number(m.limit) || 0;
+  // A count against its limit, by the engine's one rule (app_model.count_of): the quiet grey
+  // within the limit, red over it, and amber only while the words are being changed and are
+  // within the engine's `near_at` of it, where an edit could take them over. 291 of 300 in amber
+  // at rest read as a warning about a note that was fine (the maintainer, 2026-11-07).
+  function countWords(m, n, editing) {
+    const ec = obj(m.count);
+    const limit = Number(ec.limit) || Number(m.limit) || 0;
     if (!limit) return null;
+    const nearAt = Number(ec.near_at) || limit;
     const over = n > limit;
-    const near = !over && n >= 0.9 * limit;
-    return {text: n + " of " + limit + " characters" + (over ? ": " + (n - limit) + " over the limit" : near ? ": close to the limit" : ""), tone: over ? "bad" : near ? "warn" : "muted", show: txt(m.kind) === "first_note" || over || near};
+    const near = !over && n >= nearAt;
+    return {text: n + " of " + limit + " characters" + (over ? ": " + (n - limit) + " over the limit" : near && editing ? ": close to the limit" : ""),
+      tone: over ? "bad" : near && editing ? "warn" : "muted", show: txt(m.kind) === "first_note" || over || near};
   }
-  function charCount(m, text) {
+  function charCount(m, text, editing) {
     // The engine's own count for the draft as it stands; this page's for words changed here.
     const ec = obj(m.count);
-    if (ec.label && txt(text) === txt(msgParts(m).body)) return ec.show === false ? null : h("p", {class: "count tone-" + (ec.over ? "bad" : ec.warn ? "warn" : "muted")}, txt(ec.label));
-    const c = countWords(m, txt(text).length);
+    if (ec.label && !editing && txt(text) === txt(msgParts(m).body)) return ec.show === false ? null : h("p", {class: "count tone-" + (ec.over ? "bad" : "muted")}, txt(ec.label));
+    const c = countWords(m, txt(text).length, editing);
     return c && c.show ? h("p", {class: "count tone-" + c.tone}, c.text) : null;
   }
   // Beside Copy: their profile in a new tab, or the email ready to send, from the owner-only
@@ -9468,7 +9521,7 @@
     const area = h("textarea", {id: tid, rows: 3, "data-k": "chg:" + m.id, "aria-describedby": tid + "-n", maxlength: 8000,
       oninput: (e) => { draftSet(key, e.target.value); paint(e.target.value); }}, txt(draftGet(key)) || txt(m.body || m.text));
     function paint(v) {
-      const c = countWords(m, txt(v).length);
+      const c = countWords(m, txt(v).length, true);
       count.textContent = c ? c.text : txt(v).length + " characters";
       count.className = "count tone-" + (c ? c.tone : "muted");
     }
@@ -11091,9 +11144,14 @@
   function pausedUntil() { return breakUntil(); }
 
   // G14. Where the page cannot read a profile for itself: paste it, and the note is redrafted on it.
-  function pasteProfileBtn(p, key) {
-    if (readingState() === "ready") return null;
+  // `kind`: "secondary", the soft pill of a card's row, where it stands beside a note waiting
+  // on its read; quiet elsewhere. Gone where this page reads profiles by itself.
+  function pasteProfileBtn(p, key, kind) {
+    if (readHere() === "ready") return null;
     const name = txt(p.first_name);
+    // What the rewrite it queues takes: the engine's (app_alerts.paste_profile, one note
+    // rewritten, this copy's own time once it has some), never a whole networking run's.
+    const pc = obj(obj(p.paste).cost);
     // On a phone, copying a whole profile is fiddly and screenshots are what people have: they
     // go to Chat as pictures, which Claude reads and keeps the way a paste is kept.
     const shots = () => {
@@ -11105,12 +11163,12 @@
     return btn("Paste " + name + "'s profile", () => sheet({title: "Paste " + name + "'s profile",
       intro: "Open their LinkedIn page, select all, copy, and paste it here. Claude keeps only what a note can rest on.",
       lead: h("p", {class: "small"}, "On a phone? ", btn("Send screenshots instead", shots, {kind: "link", key: "paste-shots"})),
-      cost: costLine("reply"),
+      cost: Number(pc.state) > 0 && Number(pc.seconds) > 0 ? costLineOf(pc) : costLine("reply"),
       fields: [{id: "text", type: "text", long: true, label: name + "'s profile", required: true, max: 20000}], submit: "Use it",
       // Kept the way a chat keeps a paste, and a note written before it is redrafted on it
       // (profile.pasted, on the person or their message).
       onSubmit: (v) => act([{item: txt(p.id), action: "profile.pasted", value: {text: v.text}, rev: p.rev}], "Claude reads " + name + "'s profile")}),
-    {kind: "quiet", small: true, key: key || "paste-profile:" + txt(p.id)});
+    {kind: kind || "quiet", small: true, key: key || "paste-profile:" + txt(p.id)});
   }
 
   // G15. A tip as one small line at the end of its tab, and a short tour from Help.
@@ -11931,9 +11989,22 @@
       scheduleRender();
     });
   }
+  // The notes waiting for their profile, one a person, as the engine lists them (model.to_read,
+  // app_model.to_read), less any sent or set aside here; a model made before it, by its holds.
+  function heldNotes() {
+    const ids = obj(M().to_read).ids;
+    const src = Array.isArray(ids) ? ids.map(messageById).filter(Boolean) : messageItems().filter((m) => txt(m.hold));
+    const seen = new Set();
+    return src.filter((m) => { const k = txt(m.contact) || txt(m.id); if (!txt(m.hold) || !msgLive(m) || msgStopped(m) || seen.has(k)) return false; seen.add(k); return true; });
+  }
   function readingTodo() {
-    const st = readingState();
+    const st = readHere();
     const queue = waitingReads();
+    // Everyone whose note waits on a read, on this one card with the reading list: one card
+    // however many (the maintainer, 2026-11-07), never a row each on Messages to send.
+    const inQueue = new Set(queue.map((q) => txt(q.contact)));
+    const held = heldNotes().filter((m) => !inQueue.has(txt(m.contact)));
+    const people = queue.map((q) => ({first_name: q.first_name, contact: q.contact})).concat(held.map((m) => ({first_name: m.first_name, contact: m.contact})));
     const untaken = readsUntaken();
     // Signed out, or LinkedIn's check, met while reading by itself: this one card says so first.
     if ((S.reading.signedOut || S.reading.liCheck) && st === "sign_in" && !readingHidden()) {
@@ -11942,8 +12013,8 @@
     if (untaken.length && !rungFor(untaken)) {
       return {key: "reads-taken", kind: "message", band: "first", employer: null, tab: "contacts", counts: false, node: () => readsTakenCard(untaken)};
     }
-    if (queue.length && (st === "ready" || st === "paused" || st === "desktop")) {
-      return {key: "reading-queue", kind: "message", band: "week", employer: null, tab: "contacts", counts: false, node: () => readQueueCard(queue, st)};
+    if (people.length && (st === "ready" || st === "paused" || st === "desktop" || st === "off")) {
+      return {key: "reading-queue", kind: "message", band: "week", employer: null, tab: "contacts", counts: false, node: () => readQueueCard(queue, st, people)};
     }
     if (st === "ready" || st === "off" || st === "paused") return null;
     if (!arr(M().people).length) return null;
@@ -11990,18 +12061,40 @@
       noteFor("browser:reading-card"),
       S.reading.line ? h("p", {class: "small", role: "status"}, S.reading.line) : null);
   }
-  function readQueueCard(queue, st) {
-    const names = queue.map((q) => txt(q.first_name)).filter(Boolean);
-    // Where and how they are read, said once: the notes they hold back wait on this card.
-    const why = st === "paused" ? "LinkedIn asked Claude to slow down, so these wait until tomorrow." :
-      st === "desktop" ? "Claude reads them in its own browser in the Claude app on your computer, next time this page is open there. Their notes wait until then." :
-      S.reading.needTab ? "Claude reads them in a tab of its own in Claude's browser, out of your way. Press Read them once to open that tab; after that it reads by itself." : "";
+  // Everyone whose note waits on a read, as one card (`people`: the reading list and the notes
+  // held for a read, one a person), saying when the reading happens. Where this page reads
+  // (open in the Claude app on a computer), it reads by itself: the card says it is reading, or
+  // will, with no button, but for the one tap that opens its tab the first time (4.13: never
+  // opened by itself) and a retry after a day's reads met trouble. Elsewhere, where to open the
+  // page for it to happen (the maintainer, 2026-11-07).
+  function readQueueCard(queue, st, people) {
+    people = people || queue;
+    const n = people.length;
+    const names = people.map((q) => txt(q.first_name)).filter(Boolean);
+    const r = S.reading;
+    // Started by itself, or about to be (maybeAutoRead): nobody presses anything.
+    const auto = st === "ready" && queue.length > 0 && !r.needTab && (r.busy || (!autoHeld(S.autoReads) && queue.some((q) => !r.tried.has(txt(q.id)) && !readToday(q))));
+    const title = st === "desktop" ? "Open your page in the Claude app on your computer to read " + nWord(n, "profile", "profiles")
+      : st === "off" || (st === "ready" && !queue.length) ? "Paste " + nWord(n, "profile", "profiles") + " so Claude can write " + (n === 1 ? "the note" : "the notes")
+      : r.busy ? "Claude is reading " + nWord(n, "profile", "profiles")
+      : auto ? "Claude reads " + nWord(n, "profile", "profiles") + " by itself"
+      : "Read " + nWord(n, "profile", "profiles") + " before Claude writes";
+    // When and where they are read, said once: the notes they hold back wait on this card.
+    const why = st === "paused" ? "LinkedIn asked Claude to slow down, so these wait until tomorrow. Then it reads them by itself." :
+      st === "desktop" ? "Claude reads them there, in its own browser, by itself, then rewrites each note. Their notes wait until then." :
+      st === "off" || !queue.length ? "Copy each one's LinkedIn page and paste it on their card in Contacts. Claude rewrites the note from it." :
+      r.needTab ? "Claude reads them in a tab of its own in Claude's browser, out of your way. Press Read them once to open that tab; after that it reads by itself." :
+      auto ? "It reads them here, in its own browser, while this page is open, then rewrites each note. Nothing to press." :
+      "Claude could not read them today. It tries again by itself later; Read them tries now.";
+    const running = st === "ready" && r.busy;
     return card("article", {class: "card todo", "aria-labelledby": "rq-title", "data-item": "reading-queue"},
       h("div", {class: "todo-top"}, kindMark("message")),
-      h("p", {class: "card-title", id: "rq-title"}, "Read " + nWord(queue.length, "profile", "profiles") + " before Claude writes"),
+      h("p", {class: "card-title", id: "rq-title"}, title),
       names.length ? h("p", {class: "small muted"}, names.slice(0, 5).join(", ") + (names.length > 5 ? " and " + (names.length - 5) + " more" : "")) : null,
-      why ? h("p", {class: "small"}, why) : null,
-      why && st !== "ready" ? null :
+      running ? h("p", {class: "small reading-line", role: "status"}, h("span", {class: "spin", "aria-hidden": "true"}), " Reading " + txt(r.at || "their profiles") + (r.total ? ", " + (r.done + 1 > r.total ? r.total : r.done + 1) + " of " + r.total : "")) : null,
+      why && !running ? h("p", {class: "small"}, why) : null,
+      st === "off" || (st === "ready" && !queue.length) ? h("div", {class: "card-actions"}, btn("Open Contacts", () => go("contacts", {focus: true}), {kind: "primary", small: true, key: "read-open-contacts"})) :
+      st !== "ready" || auto ? null :
         h("div", {class: "card-actions"}, btn("Read them", () => { S.reading.tried.clear(); readProfiles(queue, "reading"); }, {kind: "primary", small: true, key: "read-them"})),
       // No computer: the card had no button and came back every week (the stranger audit,
       // X-53). Pasting works on any device, and the setting takes the queue with it.
@@ -12150,6 +12243,8 @@
       for (const q of queue) {
         r.tried.add(txt(q.id));
         r.at = txt(q.first_name) + "'s profile";
+        // Whose it is, so that person's card says "Reading their profile…" while it reads.
+        r.cur = txt(q.contact);
         scheduleRender();
         const url = safeUrl(obj(S.reach.get(txt(q.contact))).linkedin);
         if (!url) { r.done += 1; continue; }
@@ -12163,6 +12258,7 @@
       }
     } finally {
       r.busy = false;
+      r.cur = null;
       if (auto) keepAutoReads(Object.assign({}, obj(S.autoReads), {running: false, cut: !!obj(S.autoReads).cut || cut}));
     }
     if (r.panel === "run") r.panel = r.read ? "done" : null;
