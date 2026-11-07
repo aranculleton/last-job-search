@@ -5083,6 +5083,7 @@
     // drawing, and the Brief's other panels were built again over the same words.
     for (const l of lists) { const n = fitMemo.counts[fitName(l)]; const {base} = fitOf(l); [...l.children].forEach((li, i) => { fitHide(li, i >= (n === undefined ? base : n)); }); }
     fitFill(grid, fitMemo.fill || "");
+    fitAirSet(grid, fitMemo.air);
     fitMore(lists);
   }
   // Written only where it changes: the same mark written again is still a change to the page.
@@ -5103,14 +5104,16 @@
       briefShort(fitMemo.short);
       for (const l of lists) { const n = fitMemo.counts[name(l)]; const {base} = fit(l); [...l.children].forEach((li, i) => { fitHide(li, i >= (n === undefined ? base : n)); }); }
       fitFill(grid, fitMemo.fill || "");
+      fitAirSet(grid, fitMemo.air);
       fitMore(lists);
       return;
     }
     const short = window.innerWidth >= 960 && (forceShort === true || window.innerHeight <= 660);
     briefShort(short);
-    const remember = () => { fitMemo = {key, short, fill: grid.style.height, counts: Object.fromEntries(lists.map((l) => [name(l), [...l.children].filter((li) => !li.hidden).length]))}; };
+    const remember = (air) => { fitMemo = {key, short, fill: grid.style.height, air: air || null, counts: Object.fromEntries(lists.map((l) => [name(l), [...l.children].filter((li) => !li.hidden).length]))}; };
     for (const l of lists) { const {base} = fit(l); [...l.children].forEach((li, i) => { fitHide(li, i >= base); }); }
     fitFill(grid, "");
+    fitAirSet(grid, null);
     if (window.innerWidth < 760 || getComputedStyle(grid).gridTemplateColumns.split(" ").length < 2) { remember(); return; }
     // A laptop's Brief is one screen (the maintainer, 2026-11-05: at 1000 by 560 "the page
     // still scrolls"): two rows of panels (fillRows) and everything under them, the tip and the
@@ -5150,15 +5153,32 @@
     for (let guard = 0; guard < 24 && bottom() > room + 1; guard++) {
       const before = bottom();
       let best = null;
-      for (const l of lists.filter((x) => shown(x).length > floor(x) && !fitOpened(x))) {
+      const can = lists.filter((x) => shown(x).length > floor(x) && !fitOpened(x));
+      for (const l of can) {
         const li = shown(l).slice(-1)[0];
         li.hidden = true;
         const saved = before - bottom();
         li.hidden = false;
         if (saved > 1 && (!best || saved > best.saved + 1 || (Math.abs(saved - best.saved) <= 1 && fit(l).keep < fit(best.l).keep))) best = {l, li, saved};
       }
+      // Two panels of one row as tall as each other: neither's item alone shortens the row, so
+      // one from each gives way together (Jobs and News at 1000 by 560 held a row past the
+      // window between them, 2026-11-07).
+      if (!best) {
+        for (let i = 0; i < can.length; i++) for (let j = i + 1; j < can.length; j++) {
+          const a = can[i], b = can[j];
+          if (a.closest(".bpanel") === b.closest(".bpanel")) continue;
+          const x = shown(a).slice(-1)[0], y = shown(b).slice(-1)[0];
+          x.hidden = true; y.hidden = true;
+          const saved = before - bottom();
+          x.hidden = false; y.hidden = false;
+          const keep = fit(a).keep + fit(b).keep;
+          if (saved > 1 && (!best || saved > best.saved + 1 || (Math.abs(saved - best.saved) <= 1 && keep < best.keep))) best = {l: a, li: x, also: y, saved, keep};
+        }
+      }
       if (!best) break;
       best.li.hidden = true;
+      if (best.also) best.also.hidden = true;
     }
     // Each panel then shows what more there is room for, and a Brief that nearly fills the
     // window is stretched to its foot, its rows sharing the height, so the panels line up edge
@@ -5187,8 +5207,93 @@
       const over = Math.ceil((document.scrollingElement || document.documentElement).scrollHeight - window.innerHeight);
       if (over > 0 && over <= 48 && grid.style.height) fitFill(grid, Math.max(0, parseFloat(grid.style.height) - Math.ceil(over / z)) + "px");
     }
-    remember();
+    // The "2 more" under News is drawn before the room is measured: it is part of its foot.
     fitMore(lists);
+    remember(one ? fitAir(grid) : null);
+    fitMore(lists);
+  }
+  // The room a panel's row gives it that its own content leaves (the maintainer, 2026-11-07:
+  // "u see how its bunched at the top? be smart about this ... dynamic tho like i dont want it
+  // to break based on screen size platform zoom etc."). Worked out from what is drawn, never
+  // a height tuned to one window, and only ever spending room a panel already has, so the fit
+  // above stands. In turn: a list's own small heading where it fits; a short list's rows each
+  // in a soft box; the rows a step of the spacing scale further apart, up to 24px; and past
+  // that the foot's pills beside what they open (`data-air`, `data-gap`, kept with the counts).
+  // The progress chart grows into its room by itself (app.css).
+  const AIR_GAPS = [12, 16, 20, 24];
+  const AIR_HOLE = 32;
+  function fitAirSet(grid, air) {
+    const a = obj(air);
+    const set = (el, k, v) => { if (el.getAttribute(k) !== v) { if (v) el.setAttribute(k, v); else el.removeAttribute(k); } };
+    for (const l of grid.querySelectorAll("[data-fit]")) set(l, "data-gap", obj(a.gaps)[fitName(l)] ? String(obj(a.gaps)[fitName(l)]) : null);
+    for (const p of grid.children) set(p, "data-air", obj(a.marks)[txt(p.getAttribute("data-k"))] || null);
+  }
+  // A panel's room under its content, in the page's own px: its body is stretched to the foot
+  // (app.css), so the room is between the body's last child and the body's own bottom. Safari
+  // measures before the page's zoom and Chrome after it; the body's drawn height against its
+  // own height turns either into the page's px.
+  function airRoom(p) {
+    const body = p.querySelector(":scope > .bp-body");
+    const kids = body ? [...body.children].filter((x) => x.getClientRects().length) : [];
+    if (!kids.length) return 0;
+    const r = body.getBoundingClientRect();
+    const k = body.offsetHeight ? r.height / body.offsetHeight : 1;
+    return (r.bottom - Math.max(...kids.map((x) => x.getBoundingClientRect().bottom))) / (k > 0 ? k : 1) - 2;
+  }
+  function fitAir(grid) {
+    const air = {gaps: {}, marks: {}};
+    const panels = [...grid.children].filter((p) => p.getClientRects().length);
+    const keyOf = (p) => txt(p.getAttribute("data-k"));
+    const mark = (p, m) => { const k = keyOf(p); air.marks[k] = (air.marks[k] ? air.marks[k] + " " : "") + m; };
+    const shownIn = (l) => [...l.children].filter((li) => !li.hidden).length;
+    // First a list's own small heading (Jobs' "New, best fit first"), where the Brief has the
+    // room for its line, or makes it by showing one row fewer of a long list ("All 8 new" opens
+    // them all): it never costs another panel a row on a small window (Next three lost its
+    // third step at 1000 by 560 when it was always drawn). A line in a row stretched to the
+    // window takes its room from the other row, so what is checked is every panel and the
+    // page: none runs out of room, and nothing scrolls.
+    const scrolls = () => (document.scrollingElement || document.documentElement).scrollHeight - window.innerHeight;
+    const roomNow = () => new Map(panels.map((q) => [q, airRoom(q)]));
+    const holds = (was, sc) => scrolls() <= Math.max(0, sc) && panels.every((q) => airRoom(q) >= Math.min(-2, was.get(q)) - 1);
+    for (const p of panels) {
+      if (!p.querySelector(":scope > .bp-body > .bp-sub")) continue;
+      const was = roomNow(), sc = scrolls();
+      mark(p, "sub");
+      fitAirSet(grid, air);
+      const l = p.querySelector(":scope > .bp-body > [data-fit]");
+      const last = !holds(was, sc) && l && shownIn(l) > 3 ? [...l.children].filter((li) => !li.hidden).slice(-1)[0] : null;
+      if (last) last.hidden = true;
+      if (!holds(was, sc)) { if (last) last.hidden = false; delete air.marks[keyOf(p)]; fitAirSet(grid, air); }
+    }
+    // Then a short list's rows each in a soft box of their own (8px above and below each),
+    // as Coming up's are: three steps read as three, two people as two.
+    for (const p of panels) {
+      const rows = [...p.querySelectorAll(":scope > .bp-body > .bp-list")].filter((l) => l.getClientRects().length);
+      const n = rows.reduce((s, l) => s + shownIn(l), 0);
+      if (n && rows.every((l) => shownIn(l) <= 4) && airRoom(p) >= 16 * n) mark(p, "roomy");
+    }
+    fitAirSet(grid, air);
+    // Then the rows a step of the spacing scale further apart at a time, up to 24px.
+    for (const p of panels) {
+      const room = airRoom(p);
+      if (room < 4) continue;
+      const lists = [...p.querySelectorAll("[data-fit]")].filter((l) => l.getClientRects().length)
+        .map((l) => ({l, n: Math.max(0, shownIn(l) - 1), cur: parseFloat(getComputedStyle(l).rowGap) || 0}));
+      let best = 0;
+      for (const g of AIR_GAPS) {
+        const cost = lists.reduce((s, x) => s + x.n * Math.max(0, g - x.cur), 0);
+        if (cost > 0 && cost <= room) best = g;
+      }
+      if (best) for (const x of lists) if (x.n && best > x.cur) air.gaps[fitName(x.l)] = best;
+    }
+    fitAirSet(grid, air);
+    // More than that left (two people in a tall row, "Nothing booked yet."): the foot's pills
+    // follow what they open, a step under it, and the room stays at the panel's own foot rather
+    // than as a hole between the content and its pills. Under 32px the pills stay at the foot,
+    // in line with the row's other panels.
+    for (const p of panels) if (airRoom(p) > AIR_HOLE && p.querySelector(":scope > .bp-foot")) mark(p, "follow");
+    fitAirSet(grid, air);
+    return air;
   }
   // The rows' share of the window, kept with the counts so a redraw puts both back at once.
   // A height, not a least height: rows sharing a least height came out all as tall as the
@@ -5616,7 +5721,12 @@
     // most left half of a tall panel empty (the maintainer, 2026-11-06: "list a couple more,
     // but dont cramp them"); "All N" opens the rest on Jobs.
     const JOBS_MAX = 8;
-    put(grid, briefPanel("jobs", "Jobs", [sendLine, best.length ? h("ul", {class: "plain bp-list", "data-fit": "2,3,2"}, best.slice(0, JOBS_MAX).map((r) => jobLi(r.id, r.title, r.company, r.score, r.band)))
+    // Under the drafts' line, the new jobs say what they are: "18 drafts ready to apply" over a
+    // list of eight new jobs read as the list of the drafts (the maintainer, 2026-11-07: "is jobs
+    // showing correctly here?"). The two add up to the menu's count.
+    // On a laptop it shows where the panel has room for it (fitAir); a phone always shows it.
+    const newLine = sendLine && best.length ? h("p", {class: "small muted bp-sub"}, "New, best fit first") : null;
+    put(grid, briefPanel("jobs", "Jobs", [sendLine, newLine, best.length ? h("ul", {class: "plain bp-list", "data-fit": "2,3,2"}, best.slice(0, JOBS_MAX).map((r) => jobLi(r.id, r.title, r.company, r.score, r.band)))
       : readyRows.length ? h("ul", {class: "plain bp-list", "data-fit": "2,3,2"}, readyRows.slice(0, JOBS_MAX).map(({a, j}) => jobLi(a.id, a.role || a.title, a.company, j && j.score != null ? j.score : null, j ? j.band : null)))
       : searching ? h("p", {class: "muted"}, "Searching now.") : toSend ? null : h("p", {class: "muted"}, "Nothing new to look at.")],
       [best.length ? navLink("jobs", "All " + best.length + " new") : readyRows.length > 1 ? navLink("drafts", "All " + readyRows.length + " drafts") : null,

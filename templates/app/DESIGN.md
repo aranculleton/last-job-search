@@ -79,6 +79,14 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   with no screen of its own, says "2 more" and opens them in place. On a short window (660px
   or less) the numbers are one line under the greeting, opening Progress with its chart. A
   phone scrolls. (the maintainer, 2026-11-05; fit tests)
+- **A panel uses the room its row gives it**, never content packed at the top over a hole
+  before its pills. Worked out from what is drawn (`fitAir`), never a height tuned to one
+  window, and only room the panel already has: a list's own small heading where it fits
+  (Jobs' "New, best fit first" under its drafts' line), a short list's rows each in a soft box
+  as Coming up's are, the rows a step of the spacing scale further apart up to 24px, and past
+  that the pills a step under what they open, the spare room at the panel's foot. Your
+  progress's chart grows into its room, up to 160px. (the maintainer, 2026-11-07: "u see how
+  its bunched at the top? be smart about this"; room tests)
 
 ## Cards and lists
 

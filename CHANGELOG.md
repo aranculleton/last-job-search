@@ -34,6 +34,12 @@ make sense to somebody whose repo just received it.
   words to say ("SAY.", "Say this:", "Talking point") is left out and the words under it are
   shown; a note to you ("Note to you, not to say: ...") sits as a quieter line under what it is
   about, never among the words to say. The prep's check now asks for such a label to be taken out.
+- **On a laptop the Brief's panels use their room** instead of packing everything at the top
+  with a gap above the buttons. Next three's steps, and a short list of people or jobs, each sit
+  in their own soft box and spread out a little; a panel with little to show keeps its buttons
+  just under it; Your progress's chart grows taller; and Jobs says "New, best fit first" over
+  its new jobs, so they no longer read as the drafts ready to apply. It is worked out from your
+  own window, so it holds at any size, at any zoom and in Safari.
 
 ## [4.13.0] - 2026-11-06
 
