@@ -400,7 +400,7 @@ def test_a_referral_is_asked_for_one_role_and_holds_cold_applications(run, tmp_p
         {"submit": True, "receipts": True, "view": {"people": nxt["people"], "jobs": nxt["jobs"]}},
         {"hash": "jobs", "eval": "document.querySelector('#main [data-item=\"r12-2\"]').textContent"},
         {"hash": "contacts", "more": "larkspur_retail_castellan", "click": "The referral is over: Juno"},
-        {"click": "Not this time", "role": "radio", "submit": True},
+        {"click": "I was turned down", "within": "dialog"},
     ], vp)
     (w,) = [x for x in got["after"][1]["work"] if x["kind"] == "reply"]
     assert w["args"]["contact"] == "larkspur_retail_castellan" and w["args"]["job"] == "r12-2" and w["args"]["kind"] == "referral_ask"

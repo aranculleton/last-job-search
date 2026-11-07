@@ -160,8 +160,10 @@ ACTIONS = {
                         "state.py set --status referral_in_progress, the role named",
                         "person.status"),
     "referral.ended": (("person", "message", "referral"),
-                       "state.py set: the referral over (hired, rejected, withdrawn), the hold "
-                       "lifted", "person.status"),
+                       "state.py set: the referral over (rejected, withdrawn, not_happening, "
+                       "hired), the hold lifted and nothing owed to them but a hire's thanks; "
+                       "rejected or withdrawn also closes the sent application there "
+                       "(confirm.record_outcome)", "person.status"),
     "due.snooze": (("due", "message"), "state.py set --due <day>, or \"DO NOT CHASE until "
                                        "<day>\" on the application's row (followups.py)",
                    "due.undo"),
@@ -2005,6 +2007,18 @@ def _person_status(r: Run) -> dict:
         _undecline(str(r.target["declined"]))
     if r.target.get("parked"):
         _unpark_draft(cid)
+    # The undo of a referral's end: every application it closed, as it was.
+    for o in r.target.get("outcomes") or []:
+        sub = Run.__new__(Run)
+        sub.__dict__.update(r.__dict__)
+        sub.target, sub.value = dict(o.get("target") or {}), dict(o.get("value") or {})
+        try:
+            _outcome_undo(sub)
+        except Refused:
+            pass
+    if r.target.get("outcomes"):
+        return {"note": "Taken back: the referral and the application are as they were.",
+                "undo": None}
     return {"note": f"{_first(cid)}: {status.replace('_', ' ')}.",
             "undo": {"action": "person.status", "target": {"kind": "person", "contact": cid},
                      "value": before}}
@@ -2049,20 +2063,78 @@ def _referral_agreed(r: Run) -> dict:
 
 
 REFERRAL_ENDS = {"hired": "hired", "rejected": "not taken forward", "withdrawn": "withdrawn",
-                 "over": "over"}
+                 "not_happening": "not happening", "over": "over"}
+
+
+def _referred_applications(cid: str, role: str) -> list:
+    """The sent, still open applications at a referrer's employer that a referral's end
+    closes: those filed under them or as a referral first, else the one for the role their
+    referral names, else the only one there. Never a guess between several."""
+    import throttle
+    from company_key import key as _ckey
+    row, _ = _contact(cid)
+    k = _ckey((row or {}).get("company") or "")
+    if not k:
+        return []
+    _rows, _ = _tracker_row({})
+    live = [x for x in _rows if _ckey(x.get("company") or "") == k
+            and app_model._status(x) not in throttle.FINAL | throttle.UNSENT]
+    linked = [x for x in live if str(x.get("source") or "") == f"contact:{cid}"
+              or str(x.get("channel") or "").lower() == "referral"
+              or (cid and cid in str(x.get("notes") or ""))]
+    named = [x for x in live if role and role.lower() in str(x.get("role") or "").lower()]
+    got = linked or named or (live if len(live) == 1 else [])
+    return [{"kind": "application", "date": x.get("date") or "", "company": x.get("company") or "",
+             "role": x.get("role") or ""} for x in got]
 
 
 def _referral_ended(r: Run) -> dict:
+    """The referral is over, said in one tap (the maintainer, 2026-11-07: turned down at once
+    after applying, with no way to say so). Turned down or withdrew closes the application
+    there with that outcome as "I heard back" does; every end leaves nothing owed to the
+    referrer, so their card leaves To do; only a hire is owed a thank-you. Undo puts back the
+    person and every application it closed."""
     cid = r.target.get("contact") or ""
-    why = r.words() or "over"
-    said = REFERRAL_ENDS.get(why.lower(), why)
-    before = _set_contact(r, "in_conversation", "Thank them for the referral", "",
-                          f"the referral ended: {said}, said on the page")
-    # No reason given read "is over (over)" (engine audit 16).
-    how = f" ({said})" if said != "over" else ""
-    return {"note": f"The referral through {_first(cid)} is over{how}. The hold there is "
-                    "lifted.",
-            "undo": {"action": "person.status", "target": {"kind": "person", "contact": cid},
+    why = (r.words() or "over").lower()
+    why = {"other": "over", "couldnt": "not_happening", "not happening": "not_happening"}.get(
+        why, why)
+    said = REFERRAL_ENDS.get(why, why)
+    row, _ = _contact(cid)
+    role = app_model.role_in((row or {}).get("next_action"))
+    closed = []
+    if why in ("rejected", "withdrawn"):
+        for target in _referred_applications(cid, role):
+            sub = Run.__new__(Run)
+            sub.__dict__.update(r.__dict__)
+            sub.target, sub.value = target, {"on": r.day.isoformat(),
+                                             "why": "after the referral" if why == "rejected"
+                                             else ""}
+            got = _outcome(sub, why)
+            if got.get("undo"):
+                closed.append({"target": target, "value": got["undo"]["value"]})
+    # "Nothing owed (<day>)" is the contact book's own line for a thread that needs nothing
+    # (state.LEAVE_ALONE): no nudge, until they write again.
+    before = _set_contact(r, "in_conversation",
+                          "Thank them for the referral" if why == "hired" else
+                          f"Nothing owed ({r.day.isoformat()}). The referral is over: {said}.",
+                          "", f"the referral ended: {said}, said on the page")
+    who = _first(cid)
+    company = str((row or {}).get("company") or "") or "there"
+    if why == "rejected":
+        note = f"Recorded: {company} said no" + (", and the application is closed" if closed
+                                                 else "") + f". Nothing more is owed to {who}."
+    elif why == "withdrawn":
+        note = f"Recorded: you withdrew from {company}" + (
+            ", and the application is closed" if closed else "") + f". Nothing more is owed to {who}."
+    elif why == "not_happening":
+        note = f"No longer waiting for {who}. Applying at {company} is up to you again."
+    else:
+        # No reason given read "is over (over)" (engine audit 16).
+        how = f" ({said})" if said != "over" else ""
+        note = f"The referral through {who} is over{how}. The hold there is lifted."
+    return {"note": note,
+            "undo": {"action": "person.status",
+                     "target": {"kind": "person", "contact": cid, "outcomes": closed},
                      "value": before}}
 
 

@@ -229,8 +229,9 @@ def test_an_interview_booked_here_is_in_coming_up_at_once(run, tmp_path):
     got = _go(run, tmp_path, [
         {"hash": "interviews", "click": "Add something", "exact": True},
         {"click": "An interview", "exact": True},
-        {"click": "Senior Supply Chain Analyst at Larkspur Retail", "role": "radio", "exact": True},
-        {"submit": True},
+        # A few applications: a button each, the one tapped going straight on (DESIGN.md).
+        {"click": "Senior Supply Chain Analyst at Larkspur Retail", "within": "dialog", "exact": True},
+        {"wait": 100},
         {"fill": {"Which stage": "Final round", "The day": "2026-11-03", "The time": "2pm ET"}, "submit": True, "read": "#main"},
     ])
     a = _acts(got, "outcome.interview")[0]

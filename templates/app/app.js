@@ -2364,7 +2364,7 @@
     // the engine has not linked (an application from before links existed).
     const item = arguments[1];
     const ids = item && item.related ? arr(obj(item.related).people) : null;
-    return peopleItems().find((p) => (ids ? ids.includes(p.id) : txt(p.employer) === c) && txt(p.status) === "referral_in_progress") || null;
+    return peopleItems().find((p) => (ids ? ids.includes(p.id) : txt(p.employer) === c) && txt(p.status) === "referral_in_progress" && !referralEndedHere(p.id)) || null;
   }
   function confirmApplied(list, then, what) {
     const held = list.map((x) => ({x, p: referralAt(x.company, x)})).filter((y) => y.p);
@@ -3476,6 +3476,8 @@
         if (a && txt(a.company)) cos.add(txt(a.company).toLowerCase());
         continue;
       }
+      // A referral ended here owes them nothing but a reply they are due: off To do at once.
+      if (txt(d.action) === "referral.ended") { if (referralEndedHere(txt(d.item))) other.add(txt(d.item)); continue; }
       if (txt(d.action) !== "person.stop") continue;
       const scope = txt(obj(d.value).scope);
       if (scope === "other") { other.add(txt(d.item)); continue; }
@@ -3497,7 +3499,7 @@
     const each = !!(o && o.each);
     const out = [];
     const stopped = stoppedPeople();
-    const ivs = interviewItems().filter((i) => !isPast(i.when) && dayDiff(i.when) !== null && dayDiff(i.when) <= 14)
+    const ivs = interviewItems().filter((i) => !isPast(i.when) && !ivHad(i) && dayDiff(i.when) !== null && dayDiff(i.when) <= 14)
       .sort((a, b) => txt(a.when).localeCompare(txt(b.when)));
     const ivCompanies = new Set(ivs.map((i) => txt(i.company)));
     // The small yes-or-no and choice questions: one card, one question at a time ("1 of 4"),
@@ -3828,6 +3830,13 @@
   const TODO_FIRST = 5;     // To do shows this many first; the rest wait behind one fold
   // Cards that help Claude do more and ask nothing of today (renderTodo's last line).
   const HELP_KEYS = new Set(["reading", "export"]);
+  // What each way of helping Claude gives, in a line, for the fold that holds it.
+  function helpWhy(i) {
+    const k = txt(obj(i).key);
+    return k === "you-finish" ? "Your profile: every " + noun() + " and letter is built from it"
+      : k === "reading" ? "Let Claude read profiles before it writes to people"
+      : k === "export" ? "Your LinkedIn download keeps who you know up to date" : "";
+  }
   function settingUpNow() { const su = obj(M().setup); return !!txt(su.state) && txt(su.state) !== "done"; }
   // Anything on To do can be hidden for a week (the maintainer, 2026-10-29: everything shown
   // can be acted on or hidden). Kept on this device; it comes back after the week.
@@ -4006,7 +4015,7 @@
       }
     } else sum = "You're up to date.";
     if (!settingUp && !top && iv && dayDiff(iv.when) !== null && dayDiff(iv.when) <= 3) {
-      small = cap1(txt(iv.next_stage) || "Interview") + " with " + txt(iv.company) + " " + dayWords(iv.when) + (timeOf(iv.when) ? " at " + timeOf(iv.when) : "") + ".";
+      small = stageName(iv) + " with " + txt(iv.company) + " " + dayWords(iv.when) + (timeOf(iv.when) ? " at " + timeOf(iv.when) : "") + ".";
     }
     // Nothing more pressing to say: the shortlist waiting in Jobs, so To do never reads as
     // "nothing to do" while new roles sit unlooked at.
@@ -4074,7 +4083,9 @@
     // Hideable for a week like every other card: the gaps stay listed in Your profile. With
     // today's things folded, it waits at the end of the fold with them.
     const finish = settingUp || todoHidden({key: "you-finish"}) ? null : finishProfileCard();
-    const helpNodes = helps.map((i) => withHide(i, i.node({where: "todo", section: "todo"}))).concat(finish ? [withHide({key: "you-finish"}, finish)] : []);
+    // Your profile first: every document is built from it.
+    const helpList = (finish ? [{key: "you-finish", node: () => finish}] : []).concat(helps);
+    const helpNodes = helpList.map((i) => withHide(i, i.node({where: "todo", section: "todo"})));
     // Its count is what it still folds: once opened the line goes (CSS) and the first card it
     // showed takes the focus. "Show 1 more" stayed over the card it had shown (the
     // maintainer, 2026-11-05: "it shows something else but still says show 1 more").
@@ -4095,9 +4106,23 @@
       delete d.dataset.tapped;
       if (first) first.focus({preventScroll: true});
     }}, h("summary", {class: "band-more-sum", onclick: (e) => { e.currentTarget.parentElement.dataset.tapped = "1"; }}, "Show " + restN + " more"), rest));
+    // Help Claude do more: what makes Claude better at the rest, asked nothing today and never
+    // counted in it. Right after today's things and above Not due yet, one line that says what
+    // it gives; with nothing due today, its first card shows under its own heading, the rest
+    // one tap below (the maintainer, 2026-11-07: "help claude do more is more important but
+    // its a bit too tucked away here"). Today's things always come first (DESIGN.md, Places).
+    const helpRoom = !settingUp && !restN && !top && helpNodes.length && shown === 0;
+    if (helpRoom) {
+      put(wrap, h("section", {class: "band help-band", "aria-labelledby": "band-help"}, h("h3", {class: "group", id: "band-help"}, "Help Claude do more"),
+        h("div", {class: "todo-group"}, h("div", {class: "stack"}, helpNodes[0])),
+        helpNodes.length > 1 ? det("todo-help", false, {class: "band-more"}, h("summary", {class: "band-more-sum"}, "Show " + (helpNodes.length - 1) + " more"),
+          h("div", {class: "stack todo-help"}, helpNodes.slice(1))) : null));
+    } else if (helpNodes.length) {
+      put(wrap, det("todo-help", false, {class: "band-more soon-more help-more"}, h("summary", {class: "band-more-sum"}, "Help Claude do more (" + helpNodes.length + ")",
+        helpWhy(helpList[0]) ? h("span", {class: "band-more-why"}, " · " + helpWhy(helpList[0])) : null),
+        h("div", {class: "stack todo-help"}, helpNodes)));
+    }
     if (soonCount) put(wrap, det("todo-soon", !shown && !top, {class: "band-more soon-more"}, h("summary", {class: "band-more-sum"}, "Not due yet (" + soonCount + ")"), soon));
-    if (helpNodes.length) put(wrap, det("todo-help", false, {class: "band-more soon-more help-more"}, h("summary", {class: "band-more-sum"}, "Help Claude do more (" + helpNodes.length + ")"),
-      h("div", {class: "stack todo-help"}, helpNodes)));
     const hidden = dueItems().find((d) => txt(d.kind) === "hidden");
     if (!settingUp) put(wrap, hidden ? h("p", {class: "muted small hidden-note"}, txt(hidden.title) + ".") : null,
       hiddenFold(hiddenTodos(settingUp, every)), settingUp ? null : putOffFold(), doneTodayFold(), tipLine("todo"));
@@ -4132,8 +4157,8 @@
       // underlined text in its top line (the review, 2026-11-05).
       h("div", {class: "todo-top"}, kindMark("interview"), stateWord(relWhen(iv.when), dayDiff(iv.when) <= 1 ? "warn" : null), acts.bin),
       h("p", {class: "card-title", id: hid}, ctx.where === "todo" ? h("a", {href: "#interviews/" + iv.id, class: "title-link", "data-k": "open:interviews:" + iv.id, title: "Open in Coming up",
-        onclick: (e) => { e.preventDefault(); go("interviews", {focus: false, item: iv.id}); }}, cap1(txt(iv.next_stage) || "Interview") + " with ", h("bdi", {}, txt(iv.company)))
-        : [cap1(txt(iv.next_stage) || "Interview") + " with ", h("bdi", {}, txt(iv.company))]),
+        onclick: (e) => { e.preventDefault(); go("interviews", {focus: false, item: iv.id}); }}, stageName(iv) + " with ", h("bdi", {}, txt(iv.company)))
+        : [stageName(iv) + " with ", h("bdi", {}, txt(iv.company))]),
       h("p", {class: "meta"}, [fmtWhen(iv.when), has ? "Prep ready" : "No prep yet"].filter(Boolean).join(" · ")),
       list.length ? alertLine(list[0], {where: "soon", section: "todo", item: iv.id, bare: true}) : null,
       // The same actions as its card in Coming up (ivActs), and its bin the same choices.
@@ -4158,7 +4183,7 @@
     const gone = isPast(iv.when);
     const offer = ivOffer(iv);
     const offered = !gone && !offer ? arr(iv.offered) : [];
-    const what = lc1(txt(iv.next_stage) || "interview");
+    const what = lc1(stageName(iv));
     const read = (kind) => btn("Read your prep", () => openDetail("interview", iv.id), {kind, small: true, key: "read:" + k, aria: "Read your prep for your " + what + " with " + txt(iv.company)});
     const prepBtn = (kind) => btn(has ? "Update my prep" : "Prepare me", () => askPrep(iv), {kind, small: true, key: "prep:" + k, aria: (has ? "Update my prep for " : "Prepare me for ") + txt(iv.company)});
     const bin = IV_OVER[txt(iv.status)] ? null : btn("", () => askEndApplication(iv, "the " + what + " with " + txt(iv.company), gone ? null : () => askMoved(iv), ["interview", iv.id]),
@@ -4864,7 +4889,7 @@
     // The employer with the role: "Operations Analyst" alone did not say where (the
     // walk-through, 2026-11-03).
     const at = (what, co) => txt(what) + (txt(co) && txt(what) ? " at " + txt(co) : txt(co));
-    const title = home === "jobs" ? at(item.title, item.company) : home === "drafts" ? at(item.role, item.company) : home === "drafts-messages" ? "Note to " + whoAt(item.first_name, item.employer) : at(item.next_stage || item.role, item.company);
+    const title = home === "jobs" ? at(item.title, item.company) : home === "drafts" ? at(item.role, item.company) : home === "drafts-messages" ? "Note to " + whoAt(item.first_name, item.employer) : at(item.next_stage ? stageName(item) : item.role, item.company);
     return card("article", {class: "card todo", "aria-labelledby": hid, "data-item": "al:" + list[0].id},
       h("div", {class: "todo-top"}, kindMark(home === "interviews" ? "interview" : home === "drafts-messages" ? "message" : "application"), h("span", {class: "todo-open"}, tabLink(home, item.id))),
       h("p", {class: "card-title", id: hid}, title),
@@ -4891,6 +4916,15 @@
     if (sec && !/\]\(/.test(txt(it.text))) return h("li", {}, h("a", {href, class: "bp-text bp-link", "data-k": "bp-go:" + key, onclick: goTo}, inlineMd(txt(it.text))));
     const open = sec ? h("a", {href, class: "bp-go", "data-k": "bp-go:" + key, "aria-label": "Open: " + txt(it.text).replace(/[*_`]/g, "").slice(0, 60), onclick: goTo}, "Open") : null;
     return h("li", {}, h("span", {class: "bp-text"}, inlineMd(txt(it.text))), open);
+  }
+  // The rounds had and waiting to hear back, said under the Brief's Coming up once there is
+  // nothing booked, never as if still to come (the maintainer, 2026-11-07). The engine counts
+  // them (app_model.coming_up).
+  function briefWaiting() {
+    const items = interviewItems().filter((i) => !ivEnd(i));
+    const ids = comingUpCounts(items).waiting;
+    const cos = [...new Set(items.filter((i) => ids.includes(i.id)).map((i) => txt(i.company)).filter(Boolean))];
+    return cos.length ? " Waiting to hear back from " + (cos.length > 2 ? cos.slice(0, 2).join(", ") + " and " + (cos.length - 2) + " more" : cos.join(" and ")) + "." : "";
   }
   function briefPanel(key, title, body, foot, opts) {
     opts = opts || {};
@@ -5523,7 +5557,7 @@
       return h("div", {class: "bp-iv"},
         h("p", {class: "bp-iv-when"}, h("span", {}, whenWords),
           heroUp ? btn("", () => calSheet([heroUp]), {kind: "quiet icon-only", small: true, icon: "cal-add", key: "bp-cal-hero", aria: "Add to your calendar: " + txt(heroUp.title)}) : null),
-        h("p", {class: "bp-iv-what"}, cap1(txt(iv.next_stage) || "Interview") + " with ", h("bdi", {}, txt(iv.company))),
+        h("p", {class: "bp-iv-what"}, stageName(iv) + " with ", h("bdi", {}, txt(iv.company))),
         txt(iv.role) ? h("p", {class: "bp-iv-role"}, txt(iv.role)) : null,
         obj(iv.prep).updated ? btn("Read your prep", () => openDetail("interview", iv.id), {kind: "primary", small: true, key: "bp-prep:" + iv.id})
           : btn("Prepare me", () => askPrep(iv), {kind: "primary", small: true, key: "bp-askprep:" + iv.id}));
@@ -5679,7 +5713,7 @@
     // Booked things only: a follow-up 45 days late is To do's, never Coming up's, and the line
     // says what the strip shows (the audit, 2026-11-03).
     put(grid, briefPanel("upcoming", "Coming up", [weekStrip(allUp), upCards.length ? (() => { const seen = new Set(); return h("ul", {class: "plain bp-up", "data-fit": "2,2"}, upCards.map((u) => upRow(u, "brief", seen))); })()
-      : h("p", {class: "muted"}, allUp.length ? "Nothing else booked." : "Nothing booked yet.")],
+      : h("p", {class: "muted"}, (allUp.length ? "Nothing else booked." : "Nothing booked yet.") + briefWaiting())],
       // "All 1 coming up" said nothing the panel did not: a count only where there is more.
       [navLink("interviews", allUp.length > 1 && allUp.length > upCards.length ? "All " + allUp.length + " coming up" : "Coming up"),
         h("button", {type: "button", class: "btn link", "data-k": "bp-up-add", onclick: () => askAddSomething()}, "Add something")],
@@ -6317,10 +6351,16 @@
       act([{item: cid, action: "person.stop", value: {why, scope: w, employer: employer || null}, rev: rev || revOf(cid)}],
         w === "employer" ? "No more from " + employer : w === "other" ? "No note to " + who : "No more messages to " + who);
     };
+    // A referral in flight through them: how it ended comes first, each one tap (the
+    // maintainer, 2026-11-07: turned down, and no way to say the referral could not happen).
+    // Not the employer and in touch another way do not fit someone putting you forward.
+    const rp = personById(cid);
+    const ref = rp && txt(rp.status) === "referral_in_progress" && !referralEndedHere(cid) ? referralEndChoices(rp) : null;
     // Each choice its own button, done at once: a list to pick from and then "Done" took two
     // taps to put one thing away (the walk-through, 2026-11-03).
-    sheet({title: "Not " + who + "?", intro: "Nothing is sent either way. You can change your mind in Contacts.",
+    sheet({title: ref ? "Is the referral through " + who + " over?" : "Not " + who + "?", intro: ref ? "Turned down or withdrew also closes your application at " + employer + ". Nothing is sent." : "Nothing is sent either way. You can change your mind in Contacts.",
       choices: [extra.replied ? {label: "They replied", key: "replied", run: () => { setTimeout(extra.replied, 0); }} : null,
+        ...(ref || []),
         extra.skip ? {label: "Not now: set this note aside", key: "skip", run: () => extra.skip()} : null,
         // A dated row is put off in the engine itself, to a day: Tomorrow and Next week first,
         // never hidden on this device alone (the UX review, 2026-11-05).
@@ -6329,8 +6369,8 @@
         // them opens it again (2026-11-03: a row's own "Let it go" changed nothing to see).
         extra.letGo ? {label: "Let it go: they have not replied", key: "letgo", run: () => extra.letGo()} : null,
         {label: "Don't contact " + who, key: "person", run: () => stop("person")},
-        employer ? {label: "Not interested in " + employer + " any more", key: "employer", run: () => stop("employer")} : null,
-        {label: "Already in touch another way", key: "other", run: () => stop("other")},
+        employer && !ref ? {label: "Not interested in " + employer + " any more", key: "employer", run: () => stop("employer")} : null,
+        ref ? null : {label: "Already in touch another way", key: "other", run: () => stop("other")},
         elseChoice(extra.talk ? extra.talk[0] : "person", extra.talk ? extra.talk[1] : cid)]});
   }
   // A person's name that opens everything about them: the thread, what is owed, where they
@@ -6491,8 +6531,10 @@
     }
     if (what === "window") {
       const now = String(Number(s.window_days) || 14);
-      sheet({title: "How recent", fields: [{id: "v", type: "radio", label: "Leave out jobs posted more than", value: now, options: [["7", "7 days ago"], ["14", "14 days ago"], ["30", "30 days ago"]]}], submit: "Save",
-        onSubmit: (v) => { if (v.v !== now) set({value: Number(v.v)}, "Search window: " + v.v + " days"); }});
+      // One tap a choice, done at once; the one set now says so (DESIGN.md, the trash).
+      sheet({title: "How recent", intro: "Leave out jobs posted more than:",
+        choices: [["7", "7 days ago"], ["14", "14 days ago"], ["30", "30 days ago"]].map(([v, label]) => ({label: label + (v === now ? " (now)" : ""), key: "window-" + v,
+          run: () => { if (v !== now) set({value: Number(v)}, "Search window: " + v + " days"); }}))});
       return;
     }
     if (what === "pay") {
@@ -7111,6 +7153,8 @@
     converted_to_application: ["Applied", "ok"], gone_cold: ["Gone quiet", "plain"], closed: ["Closed", "plain"],
     dropped: ["Set aside", "plain"], cold: ["Gone quiet", "plain"], stopped: ["Stopped", "plain"]};
   function statusWord(p) {
+    // A referral ended on this page: talking again at once, before Claude has caught up.
+    if (txt(p.status) === "referral_in_progress" && referralEndedHere(p.id)) return PERSON_STATUS.in_conversation;
     const own = PERSON_STATUS[txt(p.status)] || [cap1(txt(p.status).replace(/_/g, " ")), "plain"];
     return [txt(p.status_word) || own[0], own[1]];
   }
@@ -7761,7 +7805,7 @@
       txt(prep.text) && !onPage ? btn("Read your call prep", () => openDetail("person", p.id), {small: true, key: "pprep:" + key}) : null,
       talking && st !== "call_booked" ? btn("Call booked", () => askCall(p), {small: true, key: "pcall:" + key, aria: "A call booked with " + name}) : null,
       st === "call_booked" && onPage ? btn("Change the call", () => askCall(p), {small: true, key: "dcall:" + key}) : null,
-      st === "referral_in_progress" ? btn("The referral is over", () => referralEnded(p), {small: true, key: "prefend:" + key, aria: "The referral is over: " + name})
+      st === "referral_in_progress" && !referralEndedHere(p.id) ? btn("The referral is over", () => referralEnded(p), {small: true, key: "prefend:" + key, aria: "The referral is over: " + name})
         : talking && onPage ? btn("They put my name forward", () => referralAgreed(p), {small: true, key: "dref:" + key}) : null,
       wrote ? btn("They sent me a job", () => askAddJob(p), {small: true, key: "pjob:" + key, aria: name + " sent me a job"}) : null,
       talking && !(asked && asked.doc) ? btn("Make a " + noun() + " for " + name, () => askContactResume(p), {small: true, key: "cres:" + key}) : null,
@@ -7892,6 +7936,7 @@
       : sent ? "Sent. Nothing to do until they write back."
       : got ? "Their reply is kept: your turn."
       : closedHere ? "Closed. A reply from them opens it again."
+      : st === "referral_in_progress" && referralEndedHere(p.id) ? "The referral is over. Nothing more is owed to them."
       : offTill ? "Put off until " + fmtDay(offTill) + "."
       : p.is_process_stage ? "This call is an interview stage: it goes with your interviews, with its own prep."
       : st === "call_booked" && callDay && callPast(p) ? "How did it go? Your call was " + dayWords(callDay) + "."
@@ -8004,7 +8049,7 @@
       const timed = !isDateOnly(iv.when) && tms(iv.when) !== null;
       // Over an hour after it began: it has been, whichever list it came from.
       if (timed && tms(iv.when) + 3600000 <= now()) continue;
-      out.push({id: "up-iv-" + txt(iv.id), title: cap1(txt(iv.next_stage) || "Interview") + ": " + txt(iv.company), kind: "interview", day,
+      out.push({id: "up-iv-" + txt(iv.id), title: stageName(iv) + ": " + txt(iv.company), kind: "interview", day,
         start: timed ? new Date(tms(iv.when)).toISOString() : null, all_day: !timed, note: txt(iv.role) || null, go: {to: "interviews", item: txt(iv.id)}});
     }
     // Added on this page: shown at once, marked as saving, and kept once Claude has saved it
@@ -8273,18 +8318,25 @@
     // Ended here: off the list at once, one line each while the page still holds it, so its
     // Undo stays in reach.
     const ended = allInterviews().filter(ivEnd).map((i) => endedInterview(i, ivEnd(i)));
-    const past = (i) => i.past === true || isPast(i.when);
-    const ahead = items.filter((i) => !past(i)).sort((a, b) => txt(a.when || "9999").localeCompare(txt(b.when || "9999")));
+    const past = (i) => i.past === true || ivHad(i);
+    // Counted by the engine (app_model.coming_up): a round already had and waiting to hear is
+    // never "coming up" (the maintainer, 2026-11-07: "1 interview coming up" over a recruiter
+    // screen had on Mon 2 Nov, which read as still ahead).
+    const counts = comingUpCounts(items.filter((i) => !ivEnd(i)));
+    const ahead = items.filter((i) => counts.ahead.includes(i.id)).sort((a, b) => txt(a.when || "9999").localeCompare(txt(b.when || "9999")));
     const next = ahead[0];
     let sum = "No interviews booked.";
     let small = null;
+    const waitWords = counts.waiting.length ? plural(counts.waiting.length, "interview", "interviews") + " waiting to hear back." : "";
     if (next) {
       // The first card says what and when; the summary counts, so the two never repeat.
-      const rel = relDay(next.when);
-      sum = plural(ahead.length, "interview", "interviews") + " coming up" + (rel ? ", the next " + rel : "") + ".";
-      const unprepped = ahead.filter((i) => !obj(i.prep).updated || obj(i.prep).stale).length;
+      const rel = dayOf(next.when) ? relDay(next.when) : "";
+      sum = plural(ahead.length, "interview", "interviews") + " coming up" + (rel ? ", the next " + rel : ahead.length === counts.undated.length ? ", no day yet" : "") + ".";
       // Joined to the summary's one line (the UX review, 2026-11-05).
-      small = unprepped ? plural(unprepped, "interview has", "interviews have") + " no prep yet." : "Your prep is ready for each one.";
+      small = [counts.unprepped.length ? plural(counts.unprepped.length, "interview has", "interviews have") + " no prep yet." : "Your prep is ready for each one.", waitWords].filter(Boolean).join(" ");
+    } else if (waitWords) {
+      sum = "Nothing coming up.";
+      small = waitWords;
     }
     // Two views, so neither buries the other (the maintainer, 2026-11-02: "if you have loads
     // of calls booked you really need to scroll down for the interviews and vice versa"):
@@ -8299,7 +8351,7 @@
     const none = !items.length && !up.length;
     // One line and its tools, as on Contacts: what Claude is doing is the header's work pill and
     // each card's own line, never a line here; the interviews to hear back from a soft pill.
-    const heard = items.filter((i) => past(i) && !ivEnd(i) && (daysSince(i.when) === null || daysSince(i.when) <= 14)).length;
+    const heard = counts.waiting.length;
     const tools = none ? null : h("div", {class: "head-tools"}, btn("Add something", () => askAddSomething(), {small: true, key: "up-add"}),
       heard && up.length && items.length ? btn(plural(heard, "to hear back from", "to hear back from"), () => { setPref("up:view", "interviews"); render(); }, {small: true, key: "up-heard", aria: "See the interviews you are waiting to hear back from"}) : null);
     const wrap = h("section", {class: "sec", "aria-labelledby": "h-interviews" + (where ? "-" + where : "")}, screenHead("interviews", "Coming up", small ? [sum, " ", small] : sum, null, where, tools, {quiet: true}),
@@ -8320,8 +8372,8 @@
     if (view === "day") {
       put(wrap, h("section", {class: "up-agenda", "aria-label": "Booked or due, by day"}, upAgenda(up), addAll));
       // What has no day on the list, said once with the way to it.
-      const undated = ahead.filter((i) => !dayOf(i.when) && !arr(i.offered).length).length;
-      const waiting = items.filter((i) => past(i) && !ivEnd(i) && (daysSince(i.when) === null || daysSince(i.when) <= 14)).length;
+      const undated = counts.undated.length;
+      const waiting = counts.waiting.length;
       const more = [undated ? plural(undated, "interview has", "interviews have") + " no day yet" : "", waiting ? plural(waiting, "interview", "interviews") + " waiting to hear back" : ""].filter(Boolean);
       if (more.length) put(wrap, h("p", {class: "small up-more"}, more.join("; ") + ". ",
         btn("See your interviews", () => pick("interviews"), {kind: "link", key: "up-to-iv"})));
@@ -8337,6 +8389,24 @@
   function upView() { return txt(pref("up:view", "day")) === "interviews" ? "interviews" : "day"; }
   // What an interview's pill says: how soon it is; once it has been, how it stands. "Passed"
   // read as "you passed" on interviews the person had been turned down for (2026-11-03).
+  // Held and waiting to hear back: the engine's `had` (app_model._interviews); a model from
+  // before it, a live interview whose day has gone.
+  function ivHad(iv) { return obj(iv).had === true || (obj(iv).had === undefined && obj(iv).past !== true && isPast(obj(iv).when)); }
+  // Where an interview stands, counted once by the engine (app_model.coming_up): ahead, with
+  // no day, with no prep, waiting to hear. Less any ended on this page; a model from before
+  // it is read from the interviews themselves.
+  function comingUpCounts(items) {
+    const cu = M().coming_up;
+    const live = new Set(items.map((i) => txt(i.id)));
+    if (cu && typeof cu === "object") {
+      const of = (k) => arr(cu[k]).filter((id) => live.has(txt(id)));
+      return {ahead: of("ahead"), undated: of("undated"), unprepped: of("unprepped"), waiting: of("waiting")};
+    }
+    const ahead = items.filter((i) => i.past !== true && !ivHad(i));
+    return {ahead: ahead.map((i) => i.id), undated: ahead.filter((i) => !dayOf(i.when) && !arr(i.offered).length).map((i) => i.id),
+      unprepped: ahead.filter((i) => !obj(i.prep).updated || obj(i.prep).stale).map((i) => i.id),
+      waiting: items.filter((i) => i.past !== true && ivHad(i)).map((i) => i.id)};
+  }
   const IV_OVER = {rejected: "They said no", withdrawn: "You withdrew", no_response: "No reply", "no response": "No reply", hired: "Hired", offer_declined: "Offer declined"};
   function ivPill(iv) {
     if (ivOffer(iv)) return stateWord("Offer", "ok");
@@ -8349,7 +8419,7 @@
   }
   function endedInterview(iv, e) {
     return h("div", {class: "ended", "data-item": iv.id},
-      h("p", {class: "muted small"}, cap1(txt(iv.next_stage) || "Interview") + " with ", h("bdi", {}, txt(iv.company)), ": " + lc1(ACTION_WORDS[e.doc.action] || "over") + "."),
+      h("p", {class: "muted small"}, stageName(iv) + " with ", h("bdi", {}, txt(iv.company)), ": " + lc1(ACTION_WORDS[e.doc.action] || "over") + "."),
       stateLine(e.doc.item, "ivend:" + iv.id));
   }
   function interviewCard(iv) {
@@ -8360,18 +8430,21 @@
     const busy = w && ACTIVE.has(w.status);
     const has = !!prep.updated;
     const stale = has && !!prep.stale;
-    const gone = isPast(iv.when);
+    const gone = isPast(iv.when) || ivHad(iv);
     const list = gone ? [] : alertsOf(iv);
     const ref = obj(iv.referrer);
     const offer = ivOffer(iv);
     const offered = !gone && !offer ? arr(iv.offered) : [];
     const acts = ivActs(iv, iv.id);
+    // A day gone by is said without its weekday (DESIGN.md, Words: dates), and one had and
+    // waiting to hear says so: "You had it 2 Nov" (the maintainer, 2026-11-07).
+    const goneDay = gone && dayOf(iv.when) ? (ivHad(iv) && !IV_OVER[txt(iv.status)] ? "You had it " : "") + fmtDayMonth(iv.when) : "";
     return card("article", {class: "card interview" + edgeOf(list), "aria-labelledby": hid, "data-item": iv.id},
-      h("div", {class: "job-top"}, h("h3", {id: hid}, offer ? "Your offer from " : cap1(txt(iv.next_stage) || "Interview") + " with ", h("bdi", {}, txt(iv.company))),
+      h("div", {class: "job-top"}, h("h3", {id: hid}, offer ? "Your offer from " : stageName(iv) + " with ", h("bdi", {}, txt(iv.company))),
         // The bin is on what is still live: one that ended has nothing left to end.
         h("span", {class: "top-end"}, ivPill(iv), acts.bin)),
       offer ? null : h("p", {class: "when"}, offered.length ? "They offer " + daysWords(offered) + (txt(iv.reply_by) ? " · tell them by " + fmtDay(iv.reply_by) : "")
-        : [(gone ? fmtDay(iv.when) : fmtWhen(iv.when)) || "No day yet", formatWord(iv.format)].filter(Boolean).join(" · ")),
+        : [(gone ? goneDay : fmtWhen(iv.when)) || "No day yet", formatWord(iv.format)].filter(Boolean).join(" · ")),
       // Whether the prep is ready is said only of what is still to come: "No prep yet" under
       // an interview that ended weeks ago asked for work nobody needs (2026-11-03).
       h("p", {class: "meta"}, [txt(iv.role), gone || iv.past ? "" : stale ? "Prep is for an earlier plan of rounds" : has ? "Prep ready" : "No prep yet"].filter(Boolean).join(" · "), ref.id || ref.contact ? [" · Referred by ", itemLink("contacts", txt(ref.contact || ref.id), txt(ref.first_name), "ivref:" + iv.id)] : null),
@@ -9460,7 +9533,7 @@
     if (i.d && !i.key.startsWith("due:")) return lc1(txt(i.d.title));
     if (i.key === "send") return "your messages to send";
     if (i.key.startsWith("due:")) { const d = dueItems().find((x) => x.id === id); return d ? lc1(txt(d.title)) : "something due"; }
-    if (i.key.startsWith("iv:")) { const v = allInterviews().find((x) => x.id === id); return v ? lc1(txt(v.next_stage) || "interview") + " with " + txt(v.company) : "an interview"; }
+    if (i.key.startsWith("iv:")) { const v = allInterviews().find((x) => x.id === id); return v ? lc1(stageName(v)) + " with " + txt(v.company) : "an interview"; }
     if (i.key.startsWith("need:")) { const n = needsItems().find((x) => x.id === id); return n ? lc1(txt(n.title)) : "a question"; }
     return "something";
   }
@@ -9682,15 +9755,32 @@
   }
   function referralAgreed(p) {
     const jobs = jobRows().filter((r) => arr(obj(p.related).jobs).includes(r.id));
+    // Which role, one tap each, done at once (DESIGN.md, the trash: never a choice and then Save).
+    const agreed = (r) => act([{item: p.id, action: "referral.agreed", value: {role: r ? txt(r.title) : null, job: r ? r.id : null}, rev: p.rev}], "Referral recorded: " + txt(p.first_name));
     sheet({title: txt(p.first_name) + " put your name forward", intro: "For which role? Every job and draft at " + txt(p.employer) + " then waits for it.",
-      fields: [{id: "job", type: "radio", label: "The role", required: true, options: jobs.map((r) => [r.id, txt(r.title)]).concat([["other", "Another role"]])}],
-      submit: "Save",
-      onSubmit: (v) => { const r = jobs.find((x) => x.id === v.job); act([{item: p.id, action: "referral.agreed", value: {role: r ? txt(r.title) : null, job: r ? r.id : null}, rev: p.rev}], "Referral recorded: " + txt(p.first_name)); }});
+      choices: jobs.map((r) => ({label: txt(r.title), key: "ref-job-" + r.id, run: () => agreed(r)})).concat([{label: "Another role", key: "ref-job-other", run: () => agreed(null)}])});
+  }
+  // How a referral ends, each said the way it happened and done in one tap (the maintainer,
+  // 2026-11-07: turned down at once after applying, and the sheet offered "Not this time" and
+  // "I was hired" in a list with a Save, and "Something else" with no box). Turned down or
+  // withdrew also closes the application there (app_actions._referral_ended); every one
+  // leaves nothing owed to them, so their card leaves To do at once.
+  function referralEndChoices(p) {
+    const name = txt(p.first_name);
+    const co = txt(p.employer);
+    const end = (why, label) => act([{item: p.id, action: "referral.ended", value: {why}, rev: p.rev}], label);
+    return [{label: "I was turned down", key: "ref-rejected", run: () => end("rejected", "Turned down at " + co + ". Nothing more is owed to " + name)},
+      {label: "I withdrew", key: "ref-withdrawn", run: () => end("withdrawn", "You withdrew from " + co + ". Nothing more is owed to " + name)},
+      {label: "Not happening: stop waiting", key: "ref-off", run: () => end("not_happening", "No longer waiting for " + name)}];
   }
   function referralEnded(p) {
-    sheet({title: "The referral is over", intro: "Applying at " + txt(p.employer) + " no longer waits for " + txt(p.first_name) + ".",
-      fields: [{id: "why", type: "radio", label: "How it ended", required: true, options: [["hired", "I was hired"], ["rejected", "Not this time"], ["withdrawn", "I withdrew"], ["other", "Something else"]]}],
-      submit: "Save", onSubmit: (v) => act([{item: p.id, action: "referral.ended", value: {why: v.why}, rev: p.rev}], "Referral ended: " + txt(p.first_name))});
+    sheet({title: "The referral is over", intro: "You stop waiting for " + txt(p.first_name) + ". Turned down or withdrew also closes your application at " + txt(p.employer) + ".",
+      choices: referralEndChoices(p).concat([elseChoice("person", p.id)])});
+  }
+  // A referral's end said on this page, before Claude has caught up.
+  function referralEndedHere(cid) {
+    const e = effective(txt(cid), ["referral.ended", "referral.agreed"]);
+    return !!(e && e.doc.action === "referral.ended");
   }
   // People worth writing to at the employers you want, with anything said about this run in
   // the person's own words, as Find jobs asks (the maintainer, 2026-10-29: "it says one
@@ -9733,16 +9823,22 @@
     const ivs = live.filter((a) => txt(a.status) === "interview").map((a) => [txt(a.id), word(a)]);
     const rest = live.filter((a) => txt(a.status) !== "interview").map((a) => [txt(a.id), word(a)]);
     const many = live.length > 8;
+    const pick = (id) => {
+      if (id === "other") { setTimeout(() => openPlace("interview"), 0); return; }
+      const a = live.find((x) => txt(x.id) === id);
+      if (a) setTimeout(() => heardBack(a, pre || {}), 0);
+    };
+    // A few: a button each, the one tapped going straight on (DESIGN.md, the trash: never a
+    // choice and then a second button). Many: one list to pick from.
+    if (!many) {
+      sheet({title: "I have an interview", intro: "Which is it for?",
+        choices: ivs.concat(rest).map(([id, label]) => ({label, key: "iv-for-" + id, run: () => pick(id)})).concat([{label: "Something else", key: "iv-for-other", run: () => pick("other")}])});
+      return;
+    }
     sheet({title: "I have an interview", submit: "Next",
-      fields: [many ? {id: "a", type: "select", label: "Which is it for?", required: true, error: "Choose one.", placeholder: "Choose the application",
-        options: (ivs.length ? [["", "", "Interviewing now", ivs]] : []).concat([["", "", ivs.length ? "Other applications" : "Your applications", rest]]).concat([["other", "Something else"]])}
-        : {id: "a", type: "radio", label: "Which is it for?", required: true, error: "Choose one.",
-          options: ivs.concat(rest).concat([["other", "Something else"]])}],
-      onSubmit: (v) => {
-        if (v.a === "other") { setTimeout(() => openPlace("interview"), 0); return; }
-        const a = live.find((x) => txt(x.id) === v.a);
-        if (a) setTimeout(() => heardBack(a, pre || {}), 0);
-      }});
+      fields: [{id: "a", type: "select", label: "Which is it for?", required: true, error: "Choose one.", placeholder: "Choose the application",
+        options: (ivs.length ? [["", "", "Interviewing now", ivs]] : []).concat([["", "", ivs.length ? "Other applications" : "Your applications", rest]]).concat([["other", "Something else"]])}],
+      onSubmit: (v) => pick(v.a)});
   }
   // An interview has its own day below, so the sheet's "When" goes while it is chosen.
   function whenShown(el, on) {
@@ -9839,7 +9935,7 @@
     const late = nudge ? null : appLate(a);
     const [word, tone] = iv && !isPast(iv.when) ? ["Interview " + fmtDay(iv.when), "info"] : nudge || late !== null ? ["Follow-up due", "warn"] : APP_STATE[txt(a.status)] ? [APP_STATE[txt(a.status)][0] === null ? null : txt(a.status_word) || APP_STATE[txt(a.status)][0], APP_STATE[txt(a.status)][1]] : [txt(a.status_word) || cap1(txt(a.status)), null];
     const live = appLive(a);
-    const nextLine = iv && !isPast(iv.when) ? "Next: " + lc1(txt(iv.next_stage) || "interview") + " " + dayWords(iv.when) + (timeOf(iv.when) ? " at " + timeOf(iv.when) : "")
+    const nextLine = iv && !isPast(iv.when) ? "Next: " + lc1(stageName(iv)) + " " + dayWords(iv.when) + (timeOf(iv.when) ? " at " + timeOf(iv.when) : "")
       : nudge ? "Next: " + lc1(txt(nudge.title)) + (Number(nudge.overdue_days) > 0 ? ", " + plural(Number(nudge.overdue_days), "day", "days") + " late" : nudge.due ? ", " + dayWords(nudge.due) : "")
         : late ? "Next: " + lc1(txt(next.label || next.title) || "follow up") + ", " + plural(late, "day", "days") + " late"
           : txt(next.label || next.title) ? "Next: " + lc1(txt(next.label || next.title)) + (next.date || next.on ? ", " + dayWords(next.date || next.on) : "") : a.applied_on ? "Applied " + fmtDay(a.applied_on) : "";
@@ -10092,7 +10188,15 @@
   }
   // A stage's name for a title: its first clause ("Online test: McKinsey-HackerRank
   // assessment, invited ..., deadline ..." is "Online test: McKinsey-HackerRank assessment").
-  function ivTitle(iv) { return ivOffer(iv) ? "Your offer from " + txt(iv.company) : stageShort(iv.next_stage) + " with " + txt(iv.company); }
+  function ivTitle(iv) { return ivOffer(iv) ? "Your offer from " + txt(iv.company) : stageName(iv) + " with " + txt(iv.company); }
+  // The round's name for a title, the engine's own short one where the stored name is an
+  // employer's whole paragraph (the maintainer, 2026-11-07); the paragraph is its details.
+  function stageName(iv) { return txt(obj(iv).stage_title) || stageShort(obj(iv).next_stage); }
+  function stageDetails(iv) {
+    const d = txt(obj(iv).stage_details);
+    if (d) return d;
+    return txt(obj(iv).next_stage).toLowerCase() !== stageShort(obj(iv).next_stage).toLowerCase() ? txt(obj(iv).next_stage) : "";
+  }
   function stageShort(st) {
     const t = txt(st) || "Interview";
     const cut = t.split(/,\s|\s\(|;\s/)[0];
@@ -10107,7 +10211,7 @@
     const ref = obj(iv.referrer);
     const offer = ivOffer(iv);
     const rel = !offer && iv.when && !isPast(iv.when) ? relWhen(iv.when) : "";
-    const head = [rel, offer ? "" : (isPast(iv.when) ? fmtDay(iv.when) : fmtWhen(iv.when)) || "No day yet", formatWord(iv.format), iv.with ? "with " + txt(iv.with) : ""].filter(Boolean).join(" · ");
+    const head = [rel, offer ? "" : (isPast(iv.when) ? (ivHad(iv) && !IV_OVER[txt(iv.status)] ? "You had it " : "") + fmtDayMonth(iv.when) : fmtWhen(iv.when)) || "No day yet", formatWord(iv.format), iv.with ? "with " + txt(iv.with) : ""].filter(Boolean).join(" · ");
     const r = prepRead(iv);
     const glance = has ? prepGlance(iv) : null;
     const folds = has ? prepFolds(iv) : null;
@@ -10116,8 +10220,8 @@
       // A prep read after the day says "today" of the day it was written for (the audit,
       // 2026-11-03): said once, above it.
       has && (isPast(iv.when) || obj(iv.prep).stale) ? h("p", {class: "hint"}, obj(iv.prep).stale ? "This prep is for an earlier plan of rounds: Update my prep remakes it for this one."
-        : "This prep was written for your " + lc1(stageShort(iv.next_stage)) + (dayOf(iv.when) ? " on " + fmtDay(iv.when) : "") + ".") : null,
-      h("p", {class: "meta"}, [txt(iv.role), txt(iv.next_stage).toLowerCase() !== stageShort(iv.next_stage).toLowerCase() ? txt(iv.next_stage) : ""].filter(Boolean).join(" · "),
+        : "This prep was written for your " + lc1(stageName(iv)) + (dayOf(iv.when) ? " on " + fmtDay(iv.when) : "") + ".") : null,
+      h("p", {class: "meta"}, [txt(iv.role), stageDetails(iv)].filter(Boolean).join(" · "),
         ref.id || ref.contact ? [" · Referred by ", itemLink("contacts", txt(ref.contact || ref.id), txt(ref.first_name), "ivref:" + iv.id)] : null),
       h("div", {class: "card-actions"},
         busy ? btn("See its progress", openWork, {small: true, key: "dprep-work:" + iv.id}) : has ? null : btn("Prepare me", () => askPrep(iv), {kind: "primary", small: true, key: "dprep:" + iv.id}),
@@ -10160,6 +10264,7 @@
     const dueWords = p.due && dayDiff(p.due) !== null ? (dayDiff(p.due) < 0 ? "was due " + relDay(p.due) : dayWords(p.due)) : "";
     const nextText = callDay && !callPast(p) ? "Call " + dayWords(callDay) + (obj(p.call).time ? " at " + txt(p.call.time) : "")
       : txt(p.hold) ? txt(p.hold)
+      : st === "referral_in_progress" && referralEndedHere(p.id) ? "The referral is over. Nothing more is owed to them"
       : stepWords(p.next) || txt(p.next_action);
     const nextLine = nextText ? nextText + (dueWords && !txt(p.hold) && nextText.toLowerCase().indexOf(dueWords.toLowerCase()) < 0 && !(callDay && !callPast(p)) ? ", " + dueWords : "") : "";
     // A link the next step names (a referral link, a posting) opens from here, never as raw text.

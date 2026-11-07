@@ -298,7 +298,8 @@ def code_files() -> dict:
 # the page in parts carries everything else, and these come from there.
 def _from_store() -> set:
     import app_model
-    return (set(app_model.SECTIONS) | {"people_count", "lists", "listener", "schedule"}) - {"person"}
+    return (set(app_model.SECTIONS) | {"people_count", "coming_up", "lists", "listener",
+                                       "schedule"}) - {"person"}
 
 
 def slim(model: dict) -> dict:

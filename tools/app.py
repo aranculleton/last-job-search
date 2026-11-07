@@ -384,8 +384,8 @@ def cmd_view(a) -> int:
     # A section too big for one document (a long search's jobs, a big contact book) goes as
     # parts the page joins again (page_db.split), never cut short.
     written = []
-    for name in dict.fromkeys(tuple(app_model.SECTIONS) + ("people_count", "lists", "listener",
-                                                           "schedule")):
+    for name in dict.fromkeys(tuple(app_model.SECTIONS) + ("people_count", "coming_up", "lists",
+                                                           "listener", "schedule")):
         if name not in model:
             continue
         docs = page_db.split(name, {"rev": model["rev"], "made_at": model["made_at"],
