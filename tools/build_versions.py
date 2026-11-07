@@ -852,8 +852,9 @@ METHODS: dict[str, dict] = {
             (80, "2026-11-06", False, "Your CV's card has the pencil where its draft is kept: the Tweak panel opens on Bullets, each a choice, the ones ticked swapped for another true one from the same job and never kept as a usual"),
             (81, "2026-11-06", False, "a toast shows its time left as a ring round its close, two at most with the rest counted; a job tapped keeps its place on Jobs while the person stays; a job left out as not a fit says why in Claude's work and never offers Try again"),
             (82, "2026-11-06", False, "one card left over is shown in place, never folded, on To do and on Jobs, and a fold at a list's end is a quiet line, never a bar the width of the page"),
+            (83, "2026-11-07", False, "a laptop's Brief panels use the room their row gives them: a short list's rows each in a soft box and spread a step apart, the pills just under a panel with little to show, Your progress's chart grown into its room, and Jobs' new jobs headed \"New, best fit first\" under its drafts' line; two panels of one row as tall as each other give way together"),
         ),
-        "fingerprint": "81135666d852cff3",
+        "fingerprint": "4ee1ae723263fbee",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",
