@@ -852,8 +852,9 @@ METHODS: dict[str, dict] = {
             (80, "2026-11-06", False, "Your CV's card has the pencil where its draft is kept: the Tweak panel opens on Bullets, each a choice, the ones ticked swapped for another true one from the same job and never kept as a usual"),
             (81, "2026-11-06", False, "a toast shows its time left as a ring round its close, two at most with the rest counted; a job tapped keeps its place on Jobs while the person stays; a job left out as not a fit says why in Claude's work and never offers Try again"),
             (82, "2026-11-06", False, "one card left over is shown in place, never folded, on To do and on Jobs, and a fold at a list's end is a quiet line, never a bar the width of the page"),
+            (83, "2026-11-07", False, "a note waiting for their profile says once when it is read (the page's own reading, in the Claude app on a computer), with Paste beside it gauged as one note's rewrite; everyone waiting is one To do card, never rows of Messages to send; a character count is grey within its limit, amber only while editing near it, red over"),
         ),
-        "fingerprint": "81135666d852cff3",
+        "fingerprint": "84d22b3b0cc1d568",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

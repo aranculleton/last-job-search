@@ -25,6 +25,14 @@ make sense to somebody whose repo just received it.
 - **Jobs shows all its questions itself**, never "+1 more in To do", and a single card left over
   on To do is shown rather than folded. The folds at the end of a list are quiet lines, not bars
   the width of the page.
+- **A note waiting for someone's profile says once when it will be read.** Your page reads
+  their profile by itself while it is open in the Claude app on your computer; on a phone or
+  the web the card says so, and To do has one card for everyone waiting ("Open your page in the
+  Claude app on your computer to read 3 profiles") instead of a row each under Messages to
+  send. In the app the card says "Reading their profile…" while it does. Pasting a profile
+  instead shows the minutes one note's rewrite takes, not "a lot of your allowance".
+- **A character count is grey while the message fits.** It turns amber only while you are
+  editing and are close to the limit, and red over it: "291 of 300 characters" read as a warning.
 
 ## [4.13.0] - 2026-11-06
 
