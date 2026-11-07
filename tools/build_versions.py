@@ -857,7 +857,7 @@ METHODS: dict[str, dict] = {
             (82, "2026-11-06", False, "one card left over is shown in place, never folded, on To do and on Jobs, and a fold at a list's end is a quiet line, never a bar the width of the page"),
             (83, "2026-11-07", False, "in a prep's folded sections a note to you is a quieter line under the words it is about, never a bullet among the words to say"),
         ),
-        "fingerprint": "8ddd8cc09f551eb4",
+        "fingerprint": "600ea7a2ba39229e",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

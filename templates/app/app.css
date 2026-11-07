@@ -1777,7 +1777,7 @@ ul.bp-news { gap: 12px; }
 .pi-list > li.pi-head { list-style: none; margin-left: -20px; }
 .pi-list > li.pi-head > span { font-weight: 600; }
 .pi-list > li.pi-aside { list-style: none; margin-left: -20px; }
-.pi-note { margin: 6px 0 0; }
+.pi-note { margin: 4px 0 0; }
 .pi-sub { margin: 8px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; color: var(--muted); }
 .pi-src { font-size: var(--t-sm); white-space: nowrap; }
 .prep-live { margin: 8px 0 0; }
