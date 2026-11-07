@@ -571,3 +571,49 @@ def test_a_helper_the_person_started_from_the_page_goes_whatever_it_is_called(co
     got = tidy.plan([asked, soon, mine, live], [], info, {}, listener, LIVE, REPO, TODAY, set(),
                     set(), set(), now=NOW)
     assert {c["id"]: c["why"] for c in got["keep"]}[second] == "they used it in the last hour"
+
+
+def test_an_old_helper_kept_for_any_reason_brings_the_live_helper_back_to_check(copy):
+    """The morning brief ran in the helper of the day before, which started the day's fresh
+    one and then saved. The fresh helper moved the brief across, but git could not say whether
+    the old helper's save was on master yet (it was still landing), so the old helper was kept
+    for a reason that asked for no check-in, the day's tidy-up was marked done, and the
+    "(finishing up)" chat stayed in their list until the next morning (the maintainer's copy,
+    2026-11-07). Any old helper kept by the live helper within a day of the hand-over now asks
+    for the half-hour check-in, whatever the reason."""
+    old, live = "session_EXAMPLEYESTERDAYSHELPER", "session_EXAMPLETODAYSHELPER"
+    seed = {"origin": "claude_code_mcp_seed"}
+    chats = [dict(_chat(old, "Job search page (finishing up)", updated="2026-11-07T08:15:31Z"),
+                  **seed),
+             dict(_chat(live, "Job search page", updated="2026-11-07T08:17:00Z"),
+                  created_at="2026-11-07T08:14:26Z", **seed)]
+    reg = {"setup": "chat_per_briefing", "timezone": "Europe/London", "routines": [
+        {"key": "morning_brief", "name": "Job search: morning brief", "trigger_id": "trig_EXAMPLEDAY",
+         "cron": "CRON_TZ=Europe/London 1 8 * * *", "prompt_file": routines.BRIEF_FILE,
+         "chat": {"session_id": old}}]}
+    triggers = [{"id": "trig_EXAMPLEDAY", "persistent_session_id": old, "enabled": True,
+                 "prompt": "Scheduled run: morning brief."}]
+    listener = {"chat": live, "helper": True, "since": "2026-11-07T08:16:00Z", "took_from": old,
+                "took_from_helper": True, "handed_by": old, "helpers": [old]}
+    # get_session's own shape: the chat's branch under external_metadata, no outcomes.
+    info = {old: {"id": old, "session_status": "SESSION_STATUS_IDLE",
+                  "session_context": {"sources": [{"git_repository": {
+                      "url": f"https://github.com/{REPO}"}}]},
+                  "external_metadata": {"current_branches": {"": "claude/example-brief"}}},
+            live: _detail(live, "Job search page")}
+    now = dt.datetime(2026, 11, 7, 8, 17, 40, tzinfo=dt.timezone.utc)
+
+    def run(branches, here=live, at=now):
+        return tidy.plan(chats, triggers, info, reg, listener, here, REPO, dt.date(2026, 11, 7),
+                         set(), branches, set(), now=at)
+
+    unsure = run(None)                                  # git could not say
+    assert {k["id"]: k["why"] for k in unsure["keep"]}[old] == \
+        "git could not say whether its work is on master"
+    assert unsure["brief"][0]["args"]["persistent_session_id"] == live
+    assert unsure["recheck"] is True
+    assert run({"claude/example-brief"})["recheck"] is True      # still landing
+    saved = run(set())                                            # on master: put away now
+    assert old in {c["id"] for c in saved["archive"]} and saved["recheck"] is False
+    assert run(None, here=old)["recheck"] is False                # never from the old helper
+    assert run(None, at=now + dt.timedelta(days=1, hours=1))["recheck"] is False   # a day on

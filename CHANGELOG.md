@@ -22,6 +22,11 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **The page's old helper chat is put away the same morning.** After the morning hand-over, the
+  new helper kept yesterday's "Job search page (finishing up)" chat while its last save was
+  still landing, and nothing came back to put it away, so it sat in the list until the next
+  day. Whenever the new helper keeps the old one, for any reason, it now checks again half an
+  hour later, and keeps doing so for the day until the old one is gone.
 - **Jobs shows all its questions itself**, never "+1 more in To do", and a single card left over
   on To do is shown rather than folded. The folds at the end of a list are quiet lines, not bars
   the width of the page.

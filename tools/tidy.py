@@ -913,8 +913,12 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
     # now: it asks for its own check-in, as nothing else may ring it before tomorrow's brief.
     took = _after(now.strftime("%Y-%m-%dT%H:%M:%SZ"), listener.get("since")) and \
         _ago_s(listener.get("since"), now) < RETIRE_FOR_S
+    # Any old helper kept, for whatever reason: only "for now" reasons asked for one, and a
+    # helper kept because git could not say whether its work was on master (its save still
+    # landing as the new helper took over) stayed in their list all day, the day's tidy-up
+    # already marked done (the maintainer's copy, 2026-11-07).
     out["recheck"] = bool(this_chat and this_chat == helper and took and not out["ask"] and any(
-        k["id"] in old_helpers and k["why"].startswith(FOR_NOW) for k in out["keep"]))
+        k["id"] in old_helpers for k in out["keep"]))
     if out["ask"]:
         out["brief"] = []                             # decided once every chat is read
         out["moves"] = []
