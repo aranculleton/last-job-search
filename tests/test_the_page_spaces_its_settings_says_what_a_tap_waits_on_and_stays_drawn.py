@@ -334,26 +334,25 @@ def test_a_run_of_like_work_is_one_card_with_its_count(run, tmp_path):
 
 def test_a_card_of_notes_to_check_says_what_it_is(run, tmp_path):
     """Four notes held for an unread profile made a To do card titled with the warning alone,
-    over a list of names (the maintainer, 2026-11-04: "idk what the bottom one is"). They are
-    rows of the one card of messages to send (the UX review, 2026-11-05): its title says what it
-    is, each held row says "Check first" and why, and its button opens Contacts."""
+    over a list of names (the maintainer, 2026-11-04: "idk what the bottom one is"). Then each
+    was a row of "Messages to send" saying "Check first", though none could be sent. Now they
+    are one card, however many, whose title says where to open the page for their profiles to
+    be read (the maintainer, 2026-11-07: "is there a simple way to do it in to do"), with every
+    name on it, and none of them is on Messages to send."""
     m = copy.deepcopy(_sample())
     held = [x for x in m["messages"] if x.get("kind") == "first_note"][:2]
     assert len(held) == 2
     for x in held:
         x["hold"] = "Written before their profile was read: read it first"
-        # The engine's own alert for it (tools/app_alerts.py for_message, "read_first").
-        x["alerts"] = [{"id": "read_first:" + x["id"], "kind": "read_first", "level": 1, "item": x["id"],
-                        "text": "Written before their profile was read: read it first.",
-                        "why": "A note written before their profile was read can get them wrong."}]
-    look = ("Array.from(document.querySelectorAll('[data-item^=\"grp:\"]')).map((c) => [(c.querySelector('.card-title') || {}).textContent || '',"
-            " c.textContent]).filter((x) => /profile was read/.test(x[1]))")
+    m["to_read"] = {"n": 2, "ids": [x["id"] for x in held], "contacts": [x["contact"] for x in held]}
+    look = ("[(document.querySelector('[data-item=\"reading-queue\"]') || {}).textContent || '',"
+            " Array.from(document.querySelectorAll('[data-item=\"grp:send\"] [data-item]')).map((r) => r.dataset.item),"
+            " document.querySelectorAll('[data-item=\"reading-queue\"]').length]")
     got = _go(run, tmp_path, [{"hash": "todo", "eval": look}], WIDE, model=m, clock=T)
-    cards = got["after"][0]["eval"]
-    assert cards, "the held notes make a card in To do"
-    title, text = cards[0]
-    assert title.startswith("Messages to send ("), title
-    assert text.count("Check first") == 2 and "Written before their profile was read: read it first" in text and "Open Contacts" in text, text
+    card, send, n = got["after"][0]["eval"]
+    assert n == 1 and "Open your page in the Claude app on your computer to read 2 profiles" in card, card
+    assert all(x["first_name"] in card for x in held), card
+    assert not {x["id"] for x in held} & set(send), send
 
 
 def test_a_card_being_changed_says_so(run, tmp_path):

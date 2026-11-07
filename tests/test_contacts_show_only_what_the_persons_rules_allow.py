@@ -23,6 +23,7 @@ from __future__ import annotations
 import csv
 import json
 import os
+import re
 import subprocess
 import sys
 
@@ -488,7 +489,11 @@ def test_contacts_shows_each_person_as_the_engine_says(run, page, model, vp):
     head = "\n".join(top.split("\n")[:6])
     # One short line: what is written to send, and who needs you (2026-11-04); the follow-ups
     # and replies among them are on their cards.
-    assert f"{pc['drafted']} to send · {pc['need']} need you" in head, head
+    # "To send" is the engine's one count (to_send), To do's the same: a note waiting for their
+    # profile is drafted but not ready, so not counted (2026-11-07).
+    assert f"{model['to_send']['n']} to send · {pc['need']} need you" in head, head
+    held = [x for x in model["messages"] if x.get("hold")]
+    assert held and model["to_send"]["n"] == pc["drafted"] - len(held), (model["to_send"], pc, held)
     assert "waiting to hear back" not in top
     # Past the limit: they need nothing from the person, so behind the fold (the maintainer,
     # 2026-11-04); their row says to leave it, with Close, never a follow-up of any kind.
@@ -663,7 +668,12 @@ def test_small_things_each_say_what_they_are(run, page, model):
     rafe = a["rafe"]["text"]                                                    # 37
     assert "Overdue" in rafe and "Due " not in rafe and "Paste" not in rafe, rafe
     assert a["rafe"]["count"] <= 8, a["rafe"]["count"]                          # chat_2 22
-    assert "of your allowance" in a["kit"]["text"], a["kit"]["text"]            # 36
+    # A note waiting for their profile says so once, with Paste and its gauge beside it: one
+    # note's rewrite in minutes (the engine's), never "a lot of your allowance", a networking
+    # run's gauge (the maintainer, 2026-11-07).
+    kit = a["kit"]["text"]                                                      # 36
+    assert kit.count("Waiting for their profile") == 1 and "Paste Kit's profile" in kit, kit
+    assert re.search(r"\b\d+ min\b", kit) and "a lot of your allowance" not in kit, kit
     panel = a["panel"]["eval"]                                                  # 31
     assert "Shorter" in panel and "Warmer" in panel and "More formal" in panel and "InMail" not in panel, panel
     assert "Message to Rafe copied." in a["copy"]["eval"], a["copy"]["eval"]    # 40

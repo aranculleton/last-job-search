@@ -329,10 +329,14 @@ def test_a_phone_can_act_on_the_reading_card_and_a_held_note_is_not_offered(run,
               clock="2026-10-25T09:00:00Z",
               steps=[{"hash": "todo"}, {"click": "I'll paste them instead"},
                      {"hash": "contacts",
-                      "eval": "(document.querySelector('[data-k=\"held:msg-ash-1\"]') || {}).textContent || ''"}])
+                      "eval": "[(document.querySelector('[data-k=\"held:msg-ash-1\"]') || {}).textContent || '',"
+                              " !!document.querySelector('[data-k=\"copy:msgt-msg-ash-1\"]')]"}])
     acts = [a for a in got["steps"][1]["actions"] if a.get("action") == "setting.set"]
     assert acts and acts[0]["value"] == {"value": "paste"}
-    assert "Not ready to send" in got["steps"][-1]["eval"]
+    # Not offered: its one line says why it waits (2026-11-07: "Not ready to send: waiting
+    # for ..." and an alert under it said it twice), and it has no Copy.
+    line, copy = got["steps"][-1]["eval"]
+    assert "profile was read" in line and not copy, (line, copy)
 
 
 # ------------------------------------------------------------------ X-55 questions in the chat

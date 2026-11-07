@@ -35,6 +35,7 @@ import glob
 import hashlib
 import html
 import json
+import math
 import os
 import re
 import subprocess
@@ -2218,14 +2219,25 @@ def message_type(kind: str, channel: str, contact: dict, text: str = "") -> str:
     return kind
 
 
+# Within this share of the limit a count is "near": an edit could take it over. Said in amber
+# only while the person is changing the words (the page's pencil and "I changed it first");
+# at rest a count within the limit is the quiet grey, and red only over it. 291 of 300 in amber
+# read as a warning about a note that was fine (the maintainer, 2026-11-07).
+COUNT_NEAR = 0.05
+
+
 def count_of(chars: int, limit, mtype: str) -> dict:
     """The character count the page shows: always on a first note, where the limit is that
-    type's hard rule, and on the rest only near or over it (LAYOUT_SPEC 4.15)."""
-    warn = bool(limit) and chars >= 0.9 * limit
+    type's hard rule, and on the rest only near or over it (LAYOUT_SPEC 4.15). `tone` is its
+    colour at rest ("bad" over the limit, else "muted"); `near_at` is the count from which the
+    page says it in amber while the words are being changed, by the same rule (COUNT_NEAR)."""
+    near_at = math.ceil(limit * (1 - COUNT_NEAR)) if limit else None
     over = bool(limit) and chars > limit
-    return {"chars": chars, "limit": limit, "show": mtype == "first_note" or warn,
-            "warn": warn, "over": over, "label": (f"{chars} of {limit} characters" if limit
-                                                  else f"{chars} characters")}
+    near = bool(limit) and not over and chars >= near_at
+    return {"chars": chars, "limit": limit, "near_at": near_at,
+            "show": mtype == "first_note" or near or over, "near": near, "over": over,
+            "tone": "bad" if over else "muted",
+            "label": f"{chars} of {limit} characters" if limit else f"{chars} characters"}
 
 
 # advise()'s rules, said the way the person would say them. Any other is said as its fix.
@@ -2459,11 +2471,23 @@ def to_send(messages: list) -> dict:
     card ("Messages to send (4)") both draw it, and say the same number (the UX review,
     2026-11-05: Contacts counted every draft, To do the drafted rows and a wave card apart).
     The ids are every message in order, so a page can leave out one sent there before a chat
-    has caught up."""
+    has caught up. A note waiting for their profile (`hold`) is not ready to send: it is on
+    To do's one reading card (`to_read`), never a row here as well (2026-11-07)."""
+    ready = [m for m in messages or [] if not m.get("hold")]
     seen: set = set()
-    for m in messages or []:
+    for m in ready:
         seen.add(str(m.get("contact") or "") or "msg:" + str(m.get("id") or ""))
-    return {"n": len(seen), "ids": [str(m.get("id") or "") for m in messages or []]}
+    return {"n": len(seen), "ids": [str(m.get("id") or "") for m in ready]}
+
+
+def to_read(messages: list) -> dict:
+    """The notes waiting for their profile, one a person: {"n", "ids", "contacts"}. To do says
+    them on one card, where and how they are read (the page's readQueueCard), never one card or
+    one row each (the maintainer, 2026-11-07)."""
+    held = [m for m in messages or [] if m.get("hold")]
+    contacts = list(dict.fromkeys(str(m.get("contact") or "") for m in held if m.get("contact")))
+    return {"n": len(contacts), "ids": [str(m.get("id") or "") for m in held],
+            "contacts": contacts}
 
 
 def draft_limit(contact: dict, status: str, text: str = "") -> tuple[str, str, int | None]:
@@ -2565,7 +2589,8 @@ def _messages(ctx: Ctx, targets: dict) -> list:
         # Code-only tweaks need the parts the note was made from (tools/network/parts.py).
         item["parts"] = parts.load(cid, text) is not None
         item["tweaks_done"] = _tweaks_done(os.path.dirname(f), f)
-        item["paste"] = _paste(cid, item["first_name"], raw) if kind == "first_note" else None
+        item["paste"] = _paste(cid, item["first_name"], raw, ctx._got.get("work_time")) \
+            if kind == "first_note" else None
         item["fix"] = message_fix(item)
         item["sends"] = sends_of(body)
         item["inmail"] = _inmail_card(ctx, cid, channel) if kind == "first_note" else None
@@ -2659,12 +2684,30 @@ def _app_followups(ctx: Ctx, targets: dict) -> list:
     return out
 
 
-# A first note written before their profile was read, said on its card: why it waits, and
-# where the reading happens (networking.py PROFILE_READS).
+# A first note written before their profile was read, said on its card in one line: why it
+# waits, and when the reading happens (networking.py PROFILE_READS). The reading is the page's
+# own (tools/network/reading.py: never a chat's since 4.3): it runs by itself only while the
+# page is open in the Claude app on a computer, in Claude's own browser, signed in to LinkedIn
+# there, in the tab the page keeps for it (opened once by Read them, never by itself: 4.13).
+# The message's `hold` is the line by the person's setting; the page, which knows where it is
+# open, says the line for where reading stands there (linkedin.reading.hold): "When exactly is
+# this waiting for Claude thing going to happen?" (the maintainer, 2026-11-07).
 READ_HOLD = {
-    "browser": "Waiting for their profile: Claude reads it in its own browser in the Claude app "
-               "on your computer, then rewrites this note",
+    # The setting's own line, and the page's where it cannot read (a phone, the web).
+    "browser": "Waiting for their profile: Claude reads it next time this page is open in the "
+               "Claude app on your computer, then rewrites this note",
     "paste": "Waiting for their profile: paste it here and Claude rewrites this note",
+    # Open in the Claude app on a computer, where the page reads by itself:
+    "tab": "Waiting for their profile: press Read them in To do once, and Claude reads it by "
+           "itself from then on",
+    "sign_in": "Waiting for their profile: sign in to LinkedIn in Claude's browser and Claude "
+               "reads it by itself",
+    "paused": "Waiting for their profile: LinkedIn asked Claude to slow down, so it reads it "
+              "tomorrow, by itself",
+    "next": "Waiting its turn: Claude reads their profile here by itself, then rewrites this note",
+    "reading": "Reading their profile…",
+    "read": "Profile read: Claude rewrites this note next",
+    "again": "Claude could not read their profile just now: it tries again later, by itself",
 }
 
 
@@ -2794,7 +2837,7 @@ def _is_process_stage(ctx: Ctx, c: dict, status: str) -> bool:
                    and _status(r) not in throttle.UNSENT for r in ctx.tracker)
 
 
-def _paste(cid: str, first: str, raw) -> dict | None:
+def _paste(cid: str, first: str, raw, work_time: dict | None = None) -> dict | None:
     """"Paste their profile" (profile.pasted, CAPABILITY_MAP G14) on a note that rests on
     nothing read about them: one waiting on a read, or written from their card alone. The
     page offers it under More on a phone or the web, where it cannot read LinkedIn itself."""
@@ -2804,8 +2847,8 @@ def _paste(cid: str, first: str, raw) -> dict | None:
         rests = reading.waits_on_read(cid) or reading.card_only_draft(cid)
     else:
         rests = str(raw).startswith(reading.MARKERS)
-    return app_alerts.paste_profile(f"msg-{cid}" if raw is not None else cid, first) \
-        if rests else None
+    return app_alerts.paste_profile(f"msg-{cid}" if raw is not None else cid, first,
+                                    work_time) if rests else None
 
 
 def _call_of(cid: str, status: str, due: str, said: str = "", home: str = "",
@@ -3238,7 +3281,7 @@ def _people(ctx: Ctx, targets: dict) -> list:
                 "resume_for_them": resume_made_for(cid),
                 "who": who_they_are(c, status),
                 "replied": full[cid]["replied"], "live": full[cid]["live"], "call": call,
-                "paste": _paste(cid, full[cid]["first_name"], None)
+                "paste": _paste(cid, full[cid]["first_name"], None, ctx._got.get("work_time"))
                 if (shown.get(cid) or {}).get("kind") == "first_note" else None,
                 # Where they live is not on record: the person's rule about where people are
                 # cannot be checked, which the page says before anything goes to them.
@@ -4852,6 +4895,9 @@ def _linkedin(ctx: Ctx, targets: dict) -> dict:
                      "reads": int(pr.get("reads") or 0),
                      "queue": queue if setting == "browser" else [],
                      "setting": setting, "paused": paused, "paused_until": paused_until,
+                     # A waiting note's one line, for where reading stands where the page is
+                     # open (READ_HOLD): the page picks it, never writes its own.
+                     "hold": dict(READ_HOLD),
                      # The day's sign-in check (reading.linkedin_check): passed today, the page
                      # opens nothing to check again; it compares `on` with its own day.
                      "check": {k: got for k, got in reading.linkedin_check(ctx.now).items()
@@ -5538,6 +5584,8 @@ def build(today: dt.date | None = None, now: dt.datetime | None = None,
         t, n = clock()
         today, now = today or t, now or n
     ctx = Ctx(today, now)
+    # This copy's own work times, for a cost said on an item (a pasted profile's rewrite).
+    ctx._got["work_time"] = dict(work_time or {})
     targets: dict = {}
     model = {"model": MODEL, "made_at": stamp(now), "rev": ""}
     for name in SECTIONS:
@@ -5555,6 +5603,7 @@ def build(today: dt.date | None = None, now: dt.datetime | None = None,
         model["coming_up"] = ctx._got["coming_up"]
     if isinstance(model.get("messages"), list):
         model["to_send"] = to_send(model["messages"])
+        model["to_read"] = to_read(model["messages"])
     if only is None and ctx._got.get("lists"):
         import app_lists
         model["lists"] = {}

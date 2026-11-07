@@ -330,25 +330,37 @@ PASTE_ASK = ("Open their LinkedIn page, select everything on it, copy, and paste
              "Only what a note can rest on is kept; the paste itself is not.")
 
 
-def paste_profile(item_id: str, first: str) -> dict:
+def cost_of_seconds(seconds) -> dict:
+    """The gauge for work this long, with the seconds the page says beside it: a little up to a
+    minute, some up to five, a lot past that (COSTS)."""
+    sec = max(1, int(seconds or 0))
+    out = cost(1 if sec <= 60 else 2 if sec <= 300 else 3)
+    out["seconds"] = sec
+    return out
+
+
+def paste_profile(item_id: str, first: str, work_time: dict | None = None) -> dict:
     """The "Paste their profile" action: profile.pasted with the words the page asks for.
-    It logs the read in code, then queues the note's rewrite on it (`network` work)."""
+    It logs the read in code, then queues the note's rewrite on it (`network` work with
+    args.rewrite): its cost is one note rewritten (page_db.rewrite_seconds, this copy's own
+    time once it has some), never a networking run's, which it said before (2026-11-07)."""
+    import page_db
     a = act(f"Paste {first}'s profile" if first else "Paste their profile",
             "profile.pasted", item_id)
-    a.update({"input": "text", "ask": PASTE_ASK})
+    a.update({"input": "text", "ask": PASTE_ASK,
+              "cost": cost_of_seconds(page_db.rewrite_seconds(work_time))})
     return a
 
 
 def for_message(ctx, item: dict) -> tuple[list, dict | None]:
     mid = item["id"]
     out = []
+    # A note waiting for their profile is said once, in its own line (app_model READ_HOLD, in
+    # the words for where the page is open), with "Paste their profile" beside it (the item's
+    # `paste`): an alert said the same a second time, with a networking run's gauge on the
+    # paste (the maintainer, 2026-11-07).
     if item.get("hold"):
-        a = alert("read_first", mid, item["hold"] + ".",
-                  "A note written before their profile was read can get them wrong.",
-                  paste_profile(mid, item.get("first_name") or ""))
-        # Logging the paste is free; the rewrite it queues is a chat's.
-        a["cost"] = cost(WORK_COST["network"])
-        out.append(a)
+        return out, None
     if item.get("limit") and item["chars"] > item["limit"]:
         a = alert("too_long", mid, f"{item['chars']} characters: over the "
                   f"{item['limit']} a {_CHANNEL.get(item['channel'], 'message')} "

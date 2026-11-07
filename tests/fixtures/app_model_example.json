@@ -1,7 +1,7 @@
 {
  "model": 1,
  "made_at": "2026-10-25T18:00:00Z",
- "rev": "cea41d790627",
+ "rev": "dfdcd67c9bf9",
  "app": {
   "version": "4.13.0",
   "url": null,
@@ -77,7 +77,7 @@
  ],
  "jobs": {
   "round": "r9",
-  "made_at": "2026-11-07T13:17:37Z",
+  "made_at": "2026-11-07T13:35:47Z",
   "met": false,
   "summary": "3 roles from the last search to look at, 1 of them scoring 75 or more. 3 left out, each with its reason.",
   "rows": [
@@ -656,9 +656,11 @@
    "count": {
     "chars": 144,
     "limit": 300,
+    "near_at": 285,
     "show": true,
-    "warn": false,
+    "near": false,
     "over": false,
+    "tone": "muted",
     "label": "144 of 300 characters"
    },
    "warnings": [],
@@ -1006,7 +1008,7 @@
    "when": "2026-10-28",
    "prep": {
     "path": "documents/applications/thornbury_bank_risk_analyst_thornbury/interview_prep.md",
-    "updated": "2026-11-07T13:17:37Z"
+    "updated": "2026-11-07T13:35:47Z"
    },
    "questions": 2,
    "all_day": true,
@@ -1827,6 +1829,17 @@
    "setting": "paste",
    "paused": false,
    "paused_until": null,
+   "hold": {
+    "browser": "Waiting for their profile: Claude reads it next time this page is open in the Claude app on your computer, then rewrites this note",
+    "paste": "Waiting for their profile: paste it here and Claude rewrites this note",
+    "tab": "Waiting for their profile: press Read them in To do once, and Claude reads it by itself from then on",
+    "sign_in": "Waiting for their profile: sign in to LinkedIn in Claude's browser and Claude reads it by itself",
+    "paused": "Waiting for their profile: LinkedIn asked Claude to slow down, so it reads it tomorrow, by itself",
+    "next": "Waiting its turn: Claude reads their profile here by itself, then rewrites this note",
+    "reading": "Reading their profile…",
+    "read": "Profile read: Claude rewrites this note next",
+    "again": "Claude could not read their profile just now: it tries again later, by itself"
+   },
    "check": {
     "state": "due",
     "on": null,
@@ -2308,6 +2321,11 @@
   "ids": [
    "msg-kestrel_mutual_ansgar"
   ]
+ },
+ "to_read": {
+  "n": 0,
+  "ids": [],
+  "contacts": []
  },
  "lists": {
   "applications": {
