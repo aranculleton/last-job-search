@@ -673,7 +673,11 @@ def work_times(db: dict, now: dt.datetime, days: int = 30, least: int = 3) -> di
             continue
         took = (end - start).total_seconds()
         if 5 <= took <= 4 * 3600 and str(w.get("kind") or "") in STAGES:
-            by.setdefault(str(w["kind"]), []).append(took)
+            # A note rewritten on a profile read is `network` work, but one note, not a run:
+            # counted apart, so neither's minutes are the other's (REWRITE_STAGES).
+            rewrite = w["kind"] == "network" and isinstance(w.get("args"), dict) \
+                and w["args"].get("rewrite")
+            by.setdefault(REWRITE_KIND if rewrite else str(w["kind"]), []).append(took)
     out = {}
     for kind, xs in sorted(by.items()):
         if len(xs) >= least:
@@ -681,6 +685,24 @@ def work_times(db: dict, now: dt.datetime, days: int = 30, least: int = 3) -> di
             mid = len(xs) // 2
             out[kind] = int(round(xs[mid] if len(xs) % 2 else (xs[mid - 1] + xs[mid]) / 2))
     return out
+
+
+# A note rewritten on a profile just read or pasted (app_actions._queue_rewrite: `network` work
+# with args.rewrite): one note written and checked, never a run's finding and reading. The
+# "Paste their profile" gauge says this, or this copy's own rewrites' time once it has three
+# (work_times, under REWRITE_KIND), never a whole networking run's: it said "a lot of your
+# allowance" (the maintainer, 2026-11-07).
+REWRITE_KIND = "rewrite"
+REWRITE_STAGES = [("start", "Getting started", 30), ("write", "Rewriting the note", 60),
+                  ("check", "Checking", 45)]
+
+
+def rewrite_seconds(work_time: dict | None = None) -> int:
+    """How long one note's rewrite takes this copy's Claude: its own median, else the default."""
+    got = (work_time or {}).get(REWRITE_KIND)
+    if isinstance(got, (int, float)) and not isinstance(got, bool) and got > 0:
+        return int(got)
+    return sum(s for _, _, s in REWRITE_STAGES)
 
 
 def progress(kind: str) -> dict:

@@ -248,9 +248,9 @@ def _waiting_note(search):
 def test_a_pasted_profile_is_kept_as_a_paste_and_the_note_rewritten_once(search):
     _waiting_note(search)
     msg = next(m for m in search.model()["messages"] if m["contact"] == PELL)
-    (alert,) = [a for a in msg["alerts"] if a["kind"] == "read_first"]
-    assert alert["action"]["action"] == "profile.pasted" and alert["action"]["input"] == "text"
-    assert msg["paste"]["action"] == "profile.pasted"
+    # Said once, in the note's own line with Paste beside it: no alert saying it again (2026-11-07).
+    assert not [a for a in msg["alerts"] if a["kind"] == "read_first"]
+    assert msg["paste"]["action"] == "profile.pasted" and msg["paste"]["input"] == "text"
     aid = search.act("profile.pasted", msg["id"], value={"text": PROFILE}, rev=msg["rev"])
     claimed = json.loads(search.run("apply", search.dump, "--chat", "cloud-1", "--now", NOW,
                                     "--claim"))
