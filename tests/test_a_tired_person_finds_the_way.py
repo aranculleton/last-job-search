@@ -236,8 +236,9 @@ def test_to_do_opens_on_what_is_late_or_due_today_and_folds_the_setup(run, tmp_p
         assert bands.index("Needs your answer") > last_owed, ("questions come after what is owed", r["cards"])
     assert r["youFolded"], "Finish your profile waits behind the fold while today's things show"
     # Four cards today all show (one card an act and a person, 2026-11-05): the first fold is
-    # what is not due yet; more than five, and it is "Show N more".
-    assert r["fold"].startswith(("Show ", "Not due yet")), r
+    # Help Claude do more, right after today's things (2026-11-07), or what is not due yet;
+    # more than five, and it is "Show N more".
+    assert r["fold"].startswith(("Show ", "Help Claude do more", "Not due yet")), r
 
 
 # Found along the way, 2026-11-02. "Did your note to Wren go?" is answered once the note is

@@ -3830,6 +3830,13 @@
   const TODO_FIRST = 5;     // To do shows this many first; the rest wait behind one fold
   // Cards that help Claude do more and ask nothing of today (renderTodo's last line).
   const HELP_KEYS = new Set(["reading", "export"]);
+  // What each way of helping Claude gives, in a line, for the fold that holds it.
+  function helpWhy(i) {
+    const k = txt(obj(i).key);
+    return k === "you-finish" ? "Your profile: every " + noun() + " and letter is built from it"
+      : k === "reading" ? "Let Claude read profiles before it writes to people"
+      : k === "export" ? "Your LinkedIn download keeps who you know up to date" : "";
+  }
   function settingUpNow() { const su = obj(M().setup); return !!txt(su.state) && txt(su.state) !== "done"; }
   // Anything on To do can be hidden for a week (the maintainer, 2026-10-29: everything shown
   // can be acted on or hidden). Kept on this device; it comes back after the week.
@@ -4076,7 +4083,9 @@
     // Hideable for a week like every other card: the gaps stay listed in Your profile. With
     // today's things folded, it waits at the end of the fold with them.
     const finish = settingUp || todoHidden({key: "you-finish"}) ? null : finishProfileCard();
-    const helpNodes = helps.map((i) => withHide(i, i.node({where: "todo", section: "todo"}))).concat(finish ? [withHide({key: "you-finish"}, finish)] : []);
+    // Your profile first: every document is built from it.
+    const helpList = (finish ? [{key: "you-finish", node: () => finish}] : []).concat(helps);
+    const helpNodes = helpList.map((i) => withHide(i, i.node({where: "todo", section: "todo"})));
     // Its count is what it still folds: once opened the line goes (CSS) and the first card it
     // showed takes the focus. "Show 1 more" stayed over the card it had shown (the
     // maintainer, 2026-11-05: "it shows something else but still says show 1 more").
@@ -4097,9 +4106,23 @@
       delete d.dataset.tapped;
       if (first) first.focus({preventScroll: true});
     }}, h("summary", {class: "band-more-sum", onclick: (e) => { e.currentTarget.parentElement.dataset.tapped = "1"; }}, "Show " + restN + " more"), rest));
+    // Help Claude do more: what makes Claude better at the rest, asked nothing today and never
+    // counted in it. Right after today's things and above Not due yet, one line that says what
+    // it gives; with nothing due today, its first card shows under its own heading, the rest
+    // one tap below (the maintainer, 2026-11-07: "help claude do more is more important but
+    // its a bit too tucked away here"). Today's things always come first (DESIGN.md, Places).
+    const helpRoom = !settingUp && !restN && !top && helpNodes.length && shown === 0;
+    if (helpRoom) {
+      put(wrap, h("section", {class: "band help-band", "aria-labelledby": "band-help"}, h("h3", {class: "group", id: "band-help"}, "Help Claude do more"),
+        h("div", {class: "todo-group"}, h("div", {class: "stack"}, helpNodes[0])),
+        helpNodes.length > 1 ? det("todo-help", false, {class: "band-more"}, h("summary", {class: "band-more-sum"}, "Show " + (helpNodes.length - 1) + " more"),
+          h("div", {class: "stack todo-help"}, helpNodes.slice(1))) : null));
+    } else if (helpNodes.length) {
+      put(wrap, det("todo-help", false, {class: "band-more soon-more help-more"}, h("summary", {class: "band-more-sum"}, "Help Claude do more (" + helpNodes.length + ")",
+        helpWhy(helpList[0]) ? h("span", {class: "band-more-why"}, " · " + helpWhy(helpList[0])) : null),
+        h("div", {class: "stack todo-help"}, helpNodes)));
+    }
     if (soonCount) put(wrap, det("todo-soon", !shown && !top, {class: "band-more soon-more"}, h("summary", {class: "band-more-sum"}, "Not due yet (" + soonCount + ")"), soon));
-    if (helpNodes.length) put(wrap, det("todo-help", false, {class: "band-more soon-more help-more"}, h("summary", {class: "band-more-sum"}, "Help Claude do more (" + helpNodes.length + ")"),
-      h("div", {class: "stack todo-help"}, helpNodes)));
     const hidden = dueItems().find((d) => txt(d.kind) === "hidden");
     if (!settingUp) put(wrap, hidden ? h("p", {class: "muted small hidden-note"}, txt(hidden.title) + ".") : null,
       hiddenFold(hiddenTodos(settingUp, every)), settingUp ? null : putOffFold(), doneTodayFold(), tipLine("todo"));

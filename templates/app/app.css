@@ -1295,6 +1295,8 @@ dialog.work-sheet :is(select, input, textarea) { width: 100%; max-width: 100%; m
 @media (prefers-reduced-motion: reduce) { .band-more > summary::after { transition: none; } }
 .band-more > summary::-webkit-details-marker { display: none; }
 .band-more[open] > summary { margin-bottom: 12px; }
+/* What a fold gives, said beside its name in the quiet tone (Help Claude do more). */
+.band-more > summary .band-more-why { font-weight: 400; white-space: pre-wrap; }
 /* "Show N more" says what it still folds: once open it holds nothing back, so it goes. */
 .band-more:not(.soon-more)[open] > summary { display: none; }
 
