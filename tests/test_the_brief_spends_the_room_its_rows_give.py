@@ -102,7 +102,7 @@ def test_no_panel_leaves_a_hole_above_its_pills_on_a_tall_window(run, tmp_path, 
 STEPS = r"""(() => {
   const l = document.querySelector('[data-k="bp:next"] .bp-steps');
   const li = [...l.children].filter((x) => !x.hidden);
-  const rs = li.map((x) => x.getBoundingClientRect());
+  const rs = li.map((x) => x.__drawnRect());
   const z = parseFloat(document.body.style.zoom) || 1;
   return {n: li.length, apart: Math.min(...rs.slice(1).map((r, i) => r.top - rs[i].bottom)) / z,
     boxed: li.every((x) => getComputedStyle(x).backgroundColor !== getComputedStyle(l).backgroundColor && parseFloat(getComputedStyle(x).paddingTop) >= 8)};
@@ -124,7 +124,7 @@ def test_next_threes_steps_read_as_three_where_there_is_room(run, tmp_path):
 CHART = r"""(() => {
   const c = document.querySelector('[data-k="bp:numbers"] .bp-spark');
   const z = parseFloat(document.body.style.zoom) || 1;
-  return {h: Math.round(c.getBoundingClientRect().height / z), filled: document.querySelector('#main .brief-grid').classList.contains('is-filled')};
+  return {h: Math.round(c.__drawnRect().height / z), filled: document.querySelector('#main .brief-grid').classList.contains('is-filled')};
 })()"""
 
 
