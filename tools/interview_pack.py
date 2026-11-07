@@ -4156,6 +4156,9 @@ def check(path) -> list:
         why = "a placeholder still to fill: %s" % gap
         if why not in reported:
             out.append((where, why))
+    # A label on a line of its own above the words to say ("SAY."): shown as a bullet of
+    # its own among them (2026-11-07).
+    out += prep.cue_lines(text)
     # What it says an employer heard, against what the profile says now: a pack built when
     # one employer heard one city kept saying so after the person told it another (2026-11-03).
     for m in _TOLD_LINE.finditer(text):
@@ -5334,7 +5337,7 @@ def practice(text) -> dict:
         why = inside.rsplit("; source: ", 1)[0] if "; source: " in inside else ""
         q = _plain(head if why or "; source: " in inside else ln[len("- **Q.** "):])
         mine = (written.get(what_works._norm(q)) or ("", []))[1]
-        said = [x.strip() for x in spoken(mine) if x.strip()]
+        said = [prep.uncue(x).strip() for x in spoken(mine) if x.strip()]
         qs.append({"question": q, "why": _plain(why) or None,
                    "answer": " ".join(said) or None, "draft": prep.drafted(mine)})
     return {"questions": qs, "reworked": rework_lines(text),
@@ -5428,6 +5431,9 @@ def plain_line(line) -> tuple:
         return "", ""
     s = re.sub(r"^\s*(?:[-*+]|\d+[.)])\s+", "", raw).strip()
     s = re.sub(r"^>\s*", "", s)
+    if prep.cue(s) == "say":
+        return "", ""           # "SAY." above the words: the words are the line, never this
+    s = prep.uncue(s)           # "**SAY:** I started ...": the words, without the label
     link = ""
     for m in _SOURCE_IN.finditer(s):
         if re.match(r"https?://", m.group(2).strip(), re.I) and not link:
@@ -5469,8 +5475,11 @@ def plain_line(line) -> tuple:
 
 def _read_section(title, lines) -> dict | None:
     """One section of the document as the page folds it: {key, title, items [{text, link,
-    sub [text]}]}, or None when nothing in it is for the person."""
-    items, cur, group = [], None, None
+    sub [text], note [text]}]}, or None when nothing in it is for the person. A label on a
+    line of its own ("SAY.") is never an item: the words under it are; a note to the person
+    ("Note to you, not to say: ...", or the lines under a bare "NOTE") rides on the item it
+    is about as `note`, shown apart from the words to say, never as one of them."""
+    items, cur, group, noting = [], None, None, False
     for ln in lines:
         if not ln.strip():
             continue
@@ -5481,9 +5490,21 @@ def _read_section(title, lines) -> dict | None:
             group = {"text": label, "link": "", "sub": [], "head": True} if label else None
             if group:
                 items.append(group)
+            cur, noting = None, False
+            continue
+        label = prep.cue(ln)
+        if label:
+            noting = label == "note"
             continue
         text, link = plain_line(ln)
         if not text:
+            continue
+        if noting or _NOTE_LINE.match(text):
+            owner = cur if cur is not None else group
+            if owner is None:
+                owner = {"text": "", "link": "", "sub": []}
+                items.append(owner)
+            owner.setdefault("note", []).append(text)
             continue
         if title == "Ask them":
             text = re.sub(r"\s*\([^()]*\)$", "", text)
@@ -5513,7 +5534,7 @@ def _read_section(title, lines) -> dict | None:
             continue
         cur = {"text": text, "link": link, "sub": []}
         items.append(cur)
-    items = [i for i in items if not i.get("head") or i["sub"]]
+    items = [i for i in items if not i.get("head") or i["sub"] or i.get("note")]
     if not items:
         return None
     return {"key": re.sub(r"[^a-z]+", "_", title.lower()).strip("_"),

@@ -30,6 +30,10 @@ make sense to somebody whose repo just received it.
 - **Jobs shows all its questions itself**, never "+1 more in To do", and a single card left over
   on To do is shown rather than folded. The folds at the end of a list are quiet lines, not bars
   the width of the page.
+- **An interview prep never shows a stray "SAY." as a line of its own.** A label set above the
+  words to say ("SAY.", "Say this:", "Talking point") is left out and the words under it are
+  shown; a note to you ("Note to you, not to say: ...") sits as a quieter line under what it is
+  about, never among the words to say. The prep's check now asks for such a label to be taken out.
 
 ## [4.13.0] - 2026-11-06
 
