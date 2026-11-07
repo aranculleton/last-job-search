@@ -6977,7 +6977,9 @@
       held ? null : paste];
     // A note held for their profile has no Copy and nothing else on its face: its one line says
     // why and when, and Paste is its row's one pill.
-    return {box, notes: null, act: held ? paste : sentBtn, extra, blocked: fixing === "failed", fixing: fixing === "going", line: stateLine(m.id, "msg:" + m.id)};
+    // Its gauge is the engine's, one note's rewrite (app_alerts.paste_profile), never a run's.
+    const pasteCost = held && paste && Number(obj(obj(m.paste).cost).state) > 0 ? costEl(obj(m.paste).cost, null, "cost-paste-" + seg(m.id)) : null;
+    return {box, notes: null, act: held ? paste : sentBtn, cost: pasteCost, extra, blocked: fixing === "failed", fixing: fixing === "going", line: stateLine(m.id, "msg:" + m.id)};
   }
   // Where reading LinkedIn stands for this opening of the page: readingState, except that a
   // read that worked lately elsewhere is no read here unless this page is open in the Claude
@@ -7028,7 +7030,7 @@
             {kind: "quiet icon-only", small: true, icon: "bin", key: "mbin:" + m.id, aria: "Trash it: not now, or not " + txt(m.first_name) + "?"}) : null)),
         m.why ? h("p", {class: "meta"}, txt(m.why) + ".") : null,
         d.box, d.notes,
-        h("div", {class: "card-actions"}, d.act, more("msg:" + m.id, "the message to " + txt(m.first_name), [h("div", {class: "more-acts"}, d.extra, elseBtn("message", m.id, "the message to " + txt(m.first_name), "msg:" + m.id)), relatedLinks(m.employer, m.id, m)], true)),
+        h("div", {class: "card-actions"}, d.act, d.cost, more("msg:" + m.id, "the message to " + txt(m.first_name), [h("div", {class: "more-acts"}, d.extra, elseBtn("message", m.id, "the message to " + txt(m.first_name), "msg:" + m.id)), relatedLinks(m.employer, m.id, m)], true)),
         cardTalk("message", m.id, "the message to " + txt(m.first_name)),
         d.line));
   }
@@ -7863,7 +7865,7 @@
         box ? replyBox(p) : null,
         // The gauge only beside what wakes Claude: a draft's own act (I sent it, Copy) is the
         // page's alone, and carried a follow-up's two minutes (the review, 2026-11-05).
-        h("div", {class: "card-actions"}, owed, owedCost(p, d ? null : owed, going || box), d ? null : theyReplied, more("person:" + p.id, whoAt(name, p.employer), extra)),
+        h("div", {class: "card-actions"}, owed, d && owed === d.act ? d.cost : owedCost(p, d ? null : owed, going || box), d ? null : theyReplied, more("person:" + p.id, whoAt(name, p.employer), extra)),
         cardTalk("person", p.id, whoAt(name, p.employer)),
         noteFor("reply:" + p.id), due ? stateLine(due.id, "pdue:" + p.id) : null, d ? d.line : done1 ? stateLine(done1.id, "msg:" + done1.id) : null,
         going ? null : stateLine(p.id, "person:" + p.id)));
