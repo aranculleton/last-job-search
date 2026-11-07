@@ -353,6 +353,35 @@ def label(text) -> str:
     return t[:1].upper() + t[1:]
 
 
+SHORT_LABEL = 50
+
+
+def short_label(text) -> str:
+    """A stage's name for a title: its first clause, and before a colon where an employer's
+    whole paragraph was stored as the name ("Initial round : two 60-minute virtual interviews
+    with ... Interview 1: ..." is "Initial round", the maintainer, 2026-11-07). A short name
+    is kept as it is ("Online test: case study")."""
+    t = label(text)
+    if len(t) <= SHORT_LABEL:
+        return t
+    cut = re.split(r",\s|\s\(|;\s|\.\s|\s[-\u2013\u2014]\s", t)[0].strip(" :.")
+    if len(cut) > SHORT_LABEL and ":" in cut:
+        cut = cut.split(":", 1)[0].strip()
+    if len(cut) > SHORT_LABEL:
+        cut = cut[:SHORT_LABEL].rsplit(" ", 1)[0].rstrip(" ,:;") + "\u2026"
+    return label(cut)
+
+
+def label_details(text) -> str:
+    """The rest of a long stage name, for the round's details: "" where the name is short."""
+    t = label(text)
+    short = short_label(t)
+    if short == t:
+        return ""
+    rest = t[len(short.rstrip("\u2026")):].lstrip(" :;,.-\u2013\u2014")
+    return label(rest) if not short.endswith("\u2026") else t
+
+
 def _days_words(days) -> str:
     """"Thu 12, Fri 13 or Thu 19 Nov": offered days said together."""
     got = [dt.date.fromisoformat(d) for d in days if _is_day(d)]
@@ -434,7 +463,7 @@ def build(ctx, page_url: str = "") -> list[dict]:
                     continue
                 by = s.get("reply_by") if _is_day(s.get("reply_by")) else ""
                 due = max(today.isoformat(), min(by or days[0], days[0]))
-                name = label(s.get("label") or "Interview")
+                name = short_label(s.get("label") or "Interview")
                 item = _item("deadline", f"up-{rid}-choose-{n_}", f"Choose your day: {name}, "
                              f"{company}", due, with_=company,
                              go={"to": "interviews", "item": "int-" + rid[4:]},
@@ -460,8 +489,10 @@ def build(ctx, page_url: str = "") -> list[dict]:
             who = app_model._third_party(s.get("with"), names) if s.get("with") else ""
             item = _item("test" if test else "interview",
                          f"up-{rid}-{_slug(label_)}-{day}" + (f"-{time_.replace(':', '')}" if time_ else ""),
-                         (f"{label_} due: {company}" if test and not time_ else
-                          f"{label_}: {company}"), day, time_, zone,
+                         # Titled by the round's short name, never an employer's whole
+                         # paragraph (the maintainer, 2026-11-07); its id keeps the full one.
+                         (f"{short_label(label_)} due: {company}" if test and not time_ else
+                          f"{short_label(label_)}: {company}"), day, time_, zone,
                          with_=company, where=place(s.get("place")) or (s.get("place") or None),
                          go={"to": "interviews", "item": "int-" + rid[4:]},
                          note=(f"{role}" + (f", with {who}" if who else "")) or None,

@@ -3670,7 +3670,12 @@ def _interviews(ctx: Ctx, targets: dict) -> list:
             if not stage.get("date") else []
         item = {"id": iid, "company": row.get("company") or "", "role": row.get("role") or "",
                 "status": st,
+                # The round as it was written (what an action names it by), and its name for
+                # a title: "Initial round" where the employer's whole paragraph was stored,
+                # the paragraph kept as its details (the maintainer, 2026-11-07).
                 "next_stage": upcoming.label(stage.get("label")) or None,
+                "stage_title": upcoming.short_label(stage.get("label")) or None,
+                "stage_details": upcoming.label_details(stage.get("label")) or None,
                 "offered": offered or None,
                 "reply_by": (stage.get("reply_by") or None) if offered else None,
                 "when": interview_when(stage.get("date"), clock, stage.get("zone"), ctx.zone),
@@ -3708,6 +3713,10 @@ def _interviews(ctx: Ctx, targets: dict) -> list:
                 "sent_files": _sent_files(ctx, row),
                 "referrer": referrer_of(ctx, row),
                 "past": not live,
+                # Held and waiting to hear: a live process whose round's day has gone, below
+                # what is ahead and never counted as coming up (the maintainer, 2026-11-07: a
+                # recruiter screen had on Mon 2 Nov read as if it were still to come).
+                "had": live and _round_gone(stage.get("date"), clock, stage.get("zone"), ctx),
                 "rev": rev_of(iid, st, stage.get("label"), stage.get("date"), clock,
                               stage.get("with"), bool(text), live, offered,
                               bool(stage.get("tentative")))}
@@ -3726,7 +3735,36 @@ def _interviews(ctx: Ctx, targets: dict) -> list:
                   reverse=True)
     out = ahead + done
     _list(ctx, "interviews", full, len(out), folded)
+    ctx._got["coming_up"] = coming_up(out)
     return out
+
+
+def _round_gone(day, clock, zone, ctx: Ctx) -> bool:
+    """Has a round's day gone: a day before today, or today three hours past its time (as
+    the page reads an interview as over, isPast)."""
+    day = str(day or "")
+    if not _ISO_DAY_ONLY.match(day):
+        return False
+    if day < ctx.today.isoformat():
+        return True
+    if day > ctx.today.isoformat() or not clock:
+        return False
+    when = interview_when(day, clock, zone, ctx.zone)
+    at = parse_time(when) if when and "T" in when else None
+    return bool(at and at + dt.timedelta(hours=3) <= ctx.now)
+
+
+def coming_up(interviews: list) -> dict:
+    """The interviews counted once, for Coming up's summary and the Brief (the page draws
+    these, never works them out): ahead (to come, a day or not), of those with no day yet and
+    with no prep yet, and waiting (held, waiting to hear). Ids, so a page can leave out one
+    ended there before a chat has caught up."""
+    ahead = [i for i in interviews if not i.get("past") and not i.get("had")]
+    return {"ahead": [i["id"] for i in ahead],
+            "undated": [i["id"] for i in ahead if not i.get("when") and not i.get("offered")],
+            "unprepped": [i["id"] for i in ahead if str(i.get("status") or "") != "offer"
+                          and (not i.get("prep") or i["prep"].get("stale"))],
+            "waiting": [i["id"] for i in interviews if not i.get("past") and i.get("had")]}
 
 
 # Words that make the second of two capitalised words a job title, not a surname:
@@ -5509,6 +5547,8 @@ def build(today: dt.date | None = None, now: dt.datetime | None = None,
             model[name] = json.loads(json.dumps(EMPTY.get(name)))
     if "people_count" in ctx._got:
         model["people_count"] = ctx._got["people_count"]
+    if "coming_up" in ctx._got:
+        model["coming_up"] = ctx._got["coming_up"]
     if isinstance(model.get("messages"), list):
         model["to_send"] = to_send(model["messages"])
     if only is None and ctx._got.get("lists"):

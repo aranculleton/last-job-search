@@ -492,7 +492,7 @@ def test_each_interview_card_says_how_it_stands(run, built):
         # Nothing left to end, and no prep to ask for.
         assert not cards[title]["bin"] and "prep" not in cards[title]["meta"].lower()
     waiting = cards["Panel interview with Thornbury Bank"]
-    assert waiting["pill"] == "Waiting to hear" and waiting["when"] == "Wed 28 Oct"
+    assert waiting["pill"] == "Waiting to hear" and waiting["when"] == "You had it 28 Oct"
     assert "I heard back" in waiting["buttons"]
     offer = cards["Your offer from Copperleaf Pay"]
     assert offer["pill"] == "Offer" and offer["when"] == "" and offer["bin"]
