@@ -2707,7 +2707,7 @@ READ_HOLD = {
     "next": "Waiting its turn: Claude reads their profile here by itself, then rewrites this note",
     "reading": "Reading their profile…",
     "read": "Profile read: Claude rewrites this note next",
-    "again": "Claude could not read their profile today: it tries again tomorrow, by itself",
+    "again": "Claude could not read their profile just now: it tries again later, by itself",
 }
 
 

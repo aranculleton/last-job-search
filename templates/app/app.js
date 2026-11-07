@@ -6998,7 +6998,7 @@
     if (S.reading.busy && S.reading.cur === cid) return "reading";
     if (effective(txt(q.id), ["reading.done"])) return "read";
     if (S.reading.needTab) return "tab";
-    if (S.reading.tried.has(txt(q.id)) || readToday(q)) return "again";
+    if (S.reading.tried.has(txt(q.id)) || readToday(q) || autoHeld(S.autoReads || S.autoSeen)) return "again";
     return "next";
   }
   function holdLine(m) {
@@ -11868,7 +11868,8 @@
   async function maybeAutoRead() {
     if (!S.owner || S.reading.busy || S.reading.here !== true || readingState() !== "ready") return;
     const rec = await autoReadsToday();
-    if (autoHeld(rec) || S.reading.busy) return;
+    // Held: the reading card says so, with Read them, once this is known.
+    if (autoHeld(rec) || S.reading.busy) { scheduleRender(); return; }
     const fresh = waitingReads().filter((q) => !S.reading.tried.has(txt(q.id)) && !readToday(q));
     if (fresh.length) readProfiles(fresh, "reading", true).catch(() => {});
   }
@@ -11899,7 +11900,18 @@
     if (!rec && db) { try { const d = await within(db.doc(AUTO_READS).get(), CAP_WAIT_MS); if (d && d !== "timeout" && d.exists) rec = d.data(); } catch (e) { /* none kept */ } }
     if (!obj(rec).day) { try { rec = JSON.parse(sget("local", AUTO_READS_LOCAL) || "null"); } catch (e) { rec = null; } }
     rec = obj(rec);
-    return txt(rec.day) === todayIso() ? rec : {day: todayIso(), running: false, cut: false};
+    const out = txt(rec.day) === todayIso() ? rec : {day: todayIso(), running: false, cut: false};
+    // As last read, for the reading card to say whether it reads by itself now (autoNow).
+    S.autoSeen = out;
+    return out;
+  }
+  // Will the page read these by itself on this opening, with no tap: open where it reads, its
+  // tab kept, and the day's automatic reads not held after a run cut short (autoHeld).
+  function autoNow(queue) {
+    const r = S.reading;
+    if (r.busy) return true;
+    if (r.needTab || !queue.length || autoHeld(S.autoReads || S.autoSeen)) return false;
+    return queue.some((q) => !r.tried.has(txt(q.id)) && !readToday(q));
   }
   function keepAutoReads(rec) {
     S.autoReads = rec;
@@ -12073,7 +12085,7 @@
     const names = people.map((q) => txt(q.first_name)).filter(Boolean);
     const r = S.reading;
     // Started by itself, or about to be (maybeAutoRead): nobody presses anything.
-    const auto = st === "ready" && queue.length > 0 && !r.needTab && (r.busy || (!autoHeld(S.autoReads) && queue.some((q) => !r.tried.has(txt(q.id)) && !readToday(q))));
+    const auto = st === "ready" && autoNow(queue);
     const title = st === "desktop" ? "Open your page in the Claude app on your computer to read " + nWord(n, "profile", "profiles")
       : st === "off" || (st === "ready" && !queue.length) ? "Paste " + nWord(n, "profile", "profiles") + " so Claude can write " + (n === 1 ? "the note" : "the notes")
       : r.busy ? "Claude is reading " + nWord(n, "profile", "profiles")
