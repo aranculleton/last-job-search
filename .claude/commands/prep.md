@@ -55,7 +55,8 @@ Generates `documents/network/<contact_id>/prep.md` via `prep.write_prep()`.
    python3 tools/network/prep.py "<contact>" --check
    ```
    It exits 1 while any answer is raw profile wording or reads as written (third person, a
-   resume verb opening, a label and a colon), and while a reason only they can give is still
+   resume verb opening, a label and a colon, or a label such as "SAY." on a line of its own
+   above the words), and while a reason only they can give is still
    to ask (`Ask`: "Why are you looking?" with no stock answer of theirs). Rewrite until it
    passes; never present an answer it rejects. A draft they asked for is listed under
    `Draft`, as one for them to confirm, and never fails it: show it to them as a draft. The

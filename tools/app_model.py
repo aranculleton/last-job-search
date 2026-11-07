@@ -2859,7 +2859,11 @@ def _prep_text(path: str, names=()) -> str:
     """A call prep as the person reads it on that person's page: plain paragraphs, no
     contact details, cut at a paragraph (never mid-word) with a line saying so. A prep on
     file nobody could open from the person's row was no use before the call (2026-11-03)."""
+    import interview_pack
     text = scrub_names(_redact(re.sub(r"<!--.*?-->", "", read_text(path), flags=re.S)), names)
+    # A label on a line of its own above the words to say ("SAY.") is never a line of its own
+    # here either (2026-11-07): the words under it are.
+    text = "\n".join(ln for ln in text.split("\n") if interview_pack.prep.cue(ln) != "say")
     text = re.sub(r"^#+\s*", "", text, flags=re.M)
     text = re.sub(r"\*\*([^*]+)\*\*", r"\1", text)
     text = re.sub(r"\n{3,}", "\n\n", text).strip()

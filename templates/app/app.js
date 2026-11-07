@@ -9868,11 +9868,14 @@
       h("summary", {class: "prep-fold-sum", "data-k": "prep-fold:" + key}, h("span", {class: "prep-fold-t"}, title), count ? h("span", {class: "prep-fold-n muted"}, String(count)) : null),
       h("div", {class: "prep-fold-body"}, body));
   }
+  // A note to the person ("Note to you, not to say: ...") is a quieter line under the words
+  // it is about, never a bullet among the words to say (2026-11-07).
   function prepItem(x) {
     const link = safeUrl(x.link);
     const host = link ? link.replace(/^https?:\/\/(www\.)?/i, "").split("/")[0] : "";
-    return h("li", {class: x.head ? "pi-head" : ""}, h("span", {}, isoDays(txt(x.text))), link ? [" ", h("a", {href: link, target: "_blank", rel: "noopener noreferrer", class: "pi-src"}, host, h("span", {class: "sr-only"}, " (opens in a new tab)"))] : null,
-      arr(x.sub).length ? h("ul", {class: "pi-sub"}, arr(x.sub).map((t) => h("li", {}, isoDays(txt(t))))) : null);
+    const notes = arr(x.note).map(txt).filter(Boolean).map((t) => h("p", {class: "pi-note small muted"}, isoDays(t)));
+    return h("li", {class: x.head ? "pi-head" : !txt(x.text) ? "pi-aside" : ""}, txt(x.text) ? h("span", {}, isoDays(txt(x.text))) : null, link ? [" ", h("a", {href: link, target: "_blank", rel: "noopener noreferrer", class: "pi-src"}, host, h("span", {class: "sr-only"}, " (opens in a new tab)"))] : null,
+      arr(x.sub).length ? h("ul", {class: "pi-sub"}, arr(x.sub).map((t) => h("li", {}, isoDays(txt(t))))) : null, notes);
   }
   // A day the document writes as 2026-11-04, as the page says every other day ("Wed 4 Nov").
   function isoDays(t) {
