@@ -2364,7 +2364,7 @@
     // the engine has not linked (an application from before links existed).
     const item = arguments[1];
     const ids = item && item.related ? arr(obj(item.related).people) : null;
-    return peopleItems().find((p) => (ids ? ids.includes(p.id) : txt(p.employer) === c) && txt(p.status) === "referral_in_progress") || null;
+    return peopleItems().find((p) => (ids ? ids.includes(p.id) : txt(p.employer) === c) && txt(p.status) === "referral_in_progress" && !referralEndedHere(p.id)) || null;
   }
   function confirmApplied(list, then, what) {
     const held = list.map((x) => ({x, p: referralAt(x.company, x)})).filter((y) => y.p);
@@ -3476,6 +3476,8 @@
         if (a && txt(a.company)) cos.add(txt(a.company).toLowerCase());
         continue;
       }
+      // A referral ended here owes them nothing but a reply they are due: off To do at once.
+      if (txt(d.action) === "referral.ended") { if (referralEndedHere(txt(d.item))) other.add(txt(d.item)); continue; }
       if (txt(d.action) !== "person.stop") continue;
       const scope = txt(obj(d.value).scope);
       if (scope === "other") { other.add(txt(d.item)); continue; }
@@ -6207,10 +6209,16 @@
       act([{item: cid, action: "person.stop", value: {why, scope: w, employer: employer || null}, rev: rev || revOf(cid)}],
         w === "employer" ? "No more from " + employer : w === "other" ? "No note to " + who : "No more messages to " + who);
     };
+    // A referral in flight through them: how it ended comes first, each one tap (the
+    // maintainer, 2026-11-07: turned down, and no way to say the referral could not happen).
+    // Not the employer and in touch another way do not fit someone putting you forward.
+    const rp = personById(cid);
+    const ref = rp && txt(rp.status) === "referral_in_progress" && !referralEndedHere(cid) ? referralEndChoices(rp) : null;
     // Each choice its own button, done at once: a list to pick from and then "Done" took two
     // taps to put one thing away (the walk-through, 2026-11-03).
-    sheet({title: "Not " + who + "?", intro: "Nothing is sent either way. You can change your mind in Contacts.",
+    sheet({title: ref ? "Is the referral through " + who + " over?" : "Not " + who + "?", intro: ref ? "Turned down or withdrew also closes your application at " + employer + ". Nothing is sent." : "Nothing is sent either way. You can change your mind in Contacts.",
       choices: [extra.replied ? {label: "They replied", key: "replied", run: () => { setTimeout(extra.replied, 0); }} : null,
+        ...(ref || []),
         extra.skip ? {label: "Not now: set this note aside", key: "skip", run: () => extra.skip()} : null,
         // A dated row is put off in the engine itself, to a day: Tomorrow and Next week first,
         // never hidden on this device alone (the UX review, 2026-11-05).
@@ -6219,8 +6227,8 @@
         // them opens it again (2026-11-03: a row's own "Let it go" changed nothing to see).
         extra.letGo ? {label: "Let it go: they have not replied", key: "letgo", run: () => extra.letGo()} : null,
         {label: "Don't contact " + who, key: "person", run: () => stop("person")},
-        employer ? {label: "Not interested in " + employer + " any more", key: "employer", run: () => stop("employer")} : null,
-        {label: "Already in touch another way", key: "other", run: () => stop("other")},
+        employer && !ref ? {label: "Not interested in " + employer + " any more", key: "employer", run: () => stop("employer")} : null,
+        ref ? null : {label: "Already in touch another way", key: "other", run: () => stop("other")},
         elseChoice(extra.talk ? extra.talk[0] : "person", extra.talk ? extra.talk[1] : cid)]});
   }
   // A person's name that opens everything about them: the thread, what is owed, where they
@@ -6381,8 +6389,10 @@
     }
     if (what === "window") {
       const now = String(Number(s.window_days) || 14);
-      sheet({title: "How recent", fields: [{id: "v", type: "radio", label: "Leave out jobs posted more than", value: now, options: [["7", "7 days ago"], ["14", "14 days ago"], ["30", "30 days ago"]]}], submit: "Save",
-        onSubmit: (v) => { if (v.v !== now) set({value: Number(v.v)}, "Search window: " + v.v + " days"); }});
+      // One tap a choice, done at once; the one set now says so (DESIGN.md, the trash).
+      sheet({title: "How recent", intro: "Leave out jobs posted more than:",
+        choices: [["7", "7 days ago"], ["14", "14 days ago"], ["30", "30 days ago"]].map(([v, label]) => ({label: label + (v === now ? " (now)" : ""), key: "window-" + v,
+          run: () => { if (v !== now) set({value: Number(v)}, "Search window: " + v + " days"); }}))});
       return;
     }
     if (what === "pay") {
@@ -7001,6 +7011,8 @@
     converted_to_application: ["Applied", "ok"], gone_cold: ["Gone quiet", "plain"], closed: ["Closed", "plain"],
     dropped: ["Set aside", "plain"], cold: ["Gone quiet", "plain"], stopped: ["Stopped", "plain"]};
   function statusWord(p) {
+    // A referral ended on this page: talking again at once, before Claude has caught up.
+    if (txt(p.status) === "referral_in_progress" && referralEndedHere(p.id)) return PERSON_STATUS.in_conversation;
     const own = PERSON_STATUS[txt(p.status)] || [cap1(txt(p.status).replace(/_/g, " ")), "plain"];
     return [txt(p.status_word) || own[0], own[1]];
   }
@@ -7651,7 +7663,7 @@
       txt(prep.text) && !onPage ? btn("Read your call prep", () => openDetail("person", p.id), {small: true, key: "pprep:" + key}) : null,
       talking && st !== "call_booked" ? btn("Call booked", () => askCall(p), {small: true, key: "pcall:" + key, aria: "A call booked with " + name}) : null,
       st === "call_booked" && onPage ? btn("Change the call", () => askCall(p), {small: true, key: "dcall:" + key}) : null,
-      st === "referral_in_progress" ? btn("The referral is over", () => referralEnded(p), {small: true, key: "prefend:" + key, aria: "The referral is over: " + name})
+      st === "referral_in_progress" && !referralEndedHere(p.id) ? btn("The referral is over", () => referralEnded(p), {small: true, key: "prefend:" + key, aria: "The referral is over: " + name})
         : talking && onPage ? btn("They put my name forward", () => referralAgreed(p), {small: true, key: "dref:" + key}) : null,
       wrote ? btn("They sent me a job", () => askAddJob(p), {small: true, key: "pjob:" + key, aria: name + " sent me a job"}) : null,
       talking && !(asked && asked.doc) ? btn("Make a " + noun() + " for " + name, () => askContactResume(p), {small: true, key: "cres:" + key}) : null,
@@ -7782,6 +7794,7 @@
       : sent ? "Sent. Nothing to do until they write back."
       : got ? "Their reply is kept: your turn."
       : closedHere ? "Closed. A reply from them opens it again."
+      : st === "referral_in_progress" && referralEndedHere(p.id) ? "The referral is over. Nothing more is owed to them."
       : offTill ? "Put off until " + fmtDay(offTill) + "."
       : p.is_process_stage ? "This call is an interview stage: it goes with your interviews, with its own prep."
       : st === "call_booked" && callDay && callPast(p) ? "How did it go? Your call was " + dayWords(callDay) + "."
@@ -9572,15 +9585,32 @@
   }
   function referralAgreed(p) {
     const jobs = jobRows().filter((r) => arr(obj(p.related).jobs).includes(r.id));
+    // Which role, one tap each, done at once (DESIGN.md, the trash: never a choice and then Save).
+    const agreed = (r) => act([{item: p.id, action: "referral.agreed", value: {role: r ? txt(r.title) : null, job: r ? r.id : null}, rev: p.rev}], "Referral recorded: " + txt(p.first_name));
     sheet({title: txt(p.first_name) + " put your name forward", intro: "For which role? Every job and draft at " + txt(p.employer) + " then waits for it.",
-      fields: [{id: "job", type: "radio", label: "The role", required: true, options: jobs.map((r) => [r.id, txt(r.title)]).concat([["other", "Another role"]])}],
-      submit: "Save",
-      onSubmit: (v) => { const r = jobs.find((x) => x.id === v.job); act([{item: p.id, action: "referral.agreed", value: {role: r ? txt(r.title) : null, job: r ? r.id : null}, rev: p.rev}], "Referral recorded: " + txt(p.first_name)); }});
+      choices: jobs.map((r) => ({label: txt(r.title), key: "ref-job-" + r.id, run: () => agreed(r)})).concat([{label: "Another role", key: "ref-job-other", run: () => agreed(null)}])});
+  }
+  // How a referral ends, each said the way it happened and done in one tap (the maintainer,
+  // 2026-11-07: turned down at once after applying, and the sheet offered "Not this time" and
+  // "I was hired" in a list with a Save, and "Something else" with no box). Turned down or
+  // withdrew also closes the application there (app_actions._referral_ended); every one
+  // leaves nothing owed to them, so their card leaves To do at once.
+  function referralEndChoices(p) {
+    const name = txt(p.first_name);
+    const co = txt(p.employer);
+    const end = (why, label) => act([{item: p.id, action: "referral.ended", value: {why}, rev: p.rev}], label);
+    return [{label: "I was turned down", key: "ref-rejected", run: () => end("rejected", "Turned down at " + co + ". Nothing more is owed to " + name)},
+      {label: "I withdrew", key: "ref-withdrawn", run: () => end("withdrawn", "You withdrew from " + co + ". Nothing more is owed to " + name)},
+      {label: "Not happening: stop waiting", key: "ref-off", run: () => end("not_happening", "No longer waiting for " + name)}];
   }
   function referralEnded(p) {
-    sheet({title: "The referral is over", intro: "Applying at " + txt(p.employer) + " no longer waits for " + txt(p.first_name) + ".",
-      fields: [{id: "why", type: "radio", label: "How it ended", required: true, options: [["hired", "I was hired"], ["rejected", "Not this time"], ["withdrawn", "I withdrew"], ["other", "Something else"]]}],
-      submit: "Save", onSubmit: (v) => act([{item: p.id, action: "referral.ended", value: {why: v.why}, rev: p.rev}], "Referral ended: " + txt(p.first_name))});
+    sheet({title: "The referral is over", intro: "You stop waiting for " + txt(p.first_name) + ". Turned down or withdrew also closes your application at " + txt(p.employer) + ".",
+      choices: referralEndChoices(p).concat([elseChoice("person", p.id)])});
+  }
+  // A referral's end said on this page, before Claude has caught up.
+  function referralEndedHere(cid) {
+    const e = effective(txt(cid), ["referral.ended", "referral.agreed"]);
+    return !!(e && e.doc.action === "referral.ended");
   }
   // People worth writing to at the employers you want, with anything said about this run in
   // the person's own words, as Find jobs asks (the maintainer, 2026-10-29: "it says one
@@ -9623,16 +9653,22 @@
     const ivs = live.filter((a) => txt(a.status) === "interview").map((a) => [txt(a.id), word(a)]);
     const rest = live.filter((a) => txt(a.status) !== "interview").map((a) => [txt(a.id), word(a)]);
     const many = live.length > 8;
+    const pick = (id) => {
+      if (id === "other") { setTimeout(() => openPlace("interview"), 0); return; }
+      const a = live.find((x) => txt(x.id) === id);
+      if (a) setTimeout(() => heardBack(a, pre || {}), 0);
+    };
+    // A few: a button each, the one tapped going straight on (DESIGN.md, the trash: never a
+    // choice and then a second button). Many: one list to pick from.
+    if (!many) {
+      sheet({title: "I have an interview", intro: "Which is it for?",
+        choices: ivs.concat(rest).map(([id, label]) => ({label, key: "iv-for-" + id, run: () => pick(id)})).concat([{label: "Something else", key: "iv-for-other", run: () => pick("other")}])});
+      return;
+    }
     sheet({title: "I have an interview", submit: "Next",
-      fields: [many ? {id: "a", type: "select", label: "Which is it for?", required: true, error: "Choose one.", placeholder: "Choose the application",
-        options: (ivs.length ? [["", "", "Interviewing now", ivs]] : []).concat([["", "", ivs.length ? "Other applications" : "Your applications", rest]]).concat([["other", "Something else"]])}
-        : {id: "a", type: "radio", label: "Which is it for?", required: true, error: "Choose one.",
-          options: ivs.concat(rest).concat([["other", "Something else"]])}],
-      onSubmit: (v) => {
-        if (v.a === "other") { setTimeout(() => openPlace("interview"), 0); return; }
-        const a = live.find((x) => txt(x.id) === v.a);
-        if (a) setTimeout(() => heardBack(a, pre || {}), 0);
-      }});
+      fields: [{id: "a", type: "select", label: "Which is it for?", required: true, error: "Choose one.", placeholder: "Choose the application",
+        options: (ivs.length ? [["", "", "Interviewing now", ivs]] : []).concat([["", "", ivs.length ? "Other applications" : "Your applications", rest]]).concat([["other", "Something else"]])}],
+      onSubmit: (v) => pick(v.a)});
   }
   // An interview has its own day below, so the sheet's "When" goes while it is chosen.
   function whenShown(el, on) {
@@ -10047,6 +10083,7 @@
     const dueWords = p.due && dayDiff(p.due) !== null ? (dayDiff(p.due) < 0 ? "was due " + relDay(p.due) : dayWords(p.due)) : "";
     const nextText = callDay && !callPast(p) ? "Call " + dayWords(callDay) + (obj(p.call).time ? " at " + txt(p.call.time) : "")
       : txt(p.hold) ? txt(p.hold)
+      : st === "referral_in_progress" && referralEndedHere(p.id) ? "The referral is over. Nothing more is owed to them"
       : stepWords(p.next) || txt(p.next_action);
     const nextLine = nextText ? nextText + (dueWords && !txt(p.hold) && nextText.toLowerCase().indexOf(dueWords.toLowerCase()) < 0 && !(callDay && !callPast(p)) ? ", " + dueWords : "") : "";
     // A link the next step names (a referral link, a posting) opens from here, never as raw text.
