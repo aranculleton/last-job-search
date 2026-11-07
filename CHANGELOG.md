@@ -25,6 +25,21 @@ make sense to somebody whose repo just received it.
 - **Jobs shows all its questions itself**, never "+1 more in To do", and a single card left over
   on To do is shown rather than folded. The folds at the end of a list are quiet lines, not bars
   the width of the page.
+- **A referral that cannot happen ends in one tap.** "The referral is over" was a list with a
+  Save, two answers that said the same thing, and a "Something else" with no box. Now it is a
+  short sheet of buttons, each done at once with Undo: "I was turned down" (which also closes
+  your application there), "I withdrew", "Not happening: stop waiting", and Something else,
+  which opens the box under that person. The same choices lead the person's trash while the
+  referral is in flight, and either way nothing more is owed to them, so they leave To do at
+  once. Choosing a role, an application or how recent the jobs are is one tap too.
+- **An interview you have had says so.** A round whose day has gone, while you wait to hear,
+  reads "You had it 2 Nov" below what is still to come, and Coming up counts it apart: "1
+  interview coming up, no day yet. 1 interview waiting to hear back." The Brief's Coming up
+  says who you are waiting to hear from. A round saved under the employer's whole paragraph is
+  titled by its name ("Initial round with ..."), the paragraph kept on its page.
+- **Help Claude do more is easy to find on To do.** It is one line right after today's things,
+  saying what it gives, instead of at the foot after Not due yet; with nothing due today, its
+  first card shows. It is never counted among today's things.
 
 ## [4.13.0] - 2026-11-06
 
