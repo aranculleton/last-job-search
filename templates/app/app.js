@@ -5334,7 +5334,9 @@
     // follow what they open, a step under it, and the room stays at the panel's own foot rather
     // than as a hole between the content and its pills. Under 32px the pills stay at the foot,
     // in line with the row's other panels.
-    for (const p of panels) if (airRoom(p) > AIR_HOLE && p.querySelector(":scope > .bp-foot")) mark(p, "follow");
+    // A few px short of it counts too: Safari 26.0 rounds a box to the page's px before its zoom,
+    // and a room of exactly 32 left a 50px hole there.
+    for (const p of panels) if (airRoom(p) > AIR_HOLE - 4 && p.querySelector(":scope > .bp-foot")) mark(p, "follow");
     fitAirSet(grid, air);
     return air;
   }
