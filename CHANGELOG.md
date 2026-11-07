@@ -22,9 +22,47 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **The page's old helper chat is put away the same morning.** After the morning hand-over, the
+  new helper kept yesterday's "Job search page (finishing up)" chat while its last save was
+  still landing, and nothing came back to put it away, so it sat in the list until the next
+  day. Whenever the new helper keeps the old one, for any reason, it now checks again half an
+  hour later, and keeps doing so for the day until the old one is gone.
 - **Jobs shows all its questions itself**, never "+1 more in To do", and a single card left over
   on To do is shown rather than folded. The folds at the end of a list are quiet lines, not bars
   the width of the page.
+- **An interview prep never shows a stray "SAY." as a line of its own.** A label set above the
+  words to say ("SAY.", "Say this:", "Talking point") is left out and the words under it are
+  shown; a note to you ("Note to you, not to say: ...") sits as a quieter line under what it is
+  about, never among the words to say. The prep's check now asks for such a label to be taken out.
+- **On a laptop the Brief's panels use their room** instead of packing everything at the top
+  with a gap above the buttons. Next three's steps, and a short list of people or jobs, each sit
+  in their own soft box and spread out a little; a panel with little to show keeps its buttons
+  just under it; Your progress's chart grows taller; and Jobs says "New, best fit first" over
+  its new jobs, so they no longer read as the drafts ready to apply. It is worked out from your
+  own window, so it holds at any size, at any zoom and in Safari.
+- **A referral that cannot happen ends in one tap.** "The referral is over" was a list with a
+  Save, two answers that said the same thing, and a "Something else" with no box. Now it is a
+  short sheet of buttons, each done at once with Undo: "I was turned down" (which also closes
+  your application there), "I withdrew", "Not happening: stop waiting", and Something else,
+  which opens the box under that person. The same choices lead the person's trash while the
+  referral is in flight, and either way nothing more is owed to them, so they leave To do at
+  once. Choosing a role, an application or how recent the jobs are is one tap too.
+- **An interview you have had says so.** A round whose day has gone, while you wait to hear,
+  reads "You had it 2 Nov" below what is still to come, and Coming up counts it apart: "1
+  interview coming up, no day yet. 1 interview waiting to hear back." The Brief's Coming up
+  says who you are waiting to hear from. A round saved under the employer's whole paragraph is
+  titled by its name ("Initial round with ..."), the paragraph kept on its page.
+- **Help Claude do more is easy to find on To do.** It is one line right after today's things,
+  saying what it gives, instead of at the foot after Not due yet; with nothing due today, its
+  first card shows. It is never counted among today's things.
+- **A note waiting for someone's profile says once when it will be read.** Your page reads
+  their profile by itself while it is open in the Claude app on your computer; on a phone or
+  the web the card says so, and To do has one card for everyone waiting ("Open your page in the
+  Claude app on your computer to read 3 profiles") instead of a row each under Messages to
+  send. In the app the card says "Reading their profile…" while it does. Pasting a profile
+  instead shows the minutes one note's rewrite takes, not "a lot of your allowance".
+- **A character count is grey while the message fits.** It turns amber only while you are
+  editing and are close to the limit, and red over it: "291 of 300 characters" read as a warning.
 
 ## [4.13.0] - 2026-11-06
 

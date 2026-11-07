@@ -2028,7 +2028,47 @@ def unsayable(lines, question="", seconds=0) -> list:
 # opening (2026-10-20). Read by the interview pack and the call prep alike.
 _NOTES_START = re.compile(r"^\s*(?:#{1,6}\s*|\*\*|__)?notes?(?:\*\*|__)?\s*:?\s*(?:\*\*|__)?\s*$",
                           re.I)
-_NOTE_LINE = re.compile(r"^\s*(?:(?:\*\*|__)?notes?(?:\*\*|__)?\s*:|>|\((?:note|notes)\b)", re.I)
+_NOTE_LINE = re.compile(r"^\s*(?:(?:\*\*|__)?notes?(?:\s+(?:to|for)\s+(?:you(?:rself)?|self|me))?"
+                        r"(?:\s*,?\s*not\s+(?:words\s+)?to\s+(?:say|be\s+said))?(?:\*\*|__)?\s*:"
+                        r"|>|\((?:note|notes)\b)", re.I)
+# A label on a line of its own, set above the words it labels: "SAY.", "**Say this:**",
+# "Talking points", "NOTE". A chat wrote "SAY." above a story in a section of the person's
+# own and "Note to you, not to say: ..." under it, and the page showed "SAY." as a bullet
+# of its own among the words to say (2026-11-07). A cue to say is dropped and the words
+# under it are said as they are; a cue to note makes what follows a note. `cue` says which.
+# "Say these" is not one: it heads the one screen's list of things to say, the pack's own.
+_CUE = re.compile(
+    r"^\s*(?:[-*+]\s+|\d+[.)]\s+)?(?:\*\*|__|\*|_)?\s*(?:"
+    r"(?P<say>say(?:\s+(?:this|it))?(?:\s+(?:aloud|out\s+loud))?|what\s+(?:to|you)\s+say|"
+    r"(?:the\s+)?(?:words|lines)(?:\s+to\s+say)?|to\s+say|talking\s+points?|script|answer)|"
+    r"(?P<note>notes?(?:\s+(?:to|for)\s+(?:you(?:rself)?|self|me))?(?:\s*,?\s*not\s+(?:words\s+)?"
+    r"to\s+(?:say|be\s+said))?|not\s+to\s+(?:say|be\s+said)))"
+    r"\s*(?:\*\*|__|\*|_)?\s*[.:!\-–—]*\s*(?:\*\*|__|\*|_)?\s*$", re.I)
+# The same label at the head of the words it labels, "**SAY:** I started ..." or "Say this:
+# I started ...": taken off where the line is shown, the words kept.
+_CUE_LEAD = re.compile(
+    r"^(?:(?:\*\*|__)\s*(?:say(?:\s+(?:this|it|aloud))?|what\s+to\s+say|words\s+to\s+say|"
+    r"talking\s+points?)\s*[.:\-–—]?\s*(?:\*\*|__)\s*[.:\-–—]?|"
+    r"(?:say(?:\s+(?:this|it|aloud))?|what\s+to\s+say|words\s+to\s+say|talking\s+points?)\s*:)"
+    r"\s+(?=\S)", re.I)
+
+
+def cue(line) -> str:
+    """"say" for a line that is only a label above words to say ("SAY.", "**Say this:**",
+    "TALKING POINT"), "note" for one above a note ("NOTE", "Note to you, not to say:"), ""
+    for any other line: a label is never shown or said as words of its own."""
+    m = _CUE.match(_text(line))
+    if not m:
+        return ""
+    return "say" if m.group("say") else "note"
+
+
+def uncue(line) -> str:
+    """A line with a label to say taken off its head ("**SAY:** I started ..." is "I started
+    ..."); any other line as it is."""
+    s = _text(line)
+    lead = re.match(r"^(\s*(?:[-*+]\s+|\d+[.)]\s+)?)(.*)$", s, re.S)
+    return lead.group(1) + _CUE_LEAD.sub("", lead.group(2), count=1)
 _ITALIC_LINE = re.compile(r"^\s*(?:\*(?!\*)[^*]+\*|_(?!_)[^_]+_)\s*[.:]?\s*$")
 # A draft the person asked for: an example, an anecdote, a metric or a project they could
 # not recall, written for them to confirm or change. Interview prep refused to write one,
@@ -2064,10 +2104,17 @@ _OWN_QUOTE = re.compile(r"^\s*>\s*(?:Checking|They want to hear)\s*:", re.I)
 
 
 def spoken_lines(lines) -> list:
-    """The lines of an answer the person will say: every note, and a draft's mark, out. An
-    answer written wholly as a quote is read from the quote."""
+    """The lines of an answer the person will say: every note, a label on a line of its own
+    ("SAY.") and a draft's mark out. An answer written wholly as a quote is read from the
+    quote."""
     out, quoted, notes = [], [], False
     for ln in lines or ():
+        label = cue(ln)
+        if label:
+            # "SAY." above the words is no word to say, and what follows it is said again
+            # after a note; "NOTE" above a line makes it a note.
+            notes = label == "note"
+            continue
         if _NOTES_START.match(ln):
             notes = True
         if not notes and _QUOTE.match(ln) and not _OWN_QUOTE.match(ln):
@@ -2078,6 +2125,22 @@ def spoken_lines(lines) -> list:
     if not any(_text(ln) for ln in out) and any(_text(ln) for ln in quoted):
         return [ln for ln in quoted if not (_NOTE_LINE.match(ln) or _ITALIC_LINE.match(ln)
                                             or _DRAFT_LINE.match(ln))]
+    return out
+
+
+def cue_lines(text) -> list:
+    """[("the document", why)] for each label on a line of its own above words to say
+    ("SAY.", "**Say this:**") in a prep document, outside code: the page showed "SAY." as a
+    bullet of its own among the words (2026-11-07). The words are written as they are
+    said, and a note to the person starts "Note:"."""
+    out, fenced = [], False
+    for ln in str(text or "").splitlines():
+        if re.match(r"^\s*(```|~~~)", ln):
+            fenced = not fenced
+        elif not fenced and cue(ln) == "say":
+            out.append(("the document", "\"%s\" is a label on a line of its own: take it out, "
+                        "since the words under it are what you say, and start a note to "
+                        "yourself with \"Note:\"" % ln.strip()))
     return out
 
 
@@ -2114,7 +2177,7 @@ def check_answers(text, company="") -> list:
         why = "a placeholder still to fill: %s" % gap
         if why not in reported:
             out.append((where, why))
-    return out
+    return out + cue_lines(text)
 
 
 # A gap to fill, as a person reads it: "[FILL IN: ...]", "[TODO]", "[TBC]". Only the bracket

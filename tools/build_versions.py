@@ -256,8 +256,9 @@ METHODS: dict[str, dict] = {
             (23, "2026-10-25", True, "the research a prep cites is named by its real file; a copy sent is named apart from every other (requisition numbers and levels kept, the label never cut), carries no tool comments, and is remade when a hand edit passes the check; a path printed across two Windows drives no longer stops it; a prep finds its application from one index of the tracker, so a brief rebuilding every prep is twice as fast; tool families of one name merge into one; a prep goes on the person's page first, and in the chat only where there is no page; an application's folder is found by the paths module, not the outreach one"),
             (24, "2026-10-26", False, "every file it writes has plain line ends on Windows too"),
             (25, "2026-11-03", True, "a call prep says a reason to ask you first in plain words (Claude asks you first), with no command in it, and a document an older version wrote is still read; a stock answer naming a place that employer did not hear, or a pay figure beside another band, is left out, never offered as prepared; the check fails on a gap to fill under any heading, a number the profile does not hold and a place the profile no longer says; months are counted as said; one line per resume sent; a skill held under another name (Azure Data Factory is Azure) is never offered as a near match; a manager's leadership answer leads with the team they ran; asked for in a chat, a call prep is given in the chat in full as well as on the page"),
+            (26, "2026-11-07", False, "a label on a line of its own above the words to say (\"SAY.\", \"Say this:\") is never said, never shown as a line of its own, and fails the check; a line opening \"Note to you, not to say:\" is a note; documents are written as before"),
         ),
-        "fingerprint": "7a3887fa1d71f808",
+        "fingerprint": "5247ebda28f11685",
     },
     "drafts": {
         "by": "upgrade", "priority": 2, "applies": "unsent_drafts", "time": "~5 min",
@@ -426,8 +427,9 @@ METHODS: dict[str, dict] = {
             (28, "2026-11-03", True, "a stage booked with no day yet says so in its notes instead of an empty date; the prep reads in plain words for the minutes before a call: one screen with what they are checking, three to five things to say and two or three questions to ask, the one or two things not to say that matter (the rest kept under the gaps), every source said as what it is to you (never a file, a path or a command), contacts' states in words, what you sent named as your resume and cover letter, notes never repeated under Likely questions, \"Draft\" only above an answer that is one, and what Claude still has to look up or ask said plainly; the whole prep reaches the page, never cut; a stage keeps the zone its time was given in, its length and where it is, an invitation that offers several days keeps them and the day to answer by until one is chosen, a round moved under another name is moved rather than booked twice, the next round is the earliest by its day, a test is ticked when done, and a thank-you sent some other way is marked as sent; the outcome keeps one status once resolved, and a pack's stock answers follow the place and the band each employer heard; a manager's leadership answer leads with the team they ran; a pack asked for in a chat is given in the chat in full as well as on the page"),
             (29, "2026-11-05", False, "a booked round can be not confirmed yet, written on its line and cleared when booked again without it; a new day for the same round keeps its prep current, and a prep for an earlier plan of rounds is updated by itself; nothing made before needs making again"),
             (30, "2026-11-06", False, "a pack knows a resume or letter by either order of its name (<Prefix>_<ABBR>_Resume, or <Prefix>_Resume_<ABBR> before); packs are built as before"),
+            (31, "2026-11-07", False, "a label on a line of its own above the words to say (\"SAY.\", \"**Say this:**\", \"Talking point\") is never shown as a bullet or said as part of an answer, the words under it are; a note to you (\"Note to you, not to say: ...\") is shown apart, under what it is about; the check fails a pack that still has such a label; the page reads every pack this way at once, so nothing needs making again"),
         ),
-        "fingerprint": "02cdda28c6590f65",
+        "fingerprint": "014ab3b5f51e6f50",
     },
     "research": {
         "by": "upgrade", "priority": 3, "applies": "live_applications", "time": "~5 min each",
@@ -742,8 +744,9 @@ METHODS: dict[str, dict] = {
             (37, "2026-11-06", False, "a brief time the person picks is kept to the minute, 8:00 stays 8:00; only the app's own default is moved off the hour, recorded beside what it stood for (record --asked) and said in one line; what the scheduler reports of a late start (next_run_at, the last fired time) is kept from the task listing by routines.py brief and the daily tidy-up so the page shows the real time; a brief made before keeps its schedule and is read the same way; where both earlier times fall in the slow hours (Alaska, 9:38) the line says later than 8:00, never earlier"),
             (38, "2026-11-06", False, "a hand-over from an earlier day in the person's own zone no longer holds the next day's fresh helper: an old helper put away by hand left the hand-over open, and the first page update of the morning asked for no fresh helper"),
             (39, "2026-11-06", False, "a finished job chat whose work never reached GitHub is asked once to save it (land.py --keep), and if it still is not there its work's own card says plainly that it was lost, with Try again, once, and the chat is put away; it no longer sits in the list with nothing said"),
+            (40, "2026-11-07", False, "after a hand-over the new page helper comes back half an hour on whenever it kept the old one, for any reason: one kept because git could not yet say its save was on master stayed in the list all day"),
         ),
-        "fingerprint": "6222a3a64a7c94cf",
+        "fingerprint": "b8cb5356d8fa947a",
     },
     "expand": {
         "by": "upgrade", "priority": 4, "time": "~15 min",
@@ -852,8 +855,9 @@ METHODS: dict[str, dict] = {
             (80, "2026-11-06", False, "Your CV's card has the pencil where its draft is kept: the Tweak panel opens on Bullets, each a choice, the ones ticked swapped for another true one from the same job and never kept as a usual"),
             (81, "2026-11-06", False, "a toast shows its time left as a ring round its close, two at most with the rest counted; a job tapped keeps its place on Jobs while the person stays; a job left out as not a fit says why in Claude's work and never offers Try again"),
             (82, "2026-11-06", False, "one card left over is shown in place, never folded, on To do and on Jobs, and a fold at a list's end is a quiet line, never a bar the width of the page"),
+            (83, "2026-11-07", False, "a laptop's Brief panels use the room their row gives them: a short list's rows each in a soft box and spread a step apart, the pills just under a panel with little to show, Your progress's chart grown into its room, and Jobs' new jobs headed \"New, best fit first\" under its drafts' line; two panels of one row as tall as each other give way together; in a prep's folded sections a note to you is a quieter line under the words it is about, never a bullet among the words to say; a referral's end is one tap a choice (turned down, withdrew, not happening, Something else opening the person's box), also first in their trash while it is in flight, and the other choose-then-Save sheets are buttons; an interview had and waiting to hear reads \"You had it 2 Nov\" below what is ahead, counted apart by the engine, with a long stored round name titled short; Help Claude do more sits right after today's things with what it gives; a note waiting for their profile says once when it is read (the page's own reading, in the Claude app on a computer), with Paste beside it gauged as one note's rewrite; everyone waiting is one To do card, never rows of Messages to send; a character count is grey within its limit, amber only while editing near it, red over"),
         ),
-        "fingerprint": "81135666d852cff3",
+        "fingerprint": "04245682fba34210",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

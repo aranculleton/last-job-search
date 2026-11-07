@@ -1,19 +1,19 @@
 {
  "model": 1,
  "made_at": "2026-10-25T18:00:00Z",
- "rev": "78746ad40b07",
+ "rev": "dfdcd67c9bf9",
  "app": {
-  "version": "4.12.0",
+  "version": "4.13.0",
   "url": null,
   "update_waiting": null,
   "news": [
-   "Rules the app now does by itself come off your list. (set up for you)",
-   "A search of the employers you name.",
-   "A complaint about the app is never kept as one of your rules."
+   "A search asked for in a chat costs less of your Claude allowance.",
+   "A job ruled out while it was being drafted says why, and is never drafted again.",
+   "A job you tap keeps its place on Jobs."
   ],
   "privacy": "Only you can open this page unless you share it. It holds first names, employers, your drafts and your setup answers, so keep it unshared.",
   "repo": "https://github.com/aranculleton/last-job-search",
-  "page": 80,
+  "page": 83,
   "not_saved": 0,
   "app_bugs": []
  },
@@ -77,7 +77,7 @@
  ],
  "jobs": {
   "round": "r9",
-  "made_at": "2026-11-06T11:00:19Z",
+  "made_at": "2026-11-07T13:35:47Z",
   "met": false,
   "summary": "3 roles from the last search to look at, 1 of them scoring 75 or more. 3 left out, each with its reason.",
   "rows": [
@@ -656,9 +656,11 @@
    "count": {
     "chars": 144,
     "limit": 300,
+    "near_at": 285,
     "show": true,
-    "warn": false,
+    "near": false,
     "over": false,
+    "tone": "muted",
     "label": "144 of 300 characters"
    },
    "warnings": [],
@@ -999,12 +1001,14 @@
    "role": "Risk Analyst",
    "status": "interview",
    "next_stage": "Panel interview",
+   "stage_title": "Panel interview",
+   "stage_details": null,
    "offered": null,
    "reply_by": null,
    "when": "2026-10-28",
    "prep": {
     "path": "documents/applications/thornbury_bank_risk_analyst_thornbury/interview_prep.md",
-    "updated": "2026-11-06T11:00:19Z"
+    "updated": "2026-11-07T13:35:47Z"
    },
    "questions": 2,
    "all_day": true,
@@ -1107,6 +1111,7 @@
    ],
    "referrer": null,
    "past": false,
+   "had": false,
    "rev": "070559dec4bc",
    "alerts": [],
    "suggest": null,
@@ -1531,11 +1536,23 @@
   ]
  },
  "updates": {
-  "version": "4.12.0",
-  "newest": "4.12.0",
+  "version": "4.13.0",
+  "newest": "4.13.0",
   "mode": "auto",
   "waiting": null,
   "changed": [
+   {
+    "version": "4.13.0",
+    "date": "2026-11-06",
+    "lines": [
+     "A search asked for in a chat costs less of your Claude allowance.",
+     "A job ruled out while it was being drafted says why, and is never drafted again.",
+     "A job you tap keeps its place on Jobs.",
+     "Messages at the foot of the page show how long they have left.",
+     "Cancel under a draft's pencil puts your words back.",
+     "A new text size fits your Brief to the window again."
+    ]
+   },
    {
     "version": "4.12.0",
     "date": "2026-11-06",
@@ -1546,18 +1563,6 @@
      "Documents are named you, the employer, then the document.",
      "Settings is shorter and says things plainly.",
      "Something looks wrong opens its box right there."
-    ]
-   },
-   {
-    "version": "4.11.0",
-    "date": "2026-11-06",
-    "lines": [
-     "The Brief fits a laptop screen.",
-     "One way to stop Claude.",
-     "A card's answer offers what it made.",
-     "Answers are never lost.",
-     "A bigger chat bubble.",
-     "Something else, on every card, answered under that card."
     ]
    }
   ],
@@ -1824,6 +1829,17 @@
    "setting": "paste",
    "paused": false,
    "paused_until": null,
+   "hold": {
+    "browser": "Waiting for their profile: Claude reads it next time this page is open in the Claude app on your computer, then rewrites this note",
+    "paste": "Waiting for their profile: paste it here and Claude rewrites this note",
+    "tab": "Waiting for their profile: press Read them in To do once, and Claude reads it by itself from then on",
+    "sign_in": "Waiting for their profile: sign in to LinkedIn in Claude's browser and Claude reads it by itself",
+    "paused": "Waiting for their profile: LinkedIn asked Claude to slow down, so it reads it tomorrow, by itself",
+    "next": "Waiting its turn: Claude reads their profile here by itself, then rewrites this note",
+    "reading": "Reading their profile…",
+    "read": "Profile read: Claude rewrites this note next",
+    "again": "Claude could not read their profile just now: it tries again later, by itself"
+   },
    "check": {
     "state": "due",
     "on": null,
@@ -2292,11 +2308,24 @@
   "held": 0,
   "drafted": 1
  },
+ "coming_up": {
+  "ahead": [
+   "int-thornbury_bank_risk_analyst"
+  ],
+  "undated": [],
+  "unprepped": [],
+  "waiting": []
+ },
  "to_send": {
   "n": 1,
   "ids": [
    "msg-kestrel_mutual_ansgar"
   ]
+ },
+ "to_read": {
+  "n": 0,
+  "ids": [],
+  "contacts": []
  },
  "lists": {
   "applications": {

@@ -26,6 +26,12 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   answers", always among the five: one question at a time in its grey box with "1 of 4", each
   answered with its own control (answerBox), the next there the moment it is answered.
   (tired-person tests, quick answers test)
+- What helps Claude do more (your profile, reading profiles, the LinkedIn download) is never
+  counted among today's things: it is one line right after them, above "Not due yet", saying
+  what it gives ("Help Claude do more (2) · Your profile: every resume and letter is built
+  from it"); with nothing due today, its first card shows under its own heading, the rest one
+  tap below. Why: at the foot of To do, among the folds, it was not found (the maintainer,
+  2026-11-07). (help test)
 - One card an act and one card a person. A person is never on three cards: their follow-up,
   what they asked for and a job's "ask them before you apply" are one card for them, led by
   what they asked, the referral its grey box, its Done finishing all of it. A referral with no
@@ -79,6 +85,14 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   with no screen of its own, says "2 more" and opens them in place. On a short window (660px
   or less) the numbers are one line under the greeting, opening Progress with its chart. A
   phone scrolls. (the maintainer, 2026-11-05; fit tests)
+- **A panel uses the room its row gives it**, never content packed at the top over a hole
+  before its pills. Worked out from what is drawn (`fitAir`), never a height tuned to one
+  window, and only room the panel already has: a list's own small heading where it fits
+  (Jobs' "New, best fit first" under its drafts' line), a short list's rows each in a soft box
+  as Coming up's are, the rows a step of the spacing scale further apart up to 24px, and past
+  that the pills a step under what they open, the spare room at the panel's foot. Your
+  progress's chart grows into its room, up to 160px. (the maintainer, 2026-11-07: "u see how
+  its bunched at the top? be smart about this"; room tests)
 
 ## Cards and lists
 
@@ -133,6 +147,14 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   count (`app_model.to_send`), the same as Contacts' "N to send". Why: three cards (drafted,
   first notes, to check) said one thing, and their counts disagreed with Contacts. (drafted
   messages tests)
+- A note waiting for its person's profile is not ready to send, so it is not on that card:
+  everyone waiting on a read is one card (`app_model.to_read` with the reading list), however
+  many, saying when the reading happens. Where the page cannot read (a phone, the web) its
+  title says where to open it ("Open your page in the Claude app on your computer to read 3
+  profiles"); where it can, it reads by itself and the card says so ("Claude reads 3 profiles
+  by itself", "Claude is reading 3 profiles" with its spinner), with Read them only to open its
+  tab the first time or to try again after trouble. Why: "when exactly is this waiting for
+  claude thing going to happen?" (the maintainer, 2026-11-07). (waiting-note tests)
 - Many of one small thing are one checklist card, a row an item: each row has its own next
   step and Done beside its trash, the trash keeping the rest (They replied, Tomorrow, Next week,
   the person's choices), and the card's own actions keep to the card's anatomy above.
@@ -200,6 +222,15 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   Fix it button. Tried twice and still failing, it says so, with the pencil to change it. A
   fact only the person knows is asked through the one rare question. Why: where there is
   clearly a recommended option, the app does it.
+- A first note written before their profile was read has no Copy: one line under it says why
+  and when, in the engine's words for where reading stands where the page is open
+  (`linkedin.reading.hold`): "Claude reads it next time this page is open in the Claude app on
+  your computer" on a phone or the web, "Waiting its turn", then "Reading their profile…" with
+  the spinner in the app. Never a second line or an alert saying it again. "Paste <name>'s
+  profile" is the soft pill beside it where the page cannot read now, its gauge one note's
+  rewrite (`app_alerts.paste_profile`), never a networking run's. Why: the line and an alert
+  said the same twice, and the paste read as "a lot of your allowance" (the maintainer,
+  2026-11-07). (waiting-note tests)
 - What wakes Claude carries its cost beside it (the gauge: "Draft my reply", "Ask Claude",
   "Draft the follow-up"; the pencil box's chips only fill it); what only the page does (I sent it, an edit in place,
   the trash) carries none, and wakes nothing. (`data-wakes` marks the first kind.)
@@ -340,6 +371,11 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
 
 - Colours are the tokens in `palettes.py`, never a raw value. Light: a near-white page, white
   cards, ink buttons with white text (7.3:1). Dark: the main Rosé Pine. (colour tests)
+- A character count is the quiet grey while within its limit and red over it; amber only while
+  the words are being changed and are in the last twentieth of the limit, where an edit could
+  take them over (`app_model.count_of`, `near_at`). One rule for every count of a message: a
+  draft, a reply, the pencil's field and "I changed it first". Why: 291 of 300 in amber read as
+  a warning about a note that was fine (the maintainer, 2026-11-07). (waiting-note tests)
 - Spacing keeps to 0, 2, 4, 8, 12, 16, 20, 24, 32 and 44 pixels; a first screen keeps to
   seven type styles, three weights and three tones. (layout 10, 11)
 
