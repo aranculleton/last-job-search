@@ -24,7 +24,7 @@
 (function () {
   "use strict";
 
-  const TOAST_MS = 8000;
+  const TOAST_MS = 6000;   // 8 seconds read as too long (the maintainer, 2026-11-08); Undo stays on the item after
   // How long a ring may go unanswered before its card says so: a chat woken after a quiet
   // spell first builds its computer (its setup script alone ran two minutes on 2026-11-03),
   // so three minutes called a chat that was still waking "not picked up" (the maintainer,
