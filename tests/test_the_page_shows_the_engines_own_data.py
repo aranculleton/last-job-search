@@ -157,6 +157,11 @@ def built(tmp_path_factory):
         json.dump(pj, fh, indent=1)
     import app_model
     import sync_app
+    # The engine's modules that first load under this copy (`state`, `open_actions`) keep its
+    # paths in their names: put away once it is built, so a later test in this worker reads
+    # the worker's own state, not this folder's (a follow-up test missed the row it had just
+    # added, 2026-11-08).
+    loaded = set(sys.modules)
     with pytest.MonkeyPatch.context() as mp:
         for k, v in _env(prof, st, "private").items():
             mp.setenv(k, v)
@@ -170,6 +175,8 @@ def built(tmp_path_factory):
         mp.setattr(app_setup, "_app_changelog", lambda *a, **k: "## 4.0.0 (2026-10-26)\n\n- The page.\n")
         mp.setattr(app_setup, "is_migration", lambda *a, **k: True)
         model, _ = app_model.build(*app_model.clock("2026-10-25", NOW))
+    for name in set(sys.modules) - loaded:
+        del sys.modules[name]
     assert app_model.check(model) == []
     path = os.path.join(tmp, "rich.html")
     with open(path, "w", encoding="utf-8") as fh:
