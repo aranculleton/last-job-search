@@ -22,6 +22,9 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **A message at the foot of the page goes after six seconds**, not eight, and one about a
+  failure after twelve. Its Undo stays on the item itself until Claude has made the change.
+
 - **The page's old helper chat is put away the same morning.** After the morning hand-over, the
   new helper kept yesterday's "Job search page (finishing up)" chat while its last save was
   still landing, and nothing came back to put it away, so it sat in the list until the next

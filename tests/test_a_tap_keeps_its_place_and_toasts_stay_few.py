@@ -105,3 +105,14 @@ def test_one_more_is_shown_never_folded_and_folds_are_quiet_lines(run, tmp_path,
     r = got["after"][0]["eval"]
     assert not r["one"] and not r["away"], r
     assert all(w < WIDE["width"] / 2 for w in r["bars"]), r
+
+
+def test_a_toast_goes_after_six_seconds():
+    """Eight seconds read as too long (the maintainer, 2026-11-08: "seems slightly too long"):
+    a toast goes after six, one about a failure after twice that, and its Undo stays on the
+    item's own line until Claude has made the change."""
+    import re
+    with open(os.path.join(ROOT, "templates", "app", "app.js"), encoding="utf-8") as fh:
+        js = fh.read()
+    assert re.search(r"const TOAST_MS = 6000;", js)
+    assert "t.until = now() + (t.bad ? 2 * TOAST_MS : TOAST_MS);" in js
