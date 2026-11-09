@@ -28,7 +28,7 @@ make sense to somebody whose repo just received it.
 
 - **Every run on your computer is measured, not guessed.** Its time per stage, steps by kind, LinkedIn pages and web searches come from the run's own record and show on its card, and the Monday brief says how the week's runs went. A run's own report of its time and steps was wrong by a third.
 
-- **A fallback when no helper is awake.** A chat on your computer can set up a scheduled task there that takes waiting work while the Claude app is open, and the rest of the chain (a folder your computer offers, a browser lent to a cloud chat, then pasting a profile) is tried in order.
+- **A fallback when your computer cannot be reached.** A folder your computer offers, then a browser lent to a cloud chat, then pasting a profile are tried in order. No hourly task is set up on your computer: it would start a Claude run every hour for nothing, when the cloud already starts a chat there whenever work waits.
 
 - **Profile upgrade: computer-linkedin.** If you work on a computer, one card offers to set it up for LinkedIn (about five minutes, once), and setup does the same for new copies.
 
@@ -44,6 +44,14 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
+- **Held back for now says why, ends at its day, and gives you one tap to lift it.** Each line read "open again Fri 27 Nov, or say 'more at <employer>'", leaving you to type it; now it says why ("2 people there are waiting on a reply") and has its own pill ("Open it now"), with Claude's answer under the row.
+
+- **"How every rule ends" is grouped and in plain words.** It was one wall of 34 lines with "<employer>", "No thanks", "InMail", "6 business days" and "kept, as" in it; now it sits under small headings (Jobs, People, Messages...) with room between rows.
+
+- **The computer's To do card says what is waiting and puts its step on its face.** It said "Waiting for your computer: LinkedIn is signed out in Claude's browser on your computer: sign in there once." over one Done button; now it names the work ("“People at Harbourline Bank” waits until you sign in to LinkedIn in Claude's browser") with Open LinkedIn on the card, and Done only where there is something to confirm.
+
+- **Your computer's row is under Settings, LinkedIn.** It sat in Advanced under a summary saying Ready while it needed a sign-in, and its steps ended "tap Done" where there was no Done.
+
 - **Your own approved note recipe saves for a whole batch.** When the notes you approved all open on your line about yourself (in any of its variants) and close on your own asks, a batch of ten written that way is saved; before, it was refused as "too alike" and six notes were reordered against your recipe. Anything else repeated across a batch is still caught.
 
 - **LinkedIn is never fetched over the web, and is read only in the signed-in browser on your computer.** The instructions said no chat reads LinkedIn at all, which contradicted reading profiles on your computer; every copy now says the same thing.
@@ -57,6 +65,18 @@ make sense to somebody whose repo just received it.
 - **The app skill says to load the page's database tools first in a cloud chat**, where ArtifactData and ArtifactComments can be listed by name with no schema until ToolSearch loads them.
 
 ### Fixed
+
+- **The page's helper no longer asks before starting, messaging or archiving its chats.** Its list of pre-approved steps had been split over two lines, and everything after the break asked you each time.
+
+- **A chat Claude starts on your computer asks you once to switch it to Auto, then never again.** One started from the cloud is refused Auto and began in Manual without a word, stopping on every step; you are now told the one switch, and the app remembers it for the chats after it there. The app also sets no reminders of its own while that chat works, each one a prompt.
+
+- **The Brief says good evening in the evening where you are.** It greeted by your profile's home time zone, so away from home it said "Good afternoon" at 10pm; it now follows the clock of the device you read it on.
+
+- **"Open their profile" is on a message's card, beside "I sent it".** A copied note goes nowhere until their profile is open, and under More it was hard to find.
+
+- **A change that changed nothing finishes at once in Claude's work, with its result.** It said "Putting on page" with "Open in Contacts" for three minutes, and the finished row lost Claude's answer.
+
+- **A change Claude kept as it was says so in your words, once.** "Held · Held until she answers..." became "Not sent for now · Nothing to send until they reply", a wrapped line never starts with "·", and the note under the draft folds to "Claude answered <day> · Show" after two hours instead of staying for good.
 
 - **Work on your computer whose chat stopped starts again, or ends saying so.** A "Find people" run whose chat on your computer closed part way sat "running" for good, and nothing started a new chat there; now it waits again, is taken by the next chat on your computer, and if it stops twice its card says so with Try again.
 

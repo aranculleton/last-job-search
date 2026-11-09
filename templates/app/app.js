@@ -4513,6 +4513,10 @@
     // An answer is its own result, written with the finish: never "putting it on your page"
     // (the maintainer, 2026-11-05, a squashed work card saying so over an answer shown under it).
     if (txt(obj(w).kind) === "talk") return false;
+    // Nor work that changed nothing (`done --outcome`): there is nothing to put on the page, and
+    // it said "Putting on page" with "Open in Contacts" for three minutes (the screen review,
+    // 2026-11-09).
+    if (unchangedWork(w)) return false;
     const fin = tms(obj(w).finished_at);
     // The page's data is as new as its newest part: a section a chat wrote live after the work
     // finished carries its result, so Done is said then, not three minutes on.
@@ -4957,11 +4961,10 @@
   }
   // What each person on the Brief is waiting for, in two words.
   const BRIEF_PERSON_WORD = {replied_needs_response: "Your turn", in_conversation: "Talking", referral_in_progress: "Referral", call_booked: "Call booked"};
-  // The hour where the person is, for "Good morning".
-  function hourHere() {
-    try { return Number(dtf("en-GB", {timeZone: zone(), hour: "numeric", hour12: false}).format(new Date(now()))) % 24; }
-    catch (e) { return new Date(now()).getHours(); }
-  }
+  // The hour where the person is, for "Good morning": the device's own clock, which is where
+  // they are reading it. The profile's zone said "Good afternoon" at 10pm to a person away
+  // from home (the maintainer, 2026-11-09); a day's dates still count in the profile's zone.
+  function hourHere() { return new Date(now()).getHours(); }
   // A small tip for the Brief: the engine's own when it has one, else one of these, a new
   // one each day. Each says where to find something; none is a sales line.
   const BRIEF_TIPS = [
@@ -6615,13 +6618,29 @@
     const r = obj(M().rules);
     const held = arr(r.held), every = arr(r.every_hold);
     if (!held.length && !every.length) return null;
-    const rows = held.map((x) => h("li", {class: "held-row", "data-k": "held:" + txt(x.id)}, txt(x.line)));
-    const all = every.map((x) => h("li", {class: "held-rule", "data-k": "held-rule:" + txt(x.id)}, txt(x.line)));
+    // Each line ends at its day and why; what lifts it now is its own soft pill (the engine's
+    // `lift`), asked of Claude under this row. A line ending "or say 'more at <employer>'"
+    // left the person to type it (the screen review, 2026-11-09).
+    const rows = held.map((x) => h("li", {class: "held-row", "data-k": "held:" + txt(x.id)}, h("span", {class: "held-t"}, txt(x.line)),
+      // The pill and its gauge (drawn after it) keep together beside the line.
+      txt(x.say) && txt(x.lift) ? h("span", {class: "held-act"}, btn(txt(x.lift), () => { askPlace("held", txt(x.say)); }, {small: true, kind: "secondary", key: "held-lift:" + txt(x.id), wakes: "talk", aria: txt(x.lift) + ": " + txt(x.what)})) : null));
+    // Every rule, grouped by what it is about under a small heading, a gap between rows: as one
+    // run of 34 lines it was a wall of text (the screen review, 2026-11-09).
+    const areas = [];
+    for (const x of every) {
+      const a = txt(x.area);
+      let g = areas.find((y) => y.area === a);
+      if (!g) areas.push(g = {area: a, rows: []});
+      g.rows.push(h("li", {class: "held-rule", "data-k": "held-rule:" + txt(x.id)}, txt(x.line)));
+    }
+    const all = areas.map((g) => h("li", {class: "held-area"}, h("p", {class: "held-area-name small"}, HOLD_AREAS[g.area] || cap1(g.area)), h("ul", {class: "plain held-rules-of"}, g.rows)));
     return infoRow("rules-held", "Held back for now", held.length ? held.length + " now" : "Nothing now",
-      [h("p", {class: "small muted"}, held.length ? "What your rules hold back today, when each opens again, and what lifts it." : "Nothing is held back today."),
+      [h("p", {class: "small muted"}, held.length ? "What your rules hold back today, why, and when each opens again." : "Nothing is held back today."),
         rows.length ? h("ul", {class: "plain held-list"}, shortList("held", rows, 5, "Show all")) : null,
-        all.length ? h("ul", {class: "plain held-rules small"}, shortList("held-rules", all, 0, "How every rule ends (" + all.length + ")")) : null]);
+        rows.length ? placeTalk("held") : null,
+        all.length ? h("ul", {class: "plain held-rules small"}, shortList("held-rules", all, 0, "How every rule ends (" + every.length + ")")) : null]);
   }
+  const HOLD_AREAS = {jobs: "Jobs", applications: "Applications", people: "People", messages: "Messages", interviews: "Interviews", page: "This page"};
   function openLearned() {
     openState.set("det:info:learned", true);
     S.focusAfter = {key: "info-sum:learned"};
@@ -7148,7 +7167,13 @@
     // reads by itself; for any other first note, rare, under More.
     const paste = txt(m.kind) === "first_note" && txt(m.contact) ? pasteProfileBtn({id: m.contact, contact: m.contact, first_name: m.first_name, rev: revOf(txt(m.contact)), paste: m.paste},
       (held ? "hpaste:" : "paste:") + m.id, held ? "secondary" : null) : null;
-    const extra = [openLink(m),
+    // Where it is sent, on the card's face beside I sent it: copied, the note goes nowhere until
+    // their profile is open, and under More it was not found (the maintainer, 2026-11-09:
+    // "open their profile is a bit hidden").
+    const link = openLink(m);
+    const onFace = !!(link && ready && !held);
+    if (onFace) link.classList.add("btn", "secondary", "small");
+    const extra = [onFace ? null : link,
       held ? null : cardNotes(m, {where: "contacts", section: "contacts", item: m.id}, true),
       moreAlerts(m, {where: "contacts", section: "contacts", item: m.id}),
       held ? null : paste];
@@ -7156,7 +7181,7 @@
     // why and when, and Paste is its row's one pill.
     // Its gauge is the engine's, one note's rewrite (app_alerts.paste_profile), never a run's.
     const pasteCost = held && paste && Number(obj(obj(m.paste).cost).state) > 0 ? costEl(obj(m.paste).cost, null, "cost-paste-" + seg(m.id)) : null;
-    return {box, notes: null, act: held ? paste : sentBtn, cost: pasteCost, extra, blocked: fixing === "failed", fixing: fixing === "going", line: stateLine(m.id, "msg:" + m.id)};
+    return {box, notes: null, act: held ? paste : (onFace ? [sentBtn, link] : sentBtn), cost: pasteCost, extra, blocked: fixing === "failed", fixing: fixing === "going", line: stateLine(m.id, "msg:" + m.id)};
   }
   // Where reading LinkedIn stands for this opening of the page: readingState, except that a
   // read that worked lately elsewhere is no read here unless this page is open in the Claude
@@ -7393,16 +7418,29 @@
   // the page: a page update follows the finish within minutes, and a spinner that waited two
   // hours for a change that never came read as stuck (2026-11-09).
   const FINISHING_MS = 15 * 60000;
+  // How long a change that changed nothing is said on its card, before it folds away.
+  const UNCHANGED_SAID_MS = 2 * 3600000;
   // Work that finished and changed nothing on the page (`app.py done --outcome`), in its card's
-  // words: {words, line}, or null. Its line is Claude's own answer where it wrote one, else the
-  // summary.
-  const UNCHANGED_WORDS = {held: "Held", set_aside: "Set aside", unchanged: "Not changed"};
+  // words: {words, line, next, why}, or null. `next` says what happens now where the outcome
+  // says it; `why` is Claude's own answer where it wrote one, else the summary, its outcome word
+  // dropped where it leads ("Held · Held until she answers ..." said it twice); `line` is the
+  // one of them a single line has room for. "Held" and "Set aside" were the engine's words
+  // (the screen review, 2026-11-09).
+  const UNCHANGED_WORDS = {held: "Not sent for now", set_aside: "Not sent for now", unchanged: "Kept as it was"};
+  const UNCHANGED_NEXT = {held: "Nothing to send until they reply."};
+  const OUTCOME_LEAD = /^(?:held|set aside|not changed|kept as it was|not sent for now)\b[\s:·,;.-]*/i;
   function unchangedWork(w) {
     const r = obj(obj(w).result);
-    const words = UNCHANGED_WORDS[txt(r.outcome)];
+    const o = txt(r.outcome);
+    const words = UNCHANGED_WORDS[o];
     if (!words) return null;
-    const line = firstSentence(txt(r.answer)) || firstSentence(txt(r.summary));
-    return {words, line: line ? cap1(line.replace(/[.\s]+$/, "")) + "." : ""};
+    const said = firstSentence(txt(r.answer)) || firstSentence(txt(r.summary));
+    const rest = said.replace(OUTCOME_LEAD, "");
+    // "Held until she answers ..." with its word gone is a fragment: the next step says it.
+    const fragment = rest !== said && /^(?:until|while|because|as|since|for)\b/i.test(rest);
+    const why = rest && !fragment ? cap1(rest.replace(/[.\s]+$/, "")) + "." : "";
+    const next = UNCHANGED_NEXT[o] || "";
+    return {words, next, why, line: next || why};
   }
   function personGoing(p) {
     const t = replyTap(p);
@@ -7441,7 +7479,7 @@
       // (2026-11-09).
       if (st === "done" && (txt(w[1].kind) === "tweak" || unchangedWork(w[1]))) {
         const u = unchangedWork(w[1]);
-        return u && ended < 2 * 3600000 ? {work: w[0], words: u.words, line: u.line, spin: false, tone: "held", stopped: true} : null;
+        return u && ended < UNCHANGED_SAID_MS ? {work: w[0], words: u.words, line: u.line, spin: false, tone: "held", stopped: true} : null;
       }
       // Written, and the draft not on the page yet: said, and shown the moment it arrives; a
       // page update comes within minutes, so after FINISHING_MS it is not waited for.
@@ -7483,9 +7521,13 @@
     const ctl = go.cancel ? stopClaude("the message to " + name, go.cancel, "rgo-cancel:" + p.id)
       : go.retry ? btn("Try again", go.retry, {kind: "link", small: true, key: "rgo-retry:" + p.id, aria: "Try the reply to " + name + " again"}) : null;
     const dot = go.tone === "bad" || go.tone === "held" ? "tone-" + go.tone : "tone-plain is-waiting";
+    // The "·" stays with the word, so a line that wraps never starts with it (the screen
+    // review, 2026-11-09: "· Set her draft aside" under "Set aside").
+    const said = !!go.line && txt(go.line) !== txt(go.words);
     return h("p", {class: "going small" + (go.tone ? " tone-" + go.tone : ""), "data-going": p.id, role: "status"},
       go.spin ? h("span", {class: "spin", "aria-hidden": "true"}) : h("span", {class: "dot " + dot, "aria-hidden": "true"}), " ",
-      h("span", {class: "going-word"}, go.words), go.line && txt(go.line) !== txt(go.words) ? h("span", {class: "muted"}, " · " + txt(go.line)) : null, ctl ? " " : null, ctl);
+      h("span", {class: "going-lead"}, h("span", {class: "going-word"}, go.words), said ? h("span", {class: "going-sep"}, " ·") : null), said ? h("span", {class: "muted"}, " " + txt(go.line)) : null,
+      ctl ? " " : null, ctl);
   }
   // The rare question a reply's work stopped on (the work's `needs`: {question, about, answer:
   // {kind, choices, min, max}}), asked on that person's card in its one soft grey box, in place
@@ -7627,6 +7669,7 @@
     interview: ["interviews", "an interview", "Which interview? Who it is with, when, and the role"],
     wrong: ["settings", "something on this page", "What looks wrong, and where?"],
     rules: ["settings", "your rules", ""],
+    held: ["settings", "what your rules hold back", ""],
     chats: ["settings", "your old chats", ""]};
   function placeTalk(id, o) {
     const pl = PLACES[id];
@@ -9200,8 +9243,17 @@
     // (a held change's spinner turned for two hours, 2026-11-09).
     const u = unchangedWork(w);
     if (u) {
+      // Said for as long as the person's own card says it (personGoing, two hours), then
+      // folded to "Claude answered <day> · Show": "Not changed." stayed under a draft for good
+      // (the screen review, 2026-11-09).
+      const fin = txt(w.finished_at || w.done_at);
+      if (now() - (tms(fin) || 0) >= UNCHANGED_SAID_MS && openState.get("tw-show:" + id) !== true) {
+        return answer ? h("p", {class: "small muted tweak-done", "data-tweak-done": id}, "Claude answered " + fmtDay(fin) + " · ",
+          btn("Show", () => { openState.set("tw-show:" + id, true); scheduleRender(); }, {kind: "link", small: true, key: "tw-show:" + id, aria: "Show Claude's answer about this change"})) : null;
+      }
+      const line = u.next || (answer ? "" : u.why);
       return h("div", {class: "tweak-done", "data-tweak-done": id},
-        h("p", {class: "small", role: "status"}, u.words + (u.line && !answer ? " · " + u.line : ".")), answer);
+        h("p", {class: "small", role: "status"}, u.words + (line ? " · " + line : ".")), answer);
     }
     // "New version" only once the new words are on this card: the work says done before the
     // page has the rewritten draft, and the card said "New version" over the old words, word
@@ -10722,22 +10774,26 @@
       // A chat on the computer is never offered: the cloud answers the page, and the computer
       // only reads LinkedIn, through this page (the maintainer, 2026-10-29). One already
       // listening still shows, so the person can see it.
-      st.computer === "ready" ? row("computer", "Claude on your computer", st.computer, st.say.computer || "Answers only what needs your computer.", null) :
-        // The computer's own state, from its heartbeat (tools/computer.py): one line, and the
-        // registry's steps only where the person is needed. "optional" is someone who never
-        // said they have one: nothing is shown.
-        COMPUTER_WORDS[st.computer] ? computerRow(st) : null,
+      // The computer's own state when it needs the person is under LinkedIn (computerRow).
+      st.computer === "ready" ? row("computer", "Claude on your computer", st.computer, st.say.computer || "Answers only what needs your computer.", null) : null,
       tidiedLine());
   }
   const COMPUTER_WORDS = {off: ["Off", null], gone: ["Not seen this week", "warn"], signed_out: ["Sign in once", "warn"], forgets: ["Signs out when closed", "warn"],
     paused: ["Paused", null], no_bridge: ["Not switched on", "warn"], not_set_up: ["Not set up", "warn"], no_computer: ["No computer", null]};
-  function computerRow(st) {
-    const [word, tone] = COMPUTER_WORDS[st.computer];
+  // The computer's own state, from its heartbeat (tools/computer.py): one line, and the
+  // registry's steps only where the person is needed. "optional" is someone who never said
+  // they have one: nothing is shown. The computer only reads LinkedIn, so its one home is
+  // Settings > LinkedIn beside "Let Claude read LinkedIn profiles", its word on the folded row;
+  // under Advanced > Where Claude works it sat below a summary saying Ready while it needed a
+  // sign-in (the screen review, 2026-11-09).
+  function computerRow() {
+    const st = whereState();
+    if (!COMPUTER_WORDS[st.computer]) return null;
+    const [word] = COMPUTER_WORDS[st.computer];
     const steps = st.computerSteps;
-    return h("li", {class: "task where-computer", "data-where": "computer"},
-      h("div", {class: "task-head"}, h("span", {class: "task-name"}, "Claude on your computer"), stateWord(word, tone)),
+    return infoRow("computer", "Claude on your computer", word, h("div", {class: "where-computer", "data-where": "computer"},
       st.say.computer ? h("p", {class: "small muted"}, st.say.computer) : null,
-      steps.length ? h("ol", {class: "setup-steps"}, steps.map((s) => h("li", {}, unnumber(txt(s))))) : null);
+      steps.length ? h("ol", {class: "setup-steps"}, steps.map((s) => h("li", {}, unnumber(txt(s))))) : null));
   }
   // The same link "Claude isn't listening" opens: a chat that runs the start command and
   // becomes the one that answers the page. A wording of its own reached no instructions.
@@ -12844,7 +12900,11 @@
     if (!workSeenAt.has(id)) workSeenAt.set(id, now());
     const pl = workPlace(w);
     const titleId = "w-" + seg(id);
-    const sum = firstSentence(txt(obj(w.result).summary));
+    // Its one-line result: how a change that changed nothing ended, else the summary, else
+    // Claude's answer; the row showed nothing for an answer with no summary (the screen
+    // review, 2026-11-09).
+    const u = unchangedWork(w);
+    const sum = u ? u.words + (u.line ? " · " + u.line : "") : firstSentence(txt(obj(w.result).summary)) || firstSentence(txt(obj(w.result).answer));
     const r = pl.tab ? resolveSection(pl.tab) || {section: pl.tab} : null;
     const where = pl.tab ? TAB_WORDS[pl.tab] || TAB_WORDS[r.section] || labelOf(r.section) : "";
     const open = () => { workSeenAt.set(id, 0); if (r) go(r.section, {focus: !pl.item, drafts: r.drafts, item: pl.item || null}); };
@@ -12873,7 +12933,7 @@
     else if (st === "stopped") now1 = "Stopped. Anything already saved is kept.";
     else if (st === "failed") now1 = (typeof w.error === "string" ? w.error : txt(obj(w.error).plain)) || "It stopped part way. Anything already saved is kept.";
     else if (st === "needs_you") now1 = txt(obj(obj(w.needs).answer).kind) && txt(obj(obj(w.needs).answer).kind) !== "text" ? "" : txt(w.note) || "It has a question for you.";
-    else if (st === "done") now1 = firstSentence(txt(obj(w.result).summary));
+    else if (st === "done") now1 = firstSentence(txt(obj(w.result).summary)) || firstSentence(txt(obj(w.result).answer));
     // An update to the app is never stopped half way (the 3 November audit).
     // A batch is stopped, and tried again, from its first item, whose Stop names them all.
     const crew = lead ? [] : batchOf(id).filter((m) => ACTIVE.has(txt(obj(workDoc(m)).status)));
@@ -14349,7 +14409,7 @@
     if (cal.length) put(wrap, settingsGroup("Coming up", cal));
     // Look: how the page looks and is used here, harmless to change (the maintainer, 4.12).
     put(wrap, settingsGroup("Look", [lookRow(), sizeRow(), window.innerWidth >= 760 ? sideRow() : null, touchOnly() ? null : keysRow()]));
-    put(wrap, settingsGroup("LinkedIn", linkedinRows().concat(pick(["profile_reads"]).map((s) => settingRow(s, txt(settingValue(s)) === "paste" ? null : readingBody())), pick(["linkedin_plan"]).map((s) => settingRow(s)))));
+    put(wrap, settingsGroup("LinkedIn", linkedinRows().concat(pick(["profile_reads"]).map((s) => settingRow(s, txt(settingValue(s)) === "paste" ? null : readingBody())), [computerRow()], pick(["linkedin_plan"]).map((s) => settingRow(s)))));
     put(wrap, settingsGroup("Help", [actionRow("Show me around", () => showTour(0), "help-tour"),
       // The chat bubble, where the person is, rather than taking them away to Chat (2026-10-30).
       actionRow("Ask Claude how something works", () => openDock({text: "How does "}), "help-how"),

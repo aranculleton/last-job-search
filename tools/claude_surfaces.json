@@ -680,7 +680,7 @@
       "goal": "sign in to LinkedIn once in the app's browser and stay signed in",
       "how": "Cmd+Shift+B on a Mac or Ctrl+Shift+B on Windows shows the app's browser; choose Keep cookies in its \u22ee menu so you stay signed in",
       "steps": [
-        "Show the app's browser: Cmd+Shift+B on a Mac, or Ctrl+Shift+B on Windows (or Browser in this chat's title bar).",
+        "Show the app's browser: Open on the LinkedIn card just above in this chat, or Browser in this chat's title bar (Cmd+Shift+B on a Mac, Ctrl+Shift+B on Windows).",
         "Sign in to LinkedIn there yourself.",
         "In the browser's \u22ee menu, choose Keep cookies, so you stay signed in after you quit the app.",
         "Say done here."

@@ -122,7 +122,37 @@ ACTION = {
     "no_bridge": ("remote-control-settings", "Switch it on"),
     "not_set_up": ("remote-control-settings", "Set it up"),
 }
-WAITING_SAY = "Waiting for your computer: {line}"
+# The To do card's words: one plain sentence naming the work that waits and what it waits
+# for, then its one step. "Waiting for your computer: LinkedIn is signed out in Claude's
+# browser on your computer: sign in there once." said "your computer" twice, had two colons and
+# never said what was waiting (the screen review, 2026-11-09).
+WAITING_SAY = {
+    "off": "{what} until Claude is open on your computer. Open Claude there and it starts by "
+           "itself.",
+    "gone": "{what} because Claude has not started on your computer for a week. Set it up "
+            "again once.",
+    "signed_out": "{what} until you sign in to LinkedIn in Claude's browser. Open LinkedIn and "
+                  "sign in once.",
+    "forgets": "{what} because Claude's browser forgets your LinkedIn sign-in when the app "
+               "quits. Keep the sign-in once.",
+    "no_bridge": "{what} until Claude is switched on for your computer. Switch it on once in "
+                 "the Claude app there.",
+    "not_set_up": "{what} until Claude is set up on your computer. Set it up once.",
+}
+# Where the card's one step is a page LinkedIn opens in Claude's own browser, it is on the
+# card's face, as the LinkedIn setup card's is (tools/app_setup.py outside_item).
+LINKEDIN_LOGIN = {"label": "Open LinkedIn", "url": "https://www.linkedin.com/login"}
+
+
+def waiting_words(titles: list) -> str:
+    """'“People at Harbourline Bank” waits', '“...” and 2 more wait', or
+    'Your LinkedIn work waits' where the work has no title."""
+    first = next((t for t in titles if t), "")
+    if not first:
+        return ("Your LinkedIn work waits" if len(titles) < 2 else
+                f"{len(titles)} pieces of LinkedIn work wait")
+    more = len(titles) - 1
+    return f"“{first}” waits" if not more else f"“{first}” and {more} more wait"
 
 
 def _stamp(t: dt.datetime) -> str:
@@ -314,10 +344,12 @@ def state(db: dict, now: dt.datetime, envs=None, version: str = "",
     else:
         key = "ready"
     oldest = None
+    asked = []
     for wid in w["queued"]:
         d = ((db.get("work") or {}).get(wid) or {}).get("data") or {}
         t = _time(d.get("asked_at"))
         oldest = t if oldest is None or (t and t < oldest) else oldest
+        asked.append((str(d.get("asked_at") or ""), str(d.get("title") or "").strip()))
     waited = (now - oldest).total_seconds() if oldest else 0
     act = ACTION.get(key)
     action = None
@@ -331,6 +363,8 @@ def state(db: dict, now: dt.datetime, envs=None, version: str = "",
             "card": bool(w["queued"]) and needs_them and waited >= CARD_AFTER_S,
             "computer": beat_.get("computer") or "", "seen_at": beat_.get("seen_at"),
             "waiting": len(w["queued"]) + len(w["started"]),
+            # What waits, oldest first: the card names it (WAITING_SAY).
+            "titles": [t for _, t in sorted(asked)],
             "behind": bool(version and beat_.get("version") and beat_["version"] != version)}
 
 
@@ -383,11 +417,18 @@ def card(st: dict) -> dict | None:
     if not st.get("card"):
         return None
     import app_model
-    body = WAITING_SAY.format(line=st["line"])
+    said = WAITING_SAY.get(st["state"])
+    body = said.format(what=waiting_words(st.get("titles") or [])) if said else st["line"]
+    # Its one obvious next step on its face; Done only where there is something the person did
+    # to confirm (signed in, switched it on). With the computer off, its own heartbeat says
+    # when Claude is open again, so nothing is tapped (the screen review, 2026-11-09: the
+    # card's face held only "Done").
     item = {"id": "q-setup-computer", "kind": "setup", "title": "Your computer, for LinkedIn",
             "body": body, "steps": (st.get("action") or {}).get("steps") or [],
-            "options": [{"label": "Done", "action": "setup.done"}],
+            "options": [{"label": "Done", "action": "setup.done"}] if st.get("action") else [],
             "about": {"step": "computer"}, "rev": app_model.rev_of("computer", st["state"], body)}
+    if st["state"] == "signed_out":
+        item["browser"] = dict(LINKEDIN_LOGIN)
     if st.get("action"):
         import claude_surfaces
         e = claude_surfaces.entry(st["action"]["id"])
@@ -438,8 +479,8 @@ def session_prompt(wid: str, title: str, url: str, copy: str) -> str:
         "--chat <your id>, and send its batch.",
         "7. At the end: python3 tools/computer.py beat \"$D\" --name \"<this computer's name>\" "
         "--browser <shown|hidden> --linkedin <in|out|unknown> --read <ok|stopped|none>, and "
-        "send its batch. python3 tools/computer.py task: where it says the scheduled task is "
-        "missing and this chat can make scheduled tasks, make it exactly as it prints. Archive "
+        "send its batch. Never make a scheduled task: the cloud starts a chat here when work "
+        "waits (COMPUTER.md, section 6, step 5). Archive "
         "this computer's earlier chats named \"Job search · ...\" whose work is finished, where "
         "this chat can (claude_surfaces: computer-chat-archive). Then stop: the chat that "
         "started you archives this one.",
@@ -526,7 +567,9 @@ def route(db: dict, now: dt.datetime, chat: str = "", envs=None, folders=None,
                          "<your id>, and the same create_session again. Started: "
                          f"python3 tools/computer.py started <dump> --work {wid} --session <its "
                          f"id> --env {b['id']} --computer \"{b['computer']}\", and send its "
-                         "batch. Never send_message it: it reports through the page."),
+                         "batch. Never send_message it, and set no reminder or check-in for "
+                         "it (each is one more prompt for the person): it reports through the "
+                         "page."),
                 "waiting": w}
     beat_ = heartbeat(db)
     seen = _time(beat_.get("seen_at"))
@@ -821,10 +864,9 @@ def check(db: dict, now: dt.datetime, envs=None, version: str = "", triggers=Non
                    "been deleted. The one way back: python3 tools/claude_surfaces.py steps "
                    "remote-control-settings, then the next work for the computer starts a "
                    "new chat there by itself.")
-    if beat_ and not beat_.get("task") and st["state"] in ("ready", "working"):
-        out.append(f"computer: the scheduled task is not on the computer: the next chat there "
-                   f"makes it again ({TASK_NAME}, every {TASK_EVERY_MIN} minutes, Local, in "
-                   "the copy's folder, Auto).")
+    # No scheduled task is made or asked for: one started a Claude run every hour the app was
+    # open, waiting work or not, for what the cloud already starts on the computer when work
+    # waits (the maintainer, 2026-11-09: "this sounds like it could be incredibly expensive").
     if st.get("behind"):
         out.append("computer: the computer's copy is on an older version: its next chat takes "
                    "the update when it starts.")

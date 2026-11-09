@@ -135,15 +135,18 @@ know whether it worked.
    route` prints the `create_session` call; refused as an untrusted device, run its
    `trust-check` first (a chat that approves is tied to their devices for good, so no
    scheduled task may fire into it), then `confirm_repository_trust`: one card, once.
-3. **Auto.** Nothing to do: every chat the app starts asks for Auto (`permission_mode`,
-   `tools/app_listen.py` SESSION_MODE), and the app never asks the person to change Claude's
-   own default.
+3. **Auto, once.** A chat started on the computer from the cloud is refused Auto and starts
+   in Manual (seen 2026-11-09, from a cloud chat that was in Auto itself). The desktop app keeps
+   a mode chosen in a folder for the chats after it there, so the person switches the first
+   one once: "On your computer, in the chat named <its title>, change Manual to Auto at the
+   bottom" (`app_listen.MODE_REFUSED` says it). Every chat started there after it runs in Auto.
 4. **Signed in to LinkedIn, and staying signed in** (`browser-pane-stay-signed-in`). Check:
    the chat on the computer reads one LinkedIn page and writes its heartbeat
    (`computer.py beat --linkedin in`).
-5. **The scheduled task** (`routines-local`): the chat on the computer makes it itself where
-   it can (`python3 tools/computer.py task` prints exactly what), so work still starts with
-   no cloud chat awake. Never asked of the person.
+5. **No scheduled task.** An hourly task on the computer started a Claude run every hour the
+   app was open, waiting work or not, and needed its own Auto switch and a first run by hand
+   (2026-11-09). The cloud already starts a chat on the computer when work waits, so none is
+   made or asked for. One a person made earlier can be deleted from Scheduled in the sidebar.
 6. **The test**: that chat reads one profile, then `python3 tools/computer.py ready --name
    <the computer>` dates it in `profile/place.json`, which ends the upgrade card.
 

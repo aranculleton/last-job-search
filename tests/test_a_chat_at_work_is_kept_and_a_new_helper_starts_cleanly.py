@@ -369,6 +369,9 @@ def test_every_chat_the_app_starts_asks_for_auto(monkeypatch):
     assert call["permission_mode"] == "auto"
     line = app_listen.renew_line(call)
     assert '"permission_mode": "auto"' in line and "without permission_mode" in line
+    # Refused as more than this chat's own mode, the person is asked once to switch it to Auto,
+    # never left with a new chat in Manual (a chat on a computer, 2026-11-09).
+    assert "change Manual to Auto" in line and "change the mode to Auto" in line
     monkeypatch.setattr(app_setup, "page_record", lambda: {"url": "https://claude.ai/x"})
     job = app.where_it_runs({"heavy": True, "kind": "search", "title": "Find jobs",
                              "work": "work/search~example"}, LIVE,

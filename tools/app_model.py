@@ -4778,7 +4778,11 @@ def _where(ctx: Ctx, targets: dict) -> dict:
         computer_row = {"state": "ready" if seen["state"] in ("ready", "working") else
                         seen["state"], "since": computer, "say": seen["line"],
                         "name": seen.get("computer") or None,
-                        "steps": (seen.get("action") or {}).get("steps") or [],
+                        # The registry's page steps end "tap Done", the To do card's own
+                        # button: Settings' row has no Done, so that step is not said there
+                        # (the screen review, 2026-11-09).
+                        "steps": [s for s in (seen.get("action") or {}).get("steps") or []
+                                  if "tap Done" not in s],
                         "action": (seen.get("action") or {}).get("label") or None}
     try:
         reg = routines.load()
@@ -5557,7 +5561,7 @@ def _rules(ctx: Ctx, targets: dict) -> dict:
     # its day or its reason and its override (tools/holds.py): an employer was shut 45 days
     # and nothing said so or when it would open (the maintainer, 2026-11-09).
     import holds
-    out["held"] = [{k: h[k] for k in ("id", "rule", "what", "until", "line", "say")}
+    out["held"] = [{k: h[k] for k in ("id", "rule", "what", "until", "line", "say", "lift")}
                    for h in holds.live(ctx.today)]
     out["every_hold"] = [{"id": r["id"], "area": r["area"], "line": r["line"]}
                          for r in holds.rules()]

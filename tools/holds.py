@@ -94,7 +94,7 @@ RULES = (
     {"id": "no_team", "area": "jobs", "name": "Employers with no team for you where you look",
      "where": ("tools/throttle.py:do_not_target_until", "tools/network/discovery.py:presence_blocks"),
      "ends": "on its own review day, or {dnt} days after it was found where it names none",
-     "why": "", "override": "say 'look at <employer> again'",
+     "why": "", "override": "ask Claude to look at the employer again",
      "missing": "a finding with no date holds nothing",
      "shown": "Settings, Your rules, Held back for now"},
     # ------------------------------------------------------------------ applications
@@ -104,14 +104,14 @@ RULES = (
                "tools/throttle.py:undated_application"),
      "ends": "when they answer, or {silence} days after you applied (or after the job's closing "
              "day) with no reply; a role scoring {override_points} points more still shows",
-     "why": "", "override": "say 'stop waiting on <employer>'",
+     "why": "", "override": "tell Claude to stop waiting on the employer",
      "missing": "an application with no date holds nothing",
      "shown": "Settings, Your rules, Held back for now"},
     {"id": "referral", "area": "applications",
      "name": "Applying cold where someone is referring you",
      "where": ("tools/throttle.py:referral_holds",),
      "ends": "", "why": "only you know when a referral is over; the job itself is never hidden",
-     "override": "say 'the referral at <employer> is over'",
+     "override": "tell Claude the referral there is over",
      "missing": "only a referral you recorded holds anything",
      "shown": "Jobs, on the job's card"},
     {"id": "application_nudges", "area": "applications",
@@ -129,7 +129,7 @@ RULES = (
      "where": ("tools/network/reading.py:waiting_until", "tools/network/reading.py:at_employer",
                "tools/network/reading.py:EMPLOYER_WAIT_DAYS"),
      "ends": "{per_employer} at a time; each one waiting frees their place {wait}",
-     "why": "", "override": "say 'more at <employer>'",
+     "why": "", "override": "ask Claude for more people at the employer",
      "missing": "someone with no date holds nothing",
      "shown": "Settings, Your rules, Held back for now"},
     {"id": "limit", "area": "people", "name": "Someone who has not answered your limit of messages",
@@ -141,7 +141,7 @@ RULES = (
     {"id": "closed", "area": "people", "name": "Conversations you closed or set aside",
      "where": ("tools/network/state.py:CLOSED",),
      "ends": "", "why": "your choice; a reply from them opens it again",
-     "override": "say 'write to <name> again'",
+     "override": "ask Claude to write to them again",
      "missing": "only a conversation you closed is closed",
      "shown": "Contacts"},
     {"id": "people_turned_down", "area": "people", "name": "People at employers you turned down",
@@ -159,7 +159,7 @@ RULES = (
     {"id": "person_hold", "area": "people", "name": "Someone you put on hold",
      "where": ("tools/network/state.py:action_hold", "tools/network/state.py:hold_lifts"),
      "ends": "on the day the hold names, or the day beside it",
-     "why": "", "override": "say 'write to <name> again'",
+     "why": "", "override": "ask Claude to write to them again",
      "missing": "a hold with no day at all is listed under Held back for now until you lift it",
      "shown": "Settings, Your rules, Held back for now"},
     {"id": "request", "area": "people", "name": "Follow-ups to a request nobody accepted",
@@ -174,7 +174,7 @@ RULES = (
      "override": "open their card in Contacts",
      "missing": "a name that may be someone in your contacts is asked about first",
      "shown": "Contacts"},
-    {"id": "inmail", "area": "people", "name": "InMail once this month's credits are used",
+    {"id": "inmail", "area": "people", "name": "Paid LinkedIn messages, once this month's are used",
      "where": ("tools/network/state.py:platform_budget",),
      "ends": "on the first of next month", "why": "",
      "override": "tell Claude the number LinkedIn shows",
@@ -207,7 +207,7 @@ RULES = (
     {"id": "note_aside", "area": "messages", "name": "A first note you set aside",
      "where": ("tools/app_actions.py:_msg_skip",),
      "ends": "", "why": "your choice for that person",
-     "override": "tap Undo, or say 'write to <name> again'",
+     "override": "tap Undo, or ask Claude to write to them again",
      "missing": "only the note you set aside is held",
      "shown": "Contacts"},
     # ------------------------------------------------------------------ interviews
@@ -230,13 +230,13 @@ RULES = (
      "override": "tap Show under hidden this week in To do",
      "missing": "nothing is hidden unless you hid it",
      "shown": "To do"},
-    {"id": "ideas_paused", "area": "page", "name": "Ideas Claude suggests, after three No thanks",
+    {"id": "ideas_paused", "area": "page", "name": "Ideas Claude suggests, after you dismiss three",
      "where": ("tools/app_alerts.py:paused", "tools/app_alerts.py:PAUSE_DAYS"),
      "ends": "{pause} days after the third", "why": "",
-     "override": "say 'show me ideas again'",
-     "missing": "a No thanks with no day does not count",
+     "override": "ask Claude to show you ideas again",
+     "missing": "a Dismiss with no day does not count",
      "shown": "Settings, Your rules, Held back for now"},
-    {"id": "idea_declined", "area": "page", "name": "One idea you said No thanks to",
+    {"id": "idea_declined", "area": "page", "name": "One idea you dismissed",
      "where": ("tools/app_alerts.py:NO_KEY",),
      "ends": "", "why": "your answer to that one idea", "override": "tap Undo when it is said",
      "missing": "only that idea is held", "shown": "Brief"},
@@ -267,7 +267,7 @@ def _rule_settings() -> dict:
     """The person's own numbers the inventory's words are filled from."""
     out = {"relist": 30, "dnt": 90, "silence": 45, "override_points": 10, "app_nudges": 2,
            "reopen": 120, "per_employer": "2 people", "wait": "about four weeks after the last "
-           "message", "max_unanswered": 2, "follow_up": "6 business days", "quiet": 14,
+           "message", "max_unanswered": 2, "follow_up": "6 weekdays", "quiet": 14,
            "prep": 7, "thanks": 7, "pause": 30, "news": 5}
     try:
         import throttle
@@ -287,11 +287,11 @@ def _rule_settings() -> dict:
         out["per_employer"] = f"{n} {'person' if n == 1 else 'people'}"
         out["max_unanswered"] = schema.MAX_UNANSWERED
         out["follow_up"] = (f"{schema.FOLLOW_UP_DAYS} days" if schema.FOLLOW_UP_DAYS
-                            else f"{schema.FOLLOWUP_BUSINESS_DAYS} business days")
+                            else f"{schema.FOLLOWUP_BUSINESS_DAYS} weekdays")
         out["wait"] = (f"{reading.EMPLOYER_WAIT_DAYS} days after the last message, as you set"
                        if reading.EMPLOYER_WAIT_DAYS else
-                       f"about {reading.WAITING_DAYS} days after a first note, by your follow-up "
-                       f"rule ({schema.follow_up_rule()}), counted from the last message")
+                       f"about {reading.WAITING_DAYS} days after the last message, by your "
+                       "follow-up rule")
     except Exception:  # noqa: BLE001
         pass
     try:
@@ -315,13 +315,14 @@ def _rule_settings() -> dict:
 
 def rules() -> list[dict]:
     """Every rule, its words filled from the person's settings, with `line`: its name, when
-    it ends or why it never does, and how to lift it, one plain line."""
+    it ends or why it never does, and how to lift it, one plain line. A rule with no end says
+    why in plain words ("your choice, kept until you change it"), never "kept, as ..."."""
     s = _rule_settings()
     out = []
     for r in RULES:
         ends = r["ends"].format(**s)
         why = r["why"].format(**s)
-        said = ends or f"kept, as {why}"
+        said = ends or why
         over = r["override"][:1].upper() + r["override"][1:]
         out.append(dict(r, ends=ends, why=why, line=f"{r['name']}: {said}. {over}."))
     return out
@@ -334,11 +335,15 @@ def day_words(d: dt.date) -> str:
     return f"{d.strftime('%a')} {d.day} {d.strftime('%b')}"
 
 
-def _hold(rule: str, what: str, line: str, until=None, say: str = "") -> dict:
+def _hold(rule: str, what: str, line: str, until=None, say: str = "", lift: str = "") -> dict:
+    """One hold: `line` ends at its day (or why it has none), and the reason where there is
+    one; `say` is what lifts it now, asked of Claude, and `lift` the few words of the page's
+    pill that asks it ("Open it now"). A line ending "or say 'more at <employer>'" left the
+    person to type it (the screen review, 2026-11-09)."""
     from company_key import key
     return {"id": f"hold~{rule}~{key(what) or what.lower()}", "rule": rule, "what": what,
             "until": until.isoformat() if isinstance(until, dt.date) else (until or None),
-            "line": line, "say": say}
+            "line": line, "say": say, "lift": lift if say else ""}
 
 
 def _employer_waits(today, contacts, threads) -> list:
@@ -366,9 +371,13 @@ def _employer_waits(today, contacts, threads) -> list:
         if limit is None or len(rows) < limit:
             continue
         opens = sorted(d for d, _ in rows)[len(rows) - limit]
+        # Why, then the day: "2 people there are waiting on a reply" (the screen review,
+        # 2026-11-09: the line said when, never why).
+        n = len(rows)
+        why = f"{n} people there are" if n != 1 else "1 person there is"
         out.append(_hold("employer_wait", company,
-                         f"{company}: open again {day_words(opens)}, or say 'more at {company}'",
-                         opens, f"more at {company}"))
+                         f"{company}: {why} waiting on a reply, so it opens again "
+                         f"{day_words(opens)}", opens, f"more at {company}", "Open it now"))
     return out
 
 
@@ -381,8 +390,8 @@ def _applications(today) -> list:
                 in throttle.LIVE_PROCESS]
         if live:
             out.append(_hold("application_open", company,
-                             f"{company}: no new jobs there while your interviews run, or say "
-                             f"'it's over at {company}'", None, f"it's over at {company}"))
+                             f"{company}: no new jobs there while your interviews run", None,
+                             f"it's over at {company}", "It's over"))
             continue
         ends = []
         for r in rows:
@@ -392,11 +401,10 @@ def _applications(today) -> list:
             if start:
                 ends.append(start + dt.timedelta(days=throttle.SILENCE_DAYS))
         until = max(ends) if ends else None
-        when = f"until {day_words(until)} unless they reply" if until else "until they reply"
+        when = f"until they reply or {day_words(until)}" if until else "until they reply"
         out.append(_hold("application_open", company,
-                         f"{company}: no new jobs there while your application waits, {when}, "
-                         f"or say 'stop waiting on {company}'", until,
-                         f"stop waiting on {company}"))
+                         f"{company}: no new jobs there while your application waits, {when}",
+                         until, f"stop waiting on {company}", "Stop waiting"))
     return out
 
 
@@ -410,8 +418,7 @@ def _no_team(today) -> list:
             continue
         d = dt.date.fromisoformat(until)
         out.append(_hold("no_team", name, f"{name}: no team for you where you look, looked at "
-                         f"again {day_words(d)}, or say 'look at {name} again'", d,
-                         f"look at {name} again"))
+                         f"again {day_words(d)}", d, f"look at {name} again", "Look again now"))
     return out
 
 
@@ -426,8 +433,8 @@ def _person_holds(today, contacts) -> list:
         first = name.split()[0] if name else name
         lifts = state.hold_end(c.get("next_action"), c.get("next_action_due"))
         when = f"on hold until {day_words(lifts)}" if lifts else "on hold with no end day"
-        out.append(_hold("person_hold", name, f"{name}: {when}, or say 'write to {first} again'",
-                         lifts, f"write to {first} again"))
+        out.append(_hold("person_hold", name, f"{name}: {when}", lifts,
+                         f"write to {first} again", "Write again"))
     return out
 
 
@@ -438,9 +445,9 @@ def _inmail(today, contacts, threads) -> list:
         return []
     month_end = dt.date.fromisoformat(b["month_end"])
     nxt = month_end + dt.timedelta(days=1)
-    return [_hold("inmail", "InMail", f"InMail: none left this month, more from "
-                  f"{day_words(nxt)}, or tell Claude the number LinkedIn shows", nxt,
-                  "I have <n> InMail credits")]
+    # No pill: only the person knows the number LinkedIn shows (the rule says to tell Claude).
+    return [_hold("inmail", "Paid LinkedIn messages", "Paid LinkedIn messages: none left this "
+                  f"month, more from {day_words(nxt)}", nxt)]
 
 
 def _reading(today) -> list:
@@ -459,8 +466,8 @@ def _ideas(today) -> list:
     for kind, until in sorted(app_alerts.paused(today).items()):
         d = dt.date.fromisoformat(until)
         out.append(_hold("ideas_paused", "Ideas" + (f" ({kind})" if kind else ""),
-                         f"Ideas Claude suggests: paused until {day_words(d)} after three No "
-                         "thanks, or say 'show me ideas again'", d, "show me ideas again"))
+                         "Ideas Claude suggests: paused after you dismissed three, until "
+                         f"{day_words(d)}", d, "show me ideas again", "Show ideas now"))
     return out
 
 
@@ -508,7 +515,9 @@ def main(argv=None) -> int:
     if not got:
         print("Nothing is held back today.")
     for h in got:
-        print(h["line"])
+        # Claude reads this: what lifts each one now, said after its line.
+        print(h["line"] if a.rules else
+              h["line"] + (f". To lift it now, say '{h['say']}'." if h.get("say") else "."))
     return 0
 
 

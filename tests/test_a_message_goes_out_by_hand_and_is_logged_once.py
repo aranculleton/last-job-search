@@ -302,3 +302,16 @@ def test_a_message_kind_for_each_of_the_seven(search):
     assert app_model.message_type("first_note", "email", {}) == "email"
     # A referral already in flight is past its ask: a message then is a reply.
     assert app_model._message_kind("referral_in_progress") == "reply"
+
+
+def test_where_a_note_goes_is_on_its_cards_face_beside_i_sent_it():
+    """Copied, a note goes nowhere until their profile is open, and under More "Open their
+    profile" was not found (the maintainer, 2026-11-09). A ready message carries it on its
+    face as a pill, beside I sent it; a held one keeps Paste as its one pill."""
+    import os
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    with open(os.path.join(root, "templates", "app", "app.js"), encoding="utf-8") as fh:
+        js = fh.read()
+    assert "const onFace = !!(link && ready && !held);" in js
+    assert 'act: held ? paste : (onFace ? [sentBtn, link] : sentBtn)' in js
+    assert "const extra = [onFace ? null : link," in js
