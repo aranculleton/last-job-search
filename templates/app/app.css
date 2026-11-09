@@ -2068,6 +2068,7 @@ ul.bp-news { max-width: 80ch; }
 .held-list { display: grid; gap: 8px; max-width: 64ch; }
 .held-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
 .held-t { flex: 1 1 24ch; min-width: 0; }
+.held-act { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; }
 .held-rules { display: grid; gap: 16px; max-width: 64ch; margin-top: 12px; }
 .held-area-name { font-weight: 600; color: var(--muted); margin-bottom: 4px; }
 .held-rules-of { display: grid; gap: 8px; }

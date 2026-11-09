@@ -692,3 +692,4 @@ Nimbus Cloud             # invented, tests/test_who_to_find_is_one_call_for_anyo
 Pip Varga                # invented, tests/test_who_to_find_is_one_call_for_anyone.py
 Quickmart Pharmacy       # invented, tests/test_who_to_find_is_one_call_for_anyone.py
 Paediatric Nurse         # invented, tests/test_who_to_find_is_one_call_for_anyone.py
+Paid LinkedIn            # plain words for a paid message, tools/holds.py

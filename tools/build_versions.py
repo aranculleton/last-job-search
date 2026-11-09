@@ -869,7 +869,7 @@ METHODS: dict[str, dict] = {
             (85, "2026-11-09", False, "Settings shows your computer in one line from how it last checked in (off, signed out of LinkedIn, not switched on, or ready), with the steps only where you are needed, and one To do card only while work waits for it; Find people goes to your computer once it is set up or has checked in lately, and its card says where it is starting"),
             (86, "2026-11-09", False, "a change that finished with nothing changed (held, set aside, not possible) says so on its card at once, with Claude's own answer where it wrote one, never a spinner waiting for a new version; one whose new version is late stops spinning after a few minutes; a person whose draft a change set aside is never told \"Reply written\"; a message to Claude carries its words on its work item"),
         ),
-        "fingerprint": "6c519a2291b4e84b",
+        "fingerprint": "8016201d63d83ce6",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

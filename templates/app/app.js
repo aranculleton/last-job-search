@@ -6623,7 +6623,8 @@
     // `lift`), asked of Claude under this row. A line ending "or say 'more at <employer>'"
     // left the person to type it (the screen review, 2026-11-09).
     const rows = held.map((x) => h("li", {class: "held-row", "data-k": "held:" + txt(x.id)}, h("span", {class: "held-t"}, txt(x.line)),
-      txt(x.say) && txt(x.lift) ? btn(txt(x.lift), () => { askPlace("held", txt(x.say)); }, {small: true, kind: "secondary", key: "held-lift:" + txt(x.id), wakes: "talk", aria: txt(x.lift) + ": " + txt(x.what)}) : null));
+      // The pill and its gauge (drawn after it) keep together beside the line.
+      txt(x.say) && txt(x.lift) ? h("span", {class: "held-act"}, btn(txt(x.lift), () => { askPlace("held", txt(x.say)); }, {small: true, kind: "secondary", key: "held-lift:" + txt(x.id), wakes: "talk", aria: txt(x.lift) + ": " + txt(x.what)})) : null));
     // Every rule, grouped by what it is about under a small heading, a gap between rows: as one
     // run of 34 lines it was a wall of text (the screen review, 2026-11-09).
     const areas = [];
