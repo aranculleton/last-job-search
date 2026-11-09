@@ -2572,6 +2572,22 @@ def _waiting_days() -> int:
 WAITING_DAYS = _waiting_days()
 
 
+_INDEX: list = [None, -1, {}]  # the message log last indexed, its length, its rows by contact
+
+
+def _threads_index(threads) -> dict:
+    """{contact id: their message rows, in order}, made once for one message log: the
+    surfacing check asked `at_employer` for one employer after another, and each scanned
+    the whole log once a contact, doubling a big search's page build (2026-11-09). Kept
+    for the same list object at the same length only (a row added is indexed afresh), held
+    here so it cannot be another list at its address."""
+    import state
+    n = len(threads) if threads is not None else -1
+    if _INDEX[0] is not threads or _INDEX[1] != n:
+        _INDEX[:] = [threads, n, state.by_contact(threads)]
+    return _INDEX[2]
+
+
 def at_employer(company: str, contacts, also=(), today: datetime.date | None = None,
                 threads=None, until: dict | None = None) -> tuple:
     """(who at this employer is waiting on a reply, who of `also` is there too), by
@@ -2595,8 +2611,10 @@ def at_employer(company: str, contacts, also=(), today: datetime.date | None = N
         except Exception:  # noqa: BLE001  a count must never break a save
             threads = []
 
+    index = _threads_index(threads)
+
     def msgs(c) -> list:
-        return state.threads_for(threads, c.get("contact_id", ""))
+        return list(index.get(str(c.get("contact_id") or "").strip(), ()))
 
     def recent(c) -> bool:
         day = waiting_until(c, msgs(c))
@@ -2691,7 +2709,7 @@ def more_at_hint(company: str) -> str:
 
 
 def employer_full_line(company: str, contacts, also=(), today: datetime.date | None = None,
-                       also_is: str = "with a note waiting to send") -> str:
+                       also_is: str = "with a note waiting to send", threads=None) -> str:
     """Why no one more may be written to at this employer, or "": at most PER_EMPLOYER (or
     the person's number there, `employer_limit`) while nobody there has answered, counting
     the people already waiting on a reply (`at_employer`) and `also` (today's list, or the
@@ -2702,7 +2720,7 @@ def employer_full_line(company: str, contacts, also=(), today: datetime.date | N
     limit, theirs = employer_limit(company)
     if limit is None:
         return ""
-    waiting, there = at_employer(company, contacts, also, today=today)
+    waiting, there = at_employer(company, contacts, also, today=today, threads=threads)
     if len(waiting) + len(there) < limit:
         return ""
     said = []

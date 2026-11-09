@@ -361,7 +361,8 @@ def employer_full(company: str, ctx: dict, key: str = "") -> str:
     if len(memo[k]) + len(there) < limit:
         return ""
     return reading.employer_full_line(company, ctx["contacts"], there, today=ctx["today"],
-                                      also_is="already on this list") or (
+                                      also_is="already on this list",
+                                      threads=ctx.get("thread_rows")) or (
         f"{company} already has {limit} waiting or on this list")
 
 
