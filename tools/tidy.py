@@ -489,13 +489,28 @@ def sessions(pages) -> list[dict]:
 
 
 def details(pages) -> dict:
-    """{session id: get_session's record}."""
+    """{session id: get_session's record}, from records alone, each wrapped as {"ccr": ...},
+    a page of them ({"data": [...]}), or a plain list of them. A plain list was dropped
+    without a word, so `plan` asked for the same chats again and again (2026-11-09)."""
     out = {}
-    for got in pages:
-        if isinstance(got, dict):
-            got = got.get("ccr", got)
-        if isinstance(got, dict) and got.get("id"):
+
+    def take(got) -> None:
+        if isinstance(got, list):
+            for g in got:
+                take(g)
+            return
+        if not isinstance(got, dict):
+            return
+        got = got.get("ccr", got)
+        if isinstance(got, dict) and not got.get("id") and isinstance(got.get("data"), list):
+            take(got["data"])
+        elif isinstance(got, list):
+            take(got)
+        elif isinstance(got, dict) and got.get("id"):
             out[got["id"]] = got
+
+    for got in pages:
+        take(got)
     return out
 
 
