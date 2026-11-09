@@ -451,6 +451,18 @@ def cmd_view(a) -> int:
         w.add("set", "meta", "current", {"rev": model["rev"], "made_at": model["made_at"],
                                          "model": model["model"], **stamp, **_published()},
               if_version=old["version"] if old else None)
+    # A screen written with no version while the screens came from this checkout's mirror,
+    # not a read: the mirror may lack one the page holds, and every such write was refused, so
+    # the cards stayed stuck (the maintainer's copy, 2026-11-09: "view builds its page updates
+    # without version numbers"). Its screens are read whole first, once, and then it is drawn.
+    drawn = bool(((db.get("meta") or {}).get("current") or {}).get("data")) if db else False
+    if a.dump and drawn and not page_reads.screens_read(a.dump) and any(
+            e.get("collection") in ("screen", "view") and e.get("op") == "set"
+            and e.get("if_version") is None for e in w.entries):
+        page_reads.read_screens_again(a.dump)
+        print(_dump({"rev": None, "batches": [], "for_claude": [page_reads.NEED_SCREENS.format(
+            colls="screen", dump=a.dump)]}), end="")
+        return 2
     batches = w.save("view") if w.entries else []
     # A redraft the drafts rerun handed out (tools/remake_drafts.py) goes on the work list by
     # itself, once: read against the page's own work list, and sent in a batch of its own,

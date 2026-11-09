@@ -26,6 +26,10 @@ make sense to somebody whose repo just received it.
   one after the other wrote both to the same place, so the first one's update was lost: the page
   kept showing it as running, it could not be finished again, and Claude went on to pick up work
   the page had already finished. Each one now keeps its own.
+- **The page takes Claude's updates again.** When the copy Claude keeps of your page lacked one of
+  its screens, every update was written with no version and the page refused them all, so cards
+  sat on "Putting it on your page" or "starting in a moment". Claude now reads the page's screens
+  first in that case, then updates it.
 - **A written answer to a change you asked for with a message's pencil shows under that
   message**, with your words above it, as Something else's answers do. Before, Claude could not
   post it at all and had to turn it into a question.
