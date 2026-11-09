@@ -5557,7 +5557,7 @@ def _rules(ctx: Ctx, targets: dict) -> dict:
     # its day or its reason and its override (tools/holds.py): an employer was shut 45 days
     # and nothing said so or when it would open (the maintainer, 2026-11-09).
     import holds
-    out["held"] = [{k: h[k] for k in ("id", "rule", "what", "until", "line", "say")}
+    out["held"] = [{k: h[k] for k in ("id", "rule", "what", "until", "line", "say", "lift")}
                    for h in holds.live(ctx.today)]
     out["every_hold"] = [{"id": r["id"], "area": r["area"], "line": r["line"]}
                          for r in holds.rules()]

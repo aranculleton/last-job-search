@@ -81,6 +81,17 @@ def test_every_rule_says_when_it_ends_or_why_it_stays_and_how_to_lift_it(rule):
     assert "{" not in rule["line"], rule["line"]
 
 
+ENGINE_WORDS = re.compile(r"<\w+>|No thanks|InMail|business days|kept, as\b")
+
+
+@pytest.mark.parametrize("rule", holds.rules(), ids=[r["id"] for r in holds.RULES])
+def test_every_rule_is_said_in_the_persons_words(rule):
+    """The screen review (2026-11-09): "How every rule ends" read "say 'more at <employer>'",
+    "after three No thanks", "InMail", "6 business days" and "kept, as your own window"."""
+    for k in ("line", "name", "override"):
+        assert not ENGINE_WORDS.search(rule[k]), (rule["id"], k, rule[k])
+
+
 def test_the_ids_are_one_each():
     ids = [r["id"] for r in holds.RULES]
     assert len(ids) == len(set(ids))
@@ -220,7 +231,7 @@ def _person_hold(_s):
     assert got and "no end day" in got[0]["line"]
     assert state.action_hold("Hold until 2026-12-01", TODAY).startswith("on hold until")
     got = holds._person_holds(TODAY, [{"name": "Ada Example", "next_action": "Hold"}])
-    assert got and "no end day" in got[0]["line"] and "write to Ada again" in got[0]["line"]
+    assert got and "no end day" in got[0]["line"] and got[0]["say"] == "write to Ada again"
 
 
 def _request(_s):
@@ -366,10 +377,12 @@ def test_the_window_follows_the_follow_up_rule_from_the_last_contact(monkeypatch
 PEOPLE = {
     "nurse": {"name": "Priya Okafor", "city": "Vancouver",
               "networking": "FOLLOW_UP_DAYS = 14\nMAX_UNANSWERED = 2\n",
-              "employer": "Larchmont Health", "opens": "2026-11-27"},
+              "employer": "Larchmont Health", "opens": "2026-11-27",
+              "why": "2 people there are"},
     "engineer": {"name": "Tomas Ferreira", "city": "Remote",
                  "networking": "EMPLOYER_WAIT_DAYS = 10\nPEOPLE_PER_EMPLOYER = 1\n",
-                 "employer": "Quillfeather Software", "opens": "2026-11-12"},
+                 "employer": "Quillfeather Software", "opens": "2026-11-12",
+                 "why": "1 person there is"},
     "changer": {"name": "Dana Whitlock", "city": "Leeds", "networking": "",
                 "employer": "Brackenridge Trust", "opens": None},
 }
@@ -448,21 +461,24 @@ def test_t12_every_hold_shows_its_end_or_reason_and_its_override_for_a_made_up_p
         h = live[f"employer_wait:{emp}"]
         d = dt.date.fromisoformat(p["opens"])
         assert h["until"] == p["opens"], h
-        assert h["line"] == (f"{emp}: open again {d.strftime('%a')} {d.day} {d.strftime('%b')}, "
-                             f"or say 'more at {emp}'"), h["line"]
+        # Why it is held, then the day, and nothing after it: the page's pill lifts it.
+        assert h["line"] == (f"{emp}: {p['why']} waiting on a reply, so it opens again "
+                             f"{d.strftime('%a')} {d.day} {d.strftime('%b')}"), h["line"]
+        assert h["say"] == f"more at {emp}" and h["lift"] == "Open it now", h
     else:
         # The app's own rule: six business days, two messages; two waiting at the app's two.
         h = live[f"employer_wait:{emp}"]
         assert h["until"] and h["until"] < "2026-12-01", h
     app = live["application_open:Fallowmere Clinic"]
-    assert app["until"] == "2026-12-04" and "stop waiting on Fallowmere Clinic" in app["line"]
+    assert app["until"] == "2026-12-04" and app["say"] == "stop waiting on Fallowmere Clinic"
     team = live["no_team:Ridley Assurance"]
-    assert team["until"] == "2026-12-30" and "look at Ridley Assurance again" in team["line"]
+    assert team["until"] == "2026-12-30" and team["say"] == "look at Ridley Assurance again"
     hold = live["person_hold:Celia Marsh"]
-    assert hold["until"] is None and "write to Celia again" in hold["line"]
+    assert hold["until"] is None and hold["say"] == "write to Celia again"
     for h in live.values():
         assert not JARGON.search(h["line"]), h["line"]
         assert "Morgan" not in h["line"]
+        assert "or say" not in h["line"] and (h["lift"] or not h["say"] or h["rule"] == "inmail"), h
 
 
 def test_t12_the_page_model_carries_every_rule_and_what_is_held(tmp_path):
@@ -475,5 +491,5 @@ def test_t12_the_page_model_carries_every_rule_and_what_is_held(tmp_path):
     rules = json.loads(out.read_text(encoding="utf-8"))["rules"]
     assert [x["id"] for x in rules["every_hold"]] == [r["id"] for r in holds.RULES]
     lines = [h["line"] for h in rules["held"]]
-    assert any(x.startswith("Larchmont Health: open again ") for x in lines), lines
-    assert any("more at Larchmont Health" in x for x in lines)
+    assert any(x.startswith("Larchmont Health: 2 people there are waiting on a reply, so it opens again ") for x in lines), lines
+    assert any(h["say"] == "more at Larchmont Health" and h["lift"] for h in rules["held"])
