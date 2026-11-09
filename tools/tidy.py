@@ -77,7 +77,10 @@ if _HERE not in sys.path:
 # person named themself is never one of these unless they copied the app's own words.
 # A chat a scheduled task starts carries a mark before its title ("⚡ Job search: morning
 # brief"), and without it in the pattern every such chat was read as the person's own and kept.
-APP_TITLE = re.compile(r"^(?:[^\w\s]{1,3}\s*)?Job search(?::\s*\S.{0,60}|\s+(?:helper|page)\b.{0,60})$",
+# A chat started on the person's computer is "Job search · <job> · <computer>"
+# (tools/computer.py SESSION_TITLE), so the tidy-up knows it too.
+APP_TITLE = re.compile(r"^(?:[^\w\s]{1,3}\s*)?Job search(?::\s*\S.{0,60}|\s+(?:helper|page)\b.{0,60}"
+                       r"|\s+\u00b7\s+\S.{0,60}\s+\u00b7\s+\S.{0,40})$",
                        re.I)
 # The page's helper, under its name since 4.10 ("Job search page", app_listen.HELPER_CHAT_TITLE)
 # and every older one ("Job search helper", "... (finishing up)"). Only the live one, the chat

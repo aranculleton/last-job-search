@@ -726,7 +726,7 @@ def memory_line(conflicts: list[dict]) -> str:
 SHELL_TRAPS = (
     (re.compile(r"\bset\s+--\s+\$\w"), "set -- $var splits words in bash only"),
     (re.compile(r"\bfor\s+\w+\s+in\s+\$\{?\w+\}?\s*;"), "for x in $var splits words in bash only"),
-    (re.compile(r"\$\{?\w+\[(?:0|@|\*)\]"), "arrays count from 1 in zsh"),
+    (re.compile(r"\$\{?\w+\[0\]"), "arrays count from 1 in zsh"),
     (re.compile(r"\b(?:read\s+-a|mapfile|readarray|declare\s+-A|shopt)\b"), "bash-only builtin"),
     (re.compile(r"\becho\s+-e\b"), "echo -e differs between shells"),
 )

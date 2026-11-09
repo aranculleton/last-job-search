@@ -1095,6 +1095,11 @@ def job_steps(chosen: dict, claimer: str, url: str, session: bool = True,
     elif session:
         # A job's chat started by another job's chat (`next --job-chat`) has nobody it was
         # started by to tell: it brings the page up to date itself and takes the next one.
+        if computer_only:
+            # Measured, never guessed: a computer run's own report of its time and steps was
+            # wrong by a third (2026-11-09). Its transcript says what it took (tools/computer.py).
+            step(f"Before it finishes: python3 tools/computer.py measure \"$D\" --work {wid} "
+                 f"--chat {claimer}, and send its batch; say its line, never your own count.")
         step(f"Finish as step 5 says ({done}), without its heartbeat line.{files} Save and land "
              f"your work on master (CLAUDE.md, \"Saving\"). Then, landed or not (a failed check "
              f"leaves the work for the next chat to land, and this step still runs), bring the "
@@ -1105,7 +1110,7 @@ def job_steps(chosen: dict, claimer: str, url: str, session: bool = True,
              "and never writes over a screen drawn from a newer copy than this one); and send "
              "every batch it prints (ArtifactData batch). A refused batch: read those four again "
              "and run it once more. Never write to the person: the page shows how it went.")
-        step(_next_job(url))
+        step(_next_job(url, kind=chat_kind, computer_only=computer_only))
     else:
         step(f"Finish as step 5 says ({done}), without its heartbeat line and without app.py "
              f"view.{files} Save and land your work on master (CLAUDE.md, \"Saving\"). Then end with "
