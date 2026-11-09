@@ -30,6 +30,9 @@ make sense to somebody whose repo just received it.
   its screens, every update was written with no version and the page refused them all, so cards
   sat on "Putting it on your page" or "starting in a moment". Claude now reads the page's screens
   first in that case, then updates it.
+- **A change to a message that leaves its words as they were says so**, and a card whose draft
+  the change took away (held or set aside) no longer says "Putting it on your page" for two hours:
+  both waited for a new version that was never coming.
 - **A written answer to a change you asked for with a message's pencil shows under that
   message**, with your words above it, as Something else's answers do. Before, Claude could not
   post it at all and had to turn it into a question.

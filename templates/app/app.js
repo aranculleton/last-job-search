@@ -7397,7 +7397,13 @@
     if (mine && !personDraft(p) && !personSentHere(p)) {
       const st = txt(w[1].status);
       const ended = now() - (tms(w[1].finished_at) || tms(w[1].asked_at) || 0);
-      // Written, and the draft not on the page yet: said, and shown the moment it arrives.
+      // Written, and the draft not on the page yet: said, and shown the moment it arrives. Not
+      // for a change to their message (a tweak) that ended with no draft, held or set aside,
+      // and not once the page was drawn after it finished with still no draft: nothing is on
+      // its way, and "Putting it on your page" stayed two hours (the maintainer's copy,
+      // 2026-11-09). The card then says what it says without work.
+      const fin = txt(w[1].finished_at);
+      if (st === "done" && (txt(w[1].kind) === "tweak" || (fin && pageMadeAt() > fin))) return null;
       if (st === "done" && ended < 2 * 3600000) return {words: "Finished", line: "Putting it on your page.", spin: false, tone: null};
       if (st === "failed") return {words: "Did not finish", line: (typeof w[1].error === "string" ? w[1].error : txt(obj(w[1].error).plain)) || "It stopped part way. Nothing was sent.",
         spin: false, tone: "bad", retry: () => retryWork(w[0])};
@@ -9149,7 +9155,16 @@
     // page has the rewritten draft, and the card said "New version" over the old words, word
     // for word (the maintainer, 2026-11-05). Until its rev moves, it says it is coming.
     const was = txt(obj(obj(w.args).target).rev);
-    if (was && txt(item.rev) === was && now() - (tms(w.finished_at || w.done_at) || 0) < 2 * 3600000) {
+    const fin = txt(w.finished_at || w.done_at);
+    if (was && txt(item.rev) === was) {
+      // The page drawn since it finished, and the words still the ones it was asked about: it
+      // left them as they were (held, set aside, or nothing it could change). Said once, as
+      // its own summary, never "putting the new version on your page" for good (the
+      // maintainer's copy, 2026-11-09: three cards said it all day).
+      if (!fin || pageMadeAt() > fin || now() - (tms(fin) || 0) >= 10 * 60000) {
+        const why = txt(obj(w.result).summary).replace(/[.\s]+$/, "");
+        return h("p", {class: "small tweak-done", "data-tweak-same": id}, (why || "Left as it was") + ". The words are unchanged.");
+      }
       return h("p", {class: "small tweak-done", role: "status"}, h("span", {class: "spin", "aria-hidden": "true"}), " Finished · putting the new version on your page");
     }
     // A summary ending in a full stop is not given a second (the maintainer, 2026-11-05).
