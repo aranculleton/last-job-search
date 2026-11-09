@@ -1,7 +1,7 @@
 {
  "model": 1,
  "made_at": "2026-10-25T18:00:00Z",
- "rev": "1a37703dfc1f",
+ "rev": "23666a0b7aee",
  "app": {
   "version": "4.13.0",
   "url": null,
@@ -77,7 +77,7 @@
  ],
  "jobs": {
   "round": "r9",
-  "made_at": "2026-11-09T21:35:48Z",
+  "made_at": "2026-11-09T21:44:07Z",
   "met": false,
   "summary": "3 roles from the last search to look at, 1 of them scoring 75 or more. 3 left out, each with its reason.",
   "rows": [
@@ -1008,7 +1008,7 @@
    "when": "2026-10-28",
    "prep": {
     "path": "documents/applications/thornbury_bank_risk_analyst_thornbury/interview_prep.md",
-    "updated": "2026-11-09T21:35:48Z"
+    "updated": "2026-11-09T21:44:07Z"
    },
    "questions": 2,
    "all_day": true,
@@ -2299,35 +2299,36 @@
     "rule": "application_open",
     "what": "Thornbury Bank",
     "until": null,
-    "line": "Thornbury Bank: no new jobs there while your interviews run, or say 'it's over at Thornbury Bank'",
-    "say": "it's over at Thornbury Bank"
+    "line": "Thornbury Bank: no new jobs there while your interviews run",
+    "say": "it's over at Thornbury Bank",
+    "lift": "It's over"
    }
   ],
   "every_hold": [
    {
     "id": "job_age",
     "area": "jobs",
-    "line": "Jobs posted too long ago: kept, as your own window for how recent a job must be. Change How recent in Your rules."
+    "line": "Jobs posted too long ago: your own window for how recent a job must be. Change How recent in Your rules."
    },
    {
     "id": "gates",
     "area": "jobs",
-    "line": "Jobs that need a language, citizenship, clearance or qualification you do not have: kept, as the job's own words require it; looked at again whenever your profile changes. Tell Claude you have it, or add the language in Your rules."
+    "line": "Jobs that need a language, citizenship, clearance or qualification you do not have: the job's own words require it; looked at again whenever your profile changes. Tell Claude you have it, or add the language in Your rules."
    },
    {
     "id": "sectors",
     "area": "jobs",
-    "line": "Kinds of employer you will not work for: kept, as your choice, kept until you change it. Use the trash beside it in Your rules."
+    "line": "Kinds of employer you will not work for: your choice, kept until you change it. Use the trash beside it in Your rules."
    },
    {
     "id": "declined",
     "area": "jobs",
-    "line": "Employers you turned down: kept, as your choice, kept until you change it. Use the trash beside the employer in Your rules."
+    "line": "Employers you turned down: your choice, kept until you change it. Use the trash beside the employer in Your rules."
    },
    {
     "id": "dismissed",
     "area": "jobs",
-    "line": "Jobs you set aside: kept, as your choice for that one job; another role at the employer still shows. Tap Bring back under Set aside in Jobs."
+    "line": "Jobs you set aside: your choice for that one job; another role at the employer still shows. Tap Bring back under Set aside in Jobs."
    },
    {
     "id": "ruled_out",
@@ -2342,17 +2343,17 @@
    {
     "id": "no_team",
     "area": "jobs",
-    "line": "Employers with no team for you where you look: on its own review day, or 90 days after it was found where it names none. Say 'look at <employer> again'."
+    "line": "Employers with no team for you where you look: on its own review day, or 90 days after it was found where it names none. Ask Claude to look at the employer again."
    },
    {
     "id": "application_open",
     "area": "applications",
-    "line": "Other jobs at an employer you applied to: when they answer, or 45 days after you applied (or after the job's closing day) with no reply; a role scoring 10 points more still shows. Say 'stop waiting on <employer>'."
+    "line": "Other jobs at an employer you applied to: when they answer, or 45 days after you applied (or after the job's closing day) with no reply; a role scoring 10 points more still shows. Tell Claude to stop waiting on the employer."
    },
    {
     "id": "referral",
     "area": "applications",
-    "line": "Applying cold where someone is referring you: kept, as only you know when a referral is over; the job itself is never hidden. Say 'the referral at <employer> is over'."
+    "line": "Applying cold where someone is referring you: only you know when a referral is over; the job itself is never hidden. Tell Claude the referral there is over."
    },
    {
     "id": "application_nudges",
@@ -2362,7 +2363,7 @@
    {
     "id": "employer_wait",
     "area": "people",
-    "line": "More people at an employer where people are waiting on a reply: 2 people at a time; each one waiting frees their place about 18 days after a first note, by your follow-up rule (6 business days, at most 2 with no reply), counted from the last message. Say 'more at <employer>'."
+    "line": "More people at an employer where people are waiting on a reply: 2 people at a time; each one waiting frees their place about 18 days after the last message, by your follow-up rule. Ask Claude for more people at the employer."
    },
    {
     "id": "limit",
@@ -2372,22 +2373,22 @@
    {
     "id": "closed",
     "area": "people",
-    "line": "Conversations you closed or set aside: kept, as your choice; a reply from them opens it again. Say 'write to <name> again'."
+    "line": "Conversations you closed or set aside: your choice; a reply from them opens it again. Ask Claude to write to them again."
    },
    {
     "id": "people_turned_down",
     "area": "people",
-    "line": "People at employers you turned down: kept, as your choice, kept until you change the employer's rule. Use the trash beside the employer in Your rules."
+    "line": "People at employers you turned down: your choice, kept until you change the employer's rule. Use the trash beside the employer in Your rules."
    },
    {
     "id": "place",
     "area": "people",
-    "line": "People living outside where you look: kept, as your own places to look; a reply from them is always answered. Change Where in Your rules."
+    "line": "People living outside where you look: your own places to look; a reply from them is always answered. Change Where in Your rules."
    },
    {
     "id": "person_hold",
     "area": "people",
-    "line": "Someone you put on hold: on the day the hold names, or the day beside it. Say 'write to <name> again'."
+    "line": "Someone you put on hold: on the day the hold names, or the day beside it. Ask Claude to write to them again."
    },
    {
     "id": "request",
@@ -2397,12 +2398,12 @@
    {
     "id": "written_to",
     "area": "people",
-    "line": "Someone already written to, offered as new: kept, as they are not someone new; what is owed them comes by your follow-up rule. Open their card in Contacts."
+    "line": "Someone already written to, offered as new: they are not someone new; what is owed them comes by your follow-up rule. Open their card in Contacts."
    },
    {
     "id": "inmail",
     "area": "people",
-    "line": "InMail once this month's credits are used: on the first of next month. Tell Claude the number LinkedIn shows."
+    "line": "Paid LinkedIn messages, once this month's are used: on the first of next month. Tell Claude the number LinkedIn shows."
    },
    {
     "id": "invitations",
@@ -2417,7 +2418,7 @@
    {
     "id": "follow_up",
     "area": "messages",
-    "line": "A follow-up before its day: 6 business days after the last message. Draft it now on their card."
+    "line": "A follow-up before its day: 6 weekdays after the last message. Draft it now on their card."
    },
    {
     "id": "put_off",
@@ -2427,7 +2428,7 @@
    {
     "id": "note_aside",
     "area": "messages",
-    "line": "A first note you set aside: kept, as your choice for that person. Tap Undo, or say 'write to <name> again'."
+    "line": "A first note you set aside: your choice for that person. Tap Undo, or ask Claude to write to them again."
    },
    {
     "id": "interview_quiet",
@@ -2447,12 +2448,12 @@
    {
     "id": "ideas_paused",
     "area": "page",
-    "line": "Ideas Claude suggests, after three No thanks: 30 days after the third. Say 'show me ideas again'."
+    "line": "Ideas Claude suggests, after you dismiss three: 30 days after the third. Ask Claude to show you ideas again."
    },
    {
     "id": "idea_declined",
     "area": "page",
-    "line": "One idea you said No thanks to: kept, as your answer to that one idea. Tap Undo when it is said."
+    "line": "One idea you dismissed: your answer to that one idea. Tap Undo when it is said."
    },
    {
     "id": "brief_paused",
@@ -2462,7 +2463,7 @@
    {
     "id": "news_seen",
     "area": "page",
-    "line": "News a brief already carried: kept, as the same story twice is no news; at most 5 a brief. Choose how many in Settings, Your brief."
+    "line": "News a brief already carried: the same story twice is no news; at most 5 a brief. Choose how many in Settings, Your brief."
    },
    {
     "id": "export_later",
@@ -2472,7 +2473,7 @@
    {
     "id": "update_questions",
     "area": "page",
-    "line": "Questions an update brought: kept, as they wait in Settings, never in To do, since nothing about them is late. Answer them under From updates in Settings."
+    "line": "Questions an update brought: they wait in Settings, never in To do, since nothing about them is late. Answer them under From updates in Settings."
    }
   ],
   "rev": "5f0ba4f627f5"
