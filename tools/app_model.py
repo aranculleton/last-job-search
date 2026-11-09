@@ -2579,6 +2579,10 @@ def _messages(ctx: Ctx, targets: dict) -> list:
                 "why": ROUTE_WHY.get(str(c.get("route") or "").strip().lower(),
                                      f"They work at {c.get('company') or 'an employer you want'}"),
                 "due": str(c.get("next_action_due") or "") or None, "hold": hold,
+                # Where work about it runs: the computer's chat while it waits for a profile
+                # read only the Claude app on the computer can make (page_db.needs_computer),
+                # so the page queues its pencil there and a cloud chat never takes it.
+                "work_to": "computer" if hold and reading.needs_browser_read(cid) else "either",
                 "rev": rev_of(cid, text, kind, channel, live)}
         if mtype == "first_note" and channel == "linkedin_note" and hold is None \
                 and not item["blocked"]:

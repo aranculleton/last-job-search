@@ -751,13 +751,52 @@ def item_stages(item: dict) -> list[dict]:
     return stages
 
 
+def contacts_of(item: dict) -> list[str]:
+    """The people a piece of work is about: a message's tweak (its target `msg-<contact>`, or
+    the target's contact), and a networking job's named contacts."""
+    kind = str(item.get("kind") or "")
+    args = item.get("args") if isinstance(item.get("args"), dict) else {}
+    out: list = []
+    if kind == "tweak":
+        target = args.get("target") if isinstance(args.get("target"), dict) else {}
+        if str(target.get("output") or "") == "message":
+            tid = str(target.get("id") or "")
+            out.append(str(target.get("contact") or "") or (tid[4:] if tid.startswith("msg-") else ""))
+    elif kind == "network":
+        out += [str(c) for c in args.get("contacts") or [] if str(c).strip()]
+        out.append(str(args.get("contact") or ""))
+    return [c for c in dict.fromkeys(out) if c]
+
+
+def needs_computer(item: dict) -> list[str]:
+    """The people this work is about whose note waits for its profile to be read in the page's
+    own browser, in the Claude app on the computer (reading.needs_browser_read). Such work is
+    the computer's: a cloud chat cannot read LinkedIn, took a pencil change on one, closed it as
+    done, and the computer's chat never saw it (the maintainer, 2026-11-09)."""
+    cids = contacts_of(item)
+    if not cids:
+        return []
+    net = os.path.join(_HERE, "network")
+    if net not in sys.path:
+        sys.path.insert(0, net)
+    try:
+        import reading
+        return [c for c in cids if reading.needs_browser_read(c)]
+    except Exception:  # noqa: BLE001  no profile or no networking here: nothing waits
+        return []
+
+
 def can_take(item: dict, chat_kind: str) -> bool:
     """Whether a chat of this kind can do a work item. One chat answers the page
     (tools/app_listen.py), so work never waits for a chat of the other kind: the item's `to`
     is only where the page expected it to run. A brief alone needs the cloud, since it comes
-    with the computer off."""
+    with the computer off; work about a note waiting for a profile read in the Claude app on
+    the computer (`needs_computer`) is never a cloud chat's, whatever an older page queued it
+    to, and waits for the computer's chat."""
     kind = WORK_KINDS.get(str(item.get("kind") or ""))
-    return kind is not None and chat_kind in kind["can"]
+    if kind is None or chat_kind not in kind["can"]:
+        return False
+    return not (chat_kind == "cloud" and needs_computer(item))
 
 
 def _key(text) -> str:
@@ -1772,6 +1811,15 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
                   # The choices as pages before 4.10 read them: their words alone.
                   "choices": [c["label"] for c in (clean or {}).get("choices") or []]
                   if kind in ("choice", "yesno") else None}
+    elif status == "done" and chat_kind == "cloud" and needs_computer(item):
+        # Work about a note waiting for its profile to be read in the Claude app on the
+        # computer is never closed as done by a cloud chat, which cannot read LinkedIn (one
+        # did, and the computer's chat never saw it: the maintainer, 2026-11-09). It goes back
+        # to the queue for the computer, its card saying it waits there.
+        status = "queued"
+        fields = {"status": status, "to": "computer", "lease_until": None, "claimed_by": None,
+                  "claimed_at": None, "stage": 0, "stage_at": None}
+        reply = ""
     else:
         fields = {"status": status, "finished_at": at, "lease_until": None,
                   "result": {"summary": summary, "links": [dict(x) for x in links or ()]},
@@ -2068,6 +2116,11 @@ def ask(db: dict, kind: str, title: str, now: dt.datetime, out_dir: str, args: d
     if wid in (db.get("work") or {}):
         raise ValueError(f"work {wid!r} is already there")
     to = to or ("cloud" if WORK_KINDS[kind]["to"] == "cloud" else "either")
+    # About a note waiting for its profile to be read in the Claude app on the computer: the
+    # computer's, decided as it is queued (needs_computer, and can_take for older pages).
+    if to == "either" and "computer" in WORK_KINDS[kind]["can"] and \
+            needs_computer({"kind": kind, "args": dict(args or {})}):
+        to = "computer"
     if to not in ("cloud", "computer", "either") or (
             to != "either" and to not in WORK_KINDS[kind]["can"]):
         raise ValueError(f"a {kind} runs in " + " or ".join(WORK_KINDS[kind]["can"]))

@@ -231,3 +231,82 @@ def test_a_request_about_every_waiting_note_says_what_was_done_and_no_new_versio
     block = got["steps"][0]["eval"]["block"]
     assert block.startswith("You asked") and said in block, block
     assert "new version" not in block.lower() and "Stop Claude" not in block, block
+
+
+# ------------------------------------------------------------------ the computer's work
+
+# A cloud chat took a pencil change on a note waiting for a profile read, could not read
+# LinkedIn, closed it as done, and the chat on the computer never saw it (the maintainer,
+# 2026-11-09). Work about such a note is the computer's: decided as it is queued, checked again
+# when a chat looks for work (for items an older page queued to "either"), and a cloud chat that
+# holds one never closes it as done.
+
+ROUTE = r'''
+import sys, json, datetime as dt
+sys.path[:0] = ["tools", "tools/network"]
+import os, person, profile_set, page_db, reading
+p = person.state("documents", "network", "kestrel_mutual_ansgar", "draft.md")
+os.makedirs(os.path.dirname(p), exist_ok=True)
+open(p, "w", encoding="utf-8").write("WAITS ON A READ: nothing was read about them.\n\nHi Pell.\n")
+profile_set.set_line("networking.py", "PROFILE_READS", "browser")
+now = dt.datetime(2026, 10, 25, 9, tzinfo=dt.timezone.utc)
+item = {"kind": "tweak", "status": "queued", "to": "either", "asked_at": "2026-10-25T08:58:00Z",
+        "args": {"target": {"id": "msg-kestrel_mutual_ansgar", "output": "message"}, "text": "warmer"}}
+db = {"work": {"tweak~msg-kestrel_mutual_ansgar~1": {"version": 2, "data": dict(item)}}, "locks": {}}
+out = {"needs": page_db.needs_computer(item), "cloud": page_db.can_take(item, "cloud"),
+       "computer": page_db.can_take(item, "computer"),
+       "next_cloud": page_db.next_item(db, "cloud", now), "next_computer": (page_db.next_item(db, "computer", now) or {}).get("work")}
+asked = page_db.ask({"work": {}}, "tweak", "Change the note to Pell", now, sys.argv[1] + "/ask",
+                    args={"target": {"id": "msg-kestrel_mutual_ansgar", "output": "message"}, "text": "warmer"})
+out["asked_to"] = [json.load(open(e["file_path"]))["to"] for b in asked["batches"] for e in json.load(open(b)) if e.get("file_path")]
+held = {"work": {"tweak~x": {"version": 3, "data": dict(item, status="running", claimed_by="cloud-1")}}, "locks": {}}
+got = page_db.finish(held, "tweak~x", now, sys.argv[1] + "/fin", summary="Your note is warmer now.", chat="cloud-1", chat_kind="cloud")
+fields = [json.load(open(e["file_path"])) for b in got["batches"] for e in json.load(open(b)) if e.get("file_path")]
+out["finished"] = [got["status"], [f.get("status") for f in fields], [f.get("to") for f in fields]]
+got = page_db.finish(held, "tweak~x", now, sys.argv[1] + "/fin2", summary="Your note is warmer now.", chat="cloud-1", chat_kind="computer")
+out["computer_finish"] = got["status"]
+# Once their page is read, any chat may rewrite it.
+reading.save("kestrel_mutual_ansgar", {"sources": [{"kind": "browser", "read_on": "2026-10-25"}], "items": []})
+out["after_read"] = page_db.can_take(item, "cloud")
+print(json.dumps(out))
+'''
+
+
+def test_work_about_a_note_waiting_for_a_read_is_the_computers(t, tmp_path):
+    got = json.loads(t.python(ROUTE.replace("sys.argv[1]", repr(str(tmp_path)))))
+    assert got["needs"] == ["kestrel_mutual_ansgar"], got
+    # Checked again when a chat looks for work: a cloud chat never claims it, the computer's does.
+    assert got["cloud"] is False and got["computer"] is True, got
+    assert got["next_cloud"] is None and got["next_computer"] == "tweak~msg-kestrel_mutual_ansgar~1", got
+    # Decided as it is queued.
+    assert got["asked_to"] == ["computer"], got
+    # A cloud chat holding one never closes it as done: it goes back, queued for the computer.
+    assert got["finished"][0] == "queued" and got["finished"][1] == ["queued"] and got["finished"][2] == ["computer"], got
+    assert got["computer_finish"] == "done", got
+    assert got["after_read"] is True, got
+
+
+def test_the_engine_says_where_a_waiting_notes_work_runs(t):
+    t.python("import sys; sys.path[:0] = ['tools', 'tools/network']\n"
+             "import person, os, profile_set\n"
+             "p = person.state('documents', 'network', 'kestrel_mutual_ansgar', 'draft.md')\n"
+             "os.makedirs(os.path.dirname(p), exist_ok=True)\n"
+             "open(p, 'w', encoding='utf-8').write('WAITS ON A READ: nothing was read about them.\\n\\nHi Pell.\\n')\n")
+    (msg,) = t.model()["messages"]
+    # The example person pastes profiles: nothing for the computer to read.
+    assert msg["hold"] and msg["work_to"] == "either", msg
+    t.python("import sys; sys.path[:0] = ['tools']\nimport profile_set\n"
+             "profile_set.set_line('networking.py', 'PROFILE_READS', 'browser')\n")
+    (msg,) = t.model()["messages"]
+    assert msg["work_to"] == "computer", msg
+
+
+def test_the_card_says_its_pencil_waits_for_the_claude_app_on_the_computer(run, tmp_path):
+    m, kit = _model()
+    kit["work_to"] = "computer"
+    html = _write(tmp_path, "computer", m)
+    # Queued to "either" by an older page; no chat on the computer has checked in.
+    got = run("script", html=html, viewport=WIDE, clock=CLOCK, seed=_seed(kit), fake={"canSend": "available"},
+              steps=[{"hash": "contacts", "eval": LOOK.format(cid=kit["contact"])}])
+    block = got["steps"][0]["eval"]["block"]
+    assert "Waiting for the Claude app on your computer" in block and "Waiting for Claude," not in block, block

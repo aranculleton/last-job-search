@@ -7075,7 +7075,8 @@
       S.penOpen.delete(m.id);
       S.penEdit.delete(m.id);
       draftSet("penask:" + m.id, null);
-      requestWork([{id: "tweak~" + seg(m.id) + "~" + stamp(), kind: "tweak", to: "either", title: "Change the " + what + " to " + name,
+      // The computer's while the note waits for a profile read there (the engine's work_to).
+      requestWork([{id: "tweak~" + seg(m.id) + "~" + stamp(), kind: "tweak", to: txt(m.work_to) || "either", title: "Change the " + what + " to " + name,
         args: {v: 1, target: tweakTarget("message", m), changes: [], text: txt(words), keep: null},
         stages: STAGES.tweak.filter((x) => !/PDF/.test(x[0])).map((x) => ({name: x[0], est_s: x[1]}))}]);
     };
@@ -9104,7 +9105,7 @@
       // every fact" and "Making the PDF" (journeys audit 23), a message edit the PDF too.
       const steps = st.spec.search ? STAGES.search : STAGES.tweak.filter((p, i) => st.spec.doc || (i < 2 || (st.output !== "brief" && !/pdf/i.test(p[0]))));
       const stages = steps.map((p) => ({name: p[0], est_s: Math.max(5, Math.round(p[1] * scale))}));
-      requestWork([{id: "tweak~" + seg(target.id).slice(0, 60) + "~" + hash10(JSON.stringify(shape) + "|" + txt(target.rev)), kind: "tweak", to: "either",
+      requestWork([{id: "tweak~" + seg(target.id).slice(0, 60) + "~" + hash10(JSON.stringify(shape) + "|" + txt(target.rev)), kind: "tweak", to: (st.output === "message" && txt(obj(st.item).work_to)) || "either",
         title: tweakTitle(st.output, st.item), args, stages}], {ring: st.now});
       said.push(st.now ? "Claude has the changes" : "Saved for your next chat");
     } else {
@@ -12733,7 +12734,10 @@
       steps: lead.steps, stages: arr(lead.stages).length ? lead.stages : w.stages, left_s: lead.left_s, left_at: lead.left_at, count: null, status: lead.status === "running" ? "running" : w.status}) : w;
     const p = progress(v);
     const st = p.status;
-    const toComputer = w.to === "computer";
+    // The computer's: queued there, or about a note waiting for a profile read only the Claude
+    // app on the computer can make (the engine's work_to), whatever an older page queued it to:
+    // no cloud chat takes it (page_db.can_take), and its card says where it waits.
+    const toComputer = w.to === "computer" || heldForComputer(w);
     const away = toComputer && !computerListening();
     // Slower than usual is still running (a spinner, no warning); only a missed check-in may
     // mean it stopped.
@@ -12788,7 +12792,7 @@
       // What Claude itself wrote on waiting work ("Waiting its turn: three drafts are being
       // written now") is the line, over any of the page's own: it was only in the folded steps.
       const said = lastStep && tms(lastStep.at) >= (tms(w.answered_at) || tms(w.asked_at) || 0) ? txt(lastStep.text) : "";
-      now1 = held ? heldLine(upd) : away ? "This needs your computer: open Claude on it." :
+      now1 = held ? heldLine(upd) : away ? (heldForComputer(w) ? "Waiting for the Claude app on your computer, where their profile can be read: it starts there" : "This needs your computer: open Claude on it.") :
         unsent ? "Not sent to Claude yet: it goes with your next tap here." :
         said ? said :
         helperStarting() ? "Claude's helper is starting up. It takes this in a minute or two." :
@@ -12803,6 +12807,11 @@
         "Asked " + askedWhen(w) + ". Claude starts it when it next looks at this page.";
     }
     return {p, v, lead, st, toComputer, away, slow, over, place, inLine, ahead, picked, late, unsent, waking, waitingOn, label, tone, now1};
+  }
+  function heldForComputer(w) {
+    if (txt(w.kind) !== "tweak") return false;
+    const t = obj(obj(w.args).target);
+    return txt(t.output) === "message" && txt(obj(messageById(txt(t.id))).work_to) === "computer";
   }
   // What light work waits behind in its chat: the one running there, or the light work asked
   // before it that waits too, with its place.
