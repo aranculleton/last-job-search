@@ -697,8 +697,8 @@
         {"url": "https://code.claude.com/docs/en/desktop", "quote": "Choose whether the Browser keeps cookies after you quit the app with Keep cookies in the Browser pane's \u22ee menu, so you don't have to sign in again"}
       ],
       "status": "documented",
-      "verified_on": "2026-10-25",
-      "verified_against": "code.claude.com/docs/en/desktop read 2026-10-25",
+      "verified_on": "2026-11-09",
+      "verified_against": "code.claude.com/docs/en/desktop read again 2026-11-09: whether Keep cookies is on to begin with, how long a LinkedIn sign-in lasts in the pane and how a chat can tell the pane is hidden are not on it (a chat looks: tabs_context, and a LinkedIn page showing the sign-in page)",
       "ui_sensitive": true
     },
     {

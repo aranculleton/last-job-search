@@ -6,6 +6,14 @@ computer" (or type that, with a link to this page). Claude does the rest. The on
 that are yours: copying one code into GitHub's page to sign in, and on a Mac with nothing
 set up, clicking **Install** in a window from Apple.
 
+**Using it, once it is set up.** You never need to keep a chat open on your computer. Keep
+the Claude app open there, with your computer awake, and that is all: when something needs
+your computer (reading someone's LinkedIn profile before Claude writes to them), Claude
+starts a chat there by itself, called "Job search · what it is doing · your computer's
+name", does the work and puts it on your page. Those chats are safe to delete. To watch one,
+open it in the Claude app on your computer. If your computer is off, your page says so in one
+line and the work waits; nothing else is asked of you.
+
 ---
 
 The rest of this page is for Claude. Follow it in order. Install everything yourself;
@@ -108,6 +116,55 @@ Ask nothing here and offer no choice: every case below has one right answer.
      works too).
 3. When the install in step 1 ends, say its outcome in one line (or nothing, if it all
    went through), and the restart line from 2b if there was one.
+
+## 6. Use your computer for LinkedIn (once)
+
+The one thing a computer is needed for is reading LinkedIn in the Claude desktop app's own
+browser. This stage makes that happen with no chat for the person to keep open. `/setup` runs
+it for a new person who works on a computer (`--section computer`), and an existing copy gets
+it as one card (the `computer-linkedin` profile upgrade). Each step below is one plain line
+to the person from `python3 tools/claude_surfaces.py steps <id>`, checked against its
+official page that day, and each is checked by Claude after it, so the person never has to
+know whether it worked.
+
+1. **Let Claude start its chats there** (`remote-control-settings`). Check: in a cloud chat,
+   `list_environments` lists this computer as an active environment of kind `bridge`
+   (`computer-bridge`). Not listed after they say done: give the steps once more, then the
+   fallbacks below still work.
+2. **The one approval** (`computer-bridge`). From the cloud chat, `python3 tools/computer.py
+   route` prints the `create_session` call; refused as an untrusted device, run its
+   `trust-check` first (a chat that approves is tied to their devices for good, so no
+   scheduled task may fire into it), then `confirm_repository_trust`: one card, once.
+3. **Auto.** Nothing to do: every chat the app starts asks for Auto (`permission_mode`,
+   `tools/app_listen.py` SESSION_MODE), and the app never asks the person to change Claude's
+   own default.
+4. **Signed in to LinkedIn, and staying signed in** (`browser-pane-stay-signed-in`). Check:
+   the chat on the computer reads one LinkedIn page and writes its heartbeat
+   (`computer.py beat --linkedin in`).
+5. **The scheduled task** (`routines-local`): the chat on the computer makes it itself where
+   it can (`python3 tools/computer.py task` prints exactly what), so work still starts with
+   no cloud chat awake. Never asked of the person.
+6. **The test**: that chat reads one profile, then `python3 tools/computer.py ready --name
+   <the computer>` dates it in `profile/place.json`, which ends the upgrade card.
+
+Nothing about the app's behaviour is written into a chat's own memory: the person's settings
+live in `profile/`, and the start command reports any memory that disagrees with them
+(`computer.py memory`).
+
+### How the work reaches the computer (for Claude)
+
+Work that needs a LinkedIn read is `to: computer` and is refused to any cloud chat
+(`tools/page_db.py` `computer_only`). The page's helper runs `python3 tools/computer.py
+waiting` on each wake and, while something waits, `route`, which picks the first that works:
+a chat already on the computer; a chat started there from the cloud (`create_session` on the
+bridge, in Auto, titled `Job search · <job> · <computer>`, its prompt complete, its results
+back through the page and the copy and never `send_message`, archived by the helper once its
+work is finished); the scheduled task; a folder the computer offers (`folder-attach`); a cloud
+chat lent the computer's browser (`cloud-linked-browser`); and last, the page's one line and
+the paste. On the computer the work runs in the chat itself (`app.py next --kind computer
+--computer-only`), never as a background agent, which has no browser. Each run is measured
+from its own transcript (`computer.py measure`) and its heartbeat says how the computer is,
+so the page shows one line and, only while work waits on the person, one To do card.
 
 ## If something does not work
 

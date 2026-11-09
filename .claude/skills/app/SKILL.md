@@ -283,6 +283,18 @@ page waited on every tap (2026-10-29). `next` never hands one to this chat to ru
   on a computer, or a chat without that tool (`wake` with `--no-sessions`). Send the
   claim, then make the Agent call exactly as printed (`run_in_background: true`,
   `isolation: "worktree"`).
+- **Work for the computer** (a LinkedIn read: a networking run the page sent `to: computer`)
+  is never `next`'s for a cloud chat: the engine refuses its claim, finish and fail there.
+  After each `wake`, `python3 tools/computer.py waiting "$D"` (read `beats` with the rest).
+  Nothing printed: nothing to do. Under `queued`: `list_environments`, saved to a file, then
+  `python3 tools/computer.py route "$D" --chat <your id> --envs <that file> --tools "<this
+  chat's tool names, comma separated>"`, and do what it prints: a `call` exactly as printed,
+  then its `then`; `paste` needs nothing more, the page already says it. Under `finished`:
+  `archive_session` each, then `python3 tools/computer.py archived "$D" --work <its id>`, and
+  send the batch. Never `send_message` a chat on the computer: it reports through the page and
+  the copy. On the computer itself, `next --kind computer --computer-only` runs it in that
+  chat, which has the browser, never as an agent (COMPUTER.md, "How the work reaches the
+  computer").
 
 Never wait for either: go straight back to step 3 for the next item, so a search, a
 networking run and an interview prep run side by side (ten at most in the cloud, each in a chat of
