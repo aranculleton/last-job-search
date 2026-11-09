@@ -460,10 +460,14 @@ def route(db: dict, now: dt.datetime, chat: str = "", envs=None, folders=None,
         return {"route": "computer session", "work": wid, "computer": b["computer"],
                 "line": f"Starting on your {b['computer']}.", "call": call,
                 "then": (f"create_session with this call.{app_listen.MODE_REFUSED} Refused as "
-                         "elevated_session_untrusted_device: only in a chat no scheduled task "
-                         "fires into, call confirm_repository_trust with the content_digest the "
-                         "refusal gave (one card for the person, once), then the same call "
-                         "again; in any other chat, leave it for the scheduled task. Started: "
+                         "elevated_session_untrusted_device: list_triggers, saved to a file, then "
+                         "python3 tools/computer.py trust-check --chat <your id> --triggers <that "
+                         "file>, and do what it prints: approving ties this chat to the person's "
+                         "own devices for good, and a scheduled task bound to it then fails, so "
+                         "each is moved to a fresh chat a run first. Then "
+                         "confirm_repository_trust with the content_digest the refusal gave (one "
+                         "card for the person, once), python3 tools/computer.py trusted --chat "
+                         "<your id>, and the same create_session again. Started: "
                          f"python3 tools/computer.py started <dump> --work {wid} --session <its "
                          f"id> --env {b['id']} --computer \"{b['computer']}\", and send its "
                          "batch. Never send_message it: it reports through the page."),
@@ -680,12 +684,74 @@ def trend(today: dt.date, days: int = 7) -> str:
 # ------------------------------------------------------------------ the daily check
 
 
-def check(db: dict, now: dt.datetime, envs=None, version: str = "") -> list[str]:
+def _triggers(triggers) -> list[dict]:
+    if isinstance(triggers, dict):
+        triggers = triggers.get("triggers") or triggers.get("data") or []
+    return [t for t in triggers or [] if isinstance(t, dict)]
+
+
+def bound_to(chat: str, triggers) -> list[dict]:
+    """The scheduled tasks that are on and fire into `chat` (list_triggers' answer)."""
+    return [t for t in _triggers(triggers) if chat and t.get("persistent_session_id") == chat
+            and t.get("enabled", True) is not False]
+
+
+def trust_check(chat: str, triggers) -> list[str]:
+    """Before a chat approves computer access (confirm_repository_trust), which ties it to the
+    person's own devices for good: every scheduled task that fires into it is moved to a fresh
+    chat a run, or it fails from then on with access denied, the person told only by a
+    "routine failed" push (2026-11-09). The brief needs no connectors (claude_surfaces:
+    routine-connectors), so none are passed."""
+    tasks = bound_to(chat, triggers)
+    if not tasks:
+        return ["trust: ok, no scheduled task fires into this chat"]
+    out = []
+    for t in tasks:
+        call = {"name": t.get("name"), "prompt": t.get("prompt") or "<its prompt, as get_trigger "
+                "shows it>", "create_new_session_on_fire": True, "connectors": [],
+                "initiation": "own_followup"}
+        if t.get("cron_expression"):
+            call["cron_expression"] = t["cron_expression"]
+        elif t.get("run_once_at"):
+            call["run_once_at"] = t["run_once_at"]
+        out.append(f"move {t.get('id')}: create_trigger {json.dumps(call, ensure_ascii=False)}, "
+                   f"then update_trigger {{\"trigger_id\": \"{t.get('id')}\", \"enabled\": "
+                   "false}} (turned off and kept, never deleted)" +
+                   (", then python3 tools/routines.py record --trigger <the new id> --cron "
+                    f"\"{t['cron_expression']}\" --setup routines_screen"
+                    if "brief" in str(t.get("name") or "").lower() and t.get("cron_expression")
+                    else ""))
+    return out
+
+
+def trusted(chat: str, today: dt.date) -> str:
+    """Kept, dated, in profile/place.json: the chat that approved computer access, so the daily
+    check can see a scheduled task bound to it later."""
+    import person
+    import place
+    if not person.exists("person.json"):
+        return "trusted: no profile here, nothing written"
+    got = dict(place.place_record(), computer_trusted_chat=chat,
+               computer_trusted_on=today.isoformat())
+    with open(person.path(place.PLACE_FILE), "w", encoding="utf-8", newline="\n") as fh:
+        json.dump(got, fh, indent=2)
+        fh.write("\n")
+    return f"trusted: {chat} on {today.isoformat()}"
+
+
+def check(db: dict, now: dt.datetime, envs=None, version: str = "", triggers=None,
+          locked: str = "") -> list[str]:
     """What the day's sync and the brief say about the computer, for Claude: each line names
-    what is wrong and the one way back, or nothing at all when there is nothing to do."""
+    what is wrong and the one way back, or nothing at all when there is nothing to do.
+    `triggers`: list_triggers' answer; `locked`: the chat that approved computer access."""
     st = state(db, now, envs=envs, version=version)
     beat_ = heartbeat(db)
     out = []
+    for t in bound_to(locked, triggers):
+        out.append(f"computer: the scheduled task {t.get('name')!r} fires into a chat that "
+                   "approved computer access, so it fails; move it: python3 tools/computer.py "
+                   f"trust-check --chat {locked} --triggers <list_triggers saved>, and do what "
+                   "it prints.")
     if st["card"]:
         out.append(f"computer: work waits for the computer and the person is needed: "
                    f"{st['line']} The page's To do card says so; say it in one line.")
@@ -832,6 +898,7 @@ def main(argv=None) -> int:
         p = sub.add_parser(name)
         p.add_argument("dump")
         p.add_argument("--envs", default="", help="list_environments' answer, saved to a file")
+        p.add_argument("--triggers", default="", help="list_triggers' answer, saved to a file")
         p.add_argument("--now", default=None)
     p = sub.add_parser("route")
     p.add_argument("dump")
@@ -871,8 +938,20 @@ def main(argv=None) -> int:
     p.add_argument("--title", default="")
     p = sub.add_parser("ready", help="the computer side set up and tested: dated in place.json")
     p.add_argument("--name", required=True)
+    p = sub.add_parser("trust-check", help="before computer access is approved in this chat")
+    p.add_argument("--chat", required=True)
+    p.add_argument("--triggers", required=True, help="list_triggers' answer, saved to a file")
+    p = sub.add_parser("trusted", help="this chat approved computer access: kept, dated")
+    p.add_argument("--chat", required=True)
     a = ap.parse_args(argv)
+    if a.cmd == "trust-check":
+        print("\n".join(trust_check(a.chat, _load_json(a.triggers))))
+        return 0
     import page_db
+    if a.cmd == "trusted":
+        import person
+        print(trusted(a.chat, person.today()))
+        return 0
     if a.cmd in ("task", "task-check", "prompt", "ready"):
         import app_setup
         import person
@@ -889,7 +968,7 @@ def main(argv=None) -> int:
             owner, name = app_setup.origin()
             print(session_prompt(a.work, a.title or a.work, url,
                                  f"github.com/{owner}/{name}" if owner else "their job search"))
-        else:
+        elif a.cmd == "ready":
             print(ready(a.name, person.today()))
         return 0
     if a.cmd == "trend":
@@ -922,7 +1001,13 @@ def main(argv=None) -> int:
             print(json.dumps(w))
         return 0
     if a.cmd == "check":
-        for line in check(db, now, envs=_load_json(a.envs), version=app_version()):
+        try:
+            import place
+            locked = str(place.place_record().get("computer_trusted_chat") or "")
+        except Exception:  # noqa: BLE001
+            locked = ""
+        for line in check(db, now, envs=_load_json(a.envs), version=app_version(),
+                          triggers=_load_json(a.triggers), locked=locked):
             print(line)
         return 0
     if a.cmd == "route":

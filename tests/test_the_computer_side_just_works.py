@@ -337,3 +337,36 @@ def test_the_chats_it_starts_are_known_as_the_apps_by_their_name():
     assert title == "Job search · People at Harbourline Bank · Studio Laptop"
     assert tidy.APP_TITLE.match(title)
     assert not tidy.APP_TITLE.match("Holiday plans · Studio Laptop")
+
+
+# ------------------------------------------------------------------ B20, B22: scheduled tasks
+
+
+TRIGGERS = {"triggers": [
+    {"id": "trig_brief", "name": "Job search: morning brief", "persistent_session_id": "session_helper",
+     "cron_expression": "CRON_TZ=America/Vancouver 38 7 * * *", "enabled": True, "prompt": "brief"},
+    {"id": "trig_other", "name": "Job search: first brief", "persistent_session_id": "session_other",
+     "run_once_at": "2026-10-26T09:00:00Z", "enabled": True},
+    {"id": "trig_off", "name": "Old task", "persistent_session_id": "session_helper", "enabled": False}]}
+
+
+def test_computer_access_is_never_approved_where_a_scheduled_task_fires():
+    """Approving computer access ties the chat to the person's devices for good, and a brief
+    bound to it then failed with access denied (2026-11-09): each task is moved first to a
+    fresh chat a run, with no connectors (the brief needs none), the old one turned off."""
+    moves = computer.trust_check("session_helper", TRIGGERS)
+    assert len(moves) == 1 and moves[0].startswith("move trig_brief: create_trigger ")
+    call = json.loads(moves[0].split("create_trigger ", 1)[1].split(", then update_trigger")[0])
+    assert call["create_new_session_on_fire"] is True and call["connectors"] == []
+    assert call["cron_expression"].startswith("CRON_TZ=") and "persistent_session_id" not in call
+    assert '"enabled": false' in moves[0] and "--setup routines_screen" in moves[0]
+    assert computer.trust_check("session_fresh", TRIGGERS) == [
+        "trust: ok, no scheduled task fires into this chat"]
+    # The daily check spots a task bound to the chat that approved it.
+    lines = computer.check(_db(), T, triggers=TRIGGERS, locked="session_helper")
+    assert any("morning brief" in ln and "trust-check" in ln for ln in lines)
+    assert computer.check(_db(), T, triggers=TRIGGERS, locked="") == []
+    got = computer.route(_db(("n1", _w("network", to="computer"))), T, envs=BRIDGE,
+                         tools=["create_session"])
+    assert "trust-check" in got["then"] and got["then"].index("trust-check") < \
+        got["then"].index("confirm_repository_trust")
