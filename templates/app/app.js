@@ -4513,6 +4513,10 @@
     // An answer is its own result, written with the finish: never "putting it on your page"
     // (the maintainer, 2026-11-05, a squashed work card saying so over an answer shown under it).
     if (txt(obj(w).kind) === "talk") return false;
+    // Nor work that changed nothing (`done --outcome`): there is nothing to put on the page, and
+    // it said "Putting on page" with "Open in Contacts" for three minutes (the screen review,
+    // 2026-11-09).
+    if (unchangedWork(w)) return false;
     const fin = tms(obj(w).finished_at);
     // The page's data is as new as its newest part: a section a chat wrote live after the work
     // finished carries its result, so Done is said then, not three minutes on.
@@ -7408,16 +7412,29 @@
   // the page: a page update follows the finish within minutes, and a spinner that waited two
   // hours for a change that never came read as stuck (2026-11-09).
   const FINISHING_MS = 15 * 60000;
+  // How long a change that changed nothing is said on its card, before it folds away.
+  const UNCHANGED_SAID_MS = 2 * 3600000;
   // Work that finished and changed nothing on the page (`app.py done --outcome`), in its card's
-  // words: {words, line}, or null. Its line is Claude's own answer where it wrote one, else the
-  // summary.
-  const UNCHANGED_WORDS = {held: "Held", set_aside: "Set aside", unchanged: "Not changed"};
+  // words: {words, line, next, why}, or null. `next` says what happens now where the outcome
+  // says it; `why` is Claude's own answer where it wrote one, else the summary, its outcome word
+  // dropped where it leads ("Held · Held until she answers ..." said it twice); `line` is the
+  // one of them a single line has room for. "Held" and "Set aside" were the engine's words
+  // (the screen review, 2026-11-09).
+  const UNCHANGED_WORDS = {held: "Not sent for now", set_aside: "Not sent for now", unchanged: "Kept as it was"};
+  const UNCHANGED_NEXT = {held: "Nothing to send until they reply."};
+  const OUTCOME_LEAD = /^(?:held|set aside|not changed|kept as it was|not sent for now)\b[\s:·,;.-]*/i;
   function unchangedWork(w) {
     const r = obj(obj(w).result);
-    const words = UNCHANGED_WORDS[txt(r.outcome)];
+    const o = txt(r.outcome);
+    const words = UNCHANGED_WORDS[o];
     if (!words) return null;
-    const line = firstSentence(txt(r.answer)) || firstSentence(txt(r.summary));
-    return {words, line: line ? cap1(line.replace(/[.\s]+$/, "")) + "." : ""};
+    const said = firstSentence(txt(r.answer)) || firstSentence(txt(r.summary));
+    const rest = said.replace(OUTCOME_LEAD, "");
+    // "Held until she answers ..." with its word gone is a fragment: the next step says it.
+    const fragment = rest !== said && /^(?:until|while|because|as|since|for)\b/i.test(rest);
+    const why = rest && !fragment ? cap1(rest.replace(/[.\s]+$/, "")) + "." : "";
+    const next = UNCHANGED_NEXT[o] || "";
+    return {words, next, why, line: next || why};
   }
   function personGoing(p) {
     const t = replyTap(p);
@@ -7456,7 +7473,7 @@
       // (2026-11-09).
       if (st === "done" && (txt(w[1].kind) === "tweak" || unchangedWork(w[1]))) {
         const u = unchangedWork(w[1]);
-        return u && ended < 2 * 3600000 ? {work: w[0], words: u.words, line: u.line, spin: false, tone: "held", stopped: true} : null;
+        return u && ended < UNCHANGED_SAID_MS ? {work: w[0], words: u.words, line: u.line, spin: false, tone: "held", stopped: true} : null;
       }
       // Written, and the draft not on the page yet: said, and shown the moment it arrives; a
       // page update comes within minutes, so after FINISHING_MS it is not waited for.
@@ -7498,9 +7515,13 @@
     const ctl = go.cancel ? stopClaude("the message to " + name, go.cancel, "rgo-cancel:" + p.id)
       : go.retry ? btn("Try again", go.retry, {kind: "link", small: true, key: "rgo-retry:" + p.id, aria: "Try the reply to " + name + " again"}) : null;
     const dot = go.tone === "bad" || go.tone === "held" ? "tone-" + go.tone : "tone-plain is-waiting";
+    // The "·" stays with the word, so a line that wraps never starts with it (the screen
+    // review, 2026-11-09: "· Set her draft aside" under "Set aside").
+    const said = !!go.line && txt(go.line) !== txt(go.words);
     return h("p", {class: "going small" + (go.tone ? " tone-" + go.tone : ""), "data-going": p.id, role: "status"},
       go.spin ? h("span", {class: "spin", "aria-hidden": "true"}) : h("span", {class: "dot " + dot, "aria-hidden": "true"}), " ",
-      h("span", {class: "going-word"}, go.words), go.line && txt(go.line) !== txt(go.words) ? h("span", {class: "muted"}, " · " + txt(go.line)) : null, ctl ? " " : null, ctl);
+      h("span", {class: "going-word"}, go.words, said ? h("span", {class: "going-sep"}, " ·") : null), said ? h("span", {class: "muted"}, " " + txt(go.line)) : null,
+      ctl ? " " : null, ctl);
   }
   // The rare question a reply's work stopped on (the work's `needs`: {question, about, answer:
   // {kind, choices, min, max}}), asked on that person's card in its one soft grey box, in place
@@ -9216,8 +9237,17 @@
     // (a held change's spinner turned for two hours, 2026-11-09).
     const u = unchangedWork(w);
     if (u) {
+      // Said for as long as the person's own card says it (personGoing, two hours), then
+      // folded to "Claude answered <day> · Show": "Not changed." stayed under a draft for good
+      // (the screen review, 2026-11-09).
+      const fin = txt(w.finished_at || w.done_at);
+      if (now() - (tms(fin) || 0) >= UNCHANGED_SAID_MS && openState.get("tw-show:" + id) !== true) {
+        return answer ? h("p", {class: "small muted tweak-done", "data-tweak-done": id}, "Claude answered " + fmtDay(fin) + " · ",
+          btn("Show", () => { openState.set("tw-show:" + id, true); scheduleRender(); }, {kind: "link", small: true, key: "tw-show:" + id, aria: "Show Claude's answer about this change"})) : null;
+      }
+      const line = u.next || (answer ? "" : u.why);
       return h("div", {class: "tweak-done", "data-tweak-done": id},
-        h("p", {class: "small", role: "status"}, u.words + (u.line && !answer ? " · " + u.line : ".")), answer);
+        h("p", {class: "small", role: "status"}, u.words + (line ? " · " + line : ".")), answer);
     }
     // "New version" only once the new words are on this card: the work says done before the
     // page has the rewritten draft, and the card said "New version" over the old words, word
@@ -12860,7 +12890,11 @@
     if (!workSeenAt.has(id)) workSeenAt.set(id, now());
     const pl = workPlace(w);
     const titleId = "w-" + seg(id);
-    const sum = firstSentence(txt(obj(w.result).summary));
+    // Its one-line result: how a change that changed nothing ended, else the summary, else
+    // Claude's answer; the row showed nothing for an answer with no summary (the screen
+    // review, 2026-11-09).
+    const u = unchangedWork(w);
+    const sum = u ? u.words + (u.line ? " · " + u.line : "") : firstSentence(txt(obj(w.result).summary)) || firstSentence(txt(obj(w.result).answer));
     const r = pl.tab ? resolveSection(pl.tab) || {section: pl.tab} : null;
     const where = pl.tab ? TAB_WORDS[pl.tab] || TAB_WORDS[r.section] || labelOf(r.section) : "";
     const open = () => { workSeenAt.set(id, 0); if (r) go(r.section, {focus: !pl.item, drafts: r.drafts, item: pl.item || null}); };
@@ -12889,7 +12923,7 @@
     else if (st === "stopped") now1 = "Stopped. Anything already saved is kept.";
     else if (st === "failed") now1 = (typeof w.error === "string" ? w.error : txt(obj(w.error).plain)) || "It stopped part way. Anything already saved is kept.";
     else if (st === "needs_you") now1 = txt(obj(obj(w.needs).answer).kind) && txt(obj(obj(w.needs).answer).kind) !== "text" ? "" : txt(w.note) || "It has a question for you.";
-    else if (st === "done") now1 = firstSentence(txt(obj(w.result).summary));
+    else if (st === "done") now1 = firstSentence(txt(obj(w.result).summary)) || firstSentence(txt(obj(w.result).answer));
     // An update to the app is never stopped half way (the 3 November audit).
     // A batch is stopped, and tried again, from its first item, whose Stop names them all.
     const crew = lead ? [] : batchOf(id).filter((m) => ACTIVE.has(txt(obj(workDoc(m)).status)));

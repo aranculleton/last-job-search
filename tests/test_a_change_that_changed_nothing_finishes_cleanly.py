@@ -46,18 +46,20 @@ def _held(outcome="held", rev="m1", finished="2026-10-25T08:58:00.000Z", answer=
 def test_a_held_change_says_held_at_once_with_no_spinner(run, tmp_path):
     got = _go(run, tmp_path, [{"hash": "contacts", "eval": PEN}], WIDE, seed=_held(), clock=T)
     done = got["after"][0]["eval"]["done"]
-    assert done.startswith("Held · Held until she answers"), done
+    # In the person's words, then what happens next; never the engine's "Held" (the screen
+    # review, 2026-11-09).
+    assert done == "Not sent for now · Nothing to send until they reply.", done
     assert "putting" not in done and "New version" not in done, done
     spin = got["after"][0]["eval"]
     assert spin["stop"] == 0, spin
 
 
 def test_a_change_set_aside_or_not_possible_says_so(run, tmp_path):
-    for outcome, words in (("set_aside", "Set aside"), ("unchanged", "Not changed")):
+    for outcome, words in (("set_aside", "Not sent for now"), ("unchanged", "Kept as it was")):
         got = _go(run, tmp_path, [{"hash": "contacts", "eval": PEN}], WIDE, seed=_held(outcome), clock=T)
         done = got["after"][0]["eval"]["done"]
         assert done.startswith(words), (outcome, done)
-        assert "putting" not in done, done
+        assert "putting" not in done and "Held" not in done, done
 
 
 def test_a_written_answer_to_a_change_shows_on_its_card(run, tmp_path):
@@ -65,7 +67,7 @@ def test_a_written_answer_to_a_change_shows_on_its_card(run, tmp_path):
     got = _go(run, tmp_path, [{"hash": "contacts", "eval": PEN}], WIDE,
               seed=_held("unchanged", answer=said), clock=T)
     done = got["after"][0]["eval"]["done"]
-    assert done.startswith("Not changed") and said in done, done
+    assert done.startswith("Kept as it was") and said in done, done
 
 
 def test_a_finished_change_stops_spinning_once_a_page_update_is_overdue(run, tmp_path):
@@ -98,4 +100,75 @@ def test_a_change_that_left_no_draft_never_says_reply_written(run, tmp_path):
         assert "Reply written" not in r["text"] and "Putting it on your page" not in r["text"], r
         assert not r["spin"], r
         if outcome:
-            assert r["going"].startswith("Set aside"), r
+            assert r["going"].startswith("Not sent for now"), r
+
+
+def test_a_change_that_changed_nothing_folds_away_after_two_hours(run, tmp_path):
+    """"Not changed." stayed under a draft for good; after the two hours the person's card says
+    it, it folds to "Claude answered <day> · Show" (the screen review, 2026-11-09)."""
+    said = "Her last message asked for a call, so a shorter note would drop the one thing she wanted."
+    later = "2026-10-25T11:30:00.000Z"
+    got = _go(run, tmp_path, [{"hash": "contacts", "eval": PEN},
+                              {"open": "tw-show:tweak~msg-juno-1~x", "eval": PEN}], WIDE,
+              seed=_held("unchanged", answer=said), clock=later)
+    folded, shown = got["after"][0]["eval"]["done"], got["after"][1]["eval"]["done"]
+    assert folded.startswith("Claude answered") and "25 Oct" in folded and said not in folded, folded
+    assert shown.startswith("Kept as it was") and said in shown, shown
+    got = _go(run, tmp_path, [{"hash": "contacts", "eval": PEN}], WIDE, seed=_held(), clock=later)
+    assert got["after"][0]["eval"]["done"] == "", got["after"][0]["eval"]
+
+
+LINE = ("(() => { const g = document.querySelector('[data-going=\"%s\"]'); if (!g) return null;"
+        " const kids = [...g.children].filter((e) => e.getClientRects().length);"
+        " const lines = []; for (const e of kids) { for (const b of e.getClientRects()) {"
+        " const top = Math.round(b.top); let l = lines.find((x) => Math.abs(x.top - top) < 4);"
+        " if (!l) lines.push(l = {top, first: e.textContent}); } }"
+        " return {text: g.textContent.replace(/\\s+/g, ' ').trim(),"
+        " starts: lines.sort((a, b) => a.top - b.top).map((l) => l.first.trim())}; })()" % JUNO)
+
+
+@pytest.mark.parametrize("vp", [WIDE, journeys.PHONE], ids=["wide", "phone"])
+def test_her_cards_line_says_it_once_and_no_line_starts_with_a_dot(run, tmp_path, vp):
+    """"Held · Held until she answers ..." said its word twice, and on a phone the wrapped line
+    began "· Set her draft aside" (the screen review, 2026-11-09)."""
+    model = copy.deepcopy(journeys._sample())
+    model["messages"] = [m for m in model.get("messages") or [] if m.get("contact") != JUNO]
+    seed = _held("set_aside")
+    seed["work/tweak~msg-juno-1~x"]["result"]["summary"] = \
+        "Set aside: she has two unanswered messages already."
+    got = _go(run, tmp_path, [{"hash": "contacts", "eval": LINE}], vp, model=model, seed=seed,
+              clock=T)
+    r = got["after"][0]["eval"]
+    assert r["text"] == "Not sent for now · She has two unanswered messages already.", r
+    assert not any(x.startswith("·") for x in r["starts"]), r
+
+
+WORK = ("[...document.querySelectorAll('[data-work]')].filter((e) => e.getClientRects().length)"
+        ".map((e) => ({id: e.getAttribute('data-work'), phase: e.getAttribute('data-phase'),"
+        " text: e.textContent.replace(/\\s+/g, ' ').trim()}))")
+SHOW = ("(() => { const b = [...document.querySelectorAll('button')].filter((e) =>"
+        " e.textContent.trim() === 'Show' && e.getClientRects().length).pop(); if (b) b.click();"
+        " return !!b; })()")
+
+
+def test_claudes_work_finishes_a_change_that_changed_nothing_at_once_with_its_result(run, tmp_path):
+    """Claude's work said "Putting on page" with "Open in Contacts" for three minutes over a
+    change that changed nothing, and the finished row lost Claude's answer (the screen
+    review, 2026-11-09)."""
+    answer = "Her last message asked for a call, so a shorter note would drop the one thing she wanted."
+    seed = _held("unchanged", answer=answer, finished="2026-10-25T08:59:00.000Z")
+    seed["work/tweak~msg-juno-1~x"]["result"]["summary"] = ""
+    w2 = copy.deepcopy(seed["work/tweak~msg-juno-1~x"])
+    w2["title"] = "Edit message: Kit at Harbourline"
+    w2["finished_at"] = "2026-10-25T08:40:00.000Z"
+    w2["result"] = {"links": [], "summary": "",
+                    "answer": "Yes: the team is in the office three days a week."}
+    seed["work/tweak~msg-kit-1~y"] = w2
+    got = _go(run, tmp_path, [{"hash": "contacts", "wait": 300},
+                              {"eval": SHOW}, {"wait": 300, "eval": WORK}], WIDE, seed=seed, clock=T)
+    rows = {x["id"]: x for x in got["after"][-1]["eval"]}
+    juno, kit = rows.get("tweak~msg-juno-1~x"), rows.get("tweak~msg-kit-1~y")
+    assert juno and juno["phase"] == "done", rows
+    assert "Putting on page" not in juno["text"] and "Open in" not in juno["text"], juno
+    assert "Kept as it was · Her last message asked for a call" in juno["text"], juno
+    assert kit and "Yes: the team is in the office three days a week." in kit["text"], kit
