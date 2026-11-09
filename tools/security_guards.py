@@ -199,7 +199,7 @@ ALLOWED_IGNORE_NEGATIONS = {
 # executed on session start:
 # https://research.jfrog.com/post/shai-hulud-is-back-august/
 LEARNED_HOOK = 'sh "${CLAUDE_PROJECT_DIR}"/tools/py.sh "${CLAUDE_PROJECT_DIR}"/tools/learned.py hook'
-ALLOWED_HOOKS: set[str] = {f"UserPromptSubmit:{LEARNED_HOOK}", f"Stop:{LEARNED_HOOK}"}
+ALLOWED_HOOKS: set[str] = {f"UserPromptSubmit:{LEARNED_HOOK}", f"Stop:{LEARNED_HOOK}", f"PostToolUse:{LEARNED_HOOK}"}
 
 FORBIDDEN_SCRIPTS = {"preinstall", "install", "postinstall", "prepare", "prepack"}
 
