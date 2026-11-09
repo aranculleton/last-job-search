@@ -1,7 +1,7 @@
 {
  "model": 1,
  "made_at": "2026-10-25T18:00:00Z",
- "rev": "15baa0c62e7b",
+ "rev": "c977c41864d2",
  "app": {
   "version": "4.13.0",
   "url": null,
@@ -77,7 +77,7 @@
  ],
  "jobs": {
   "round": "r9",
-  "made_at": "2026-11-09T17:48:37Z",
+  "made_at": "2026-11-09T18:04:39Z",
   "met": false,
   "summary": "3 roles from the last search to look at, 1 of them scoring 75 or more. 3 left out, each with its reason.",
   "rows": [
@@ -679,6 +679,7 @@
    "why": "You studied at the same place",
    "due": null,
    "hold": null,
+   "work_to": "either",
    "rev": "2ca9b4fd8d83",
    "wave": "w2026-43",
    "wave_label": "First notes to send",
@@ -1009,7 +1010,7 @@
    "when": "2026-10-28",
    "prep": {
     "path": "documents/applications/thornbury_bank_risk_analyst_thornbury/interview_prep.md",
-    "updated": "2026-11-09T17:48:37Z"
+    "updated": "2026-11-09T18:04:39Z"
    },
    "questions": 2,
    "all_day": true,

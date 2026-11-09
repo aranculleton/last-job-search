@@ -344,7 +344,10 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   words, never at the card's far edge; "New version" only once the new words are on the card.
   Words in one note's box about every note waiting for a profile, or naming the others, are
   done for them all (`tweak.about_others`: each put on the page's reading list) and this note
-  is left as it was; the block says so in a line, never "New version" (2026-11-09). Why: everything opening the Chat clogged it with tasks, and an answer
+  is left as it was; the block says so in a line, never "New version" (2026-11-09).
+  Work about a note waiting for a profile read is the computer's (`page_db.needs_computer`,
+  the message's `work_to`): its line says "Waiting for the Claude app on your computer",
+  never a cloud chat's wait. Why: everything opening the Chat clogged it with tasks, and an answer
   belongs where its question was asked (the maintainer, 2026-11-05: "it opens a text box UNDER
   THAT PARTICULAR THING IM QUERYING ... and then the response shows underneath"; More test)
 - The same box serves an ask that belongs to a place rather than a card (`PLACES`): Paste a

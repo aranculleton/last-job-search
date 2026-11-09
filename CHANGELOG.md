@@ -70,6 +70,10 @@ make sense to somebody whose repo just received it.
   half a minute at most, then "Waiting for Claude, asked at 10:42", never a clock running under
   "starting in a moment". Asked about every note waiting for a profile from one note's pencil,
   Claude puts them all on your page's reading list and leaves that note as it is, and says so.
+- **Work on a note waiting for someone's profile waits for the Claude app on your computer.**
+  A chat in the cloud cannot read LinkedIn, yet one took a change asked on such a note and
+  closed it as done, so the chat on your computer never saw it. Now that work is the
+  computer's, its card says it waits there, and a cloud chat never takes it or closes it.
 - **A character count is grey while the message fits.** It turns amber only while you are
   editing and are close to the limit, and red over it: "291 of 300 characters" read as a warning.
 
