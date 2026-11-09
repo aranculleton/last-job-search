@@ -236,6 +236,7 @@ ALLOWED_ENV = {"PYTHONUTF8": "1", "GIT_TERMINAL_PROMPT": "0", "GCM_INTERACTIVE":
 ALLOWED_SKILL_TOOLS = {
     ".claude/skills/app/SKILL.md": {
         "Read", "Bash(python3 tools/app.py *)", "Bash(python3 tools/routines.py *)",
+        "Bash(python3 tools/computer.py *)", "mcp__claude-code-remote__list_environments",
         "Bash(python3 tools/tidy.py *)", "ArtifactData", "Artifact", "ArtifactComments", "Agent",
         "mcp__claude-code-remote__create_session", "mcp__claude-code-remote__send_message",
         "mcp__claude-code-remote__list_sessions", "mcp__claude-code-remote__get_session",

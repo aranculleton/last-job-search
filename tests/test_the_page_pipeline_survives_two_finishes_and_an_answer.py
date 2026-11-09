@@ -82,7 +82,10 @@ def read(r, name, *args, now=NOW):
     for line in said.splitlines()[1:]:
         if line.startswith("{"):
             listing += query(r, out, json.loads(line))
-    assert "app.py versions" in said, said
+    # Where the app's hook is registered it keeps the versions after the read by itself and
+    # `reads` asks for no step; here, with no Claude to run it, the test does what it does.
+    import page_db
+    assert page_db.hook_keeps_versions() or "app.py versions" in said, said
     code, out_said = app_in(r, "versions", out, text="\n".join(listing))
     assert code == 0, out_said
     return out
