@@ -160,6 +160,54 @@ def test_the_page_shows_the_computer_in_one_line(age, facts, envs, want):
         assert st["action"]["steps"] and all(s[:1].isdigit() for s in st["action"]["steps"])
 
 
+def test_the_card_names_what_waits_and_puts_its_one_step_on_its_face():
+    """The screen review (2026-11-09): the card said "Waiting for your computer: LinkedIn is
+    signed out in Claude's browser on your computer: sign in there once." (two colons, "your
+    computer" twice, never what waited) over one button, Done."""
+    work = ("network~people", _w("network", "Harbourline Bank", to="computer",
+                                 title="People at Harbourline Bank",
+                                 asked="2026-10-25T17:00:00Z"))
+    st = computer.state(dict(_db(work), chats=_beat(linkedin="out")), T, envs=BRIDGE)
+    card = computer.card(st)
+    assert card["body"] == ("“People at Harbourline Bank” waits until you sign in to "
+                            "LinkedIn in Claude's browser. Open LinkedIn and sign in once.")
+    assert card["body"].count(":") == 0 and card["body"].count("your computer") <= 1
+    assert card["browser"] == {"label": "Open LinkedIn", "url": "https://www.linkedin.com/login"}
+    assert [o["label"] for o in card["options"]] == ["Done"]
+    # Off: Claude being open again is seen by itself, so there is nothing to confirm.
+    off = computer.state(dict(_db(work), chats=_beat(age_s=5 * 3600)), T)
+    assert off["state"] == "off"
+    card = computer.card(off)
+    assert card["body"].startswith("“People at Harbourline Bank” waits until Claude is open")
+    assert card["options"] == [] and "browser" not in card
+    two = dict(_db(work, ("network~more", _w("network", "Fernhill Freight", to="computer",
+                                              title="People at Fernhill Freight",
+                                              asked="2026-10-25T17:30:00Z"))),
+               chats=_beat(linkedin="out"))
+    assert computer.card(computer.state(two, T, envs=BRIDGE))["body"].startswith(
+        "“People at Harbourline Bank” and 1 more wait until")
+    for key, said in computer.WAITING_SAY.items():
+        assert said.count(".") == 2 and ":" not in said, key
+
+
+def test_settings_row_never_says_tap_done_where_there_is_no_done(tmp_path, monkeypatch):
+    import person
+    s = Search(str(tmp_path))
+    monkeypatch.setenv(person.ENV, s.profile)
+    monkeypatch.setenv(person.STATE_ENV, s.state)
+    person._modules.clear()
+    person._data.clear()
+    work = ("network~people", _w("network", "Harbourline Bank", to="computer",
+                                 asked="2026-10-25T17:00:00Z"))
+    st = computer.state(dict(_db(work), chats=_beat(linkedin="out")), T, envs=BRIDGE)
+    assert any("tap Done" in s for s in st["action"]["steps"])      # the card's own steps
+    model, _ = app_model.build(T.date(), T, only=("where",), computer=st)
+    steps = model["where"]["computer"]["steps"]
+    assert steps and not any("Done" in s for s in steps), steps
+    person._modules.clear()
+    person._data.clear()
+
+
 def test_one_card_only_while_computer_work_waits_and_the_person_is_needed():
     work = ("network~people", _w("network", "Harbourline Bank", to="computer",
                                  asked="2026-10-25T17:00:00Z"))
@@ -537,3 +585,63 @@ def test_the_apps_hook_keeps_each_reads_versions_so_no_step_is_asked():
     assert page_db.hook_keeps_versions() is True
     assert page_db.versions_step("$D") == ""
     assert "app.py versions" in page_db.VERSIONS_STEP
+
+
+# ------------------------------------------------------------------ on the page
+
+PAGE = r"""(() => { const t = (e) => e ? e.textContent.replace(/\s+/g, ' ').trim() : null;
+  const groups = [...document.querySelectorAll('section.set-group')];
+  const li = groups.find((g) => /^LinkedIn/.test(t(g.querySelector('h3')) || ''));
+  const row = document.querySelector('[data-k="info-sum:computer"]');
+  const where = document.querySelector('[data-k="info-sum:where"]');
+  return {inLinkedIn: !!(li && row && li.contains(row)), row: t(row), where: t(where),
+    inWhere: !!document.querySelector('details.set-advanced [data-where="computer"]'),
+    steps: [...document.querySelectorAll('[data-where="computer"] li')].map(t)}; })()"""
+CARD = r"""(() => { const c = document.querySelector('[data-item="q-setup-computer"]'); if (!c) return null;
+  return {body: c.querySelector('.body').textContent, pills: [...c.querySelectorAll('.card-actions > button, .card-actions > a')]
+    .map((b) => [b.textContent.replace(/\s+/g, ' ').trim(), b.classList.contains('primary') || b.classList.contains('next')])}; })()"""
+
+
+@pytest.fixture(scope="module")
+def run():
+    import test_the_page_journeys as journeys
+    yield from journeys.browser()
+
+
+def test_the_page_draws_the_computer_once_under_linkedin_and_its_card_with_its_step(
+        run, tmp_path, monkeypatch):
+    """The screen review (2026-11-09): the card had only Done on its face; Settings put the
+    computer under Advanced > Where Claude works, its summary saying Ready over a sign-in
+    needed, and its last step said "tap Done" where there was none."""
+    import app_page
+    import person
+    import test_the_page_journeys as journeys
+    s = Search(str(tmp_path / "copy"))
+    monkeypatch.setenv(person.ENV, s.profile)
+    monkeypatch.setenv(person.STATE_ENV, s.state)
+    person._modules.clear()
+    person._data.clear()
+    work = ("network~people", _w("network", "Harbourline Bank", to="computer",
+                                 title="People at Harbourline Bank",
+                                 asked="2026-10-25T17:00:00Z"))
+    st = computer.state(dict(_db(work), chats=_beat(linkedin="out")), T, envs=BRIDGE)
+    built, _ = app_model.build(T.date(), T, only=("needs_you", "where"), computer=st)
+    person._modules.clear()
+    person._data.clear()
+    m = journeys._sample()
+    m["where"] = dict(m["where"], computer=built["where"]["computer"])
+    m["needs_you"] = [c for c in built["needs_you"] if c["id"] == "q-setup-computer"] + \
+        list(m.get("needs_you") or [])
+    path = os.path.join(str(tmp_path), "page.html")
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(app_page.standalone(app_page.render(m)))
+    got = run("engine", html=path, viewport=journeys.WIDE, steps=[
+        {"hash": "settings", "open": "info-sum:computer", "eval": PAGE},
+        {"hash": "todo", "eval": CARD}], seed={}, fake={"canSend": "available"}, clock=NOW)
+    assert not got["errors"], got["errors"]
+    page, card = got["after"][0]["eval"], got["after"][1]["eval"]
+    assert page["inLinkedIn"] and not page["inWhere"], page
+    assert page["row"] == "Claude on your computerSign in once", page
+    assert page["steps"] and not any("Done" in x for x in page["steps"]), page
+    assert card and card["body"].startswith("“People at Harbourline Bank” waits"), card
+    assert card["pills"][:2] == [["Open LinkedIn", True], ["Done", False]], card

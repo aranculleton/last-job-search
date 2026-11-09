@@ -10768,22 +10768,26 @@
       // A chat on the computer is never offered: the cloud answers the page, and the computer
       // only reads LinkedIn, through this page (the maintainer, 2026-10-29). One already
       // listening still shows, so the person can see it.
-      st.computer === "ready" ? row("computer", "Claude on your computer", st.computer, st.say.computer || "Answers only what needs your computer.", null) :
-        // The computer's own state, from its heartbeat (tools/computer.py): one line, and the
-        // registry's steps only where the person is needed. "optional" is someone who never
-        // said they have one: nothing is shown.
-        COMPUTER_WORDS[st.computer] ? computerRow(st) : null,
+      // The computer's own state when it needs the person is under LinkedIn (computerRow).
+      st.computer === "ready" ? row("computer", "Claude on your computer", st.computer, st.say.computer || "Answers only what needs your computer.", null) : null,
       tidiedLine());
   }
   const COMPUTER_WORDS = {off: ["Off", null], gone: ["Not seen this week", "warn"], signed_out: ["Sign in once", "warn"], forgets: ["Signs out when closed", "warn"],
     paused: ["Paused", null], no_bridge: ["Not switched on", "warn"], not_set_up: ["Not set up", "warn"], no_computer: ["No computer", null]};
-  function computerRow(st) {
-    const [word, tone] = COMPUTER_WORDS[st.computer];
+  // The computer's own state, from its heartbeat (tools/computer.py): one line, and the
+  // registry's steps only where the person is needed. "optional" is someone who never said
+  // they have one: nothing is shown. The computer only reads LinkedIn, so its one home is
+  // Settings > LinkedIn beside "Let Claude read LinkedIn profiles", its word on the folded row;
+  // under Advanced > Where Claude works it sat below a summary saying Ready while it needed a
+  // sign-in (the screen review, 2026-11-09).
+  function computerRow() {
+    const st = whereState();
+    if (!COMPUTER_WORDS[st.computer]) return null;
+    const [word] = COMPUTER_WORDS[st.computer];
     const steps = st.computerSteps;
-    return h("li", {class: "task where-computer", "data-where": "computer"},
-      h("div", {class: "task-head"}, h("span", {class: "task-name"}, "Claude on your computer"), stateWord(word, tone)),
+    return infoRow("computer", "Claude on your computer", word, h("div", {class: "where-computer", "data-where": "computer"},
       st.say.computer ? h("p", {class: "small muted"}, st.say.computer) : null,
-      steps.length ? h("ol", {class: "setup-steps"}, steps.map((s) => h("li", {}, unnumber(txt(s))))) : null);
+      steps.length ? h("ol", {class: "setup-steps"}, steps.map((s) => h("li", {}, unnumber(txt(s))))) : null));
   }
   // The same link "Claude isn't listening" opens: a chat that runs the start command and
   // becomes the one that answers the page. A wording of its own reached no instructions.
@@ -14399,7 +14403,7 @@
     if (cal.length) put(wrap, settingsGroup("Coming up", cal));
     // Look: how the page looks and is used here, harmless to change (the maintainer, 4.12).
     put(wrap, settingsGroup("Look", [lookRow(), sizeRow(), window.innerWidth >= 760 ? sideRow() : null, touchOnly() ? null : keysRow()]));
-    put(wrap, settingsGroup("LinkedIn", linkedinRows().concat(pick(["profile_reads"]).map((s) => settingRow(s, txt(settingValue(s)) === "paste" ? null : readingBody())), pick(["linkedin_plan"]).map((s) => settingRow(s)))));
+    put(wrap, settingsGroup("LinkedIn", linkedinRows().concat(pick(["profile_reads"]).map((s) => settingRow(s, txt(settingValue(s)) === "paste" ? null : readingBody())), [computerRow()], pick(["linkedin_plan"]).map((s) => settingRow(s)))));
     put(wrap, settingsGroup("Help", [actionRow("Show me around", () => showTour(0), "help-tour"),
       // The chat bubble, where the person is, rather than taking them away to Chat (2026-10-30).
       actionRow("Ask Claude how something works", () => openDock({text: "How does "}), "help-how"),

@@ -4778,7 +4778,11 @@ def _where(ctx: Ctx, targets: dict) -> dict:
         computer_row = {"state": "ready" if seen["state"] in ("ready", "working") else
                         seen["state"], "since": computer, "say": seen["line"],
                         "name": seen.get("computer") or None,
-                        "steps": (seen.get("action") or {}).get("steps") or [],
+                        # The registry's page steps end "tap Done", the To do card's own
+                        # button: Settings' row has no Done, so that step is not said there
+                        # (the screen review, 2026-11-09).
+                        "steps": [s for s in (seen.get("action") or {}).get("steps") or []
+                                  if "tap Done" not in s],
                         "action": (seen.get("action") or {}).get("label") or None}
     try:
         reg = routines.load()
