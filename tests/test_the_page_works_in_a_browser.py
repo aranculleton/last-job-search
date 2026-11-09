@@ -286,7 +286,7 @@ def test_the_owner_sees_the_page_and_anyone_else_sees_only_a_private_notice(run,
     _clean(own)
     assert own["shellShown"] and not own["privateShown"] and not own["opening"]
     # It opens on the Brief, greeting the person by name (4.3).
-    assert own["heading"] == "Good morning, Morgan" and own["cards"] >= 4
+    assert GREETING.fullmatch(own["heading"]) and own["cards"] >= 4
     assert own["brand"] == "Morgan’s job search"
     # One card, one thing (4.3): today's To do cards that still need the person, the number
     # To do's own summary leads with.
@@ -307,19 +307,30 @@ def test_the_owner_sees_the_page_and_anyone_else_sees_only_a_private_notice(run,
     assert "open it in the Claude app" in no_app["bodyText"]
 
 
+def test_the_greeting_follows_the_clock_of_the_device_it_is_read_on(run, pages):
+    """21:30 in London is evening there, whatever zone the profile names: the profile's zone
+    said "Good afternoon" at 10pm to a person away from home (the maintainer, 2026-11-09)."""
+    london = run("paint", html=pages["sample"], clock="2026-10-25T21:30:00Z",
+                 timezoneId="Europe/London")
+    toronto = run("paint", html=pages["sample"], clock="2026-10-25T21:30:00Z",
+                  timezoneId="America/Toronto")
+    assert london["heading"] == "Good evening, Morgan", london["heading"]
+    assert toronto["heading"] == "Good afternoon, Morgan", toronto["heading"]
+
+
 def test_nothing_personal_shows_until_the_owner_check_answers(run, pages):
     r = run("private_gate", html=pages["sample"])
     _clean(r)
     assert r["before"]["opening"] and not r["before"]["shell"]
     for word in ("Harbourline", "Juno", "Looker", "Morgan"):
         assert word not in r["before"]["text"], word
-    assert r["after"]["shell"] and r["after"]["heading"] == "Good morning, Morgan"
+    assert r["after"]["shell"] and GREETING.fullmatch(r["after"]["heading"])
 
 
 def test_without_a_store_the_page_says_it_is_read_only(run, pages):
     r = run("paint", html=pages["sample"], fake={"caps": ["user"]})
     _clean(r)
-    assert r["heading"] == "Good morning, Morgan" and r["conn"] == "readonly"
+    assert GREETING.fullmatch(r["heading"]) and r["conn"] == "readonly"
     assert r["pulse"].startswith("Read only here: this page cannot keep answers.")
 
 
@@ -327,6 +338,8 @@ def test_without_a_store_the_page_says_it_is_read_only(run, pages):
 
 # Drafts are a view of Jobs, the messages to send are on each person's card in Contacts (one
 # page since 2026-11-04), and the Brief greets the person by name (4.3).
+# The Brief greets by the device's own hour (app.js hourHere), which a far time zone moves.
+GREETING = re.compile(r"Good (morning|afternoon|evening), Morgan")
 LABELS = {"brief": "Good morning, Morgan", "todo": "To do", "jobs": "Jobs", "drafts": "Jobs",
           "contacts": "Contacts", "interviews": "Coming up", "progress": "Progress", "chat": "Chat", "settings": "Settings",
           "profile": "Your profile"}
@@ -340,7 +353,8 @@ def test_every_section_full_shows_its_items_in_plain_words(run, pages):
     _clean(r)
     for sid, label in LABELS.items():
         got = r[sid]
-        assert got["heading"] == label, (sid, got["heading"])
+        assert (GREETING.fullmatch(got["heading"]) if sid == "brief" else got["heading"] == label), \
+            (sid, got["heading"])
         assert got["overflow"]["sw"] <= got["overflow"]["cw"], sid
         assert not JARGON.search(got["text"]), (sid, JARGON.search(got["text"]).group(0))
         # A version number only on Settings' What's new row, where the maintainer asked for it

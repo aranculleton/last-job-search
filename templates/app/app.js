@@ -4961,11 +4961,10 @@
   }
   // What each person on the Brief is waiting for, in two words.
   const BRIEF_PERSON_WORD = {replied_needs_response: "Your turn", in_conversation: "Talking", referral_in_progress: "Referral", call_booked: "Call booked"};
-  // The hour where the person is, for "Good morning".
-  function hourHere() {
-    try { return Number(dtf("en-GB", {timeZone: zone(), hour: "numeric", hour12: false}).format(new Date(now()))) % 24; }
-    catch (e) { return new Date(now()).getHours(); }
-  }
+  // The hour where the person is, for "Good morning": the device's own clock, which is where
+  // they are reading it. The profile's zone said "Good afternoon" at 10pm to a person away
+  // from home (the maintainer, 2026-11-09); a day's dates still count in the profile's zone.
+  function hourHere() { return new Date(now()).getHours(); }
   // A small tip for the Brief: the engine's own when it has one, else one of these, a new
   // one each day. Each says where to find something; none is a sales line.
   const BRIEF_TIPS = [
@@ -7168,7 +7167,13 @@
     // reads by itself; for any other first note, rare, under More.
     const paste = txt(m.kind) === "first_note" && txt(m.contact) ? pasteProfileBtn({id: m.contact, contact: m.contact, first_name: m.first_name, rev: revOf(txt(m.contact)), paste: m.paste},
       (held ? "hpaste:" : "paste:") + m.id, held ? "secondary" : null) : null;
-    const extra = [openLink(m),
+    // Where it is sent, on the card's face beside I sent it: copied, the note goes nowhere until
+    // their profile is open, and under More it was not found (the maintainer, 2026-11-09:
+    // "open their profile is a bit hidden").
+    const link = openLink(m);
+    const onFace = !!(link && ready && !held);
+    if (onFace) link.classList.add("btn", "secondary", "small");
+    const extra = [onFace ? null : link,
       held ? null : cardNotes(m, {where: "contacts", section: "contacts", item: m.id}, true),
       moreAlerts(m, {where: "contacts", section: "contacts", item: m.id}),
       held ? null : paste];
@@ -7176,7 +7181,7 @@
     // why and when, and Paste is its row's one pill.
     // Its gauge is the engine's, one note's rewrite (app_alerts.paste_profile), never a run's.
     const pasteCost = held && paste && Number(obj(obj(m.paste).cost).state) > 0 ? costEl(obj(m.paste).cost, null, "cost-paste-" + seg(m.id)) : null;
-    return {box, notes: null, act: held ? paste : sentBtn, cost: pasteCost, extra, blocked: fixing === "failed", fixing: fixing === "going", line: stateLine(m.id, "msg:" + m.id)};
+    return {box, notes: null, act: held ? paste : (onFace ? [sentBtn, link] : sentBtn), cost: pasteCost, extra, blocked: fixing === "failed", fixing: fixing === "going", line: stateLine(m.id, "msg:" + m.id)};
   }
   // Where reading LinkedIn stands for this opening of the page: readingState, except that a
   // read that worked lately elsewhere is no read here unless this page is open in the Claude

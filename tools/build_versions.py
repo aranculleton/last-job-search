@@ -868,8 +868,9 @@ METHODS: dict[str, dict] = {
             (84, "2026-11-09", False, "Settings, Your rules: Held back for now, what the person's rules hold back today with the day each opens and what lifts it, and every rule that holds anything one tap below"),
             (85, "2026-11-09", False, "Settings shows your computer in one line from how it last checked in (off, signed out of LinkedIn, not switched on, or ready), with the steps only where you are needed, and one To do card only while work waits for it; Find people goes to your computer once it is set up or has checked in lately, and its card says where it is starting"),
             (86, "2026-11-09", False, "a change that finished with nothing changed (held, set aside, not possible) says so on its card at once, with Claude's own answer where it wrote one, never a spinner waiting for a new version; one whose new version is late stops spinning after a few minutes; a person whose draft a change set aside is never told \"Reply written\"; a message to Claude carries its words on its work item"),
+            (87, "2026-11-09", False, "the Brief greets by the clock of the device it is read on, and a ready message has Open their profile on its face beside I sent it"),
         ),
-        "fingerprint": "8016201d63d83ce6",
+        "fingerprint": "d4a029a07f767e60",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

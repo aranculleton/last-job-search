@@ -66,6 +66,10 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **The Brief says good evening in the evening where you are.** It greeted by your profile's home time zone, so away from home it said "Good afternoon" at 10pm; it now follows the clock of the device you read it on.
+
+- **"Open their profile" is on a message's card, beside "I sent it".** A copied note goes nowhere until their profile is open, and under More it was hard to find.
+
 - **A change that changed nothing finishes at once in Claude's work, with its result.** It said "Putting on page" with "Open in Contacts" for three minutes, and the finished row lost Claude's answer.
 
 - **A change Claude kept as it was says so in your words, once.** "Held · Held until she answers..." became "Not sent for now · Nothing to send until they reply", a wrapped line never starts with "·", and the note under the draft folds to "Claude answered <day> · Show" after two hours instead of staying for good.
