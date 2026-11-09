@@ -311,7 +311,9 @@ jobs:
     # ends were green, and each cost a billed minute on every push.
     name: Tests (Python 3.9, the supported floor)
     if: ${{ !github.event.repository.private || github.event_name == 'workflow_dispatch' }}
-    runs-on: ubuntu-latest
+    # 24.04, not ubuntu-latest: from 9 November 2026 ubuntu-latest is 26.04, for which
+    # actions/setup-python has no 3.9 ("The version '3.9' ... was not found for Ubuntu 26.04").
+    runs-on: ubuntu-24.04
     # 15, not 10: the suite grew past ten minutes on a slow runner at 4.12 (two runs stopped at 96 and 98%).
     timeout-minutes: 15
     steps:
