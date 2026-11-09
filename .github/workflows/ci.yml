@@ -126,7 +126,7 @@ jobs:
     # worth of billed time.
     name: Checks (lint, guards, CLIs, tests)
     if: ${{ !github.event.repository.private || github.event_name == 'workflow_dispatch' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # 15, not 10: the suite grew past ten minutes on a slow runner at 4.12.
     timeout-minutes: 15
     outputs:
@@ -311,7 +311,10 @@ jobs:
     # ends were green, and each cost a billed minute on every push.
     name: Tests (Python 3.9, the supported floor)
     if: ${{ !github.event.repository.private || github.event_name == 'workflow_dispatch' }}
-    runs-on: ubuntu-latest
+    # Every Linux job here runs on 24.04, not ubuntu-latest: from 9 November 2026 ubuntu-latest
+    # is 26.04, for which actions/setup-python has no 3.9 and Playwright 1.56.1 installs no
+    # browsers ("Playwright does not support chromium on ubuntu26.04-x64"). Move them on once both do.
+    runs-on: ubuntu-24.04
     # 15, not 10: the suite grew past ten minutes on a slow runner at 4.12 (two runs stopped at 96 and 98%).
     timeout-minutes: 15
     steps:
@@ -331,7 +334,7 @@ jobs:
     # they run beside the other jobs, in parallel workers, free on the public app.
     name: Page tests (browser)
     if: ${{ !github.event.repository.private || github.event_name == 'workflow_dispatch' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -360,7 +363,7 @@ jobs:
     # being gated to a specific repository. Enabling Dependency graph under
     # Settings -> Advanced Security activates the real check on any repo.
     if: ${{ github.event_name == 'pull_request' && !github.event.repository.private }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -396,7 +399,7 @@ jobs:
     name: Compile example CV and cover letter (${{ matrix.leg.name }})
     needs: checks
     if: ${{ needs.checks.outputs.latex == 'true' && (!github.event.repository.private || github.event_name == 'workflow_dispatch') }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     container: ${{ matrix.leg.container }}
     strategy:
@@ -479,7 +482,7 @@ jobs:
     name: Fast checks
     needs: [checks, python-floor, page, latex-smoke]
     if: ${{ always() && (!github.event.repository.private || github.event_name == 'workflow_dispatch') }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:
       - name: Every fast check passed (LaTeX skipped when nothing touches it)

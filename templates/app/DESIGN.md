@@ -222,15 +222,18 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   Fix it button. Tried twice and still failing, it says so, with the pencil to change it. A
   fact only the person knows is asked through the one rare question. Why: where there is
   clearly a recommended option, the app does it.
-- A first note written before their profile was read has no Copy: one line under it says why
-  and when, in the engine's words for where reading stands where the page is open
-  (`linkedin.reading.hold`): "Claude reads it next time this page is open in the Claude app on
-  your computer" on a phone or the web, "Waiting its turn", then "Reading their profile…" with
-  the spinner in the app. Never a second line or an alert saying it again. "Paste <name>'s
-  profile" is the soft pill beside it where the page cannot read now, its gauge one note's
-  rewrite (`app_alerts.paste_profile`), never a networking run's. Why: the line and an alert
-  said the same twice, and the paste read as "a lot of your allowance" (the maintainer,
-  2026-11-07). (waiting-note tests)
+- A draft's facts are one quiet line under it, in one tone, each in a few words from the
+  engine: its count ("290/300", `count.short`), why it waits ("Waiting for their profile",
+  `linkedin.reading.hold_short`, for where reading stands where the page is open: "Their
+  profile is read next", "Reading their profile…" with the spinner in the app) and "Location
+  not on record". What each means, in a sentence, is behind the line's one "?" ("Claude reads
+  it next time this page is open in the Claude app on your computer, then rewrites this note").
+  Never a line a fact, and never an alert saying it again. A first note waiting for its profile
+  has no Copy; "Paste <name>'s profile" is the soft pill in its row where the page cannot read
+  now, its gauge one note's rewrite (`app_alerts.paste_profile`), never a networking run's.
+  Why: the line and an alert said the same twice, the paste read as "a lot of your allowance"
+  (the maintainer, 2026-11-07), and five lines of different weights under one note did not read
+  as one card (2026-11-09: "any better way to display"). (waiting-note and calm-card tests)
 - What wakes Claude carries its cost beside it (the gauge: "Draft my reply", "Ask Claude",
   "Draft the follow-up"; the pencil box's chips only fill it); what only the page does (I sent it, an edit in place,
   the trash) carries none, and wakes nothing. (`data-wakes` marks the first kind.)
@@ -336,9 +339,15 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   "Earlier (N)" opening the rest in place in a box that scrolls inside itself; a long answer
   is clipped with Show all, a day-old one to its first line; a hidden or folded exchange
   leaves "Claude answered 5 Nov · Show". The box keeps its own hairline, so it stays apart
-  from a hovered card. A change asked with the pencil is one block under the draft: "You
-  asked" and the words, two lines with Show all, then its state and Stop Claude; "New
-  version" only once the new words are on the card. Why: everything opening the Chat clogged it with tasks, and an answer
+  from a hovered card. A change asked with the pencil is one soft grey block under the draft: "You
+  asked" and the words, two lines with Show all, then its state with Stop Claude beside its
+  words, never at the card's far edge; "New version" only once the new words are on the card.
+  Words in one note's box about every note waiting for a profile, or naming the others, are
+  done for them all (`tweak.about_others`: each put on the page's reading list) and this note
+  is left as it was; the block says so in a line, never "New version" (2026-11-09).
+  Work about a note waiting for a profile read is the computer's (`page_db.needs_computer`,
+  the message's `work_to`): its line says "Waiting for the Claude app on your computer",
+  never a cloud chat's wait. Why: everything opening the Chat clogged it with tasks, and an answer
   belongs where its question was asked (the maintainer, 2026-11-05: "it opens a text box UNDER
   THAT PARTICULAR THING IM QUERYING ... and then the response shows underneath"; More test)
 - The same box serves an ask that belongs to a place rather than a card (`PLACES`): Paste a
@@ -384,7 +393,10 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
 - Running work turns a small spinner and sweeps its bar; waiting work breathes; an update is a
   moving line under the header. Reduced motion stills all of it. (motion test)
 - Work says where it stands in words: running, Next, Waiting its turn, Not sent yet, Waking Claude,
-  Sent, No answer yet, Waiting for Claude (with when it was asked), in the same chat. "Claude
+  Sent, No answer yet, Waiting for Claude (with when it was asked), in the same chat. Work
+  sent to a chat that is up says "Starting in a moment" for half a minute at most; not taken by
+  then, it is "Waiting for Claude, asked at 10:42" with no clock running ("Changing it next ·
+  starting in a moment · 1m 53s", the maintainer, 2026-11-09). "Claude
   is on it" only for work Claude has begun; a step's clock only from a few seconds in, and
   none where the work counts its own progress. The top pill names the one thing running.
   Work waiting its turn behind the big jobs stays "Waiting its turn" however long it waits ("In line" left people asking what it meant, the maintainer, 2026-11-06), and drafts

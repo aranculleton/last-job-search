@@ -123,10 +123,13 @@ def tables() -> dict:
     stages with their seconds (page_db.STAGES) and how much of Claude it takes
     (app_alerts.WORK_COST)."""
     import app_alerts
+    import app_model
     import page_db
     return {"stages": {kind: [[name, secs] for _key, name, secs in rows]
                        for kind, rows in page_db.STAGES.items()},
-            "work_cost": dict(app_alerts.WORK_COST)}
+            "work_cost": dict(app_alerts.WORK_COST),
+            # A note's facts said in a few words, and in a sentence behind its "?".
+            "facts": {"where_unknown": list(app_model.WHERE_UNKNOWN)}}
 
 
 def compact_js(js: str) -> str:

@@ -751,13 +751,52 @@ def item_stages(item: dict) -> list[dict]:
     return stages
 
 
+def contacts_of(item: dict) -> list[str]:
+    """The people a piece of work is about: a message's tweak (its target `msg-<contact>`, or
+    the target's contact), and a networking job's named contacts."""
+    kind = str(item.get("kind") or "")
+    args = item.get("args") if isinstance(item.get("args"), dict) else {}
+    out: list = []
+    if kind == "tweak":
+        target = args.get("target") if isinstance(args.get("target"), dict) else {}
+        if str(target.get("output") or "") == "message":
+            tid = str(target.get("id") or "")
+            out.append(str(target.get("contact") or "") or (tid[4:] if tid.startswith("msg-") else ""))
+    elif kind == "network":
+        out += [str(c) for c in args.get("contacts") or [] if str(c).strip()]
+        out.append(str(args.get("contact") or ""))
+    return [c for c in dict.fromkeys(out) if c]
+
+
+def needs_computer(item: dict) -> list[str]:
+    """The people this work is about whose note waits for its profile to be read in the page's
+    own browser, in the Claude app on the computer (reading.needs_browser_read). Such work is
+    the computer's: a cloud chat cannot read LinkedIn, took a pencil change on one, closed it as
+    done, and the computer's chat never saw it (the maintainer, 2026-11-09)."""
+    cids = contacts_of(item)
+    if not cids:
+        return []
+    net = os.path.join(_HERE, "network")
+    if net not in sys.path:
+        sys.path.insert(0, net)
+    try:
+        import reading
+        return [c for c in cids if reading.needs_browser_read(c)]
+    except Exception:  # noqa: BLE001  no profile or no networking here: nothing waits
+        return []
+
+
 def can_take(item: dict, chat_kind: str) -> bool:
     """Whether a chat of this kind can do a work item. One chat answers the page
     (tools/app_listen.py), so work never waits for a chat of the other kind: the item's `to`
     is only where the page expected it to run. A brief alone needs the cloud, since it comes
-    with the computer off."""
+    with the computer off; work about a note waiting for a profile read in the Claude app on
+    the computer (`needs_computer`) is never a cloud chat's, whatever an older page queued it
+    to, and waits for the computer's chat."""
     kind = WORK_KINDS.get(str(item.get("kind") or ""))
-    return kind is not None and chat_kind in kind["can"]
+    if kind is None or chat_kind not in kind["can"]:
+        return False
+    return not (chat_kind == "cloud" and needs_computer(item))
 
 
 def _key(text) -> str:
@@ -1705,7 +1744,7 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
            status: str = "done", error: str = "", links=(), reply: str = "", thread: str = "",
            chat_kind: str = "cloud", dump_dir: str = "", chat: str = "",
            question: str = "", about: str = "", answer: dict | None = None,
-           answered=(), left_out: str = "") -> dict:
+           answered=(), left_out: str = "", unchanged: bool = False) -> dict:
     """The batch that finishes one work item (the app skill, step 5): the item `done` (or
     `failed`, with `error` in plain words, or `stopped` after their Stop), its one-sentence
     summary and links, pinned to the version read; each of its locks the dump holds, deleted
@@ -1754,6 +1793,13 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
     args = item.get("args") if isinstance(item.get("args"), dict) else {}
     thread = str(thread or "").strip() or (str(args.get("thread") or "").strip()
                                            if reply else "")
+    # A change asked with a card's pencil (a tweak) has no thread of its own: a written answer
+    # to it goes to that card's own thread, where Something else's answers show, with the
+    # person's words first (the maintainer's copy, 2026-11-09: "Name its thread" refused a
+    # plain answer to a message's change, and it had to be turned into a question).
+    card = _tweak_card(item) if str(reply or "").strip() and not thread else None
+    if card:
+        thread = card["thread"]
     if str(reply or "").strip() and not thread:
         raise ValueError("which conversation is the answer for? Name its thread (--thread)")
     at = app_model.stamp(now)
@@ -1772,6 +1818,15 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
                   # The choices as pages before 4.10 read them: their words alone.
                   "choices": [c["label"] for c in (clean or {}).get("choices") or []]
                   if kind in ("choice", "yesno") else None}
+    elif status == "done" and chat_kind == "cloud" and needs_computer(item):
+        # Work about a note waiting for its profile to be read in the Claude app on the
+        # computer is never closed as done by a cloud chat, which cannot read LinkedIn (one
+        # did, and the computer's chat never saw it: the maintainer, 2026-11-09). It goes back
+        # to the queue for the computer, its card saying it waits there.
+        status = "queued"
+        fields = {"status": status, "to": "computer", "lease_until": None, "claimed_by": None,
+                  "claimed_at": None, "stage": 0, "stage_at": None}
+        reply = ""
     else:
         fields = {"status": status, "finished_at": at, "lease_until": None,
                   "result": {"summary": summary, "links": [dict(x) for x in links or ()]},
@@ -1786,8 +1841,26 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
         # maintainer, 2026-11-06).
         if str(left_out or "").strip():
             fields["result"]["left_out"] = " ".join(str(left_out).split())[:300]
+        # Done with nothing changed on the item it was asked on (a pencil's words about every
+        # note waiting for a profile, or a change already made): the card says its summary,
+        # never "putting the new version on your page" over words that are not changing.
+        if unchanged:
+            fields["result"]["unchanged"] = True
     w = Writes(out_dir)
     mid = ""
+    if card:
+        talk = (db.get("talk") or {}).get(safe_id(thread))
+        head = {"to": str(item.get("to") or "either"), "card": card["about"],
+                "title": "About " + card["about"]["label"], "last_at": at}
+        if talk is not None:
+            w.add("update", "talk", thread, head, if_version=talk["version"])
+        else:
+            w.add("set", "talk", thread, dict(head, created_at=at))
+        asked = " ".join(str(args.get("text") or "").split())
+        if asked:
+            w.add("set", f"talk/{safe_id(thread)}/messages", "m" + safe_id(work_id)[-40:],
+                  {"from": "you", "text": asked,
+                   "at": str(item.get("created_at") or item.get("at") or at), "work": work_id})
     if str(reply or "").strip():
         mid = message_id(now)
         w.add("set", f"talk/{safe_id(thread)}/messages", mid,
@@ -1807,7 +1880,42 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
     # last one finishes the search once it has found all it will.
     lead = _search_counted(db, item, work_id, status, now, w, dump_dir)
     return {"work": work_id, "status": status, "thread": thread or None, "message": mid or None,
-            "locks": freed, **({"search": lead} if lead else {}), "batches": w.save("finish")}
+            "locks": freed, **({"search": lead} if lead else {}),
+            "batches": w.save(batch_name("finish", work_id))}
+
+
+def batch_name(kind: str, work_id: str) -> str:
+    """A batch file named for its work item, so two run one after another never write the same
+    file: every `done` wrote out/finish.json, and finishing two items before sending the first
+    lost it, while the dump already said it had finished, so `done` refused it again and `wake`
+    claimed items the page had finished with old versions (the maintainer's copy, 2026-11-09).
+    Letters, digits, - and _ only, as a file name on Windows must be."""
+    return kind + "-" + (re.sub(r"[^A-Za-z0-9_-]+", "-", str(work_id or "")).strip("-")[-80:] or "x")
+
+
+def _tweak_card(item: dict) -> dict | None:
+    """The card a tweak was asked on: its own thread (the page's cardThread) and what the
+    thread is about ({kind, id, label}), or None for a tweak with no card (a search's)."""
+    if str(item.get("kind") or "") != "tweak":
+        return None
+    args = item.get("args") if isinstance(item.get("args"), dict) else {}
+    target = args.get("target") if isinstance(args.get("target"), dict) else {}
+    kind, tid = str(target.get("output") or ""), str(target.get("id") or "")
+    if not kind or not tid or kind in ("jobs", "brief"):
+        return None
+    # "Change the note to Juno" is about "the note to Juno", as Something else names it.
+    label = re.sub(r"^(?:Change|Edit)\s+", "", str(item.get("title") or "").strip(), flags=re.I)
+    label = label or f"the {kind}"
+    return {"thread": card_thread(kind, tid),
+            "about": {"kind": kind, "id": tid, "label": label[:120]}}
+
+
+def card_thread(kind: str, cid: str) -> str:
+    """A card's own thread, as the page names it (templates/app/app.js cardThread and seg)."""
+    raw = re.sub(r"[^A-Za-z0-9_\-.~:@+]", "-", f"{kind}-{cid}")[:150]
+    if not raw or raw in (".", ".."):
+        raw = "x"
+    return ("card-" + raw)[:125]
 
 
 def _drafted(db: dict, ids, also: dict | None = None) -> tuple[int, bool]:
@@ -2063,6 +2171,11 @@ def ask(db: dict, kind: str, title: str, now: dt.datetime, out_dir: str, args: d
     if wid in (db.get("work") or {}):
         raise ValueError(f"work {wid!r} is already there")
     to = to or ("cloud" if WORK_KINDS[kind]["to"] == "cloud" else "either")
+    # About a note waiting for its profile to be read in the Claude app on the computer: the
+    # computer's, decided as it is queued (needs_computer, and can_take for older pages).
+    if to == "either" and "computer" in WORK_KINDS[kind]["can"] and \
+            needs_computer({"kind": kind, "args": dict(args or {})}):
+        to = "computer"
     if to not in ("cloud", "computer", "either") or (
             to != "either" and to not in WORK_KINDS[kind]["can"]):
         raise ValueError(f"a {kind} runs in " + " or ".join(WORK_KINDS[kind]["can"]))

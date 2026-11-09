@@ -451,6 +451,18 @@ def cmd_view(a) -> int:
         w.add("set", "meta", "current", {"rev": model["rev"], "made_at": model["made_at"],
                                          "model": model["model"], **stamp, **_published()},
               if_version=old["version"] if old else None)
+    # A screen written with no version while the screens came from this checkout's mirror,
+    # not a read: the mirror may lack one the page holds, and every such write was refused, so
+    # the cards stayed stuck (the maintainer's copy, 2026-11-09: "view builds its page updates
+    # without version numbers"). Its screens are read whole first, once, and then it is drawn.
+    drawn = bool(((db.get("meta") or {}).get("current") or {}).get("data")) if db else False
+    if a.dump and drawn and not page_reads.screens_read(a.dump) and any(
+            e.get("collection") in ("screen", "view") and e.get("op") == "set"
+            and e.get("if_version") is None for e in w.entries):
+        page_reads.read_screens_again(a.dump)
+        print(_dump({"rev": None, "batches": [], "for_claude": [page_reads.NEED_SCREENS.format(
+            colls="screen", dump=a.dump)]}), end="")
+        return 2
     batches = w.save("view") if w.entries else []
     # A redraft the drafts rerun handed out (tools/remake_drafts.py) goes on the work list by
     # itself, once: read against the page's own work list, and sent in a batch of its own,
@@ -2332,7 +2344,8 @@ def cmd_done(a) -> int:
                              error=a.failed, links=_links(a.link), reply=reply, thread=a.thread,
                              chat_kind=a.kind or app_listen.chat_kind(), dump_dir=a.dump,
                              chat=a.chat, question=a.question, about=a.about,
-                             answer=_answer(a), answered=a.answered, left_out=left)
+                             answer=_answer(a), answered=a.answered, left_out=left,
+                             unchanged=bool(getattr(a, "unchanged", False)))
     except (KeyError, ValueError) as e:
         print(f"app: not finished: {e.args[0] if e.args else e}", file=sys.stderr)
         return 2
@@ -2972,6 +2985,10 @@ def main(argv=None) -> int:
                    help="a form's question answered (form_answers), in the form's own words: "
                         "its card says Done once each is on it (more than one allowed)")
     p.add_argument("--out", default="", help="where the batch goes (default <dump>/out)")
+    p.add_argument("--unchanged", action="store_true",
+                   help="done, and nothing on the item it was asked on changed (a tweak whose "
+                        "words were about other notes, or already so: tweak.py apply says "
+                        "`unchanged`): its card says the summary, never a new version")
     p.add_argument("--left-out", dest="left_out", default="",
                    help="a draft stopped because the job is not one they can take: why, in "
                         "plain words; the job leaves Jobs, ruled out with that reason")

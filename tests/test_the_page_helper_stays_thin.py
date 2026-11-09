@@ -530,3 +530,25 @@ def test_the_apps_own_checkout_is_never_written_to(monkeypatch, tmp_path):
     monkeypatch.setattr(person, "state", lambda *p: os.path.join(str(tmp_path), *p))
     helper_usage.record("wake", "session_EXAMPLEHELPER")
     assert not os.path.exists(os.path.join(str(tmp_path), "documents"))
+
+
+def test_a_screen_the_mirror_lacks_is_read_before_it_is_written(ring):
+    """The maintainer's copy, 2026-11-09: `view` built its page updates with no version
+    numbers, so the page refused every one and the cards stayed stuck. The screens came from
+    this checkout's mirror, which lacked records the page held: a write to one with no version
+    is refused. Now a page update that would write a laid screen with no version reads the
+    screens whole first, once, and then draws the page."""
+    first, _ = read(ring, "r1")
+    wake(ring, first)
+    assert view(ring, first)[1]
+    # The copy this checkout keeps lacks a screen the page holds (a section the update
+    # rewrites): gone from the mirror and from the last read it is rebuilt from.
+    for where in (ring.mirror, first):
+        os.remove(os.path.join(where, "screen", "listener.json"))
+    d, _ = read(ring, "r2", now=LATER)
+    wake(ring, d, now=LATER)
+    got, _ = view(ring, d, LATER)
+    assert got["batches"] == [] and "screen" in got["for_claude"][0], got
+    query(ring, d, {"collection": "screen", "query": {"limit": 1000}})
+    got, ok = view(ring, d, LATER)
+    assert ok and got["batches"], got

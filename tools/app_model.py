@@ -2237,7 +2237,10 @@ def count_of(chars: int, limit, mtype: str) -> dict:
     return {"chars": chars, "limit": limit, "near_at": near_at,
             "show": mtype == "first_note" or near or over, "near": near, "over": over,
             "tone": "bad" if over else "muted",
-            "label": f"{chars} of {limit} characters" if limit else f"{chars} characters"}
+            "label": f"{chars} of {limit} characters" if limit else f"{chars} characters",
+            # As the card's one line of facts says it ("290/300 · Waiting for their profile"),
+            # the label read aloud and behind its "?" (the maintainer, 2026-11-09).
+            "short": f"{chars}/{limit}" if limit else f"{chars} characters"}
 
 
 # advise()'s rules, said the way the person would say them. Any other is said as its fix.
@@ -2576,6 +2579,10 @@ def _messages(ctx: Ctx, targets: dict) -> list:
                 "why": ROUTE_WHY.get(str(c.get("route") or "").strip().lower(),
                                      f"They work at {c.get('company') or 'an employer you want'}"),
                 "due": str(c.get("next_action_due") or "") or None, "hold": hold,
+                # Where work about it runs: the computer's chat while it waits for a profile
+                # read only the Claude app on the computer can make (page_db.needs_computer),
+                # so the page queues its pencil there and a cloud chat never takes it.
+                "work_to": "computer" if hold and reading.needs_browser_read(cid) else "either",
                 "rev": rev_of(cid, text, kind, channel, live)}
         if mtype == "first_note" and channel == "linkedin_note" and hold is None \
                 and not item["blocked"]:
@@ -2709,6 +2716,20 @@ READ_HOLD = {
     "read": "Profile read: Claude rewrites this note next",
     "again": "Claude could not read their profile just now: it tries again later, by itself",
 }
+# The same, as a few words in the card's one quiet line of facts ("290/300 · Waiting for their
+# profile · Location not on record"); the sentence above is behind its "?". Five lines of
+# different weights under one note did not read as one card (the maintainer, 2026-11-09: "any
+# better way to display").
+READ_HOLD_SHORT = {
+    "browser": "Waiting for their profile", "paste": "Waiting for their profile",
+    "tab": "Waiting for their profile", "sign_in": "Waiting for their profile",
+    "paused": "Waiting for their profile", "next": "Their profile is read next",
+    "reading": "Reading their profile…", "read": "Profile read", "again": "Profile not read yet",
+}
+# Where they live is not on record, so the person's own rule about where people are cannot be
+# checked before a new message goes: the fact, and what to do, behind the same "?".
+WHERE_UNKNOWN = ("Location not on record",
+                 "Where they live is not on record: check their profile before you send")
 
 
 # One plain word for each status, and what the row offers when something is owed by the
@@ -4897,7 +4918,7 @@ def _linkedin(ctx: Ctx, targets: dict) -> dict:
                      "setting": setting, "paused": paused, "paused_until": paused_until,
                      # A waiting note's one line, for where reading stands where the page is
                      # open (READ_HOLD): the page picks it, never writes its own.
-                     "hold": dict(READ_HOLD),
+                     "hold": dict(READ_HOLD), "hold_short": dict(READ_HOLD_SHORT),
                      # The day's sign-in check (reading.linkedin_check): passed today, the page
                      # opens nothing to check again; it compares `on` with its own day.
                      "check": {k: got for k, got in reading.linkedin_check(ctx.now).items()

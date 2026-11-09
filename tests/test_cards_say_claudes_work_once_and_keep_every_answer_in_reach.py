@@ -158,6 +158,33 @@ def test_new_version_is_said_only_once_the_new_words_are_on_the_card(run, tmp_pa
     assert "New version: Her message now asks straight for the call she offered. The earlier" in done and ".." not in done, done
 
 
+
+def test_a_change_that_left_the_words_as_they_were_says_so_and_is_not_coming(run, tmp_path):
+    """A change to a message that ended with the words unchanged (held, set aside, nothing it
+    could change) said "Finished · putting the new version on your page" all day: no new
+    version was ever coming (the maintainer's copy, 2026-11-09, on three cards)."""
+    got = _go(run, tmp_path, [{"hash": "contacts", "eval": PEN}], WIDE,
+              seed=_tweak("done", rev="m1", summary="Held until their profile is read.",
+                          finished_at="2026-10-25T08:40:00.000Z"), clock=T)
+    done = got["after"][0]["eval"]["done"]
+    assert "putting" not in done and "New version" not in done, done
+    assert done == "Held until their profile is read. The words are unchanged.", done
+
+
+def test_a_change_that_took_the_draft_away_leaves_no_reply_on_its_way(run, tmp_path):
+    """The draft was held or set aside by the change, so the card has none: it said "Reply
+    written · Finished · Putting it on your page" for two hours (personGoing took any
+    finished work with no draft for a reply on its way)."""
+    m = journeys._sample()
+    m["messages"] = [x for x in m.get("messages") or [] if x.get("contact") != JUNO]
+    got = _go(run, tmp_path, [{"hash": "contacts", "eval": PEN}], WIDE, model=m,
+              seed=_tweak("done", rev="m1", summary="Set aside.", finished_at="2026-10-25T08:58:00.000Z"),
+              clock=T)
+    r = got["after"][0]["eval"]
+    assert r is not None
+    assert not any("Putting it on your page" in g for g in r["going"]), r["going"]
+
+
 # ------------------------------------------------------------------ Claude's work
 
 
