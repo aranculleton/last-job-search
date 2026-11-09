@@ -47,6 +47,10 @@ Usage:
     python3 tools/network/state.py resent <contact_id> [--text-file <file>] [--date ...] [--subject ...]
     python3 tools/network/state.py unsend <contact_id>
     python3 tools/network/state.py inmail-credits [<the balance LinkedIn shows>]
+    python3 tools/network/state.py add "<name>" [--company "<employer>"] [--title T] [--linkedin URL]
+        [--location L] [--route R] [--note "..."]             # someone new, never a second row
+    python3 tools/network/state.py hold <contact_id> [--until "<condition>"] [--release]
+        # hold the draft waiting for someone in conversation, never over another one
 """
 
 from __future__ import annotations
@@ -3272,6 +3276,111 @@ def unpark_draft(contact_id: str, now: dict | None = None) -> bool:
     return True
 
 
+# A draft held back for someone already in conversation ("not until she answers the email"),
+# kept beside draft.md under its own name. A chat that had to hold one reached for
+# park_draft(as_name=...) by hand, because the default name would have written over a draft
+# already set aside there (2026-11-09).
+HELD = "draft.held.md"
+
+
+def _free_name(folder: str, name: str) -> str:
+    """`name` in `folder`, or the first of name-2, name-3 ... not taken: never over a file."""
+    stem, ext = os.path.splitext(name)
+    n, out = 1, name
+    while os.path.exists(os.path.join(folder, out)):
+        n += 1
+        out = f"{stem}-{n}{ext}"
+    return out
+
+
+def held_drafts(contact_id: str) -> list:
+    """The held drafts in a contact's folder, oldest first."""
+    folder = _draft_folder(contact_id)
+    if not folder or not os.path.isdir(folder):
+        return []
+    stem, ext = os.path.splitext(HELD)
+    names = [f for f in os.listdir(folder)
+             if f == HELD or re.fullmatch(re.escape(stem) + r"-\d+" + re.escape(ext), f)]
+    return sorted(names, key=lambda f: int((re.findall(r"-(\d+)\.", f) or ["1"])[0]))
+
+
+def hold(contacts, contact_id, today, until="") -> tuple:
+    """(the row, the file the draft went to): hold the draft waiting for this contact, kept
+    as draft.held.md (or draft.held-2.md ..., never over another), with the condition on
+    the row's next action and a dated line in its notes. Nothing about the thread changes:
+    their status, the log and the date the brief brings them back on stay as they are.
+    Raises ValueError for a contact not in the book or no draft waiting."""
+    day = _need_date(today, "today")
+    cid = str(contact_id or "").strip()
+    contact = already_contacted(contacts, contact_id=cid)
+    if contact is None:
+        raise ValueError(f"no contact {cid!r} in the contact book")
+    folder = _draft_folder(cid)
+    if not folder or not os.path.isfile(os.path.join(folder, "draft.md")):
+        raise ValueError(f"no draft is waiting for {contact.get('name') or cid}: nothing to hold")
+    name = _free_name(folder, HELD)
+    park_draft(cid, as_name=name)
+    until = " ".join(str(until or "").split())
+    put_next(contact, (), f"Draft held until {until}" if until else
+             "Draft held until the person says to send it")
+    _note(contact, "notes", f"draft held {day.isoformat()}" + (f" until {until}" if until else "")
+          + f" ({name})")
+    return contact, name
+
+
+def release(contacts, contact_id, today) -> tuple:
+    """(the row, the file put back): the newest held draft back as draft.md, where no
+    draft.md is waiting. Raises ValueError when there is none held or one is waiting."""
+    day = _need_date(today, "today")
+    cid = str(contact_id or "").strip()
+    contact = already_contacted(contacts, contact_id=cid)
+    if contact is None:
+        raise ValueError(f"no contact {cid!r} in the contact book")
+    held = held_drafts(cid)
+    if not held:
+        raise ValueError(f"no draft is held for {contact.get('name') or cid}")
+    folder = _draft_folder(cid)
+    if os.path.exists(os.path.join(folder, "draft.md")):
+        raise ValueError(f"a draft is already waiting for {contact.get('name') or cid}: send or "
+                         "hold that one first")
+    os.replace(os.path.join(folder, held[-1]), os.path.join(folder, "draft.md"))
+    if str(contact.get("next_action") or "").startswith("Draft held"):
+        put_next(contact, (), "Send the draft that was held")
+    _note(contact, "notes", f"held draft released {day.isoformat()}")
+    return contact, held[-1]
+
+
+def _cli_hold(argv) -> int:
+    ap = argparse.ArgumentParser(
+        prog="state.py hold",
+        description="Hold back the draft waiting for someone, kept and never written over; "
+                    "--release puts it back.")
+    ap.add_argument("contact_id")
+    ap.add_argument("--until", default="", help="the condition, in words: \"she answers the "
+                                                "email\", \"after the interview on Friday\"")
+    ap.add_argument("--release", action="store_true", help="put the held draft back")
+    ap.add_argument("--contacts", default=CONTACTS_CSV)
+    ap.add_argument("--today", default=datetime.date.today().isoformat())
+    a = ap.parse_args(argv)
+    contacts = load_contacts(a.contacts)
+    try:
+        if a.release:
+            row, name = release(contacts, a.contact_id, a.today)
+        else:
+            row, name = hold(contacts, a.contact_id, a.today, a.until)
+    except ValueError as e:
+        print(f"hold: not changed: {e}")
+        return 1
+    save_contacts(contacts, a.contacts)
+    who = row.get("name") or a.contact_id
+    if a.release:
+        print(f"hold: the draft for {who} is waiting again")
+    else:
+        print(f"hold: the draft for {who} is held" + (f" until {a.until}" if a.until else "")
+              + f", kept as {name}; put it back with: state.py hold {a.contact_id} --release")
+    return 0
+
+
 # What a draft knew of their messages when it was written, kept beside it: the day of their
 # newest message then, and how many of theirs carried that day. A message newer than that,
 # or another on that day, is one the draft never saw, however late the log heard of it (a
@@ -5393,6 +5502,8 @@ def main(argv=None) -> int:
         return _cli_withdraw(argv[1:])
     if argv[:1] == ["add"]:
         return _cli_add(argv[1:])
+    if argv[:1] == ["hold"]:
+        return _cli_hold(argv[1:])
     if argv[:1] == ["accepted"]:
         return _cli_accepted(argv[1:])
     if argv[:1] == ["sent"]:

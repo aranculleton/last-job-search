@@ -674,3 +674,21 @@ Larchmont Health'       # the same, quoted in a line the page says
 Fernhill Freight'       # the example person's invented employer, quoted in tools/holds.py
 Ridley Assurance        # invented employer, tests/test_every_hold_says_when_it_ends.py
 Tomas Ferreira          # an invented remote software engineer, the same test
+Baywater Rehab           # invented, tests/test_an_approved_note_recipe_saves_a_whole_batch.py
+Cedarholt Hospice        # invented, tests/test_an_approved_note_recipe_saves_a_whole_batch.py
+Coastwell Clinic         # invented, tests/test_an_approved_note_recipe_saves_a_whole_batch.py
+Fraserline Health        # invented, tests/test_an_approved_note_recipe_saves_a_whole_batch.py
+Harbourmead Hospital     # invented, tests/test_an_approved_note_recipe_saves_a_whole_batch.py
+Islay Health             # invented, tests/test_an_approved_note_recipe_saves_a_whole_batch.py
+Northgate Care           # invented, tests/test_an_approved_note_recipe_saves_a_whole_batch.py
+Oakbank Hospital         # invented, tests/test_an_approved_note_recipe_saves_a_whole_batch.py
+Pinecrest Children's     # invented, tests/test_an_approved_note_recipe_saves_a_whole_batch.py
+Summitvale Care          # invented, tests/test_an_approved_note_recipe_saves_a_whole_batch.py
+Valleyford Medical       # invented, tests/test_an_approved_note_recipe_saves_a_whole_batch.py
+Mira Stavros             # invented, tests/test_an_approved_note_recipe_saves_a_whole_batch.py
+Coastwell Children's Hospital # invented, tests/test_who_to_find_is_one_call_for_anyone.py
+Harbour Kitchens         # invented, tests/test_who_to_find_is_one_call_for_anyone.py
+Nimbus Cloud             # invented, tests/test_who_to_find_is_one_call_for_anyone.py
+Pip Varga                # invented, tests/test_who_to_find_is_one_call_for_anyone.py
+Quickmart Pharmacy       # invented, tests/test_who_to_find_is_one_call_for_anyone.py
+Paediatric Nurse         # invented, tests/test_who_to_find_is_one_call_for_anyone.py

@@ -140,7 +140,10 @@ def test_reading_needs_no_question_first_and_is_the_pages_whatever_the_chat_has(
     for tools in (["browser"], ["chrome"], ["enable"], []):
         got = reading.route(tools, reading.reads_setting(Unset()), {"CLAUDECODE": "1"})
         assert got["route"] == "page" and got["usable"], got
-        assert "queue-page" in got["do"] and "Never open linkedin.com in this chat" in got["do"]
+        # The rule since 2026-11-09: never fetched over the web, read only in the signed-in
+        # browser on the person's computer.
+        assert "queue-page" in got["do"] and "Never fetch linkedin.com over the web" in got["do"]
+        assert "signed-in browser on the person's computer" in got["do"]
     assert reading.route(["browser"], "paste", {"CLAUDECODE": "1"})["route"] == "hand"
 
 

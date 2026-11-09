@@ -2220,6 +2220,16 @@ SAFE_DEFAULTS: dict[str, str] = {
     "networking.PROFILE_SESSION_EXPIRY_HOURS": "4 hours: a sign-in page that long after the last "
                                                 "page or sign-in is a session that expired, not "
                                                 "friction; within it, the day stops as before",
+    "networking.REPLY_RATES": "{}: the reply rate of each kind of reader is counted from their "
+                              "own message log, and the app's order (founders, hiring leaders, "
+                              "recruiters, then peers) stands until there are enough",
+    "networking.RECRUITER_NEAR": "(): a recruiter for their own function ranks first, one whose "
+                                 "headline names nothing is kept unranked, and one for another "
+                                 "family of work is left out",
+    "networking.SKIP_HEADLINES": "None: no headline is left out on their word alone; the app's "
+                                 "own function and revenue-role checks still run",
+    "networking.PER_EMPLOYER_PER_RUN": "None: a run takes people at one employer up to the "
+                                       "per-employer limit, counting those already waiting",
     "networking.VARY_ABOUT_ME": "False: the line about themselves is theirs to repeat in every "
                                 "note; True holds it to the same rule as anything else a batch "
                                 "repeats",

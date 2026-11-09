@@ -29,7 +29,7 @@ location: their profile is read before anything is written to them.
 
     python3 tools/network/surface.py "<name>" [--company "<employer>"] [--url <profile address>]
     python3 tools/network/surface.py --id <contact_id> [...]
-    python3 tools/network/surface.py --file <people.json>     # a list: [{name, company, linkedin_url}]
+    python3 tools/network/surface.py --file <people.json>     # a list, best first: [{name, company, linkedin_url}]
     python3 tools/network/surface.py --queue                  # everyone waiting on a first note
 """
 
@@ -98,7 +98,8 @@ def context(contacts=None, threads=None, connections=None, today=None, index=Non
     return {"contacts": contacts, "book": _book_index(contacts),
             "threads": state.by_contact(threads) if index is None else index, "today": today,
             "connections": connections or [], "conn_by_handle": by_handle,
-            "conn_by_name": by_name, "employers": {}}
+            "conn_by_name": by_name, "employers": {}, "thread_rows": threads,
+            "waiting_at": {}, "shown": {}, "count_list": False}
 
 
 def _same_employer(a, b) -> bool:
@@ -307,13 +308,61 @@ def check(person: dict, ctx: dict | None = None, queued: bool = False) -> dict:
     why = memo[company]
     if why:
         return no(f"{company}: {why}")
+    key = _who_key(name, company, url, out["contact_id"] or pid)
+    full = employer_full(company, ctx, key)
+    if full:
+        return no(full)
     if not company:
         out["warn"].append("no employer known, so the bar was not checked: place them first")
     connected = old_connection(p, ctx, out["contact_id"], conn)
     if connected:
         out["needs_read"] = True
         out["warn"].append(OLD_CONNECTION.format(day=connected))
+    if company and key:
+        ctx.setdefault("shown", {})[key] = {"name": name, "company": company}
     return out
+
+
+def _who_key(name: str, company: str, url: str, contact_id: str) -> str:
+    """One person in a list, however the list gave them: their contact id, profile address,
+    or name at an employer."""
+    if contact_id:
+        return "id:" + contact_id
+    h = state.profile_handle(url)
+    if h:
+        return "url:" + h
+    k = state._match_name(name)
+    return f"name:{k}@{state.company_key(company)}" if k else ""
+
+
+def employer_full(company: str, ctx: dict, key: str = "") -> str:
+    """Why nobody more is shown at this employer, or "": the per-employer limit
+    (reading.employer_limit: networking.py PEOPLE_PER_EMPLOYER, or the person's word for one
+    employer), counting the people there already waiting on a reply and everyone this list
+    has already shown there when the list is one to write to, best first (`count_list`;
+    a list to rank from shows everyone and is capped after ranking). The short list held it and this check did not, so a run shown
+    five people as fine had them refused one step later and searched again (2026-11-09).
+    One answer, `reading.employer_full_line`, for every step."""
+    import reading
+    company = str(company or "").strip()
+    if not company:
+        return ""
+    limit, _theirs = reading.employer_limit(company)
+    if limit is None:
+        return ""
+    k = state.company_key(company)
+    memo = ctx.setdefault("waiting_at", {})
+    if k not in memo:
+        memo[k] = reading.at_employer(company, ctx["contacts"], (), today=ctx["today"],
+                                      threads=ctx.get("thread_rows"))[0]
+    there = [v for kk, v in ctx.setdefault("shown", {}).items()
+             if kk != key and state.company_key(v.get("company")) == k] \
+        if ctx.get("count_list") else []
+    if len(memo[k]) + len(there) < limit:
+        return ""
+    return reading.employer_full_line(company, ctx["contacts"], there, today=ctx["today"],
+                                      also_is="already on this list") or (
+        f"{company} already has {limit} waiting or on this list")
 
 
 # ------------------------------------------------------------------ someone already written to
@@ -524,6 +573,7 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
     ctx = context()
     if a.file:
+        ctx["count_list"] = True         # a list to write to, best first: the limit counts it
         with open(a.file, encoding="utf-8") as fh:
             people = json.load(fh)
         people = people.get("people", people) if isinstance(people, dict) else people

@@ -474,6 +474,7 @@ METHODS: dict[str, dict] = {
                   "tools/network/discovery.py", "tools/network/openalex.py", "tools/network/schema.py",
                   "tools/network/sources.py", "tools/network/why.py", "tools/network/export.py",
                   "tools/network/surface.py", "tools/network/inmail_pick.py",
+                  "tools/network/candidates.py",
                   ".claude/skills/networking/*", ".claude/commands/network.md",
                   ".claude/commands/reply.md"),
         "versions": (
@@ -581,8 +582,9 @@ METHODS: dict[str, dict] = {
             (85, "2026-11-06", False, "a logged resume or letter is known by either order of its name (<Prefix>_<ABBR>_Resume, or <Prefix>_Resume_<ABBR> before); nothing older needs redoing"),
             (86, "2026-11-06", True, "a follow-up code cannot write goes to Claude after it looks for something new (their profile as read, news and roles at their employer, the person's own profile), never to the person as a question, and a question an older run asked is taken back; a rule about not repeating a message never switches plain follow-ups off; a plain follow-up varies its opener, greets a name with a leading initial by the given name and goes to Claude to fit the person's own message rules; a contact whose log holds only our request and their acceptance reads as connected"),
             (87, "2026-11-09", False, "someone waiting holds their employer by the person's follow-up rule from the last contact (or EMPLOYER_WAIT_DAYS), never a fixed 45 days from the first note, and with no date not at all"),
+            (88, "2026-11-09", False, "who to write to is one call (candidates.py check): the search result's headline is filtered on the person's settings (a recruiter for another function is out), every list check runs at once, the per-employer limit included in the one surfacing check, and the list is ranked by who is likeliest to help and filled to the number asked, widening to more employers rather than padding; the InMail chooser picks only from what is known; LinkedIn is never fetched over the web and read only in the signed-in browser on the person's computer; a draft is held with state.py hold, never over another; the people already found need nothing redone"),
         ),
-        "fingerprint": "2d89bab346bc3c9a",
+        "fingerprint": "f7b8bc3555c9fa1a",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
@@ -641,8 +643,9 @@ METHODS: dict[str, dict] = {
             (41, "2026-11-05", False, "a note written keeps beside it what of the person's messages it answers, so one they send later sets it aside; notes are written as before"),
             (42, "2026-11-05", False, "a note to someone the person has already talked to (a follow-up or a reply) never opens on WAITS ON A READ, and a follow-up takes the place of a first note left marked from before the conversation"),
             (43, "2026-11-09", False, "the company limit counts someone waiting only by the person's follow-up rule from the last contact; a note with no date holds nothing"),
+            (44, "2026-11-09", False, "a batch on the person's own approved recipe saves: the opening and closing lines of the notes they approved, every variant, and any shape two of them share are theirs to repeat; a profile read takes its Experience page too where LinkedIn's newer layout keeps it apart; place-ids keeps a place's location number; notes already saved need nothing redone"),
         ),
-        "fingerprint": "8fa815ae1641c15b",
+        "fingerprint": "75d224593dfbe07c",
     },
     "screening": {
         "by": "round", "priority": 2,

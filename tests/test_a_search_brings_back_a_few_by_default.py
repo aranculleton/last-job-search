@@ -49,7 +49,10 @@ def test_find_people_asks_how_many_too_and_the_run_keeps_to_it():
     js = open(os.path.join(ROOT, "templates", "app", "app.js"), encoding="utf-8").read()
     assert 'label: "How many people", value: "5"' in js and "args: Object.assign({count}" in js
     net = open(os.path.join(ROOT, ".claude", "commands", "network.md"), encoding="utf-8").read()
-    assert "brings back `args.count` people at most (5 when not given)" in net
+    assert "brings back `args.count` people (5 when not given), never more\n   than can be sent" \
+        in net
+    # A target, not a hint: a run asked for ten stopped at eight (2026-11-09).
+    assert "The number is a target, not a\n   hint" in net and "**Keep going until N.**" in net
 
 
 def test_the_job_sites_step_is_timed_as_it_runs_and_says_it_is_the_long_part():

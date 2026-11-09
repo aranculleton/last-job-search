@@ -228,3 +228,19 @@ OTHER_FUNCTIONS = (r"sales|marketing|recruit\w*|hr|people|finance|legal|"
 OTHER_FUNCTIONS_MOVED = (r"sales|marketing|recruit\w*|hr|people|finance|legal|"
                          r"support|customer success|product|design|ops|operations")
 OWN_FUNCTION_WORDS = r"data|analytics|engineering|that"
+
+# Who to write to, from a people search (tools/network/candidates.py), checked on the
+# search result's headline before anyone reaches the list. Each is shown at the app's
+# default; Morgan's could be the ones in the comments.
+# Their own reply rates by kind of reader, (answered, written to): founder, hiring_leader,
+# recruiter, senior_peer, peer. Empty, they are counted from the message log.
+#   REPLY_RATES = {"founder": (3, 5), "recruiter": (4, 9), "peer": (2, 30)}
+REPLY_RATES = {}
+# Recruiters for work near theirs, ranked a little below one for their own function.
+#   RECRUITER_NEAR = ("supply chain", "operations")
+RECRUITER_NEAR = ()
+# Headlines never shown, whatever else fits: a pattern, or a tuple of words.
+#   SKIP_HEADLINES = ("agency recruiter",)
+SKIP_HEADLINES = None
+# At most this many people at one employer in one run (None: the per-employer limit only).
+PER_EMPLOYER_PER_RUN = None
