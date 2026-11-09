@@ -23,7 +23,7 @@ import test_the_page_journeys as journeys  # noqa: E402
 from test_the_page_journeys import PHONE, WIDE, _sample  # noqa: E402
 
 CLOCK = "2026-11-09T09:30:00Z"
-LINE = "Larchmont Health: open again Fri 27 Nov, or say 'more at Larchmont Health'"
+LINE = "Larchmont Health: 2 people there are waiting on a reply, so it opens again Fri 27 Nov"
 
 
 @pytest.fixture(scope="module")
@@ -36,11 +36,11 @@ def _model(held=True):
     rules = dict(m.get("rules") or {})
     rules["held"] = ([{"id": "hold~employer_wait~larchmont health", "rule": "employer_wait",
                        "what": "Larchmont Health", "until": "2026-11-27", "line": LINE,
-                       "say": "more at Larchmont Health"},
+                       "say": "more at Larchmont Health", "lift": "Open it now"},
                       {"id": "hold~person_hold~celia marsh", "rule": "person_hold",
                        "what": "Celia Marsh", "until": None,
-                       "line": "Celia Marsh: on hold with no end day, or say 'write to Celia again'",
-                       "say": "write to Celia again"}] if held else [])
+                       "line": "Celia Marsh: on hold with no end day",
+                       "say": "write to Celia again", "lift": "Write again"}] if held else [])
     rules["every_hold"] = [{"id": r["id"], "area": r["area"], "line": r["line"]}
                            for r in holds.rules()]
     m["rules"] = rules
@@ -70,6 +70,46 @@ def test_held_back_is_one_row_with_a_line_each_and_every_rule_one_tap_below(run,
     assert opened["count"] == 2 and LINE in opened["text"], opened["text"][:400]
     assert "How every rule ends (%d)" % len(holds.RULES) in opened["text"]
     assert every["count"] == len(holds.RULES)
+
+
+# Each held line's pill, and every rule grouped under its area's heading.
+SHAPE = r"""(() => { const d = document.querySelector('[data-k="det:info:rules-held"]');
+  const pills = [...d.querySelectorAll('.held-row button')].map((b) => [b.textContent.trim(), b.getAttribute('data-wakes')]);
+  const heads = [...d.querySelectorAll('.held-area-name')].map((e) => e.textContent);
+  const rule = d.querySelector('.held-rule');
+  const gap = rule && rule.nextElementSibling ? rule.nextElementSibling.getBoundingClientRect().top - rule.getBoundingClientRect().bottom : null;
+  return {pills, heads, gap, rowText: [...d.querySelectorAll('.held-row .held-t')].map((e) => e.textContent),
+    wide: rule ? rule.closest('.held-rules').getBoundingClientRect().width : 0, fs: rule ? parseFloat(getComputedStyle(rule).fontSize) : 0}; })()"""
+
+
+def test_a_held_line_ends_at_its_day_with_a_pill_that_lifts_it(run, tmp_path):
+    """The screen review (2026-11-09): each line ended "or say 'more at <employer>'", and every
+    rule was one wall of 34 lines."""
+    got = _go(run, tmp_path, [
+        {"hash": "settings"},
+        {"open": "info-sum:rules-held"},
+        {"open": "few:held-rules", "eval": SHAPE},
+    ], WIDE, _model())
+    r = got["after"][-1]["eval"]
+    assert r["pills"] == [["Open it now", "talk"], ["Write again", "talk"]], r
+    assert all("or say" not in t for t in r["rowText"]) and r["rowText"][0] == LINE, r
+    assert r["heads"] == ["Jobs", "Applications", "People", "Messages", "Interviews", "This page"], r
+    assert r["gap"] is not None and r["gap"] >= 4, r
+    assert r["wide"] <= 64 * r["fs"], r
+
+
+def test_the_pill_asks_claude_under_the_row(run, tmp_path):
+    got = _go(run, tmp_path, [
+        {"hash": "settings"},
+        {"open": "info-sum:rules-held"},
+        {"open": "held-lift:hold~employer_wait~larchmont health", "wait": 300,
+         "read": '[data-k="det:info:rules-held"]'},
+    ], WIDE, _model())
+    last = got["after"][-1]
+    asked = [w for w in last["work"] if w.get("kind") == "talk"]
+    assert asked and asked[0]["args"]["text"] == "more at Larchmont Health", last["work"]
+    assert asked[0]["args"]["about"]["id"] == "held", asked[0]
+    assert "more at Larchmont Health" in last["text"], last["text"][:600]
 
 
 def test_with_nothing_held_it_says_so_and_still_opens_every_rule(run, tmp_path):

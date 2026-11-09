@@ -6615,13 +6615,28 @@
     const r = obj(M().rules);
     const held = arr(r.held), every = arr(r.every_hold);
     if (!held.length && !every.length) return null;
-    const rows = held.map((x) => h("li", {class: "held-row", "data-k": "held:" + txt(x.id)}, txt(x.line)));
-    const all = every.map((x) => h("li", {class: "held-rule", "data-k": "held-rule:" + txt(x.id)}, txt(x.line)));
+    // Each line ends at its day and why; what lifts it now is its own soft pill (the engine's
+    // `lift`), asked of Claude under this row. A line ending "or say 'more at <employer>'"
+    // left the person to type it (the screen review, 2026-11-09).
+    const rows = held.map((x) => h("li", {class: "held-row", "data-k": "held:" + txt(x.id)}, h("span", {class: "held-t"}, txt(x.line)),
+      txt(x.say) && txt(x.lift) ? btn(txt(x.lift), () => { askPlace("held", txt(x.say)); }, {small: true, kind: "secondary", key: "held-lift:" + txt(x.id), wakes: "talk", aria: txt(x.lift) + ": " + txt(x.what)}) : null));
+    // Every rule, grouped by what it is about under a small heading, a gap between rows: as one
+    // run of 34 lines it was a wall of text (the screen review, 2026-11-09).
+    const areas = [];
+    for (const x of every) {
+      const a = txt(x.area);
+      let g = areas.find((y) => y.area === a);
+      if (!g) areas.push(g = {area: a, rows: []});
+      g.rows.push(h("li", {class: "held-rule", "data-k": "held-rule:" + txt(x.id)}, txt(x.line)));
+    }
+    const all = areas.map((g) => h("li", {class: "held-area"}, h("p", {class: "held-area-name small"}, HOLD_AREAS[g.area] || cap1(g.area)), h("ul", {class: "plain held-rules-of"}, g.rows)));
     return infoRow("rules-held", "Held back for now", held.length ? held.length + " now" : "Nothing now",
-      [h("p", {class: "small muted"}, held.length ? "What your rules hold back today, when each opens again, and what lifts it." : "Nothing is held back today."),
+      [h("p", {class: "small muted"}, held.length ? "What your rules hold back today, why, and when each opens again." : "Nothing is held back today."),
         rows.length ? h("ul", {class: "plain held-list"}, shortList("held", rows, 5, "Show all")) : null,
-        all.length ? h("ul", {class: "plain held-rules small"}, shortList("held-rules", all, 0, "How every rule ends (" + all.length + ")")) : null]);
+        rows.length ? placeTalk("held") : null,
+        all.length ? h("ul", {class: "plain held-rules small"}, shortList("held-rules", all, 0, "How every rule ends (" + every.length + ")")) : null]);
   }
+  const HOLD_AREAS = {jobs: "Jobs", applications: "Applications", people: "People", messages: "Messages", interviews: "Interviews", page: "This page"};
   function openLearned() {
     openState.set("det:info:learned", true);
     S.focusAfter = {key: "info-sum:learned"};
@@ -7627,6 +7642,7 @@
     interview: ["interviews", "an interview", "Which interview? Who it is with, when, and the role"],
     wrong: ["settings", "something on this page", "What looks wrong, and where?"],
     rules: ["settings", "your rules", ""],
+    held: ["settings", "what your rules hold back", ""],
     chats: ["settings", "your old chats", ""]};
   function placeTalk(id, o) {
     const pl = PLACES[id];
