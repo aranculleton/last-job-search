@@ -66,6 +66,8 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **The page's helper no longer asks before starting, messaging or archiving its chats.** Its list of pre-approved steps had been split over two lines, and everything after the break asked you each time.
+
 - **A chat Claude starts on your computer asks you once to switch it to Auto, then never again.** One started from the cloud is refused Auto and began in Manual without a word, stopping on every step; you are now told the one switch, and the app remembers it for the chats after it there. The app also sets no reminders of its own while that chat works, each one a prompt.
 
 - **The Brief says good evening in the evening where you are.** It greeted by your profile's home time zone, so away from home it said "Good afternoon" at 10pm; it now follows the clock of the device you read it on.

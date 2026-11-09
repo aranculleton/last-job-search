@@ -4,8 +4,7 @@ description: >
   The chat's side of the person's job-search page: what to do when the page rings. Triggers
   on: [app], a doorbell from the page, "Artifact comment sent to Claude" on the job-search
   page, a work item, [work:<id>], the app page, the page's actions or receipts.
-allowed-tools: Read, Bash(python3 tools/app.py *), Bash(python3 tools/computer.py *), mcp__claude-code-remote__list_environments, 
- Bash(python3 tools/routines.py *), Bash(python3 tools/tidy.py *), ArtifactData, Artifact, ArtifactComments, Agent, mcp__claude-code-remote__create_session, mcp__claude-code-remote__send_message, mcp__claude-code-remote__list_sessions, mcp__claude-code-remote__get_session, mcp__claude-code-remote__archive_session, mcp__claude-code-remote__list_triggers, mcp__claude-code-remote__create_trigger, mcp__claude-code-remote__update_trigger, mcp__claude-code-remote__set_session_title
+allowed-tools: Read, Bash(python3 tools/app.py *), Bash(python3 tools/computer.py *), mcp__claude-code-remote__list_environments, Bash(python3 tools/routines.py *), Bash(python3 tools/tidy.py *), ArtifactData, Artifact, ArtifactComments, Agent, mcp__claude-code-remote__create_session, mcp__claude-code-remote__send_message, mcp__claude-code-remote__list_sessions, mcp__claude-code-remote__get_session, mcp__claude-code-remote__archive_session, mcp__claude-code-remote__list_triggers, mcp__claude-code-remote__create_trigger, mcp__claude-code-remote__update_trigger, mcp__claude-code-remote__set_session_title
 ---
 
 # The page's inbox
