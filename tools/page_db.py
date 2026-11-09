@@ -907,7 +907,7 @@ def can_take(item: dict, chat_kind: str) -> bool:
 # LinkedIn from here" (2026-11-09), so the engine refuses it to any chat but a computer one:
 # a chat on the computer, or a cloud chat lent the computer's browser, which says so with
 # `--kind computer` (tools/computer.py route). What such a chat is told instead is here.
-COMPUTER_ONLY_SAID = ("this needs the person's computer (a LinkedIn read): a cloud chat never "
+COMPUTER_ONLY_REFUSAL = ("this needs the person's computer (a LinkedIn read): a cloud chat never "
                       "claims, finishes or fails it. Start it there instead: python3 "
                       "tools/computer.py route")
 # The kinds whose `to: computer` means a LinkedIn read (a networking run, its reads and
@@ -925,7 +925,7 @@ def computer_only(item: dict, chat_kind: str) -> str:
         return ""
     args = item.get("args") if isinstance(item.get("args"), dict) else {}
     if str(item.get("kind") or "") in READS_ON_COMPUTER or args.get("read_on_computer"):
-        return COMPUTER_ONLY_SAID
+        return COMPUTER_ONLY_REFUSAL
     return ""
 
 

@@ -138,7 +138,9 @@ def computer_seen(db: dict, now) -> dict | None:
 def cmd_model(a) -> int:
     import app_model
     today, now = app_model.clock(a.today, a.now)
-    model, _ = _build(today, now)
+    # The computer's row as a page with nothing from it yet shows it, so `model` and a
+    # `view` of a page the computer never wrote to are the same model, rev and all.
+    model, _ = _build(today, now, computer=computer_seen({}, now))
     _out(_dump(model), a.out)
     return 0
 
@@ -370,7 +372,7 @@ def cmd_view(a) -> int:
     full: dict = {}
     model, _ = _build(today, now, shown=app_alerts.shown_in(db.get("view") or {}), full=full,
                       work_time=page_db.work_times(db, now) if db else None,
-                      computer=computer_seen(db, now) if db else None)
+                      computer=computer_seen(db or {}, now))
     w = page_db.Writes(a.out_dir)
     views = (db.get("view") or {}) if db else {}
     # Only what changed is written: every update rewrote all 37 documents, about 1.5 MB, when
