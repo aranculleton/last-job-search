@@ -1,79 +1,80 @@
 # Notes for the next builder
 
-Written at the release of 4.13.0 (2026-11-06), for the chat that builds the next version. Read
-MAINTAINING.md first; this is background, never a list of work: a builder starts only from the
-maintainer's notes (MAINTAINING.md, "How a builder works").
+Written at the hand-over of 9 November 2026, with no release made: the maintainer asked for a
+new builder chat before releasing. Read MAINTAINING.md first; this is background, never a list
+of work: a builder starts only from the maintainer's notes (MAINTAINING.md, "How a builder
+works").
 
-## What 4.13.0 decided, to keep
+## Where things stand
 
-- **Safari measures before the page's zoom, Chrome and Firefox after.** Anything set against the
-  window (innerHeight, scrollTop) turns a measured box into the window's px first
-  (`screenPerPx`, `screenY` in app.js; the tests' `__drawnRect`). Chrome can measure Safari's way
-  in a test (`measureBeforeZoom` in the harness), so the ordinary run holds it.
-- **A computer that reports no pointer is a computer.** Firefox run headless, a remote desktop and a
-  keyboard alone report `pointer: none`; every laptop rule lists it beside `pointer: fine`.
-- **Everywhere by hand takes `variants` and `tests`**, and its summary prints each failure's
-  message whole (`--tb=line`, `verbosity_assertions=2`). A probe test that raises its
-  measurements, run there on a branch, is the cheap way to see what Safari or Firefox draws
-  (this container has neither); remove it before merging.
-- **The Brief takes its compact shape whenever the whole of it does not fit**, not at a fixed
-  height (`brief-short` on the root, set by `fitBrief`), and a last few px of scroll come off the
-  stretched rows. Its fit is kept by the window's size and the zoom.
-- **News shows the person's News items setting (3 unless chosen)**; a point written "... Use it:
-  ..." is set in its two parts (`app_model._NEWS_USE`). News is never clipped: a cut point had no
-  way to open (2026-10-30).
-- **The Chat panel sits left or right** (`ljs:dock-side`, Settings > Look and the panel's arrow:
-  one choice). Earlier messages come only by Show, never by scrolling up.
-- **A job tapped keeps its place on Jobs while the person stays** (`S.jobsHeld`).
-- **Toasts: two at most, "+N more" opening Claude's work, a ring round the close for the time
-  left.** A redraw is never started from inside a redraw (`release` defers).
-- **A draft left out as not a fit is `result.left_out`**: said as its reason, never Try again.
-- **Saving**: a landing pushes the chat's branch before the check; the chat that answers the page
-  batches saves asked within five minutes, but only after its work is pushed; a round's number
-  counts GitHub's rounds and a clash is renamed; lost work is asked for once, then said; the
-  steps unsubscribe from a save's pull request at once.
-- **The page helper**: the hand-over ends on a new day in the person's zone; the listener starts
-  the fresh helper with `create_session` itself (the scheduled-task route is gone, its names
-  listed in docs/removed_names.json); a helper that handed over does no more work and archives
-  itself once its save lands; work named at a pass's end and left holds the helper's turn once.
-- **Follow-ups never ask the person to write them.** What code cannot write goes to Claude, who
-  looks first (their profile as read, the employer's news and roles, the person's profile), then
-  writes a plain follow-up. A "don't repeat" rule never turns plain follow-ups off.
-- **Profile reading uses the page's own tab only**, checks sign-in by reading it, and a sign-out
-  is one To do card. A web page cannot hide Claude's browser pane, so a read is visible if that
-  tab is open.
-- **A general resume is grounded like a tailored one**, and its bullets are chosen with its
-  pencil (Tweak panel, Bullets).
+- **Nothing released since 4.13.0.** `[Unreleased]` holds the maintainer's notes of 7, 8 and
+  9 November: the helper hand-over, the Brief's room, the referral's end, a round already had,
+  Help Claude do more, notes waiting on a profile read, the quiet character count, cue words in
+  preps, six-second toasts, and the helper bugs below. It is a minor version (4.14.0) when they
+  say "release it": it adds things a person notices.
+- **The last pull request may still be open**: "Three helper bugs: a lost finish, a tweak's
+  answer, unversioned page updates" on `claude/clever-wright-971fgq`, which also carries the
+  calm Contacts card and computer-only reads. Merge it once `Fast checks` is green, before
+  anything else.
+- **The update was rehearsed** (`tools/rehearse_sync.py`) on the maintainer's copy before the
+  last two rounds (47 of 47); rehearse again before the release.
+- **The README pictures need remaking at the release**: the Brief and the Contacts card both
+  look different now. The Brief and the tour were retaken once this version and were good, but
+  that commit never left its worktree.
+
+## What this version decided, to keep
+
+- **Every Linux job runs on `ubuntu-24.04`.** `ubuntu-latest` became 26.04 on 9 November 2026:
+  setup-python has no 3.9 there and Playwright 1.56.1 installs no browsers on it. Move back once
+  both do.
+- **Safari 26.0 is Playwright 1.56.1's WebKit** (what CI's Everywhere runs) and it measures
+  before the page's zoom; a newer WebKit does not. Reproduce it locally by installing
+  Playwright version 1.56.1 with npm in a scratch folder and pointing `NODE_PATH` at its `node_modules` with
+  `LJS_PW_ENGINE=webkit`. Tests read boxes with `__drawnRect`, never `getBoundingClientRect`
+  divided by the zoom.
+- **`app.py done` names each batch for its item** (`page_db.batch_name`): one file shared by
+  every finish lost the first of two.
+- **A tweak's written answer goes to its card's own thread** (`page_db.card_thread`, the page's
+  `cardThread`), with the person's words first; `done --unchanged` says a tweak left the words as
+  they were. The page also works it out by itself: drawn after the finish with the rev unmoved,
+  the card says the words are unchanged.
+- **`view` never writes a screen with no version unless the screens were read just now**
+  (`page_reads.screens_read`): screens laid from the mirror that lack a record the page holds
+  make it ask for a read of `screen` first.
+- **Work about a note waiting on a browser read is the computer's** (`reading.needs_browser_read`):
+  routed at queue time, refused to a cloud chat in `next_item`, and put back in the queue if a
+  cloud chat tries to finish it.
+- **The live helper comes back half an hour after a hand-over whenever it kept the old helper,
+  for any reason** (`tidy.plan`'s `recheck`).
+- **A Brief panel spends only the room it has** (`fitAir`): short lists boxed and spread a step
+  at a time up to 24px, the pills under sparse content, the progress chart up to 160px.
+- **Toasts last six seconds** (twelve for a failure); their Undo stays on the item after.
+- **A page test that builds the engine in-process puts away the modules it first loaded**
+  (`test_the_page_shows_the_engines_own_data.py`): `state` and `open_actions` keep the paths of
+  the copy they first loaded under, and a later test in the same worker read the wrong folder.
 
 ## Built from notes but not finished
 
-- **Small taps still take 2 to 4 minutes** (the maintainer's note 11). The code is under two
-  seconds; the time is about twelve model steps in a fresh helper. Recommended, not built: the
-  listener does code-only taps itself with no helper, and the late-read queries go with the last
-  batch; measure with `helper_usage` before and after.
-- **The suite's time is unchanged** (note 5): 4.12 added about 5%, the rest is fresh
-  `tools/app.py` processes importing 96 modules and compiling about 1,745 regexes. Lazy regex
-  compiling across about 20 modules would save roughly 15%; not done, being wide.
-- **What's new in Settings reads as cluttered** (the maintainer, at release): every version's
-  lines and "Changes made for you" in one long block. Not touched.
-- **Advanced holds two settings by design** (4.12: only what can slow things or use the
-  allowance); the maintainer asked about it at release.
-- **To do's folds**: one card left over shown in place rather than "Show 1 more", and the folds
-  as quiet lines rather than whole-width bars, were built after the release was asked for and go
-  in the next version's first merge (they are on master after 4.13.0 if that merge happened).
-- A record with a vanity LinkedIn address and an export in the member-id form, with no message
-  to match on, can still become a second record. "Make a fresh one" on a general resume starts
-  its bullets again. Undoing "Not this person" does not put them back on the reading list.
+- **The Brief's top row first** (the maintainer, 8 November): "prioritise immediate actions so
+  if the top row has like enough calendar things to warrant a second row so like 4 things, or
+  the today thing or next three etc that expands to the original size, rather than ALWAYS having
+  a long list for jobs, people etc." Today, Coming up and Next three should get the height their
+  content needs first, the second row's long lists giving way. Started by a helper and not
+  finished; nothing of it was kept.
+- **Your progress, polished** (same note): "make the progress dynamic expanding prettier/more
+  polished, maybe the boxes slightly expand? Doesn't look great in its current form." Not built.
+- **`wake` one version behind after the person answers a card**: the page raises the work's
+  version when they answer, so a wake read before that pins to the old one and is refused; the
+  existing `app.py version` repins it. Not changed.
 
-## Not tested at this release
+## Not tested, or found and left
 
-- **Windows** ran only on 4.12's runs and this release pull request: its landing test's fix
-  from 4.12 (shlex.join) and everything since are read there.
-- **Safari and Firefox** were run by hand on the page's fit, Chat, review and file-name tests and
-  the layout promises: all passed. The rest of the page in those engines runs on the release pull
-  request's Everywhere.
-- **The rehearsal** (`tools/rehearse_sync.py`) passed on the maintainer's copy at release, a cloud
-  and a computer chat taking the update at once, their own tests and the quick check included.
-  It needs a full clone of their copy (a filtered one cannot be copied): the push gate keeps one.
-- An `app.py model` build reads the checkout's own `origin/claude/*` branches (through
-  `report.stuck`), so a page test depends on the checkout it runs in.
+- **The moved-clock suite** (Everywhere's 30, 90 and 400 days) fails three tests that predate
+  this version: `test_sync_app.py::test_the_app_watch_runs_once_a_day_not_on_every_sync`,
+  `test_the_page_helper_stays_thin.py::test_a_save_asked_for_is_aged_on_the_clock_that_asked`
+  and `test_a_search_prints_its_own_table.py::test_the_golden_round_prints_its_table_and_writes_the_same_files`.
+- **Safari 26.0** fails three page tests that also fail on master before this version:
+  `test_the_brief_uses_its_room.py::test_the_jobs_panel_lists_more_where_it_has_room` and two
+  clock tests in `test_the_page_works_in_a_browser.py` (progress moving with the clock, work
+  picked up showing its clock).
+- **Windows** ran only on the Platforms runs of 7 November; nothing since.
