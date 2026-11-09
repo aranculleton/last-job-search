@@ -252,7 +252,7 @@ def waiting(db: dict, now: dt.datetime) -> dict:
     queued, started, finished = [], {}, []
     for wid, doc in sorted((db.get("work") or {}).items()):
         d = (doc or {}).get("data") or {}
-        if str(d.get("to") or "") != "computer":
+        if not page_db.computer_only(d, "cloud"):
             continue
         status = str(d.get("status") or "")
         sess = d.get("computer_session") if isinstance(d.get("computer_session"), dict) else {}

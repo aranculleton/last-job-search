@@ -867,8 +867,8 @@ def choose(db: dict, chat: str, kind: str, now, on: str = "", no_sessions: bool 
     # Sent to the computer: a LinkedIn read. It runs in this chat, which has the browser,
     # never as a background agent with none (`--tools none`), which the computer's chat had
     # to overrule by hand (2026-11-09).
-    sent_here = str((((db.get("work") or {}).get(page_db.safe_id(chosen["work"])) or {})
-                     .get("data") or {}).get("to") or "") == "computer"
+    sent_here = bool(page_db.computer_only((((db.get("work") or {}).get(
+        page_db.safe_id(chosen["work"])) or {}).get("data") or {}), "cloud"))
     info = model_guide.for_work(chosen["kind"], on)
     heavy = bool(page_db.WORK_KINDS.get(chosen["kind"], {}).get("heavy"))
     chosen.update(model=info["model"], effort=info["effort"], heavy=heavy)

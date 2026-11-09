@@ -394,13 +394,14 @@ def test_a_finished_or_stalled_job_frees_its_lock():
 def test_the_chat_that_answers_the_page_takes_its_work_and_a_brief_waits_for_the_cloud():
     """One chat answers the page (tools/app_listen.py), so work never waits for a chat of the
     other kind: a setting that sent it there stranded it (4.3). Only a brief, which comes with
-    the computer off, waits for a chat in the cloud. Work sent to the computer (a LinkedIn
-    read) is the other exception: a cloud chat claimed one and closed it with "Can't read
-    LinkedIn from here" (2026-11-09), so it waits for a chat with the computer's browser."""
+    the computer off, waits for a chat in the cloud. A LinkedIn read sent to the computer is
+    the other exception: a cloud chat claimed one and closed it with "Can't read LinkedIn
+    from here" (2026-11-09), so it waits for a chat with the computer's browser."""
     now = app_model.parse_time(NOW)
     assert page_db.next_item(_db(("s1", _w("search", to="cloud"))), "computer", now)["work"] == "s1"
-    assert page_db.next_item(_db(("s1", _w("search", to="computer"))), "cloud", now) is None
-    assert page_db.next_item(_db(("s1", _w("search", to="computer"))), "computer", now)["work"] == "s1"
+    assert page_db.next_item(_db(("s1", _w("search", to="computer"))), "cloud", now)["work"] == "s1"
+    assert page_db.next_item(_db(("n1", _w("network", to="computer"))), "cloud", now) is None
+    assert page_db.next_item(_db(("n1", _w("network", to="computer"))), "computer", now)["work"] == "n1"
     only_brief = _db(("b1", _w("brief", to="computer")))
     assert page_db.next_item(only_brief, "computer", now) is None
     assert page_db.next_item(only_brief, "cloud", now)["work"] == "b1"

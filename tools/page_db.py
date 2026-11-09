@@ -769,14 +769,23 @@ def can_take(item: dict, chat_kind: str) -> bool:
 COMPUTER_ONLY_SAID = ("this needs the person's computer (a LinkedIn read): a cloud chat never "
                       "claims, finishes or fails it. Start it there instead: python3 "
                       "tools/computer.py route")
+# The kinds whose `to: computer` means a LinkedIn read (a networking run, its reads and
+# rewrites), and the flag any other item sets when it needs one (`args.read_on_computer`).
+# Elsewhere `to: computer` is only where the page expected it to run (its listener was on
+# the computer), and any chat may still take it: 4.3 stranded work that way.
+READS_ON_COMPUTER = ("network",)
 
 
 def computer_only(item: dict, chat_kind: str) -> str:
     """Why a chat of `chat_kind` may not claim, finish or fail `item`, or "": it is sent to the
-    computer and this chat is not one. Their own Stop is the one way a cloud chat ends it."""
+    computer for a LinkedIn read and this chat is not one. Their own Stop is the one way a
+    cloud chat ends it."""
     if str(item.get("to") or "") != "computer" or chat_kind == "computer":
         return ""
-    return COMPUTER_ONLY_SAID
+    args = item.get("args") if isinstance(item.get("args"), dict) else {}
+    if str(item.get("kind") or "") in READS_ON_COMPUTER or args.get("read_on_computer"):
+        return COMPUTER_ONLY_SAID
+    return ""
 
 
 def _key(text) -> str:
@@ -894,7 +903,7 @@ def next_item(db: dict, chat_kind: str, now: dt.datetime,
                  and int(item.get("attempt") or 1) < AUTO_TRIES and not item.get("in_chat"))
         if str(item.get("status") or "") != "queued" and not again:
             continue
-        if not can_take(item, chat_kind) or (to_only and str(item.get("to") or "") != to_only):
+        if not can_take(item, chat_kind) or (to_only == "computer" and not computer_only(item, "cloud")):
             continue
         queued.append((-int(item.get("priority") or 0), str(item.get("asked_at") or ""), wid))
     # An update that changes how a record file is stored (args.migration) never interrupts
