@@ -922,7 +922,7 @@
         },
         {
           "url": "https://code.claude.com/docs/en/costs",
-          "quote": "The Session block at the top of"
+          "quote": "shows detailed token usage statistics for your current session"
         }
       ],
       "status": "documented",
