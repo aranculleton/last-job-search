@@ -2200,6 +2200,11 @@ SAFE_DEFAULTS: dict[str, str] = {
                                  "silence, as before it was a setting",
     "networking.MAX_UNANSWERED": "unset, two messages in a row with no reply (the first and one "
                                  "nudge), as before it was a setting",
+    # Since 2026-11-09 the days someone waiting holds their employer follow the follow-up
+    # rule, from the last contact, where a fixed 45 days from the first note held it.
+    "networking.EMPLOYER_WAIT_DAYS": "unset, the person's own follow-up rule decides: one "
+                                     "wait for each message their limit still allows, then "
+                                     "one more, from the last contact",
     "networking.EXPORT_EVERY_DAYS": "unset, the brief asks for a new LinkedIn download once the "
                                     "last is 14 days old; 0 never asks",
     "networking.EXPORT_REMIND": "\"auto\": the LinkedIn download is asked for weekly while "

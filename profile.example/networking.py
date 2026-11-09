@@ -20,6 +20,10 @@ LINKEDIN_PLAN = "premium"
 # each contact (`state.py follow-ups --write`), so the brief brings it back on the day.
 # FOLLOW_UP_DAYS = 14
 # MAX_UNANSWERED = 2
+# How long someone waiting on a reply keeps their employer closed to a new person, in days
+# from the last contact (tools/network/reading.py waiting_until). Unset, it follows the
+# rule above: one follow-up wait for each message the limit still allows, then one more.
+# EMPLOYER_WAIT_DAYS = 28
 # How old their LinkedIn download may get before the brief asks for a new one, in days
 # (tools/network/export.py); unset, 14, and 0 never asks.
 # EXPORT_EVERY_DAYS = 14

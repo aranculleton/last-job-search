@@ -2485,10 +2485,25 @@ def _people_per_employer(v) -> int:
 PER_EMPLOYER = _people_per_employer(getattr(_NET, "PEOPLE_PER_EMPLOYER", 2))
 MORE_AT_FILE = "more_at.json"
 WAITING = ("awaiting_reply", "connected_no_reply")
-# Only a note sent this recently holds the employer: the throttle's 45 days of silence. An
-# unanswered note from months ago is a thread that has ended, and counted for ever it would
-# shut the employer to every new person.
-WAITING_DAYS = 45
+# How long someone waiting on a reply holds their employer: by the person's own follow-up
+# rule (schema.FOLLOW_UP_DAYS, else the app's business days; schema.MAX_UNANSWERED), counted
+# from the last contact (`waiting_until`): one follow-up after their wait, at most their limit
+# of unanswered messages, then the thread is over and the employer is free. Under a rule of
+# 14 days and two messages, about four weeks after the first note. A fixed 45 days counted
+# from the first note held an employer six weeks and more, a number nobody chose (the
+# maintainer, 2026-11-09). EMPLOYER_WAIT_DAYS in networking.py sets a number of their own,
+# counted from the last contact; unset or not a whole number, the rule decides.
+def _wait_days(v) -> int | None:
+    if v is None or isinstance(v, bool):
+        return None
+    try:
+        n = int(v)
+    except (TypeError, ValueError):
+        return None
+    return n if n >= 1 else None
+
+
+EMPLOYER_WAIT_DAYS = _wait_days(getattr(_NET, "EMPLOYER_WAIT_DAYS", None))
 
 
 def _who(contact_id: str, contacts) -> dict | None:
@@ -2504,11 +2519,63 @@ def _who(contact_id: str, contacts) -> dict | None:
     return None
 
 
+def waiting_until(contact, msgs, wait_days: int | None = -1) -> datetime.date | None:
+    """The first day someone waiting on a reply no longer holds their employer, or None when
+    nothing about them has a date.
+
+    The clock runs from the last contact (state.follow_up_due: our last message, or their
+    acceptance when that came last), never the first note: a follow-up sent last week is
+    last week's contact. From there, by the person's rule: one follow-up wait for each message
+    their limit still allows (schema.MAX_UNANSWERED less those already unanswered), then one
+    more wait for the last of them to be answered. `wait_days` (EMPLOYER_WAIT_DAYS, -1 reads
+    it) replaces that with their own number of days from the last contact.
+
+    With no date in the log or on the row, the row's own follow-up day (next_action_due) is
+    the record's date: it holds until one more wait after it. With no date at all it holds
+    nothing: an undated note counted for ever shut the employer to everyone (2026-11-09)."""
+    import state
+    wait_days = EMPLOYER_WAIT_DAYS if wait_days == -1 else wait_days
+    msgs = list(msgs or ())
+    try:
+        sent, _due, _n = state.follow_up_due(contact, msgs)
+    except (TypeError, ValueError):
+        sent = None
+    if sent is None:
+        due = state.as_date((contact or {}).get("next_action_due"))
+        if due is None:
+            return None
+        return due + datetime.timedelta(days=wait_days) if wait_days else state.follow_up_on(due)
+    if wait_days:
+        return sent + datetime.timedelta(days=wait_days)
+    # At least the note that put them on the list went, logged or not.
+    gone = max(state._chases(msgs), 1)
+    until = sent
+    for _ in range(max(state.schema.MAX_UNANSWERED - gone, 0) + 1):
+        until = state.follow_up_on(until)
+    return until
+
+
+def _waiting_days() -> int:
+    """About how many days a first note, with nothing after it, holds its employer under the
+    person's rule (business days read as calendar days, rounded up): the number a line or a
+    test may quote. The day itself is always `waiting_until`'s."""
+    if EMPLOYER_WAIT_DAYS:
+        return EMPLOYER_WAIT_DAYS
+    import schema
+    wait = schema.FOLLOW_UP_DAYS or -(-schema.FOLLOWUP_BUSINESS_DAYS * 7 // 5)
+    return wait * max(schema.MAX_UNANSWERED, 1)
+
+
+WAITING_DAYS = _waiting_days()
+
+
 def at_employer(company: str, contacts, also=(), today: datetime.date | None = None,
-                threads=None) -> tuple:
+                threads=None, until: dict | None = None) -> tuple:
     """(who at this employer is waiting on a reply, who of `also` is there too), by
-    company_key, so an employer under another of its names is the same employer. A note
-    first sent more than WAITING_DAYS ago no longer counts; one with no date still does.
+    company_key, so an employer under another of its names is the same employer. Someone
+    waiting holds the employer only until `waiting_until` (the person's follow-up rule, from
+    the last contact); one with no date at all holds nothing. `until`, given a dict, gets
+    each waiting person's day by contact id, for the line that says when it opens.
     Waiting is what the message log says (state.effective_status), never the stored status
     alone: someone who had replied was counted, and named, as waiting (2026-10-21).
     `threads` is the message log; None reads it."""
@@ -2525,18 +2592,17 @@ def at_employer(company: str, contacts, also=(), today: datetime.date | None = N
         except Exception:  # noqa: BLE001  a count must never break a save
             threads = []
 
-    def status(c) -> str:
-        return state.effective_status(c, state.threads_for(threads, c.get("contact_id", "")))
+    def msgs(c) -> list:
+        return state.threads_for(threads, c.get("contact_id", ""))
 
     def recent(c) -> bool:
-        try:
-            sent = datetime.date.fromisoformat(str(c.get("first_contacted") or "")[:10])
-        except ValueError:
-            return True
-        return (today - sent).days <= WAITING_DAYS
+        day = waiting_until(c, msgs(c))
+        if day is not None and until is not None:
+            until[str(c.get("contact_id") or "")] = day
+        return day is not None and day > today
 
     waiting = [c for c in contacts or () if state.row_company_key(c) == k
-               and recent(c) and status(c) in WAITING]
+               and state.effective_status(c, msgs(c)) in WAITING and recent(c)]
     there = [x for x in also if x and company_key(x.get("company")) == k]
     return waiting, there
 
