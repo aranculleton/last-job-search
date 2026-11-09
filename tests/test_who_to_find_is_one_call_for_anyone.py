@@ -14,6 +14,7 @@ profile, as a person's copy does.
 from __future__ import annotations
 
 import csv
+import datetime
 import json
 import os
 import shutil
@@ -22,7 +23,12 @@ import sys
 
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-TODAY = "2026-11-09"
+# The app's own day, never a fixed one: these commands count from it (person.today), and
+# the suite runs with the clock moved on too (tools/everywhere.sh, 30 to 400 days).
+_DAY = datetime.date.today()
+TODAY = _DAY.isoformat()
+WEEK_AGO = (_DAY - datetime.timedelta(days=7)).isoformat()
+SIX_DAYS_AGO = (_DAY - datetime.timedelta(days=6)).isoformat()
 
 
 def _profile(tmp_path, networking="", search="", employers="", roles=""):
@@ -148,9 +154,9 @@ def test_a_remote_software_engineer(tmp_path):
     # Two people at one employer already waiting on a reply, written to last week.
     _book(tmp_path, [
         {"contact_id": "larkspur_a", "name": "Corwin Haldane", "company": "Larkspur Systems",
-         "status": "awaiting_reply", "first_contacted": "2026-11-02", "channel": "connection"},
+         "status": "awaiting_reply", "first_contacted": WEEK_AGO, "channel": "connection"},
         {"contact_id": "larkspur_b", "name": "Zoe Ruiz", "company": "Larkspur Systems",
-         "status": "awaiting_reply", "first_contacted": "2026-11-03", "channel": "connection"},
+         "status": "awaiting_reply", "first_contacted": SIX_DAYS_AGO, "channel": "connection"},
     ])
     uk = "United Kingdom"
     people = [
@@ -232,9 +238,9 @@ def test_the_one_surfacing_check_holds_the_per_employer_limit(tmp_path):
     _profile(tmp_path, ENG_NET, "", ENG_EMP)
     _book(tmp_path, [
         {"contact_id": "larkspur_a", "name": "Corwin Haldane", "company": "Larkspur Systems",
-         "status": "awaiting_reply", "first_contacted": "2026-11-02", "channel": "connection"},
+         "status": "awaiting_reply", "first_contacted": WEEK_AGO, "channel": "connection"},
         {"contact_id": "larkspur_b", "name": "Zoe Ruiz", "company": "Larkspur Systems",
-         "status": "awaiting_reply", "first_contacted": "2026-11-03", "channel": "connection"},
+         "status": "awaiting_reply", "first_contacted": SIX_DAYS_AGO, "channel": "connection"},
     ])
     people = [_p("Pip Varga", "Engineering Manager", "Larkspur Systems", "United Kingdom", "pip"),
               _p("Idris Corrie", "Staff Software Engineer", "Nimbus Cloud", "", "idris"),
