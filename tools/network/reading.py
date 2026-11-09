@@ -2885,6 +2885,19 @@ def waits_on_read(contact_id: str) -> bool:
     return _first_line(contact_id).startswith(WAITS_ON_A_READ)
 
 
+def needs_browser_read(contact_id: str) -> bool:
+    """Does their note wait on a read only the page's own browser can make? It opens on WAITS
+    ON A READ, nothing of their own page is read yet, and the person lets Claude read
+    (PROFILE_READS "browser"). Work about such a note is the computer's: a cloud chat cannot
+    read LinkedIn, took a pencil change on one and closed it as done, so the chat on the
+    computer never saw it (the maintainer, 2026-11-09; page_db.needs_computer)."""
+    try:
+        return reads_now() == "browser" and waits_on_read(contact_id) and \
+            not _page_read(load(contact_id) or {})
+    except (OSError, ValueError):
+        return False
+
+
 def card_only_draft(contact_id: str) -> bool:
     """Is their waiting draft a card-only note (it opens on the CARD ONLY line)?"""
     return _first_line(contact_id).startswith(CARD_ONLY)

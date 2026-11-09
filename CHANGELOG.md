@@ -73,12 +73,22 @@ make sense to somebody whose repo just received it.
 - **Help Claude do more is easy to find on To do.** It is one line right after today's things,
   saying what it gives, instead of at the foot after Not due yet; with nothing due today, its
   first card shows. It is never counted among today's things.
-- **A note waiting for someone's profile says once when it will be read.** Your page reads
-  their profile by itself while it is open in the Claude app on your computer; on a phone or
-  the web the card says so, and To do has one card for everyone waiting ("Open your page in the
-  Claude app on your computer to read 3 profiles") instead of a row each under Messages to
-  send. In the app the card says "Reading their profile…" while it does. Pasting a profile
-  instead shows the minutes one note's rewrite takes, not "a lot of your allowance".
+- **A person's card in Contacts reads as one calm card.** Under a note, its facts are one quiet
+  line, "290/300 · Waiting for their profile · Location not on record", with what each means
+  behind its "?", instead of three lines. Your page reads a waiting profile by itself while it
+  is open in the Claude app on your computer; elsewhere the "?" says so, and To do has one card
+  for everyone waiting ("Open your page in the Claude app on your computer to read 3 profiles")
+  instead of a row each under Messages to send. Pasting a profile instead shows the minutes one
+  note's rewrite takes, not "a lot of your allowance".
+- **A change you ask for with the pencil sits in one grey block under the note**, what you asked
+  and then where it stands, with Stop Claude right beside it. It says "Starting in a moment" for
+  half a minute at most, then "Waiting for Claude, asked at 10:42", never a clock running under
+  "starting in a moment". Asked about every note waiting for a profile from one note's pencil,
+  Claude puts them all on your page's reading list and leaves that note as it is, and says so.
+- **Work on a note waiting for someone's profile waits for the Claude app on your computer.**
+  A chat in the cloud cannot read LinkedIn, yet one took a change asked on such a note and
+  closed it as done, so the chat on your computer never saw it. Now that work is the
+  computer's, its card says it waits there, and a cloud chat never takes it or closes it.
 - **A character count is grey while the message fits.** It turns amber only while you are
   editing and are close to the limit, and red over it: "291 of 300 characters" read as a warning.
 
