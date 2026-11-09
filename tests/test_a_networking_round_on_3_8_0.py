@@ -419,8 +419,10 @@ def test_a_first_page_with_nobody_in_the_function_here_is_said_once(book, capsys
 # ------------------------------------------------------------ 21. two a company
 
 def test_people_waiting_on_a_reply_count_against_two_a_company(book, capsys):
+    # Written to three days ago: a note with no date at all holds nothing (2026-11-09).
+    sent = (TODAY - datetime.timedelta(days=3)).isoformat()
     waiting = [_row(f"kestrel_{i}", n, "Kestrel Mutual Ltd", status="awaiting_reply",
-                    location="Manchester")
+                    location="Manchester", first_contacted=sent)
                for i, n in enumerate(("Rosalind Achterberg", "Corwin Haldane", "Idris Corrie"))]
     new = [_row("kestrel_allard", "Wren Allard", "Kestrel Mutual", location="Manchester"),
            _row("fernhill_a", "Juno Castellan", "Fernhill Freight", location="Manchester"),

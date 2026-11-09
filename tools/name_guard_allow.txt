@@ -665,3 +665,12 @@ Hi Odo                  # the invented Odo Quillan greeted, the same test
 Average Monthly Visitors # a field on Adzuna's sign-up form, tools/portals.py
 Mossgate Freight Ltd    # invented employer, tests/test_a_search_of_named_employers_holds_only_them.py
 Ottilie Brack           # invented contact, tests/test_a_search_prints_its_own_table.py
+Ashgrove Partners       # invented employer, tests/test_every_hold_says_when_it_ends.py
+Bram Ostler             # invented contact, the same test
+Celia Marsh             # invented contact, the same test and tests/test_the_page_says_what_is_held_back_and_when_it_opens.py
+Fallowmere Clinic       # invented employer, tests/test_every_hold_says_when_it_ends.py
+Larchmont Health        # invented employer, the same two tests
+Larchmont Health'       # the same, quoted in a line the page says
+Fernhill Freight'       # the example person's invented employer, quoted in tools/holds.py
+Ridley Assurance        # invented employer, tests/test_every_hold_says_when_it_ends.py
+Tomas Ferreira          # an invented remote software engineer, the same test

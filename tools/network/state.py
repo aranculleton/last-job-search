@@ -4993,12 +4993,15 @@ def hold_lifts(text) -> datetime.date | None:
     return day
 
 
-def action_hold(next_action, today) -> str:
-    """Why this next_action is held today, or "" when it is not a hold or has lifted."""
+def action_hold(next_action, today, due=None) -> str:
+    """Why this next_action is held today, or "" when it is not a hold or has lifted.
+    A hold whose words name no end lifts on the row's own day (`due`, its next_action_due)
+    where it has one: a "Hold" with a day beside it held for ever (2026-11-09). With
+    neither, it holds until the person says otherwise, and the page lists it so."""
     text = str(next_action or "").strip()
     if not _HOLD.match(text):
         return ""
-    lifts = hold_lifts(text)
+    lifts = hold_lifts(text) or as_date(due)
     if lifts is None:
         return "on hold, no end date"
     if lifts <= _need_date(today, "today"):
