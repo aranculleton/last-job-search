@@ -295,7 +295,9 @@ def test_the_daily_check_names_what_is_broken_and_the_way_back():
     gone = computer.check(dict(_db(), chats=_beat(age_s=9 * 86400)), T, envs=None)
     assert any("remote-control-settings" in ln for ln in gone)
     no_task = computer.check(dict(_db(), chats=_beat(task=False)), T, envs=BRIDGE)
-    assert any(computer.TASK_NAME in ln for ln in no_task)
+    # No hourly task is asked for: it cost a Claude run an hour for what the cloud already
+    # starts on the computer when work waits (the maintainer, 2026-11-09).
+    assert not any(computer.TASK_NAME in ln or "scheduled task" in ln for ln in no_task)
     behind = computer.check(dict(_db(), chats=_beat(version="1.0.0")), T, envs=BRIDGE,
                             version="9.9.9")
     assert any("older version" in ln for ln in behind)

@@ -479,8 +479,8 @@ def session_prompt(wid: str, title: str, url: str, copy: str) -> str:
         "--chat <your id>, and send its batch.",
         "7. At the end: python3 tools/computer.py beat \"$D\" --name \"<this computer's name>\" "
         "--browser <shown|hidden> --linkedin <in|out|unknown> --read <ok|stopped|none>, and "
-        "send its batch. python3 tools/computer.py task: where it says the scheduled task is "
-        "missing and this chat can make scheduled tasks, make it exactly as it prints. Archive "
+        "send its batch. Never make a scheduled task: the cloud starts a chat here when work "
+        "waits (COMPUTER.md, section 6, step 5). Archive "
         "this computer's earlier chats named \"Job search · ...\" whose work is finished, where "
         "this chat can (claude_surfaces: computer-chat-archive). Then stop: the chat that "
         "started you archives this one.",
@@ -864,10 +864,9 @@ def check(db: dict, now: dt.datetime, envs=None, version: str = "", triggers=Non
                    "been deleted. The one way back: python3 tools/claude_surfaces.py steps "
                    "remote-control-settings, then the next work for the computer starts a "
                    "new chat there by itself.")
-    if beat_ and not beat_.get("task") and st["state"] in ("ready", "working"):
-        out.append(f"computer: the scheduled task is not on the computer: the next chat there "
-                   f"makes it again ({TASK_NAME}, every {TASK_EVERY_MIN} minutes, Local, in "
-                   "the copy's folder, Auto).")
+    # No scheduled task is made or asked for: one started a Claude run every hour the app was
+    # open, waiting work or not, for what the cloud already starts on the computer when work
+    # waits (the maintainer, 2026-11-09: "this sounds like it could be incredibly expensive").
     if st.get("behind"):
         out.append("computer: the computer's copy is on an older version: its next chat takes "
                    "the update when it starts.")

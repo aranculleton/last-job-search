@@ -143,9 +143,10 @@ know whether it worked.
 4. **Signed in to LinkedIn, and staying signed in** (`browser-pane-stay-signed-in`). Check:
    the chat on the computer reads one LinkedIn page and writes its heartbeat
    (`computer.py beat --linkedin in`).
-5. **The scheduled task** (`routines-local`): the chat on the computer makes it itself where
-   it can (`python3 tools/computer.py task` prints exactly what), so work still starts with
-   no cloud chat awake. Never asked of the person.
+5. **No scheduled task.** An hourly task on the computer started a Claude run every hour the
+   app was open, waiting work or not, and needed its own Auto switch and a first run by hand
+   (2026-11-09). The cloud already starts a chat on the computer when work waits, so none is
+   made or asked for. One a person made earlier can be deleted from Scheduled in the sidebar.
 6. **The test**: that chat reads one profile, then `python3 tools/computer.py ready --name
    <the computer>` dates it in `profile/place.json`, which ends the upgrade card.
 

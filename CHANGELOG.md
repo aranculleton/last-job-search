@@ -28,7 +28,7 @@ make sense to somebody whose repo just received it.
 
 - **Every run on your computer is measured, not guessed.** Its time per stage, steps by kind, LinkedIn pages and web searches come from the run's own record and show on its card, and the Monday brief says how the week's runs went. A run's own report of its time and steps was wrong by a third.
 
-- **A fallback when no helper is awake.** A chat on your computer can set up a scheduled task there that takes waiting work while the Claude app is open, and the rest of the chain (a folder your computer offers, a browser lent to a cloud chat, then pasting a profile) is tried in order.
+- **A fallback when your computer cannot be reached.** A folder your computer offers, then a browser lent to a cloud chat, then pasting a profile are tried in order. No hourly task is set up on your computer: it would start a Claude run every hour for nothing, when the cloud already starts a chat there whenever work waits.
 
 - **Profile upgrade: computer-linkedin.** If you work on a computer, one card offers to set it up for LinkedIn (about five minutes, once), and setup does the same for new copies.
 
