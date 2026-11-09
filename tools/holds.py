@@ -424,7 +424,7 @@ def _person_holds(today, contacts) -> list:
             continue
         name = str(c.get("name") or c.get("contact_id") or "").strip()
         first = name.split()[0] if name else name
-        lifts = state.hold_lifts(c.get("next_action")) or state.as_date(c.get("next_action_due"))
+        lifts = state.hold_end(c.get("next_action"), c.get("next_action_due"))
         when = f"on hold until {day_words(lifts)}" if lifts else "on hold with no end day"
         out.append(_hold("person_hold", name, f"{name}: {when}, or say 'write to {first} again'",
                          lifts, f"write to {first} again"))

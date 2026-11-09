@@ -120,19 +120,9 @@ def _build(today, now, **kw):
 
 def computer_seen(db: dict, now) -> dict | None:
     """The computer's state from the page's database (tools/computer.py), or None where it
-    cannot be read: the page then shows what it showed before."""
-    try:
-        import computer
-        works_on = computer._works_on()
-        st = computer.state(db, now, version=computer.app_version(), works_on=works_on)
-    except Exception:  # noqa: BLE001  the page is drawn whatever the computer's record holds
-        return None
-    # Someone who never said they have a computer, with nothing waiting for one, keeps the
-    # row as it was: nothing about a computer is pressed on a person without one.
-    if st["state"] in ("not_set_up", "no_computer") and not st["waiting"] \
-            and works_on not in ("computer", "both"):
-        return None
-    return st
+    cannot be read: the page then shows what it showed before (computer.seen)."""
+    import computer
+    return computer.seen(db, now)
 
 
 def cmd_model(a) -> int:
@@ -848,13 +838,15 @@ def cmd_apply(a) -> int:
 
 def choose(db: dict, chat: str, kind: str, now, on: str = "", no_sessions: bool = False,
            claim_out: str | None = None, job_chat: bool = False,
-           computer_only: bool = False) -> dict | None:
+           computer_only: bool = False, lent: bool = False) -> dict | None:
     """The queued work this chat should take (None: nothing is), with the model a chat
     started for it gets (tools/model_guide.py for_work), `run`: where it is done
     (where_it_runs), and with `claim_out` the claim as batch files. Small work done here is
     claimed running at its first stage, so no progress pin follows it. Work sent to the
     computer is always done here, in the chat with the browser (`computer_only`: the chat
-    the app started on the computer takes nothing else)."""
+    the app started on the computer takes nothing else). `lent`: a cloud chat lent the
+    computer's browser or folder, claiming as a computer chat; its heartbeat, like a big job's
+    own chat's, never counts as a chat listening (page_db.heartbeat `watching`)."""
     import app_listen
     import model_guide
     import page_db
@@ -897,7 +889,8 @@ def choose(db: dict, chat: str, kind: str, now, on: str = "", no_sessions: bool 
                                         chat_kind=kind, computer_only=sent_here)
     if claim_out:
         chosen["batches"] = page_db.claim(db, chosen, chat, kind, now, claim_out,
-                                          running=chosen.get("run") == "here")
+                                          running=chosen.get("run") == "here",
+                                          watching=not (lent or job_chat))
     return chosen
 
 
@@ -913,7 +906,8 @@ def cmd_next(a) -> int:
         chosen = choose(page_db.load(a.dump), a.chat, a.kind, now, on=a.on,
                         no_sessions=a.no_sessions, claim_out=a.claim_out,
                         job_chat=getattr(a, "job_chat", False),
-                        computer_only=getattr(a, "computer_only", False))
+                        computer_only=getattr(a, "computer_only", False),
+                        lent=getattr(a, "lent", False))
     except ValueError as e:
         print(f"app: {e.args[0] if e.args else e}", file=sys.stderr)
         return 2
@@ -983,7 +977,7 @@ def child_prompt(chosen: dict, parent: str, url: str, session: bool = True) -> s
 
 def _versions_said(dump: str) -> str:
     """The step after a read that keeps each record's own version (page_db.versions_step),
-    or "" where the app's hook keeps them."""
+    or "" where a hook keeps them (none does yet: page_db.hook_keeps_versions)."""
     import page_db
     return page_db.versions_step(dump)
 
@@ -1000,6 +994,11 @@ def job_steps(chosen: dict, claimer: str, url: str, session: bool = True,
     keys = ", ".join(s["key"] for s in chosen.get("stages") or [] if s.get("key"))
     row = work_row(kind)
     lines: list[str] = []
+    # Claimed as a computer chat (a cloud chat lent the computer's browser or folder too):
+    # every finish says so. Without it, app.py done took the chat's own kind, cloud, and a
+    # LinkedIn read could not be finished by the chat that did it (the release review,
+    # 2026-11-09).
+    kf = " --kind computer" if chat_kind == "computer" else ""
 
     def step(text: str) -> None:
         lines.append(f"{first + len(lines)}. {text}")
@@ -1033,9 +1032,9 @@ def job_steps(chosen: dict, claimer: str, url: str, session: bool = True,
          f"(ArtifactData batch, url {url}). On a long stage, pin it again with a new line every "
          "ten minutes or so: the page counts a job with no word for half an hour as stopped. "
          "\"stop_asked\": true means they tapped Stop (`stopped` names others of the job they "
-         f"stopped): end each with app.py done --work <its id> --chat {claimer} --stopped. A "
+         f"stopped): end each with app.py done --work <its id> --chat {claimer}{kf} --stopped. A "
          "question only the person can answer: app.py done --work <its id> --chat "
-         f"{claimer} --question \"<one plain question>\" puts it on their page, and their "
+         f"{claimer}{kf} --question \"<one plain question>\" puts it on their page, and their "
          "answer puts it back in the queue; never wait in the chat. A refused write names the "
          "record's version: python3 tools/app.py version \"$D\" <collection>/<doc id> "
          "<that version>, and run it once more; refused again, read work again; claimed by "
@@ -1071,9 +1070,9 @@ def job_steps(chosen: dict, claimer: str, url: str, session: bool = True,
              "not one they can take: --left-out \"<why, plain>\"), send its batch and bring the "
              "page up to date (the finish step below), so it is in Drafts at once. The search "
              "finishes by itself with its last draft; never app.py done it yourself.")
-    done = (f"each draft's own app.py done, with --chat {claimer}: {wid} finishes with the last"
+    done = (f"each draft's own app.py done, with --chat {claimer}{kf}: {wid} finishes with the last"
             if kind == "search" and chosen.get("draft_all")
-            else f"its app.py done with --work {wid} --chat {claimer}")
+            else f"its app.py done with --work {wid} --chat {claimer}{kf}")
     # A draft's PDFs: this chat cannot upload (Artifact is not among its tools), so its
     # app.py done queues one `files` item for the chat that answers the page, and nothing is
     # uploaded here (the maintainer, 4 November).
@@ -1420,8 +1419,11 @@ def data_current(dump: str) -> bool:
         if not rev:
             return False
         today, now = app_model.clock(None, None)
-        # Built as `view` builds it: the suggestions on the page keep their day.
-        model, _ = _build(today, now, shown=app_alerts.shown_in(db.get("view") or {}), full={})
+        # Built as `view` builds it: the suggestions on the page keep their day, and the
+        # computer is as the page's database says (built without it, a page holding the model
+        # `view` made never matched, and start said to write it all again).
+        model, _ = _build(today, now, shown=app_alerts.shown_in(db.get("view") or {}), full={},
+                          computer=computer_seen(db, now))
         return rev == str(model.get("rev") or "")
     except Exception:  # noqa: BLE001  no profile, or a model that cannot be built: write it
         return False
@@ -2944,6 +2946,9 @@ def main(argv=None) -> int:
     p.add_argument("--computer-only", dest="computer_only", action="store_true",
                    help="this chat was started on the computer for its work: take only work "
                         "sent to the computer, and do it here")
+    p.add_argument("--lent", action="store_true",
+                   help="a cloud chat lent the computer's browser or folder: its claim is a "
+                        "computer chat's, but it is not a chat listening on the computer")
     p.add_argument("--chat", required=True)
     p.add_argument("--kind", required=True, choices=("cloud", "computer"))
     p.add_argument("--claim-out", dest="claim_out", default=None,

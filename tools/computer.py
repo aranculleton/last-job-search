@@ -244,13 +244,26 @@ def bridges(envs) -> list[dict]:
 # ------------------------------------------------------------------ the one line
 
 
+def lapsed(item: dict, now: dt.datetime, work: dict | None = None) -> bool:
+    """Work for the computer whose chat stopped (its claim not moved on for a lease) and that
+    `page_db.next_item` starts again: it waits as queued work does. Only a computer chat may
+    take it again, so counted as running it sat "running" for good when the computer's chat
+    died: nothing started a new one, and the scheduled task saw nothing (the release review,
+    2026-11-09). One tried AUTO_TRIES times is failed in plain words instead (page_db.stranded)."""
+    import page_db
+    return (str(item.get("status") or "") in page_db.ACTIVE
+            and not page_db._live_claim(item, now, work)
+            and int(item.get("attempt") or 1) < page_db.AUTO_TRIES and not item.get("in_chat"))
+
+
 def waiting(db: dict, now: dt.datetime) -> dict:
     """{"queued": [ids], "started": {id: session}, "finished": [{work, session}]}: the work
     sent to the computer that nobody has started, the chats started for it on the computer,
     and the ones whose work is over, to be archived."""
     import page_db
     queued, started, finished = [], {}, []
-    for wid, doc in sorted((db.get("work") or {}).items()):
+    work = db.get("work") or {}
+    for wid, doc in sorted(work.items()):
         d = (doc or {}).get("data") or {}
         if not page_db.computer_only(d, "cloud"):
             continue
@@ -261,7 +274,7 @@ def waiting(db: dict, now: dt.datetime) -> dict:
                 finished.append({"work": wid, "session": sess["id"]})
             continue
         at = _time(sess.get("at"))
-        if status == "queued" and not d.get("stop_asked"):
+        if (status == "queued" or lapsed(d, now, work)) and not d.get("stop_asked"):
             if sess.get("id") and at and (now - at).total_seconds() < STARTED_S:
                 started[wid] = sess["id"]
             else:
@@ -319,6 +332,49 @@ def state(db: dict, now: dt.datetime, envs=None, version: str = "",
             "computer": beat_.get("computer") or "", "seen_at": beat_.get("seen_at"),
             "waiting": len(w["queued"]) + len(w["started"]),
             "behind": bool(version and beat_.get("version") and beat_["version"] != version)}
+
+
+def seen(db: dict, now: dt.datetime) -> dict | None:
+    """The computer's state from the page's database, as the page is drawn with it (`app.py
+    view`) and a tap on its card is checked against it (app_actions.Index), or None where it
+    cannot be read: the page then shows what it showed before."""
+    try:
+        works_on = _works_on()
+        st = state(db, now, version=app_version(), works_on=works_on)
+    except Exception:  # noqa: BLE001  the page is drawn whatever the computer's record holds
+        return None
+    # Someone who never said they have a computer, with nothing waiting for one, keeps the
+    # row as it was: nothing about a computer is pressed on a person without one. Nor on one
+    # whose computer was set up and tested (`computer_ready`) and has not written to this page
+    # yet: "Set it up once" was untrue for them.
+    if st["state"] in ("not_set_up", "no_computer") and not st["waiting"] \
+            and (works_on not in ("computer", "both") or _ready_said()):
+        return None
+    return st
+
+
+def _ready_said() -> bool:
+    """Was the computer side set up and tested here (`ready`, profile/place.json)?"""
+    try:
+        import place
+        return bool(place.place_record().get("computer_ready"))
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def reads_there(rec: dict, st: dict, now: dt.datetime) -> bool:
+    """Is the person's computer known ready to read LinkedIn, so work that reads it is sent
+    there (`to: computer`, the page's peopleTo)? They work on a computer, and its setup was
+    tested (`computer_ready` in profile/place.json, written by `ready`) or it wrote a heartbeat
+    lately (`st`: `state`'s answer). Otherwise it is sent anywhere, where the page reads the
+    profiles itself: sent to a computer with no bridge, no scheduled task and its setup put
+    off, it waited for good, since no cloud chat may take it (the release review, 2026-11-09)."""
+    if str(rec.get("works_on") or "") not in ("computer", "both"):
+        return False
+    if rec.get("computer_ready"):
+        return True
+    seen = _time((st or {}).get("seen_at"))
+    return bool(seen and (now - seen).total_seconds() < OFF_S)
 
 
 def card(st: dict) -> dict | None:
@@ -486,14 +542,17 @@ def route(db: dict, now: dt.datetime, chat: str = "", envs=None, folders=None,
                 "line": f"Using your {_plain_name(f.get('computer_name'))}.",
                 "call": {k: f.get(k) for k in ("environment_id", "computer_name", "folder")},
                 "then": ("request_computer_folder with this call; attached: claim it here with "
-                         "--kind computer and do it here."), "waiting": w}
+                         "python3 tools/app.py next <dump> --chat <id> --kind computer "
+                         "--computer-only --lent and do it here, with --kind computer on every "
+                         "app.py done."), "waiting": w}
     if any(t.startswith("mcp__remote-devices__Claude_Browser") or
            t == "enable__mcp__remote-devices__Claude_Browser" for t in tools):
         return {"route": "linked browser", "work": wid,
                 "line": "Reading it with your computer's browser.",
                 "then": ("this chat has the computer's browser: claim it with python3 "
                          "tools/app.py next <dump> --chat <id> --kind computer --computer-only "
-                         "and do it here."), "waiting": w}
+                         "--lent and do it here, with --kind computer on every app.py done."),
+                "waiting": w}
     out = {"route": "paste", "work": wid, "line": st["line"], "action": st["action"],
            "paste": True, "waiting": w}
     if st["state"] == "ready":

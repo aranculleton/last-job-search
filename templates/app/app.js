@@ -9928,7 +9928,8 @@
   // Finding people reads LinkedIn, which only the person's computer can (tools/page_db.py
   // computer_only): with a computer, the run goes there, and no cloud chat takes it and closes
   // it with "Can't read LinkedIn from here" (2026-11-09). With none, it stays anywhere, and the
-  // person pastes the few profiles that matter.
+  // person pastes the few profiles that matter. The engine decides (person.computer:
+  // tools/computer.py reads_there): only a computer known ready, never one only named.
   function peopleTo() { return person().computer ? "computer" : "either"; }
 
   // ------------------------------------------------------------------ applications after sending (FUNCTIONS_SPEC 1.2)
