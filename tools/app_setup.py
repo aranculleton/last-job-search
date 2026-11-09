@@ -1705,6 +1705,17 @@ def start(on: str = "", tools: str = "", page_url: str = "", runner=None, work: 
     if once:
         steps.append(f"{n}. {once}")
         n += 1
+    # An old note in this chat's own memory never outranks the person's settings in profile/:
+    # a chat on a computer obeyed "only update when I say" over app_updates "auto", then was
+    # rightly refused when it tried to rewrite the note (2026-11-09). Said, never changed.
+    try:
+        import computer
+        clash = computer.memory_line(computer.memory_conflicts(ROOT))
+    except Exception:  # noqa: BLE001  no memory to read: nothing to say
+        clash = ""
+    if clash:
+        steps.append(f"{n}. {clash}")
+        n += 1
     if st["page"].get("url") and not work and not (data_current and not sync):
         # The marks the person made on the page (applied, sent, set aside) ring nobody: the
         # next chat to work on the search keeps them first, this one included, so the last

@@ -80,9 +80,15 @@ CARD_AFTER_S = 10 * 60
 STARTED_S = 30 * 60
 # The name of every chat the app starts on the computer: recognisable, and safe to delete.
 SESSION_TITLE = "Job search · {job} · {computer}"
-# The scheduled task on the computer that takes waiting work while no cloud chat is awake.
+# The scheduled task on the computer that takes waiting work while no cloud chat is awake
+# (claude_surfaces: routines-local): a fresh chat each run, in the copy's folder, in Auto. It
+# is the fallback, not the way: a chat started from the cloud takes work within a minute, so
+# the task runs hourly, and a run with nothing waiting stops at its first step, costing little.
 TASK_NAME = "job-search-computer"
-TASK_EVERY_MIN = 15
+TASK_EVERY_MIN = 60
+TASK_PROMPT = ("Take the work waiting for this computer on my job search page: run python3 "
+               "tools/computer.py task-check and do exactly what it prints. With nothing "
+               "waiting it stops at its second step, saying nothing.")
 RUNS_FILE = ("documents", "computer_runs.json")
 RUNS_KEEP_DAYS = 90
 BROWSER = ("shown", "hidden", "none")
@@ -358,26 +364,68 @@ def session_prompt(wid: str, title: str, url: str, copy: str) -> str:
         f"a fresh folder in your scratchpad, $D: ArtifactData query, url {url}, once for each of "
         "the collections work, holds, beats, screen, meta and addr, each with out_dir $D and "
         "limit 1000.",
-        "4. Say how this computer is: look at Claude's browser (tabs_context), then python3 "
-        "tools/computer.py beat \"$D\" --name \"<this computer's name>\" --browser "
-        "<shown|hidden> --linkedin <in|out|unknown>, and send the batch it prints "
-        "(ArtifactData batch). LinkedIn signed out: put it on their page with python3 "
-        "tools/app.py done --work " + wid + " --chat <your id> --question \"LinkedIn is signed "
-        "out in Claude's browser on your computer. Sign in there once, then tap Done.\" and "
-        "stop; never ask in this chat.",
-        "5. python3 tools/app.py next \"$D\" --chat <your id> --kind computer --computer-only "
-        "--on \"<your model>\" --claim-out \"$D/claim\", send its claim batch (refused: another "
-        "chat has it, stop), and follow the `steps` it printed, in order. Reading LinkedIn: "
-        "only the pages the work names, one at a time; say what you do as you do it, nothing "
-        "about waiting you do not do (tools/network/pace.py PACE_RULE).",
-        "6. Before finishing each item: python3 tools/computer.py measure \"$D\" --work <its id> "
-        "--chat <your id>, and send its batch: the page and the brief show what the run took.",
+        "4. python3 tools/app.py next \"$D\" --chat <your id> --kind computer --computer-only "
+        "--on \"<your model>\" --claim-out \"$D/claim\", and send its claim batch (refused: "
+        "another chat has it, stop).",
+        "5. Say how this computer is: look at Claude's browser (tabs_context, and whether a "
+        "LinkedIn page shows the person signed in), then python3 tools/computer.py beat \"$D\" "
+        "--name \"<this computer's name>\" --browser <shown|hidden> --linkedin "
+        "<in|out|unknown>, and send the batch it prints (ArtifactData batch). LinkedIn signed "
+        "out: put it on their page with python3 tools/app.py done \"$D\" --work <its id> --chat "
+        "<your id> --kind computer --question \"LinkedIn is signed out in Claude's browser on "
+        "your computer. Sign in there once, then tap Done.\" and send its batch; then go to "
+        "step 7. Never ask in this chat.",
+        "6. Follow the `steps` step 4 printed, in order. Reading LinkedIn: only the pages the "
+        "work names, one at a time, as tools/network/pace.py PACE_RULE says; say what you do "
+        "as you do it, and nothing about waiting you do not do. Where its steps did not measure "
+        "it, before each finish: python3 tools/computer.py measure \"$D\" --work <its id> "
+        "--chat <your id>, and send its batch.",
         "7. At the end: python3 tools/computer.py beat \"$D\" --name \"<this computer's name>\" "
-        "--browser <shown|hidden> --linkedin <in|out|unknown> --read <ok|stopped>, send its "
-        "batch, and archive this computer's earlier chats named \"Job search · ...\" whose work "
-        "is finished, where this chat can (claude_surfaces: computer-chat-archive). Then stop: "
-        "the chat that started you archives this one.",
+        "--browser <shown|hidden> --linkedin <in|out|unknown> --read <ok|stopped|none>, and "
+        "send its batch. python3 tools/computer.py task: where it says the scheduled task is "
+        "missing and this chat can make scheduled tasks, make it exactly as it prints. Archive "
+        "this computer's earlier chats named \"Job search · ...\" whose work is finished, where "
+        "this chat can (claude_surfaces: computer-chat-archive). Then stop: the chat that "
+        "started you archives this one.",
     ])
+
+
+def ready(name: str, today: dt.date) -> str:
+    """Write, dated, that the computer side is set up and its test read worked, in
+    profile/place.json (`computer_ready`, `computer_name`): the trace the computer-linkedin
+    upgrade looks for. Only into a profile that exists."""
+    import person
+    import place
+    if not person.exists("person.json"):
+        return "ready: no profile here, nothing written"
+    got = dict(place.place_record(), computer_ready=today.isoformat(),
+               computer_name=_plain_name(name))
+    path = person.path(place.PLACE_FILE)
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
+        json.dump(got, fh, indent=2)
+        fh.write("\n")
+    return f"ready: {_plain_name(name)} set up and tested on {today.isoformat()}"
+
+
+def task_spec(root: str) -> dict:
+    """The scheduled task as a chat on the computer makes it (claude_surfaces: routines-local):
+    Local, in the copy's folder, hourly, in Auto, with a prompt that stops at once when nothing
+    waits."""
+    return {"name": TASK_NAME, "where": "Local (only on this computer)", "folder": root,
+            "schedule": f"every {TASK_EVERY_MIN} minutes" if TASK_EVERY_MIN < 60 else "hourly",
+            "permission_mode": "Auto", "prompt": TASK_PROMPT}
+
+
+def task_steps(url: str) -> list[str]:
+    """What a run of the scheduled task does: one read of the page's work, and nothing more
+    when nothing waits for this computer."""
+    return [
+        "1. Load ArtifactData (ToolSearch, select:ArtifactData). ArtifactData query, url "
+        f"{url}, collection work, out_dir a fresh folder in your scratchpad, $D, limit 1000.",
+        "2. python3 tools/computer.py waiting \"$D\". It prints nothing: stop now and say nothing.",
+        "3. Otherwise, for the first id under \"queued\", follow from step 2 the steps that "
+        "python3 tools/computer.py prompt --work <that id> prints, in this chat.",
+    ]
 
 
 def route(db: dict, now: dt.datetime, chat: str = "", envs=None, folders=None,
@@ -424,7 +472,8 @@ def route(db: dict, now: dt.datetime, chat: str = "", envs=None, folders=None,
     seen = _time(beat_.get("seen_at"))
     if beat_.get("task") and seen and (now - seen).total_seconds() < OFF_S:
         return {"route": "computer task", "work": wid,
-                "line": f"Your computer takes it within {TASK_EVERY_MIN} minutes.", "waiting": w}
+                "line": "Your computer takes it within the hour, while Claude is open there.",
+                "waiting": w}
     usable = [f for f in ((folders or {}).get("folders") or []) if f.get("online", True)] \
         if isinstance(folders, dict) else []
     if usable and "request_computer_folder" in tools:
@@ -564,21 +613,27 @@ def runs_path() -> str:
     return os.path.join(person.state(), *RUNS_FILE)
 
 
-def record_run(wid: str, kind: str, usage: dict, now: dt.datetime) -> None:
-    """Kept in documents/computer_runs.json, only ever added to, RUNS_KEEP_DAYS long."""
-    path = runs_path()
+def _runs() -> list:
     try:
-        with open(path, encoding="utf-8") as fh:
-            runs = json.load(fh)
+        with open(runs_path(), encoding="utf-8") as fh:
+            got = json.load(fh)
     except (OSError, ValueError):
-        runs = []
+        return []
+    runs = got.get("runs") if isinstance(got, dict) else None
+    return [r for r in runs or [] if isinstance(r, dict)]
+
+
+def record_run(wid: str, kind: str, usage: dict, now: dt.datetime) -> None:
+    """Kept in documents/computer_runs.json ({"runs": [...]}, merged entry by entry by
+    tools/merge_state.py), only ever added to, RUNS_KEEP_DAYS long."""
+    path = runs_path()
     cut = _stamp(now - dt.timedelta(days=RUNS_KEEP_DAYS))
-    runs = [r for r in runs if isinstance(r, dict) and str(r.get("at") or "") >= cut
-            and r.get("work") != wid]
+    runs = [r for r in _runs() if str(r.get("at") or "") >= cut and r.get("work") != wid]
     runs.append(dict(usage, work=wid, kind=kind, at=_stamp(now)))
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
-        json.dump(runs, fh, indent=1, ensure_ascii=False)
+        json.dump({"runs": sorted(runs, key=lambda r: str(r.get("at") or ""))}, fh, indent=1,
+                  ensure_ascii=False, sort_keys=True)
         fh.write("\n")
 
 
@@ -594,10 +649,8 @@ def usage_line(u: dict) -> str:
 
 def trend(today: dt.date, days: int = 7) -> str:
     """The brief's line on the computer runs of the last `days`, against the week before."""
-    try:
-        with open(runs_path(), encoding="utf-8") as fh:
-            runs = [r for r in json.load(fh) if isinstance(r, dict)]
-    except (OSError, ValueError):
+    runs = _runs()
+    if not runs:
         return ""
 
     def window(lo: int, hi: int) -> list:
@@ -811,8 +864,34 @@ def main(argv=None) -> int:
     sub.add_parser("memory")
     p = sub.add_parser("shell")
     p.add_argument("command")
+    sub.add_parser("task", help="is the scheduled task on this computer, and how to make it")
+    sub.add_parser("task-check", help="what a run of the scheduled task does")
+    p = sub.add_parser("prompt", help="the whole prompt of a chat on the computer for one item")
+    p.add_argument("--work", required=True)
+    p.add_argument("--title", default="")
+    p = sub.add_parser("ready", help="the computer side set up and tested: dated in place.json")
+    p.add_argument("--name", required=True)
     a = ap.parse_args(argv)
     import page_db
+    if a.cmd in ("task", "task-check", "prompt", "ready"):
+        import app_setup
+        import person
+        url = app_setup.page_record().get("url", "") or "<url>"
+        if a.cmd == "task":
+            if task_present():
+                print("task: the scheduled task is on this computer")
+            else:
+                print("task: missing. Make it: " + json.dumps(task_spec(person.state()),
+                                                              ensure_ascii=False))
+        elif a.cmd == "task-check":
+            print("\n".join(task_steps(url)))
+        elif a.cmd == "prompt":
+            owner, name = app_setup.origin()
+            print(session_prompt(a.work, a.title or a.work, url,
+                                 f"github.com/{owner}/{name}" if owner else "their job search"))
+        else:
+            print(ready(a.name, person.today()))
+        return 0
     if a.cmd == "trend":
         import person
         print(trend(person.today(), a.days))

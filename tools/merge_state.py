@@ -172,7 +172,9 @@ JSON_FILES = {
     # their computer (note_local) and setup's own mark (mark_setup): the first to start
     # setup holds it, and a first sighting is the earliest one.
     "profile/place.json": {"stamps": {"asked": "later", "started": "earlier"},
-                           "dated": {"computer_chat": "earlier", "setup/finished": "earlier"},
+                           "dated": {"computer_chat": "earlier", "setup/finished": "earlier",
+                                     # The computer side set up and tested (computer.ready).
+                                     "computer_ready": "later"},
                            "indent": 2, "ascii": True},
     # The scheduled tasks (routines.record): one entry a task, known by its key.
     "profile/routines.json": {"lists": {"routines": ("key",)}, "indent": 2},
@@ -181,6 +183,10 @@ JSON_FILES = {
     # entry one side let go of stays out.
     "documents/helper_usage.json": {"lists": {"entries": ("at", "chat", "kind")},
                                     "order": {"entries": "at"}, "indent": 1, "sort": "all"},
+    # What each run on the person's computer took, measured (computer.record_run): a log only
+    # ever added to, one entry a piece of work, kept RUNS_KEEP_DAYS.
+    "documents/computer_runs.json": {"lists": {"runs": ("at", "work")},
+                                     "order": {"runs": "at"}, "indent": 1, "sort": "all"},
     # What the person booked that the app did not know of (upcoming.add): one entry each,
     # known by its id, so the page and a chat adding one each on the same day keep both.
     "documents/upcoming.json": {"lists": {"events": ("id",)}, "indent": 2},
