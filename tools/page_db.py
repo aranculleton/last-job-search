@@ -199,6 +199,129 @@ def _read_json(path: str):
         return None
 
 
+# ------------------------------------------------------------------ the store's version, as read
+#
+# ArtifactData's `out_dir` saves a record's fields and nothing else: the version is only in the
+# lines the read prints, one a record (checked against the store itself, 2026-11-09):
+#     - "due"  13 bytes  version 2  "<out_dir>/screen/due.json"
+# Read from the files alone, every record came back at its `_v` stamp, which the page writes from
+# its own copy and so can be behind or ahead, or at 1 for a record no stamp was kept for: every
+# screen of a page update was pinned to 1 while the page held them at 82, and refused, and a
+# chat put the right numbers in by hand, fifty at a time (a person's computer, 2026-11-09).
+# `keep_listed` writes each listed version into its file, beside the fields (`__version__`,
+# which `load()` takes as the store's own number), so every command over the folder pins to the
+# page's own number. The app's hook does it after every read (`learned.py hook`, PostToolUse);
+# `app.py versions` does it from the lines given to it, where the hook did not run.
+LISTED = re.compile(r'\bversion\s+(\d+)\s+"([^"\r\n]+?\.json)"')
+SHORT = re.compile(r"^\s*([A-Za-z0-9_\-.~:@+]+(?:/[A-Za-z0-9_\-.~:@+]+)*)/([A-Za-z0-9_\-.~:@+]+)"
+                   r"\s*[\s=]\s*(\d+)\s*$")
+STORE_VERSION = "__version__"
+LISTED_MARK = ".versions.json"      # in a dump folder: the read's versions were kept here
+# What a chat is told to do after its reads where the app's hook does not keep the versions.
+VERSIONS_STEP = ("then keep the page's own version of each record: python3 tools/app.py versions "
+                 "\"{dump}\" with the lines those reads printed on its input (a heredoc), each "
+                 "`- \"<id>\"  N bytes  version V  \"<file>\"` as printed, or typed short, "
+                 "`<collection>/<doc id> V` a line")
+
+
+def hook_keeps_versions() -> bool:
+    """Does this copy's Claude Code settings run the app's hook after a read of the page
+    (PostToolUse on ArtifactData), so each read keeps its versions by itself?"""
+    path = os.path.join(os.path.dirname(_HERE), ".claude", "settings.json")
+    got = _read_json(path)
+    entries = ((got or {}).get("hooks") or {}).get("PostToolUse") if isinstance(got, dict) else None
+    for e in entries if isinstance(entries, list) else ():
+        matcher = str(e.get("matcher") or "*") if isinstance(e, dict) else ""
+        if not matcher or (matcher != "*" and "ArtifactData" not in matcher):
+            continue
+        if any("learned.py hook" in str((h or {}).get("command") or "")
+               for h in e.get("hooks") or [] if isinstance(h, dict)):
+            return True
+    return False
+
+
+def versions_step(dump: str) -> str:
+    """The step that keeps the read's versions, or "" where the hook keeps them."""
+    return "" if hook_keeps_versions() else VERSIONS_STEP.format(dump=dump)
+
+
+def keep_listed(text: str, out_dir: str) -> int:
+    """Each record the read's lines name under `out_dir`, given the version the store listed
+    it at. Returns how many files took one. A file outside `out_dir`, or not a record the read
+    saved, is left alone."""
+    if not text or not out_dir:
+        return 0
+    root = os.path.realpath(out_dir)
+    n = 0
+    found = list(LISTED.findall(str(text)))
+    for line in str(text).splitlines():
+        # The short form a chat may type instead: "<collection>/<doc id> <version>".
+        got = SHORT.match(line)
+        if got and not LISTED.search(line):
+            coll, doc_id, version = got.group(1), got.group(2), got.group(3)
+            found.append((version, os.path.join(root, *coll.split("/"),
+                                                doc_id.replace("~", "@") + ".json")))
+    for version, path in found:
+        real = os.path.realpath(path if os.path.isabs(path) else os.path.join(root, path))
+        if not real.startswith(root + os.sep) or not os.path.isfile(real):
+            continue
+        got = _read_json(real)
+        if not isinstance(got, dict):
+            continue
+        got[STORE_VERSION] = int(version)
+        try:
+            tmp = f"{real}.{os.getpid()}.tmp"
+            with open(tmp, "w", encoding="utf-8", newline="\n") as fh:
+                json.dump(got, fh, ensure_ascii=False, indent=2)
+                fh.write("\n")
+            os.replace(tmp, real)
+            n += 1
+        except OSError:
+            continue
+    if n:
+        mark = os.path.join(root, LISTED_MARK)
+        had = _read_json(mark)
+        had = had if isinstance(had, dict) else {}
+        try:
+            with open(mark, "w", encoding="utf-8", newline="\n") as fh:
+                json.dump({"records": int(had.get("records") or 0) + n}, fh)
+        except OSError:
+            pass
+    return n
+
+
+def _strings(obj, out: list) -> None:
+    if isinstance(obj, str):
+        out.append(obj)
+    elif isinstance(obj, dict):
+        for v in obj.values():
+            _strings(v, out)
+    elif isinstance(obj, (list, tuple)):
+        for v in obj:
+            _strings(v, out)
+
+
+def keep_listed_event(event: dict) -> int:
+    """The hook's half (Claude Code's PostToolUse, after an ArtifactData read with `out_dir`):
+    the versions its result lists, kept in the files it saved. Any other call: nothing."""
+    if not isinstance(event, dict) or str(event.get("tool_name") or "") != "ArtifactData":
+        return 0
+    given = event.get("tool_input") if isinstance(event.get("tool_input"), dict) else {}
+    out = str(given.get("out_dir") or "")
+    if not out or str(given.get("action") or "") not in ("get", "list", "query"):
+        return 0
+    if not os.path.isabs(out):
+        out = os.path.join(str(event.get("cwd") or os.getcwd()), out)
+    said: list = []
+    _strings(event.get("tool_response"), said)
+    return keep_listed("\n".join(said), out)
+
+
+def listed_here(dump_dir: str) -> bool:
+    """Were the store's own versions kept in this folder by a read (`keep_listed`)?"""
+    return os.path.isfile(os.path.join(dump_dir, LISTED_MARK))
+
+
 def load(dump_dir: str) -> dict:
     """{collection: {doc_id: {"data": fields, "version": n or None}}} for every collection
     the chat dumped into `dump_dir`. A collection not dumped is empty.
@@ -447,6 +570,24 @@ def body_path(out_dir: str, collection: str, doc_id: str) -> str:
                         body_name(doc_id) + ".json")
 
 
+def sent_size(entry: dict) -> int:
+    """One batch entry's bytes as the request carries it, at the most: its body as JSON text
+    inside JSON (every quote and backslash escaped again) with every character past ASCII
+    written as an escape, plus the entry around it. Sized by the file on disk, one page update
+    went as a 2.86 MB request against the 1 MiB limit: the screens' own JSON text, and their
+    curly quotes and dots, grow by up to three times as they are sent (a person's copy,
+    2026-11-09)."""
+    head = len(json.dumps({k: v for k, v in entry.items() if k != "file_path"})) + 64
+    path = entry.get("file_path")
+    if not path:
+        return head
+    body = _read_json(path)
+    if body is None:
+        return head + 3 * os.path.getsize(path) if os.path.isfile(path) else head
+    return head + max(os.path.getsize(path),
+                      len(json.dumps(json.dumps(body, separators=(",", ":")))))
+
+
 class Writes:
     """The writes one chat turn sends back, each body in a file of its own.
 
@@ -515,7 +656,7 @@ class Writes:
         parts: list[list[dict]] = [[]]
         size = 0
         for e in self.entries:
-            n = os.path.getsize(e["file_path"]) if e.get("file_path") else 0
+            n = sent_size(e)
             if parts[-1] and (len(parts[-1]) >= BATCH_MAX or size + n > BATCH_BYTES):
                 parts.append([])
                 size = 0
@@ -1441,6 +1582,11 @@ def note_version(dump_dir: str, ref: str, version: int) -> str:
         remember_version(f"{store_coll}/{store_id}", stamp, int(version))
     _keep_dump(dump_dir, store_coll, store_id, dict(doc["data"]), int(version))
     key = f"{store_coll}/{store_id}"
+    _count_refusal(dump_dir, key)
+    return key
+
+
+def _count_refusal(dump_dir: str, key: str) -> None:
     tries = _read_json(os.path.join(dump_dir, REFUSED))
     tries = tries if isinstance(tries, dict) else {}
     tries[key] = int(tries.get(key) or 0) + 1
@@ -1449,7 +1595,62 @@ def note_version(dump_dir: str, ref: str, version: int) -> str:
             json.dump(tries, fh, indent=1, sort_keys=True)
     except OSError:
         pass
+
+
+def take_back(dump_dir: str, ref: str) -> str:
+    """A refusal that named no version (the record exists, and the write carried none, as one
+    the folder never read): the refused batch, and any sent after it, taken back as
+    `note_version` takes it, so the same command makes the save again once the record is read
+    into the folder. Returns the record's stored name."""
+    key = stored_ref(ref)
+    if "/" not in key or not key.rpartition("/")[0]:
+        raise KeyError("name it as <collection>/<doc id>, as the refusal named it")
+    put_back(dump_dir, key)
+    _count_refusal(dump_dir, key)
     return key
+
+
+def stored_ref(ref: str) -> str:
+    """`<collection>/<doc id>` as the store names it, from either name of the record."""
+    coll, _, doc_id = str(ref or "").strip().strip("/").rpartition("/")
+    logical = _LOGICAL.get(coll, coll)
+    if logical == "meta":
+        doc_id = _LOGICAL_DOC.get(("meta", doc_id), doc_id)
+    sc, sid = stored(logical, safe_id(doc_id).replace("@", "~"))
+    return f"{sc}/{sid}"
+
+
+def version_known(dump_dir: str, key: str) -> bool:
+    """Is the folder's version of `key` (`<stored collection>/<doc id>`) the store's own: kept
+    from the read's listing, or moved on from one by this folder's own writes (or made by
+    them)? A record known only by its stamp may be wrong."""
+    coll, _, doc_id = key.rpartition("/")
+    side = _read_json(os.path.join(dump_dir, READ_STAMPS))
+    if isinstance(side, dict) and key in side:
+        return side[key] is None
+    for name in (doc_id.replace("~", "@"), doc_id):
+        raw = _read_json(os.path.join(dump_dir, coll, name + ".json"))
+        if isinstance(raw, dict):
+            return _version_of(raw)[2]
+    return False
+
+
+def read_again(dump_dir: str, ref: str, missing: bool = False) -> list[str]:
+    """The collections to read again into the folder before a refused save is made again:
+    those of every record the refused batch (and any sent after it) pins only by its stamp,
+    so the save run again is pinned to the page's own numbers, never refused once for each
+    (fifty refusals for one page update, a person's computer, 2026-11-09). `missing`: the
+    refusal named no version (the record exists and the write carried none), so its own
+    collection too. Call before `note_version`, which takes the batch back."""
+    key = stored_ref(ref)
+    sent = _sent(dump_dir)
+    at = next((i for i in range(len(sent) - 1, -1, -1)
+               if key in (sent[i].get("records") or [])), None)
+    recs = [r for s in sent[at:] for r in s.get("records") or []] if at is not None else []
+    colls = {r.rpartition("/")[0] for r in recs if r != key and not version_known(dump_dir, r)}
+    if missing:
+        colls.add(key.rpartition("/")[0])
+    return sorted(colls)
 
 
 # In a dump folder: how often the store refused a save of each record here (note_version).
@@ -1739,7 +1940,7 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
            status: str = "done", error: str = "", links=(), reply: str = "", thread: str = "",
            chat_kind: str = "cloud", dump_dir: str = "", chat: str = "",
            question: str = "", about: str = "", answer: dict | None = None,
-           answered=(), left_out: str = "") -> dict:
+           answered=(), left_out: str = "", outcome: str = "") -> dict:
     """The batch that finishes one work item (the app skill, step 5): the item `done` (or
     `failed`, with `error` in plain words, or `stopped` after their Stop), its one-sentence
     summary and links, pinned to the version read; each of its locks the dump holds, deleted
@@ -1759,6 +1960,12 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
         raise KeyError(f"no work {work_id!r} in the dump; read work again")
     item = dict(doc["data"])
     if str(item.get("status") or "") in FINISHED:
+        made = finished_here(dump_dir, work_id) if dump_dir else None
+        if made:
+            # Finished by this folder, its batch kept: the same batch again, never refused,
+            # so a finish that was never sent is never lost (two finishes in a row wrote one
+            # file, and the second refused the first as already finished, 2026-11-09).
+            return made
         raise KeyError(f"work {work_id!r} has already finished; write nothing more to it")
     taken = not_its_claim(item, chat)        # `chat`: the id the job was claimed under
     if taken:
@@ -1766,6 +1973,16 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
     refused = computer_only(item, chat_kind)
     if refused and not (status == "stopped" and item.get("stop_asked")):
         raise ValueError(f"not finished: {refused}")
+    if chat and str(item.get("status") or "queued") == "queued" and not item.get("claimed_by") \
+            and status != "stopped":
+        # Read before its claim landed: pinned to the version before the claim, the finish was
+        # refused, and the holds the claim made were never freed (a person's computer,
+        # 2026-11-09: a hold deleted by hand).
+        raise KeyError(f"this folder was read before {work_id!r} was claimed: read work and "
+                       "holds into it again, then run this again")
+    outcome = str(outcome or "").strip().lower().replace(" ", "_")
+    if outcome and outcome not in OUTCOMES:
+        raise ValueError(f"--outcome is one of {', '.join(OUTCOMES)}")
     question = " ".join(str(question or "").split())
     if question:
         status = "needs_you"
@@ -1791,8 +2008,13 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
     args = item.get("args") if isinstance(item.get("args"), dict) else {}
     thread = str(thread or "").strip() or (str(args.get("thread") or "").strip()
                                            if reply else "")
+    # Work with no conversation of its own (a change to a draft, asked with its pencil): the
+    # answer is kept on the item, and its card shows it where the change would have shown.
+    # "Name its thread" refused it, and a plain answer could not be given at all (2026-11-09).
+    answer_text = ""
     if str(reply or "").strip() and not thread:
-        raise ValueError("which conversation is the answer for? Name its thread (--thread)")
+        answer_text = str(reply).strip()[:ANSWER_MAX]
+        reply = ""
     at = app_model.stamp(now)
     if status == "needs_you":
         import app_actions
@@ -1823,6 +2045,13 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
         # maintainer, 2026-11-06).
         if str(left_out or "").strip():
             fields["result"]["left_out"] = " ".join(str(left_out).split())[:300]
+        if answer_text:
+            fields["result"]["answer"] = answer_text
+        # It finished and changed nothing on the page (held, set aside, or not possible): its
+        # card says so at once, never "putting the new version on your page" while waiting for
+        # a change that will not come (a held change's spinner turned for good, 2026-11-09).
+        if outcome:
+            fields["result"]["outcome"] = outcome
     w = Writes(out_dir)
     mid = ""
     if str(reply or "").strip():
@@ -1836,15 +2065,53 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
         if str((lock.get("data") or {}).get("work") or "") == work_id and not lock.get("old"):
             w.add("delete", "locks", lid, if_version=lock["version"])
             freed.append(lid)
-    if dump_dir:
-        _keep_dump(dump_dir, "work", work_id, dict(item, **fields), int(doc["version"] or 1) + 1)
-        for lid in freed:
-            _drop_from_dump(dump_dir, "locks", lid)
     # A draft of a search that drafts what it finds: the search's card counts it, and the
     # last one finishes the search once it has found all it will.
-    lead = _search_counted(db, item, work_id, status, now, w, dump_dir)
-    return {"work": work_id, "status": status, "thread": thread or None, "message": mid or None,
-            "locks": freed, **({"search": lead} if lead else {}), "batches": w.save("finish")}
+    lead = _search_counted(db, item, work_id, status, now, w)
+    got = {"work": work_id, "status": status, "thread": thread or None, "message": mid or None,
+           "locks": freed, **({"search": lead} if lead else {}),
+           # Each finish's batch a file of its own: two finishes in a row wrote one file, and
+           # the first was lost (2026-11-09).
+           "batches": w.save("finish-" + body_name(safe_id(work_id)))}
+    if dump_dir:
+        # The folder as it will be once the finish lands, kept the way every other batch is
+        # (keep_landed): the next command over it sees the item finished and its holds gone,
+        # and a refused finish is put back whole by `app.py version`, so the same `done` makes
+        # it again. Moved on outside that record, the refused finish could never be made again
+        # ("already finished"), and the item was one version behind for good (2026-11-09).
+        keep_landed(dump_dir, got["batches"])
+        _keep_finished(dump_dir, work_id, got)
+    return got
+
+
+# How a finish that changed nothing on the page ended (`done --outcome`): its card says it.
+OUTCOMES = ("held", "set_aside", "unchanged")
+# A written answer to work with no conversation of its own, kept on the item (`result.answer`).
+ANSWER_MAX = 4000
+FINISHED_HERE = ".finished.json"    # in a dump folder: each finish made here, with its batches
+
+
+def _keep_finished(dump_dir: str, work_id: str, got: dict) -> None:
+    side = os.path.join(dump_dir, FINISHED_HERE)
+    have = _read_json(side)
+    have = have if isinstance(have, dict) else {}
+    have[safe_id(work_id)] = got
+    try:
+        with open(side, "w", encoding="utf-8", newline="\n") as fh:
+            json.dump(have, fh, ensure_ascii=False, indent=1)
+    except OSError:
+        pass
+
+
+def finished_here(dump_dir: str, work_id: str) -> dict | None:
+    """The finish this folder made for `work_id` (what `finish` returned, its batch files
+    still there), marked `again`, or None."""
+    have = _read_json(os.path.join(dump_dir, FINISHED_HERE))
+    got = have.get(safe_id(work_id)) if isinstance(have, dict) else None
+    if not isinstance(got, dict) or not got.get("batches") or \
+            not all(os.path.isfile(p) for p in got["batches"]):
+        return None
+    return dict(got, again=True)
 
 
 def _drafted(db: dict, ids, also: dict | None = None) -> tuple[int, bool]:
@@ -2125,9 +2392,11 @@ def ask(db: dict, kind: str, title: str, now: dt.datetime, out_dir: str, args: d
                       to=chat_kind if chat_kind in WORK_KINDS[kind]["can"] else to)
     w = Writes(out_dir)
     w.add("set", "work", wid, fields)
+    batches = w.save("ask")
     if dump_dir:
-        _keep_dump(dump_dir, "work", wid, fields, 1)
-    return {"work": wid, "batches": w.save("ask")}
+        # As every other batch is kept (keep_landed), so a refused one is put back.
+        keep_landed(dump_dir, batches)
+    return {"work": wid, "batches": batches}
 
 
 # Kinds of work whose finish leaves PDFs the page should hold: they run in a chat of their own,

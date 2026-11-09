@@ -20,7 +20,91 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Added
+
+- **Claude starts its LinkedIn work on your computer by itself.** When "Find people" needs to read profiles, the helper in the cloud starts a chat on your computer, in Auto, named "Job search · what it is doing · your computer", and its results come back to your page; you never keep a chat open there. Before, the run sat queued until you opened a chat on your computer yourself.
+
+- **Your computer's state, in one line.** Settings shows whether your computer is ready, off, signed out of LinkedIn or not switched on yet, with the steps only when you are needed, and To do gets one card only while work waits for it. Before, the page said only "open Claude on your computer".
+
+- **Every run on your computer is measured, not guessed.** Its time per stage, steps by kind, LinkedIn pages and web searches come from the run's own record and show on its card, and the Monday brief says how the week's runs went. A run's own report of its time and steps was wrong by a third.
+
+- **A fallback when no helper is awake.** A chat on your computer can set up a scheduled task there that takes waiting work while the Claude app is open, and the rest of the chain (a folder your computer offers, a browser lent to a cloud chat, then pasting a profile) is tried in order.
+
+- **Profile upgrade: computer-linkedin.** If you work on a computer, one card offers to set it up for LinkedIn (about five minutes, once), and setup does the same for new copies.
+
+- **Finding people is one check, from your own settings, before anyone reaches the list.** A "find 10 people" run put names from search results on its list and only then found that recruiters there hired for sales or corporate finance, that five employers already had two people waiting on a reply and that someone had been written to a fortnight before; it swapped people out, searched again and stopped at eight. `candidates.py check` now filters on the search result's headline (a recruiter for a function that is not yours is left out), runs every list check at once and ranks by who is likeliest to help: the kinds of reader who answer you, a recruiter for your function, background you share.
+
+- **The number of people you ask for is a target.** A run widens to the next employers that clear your bar until it has found and drafted that many, never padding the list with weaker fits, and says plainly when there are no employers left to try.
+
+- **A draft for someone you are already talking to can be held back.** "Not until she answers the email" keeps the draft aside with your condition on the contact, and never overwrites a draft already set aside; it comes back when you say.
+
+- **A city's LinkedIn search number is kept once**, beside each employer's, so a run searches LinkedIn for the right people directly instead of spending web searches that found none of them.
+
+- **Settings, Your rules, now says what is held back today and when each opens again.** One row, "Held back for now", lists each live hold as one plain line ("Larchmont Health: open again Fri 27 Nov, or say 'more at Larchmont Health'"), and every rule that leaves out, holds, caps or gates anything in the app is one tap below it with when it ends, or why it stays, and what lifts it. Nothing on the page said an employer was closed to new people, for how long, or how to open it.
+
+### Changed
+
+- **Your own approved note recipe saves for a whole batch.** When the notes you approved all open on your line about yourself (in any of its variants) and close on your own asks, a batch of ten written that way is saved; before, it was refused as "too alike" and six notes were reordered against your recipe. Anything else repeated across a batch is still caught.
+
+- **LinkedIn is never fetched over the web, and is read only in the signed-in browser on your computer.** The instructions said no chat reads LinkedIn at all, which contradicted reading profiles on your computer; every copy now says the same thing.
+
+- **Suggested InMails come only from what is already known.** The chooser suggested InMails that could only be confirmed by opening a message window on LinkedIn, which a chat never does; those people now keep their connection note.
+
+- **An employer frees up by your own follow-up rule, not after a fixed 45 days.** Someone waiting on a reply holds their employer for one follow-up wait for each message your limit still allows, then one more, counted from the last contact: about four weeks under a rule of 14 days and two messages. Before, 45 days from the first note held an employer six weeks and more, a number nobody chose. A number of days of your own can be set instead, and "more at" still works.
+
+- **A message to Claude from the page's chat carries its words with its work.** The page puts what the person typed on the work item, and `app.py wake` shows it with the item (for an older item, the one read that fetches it), so no chat reads the thread for the words.
+
+- **The app skill says to load the page's database tools first in a cloud chat**, where ArtifactData and ArtifactComments can be listed by name with no schema until ToolSearch loads them.
+
 ### Fixed
+
+- **A cloud chat no longer takes work that needs your computer and closes it unread.** The engine refuses a cloud chat's claim, finish or fail of a LinkedIn read sent to your computer; a chat had closed one with "Can't read LinkedIn from here".
+
+- **Work for your computer runs in the chat that has the browser.** It was handed to a background helper with no browser, which a chat on the computer had to overrule by hand.
+
+- **An old note in a chat's memory no longer outranks your settings.** The start of every chat reports a memory note that disagrees with your settings (such as "only update when I say") and follows your settings; a chat had obeyed the old note.
+
+- **Approving computer access no longer breaks your morning brief.** Before a chat asks for computer access, any scheduled task that fires into it moves to a fresh chat each run, and the daily check spots one left behind; a brief bound to that chat would have failed the next morning.
+
+- **Commands the app gives work the same on a Mac.** A check holds every command the app prints to what runs alike in zsh and bash; a loop of fifty fixes all "failed" on a Mac.
+
+- **Reading LinkedIn keeps one plain rule, said only as done.** One page at a time with no wait set, stopping the moment LinkedIn shows a check; a chat had promised gaps between pages it did not keep.
+
+- **A profile read gets Experience on LinkedIn's newer layout.** Experience is no longer on the profile page itself, so every read came back with it empty and told the chat to keep scrolling; the read now names the profile's Experience page and takes both pages as one read.
+
+- **The check before anyone is shown holds the limit of people at one employer.** It passed people at employers that already had people waiting on a reply, and only the next step refused them, so a run searched again for nothing.
+
+- **A note with no date no longer closes its employer for ever.** An undated note counted as waiting with no end; now the record's own follow-up day dates it, and with no date at all it holds nothing.
+
+- **An employer with no team for you is looked at again even when nobody wrote a review day.** Such an entry suppressed its employer for ever; it now stops 90 days after it was recorded, and one with no date at all holds nothing.
+
+- **An application with no date no longer hides its employer's other jobs for ever.** Its silence could never be counted, so it held them with no end; an interview still holds while it runs.
+
+- **A hold on a contact with a day beside it lifts on that day.** A "Hold" whose words named no end held for ever even with a due day on the row; one with neither is now listed under Held back for now with what lifts it.
+
+- **Page updates are pinned to the page's own version numbers, so they land the first time.** The files a read of the page's database saves hold no version (only the lines the read prints do), so every write was pinned to a stamp that could be far behind: a whole page update was refused record by record, and the cards sat on "Putting on page" until versions were typed in by hand. A read now keeps each record's version from those lines (`app.py versions`, which `reads` names after its queries), and a refused save names the other collections it pinned by guess, so the save made again lands at once; a refusal that names no version (`app.py version "$D" <record>` with none) reads that record again.
+
+- **Two finishes in a row each keep their own batch.** Every `app.py done` wrote the same file, so finishing two items in a row lost the first, and a second `done` refused it as already finished. Each finish now has a folder of its own, a second `done` gives back the same batch, and a refused finish is put back so the same `done` makes it again.
+
+- **A claim and a finish leave the local copy as the page will hold it.** After `app.py next --claim-out` the folder still held the item as read, so the first progress pin was refused and the finish left the claim's hold behind; a finish moved the copy on outside the record a refusal puts back. Both are now kept like every other batch, and a finish from a folder read before its claim says to read again instead of writing a pin that cannot land.
+
+- **A written answer to a change asked with the pencil can be posted.** `app.py done --reply-file` on work with no conversation of its own was refused ("Name its thread"); the answer now goes on the item and shows on its card.
+
+- **A change that changed nothing finishes cleanly.** A change Claude held, set aside or could not make left "Finished · putting the new version on your page" spinning for good, and a person whose draft it set aside showed "Reply written" for two hours. `app.py done --outcome held|set_aside|unchanged` makes the card say so at once with no spinner, finished work no longer waits more than a few minutes for a version that is not coming, and a finished change is never read as a reply about to arrive.
+
+- **Page updates are sized as they are sent.** One update went as a 2.86 MB request against the 1 MiB limit: batches were sized by the files on disk, while the screens' JSON text and their curly quotes grow as they are sent. Each batch is now sized at what the request carries.
+
+- **Every chat the app starts opens in Auto.** The page's fresh helper each morning and a big
+  job's own chat started in Manual and stopped on permission prompts while the person was away.
+  Where the chat starting it is in a stricter mode itself, it starts the new one without asking
+  for Auto rather than failing.
+
+- **Tidying old chats reads their details however they arrive.** Handed as a plain list, they
+  were dropped without a word, and the tidy asked for the same chats again and again.
+
+- **The app's checks run on the Linux GitHub offered until this week.** Its newest has no
+  Python 3.9 and no browser for the page tests, so both checks a merge waits for failed in
+  their first minute.
 
 - **A message at the foot of the page goes after six seconds**, not eight, and one about a
   failure after twelve. Its Undo stays on the item itself until Claude has made the change.

@@ -308,7 +308,9 @@ def _now_doc(folder: str) -> dict:
     for name in ("now.json", "current.json"):
         got = _fields(os.path.join(folder, "meta", name))
         if got:
-            return {k: v for k, v in got.items() if k != "_v"}
+            # Neither number is the record: the stamp, and the store's own version a read
+            # keeps beside the fields (page_db.keep_listed), which a write never carries.
+            return {k: v for k, v in got.items() if k not in ("_v", "__version__")}
     return {}
 
 
@@ -374,15 +376,22 @@ def assemble(dump: str, now: dt.datetime | None = None) -> dict:
 
 NEED_SCREENS = ("view: another chat drew the page since this copy last did, so its screens are "
                 "read now: ArtifactData query, collections {colls}, url <the page>, limit 1000, "
-                "out_dir \"{dump}\" (the same folder; never list or open what they save), then "
+                "out_dir \"{dump}\" (the same folder; never list or open what they save), {keep}then "
                 "run this again.")
 
 
 LATE = ("view: before this batch ends, read what came in while the work ran (taps and work "
         "asked for since this wake's read), so a tap made meanwhile is applied now, never left "
         "for the person's next message: ArtifactData query, each of these in one message, url "
-        "{url}, out_dir \"{dump}\" (the same folder; never list or open what they save), then "
+        "{url}, out_dir \"{dump}\" (the same folder; never list or open what they save), {keep}then "
         "run this same command again: {queries}")
+
+
+def keep_step(dump: str) -> str:
+    """"<keep the read's versions>, " where the app's hook does not, else ""."""
+    import page_db
+    keep = page_db.versions_step(dump)
+    return keep[len("then "):] + ", " if keep else ""
 
 
 def late_queries(dump: str, now: dt.datetime | None = None) -> list[dict]:
@@ -412,7 +421,7 @@ def late_queries(dump: str, now: dt.datetime | None = None) -> list[dict]:
 
 
 def say_late(queries: list[dict], dump: str, url: str) -> str:
-    return LATE.format(url=url, dump=dump, queries=" ".join(
+    return LATE.format(url=url, dump=dump, keep=keep_step(dump), queries=" ".join(
         json.dumps(q, separators=(",", ":")) for q in queries))
 
 
@@ -502,11 +511,13 @@ def say_plan(got: dict, dump: str, url: str) -> str:
     if got.get("nothing"):
         return ("reads: nothing new since this revision was read: no read and no wake; "
                 "resolve the ring and end.")
+    import page_db
+    keep = page_db.versions_step(dump)
     head = ("reads: " + (f"a whole read ({got['full']})" if got.get("full")
                          else f"what changed since {got['cursor']}") +
             f". ArtifactData query, each of these in one message, url {url}, out_dir \"{dump}\" "
-            "(never list or open what they save), then python3 tools/app.py wake with the same "
-            "folder:")
+            "(never list or open what they save), " + (keep + ", " if keep else "") +
+            "then python3 tools/app.py wake with the same folder:")
     return "\n".join([head] + [json.dumps(q, separators=(",", ":")) for q in got["queries"]])
 
 

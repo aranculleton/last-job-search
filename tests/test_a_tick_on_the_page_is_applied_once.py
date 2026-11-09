@@ -433,6 +433,11 @@ def test_next_writes_its_claim_pinned_with_its_locks(search):
     # (`locks`) has no version a write to `holds` can be pinned to, and is moved instead.
     search.put("holds", "emp~kestrel_mutual", {"work": "draft~old", "until": "2026-10-24T00:00:00Z"},
                version=2)
+    # The other chat's own read, made at the same moment (the claiming chat's folder holds its
+    # claim as landed once it is made).
+    import shutil
+    theirs = search.dump.rstrip("/\\") + "-other"
+    shutil.copytree(search.dump, theirs)
     out = search.run("next", search.dump, "--chat", "cloud-1", "--kind", "cloud",
                      "--now", NOW, "--claim-out", os.path.join(search.dump, "claim"))
     got = json.loads(out)
@@ -442,7 +447,7 @@ def test_next_writes_its_claim_pinned_with_its_locks(search):
         ("work", "draft~abc", 5), ("holds", "emp~kestrel_mutual", 2), ("beats", "cloud-1", None)]
     # A chat of the other kind may be offered the same item; the claim is pinned to version 5,
     # so only one write of the two can win.
-    again = json.loads(search.run("next", search.dump, "--chat", "c2", "--kind", "computer",
+    again = json.loads(search.run("next", theirs, "--chat", "c2", "--kind", "computer",
                                   "--now", NOW))
     assert again["work"] == "draft~abc" and again["version"] == 5
 

@@ -7389,6 +7389,21 @@
   // tone, cancel, retry, stopped}. Null when nothing is. Read from the tap and the work items,
   // never this tab's memory, so it is the same after a reload.
   const GONE_LINE_MS = 10 * 60000;
+  // How long finished work waits, said as "putting it on your page", for its result to reach
+  // the page: a page update follows the finish within minutes, and a spinner that waited two
+  // hours for a change that never came read as stuck (2026-11-09).
+  const FINISHING_MS = 15 * 60000;
+  // Work that finished and changed nothing on the page (`app.py done --outcome`), in its card's
+  // words: {words, line}, or null. Its line is Claude's own answer where it wrote one, else the
+  // summary.
+  const UNCHANGED_WORDS = {held: "Held", set_aside: "Set aside", unchanged: "Not changed"};
+  function unchangedWork(w) {
+    const r = obj(obj(w).result);
+    const words = UNCHANGED_WORDS[txt(r.outcome)];
+    if (!words) return null;
+    const line = firstSentence(txt(r.answer)) || firstSentence(txt(r.summary));
+    return {words, line: line ? cap1(line.replace(/[.\s]+$/, "")) + "." : ""};
+  }
   function personGoing(p) {
     const t = replyTap(p);
     const tapAt = t ? txt(t.doc.at).slice(0, 19) : "";
@@ -7420,8 +7435,17 @@
     if (mine && !personDraft(p) && !personSentHere(p)) {
       const st = txt(w[1].status);
       const ended = now() - (tms(w[1].finished_at) || tms(w[1].asked_at) || 0);
-      // Written, and the draft not on the page yet: said, and shown the moment it arrives.
-      if (st === "done" && ended < 2 * 3600000) return {words: "Finished", line: "Putting it on your page.", spin: false, tone: null};
+      // Finished and nothing changed (held, set aside, not possible): said at once, never a
+      // reply about to arrive. A change to their message that left no draft is nothing to wait
+      // for either: it said "Reply written · Finished · Putting it on your page" for two hours
+      // (2026-11-09).
+      if (st === "done" && (txt(w[1].kind) === "tweak" || unchangedWork(w[1]))) {
+        const u = unchangedWork(w[1]);
+        return u && ended < 2 * 3600000 ? {work: w[0], words: u.words, line: u.line, spin: false, tone: "held", stopped: true} : null;
+      }
+      // Written, and the draft not on the page yet: said, and shown the moment it arrives; a
+      // page update comes within minutes, so after FINISHING_MS it is not waited for.
+      if (st === "done" && ended < FINISHING_MS) return {work: w[0], words: "Finished", line: "Putting it on your page.", spin: false, tone: null};
       if (st === "failed") return {words: "Did not finish", line: (typeof w[1].error === "string" ? w[1].error : txt(obj(w[1].error).plain)) || "It stopped part way. Nothing was sent.",
         spin: false, tone: "bad", retry: () => retryWork(w[0])};
       if (st === "stopped" && ended < GONE_LINE_MS) return {words: "Stopped", line: "Nothing was drafted. Their message is kept for when you want a reply.", spin: false, tone: "held", stopped: true};
@@ -7820,7 +7844,7 @@
       const made = await createWork(db, {id: wid, kind: "talk", to, title: "About " + about.label + ": “" + clipWords(text, 50) + "”",
         // What its records were when asked (each related message's rev), so the answer's next
         // steps are what it made or changed, read from the records, never from its words.
-        args: {thread: th, message: mid, about: {kind: about.kind, id: about.id, label: about.label},
+        args: {thread: th, message: mid, text: txt(text).slice(0, TALK_TEXT_MAX), about: {kind: about.kind, id: about.id, label: about.label},
           seen: Object.fromEntries(talkRecords(about.kind, about.id).msgs.map((m) => [m.id, txt(m.rev)]))}, slot: false});
       if (!made.ok) throw new Error("work");
     } catch (e) {
@@ -9168,15 +9192,29 @@
     if (!done.length) return null;
     const [id, w] = done[0];
     if (obj(w.args).back) return null;
+    // Claude's own answer to the change, where it wrote one (`done --reply-file` on work with no
+    // conversation of its own), under the line that says how it ended.
+    const answer = txt(obj(w.result).answer) ? clipBlock(txt(obj(w.result).answer), "tw-a:" + id, {cls: "ct-a", lead: [h("span", {class: "ct-who"}, "Claude"), " "]}) : null;
+    // Finished with nothing changed (held, set aside, not possible): said at once, with no
+    // spinner, never "putting the new version on your page" for a version that will not come
+    // (a held change's spinner turned for two hours, 2026-11-09).
+    const u = unchangedWork(w);
+    if (u) {
+      return h("div", {class: "tweak-done", "data-tweak-done": id},
+        h("p", {class: "small", role: "status"}, u.words + (u.line && !answer ? " · " + u.line : ".")), answer);
+    }
     // "New version" only once the new words are on this card: the work says done before the
     // page has the rewritten draft, and the card said "New version" over the old words, word
-    // for word (the maintainer, 2026-11-05). Until its rev moves, it says it is coming.
+    // for word (the maintainer, 2026-11-05). Until its rev moves, it says it is coming, for the
+    // few minutes a page update takes; after that it says it finished, with no spinner.
     const was = txt(obj(obj(w.args).target).rev);
-    if (was && txt(item.rev) === was && now() - (tms(w.finished_at || w.done_at) || 0) < 2 * 3600000) {
-      return h("p", {class: "small tweak-done", role: "status"}, h("span", {class: "spin", "aria-hidden": "true"}), " Finished · putting the new version on your page");
-    }
     // A summary ending in a full stop is not given a second (the maintainer, 2026-11-05).
     const what = txt(obj(w.result).summary).replace(/[.\s]+$/, "") || "your changes";
+    if (was && txt(item.rev) === was) {
+      if (now() - (tms(w.finished_at || w.done_at) || 0) < FINISHING_MS)
+        return h("p", {class: "small tweak-done", role: "status"}, h("span", {class: "spin", "aria-hidden": "true"}), " Finished · putting the new version on your page");
+      return h("div", {class: "tweak-done", "data-tweak-done": id}, h("p", {class: "small"}, "Finished: " + lc1(what) + "."), answer);
+    }
     return h("p", {class: "small tweak-done"}, "New version: " + what + ". The earlier one is kept. ",
       btn("Go back to it", () => requestWork([{id: "tweak~" + seg(txt(item.id)).slice(0, 60) + "~back-" + hash10(id), kind: "tweak", to: "either", title: "Back to the earlier version: " + txt(item.company || item.employer),
         args: {v: 1, target: tweakTarget(txt(obj(obj(w.args).target).output) || "resume", item), changes: [{p: "back", v: id}], back: id, text: null, keep: null, cost: {state: 1, writes: [], est_s: 45}}}], {ring: canRing()}),
@@ -13671,7 +13709,9 @@
         if (await within(Promise.all(writes), 20000) === "timeout") throw new Error("not saved");
         S.lastSent = {text, at: now()};
         // A title cut at a word, never mid-word ("…find 10 m…", the audit).
-        const made = await createWork(db, {id: wid, kind: "talk", to, title: "Answer: “" + clipWords(said, 50) + "”", args: {thread: th, message: mid}, slot: false});
+        // Its words ride with the work (`text`), so the chat that takes it has them with the item
+        // and never reads the thread for them (the maintainer, 2026-11-09).
+        const made = await createWork(db, {id: wid, kind: "talk", to, title: "Answer: “" + clipWords(said, 50) + "”", args: {thread: th, message: mid, text: txt(text).slice(0, TALK_TEXT_MAX)}, slot: false});
         if (!made.ok) throw new Error("work");
       } catch (e) {
         // Nothing half sent: a message kept without its work waited for an answer that
@@ -13688,6 +13728,8 @@
     return wid;
   }
   // Cut at a word, with an ellipsis, never mid-word.
+  // How much of a message to Claude rides with its work item (args.text); the thread keeps it all.
+  const TALK_TEXT_MAX = 4000;
   function clipWords(s, n) {
     const t = txt(s).replace(/\s+/g, " ").trim();
     if (t.length <= n) return t;
