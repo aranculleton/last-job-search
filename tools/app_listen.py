@@ -78,6 +78,14 @@ HELPER_BUSY = "Getting your page ready"
 # chat to run WAKE_COMMAND, which makes it the listener: a new chat with nothing else to do,
 # so it is the helper itself and starts no other.
 WAKE_PROMPT = "Look after my job search page from now on."
+# Every chat the app starts asks for Auto (create_session's `permission_mode`), so it never
+# stops on a permission prompt while the person is away: the helper and a computer chat both
+# started in Manual and waited on the person (the maintainer, 2026-11-09). A chat in a
+# stricter mode than Auto is refused it ("cannot be more permissive than the calling
+# session's mode"), so the call is made again without it (MODE_REFUSED).
+SESSION_MODE = "auto"
+MODE_REFUSED = (" If it is refused because its permission_mode is more than this chat's own, "
+                "make the same call again without permission_mode.")
 WAKE_COMMAND = "python3 tools/app.py start --listen --helper"
 REPUBLISH_TITLE = "Bringing your page up to date"
 # All the person hears about their page after an update: one line. A chat that took an
@@ -572,9 +580,9 @@ def renew_line(renew: dict, now: dt.datetime | None = None) -> str:
             "hold), and it has no small job of its own in hand. Once this turn's work is "
             "saved (python3 tools/land.py --detach started, or nothing to save), start its "
             "fresh helper from this chat yourself, unasked and saying nothing to the person: "
-            "create_session " + json.dumps(renew, ensure_ascii=False) +
-            " (never through a scheduled task: the chat one starts has no copy of the files "
-            "and cannot start the helper). Where create_session is not among this chat's "
+            "create_session " + json.dumps(renew, ensure_ascii=False) + "." +
+            MODE_REFUSED + " Never through a scheduled task: the chat one starts has no copy "
+            "of the files and cannot start the helper. Where create_session is not among this chat's "
             "tools, or it is refused because this chat cannot start any more chats: " + NESTED +
             ". The new chat takes the page as it starts; until then this one still answers.")
 
@@ -961,7 +969,8 @@ def renewal(rec: dict, db: dict, chat: str, now: dt.datetime, scheduled: bool = 
     note = handover(db)
     return {"title": HELPER_CHAT_TITLE, "prompt": WAKE_PROMPT + (f"\n\n{note}" if note else ""),
             "source_url": f"https://github.com/{owner}/{name}",
-            "extra_allowed_tools": ["ArtifactData", "ArtifactComments"]}
+            "extra_allowed_tools": ["ArtifactData", "ArtifactComments"],
+            "permission_mode": SESSION_MODE}
 
 
 def first_claim(chat: str, out_dir: str, now: dt.datetime | None = None,

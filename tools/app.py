@@ -1125,6 +1125,7 @@ def where_it_runs(chosen: dict, chat: str, kind: str, no_sessions: bool = False,
     `taken`: the names of the job chats still at work."""
     if not chosen.get("heavy"):
         return {"run": "here"}
+    import app_listen
     import app_setup
     url = app_setup.page_record().get("url", "") or "<url>"
     # The id the job's chat reports back to: this chat's own. Where it is not known here,
@@ -1140,7 +1141,8 @@ def where_it_runs(chosen: dict, chat: str, kind: str, no_sessions: bool = False,
         # requests permission" while the person was away (2026-11-03).
         call = {"title": title, "prompt": child_prompt(chosen, parent, url),
                 "source_url": f"https://github.com/{owner}/{name}",
-                "extra_allowed_tools": list(CHILD_TOOLS)}
+                "extra_allowed_tools": list(CHILD_TOOLS),
+                "permission_mode": app_listen.SESSION_MODE}
         if chosen.get("model"):
             call["model"] = chosen["model"]
         got = {"run": "child session", "create_session": call}
@@ -1974,10 +1976,12 @@ def cmd_wake(a) -> int:
                             "once more (step 3 again)." if more else ""))
         else:
             call = "create_session" if chosen.get("run") == "child session" else "Agent"
+            import app_listen
             then.append(f"then: only once the work's claim is accepted, make the {call} call "
                         "in `next` below exactly as it is printed" + (
                             f" (first {chosen['first']})" if chosen.get("first") else "") +
-                        ", and never wait for it." + (NESTED_JOB.format(chat=chat, dump=a.dump)
+                        ", and never wait for it." + (
+                            app_listen.MODE_REFUSED if call == "create_session" else "") + (NESTED_JOB.format(chat=chat, dump=a.dump)
                                                       if call == "create_session" else "") + (
                             " More is waiting: then run this again with the same folder (step "
                             "3 again): " + _again(a, chat) if more else ""))
