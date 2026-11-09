@@ -1,7 +1,7 @@
 {
  "model": 1,
  "made_at": "2026-10-25T18:00:00Z",
- "rev": "d2ff978deb07",
+ "rev": "1a37703dfc1f",
  "app": {
   "version": "4.13.0",
   "url": null,
@@ -77,7 +77,7 @@
  ],
  "jobs": {
   "round": "r9",
-  "made_at": "2026-11-09T20:45:31Z",
+  "made_at": "2026-11-09T21:35:48Z",
   "met": false,
   "summary": "3 roles from the last search to look at, 1 of them scoring 75 or more. 3 left out, each with its reason.",
   "rows": [
@@ -1008,7 +1008,7 @@
    "when": "2026-10-28",
    "prep": {
     "path": "documents/applications/thornbury_bank_risk_analyst_thornbury/interview_prep.md",
-    "updated": "2026-11-09T20:45:31Z"
+    "updated": "2026-11-09T21:35:48Z"
    },
    "questions": 2,
    "all_day": true,
@@ -1980,26 +1980,16 @@
    "say": "Off: you paste someone's profile when you write to them."
   },
   "computer": {
-   "state": "not_set_up",
+   "state": "optional",
    "since": null,
-   "say": "Claude doesn't use your computer yet. Set it up once to read LinkedIn profiles there.",
-   "name": null,
-   "steps": [
-    "1. On your computer, open the Claude desktop app, then Settings, then Claude Code, then Remote Control.",
-    "2. Turn on Connect new sessions to Remote Control.",
-    "3. Turn on Let your phone and claude.ai start sessions here.",
-    "4. Turn on Keep this computer awake for Remote Control.",
-    "5. Under Folders, choose Add folder and pick the folder your job search is in, then pin it.",
-    "6. Come back to this page and tap Done."
-   ],
-   "action": "Set it up"
+   "say": "Only if you keep files on your computer for Claude."
   },
   "brief": {
    "state": "ready",
    "when": "Every day at 7:38",
    "say": "Your brief comes every day at 7:38."
   },
-  "rev": "d1e9bf5f4e0c",
+  "rev": "c6eff5e09e60",
   "tidied": {
    "count": 0,
    "on": null
