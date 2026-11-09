@@ -353,11 +353,11 @@ TRIGGERS = {"triggers": [
 def test_computer_access_is_never_approved_where_a_scheduled_task_fires():
     """Approving computer access ties the chat to the person's devices for good, and a brief
     bound to it then failed with access denied (2026-11-09): each task is moved first to a
-    fresh chat a run, with no connectors (the brief needs none), the old one turned off."""
+    fresh chat a run, with no connectors field (the brief needs none, and some organisations refuse the field), the old one turned off."""
     moves = computer.trust_check("session_helper", TRIGGERS)
     assert len(moves) == 1 and moves[0].startswith("move trig_brief: create_trigger ")
     call = json.loads(moves[0].split("create_trigger ", 1)[1].split(", then update_trigger")[0])
-    assert call["create_new_session_on_fire"] is True and call["connectors"] == []
+    assert call["create_new_session_on_fire"] is True and "connectors" not in call
     assert call["cron_expression"].startswith("CRON_TZ=") and "persistent_session_id" not in call
     assert '"enabled": false' in moves[0] and "--setup routines_screen" in moves[0]
     assert computer.trust_check("session_fresh", TRIGGERS) == [

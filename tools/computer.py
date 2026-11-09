@@ -701,14 +701,14 @@ def trust_check(chat: str, triggers) -> list[str]:
     person's own devices for good: every scheduled task that fires into it is moved to a fresh
     chat a run, or it fails from then on with access denied, the person told only by a
     "routine failed" push (2026-11-09). The brief needs no connectors (claude_surfaces:
-    routine-connectors), so none are passed."""
+    routine-connectors), so the field is left out (some organisations refuse it)."""
     tasks = bound_to(chat, triggers)
     if not tasks:
         return ["trust: ok, no scheduled task fires into this chat"]
     out = []
     for t in tasks:
         call = {"name": t.get("name"), "prompt": t.get("prompt") or "<its prompt, as get_trigger "
-                "shows it>", "create_new_session_on_fire": True, "connectors": [],
+                "shows it>", "create_new_session_on_fire": True,
                 "initiation": "own_followup"}
         if t.get("cron_expression"):
             call["cron_expression"] = t["cron_expression"]

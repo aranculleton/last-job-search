@@ -976,7 +976,7 @@
     },
     {
       "id": "routine-connectors",
-      "claim": "A cloud scheduled task made on claude.ai includes all of the person's connectors unless they are removed, but one made by a chat (create_trigger) stores none unless they are named, and says so when it is made. The brief needs none: it reads and writes the person's copy and the page through the app's own tools, and its news through web search, so it is made with none and nothing is lost.",
+      "claim": "A cloud scheduled task made on claude.ai includes all of the person's connectors unless they are removed, but one made by a chat (create_trigger) stores none unless they are named, and says so when it is made. The brief needs none: it reads and writes the person's copy and the page through the app's own tools, and its news through web search, so it is made with none and nothing is lost; the field is left out of the call, which some organisations refuse outright, and the warning that none are stored is expected.",
       "sources": [
         {
           "url": "https://code.claude.com/docs/en/routines",
