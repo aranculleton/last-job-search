@@ -284,7 +284,7 @@ def render(entries, today, only_live=True):
                 # A HOLD or FREEZE with a date on it is a date to look again,
                 # not a date to send. Marking it DUE put a freeze in the
                 # same list as the messages that were actually owed.
-                hold = state.action_hold(c.get("next_action"), today)
+                hold = state.action_hold(c.get("next_action"), today, c.get("next_action_due"))
                 lines[-1] += ("  HELD, %s" % hold) if hold else "  **DUE %s**" % c["next_action_due"]
         # Contacts with nothing outstanding still matter: they are who is
         # already known at this employer, which is what stops a future run
@@ -646,7 +646,7 @@ def due_items(contacts, threads, tracker, today, docs=None, network=None, now=No
             "name": name + (" (%s)" % r["company"] if r["company"] else ""),
             "who": "%s [%s owed]" % (who, state.noun()), "due": due.isoformat(),
             "late": (today - due).days, "what": line, "to": "", "text": "",
-            "held": [h for h in (state.action_hold(c.get("next_action"), today),) if h],
+            "held": [h for h in (state.action_hold(c.get("next_action"), today, c.get("next_action_due")),) if h],
             "quiet": False, "kind": "resume", "status": c.get("status", ""),
             "contact_id": r["contact_id"], "old": old,
             **({"lapsed_on": lapsed.isoformat(), "asked": r["asked"]} if lapsed else {})})

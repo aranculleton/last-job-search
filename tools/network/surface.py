@@ -290,7 +290,7 @@ def check(person: dict, ctx: dict | None = None, queued: bool = False) -> dict:
                 return no(f"{status} in your contact book as {r.get('contact_id')}, though "
                           "nothing is logged yet")
         for r in rows:
-            hold = state.action_hold(r.get("next_action"), ctx["today"])
+            hold = state.action_hold(r.get("next_action"), ctx["today"], r.get("next_action_due"))
             if hold:
                 return no(f"{hold} ({r.get('contact_id')})")
         if not queued:

@@ -441,12 +441,21 @@ def open_applications(path: str = TRACKER, today: "dt.date | None" = None,
         status = (r.get("status") or "").strip().lower()
         if status in FINAL or status in UNSENT:
             continue
-        if is_silent(r, today):
+        if is_silent(r, today) or undated_application(r, today):
             continue
         k = key(r.get("company"))
         if k:
             out.setdefault(k, []).append(r)
     return out
+
+
+def undated_application(row: dict, today: "dt.date | None" = None) -> bool:
+    """A sent application nothing dates (no applied_on, no date) and no live process: it
+    holds its employer back for no time at all, since its silence can never be counted, and
+    held, it held for ever (2026-11-09). A process with an interview holds while it runs."""
+    if str(row.get("status") or "").strip().lower() in LIVE_PROCESS:
+        return False
+    return _row_age_days(row, today) is None
 
 
 def silent_applications(path: str = TRACKER, today: "dt.date | None" = None,
@@ -877,6 +886,26 @@ def _read_do_not_target(path: str = DO_NOT_TARGET) -> dict | None:
     return data if isinstance(data, dict) else None
 
 
+# An entry with no review_after is looked at again this long after the day it was recorded,
+# "revisit in a few months" as the entries themselves say; one with neither date holds
+# nothing. Every entry is meant to carry review_after, and one written without it suppressed
+# its employer for ever (2026-11-09).
+DO_NOT_TARGET_REVIEW_DAYS = 90
+
+
+def do_not_target_until(e: dict) -> str:
+    """The ISO day a do-not-target entry stops suppressing, or "" when nothing dates it (then
+    it suppresses nothing): its review_after, else DO_NOT_TARGET_REVIEW_DAYS after the day it
+    was recorded."""
+    if not isinstance(e, dict):
+        return ""
+    got = as_date(e.get("review_after"), iso_only=True)
+    if got:
+        return got.isoformat()
+    rec = as_date(e.get("recorded"), iso_only=True)
+    return (rec + dt.timedelta(days=DO_NOT_TARGET_REVIEW_DAYS)).isoformat() if rec else ""
+
+
 def load_do_not_target(path: str = DO_NOT_TARGET, today: str = "",
                        data: dict | None = None) -> dict[str, str]:
     """Employer key -> why no posting from them can be relevant.
@@ -902,14 +931,14 @@ def load_do_not_target(path: str = DO_NOT_TARGET, today: str = "",
     for name, e in (data.get("companies") or {}).items():
         if not isinstance(e, dict):
             continue
-        if (e.get("review_after") or "") and e["review_after"] < today:
+        until = do_not_target_until(e)
+        if not until or until < today:
             continue
         k = key(name)
         if k:
             out[k] = "do not target: %s (%s, recorded %s, review after %s)" % (
                 e.get("reason", "no reason recorded")[:160],
-                e.get("scope", "all"), e.get("recorded", "?"),
-                e.get("review_after", "never"))
+                e.get("scope", "all"), e.get("recorded", "?"), until)
     return out
 
 
@@ -921,8 +950,7 @@ def expired_do_not_target(path: str = DO_NOT_TARGET, today: str = "",
         return []
     today = today or dt.date.today().isoformat()
     return sorted(n for n, e in (data.get("companies") or {}).items()
-                  if isinstance(e, dict) and (e.get("review_after") or "")
-                  and e["review_after"] < today)
+                  if isinstance(e, dict) and do_not_target_until(e) < today)
 
 
 def _status_of(row: dict, derived: dict[str, str]) -> str:
