@@ -1693,6 +1693,13 @@
     }
     return best ? best.line : "";
   }
+  // Work for the computer that has not started: the engine's one line for the computer as it
+  // is (tools/computer.py SAY, in Settings' row), never a line made here.
+  function computerLine() {
+    const c = obj(obj(M().where).computer);
+    const said = txt(c.say);
+    return said && txt(c.state) !== "optional" && txt(c.state) !== "ready" ? said : "This needs your computer: Claude starts it there when your computer is on.";
+  }
   function computerListening() {
     for (const [, c] of S.chats) {
       if (txt(c.kind) !== "computer") continue;
@@ -1861,7 +1868,8 @@
     const ids = [];
     for (const [id, w] of allWork()) {
       if (id === here || (txt(w.status) || "queued") !== "queued" || !w.asked_from || w.stop_asked) continue;
-      if (w.to === "computer" && !computerListening()) continue;
+      // Work for the computer rings the helper too: it starts a chat on the computer for it
+      // (tools/computer.py route), where before it waited for a chat there nobody had open.
       if (pickedUp(w) || t - (S.tried.get(id) || 0) < 15000 || (S.tries.get(id) || 0) >= RING_TRIES) continue;
       const p = progress(w, t);
       const place = queuePlace(id, w);
@@ -1898,7 +1906,7 @@
       // Sent, or not sent and saying so on its card with the way to send it: never "saved"
       // over a ring that failed.
       if (told || (canRing() && how !== "no_session" && !toComputer)) S.workNote.delete(id);
-      else if (toComputer) S.workNote.set(id, {text: "This needs your computer: open Claude on it, and it starts there.", tone: "muted"});
+      else if (toComputer) S.workNote.set(id, {text: computerLine(), tone: "muted"});
       // Where this page cannot ring at all: saved, and the one way to start it now beside it
       // ("It starts next time Claude works on your search" never said when, the audit).
       // The way to start it now is added where the note is drawn (noteWords): Open Claude only
@@ -9854,7 +9862,7 @@
       onSubmit: (v) => {
         const n = txt(v.note);
         const count = Number(v.count || 5);
-        requestWork([{id: "network~targets~" + todayIso(), kind: "network", to: "either", title: n ? "People: " + (n.length > 40 ? n.slice(0, 39) + "\u2026" : n) : "People at the employers you want", args: Object.assign({count}, n ? {note: n} : {}), redo: true}]);
+        requestWork([{id: "network~targets~" + todayIso(), kind: "network", to: peopleTo(), title: n ? "People: " + (n.length > 40 ? n.slice(0, 39) + "\u2026" : n) : "People at the employers you want", args: Object.assign({count}, n ? {note: n} : {}), redo: true}]);
       }});
   }
   function findPeople(company) {
@@ -9862,8 +9870,13 @@
     if (!c || alreadyGoing("network")) return;
     sheet({title: "Find people at " + c, intro: "Claude looks for alumni and people in your field there first, reads each one, and drafts a short first note for the best few.",
       cost: costLine("network"), submit: "Find people", fields: [],
-      onSubmit: () => requestWork([{id: "network~" + seg(c), kind: "network", to: "either", title: "People at " + c, args: {company: c}, redo: true}])});
+      onSubmit: () => requestWork([{id: "network~" + seg(c), kind: "network", to: peopleTo(), title: "People at " + c, args: {company: c}, redo: true}])});
   }
+  // Finding people reads LinkedIn, which only the person's computer can (tools/page_db.py
+  // computer_only): with a computer, the run goes there, and no cloud chat takes it and closes
+  // it with "Can't read LinkedIn from here" (2026-11-09). With none, it stays anywhere, and the
+  // person pastes the few profiles that matter.
+  function peopleTo() { return person().computer ? "computer" : "either"; }
 
   // ------------------------------------------------------------------ applications after sending (FUNCTIONS_SPEC 1.2)
 
@@ -10655,8 +10668,22 @@
       // A chat on the computer is never offered: the cloud answers the page, and the computer
       // only reads LinkedIn, through this page (the maintainer, 2026-10-29). One already
       // listening still shows, so the person can see it.
-      st.computer === "ready" ? row("computer", "Claude on your computer", st.computer, st.say.computer || "Answers only what needs your computer.", null) : null,
+      st.computer === "ready" ? row("computer", "Claude on your computer", st.computer, st.say.computer || "Answers only what needs your computer.", null) :
+        // The computer's own state, from its heartbeat (tools/computer.py): one line, and the
+        // registry's steps only where the person is needed. "optional" is someone who never
+        // said they have one: nothing is shown.
+        COMPUTER_WORDS[st.computer] ? computerRow(st) : null,
       tidiedLine());
+  }
+  const COMPUTER_WORDS = {off: ["Off", null], gone: ["Not seen this week", "warn"], signed_out: ["Sign in once", "warn"], forgets: ["Signs out when closed", "warn"],
+    paused: ["Paused", null], no_bridge: ["Not switched on", "warn"], not_set_up: ["Not set up", "warn"], no_computer: ["No computer", null]};
+  function computerRow(st) {
+    const [word, tone] = COMPUTER_WORDS[st.computer];
+    const steps = st.computerSteps;
+    return h("li", {class: "task where-computer", "data-where": "computer"},
+      h("div", {class: "task-head"}, h("span", {class: "task-name"}, "Claude on your computer"), stateWord(word, tone)),
+      st.say.computer ? h("p", {class: "small muted"}, st.say.computer) : null,
+      steps.length ? h("ol", {class: "setup-steps"}, steps.map((s) => h("li", {}, unnumber(txt(s))))) : null);
   }
   // The same link "Claude isn't listening" opens: a chat that runs the start command and
   // becomes the one that answers the page. A wording of its own reached no instructions.
@@ -12680,7 +12707,9 @@
     const p = progress(v);
     const st = p.status;
     const toComputer = w.to === "computer";
-    const away = toComputer && !computerListening();
+    // A chat the helper started on the computer for it (tools/computer.py started) is not
+    // "away": its own step says "Starting on your Mac".
+    const away = toComputer && !computerListening() && !obj(w.computer_session).id;
     // Slower than usual is still running (a spinner, no warning); only a missed check-in may
     // mean it stopped.
     const slow = p.lapsed;
@@ -12728,7 +12757,7 @@
       // What Claude itself wrote on waiting work ("Waiting its turn: three drafts are being
       // written now") is the line, over any of the page's own: it was only in the folded steps.
       const said = lastStep && tms(lastStep.at) >= (tms(w.answered_at) || tms(w.asked_at) || 0) ? txt(lastStep.text) : "";
-      now1 = held ? heldLine(upd) : away ? "This needs your computer: open Claude on it." :
+      now1 = held ? heldLine(upd) : away ? computerLine() :
         unsent ? "Not sent to Claude yet: it goes with your next tap here." :
         said ? said :
         helperStarting() ? "Claude's helper is starting up. It takes this in a minute or two." :

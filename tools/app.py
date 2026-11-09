@@ -118,6 +118,23 @@ def _build(today, now, **kw):
     return with_page_parts(model), got
 
 
+def computer_seen(db: dict, now) -> dict | None:
+    """The computer's state from the page's database (tools/computer.py), or None where it
+    cannot be read: the page then shows what it showed before."""
+    try:
+        import computer
+        works_on = computer._works_on()
+        st = computer.state(db, now, version=computer.app_version(), works_on=works_on)
+    except Exception:  # noqa: BLE001  the page is drawn whatever the computer's record holds
+        return None
+    # Someone who never said they have a computer, with nothing waiting for one, keeps the
+    # row as it was: nothing about a computer is pressed on a person without one.
+    if st["state"] in ("not_set_up", "no_computer") and not st["waiting"] \
+            and works_on not in ("computer", "both"):
+        return None
+    return st
+
+
 def cmd_model(a) -> int:
     import app_model
     today, now = app_model.clock(a.today, a.now)
@@ -351,7 +368,8 @@ def cmd_view(a) -> int:
     # reach it a day.
     full: dict = {}
     model, _ = _build(today, now, shown=app_alerts.shown_in(db.get("view") or {}), full=full,
-                      work_time=page_db.work_times(db, now) if db else None)
+                      work_time=page_db.work_times(db, now) if db else None,
+                      computer=computer_seen(db, now) if db else None)
     w = page_db.Writes(a.out_dir)
     views = (db.get("view") or {}) if db else {}
     # Only what changed is written: every update rewrote all 37 documents, about 1.5 MB, when
