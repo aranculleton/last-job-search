@@ -45,7 +45,7 @@ jobs:
     # acts on.
     # Pinned by tests/test_upstream_triage.py.
     if: github.repository != 'MadsLorentzen/ai-job-search' && github.repository == 'aranculleton/last-job-search'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # A weekly cron is exactly the job nobody watches, and GitHub's default
     # timeout is 360 minutes. At $0.008 a minute one hang here is $2.88.
     timeout-minutes: 10

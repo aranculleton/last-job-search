@@ -51,7 +51,7 @@ jobs:
     # 50 minutes on this job alone (2026-10-29). Each installs only the engine it needs.
     name: page everywhere (${{ matrix.name }})
     if: ${{ github.event_name == 'workflow_dispatch' || (!github.event.repository.private && (github.event_name == 'schedule' || startsWith(github.event.pull_request.title, 'Release '))) }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     strategy:
       fail-fast: false
@@ -104,7 +104,7 @@ jobs:
   suite:
     name: suite everywhere (the clock moved on, far time zones, an odd folder, the newest Python)
     if: ${{ (github.event_name == 'workflow_dispatch' && inputs.suite != false) || (!github.event.repository.private && (github.event_name == 'schedule' || startsWith(github.event.pull_request.title, 'Release '))) }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
