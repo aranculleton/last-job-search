@@ -210,14 +210,17 @@ def _read_json(path: str):
 # chat put the right numbers in by hand, fifty at a time (a person's computer, 2026-11-09).
 # `keep_listed` writes each listed version into its file, beside the fields (`__version__`,
 # which `load()` takes as the store's own number), so every command over the folder pins to the
-# page's own number. The app's hook does it after every read (`learned.py hook`, PostToolUse);
-# `app.py versions` does it from the lines given to it, where the hook did not run.
+# page's own number. A chat runs `app.py versions` after each read, with the lines the read
+# printed: no copy's settings run the app's hook after a read yet (a PostToolUse hook on
+# ArtifactData was refused). `learned.py hook` already does the same on a PostToolUse event
+# (keep_listed_event), and `hook_keeps_versions` says whether a copy's settings register it,
+# so the step drops by itself once such a hook exists.
 LISTED = re.compile(r'\bversion\s+(\d+)\s+"([^"\r\n]+?\.json)"')
 SHORT = re.compile(r"^\s*([A-Za-z0-9_\-.~:@+]+(?:/[A-Za-z0-9_\-.~:@+]+)*)/([A-Za-z0-9_\-.~:@+]+)"
                    r"\s*[\s=]\s*(\d+)\s*$")
 STORE_VERSION = "__version__"
 LISTED_MARK = ".versions.json"      # in a dump folder: the read's versions were kept here
-# What a chat is told to do after its reads where the app's hook does not keep the versions.
+# What a chat is told to do after its reads: every copy today, since no hook keeps them.
 VERSIONS_STEP = ("then keep the page's own version of each record: python3 tools/app.py versions "
                  "\"{dump}\" with the lines those reads printed on its input (a heredoc), each "
                  "`- \"<id>\"  N bytes  version V  \"<file>\"` as printed, or typed short, "
@@ -302,8 +305,9 @@ def _strings(obj, out: list) -> None:
 
 
 def keep_listed_event(event: dict) -> int:
-    """The hook's half (Claude Code's PostToolUse, after an ArtifactData read with `out_dir`):
-    the versions its result lists, kept in the files it saved. Any other call: nothing."""
+    """The hook's half, for a copy whose settings run `learned.py hook` on PostToolUse after an
+    ArtifactData read with `out_dir` (none does yet: hook_keeps_versions): the versions its
+    result lists, kept in the files it saved. Any other call: nothing."""
     if not isinstance(event, dict) or str(event.get("tool_name") or "") != "ArtifactData":
         return 0
     given = event.get("tool_input") if isinstance(event.get("tool_input"), dict) else {}
@@ -917,6 +921,16 @@ COMPUTER_ONLY_REFUSAL = ("this needs the person's computer (a LinkedIn read): a 
 READS_ON_COMPUTER = ("network",)
 
 
+def claimed_kind(item: dict, chat_kind: str, chat: str = "") -> str:
+    """The kind of chat writing to `item`: the kind its claim was made as (`claimed_as`) when
+    `chat` is the one that claimed it, else `chat_kind`. A cloud chat lent the computer's
+    browser claims as a computer chat, and the finish it runs is its claim's."""
+    if chat and str(item.get("claimed_by") or "") == str(chat) \
+            and str(item.get("claimed_as") or "") == "computer":
+        return "computer"
+    return chat_kind
+
+
 def computer_only(item: dict, chat_kind: str) -> str:
     """Why a chat of `chat_kind` may not claim, finish or fail `item`, or "": it is sent to the
     computer for a LinkedIn read and this chat is not one. Their own Stop is the one way a
@@ -1224,15 +1238,19 @@ def after_update(db: dict) -> bool:
 
 
 def heartbeat(chat_id: str, chat_kind: str, now: dt.datetime, busy: str | None = None,
-              title: str = "") -> dict:
+              title: str = "", watching: bool = True) -> dict:
+    """A chat's heartbeat. `watching` False: a chat that is at work but neither answers the
+    page nor sits on the computer (a job's own chat, or a cloud chat lent the computer's
+    browser or folder), which the page and `computer.route` never count as a chat listening."""
     import app_model
     can = sorted(k for k, v in WORK_KINDS.items() if chat_kind in v["can"])
     return {"kind": chat_kind, "title": title or f"Job search ({chat_kind})", "can": can,
-            "seen_at": app_model.stamp(now), "busy": busy}
+            "seen_at": app_model.stamp(now), "busy": busy,
+            **({} if watching else {"watching": False})}
 
 
 def claim(db: dict, chosen: dict, chat_id: str, chat_kind: str, now: dt.datetime,
-          out_dir: str, running: bool = False) -> list[str]:
+          out_dir: str, running: bool = False, watching: bool = True) -> list[str]:
     """The claim for `chosen` (next_item's answer) as batch files: the item pinned to the
     version read, each lock created (a lock left by a finished job is replaced, pinned to
     its version), and the chat's heartbeat. A refused batch means another chat has it.
@@ -1264,8 +1282,11 @@ def claim(db: dict, chosen: dict, chat_id: str, chat_kind: str, now: dt.datetime
             out["steps"] = [{"at": at, "text": "Carrying on with your answer."}]
         return out
 
+    # The kind it was claimed as, kept on the item: a cloud chat lent the computer's browser
+    # claims as a computer chat, and its finish, run without `--kind computer`, was refused as
+    # a cloud chat's (the release review, 2026-11-09). `finish` believes it for the claimer.
     fields = {"status": status, "claimed_by": chat_id, "claimed_at": at, "lease_until": until,
-              **fresh(chosen["work"])}
+              "claimed_as": chat_kind, **fresh(chosen["work"])}
     named = str((chosen.get("create_session") or {}).get("title") or "")
     if named:
         # The name of the chat started for it, so the next one started beside it is never
@@ -1280,7 +1301,7 @@ def claim(db: dict, chosen: dict, chat_id: str, chat_kind: str, now: dt.datetime
     for other in chosen.get("with") or []:
         w.add("update", "work", other["work"],
               dict(fresh(other["work"]), status=status, claimed_by=chat_id, claimed_at=at,
-                   lease_until=until, **{"with": chosen["work"]}),
+                   lease_until=until, claimed_as=chat_kind, **{"with": chosen["work"]}),
               if_version=other.get("version"))
     # Each lock names the item that needs it, so finishing one posting of a batch (or
     # stopping it for a question) frees its own employer and nothing else.
@@ -1298,7 +1319,12 @@ def claim(db: dict, chosen: dict, chat_id: str, chat_kind: str, now: dt.datetime
     # `busy` is the line the page shows for work asked in the chat (busy_beat), never a work
     # id: the page shows the work itself. A line already there is kept.
     line = plain_busy(((mine or {}).get("data") or {}).get("busy"), db)
-    w.add("set", "chats", chat_id, heartbeat(chat_id, chat_kind, now, busy=line),
+    # A chat that only does this work (`watching` False) says so on its heartbeat: written as
+    # a computer chat's, a cloud chat lent the computer's browser made the page and
+    # computer.route believe a chat on the computer listened for twenty minutes (the release
+    # review, 2026-11-09).
+    w.add("set", "chats", chat_id, heartbeat(chat_id, chat_kind, now, busy=line,
+                                             watching=watching),
           if_version=mine["version"] if mine else None)
     return w.save("claim")
 
@@ -1970,7 +1996,7 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
     taken = not_its_claim(item, chat)        # `chat`: the id the job was claimed under
     if taken:
         raise KeyError(taken)
-    refused = computer_only(item, chat_kind)
+    refused = computer_only(item, claimed_kind(item, chat_kind, chat))
     if refused and not (status == "stopped" and item.get("stop_asked")):
         raise ValueError(f"not finished: {refused}")
     if chat and str(item.get("status") or "queued") == "queued" and not item.get("claimed_by") \

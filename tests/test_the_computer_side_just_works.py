@@ -184,7 +184,11 @@ def test_a_person_with_no_computer_is_shown_nothing_about_one(monkeypatch):
     monkeypatch.setattr(computer, "_works_on", lambda: "")
     assert app.computer_seen(db, T) is None
     monkeypatch.setattr(computer, "_works_on", lambda: "computer")
+    monkeypatch.setattr(computer, "_ready_said", lambda: False)
     assert app.computer_seen(db, T)["state"] == "not_set_up"
+    # Set up and tested, and not heard from on this page yet: never told to set it up.
+    monkeypatch.setattr(computer, "_ready_said", lambda: True)
+    assert app.computer_seen(db, T) is None
     # Work sent to the computer by someone with no computer said: told plainly, never hidden.
     sent = _db(("n1", _w("network", "Harbourline Bank", to="computer")))
     monkeypatch.setattr(computer, "_works_on", lambda: "phone")
@@ -396,3 +400,142 @@ def test_computer_access_is_never_approved_where_a_scheduled_task_fires():
                          tools=["create_session"])
     assert "trust-check" in got["then"] and got["then"].index("trust-check") < \
         got["then"].index("confirm_repository_trust")
+
+
+# ------------------------------------------------------------------ the release review, 2026-11-09
+
+
+def _entries(batches):
+    out = []
+    for b in batches:
+        with open(b, encoding="utf-8") as fh:
+            out += json.load(fh)
+    return out
+
+
+def _body(entry):
+    if entry.get("data") is not None:
+        return entry["data"]
+    with open(entry["file_path"], encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+def test_computer_work_whose_chat_died_waits_again_and_is_never_stuck_running(tmp_path):
+    """A LinkedIn read claimed by a computer chat that then died: its claim lapses, and it is
+    waiting work again, so a new chat on the computer is started for it, the scheduled task
+    sees it, and a computer chat takes it again; stopped twice, it is failed in plain words."""
+    died = _w("network", "Harbourline Bank", to="computer", status="running",
+              claimed_by="mac-1", claimed_at="2026-10-25T16:00:00Z",
+              lease_until="2026-10-25T16:30:00Z", attempt=1)
+    db = _db(("network~people", died))
+    assert computer.waiting(db, T)["queued"] == ["network~people"]
+    assert computer.route(db, T, envs=BRIDGE, tools=["create_session"])["route"] == \
+        "computer session"
+    assert page_db.next_item(db, "cloud", T) is None
+    again = page_db.next_item(db, "computer", T, to_only="computer")
+    assert again["work"] == "network~people" and again["again"] == 2
+    # Still held by its chat: running, not waiting.
+    live = _db(("network~people", dict(died, lease_until="2026-10-25T18:30:00Z")))
+    assert computer.waiting(live, T)["queued"] == []
+    # Stopped a second time: failed, in plain words, never left running.
+    twice = _db(("network~people", dict(died, attempt=2)))
+    assert computer.waiting(twice, T)["queued"] == []
+    assert page_db.stranded(twice, T) == ["network~people"]
+    assert page_db.fail_stranded(twice, T, str(tmp_path / "s"))["ended"] == ["network~people"]
+
+
+def test_done_on_the_computers_card_is_applied(tmp_path):
+    """The computer's To do card is built where a tap is checked, so its Done lands."""
+    s = Search(str(tmp_path))
+    item = _w("network", "Harbourline Bank", to="computer", asked="2026-10-25T17:00:00Z")
+    beat = _beat(linkedin="out")
+    db = dict(_db(("network~people", item)), chats=beat)
+    rev = computer.card(computer.state(db, T))["rev"]
+    s.put("work", "network~people", item, version=1)
+    for did, doc in beat.items():
+        s.put("chats", did, doc["data"], version=doc["version"])
+    aid = s.act("setup.done", "q-setup-computer", rev=rev)
+    s.apply()
+    got = s.receipt(aid)
+    assert got["result"] == "ok", got
+    assert "no longer on the page" not in got["note"]
+
+
+def test_a_chat_lent_the_computers_browser_finishes_what_it_claimed_and_is_not_its_chat(tmp_path):
+    """A cloud chat lent the computer's browser claims as a computer chat: its steps carry
+    `--kind computer`, its finish is believed without it for the chat that claimed, and its
+    heartbeat never says a chat on the computer is listening."""
+    s = Search(str(tmp_path))
+    s.put("work", "network~people", _w("network", "Harbourline Bank", to="computer",
+                                       title="People at Harbourline Bank"), version=4)
+    got = json.loads(s.run("next", s.dump, "--chat", "cloud-7", "--kind", "computer",
+                           "--computer-only", "--lent", "--now", NOW,
+                           "--claim-out", os.path.join(s.dump, "claim")))
+    steps = "\n".join(got["steps"])
+    assert re.search(r"app\.py done with --work network~people --chat cloud-7 --kind computer",
+                     steps), steps
+    assert "--chat cloud-7 --kind computer --stopped" in steps
+    entries = _entries(got["batches"])
+    body = _body(next(e for e in entries if e["collection"] in ("chats", "beats")))
+    assert body["kind"] == "computer" and body["watching"] is False
+    assert _body(next(e for e in entries if e["collection"] == "work"))["claimed_as"] == "computer"
+    # Its heartbeat is not a chat on the computer: the chain still starts one there.
+    db = _db(("n2", _w("network", "Larkspur Retail", to="computer")),
+             chats={"cloud-7": {"data": dict(body, seen_at=NOW), "version": 1}})
+    assert computer.route(db, T, envs=BRIDGE, tools=["create_session"])["route"] == \
+        "computer session"
+    # Its finish, run as the cloud chat it is, is believed for the chat that claimed it alone.
+    running = _db(("network~people", _w("network", "Harbourline Bank", to="computer",
+                                        status="running", claimed_by="cloud-7",
+                                        claimed_as="computer", claimed_at=NOW)))
+    assert page_db.finish(running, "network~people", T, str(tmp_path / "f"), chat_kind="cloud",
+                          chat="cloud-7", summary="Ten people found and drafted.")
+    with pytest.raises((ValueError, KeyError)):
+        page_db.finish(running, "network~people", T, str(tmp_path / "g"), chat_kind="cloud",
+                       chat="cloud-8", summary="Ten people found and drafted.")
+    # The chat started on the computer itself still counts as one there.
+    s.put("work", "n3", _w("network", "Fernhill Freight", to="computer"), version=1)
+    own = json.loads(s.run("next", s.dump, "--chat", "mac-1", "--kind", "computer",
+                           "--computer-only", "--now", NOW,
+                           "--claim-out", os.path.join(s.dump, "claim2")))
+    own_beat = _body(next(e for e in _entries(own["batches"]) if e["collection"] in ("chats", "beats")))
+    assert own_beat.get("watching") is not False
+    folders = {"folders": [{"environment_id": "env_f", "computer_name": "Studio Laptop",
+                            "folder": "search", "online": True}]}
+    for route_, tools in (("linked browser", ["enable__mcp__remote-devices__Claude_Browser"]),
+                          ("computer folder", ["request_computer_folder"])):
+        r = computer.route(_db(("n4", _w("network", "Kestrel Mutual", to="computer"))), T,
+                           envs=[], folders=folders, tools=tools)
+        assert r["route"] == route_ and "--lent" in r["then"] and "--kind computer" in r["then"]
+
+
+@pytest.mark.parametrize("place, seen, want", [
+    ({"works_on": "computer"}, {}, False),                              # said, never set up
+    ({"works_on": "both", "computer_ready": "2026-10-20"}, {}, True),   # set up and tested
+    ({"works_on": "computer"}, {"seen_at": "2026-10-25T17:30:00Z"}, True),   # seen lately
+    ({"works_on": "computer"}, {"seen_at": "2026-10-20T17:30:00Z"}, False),  # long gone
+    ({"works_on": "phone", "computer_ready": "2026-10-20"}, {}, False),
+])
+def test_find_people_goes_to_the_computer_only_once_it_is_known_ready(place, seen, want):
+    """Sent to a computer nobody can start a chat on, a "Find people" waited for good: the
+    engine says whether the computer is ready (person.computer), and the page follows it."""
+    assert computer.reads_there(place, seen, T) is want
+
+
+def test_the_page_follows_the_engine_on_where_find_people_goes():
+    import inspect
+    with open(os.path.join(ROOT, "templates", "app", "app.js"), encoding="utf-8") as fh:
+        js = fh.read()
+    assert 'function peopleTo() { return person().computer ? "computer" : "either"; }' in js
+    assert "reads_there" in inspect.getsource(app_model._person)
+
+
+def test_every_read_is_followed_by_app_py_versions_while_no_hook_keeps_them():
+    """No copy's settings run the app's hook after a read (it was refused), so each read is
+    followed by `app.py versions`, and nothing says the hook does it."""
+    import inspect
+    import learned
+    assert page_db.hook_keeps_versions() is False
+    assert "app.py versions" in page_db.versions_step("$D")
+    for mod in (page_db, learned):
+        assert "hook does it after every read" not in inspect.getsource(mod)

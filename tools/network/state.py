@@ -5102,15 +5102,30 @@ def hold_lifts(text) -> datetime.date | None:
     return day
 
 
+# A hold that is the word alone ("HOLD", "Frozen.", "on hold"): nothing in it says what ends
+# it, so the row's own day (next_action_due) does.
+_BARE_HOLD = re.compile(r"^\W*(?:on\s+)?(?:hold|freeze|frozen)\W*$", re.I)
+
+
+def hold_end(next_action, due=None) -> datetime.date | None:
+    """The first day the hold in `next_action` no longer applies, or None while nothing ends it
+    but the person. A day its words name ends it; the row's own day (`due`, its
+    next_action_due) ends only a bare "Hold" or "Freeze": a "Hold" with a day beside it held
+    for ever (2026-11-09). A hold whose words name a condition ("Hold until she replies")
+    stays held: its row's day is the old follow-up day, and a stale one lifted the hold at
+    once (the release review, 2026-11-09)."""
+    text = str(next_action or "").strip()
+    return hold_lifts(text) or (as_date(due) if _BARE_HOLD.match(text) else None)
+
+
 def action_hold(next_action, today, due=None) -> str:
-    """Why this next_action is held today, or "" when it is not a hold or has lifted.
-    A hold whose words name no end lifts on the row's own day (`due`, its next_action_due)
-    where it has one: a "Hold" with a day beside it held for ever (2026-11-09). With
-    neither, it holds until the person says otherwise, and the page lists it so."""
+    """Why this next_action is held today, or "" when it is not a hold or has lifted (its end,
+    hold_end). With no end, it holds until the person says otherwise, and the page lists it
+    so."""
     text = str(next_action or "").strip()
     if not _HOLD.match(text):
         return ""
-    lifts = hold_lifts(text) or as_date(due)
+    lifts = hold_end(text, due)
     if lifts is None:
         return "on hold, no end date"
     if lifts <= _need_date(today, "today"):

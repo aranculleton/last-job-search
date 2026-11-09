@@ -468,8 +468,14 @@ class Index:
     on everyone at an employer, then a Stop on one of them) is still checked against what
     the person saw, never bounced by their own earlier tap (2026-11-04)."""
 
-    def __init__(self, today: dt.date, now: dt.datetime, shown: dict | None = None):
+    def __init__(self, today: dt.date, now: dt.datetime, shown: dict | None = None,
+                 db: dict | None = None):
         self.today, self.now, self.shown = today, now, shown
+        # The computer as the page was drawn with it (computer.seen, from the page's database,
+        # worked out at the first build): built without it, its To do card was missing, and
+        # every Done on it said "That is no longer on the page" (the release review, 2026-11-09).
+        self.db = db
+        self._computer: list = []
         self.cache: dict = {}
         self.touched: set = set()
         self.builds = 0
@@ -480,7 +486,11 @@ class Index:
 
     def section(self, name: str) -> dict:
         if name not in self.cache:
-            _, self.cache[name] = app_model.build(self.today, self.now, only={name})
+            if not self._computer:
+                import computer
+                self._computer.append(computer.seen(self.db or {}, self.now))
+            _, self.cache[name] = app_model.build(self.today, self.now, only={name},
+                                                  computer=self._computer[0])
             self.builds += 1
             if not self.tabs:
                 for k, t in self.cache[name].items():
@@ -4203,7 +4213,7 @@ def apply_dir(dump_dir: str, chat: str = "chat", now: dt.datetime | None = None,
     safe_only = None
     today = app_model.local_day(now, zone)
     import app_alerts
-    index = Index(today, now, shown=app_alerts.shown_in(db.get("view") or {}))
+    index = Index(today, now, shown=app_alerts.shown_in(db.get("view") or {}), db=db)
     names = None
     summary: dict = {"ok": [], "stale": [], "conflict": [], "again": []}
     done: dict = {}

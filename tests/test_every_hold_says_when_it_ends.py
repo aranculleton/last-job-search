@@ -208,7 +208,16 @@ def _place(_s):
 def _person_hold(_s):
     import state
     assert state.action_hold("Hold: waiting for them to be back", TODAY) == "on hold, no end date"
-    assert state.action_hold("Hold: waiting for them to be back", TODAY, "2026-11-01") == ""
+    # The row's day ends only a bare hold: one that names a condition stays held, however old
+    # the row's follow-up day (a stale day lifted "Hold until she replies" at once).
+    assert state.action_hold("HOLD", TODAY, "2026-11-01") == ""
+    assert state.action_hold("Frozen.", TODAY, "2026-12-01").startswith("on hold until")
+    assert state.action_hold("Hold until she replies", TODAY, "2026-11-01") == \
+        "on hold, no end date"
+    assert state.action_hold("Hold: waiting for them to be back", TODAY, "2026-11-01")
+    got = holds._person_holds(TODAY, [{"name": "Ada Example", "next_action":
+                                       "Hold until she replies", "next_action_due": "2026-11-01"}])
+    assert got and "no end day" in got[0]["line"]
     assert state.action_hold("Hold until 2026-12-01", TODAY).startswith("on hold until")
     got = holds._person_holds(TODAY, [{"name": "Ada Example", "next_action": "Hold"}])
     assert got and "no end day" in got[0]["line"] and "write to Ada again" in got[0]["line"]
