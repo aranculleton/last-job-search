@@ -7520,7 +7520,7 @@
     const said = !!go.line && txt(go.line) !== txt(go.words);
     return h("p", {class: "going small" + (go.tone ? " tone-" + go.tone : ""), "data-going": p.id, role: "status"},
       go.spin ? h("span", {class: "spin", "aria-hidden": "true"}) : h("span", {class: "dot " + dot, "aria-hidden": "true"}), " ",
-      h("span", {class: "going-word"}, go.words, said ? h("span", {class: "going-sep"}, " ·") : null), said ? h("span", {class: "muted"}, " " + txt(go.line)) : null,
+      h("span", {class: "going-lead"}, h("span", {class: "going-word"}, go.words), said ? h("span", {class: "going-sep"}, " ·") : null), said ? h("span", {class: "muted"}, " " + txt(go.line)) : null,
       ctl ? " " : null, ctl);
   }
   // The rare question a reply's work stopped on (the work's `needs`: {question, about, answer:
