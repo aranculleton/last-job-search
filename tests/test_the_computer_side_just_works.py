@@ -191,6 +191,31 @@ def test_a_person_with_no_computer_is_shown_nothing_about_one(monkeypatch):
     assert app.computer_seen(sent, T)["state"] == "no_computer"
 
 
+def test_the_page_draws_the_engines_line_and_card(tmp_path, monkeypatch):
+    """Settings' row and the To do card come from the engine, worked out once (DESIGN.md)."""
+    import person
+    s = Search(str(tmp_path))
+    monkeypatch.setenv(person.ENV, s.profile)
+    monkeypatch.setenv(person.STATE_ENV, s.state)
+    person._modules.clear()
+    person._data.clear()
+    work = ("network~people", _w("network", "Harbourline Bank", to="computer",
+                                 asked="2026-10-25T17:00:00Z"))
+    st = computer.state(dict(_db(work), chats=_beat(linkedin="out")), T, envs=BRIDGE)
+    model, _ = app_model.build(T.date(), T, only=("needs_you", "where"), computer=st)
+    row = model["where"]["computer"]
+    assert row["state"] == "signed_out" and row["say"] == computer.SAY["signed_out"]
+    assert row["steps"] and row["action"] == "Sign in once"
+    cards = [c for c in model["needs_you"] if c["id"] == "q-setup-computer"]
+    assert len(cards) == 1 and cards[0]["steps"] and cards[0]["link"]
+    ready = computer.state(dict(_db(work), chats=_beat()), T, envs=BRIDGE)
+    model, _ = app_model.build(T.date(), T, only=("needs_you", "where"), computer=ready)
+    assert model["where"]["computer"]["state"] == "ready"
+    assert not [c for c in model["needs_you"] if c["id"] == "q-setup-computer"]
+    person._modules.clear()
+    person._data.clear()
+
+
 def test_the_heartbeat_is_measured_never_guessed():
     with pytest.raises(ValueError):
         computer.beat_fields("Studio Laptop", T, browser="probably")

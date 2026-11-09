@@ -3725,6 +3725,10 @@ def _setup_done(r: Run) -> dict:
         if kind["kind"] != "private":
             raise Refused("GitHub still shows your copy as public.")
         return {"note": "Your copy is private now.", "undo": None}
+    if key == "computer":
+        # The computer's own card (tools/computer.py card): nothing to keep, since the next
+        # heartbeat says whether it worked; the helper's wake tries the computer again.
+        return {"note": "Thank you: Claude tries your computer again now.", "undo": None}
     if app_setup.set_up() or key in app_setup.TOLD:
         app_setup.save_said(key, app_model.stamp(r.at))
     return {"note": "Noted, thank you.", "undo": None}
