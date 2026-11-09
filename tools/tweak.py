@@ -1496,14 +1496,16 @@ def route_others(where: dict, words: str) -> dict | None:
     lead = ("That was about every note waiting for a profile, so this one is unchanged. "
             if len(ids) > 1 else "That was about reading their profile, so this note is "
                                  "unchanged. ")
+    queued: list = []
     if reading.reads_now() == "browser":
         reading.queue_for_page(ids)
+        queued = ids
         said = (f"{who} {'is' if len(ids) == 1 else 'are'} on your page's reading list: it reads "
                 f"{'it' if len(ids) == 1 else 'them'} while it is open in the Claude app on your "
                 "computer, then rewrites each note.")
     else:
         said = "Paste each one's profile on their card, and Claude rewrites the note."
-    return {"status": "done", "summary": lead + said, "unchanged": True, "queued": ids}
+    return {"status": "done", "summary": lead + said, "unchanged": True, "queued": queued}
 
 
 def apply(work: dict, today: dt.date | None = None) -> dict:

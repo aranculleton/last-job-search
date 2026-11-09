@@ -330,13 +330,14 @@ def test_a_phone_can_act_on_the_reading_card_and_a_held_note_is_not_offered(run,
               steps=[{"hash": "todo"}, {"click": "I'll paste them instead"},
                      {"hash": "contacts",
                       "eval": "[(document.querySelector('[data-k=\"held:msg-ash-1\"]') || {}).textContent || '',"
+                              " (document.querySelector('[data-k=\"facts:msg-ash-1\"]') || {}).textContent || '',"
                               " !!document.querySelector('[data-k=\"copy:msgt-msg-ash-1\"]')]"}])
     acts = [a for a in got["steps"][1]["actions"] if a.get("action") == "setting.set"]
     assert acts and acts[0]["value"] == {"value": "paste"}
-    # Not offered: its one line says why it waits (2026-11-07: "Not ready to send: waiting
-    # for ..." and an alert under it said it twice), and it has no Copy.
-    line, copy = got["steps"][-1]["eval"]
-    assert "profile was read" in line and not copy, (line, copy)
+    # Not offered: its line of facts says it waits for their profile, the engine's sentence
+    # behind its "?" (2026-11-07: said twice; 2026-11-09: one quiet line), and it has no Copy.
+    held, facts, copy = got["steps"][-1]["eval"]
+    assert held.strip() == "Waiting for their profile" and "profile was read" in facts and not copy, (held, facts, copy)
 
 
 # ------------------------------------------------------------------ X-55 questions in the chat

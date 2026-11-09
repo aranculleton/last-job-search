@@ -9160,11 +9160,14 @@
       // breaks, then its one state and Stop Claude. It was said twice, the whole paste as one
       // grey run near the top of the card and again under the draft (the maintainer, 2026-11-05).
       const asked = txt(obj(gw.args).text);
+      const shown = !!asked && obj(gw.args).auto !== true;
       return h("div", {class: "tweak-going", "data-tweak-going": gid},
-        asked && obj(gw.args).auto !== true ? clipBlock(asked, "tw:" + gid, {cls: "ct-q", lead: [h("span", {class: "ct-who"}, "You asked"), " "]}) : null,
-        // Its state alone while it waits ("Waiting for Claude, asked at 10:42", "Waiting its
-        // turn, after ..."), never "Changing it next" over work nothing has started.
-        workInline(gid, gw, {key: "tweak:" + item.id, lead: txt(gw.status) === "queued" ? "" : "Changing it now", bare: true}));
+        shown ? clipBlock(asked, "tw:" + gid, {cls: "ct-q", lead: [h("span", {class: "ct-who"}, "You asked"), " "]}) : null,
+        // Under what was asked, its state alone while it waits ("Waiting for Claude, asked at
+        // 10:42", "Waiting its turn, after ..."): "Changing it next · starting in a moment" read
+        // as about to happen for two minutes (the maintainer, 2026-11-09). With nothing asked in
+        // words (a chip's change), what it is comes first.
+        workInline(gid, gw, {key: "tweak:" + item.id, lead: txt(gw.status) === "queued" ? (shown ? "" : "Changing it next") : "Changing it now", bare: shown}));
     }
     // Asked with the pencil, and about more than this one's words (every note waiting for a
     // profile, other people by name): Claude did that instead and changed nothing here, so the
