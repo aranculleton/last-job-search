@@ -1754,6 +1754,13 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
     args = item.get("args") if isinstance(item.get("args"), dict) else {}
     thread = str(thread or "").strip() or (str(args.get("thread") or "").strip()
                                            if reply else "")
+    # A change asked with a card's pencil (a tweak) has no thread of its own: a written answer
+    # to it goes to that card's own thread, where Something else's answers show, with the
+    # person's words first (the maintainer's copy, 2026-11-09: "Name its thread" refused a
+    # plain answer to a message's change, and it had to be turned into a question).
+    card = _tweak_card(item) if str(reply or "").strip() and not thread else None
+    if card:
+        thread = card["thread"]
     if str(reply or "").strip() and not thread:
         raise ValueError("which conversation is the answer for? Name its thread (--thread)")
     at = app_model.stamp(now)
@@ -1788,6 +1795,19 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
             fields["result"]["left_out"] = " ".join(str(left_out).split())[:300]
     w = Writes(out_dir)
     mid = ""
+    if card:
+        talk = (db.get("talk") or {}).get(safe_id(thread))
+        head = {"to": str(item.get("to") or "either"), "card": card["about"],
+                "title": "About " + card["about"]["label"], "last_at": at}
+        if talk is not None:
+            w.add("update", "talk", thread, head, if_version=talk["version"])
+        else:
+            w.add("set", "talk", thread, dict(head, created_at=at))
+        asked = " ".join(str(args.get("text") or "").split())
+        if asked:
+            w.add("set", f"talk/{safe_id(thread)}/messages", "m" + safe_id(work_id)[-40:],
+                  {"from": "you", "text": asked,
+                   "at": str(item.get("created_at") or item.get("at") or at), "work": work_id})
     if str(reply or "").strip():
         mid = message_id(now)
         w.add("set", f"talk/{safe_id(thread)}/messages", mid,
@@ -1807,7 +1827,42 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
     # last one finishes the search once it has found all it will.
     lead = _search_counted(db, item, work_id, status, now, w, dump_dir)
     return {"work": work_id, "status": status, "thread": thread or None, "message": mid or None,
-            "locks": freed, **({"search": lead} if lead else {}), "batches": w.save("finish")}
+            "locks": freed, **({"search": lead} if lead else {}),
+            "batches": w.save(batch_name("finish", work_id))}
+
+
+def batch_name(kind: str, work_id: str) -> str:
+    """A batch file named for its work item, so two run one after another never write the same
+    file: every `done` wrote out/finish.json, and finishing two items before sending the first
+    lost it, while the dump already said it had finished, so `done` refused it again and `wake`
+    claimed items the page had finished with old versions (the maintainer's copy, 2026-11-09).
+    Letters, digits, - and _ only, as a file name on Windows must be."""
+    return kind + "-" + (re.sub(r"[^A-Za-z0-9_-]+", "-", str(work_id or "")).strip("-")[-80:] or "x")
+
+
+def _tweak_card(item: dict) -> dict | None:
+    """The card a tweak was asked on: its own thread (the page's cardThread) and what the
+    thread is about ({kind, id, label}), or None for a tweak with no card (a search's)."""
+    if str(item.get("kind") or "") != "tweak":
+        return None
+    args = item.get("args") if isinstance(item.get("args"), dict) else {}
+    target = args.get("target") if isinstance(args.get("target"), dict) else {}
+    kind, tid = str(target.get("output") or ""), str(target.get("id") or "")
+    if not kind or not tid or kind in ("jobs", "brief"):
+        return None
+    # "Change the note to Juno" is about "the note to Juno", as Something else names it.
+    label = re.sub(r"^(?:Change|Edit)\s+", "", str(item.get("title") or "").strip(), flags=re.I)
+    label = label or f"the {kind}"
+    return {"thread": card_thread(kind, tid),
+            "about": {"kind": kind, "id": tid, "label": label[:120]}}
+
+
+def card_thread(kind: str, cid: str) -> str:
+    """A card's own thread, as the page names it (templates/app/app.js cardThread and seg)."""
+    raw = re.sub(r"[^A-Za-z0-9_\-.~:@+]", "-", f"{kind}-{cid}")[:150]
+    if not raw or raw in (".", ".."):
+        raw = "x"
+    return ("card-" + raw)[:125]
 
 
 def _drafted(db: dict, ids, also: dict | None = None) -> tuple[int, bool]:

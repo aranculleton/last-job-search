@@ -22,6 +22,14 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **Claude never loses the update for a piece of work it finished.** Finishing two pieces of work
+  one after the other wrote both to the same place, so the first one's update was lost: the page
+  kept showing it as running, it could not be finished again, and Claude went on to pick up work
+  the page had already finished. Each one now keeps its own.
+- **A written answer to a change you asked for with a message's pencil shows under that
+  message**, with your words above it, as Something else's answers do. Before, Claude could not
+  post it at all and had to turn it into a question.
+
 - **A message at the foot of the page goes after six seconds**, not eight, and one about a
   failure after twelve. Its Undo stays on the item itself until Claude has made the change.
 
