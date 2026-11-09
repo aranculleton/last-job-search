@@ -1705,7 +1705,7 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
            status: str = "done", error: str = "", links=(), reply: str = "", thread: str = "",
            chat_kind: str = "cloud", dump_dir: str = "", chat: str = "",
            question: str = "", about: str = "", answer: dict | None = None,
-           answered=(), left_out: str = "") -> dict:
+           answered=(), left_out: str = "", unchanged: bool = False) -> dict:
     """The batch that finishes one work item (the app skill, step 5): the item `done` (or
     `failed`, with `error` in plain words, or `stopped` after their Stop), its one-sentence
     summary and links, pinned to the version read; each of its locks the dump holds, deleted
@@ -1786,6 +1786,11 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
         # maintainer, 2026-11-06).
         if str(left_out or "").strip():
             fields["result"]["left_out"] = " ".join(str(left_out).split())[:300]
+        # Done with nothing changed on the item it was asked on (a pencil's words about every
+        # note waiting for a profile, or a change already made): the card says its summary,
+        # never "putting the new version on your page" over words that are not changing.
+        if unchanged:
+            fields["result"]["unchanged"] = True
     w = Writes(out_dir)
     mid = ""
     if str(reply or "").strip():

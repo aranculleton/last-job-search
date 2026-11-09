@@ -1387,7 +1387,8 @@ def _apply_settings(work: dict, where: dict, p: dict) -> dict:
         said += s_
     if writes and all(_now_value(w) == w[-1] for w in writes) and not any(
             c["p"] in ("I1", "J6", "J11") for c in changes):
-        return {"status": "cached", "summary": "Already done: it is as you asked.", "key": p["key"]}
+        return {"status": "cached", "summary": "Already done: it is as you asked.", "key": p["key"],
+                "unchanged": True}
     done = []
     rules_before = _rules_fingerprint()
     try:
@@ -1441,6 +1442,70 @@ def _save_draft(where: dict, apps, read_in) -> None:
     fit_to_page.save(where["file"], apps, read_in)
 
 
+# Words in one note's pencil box that are about every note waiting for a profile ("can you
+# action all the ones waiting?") rather than this note's wording.
+_ALL_OF_THEM = re.compile(r"\b(?:all|every|each|everyone|everybody|them all|the others|the rest)\b",
+                          re.I)
+_THE_READS = re.compile(r"\b(?:waiting|profiles?|read(?:s|ing)?|ones)\b", re.I)
+
+
+def _names(firsts: list) -> str:
+    """"Kit", "Kit and Lea", "Kit, Lea, Ana and 2 others"."""
+    firsts = [f for f in firsts if f]
+    if len(firsts) > 4:
+        firsts = firsts[:3] + [f"{len(firsts) - 3} others"]
+    return firsts[0] if len(firsts) == 1 else ", ".join(firsts[:-1]) + " and " + firsts[-1]
+
+
+def about_others(text: str, item: dict, messages: list) -> list:
+    """The notes waiting for a profile that one note's pencil words are about, when they are
+    about more than that note's wording: another waiting person named, or all of them asked
+    for. Every waiting note then, this one included; [] when the words are this note's own (the
+    maintainer, 2026-11-09: "can u action on all the ones waiting? james, monal, andre, amir
+    etc", typed in one person's box, was queued as a rewrite of that one note)."""
+    words = str(text or "")
+    waiting = [m for m in messages or [] if m.get("hold") and m.get("contact")]
+    if not words.strip() or not waiting:
+        return []
+    own = str(item.get("contact") or "")
+
+    def named(m) -> bool:
+        first = str(m.get("first_name") or "").strip()
+        return len(first) >= 3 and re.search(r"(?<![\w])" + re.escape(first) + r"(?![\w])", words,
+                                             re.I) is not None
+    if any(named(m) for m in waiting if m["contact"] != own) or \
+            (_ALL_OF_THEM.search(words) and _THE_READS.search(words)):
+        return waiting
+    return []
+
+
+def route_others(where: dict, words: str) -> dict | None:
+    """A message's pencil words about every note waiting for a profile: that is done instead,
+    and this note is left as it is. Each waiting person goes on the page's reading list
+    (reading.queue_for_page), which the page reads by itself while it is open in the Claude app
+    on a computer, each note rewritten from what is read; with the person's choice to paste,
+    the line says to paste each one instead. None when the words are about this note."""
+    import app_model
+    import reading
+    model, _ = app_model.build(only={"messages"})
+    waiting = about_others(words, where["item"], model.get("messages") or [])
+    if not waiting:
+        return None
+    ids = list(dict.fromkeys(m["contact"] for m in waiting))
+    who = _names([m.get("first_name") or "" for m in waiting])
+    lead = ("That was about every note waiting for a profile, so this one is unchanged. "
+            if len(ids) > 1 else "That was about reading their profile, so this note is "
+                                 "unchanged. ")
+    if reading.reads_now() == "browser":
+        reading.queue_for_page(ids)
+        said = (f"{who} {'is' if len(ids) == 1 else 'are'} on your page's reading list: it reads "
+                f"{'it' if len(ids) == 1 else 'them'} while it is open in the Claude app on your "
+                "computer, then rewrites each note.")
+    else:
+        said = "Paste each one's profile on their card, and Claude rewrites the note."
+    return {"status": "done", "summary": lead + said, "unchanged": True, "queued": ids}
+
+
 def apply(work: dict, today: dt.date | None = None) -> dict:
     """Do the tweak, or say what needs writing. Returns {status, summary, key, ...}:
     done, cached (already so), needs_model (staged for a redraft), or refused."""
@@ -1460,6 +1525,10 @@ def apply(work: dict, today: dt.date | None = None) -> dict:
     if p["page_only"]:
         return {"status": "done", "summary": "Changed on your page.", "key": p["key"]}
     words = p["words"]
+    if words and where["output"] == "message" and not p["changes"]:
+        routed = route_others(where, words)
+        if routed:
+            return dict(routed, key=p["key"])
     if words:
         # The page's box never reaches the chat's hook: held like any reaction said here.
         import learned
@@ -1472,7 +1541,7 @@ def apply(work: dict, today: dt.date | None = None) -> dict:
     if (seen and seen.get("result_md5") == now) or same:
         # The same tweak again on what it made: nothing to do, nothing rendered.
         return {"status": "cached", "summary": "Already done: it is as you asked.",
-                "key": same or p["key"]}
+                "key": same or p["key"], "unchanged": True}
     if seen and seen.get("result_md5") and _restore(where, seen["result_md5"]):
         # The same tweak on the same draft before: its kept result back, never written twice.
         ok, line = (_render(where) if where["output"] in ("resume", "letter") else (True, ""))

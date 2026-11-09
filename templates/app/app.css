@@ -922,6 +922,19 @@ dialog.question-screen[open] { display: flex; flex-direction: column; }
 .openlink { display: inline-flex; align-items: center; min-height: var(--target); font-weight: 600; }
 
 p.count.tone-warn { color: var(--st-overdue); }
+/* A note's facts, one quiet line in one tone: the count, why it waits, where they live; the
+   count alone takes a state's colour, red over its limit and amber while edited near it. */
+.msg-facts .facts-line { color: var(--muted); }
+.msg-facts .count { font: inherit; color: inherit; }
+.msg-facts .count.tone-bad { color: var(--st-failed); }
+.msg-facts .count.tone-warn { color: var(--st-overdue); }
+.msg-facts .msg-held .spin { width: 12px; height: 12px; border-width: 2px; vertical-align: -1px; }
+/* A change asked with the pencil: one soft grey block under the draft, what was asked and then
+   its state with Stop Claude beside the words, never pushed to the card's far edge. */
+.tweak-going { display: grid; gap: 4px; padding: 8px 12px; border-radius: var(--r-sm); background: var(--sunk); }
+.tweak-going .work-inline .wi-text { flex: 0 1 auto; }
+.tweak-going .work-inline { gap: 4px 8px; }
+.tweak-said { margin: 0; }
 .copy-box { width: 100%; font: inherit; background: var(--sunk); border: 2px solid var(--focus); border-radius: var(--r-sm); padding: 8px 12px; }
 .copy-buffer { position: fixed; top: 0; left: 0; width: 2px; height: 2px; opacity: 0; pointer-events: none; }
 .changed > summary { cursor: pointer; font-weight: 600; font-size: var(--t-sm); color: var(--muted); min-height: var(--target); display: flex; align-items: center; gap: 4px; list-style: none; }

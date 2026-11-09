@@ -2332,7 +2332,8 @@ def cmd_done(a) -> int:
                              error=a.failed, links=_links(a.link), reply=reply, thread=a.thread,
                              chat_kind=a.kind or app_listen.chat_kind(), dump_dir=a.dump,
                              chat=a.chat, question=a.question, about=a.about,
-                             answer=_answer(a), answered=a.answered, left_out=left)
+                             answer=_answer(a), answered=a.answered, left_out=left,
+                             unchanged=bool(getattr(a, "unchanged", False)))
     except (KeyError, ValueError) as e:
         print(f"app: not finished: {e.args[0] if e.args else e}", file=sys.stderr)
         return 2
@@ -2972,6 +2973,10 @@ def main(argv=None) -> int:
                    help="a form's question answered (form_answers), in the form's own words: "
                         "its card says Done once each is on it (more than one allowed)")
     p.add_argument("--out", default="", help="where the batch goes (default <dump>/out)")
+    p.add_argument("--unchanged", action="store_true",
+                   help="done, and nothing on the item it was asked on changed (a tweak whose "
+                        "words were about other notes, or already so: tweak.py apply says "
+                        "`unchanged`): its card says the summary, never a new version")
     p.add_argument("--left-out", dest="left_out", default="",
                    help="a draft stopped because the job is not one they can take: why, in "
                         "plain words; the job leaves Jobs, ruled out with that reason")
