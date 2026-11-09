@@ -66,6 +66,8 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **A chat Claude starts on your computer asks you once to switch it to Auto, then never again.** One started from the cloud is refused Auto and began in Manual without a word, stopping on every step; you are now told the one switch, and the app remembers it for the chats after it there. The app also sets no reminders of its own while that chat works, each one a prompt.
+
 - **The Brief says good evening in the evening where you are.** It greeted by your profile's home time zone, so away from home it said "Good afternoon" at 10pm; it now follows the clock of the device you read it on.
 
 - **"Open their profile" is on a message's card, beside "I sent it".** A copied note goes nowhere until their profile is open, and under More it was hard to find.

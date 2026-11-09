@@ -567,7 +567,9 @@ def route(db: dict, now: dt.datetime, chat: str = "", envs=None, folders=None,
                          "<your id>, and the same create_session again. Started: "
                          f"python3 tools/computer.py started <dump> --work {wid} --session <its "
                          f"id> --env {b['id']} --computer \"{b['computer']}\", and send its "
-                         "batch. Never send_message it: it reports through the page."),
+                         "batch. Never send_message it, and set no reminder or check-in for "
+                         "it (each is one more prompt for the person): it reports through the "
+                         "page."),
                 "waiting": w}
     beat_ = heartbeat(db)
     seen = _time(beat_.get("seen_at"))
