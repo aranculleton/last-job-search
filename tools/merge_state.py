@@ -383,6 +383,7 @@ JSON_NAMES = {
     "tools/app.py: *.json": "a page dump's screen documents, read only to tell whether the dump holds the page's screens (app.py no_screen), in the chat's scratch folder; never committed",
     "tools/rules_view.py: *.json": "each search's left-out list, read only for how many each rule left out (rules_view.left_counts); merged as documents/rounds/filtered/*.json",
     "tools/run_round.py: *.json": "every round summary, read only, to hold a set-aside made during a search; written by write_summary, merged as documents/rounds/*.json",
+    "tools/network/candidates.py: *.json": "every round summary, read only, for the employers a short people search widens to (candidates.employers); written by run_round.write_summary, merged as documents/rounds/*.json",
     **dict.fromkeys(("00_portal_health.json", "01_dropped.json", "01_prefiltered.json",
                      "02_hydrated.json", "03_screened.json", "03_screened_all.json",
                      "04_opportunity.json", "05_ranked.json", "06_shortlist.json",
