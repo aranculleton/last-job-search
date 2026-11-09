@@ -15,7 +15,8 @@
     "Get a copy of your data", "Download your data", "larger download", "Connections filter",
     "Current company filter", "Manage invitations", "Sent tab", "Open folder", "Local group",
     "Free message", "Get more InMail credits", "Create repository from template",
-    "Only select repositories", "Keep cookies"
+    "Only select repositories", "Keep cookies", "Keep this computer awake",
+    "Let your phone and claude.ai start sessions here"
   ],
   "entries": [
     {
@@ -249,13 +250,36 @@
     },
     {
       "id": "routines-local",
-      "claim": "A desktop scheduled task made with Local runs on the computer, and only while the desktop app is running and the computer is awake, so it is never used for the brief.",
+      "claim": "A desktop scheduled task made with Local runs on the computer, in a fresh chat each time it is due, and only while the desktop app is running and the computer is awake: a time the computer sleeps through is skipped, with one catch-up run when it wakes. A chat in the desktop app makes one itself when asked to, as often as every minute, in the folder it names; a run waits on any step its permission mode does not cover. So it is never used for the brief; on the computer it is what takes the work waiting for the computer when no cloud chat is awake to start one there.",
       "sources": [
-        {"url": "https://code.claude.com/docs/en/desktop-scheduled-tasks", "quote": "Tasks only run while the desktop app is running and your computer is awake."}
+        {
+          "url": "https://code.claude.com/docs/en/desktop-scheduled-tasks",
+          "quote": "Tasks only run while the desktop app is running and your computer is awake."
+        },
+        {
+          "url": "https://code.claude.com/docs/en/desktop-scheduled-tasks",
+          "quote": "You can also create a task by describing what you want in any session."
+        },
+        {
+          "url": "https://code.claude.com/docs/en/desktop-scheduled-tasks",
+          "quote": "starts a fresh session when a task is due"
+        },
+        {
+          "url": "https://code.claude.com/docs/en/desktop-scheduled-tasks",
+          "quote": "If your computer sleeps through a scheduled time, the run is skipped."
+        },
+        {
+          "url": "https://code.claude.com/docs/en/desktop-scheduled-tasks",
+          "quote": "Each task has its own permission mode"
+        },
+        {
+          "url": "https://code.claude.com/docs/en/desktop-scheduled-tasks",
+          "quote": "Claude isn't held to the once-per-hour limit"
+        }
       ],
       "status": "documented",
-      "verified_on": "2026-10-18",
-      "verified_against": "code.claude.com docs read 2026-10-18",
+      "verified_on": "2026-11-09",
+      "verified_against": "code.claude.com/docs/en/desktop-scheduled-tasks read 2026-11-09 (Create a scheduled task, Schedule options, How scheduled tasks run, Missed runs, Permissions); a task's prompt is kept on the computer under ~/.claude/scheduled-tasks/<task-name>/SKILL.md",
       "ui_sensitive": false
     },
     {
@@ -673,8 +697,8 @@
         {"url": "https://code.claude.com/docs/en/desktop", "quote": "Choose whether the Browser keeps cookies after you quit the app with Keep cookies in the Browser pane's \u22ee menu, so you don't have to sign in again"}
       ],
       "status": "documented",
-      "verified_on": "2026-10-25",
-      "verified_against": "code.claude.com/docs/en/desktop read 2026-10-25",
+      "verified_on": "2026-11-09",
+      "verified_against": "code.claude.com/docs/en/desktop read again 2026-11-09: whether Keep cookies is on to begin with, how long a LinkedIn sign-in lasts in the pane and how a chat can tell the pane is hidden are not on it (a chat looks: tabs_context, and a LinkedIn page showing the sign-in page)",
       "ui_sensitive": true
     },
     {
@@ -758,6 +782,215 @@
       "verified_on": "2026-10-25",
       "verified_against": "code.claude.com/docs/en/artifacts (\"Share an artifact\") and support.claude.com article 9487310, read 2026-10-25; that a shared page carries its embedded data is how a published page works (one self-contained document)",
       "ui_sensitive": true
+    },
+    {
+      "id": "remote-control-settings",
+      "claim": "On the computer, the desktop app's settings for this are under Settings, then Claude Code, then Remote Control. The docs name one switch there, Connect new sessions to Remote Control. The screen seen on 2026-11-09 also had Let your phone and claude.ai start sessions here, which is what lets a cloud chat start a chat on the computer (the computer then shows in list_environments as a bridge environment); Keep this computer awake for Remote Control, marked Recommended; and a Folders list, with Add folder and Show folders, where a folder can be pinned. The docs do not name the second and third switches, the Folders list or pinning (not verified beyond what was seen).",
+      "goal": "let Claude start its chats on your computer",
+      "how": "in the Claude desktop app on your computer, Settings, then Claude Code, then Remote Control",
+      "steps": [
+        "On your computer, open the Claude desktop app, then Settings, then Claude Code, then Remote Control.",
+        "Turn on Connect new sessions to Remote Control.",
+        "Turn on Let your phone and claude.ai start sessions here.",
+        "Turn on Keep this computer awake for Remote Control.",
+        "Under Folders, choose Add folder and pick the folder your job search is in, then pin it.",
+        "Say done here."
+      ],
+      "page_goal": "let Claude start its chats on your computer",
+      "page_steps": [
+        "On your computer, open the Claude desktop app, then Settings, then Claude Code, then Remote Control.",
+        "Turn on Connect new sessions to Remote Control.",
+        "Turn on Let your phone and claude.ai start sessions here.",
+        "Turn on Keep this computer awake for Remote Control.",
+        "Under Folders, choose Add folder and pick the folder your job search is in, then pin it.",
+        "Come back to this page and tap Done."
+      ],
+      "sources": [
+        {
+          "url": "https://code.claude.com/docs/en/desktop",
+          "quote": "new sessions connect automatically while Connect new sessions to Remote Control is on in Settings > Code or Settings > Claude Code"
+        },
+        {
+          "url": "observed:desktop-app-settings",
+          "quote": "Let your phone and claude.ai start sessions here"
+        },
+        {
+          "url": "tool:list_environments",
+          "quote": "Returns environment IDs, names, kinds, and states."
+        }
+      ],
+      "status": "observed",
+      "verified_against": "code.claude.com/docs/en/desktop (Control which sessions appear on your other devices) read 2026-11-09; the other switches, Folders and pinning observed on a Mac in the desktop app on 2026-11-09, where the computer then appeared in list_environments as kind bridge, state active, named <computer>:<folder>:<code>; the docs are silent on them, and on Windows (not verified there)",
+      "ui_sensitive": true,
+      "verified_on": "2026-11-09"
+    },
+    {
+      "id": "computer-bridge",
+      "claim": "Once the computer lets claude.ai start sessions on it, list_environments shows it as an environment of kind bridge, state active, named after the computer and the shared folder, with the description Bridge environment (<computer>). A cloud chat starts a chat there with create_session and that environment_id. The first such call from a chat is refused until the person approves one card (confirm_repository_trust), and that approval ties the asking chat to their trusted devices for good, so it is asked from a chat no scheduled task fires into. The chat it starts runs in the shared folder (the folder, not a copy inside it, so it looks for the copy there), keeps the computer's own tools, the Browser pane among them, and takes the permission_mode it is given, never more than the asking chat's own. The docs are silent on bridge environments: when one appears, whether pinning a folder changes where its chats start, and Windows.",
+      "sources": [
+        {
+          "url": "tool:list_environments",
+          "quote": "Returns environment IDs, names, kinds, and states."
+        },
+        {
+          "url": "tool:create_session",
+          "quote": "Cannot be more permissive than the calling session's mode; omit to inherit it."
+        },
+        {
+          "url": "tool:confirm_repository_trust",
+          "quote": "allowing it limits the session to the owner's trusted devices for good."
+        },
+        {
+          "url": "https://code.claude.com/docs/en/permission-modes",
+          "quote": "you can't select Bypass permissions from the app."
+        }
+      ],
+      "status": "observed",
+      "verified_against": "the tool descriptions as offered to a cloud chat on 2026-11-09, and a run observed that day: a bridge environment listed active, create_session refused with elevated_session_untrusted_device until one trust card was approved, then a chat started on the computer in the shared folder with the Browser pane tools; code.claude.com has no page on bridge environments (searched 2026-11-09)",
+      "ui_sensitive": false,
+      "verified_on": "2026-11-09"
+    },
+    {
+      "id": "folder-attach",
+      "claim": "A cloud chat can ask to work in a folder the computer shares (list_computer_folders, then request_computer_folder), but only where that computer offers it to cloud chats. A folder listed under cannot_be_used with the reason not_available is in the person's list but not offered, and the tool says using a folder from a cloud chat is not available to everyone yet. So it is tried only when a folder is listed as usable, and never relied on.",
+      "sources": [
+        {
+          "url": "tool:list_computer_folders",
+          "quote": "using a folder from a cloud session is not available to everyone yet"
+        },
+        {
+          "url": "tool:request_computer_folder",
+          "quote": "A session is attached to at most one folder at a time"
+        }
+      ],
+      "status": "observed",
+      "verified_against": "the tool descriptions as offered on 2026-11-09, and list_computer_folders that day returning no usable folder and one not_available with no cause given; code.claude.com is silent on it",
+      "ui_sensitive": false,
+      "verified_on": "2026-11-09"
+    },
+    {
+      "id": "computer-chat-browser",
+      "claim": "A chat the cloud starts on the computer has the desktop app's Browser pane tools (mcp__Claude_Browser__*), seen on 2026-11-09 reading pages with them; the docs do not say so. From a terminal instead, claude remote-control --chrome starts its chats with Chrome on, which the docs do say. Chrome is never needed: the Browser pane is a browser of its own.",
+      "sources": [
+        {
+          "url": "https://code.claude.com/docs/en/remote-control",
+          "quote": "Turn Chrome integration on or off in the sessions the server creates"
+        },
+        {
+          "url": "observed:bridge-session",
+          "quote": "navigate, javascript_tool and get_page_text in a chat started on the computer from the cloud"
+        }
+      ],
+      "status": "observed",
+      "verified_against": "observed in a chat started on a Mac from the cloud on 2026-11-09; code.claude.com/docs/en/remote-control read 2026-11-09 for --chrome; silent on the Browser pane in such chats",
+      "ui_sensitive": false,
+      "verified_on": "2026-11-09"
+    },
+    {
+      "id": "session-approvals",
+      "claim": "A chat started on the computer asks the person nothing in Auto, apart from what Auto itself sends to them; Bypass permissions cannot be chosen from the app. A message from one chat to another (send_message) needed the person's approval on every call in a chat on the computer, with no way to always allow it seen, and the docs say a tool marked as needing the person prompts on every call. So nothing the app does needs one chat to message another mid-run: the prompt is complete when the chat starts, and results come back through the page and the person's copy.",
+      "sources": [
+        {
+          "url": "https://code.claude.com/docs/en/permission-modes",
+          "quote": "you can't select Bypass permissions from the app."
+        },
+        {
+          "url": "https://code.claude.com/docs/en/desktop-scheduled-tasks",
+          "quote": "prompt on every call and don't offer an always-allow option"
+        },
+        {
+          "url": "tool:send_message",
+          "quote": "It arrives there as a turn marked as sent by this session, not typed by a person"
+        }
+      ],
+      "status": "observed",
+      "verified_against": "code.claude.com/docs/en/permission-modes and /desktop-scheduled-tasks read 2026-11-09; send_message refused with MCP tool call requires approval twice in a chat on a Mac, observed 2026-11-09",
+      "ui_sensitive": false,
+      "verified_on": "2026-11-09"
+    },
+    {
+      "id": "session-usage",
+      "claim": "A chat can measure itself from its own transcript, the JSON lines file under ~/.claude/projects that the status line names as transcript_path: every tool call with its name and time, and each reply's token counts. The session's own cost is shown in /usage and in the status line's cost.total_cost_usd, an estimate at list price; neither is readable by a tool call, so the app adds up the transcript (tools/computer.py usage) and prices it the way tools/helper_usage.py does, as an estimate. A finished cloud chat's usage fields read 0 on 2026-11-09.",
+      "sources": [
+        {
+          "url": "https://code.claude.com/docs/en/statusline",
+          "quote": "Estimated session cost in USD, computed client-side at list price"
+        },
+        {
+          "url": "https://code.claude.com/docs/en/statusline",
+          "quote": "Path to conversation transcript file"
+        },
+        {
+          "url": "https://code.claude.com/docs/en/costs",
+          "quote": "shows detailed token usage statistics for your current session"
+        }
+      ],
+      "status": "documented",
+      "verified_against": "code.claude.com/docs/en/statusline and /costs read 2026-11-09; the zero usage fields observed that day",
+      "ui_sensitive": false,
+      "verified_on": "2026-11-09"
+    },
+    {
+      "id": "deep-links",
+      "claim": "No link opens the desktop app's Code tab in a local folder with a prompt. claude-cli://open takes cwd and q and opens a terminal chat, its prompt filled but not sent; claude://code/new opens the desktop app's new-session page and takes q, with a folder only for a connection to another machine. So the app never relies on a link to start a chat on the computer: it starts one from the cloud.",
+      "sources": [
+        {
+          "url": "https://code.claude.com/docs/en/deep-links",
+          "quote": "The prompt is populated but not sent until you press Enter."
+        },
+        {
+          "url": "https://code.claude.com/docs/en/desktop",
+          "quote": "link opens Desktop's new-session page, and it can name an SSH connection."
+        }
+      ],
+      "status": "documented",
+      "verified_against": "code.claude.com/docs/en/deep-links and /desktop (Open an SSH session from a link) read 2026-11-09",
+      "ui_sensitive": false,
+      "verified_on": "2026-11-09"
+    },
+    {
+      "id": "computer-chat-archive",
+      "claim": "Archiving a chat in the desktop app archives its copy on the person's other devices too, but the docs do not say the reverse: a chat on the computer archived from the cloud (archive_session) was seen still listed in the desktop app. A chat in the desktop app can archive the app's other chats there itself, without a card in Auto, and never sees the chat it is in. So each chat the app starts on the computer first archives the app's earlier finished ones there, by their name.",
+      "sources": [
+        {
+          "url": "https://code.claude.com/docs/en/desktop",
+          "quote": "Desktop archives the session's Remote Control copy too"
+        },
+        {
+          "url": "https://code.claude.com/docs/en/desktop",
+          "quote": "You get an approval card before Claude archives a session, except in Auto mode and Bypass permissions mode"
+        },
+        {
+          "url": "https://code.claude.com/docs/en/desktop",
+          "quote": "Claude never lists the session you're asking from."
+        },
+        {
+          "url": "tool:archive_session",
+          "quote": "Transitions the session to read-only archived state and releases its container."
+        }
+      ],
+      "status": "observed",
+      "verified_against": "code.claude.com/docs/en/desktop (Archive a session, Work across sessions, Control which sessions appear) read 2026-11-09; a chat archived from the cloud seen still listed in the desktop app on a Mac that day",
+      "ui_sensitive": false,
+      "verified_on": "2026-11-09"
+    },
+    {
+      "id": "routine-connectors",
+      "claim": "A cloud scheduled task made on claude.ai includes all of the person's connectors unless they are removed, but one made by a chat (create_trigger) stores none unless they are named, and says so when it is made. The brief needs none: it reads and writes the person's copy and the page through the app's own tools, and its news through web search, so it is made with none and nothing is lost; the field is left out of the call, which some organisations refuse outright, and the warning that none are stored is expected.",
+      "sources": [
+        {
+          "url": "https://code.claude.com/docs/en/routines",
+          "quote": "All of your connected MCP connectors are included by default."
+        },
+        {
+          "url": "tool:create_trigger",
+          "quote": "Pass ONLY connectors the user explicitly asked this scheduled task to use"
+        }
+      ],
+      "status": "documented",
+      "verified_against": "code.claude.com/docs/en/routines read 2026-11-09 and the create_trigger tool description that day",
+      "ui_sensitive": false,
+      "verified_on": "2026-11-09"
     }
   ]
 }

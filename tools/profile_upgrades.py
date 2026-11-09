@@ -458,6 +458,22 @@ def _linkedin_plan() -> str:
     return ""
 
 
+def _computer_linkedin() -> str:
+    """Pending for someone who works on a computer and whose computer side is not set up and
+    tested yet (`computer_ready` in profile/place.json, written by tools/computer.py ready)."""
+    try:
+        import place
+        rec = place.place_record()
+    except Exception:  # noqa: BLE001
+        return ""
+    if rec.get("works_on") not in ("computer", "both") and not rec.get("computer_chat"):
+        return ""
+    if rec.get("computer_ready"):
+        return ""
+    return ("your computer is not set up for Claude to start its LinkedIn reads there by "
+            "itself, so a \"Find people\" run waits until you open a chat there")
+
+
 def _profile_never_say() -> str:
     import learned
     got = learned.unadopted()
@@ -1706,6 +1722,29 @@ REGISTRY: tuple[Upgrade, ...] = (
                                     + ["I only read it. Nothing is sent to anyone."]),
             why_ask="People you already know can be messaged directly, with no connection "
                     "request, and they reply far more often than strangers."),
+    Upgrade("computer-linkedin", "2026-11-09",
+            "LinkedIn read on your own computer by itself, with no chat for you to keep open "
+            "there",
+            _computer_linkedin, "/setup --section computer (COMPUTER.md, \"Use your computer "
+            "for LinkedIn\"): each step from tools/claude_surfaces.py, checked after it, ending "
+            "with python3 tools/computer.py ready --name <the computer>. A no is python3 "
+            "tools/profile_upgrades.py --no computer-linkedin", "question", "~5 min",
+            conditional=True,
+            priority=2,
+            needs="you",
+            ask="Want Claude to read LinkedIn on your computer by itself, so Find people never "
+                "waits for you? It takes about five minutes, once. Yes, or not now?",
+            # The plan only: each screen's own steps come from the registry at its stage
+            # (remote-control-settings, browser-pane-stay-signed-in), checked that day.
+            steps=lambda: "\n".join([
+                "To let Claude read LinkedIn on your computer by itself:",
+                "1. On your computer, switch it on once in the Claude app's settings: I give you "
+                "each switch as you go.",
+                "2. Approve the one card Claude shows you, once.",
+                "3. Sign in to LinkedIn in Claude's browser there, and keep the sign-in.",
+                "Then I check it works by reading one profile."]),
+            why_ask="Reading someone's profile is what makes a note fit them, and only your "
+                    "own computer, signed in to LinkedIn, can do it."),
     Upgrade("linkedin-history", "2026-10-23",
             "every chat seeing your past LinkedIn conversations, not only the ones written here",
             _linkedin_history, "on their computer, first `python3 tools/network/export.py take "

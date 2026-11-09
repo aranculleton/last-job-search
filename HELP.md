@@ -48,8 +48,8 @@ To make your copy private:
 Screens change: if yours looks different, tell Claude what you see.
 <!-- /claude-surface -->
 
-**Your page doesn't read LinkedIn profiles.** Only in the Claude desktop app on your
-computer: allow Claude's browser there, and sign in to LinkedIn when it asks.
+**Find people waits for your computer.** Keep the Claude app open there. Still waiting?
+Tell Claude: it sets your computer up with you, once.
 
 <!-- claude-surface: team-plan -->
 <!-- checked 2026-11-03; https://code.claude.com/docs/en/web-quickstart -->
