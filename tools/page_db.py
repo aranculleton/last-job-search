@@ -755,9 +755,28 @@ def can_take(item: dict, chat_kind: str) -> bool:
     """Whether a chat of this kind can do a work item. One chat answers the page
     (tools/app_listen.py), so work never waits for a chat of the other kind: the item's `to`
     is only where the page expected it to run. A brief alone needs the cloud, since it comes
-    with the computer off."""
+    with the computer off; work sent to the computer (`to: computer`, a LinkedIn read) needs a
+    chat with the computer's browser (computer_only)."""
     kind = WORK_KINDS.get(str(item.get("kind") or ""))
-    return kind is not None and chat_kind in kind["can"]
+    return kind is not None and chat_kind in kind["can"] and not computer_only(item, chat_kind)
+
+
+# Work that needs the person's own computer: a LinkedIn read, in the Browser pane of the
+# Claude desktop app there. A cloud chat claimed such a run and closed it with "Can't read
+# LinkedIn from here" (2026-11-09), so the engine refuses it to any chat but a computer one:
+# a chat on the computer, or a cloud chat lent the computer's browser, which says so with
+# `--kind computer` (tools/computer.py route). What such a chat is told instead is here.
+COMPUTER_ONLY_SAID = ("this needs the person's computer (a LinkedIn read): a cloud chat never "
+                      "claims, finishes or fails it. Start it there instead: python3 "
+                      "tools/computer.py route")
+
+
+def computer_only(item: dict, chat_kind: str) -> str:
+    """Why a chat of `chat_kind` may not claim, finish or fail `item`, or "": it is sent to the
+    computer and this chat is not one. Their own Stop is the one way a cloud chat ends it."""
+    if str(item.get("to") or "") != "computer" or chat_kind == "computer":
+        return ""
+    return COMPUTER_ONLY_SAID
 
 
 def _key(text) -> str:
@@ -845,11 +864,13 @@ def held_locks(db: dict, now: dt.datetime) -> dict:
 
 
 def next_item(db: dict, chat_kind: str, now: dt.datetime,
-              cap: int = HEAVY_CAP, heavy_only: bool = False) -> dict | None:
+              cap: int = HEAVY_CAP, heavy_only: bool = False,
+              to_only: str = "") -> dict | None:
     """The queued work item this chat should claim, or None.
 
     A kind of work it can do (can_take), the most urgent first and then the oldest asked, never past the heavy-job cap (urgent
-    may take one more), and never one whose locks another live job holds."""
+    may take one more), and never one whose locks another live job holds. `to_only`
+    ("computer"): only work sent there, for the chat the app started on the computer for it."""
     work = db.get("work") or {}
     held = held_locks(db, now)
     # A batch is one job: its other postings (`with` its leader) take no place of their own,
@@ -873,7 +894,7 @@ def next_item(db: dict, chat_kind: str, now: dt.datetime,
                  and int(item.get("attempt") or 1) < AUTO_TRIES and not item.get("in_chat"))
         if str(item.get("status") or "") != "queued" and not again:
             continue
-        if not can_take(item, chat_kind):
+        if not can_take(item, chat_kind) or (to_only and str(item.get("to") or "") != to_only):
             continue
         queued.append((-int(item.get("priority") or 0), str(item.get("asked_at") or ""), wid))
     # An update that changes how a record file is stored (args.migration) never interrupts
@@ -1069,11 +1090,15 @@ def claim(db: dict, chosen: dict, chat_id: str, chat_kind: str, now: dt.datetime
     running at its first stage, and no progress pin follows: each pin was a step of a chat
     that re-reads its whole history, for work done in a minute (2026-11-03)."""
     import app_model
+    work = db.get("work") or {}
+    for wid in [chosen["work"]] + [o["work"] for o in chosen.get("with") or []]:
+        refused = computer_only((work.get(safe_id(wid)) or {}).get("data") or {}, chat_kind)
+        if refused:
+            raise ValueError(f"not claimed: {refused}")
     w = Writes(out_dir)
     at = app_model.stamp(now)
     until = app_model.stamp(now + dt.timedelta(seconds=LEASE_S))
     status = "running" if running else "claimed"
-    work = db.get("work") or {}
 
     def fresh(wid: str) -> dict:
         """What a claim clears on an item taken from the queue. A question answered on the
@@ -1729,6 +1754,9 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
     taken = not_its_claim(item, chat)        # `chat`: the id the job was claimed under
     if taken:
         raise KeyError(taken)
+    refused = computer_only(item, chat_kind)
+    if refused and not (status == "stopped" and item.get("stop_asked")):
+        raise ValueError(f"not finished: {refused}")
     question = " ".join(str(question or "").split())
     if question:
         status = "needs_you"

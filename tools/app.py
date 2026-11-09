@@ -826,11 +826,14 @@ def cmd_apply(a) -> int:
 
 
 def choose(db: dict, chat: str, kind: str, now, on: str = "", no_sessions: bool = False,
-           claim_out: str | None = None, job_chat: bool = False) -> dict | None:
+           claim_out: str | None = None, job_chat: bool = False,
+           computer_only: bool = False) -> dict | None:
     """The queued work this chat should take (None: nothing is), with the model a chat
     started for it gets (tools/model_guide.py for_work), `run`: where it is done
     (where_it_runs), and with `claim_out` the claim as batch files. Small work done here is
-    claimed running at its first stage, so no progress pin follows it."""
+    claimed running at its first stage, so no progress pin follows it. Work sent to the
+    computer is always done here, in the chat with the browser (`computer_only`: the chat
+    the app started on the computer takes nothing else)."""
     import app_listen
     import model_guide
     import page_db
@@ -839,9 +842,15 @@ def choose(db: dict, chat: str, kind: str, now, on: str = "", no_sessions: bool 
         # Each big job in a cloud chat of its own runs on its own computer: ten at once there.
         cap = page_db.HEAVY_CAP_CHATS if kind == "cloud" and not no_sessions else page_db.HEAVY_CAP
         chosen = page_db.next_item(app_listen.without_republish(db), kind, now, cap=cap,
-                                   heavy_only=job_chat)
+                                   heavy_only=job_chat and not computer_only,
+                                   to_only="computer" if computer_only else "")
     if chosen is None:
         return None
+    # Sent to the computer: a LinkedIn read. It runs in this chat, which has the browser,
+    # never as a background agent with none (`--tools none`), which the computer's chat had
+    # to overrule by hand (2026-11-09).
+    sent_here = str((((db.get("work") or {}).get(page_db.safe_id(chosen["work"])) or {})
+                     .get("data") or {}).get("to") or "") == "computer"
     info = model_guide.for_work(chosen["kind"], on)
     heavy = bool(page_db.WORK_KINDS.get(chosen["kind"], {}).get("heavy"))
     chosen.update(model=info["model"], effort=info["effort"], heavy=heavy)
@@ -850,7 +859,7 @@ def choose(db: dict, chat: str, kind: str, now, on: str = "", no_sessions: bool 
              ((doc.get("data") or {}) for doc in (db.get("work") or {}).values())
              if str(d.get("status") or "") in ("claimed", "running")} - {""}
     chosen.update(where_it_runs(chosen, chat, kind, no_sessions, taken=taken))
-    if job_chat:
+    if job_chat or sent_here:
         # A big job's own chat takes the next big job waiting and does it itself: no chat
         # can tell the one that answers the page that a slot is free, so a queue of drafts
         # waited behind the cap with nobody to start it (2026-11-03).
@@ -863,7 +872,8 @@ def choose(db: dict, chat: str, kind: str, now, on: str = "", no_sessions: bool 
             # review, 2026-11-03).
             import app_setup
             url = app_setup.page_record().get("url", "") or "<url>"
-            chosen["steps"] = job_steps(chosen, chat, url, session=True, first=1)
+            chosen["steps"] = job_steps(chosen, chat, url, session=True, first=1,
+                                        chat_kind=kind, computer_only=sent_here)
     if claim_out:
         chosen["batches"] = page_db.claim(db, chosen, chat, kind, now, claim_out,
                                           running=chosen.get("run") == "here")
@@ -878,9 +888,14 @@ def cmd_next(a) -> int:
     import app_model
     import page_db
     _, now = app_model.clock(None, a.now)
-    chosen = choose(page_db.load(a.dump), a.chat, a.kind, now, on=a.on,
-                    no_sessions=a.no_sessions, claim_out=a.claim_out,
-                    job_chat=getattr(a, "job_chat", False))
+    try:
+        chosen = choose(page_db.load(a.dump), a.chat, a.kind, now, on=a.on,
+                        no_sessions=a.no_sessions, claim_out=a.claim_out,
+                        job_chat=getattr(a, "job_chat", False),
+                        computer_only=getattr(a, "computer_only", False))
+    except ValueError as e:
+        print(f"app: {e.args[0] if e.args else e}", file=sys.stderr)
+        return 2
     if chosen is None:
         return 0
     print(_dump(chosen), end="")
@@ -940,7 +955,8 @@ def child_prompt(chosen: dict, parent: str, url: str, session: bool = True) -> s
 
 
 def job_steps(chosen: dict, claimer: str, url: str, session: bool = True,
-              first: int = 1, report_to: str = "") -> list[str]:
+              first: int = 1, report_to: str = "", chat_kind: str = "cloud",
+              computer_only: bool = False) -> list[str]:
     """The steps for one big job, numbered from `first`, every one naming this job's own id,
     its own folder ($D, read afresh), its kind's commands and its pins (a search's round.log
     as well), with `--chat <claimer>` (the id it was claimed under) on each write. A job
@@ -1082,11 +1098,16 @@ def job_steps(chosen: dict, claimer: str, url: str, session: bool = True,
     return lines
 
 
-def _next_job(url: str, first_word: str = "Then") -> str:
-    return (f"{first_word}, the next big job waiting, so a queue keeps moving with nobody to "
+def _next_job(url: str, first_word: str = "Then", kind: str = "cloud",
+              computer_only: bool = False) -> str:
+    # A chat on the computer takes the next piece of work sent there, as a computer chat:
+    # told "--kind cloud --job-chat", it would have taken cloud work and refused its own.
+    what, flags = (("piece of work for this computer", f"{kind} --computer-only")
+                   if computer_only else ("big job", f"{kind} --job-chat"))
+    return (f"{first_word}, the next {what} waiting, so a queue keeps moving with nobody to "
             f"start it: ArtifactData query, url {url}, collections work and holds, out_dir a "
             f"fresh folder $E; python3 tools/app.py next \"$E\" --chat <this chat's id> --kind "
-            f"cloud --job-chat --on \"<your model>\" --claim-out \"$E/claim\". Nothing named: "
+            f"{flags} --on \"<your model>\" --claim-out \"$E/claim\". Nothing named: "
             "stop. One named: send its claim batch (refused: another chat has it, stop), then "
             "follow the `steps` it printed, in order: that job's own, with its id, its folder and "
             "its commands, never this one's. At most three jobs in this chat, so its history "
@@ -2822,6 +2843,9 @@ def main(argv=None) -> int:
     p.add_argument("dump")
     p.add_argument("--job-chat", dest="job_chat", action="store_true",
                    help="this chat is a big job's own: take only big work, and do it here")
+    p.add_argument("--computer-only", dest="computer_only", action="store_true",
+                   help="this chat was started on the computer for its work: take only work "
+                        "sent to the computer, and do it here")
     p.add_argument("--chat", required=True)
     p.add_argument("--kind", required=True, choices=("cloud", "computer"))
     p.add_argument("--claim-out", dest="claim_out", default=None,
