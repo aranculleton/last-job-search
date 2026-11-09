@@ -1,7 +1,7 @@
 {
  "model": 1,
  "made_at": "2026-10-25T18:00:00Z",
- "rev": "dfdcd67c9bf9",
+ "rev": "1a37703dfc1f",
  "app": {
   "version": "4.13.0",
   "url": null,
@@ -13,7 +13,7 @@
   ],
   "privacy": "Only you can open this page unless you share it. It holds first names, employers, your drafts and your setup answers, so keep it unshared.",
   "repo": "https://github.com/aranculleton/last-job-search",
-  "page": 83,
+  "page": 86,
   "not_saved": 0,
   "app_bugs": []
  },
@@ -77,7 +77,7 @@
  ],
  "jobs": {
   "round": "r9",
-  "made_at": "2026-11-07T13:35:47Z",
+  "made_at": "2026-11-09T21:35:48Z",
   "met": false,
   "summary": "3 roles from the last search to look at, 1 of them scoring 75 or more. 3 left out, each with its reason.",
   "rows": [
@@ -1008,7 +1008,7 @@
    "when": "2026-10-28",
    "prep": {
     "path": "documents/applications/thornbury_bank_risk_analyst_thornbury/interview_prep.md",
-    "updated": "2026-11-07T13:35:47Z"
+    "updated": "2026-11-09T21:35:48Z"
    },
    "questions": 2,
    "all_day": true,
@@ -2293,6 +2293,188 @@
   ],
   "brief_line": null,
   "still_right": 0,
+  "held": [
+   {
+    "id": "hold~application_open~thornbury bank",
+    "rule": "application_open",
+    "what": "Thornbury Bank",
+    "until": null,
+    "line": "Thornbury Bank: no new jobs there while your interviews run, or say 'it's over at Thornbury Bank'",
+    "say": "it's over at Thornbury Bank"
+   }
+  ],
+  "every_hold": [
+   {
+    "id": "job_age",
+    "area": "jobs",
+    "line": "Jobs posted too long ago: kept, as your own window for how recent a job must be. Change How recent in Your rules."
+   },
+   {
+    "id": "gates",
+    "area": "jobs",
+    "line": "Jobs that need a language, citizenship, clearance or qualification you do not have: kept, as the job's own words require it; looked at again whenever your profile changes. Tell Claude you have it, or add the language in Your rules."
+   },
+   {
+    "id": "sectors",
+    "area": "jobs",
+    "line": "Kinds of employer you will not work for: kept, as your choice, kept until you change it. Use the trash beside it in Your rules."
+   },
+   {
+    "id": "declined",
+    "area": "jobs",
+    "line": "Employers you turned down: kept, as your choice, kept until you change it. Use the trash beside the employer in Your rules."
+   },
+   {
+    "id": "dismissed",
+    "area": "jobs",
+    "line": "Jobs you set aside: kept, as your choice for that one job; another role at the employer still shows. Tap Bring back under Set aside in Jobs."
+   },
+   {
+    "id": "ruled_out",
+    "area": "jobs",
+    "line": "Jobs a search already ruled out: a reason that was only a score, a pay band or a preference is read again on every search. Tap Bring back under What a search left out in Jobs."
+   },
+   {
+    "id": "duplicates",
+    "area": "jobs",
+    "line": "The same job posted again: after 30 days the same title at the employer counts as a new opening. Add it yourself with Add a job."
+   },
+   {
+    "id": "no_team",
+    "area": "jobs",
+    "line": "Employers with no team for you where you look: on its own review day, or 90 days after it was found where it names none. Say 'look at <employer> again'."
+   },
+   {
+    "id": "application_open",
+    "area": "applications",
+    "line": "Other jobs at an employer you applied to: when they answer, or 45 days after you applied (or after the job's closing day) with no reply; a role scoring 10 points more still shows. Say 'stop waiting on <employer>'."
+   },
+   {
+    "id": "referral",
+    "area": "applications",
+    "line": "Applying cold where someone is referring you: kept, as only you know when a referral is over; the job itself is never hidden. Say 'the referral at <employer> is over'."
+   },
+   {
+    "id": "application_nudges",
+    "area": "applications",
+    "line": "Follow-ups to an application: at most 2 follow-ups; closed as no reply after 45 days, and opened again if they write within 120 days. Say 'they replied' on the application."
+   },
+   {
+    "id": "employer_wait",
+    "area": "people",
+    "line": "More people at an employer where people are waiting on a reply: 2 people at a time; each one waiting frees their place about 18 days after a first note, by your follow-up rule (6 business days, at most 2 with no reply), counted from the last message. Say 'more at <employer>'."
+   },
+   {
+    "id": "limit",
+    "area": "people",
+    "line": "Someone who has not answered your limit of messages: when they write back; your limit is 2 messages with no reply. Tap Close on their card, or paste their reply with They replied."
+   },
+   {
+    "id": "closed",
+    "area": "people",
+    "line": "Conversations you closed or set aside: kept, as your choice; a reply from them opens it again. Say 'write to <name> again'."
+   },
+   {
+    "id": "people_turned_down",
+    "area": "people",
+    "line": "People at employers you turned down: kept, as your choice, kept until you change the employer's rule. Use the trash beside the employer in Your rules."
+   },
+   {
+    "id": "place",
+    "area": "people",
+    "line": "People living outside where you look: kept, as your own places to look; a reply from them is always answered. Change Where in Your rules."
+   },
+   {
+    "id": "person_hold",
+    "area": "people",
+    "line": "Someone you put on hold: on the day the hold names, or the day beside it. Say 'write to <name> again'."
+   },
+   {
+    "id": "request",
+    "area": "people",
+    "line": "Follow-ups to a request nobody accepted: when they accept, or when you withdraw it. Withdraw it from their card."
+   },
+   {
+    "id": "written_to",
+    "area": "people",
+    "line": "Someone already written to, offered as new: kept, as they are not someone new; what is owed them comes by your follow-up rule. Open their card in Contacts."
+   },
+   {
+    "id": "inmail",
+    "area": "people",
+    "line": "InMail once this month's credits are used: on the first of next month. Tell Claude the number LinkedIn shows."
+   },
+   {
+    "id": "invitations",
+    "area": "people",
+    "line": "LinkedIn's weekly invitation limit: when LinkedIn lets requests go again; the app sets no limit of its own. Follow them meanwhile, and the request goes the next week."
+   },
+   {
+    "id": "reading_stop",
+    "area": "people",
+    "line": "Reading profiles after LinkedIn shows a check: the next day. Nothing to do."
+   },
+   {
+    "id": "follow_up",
+    "area": "messages",
+    "line": "A follow-up before its day: 6 business days after the last message. Draft it now on their card."
+   },
+   {
+    "id": "put_off",
+    "area": "messages",
+    "line": "Something you put off: on the day you chose. Tap Show under put off in To do."
+   },
+   {
+    "id": "note_aside",
+    "area": "messages",
+    "line": "A first note you set aside: kept, as your choice for that person. Tap Undo, or say 'write to <name> again'."
+   },
+   {
+    "id": "interview_quiet",
+    "area": "interviews",
+    "line": "Chasing during interviews: a live process is never chased; after 14 quiet days Claude asks how it went. Say how it went, on the interview."
+   },
+   {
+    "id": "prep",
+    "area": "interviews",
+    "line": "Prep and thank-you notes: prep shows 7 days before; a thank-you is offered for 7 days after. Tap Update my prep on the interview."
+   },
+   {
+    "id": "todo_hidden",
+    "area": "page",
+    "line": "To do cards you hid: after a week, on that device. Tap Show under hidden this week in To do."
+   },
+   {
+    "id": "ideas_paused",
+    "area": "page",
+    "line": "Ideas Claude suggests, after three No thanks: 30 days after the third. Say 'show me ideas again'."
+   },
+   {
+    "id": "idea_declined",
+    "area": "page",
+    "line": "One idea you said No thanks to: kept, as your answer to that one idea. Tap Undo when it is said."
+   },
+   {
+    "id": "brief_paused",
+    "area": "page",
+    "line": "Your brief, paused: on the day you chose. Tap Resume in Settings, Your brief."
+   },
+   {
+    "id": "news_seen",
+    "area": "page",
+    "line": "News a brief already carried: kept, as the same story twice is no news; at most 5 a brief. Choose how many in Settings, Your brief."
+   },
+   {
+    "id": "export_later",
+    "area": "page",
+    "line": "The LinkedIn download reminder, put off: it asks again on its next turn. Choose how often in Settings, LinkedIn."
+   },
+   {
+    "id": "update_questions",
+    "area": "page",
+    "line": "Questions an update brought: kept, as they wait in Settings, never in To do, since nothing about them is late. Answer them under From updates in Settings."
+   }
+  ],
   "rev": "5f0ba4f627f5"
  },
  "people_count": {

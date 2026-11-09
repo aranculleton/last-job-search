@@ -453,7 +453,11 @@ def test_only_what_truly_needs_the_person_waits_for_them():
                                                                  # download, where the computer's
                                                                  # own search finds none
                                                                  # (2026-10-23).
-                                                                 "linkedin-history"}
+                                                                 "linkedin-history",
+                                                                 # Only they can switch it on
+                                                                 # in the Claude app on their
+                                                                 # computer (2026-11-09).
+                                                                 "computer-linkedin"}
     # Nothing asks for their email: anything like an alert reaches them inside Claude
     # (the maintainer's instruction, 2026-10-22).
     assert not [u.id for u in U.REGISTRY
@@ -1112,3 +1116,19 @@ def test_a_general_resume_made_before_its_draft_was_kept_is_made_again(profile):
     with open(path, "w", encoding="utf-8") as fh:
         json.dump([{"general": True}], fh)
     assert u.pending() == ""
+
+
+def test_a_person_with_a_computer_is_offered_its_linkedin_stage_once(profile):
+    """The computer side is new in this release (2026-11-09): someone who works on a computer
+    gets its setup as one card, until `computer.py ready` dates it in place.json; someone
+    with no computer is never asked."""
+    u = U.by_id("computer-linkedin")
+    assert u.needs == "you" and u.ask and "computer.py ready" in u.run
+    path = profile / "place.json"
+    rec = json.loads(path.read_text(encoding="utf-8"))
+    assert u.pending() == ""                       # the example's computer is set up
+    path.write_text(json.dumps({k: v for k, v in rec.items()
+                                if not k.startswith("computer_")}), encoding="utf-8")
+    assert "not set up" in u.pending()
+    path.write_text(json.dumps({"works_on": "phone"}), encoding="utf-8")
+    assert u.pending() == ""                       # a career changer with no laptop

@@ -56,6 +56,7 @@ only through `fenced()`, as data, never as instructions.
                                                    # (text or extractor --list JSON); --record adds
                                                    # anyone Pending not in the book, as sent
     python3 tools/network/reading.py company-ids "Employer A=1234" "Employer B=5678"  # many at once
+    python3 tools/network/reading.py place-ids "City=1234"        # a place's location number, once
     python3 tools/network/reading.py send-time <contact_id>...    # the time now where each one is
     python3 tools/network/reading.py skip <contact_id> --reason R  # a read ruled them out: close it
     python3 tools/network/reading.py batch [<contact_id>...]       # are the queued notes too alike?
@@ -86,8 +87,9 @@ Exit codes, one meaning each, so `read; verdict` can be chained (EXIT):
     11 the batch of notes is too alike to send
     12 done: nobody left to read on today's short list (`next`)
     13 new day: a run went past midnight; today needs its own list
-    14 scroll: the page's text has no Experience yet (a read without its Experience page; the
-       page's reads open that page itself and never meet it)
+    14 scroll: the page's text has no Experience yet: on LinkedIn's newer layout it is on the
+       profile's own Experience page (the extractor names it), read together with the profile;
+       the page's reads open that page themselves and never meet this
 """
 
 from __future__ import annotations
@@ -1288,7 +1290,7 @@ def check_line(got: dict) -> str:
                 "person to sign in and checks again by itself when they come back. Open nothing "
                 "here")
     return ("due: no look at LinkedIn today yet; the page checks by itself, once, when it opens "
-            "in the Claude desktop app. No chat opens LinkedIn to check")
+            "in the Claude desktop app. Nothing else opens LinkedIn only to check")
 
 
 def _keep(rel: tuple, key: str, rec) -> bool:
@@ -1352,11 +1354,11 @@ def signin_steps() -> list:
 def new_computer(tools=(), today: datetime.date | None = None) -> list:
     """The start of each run in a chat on the person's computer (one they already had): the
     LinkedIn download, while it is still to do. One numbered line a step, for Claude to do in
-    order, unprompted. Nothing about signing in: since 4.3 no chat reads LinkedIn, whatever
-    browser it has (route); their page does, and asks them to sign in itself. `tools` is kept
-    for callers that pass it."""
+    order, unprompted. Nothing about signing in: LinkedIn is read only in the signed-in browser
+    on the person's computer (route), and whatever reads there asks them to sign in itself.
+    `tools` is kept for callers that pass it."""
     import export
-    # Asked of the person, never fetched in this chat's browser: no chat opens LinkedIn.
+    # Asked of the person: the download is theirs to make, never fetched over the web.
     got = export.status(today, ())
     steps = [f"the LinkedIn download, {got['line']}: {got['do']}"] if got["state"] != "fresh" else []
     return [f"{i}. {s}" for i, s in enumerate(steps, 1)] or ["nothing to do: carry on"]
@@ -1707,9 +1709,9 @@ def route(tools=(), consent: str | None = None, env=None, signed_in: bool | None
     """How a profile is read: by the person's own page, in the Claude desktop app, never by a
     chat, chosen for the person and never asked of them.
 
-    Since 4.3 no chat reads LinkedIn, whatever browser it has (the maintainer, 2026-10-29: the
-    cloud does nearly everything, and the computer only the reading that needs their sign-in,
-    which the page does). A chat that read profiles put every page into its own context, the
+    LinkedIn is never fetched over the web (WebFetch, curl): it is read only in the signed-in
+    browser on the person's computer (the maintainer, 2026-11-09; 2026-10-29: the cloud does
+    nearly everything, and the computer only the reading that needs their sign-in). A chat that read profiles put every page into its own context, the
     costliest part of a run; the page reads them for nothing and hands each to the engine as a
     reading.done action (app_actions._reading_done). `tools`, `env` and `signed_in` are kept
     for callers that pass them; nothing depends on them now.
@@ -1728,7 +1730,8 @@ def route(tools=(), consent: str | None = None, env=None, signed_in: bool | None
                        "from what is known now with `reading.py draft <contact> - "
                        "--wait-for-read`. The page reads them when it is open in the Claude "
                        "desktop app, and the notes are rewritten on what it read in one piece "
-                       "of work. Never open linkedin.com in this chat, whatever browser it has"),
+                       "of work. Never fetch linkedin.com over the web (WebFetch, curl): it is "
+                       "read only in the signed-in browser on the person's computer"),
                 "say": "" if place.page_reads() else
                        "Your page reads their profiles when you open it in the Claude app on "
                        "your computer.",
@@ -2485,10 +2488,25 @@ def _people_per_employer(v) -> int:
 PER_EMPLOYER = _people_per_employer(getattr(_NET, "PEOPLE_PER_EMPLOYER", 2))
 MORE_AT_FILE = "more_at.json"
 WAITING = ("awaiting_reply", "connected_no_reply")
-# Only a note sent this recently holds the employer: the throttle's 45 days of silence. An
-# unanswered note from months ago is a thread that has ended, and counted for ever it would
-# shut the employer to every new person.
-WAITING_DAYS = 45
+# How long someone waiting on a reply holds their employer: by the person's own follow-up
+# rule (schema.FOLLOW_UP_DAYS, else the app's business days; schema.MAX_UNANSWERED), counted
+# from the last contact (`waiting_until`): one follow-up after their wait, at most their limit
+# of unanswered messages, then the thread is over and the employer is free. Under a rule of
+# 14 days and two messages, about four weeks after the first note. A fixed 45 days counted
+# from the first note held an employer six weeks and more, a number nobody chose (the
+# maintainer, 2026-11-09). EMPLOYER_WAIT_DAYS in networking.py sets a number of their own,
+# counted from the last contact; unset or not a whole number, the rule decides.
+def _wait_days(v) -> int | None:
+    if v is None or isinstance(v, bool):
+        return None
+    try:
+        n = int(v)
+    except (TypeError, ValueError):
+        return None
+    return n if n >= 1 else None
+
+
+EMPLOYER_WAIT_DAYS = _wait_days(getattr(_NET, "EMPLOYER_WAIT_DAYS", None))
 
 
 def _who(contact_id: str, contacts) -> dict | None:
@@ -2504,11 +2522,79 @@ def _who(contact_id: str, contacts) -> dict | None:
     return None
 
 
+def waiting_until(contact, msgs, wait_days: int | None = -1) -> datetime.date | None:
+    """The first day someone waiting on a reply no longer holds their employer, or None when
+    nothing about them has a date.
+
+    The clock runs from the last contact (state.follow_up_due: our last message, or their
+    acceptance when that came last), never the first note: a follow-up sent last week is
+    last week's contact. From there, by the person's rule: one follow-up wait for each message
+    their limit still allows (schema.MAX_UNANSWERED less those already unanswered), then one
+    more wait for the last of them to be answered. `wait_days` (EMPLOYER_WAIT_DAYS, -1 reads
+    it) replaces that with their own number of days from the last contact.
+
+    With no date in the log or on the row, the row's own follow-up day (next_action_due) is
+    the record's date: it holds until one more wait after it. With no date at all it holds
+    nothing: an undated note counted for ever shut the employer to everyone (2026-11-09)."""
+    import state
+    wait_days = EMPLOYER_WAIT_DAYS if wait_days == -1 else wait_days
+    msgs = list(msgs or ())
+    try:
+        sent, _due, _n = state.follow_up_due(contact, msgs)
+    except (TypeError, ValueError):
+        sent = None
+    if sent is None:
+        due = state.as_date((contact or {}).get("next_action_due"))
+        if due is None:
+            return None
+        return due + datetime.timedelta(days=wait_days) if wait_days else state.follow_up_on(due)
+    if wait_days:
+        return sent + datetime.timedelta(days=wait_days)
+    # At least the note that put them on the list went, logged or not.
+    gone = max(state._chases(msgs), 1)
+    until = sent
+    for _ in range(max(state.schema.MAX_UNANSWERED - gone, 0) + 1):
+        until = state.follow_up_on(until)
+    return until
+
+
+def _waiting_days() -> int:
+    """About how many days a first note, with nothing after it, holds its employer under the
+    person's rule (business days read as calendar days, rounded up): the number a line or a
+    test may quote. The day itself is always `waiting_until`'s."""
+    if EMPLOYER_WAIT_DAYS:
+        return EMPLOYER_WAIT_DAYS
+    import schema
+    wait = schema.FOLLOW_UP_DAYS or -(-schema.FOLLOWUP_BUSINESS_DAYS * 7 // 5)
+    return wait * max(schema.MAX_UNANSWERED, 1)
+
+
+WAITING_DAYS = _waiting_days()
+
+
+_INDEX: list = [None, -1, {}]  # the message log last indexed, its length, its rows by contact
+
+
+def _threads_index(threads) -> dict:
+    """{contact id: their message rows, in order}, made once for one message log: the
+    surfacing check asked `at_employer` for one employer after another, and each scanned
+    the whole log once a contact, doubling a big search's page build (2026-11-09). Kept
+    for the same list object at the same length only (a row added is indexed afresh), held
+    here so it cannot be another list at its address."""
+    import state
+    n = len(threads) if threads is not None else -1
+    if _INDEX[0] is not threads or _INDEX[1] != n:
+        _INDEX[:] = [threads, n, state.by_contact(threads)]
+    return _INDEX[2]
+
+
 def at_employer(company: str, contacts, also=(), today: datetime.date | None = None,
-                threads=None) -> tuple:
+                threads=None, until: dict | None = None) -> tuple:
     """(who at this employer is waiting on a reply, who of `also` is there too), by
-    company_key, so an employer under another of its names is the same employer. A note
-    first sent more than WAITING_DAYS ago no longer counts; one with no date still does.
+    company_key, so an employer under another of its names is the same employer. Someone
+    waiting holds the employer only until `waiting_until` (the person's follow-up rule, from
+    the last contact); one with no date at all holds nothing. `until`, given a dict, gets
+    each waiting person's day by contact id, for the line that says when it opens.
     Waiting is what the message log says (state.effective_status), never the stored status
     alone: someone who had replied was counted, and named, as waiting (2026-10-21).
     `threads` is the message log; None reads it."""
@@ -2525,18 +2611,19 @@ def at_employer(company: str, contacts, also=(), today: datetime.date | None = N
         except Exception:  # noqa: BLE001  a count must never break a save
             threads = []
 
-    def status(c) -> str:
-        return state.effective_status(c, state.threads_for(threads, c.get("contact_id", "")))
+    index = _threads_index(threads)
+
+    def msgs(c) -> list:
+        return list(index.get(str(c.get("contact_id") or "").strip(), ()))
 
     def recent(c) -> bool:
-        try:
-            sent = datetime.date.fromisoformat(str(c.get("first_contacted") or "")[:10])
-        except ValueError:
-            return True
-        return (today - sent).days <= WAITING_DAYS
+        day = waiting_until(c, msgs(c))
+        if day is not None and until is not None:
+            until[str(c.get("contact_id") or "")] = day
+        return day is not None and day > today
 
     waiting = [c for c in contacts or () if state.row_company_key(c) == k
-               and recent(c) and status(c) in WAITING]
+               and state.effective_status(c, msgs(c)) in WAITING and recent(c)]
     there = [x for x in also if x and company_key(x.get("company")) == k]
     return waiting, there
 
@@ -2622,7 +2709,7 @@ def more_at_hint(company: str) -> str:
 
 
 def employer_full_line(company: str, contacts, also=(), today: datetime.date | None = None,
-                       also_is: str = "with a note waiting to send") -> str:
+                       also_is: str = "with a note waiting to send", threads=None) -> str:
     """Why no one more may be written to at this employer, or "": at most PER_EMPLOYER (or
     the person's number there, `employer_limit`) while nobody there has answered, counting
     the people already waiting on a reply (`at_employer`) and `also` (today's list, or the
@@ -2633,7 +2720,7 @@ def employer_full_line(company: str, contacts, also=(), today: datetime.date | N
     limit, theirs = employer_limit(company)
     if limit is None:
         return ""
-    waiting, there = at_employer(company, contacts, also, today=today)
+    waiting, there = at_employer(company, contacts, also, today=today, threads=threads)
     if len(waiting) + len(there) < limit:
         return ""
     said = []
@@ -3568,11 +3655,68 @@ ALIKE_SHARE = 1 / 3
 # the same rule as anything else a drafter repeats.
 VARY_ABOUT_ME = bool(getattr(_NET, "VARY_ABOUT_ME", False))
 _GREETING = re.compile(r"^\s*(?:hi|hello|hey|dear)\b[^,.!?]{0,40}[,.!]\s*", re.I)
+# The person's own recipe, read from the first notes they approved (`learned.py approve`):
+# the line each opens on after the greeting and the line each closes on are theirs, every
+# variant of them, and a shape (an order, a frame, an opening, a close) that at least
+# RECIPE_MIN of those notes share is the way they asked for. A person whose recipe made the
+# line about them the first sentence of every note, with three approved variants of it, had
+# a batch of ten refused as "too alike" and six notes reordered against it (2026-11-09).
+RECIPE_MIN = 2
+# The channels whose approved messages are first notes this check compares.
+RECIPE_CHANNELS = ("connection", "inmail", "")
 
 
 def _sentences(note: str) -> list:
     body = _GREETING.sub("", " ".join(str(note or "").split()))
     return [x.strip() for x in re.split(r"(?<=[.?!])\s+", body) if len(x.strip()) >= 12]
+
+
+def approved_notes() -> list:
+    """The first notes the person approved as examples, whole: `learned.py approved`, the
+    connection notes and InMails (or those kept with no channel). [] when none or no
+    profile."""
+    try:
+        import learned
+        rows = learned.approved()
+    except (Exception, SystemExit):  # noqa: BLE001  no profile or no file: no recipe
+        return []
+    return [str(r.get("text") or "") for r in rows
+            if str(r.get("channel") or "").strip().lower() in RECIPE_CHANNELS
+            and str(r.get("text") or "").strip()]
+
+
+def recipe(approved=None, openers=()) -> dict:
+    """What the person's approved notes say is theirs to repeat: `lines`, the sentence each
+    opens on after the greeting and the one each closes on; and the shapes at least
+    RECIPE_MIN of them share: `orders` (compose.sentence_order), `frames`, `openings`,
+    `closes` and `skeletons` (compose.skeleton)."""
+    import advice
+    import compose
+    texts = approved_notes() if approved is None else [str(t or "") for t in approved]
+    texts = [t for t in texts if t.strip()]
+    lines, counts = [], {"orders": {}, "frames": {}, "openings": {}, "closes": {},
+                         "skeletons": {}}
+
+    def bump(kind, key, i):
+        if key:
+            counts[kind].setdefault(key, set()).add(i)
+
+    for i, t in enumerate(texts):
+        sents = [s for s in _sentences(t) if not advice._signoff(s)]
+        if not sents:
+            continue
+        first = _opening_slot(sents, openers) or sents[0]
+        lines += [first, sents[-1]]
+        bump("orders", compose.sentence_order(t), i)
+        bump("skeletons", compose.skeleton(t), i)
+        for s in sents:
+            bump("frames", frame(s), i)
+        bump("openings", _opening(first), i)
+        bump("closes", " ".join(frame(sents[-1])), i)
+    out = {k: {key for key, ids in v.items() if len(ids) >= RECIPE_MIN}
+           for k, v in counts.items()}
+    out["lines"] = lines
+    return out
 
 
 def _opening_slot(sents: list, openers) -> str:
@@ -3667,7 +3811,7 @@ def _employers_of(ids, employers=None) -> dict:
 
 def alike(notes: dict, ask: str | None = None, about_me: str | None = None,
           opener: str | None = None, vary_about_me: bool | None = None,
-          employers: dict | None = None) -> list:
+          employers: dict | None = None, approved: list | None = None) -> list:
     """What makes a batch of first notes a template: [(what, sentence, [ids])].
 
     `same_ground` compares only the common ground, so ten notes ending on one sentence
@@ -3675,7 +3819,10 @@ def alike(notes: dict, ask: str | None = None, about_me: str | None = None,
     ALIKE_SHARE of the batch) is a finding, and so is an ask that is not the person's
     own (ASK in networking.py, the one place it lives). The person's opener, their
     ASK and their ABOUT_ME are theirs to repeat, unless VARY_ABOUT_ME says the
-    background line differs by person."""
+    background line differs by person, and so is their recipe (`recipe()`): the opening
+    and closing lines of the first notes they approved, every variant, and any shape at
+    least RECIPE_MIN of those notes share. `approved` is those notes; None reads them from
+    learned.py."""
     import compose
     ask = compose.ASK if ask is None else ask
     about_me = compose.ABOUT_ME if about_me is None else about_me
@@ -3688,8 +3835,10 @@ def alike(notes: dict, ask: str | None = None, about_me: str | None = None,
     # Everything that is the person's to repeat, their work-authorization lines among them:
     # four notes to decision-makers were found sharing it (2026-10-20). compose._own_lines()
     # is the one list, and the lines a caller passed are theirs too.
+    openers = [opener] + [v for rt in compose.READER_TYPES for v in compose.options("opener", rt)]
+    taught = recipe(approved, openers)
     own = [x for x in (ask, opener) + (() if vary else (about_me,)) if x] + bank \
-        + compose._own_lines(about_me=not vary)
+        + compose._own_lines(about_me=not vary) + taught["lines"]
     per = {cid: _sentences(t) for cid, t in notes.items()}
     limit = max(ALIKE_MIN, int(len(notes) * ALIKE_SHARE))
     out, seen = [], []
@@ -3728,7 +3877,7 @@ def alike(notes: dict, ask: str | None = None, about_me: str | None = None,
             if _frame_fixed(f) >= FRAME_MIN_WORDS and not any(_same(x, y) for y in seen):
                 groups.setdefault(f, {}).setdefault(cid, x)
     for f, by in groups.items():
-        if len(by) > limit:
+        if len(by) > limit and f not in taught["frames"]:
             out.append(("same frame", " ".join(f), sorted(by)))
     for what, pick in (("same opening", lambda xs: xs[0] if xs else ""),
                        ("same close", lambda xs: xs[-1] if xs else "")):
@@ -3738,6 +3887,8 @@ def alike(notes: dict, ask: str | None = None, about_me: str | None = None,
             if not x or any(_same(x, y) for y in seen):
                 continue                   # already said as a shared sentence
             key_ = _opening(x) if what == "same opening" else " ".join(frame(x))
+            if key_ in taught["openings" if what == "same opening" else "closes"]:
+                continue                   # the person's recipe opens or closes this way
             if key_ and (what == "same opening" or _frame_fixed(frame(x)) >= 2):
                 by.setdefault(key_, []).append(cid)
         for key_, ids in by.items():
@@ -3747,7 +3898,6 @@ def alike(notes: dict, ask: str | None = None, about_me: str | None = None,
     # The person's own words are theirs to repeat as a phrase, not as the whole opening:
     # most of a batch opening on one sentence reads as a template even when the sentence is
     # their own line about them (2026-10-22). Any other sentence is judged above.
-    openers = [opener] + [v for rt in compose.READER_TYPES for v in compose.options("opener", rt)]
     slots = {cid: _opening_slot(sents, openers) for cid, sents in per.items()}
     judged = []
     for x in slots.values():
@@ -3756,7 +3906,8 @@ def alike(notes: dict, ask: str | None = None, about_me: str | None = None,
         judged.append(x)
         ids = sorted(i for i, y in slots.items() if y and _same(x, y))
         if (len(ids) >= OPENING_SLOT_MIN and 2 * len(ids) > len(notes)
-                and any(_same(x, o) for o in own)):
+                and any(_same(x, o) for o in own)
+                and not any(_same(x, o) for o in taught["lines"])):
             out.append(("same first sentence, your own words included", x, ids))
     # One sentence order across nearly the whole batch. Twenty notes were greeting, the same
     # who-line, one line about them and the ask, and nothing here said so: each line was the
@@ -3771,12 +3922,14 @@ def alike(notes: dict, ask: str | None = None, about_me: str | None = None,
                 orders.setdefault(o, []).append(cid)
         share = ORDER_SHARE if len(notes) >= ORDER_SHARE_FROM else 1.0
         for o, ids in orders.items():
-            if len(ids) >= share * len(notes):
+            if len(ids) >= share * len(notes) and o not in taught["orders"]:
                 out.append(("same sentence order", " / ".join(o), sorted(ids)))
     # Built the same way: "identical in structure" was the person's word for a batch whose
     # sentences differed and whose shape did not.
+    shapes = {" / ".join(k) for k in taught["skeletons"]}
     for a, b, shape in compose.alike(notes):
-        out.append(("same shape", shape, [a, b]))
+        if shape not in shapes:
+            out.append(("same shape", shape, [a, b]))
     # A round's InMails: one subject, one paragraph order or one close for two readers
     # was "identical in structure" too (2026-10-20).
     out += compose.round_alike(notes)
@@ -3870,6 +4023,18 @@ _EXTRACTOR = r"""(() => {
     out.top = clip(lines.slice(0, cut < 0 ? 12 : Math.min(cut, 12)).join("\n"), 1500);
   }
   out.sections = WANT.filter(k => got[k]).map(k => got[k]);
+  // LinkedIn's newer layout leaves Experience off the profile page altogether: it is on the
+  // profile's own Experience page, whole, with nothing to scroll. A read of the profile
+  // alone came back with no Experience on every profile (2026-11-09), so the address of
+  // that page is given, to load next and read with this one; on that page itself, its
+  // section is the Experience.
+  let path = "", origin = "https://www.linkedin.com";
+  try { const u = new URL(location.href); path = u.pathname; origin = u.origin; } catch (e) { path = ""; }
+  const prof = path.match(/^\/in\/[^/]+\/?/);
+  const onExp = /\/details\/experience\/?$/.test(path);
+  if (onExp) out.page = "experience";
+  if (prof && !onExp && WANT.includes("experience") && !got["experience"])
+    out.experience_page = origin + prof[0].replace(/\/?$/, "/") + "details/experience/";
   // The employers their Experience links to, by LinkedIn's company number: what a people
   // search narrowed to one employer needs, read off a page already open (2026-10-22).
   out.companies = [];
@@ -4141,24 +4306,82 @@ def known_company_id(company: str) -> tuple:
     return "", ""
 
 
+def _one_extract(t: str):
+    """(the first extractor result in `t`, where it ended) or (None, 0)."""
+    at = [k for k in (t.find("{"), t.find('"{')) if 0 <= k <= 40]
+    if not at:
+        return None, 0
+    try:
+        got, end = json.JSONDecoder().raw_decode(t[min(at):])
+        if isinstance(got, str):
+            got = json.loads(got)
+    except ValueError:
+        return None, 0
+    if isinstance(got, dict) and ("top" in got or "sections" in got) and "cards" not in got:
+        return got, min(at) + end
+    return None, 0
+
+
+def merge_extracts(parts: list) -> dict:
+    """Several extractor results for one person (their profile, then its Experience page) as
+    one: the profile's top card, each section once, the fuller text where both have it, and
+    every employer number. `experience_page` stays only while no part has Experience."""
+    if not parts:
+        return {}
+    main = next((p for p in parts if p.get("page") != "experience" and p.get("top")), parts[0])
+    out = dict(main)
+    secs: dict = {}
+    order: list = []
+    for p in parts:
+        for sec in p.get("sections") or []:
+            k = str(sec.get("heading") or "").strip().lower()
+            if not k:
+                continue
+            if k not in secs:
+                order.append(k)
+            if len(str(sec.get("text") or "")) > len(str((secs.get(k) or {}).get("text") or "")):
+                secs[k] = sec
+    out["sections"] = [secs[k] for k in order]
+    seen, companies = set(), []
+    for p in parts:
+        for c in p.get("companies") or []:
+            if isinstance(c, dict) and c.get("id") not in seen:
+                seen.add(c.get("id"))
+                companies.append(c)
+    out["companies"] = companies
+    out.pop("page", None)
+    if "experience" in secs:
+        out.pop("experience_page", None)
+    return out
+
+
 def extract_json(text: str) -> str:
     """The profile extractor's JSON in what a browser tool handed back, or "" for page text:
     as it came, quoted as a string once more, in a code fence or after a short label
     ("Result:"). The snippet's return value goes to `read` as it is, with no --json and
-    nothing re-typed (2026-10-22)."""
+    nothing re-typed (2026-10-22). Two results one after the other (the profile, then its
+    Experience page, which LinkedIn's newer layout keeps apart) are one read: `merge_extracts`."""
     t = re.sub(r"^```\w*\s*|\s*```\s*$", "", str(text or "").strip())
-    at = [k for k in (t.find("{"), t.find('"{')) if 0 <= k <= 40]
-    if not at:
+    parts = []
+    while t:
+        got, end = _one_extract(t)
+        if got is None:
+            break
+        parts.append(got)
+        t = re.sub(r"^\s*(?:```\w*|-{3,})?\s*", "", t[end:])
+    if not parts:
         return ""
+    return json.dumps(parts[0] if len(parts) == 1 else merge_extracts(parts))
+
+
+def experience_page(extract: str) -> str:
+    """The address of their Experience page, when the extractor read a profile that leaves
+    Experience off (LinkedIn's newer layout), or ""."""
     try:
-        got, _end = json.JSONDecoder().raw_decode(t[min(at):])
-        if isinstance(got, str):
-            got = json.loads(got)
+        got = json.loads(extract) if extract else {}
     except ValueError:
         return ""
-    if isinstance(got, dict) and ("top" in got or "sections" in got) and "cards" not in got:
-        return json.dumps(got)
-    return ""
+    return str(got.get("experience_page") or "") if isinstance(got, dict) else ""
 
 
 def from_extract(raw: str) -> str:
@@ -4878,7 +5101,8 @@ def save_drafts(batch: dict, own_facts_why: dict | None = None) -> int:
               "its own way of saying what you have done, its own close, and not all in one "
               "order (compose.first_note order=: the line about you second, after a question, "
               "or first in a few, never most); the person's own opener, line about them and "
-              "ask are theirs to repeat, but not as the first sentence of most notes")
+              "ask are theirs to repeat, but not as the first sentence of most notes, unless "
+              "the first notes they approved open that way (python3 tools/learned.py approved)")
         return EXIT["alike"]
     if added_lines:
         state.save_contacts(contacts)
@@ -5101,6 +5325,9 @@ def main(argv: list | None = None) -> int:
                                             "at once, each unconfirmed until a first page of "
                                             "results confirms it")
     ci.add_argument("pairs", nargs="+", metavar="\"EMPLOYER=NUMBER\"")
+    pi = sub.add_parser("place-ids", help="keep places' LinkedIn location numbers, so a people "
+                                          "search there needs no web search")
+    pi.add_argument("pairs", nargs="+", metavar="\"PLACE=NUMBER\"")
     sk = sub.add_parser("skip", help="a read ruled them out: close them with the reason, "
                                      "and remove their draft")
     sk.add_argument("contact_id")
@@ -5200,6 +5427,15 @@ def main(argv: list | None = None) -> int:
         return EXIT["ok"]
     if a.cmd == "next":
         return _cli_next(a)
+    if a.cmd == "place-ids":
+        got = learn_place_ids(a.pairs)
+        for name, number, what in got:
+            print(f"  {name}" + (f" = {number}" if number else "") + f": {what}")
+        kept = sum(1 for _n, _x, what in got if not what.startswith("not kept"))
+        print(f"place-ids: {kept} of {len(got)} kept in your own files "
+              f"({os.path.join(*SEARCH_FILE)}); a search there: candidates.py search "
+              "\"<employer>\" --place \"<place>\"")
+        return EXIT["ok"] if kept == len(got) else EXIT["error"]
     if a.cmd == "company-ids":
         got = learn_company_ids(a.pairs)
         for name, number, what in got:
@@ -5704,17 +5940,32 @@ def main(argv: list | None = None) -> int:
                 print("reading: a third-degree profile shows no Experience to anyone outside "
                       "their network, so the page is read as it is.")
                 a.no_experience = True
+            exp_page = experience_page(extract)
+            if not a.no_experience and not has_experience(text) and exp_page:
+                # LinkedIn's newer layout keeps Experience off the profile page: its own page
+                # holds it whole (2026-11-09). Loaded once, on purpose, and read with this one.
+                print("reading: not read yet. This profile page carries no Experience: it is on "
+                      f"their Experience page. Open {exp_page} (one more page, nothing clicked), "
+                      "run the same extractor there, and read the two results together, one "
+                      f"after the other: reading.py read {a.contact_id} - --source browser "
+                      f"--mode {a.mode}. If that page shows no Experience either, add "
+                      "--no-experience")
+                return EXIT["scroll"]
             if not a.no_experience and not has_experience(text):
                 # On the current layout Experience and Education are on the page only once it
                 # has been scrolled to the very end; read before that, a real profile looks
                 # nearly empty, which is how a false "did not render" came about
                 # (2026-10-21). Nothing new is loaded: the same page, scrolled, read again.
-                print("reading: not read yet. Their Experience is not in the text, so the page "
-                      "was read before it had been scrolled to the end. Scroll the same page "
-                      "slowly to the very bottom (no new page, nothing clicked), then read its "
-                      f"text again: reading.py read {a.contact_id} - --source browser"
-                      f"{' --json' if a.json else ''} --mode {a.mode}. If their page has no "
-                      "Experience at all, even at the end, add --no-experience")
+                exp_at = experience_address(a.url or contact.get("linkedin_url", ""))
+                print("reading: not read yet. Their Experience is not in the text. On LinkedIn's "
+                      "newer layout it is on its own page"
+                      + (f", {exp_at}" if exp_at else " (their profile address, then "
+                         "details/experience/)")
+                      + ": open it (one more page, nothing clicked) and read this page's text and "
+                      f"that one's together: reading.py read {a.contact_id} - --source browser"
+                      f"{' --json' if a.json else ''} --mode {a.mode}. On the older layout, scroll "
+                      "the same page slowly to the very bottom instead and read it again. If "
+                      "their page has no Experience at all, add --no-experience")
                 return EXIT["scroll"]
         try:
             new = parse(text, name=contact.get("name", ""), company=contact.get("company", ""),
@@ -5795,15 +6046,25 @@ def rendered(text: str, name: str = "") -> bool:
     return len(" ".join(lines)) >= NOT_RENDERED_CHARS
 
 
-def _go_line(mode: str = "deep") -> str:
-    # On the current layout Experience and Education are on the page only once it has been
-    # scrolled to the very bottom (2026-10-21): every read scrolls to the end first.
+def experience_address(url: str) -> str:
+    """Their profile's own Experience page, from the profile's address, or ""."""
+    m = re.match(r"(https?://[^/]*linkedin\.com/in/[^/?#]+)", str(url or "").strip())
+    return (m.group(1) + "/details/experience/") if m else ""
+
+
+def _go_line(mode: str = "deep", url: str = "") -> str:
+    # On the older layout Experience and Education are on the page only once it has been
+    # scrolled to the very bottom (2026-10-21); on the newer one Experience is not on the
+    # profile at all, but on its own page (2026-11-09). One read takes both, as the page's
+    # own reader does: the profile, then its Experience page, nothing clicked.
+    exp = experience_address(url) or "their profile's address + details/experience/"
+    both = (f"then open its Experience page ({exp}), nothing clicked, and read the two pages' "
+            "text, or the extractor's two results, together in one read")
     if mode == "card":
-        return ("go: open the page, scroll it to the very end (Experience and Education appear "
-                "only then) and click nothing, then read its text once (`read ... --mode "
-                "card`); the top card, About and Experience decide most keep or skip")
-    return ("go: open the page, scroll it to the very end (nothing clicked), then read its "
-            "text once")
+        return ("go: open the page, scroll it to the very end and click nothing, " + both
+                + " (`read ... --mode card`); the top card, About and Experience decide most "
+                "keep or skip")
+    return "go: open the page, scroll it to the very end (nothing clicked), " + both
 
 
 def _cli_next(a) -> int:
@@ -5837,7 +6098,7 @@ def _cli_next(a) -> int:
     url = nxt.get("linkedin_url") or ""
     print(f"next: {nxt.get('name') or nxt['contact_id']} ({nxt.get('company') or '?'}) "
           f"[{nxt['contact_id']}] {url or '(no address on file: find their page first)'}")
-    print(_go_line(a.mode))
+    print(_go_line(a.mode, url))
     print(f"then: python3 tools/network/reading.py read {nxt['contact_id']} - --source browser "
           f"--mode {a.mode}, show the person the draft it allows, and `reading.py next` again")
     return EXIT["ok"]
@@ -5993,6 +6254,29 @@ def no_filter_line(company: str, place: str = "") -> str:
             + (f" and the location to {place}" if place else "")
             + " and keep its address: reading.py search-url --company "
             f"\"{company}\"" + (f" --place \"{place}\"" if place else "") + " --learn \"<address>\"")
+
+
+def learn_place_ids(pairs) -> list:
+    """Keep places' LinkedIn location numbers ("Vancouver=1234"), as a people search narrowed
+    to a place carries them (geoUrn), so a search there is built with no web search and no
+    search filtered by hand first. A run found the number for its city and had nowhere to keep
+    it but a hand-filtered address (2026-11-09). [(place, number, what happened)]."""
+    out = []
+    data = _filters()
+    for raw in pairs or ():
+        name, sep, number = str(raw or "").rpartition("=")
+        name, number = " ".join(name.split()), number.strip()
+        if not sep or not name or not number.isdigit():
+            out.append((str(raw), number, "not kept: write it as \"Place=1234\", digits only"))
+            continue
+        places = data.setdefault("places", {})
+        k, v = name.lower(), '["%s"]' % number
+        said = "already kept" if places.get(k) == v else "kept"
+        places[k] = v
+        out.append((name, number, said))
+    if any(w == "kept" for _n, _x, w in out):
+        _save_filters(data)
+    return out
 
 
 def learn_company_ids(pairs) -> list:

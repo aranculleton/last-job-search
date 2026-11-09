@@ -172,7 +172,9 @@ JSON_FILES = {
     # their computer (note_local) and setup's own mark (mark_setup): the first to start
     # setup holds it, and a first sighting is the earliest one.
     "profile/place.json": {"stamps": {"asked": "later", "started": "earlier"},
-                           "dated": {"computer_chat": "earlier", "setup/finished": "earlier"},
+                           "dated": {"computer_chat": "earlier", "setup/finished": "earlier",
+                                     # The computer side set up and tested (computer.ready).
+                                     "computer_ready": "later"},
                            "indent": 2, "ascii": True},
     # The scheduled tasks (routines.record): one entry a task, known by its key.
     "profile/routines.json": {"lists": {"routines": ("key",)}, "indent": 2},
@@ -181,6 +183,10 @@ JSON_FILES = {
     # entry one side let go of stays out.
     "documents/helper_usage.json": {"lists": {"entries": ("at", "chat", "kind")},
                                     "order": {"entries": "at"}, "indent": 1, "sort": "all"},
+    # What each run on the person's computer took, measured (computer.record_run): a log only
+    # ever added to, one entry a piece of work, kept RUNS_KEEP_DAYS.
+    "documents/computer_runs.json": {"lists": {"runs": ("at", "work")},
+                                     "order": {"runs": "at"}, "indent": 1, "sort": "all"},
     # What the person booked that the app did not know of (upcoming.add): one entry each,
     # known by its id, so the page and a chat adding one each on the same day keep both.
     "documents/upcoming.json": {"lists": {"events": ("id",)}, "indent": 2},
@@ -378,11 +384,15 @@ _PER_ROUND = ("named after the round that wrote it, once, and never written agai
 JSON_NAMES = {
     ".sent.json": "each view batch's records as they stood before it was sent, in the view's own folder, so a refused save can be put back and made again (page_db.keep_landed); never committed",
     ".refused.json": "the record a page save was refused for, in the view's own folder, read once by the next run; never committed",
+    ".finished.json": "each finish made from a page dump, with its batches, in the dump's own scratch folder, so the same finish run again gives the same batch (page_db.finished_here); never committed",
+    ".versions.json": "the versions a read of the page listed, in the dump's own scratch folder (page_db.listed_here); never committed",
+    "tools/app.py: .json": "a page message's own record in a dump's talk folder, read only for its words (app.talk_words), in the chat's scratch folder; never committed",
     # run_round reads every round's summary to find a job set aside while a search ran; the
     # files themselves are wired as "documents/rounds/*.json" above.
     "tools/app.py: *.json": "a page dump's screen documents, read only to tell whether the dump holds the page's screens (app.py no_screen), in the chat's scratch folder; never committed",
     "tools/rules_view.py: *.json": "each search's left-out list, read only for how many each rule left out (rules_view.left_counts); merged as documents/rounds/filtered/*.json",
     "tools/run_round.py: *.json": "every round summary, read only, to hold a set-aside made during a search; written by write_summary, merged as documents/rounds/*.json",
+    "tools/network/candidates.py: *.json": "every round summary, read only, for the employers a short people search widens to (candidates.employers); written by run_round.write_summary, merged as documents/rounds/*.json",
     **dict.fromkeys(("00_portal_health.json", "01_dropped.json", "01_prefiltered.json",
                      "02_hydrated.json", "03_screened.json", "03_screened_all.json",
                      "04_opportunity.json", "05_ranked.json", "06_shortlist.json",

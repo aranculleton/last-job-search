@@ -68,8 +68,8 @@ COMPUTER_PAGE = "github.com/aranculleton/last-job-search/blob/master/COMPUTER.md
 # in the desktop app, reads them as the person (host:claude_browser, proven 2026-10-25).
 PAGE_READS = ("Finding people works here. Your page reads their LinkedIn profiles when you "
               "open it in the Claude desktop app.")
-# Since 4.3 no chat reads LinkedIn, whatever browser it has: the page does, in the Claude
-# desktop app (reading.route). These names stay, as public names, each saying that now.
+# LinkedIn is never fetched over the web (WebFetch, curl): it is read only in the signed-in
+# browser on the person's computer, by the page in the Claude desktop app (reading.route). These names stay, as public names, each saying that now.
 SHORT_HAS_LOCAL = PAGE_READS
 FINDING_WORKS = "Finding people works in this chat."
 CLOUD_LINK_NOW = PAGE_READS

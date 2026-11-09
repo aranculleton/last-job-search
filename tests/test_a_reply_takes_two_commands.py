@@ -317,10 +317,16 @@ def test_done_finishes_any_work_in_one_batch_and_holds_the_summary_to_one_senten
     assert work["body"]["result"]["links"] == [{"label": "Your CV",
                                                 "url": "cv/Morgan_Ellis_CV_Kestrel.pdf"}]
     assert (lock["op"], lock["if_version"]) == ("delete", 1)
-    # Finished is finished: the dump says so, and a second finish writes nothing.
+    # Finished is finished: the dump says so, and a second finish writes nothing new. It gives
+    # back the finish this folder made, the same batch, so one never sent is never lost (two
+    # finishes in a row, 2026-11-09).
+    first = json.loads(out)["batches"]
     code, out = run(search, app, "done", search.dump, "--work", wid, "--summary", "Done.",
                     "--now", NOW)
-    assert code == 2 and "already finished" in out, out
+    assert code == 0 and json.loads(out)["again"] is True, out
+    assert json.loads(out)["batches"] == first[:1]      # the finish (its files went apart)
+    work, _lock = batch(first[0])
+    assert work["body"]["result"]["summary"] == "Your Kestrel Mutual CV and letter are ready."
 
     talk = "talk~cloud-c2~m9"
     put(search, "work", talk, {"kind": "talk", "title": "Answer: what next?", "to": "cloud",

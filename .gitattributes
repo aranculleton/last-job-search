@@ -59,6 +59,7 @@ profile/place.json merge=ljs-state text eol=lf
 profile/routines.json merge=ljs-state text eol=lf
 documents/upcoming.json merge=ljs-state text eol=lf
 documents/helper_usage.json merge=ljs-state text eol=lf
+documents/computer_runs.json merge=ljs-state text eol=lf
 documents/rules/set.json merge=ljs-state text eol=lf
 documents/rules/review.json merge=ljs-state text eol=lf
 documents/skill_answers.json merge=ljs-state text eol=lf

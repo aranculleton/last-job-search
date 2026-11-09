@@ -118,10 +118,19 @@ def _build(today, now, **kw):
     return with_page_parts(model), got
 
 
+def computer_seen(db: dict, now) -> dict | None:
+    """The computer's state from the page's database (tools/computer.py), or None where it
+    cannot be read: the page then shows what it showed before (computer.seen)."""
+    import computer
+    return computer.seen(db, now)
+
+
 def cmd_model(a) -> int:
     import app_model
     today, now = app_model.clock(a.today, a.now)
-    model, _ = _build(today, now)
+    # The computer's row as a page with nothing from it yet shows it, so `model` and a
+    # `view` of a page the computer never wrote to are the same model, rev and all.
+    model, _ = _build(today, now, computer=computer_seen({}, now))
     _out(_dump(model), a.out)
     return 0
 
@@ -280,7 +289,8 @@ def cmd_view(a) -> int:
             if end and answers_page(page_db.load(a.dump), a.chat) else []
         if need or late:
             print(_dump({"rev": None, "batches": [], "for_claude": (
-                [page_reads.NEED_SCREENS.format(colls=" and ".join(need), dump=a.dump)]
+                [page_reads.NEED_SCREENS.format(colls=" and ".join(need), dump=a.dump,
+                                                keep=page_reads.keep_step(a.dump))]
                 if need else []) + ([page_reads.say_late(
                     late, a.dump, app_setup.page_record().get("url") or "<the page>")]
                     if late else [])}), end="")
@@ -351,7 +361,8 @@ def cmd_view(a) -> int:
     # reach it a day.
     full: dict = {}
     model, _ = _build(today, now, shown=app_alerts.shown_in(db.get("view") or {}), full=full,
-                      work_time=page_db.work_times(db, now) if db else None)
+                      work_time=page_db.work_times(db, now) if db else None,
+                      computer=computer_seen(db or {}, now))
     w = page_db.Writes(a.out_dir)
     views = (db.get("view") or {}) if db else {}
     # Only what changed is written: every update rewrote all 37 documents, about 1.5 MB, when
@@ -826,11 +837,16 @@ def cmd_apply(a) -> int:
 
 
 def choose(db: dict, chat: str, kind: str, now, on: str = "", no_sessions: bool = False,
-           claim_out: str | None = None, job_chat: bool = False) -> dict | None:
+           claim_out: str | None = None, job_chat: bool = False,
+           computer_only: bool = False, lent: bool = False) -> dict | None:
     """The queued work this chat should take (None: nothing is), with the model a chat
     started for it gets (tools/model_guide.py for_work), `run`: where it is done
     (where_it_runs), and with `claim_out` the claim as batch files. Small work done here is
-    claimed running at its first stage, so no progress pin follows it."""
+    claimed running at its first stage, so no progress pin follows it. Work sent to the
+    computer is always done here, in the chat with the browser (`computer_only`: the chat
+    the app started on the computer takes nothing else). `lent`: a cloud chat lent the
+    computer's browser or folder, claiming as a computer chat; its heartbeat, like a big job's
+    own chat's, never counts as a chat listening (page_db.heartbeat `watching`)."""
     import app_listen
     import model_guide
     import page_db
@@ -839,9 +855,15 @@ def choose(db: dict, chat: str, kind: str, now, on: str = "", no_sessions: bool 
         # Each big job in a cloud chat of its own runs on its own computer: ten at once there.
         cap = page_db.HEAVY_CAP_CHATS if kind == "cloud" and not no_sessions else page_db.HEAVY_CAP
         chosen = page_db.next_item(app_listen.without_republish(db), kind, now, cap=cap,
-                                   heavy_only=job_chat)
+                                   heavy_only=job_chat and not computer_only,
+                                   to_only="computer" if computer_only else "")
     if chosen is None:
         return None
+    # Sent to the computer: a LinkedIn read. It runs in this chat, which has the browser,
+    # never as a background agent with none (`--tools none`), which the computer's chat had
+    # to overrule by hand (2026-11-09).
+    sent_here = bool(page_db.computer_only((((db.get("work") or {}).get(
+        page_db.safe_id(chosen["work"])) or {}).get("data") or {}), "cloud"))
     info = model_guide.for_work(chosen["kind"], on)
     heavy = bool(page_db.WORK_KINDS.get(chosen["kind"], {}).get("heavy"))
     chosen.update(model=info["model"], effort=info["effort"], heavy=heavy)
@@ -850,7 +872,7 @@ def choose(db: dict, chat: str, kind: str, now, on: str = "", no_sessions: bool 
              ((doc.get("data") or {}) for doc in (db.get("work") or {}).values())
              if str(d.get("status") or "") in ("claimed", "running")} - {""}
     chosen.update(where_it_runs(chosen, chat, kind, no_sessions, taken=taken))
-    if job_chat:
+    if job_chat or sent_here:
         # A big job's own chat takes the next big job waiting and does it itself: no chat
         # can tell the one that answers the page that a slot is free, so a queue of drafts
         # waited behind the cap with nobody to start it (2026-11-03).
@@ -863,10 +885,12 @@ def choose(db: dict, chat: str, kind: str, now, on: str = "", no_sessions: bool 
             # review, 2026-11-03).
             import app_setup
             url = app_setup.page_record().get("url", "") or "<url>"
-            chosen["steps"] = job_steps(chosen, chat, url, session=True, first=1)
+            chosen["steps"] = job_steps(chosen, chat, url, session=True, first=1,
+                                        chat_kind=kind, computer_only=sent_here)
     if claim_out:
         chosen["batches"] = page_db.claim(db, chosen, chat, kind, now, claim_out,
-                                          running=chosen.get("run") == "here")
+                                          running=chosen.get("run") == "here",
+                                          watching=not (lent or job_chat))
     return chosen
 
 
@@ -878,11 +902,23 @@ def cmd_next(a) -> int:
     import app_model
     import page_db
     _, now = app_model.clock(None, a.now)
-    chosen = choose(page_db.load(a.dump), a.chat, a.kind, now, on=a.on,
-                    no_sessions=a.no_sessions, claim_out=a.claim_out,
-                    job_chat=getattr(a, "job_chat", False))
+    try:
+        chosen = choose(page_db.load(a.dump), a.chat, a.kind, now, on=a.on,
+                        no_sessions=a.no_sessions, claim_out=a.claim_out,
+                        job_chat=getattr(a, "job_chat", False),
+                        computer_only=getattr(a, "computer_only", False),
+                        lent=getattr(a, "lent", False))
+    except ValueError as e:
+        print(f"app: {e.args[0] if e.args else e}", file=sys.stderr)
+        return 2
     if chosen is None:
         return 0
+    if chosen.get("batches"):
+        # Claimed, as it will be once sent: the pins and the finish made from this folder are
+        # pinned to the claim's versions and free the holds it makes. Left as read, the first
+        # pin was refused and the finish left a hold behind, deleted by hand (a person's
+        # computer, 2026-11-09).
+        page_db.keep_landed(a.dump, chosen["batches"])
     print(_dump(chosen), end="")
     return 0
 
@@ -939,8 +975,16 @@ def child_prompt(chosen: dict, parent: str, url: str, session: bool = True) -> s
                                        report_to=parent if session else ""))
 
 
+def _versions_said(dump: str) -> str:
+    """The step after a read that keeps each record's own version (page_db.versions_step),
+    or "" where the app's hook keeps them (page_db.hook_keeps_versions)."""
+    import page_db
+    return page_db.versions_step(dump)
+
+
 def job_steps(chosen: dict, claimer: str, url: str, session: bool = True,
-              first: int = 1, report_to: str = "") -> list[str]:
+              first: int = 1, report_to: str = "", chat_kind: str = "cloud",
+              computer_only: bool = False) -> list[str]:
     """The steps for one big job, numbered from `first`, every one naming this job's own id,
     its own folder ($D, read afresh), its kind's commands and its pins (a search's round.log
     as well), with `--chat <claimer>` (the id it was claimed under) on each write. A job
@@ -950,6 +994,11 @@ def job_steps(chosen: dict, claimer: str, url: str, session: bool = True,
     keys = ", ".join(s["key"] for s in chosen.get("stages") or [] if s.get("key"))
     row = work_row(kind)
     lines: list[str] = []
+    # Claimed as a computer chat (a cloud chat lent the computer's browser or folder too):
+    # every finish says so. Without it, app.py done took the chat's own kind, cloud, and a
+    # LinkedIn read could not be finished by the chat that did it (the release review,
+    # 2026-11-09).
+    kf = " --kind computer" if chat_kind == "computer" else ""
 
     def step(text: str) -> None:
         lines.append(f"{first + len(lines)}. {text}")
@@ -957,7 +1006,8 @@ def job_steps(chosen: dict, claimer: str, url: str, session: bool = True,
     step("Load ArtifactData (ToolSearch, select:ArtifactData). Read the page's database "
          f"into a fresh folder in your scratchpad for this job alone, $D, in one go: "
          f"ArtifactData query, url {url}, once for each of the collections work, holds, screen, "
-         f"meta and addr, each with out_dir $D and limit 1000. The item, its args and the "
+         f"meta and addr, each with out_dir $D and limit 1000"
+         + ("; " + _versions_said("$D") if _versions_said("$D") else "") + ". The item, its args and the "
          f"`answers` the person already gave on the page (never asked again) are in "
          f"$D/work/{wid.replace('~', '@')}.json.")
     mates = [str(o.get("work") or "") for o in chosen.get("with") or [] if o.get("work")]
@@ -982,9 +1032,9 @@ def job_steps(chosen: dict, claimer: str, url: str, session: bool = True,
          f"(ArtifactData batch, url {url}). On a long stage, pin it again with a new line every "
          "ten minutes or so: the page counts a job with no word for half an hour as stopped. "
          "\"stop_asked\": true means they tapped Stop (`stopped` names others of the job they "
-         f"stopped): end each with app.py done --work <its id> --chat {claimer} --stopped. A "
+         f"stopped): end each with app.py done --work <its id> --chat {claimer}{kf} --stopped. A "
          "question only the person can answer: app.py done --work <its id> --chat "
-         f"{claimer} --question \"<one plain question>\" puts it on their page, and their "
+         f"{claimer}{kf} --question \"<one plain question>\" puts it on their page, and their "
          "answer puts it back in the queue; never wait in the chat. A refused write names the "
          "record's version: python3 tools/app.py version \"$D\" <collection>/<doc id> "
          "<that version>, and run it once more; refused again, read work again; claimed by "
@@ -1020,9 +1070,9 @@ def job_steps(chosen: dict, claimer: str, url: str, session: bool = True,
              "not one they can take: --left-out \"<why, plain>\"), send its batch and bring the "
              "page up to date (the finish step below), so it is in Drafts at once. The search "
              "finishes by itself with its last draft; never app.py done it yourself.")
-    done = (f"each draft's own app.py done, with --chat {claimer}: {wid} finishes with the last"
+    done = (f"each draft's own app.py done, with --chat {claimer}{kf}: {wid} finishes with the last"
             if kind == "search" and chosen.get("draft_all")
-            else f"its app.py done with --work {wid} --chat {claimer}")
+            else f"its app.py done with --work {wid} --chat {claimer}{kf}")
     # A draft's PDFs: this chat cannot upload (Artifact is not among its tools), so its
     # app.py done queues one `files` item for the chat that answers the page, and nothing is
     # uploaded here (the maintainer, 4 November).
@@ -1061,6 +1111,11 @@ def job_steps(chosen: dict, claimer: str, url: str, session: bool = True,
     elif session:
         # A job's chat started by another job's chat (`next --job-chat`) has nobody it was
         # started by to tell: it brings the page up to date itself and takes the next one.
+        if computer_only:
+            # Measured, never guessed: a computer run's own report of its time and steps was
+            # wrong by a third (2026-11-09). Its transcript says what it took (tools/computer.py).
+            step(f"Before it finishes: python3 tools/computer.py measure \"$D\" --work {wid} "
+                 f"--chat {claimer}, and send its batch; say its line, never your own count.")
         step(f"Finish as step 5 says ({done}), without its heartbeat line.{files} Save and land "
              f"your work on master (CLAUDE.md, \"Saving\"). Then, landed or not (a failed check "
              f"leaves the work for the next chat to land, and this step still runs), bring the "
@@ -1071,7 +1126,7 @@ def job_steps(chosen: dict, claimer: str, url: str, session: bool = True,
              "and never writes over a screen drawn from a newer copy than this one); and send "
              "every batch it prints (ArtifactData batch). A refused batch: read those four again "
              "and run it once more. Never write to the person: the page shows how it went.")
-        step(_next_job(url))
+        step(_next_job(url, kind=chat_kind, computer_only=computer_only))
     else:
         step(f"Finish as step 5 says ({done}), without its heartbeat line and without app.py "
              f"view.{files} Save and land your work on master (CLAUDE.md, \"Saving\"). Then end with "
@@ -1082,11 +1137,16 @@ def job_steps(chosen: dict, claimer: str, url: str, session: bool = True,
     return lines
 
 
-def _next_job(url: str, first_word: str = "Then") -> str:
-    return (f"{first_word}, the next big job waiting, so a queue keeps moving with nobody to "
+def _next_job(url: str, first_word: str = "Then", kind: str = "cloud",
+              computer_only: bool = False) -> str:
+    # A chat on the computer takes the next piece of work sent there, as a computer chat:
+    # told "--kind cloud --job-chat", it would have taken cloud work and refused its own.
+    what, flags = (("piece of work for this computer", f"{kind} --computer-only")
+                   if computer_only else ("big job", f"{kind} --job-chat"))
+    return (f"{first_word}, the next {what} waiting, so a queue keeps moving with nobody to "
             f"start it: ArtifactData query, url {url}, collections work and holds, out_dir a "
             f"fresh folder $E; python3 tools/app.py next \"$E\" --chat <this chat's id> --kind "
-            f"cloud --job-chat --on \"<your model>\" --claim-out \"$E/claim\". Nothing named: "
+            f"{flags} --on \"<your model>\" --claim-out \"$E/claim\". Nothing named: "
             "stop. One named: send its claim batch (refused: another chat has it, stop), then "
             "follow the `steps` it printed, in order: that job's own, with its id, its folder and "
             "its commands, never this one's. At most three jobs in this chat, so its history "
@@ -1125,6 +1185,7 @@ def where_it_runs(chosen: dict, chat: str, kind: str, no_sessions: bool = False,
     `taken`: the names of the job chats still at work."""
     if not chosen.get("heavy"):
         return {"run": "here"}
+    import app_listen
     import app_setup
     url = app_setup.page_record().get("url", "") or "<url>"
     # The id the job's chat reports back to: this chat's own. Where it is not known here,
@@ -1140,7 +1201,8 @@ def where_it_runs(chosen: dict, chat: str, kind: str, no_sessions: bool = False,
         # requests permission" while the person was away (2026-11-03).
         call = {"title": title, "prompt": child_prompt(chosen, parent, url),
                 "source_url": f"https://github.com/{owner}/{name}",
-                "extra_allowed_tools": list(CHILD_TOOLS)}
+                "extra_allowed_tools": list(CHILD_TOOLS),
+                "permission_mode": app_listen.SESSION_MODE}
         if chosen.get("model"):
             call["model"] = chosen["model"]
         got = {"run": "child session", "create_session": call}
@@ -1357,8 +1419,11 @@ def data_current(dump: str) -> bool:
         if not rev:
             return False
         today, now = app_model.clock(None, None)
-        # Built as `view` builds it: the suggestions on the page keep their day.
-        model, _ = _build(today, now, shown=app_alerts.shown_in(db.get("view") or {}), full={})
+        # Built as `view` builds it: the suggestions on the page keep their day, and the
+        # computer is as the page's database says (built without it, a page holding the model
+        # `view` made never matched, and start said to write it all again).
+        model, _ = _build(today, now, shown=app_alerts.shown_in(db.get("view") or {}), full={},
+                          computer=computer_seen(db, now))
         return rev == str(model.get("rev") or "")
     except Exception:  # noqa: BLE001  no profile, or a model that cannot be built: write it
         return False
@@ -1944,7 +2009,8 @@ def cmd_wake(a) -> int:
 
         def with_item(c):
             item = ((db.get("work") or {}).get(c["work"]) or {}).get("data") or {}
-            return dict(c, **{k: item[k] for k in ("args", "answers", "note") if k in item})
+            return talk_words(dict(c, **{k: item[k] for k in ("args", "answers", "note")
+                                         if k in item}), a.dump, url)
         if chosen.get("run") == "here":
             shown = with_item(chosen)
             # Finishing it writes the item, its locks and this chat's heartbeat, which this
@@ -1974,10 +2040,12 @@ def cmd_wake(a) -> int:
                             "once more (step 3 again)." if more else ""))
         else:
             call = "create_session" if chosen.get("run") == "child session" else "Agent"
+            import app_listen
             then.append(f"then: only once the work's claim is accepted, make the {call} call "
                         "in `next` below exactly as it is printed" + (
                             f" (first {chosen['first']})" if chosen.get("first") else "") +
-                        ", and never wait for it." + (NESTED_JOB.format(chat=chat, dump=a.dump)
+                        ", and never wait for it." + (
+                            app_listen.MODE_REFUSED if call == "create_session" else "") + (NESTED_JOB.format(chat=chat, dump=a.dump)
                                                       if call == "create_session" else "") + (
                             " More is waiting: then run this again with the same folder (step "
                             "3 again): " + _again(a, chat) if more else ""))
@@ -1998,6 +2066,26 @@ def cmd_wake(a) -> int:
             last.append(TIDY_SAID)
     _print_wake(head, notes, _send_as(sends, rd, a.dump), url, then=then + last)
     return 0
+
+
+def talk_words(shown: dict, dump: str, url: str) -> dict:
+    """A message from the page's chat, with its words: the page puts them on the item
+    (`args.text`); an item made before it did gets them from the thread when the folder holds
+    the message, else the one read that fetches it. The item carried only `args.message`, and
+    every chat read the thread for the words (2026-11-09)."""
+    args = shown.get("args") if isinstance(shown.get("args"), dict) else None
+    if shown.get("kind") != "talk" or not args or args.get("text") or not args.get("message"):
+        return shown
+    th, mid = str(args.get("thread") or ""), str(args["message"])
+    import page_db
+    for name in (mid.replace("~", "@"), mid):
+        got = page_db._read_json(os.path.join(dump, "talk", th, "messages", name + ".json"))
+        if isinstance(got, dict):
+            fields, _v = page_db.unwrap(got)
+            if str(fields.get("text") or "").strip():
+                return dict(shown, args=dict(args, text=str(fields["text"])))
+    return dict(shown, read_words=(f"ArtifactData get, url {url}, collection talk/{th}/messages, "
+                                   f"doc_id {mid}: its `text` is what they said"))
 
 
 # A job's chat refused because this chat can start no more (chats nest only so deep): the
@@ -2332,13 +2420,19 @@ def cmd_done(a) -> int:
                              error=a.failed, links=_links(a.link), reply=reply, thread=a.thread,
                              chat_kind=a.kind or app_listen.chat_kind(), dump_dir=a.dump,
                              chat=a.chat, question=a.question, about=a.about,
-                             answer=_answer(a), answered=a.answered, left_out=left)
+                             answer=_answer(a), answered=a.answered, left_out=left,
+                             outcome=getattr(a, "outcome", "") or "")
     except (KeyError, ValueError) as e:
         print(f"app: not finished: {e.args[0] if e.args else e}", file=sys.stderr)
         return 2
     kind = str((((db.get("work") or {}).get(page_db.safe_id(a.work)) or {}).get("data") or {})
                .get("kind") or "")
-    if got["status"] == "done" and kind in page_db.FILES_AFTER:
+    if got.get("again"):
+        # This folder finished it already: the same batch, to send if it never was.
+        got["said"] = ("this folder finished it already: here is that finish again; send it if "
+                       "it was never sent (refused, it is the page's newer copy: python3 "
+                       "tools/app.py version, as any refusal)")
+    elif got["status"] == "done" and kind in page_db.FILES_AFTER:
         # The PDFs it made reach the page with no one asking: one `files` item for the chat
         # that answers the page, for every draft whose files the page lacks (a job's own chat
         # cannot upload them).
@@ -2706,17 +2800,38 @@ def cmd_ask(a) -> int:
     return 0
 
 
+def cmd_versions(a) -> int:
+    """The versions a read listed, kept in the files it saved (page_db.keep_listed): the
+    lines on the input, as the read printed them or typed short."""
+    import page_db
+    text = sys.stdin.read() if not a.lines else "\n".join(a.lines)
+    n = page_db.keep_listed(text, a.dump)
+    if not n:
+        print("app: no record of this folder was named with its version: give the lines the "
+              "read printed (`- \"<id>\"  N bytes  version V  \"<file>\"`), or "
+              "`<collection>/<doc id> V` a line", file=sys.stderr)
+        return 2
+    print(f"versions: {n} record{'s' if n != 1 else ''} in this folder now carry the page's own "
+          "version: every write made from it is pinned to that.")
+    return 0
+
+
 def cmd_version(a) -> int:
     """A refused write named a record's current version: kept in the folder, so the same
     command run again pins to it (once; a second refusal means read again)."""
     import page_db
+    import page_reads
+    # Every other record the refused save pins by its stamp alone is read again first, so the
+    # save made again lands at once: one refusal for each, fifty of them for one page update,
+    # was a version typed by hand fifty times (a person's computer, 2026-11-09).
+    again = page_db.read_again(a.dump, a.record, missing=a.version is None)
     try:
-        kept = page_db.note_version(a.dump, a.record, a.version)
+        kept = page_db.take_back(a.dump, a.record) if a.version is None else \
+            page_db.note_version(a.dump, a.record, a.version)
     except (KeyError, ValueError) as e:
         print(f"app: {e.args[0] if e.args else e}", file=sys.stderr)
         return 2
     try:
-        import page_reads
         page_reads.want_full()
     except Exception:  # noqa: BLE001  nothing kept to read wholly
         pass
@@ -2724,9 +2839,19 @@ def cmd_version(a) -> int:
         # The page changed it again while this was saved: never dropped, never a loop.
         print(VERSION_AGAIN.format(record=kept, dump=a.dump))
         return 3
-    print(f"app: {kept} is at version {a.version} in this folder, and what the refused batch "
-          "would have saved is back in it to be saved again: run the refused command again, "
-          "once, and send what it prints")
+    first = ""
+    if again:
+        import app_setup
+        url = app_setup.page_record().get("url") or "<the page>"
+        first = (f" First read {', '.join(again)} again into this folder (ArtifactData query, "
+                 f"url {url}, one for each, limit 1000, out_dir \"{a.dump}\"; never list or open "
+                 f"what they save), {page_reads.keep_step(a.dump)}so every record it saves "
+                 "again is pinned to the page's own number. Then")
+    where = (f"at version {a.version} in this folder" if a.version is not None
+             else "on the page already, so it is read again first")
+    print(f"app: {kept} is {where}, and what the refused batch would have saved is back in it "
+          f"to be saved again:{first} run the refused command again, once, and send what it "
+          "prints")
     return 0
 
 
@@ -2818,6 +2943,12 @@ def main(argv=None) -> int:
     p.add_argument("dump")
     p.add_argument("--job-chat", dest="job_chat", action="store_true",
                    help="this chat is a big job's own: take only big work, and do it here")
+    p.add_argument("--computer-only", dest="computer_only", action="store_true",
+                   help="this chat was started on the computer for its work: take only work "
+                        "sent to the computer, and do it here")
+    p.add_argument("--lent", action="store_true",
+                   help="a cloud chat lent the computer's browser or folder: its claim is a "
+                        "computer chat's, but it is not a chat listening on the computer")
     p.add_argument("--chat", required=True)
     p.add_argument("--kind", required=True, choices=("cloud", "computer"))
     p.add_argument("--claim-out", dest="claim_out", default=None,
@@ -2940,8 +3071,9 @@ def main(argv=None) -> int:
     p.add_argument("--work", required=True, help="the work item's id")
     p.add_argument("--summary", default="", help="one short sentence of what is ready")
     p.add_argument("--reply-file", dest="reply_file", default="",
-                   help="the answer for the person, shown in the conversation; - reads it "
-                        "from the input")
+                   help="the answer for the person, shown in the conversation (on the card "
+                        "itself for work with none, a change to a draft); - reads it from the "
+                        "input")
     p.add_argument("--thread", default="", help="the conversation (default: the item's own)")
     p.add_argument("--failed", default="", help="it did not finish: why, in plain words")
     p.add_argument("--stopped", action="store_true", help="they tapped Stop: it stops here")
@@ -2972,6 +3104,10 @@ def main(argv=None) -> int:
                    help="a form's question answered (form_answers), in the form's own words: "
                         "its card says Done once each is on it (more than one allowed)")
     p.add_argument("--out", default="", help="where the batch goes (default <dump>/out)")
+    p.add_argument("--outcome", default="", choices=("", "held", "set_aside", "unchanged"),
+                   help="it finished and changed nothing on the page: held, set aside, or "
+                        "unchanged (not possible, or already as asked); its card says so at "
+                        "once, with the summary")
     p.add_argument("--left-out", dest="left_out", default="",
                    help="a draft stopped because the job is not one they can take: why, in "
                         "plain words; the job leaves Jobs, ruled out with that reason")
@@ -3018,7 +3154,12 @@ def main(argv=None) -> int:
                                        "in the folder, then run the command again")
     p.add_argument("dump")
     p.add_argument("record", help="<collection>/<doc id>, as the refusal named it")
-    p.add_argument("version", type=int)
+    p.add_argument("version", type=int, nargs="?", default=None,
+                   help="the version it named; none when it said the record exists and the "
+                        "write carried no version")
+    p = sub.add_parser("versions", help="the versions a read listed, kept in the files it saved")
+    p.add_argument("dump")
+    p.add_argument("lines", nargs="*", help="`<collection>/<doc id> V` (default: the input)")
     a = ap.parse_args(argv)
     if not a.cmd:
         ap.print_help()
@@ -3031,7 +3172,8 @@ def main(argv=None) -> int:
             "start": cmd_start, "published": cmd_published, "resume-saved": cmd_resume_saved,
             "files-saved": cmd_files_saved, "propose": cmd_propose, "listen": cmd_listen,
             "republish": cmd_republish, "pinned": cmd_pinned, "told": cmd_told, "doorbells": cmd_doorbells, "done": cmd_done,
-            "ask": cmd_ask, "wake": cmd_wake, "version": cmd_version, "reads": cmd_reads, "search-drafts": cmd_search_drafts,
+            "ask": cmd_ask, "wake": cmd_wake, "version": cmd_version, "versions": cmd_versions,
+            "reads": cmd_reads, "search-drafts": cmd_search_drafts,
             "follow-ups": cmd_follow_ups, "nested": cmd_nested, "retired": cmd_retired,
             "answer": cmd_answer}[a.cmd](a)
 

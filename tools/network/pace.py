@@ -81,6 +81,22 @@ RETIRED = ("PROFILE_READ_RISK", "PROFILE_READS_PER_HOUR", "PROFILE_READS_PER_DAY
            "PROFILE_READS_PER_RUN", "PROFILE_READ_SKIP_SPARE", "PROFILE_READ_RAMP",
            "CONNECTIONS_PER_WEEK")
 
+# The one rule a chat reading LinkedIn keeps, and the only thing it says about pace, as it does
+# it. A chat on a computer told the person it would leave 15 to 45 seconds between pages, then
+# loaded them about ten seconds apart, several in one turn (2026-11-09): what it said was
+# neither the app's rule nor what it did.
+PACE_RULE = ("One LinkedIn page at a time, each read before the next is opened, with no wait "
+             "set between them; the day's reads stop as soon as LinkedIn shows a check, its "
+             "sign-in page or an empty page.")
+
+
+def say(pages: int) -> str:
+    """What a chat says before it reads, in the person's words: what it does, and nothing
+    about waiting it does not do."""
+    n = max(0, int(pages))
+    return (f"Reading {n} LinkedIn page{'s' if n != 1 else ''} in Claude's browser, one at a "
+            "time; it stops at once if LinkedIn shows a check.")
+
 
 # ------------------------------------------------------------------ the ledger
 

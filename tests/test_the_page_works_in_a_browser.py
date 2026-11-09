@@ -961,7 +961,8 @@ def test_work_goes_to_the_chat_that_answers_the_page_with_nothing_to_choose(run,
     assert "Where long tasks run" not in r["legend"]
     assert not any("work_either" in k for k in r["settingKeys"])
     assert len(r["work"]) == 1 and r["work"][0]["to"] == "computer"
-    assert any("This needs your computer: open Claude on it." in t for t in r["waiting"])
+    assert any("This needs your computer: Claude starts it there when your computer is on." in t
+               for t in r["waiting"])
     on = run("chat_computer", html=pages["sample"], listening=True)
     _clean(on)
     assert not any("open Claude on it" in t for t in on["waiting"]) and on["rings"] >= 1

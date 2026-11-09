@@ -617,3 +617,15 @@ def test_an_old_helper_kept_for_any_reason_brings_the_live_helper_back_to_check(
     assert old in {c["id"] for c in saved["archive"]} and saved["recheck"] is False
     assert run(None, here=old)["recheck"] is False                # never from the old helper
     assert run(None, at=now + dt.timedelta(days=1, hours=1))["recheck"] is False   # a day on
+
+
+def test_session_details_are_read_in_any_shape():
+    """get_session's records handed to `tidy plan` as a plain list were dropped without a word,
+    so it asked for the same chats again and again (2026-11-09). Wrapped, paged or plain, each
+    record is read."""
+    import tidy
+    a = {"id": "session_aaa", "title": "Job search page"}
+    b = {"id": "session_bbb", "title": "Job search: Find jobs"}
+    for shape in ([a, b], [{"ccr": a}, {"ccr": b}], {"ccr": {"data": [a, b]}}, {"data": [a, b]},
+                  [[a], {"ccr": b}]):
+        assert set(tidy.details(tidy._as_pages(shape))) == {"session_aaa", "session_bbb"}, shape

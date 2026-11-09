@@ -1566,6 +1566,25 @@ def unsent_line(chat: str, today: dt.date | None = None) -> str:
     return ""
 
 
+def _computer_lines(b: dict) -> list[str]:
+    """The computer side, for someone who works on one (tools/computer.py): its daily check
+    against the page's database, and the week's runs as measured, once a week (Mondays)."""
+    try:
+        import computer
+        import place
+        if place.works_on() not in ("computer", "both") and not place.has_local():
+            return []
+        today = _d(b.get("date")) or dt.date.today()
+        trend = computer.trend(today) if today.weekday() == 0 else ""
+    except Exception:  # noqa: BLE001  a check never stops the brief
+        return []
+    out = ["computer: python3 tools/computer.py check <page work+beats> --envs "
+           "<list_environments saved> --triggers <list_triggers saved>; do each line"]
+    if trend:
+        out.append(f"the computer's week, one line at the end of the message: \"{trend}\"")
+    return out
+
+
 def claude_lines(b: dict) -> list[str]:
     """For the model only: what it acts on. Never in the message."""
     s = b["sync"] or {}
@@ -1612,6 +1631,7 @@ def claude_lines(b: dict) -> list[str]:
     tidy_line = _tidy_due()
     if tidy_line:
         out.append(tidy_line)
+    out += _computer_lines(b)
     n = setting("news")
     if b.get("watch_due") and n:
         out.append("what the news watches needs writing (%s): read the person's profile, then "

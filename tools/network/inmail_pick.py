@@ -407,8 +407,20 @@ def _waiting_days(cid: str, threads, today: datetime.date) -> int:
     return (today - reqs[-1]).days
 
 
+def window_known(got: dict | None) -> bool:
+    """Is their message window already known, from a reading or the person's word
+    (`reading.py message-check <id> free|credits --by-hand`)? Finding it out means opening
+    the window on LinkedIn, a click no chat makes, so the run picks only where it is known
+    (2026-11-09: two people were picked for an InMail that only a click could confirm, and
+    the run left them connection notes after all)."""
+    import reading
+    return reading.message_window(got) in ("free", "credits")
+
+
 def pick(ids, today: datetime.date) -> list[dict]:
-    """The run's decision over these contacts, kept beside each picked one's draft."""
+    """The run's decision over these contacts, kept beside each picked one's draft: from
+    what is known only. Someone whose message window nobody has seen keeps their connection
+    note (`window_known`)."""
     import reading
     import state
     contacts = state.load_contacts()
@@ -420,8 +432,11 @@ def pick(ids, today: datetime.date) -> list[dict]:
         c = book.get(cid)
         if c is None:
             continue
+        got_ = reading.load(cid) or {}
+        if not window_known(got_):
+            continue
         people.append(dict(c, request_waiting_days=_waiting_days(cid, threads, today)))
-        readings[cid] = reading.load(cid) or {}
+        readings[cid] = got_
     got = choose(people, readings, left=b["inmails_left"], queued=b["queued_unsent"]["inmail"])
     for g in got:
         mark_picked(g["contact_id"], g["why"], today.isoformat())
@@ -449,14 +464,12 @@ def main(argv=None) -> int:
             return 0
         got = pick(a.ids, today)
         if not got:
-            print("inmail: nobody here is worth an InMail now: everyone gets a connection note")
+            print("inmail: nobody here is worth an InMail on what is known: everyone gets a "
+                  "connection note")
             return 0
         for g in got:
-            print(f"  {g['contact_id']}: {card_line(g['why'])}. Their message window is checked "
-                  "first (reading.py extractor --message-check on their page, or their word: "
-                  f"reading.py message-check {g['contact_id']} free|credits --by-hand); then "
-                  "write the InMail and save it: python3 tools/network/inmail_pick.py use "
-                  f"{g['contact_id']} -")
+            print(f"  {g['contact_id']}: {card_line(g['why'])}. Write the InMail and save it: "
+                  f"python3 tools/network/inmail_pick.py use {g['contact_id']} -")
         return 0
     if a.cmd == "use":
         text = sys.stdin.read() if a.file == "-" else open(a.file, encoding="utf-8").read()

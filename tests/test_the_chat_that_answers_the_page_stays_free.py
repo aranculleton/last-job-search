@@ -238,6 +238,9 @@ def test_a_claim_keeps_the_chats_busy_line_and_never_writes_the_work_id(search):
     search.put("beats", "cloud-1", {"kind": "cloud", "title": "Job search (cloud)",
                                     "seen_at": "2026-10-25T17:00:00Z", "busy": "draft~9"},
                version=5)
+    # The folder holds the first claim now (a claim is kept in it as landed): the item is put
+    # back in the queue for a second look.
+    search.put("work", "talk~1", _w("talk"), version=2)
     got = json.loads(search.run("next", search.dump, "--chat", "cloud-1", "--kind", "cloud",
                                 "--claim-out", out, "--now", NOW))
     _, beat = _writes(got["batches"])[("beats", "cloud-1")]

@@ -110,10 +110,10 @@ Every rule below is enforced in code; each section further down has the detail.
   Premium (`schema.LIMITS`, from `LINKEDIN_PLAN`), hard: `compose.py` raises, never
   truncates.
 - No LinkedIn profile is ever fetched from a session, and LinkedIn's job search **stays
-  on**: only the person switches it off, never a session. Profiles are read by the person's
-  own page, in the Claude desktop app's browser, never by a chat, whatever browser the chat
-  has (`reading.route`): a chat queues them (`reading.py queue-page`), and what the page
-  reads comes back as one rewrite of every waiting note.
+  on**: only the person switches it off, never a session. LinkedIn is never fetched over the web (WebFetch, curl): it is read only in the signed-in browser on the person's computer, by
+  their own page in the Claude desktop app or by a chat there that has that browser; which of
+  them reads is `reading.route`'s to say. A chat that queues them for the page
+  (`reading.py queue-page`) gets back what it read as one rewrite of every waiting note.
 - Never claim anything not in `profile/01-candidate-profile.md`.
 - **A LinkedIn download the person gives is taken first**, before anything is written from
   it: `python3 tools/network/export.py take <the ZIP or its folder>` saves it and imports its
@@ -274,11 +274,12 @@ stops a read (LinkedIn's own signals; the app sets no limit of its own):
 - **Their profile** is read by the person's page, open in the Claude desktop app and signed
   in to LinkedIn there, unless `PROFILE_READS` in `profile/networking.py` is `"paste"` or
   `"off"` (unset, it reads); otherwise it comes from them (a paste, LinkedIn's Save to PDF,
-  or screenshots from the app, transcribed word for word). No chat reads LinkedIn, whatever
-  browser it has: a chat reading pages put each profile into its own context, the costliest
-  part of a run, where the page reads them for nothing (2026-10-29). This session never
-  fetches LinkedIn itself either: its robots.txt disallows every crawler it does not name and
-  a profile request answers HTTP 999.
+  or screenshots from the app, transcribed word for word). LinkedIn is never fetched over the
+  web (WebFetch, curl): its robots.txt disallows every crawler it does not name and a profile
+  request answers HTTP 999. It is read only in the signed-in browser on the person's
+  computer, by their page or a chat there (`reading.route` says which); a chat reading pages
+  puts each profile into its own context, the costliest part of a run, where the page reads
+  them for nothing (2026-10-29).
 - **Fewer, better-spent reads.** Free sources make the list, one-page reads screen it, and a
   profile read goes only to the few the person will write to today; read, judge, next. A
   first note with nothing read is refused unless the person chose card-only. No change to
@@ -433,8 +434,11 @@ on Premium. That is the shape, and `first_note()` assembles it:
   every kind of message.
 - **The company limit holds at the draft too.** `reading.PER_EMPLOYER` people at one
   employer (two, or the person's `PEOPLE_PER_EMPLOYER` in `profile/networking.py`) while
-  nobody there has answered, counting those waiting on a reply and the notes already queued:
-  `reading.employer_full_line()` is the one test, read by the short list, every draft saved
+  nobody there has answered, counting those waiting on a reply and the notes already queued.
+  Someone waiting holds their place only by the person's follow-up rule, counted from the last
+  contact (`reading.waiting_until`, or their `EMPLOYER_WAIT_DAYS`); with no date at all, not at
+  all. The day each employer opens again is on the page under Your rules, "Held back for now"
+  (`python3 tools/holds.py`). `reading.employer_full_line()` is the one test, read by the short list, every draft saved
   and `reading.py batch`. When the person wants more at one employer, keep their word for
   it: `reading.py more-at "<Employer>" --said "<their words>" [--up-to <n>]` (kept in
   `profile/more_at.json` and recorded as theirs); every refusal prints that line.
@@ -639,10 +643,11 @@ Career) and expire after 90 days, so that number beats the count from the log. A
 Open Profile (their profile shows a Message button), and everything else is a connection
 request. **The Message button looks the same for an Open Profile and for an InMail that
 spends a credit**: which one shows only in their message window
-(`claude_surfaces.py steps linkedin-open-profile`). So before an InMail is drafted, run
-`reading.py extractor --message-check` on their page (it opens the window, types nothing,
-closes it) and keep what it returned with `reading.py message-check <id> <output>` (or the
-person's word, `free` or `credits`, with `--by-hand`). A draft is saved only for someone
+(`claude_surfaces.py steps linkedin-open-profile`). An InMail is drafted only where that
+is already known: what the person saw or says (`reading.py message-check <id> free|credits
+--by-hand`), or a reading that holds it. The run never opens the window itself, a click no
+chat makes, and `inmail_pick.py pick` weighs only people whose window is known (2026-11-09).
+A draft is saved only for someone
 who will get it: free goes as an Open Profile message (channel `open_profile`, no credit);
 one that needs a credit only while the credits left this month cover it beside the InMails
 already drafted; and none before the check. 14 InMails were drafted on a guess and 2 went
@@ -1060,6 +1065,14 @@ almost always one.
   --referred-by --note]` adds someone not in the book (a recruiter who wrote first, a name
   passed on), never a second row: someone already there is named, and a name close to one at
   that employer is asked about (`--new` when it is someone else)
+- `candidates.py check <file> ... [--company C] [--want N] [--add] [--shortlist]` is who to
+  write to from a people search in one call: the headline filter on the person's settings,
+  every list check (the per-employer limit included), the ranking by who is likeliest to
+  help, and the list filled to N, widening rather than padding (`candidates.py employers`,
+  `candidates.py search "<employer>" --place "<city>"`; `reading.py place-ids
+  "<City>=<number>"` keeps a place's location number once)
+- `state.py hold <id> --until "<condition>"` holds the draft waiting for someone already in
+  conversation, kept as `draft.held.md` and never over another; `--release` puts it back
 - `state.py received <id> --text-file <file>` logs their message as it came (`--scenario`,
   `--date`, `--channel`), never written into the log by hand; the same words already logged
   are refused, on any day for a message of a sentence or more

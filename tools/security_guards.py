@@ -199,7 +199,7 @@ ALLOWED_IGNORE_NEGATIONS = {
 # executed on session start:
 # https://research.jfrog.com/post/shai-hulud-is-back-august/
 LEARNED_HOOK = 'sh "${CLAUDE_PROJECT_DIR}"/tools/py.sh "${CLAUDE_PROJECT_DIR}"/tools/learned.py hook'
-ALLOWED_HOOKS: set[str] = {f"UserPromptSubmit:{LEARNED_HOOK}", f"Stop:{LEARNED_HOOK}"}
+ALLOWED_HOOKS: set[str] = {f"UserPromptSubmit:{LEARNED_HOOK}", f"Stop:{LEARNED_HOOK}", f"PostToolUse:{LEARNED_HOOK}"}
 
 FORBIDDEN_SCRIPTS = {"preinstall", "install", "postinstall", "prepare", "prepack"}
 
@@ -236,6 +236,7 @@ ALLOWED_ENV = {"PYTHONUTF8": "1", "GIT_TERMINAL_PROMPT": "0", "GCM_INTERACTIVE":
 ALLOWED_SKILL_TOOLS = {
     ".claude/skills/app/SKILL.md": {
         "Read", "Bash(python3 tools/app.py *)", "Bash(python3 tools/routines.py *)",
+        "Bash(python3 tools/computer.py *)", "mcp__claude-code-remote__list_environments",
         "Bash(python3 tools/tidy.py *)", "ArtifactData", "Artifact", "ArtifactComments", "Agent",
         "mcp__claude-code-remote__create_session", "mcp__claude-code-remote__send_message",
         "mcp__claude-code-remote__list_sessions", "mcp__claude-code-remote__get_session",

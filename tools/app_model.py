@@ -732,7 +732,12 @@ def _person(ctx: Ctx, targets: dict) -> dict:
         import place
         owner, folder = ctx.repo
         repo = f"{owner}/{folder}" if owner else ""
-        computer = place.works_on() in ("computer", "both")
+        # Known ready, never only said: "Find people" goes to the computer on this (the page's
+        # peopleTo), and sent there with no computer that could take it, it waited for good
+        # (the release review, 2026-11-09).
+        import computer as _computer
+        computer = _computer.reads_there(place.place_record(), ctx._got.get("computer") or {},
+                                         ctx.now)
     except Exception:  # noqa: BLE001
         pass
     return {"first_name": first, "doc_noun": noun, "time_zone": zone, "repo": repo,
@@ -795,12 +800,25 @@ def _needs_you(ctx: Ctx, targets: dict) -> list:
         out += _inmail_ask(ctx, targets)
         out += _tweak_offers(ctx, targets)
         out += _remade_cards(ctx, targets)
+        out += _computer_card(ctx, targets)
     except person.NoProfile:
         pass
     ups = app_setup.upgrade_questions(targets)
     if any(x["id"] == "q-own-profile" for x in out):
         ups = [x for x in ups if x["id"] != "q-upgrade-own-profile-review"]
     return out + ups
+
+
+def _computer_card(ctx: Ctx, targets: dict) -> list:
+    """One card, only while work for the computer waits and only the person can move it
+    (tools/computer.py state, `card`): the computer off, LinkedIn signed out there, or the
+    computer not yet switched on for Claude. Nothing else about the computer reaches To do."""
+    import computer
+    item = computer.card(ctx._got.get("computer") or {})
+    if not item:
+        return []
+    targets[item["id"]] = {"kind": "outside", "key": "computer", "rev": item["rev"]}
+    return [item]
 
 
 TWEAK_OFFERS_MAX = 2
@@ -4753,6 +4771,15 @@ def _where(ctx: Ctx, targets: dict) -> dict:
                                                                 "is set up."} if computer else
                     {"state": "optional", "since": None,
                      "say": "Only if you keep files on your computer for Claude."})
+    seen = ctx._got.get("computer") or {}
+    if seen.get("state"):
+        # Its heartbeat in the page's database (tools/computer.py): one line, at most one
+        # action, worked out once in the engine and only drawn by the page.
+        computer_row = {"state": "ready" if seen["state"] in ("ready", "working") else
+                        seen["state"], "since": computer, "say": seen["line"],
+                        "name": seen.get("computer") or None,
+                        "steps": (seen.get("action") or {}).get("steps") or [],
+                        "action": (seen.get("action") or {}).get("label") or None}
     try:
         reg = routines.load()
     except Exception:  # noqa: BLE001
@@ -5526,6 +5553,14 @@ def _rules(ctx: Ctx, targets: dict) -> dict:
     line = rules_view.review_line(rows, ctx.today)
     out = {"id": "your-rules", "rows": rows, "brief_line": line,
            "still_right": sum(1 for r in rows if r["still_right"])}
+    # What is held back today and every rule that holds anything, each one plain line with
+    # its day or its reason and its override (tools/holds.py): an employer was shut 45 days
+    # and nothing said so or when it would open (the maintainer, 2026-11-09).
+    import holds
+    out["held"] = [{k: h[k] for k in ("id", "rule", "what", "until", "line", "say")}
+                   for h in holds.live(ctx.today)]
+    out["every_hold"] = [{"id": r["id"], "area": r["area"], "line": r["line"]}
+                         for r in holds.rules()]
     out["rev"] = rev_of(out["id"], line, out["still_right"])
     targets["your-rules"] = {"kind": "your_rules", "rev": out["rev"]}
     return out
@@ -5559,7 +5594,8 @@ EMPTY = {
                              "rev": "none"}},
     "learned": [], "help": {"tip": None, "tour": [], "off": False}, "resume": None,
     "search": None, "where": None, "schedule": None, "upcoming": [],
-    "rules": {"id": "your-rules", "rows": [], "brief_line": None, "still_right": 0, "rev": "none"},
+    "rules": {"id": "your-rules", "rows": [], "brief_line": None, "still_right": 0, "held": [],
+              "every_hold": [], "rev": "none"},
     "jobs": {"round": "", "made_at": None, "met": False, "summary": "No search has run yet.",
              "rows": [], "filtered": {"count": 0, "groups": []}},
     "done": {"counts": {"applied": 0, "interviews": 0, "offers": 0, "replies": 0},
@@ -5574,7 +5610,7 @@ EMPTY = {
 
 def build(today: dt.date | None = None, now: dt.datetime | None = None,
           only=None, shown: dict | None = None, full: dict | None = None,
-          work_time: dict | None = None) -> tuple[dict, dict]:
+          work_time: dict | None = None, computer: dict | None = None) -> tuple[dict, dict]:
     """(the model, what each item id stands for in the repo). `only` builds just those
     sections, for an applier that needs one item's rev and not the whole page. `shown` is
     {suggestion id: the day it first showed} from the page's database, so at most three new
@@ -5586,6 +5622,9 @@ def build(today: dt.date | None = None, now: dt.datetime | None = None,
     ctx = Ctx(today, now)
     # This copy's own work times, for a cost said on an item (a pasted profile's rewrite).
     ctx._got["work_time"] = dict(work_time or {})
+    # The computer as the page's database says it (tools/computer.py state), from `app.py
+    # view`: its row in Settings and, while computer work waits on the person, one card.
+    ctx._got["computer"] = dict(computer or {})
     targets: dict = {}
     model = {"model": MODEL, "made_at": stamp(now), "rev": ""}
     for name in SECTIONS:

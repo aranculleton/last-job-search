@@ -350,3 +350,27 @@ def test_an_archive_refused_is_tried_again_never_handed_to_the_person(copy, tmp_
     assert f"archive {DESK}" in said, said
     line = next(ln for ln in said.splitlines() if "refused" in ln)
     assert "never asked of the person" in line and '"delay_minutes": 31' in line, line
+
+
+def test_every_chat_the_app_starts_asks_for_auto(monkeypatch):
+    """A fresh page helper and a big job's chat start in Auto, never Manual: both started in
+    Manual and stopped on permission prompts while the person was away (the maintainer,
+    2026-11-09). The line that hands the call over says what to do when the mode is refused."""
+    import app
+    import app_listen
+    import app_setup
+    now = dt.datetime(2026, 11, 6, 9, 20, tzinfo=dt.timezone.utc)
+    rec = {"chat": LIVE, "helper": True, "since": "2026-11-05T09:00:00Z",
+           "answered_at": "2026-11-05T09:15:00Z"}
+    monkeypatch.setattr(app_listen, "chat_kind", lambda: "cloud")
+    monkeypatch.setattr(app_setup, "origin", lambda: ("example-owner", "example-copy"))
+    monkeypatch.setattr(app_listen, "history_tokens", lambda: 720_000)
+    call = app_listen.renewal(rec, {"work": {}}, LIVE, now)
+    assert call["permission_mode"] == "auto"
+    line = app_listen.renew_line(call)
+    assert '"permission_mode": "auto"' in line and "without permission_mode" in line
+    monkeypatch.setattr(app_setup, "page_record", lambda: {"url": "https://claude.ai/x"})
+    job = app.where_it_runs({"heavy": True, "kind": "search", "title": "Find jobs",
+                             "work": "work/search~example"}, LIVE,
+                            "cloud")
+    assert job["create_session"]["permission_mode"] == "auto"

@@ -384,8 +384,9 @@ METHODS: dict[str, dict] = {
             (80, "2026-11-06", False, "a new resume and letter are named the person, the employer, then the document (<Prefix>_<ABBR>_Resume, <Prefix>_<ABBR>_Cover_Letter); one made before keeps its name and every reader finds both orders; the file you download or send is named by Settings, File names; nothing made before needs making again"),
             (81, "2026-11-06", False, "the landing steps unsubscribe from a save's pull request as soon as it is opened, before its merge, so a save no longer wakes the chat twice more"),
             (82, "2026-11-06", False, "a general resume's summary goes through the grounding audit's own questions, a written one with its claim map (stage_picks.py general --claims-file), and one questioned is never made; its draft is kept (documents/cv/general/draft.json) so the pencil changes its bullets, its look and its summary as an application's, the summary through both audits, which ask a general draft only grounding questions; one made before has no pencil until a fresh one is made, and nothing made before needs making again"),
+            (83, "2026-11-09", False, "a hold on a contact with no end day lifts on the day beside it; the runbook says where every hold is listed"),
         ),
-        "fingerprint": "f285a8033e8cb7ae",
+        "fingerprint": "c2c9ce3007f5a1b9",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -473,6 +474,7 @@ METHODS: dict[str, dict] = {
                   "tools/network/discovery.py", "tools/network/openalex.py", "tools/network/schema.py",
                   "tools/network/sources.py", "tools/network/why.py", "tools/network/export.py",
                   "tools/network/surface.py", "tools/network/inmail_pick.py",
+                  "tools/network/candidates.py",
                   ".claude/skills/networking/*", ".claude/commands/network.md",
                   ".claude/commands/reply.md"),
         "versions": (
@@ -579,8 +581,10 @@ METHODS: dict[str, dict] = {
             (84, "2026-11-06", False, "the LinkedIn download is asked for weekly while the person has sent notes or messages in the last two weeks, every two weeks otherwise, or as they chose (EXPORT_REMIND: every two weeks, every month, or not at all), worked out once in export.every_days and said so in /network; put away from its trash, the next ask counts from that day; nothing older needs redoing"),
             (85, "2026-11-06", False, "a logged resume or letter is known by either order of its name (<Prefix>_<ABBR>_Resume, or <Prefix>_Resume_<ABBR> before); nothing older needs redoing"),
             (86, "2026-11-06", True, "a follow-up code cannot write goes to Claude after it looks for something new (their profile as read, news and roles at their employer, the person's own profile), never to the person as a question, and a question an older run asked is taken back; a rule about not repeating a message never switches plain follow-ups off; a plain follow-up varies its opener, greets a name with a leading initial by the given name and goes to Claude to fit the person's own message rules; a contact whose log holds only our request and their acceptance reads as connected"),
+            (87, "2026-11-09", False, "someone waiting holds their employer by the person's follow-up rule from the last contact (or EMPLOYER_WAIT_DAYS), never a fixed 45 days from the first note, and with no date not at all"),
+            (88, "2026-11-09", False, "who to write to is one call (candidates.py check): the search result's headline is filtered on the person's settings (a recruiter for another function is out), every list check runs at once, the per-employer limit included in the one surfacing check, and the list is ranked by who is likeliest to help and filled to the number asked, widening to more employers rather than padding; the InMail chooser picks only from what is known; LinkedIn is never fetched over the web and read only in the signed-in browser on the person's computer; a draft is held with state.py hold, never over another; the people already found need nothing redone"),
         ),
-        "fingerprint": "0e51ed6a3bbe66c9",
+        "fingerprint": "0df3884dfafcd9ea",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
@@ -638,8 +642,10 @@ METHODS: dict[str, dict] = {
             (40, "2026-11-05", False, "reading.py linkedin-check says whether today's look at LinkedIn's sign-in is passed, signed-out or due, on the person's own day, and signin --page opens nothing once the day has passed; notes are written as before"),
             (41, "2026-11-05", False, "a note written keeps beside it what of the person's messages it answers, so one they send later sets it aside; notes are written as before"),
             (42, "2026-11-05", False, "a note to someone the person has already talked to (a follow-up or a reply) never opens on WAITS ON A READ, and a follow-up takes the place of a first note left marked from before the conversation"),
+            (43, "2026-11-09", False, "the company limit counts someone waiting only by the person's follow-up rule from the last contact; a note with no date holds nothing"),
+            (44, "2026-11-09", False, "a batch on the person's own approved recipe saves: the opening and closing lines of the notes they approved, every variant, and any shape two of them share are theirs to repeat; a profile read takes its Experience page too where LinkedIn's newer layout keeps it apart; place-ids keeps a place's location number; notes already saved need nothing redone"),
         ),
-        "fingerprint": "b316aab37b404c88",
+        "fingerprint": "cae31d327c4c1ed5",
     },
     "screening": {
         "by": "round", "priority": 2,
@@ -695,8 +701,9 @@ METHODS: dict[str, dict] = {
             (39, "2026-11-05", False, "a job title written in two languages (\"Data Analyst // Analyste de données\") is in the one you work in: the title gate and the screen no longer cut it as the other, and whether that language is required is read from the posting; a ruling made on such a title is released by itself, and the title gate's drops are decided again on every round, so nothing needs redoing; a kind of employer you ruled out can be turned back on from Your rules (search.py BAR_EXCLUDED_OFF)"),
             (40, "2026-11-05", False, "a referral in progress keeps its employer's roles in the filter before scoring as in the throttle, one rule for both (throttle.employer_stops), each carrying a note never to apply cold; a skip for it was never kept, so nothing needs redoing"),
             (41, "2026-11-05", False, "a live contact or an earlier interview is counted before the top of the scale, not added after it, so the strong roles at one employer keep their order instead of all reading 100; nothing is screened differently"),
+            (42, "2026-11-09", False, "a do-not-target entry with no review day stops 90 days after it was recorded, and with no date at all holds nothing; an application with no date holds its employer back for no time"),
         ),
-        "fingerprint": "d78ed8da1d32958f",
+        "fingerprint": "a6437c6b769c6f40",
     },
     "routines": {
         "by": "you", "priority": 3, "applies": "routines",
@@ -745,8 +752,10 @@ METHODS: dict[str, dict] = {
             (38, "2026-11-06", False, "a hand-over from an earlier day in the person's own zone no longer holds the next day's fresh helper: an old helper put away by hand left the hand-over open, and the first page update of the morning asked for no fresh helper"),
             (39, "2026-11-06", False, "a finished job chat whose work never reached GitHub is asked once to save it (land.py --keep), and if it still is not there its work's own card says plainly that it was lost, with Try again, once, and the chat is put away; it no longer sits in the list with nothing said"),
             (40, "2026-11-07", False, "after a hand-over the new page helper comes back half an hour on whenever it kept the old one, for any reason: one kept because git could not yet say its save was on master stayed in the list all day"),
+            (41, "2026-11-09", False, "tidying reads chats' details however they arrive (a plain list was dropped, so the same chats were asked for again), and every chat the app starts asks for Auto"),
+            (42, "2026-11-09", False, "the chats the app starts on your computer, \"Job search \u00b7 <job> \u00b7 <computer>\", are known as the app's by the daily tidy-up"),
         ),
-        "fingerprint": "b8cb5356d8fa947a",
+        "fingerprint": "696b4c394155101c",
     },
     "expand": {
         "by": "upgrade", "priority": 4, "time": "~15 min",
@@ -856,8 +865,11 @@ METHODS: dict[str, dict] = {
             (81, "2026-11-06", False, "a toast shows its time left as a ring round its close, two at most with the rest counted; a job tapped keeps its place on Jobs while the person stays; a job left out as not a fit says why in Claude's work and never offers Try again"),
             (82, "2026-11-06", False, "one card left over is shown in place, never folded, on To do and on Jobs, and a fold at a list's end is a quiet line, never a bar the width of the page"),
             (83, "2026-11-07", False, "a laptop's Brief panels use the room their row gives them: a short list's rows each in a soft box and spread a step apart, the pills just under a panel with little to show, Your progress's chart grown into its room, and Jobs' new jobs headed \"New, best fit first\" under its drafts' line; two panels of one row as tall as each other give way together; in a prep's folded sections a note to you is a quieter line under the words it is about, never a bullet among the words to say; a referral's end is one tap a choice (turned down, withdrew, not happening, Something else opening the person's box), also first in their trash while it is in flight, and the other choose-then-Save sheets are buttons; an interview had and waiting to hear reads \"You had it 2 Nov\" below what is ahead, counted apart by the engine, with a long stored round name titled short; Help Claude do more sits right after today's things with what it gives; a note waiting for their profile says once when it is read (the page's own reading, in the Claude app on a computer), with Paste beside it gauged as one note's rewrite; everyone waiting is one To do card, never rows of Messages to send; a character count is grey within its limit, amber only while editing near it, red over"),
+            (84, "2026-11-09", False, "Settings, Your rules: Held back for now, what the person's rules hold back today with the day each opens and what lifts it, and every rule that holds anything one tap below"),
+            (85, "2026-11-09", False, "Settings shows your computer in one line from how it last checked in (off, signed out of LinkedIn, not switched on, or ready), with the steps only where you are needed, and one To do card only while work waits for it; Find people goes to your computer once it is set up or has checked in lately, and its card says where it is starting"),
+            (86, "2026-11-09", False, "a change that finished with nothing changed (held, set aside, not possible) says so on its card at once, with Claude's own answer where it wrote one, never a spinner waiting for a new version; one whose new version is late stops spinning after a few minutes; a person whose draft a change set aside is never told \"Reply written\"; a message to Claude carries its words on its work item"),
         ),
-        "fingerprint": "2878f053befd22c2",
+        "fingerprint": "928ca4212d52fe76",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",
@@ -885,6 +897,8 @@ KEEPS_NOTHING: dict[str, str] = {
     "plugin/*": "the optional front door on a computer: finds or makes the person's copy and "
                 "hands over to it, and keeps nothing of its own",
     "tools/dates.py": "reads a date; every tool that keeps something is versioned where it keeps it",
+    "tools/holds.py": "says what the person's rules hold back today and when each ends, worked "
+                      "out afresh from their files on every page build; keeps nothing",
     "tools/offline_boards.py": "a test seam: canned board answers inside a test, nothing kept",
     "tools/try_personal_tests.py": "the maintainer's pre-release check; reads a copy, keeps nothing",
     "tools/rehearse_sync.py": "the maintainer's pre-release rehearsal of a sync on throwaway "
@@ -969,6 +983,10 @@ KEEPS_NOTHING: dict[str, str] = {
                            "every wake",
     "tools/helper_usage.py": "a log of what answering the page cost, added to as it goes; "
                              "nothing it made before is made again",
+    "tools/computer.py": "routes work for the computer and writes its heartbeat, its run log "
+                         "and the setup's dated mark as it goes; nothing it made before is "
+                         "made again (the computer stage itself is the computer-linkedin "
+                         "profile upgrade)",
     "tools/app_actions.py": "writes the person's own answers through confirm, exclude, state.py, learned and settings; nothing it wrote is remade",
     "docs/images/*": "the README's pictures, from the test sample, each named after its own contents (tools/readme_pictures.py); never in a person's search",
     "tools/app_listen.py": "names the one chat that answers the page, in the page's own database and a record in the git folder that is never committed; read afresh at every start",

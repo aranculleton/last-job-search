@@ -394,10 +394,14 @@ def test_a_finished_or_stalled_job_frees_its_lock():
 def test_the_chat_that_answers_the_page_takes_its_work_and_a_brief_waits_for_the_cloud():
     """One chat answers the page (tools/app_listen.py), so work never waits for a chat of the
     other kind: a setting that sent it there stranded it (4.3). Only a brief, which comes with
-    the computer off, waits for a chat in the cloud."""
+    the computer off, waits for a chat in the cloud. A LinkedIn read sent to the computer is
+    the other exception: a cloud chat claimed one and closed it with "Can't read LinkedIn
+    from here" (2026-11-09), so it waits for a chat with the computer's browser."""
     now = app_model.parse_time(NOW)
     assert page_db.next_item(_db(("s1", _w("search", to="cloud"))), "computer", now)["work"] == "s1"
     assert page_db.next_item(_db(("s1", _w("search", to="computer"))), "cloud", now)["work"] == "s1"
+    assert page_db.next_item(_db(("n1", _w("network", to="computer"))), "cloud", now) is None
+    assert page_db.next_item(_db(("n1", _w("network", to="computer"))), "computer", now)["work"] == "n1"
     only_brief = _db(("b1", _w("brief", to="computer")))
     assert page_db.next_item(only_brief, "computer", now) is None
     assert page_db.next_item(only_brief, "cloud", now)["work"] == "b1"
@@ -429,6 +433,11 @@ def test_next_writes_its_claim_pinned_with_its_locks(search):
     # (`locks`) has no version a write to `holds` can be pinned to, and is moved instead.
     search.put("holds", "emp~kestrel_mutual", {"work": "draft~old", "until": "2026-10-24T00:00:00Z"},
                version=2)
+    # The other chat's own read, made at the same moment (the claiming chat's folder holds its
+    # claim as landed once it is made).
+    import shutil
+    theirs = search.dump.rstrip("/\\") + "-other"
+    shutil.copytree(search.dump, theirs)
     out = search.run("next", search.dump, "--chat", "cloud-1", "--kind", "cloud",
                      "--now", NOW, "--claim-out", os.path.join(search.dump, "claim"))
     got = json.loads(out)
@@ -438,7 +447,7 @@ def test_next_writes_its_claim_pinned_with_its_locks(search):
         ("work", "draft~abc", 5), ("holds", "emp~kestrel_mutual", 2), ("beats", "cloud-1", None)]
     # A chat of the other kind may be offered the same item; the claim is pinned to version 5,
     # so only one write of the two can win.
-    again = json.loads(search.run("next", search.dump, "--chat", "c2", "--kind", "computer",
+    again = json.loads(search.run("next", theirs, "--chat", "c2", "--kind", "computer",
                                   "--now", NOW))
     assert again["work"] == "draft~abc" and again["version"] == 5
 

@@ -21,7 +21,8 @@ first:
    search cannot prove someone has no profile, and nothing is fetched.
 4. **A read on their page**, open in the Claude desktop app on their computer: the profiles
    of the people being written to, each with its Experience and Education pages, one at a
-   time (step 5). No chat reads LinkedIn, whatever browser it has.
+   time (step 5). LinkedIn is never fetched over the web (WebFetch, curl): it is read only in
+   the signed-in browser on the person's computer.
 5. **A paste or screenshots from them**, for the best `reading.HAND_TOP` (3) at most, and only
    where they chose to paste profiles ("I paste them" in the page's Settings). It is never
    how the list is made, and never asked for everyone.
@@ -29,10 +30,64 @@ first:
 The run presents the whole ranked list from rungs 1 to 3 without waiting for any read.
 Rungs 1 to 3 use no LinkedIn account at all (a web search engine and their own file), so
 they cannot get anyone restricted; that is what makes the list faster than searching
-LinkedIn by hand without adding any risk. Only rung 4 uses their account, on their page:
-read only, one page at a time, and it stops at LinkedIn's first signal.
-Nothing is sent, clicked, connected or submitted by any rung; the person acts.
-LinkedIn is never fetched from a session.
+LinkedIn by hand without adding any risk. Only rung 4 uses their account, in the signed-in
+browser on their computer: read only, one page at a time, and it stops at LinkedIn's first
+signal. Nothing is sent, clicked, connected or submitted by any rung; the person acts.
+LinkedIn is never fetched over the web (WebFetch, curl) from any session.
+
+## The run, in order: commands only
+
+"Find N people" is this, in this order, each step a command with its own output. Never read
+the app's code mid-run: if a step needs something no command prints, that is a bug to
+report, not a file to open. `N` is the number asked (`args.count`, 5 when not given) and it
+is a target: the run keeps going until N are found and drafted. On a page work item, pin
+each stage as it starts (`python3 tools/app.py pin "$D" --work <id> --chat <id> --stage
+<start|find|read|write|check> --done <found so far> --total <N> --line "<one plain line>"`),
+and again every ten minutes on a long one, so the page shows the stage, the count and the
+time honestly.
+
+1. **start.** `python3 tools/learned.py brief people` and `brief targets` (who they want, in
+   their words), and the queue an earlier run left (step 1 of "Run it", below).
+2. **Who can help** is the person's settings, never a guess: their titles (`TITLE_SETS`,
+   `FUNCTION_TITLE`), their city (`HOME_CITY`), their bar (`tools/bar.py`), the kinds of
+   reader who answer them (`REPLY_RATES`, else their message log), recruiters near their
+   function (`RECRUITER_NEAR`), and what never to show (`SKIP_HEADLINES`, the employers
+   they declined, anyone written to). The employers: the ones they named, else `python3
+   tools/network/candidates.py employers`.
+3. **find: search for exactly those people.** `python3 tools/network/candidates.py search
+   "<employer>" ... --place "<their city>"` prints the LinkedIn people searches, one for each
+   kind of reader that helps, best-answering first, narrowed to the employer's company
+   number and the place's location number, each kept once (`reading.py company-ids
+   "<Employer>=<number>"`, `reading.py place-ids "<City>=<number>"`; a profile read gives
+   employer numbers by itself). Open each in the signed-in browser on the person's computer,
+   run `python3 tools/network/reading.py extractor --list` on it and save what it returns. No
+   web search while these work; where no browser is here, the ladder's rungs 1 to 3 (step 3
+   of "Run it") make the list instead.
+4. **Check everyone at once:** `python3 tools/network/candidates.py check <file> ...
+   --company "<employer>" --want <N> --json > found-<employer>.json`. One call filters on the
+   headline (a recruiter for a function not theirs is out), runs every list check (written
+   to, closed, held, declined, the employer's limit counting the people already waiting
+   there, where they live when the result says, twice on one list), and ranks by who is
+   likeliest to help. Never put anyone on the list it left out.
+5. **Keep going until N.** While it prints `short:`, take the next employer it names, search
+   (step 3) and check again. Never pad with weaker fits. Only when `candidates.py employers`
+   has none left is the run short: say so honestly, how many of N and why
+   (`sources.short_batch`).
+6. **Fix the list, in one save:** `python3 tools/network/candidates.py check found-*.json
+   --want <N> --add --shortlist`. It adds everyone chosen to the contact book (never a second
+   row) and puts them on today's short list, best first. One person met another way:
+   `python3 tools/network/state.py add "<name>" --company "<employer>"`.
+7. **read: their profiles, now and only now, in one batch,** to confirm and personalise
+   (step 5 of "Run it": `reading.py next`, then the profile and its Experience page in one
+   read; or queued for the page). A read that rules someone out: `reading.py skip <id>
+   --reason "<why>"`, and the next from step 6's ranking takes their place, already checked.
+8. **write: every note in one pass,** after `python3 tools/learned.py brief messages
+   --channel connection --reader <reader>`: their approved notes are the recipe, and a batch
+   on it saves. Save the batch in one call: `python3 tools/network/reading.py drafts
+   <file.json>`.
+9. **check:** `python3 tools/network/inmail_pick.py pick <ids>` (from what is known only),
+   then the page's finish (`app.py done`). Someone already in conversation whose draft must
+   wait: `python3 tools/network/state.py hold <id> --until "<condition>"`.
 
 ## Run it
 
@@ -198,11 +253,14 @@ LinkedIn is never fetched from a session.
    mixes kinds instead of running one. The search tool sometimes declines a people query:
    never rephrase it to get round that; the next kind in the plan carries the run.
 
-   A run the page asked for brings back `args.count` people at most (5 when not given),
-   never more than can be sent: the person chose how many (2026-10-30).
+   A run the page asked for brings back `args.count` people (5 when not given), never more
+   than can be sent: the person chose how many (2026-10-30). The number is a target, not a
+   hint: a run asked for ten stopped at eight (2026-11-09). When one employer's searches are
+   spent, the run widens to the next employer (`candidates.py employers`), and goes on
+   until the number is found and drafted.
 
-   **When the searches the budget allows are spent and the batch is not full, stop and say
-   so**, with `sources.short_batch(found, wanted, tried, have_connections, browser, named)`:
+   **Only when no employer that clears their bar is left and the batch is not full, stop and
+   say so**, with `sources.short_batch(found, wanted, tried, have_connections, browser, named)`:
    how many it found of how many it could send (`named` is everyone kept, when more than
    those with enough known for a note), what each kind returned, and the ways to more
    people that are the person's own. Never pad the batch with weaker names.
@@ -281,10 +339,11 @@ LinkedIn is never fetched from a session.
       `python3 tools/network/reading.py queue-page <ids, best first>`, then write each note
       from what is known now (the card, the public findings) with `reading.py draft <id> -
       --wait-for-read` (step 7): saved under `WAITS ON A READ`, shown to the person as
-      waiting on their profile, and never sent as it stands. Nothing is waited for, and this
-      chat never opens linkedin.com, whatever browser it has: a chat reading profiles put each
-      page into its own context, the costliest part of a run, and the page reads them for
-      nothing. The page reads each person's profile, then their Experience and Education
+      waiting on their profile, and never sent as it stands. Nothing is waited for. LinkedIn
+      is never fetched over the web (WebFetch, curl): it is read only in the signed-in browser
+      on the person's computer, and a cloud chat queues the reads for the page, which reads
+      them for nothing (a chat reading profiles puts each page into its own context, the
+      costliest part of a run). The page reads each person's profile, then their Experience and Education
       pages, when it is open in the Claude desktop app, by itself; signing in and LinkedIn's
       checks are its own to handle, on the page, once a day and without opening Claude's
       browser by itself (`reading.py linkedin-check` says whether today's look is due). Each read arrives as a `reading.done` action,
@@ -404,7 +463,9 @@ LinkedIn is never fetched from a session.
      same close in many notes is what is caught.
      `reading.py batch` runs the same check on the queue alone.
      Their opener, `ABOUT_ME` and `ASK` are theirs to repeat, unless `VARY_ABOUT_ME` in
-     `profile/networking.py` says the background line is chosen per person. When a common ground already names an employer, the about-me line
+     `profile/networking.py` says the background line is chosen per person, and so is their
+     own recipe: the opening and closing lines of the notes they approved (`learned.py
+     approved`), every variant, and any order or shape two of those notes share. When a common ground already names an employer, the about-me line
      does not repeat it: pass a shorter `about_me`.
    - The note fits the person's plan: `schema.LIMITS["connection_note_chars"]`, 200
      characters on a free account and 300 on Premium. `TooLong` means cut and
@@ -462,8 +523,10 @@ LinkedIn is never fetched from a session.
    leader at a target employer whom a request would reach badly (no Connect on their page,
    nothing connecting them to the person, or a request that has waited three weeks), at most
    two a run, and never past the credits left less one kept back. On a free plan it picks
-   nobody. For each one it names: their message window is checked (as above), then write the
-   InMail (`compose.inmail()`, a first line `Subject: ...`) and save it with `python3
+   nobody. It picks only from what is known: someone whose message window nobody has seen
+   (no reading holds it and the person has not said) keeps the connection note, because
+   finding out means opening that window on LinkedIn, a click no chat makes. For each one it
+   names, write the InMail (`compose.inmail()`, a first line `Subject: ...`) and save it with `python3
    tools/network/inmail_pick.py use <id> -`. That keeps the connection note beside it, so the
    draft card can say why ("InMail (suggested): a recruiter at a target employer, and a request
    would wait"), what it spends ("uses 1 of your 4 InMails"), and switch that person to the
@@ -567,9 +630,9 @@ with their reason if they do not want that person contacted.
 - Stop after finding people to ask whether to draft their messages
 - Search one employer past its budget: four searches across its kinds
   (`sources.for_company()`), of which at most two are title searches (`discovery.queries_for()`)
-- Fetch a LinkedIn page, a careers page or a blog index from this session, or open one in a
-  browser this chat has (a profile is read only by the person's page, in the Claude desktop
-  app, or from their paste)
+- Fetch a LinkedIn page over the web (WebFetch, curl), or a careers page or a blog index:
+  LinkedIn is read only in the signed-in browser on the person's computer (their page, or a
+  chat there), or from their paste
 - Click anything on LinkedIn, read faster than a person would, or read anyone this run did
   not surface
 - Cite a people-search or data-broker site, or keep more of a profile than `reading.py` keeps

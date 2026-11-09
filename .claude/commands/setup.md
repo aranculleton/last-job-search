@@ -266,6 +266,12 @@ Then the state files (setup-sections.md, the last section), and commit and push.
   page's To do card walks them through it. Say it in one line; never call it optional.
 - **Where they will work** is never asked: pass on the one line `python3 tools/place.py next`
   prints.
+- **Their computer, for LinkedIn** (`--section computer` runs this alone): where they work on
+  a computer (`profile/place.json` `works_on` computer or both), COMPUTER.md section 6, "Use
+  your computer for LinkedIn", once: each step one plain line from `claude_surfaces.py steps`,
+  checked after it, ending with `python3 tools/computer.py ready --name <the computer>`. On a
+  phone only, skip it: the page offers the paste. Never write a rule about the app into the
+  chat's own memory.
 - **Finished**: `python3 tools/place.py finished`, commit, and land it; with a page, bring its
   data up to date (`python3 tools/app.py view`, the `app` skill), so it shows the shortlist
   and the brief. This chat goes on answering the page.
