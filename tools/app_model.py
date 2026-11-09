@@ -5526,6 +5526,14 @@ def _rules(ctx: Ctx, targets: dict) -> dict:
     line = rules_view.review_line(rows, ctx.today)
     out = {"id": "your-rules", "rows": rows, "brief_line": line,
            "still_right": sum(1 for r in rows if r["still_right"])}
+    # What is held back today and every rule that holds anything, each one plain line with
+    # its day or its reason and its override (tools/holds.py): an employer was shut 45 days
+    # and nothing said so or when it would open (the maintainer, 2026-11-09).
+    import holds
+    out["held"] = [{k: h[k] for k in ("id", "rule", "what", "until", "line", "say")}
+                   for h in holds.live(ctx.today)]
+    out["every_hold"] = [{"id": r["id"], "area": r["area"], "line": r["line"]}
+                         for r in holds.rules()]
     out["rev"] = rev_of(out["id"], line, out["still_right"])
     targets["your-rules"] = {"kind": "your_rules", "rev": out["rev"]}
     return out
@@ -5559,7 +5567,8 @@ EMPTY = {
                              "rev": "none"}},
     "learned": [], "help": {"tip": None, "tour": [], "off": False}, "resume": None,
     "search": None, "where": None, "schedule": None, "upcoming": [],
-    "rules": {"id": "your-rules", "rows": [], "brief_line": None, "still_right": 0, "rev": "none"},
+    "rules": {"id": "your-rules", "rows": [], "brief_line": None, "still_right": 0, "held": [],
+              "every_hold": [], "rev": "none"},
     "jobs": {"round": "", "made_at": None, "met": False, "summary": "No search has run yet.",
              "rows": [], "filtered": {"count": 0, "groups": []}},
     "done": {"counts": {"applied": 0, "interviews": 0, "offers": 0, "replies": 0},

@@ -6589,7 +6589,7 @@
     const r = obj(M().rules);
     const live = arr(r.rows).filter((x) => !effective(txt(x.id), ["rule.drop"]));
     const declined = live.filter((x) => txt(x.kind) === "declined");
-    const out = [];
+    const out = [heldRow()].filter(Boolean);
     for (const x of live) {
       if (txt(x.kind) === "learned") continue;
       if (txt(x.kind) === "declined") { if (x === declined[0]) out.push(declinedRow(declined)); continue; }
@@ -6598,6 +6598,21 @@
     const n = learnedLive().length;
     if (n) out.push(actionRow("Learned from you: " + plural(n, "rule", "rules"), openLearned, "rules-learned"));
     return out;
+  }
+  // "Held back for now (N)": what the person's rules hold back today, a plain line each with
+  // the day it opens or why it stays and what lifts it, every line the engine's
+  // (tools/holds.py); then every rule that holds anything, folded behind one link. Why: an
+  // employer was shut for 45 days and nothing on the page said so (the maintainer, 2026-11-09).
+  function heldRow() {
+    const r = obj(M().rules);
+    const held = arr(r.held), every = arr(r.every_hold);
+    if (!held.length && !every.length) return null;
+    const rows = held.map((x) => h("li", {class: "held-row", "data-k": "held:" + txt(x.id)}, txt(x.line)));
+    const all = every.map((x) => h("li", {class: "held-rule", "data-k": "held-rule:" + txt(x.id)}, txt(x.line)));
+    return infoRow("rules-held", "Held back for now", held.length ? held.length + " now" : "Nothing now",
+      [h("p", {class: "small muted"}, held.length ? "What your rules hold back today, when each opens again, and what lifts it." : "Nothing is held back today."),
+        rows.length ? h("ul", {class: "plain held-list"}, shortList("held", rows, 5, "Show all")) : null,
+        all.length ? h("ul", {class: "plain held-rules small"}, shortList("held-rules", all, 0, "How every rule ends (" + all.length + ")")) : null]);
   }
   function openLearned() {
     openState.set("det:info:learned", true);
