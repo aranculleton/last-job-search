@@ -48,41 +48,8 @@ To make your copy private:
 Screens change: if yours looks different, tell Claude what you see.
 <!-- /claude-surface -->
 
-**Your page doesn't read LinkedIn profiles.** Only in the Claude desktop app on your
-computer: allow Claude's browser there, and sign in to LinkedIn when it asks.
-
-**"Find people" waits for your computer.** Keep the Claude app open on your computer, and
-the computer awake: Claude starts a chat there by itself, named "Job search · ... · your
-computer", and those chats are safe to delete. If it never starts, switch it on once:
-
-<!-- claude-surface: remote-control-settings -->
-<!-- checked 2026-11-09; https://code.claude.com/docs/en/desktop -->
-To let Claude start its chats on your computer:
-1. On your computer, open the Claude desktop app, then Settings, then Claude Code, then
-   Remote Control.
-2. Turn on Connect new sessions to Remote Control.
-3. Turn on Let your phone and claude.ai start sessions here.
-4. Turn on Keep this computer awake for Remote Control.
-5. Under Folders, choose Add folder and pick the folder your job search is in, then pin it.
-6. Say done here.
-
-Screens change: if yours looks different, tell Claude what you see.
-<!-- /claude-surface -->
-
-**LinkedIn keeps signing you out on your computer.**
-
-<!-- claude-surface: browser-pane-stay-signed-in -->
-<!-- checked 2026-11-09; https://code.claude.com/docs/en/desktop -->
-To sign in to LinkedIn once in the app's browser and stay signed in:
-1. Show the app's browser: Cmd+Shift+B on a Mac, or Ctrl+Shift+B on Windows (or Browser in
-   this chat's title bar).
-2. Sign in to LinkedIn there yourself.
-3. In the browser's ⋮ menu, choose Keep cookies, so you stay signed in after you quit the
-   app.
-4. Say done here.
-
-Screens change: if yours looks different, tell Claude what you see.
-<!-- /claude-surface -->
+**Find people waits for your computer.** Keep the Claude app open there. Still waiting?
+Tell Claude: it sets your computer up with you, once.
 
 <!-- claude-surface: team-plan -->
 <!-- checked 2026-11-03; https://code.claude.com/docs/en/web-quickstart -->

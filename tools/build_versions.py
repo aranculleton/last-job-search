@@ -745,8 +745,9 @@ METHODS: dict[str, dict] = {
             (38, "2026-11-06", False, "a hand-over from an earlier day in the person's own zone no longer holds the next day's fresh helper: an old helper put away by hand left the hand-over open, and the first page update of the morning asked for no fresh helper"),
             (39, "2026-11-06", False, "a finished job chat whose work never reached GitHub is asked once to save it (land.py --keep), and if it still is not there its work's own card says plainly that it was lost, with Try again, once, and the chat is put away; it no longer sits in the list with nothing said"),
             (40, "2026-11-07", False, "after a hand-over the new page helper comes back half an hour on whenever it kept the old one, for any reason: one kept because git could not yet say its save was on master stayed in the list all day"),
+            (41, "2026-11-09", False, "the chats the app starts on your computer, \"Job search \u00b7 <job> \u00b7 <computer>\", are known as the app's by the daily tidy-up"),
         ),
-        "fingerprint": "b8cb5356d8fa947a",
+        "fingerprint": "c98a40968f4d5f9e",
     },
     "expand": {
         "by": "upgrade", "priority": 4, "time": "~15 min",
@@ -856,8 +857,9 @@ METHODS: dict[str, dict] = {
             (81, "2026-11-06", False, "a toast shows its time left as a ring round its close, two at most with the rest counted; a job tapped keeps its place on Jobs while the person stays; a job left out as not a fit says why in Claude's work and never offers Try again"),
             (82, "2026-11-06", False, "one card left over is shown in place, never folded, on To do and on Jobs, and a fold at a list's end is a quiet line, never a bar the width of the page"),
             (83, "2026-11-07", False, "a laptop's Brief panels use the room their row gives them: a short list's rows each in a soft box and spread a step apart, the pills just under a panel with little to show, Your progress's chart grown into its room, and Jobs' new jobs headed \"New, best fit first\" under its drafts' line; two panels of one row as tall as each other give way together; in a prep's folded sections a note to you is a quieter line under the words it is about, never a bullet among the words to say; a referral's end is one tap a choice (turned down, withdrew, not happening, Something else opening the person's box), also first in their trash while it is in flight, and the other choose-then-Save sheets are buttons; an interview had and waiting to hear reads \"You had it 2 Nov\" below what is ahead, counted apart by the engine, with a long stored round name titled short; Help Claude do more sits right after today's things with what it gives; a note waiting for their profile says once when it is read (the page's own reading, in the Claude app on a computer), with Paste beside it gauged as one note's rewrite; everyone waiting is one To do card, never rows of Messages to send; a character count is grey within its limit, amber only while editing near it, red over"),
+            (84, "2026-11-09", False, "Settings shows your computer in one line from how it last checked in (off, signed out of LinkedIn, not switched on, or ready), with the steps only where you are needed, and one To do card only while work waits for it; Find people goes to your computer when you have one, and its card says where it is starting"),
         ),
-        "fingerprint": "2878f053befd22c2",
+        "fingerprint": "f9abd94ecedf8bc5",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",
@@ -969,6 +971,10 @@ KEEPS_NOTHING: dict[str, str] = {
                            "every wake",
     "tools/helper_usage.py": "a log of what answering the page cost, added to as it goes; "
                              "nothing it made before is made again",
+    "tools/computer.py": "routes work for the computer and writes its heartbeat, its run log "
+                         "and the setup's dated mark as it goes; nothing it made before is "
+                         "made again (the computer stage itself is the computer-linkedin "
+                         "profile upgrade)",
     "tools/app_actions.py": "writes the person's own answers through confirm, exclude, state.py, learned and settings; nothing it wrote is remade",
     "docs/images/*": "the README's pictures, from the test sample, each named after its own contents (tools/readme_pictures.py); never in a person's search",
     "tools/app_listen.py": "names the one chat that answers the page, in the page's own database and a record in the git folder that is never committed; read afresh at every start",
