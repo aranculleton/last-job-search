@@ -44,6 +44,14 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
+- **Held back for now says why, ends at its day, and gives you one tap to lift it.** Each line read "open again Fri 27 Nov, or say 'more at <employer>'", leaving you to type it; now it says why ("2 people there are waiting on a reply") and has its own pill ("Open it now"), with Claude's answer under the row.
+
+- **"How every rule ends" is grouped and in plain words.** It was one wall of 34 lines with "<employer>", "No thanks", "InMail", "6 business days" and "kept, as" in it; now it sits under small headings (Jobs, People, Messages...) with room between rows.
+
+- **The computer's To do card says what is waiting and puts its step on its face.** It said "Waiting for your computer: LinkedIn is signed out in Claude's browser on your computer: sign in there once." over one Done button; now it names the work ("“People at Harbourline Bank” waits until you sign in to LinkedIn in Claude's browser") with Open LinkedIn on the card, and Done only where there is something to confirm.
+
+- **Your computer's row is under Settings, LinkedIn.** It sat in Advanced under a summary saying Ready while it needed a sign-in, and its steps ended "tap Done" where there was no Done.
+
 - **Your own approved note recipe saves for a whole batch.** When the notes you approved all open on your line about yourself (in any of its variants) and close on your own asks, a batch of ten written that way is saved; before, it was refused as "too alike" and six notes were reordered against your recipe. Anything else repeated across a batch is still caught.
 
 - **LinkedIn is never fetched over the web, and is read only in the signed-in browser on your computer.** The instructions said no chat reads LinkedIn at all, which contradicted reading profiles on your computer; every copy now says the same thing.
@@ -57,6 +65,10 @@ make sense to somebody whose repo just received it.
 - **The app skill says to load the page's database tools first in a cloud chat**, where ArtifactData and ArtifactComments can be listed by name with no schema until ToolSearch loads them.
 
 ### Fixed
+
+- **A change that changed nothing finishes at once in Claude's work, with its result.** It said "Putting on page" with "Open in Contacts" for three minutes, and the finished row lost Claude's answer.
+
+- **A change Claude kept as it was says so in your words, once.** "Held · Held until she answers..." became "Not sent for now · Nothing to send until they reply", a wrapped line never starts with "·", and the note under the draft folds to "Claude answered <day> · Show" after two hours instead of staying for good.
 
 - **Work on your computer whose chat stopped starts again, or ends saying so.** A "Find people" run whose chat on your computer closed part way sat "running" for good, and nothing started a new chat there; now it waits again, is taken by the next chat on your computer, and if it stops twice its card says so with Try again.
 

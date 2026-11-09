@@ -48,6 +48,10 @@ def book(tmp_path, monkeypatch):
     """A contact book and a message log of the test's own, in files, and every reading,
     draft and ledger under tmp_path: nothing reaches the shared example state."""
     monkeypatch.setattr(reading.person, "state", lambda *p: str(tmp_path.joinpath(*p)))
+    # reading.talked_with keeps what it read by the shared files' time and size, which this
+    # book's loaders bypass: a cache of its own, so the next test in the worker never reads
+    # this book's empty answer for the shared example (a follow-up test failed after it).
+    monkeypatch.setattr(reading, "_TALKED", {})
     cpath, tpath = tmp_path / "contacts.csv", tmp_path / "threads.csv"
     state._write_csv(str(cpath), [], schema.CONTACT_COLUMNS)
     state._write_csv(str(tpath), [], schema.THREAD_COLUMNS)
