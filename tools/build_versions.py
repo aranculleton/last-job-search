@@ -745,8 +745,9 @@ METHODS: dict[str, dict] = {
             (38, "2026-11-06", False, "a hand-over from an earlier day in the person's own zone no longer holds the next day's fresh helper: an old helper put away by hand left the hand-over open, and the first page update of the morning asked for no fresh helper"),
             (39, "2026-11-06", False, "a finished job chat whose work never reached GitHub is asked once to save it (land.py --keep), and if it still is not there its work's own card says plainly that it was lost, with Try again, once, and the chat is put away; it no longer sits in the list with nothing said"),
             (40, "2026-11-07", False, "after a hand-over the new page helper comes back half an hour on whenever it kept the old one, for any reason: one kept because git could not yet say its save was on master stayed in the list all day"),
+            (41, "2026-11-09", False, "tidying reads chats' details however they arrive (a plain list was dropped, so the same chats were asked for again), and every chat the app starts asks for Auto"),
         ),
-        "fingerprint": "b8cb5356d8fa947a",
+        "fingerprint": "59df1d56a6f3430e",
     },
     "expand": {
         "by": "upgrade", "priority": 4, "time": "~15 min",
