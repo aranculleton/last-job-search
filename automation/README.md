@@ -71,9 +71,14 @@ there, once. Nothing else is asked, and no other chat is made. A scheduled task 
 on your computer is never used for it:
 
 <!-- claude-surface: routines-local -->
-<!-- checked 2026-10-18; https://code.claude.com/docs/en/desktop-scheduled-tasks -->
-A desktop scheduled task made with Local runs on the computer, and only while the desktop
-app is running and the computer is awake, so it is never used for the brief.
+<!-- checked 2026-11-09; https://code.claude.com/docs/en/desktop-scheduled-tasks -->
+A desktop scheduled task made with Local runs on the computer, in a fresh chat each time it
+is due, and only while the desktop app is running and the computer is awake: a time the
+computer sleeps through is skipped, with one catch-up run when it wakes. A chat in the
+desktop app makes one itself when asked to, as often as every minute, in the folder it
+names; a run waits on any step its permission mode does not cover. So it is never used for
+the brief; on the computer it is what takes the work waiting for the computer when no cloud
+chat is awake to start one there.
 <!-- /claude-surface -->
 
 Claude cannot start a cloud chat from its own shell on your computer, so it never tries:
