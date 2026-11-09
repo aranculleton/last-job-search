@@ -32,6 +32,17 @@
     ]
   },
   "hooks": {
+        "PostToolUse": [
+      {
+        "matcher": "ArtifactData",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PROJECT_DIR}\"/tools/py.sh \"${CLAUDE_PROJECT_DIR}\"/tools/learned.py hook"
+          }
+        ]
+      }
+    ],
     "UserPromptSubmit": [
       {
         "hooks": [
