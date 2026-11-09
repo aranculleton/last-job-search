@@ -530,12 +530,10 @@ def test_the_page_follows_the_engine_on_where_find_people_goes():
     assert "reads_there" in inspect.getsource(app_model._person)
 
 
-def test_every_read_is_followed_by_app_py_versions_while_no_hook_keeps_them():
-    """No copy's settings run the app's hook after a read (it was refused), so each read is
-    followed by `app.py versions`, and nothing says the hook does it."""
-    import inspect
-    import learned
-    assert page_db.hook_keeps_versions() is False
-    assert "app.py versions" in page_db.versions_step("$D")
-    for mod in (page_db, learned):
-        assert "hook does it after every read" not in inspect.getsource(mod)
+def test_the_apps_hook_keeps_each_reads_versions_so_no_step_is_asked():
+    """The app's settings run its hook after a read of the page's database (PostToolUse on
+    ArtifactData, the maintainer's own edit of 2026-11-09), so no read asks for `app.py
+    versions`; a copy without it is asked, and the step is there for it."""
+    assert page_db.hook_keeps_versions() is True
+    assert page_db.versions_step("$D") == ""
+    assert "app.py versions" in page_db.VERSIONS_STEP

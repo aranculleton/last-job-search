@@ -58,6 +58,16 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **Work on your computer whose chat stopped starts again, or ends saying so.** A "Find people" run whose chat on your computer closed part way sat "running" for good, and nothing started a new chat there; now it waits again, is taken by the next chat on your computer, and if it stops twice its card says so with Try again.
+
+- **"Find people" goes to your computer only once your computer is set up.** Someone who said they work on a computer but had not set it up yet had the run sent there, where nothing could take it; until the computer is set up or has checked in lately, it runs as before and you paste the profiles that matter.
+
+- **Done on the "Your computer, for LinkedIn" card works.** Every tap said "That is no longer on the page".
+
+- **A cloud chat lent your computer's browser can finish what it reads.** Its finish was refused as a cloud chat's, and while it worked the page thought a chat on your computer was open.
+
+- **A read of your page keeps its own version numbers by itself.** Claude Code now runs the app's check after every read of the page's data, so a page update no longer depends on a chat remembering a step; the step stays for any copy whose settings do not have it yet.
+
 - **A cloud chat no longer takes work that needs your computer and closes it unread.** The engine refuses a cloud chat's claim, finish or fail of a LinkedIn read sent to your computer; a chat had closed one with "Can't read LinkedIn from here".
 
 - **Work for your computer runs in the chat that has the browser.** It was handed to a background helper with no browser, which a chat on the computer had to overrule by hand.
@@ -80,7 +90,7 @@ make sense to somebody whose repo just received it.
 
 - **An application with no date no longer hides its employer's other jobs for ever.** Its silence could never be counted, so it held them with no end; an interview still holds while it runs.
 
-- **A hold on a contact with a day beside it lifts on that day.** A "Hold" whose words named no end held for ever even with a due day on the row; one with neither is now listed under Held back for now with what lifts it.
+- **A hold on a contact with only a day beside it lifts on that day; one that names what it waits for stays.** A bare "Hold" held for ever even with a due day on the row; but a hold that says "until she replies" was lifted at once by an old follow-up day on its row. One with neither is listed under Held back for now with what lifts it.
 
 - **Page updates are pinned to the page's own version numbers, so they land the first time.** The files a read of the page's database saves hold no version (only the lines the read prints do), so every write was pinned to a stamp that could be far behind: a whole page update was refused record by record, and the cards sat on "Putting on page" until versions were typed in by hand. A read now keeps each record's version from those lines (`app.py versions`, which `reads` names after its queries), and a refused save names the other collections it pinned by guess, so the save made again lands at once; a refusal that names no version (`app.py version "$D" <record>` with none) reads that record again.
 

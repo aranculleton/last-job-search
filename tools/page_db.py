@@ -210,17 +210,17 @@ def _read_json(path: str):
 # chat put the right numbers in by hand, fifty at a time (a person's computer, 2026-11-09).
 # `keep_listed` writes each listed version into its file, beside the fields (`__version__`,
 # which `load()` takes as the store's own number), so every command over the folder pins to the
-# page's own number. A chat runs `app.py versions` after each read, with the lines the read
-# printed: no copy's settings run the app's hook after a read yet (a PostToolUse hook on
-# ArtifactData was refused). `learned.py hook` already does the same on a PostToolUse event
-# (keep_listed_event), and `hook_keeps_versions` says whether a copy's settings register it,
-# so the step drops by itself once such a hook exists.
+# page's own number. The app's hook keeps them after every read of the page's database
+# (`learned.py hook` on PostToolUse for ArtifactData, keep_listed_event; registered on
+# 2026-11-09 by the maintainer, since Claude may not add a hook itself). `app.py versions`
+# does it from the lines given to it, for a copy whose settings do not register the hook
+# yet (`hook_keeps_versions`), so the step is asked for only there.
 LISTED = re.compile(r'\bversion\s+(\d+)\s+"([^"\r\n]+?\.json)"')
 SHORT = re.compile(r"^\s*([A-Za-z0-9_\-.~:@+]+(?:/[A-Za-z0-9_\-.~:@+]+)*)/([A-Za-z0-9_\-.~:@+]+)"
                    r"\s*[\s=]\s*(\d+)\s*$")
 STORE_VERSION = "__version__"
 LISTED_MARK = ".versions.json"      # in a dump folder: the read's versions were kept here
-# What a chat is told to do after its reads: every copy today, since no hook keeps them.
+# What a chat is told to do after its reads where the app's hook does not keep the versions.
 VERSIONS_STEP = ("then keep the page's own version of each record: python3 tools/app.py versions "
                  "\"{dump}\" with the lines those reads printed on its input (a heredoc), each "
                  "`- \"<id>\"  N bytes  version V  \"<file>\"` as printed, or typed short, "
@@ -306,7 +306,7 @@ def _strings(obj, out: list) -> None:
 
 def keep_listed_event(event: dict) -> int:
     """The hook's half, for a copy whose settings run `learned.py hook` on PostToolUse after an
-    ArtifactData read with `out_dir` (none does yet: hook_keeps_versions): the versions its
+    ArtifactData read with `out_dir` (hook_keeps_versions): the versions its
     result lists, kept in the files it saved. Any other call: nothing."""
     if not isinstance(event, dict) or str(event.get("tool_name") or "") != "ArtifactData":
         return 0

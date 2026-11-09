@@ -2719,7 +2719,7 @@ def _cli_hook() -> int:
         event = event if isinstance(event, dict) else {}
         if (event.get("hook_event_name") or "") == "PostToolUse":
             # After a read of the page's database, where a copy's settings run this hook on
-            # PostToolUse (none does yet, so chats run app.py versions after each read:
+            # PostToolUse (where a copy's settings do not, chats run app.py versions after each read:
             # page_db.hook_keeps_versions): each record's version, as the read listed it, kept
             # in the file it saved (page_db.keep_listed). Says nothing, holds nothing.
             import page_db

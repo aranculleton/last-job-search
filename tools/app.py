@@ -977,7 +977,7 @@ def child_prompt(chosen: dict, parent: str, url: str, session: bool = True) -> s
 
 def _versions_said(dump: str) -> str:
     """The step after a read that keeps each record's own version (page_db.versions_step),
-    or "" where a hook keeps them (none does yet: page_db.hook_keeps_versions)."""
+    or "" where the app's hook keeps them (page_db.hook_keeps_versions)."""
     import page_db
     return page_db.versions_step(dump)
 
