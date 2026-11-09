@@ -433,8 +433,11 @@ on Premium. That is the shape, and `first_note()` assembles it:
   every kind of message.
 - **The company limit holds at the draft too.** `reading.PER_EMPLOYER` people at one
   employer (two, or the person's `PEOPLE_PER_EMPLOYER` in `profile/networking.py`) while
-  nobody there has answered, counting those waiting on a reply and the notes already queued:
-  `reading.employer_full_line()` is the one test, read by the short list, every draft saved
+  nobody there has answered, counting those waiting on a reply and the notes already queued.
+  Someone waiting holds their place only by the person's follow-up rule, counted from the last
+  contact (`reading.waiting_until`, or their `EMPLOYER_WAIT_DAYS`); with no date at all, not at
+  all. The day each employer opens again is on the page under Your rules, "Held back for now"
+  (`python3 tools/holds.py`). `reading.employer_full_line()` is the one test, read by the short list, every draft saved
   and `reading.py batch`. When the person wants more at one employer, keep their word for
   it: `reading.py more-at "<Employer>" --said "<their words>" [--up-to <n>]` (kept in
   `profile/more_at.json` and recorded as theirs); every refusal prints that line.
