@@ -1,79 +1,67 @@
 # Notes for the next builder
 
-Written at the release of 4.13.0 (2026-11-06), for the chat that builds the next version. Read
+Written at the release of 4.14.0 (2026-11-10), for the chat that builds the next version. Read
 MAINTAINING.md first; this is background, never a list of work: a builder starts only from the
 maintainer's notes (MAINTAINING.md, "How a builder works").
 
-## What 4.13.0 decided, to keep
+## What 4.14.0 decided, to keep
 
-- **Safari measures before the page's zoom, Chrome and Firefox after.** Anything set against the
-  window (innerHeight, scrollTop) turns a measured box into the window's px first
-  (`screenPerPx`, `screenY` in app.js; the tests' `__drawnRect`). Chrome can measure Safari's way
-  in a test (`measureBeforeZoom` in the harness), so the ordinary run holds it.
-- **A computer that reports no pointer is a computer.** Firefox run headless, a remote desktop and a
-  keyboard alone report `pointer: none`; every laptop rule lists it beside `pointer: fine`.
-- **Everywhere by hand takes `variants` and `tests`**, and its summary prints each failure's
-  message whole (`--tb=line`, `verbosity_assertions=2`). A probe test that raises its
-  measurements, run there on a branch, is the cheap way to see what Safari or Firefox draws
-  (this container has neither); remove it before merging.
-- **The Brief takes its compact shape whenever the whole of it does not fit**, not at a fixed
-  height (`brief-short` on the root, set by `fitBrief`), and a last few px of scroll come off the
-  stretched rows. Its fit is kept by the window's size and the zoom.
-- **News shows the person's News items setting (3 unless chosen)**; a point written "... Use it:
-  ..." is set in its two parts (`app_model._NEWS_USE`). News is never clipped: a cut point had no
-  way to open (2026-10-30).
-- **The Chat panel sits left or right** (`ljs:dock-side`, Settings > Look and the panel's arrow:
-  one choice). Earlier messages come only by Show, never by scrolling up.
-- **A job tapped keeps its place on Jobs while the person stays** (`S.jobsHeld`).
-- **Toasts: two at most, "+N more" opening Claude's work, a ring round the close for the time
-  left.** A redraw is never started from inside a redraw (`release` defers).
-- **A draft left out as not a fit is `result.left_out`**: said as its reason, never Try again.
-- **Saving**: a landing pushes the chat's branch before the check; the chat that answers the page
-  batches saves asked within five minutes, but only after its work is pushed; a round's number
-  counts GitHub's rounds and a clash is renamed; lost work is asked for once, then said; the
-  steps unsubscribe from a save's pull request at once.
-- **The page helper**: the hand-over ends on a new day in the person's zone; the listener starts
-  the fresh helper with `create_session` itself (the scheduled-task route is gone, its names
-  listed in docs/removed_names.json); a helper that handed over does no more work and archives
-  itself once its save lands; work named at a pass's end and left holds the helper's turn once.
-- **Follow-ups never ask the person to write them.** What code cannot write goes to Claude, who
-  looks first (their profile as read, the employer's news and roles, the person's profile), then
-  writes a plain follow-up. A "don't repeat" rule never turns plain follow-ups off.
-- **Profile reading uses the page's own tab only**, checks sign-in by reading it, and a sign-out
-  is one To do card. A web page cannot hide Claude's browser pane, so a read is visible if that
-  tab is open.
-- **A general resume is grounded like a tailored one**, and its bullets are chosen with its
-  pencil (Tweak panel, Bullets).
-
-## Built from notes but not finished
-
-- **Small taps still take 2 to 4 minutes** (the maintainer's note 11). The code is under two
-  seconds; the time is about twelve model steps in a fresh helper. Recommended, not built: the
-  listener does code-only taps itself with no helper, and the late-read queries go with the last
-  batch; measure with `helper_usage` before and after.
-- **The suite's time is unchanged** (note 5): 4.12 added about 5%, the rest is fresh
-  `tools/app.py` processes importing 96 modules and compiling about 1,745 regexes. Lazy regex
-  compiling across about 20 modules would save roughly 15%; not done, being wide.
-- **What's new in Settings reads as cluttered** (the maintainer, at release): every version's
-  lines and "Changes made for you" in one long block. Not touched.
-- **Advanced holds two settings by design** (4.12: only what can slow things or use the
-  allowance); the maintainer asked about it at release.
-- **To do's folds**: one card left over shown in place rather than "Show 1 more", and the folds
-  as quiet lines rather than whole-width bars, were built after the release was asked for and go
-  in the next version's first merge (they are on master after 4.13.0 if that merge happened).
-- A record with a vanity LinkedIn address and an export in the member-id form, with no message
-  to match on, can still become a second record. "Make a fresh one" on a general resume starts
-  its bullets again. Undoing "Not this person" does not put them back on the reading list.
+- **LinkedIn is read on the person's computer, started from the cloud.** A cloud chat finds an
+  active bridge environment (`list_environments`, kind `bridge`) and starts a chat there with
+  `create_session` (`tools/computer.py route`); its results come back through the page and git,
+  never `send_message`, which asks the person every time. Work that needs a LinkedIn read is
+  `to: computer` once the computer is known ready (`computer.reads_there`), and a cloud chat may
+  not claim, finish or fail it (`page_db.computer_only`). A route given no list of computers
+  asks for one first, never judging the computer off from its last check-in alone.
+- **Auto is inherited, not granted.** A chat starts in Auto only when the chat starting it is in
+  Auto ("requires the parent session to be in auto mode"). Every `create_session` the app builds
+  asks for it (`app_listen.SESSION_MODE`), and on that refusal the person is asked once to switch
+  the right chat (`MODE_REFUSED`). A mode menu showing Auto is not proof; the refusal is.
+- **Computer approval and scheduled tasks never share a chat.** `confirm_repository_trust` ties
+  the approving chat to the person's devices, and a task bound to it fails. The morning brief
+  fires into a chat of its own made with the copy as `source_url` ("Job search: morning brief");
+  the daily check remakes it when missing, archived or trusted (`tidy.plan`), and existing copies
+  move by the `brief-own-chat` upgrade. A fresh chat a run cannot work: it has no copy. A manual
+  `fire_trigger` of a task bound to a chat starts a fresh chat, so it cannot test the bound run.
+- **No reminders and no hourly task.** A helper sets no `send_later` (a trusted helper cannot
+  run one); the computer has no scheduled task (it cost a run an hour for nothing).
+- **A chat on the computer:** draws the page first, then saves in the background; its save
+  ends at its push and the cloud's landing merges it (`land.on_computer`); it says nothing about
+  saving. It removes a memory note that contradicts the person's settings. It cannot remove
+  itself from the desktop sidebar, and archiving from the cloud does not either; the job's card
+  says up front that it runs in a chat there, which the person can delete.
+- **Page versions:** every read records the page's own versions (`app.py versions`, always
+  printed; the PostToolUse hook on ArtifactData does it too in a chat started after the hook
+  was added). A `view` while the page's own code is behind says to republish.
+- **People runs:** an employer frees after one follow-up wait from the last contact; an
+  unaccepted request after 21 days; a thread with no answer in 90 days goes cold by itself
+  (`threads-gone-cold`). Recruiters and founders before peers, by the person's reply rates; a
+  close only counts when the person made it. Likely employers are searched first and an empty
+  one rests 30 days (`candidates.py order`).
+- **Documents set with no kerning**, so a text layer reads AWS whole; the final check flags any
+  word split by a space. A resume made for a contact keeps the person's own file name.
+- **Saves that touch only the person's files** land with a data check, no code checks.
+- **Every Linux CI job names ubuntu-24.04**: ubuntu-latest became 26.04, with no Python 3.9 and
+  no Playwright browsers.
+- **Pre-approved tools and the read hook are the maintainer's edits.** Claude's safety check
+  refuses an agent changing `.claude/settings.json`, `tools/security_guards.py`'s allowlists or
+  a skill's `allowed-tools`, even when asked. The maintainer made those edits on GitHub; a
+  skill's `allowed-tools` must stay on one line (`test_a_skills_allowed_tools_is_one_line`).
 
 ## Not tested at this release
 
-- **Windows** ran only on 4.12's runs and this release pull request: its landing test's fix
-  from 4.12 (shlex.join) and everything since are read there.
-- **Safari and Firefox** were run by hand on the page's fit, Chat, review and file-name tests and
-  the layout promises: all passed. The rest of the page in those engines runs on the release pull
-  request's Everywhere.
-- **The rehearsal** (`tools/rehearse_sync.py`) passed on the maintainer's copy at release, a cloud
-  and a computer chat taking the update at once, their own tests and the quick check included.
-  It needs a full clone of their copy (a filtered one cannot be copied): the push gate keeps one.
-- An `app.py model` build reads the checkout's own `origin/claude/*` branches (through
-  `report.stuck`), so a page test depends on the checkout it runs in.
+- **Windows and Linux computers.** The computer side was used for real on a Mac only. Linux
+  has no desktop app, so it gets the paste fallback.
+- **The cloud reading LinkedIn itself** (`request_computer_folder`, a lent browser) was not
+  available on the maintainer's account, so those routes are untried.
+- **Firefox:** one page test (the work card's progress at 150 s into a 300 s stage) failed once
+  in Firefox and passed when run again by hand on the branch: intermittent, Firefox only.
+- **Safari:** `test_the_brief_uses_its_room.py::test_the_jobs_panel_lists_more_where_it_has_room`
+  shows 4 jobs where more fit, in Safari only, and fails the same way on the master before this
+  release (run by hand there on 2026-11-10), so this release did not cause it. Safari and
+  Firefox had not run for days before (ubuntu 26.04 broke their install).
+- **Windows:** the two `test_a_job_chats_lost_work_is_asked_for_once_then_said.py` failures
+  in the Git Bash leg were already on master's weekly run of 2026-11-09.
+- **The rehearsal** passed on the maintainer's copy, apart from two of their own tests that
+  still expect older app behaviour (a referral removing a job; the old resume name order).
+  Their copy's own-tests step brings them in line.
