@@ -13,7 +13,16 @@ import sys
 import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from test_the_page_journeys import _sample, browser  # noqa: E402
+from test_the_page_journeys import _sample as _example, browser  # noqa: E402
+
+
+def _sample():
+    """The example search, read by the page itself: its person has no computer known ready
+    here. One that is ready reads there, sent as work by itself
+    (test_a_note_waiting_on_a_read_says_when_once.py)."""
+    m = _example()
+    m["person"]["computer"] = False
+    return m
 from test_the_page_works_in_a_browser import _write  # noqa: E402
 
 
