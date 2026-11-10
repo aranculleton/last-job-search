@@ -182,7 +182,7 @@ def test_an_answer_that_pastes_what_its_card_holds_is_refused_unless_asked_for(s
 
 def test_an_answer_that_changed_nothing_has_no_button(search):
     wid = talk(search)
-    code, out = done(search, wid, "Yes: Thornbury Bank's panel is on Wednesday at 2pm.")
+    code, out = done(search, wid, "Yes: the panel at Thornbury Bank is on Wednesday at 2pm.")
     assert code == 0, out
     msg, work = said(out)
     assert "go" not in msg and "go" not in work["result"], (msg, work)
