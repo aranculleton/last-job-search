@@ -974,6 +974,19 @@ def _follow_up_dates() -> str:
             if n else "")
 
 
+def _gone_cold() -> str:
+    """Conversations still read as waiting on a reply with no answer in months: imported
+    threads from years back and notes sent a season ago were counted against their employer
+    and shown as owed a follow-up (2026-11-10). Closing them as gone cold is instant, and a
+    reply from them opens one again."""
+    found = _probe("import state; c = state.load_contacts(); import datetime; print(len("
+                   "state.close_gone_cold([dict(r) for r in c], state.load_threads(), "
+                   "datetime.date.today())))")
+    n = int(found) if found.isdigit() else 0
+    return ("%d conversation(s) with no answer in months still read as waiting on a reply" % n
+            if n else "")
+
+
 def _old_sweep_cursor() -> str:
     """3.7.0 kept the slow boards' resume point at documents/rounds/.sweep.json, beside the
     round summaries, and a person's own test that reads every documents/rounds/*.json as a
@@ -1972,6 +1985,12 @@ REGISTRY: tuple[Upgrade, ...] = (
             _export_repeats, "python3 tools/network/export.py tidy", "instant",
             command=("python3", "tools/network/export.py", "tidy"),
             paths=("network_threads.csv", "network_contacts.csv"), priority=2),
+    Upgrade("threads-gone-cold", "2026-11-10",
+            "conversations with no answer in months closed as gone cold, so they no longer "
+            "count as waiting or hold their employer; a reply from them opens one again",
+            _gone_cold, "python3 tools/network/state.py gone-cold", "instant",
+            command=("python3", "tools/network/state.py", "gone-cold"),
+            paths=("network_contacts.csv",), priority=2),
     Upgrade("one-record", "2026-11-05",
             "anyone kept twice in your contacts joined into one, and people you knew only by "
             "first name given the surname, employer and title your LinkedIn download shows",
@@ -2241,9 +2260,14 @@ SAFE_DEFAULTS: dict[str, str] = {
                                  "nudge), as before it was a setting",
     # Since 2026-11-09 the days someone waiting holds their employer follow the follow-up
     # rule, from the last contact, where a fixed 45 days from the first note held it.
+    # Since 2026-11-10 one follow-up wait, not one for every message the limit allows: notes
+    # three weeks old held big employers shut through a run.
     "networking.EMPLOYER_WAIT_DAYS": "unset, the person's own follow-up rule decides: one "
-                                     "wait for each message their limit still allows, then "
-                                     "one more, from the last contact",
+                                     "follow-up wait from the last contact, and a request "
+                                     "nobody accepted no longer than the days to withdraw it",
+    "networking.GONE_COLD_DAYS": "unset, 90: a conversation with no answer that long after the "
+                                 "last message is closed as gone cold, recorded, and opened "
+                                 "again by a reply",
     "networking.EXPORT_EVERY_DAYS": "unset, the brief asks for a new LinkedIn download once the "
                                     "last is 14 days old; 0 never asks",
     "networking.EXPORT_REMIND": "\"auto\": the LinkedIn download is asked for weekly while "

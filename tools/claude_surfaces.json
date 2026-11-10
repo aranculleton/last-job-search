@@ -950,8 +950,24 @@
     },
     {
       "id": "computer-chat-archive",
-      "claim": "Archiving a chat in the desktop app archives its copy on the person's other devices too, but the docs do not say the reverse: a chat on the computer archived from the cloud (archive_session) was seen still listed in the desktop app. A chat in the desktop app can archive the app's other chats there itself, without a card in Auto, and never sees the chat it is in. So each chat the app starts on the computer first archives the app's earlier finished ones there, by their name.",
+      "claim": "A chat in the desktop app can list the app's other chats on that computer and archive them, asked in plain words: the docs name no tool for it. It sees only the chats the desktop app runs itself (local, SSH and WSL ones in the Code tab), the 20 most recently active by default, never archived ones unless asked, and never the chat it is in; it does not see cloud chats. Whether a chat the cloud started on the computer has this too is not documented: the one on a Mac on 2026-11-10 listed the others and found none to archive, because the person had deleted the earlier chat by hand, and that chat (the setup one, named by the desktop app from the line pasted into it) did not carry the app's name either. Archiving it in the desktop app archives its copy on the person's other devices too, but the docs do not say the reverse: a chat on the computer archived from the cloud (archive_session) was seen still listed in the desktop app. So each chat the app starts on the computer archives the app's earlier finished ones there (computer.py archivable picks them by name), and where it cannot list them it says nothing.",
       "sources": [
+        {
+          "url": "https://code.claude.com/docs/en/desktop",
+          "quote": "Claude can list your other Code tab sessions, read what each has been doing, and send messages between them."
+        },
+        {
+          "url": "https://code.claude.com/docs/en/desktop",
+          "quote": "You can also ask Claude to rename or archive a session."
+        },
+        {
+          "url": "https://code.claude.com/docs/en/desktop",
+          "quote": "Through this surface, Claude sees only the sessions the desktop app runs itself"
+        },
+        {
+          "url": "https://code.claude.com/docs/en/desktop",
+          "quote": "By default it sees the 20 most recently active sessions and skips archived sessions unless you ask for them."
+        },
         {
           "url": "https://code.claude.com/docs/en/desktop",
           "quote": "Desktop archives the session's Remote Control copy too"
@@ -970,9 +986,29 @@
         }
       ],
       "status": "observed",
-      "verified_against": "code.claude.com/docs/en/desktop (Archive a session, Work across sessions, Control which sessions appear) read 2026-11-09; a chat archived from the cloud seen still listed in the desktop app on a Mac that day",
+      "verified_against": "code.claude.com/docs/en/desktop (Work across sessions, Archive a session, Control which sessions appear) read 2026-11-10; a chat archived from the cloud seen still listed in the desktop app on a Mac on 2026-11-09; a chat on a Mac on 2026-11-10 listed the others",
       "ui_sensitive": false,
-      "verified_on": "2026-11-09"
+      "verified_on": "2026-11-10"
+    },
+    {
+      "id": "memory-remove-note",
+      "claim": "Claude's own memory for a folder (auto memory) is plain markdown in ~/.claude/projects/<project>/memory/, with MEMORY.md as its index, and a person can edit or delete any of it; /memory in a chat opens that folder. The start step removes a note there that disagrees with the person's settings itself, and says this only where it could not.",
+      "goal": "remove the old note yourself",
+      "how": "type /memory in a chat on this computer, open the auto memory folder from there, and delete the note that says otherwise",
+      "sources": [
+        {
+          "url": "https://code.claude.com/docs/en/memory",
+          "quote": "Auto memory files are plain markdown you can edit or delete at any time."
+        },
+        {
+          "url": "https://code.claude.com/docs/en/memory",
+          "quote": "The command also lets you toggle auto memory on or off and provides an option to open the auto memory folder."
+        }
+      ],
+      "status": "documented",
+      "verified_against": "code.claude.com/docs/en/memory (Auto memory, View and edit with /memory) read 2026-11-10",
+      "ui_sensitive": false,
+      "verified_on": "2026-11-10"
     },
     {
       "id": "routine-connectors",

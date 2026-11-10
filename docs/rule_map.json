@@ -1193,7 +1193,7 @@
    "rule": "The same, said where every chat reads it.",
    "bold": null,
    "home": "CLAUDE.md",
-   "anchor": "never onto master without CI green (in a person's copy, `./tools/ci_local.sh --quick`, never the full\nrun)",
+   "anchor": "never onto master\nwithout CI green (in a person's copy, `./tools/ci_local.sh --quick`, or a data check if only\ntheirs changed)",
    "needed_by": [
     "every chat"
    ]

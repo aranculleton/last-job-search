@@ -151,8 +151,8 @@ know whether it worked.
    <the computer>` dates it in `profile/place.json`, which ends the upgrade card.
 
 Nothing about the app's behaviour is written into a chat's own memory: the person's settings
-live in `profile/`, and the start command reports any memory that disagrees with them
-(`computer.py memory`).
+live in `profile/`, and the start command removes a note in memory that disagrees with them,
+once, saying one line (`computer.py memory`).
 
 ### How the work reaches the computer (for Claude)
 

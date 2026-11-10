@@ -44,7 +44,10 @@ is a target: the run keeps going until N are found and drafted. On a page work i
 each stage as it starts (`python3 tools/app.py pin "$D" --work <id> --chat <id> --stage
 <start|find|read|write|check> --done <found so far> --total <N> --line "<one plain line>"`),
 and again every ten minutes on a long one, so the page shows the stage, the count and the
-time honestly.
+time honestly. The run's record splits its time by these stages (`computer.py measure`):
+`find` is the searching, `read` the profile reads, so the brief's trend can say which one
+the time went on. Pin `find` before the first search and `read` before the first profile,
+every run, never one stage for both.
 
 1. **start.** `python3 tools/learned.py brief people` and `brief targets` (who they want, in
    their words), and the queue an earlier run left (step 1 of "Run it", below).
@@ -53,10 +56,15 @@ time honestly.
    reader who answer them (`REPLY_RATES`, else their message log), recruiters near their
    function (`RECRUITER_NEAR`), and what never to show (`SKIP_HEADLINES`, the employers
    they declined, anyone written to). The employers: the ones they named, else `python3
-   tools/network/candidates.py employers`.
-3. **find: search for exactly those people.** `python3 tools/network/candidates.py search
-   "<employer>" ... --place "<their city>"` prints the LinkedIn people searches, one for each
-   kind of reader that helps, best-answering first, narrowed to the employer's company
+   tools/network/candidates.py employers --place "<their city>"`.
+3. **find: the likely employers first.** `python3 tools/network/candidates.py order
+   "<employer>" ... --place "<their city>"` puts first the employers where people who fit are
+   already known in that place (the contact book, earlier checks), then those one search
+   away, and skips one an earlier check found nobody for there in the last 30 days, with the
+   day it is looked at again. From what is known only: no web search. Then search exactly
+   those people: `python3 tools/network/candidates.py search "<employer>" ... --place "<their
+   city>"` (in that order, the skipped ones left out) prints the LinkedIn people searches,
+   one for each kind of reader that helps, best-answering first, narrowed to the employer's company
    number and the place's location number, each kept once (`reading.py company-ids
    "<Employer>=<number>"`, `reading.py place-ids "<City>=<number>"`; a profile read gives
    employer numbers by itself). Open each in the signed-in browser on the person's computer,
@@ -64,18 +72,26 @@ time honestly.
    web search while these work; where no browser is here, the ladder's rungs 1 to 3 (step 3
    of "Run it") make the list instead.
 4. **Check everyone at once:** `python3 tools/network/candidates.py check <file> ...
-   --company "<employer>" --want <N> --json > found-<employer>.json`. One call filters on the
-   headline (a recruiter for a function not theirs is out), runs every list check (written
-   to, closed, held, declined, the employer's limit counting the people already waiting
-   there, where they live when the result says, twice on one list), and ranks by who is
-   likeliest to help. Never put anyone on the list it left out.
-5. **Keep going until N.** While it prints `short:`, take the next employer it names, search
-   (step 3) and check again. Never pad with weaker fits. Only when `candidates.py employers`
-   has none left is the run short: say so honestly, how many of N and why
-   (`sources.short_batch`).
+   --company "<employer>" --place "<their city>" --want <N> --json > found-<employer>.json`.
+   One call filters on the headline (a recruiter for a function not theirs is out, and so is
+   a headline that reads as selling), runs every list check (written to, closed by the
+   person, held, declined, the employer's limit counting the people already waiting there,
+   where they live when the result says, twice on one list), and ranks the kind of reader
+   who answers them first (their reply rates), then a hiring signal in the headline. It
+   keeps what each employer held in that place, so the next run's first pass knows. Never
+   put anyone on the list it left out. Someone an earlier run closed (not the person) is
+   checked again and says so.
+5. **Keep going until N.** Recruiters, hiring leaders and founders come first: while it
+   prints `peers held back:` or `short:`, take the next employer it names, search (step 3)
+   and check again. Peers fill what is left only once the hiring side at every employer has
+   been tried (it says so, or `--peers` once `candidates.py employers` has none left). Never
+   pad with weaker fits. Only when `candidates.py employers` has none left is the run short:
+   say so honestly, how many of N and why (`sources.short_batch`).
 6. **Fix the list, in one save:** `python3 tools/network/candidates.py check found-*.json
    --want <N> --add --shortlist`. It adds everyone chosen to the contact book (never a second
-   row) and puts them on today's short list, best first. One person met another way:
+   row) and puts them on today's short list, best first. Someone chosen before stays chosen:
+   a check never swaps them for someone new unless the person says so (`reading.py shortlist
+   --remove <id>`, which takes off that one alone). One person met another way:
    `python3 tools/network/state.py add "<name>" --company "<employer>"`.
 7. **read: their profiles, now and only now, in one batch,** to confirm and personalise
    (step 5 of "Run it": `reading.py next`, then the profile and its Experience page in one
@@ -84,7 +100,7 @@ time honestly.
 8. **write: every note in one pass,** after `python3 tools/learned.py brief messages
    --channel connection --reader <reader>`: their approved notes are the recipe, and a batch
    on it saves. Save the batch in one call: `python3 tools/network/reading.py drafts
-   <file.json>`.
+   <file.json>`; `reading.py batch <ids>` checks this run's notes, never older ones alone.
 9. **check:** `python3 tools/network/inmail_pick.py pick <ids>` (from what is known only),
    then the page's finish (`app.py done`). Someone already in conversation whose draft must
    wait: `python3 tools/network/state.py hold <id> --until "<condition>"`.
@@ -461,7 +477,9 @@ time honestly.
      choose: the line about the sender second, after the question, or first in a few, never
      most). A close is never held to `ASK` word for word: any natural ask is fine, and the
      same close in many notes is what is caught.
-     `reading.py batch` runs the same check on the queue alone.
+     `reading.py batch <ids>` runs the same check for the run's own notes against the
+     whole queue, and says only what involves them: older notes alike among
+     themselves are not this run's to rewrite.
      Their opener, `ABOUT_ME` and `ASK` are theirs to repeat, unless `VARY_ABOUT_ME` in
      `profile/networking.py` says the background line is chosen per person, and so is their
      own recipe: the opening and closing lines of the notes they approved (`learned.py

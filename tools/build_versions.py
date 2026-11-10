@@ -388,8 +388,9 @@ METHODS: dict[str, dict] = {
             (84, "2026-11-10", False, "a resume made for a contact is named as the person's own (<Prefix>_<Noun>.pdf) in the contact's folder, never _For_<them>: the contact receives the file; older ones keep their names"),
             (85, "2026-11-10", True, "every font on a resume is set with no kerning, so an applicant tracking system reads AWS, VAT or Vancouver as one word (a kern pair read as a space split \"AWS\" in summaries, and \"V ancouver\" under the classic design); the cover letter's fonts likewise (it read \"L TV\"); the round trip names any word the text layer splits, verify_batch flags one in a letter (SPLIT_LETTER), and the font probe reads kern pairs; unsent applications are made again so none goes out with a split word"),
             (86, "2026-11-10", False, "a resume made for a contact goes into the page's store as it is made, so its Get it downloads at once; a job's own chat lands its work with land.py in the foreground and brings the page up to date itself, never messaging another chat; a networking item sent to the computer with args.read_first reads each profile there before rewriting its note"),
+            (87, "2026-11-10", False, "how a draft's work is saved changed: a save of only the person's own files lands after a data check with no code checks, and a chat on the person's computer saves to GitHub and leaves the merge to the chat that answers the page; nothing made before needs making again"),
         ),
-        "fingerprint": "579e016fdfca27fa",
+        "fingerprint": "c964c1a6d3278c6f",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -586,8 +587,9 @@ METHODS: dict[str, dict] = {
             (86, "2026-11-06", True, "a follow-up code cannot write goes to Claude after it looks for something new (their profile as read, news and roles at their employer, the person's own profile), never to the person as a question, and a question an older run asked is taken back; a rule about not repeating a message never switches plain follow-ups off; a plain follow-up varies its opener, greets a name with a leading initial by the given name and goes to Claude to fit the person's own message rules; a contact whose log holds only our request and their acceptance reads as connected"),
             (87, "2026-11-09", False, "someone waiting holds their employer by the person's follow-up rule from the last contact (or EMPLOYER_WAIT_DAYS), never a fixed 45 days from the first note, and with no date not at all"),
             (88, "2026-11-09", False, "who to write to is one call (candidates.py check): the search result's headline is filtered on the person's settings (a recruiter for another function is out), every list check runs at once, the per-employer limit included in the one surfacing check, and the list is ranked by who is likeliest to help and filled to the number asked, widening to more employers rather than padding; the InMail chooser picks only from what is known; LinkedIn is never fetched over the web and read only in the signed-in browser on the person's computer; a draft is held with state.py hold, never over another; the people already found need nothing redone"),
+            (89, "2026-11-10", False, "someone waiting holds their employer for one follow-up wait from the last contact, a request nobody accepted no longer than the days to withdraw it, and a conversation with no answer in GONE_COLD_DAYS (90) is closed as gone cold by itself, recorded and opened again by a reply; a people run ranks the kind of reader who answers the person first, then a hiring signal in the headline, and fills with peers only once the hiring side at every employer has been tried, saying so; a headline that reads as selling is out; someone chosen stays chosen; someone an earlier run closed (not the person) is checked again; candidates.py order searches the employers with people known in the place first and skips one found empty there for 30 days; a run's time is split into searching and reading; the people already found need nothing redone"),
         ),
-        "fingerprint": "0df3884dfafcd9ea",
+        "fingerprint": "cf2eb6c881c61075",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
@@ -647,8 +649,9 @@ METHODS: dict[str, dict] = {
             (42, "2026-11-05", False, "a note to someone the person has already talked to (a follow-up or a reply) never opens on WAITS ON A READ, and a follow-up takes the place of a first note left marked from before the conversation"),
             (43, "2026-11-09", False, "the company limit counts someone waiting only by the person's follow-up rule from the last contact; a note with no date holds nothing"),
             (44, "2026-11-09", False, "a batch on the person's own approved recipe saves: the opening and closing lines of the notes they approved, every variant, and any shape two of them share are theirs to repeat; a profile read takes its Experience page too where LinkedIn's newer layout keeps it apart; place-ids keeps a place's location number; notes already saved need nothing redone"),
+            (45, "2026-11-10", False, "the company limit frees an employer one follow-up wait after the last contact; today's short list is kept on the person's own day and a removal takes off that one alone; reading.py batch checks the run's own notes against the whole queue and says only what involves them; notes are written as before"),
         ),
-        "fingerprint": "cae31d327c4c1ed5",
+        "fingerprint": "0a87c19ceda26b92",
     },
     "screening": {
         "by": "round", "priority": 2,
@@ -877,8 +880,9 @@ METHODS: dict[str, dict] = {
             (90, "2026-11-10", False, "a work card's count joins its line without a stray full stop"),
             (91, "2026-11-10", False, "Your progress counts people as well as jobs: up to four numbers chosen for you (applied, interviews, messages sent, replies, calls, referrals and the like), never a nought beside real work, one line on what is working when your own numbers show it, and the weeks as applications and messages sent"),
             (92, "2026-11-10", False, "a note waiting for its person's profile names only what is there: with your computer ready, it says Claude reads it on your computer by itself and the read is sent there with nothing pressed, and \"press Read them\" only while To do shows that button; a reply that sends the resume made for that person offers that one, from the page's store; a finished resume made for someone opens their card in Contacts; Help Claude do more is one soft card after today's things with its one pill to start; the page being updated turns a small ring in its own colours"),
+            (93, "2026-11-10", False, "coming back to the page from LinkedIn, the message whose Copy or Open their profile was pressed last is brought into view and ringed for a few seconds, its I sent it the filled pill, until I sent it or a tap elsewhere; work started in a chat on your computer says so on its card while it runs, and that you can delete that chat when it's done"),
         ),
-        "fingerprint": "9f52a9fa8ed9d92c",
+        "fingerprint": "40377b45561b0006",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

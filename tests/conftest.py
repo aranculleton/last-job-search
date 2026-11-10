@@ -31,6 +31,9 @@ os.environ.pop("LJS_LEDGER", None)
 # a cloud copy shows (choosing Auto, the PDF tools' line) to every model the tests build. A
 # test of a cloud chat sets it itself.
 os.environ.pop("CLAUDE_CODE_REMOTE", None)
+# Nor a chat's on a computer: Claude Code's CLAUDECODE makes a save end at its push there
+# (land.on_computer). A test of a computer chat sets it itself.
+os.environ.pop("CLAUDECODE", None)
 atexit.register(shutil.rmtree, _state, ignore_errors=True)
 # The checkout the suite runs in is read as the app's own, wherever it is. In a person's copy
 # (ci_local.sh runs this suite there; the computer check runs it in one cloned from a folder)

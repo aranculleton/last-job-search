@@ -568,6 +568,14 @@ def cmd_view(a) -> int:
         lines = list(lines or []) + stale
     if getattr(a, "end", False):
         lines = list(lines or []) + end_of_batch(a.chat, getattr(a, "message", "") or "", now)
+        try:
+            import app_listen
+            import app_setup
+            late = app_listen.rings_meanwhile(a.dump, app_setup.page_record().get("url") or "")
+        except Exception:  # noqa: BLE001  never a reason the page is not answered
+            late = ""
+        if late:
+            lines.append(late)
     # The taps that came in while the work ran go first: the screens are drawn with them.
     batches = list(late_batches) + list(batches)
     print(_dump({"rev": model["rev"], "batches": batches,
@@ -1159,6 +1167,22 @@ def job_steps(chosen: dict, claimer: str, url: str, session: bool = True,
             # wrong by a third (2026-11-09). Its transcript says what it took (tools/computer.py).
             step(f"Before it finishes: python3 tools/computer.py measure \"$D\" --work {wid} "
                  f"--chat {claimer}, and send its batch; say its line, never your own count.")
+        if computer_only:
+            # The page first, from this copy, then the save in a process of its own: a chat on
+            # the computer held the page for its save's three minutes and more, and its save
+            # ends at its push, the chat in the cloud merging it (land.on_computer; the
+            # maintainer's computer, 2026-11-10). Nothing about saving is the person's.
+            step(f"Finish as step 5 says ({done}), without its heartbeat line.{files} Then bring "
+                 f"the page up to date at once, from this copy: ArtifactData query, url {url}, "
+                 f"collections screen, meta, addr and work, out_dir $D; python3 tools/app.py view "
+                 f"\"$D/view\" --dump \"$D\" --chat <this chat's id> --work {wid}; and send every "
+                 "batch it prints (ArtifactData batch). "
+                 f"{REFUSED_ONCE} Only then save, in the background: python3 tools/land.py "
+                 "--detach --message \"<what changed>\" (an ordinary call that returns at once; "
+                 "the chat in the cloud brings it to master). Never wait for it, and never say "
+                 "anything about saving, pull requests or merging: the page shows how it went.")
+            step(_next_job(url, kind=chat_kind, computer_only=computer_only))
+            return lines
         step(f"Finish as step 5 says ({done}), without its heartbeat line.{files} "
              f"{LAND_AND_WAIT} Then, landed or not (a failed check leaves the work for the "
              f"next chat to land, and this step still runs), bring the page up to date yourself: "

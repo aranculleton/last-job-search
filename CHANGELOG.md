@@ -22,6 +22,14 @@ make sense to somebody whose repo just received it.
 
 ### Added
 
+- **Conversations with no answer in about three months close by themselves.** A thread still read as waiting on a reply with nothing from them in 90 days is set to gone cold, written on the contact with the day, and opened again by itself if they reply; your own number goes in `GONE_COLD_DAYS`. Imported conversations from years back and notes sent a season ago were counted against their employer and shown as owed a follow-up. Profile upgrade: `threads-gone-cold`
+
+- **A people search goes to the likely employers first.** `candidates.py order` (and `search`, which follows it) puts first the employers where people who fit are already known in your city, from your contact book and earlier checks, and skips one an earlier check found nobody for there in the last 30 days, saying when it is looked at again. Runs searched employer by employer and kind by kind, many of them empty.
+
+- **A run's time is split into searching and reading.** Its record keeps how long the searching and the profile reads each took, even where no stage was marked, and the brief's weekly line says it.
+
+- **Back from LinkedIn, the page shows you whose note you were sending.** The message whose Copy or Open their profile you pressed last is brought into view when you come back to the page, ringed for a few seconds, with its I sent it as the filled button, until you press I sent it or tap somewhere else. Going to LinkedIn and back, it was easy to lose track of which card the sent note belonged to.
+
 - **Claude starts its LinkedIn work on your computer by itself.** When "Find people" needs to read profiles, the helper in the cloud starts a chat on your computer, in Auto, named "Job search · what it is doing · your computer", and its results come back to your page; you never keep a chat open there. Before, the run sat queued until you opened a chat on your computer yourself.
 
 - **Your computer's state, in one line.** Settings shows whether your computer is ready, off, signed out of LinkedIn or not switched on yet, with the steps only when you are needed, and To do gets one card only while work waits for it. Before, the page said only "open Claude on your computer".
@@ -43,6 +51,16 @@ make sense to somebody whose repo just received it.
 - **Settings, Your rules, now says what is held back today and when each opens again.** One row, "Held back for now", lists each live hold as one plain line ("Larchmont Health: open again Fri 27 Nov, or say 'more at Larchmont Health'"), and every rule that leaves out, holds, caps or gates anything in the app is one tap below it with when it ends, or why it stays, and what lifts it. Nothing on the page said an employer was closed to new people, for how long, or how to open it.
 
 ### Changed
+
+- **People who answer you come first.** A people run ranks the kind of reader who replies to you most (by your own reply rates) first, then anyone whose headline says they are hiring, and fills with peers only once recruiters, hiring leaders and founders at every employer have been tried, saying so and naming the next employers to search. A run asked for five filled its list with engineers and peers, whom the person's own log shows answer least, where an employer had no recruiter in the city.
+
+- **Closed means closed by you.** Someone an earlier run closed after reading them, never written to and never closed by you, is checked again by today's rules and opened again if chosen, with the earlier reason shown. A head of the function whose headline said "Hiring" was skipped by every later run for an earlier run's housekeeping.
+
+- **A job that runs in a chat on your computer now says so from the start.** Its card shows "This runs in a chat on your Mac, which you can delete when it's done." for as long as the job runs. Before, a chat appeared on the computer and nothing on the page explained it.
+
+- **A save that changes only your own files lands at once.** Every save ran the app's code checks for minutes, longer on a computer, though most change only your tracker, messages and documents, which cannot break the app's code; now such a save reads each changed file cleanly (JSON parses, every table reads with its key columns, no merge markers) and lands, and anything of the app's or of your own settings code is still checked in full.
+
+- **A chat on your computer draws your page first, then saves quietly in the background.** A computer chat held the page for its save's three minutes and more, and its last message told the person about a pull request and a merge; now the page is brought up to date from its copy at once, the save goes on by itself, and nothing about saving is said.
 
 - **With your computer set up, a note waiting for someone's profile is read there by itself.** The note says "Claude reads it on your computer by itself", and Claude sends the read to your computer with nothing to press. Before, the note said to press Read them in To do when no such button was there.
 
@@ -76,13 +94,29 @@ make sense to somebody whose repo just received it.
 
 - **Suggested InMails come only from what is already known.** The chooser suggested InMails that could only be confirmed by opening a message window on LinkedIn, which a chat never does; those people now keep their connection note.
 
-- **An employer frees up by your own follow-up rule, not after a fixed 45 days.** Someone waiting on a reply holds their employer for one follow-up wait for each message your limit still allows, then one more, counted from the last contact: about four weeks under a rule of 14 days and two messages. Before, 45 days from the first note held an employer six weeks and more, a number nobody chose. A number of days of your own can be set instead, and "more at" still works.
+- **An employer frees up by your own follow-up rule, not after a fixed 45 days.** Someone waiting on a reply holds their employer for one follow-up wait from the last contact: once a follow-up is due, the employer is free, about two weeks under a rule of 14 days. A connection request nobody accepted stops counting once it is worth withdrawing (21 days), whatever wait is set. Before, 45 days from the first note held an employer six weeks and more, a number nobody chose. A number of days of your own can be set instead, and "more at" still works.
 
 - **A message to Claude from the page's chat carries its words with its work.** The page puts what the person typed on the work item, and `app.py wake` shows it with the item (for an older item, the one read that fetches it), so no chat reads the thread for the words.
 
 - **The app skill says to load the page's database tools first in a cloud chat**, where ArtifactData and ArtifactComments can be listed by name with no schema until ToolSearch loads them.
 
 ### Fixed
+
+- **Taking one person off today's short list takes off that one alone.** The short list is kept on your own day everywhere, and is saved only when it changed. `reading.py shortlist --remove` read the computer's calendar, found no list for its day late in the evening, and saved an empty one over yours.
+
+- **A headline that reads as selling is left out, and a chosen person stays chosen.** A sales, account or partnership role, or a headline that names only an industry it covers or the clients it helps, is out (your `SKIP_HEADLINES` add to it; never where your own work is sales). A second check had swapped a chosen person for exactly such a headline, because the chosen one, now in the contact book, read as "already there".
+
+- **A batch check is shown only what involves its own notes.** `reading.py batch` checks the run's notes (the ids given, else today's short list) against every note waiting, and no longer flags two older notes from earlier runs that the run had no reason to rewrite.
+
+- **A contact's card shows its ring when the page points at it.** Cards in Contacts dropped the ring that marks the card a link has taken you to, so a card you were sent to looked like every other card.
+
+- **A save on your computer is never stopped at its last step.** Claude's own safety check on the computer refused to merge a save without review, twice in one evening, so the work sat unmerged; a computer chat's save now ends once it is on GitHub, and the chat that answers your page in the cloud brings it in with its next save.
+
+- **An old note in Claude's memory on your computer no longer contradicts your settings.** The start step found a note ("updates only when I say") that disagreed with the person's setting, reported it and left it, so every chat there met it again; it now removes just that note, once, says so in one line, and where it cannot, says once how to remove it.
+
+- **The chat on your computer puts away the app's earlier chats there, the setup chat included.** Its clean-up looked only for chats named "Job search · ...", so the setup chat, which the desktop app names from the line pasted into it, was never found; `computer.py archivable` now picks them from the desktop app's own list, and a chat that cannot list them says nothing instead of reporting a clean-up.
+
+- **A tap made while the page's helper was busy is picked up when its turn ends.** A job sat at "Starting in a moment" for over a minute until the person asked in a chat; a turn that ran past a minute and a half since it read the page now looks once more and starts anything asked meanwhile.
 
 - **A reply that says your resume is attached offers the resume made for that person.** It used to offer your general resume, because the one made for them was looked for in the wrong place.
 

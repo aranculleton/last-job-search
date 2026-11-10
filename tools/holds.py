@@ -127,8 +127,12 @@ RULES = (
     {"id": "employer_wait", "area": "people",
      "name": "More people at an employer where people are waiting on a reply",
      "where": ("tools/network/reading.py:waiting_until", "tools/network/reading.py:at_employer",
-               "tools/network/reading.py:EMPLOYER_WAIT_DAYS"),
-     "ends": "{per_employer} at a time; each one waiting frees their place {wait}",
+               "tools/network/reading.py:EMPLOYER_WAIT_DAYS",
+               "tools/network/state.py:REQUEST_WITHDRAW_DAYS",
+               "tools/network/state.py:close_gone_cold"),
+     "ends": "{per_employer} at a time; each one waiting frees their place {wait}; a "
+             "connection request nobody accepted frees it after {withdraw} days at most, and "
+             "a conversation with no answer in {cold} days is closed as gone cold",
      "why": "", "override": "ask Claude for more people at the employer",
      "missing": "someone with no date holds nothing",
      "shown": "Settings, Your rules, Held back for now"},
@@ -266,8 +270,8 @@ RULES = (
 def _rule_settings() -> dict:
     """The person's own numbers the inventory's words are filled from."""
     out = {"relist": 30, "dnt": 90, "silence": 45, "override_points": 10, "app_nudges": 2,
-           "reopen": 120, "per_employer": "2 people", "wait": "about four weeks after the last "
-           "message", "max_unanswered": 2, "follow_up": "6 weekdays", "quiet": 14,
+           "reopen": 120, "per_employer": "2 people", "wait": "about two weeks after the last "
+           "message", "withdraw": 21, "cold": 90, "max_unanswered": 2, "follow_up": "6 weekdays", "quiet": 14,
            "prep": 7, "thanks": 7, "pause": 30, "news": 5}
     try:
         import throttle
@@ -290,8 +294,10 @@ def _rule_settings() -> dict:
                             else f"{schema.FOLLOWUP_BUSINESS_DAYS} weekdays")
         out["wait"] = (f"{reading.EMPLOYER_WAIT_DAYS} days after the last message, as you set"
                        if reading.EMPLOYER_WAIT_DAYS else
-                       f"about {reading.WAITING_DAYS} days after the last message, by your "
-                       "follow-up rule")
+                       f"about {reading.WAITING_DAYS} days after the last message, once a "
+                       "follow-up is due by your rule")
+        import state
+        out.update(withdraw=state.REQUEST_WITHDRAW_DAYS, cold=state.GONE_COLD_DAYS)
     except Exception:  # noqa: BLE001
         pass
     try:

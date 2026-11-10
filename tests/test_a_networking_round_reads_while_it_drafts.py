@@ -550,11 +550,11 @@ def test_a_batch_of_drafts_too_alike_saves_none_of_them(book, capsys):
 
 
 def test_a_draft_is_held_to_the_same_company_limit_as_the_read_list(book, capsys):
-    # `draft` reads the calendar, so the two notes went a week before today: dated in
+    # `draft` reads the calendar, so the two notes went two days before today: dated in
     # October 2026 they stopped holding the employer (WAITING_DAYS) six weeks on.
     today = datetime.date.today()
     waiting = [_row(f"kestrel_w{i}", n, "Kestrel Mutual", status="awaiting_reply",
-                    first_contacted=(today - datetime.timedelta(days=8)).isoformat())
+                    first_contacted=(today - datetime.timedelta(days=2)).isoformat())
                for i, n in enumerate(["Ana Rook", "Bo Venn"])]
     book.put(*waiting, _row("kestrel_achterberg", "Rosalind Achterberg", "Kestrel Mutual"))
     full = reading.employer_full_line("Kestrel Mutual", book.contacts(), today=today)

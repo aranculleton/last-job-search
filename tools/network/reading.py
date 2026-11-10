@@ -2357,7 +2357,7 @@ def meanwhile(today: datetime.date | None = None, contacts=None) -> list:
     not written from it yet, and a recruiter whose card says enough. A round read one page at
     a time while the session waited, and nothing was drafted until the reads were done
     (2026-10-21)."""
-    today = today or datetime.date.today()
+    today = today or person.today()
     if contacts is None:
         try:
             import state
@@ -2488,14 +2488,18 @@ def _people_per_employer(v) -> int:
 PER_EMPLOYER = _people_per_employer(getattr(_NET, "PEOPLE_PER_EMPLOYER", 2))
 MORE_AT_FILE = "more_at.json"
 WAITING = ("awaiting_reply", "connected_no_reply")
-# How long someone waiting on a reply holds their employer: by the person's own follow-up
-# rule (schema.FOLLOW_UP_DAYS, else the app's business days; schema.MAX_UNANSWERED), counted
-# from the last contact (`waiting_until`): one follow-up after their wait, at most their limit
-# of unanswered messages, then the thread is over and the employer is free. Under a rule of
-# 14 days and two messages, about four weeks after the first note. A fixed 45 days counted
-# from the first note held an employer six weeks and more, a number nobody chose (the
-# maintainer, 2026-11-09). EMPLOYER_WAIT_DAYS in networking.py sets a number of their own,
-# counted from the last contact; unset or not a whole number, the rule decides.
+# How long someone waiting on a reply holds their employer: one follow-up wait by the person's
+# own rule (schema.FOLLOW_UP_DAYS, else the app's business days), counted from the last
+# contact (`waiting_until`); then a follow-up is due, and the employer is free. Under a rule
+# of 14 days, a fortnight after the last message. Waiting for every message their limit
+# allows (about four weeks) held four big employers shut through a run, with requests
+# three weeks old nobody accepted (the maintainer, 2026-11-10). A connection request
+# nobody accepted stops counting once it is worth withdrawing (state.REQUEST_WITHDRAW_DAYS),
+# whatever the wait, and a thread with no answer in state.GONE_COLD_DAYS is closed as gone
+# cold (state.close_gone_cold), so it never waits at all. EMPLOYER_WAIT_DAYS in
+# networking.py sets a number of their own, counted from the last contact; unset or not a
+# whole number, the rule decides. A fixed 45 days from the first note held an employer six
+# weeks and more, a number nobody chose (the maintainer, 2026-11-09).
 def _wait_days(v) -> int | None:
     if v is None or isinstance(v, bool):
         return None
@@ -2528,10 +2532,12 @@ def waiting_until(contact, msgs, wait_days: int | None = -1) -> datetime.date | 
 
     The clock runs from the last contact (state.follow_up_due: our last message, or their
     acceptance when that came last), never the first note: a follow-up sent last week is
-    last week's contact. From there, by the person's rule: one follow-up wait for each message
-    their limit still allows (schema.MAX_UNANSWERED less those already unanswered), then one
-    more wait for the last of them to be answered. `wait_days` (EMPLOYER_WAIT_DAYS, -1 reads
-    it) replaces that with their own number of days from the last contact.
+    last week's contact. From there, one follow-up wait by the person's rule
+    (state.follow_up_on): once a follow-up is due the employer is free, and a follow-up sent
+    starts the clock again. `wait_days` (EMPLOYER_WAIT_DAYS, -1 reads it) replaces that with
+    their own number of days from the last contact. A connection request nobody has accepted
+    holds no longer than state.REQUEST_WITHDRAW_DAYS from when it went, whichever wait is set:
+    by then it is one to withdraw, not one to wait on.
 
     With no date in the log or on the row, the row's own follow-up day (next_action_due) is
     the record's date: it holds until one more wait after it. With no date at all it holds
@@ -2548,13 +2554,10 @@ def waiting_until(contact, msgs, wait_days: int | None = -1) -> datetime.date | 
         if due is None:
             return None
         return due + datetime.timedelta(days=wait_days) if wait_days else state.follow_up_on(due)
-    if wait_days:
-        return sent + datetime.timedelta(days=wait_days)
-    # At least the note that put them on the list went, logged or not.
-    gone = max(state._chases(msgs), 1)
-    until = sent
-    for _ in range(max(state.schema.MAX_UNANSWERED - gone, 0) + 1):
-        until = state.follow_up_on(until)
+    until = sent + datetime.timedelta(days=wait_days) if wait_days else state.follow_up_on(sent)
+    pending = state.request_pending(msgs)
+    if pending is not None and pending != datetime.date.min:
+        until = min(until, pending + datetime.timedelta(days=state.REQUEST_WITHDRAW_DAYS))
     return until
 
 
@@ -2565,8 +2568,7 @@ def _waiting_days() -> int:
     if EMPLOYER_WAIT_DAYS:
         return EMPLOYER_WAIT_DAYS
     import schema
-    wait = schema.FOLLOW_UP_DAYS or -(-schema.FOLLOWUP_BUSINESS_DAYS * 7 // 5)
-    return wait * max(schema.MAX_UNANSWERED, 1)
+    return schema.FOLLOW_UP_DAYS or -(-schema.FOLLOWUP_BUSINESS_DAYS * 7 // 5)
 
 
 WAITING_DAYS = _waiting_days()
@@ -2751,8 +2753,13 @@ def shortlist(ids, today: datetime.date | None = None, contacts=None, remove=(),
     There is no cap of the app's own on its length (`shortlist_cap`), and at most
     UNVERIFIED_ON_SHORTLIST of them may be people nothing has placed in a city yet
     (`placed`): the rest of those wait for a one-page read or a public finding.
+
+    The day is the person's own (person.today()), the one `candidates.py --shortlist` keeps
+    the list under: `--remove <id>` on the computer's calendar found no list for its day,
+    saved an empty one over the person's, and the whole list was gone (2026-11-10). And the
+    list is saved only when it changed: a removal takes off what it names and nothing else.
     """
-    today = today or datetime.date.today()
+    today = today or person.today()
     if contacts is None:
         try:
             import state
@@ -2795,7 +2802,8 @@ def shortlist(ids, today: datetime.date | None = None, contacts=None, remove=(),
             unplaced_on += 1
         have.append(i)
         added.append(i)
-    _save_shortlist(have, today)
+    if have != had:
+        _save_shortlist(have, today)
     return {"ids": have, "added": added, "full": full, "unplaced": unplaced,
             "pruned": pruned, "removed": removed, "cap": cap, "why": why,
             "unknown": unknown, "employer_full": employer_full, "card_enough": card}
@@ -2806,7 +2814,7 @@ def on_shortlist(contact_id: str, today: datetime.date | None = None) -> bool:
     someone on it whose page is still unread: a read the page queued before midnight and
     made after it was refused and taken off the queue for good, though their profile was
     already open (a check that ran across midnight, 2026-11-05)."""
-    today = today or datetime.date.today()
+    today = today or person.today()
     if contact_id in _shortlist_file(today):
         return True
     yday = today - datetime.timedelta(days=1)
@@ -2816,7 +2824,7 @@ def on_shortlist(contact_id: str, today: datetime.date | None = None) -> bool:
 def next_up(today: datetime.date | None = None, contacts=None) -> dict | None:
     """The next person on today's list whose page is still to read, as their contact row
     (or {"contact_id"} when they are not in the book yet), or None when none is left."""
-    today = today or datetime.date.today()
+    today = today or person.today()
     if contacts is None:
         try:
             import state
@@ -3934,6 +3942,20 @@ def alike(notes: dict, ask: str | None = None, about_me: str | None = None,
     # was "identical in structure" too (2026-10-20).
     out += compose.round_alike(notes)
     return out
+
+
+def batch_of(every: dict, ids=(), today: datetime.date | None = None) -> tuple:
+    """({contact_id: note} of the run's own batch, how many older notes wait beside it): the
+    ids given, else the people on today's short list who have a note queued, else every
+    queued note. A run checking its own notes was shown a likeness between two notes left
+    from earlier runs, which were not its to rewrite (2026-11-10): the batch is checked
+    against everything waiting, and only what involves its own notes is said."""
+    if ids:
+        mine = {k: v for k, v in every.items() if k in set(ids)}
+    else:
+        listed = set(_shortlist_file(today or person.today()))
+        mine = {k: v for k, v in every.items() if k in listed} or dict(every)
+    return mine, len(every) - len(mine)
 
 
 def queued_notes(contacts: list) -> dict:
@@ -5333,7 +5355,9 @@ def main(argv: list | None = None) -> int:
     sk.add_argument("contact_id")
     sk.add_argument("--reason", required=True)
     ba = sub.add_parser("batch", help="are the queued first notes too alike to send (exit 11)")
-    ba.add_argument("ids", nargs="*", help="the notes to check; every queued note by default")
+    ba.add_argument("ids", nargs="*", help="the run's notes to check, against every queued note; "
+                    "by default the notes of the people on today's short list, else every "
+                    "queued note")
     ex = sub.add_parser("extractor", help="the read-only snippet that returns a profile page, or "
                                           "with --list a page of many people, as JSON")
     ex.add_argument("--activity", action="store_true",
@@ -5403,7 +5427,7 @@ def main(argv: list | None = None) -> int:
     if a.cmd == "estimate":
         n = a.n
         if n is None:
-            day = datetime.date.today()
+            day = person.today()
             n = sum(1 for i in _shortlist_file(day) if not _read_on(i, day.isoformat()))
         print(estimate(n, mode=a.mode)["line"])
         return EXIT["ok"]
@@ -5688,7 +5712,7 @@ def main(argv: list | None = None) -> int:
                   f"{', '.join(got['card_enough'])}. Draft each from the card now (reading.py "
                   "draft saves it marked CARD ONLY), with no read spent")
         print(budget_line())       # before the round: what it can have, and what binds
-        todo = [i for i in got["ids"] if not _read_on(i, datetime.date.today().isoformat())]
+        todo = [i for i in got["ids"] if not _read_on(i, person.today().isoformat())]
         if todo:
             print(estimate(len(todo))["line"])
         return EXIT["ok"]
@@ -5749,12 +5773,12 @@ def main(argv: list | None = None) -> int:
         return save_drafts(batch, own_facts_why=why)
     if a.cmd == "batch":
         import state
-        notes = queued_notes(state.load_contacts())
-        if a.ids:
-            notes = {k: v for k, v in notes.items() if k in a.ids}
         contacts = state.load_contacts()
-        found = alike(notes, employers={c.get("contact_id"): c.get("company", "")
-                                        for c in contacts})
+        every = queued_notes(contacts)
+        notes, older = batch_of(every, a.ids)
+        found = [(w, d, ids) for w, d, ids in alike(
+            every, employers={c.get("contact_id"): c.get("company", "") for c in contacts})
+            if set(ids) & set(notes)]
         # A note saved before drafts were held to the plan's length is caught before it goes.
         import compose
         kinds = {c.get("contact_id"): {"inmail": "inmail", "open_profile": "inmail",
@@ -5779,7 +5803,9 @@ def main(argv: list | None = None) -> int:
                               employer_full_line(there[0]["company"], contacts, there[1:]) or
                               f"{there[0]['company']}: {len(there)} notes waiting to send",
                               [c["contact_id"] for c in there]))
-        print(f"batch: {len(notes)} queued note(s) checked")
+        print(f"batch: {len(notes)} queued note(s) checked"
+              + (f", against {older} older one(s) waiting; a likeness among older notes alone "
+                 "is left as it is" if older else ""))
         for what, sent_, ids in found:
             print(f"  {what}: \"{_clip(sent_, 110)}\" in {len(ids)}: {', '.join(ids[:8])}"
                   + (" ..." if len(ids) > 8 else ""))
@@ -6073,10 +6099,11 @@ def _cli_next(a) -> int:
     contacts = state.load_contacts()
     nxt = next_up(contacts=contacts)
     if nxt is None:
-        today = datetime.date.today().isoformat()
-        yday = datetime.date.today() - datetime.timedelta(days=1)
+        day = person.today()
+        today = day.isoformat()
+        yday = day - datetime.timedelta(days=1)
         left = [i for i in _shortlist_file(yday) if not _read_on(i, yday.isoformat())]
-        if not _shortlist_file(datetime.date.today()) and left:
+        if not _shortlist_file(day) and left:
             # A read waiting in the background that ran past midnight found a new day with
             # no list, and stopped saying nothing was left.
             print(f"new day: yesterday's list ended with {len(left)} not read "
@@ -6085,7 +6112,7 @@ def _cli_next(a) -> int:
                   f"then python3 tools/network/reading.py shortlist {' '.join(left)}, then "
                   "reading.py next again")
             return EXIT["new_day"]
-        done = [i for i in _shortlist_file(datetime.date.today()) if _read_on(i, today)]
+        done = [i for i in _shortlist_file(day) if _read_on(i, today)]
         print(f"done: nothing left to read on today's list ({len(done)} read today"
               + (f": {', '.join(done)}" if done else "") + "). Show each draft that is not "
               "shown yet, then tell the person the run is done (a notification where the "

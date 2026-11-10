@@ -360,16 +360,66 @@ def test_the_window_follows_the_follow_up_rule_from_the_last_contact(monkeypatch
     monkeypatch.setattr(schema, "MAX_UNANSWERED", 2)
     monkeypatch.setattr(schema, "MAX_NUDGES", 1)
     first = {"contact_id": "a", "first_contacted": "2026-10-01", "status": "awaiting_reply"}
-    # One note: a follow-up after 14 days, then 14 more for an answer: four weeks.
-    assert reading.waiting_until(first, [], wait_days=None) == dt.date(2026, 10, 29)
+    # One note: once its follow-up is due (14 days), the employer is free. Waiting for every
+    # message the limit allows held big employers about four weeks (2026-11-10).
+    assert reading.waiting_until(first, [], wait_days=None) == dt.date(2026, 10, 15)
     note = {"contact_id": "a", "date": "2026-10-01", "direction": "outbound",
             "channel": "linkedin", "summary": "note", "full_text": "Hello"}
     nudge = dict(note, date="2026-10-20", summary="nudge", full_text="Following up")
-    # The follow-up went late, on the 20th: the clock runs from it, and the limit is reached,
-    # so one more wait and the employer is free.
+    # The follow-up went late, on the 20th: the clock runs from it, one wait more.
     assert reading.waiting_until(first, [note, nudge], wait_days=None) == dt.date(2026, 11, 3)
     # Their own number of days, from the last contact.
     assert reading.waiting_until(first, [note, nudge], wait_days=10) == dt.date(2026, 10, 30)
+
+
+def test_a_request_nobody_accepted_stops_holding_once_it_is_one_to_withdraw(monkeypatch):
+    import reading
+    import schema
+    import state
+    monkeypatch.setattr(schema, "FOLLOW_UP_DAYS", 14)
+    row = {"contact_id": "r", "status": "awaiting_reply", "company": "Wrenfield Labs"}
+    request = {"contact_id": "r", "date": "2026-10-01", "direction": "outbound",
+               "channel": "linkedin", "summary": "connection request", "full_text": "Hi there",
+               "scenario": "connection_request"}
+    assert state.request_pending([request]) == dt.date(2026, 10, 1)
+    # A person's own long wait still lets a request go once it is worth withdrawing.
+    assert reading.waiting_until(row, [request], wait_days=45) == dt.date(2026, 10, 22)
+    assert reading.waiting_until(row, [request], wait_days=None) == dt.date(2026, 10, 15)
+    # Three weeks on, nobody at the employer is counted as waiting.
+    waiting, _ = reading.at_employer("Wrenfield Labs", [row], today=dt.date(2026, 10, 23),
+                                     threads=[request])
+    assert waiting == []
+
+
+def test_a_thread_silent_for_months_is_closed_as_gone_cold_and_a_reply_opens_it():
+    import state
+    today = dt.date(2026, 11, 10)
+    old = {"contact_id": "g1", "name": "Ottilie Brack", "company": "Harrowgate Software",
+           "status": "awaiting_reply", "first_contacted": "2023-05-02"}
+    recent = dict(old, contact_id="g2", name="Joss Penhale", first_contacted="2026-10-30")
+    theirs = dict(old, contact_id="g3", name="Rafe Mallory",
+                  next_action="Ask again after her product launch", next_action_due="2027-01-10")
+    rows = [{"contact_id": c, "date": d, "direction": "outbound", "channel": "linkedin",
+             "summary": "message", "full_text": "Hello"}
+            for c, d in (("g1", "2023-05-02"), ("g2", "2026-10-30"), ("g3", "2026-03-01"))]
+    contacts = [old, recent, theirs]
+    said = state.write_follow_ups(contacts, rows, today)
+    assert old["status"] == "gone_cold" and not old.get("next_action_due")
+    assert "gone cold 2026-11-10" in old["outcome"] and "closed by itself" in old["outcome"]
+    assert any("Ottilie Brack" in x and "gone cold" in x for x in said)
+    assert recent["status"] == "awaiting_reply"
+    assert theirs["status"] == "awaiting_reply"          # a date of their own, still ahead
+    # Recorded once: a second run changes nothing.
+    assert not any("gone cold" in x for x in state.write_follow_ups(contacts, rows, today))
+    # Reversible: a reply from them opens it again by itself.
+    rows.append({"contact_id": "g1", "date": "2026-11-12", "direction": "inbound",
+                 "channel": "linkedin", "summary": "reply", "full_text": "Sorry, only saw this"})
+    mine = [r for r in rows if r["contact_id"] == "g1"]
+    assert state.effective_status(old, mine) == "replied_needs_response"
+    # Their own number of days.
+    again = dict(recent, contact_id="g4", status="awaiting_reply", outcome="")
+    assert state.close_gone_cold([again], [dict(rows[1], contact_id="g4")], today, days=5)
+    assert again["status"] == "gone_cold"
 
 
 # ------------------------------------------------------------------ T12, with made-up people
@@ -377,7 +427,7 @@ def test_the_window_follows_the_follow_up_rule_from_the_last_contact(monkeypatch
 PEOPLE = {
     "nurse": {"name": "Priya Okafor", "city": "Vancouver",
               "networking": "FOLLOW_UP_DAYS = 14\nMAX_UNANSWERED = 2\n",
-              "employer": "Larchmont Health", "opens": "2026-11-27",
+              "employer": "Larchmont Health", "opens": "2026-11-13",
               "why": "2 people there are"},
     "engineer": {"name": "Tomas Ferreira", "city": "Remote",
                  "networking": "EMPLOYER_WAIT_DAYS = 10\nPEOPLE_PER_EMPLOYER = 1\n",
@@ -466,9 +516,9 @@ def test_t12_every_hold_shows_its_end_or_reason_and_its_override_for_a_made_up_p
                              f"{d.strftime('%a')} {d.day} {d.strftime('%b')}"), h["line"]
         assert h["say"] == f"more at {emp}" and h["lift"] == "Open it now", h
     else:
-        # The app's own rule: six business days, two messages; two waiting at the app's two.
-        h = live[f"employer_wait:{emp}"]
-        assert h["until"] and h["until"] < "2026-12-01", h
+        # The app's own rule: six business days. The note of 30 October had its follow-up
+        # due on the 9th, so only one person still waits, under the app's two: nothing held.
+        assert f"employer_wait:{emp}" not in live
     app = live["application_open:Fallowmere Clinic"]
     assert app["until"] == "2026-12-04" and app["say"] == "stop waiting on Fallowmere Clinic"
     team = live["no_team:Ridley Assurance"]

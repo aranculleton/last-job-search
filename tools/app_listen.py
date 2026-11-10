@@ -319,6 +319,41 @@ def waiting_since(db: dict, now: dt.datetime | None = None) -> dt.datetime | Non
     return min(times) if times else None
 
 
+# A ring that came while a long turn ran (a small job in this chat, a check, a read of many
+# pages) was the page's work sitting at "Starting in a moment" for over a minute, until the
+# person asked in a chat (the maintainer's copy, 2026-11-10). Whether the platform holds a
+# comment sent to Claude mid-turn and delivers it after, or drops it, is not documented
+# (ArtifactComments: "this session is woken with a new turn when ... a comment on it is sent
+# to Claude"). So a turn that ran past RING_LOOK_S since its read looks once more before it
+# ends, and anything queued meanwhile starts now, whether or not its ring ever arrives.
+RING_LOOK_S = 90
+
+
+def read_at(dump: str) -> float:
+    """When the page's work was read into `dump` (its files' time), or 0 when it was not."""
+    folder = os.path.join(dump or "", "work")
+    try:
+        times = [os.path.getmtime(os.path.join(folder, f)) for f in os.listdir(folder)]
+    except OSError:
+        return 0.0
+    return min(times) if times else os.path.getmtime(folder)
+
+
+def rings_meanwhile(dump: str, url: str, now: float | None = None) -> str:
+    """The line that ends a long turn of the chat that answers the page: read the work again
+    and start what was asked meanwhile. "" for a short turn, or one with no read."""
+    at = read_at(dump)
+    now = __import__("time").time() if now is None else now
+    if not at or now - at < RING_LOOK_S:
+        return ""
+    return ("listen: this turn ran %d seconds since the page was read, and a tap meanwhile may "
+            "not wake this chat: last, read the page's work and holds again (ArtifactData "
+            "query, url %s, collections work and holds, out_dir a fresh folder $E, limit 1000), "
+            "then python3 tools/app_listen.py waiting \"$E\"; where it says work waits, do what "
+            "a ring does (the app skill, step 1). Nothing waits: end the turn, saying nothing "
+            "about it." % (int(now - at), url or "<the page>"))
+
+
 # How many earlier helpers the page's record keeps by id, for the tidy-up.
 HELPERS_KEPT = 8
 
@@ -1585,3 +1620,20 @@ def after_update(landed: bool = False, chat: str = "") -> list[str]:
             "2. If it says another chat answers the page: " + _ask_listener(url) +
             " Then stop here."] + _publish_now(url, 3)
 
+
+def main(argv=None) -> int:
+    """python3 tools/app_listen.py waiting <dump>: whether work waits for a chat in a read of
+    the page's work (rings_meanwhile)."""
+    argv = sys.argv[1:] if argv is None else argv
+    if argv[:1] != ["waiting"] or len(argv) != 2:
+        print("usage: python3 tools/app_listen.py waiting <dump>", file=sys.stderr)
+        return 2
+    import page_db
+    since = waiting_since(page_db.load(argv[1]))
+    print("waiting: work waits since %s" % since.strftime("%Y-%m-%dT%H:%M:%SZ") if since
+          else "waiting: nothing")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

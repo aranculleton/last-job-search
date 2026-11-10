@@ -239,6 +239,8 @@ bdi { unicode-bidi: isolate; }
 .card:focus { outline: none; }
 .card:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .card.flash { box-shadow: 0 0 0 3px var(--mark); }
+/* The card whose Copy or Open their profile was pressed last, ringed the same way on return (app.js backToPage). */
+.person.flash, ul.people > li.person.flash { box-shadow: 0 0 0 3px var(--mark); }
 
 .card h3, .card-title { font-size: var(--t-lg); font-weight: 600; }
 .org { color: var(--muted); }
@@ -1202,6 +1204,7 @@ label.pick { display: flex; align-items: flex-start; justify-content: center; wi
   .btn.filter[aria-pressed="true"], .btn.answer[aria-pressed="true"], .tab[aria-current="page"], .side-list a[aria-current="page"],
   .look-choice:has(input:checked) { outline: 3px solid Highlight; outline-offset: -3px; }
   :focus-visible { outline: 3px solid Highlight; }
+  .last-used { outline: 3px solid Highlight; outline-offset: 2px; }
   .bar, .fun-track { border: 1px solid CanvasText; background: Canvas; }
   .fill, .fun-fill, .dot, .sw, .wc-steps li::before, .tab[aria-current="page"]::before, .side-list a[aria-current="page"]::before { forced-color-adjust: none; background: Highlight; border-color: CanvasText; }
   .spin { forced-color-adjust: none; border-color: CanvasText; border-top-color: Highlight; }

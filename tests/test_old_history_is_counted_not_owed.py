@@ -125,8 +125,11 @@ def test_a_thread_that_ended_long_ago_is_not_dated_and_an_app_date_on_one_is_set
     threads = [_m("kestrel_ended", "2021-03-01", "out", "Hi Corwin, how is the team set up?"),
                _m("kestrel_ended", "2021-03-12", "out", "Hi Corwin, one more thought on it.",
                   scenario="nudge")]
-    assert state.write_follow_ups(contacts, threads, TODAY) == []
+    # Since 2026-11-10 it is closed as gone cold, recorded on the row, and never dated.
+    (said,) = state.write_follow_ups(contacts, threads, TODAY)
+    assert "gone cold" in said and contacts[0]["status"] == "gone_cold"
     assert contacts[0]["next_action_due"] == ""
+    contacts[0].update(status="awaiting_reply", outcome="")      # as an older copy left it
     # What the app wrote on such a thread before 2026-11-04, when its line at the limit had a
     # day to close it: its own words and its own date.
     contacts[0]["next_action"] = ("Nudged: nothing more unless they reply. If still silent by "

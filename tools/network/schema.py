@@ -199,6 +199,8 @@ def _days_setting(name: str) -> int:
 FOLLOW_UP_DAYS = _days_setting("FOLLOW_UP_DAYS")
 MAX_UNANSWERED = _days_setting("MAX_UNANSWERED") or MAX_NUDGES + 1
 MAX_NUDGES = max(MAX_UNANSWERED - 1, 0)
+# Days with no answer before a conversation is closed as gone cold (state.close_gone_cold).
+GONE_COLD_DAYS = _days_setting("GONE_COLD_DAYS") or 90
 
 
 def follow_up_rule() -> str:

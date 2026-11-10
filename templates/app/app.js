@@ -253,6 +253,13 @@
     focusAfter: null,
     online: navigator.onLine !== false,
     copied: new Set(),
+    // The messages whose "Open their profile" was pressed, and the one whose Copy or Open was
+    // pressed last, kept for this tab (useLast): coming back, its card is the one marked.
+    opened: new Set(),
+    lastUsed: sget("session", "ljs:lastused"),
+    away: false,
+    marked: false,
+    markUntil: 0,
     copyBox: new Map(),
     // Contacts: the people whose "They replied" box is open (its words are kept as drafts).
     replyOpen: new Set(),
@@ -7135,6 +7142,62 @@
       .replace(/(^|[^\]])\((https?:\/\/[^\s)]+)\)/g, (m, pre, u) => pre + "([" + host(clean(u)) + "](" + clean(u) + "))")
       .replace(/(^|[\s])(https?:\/\/[^\s)\]]+)/g, (m, pre, u) => { const c = clean(u); return pre + "[" + host(c) + "](" + c + ")" + u.slice(c.length); });
   }
+  // The message whose Copy or "Open their profile" was pressed last, on this device and kept
+  // for this tab: coming back to the page from LinkedIn, its card is brought into view and
+  // ringed for a few seconds in the selected style, and its I sent it is the filled pill, so
+  // whose note went is never in doubt (the maintainer, 2026-11-10: "i might forget which one to
+  // put I sent it on"). I sent it, or a tap anywhere else once it is marked, lets it go.
+  const MARK_MS = 4000;
+  let markTimer = null;
+  function useLast(id) {
+    S.lastUsed = txt(id) || null;
+    S.marked = false;
+    sset("session", "ljs:lastused", S.lastUsed);
+  }
+  function lastCard(root) {
+    const id = S.lastUsed;
+    if (!id || !root) return null;
+    let box = null;
+    try { box = root.querySelector('.pdraft[data-msg="' + (window.CSS && CSS.escape ? CSS.escape(id) : id) + '"]'); } catch (e) { box = null; }
+    return box ? box.closest("[data-card]") : null;
+  }
+  // Drawn into each screen while the ring lasts, so a live update keeps it (patch's probe).
+  function markLast(root) {
+    const c = S.markUntil > now() ? lastCard(root) : null;
+    if (c) c.classList.add("flash", "last-used");
+  }
+  function unmark() {
+    S.markUntil = 0;
+    clearTimeout(markTimer);
+    for (const c of document.querySelectorAll("#main .last-used")) c.classList.remove("flash", "last-used");
+  }
+  function leftPage() { if (S.lastUsed) S.away = true; }
+  function backToPage() {
+    if (!S.away) return;
+    S.away = false;
+    const m = S.lastUsed ? messageById(S.lastUsed) : null;
+    // Sent or set aside meanwhile (here, another tab or a chat): nothing to point at.
+    if (m && !msgLive(m)) { useLast(null); scheduleRender(); return; }
+    const c = m && !txt(m.hold) ? lastCard($("main")) : null;
+    if (!c || !c.getClientRects().length) return;
+    S.marked = true;
+    S.markUntil = now() + MARK_MS;
+    c.classList.add("flash", "last-used");
+    const still = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    try { c.scrollIntoView({block: "center", behavior: still ? "auto" : "smooth"}); } catch (e) { /* no scrolling here */ }
+    clearTimeout(markTimer);
+    markTimer = setTimeout(unmark, MARK_MS);
+    scheduleRender();
+  }
+  // Once marked, a tap anywhere but its card lets it go (a Copy on another card then takes it).
+  document.addEventListener("click", (e) => {
+    if (!S.marked) return;
+    const c = lastCard($("main"));
+    if (c && e.target && c.contains(e.target)) return;
+    useLast(null);
+    unmark();
+    scheduleRender();
+  }, true);
   function draftParts(m, o) {
     o = o || {};
     const tid = "msgt-" + seg(m.id);
@@ -7160,7 +7223,7 @@
     // Not ready: written before their profile was read (X-53), or a fix still to come.
     const ready = !held && !fixing;
     const copyBtn = h("button", {type: "button", class: "btn small copy bubble-copy" + (copied ? "" : " primary"), "data-k": "copy:" + tid, "data-primary": copied ? null : "1",
-      "aria-label": copied ? null : copyName, onclick: () => { S.copied.add(m.id); copyText(txt(draftGet(penKey)) || parts.body, (parts.subject ? "message" : what) + " to " + name, "copy:" + tid, tid); }},
+      "aria-label": copied ? null : copyName, onclick: () => { S.copied.add(m.id); useLast(m.id); copyText(txt(draftGet(penKey)) || parts.body, (parts.subject ? "message" : what) + " to " + name, "copy:" + tid, tid); }},
       icon("copy"), copied ? (fresh ? "Copied" : "Copy again") : "Copy");
     // The pencil: the words changed in place, or Claude asked to change them.
     const penBtn = btn("", () => { if (S.penOpen.has(m.id)) S.penOpen.delete(m.id); else { S.penOpen.add(m.id); S.focusAfter = {key: "penask:" + m.id}; } scheduleRender(); },
@@ -7168,8 +7231,11 @@
     penBtn.classList.add("bubble-pen");
     const sentNow = (text) => act([{item: m.id, action: "msg.sent", value: msgSentValue(m, text), rev: m.rev}], "Marked as sent: " + name);
     // Copy first, filled, then I sent it is: the order the work is done in.
-    const sentBtn = ready ? btn("I sent it", () => { const t = txt(draftGet(penKey)).trim(); draftSet(penKey, null); S.penOpen.delete(m.id); sentNow(t || parts.body); },
-      {kind: copied ? "primary" : "secondary", small: true, key: "sent:" + m.id, aria: "I sent it: the " + what + " to " + name}) : null;
+    // Copied or their profile opened, I sent it is filled; on the one pressed last it is the
+    // screen's filled pill (lead), so coming back from LinkedIn it is the one to press.
+    const last = S.lastUsed === m.id;
+    const sentBtn = ready ? btn("I sent it", () => { const t = txt(draftGet(penKey)).trim(); draftSet(penKey, null); S.penOpen.delete(m.id); if (S.lastUsed === m.id) { useLast(null); unmark(); } sentNow(t || parts.body); },
+      {kind: copied || last || S.opened.has(m.id) ? "primary" : "secondary", lead: last, small: true, key: "sent:" + m.id, aria: "I sent it: the " + what + " to " + name}) : null;
     const sid = "msgs-" + seg(m.id);
     const heading = (DRAFT_WORD[txt(m.type)] || DRAFT_WORD[txt(m.kind)] || "Your message") + (CHANNEL[txt(m.channel)] ? " · " + CHANNEL[txt(m.channel)] : "");
     const area = editing ? h("textarea", {id: tid, class: "sendtext big pen-text", rows: 5, "data-k": "pentext:" + m.id, "aria-label": "The " + what + " to " + name + ", to change",
@@ -7244,6 +7310,7 @@
     // their profile is open, and under More it was not found (the maintainer, 2026-11-09:
     // "open their profile is a bit hidden").
     const link = openLink(m);
+    if (link) { link.addEventListener("click", () => { S.opened.add(m.id); useLast(m.id); scheduleRender(); }); link.__ljsOn = true; }
     const onFace = !!(link && ready && !held);
     if (onFace) link.classList.add("btn", "secondary", "small");
     const extra = [onFace ? null : link,
@@ -12944,7 +13011,7 @@
     const st = p.status;
     const toComputer = w.to === "computer";
     // A chat the helper started on the computer for it (tools/computer.py started) is not
-    // "away": its own step says "Starting on your Mac".
+    // "away": its own step says "This runs in a chat on your Mac, ...".
     const away = toComputer && !computerListening() && !obj(w.computer_session).id;
     // Slower than usual is still running (a spinner, no warning); only a missed check-in may
     // mean it stopped.
@@ -13085,6 +13152,11 @@
         "aria-valuenow": String(p.pct), "aria-valuetext": barText(p)}, h("span", {class: "fill", style: "width:" + p.pct + "%"})));
     }
     put(cardEl, h("p", {class: "wc-time", "data-time": "1"}, ACTIVE.has(st) || TERMINAL.has(st) ? timeText(w, p, stepClock && !!now1 && sameSpan(ws.v, p)) : ""));
+    // Started in a chat on their computer (tools/computer.py started): said while it runs, in
+    // the engine's words, so the chat that appears there is no surprise (2026-11-10).
+    const ranOn = obj(w.computer_session);
+    const runsThere = ACTIVE.has(st) && txt(ranOn.id) && !txt(ranOn.archived_at) ? txt(ranOn.say) : "";
+    if (runsThere && runsThere !== txt(now1)) put(cardEl, h("p", {class: "wc-where small muted", "data-where": "computer"}, runsThere));
     // Work nobody has started yet can be called off in one plain tap: the small "Stop" at the
     // end of the time line went unseen, and a tap that queued a nudge looked unstoppable
     // (the maintainer, 2026-10-26).
@@ -15367,7 +15439,7 @@
       const node = (sec, b) => guarded(() => sectionNode(sec, b), () => h("section", {class: "section"},
         empty("This part could not be shown.", "Something in it is not as the page expects. Refresh, and if it stays, tell Claude in a chat what you see, or the app's makers (Settings, Something looks wrong).")));
       patch(main, split ? [h("div", {class: "col"}, node(S.section)), h("div", {class: "col"}, node(S.split, "b"))] : [node(S.section)],
-        (probe) => { fitKept(probe); demotePrimaries([probe]); nameByItem(probe); }, true);
+        (probe) => { fitKept(probe); markLast(probe); demotePrimaries([probe]); nameByItem(probe); }, true);
     }
     const rail = $("rail");
     // The Brief is a page to take in at a glance, so it has the whole width: no Work rail
@@ -15582,8 +15654,9 @@
     // Re-laid out where the frame changes: the phone below 760px, the rail from 1280px.
     let lastBand = window.innerWidth < 760 ? 0 : wide() ? 2 : 1;
     window.addEventListener("resize", () => { const w = wide(); const band = window.innerWidth < 760 ? 0 : w ? 2 : 1; if (w !== lastWide || band !== lastBand) { if ((band === 0) !== (lastBand === 0)) applySize(S.size); lastWide = w; lastBand = band; if (w) closeWork(); render(); } });
-    window.addEventListener("focus", () => { refreshCanSend(); recheckReading().catch(() => {}); freshen(false); });
-    document.addEventListener("visibilitychange", () => { if (!document.hidden) { refreshCanSend(); liveRender(); recheckReading().catch(() => {}); freshen(false); } });
+    window.addEventListener("blur", leftPage);
+    window.addEventListener("focus", () => { backToPage(); refreshCanSend(); recheckReading().catch(() => {}); freshen(false); });
+    document.addEventListener("visibilitychange", () => { if (document.hidden) leftPage(); else { backToPage(); refreshCanSend(); liveRender(); recheckReading().catch(() => {}); freshen(false); } });
     setInterval(() => { if (now() - lastCheck >= CHECK_EVERY_MS) freshen(false); }, 60000);
     document.addEventListener("keydown", onKey);
     setInterval(tick, 1000);
