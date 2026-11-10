@@ -115,7 +115,7 @@ def test_the_parts_are_in_the_order_the_interview_runs(run, tmp_path, vp):
         "const d = document.querySelector('dialog.detail');"
         "return {full: d.classList.contains('full'), parts: [...d.querySelectorAll('.lp-part-h')].map((x) => x.textContent),"
         " cards: d.querySelectorAll('.lp-q').length, chips: d.querySelectorAll('.lp-chips .btn').length,"
-        " wide: Math.round(d.getBoundingClientRect().width), vw: innerWidth};"))], vp)
+        " wide: Math.round(d.__drawnRect().width), vw: innerWidth};"))], vp)
     seen = got["after"][0]["eval"]
     assert seen["full"] and seen["wide"] == seen["vw"], "the prep is full screen on every screen"
     titles = [p["title"] for p in lv["parts"]]
@@ -149,7 +149,7 @@ def test_a_likely_to_prompt_link_goes_to_its_answer_and_marks_it(run, tmp_path, 
     got = _go(run, tmp_path, _model(_ctx()), [
         OPEN,
         {"click": "Full answer and follow-ups:", "within": "dialog.detail", "read": "dialog.detail", "wait": 1200,
-         "eval": "(() => { const a = document.activeElement; const r = a.getBoundingClientRect();"
+         "eval": "(() => { const a = document.activeElement; const r = a.__drawnRect();"
                  " return {id: a.id, flash: a.classList.contains('lp-flash'), top: Math.round(r.top), vh: innerHeight}; })()"},
     ], vp)
     at = got["after"][1]["eval"]
@@ -161,7 +161,7 @@ def test_a_term_opens_and_back_returns(run, tmp_path, vp):
     panel = _ev("const p = document.querySelector('.lp-panel');"
                 "return {open: vis(p), title: p.querySelector('.lp-panel-title').textContent,"
                 " back: vis(p.querySelector('.lp-back')), text: p.textContent,"
-                " box: (() => { const r = p.getBoundingClientRect(); return [Math.round(r.left), Math.round(r.right), Math.round(r.bottom)]; })(), vw: innerWidth, vh: innerHeight};")
+                " box: (() => { const r = p.__drawnRect(); return [Math.round(r.left), Math.round(r.right), Math.round(r.bottom)]; })(), vw: innerWidth, vh: innerHeight};")
     got = _go(run, tmp_path, _model(_ctx()), [
         OPEN,
         {"click": "forecasts: what it means", "within": "dialog.detail .lp-part", "eval": panel},
@@ -201,7 +201,7 @@ def test_practice_hides_the_answers_and_a_tap_shows_one(run, tmp_path, vp):
 
 def test_nothing_is_wider_than_a_phone_and_the_dark_look_draws(run, tmp_path):
     wide = ("(() => { const d = document.querySelector('dialog.detail'); const b = d.querySelector('.detail-body');"
-            " const over = [...d.querySelectorAll('.lp *:not(.lp-chips *)')].filter((e) => e.getBoundingClientRect().right > innerWidth + 1 && e.getClientRects().length).map((e) => e.className).slice(0, 5);"
+            " const over = [...d.querySelectorAll('.lp *:not(.lp-chips *)')].filter((e) => e.__drawnRect().right > innerWidth + 1 && e.getClientRects().length).map((e) => e.className).slice(0, 5);"
             " const bg = getComputedStyle(d).backgroundColor.match(/\\d+/g).slice(0, 3).map(Number);"
             " return {sideways: b.scrollWidth > b.clientWidth + 1, over, light: (bg[0] + bg[1] + bg[2]) / 3}; })()")
     steps = [dict(OPEN), {"open": "det:lp:q1.0", "eval": wide}]
@@ -251,7 +251,7 @@ def test_hiding_the_answers_says_so_and_looks_pressed(run, tmp_path, vp):
 def test_search_and_the_chips_stay_in_reach_however_far_down(run, tmp_path, vp):
     look = ("(() => { const b = document.querySelector('dialog.detail .detail-body'); b.scrollTop = b.scrollHeight;"
             " return new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(() => {"
-            " const bar = document.querySelector('.lp-bar').getBoundingClientRect();"
+            " const bar = document.querySelector('.lp-bar').__drawnRect();"
             " const f = document.querySelector('.lp-bar input');"
             " ok({top: Math.round(bar.top), bottom: Math.round(bar.bottom), vh: innerHeight, placeholder: f.placeholder,"
             " fits: f.scrollWidth <= f.clientWidth + 1,"
@@ -270,7 +270,7 @@ def test_the_top_is_three_blocks_with_pay_and_notice_at_once(run, tmp_path, vp):
             " const first = kids.findIndex((x) => x.classList.contains('lp-part'));"
             " const head = document.querySelector('.lp-head').textContent;"
             " return {before: kids.slice(0, first).map((x) => x.className), head,"
-            " top: Math.round(lp.querySelector('.lp-part').getBoundingClientRect().top), vh: innerHeight}; })()")
+            " top: Math.round(lp.querySelector('.lp-part').__drawnRect().top), vh: innerHeight}; })()")
     got = _go(run, tmp_path, _model(_ctx()), [dict(OPEN, eval=look)], vp)
     at = got["after"][0]["eval"]
     # The card's own actions, the head and the bar: nothing else before part 1.
@@ -282,8 +282,8 @@ def test_the_top_is_three_blocks_with_pay_and_notice_at_once(run, tmp_path, vp):
 
 
 def test_a_term_on_a_wide_screen_opens_beside_the_column_and_nothing_moves(run, tmp_path):
-    box = ("(() => { const c = document.querySelector('.lp').getBoundingClientRect(); const p = document.querySelector('.lp-panel');"
-           " const r = p.hidden ? null : p.getBoundingClientRect();"
+    box = ("(() => { const c = document.querySelector('.lp').__drawnRect(); const p = document.querySelector('.lp-panel');"
+           " const r = p.hidden ? null : p.__drawnRect();"
            " return {left: Math.round(c.left), right: Math.round(c.right), panel: r ? Math.round(r.left) : null}; })()")
     got = _go(run, tmp_path, _model(_ctx()), [dict(OPEN, eval=box),
         {"click": "forecasts: what it means", "within": "dialog.detail .lp-part", "eval": box}], WIDE)
