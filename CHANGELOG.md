@@ -44,6 +44,16 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
+- **The final check names any word that reads back with a space inside it.** The check that compares a resume's text with its draft ignored spaces, so a split word passed it; it now names the word and where it is, and the font check reads these letter pairs too.
+
+- **A cover letter reads the same way.** The letter's own fonts split "LTV" into "L TV"; they are now set without those adjustments too, and the final check names any word in a letter that reads back as two.
+
+- **Your progress counts the people you write to, not only the jobs you apply for.** The Brief's panel showed applied, replied, interviews and offers whatever you were doing, so a month spent writing to people read as "0 applied" beside noughts. It now shows up to four numbers chosen for you from both sides (applied, interviews, offers, messages sent, accepted, people replied, calls, referrals, and interviews or referrals that came through people), what moved furthest first, and never a nought beside real work.
+
+- **One line says what is working, when your own numbers show it.** Under the numbers, a line such as which kind of person answers your first notes most, or how applications went where you had talked to someone there, said as plain counts and only once each group holds at least five; with too few, nothing is claimed.
+
+- **The weekly chart shows applications and messages sent.** Two quiet bars a week in the page's two chart colours, each named by a swatch in the line under them (one series when you only do one); Progress, which the numbers open, counts messages sent too and draws the same two series.
+
 - **Held back for now says why, ends at its day, and gives you one tap to lift it.** Each line read "open again Fri 27 Nov, or say 'more at <employer>'", leaving you to type it; now it says why ("2 people there are waiting on a reply") and has its own pill ("Open it now"), with Claude's answer under the row.
 
 - **"How every rule ends" is grouped and in plain words.** It was one wall of 34 lines with "<employer>", "No thanks", "InMail", "6 business days" and "kept, as" in it; now it sits under small headings (Jobs, People, Messages...) with room between rows.
@@ -65,6 +75,10 @@ make sense to somebody whose repo just received it.
 - **The app skill says to load the page's database tools first in a cloud chat**, where ArtifactData and ArtifactComments can be listed by name with no schema until ToolSearch loads them.
 
 ### Fixed
+
+- **An applicant tracking system reads "AWS", "VAT" or "Vancouver" as one word on every resume.** A resume's summary read back as "production pipelines on Azure and A WS" because the font tucks some letter pairs closer together, and the text reader took that gap for a space; the classic design split "V ancouver" and "Y AML" the same way. Every font on a resume is now set without those adjustments, and applications not yet sent are made again.
+
+- **This week's date under the chart is no longer cut off.** In bold at the panel's edge it read "19 Oc"; it now ends at the edge.
 
 - **A second people search the same day keeps the first one's results.** Both were saved under the day's name, so the new one took the earlier one's place on the page.
 
