@@ -1,7 +1,7 @@
 {
  "model": 1,
  "made_at": "2026-10-25T18:00:00Z",
- "rev": "23666a0b7aee",
+ "rev": "2bfcb75511a2",
  "app": {
   "version": "4.13.0",
   "url": null,
@@ -13,7 +13,7 @@
   ],
   "privacy": "Only you can open this page unless you share it. It holds first names, employers, your drafts and your setup answers, so keep it unshared.",
   "repo": "https://github.com/aranculleton/last-job-search",
-  "page": 86,
+  "page": 90,
   "not_saved": 0,
   "app_bugs": []
  },
@@ -77,7 +77,7 @@
  ],
  "jobs": {
   "round": "r9",
-  "made_at": "2026-11-09T21:55:43Z",
+  "made_at": "2026-11-10T00:52:54Z",
   "met": false,
   "summary": "3 roles from the last search to look at, 1 of them scoring 75 or more. 3 left out, each with its reason.",
   "rows": [
@@ -1008,7 +1008,7 @@
    "when": "2026-10-28",
    "prep": {
     "path": "documents/applications/thornbury_bank_risk_analyst_thornbury/interview_prep.md",
-    "updated": "2026-11-09T21:55:43Z"
+    "updated": "2026-11-10T00:52:54Z"
    },
    "questions": 2,
    "all_day": true,
@@ -1128,7 +1128,8 @@
    "applied": 3,
    "interviews": 1,
    "offers": 0,
-   "replies": 1
+   "replies": 1,
+   "sent": 2
   },
   "funnel": [
    {
@@ -1148,42 +1149,50 @@
    {
     "week": "2026-W36",
     "applied": 0,
-    "replies": 0
+    "replies": 0,
+    "sent": 0
    },
    {
     "week": "2026-W37",
     "applied": 1,
-    "replies": 1
+    "replies": 1,
+    "sent": 1
    },
    {
     "week": "2026-W38",
     "applied": 0,
-    "replies": 0
+    "replies": 0,
+    "sent": 0
    },
    {
     "week": "2026-W39",
     "applied": 0,
-    "replies": 0
+    "replies": 0,
+    "sent": 1
    },
    {
     "week": "2026-W40",
     "applied": 1,
-    "replies": 0
+    "replies": 0,
+    "sent": 0
    },
    {
     "week": "2026-W41",
     "applied": 0,
-    "replies": 0
+    "replies": 0,
+    "sent": 0
    },
    {
     "week": "2026-W42",
     "applied": 0,
-    "replies": 0
+    "replies": 0,
+    "sent": 0
    },
    {
     "week": "2026-W43",
     "applied": 0,
-    "replies": 0
+    "replies": 0,
+    "sent": 0
    }
   ],
   "applications": [
@@ -1212,7 +1221,8 @@
     "applied": 1,
     "interviews": 1,
     "offers": 0,
-    "replies": 0
+    "replies": 0,
+    "sent": 0
    },
    "funnel": [
     {
@@ -1228,6 +1238,28 @@
      "n": 0
     }
    ]
+  },
+  "glance": {
+   "days": 30,
+   "tiles": [
+    {
+     "k": "applied",
+     "n": 1,
+     "label": "applied",
+     "short": "applied",
+     "side": "jobs",
+     "share": null
+    },
+    {
+     "k": "interviews",
+     "n": 1,
+     "label": "interview",
+     "short": "interview",
+     "side": "jobs",
+     "share": null
+    }
+   ],
+   "working": null
   }
  },
  "settings": [
