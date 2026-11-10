@@ -385,8 +385,9 @@ METHODS: dict[str, dict] = {
             (81, "2026-11-06", False, "the landing steps unsubscribe from a save's pull request as soon as it is opened, before its merge, so a save no longer wakes the chat twice more"),
             (82, "2026-11-06", False, "a general resume's summary goes through the grounding audit's own questions, a written one with its claim map (stage_picks.py general --claims-file), and one questioned is never made; its draft is kept (documents/cv/general/draft.json) so the pencil changes its bullets, its look and its summary as an application's, the summary through both audits, which ask a general draft only grounding questions; one made before has no pencil until a fresh one is made, and nothing made before needs making again"),
             (83, "2026-11-09", False, "a hold on a contact with no end day lifts on the day beside it; the runbook says where every hold is listed"),
+            (84, "2026-11-10", True, "every font on a resume is set with no kerning, so an applicant tracking system reads AWS, VAT or Vancouver as one word (a kern pair read as a space split \"AWS\" in summaries, and \"V ancouver\" under the classic design); the round trip names any word the text layer splits, and the font probe reads kern pairs; unsent applications are made again so none goes out with a split word"),
         ),
-        "fingerprint": "c2c9ce3007f5a1b9",
+        "fingerprint": "a69bb7298cb2d2c4",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
