@@ -739,7 +739,8 @@ LADDER = (
 def ladder(tools=(), consent: str | None = None, has_export: bool | None = None) -> dict:
     """What this run can use from the ladder, for the tools this chat has.
 
-    `tools` is kept for callers that pass it: the page reads, never a chat (reading.route).
+    `tools`: this chat's browser tools. The page reads, or a chat with Claude's own browser on
+    the person's computer reads them itself, in the run (reading.route `here`).
     Returns {"rungs": [(Rung, usable, why)], "read": route, "read_cap": None for no cap of
     the app's own, 0 where nothing is read,
     "hand_top": n, "say": the one line for the person, or ""}.
@@ -747,10 +748,10 @@ def ladder(tools=(), consent: str | None = None, has_export: bool | None = None)
     import reading
     r = reading.route(list(tools or ()), consent)
     # None: no cap of the app's own on reads (reading.shortlist_cap); 0: none here.
-    cap = reading.shortlist_cap()[0] if r["route"] == "page" else 0
+    reads = r["route"] in ("page", "here")
+    cap = reading.shortlist_cap()[0] if reads else 0
     export = _has_export() if has_export is None else has_export
     declined = CONNECTIONS_EXPORT == "declined"
-    reads = r["route"] == "page"
     rungs = []
     for rung in LADDER:
         if rung.id == "connections":
@@ -761,7 +762,9 @@ def ladder(tools=(), consent: str | None = None, has_export: bool | None = None)
                    else "not on file yet: the connections-export upgrade asks")
         elif rung.id == "browser_read":
             usable = reads
-            why = (f"{r['browser']}, the people worth writing to, queued for it"
+            why = (f"{r['browser']}, the people worth writing to, read in this run"
+                   if r["route"] == "here" else
+                   f"{r['browser']}, the people worth writing to, queued for it"
                    if reads else f"PROFILE_READS is {reading.reads_now()!r}")
         elif rung.id == "hand":
             usable = not reads

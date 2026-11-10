@@ -2460,6 +2460,16 @@ def ask(db: dict, kind: str, title: str, now: dt.datetime, out_dir: str, args: d
     wid = safe_id(item_id) if item_id else work_id(kind, now)
     if wid in (db.get("work") or {}):
         raise ValueError(f"work {wid!r} is already there")
+    sent = ""
+    if kind in READS_ON_COMPUTER and chat_kind != "computer" and to in ("", "cloud", "either"):
+        # A networking run asked for in a cloud chat goes to the person's computer when it is
+        # known ready, as the page's own Find people sends it (peopleTo): the whole run there,
+        # its profiles read in Claude's browser. Asked in a chat it went `to: cloud`, or ran in
+        # that cloud chat itself (--here), which can read no profile, and left every note
+        # waiting on a read (the maintainer, 2026-11-10).
+        import computer
+        if computer.networking_there(db, now):
+            to, here, sent = "computer", False, "computer"
     to = to or ("cloud" if WORK_KINDS[kind]["to"] == "cloud" else "either")
     if to not in ("cloud", "computer", "either") or (
             to != "either" and to not in WORK_KINDS[kind]["can"]):
@@ -2490,7 +2500,20 @@ def ask(db: dict, kind: str, title: str, now: dt.datetime, out_dir: str, args: d
     if dump_dir:
         # As every other batch is kept (keep_landed), so a refused one is put back.
         keep_landed(dump_dir, batches)
-    return {"work": wid, "batches": batches}
+    got = {"work": wid, "batches": batches}
+    if sent:
+        got["sent_to"] = sent
+        got["then"] = ("Sent to the person's computer, where the whole run is done in Claude's "
+                       "browser: this chat does none of it. Now python3 tools/computer.py "
+                       "waiting and route, as the app skill says for work for the computer. "
+                       "Tell the person in one line: " + SENT_TO_COMPUTER_SAY)
+    return got
+
+
+# What the person is told when a networking run they asked for in a cloud chat goes to their
+# computer instead.
+SENT_TO_COMPUTER_SAY = ("Finding people runs on your computer, where Claude reads each "
+                        "profile before writing the note. Your page shows how it goes.")
 
 
 # Kinds of work whose finish leaves PDFs the page should hold: they run in a chat of their own,

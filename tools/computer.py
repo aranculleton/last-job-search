@@ -43,6 +43,7 @@ whose trend the brief reports (`trend`).
     python3 tools/computer.py started <dump> --work ID --session ID --env ID --computer NAME
     python3 tools/computer.py archived <dump> --work ID
     python3 tools/computer.py signed-in <dump> --work ID          # its own sign-in question, answered
+    python3 tools/computer.py signin-wait <dump> --work ID [--every S]  # wait for a sign-in, then look
     python3 tools/computer.py measure <dump> --work ID --chat ID [--transcript FILE]
     python3 tools/computer.py check <dump> [--envs FILE]       # the sync's and the brief's lines
     python3 tools/computer.py trend [--days 7]
@@ -83,6 +84,14 @@ CARD_AFTER_S = 10 * 60
 # A chat started on the computer is believed to be at work for this long (its claim's lease
 # then says the rest): no second one is started for the same work meanwhile.
 STARTED_S = 30 * 60
+# A chat on the computer that found LinkedIn signed out opens the sign-in page in Claude's
+# browser, puts the Sign in to LinkedIn card on the page and looks again by itself for this
+# long, carrying on the moment they are signed in (`signin-wait`). Meanwhile it is at work,
+# never put away; after it, it ends, and a fresh one carries on once they sign in. Stopped at
+# once, the job was parked and its chat put away the minute LinkedIn was found signed out,
+# and a sign-in made then started nothing for half an hour (the maintainer, 2026-11-10).
+SIGNIN_WAIT_S = 15 * 60
+SIGNIN_LOOK_S = 60
 # The name of every chat the app starts on the computer: recognisable, and safe to delete.
 SESSION_TITLE = "Job search · {job} · {computer}"
 # The scheduled task on the computer that takes waiting work while no cloud chat is awake
@@ -527,13 +536,21 @@ def waiting(db: dict, now: dt.datetime) -> dict:
         # computer is put away at once, like a finished one, and a fresh one is started only
         # once they answer, which queues the work again. The stopped chat sat in their sidebar
         # while the page waited on them (the maintainer, 2026-11-10).
+        # Its chat waiting for a sign-in (SIGNIN_WAIT_S) is at work, never put away; one put
+        # away (`archived_at`) is at work no longer, whenever it started: a sign-in made on the
+        # page then queued the work again, and it waited half an hour, counted as started.
+        live = bool(sess.get("id")) and not sess.get("archived_at")
+        asked_you = _time(d.get("asked_you_at"))
+        waits = live and bool(asked_you) and (now - asked_you).total_seconds() < SIGNIN_WAIT_S
         if status in page_db.FINISHED or status == "needs_you":
-            if sess.get("id") and not sess.get("archived_at"):
+            if status == "needs_you" and waits and waits_on_signin(d):
+                started[wid] = sess["id"]
+            elif live:
                 finished.append({"work": wid, "session": sess["id"]})
             continue
         at = _time(sess.get("at"))
         if (status == "queued" or lapsed(d, now, work)) and not d.get("stop_asked"):
-            if sess.get("id") and at and (now - at).total_seconds() < STARTED_S:
+            if live and ((at and (now - at).total_seconds() < STARTED_S) or waits):
                 started[wid] = sess["id"]
             else:
                 queued.append(wid)
@@ -641,6 +658,22 @@ def reads_there(rec: dict, st: dict, now: dt.datetime) -> bool:
     return bool(seen and (now - seen).total_seconds() < OFF_S)
 
 
+def networking_there(db: dict, now: dt.datetime) -> bool:
+    """Does a networking run go to the person's computer, the whole run done there with its
+    profile reads in Claude's browser (the page's peopleTo, for one asked in a chat too)? Their
+    computer is known ready (reads_there, from profile/place.json and the page's heartbeat)
+    and they have profiles read in the browser, not pasted or left alone."""
+    try:
+        import place
+        sys.path.insert(0, os.path.join(_HERE, "network"))
+        import reading
+        if reading.reads_now() != "browser":
+            return False
+        return reads_there(place.place_record(), heartbeat(db), now)
+    except Exception:  # noqa: BLE001  nothing to read: not known ready
+        return False
+
+
 def card(st: dict) -> dict | None:
     """The one To do card, in the shape of the page's other setup cards
     (tools/app_setup.py outside_item), or None when the person is not needed."""
@@ -698,14 +731,21 @@ def session_prompt(wid: str, title: str, url: str, copy: str) -> str:
         "LinkedIn page shows the person signed in), then python3 tools/computer.py beat \"$D\" "
         "--name \"<this computer's name>\" --browser <shown|hidden> --linkedin "
         "<in|out|unknown>, and send the batch it prints (ArtifactData batch). LinkedIn signed "
-        "out: put it on their page with python3 tools/app.py done \"$D\" --work <its id> --chat "
-        "<your id> --kind computer --signin linkedin --question \"LinkedIn is signed out in "
-        "Claude's browser.\" and send its batch: the page signs them in inside the Claude app "
-        "and sends the work back by itself. Then go to step 7. Never ask in this chat.",
-        "Signed in after all (the person says so in this chat, or any later look shows LinkedIn "
-        "signed in) while a job of yours waits on its sign-in: python3 tools/computer.py "
-        "signed-in \"$D\" --work <its id>, send its batch, write the heartbeat with --linkedin "
-        "in, then step 4 again and carry on from step 6. Never tell them to tap anything on the "
+        f"out (now, or at any profile later): open {LINKEDIN_LOGIN['url']} in Claude's browser, "
+        "in a tab of its own, so the sign-in is there when they look; put it on their page with "
+        "python3 tools/app.py done \"$D\" --work <its id> --chat <your id> --kind computer "
+        "--signin linkedin --question \"LinkedIn is signed out in Claude's browser.\" and send "
+        "its batch (the Sign in to LinkedIn card: the page signs them in inside the Claude app). "
+        "Then wait for it yourself, never parking the job: python3 tools/computer.py "
+        "signin-wait \"$D\" --work <its id> (it waits a minute and says how long is left), then "
+        "look only at the sign-in tab's address and title, python3 tools/network/reading.py "
+        "signin --url <its address>. Not signed in yet: signin-wait again, until it says stop, "
+        "then go to step 7 (a fresh chat carries on once they sign in). Never ask in this chat.",
+        "Signed in (any look shows LinkedIn signed in, or the person says so here) while a job "
+        "of yours waits on its sign-in: python3 tools/computer.py signed-in \"$D\" --work <its "
+        "id> and send its batch (refused, or it says it is not waiting: the page sent the work "
+        "back already, and there is nothing to send), write the heartbeat with --linkedin in, read the page's work again (step 3), "
+        "then step 4 again and carry on from step 6. Never tell them to tap anything on the "
         "page for it.",
         "6. Follow the `steps` step 4 printed, in order. Reading LinkedIn: only the pages the "
         "work names, one at a time, as tools/network/pace.py PACE_RULE says; say what you do "
@@ -836,17 +876,34 @@ def route(db: dict, now: dt.datetime, chat: str = "", envs=None, folders=None,
     live = [d for d in ((doc or {}).get("data") or {} for doc in chats.values())
             if d.get("kind") == "computer" and d.get("watching") is not False
             and _time(d.get("seen_at")) and (now - _time(d["seen_at"])).total_seconds() < FRESH_S]
-    if live:
-        return {"route": "computer chat", "work": wid,
-                "line": "Your computer's chat takes it.", "waiting": w}
+    # This chat is on the computer, with Claude's browser: it takes the work itself. A chat the
+    # person opened there, with no list of computers to ask and no heartbeat yet, was routed
+    # to "paste", and its page said the computer was off while it sat open on it.
+    here = app_listen.chat_kind() == "computer" and any(
+        t in ("browser", "enable") or t.startswith("mcp__Claude_Browser") for t in tools)
+    if live or here:
+        out = {"route": "computer chat", "work": wid,
+               "line": "Your computer's chat takes it.", "waiting": w}
+        if here:
+            out["then"] = ("this chat is on the computer and has Claude's browser: take it here, "
+                           "python3 tools/app.py next <dump> --chat <your id> --kind computer "
+                           "--on \"<your model>\" --claim-out <dump>/claim, send its claim "
+                           "batch, and follow the steps it prints.")
+        return out
     found = bridges(envs)
-    if found and "create_session" in tools and chat and not is_starter(db, chat) \
-            and app_listen.chat_kind() == "cloud":
+    helper = bool(found) and "create_session" in tools and bool(chat) \
+        and not is_starter(db, chat) and app_listen.chat_kind() == "cloud"
+    if helper:
         # Any cloud chat but the starter wakes the starter (or makes it once): the approval a
         # chat on the computer needs ties the approving chat to the person's devices for good,
         # and a helper that held it could not archive itself (the maintainer, 2026-11-10).
-        return _starter_route(db, now, wid, w, url, copy, runs_there(found[0]["computer"]))
-    if found and "create_session" in tools:
+        got = _starter_route(db, now, wid, w, url, copy, runs_there(found[0]["computer"]))
+        # No starter can be made from here (no copy to start it from): the rest of the chain
+        # still works, a folder or the browser the computer lends this chat. "none" here left
+        # the work waiting with both on offer.
+        if got["route"] != "none":
+            return got
+    if found and "create_session" in tools and not helper:
         b = found[0]
         title = session_title(item.get("title") or item.get("kind"), b["computer"])
         call = {"environment_id": b["id"], "title": title,
@@ -960,7 +1017,8 @@ def signed_in(db: dict, wid: str, now: dt.datetime, out_dir: str, dump_dir: str 
         raise KeyError(f"no work {wid!r} in the dump; read work again")
     d = doc["data"]
     if not waits_on_signin(d):
-        raise KeyError(f"{wid!r} is not waiting on a sign-in; carry on as it is")
+        raise KeyError(f"{wid!r} is not waiting on a sign-in (the page may have sent it back "
+                       "already): nothing to send; carry on as it is")
     args = dict(d.get("args") or {}) if isinstance(d.get("args"), dict) else {}
     answers = dict(args.get("answers") or {}) if isinstance(args.get("answers"), dict) else {}
     answers[str(d.get("note") or "question")[:200]] = SIGNED_IN_SAID
@@ -976,6 +1034,16 @@ def signed_in(db: dict, wid: str, now: dt.datetime, out_dir: str, dump_dir: str 
     if dump_dir:
         page_db._keep_dump(dump_dir, "work", wid, dict(d, **fields), int(doc["version"] or 1) + 1)
     return w.save("computer-signed-in")
+
+
+def signin_wait(item: dict, now: dt.datetime) -> tuple[str, int]:
+    """("look" | "stop" | "answered", seconds left): whether a chat on the computer that found
+    LinkedIn signed out goes on looking for the sign-in (SIGNIN_WAIT_S from its question)."""
+    if not waits_on_signin(item):
+        return "answered", 0
+    asked = _time(item.get("asked_you_at")) or now
+    left = int(SIGNIN_WAIT_S - (now - asked).total_seconds())
+    return ("look", left) if left > 0 else ("stop", 0)
 
 
 def archived(db: dict, wid: str, now: dt.datetime, out_dir: str) -> list[str]:
@@ -1522,6 +1590,11 @@ def main(argv=None) -> int:
     p.add_argument("--work", required=True)
     p.add_argument("--out", default="")
     p.add_argument("--now", default=None)
+    p = sub.add_parser("signin-wait", help="LinkedIn signed out: wait a minute, then look again")
+    p.add_argument("dump")
+    p.add_argument("--work", required=True)
+    p.add_argument("--every", type=float, default=SIGNIN_LOOK_S, help="seconds to wait")
+    p.add_argument("--now", default=None)
     p = sub.add_parser("started")
     p.add_argument("dump")
     for k in ("--work", "--session", "--env", "--computer"):
@@ -1618,6 +1691,25 @@ def main(argv=None) -> int:
         return 0
     db = page_db.load(a.dump)
     out = getattr(a, "out", "") or os.path.join(a.dump, "out")
+    if a.cmd == "signin-wait":
+        doc = (db.get("work") or {}).get(page_db.safe_id(a.work))
+        if doc is None:
+            print(f"computer: no work {a.work!r} in the dump; read work again", file=sys.stderr)
+            return 2
+        said, left = signin_wait(doc["data"], now)
+        if said == "look":
+            import time
+            wait = max(0.0, min(float(a.every), float(left)))
+            time.sleep(wait)
+            left = max(0, int(left - wait))
+            print(f"look: look at the sign-in tab again ({max(1, left // 60)} min left)")
+        elif said == "stop":
+            print(f"stop: not signed in after {SIGNIN_WAIT_S // 60} minutes. Go to step 7: the "
+                  "card stays on their page, and a fresh chat carries on once they sign in there.")
+        else:
+            print("answered: it is not waiting on a sign-in now. Read the page's work again "
+                  "(step 3), then step 4.")
+        return 0
     if a.cmd == "ring":
         rec = starter(db)
         if not rec.get("bell"):

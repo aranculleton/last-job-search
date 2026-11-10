@@ -50,13 +50,17 @@ def test_one_who_pastes_still_gets_the_whole_list_and_is_asked_for_nothing_per_p
 
 @pytest.mark.parametrize("tools", [["browser"], ["enable"], ["chrome"], ["chrome-off"], []])
 def test_the_page_reads_the_best_few_whatever_browser_the_chat_has(tools, monkeypatch):
-    """Since 4.3 no chat reads LinkedIn, whatever browser it has: the person's page does, in
-    the Claude desktop app (reading.route), so every chat's ladder is the same."""
+    """Since 4.3 the person's page reads, in the Claude desktop app (reading.route), and since
+    2026-11-10 a chat holding Claude's own browser on their computer reads the best few itself,
+    in the run: either way the browser read is on and nothing is asked to be pasted."""
     monkeypatch.setattr(reading, "PROFILE_READS", "browser")
     monkeypatch.setattr(reading, "reads_now", lambda: "browser")
     got = sources.ladder(tools)
     usable = {r.id: ok for r, ok, _ in got["rungs"]}
-    assert got["read"] == "page" and usable["browser_read"] and not usable["hand"]
+    want = "here" if tools in (["browser"], ["enable"]) else "page"
+    assert got["read"] == want and usable["browser_read"] and not usable["hand"]
+    why = {r.id: w for r, _, w in got["rungs"]}["browser_read"]
+    assert ("read in this run" in why) is (want == "here")
     # No cap of the app's own on reads (None), and no paste asked for meanwhile.
     assert got["read_cap"] is None and got["hand_top"] == 0
 

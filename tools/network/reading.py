@@ -1744,6 +1744,11 @@ def what_to_send(where: str) -> str:
     return "their profile pasted here, or screenshots of it"
 
 
+# The tools that are Claude's own browser pane on the person's computer (place.BROWSERS less
+# Chrome, whose tabs are the person's own): a chat holding one reads profiles itself.
+READS_HERE = {"browser", "enable"}
+
+
 def route(tools=(), consent: str | None = None, env=None, signed_in: bool | None = None) -> dict:
     """How a profile is read: by the person's own page, in the Claude desktop app, never by a
     chat, chosen for the person and never asked of them.
@@ -1753,13 +1758,34 @@ def route(tools=(), consent: str | None = None, env=None, signed_in: bool | None
     nearly everything, and the computer only the reading that needs their sign-in). A chat that read profiles put every page into its own context, the
     costliest part of a run; the page reads them for nothing and hands each to the engine as a
     reading.done action (app_actions._reading_done). `tools`, `env` and `signed_in` are kept
-    for callers that pass them; nothing depends on them now.
+    for callers that pass them.
+
+    A chat with Claude's own browser on the person's computer (`tools` names `browser` or
+    `enable`: the desktop app's browser pane, in a chat there or lent to a cloud chat) reads
+    them itself, in this run (`here`): the networking run sent to the computer queued its
+    reads for "the page", drafted every note to wait on a read and finished, and a second
+    chat on the computer was started later to read and rewrite them, so the run that was
+    meant to be whole did only half (the maintainer, 2026-11-10). What a chat can do is
+    decided by the tools it has, never by where it was started (MAINTAINING.md).
     """
     consent = (consent or reads_now()).lower()
     hand = what_to_send(surface(env))
     if consent == "off":
         return {"route": "public", "browser": "", "usable": False, "do": "public work only",
                 "say": "", "signin": False}
+    if consent == "browser" and READS_HERE & {str(t).strip().lower() for t in tools or ()}:
+        return {"route": "here", "browser": "Claude's browser on the person's computer",
+                "usable": True,
+                "do": ("read the short list in this chat's own browser now, in this run: "
+                       "`reading.py shortlist <ids, best first>`, then `reading.py next` and do "
+                       "what it prints (the profile and its Experience page, then `reading.py "
+                       "read <contact> - --source browser`) until it says done, and write each "
+                       "note from its reading (`reading.py draft <contact> -`, never "
+                       "--wait-for-read). LinkedIn's sign-in page instead of a profile: "
+                       "`reading.py signin` and its steps, then carry on. Never queue them for "
+                       "the page, and never fetch linkedin.com over the web (WebFetch, curl): "
+                       "it is read only in the signed-in browser on the person's computer"),
+                "say": "", "signin": True}
     if consent == "browser":
         import place
         return {"route": "page", "browser": "your page in the Claude desktop app",

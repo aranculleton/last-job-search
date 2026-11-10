@@ -340,16 +340,24 @@ def test_where_the_session_runs_is_read_from_its_environment():
 
 
 def test_the_route_is_chosen_for_the_person_and_never_asks_them_to_press_anything():
-    # Since 4.3 the person's page reads, never a chat, whatever browser the chat has or where
-    # it runs: one route, queued for the page, and the person told once where it reads.
+    # Since 4.3 the person's page reads, queued for it, and the person told once where it
+    # reads; since 2026-11-10 a chat holding Claude's own browser on their computer reads the
+    # short list itself, in the run, and writes every note from it (decided by its tools,
+    # never where it runs): the run sent to the computer did only half, queuing its reads
+    # for a second chat there.
     import place
     for env in (LOCAL, CLOUD_DESKTOP, CLOUD_PHONE):
         for tools in (["browser"], ["enable"], ["chrome"], ["chrome-off"], []):
             r = reading.route(tools, "browser", env, signed_in=False)
-            assert r["route"] == "page" and r["usable"] and not r["signin"]
-            assert "queue-page" in r["do"] and "--wait-for-read" in r["do"]
             assert "sign in" not in r["say"].lower() and "Chrome" not in r["say"]
             assert len(r["say"].split()) <= place.SHORT_WORDS
+            if tools in (["browser"], ["enable"]):
+                assert r["route"] == "here" and r["usable"] and r["signin"]
+                assert "queue-page" not in r["do"] and "never --wait-for-read" in r["do"]
+                assert "reading.py next" in r["do"] and "--source browser" in r["do"]
+                continue
+            assert r["route"] == "page" and r["usable"] and not r["signin"]
+            assert "queue-page" in r["do"] and "--wait-for-read" in r["do"]
     phone = reading.route([], "browser", CLOUD_PHONE)
     desk = reading.route([], "browser", CLOUD_DESKTOP)
     for r in (phone, desk):
