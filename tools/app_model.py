@@ -2015,6 +2015,7 @@ VERIFY_WORDS = {
     "DESIGN_LETTER": "the letter may not read cleanly in an employer's system",
     "CONTACT": "your contact details are not all in the text",
     "CONTACT_LETTER": "the letter's header is missing your email or phone",
+    "SPLIT_LETTER": "a word in the letter reads as two in an employer's system",
     "ROUNDTRIP": "a line of the draft is missing from the PDF's text",
     "NO_PINNED_SKILL": "the skill you always show is missing", "SKILLPARENS":
     "the skills line has brackets", "DUPBULLET": "a bullet is there twice",

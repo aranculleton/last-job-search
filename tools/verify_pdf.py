@@ -446,6 +446,35 @@ def split_words(groups, text) -> list:
     return out
 
 
+def letter_fields(draft):
+    """[(label, [(what, text)])] for the words a draft puts on its cover letter: the
+    paragraphs, the lead line, each bullet's label and text, and the salutation."""
+    import copy
+    import render_application as R
+    import person
+    d = R.build(copy.deepcopy(draft))
+    ident = person.get("identity") or {}
+    # The header and the date: never split on a good page, and a space they hold (a
+    # phone number's, a date's) is one the draft has, not a split.
+    groups = [("the letter's header", [(k, str(ident.get(k) or "")) for k in (
+        "name", "location", "phone", "email")] + [("date", str(d.get("letter_date") or ""))])]
+    groups.append(("the letter's salutation", [("salutation",
+                                                tex_plain(d.get("salutation", "")))]))
+    groups += [("the letter's %s" % name, [(key, tex_plain(d.get(key, "")))])
+               for key, name in (("p1", "first paragraph"), ("p2", "second paragraph"),
+                                 ("lead", "lead line"))]
+    groups += [("the letter's bullet %d" % i, [("bullet", tex_plain("%s: %s" % (t, x)))])
+               for i, (t, x) in enumerate(d.get("cl_bullets") or [], 1)]
+    groups.append(("the letter's closing paragraph", [("p4", tex_plain(d.get("p4", "")))]))
+    return groups
+
+
+def letter_splits(draft, text) -> list:
+    """The letter's words its text layer reads with a space inside them, as plain lines."""
+    return ["split: %s: \"%s\" reads as \"%s\" in the text layer" % hit
+            for hit in split_words(letter_fields(draft), text)]
+
+
 def roundtrip(groups, text):
     """What the text layer lacks or holds out of order, as plain lines; [] when every line
     the draft put on the page is there, in order.

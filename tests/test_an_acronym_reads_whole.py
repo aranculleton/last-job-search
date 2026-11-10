@@ -82,3 +82,51 @@ def test_every_design_reads_kerned_words_whole(tmp_path, monkeypatch, design):
     assert "Azure and AWS" in text, text[:400]
     found = V.roundtrip(V.roundtrip_fields(a), text)
     assert not [f for f in found if f.startswith("split:")], found
+
+
+# --- the cover letter ---------------------------------------------------------------------
+
+LETTER_WORDS = ("AWS", "AVL", "WAV", "VAT", "YAML", "LTV", "Vancouver", "Tyneside")
+
+
+def _letter_draft():
+    a = _draft()
+    a["p1"] = "At Brindle & Hart I forecast by depot on Azure and AWS with AVL and WAV data."
+    a["p2"] = "Wrenfield moves goods; VAT, YAML and LTV work from Vancouver to Tyneside."
+    a["cl_bullets"] = [{"label": "Forecasting", "text": "Weekly models on AWS by depot."}]
+    return a
+
+
+def test_a_letter_word_read_with_a_space_inside_it_is_named():
+    a = _letter_draft()
+    page = "\n".join(f for _l, fs in V.letter_fields(a) for _w, f in fs)
+    assert V.letter_splits(a, page) == []
+    [why] = V.letter_splits(a, page.replace("and LTV", "and L TV"))
+    assert why == 'split: the letter\'s second paragraph: "LTV" reads as "L TV" in the text layer'
+
+
+@pytest.mark.skipif(not shutil.which("xelatex"), reason="XeLaTeX is not installed here")
+@pytest.mark.parametrize("design", [None, "classic", "modern"])
+def test_the_letter_reads_kerned_words_whole(tmp_path, monkeypatch, design):
+    # The template's letter read "L TV" in Raleway (2026-11-10): cover.cls sets every font it
+    # loads with no kerning, as the resume's are.
+    monkeypatch.setenv("LJS_STATE", str(tmp_path))
+    import docpaths
+    import fit_to_page as F
+    import render_application as R
+    from pypdf import PdfReader
+    for d in ("cv", "cover_letters"):
+        (tmp_path / d).mkdir()
+    for f in ("OpenFonts", "cover.cls"):
+        os.symlink(os.path.join(ROOT, "cover_letters", f), tmp_path / "cover_letters" / f)
+    a = _letter_draft()
+    if design:
+        a["design"] = design
+    b = R.build(a)
+    R.gen.letter(b)
+    F.compile_letter(b["abbr"])
+    text = " ".join("".join(p.extract_text() for p in
+                            PdfReader(docpaths.letter_pdf(b["abbr"])).pages).split())
+    for word in LETTER_WORDS:
+        assert re.search(r"\b%s\b" % word, text), (design, word, text)
+    assert V.letter_splits(a, text) == []
