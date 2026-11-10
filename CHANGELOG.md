@@ -44,6 +44,14 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
+- **With your computer set up, a note waiting for someone's profile is read there by itself.** The note says "Claude reads it on your computer by itself", and Claude sends the read to your computer with nothing to press. Before, the note said to press Read them in To do when no such button was there.
+
+- **Help Claude do more is a card you can see.** It sits right after today's things as one soft card: what the first thing gives you, and one button to start it, with the rest folded under "and N more". As a faint line at the foot of To do it was easy to miss.
+
+- **While your page is being updated, it shows a small turning ring in its own colours**, light or dark, instead of a plain line on a blank page.
+
+- **Claude's chat for a big job no longer messages your page's helper chat.** It saves its work, waiting for the save to finish, and updates your page itself. Messages between chats needed your approval every time, and one was refused.
+
 - **The final check names any word that reads back with a space inside it.** The check that compares a resume's text with its draft ignored spaces, so a split word passed it; it now names the word and where it is, and the font check reads these letter pairs too.
 
 - **A cover letter reads the same way.** The letter's own fonts split "LTV" into "L TV"; they are now set without those adjustments too, and the final check names any word in a letter that reads back as two.
@@ -75,6 +83,18 @@ make sense to somebody whose repo just received it.
 - **The app skill says to load the page's database tools first in a cloud chat**, where ArtifactData and ArtifactComments can be listed by name with no schema until ToolSearch loads them.
 
 ### Fixed
+
+- **A reply that says your resume is attached offers the resume made for that person.** It used to offer your general resume, because the one made for them was looked for in the wrong place.
+
+- **A resume made for someone downloads at once.** It now goes onto your page as soon as it is made. Before, Get it started a new piece of work to fetch it.
+
+- **A finished resume made for someone opens their card in Contacts.** It opened Jobs with a search for their name, which found nothing.
+
+- **"Press Read them" appears only while To do shows the Read them button.** When another card took its place, the note pointed at a button that was not there.
+
+- **Claude takes the next job without being turned away by your page.** When Claude picked up its next job, it saved its own status without first reading what your page held, so your page refused the save. Claude now reads that status first.
+
+- **An update to your page that your page refuses now succeeds on the second try.** When another chat had changed the page in the meantime, Claude now reads again everything that may have changed, in one go. Before, it fixed one record at a time and was refused again for the next.
 
 - **An applicant tracking system reads "AWS", "VAT" or "Vancouver" as one word on every resume.** A resume's summary read back as "production pipelines on Azure and A WS" because the font tucks some letter pairs closer together, and the text reader took that gap for a space; the classic design split "V ancouver" and "Y AML" the same way. Every font on a resume is now set without those adjustments, and applications not yet sent are made again.
 
