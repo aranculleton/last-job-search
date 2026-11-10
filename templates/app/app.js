@@ -7184,7 +7184,10 @@
     S.markUntil = now() + MARK_MS;
     c.classList.add("flash", "last-used");
     const still = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
-    try { c.scrollIntoView({block: "center", behavior: still ? "auto" : "smooth"}); } catch (e) { /* no scrolling here */ }
+    // Its I sent it is what is wanted next, so that is what is brought to the middle: centring
+    // a tall card left the button below the fold in Safari (2026-11-10).
+    const sent = c.querySelector('[data-k^="sent:"]');
+    try { (sent || c).scrollIntoView({block: "center", behavior: still ? "auto" : "smooth"}); } catch (e) { /* no scrolling here */ }
     clearTimeout(markTimer);
     markTimer = setTimeout(unmark, MARK_MS);
     scheduleRender();
