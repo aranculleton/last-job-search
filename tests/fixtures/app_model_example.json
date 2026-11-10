@@ -1,7 +1,7 @@
 {
  "model": 1,
  "made_at": "2026-10-25T18:00:00Z",
- "rev": "188c244b757c",
+ "rev": "11d94c6c28c6",
  "app": {
   "version": "4.13.0",
   "url": null,
@@ -13,7 +13,7 @@
   ],
   "privacy": "Only you can open this page unless you share it. It holds first names, employers, your drafts and your setup answers, so keep it unshared.",
   "repo": "https://github.com/aranculleton/last-job-search",
-  "page": 91,
+  "page": 92,
   "not_saved": 0,
   "app_bugs": []
  },
@@ -77,7 +77,7 @@
  ],
  "jobs": {
   "round": "r9",
-  "made_at": "2026-11-10T00:56:01Z",
+  "made_at": "2026-11-10T01:03:31Z",
   "met": false,
   "summary": "3 roles from the last search to look at, 1 of them scoring 75 or more. 3 left out, each with its reason.",
   "rows": [
@@ -1008,7 +1008,7 @@
    "when": "2026-10-28",
    "prep": {
     "path": "documents/applications/thornbury_bank_risk_analyst_thornbury/interview_prep.md",
-    "updated": "2026-11-10T00:56:01Z"
+    "updated": "2026-11-10T01:03:31Z"
    },
    "questions": 2,
    "all_day": true,
@@ -1864,6 +1864,7 @@
    "hold": {
     "browser": "Waiting for their profile: Claude reads it next time this page is open in the Claude app on your computer, then rewrites this note",
     "paste": "Waiting for their profile: paste it here and Claude rewrites this note",
+    "computer": "Waiting for their profile: Claude reads it on your computer by itself, then rewrites this note",
     "tab": "Waiting for their profile: press Read them in To do once, and Claude reads it by itself from then on",
     "sign_in": "Waiting for their profile: sign in to LinkedIn in Claude's browser and Claude reads it by itself",
     "paused": "Waiting for their profile: LinkedIn asked Claude to slow down, so it reads it tomorrow, by itself",

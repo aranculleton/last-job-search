@@ -527,7 +527,9 @@ master cannot see work sitting on another chat's branch, and builds it a second 
    start `python3 tools/land.py --message "<what changed>"` in the background (Bash,
    `run_in_background`), so the chat stays free for the person and the page while it runs
    (in the foreground the check held the chat that answers the page for minutes,
-   2026-10-29). It does every step on this side, each git command on its own: saves and
+   2026-10-29). A chat whose next step needs the landing done (a job's own chat) runs it in
+   the foreground instead, so the command itself ends when the landing has; never a `pgrep`
+   loop to wait on it, which matches its own command line and never ends (2026-11-10). It does every step on this side, each git command on its own: saves and
    commits, `git fetch origin master` and `git merge --no-edit origin/master`, runs
    `./tools/ci_local.sh --quick`, and only when that is green `git push -u origin HEAD`
    (a network failure is retried; nothing is ever forced). In the turn its ending wakes:

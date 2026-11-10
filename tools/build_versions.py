@@ -387,8 +387,9 @@ METHODS: dict[str, dict] = {
             (83, "2026-11-09", False, "a hold on a contact with no end day lifts on the day beside it; the runbook says where every hold is listed"),
             (84, "2026-11-10", False, "a resume made for a contact is named as the person's own (<Prefix>_<Noun>.pdf) in the contact's folder, never _For_<them>: the contact receives the file; older ones keep their names"),
             (85, "2026-11-10", True, "every font on a resume is set with no kerning, so an applicant tracking system reads AWS, VAT or Vancouver as one word (a kern pair read as a space split \"AWS\" in summaries, and \"V ancouver\" under the classic design); the cover letter's fonts likewise (it read \"L TV\"); the round trip names any word the text layer splits, verify_batch flags one in a letter (SPLIT_LETTER), and the font probe reads kern pairs; unsent applications are made again so none goes out with a split word"),
+            (86, "2026-11-10", False, "a resume made for a contact goes into the page's store as it is made, so its Get it downloads at once; a job's own chat lands its work with land.py in the foreground and brings the page up to date itself, never messaging another chat; a networking item sent to the computer with args.read_first reads each profile there before rewriting its note"),
         ),
-        "fingerprint": "fa97b2a1da91931d",
+        "fingerprint": "579e016fdfca27fa",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -875,8 +876,9 @@ METHODS: dict[str, dict] = {
             (89, "2026-11-10", False, "a work card's count joins its line without a stray full stop; each people search asked from the page has its own id, so a second one the same day never overwrites the first"),
             (90, "2026-11-10", False, "a work card's count joins its line without a stray full stop"),
             (91, "2026-11-10", False, "Your progress counts people as well as jobs: up to four numbers chosen for you (applied, interviews, messages sent, replies, calls, referrals and the like), never a nought beside real work, one line on what is working when your own numbers show it, and the weeks as applications and messages sent"),
+            (92, "2026-11-10", False, "a note waiting for its person's profile names only what is there: with your computer ready, it says Claude reads it on your computer by itself and the read is sent there with nothing pressed, and \"press Read them\" only while To do shows that button; a reply that sends the resume made for that person offers that one, from the page's store; a finished resume made for someone opens their card in Contacts; Help Claude do more is one soft card after today's things with its one pill to start; the page being updated turns a small ring in its own colours"),
         ),
-        "fingerprint": "3baa979eea0c8837",
+        "fingerprint": "9f52a9fa8ed9d92c",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

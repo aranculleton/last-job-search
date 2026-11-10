@@ -3848,6 +3848,8 @@
   // Cards that help Claude do more and ask nothing of today (renderTodo's last line).
   const HELP_KEYS = new Set(["reading", "export"]);
   // What each way of helping Claude gives, in a line, for the fold that holds it.
+  // The help card's one pill: what starting the first one is, in its own words.
+  const HELP_START = {"you-finish": "Finish your profile", reading: "Set it up", export: "Add your download"};
   function helpWhy(i) {
     const k = txt(obj(i).key);
     return k === "you-finish" ? "Your profile: every " + noun() + " and letter is built from it"
@@ -3890,6 +3892,9 @@
     if (settingUp) return [];
     const list = every.filter(todoHidden);
     if (todoHidden({key: "you-finish"}) && finishProfileCard()) list.push({key: "you-finish", node: () => finishProfileCard()});
+    // Help Claude do more's own card, hidden with its bin, comes back from here like any other.
+    if (todoHidden({key: "help"})) list.push({key: "help", node: () => card("article", {class: "card todo help-card", "aria-labelledby": "help-hidden-title", "data-item": "help-hidden"},
+      h("p", {class: "card-title", id: "help-hidden-title"}, "Help Claude do more"))});
     return list;
   }
   function hiddenFold(list) {
@@ -4124,20 +4129,31 @@
       if (first) first.focus({preventScroll: true});
     }}, h("summary", {class: "band-more-sum", onclick: (e) => { e.currentTarget.parentElement.dataset.tapped = "1"; }}, "Show " + restN + " more"), rest));
     // Help Claude do more: what makes Claude better at the rest, asked nothing today and never
-    // counted in it. Right after today's things and above Not due yet, one line that says what
-    // it gives; with nothing due today, its first card shows under its own heading, the rest
-    // one tap below (the maintainer, 2026-11-07: "help claude do more is more important but
-    // its a bit too tucked away here"). Today's things always come first (DESIGN.md, Places).
-    const helpRoom = !settingUp && !restN && !top && helpNodes.length && shown === 0;
-    if (helpRoom) {
-      put(wrap, h("section", {class: "band help-band", "aria-labelledby": "band-help"}, h("h3", {class: "group", id: "band-help"}, "Help Claude do more"),
-        h("div", {class: "todo-group"}, h("div", {class: "stack"}, helpNodes[0])),
-        helpNodes.length > 1 ? det("todo-help", false, {class: "band-more"}, h("summary", {class: "band-more-sum"}, "Show " + (helpNodes.length - 1) + " more"),
+    // counted in it. Right after today's things and above Not due yet, one soft card in To do's
+    // own style: its title, the first one's line saying what it gives, and its one pill to
+    // start it, which puts that one's own card in its place; the rest fold under "and N more".
+    // A faint line at the foot was not found (the maintainer, 2026-11-07 and 2026-11-10: "help
+    // claude do more is so hidden"). With nothing due today, the first one's card shows at
+    // once. Today's things always come first (DESIGN.md, Places).
+    if (helpNodes.length && !todoHidden({key: "help"})) {
+      const nothingToday = !settingUp && !restN && !top && shown === 0;
+      const started = nothingToday || openState.get("det:todo-help-first") === true;
+      const first = helpList[0];
+      const start = () => {
+        openState.set("det:todo-help-first", true);
+        scheduleRender();
+        setTimeout(() => { const c = document.querySelector("#main .help-band [data-card]"); if (c) c.focus({preventScroll: false}); }, 0);
+      };
+      const head = started ? h("div", {class: "todo-group"}, h("div", {class: "stack"}, helpNodes[0]))
+        : withHide({key: "help"}, card("article", {class: "card todo help-card", "aria-labelledby": "help-title", "data-item": "help"},
+          h("div", {class: "todo-top"}, kindMark("setup")),
+          h("p", {class: "card-title", id: "help-title"}, "Help Claude do more"),
+          helpWhy(first) ? h("p", {class: "small"}, helpWhy(first)) : null,
+          h("div", {class: "card-actions"}, btn(HELP_START[txt(first.key)] || "Start", start, {kind: "primary", small: true, key: "help-start"}))));
+      put(wrap, h("section", {class: started ? "band help-band" : "help-band", "aria-labelledby": started ? "band-help" : "help-title"},
+        started ? h("h3", {class: "group", id: "band-help"}, "Help Claude do more") : null, head,
+        helpNodes.length > 1 ? det("todo-help", false, {class: "band-more"}, h("summary", {class: "band-more-sum"}, "and " + (helpNodes.length - 1) + " more"),
           h("div", {class: "stack todo-help"}, helpNodes.slice(1))) : null));
-    } else if (helpNodes.length) {
-      put(wrap, det("todo-help", false, {class: "band-more soon-more help-more"}, h("summary", {class: "band-more-sum"}, "Help Claude do more (" + helpNodes.length + ")",
-        helpWhy(helpList[0]) ? h("span", {class: "band-more-why"}, " · " + helpWhy(helpList[0])) : null),
-        h("div", {class: "stack todo-help"}, helpNodes)));
     }
     if (soonCount) put(wrap, det("todo-soon", !shown && !top, {class: "band-more soon-more"}, h("summary", {class: "band-more-sum"}, "Not due yet (" + soonCount + ")"), soon));
     const hidden = dueItems().find((d) => txt(d.kind) === "hidden");
@@ -6874,10 +6890,19 @@
     const r = obj(p.resume_for_them);
     if (!txt(r.name)) return null;
     const key = (where || "p") + "resfor:" + p.id;
-    const g = obj(r.get);
-    const get = txt(r.asset) ? btn("Get it", () => getFiles({id: "resfor-" + seg(p.id), company: ""}, [{name: r.name, path: r.path, asset: r.asset}]), {kind: "link", small: true, key})
-      : g.kind ? btn("Get it", () => requestWork([{id: txt(g.id), kind: txt(g.kind), title: "The " + noun() + " made for " + txt(p.first_name) + ", ready to download", args: obj(g.args), redo: true}]), {kind: "link", small: true, key}) : null;
+    const fetchIt = getMadeFor(p, key);
+    const get = fetchIt ? btn("Get it", fetchIt, {kind: "link", small: true, key}) : null;
     return h("p", {class: "small", "data-resume-for": txt(p.id)}, cap1(noun()) + " made for " + txt(p.first_name) + (txt(r.made_on) ? ", " + fmtDay(r.made_on) : ""), get ? [" · ", get] : null);
+  }
+  // Getting the resume made for them: saved at once from the page's own store, where its
+  // making put it (page_db.queue_files, app_model.files_missing); one made before that is
+  // fetched for the page first, the way any file is. Null: nothing to get.
+  function getMadeFor(p, key) {
+    const r = obj(p.resume_for_them);
+    if (!txt(r.name)) return null;
+    if (txt(r.asset)) return () => download({kind: "resume", name: txt(r.name), path: r.path, asset: r.asset}, key);
+    const g = obj(r.get);
+    return g.kind ? () => requestWork([{id: txt(g.id), kind: txt(g.kind), title: "The " + noun() + " made for " + txt(p.first_name) + ", ready to download", args: obj(g.args), redo: true}]) : null;
   }
   async function getFiles(a, files) {
     for (const f of files) await download(Object.assign({company: txt(a.company)}, f), "dl:" + a.id);
@@ -7069,7 +7094,16 @@
   function sendsLine(m) {
     if (txt(m.sends) !== "resume") return null;
     const made = readyItems().find((a) => readyLive(a) && txt(obj(a.for_contact).id || a.for_contact) === txt(m.contact));
-    const theirs = made ? arr(made.files).find((f) => f.kind === "resume" && f.asset) : null;
+    // The one made for them with no job named (general_resume.py --for-contact) is on their
+    // own card (people[].resume_for_them), never among the applications: looked up only
+    // there, it was missed, and "Your resume" offered the general one (the maintainer,
+    // 2026-11-10).
+    const p = personById(txt(m.contact)) || {};
+    const forThem = obj(p.resume_for_them);
+    const madeFile = made ? arr(made.files).find((f) => f.kind === "resume") || null : null;
+    const theirs = madeFile ? (madeFile.asset ? madeFile : null)
+      : txt(forThem.asset) ? {kind: "resume", name: txt(forThem.name), path: forThem.path, asset: forThem.asset} : null;
+    const hasTheirs = !!(madeFile || txt(forThem.name));
     const cur = obj(obj(M().resume).file);
     const key = "dl:sends:" + m.id;
     const who = txt(m.first_name);
@@ -7078,12 +7112,17 @@
     const making = !theirs && [...allWork()].some(([, w]) => txt(w.kind) === "resume_for_contact" &&
       txt(obj(w.args).contact) === txt(m.contact) && ACTIVE.has(txt(w.status) || "queued"));
     if (making) return h("div", {class: "sends-line"}, h("span", {class: "small muted"}, "Goes with it: the " + noun() + " for " + who + ", which Claude is making now"));
-    const f = theirs || (cur.asset ? {kind: "resume", name: txt(cur.name), asset: cur.asset} : null);
+    // Theirs, made but not yet in the page's store: the way to it, never the general file
+    // under their name.
+    const f = theirs || (hasTheirs ? null : cur.asset ? {kind: "resume", name: txt(cur.name), asset: cur.asset} : null);
+    const label = hasTheirs ? "The " + noun() + " for " + who : "Your " + noun();
+    const reach = hasTheirs && !made ? getMadeFor(p, key)
+      : () => go("drafts", {focus: true, drafts: "apps", item: made ? made.id : txt(obj(M().resume).id) || "resume-general"});
     return h("div", {class: "sends-line"},
       h("span", {class: "small muted"}, "Goes with it: "),
-      f ? btn((made ? "The " + noun() + " for " + who : "Your " + noun()) + " (" + (txt(f.name).split(".").pop() || "pdf").toUpperCase() + ")", () => download(f, key),
-        {kind: "secondary", small: true, key, aria: "Save " + (made ? "the " + noun() + " for " + who : "your " + noun()) + " to attach to the message to " + who})
-        : btn("Your " + noun(), () => go("drafts", {focus: true, drafts: "apps", item: made ? made.id : txt(obj(M().resume).id) || "resume-general"}), {kind: "secondary", small: true, key, aria: "Your " + noun() + ", to attach to the message to " + who}),
+      f ? btn(label + " (" + (txt(f.name).split(".").pop() || "pdf").toUpperCase() + ")", () => download(f, key),
+        {kind: "secondary", small: true, key, aria: "Save " + label.charAt(0).toLowerCase() + label.slice(1) + " to attach to the message to " + who})
+        : reach ? btn(label, reach, {kind: "secondary", small: true, key, aria: label + ", to attach to the message to " + who}) : null,
       noteFor(key));
   }
   // A web address written out in a line of words is a short link named by its site, "(canada.ca)":
@@ -7228,16 +7267,31 @@
   function holdKey(m) {
     const st = readHere();
     if (st === "off") return "paste";
-    if (st === "paused" || st === "sign_in") return st;
-    if (st !== "ready") return "browser";
+    if (st === "paused") return st;
     const cid = txt(m.contact);
     const q = arr(readingInfo().queue).find((x) => txt(x.contact) === cid);
+    // Their computer is set up and ready: the engine sends the read there as work, by itself
+    // (tools/app.py computer_reads), wherever this page is open (the maintainer, 2026-11-10).
+    if (computerReads()) return q && S.reading.busy && S.reading.cur === cid ? "reading" : q && effective(txt(q.id), ["reading.done"]) ? "read" : "computer";
+    if (st === "sign_in") return st;
+    if (st !== "ready") return "browser";
     if (!q) return null;
     if (S.reading.busy && S.reading.cur === cid) return "reading";
     if (effective(txt(q.id), ["reading.done"])) return "read";
-    if (S.reading.needTab) return "tab";
+    // "Press Read them in To do" only while To do holds that button: the line named a card
+    // that was not there (the maintainer, 2026-11-10). Until it is, it waits its turn.
+    if (S.reading.needTab) return readThemOnTodo() ? "tab" : "next";
     if (S.reading.tried.has(txt(q.id)) || readToday(q) || autoHeld(S.autoReads || S.autoSeen)) return "again";
     return "next";
+  }
+  // The person's computer reads LinkedIn by itself (the engine's person.computer,
+  // tools/computer.py reads_there), unless they paste profiles instead.
+  function computerReads() { return !!person().computer && txt(readingInfo().setting) !== "paste"; }
+  // Does To do show the Read them button now: its reading card is the one To do draws, and
+  // that card carries it (readThemShows).
+  function readThemOnTodo() {
+    const it = readingTodo();
+    return !!it && it.key === "reading-queue" && readThemShows(waitingReads(), readHere());
   }
   function holdLine(m) {
     const k = holdKey(m);
@@ -12423,7 +12477,7 @@
     if (untaken.length && !rungFor(untaken)) {
       return {key: "reads-taken", kind: "message", band: "first", employer: null, tab: "contacts", counts: false, node: () => readsTakenCard(untaken)};
     }
-    if (people.length && (st === "ready" || st === "paused" || st === "desktop" || st === "off")) {
+    if (people.length && (st === "ready" || st === "paused" || st === "desktop" || st === "off" || computerReads())) {
       return {key: "reading-queue", kind: "message", band: "week", employer: null, tab: "contacts", counts: false, node: () => readQueueCard(queue, st, people)};
     }
     if (st === "ready" || st === "off" || st === "paused") return null;
@@ -12484,13 +12538,17 @@
     const r = S.reading;
     // Started by itself, or about to be (maybeAutoRead): nobody presses anything.
     const auto = st === "ready" && autoNow(queue);
-    const title = st === "desktop" ? "Open your page in the Claude app on your computer to read " + nWord(n, "profile", "profiles")
+    // Read on their computer, sent there by the engine by itself: nothing to press anywhere.
+    const there = computerReads() && st !== "paused" && st !== "off" && !r.busy;
+    const title = there ? "Claude reads " + nWord(n, "profile", "profiles") + " on your computer by itself"
+      : st === "desktop" ? "Open your page in the Claude app on your computer to read " + nWord(n, "profile", "profiles")
       : st === "off" || (st === "ready" && !queue.length) ? "Paste " + nWord(n, "profile", "profiles") + " so Claude can write " + (n === 1 ? "the note" : "the notes")
       : r.busy ? "Claude is reading " + nWord(n, "profile", "profiles")
       : auto ? "Claude reads " + nWord(n, "profile", "profiles") + " by itself"
       : "Read " + nWord(n, "profile", "profiles") + " before Claude writes";
     // When and where they are read, said once: the notes they hold back wait on this card.
-    const why = st === "paused" ? "LinkedIn asked Claude to slow down, so these wait until tomorrow. Then it reads them by itself." :
+    const why = there ? "It reads them in the Claude app on your computer, then rewrites each note. Nothing to press." :
+      st === "paused" ? "LinkedIn asked Claude to slow down, so these wait until tomorrow. Then it reads them by itself." :
       st === "desktop" ? "Claude reads them there, in its own browser, by itself, then rewrites each note. Their notes wait until then." :
       st === "off" || !queue.length ? "Copy each one's LinkedIn page and paste it on their card in Contacts. Claude rewrites the note from it." :
       r.needTab ? "Claude reads them in a tab of its own in Claude's browser, out of your way. Press Read them once to open that tab; after that it reads by itself." :
@@ -12503,17 +12561,22 @@
       names.length ? h("p", {class: "small muted"}, names.slice(0, 5).join(", ") + (names.length > 5 ? " and " + (names.length - 5) + " more" : "")) : null,
       running ? h("p", {class: "small reading-line", role: "status"}, h("span", {class: "spin", "aria-hidden": "true"}), " Reading " + txt(r.at || "their profiles") + (r.total ? ", " + (r.done + 1 > r.total ? r.total : r.done + 1) + " of " + r.total : "")) : null,
       why && !running ? h("p", {class: "small"}, why) : null,
+      there ? null :
       st === "off" || (st === "ready" && !queue.length) ? h("div", {class: "card-actions"}, btn("Open Contacts", () => go("contacts", {focus: true}), {kind: "primary", small: true, key: "read-open-contacts"})) :
-      st !== "ready" || auto ? null :
+      !readThemShows(queue, st) ? null :
         h("div", {class: "card-actions"}, btn("Read them", () => { S.reading.tried.clear(); readProfiles(queue, "reading"); }, {kind: "primary", small: true, key: "read-them"})),
       // No computer: the card had no button and came back every week (the stranger audit,
       // X-53). Pasting works on any device, and the setting takes the queue with it.
-      st === "desktop" && settingItem("profile_reads") ? h("div", {class: "card-actions"}, btn("I'll paste them instead", () => {
+      st === "desktop" && !there && settingItem("profile_reads") ? h("div", {class: "card-actions"}, btn("I'll paste them instead", () => {
         const s = settingItem("profile_reads");
         act([{item: setId(s), action: "setting.set", value: {value: "paste"}, rev: txt(s.rev) || null}], "You paste profiles from now on");
       }, {kind: "secondary", small: true, key: "read-paste"}), h("span", {class: "hint"}, "No computer? Copy a profile's text on your phone and paste it to Claude.")) : null,
       noteFor("reading"));
   }
+  // The reading card's Read them: where this page reads (open in the Claude app on a
+  // computer), with someone waiting, and not reading by itself now. Never where their
+  // computer reads them, which needs nothing pressed.
+  function readThemShows(queue, st) { return st === "ready" && queue.length > 0 && !autoNow(queue) && !computerReads(); }
   // The small panel for Claude's browser: what it is doing, and Close, which only hides it.
   function browserPanel() {
     const r = S.reading;
@@ -12797,7 +12860,7 @@
     const kind = txt(obj(w).kind);
     const t = obj(a.target);
     const card = kind === "talk" ? obj(a.about) : {};
-    const who = txt(a.contact) || txt(t.contact) || (card.kind === "person" ? txt(card.id) : "") || (card.kind === "message" ? txt(obj(messageById(txt(card.id))).contact) : "");
+    const who = txt(a.contact) || txt(t.contact) || (card.kind === "person" ? txt(card.id) : "") || (card.kind === "message" ? txt(obj(messageById(txt(card.id))).contact) : "") || resumeContact(w);
     if (who || txt(t.output) === "message") {
       const note = who ? messageItems().find((m) => txt(m.contact) === who && msgLive(m)) : messageById(txt(t.id));
       return {tab: "contacts", item: note ? note.id : who || txt(t.id) || null};
@@ -12812,6 +12875,30 @@
     }
     if (kind === "prep" && txt(a.interview)) return {tab: "interviews", item: txt(a.interview)};
     return {tab: WORK_HOME[kind] || null, item: null};
+  }
+  // Whose resume a piece of work made or fetched: a resume made for a contact lives on their
+  // card in Contacts, so its row opens there. Its `files` work names it only by its path
+  // (documents/network/<id>/) or its `resfor-<id>`, and one asked in a chat may name them only
+  // in its title ("Resume for Juno (Larkspur Retail)"): each opened Jobs, searching for the
+  // name, and found nothing (the maintainer, 2026-11-10).
+  function resumeContact(w) {
+    const a = obj(obj(w).args);
+    const kind = txt(obj(w).kind);
+    if (kind !== "resume_for_contact" && kind !== "files") return "";
+    const fc = txt(obj(a.for_contact).id || a.for_contact);
+    if (fc) return fc;
+    for (const p of arr(a.paths).concat(txt(a.resume) ? [a.resume] : [])) {
+      const m = /^documents\/network\/([^/]+)\//.exec(txt(p).replace(/\\/g, "/"));
+      if (m) return m[1];
+    }
+    for (const x of arr(a.applications).concat(txt(a.application) ? [a.application] : [])) if (/^resfor-./.test(txt(x))) return txt(x).slice(7);
+    if (kind !== "resume_for_contact") return "";
+    const m = /\bfor ([^(),:]+?)\s*(?:\(([^)]+)\))?\s*(?:[,:]|$)/i.exec(txt(obj(w).title));
+    if (!m) return "";
+    const name = m[1].trim().toLowerCase(), at = txt(m[2]).trim().toLowerCase();
+    const hit = peopleItems().filter((p) => [txt(p.name), txt(p.first_name)].some((n) => n && n.toLowerCase() === name) &&
+      (!at || txt(p.employer).toLowerCase() === at));
+    return hit.length === 1 ? txt(hit[0].id) : "";
   }
   const WORK_HOME = {search: "jobs", draft: "drafts", resume_for_contact: "drafts", prep: "interviews", reply: "contacts", follow_up: "contacts",
     network: "contacts", talk: "chat", update: "settings", files: "drafts", tweak: "drafts", evaluate: "jobs", general_resume: "settings", profile: "settings", own_profile: "todo"};

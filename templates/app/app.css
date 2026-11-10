@@ -226,7 +226,7 @@ bdi { unicode-bidi: isolate; }
 
 
 .group { font-size: var(--t-md); font-weight: 600; color: var(--ink); }
-.band { display: grid; gap: 16px; }
+.band, .help-band { display: grid; gap: 16px; }
 .todo-group { display: grid; gap: 12px; }
 .todo-employer { font-size: var(--t-sm); font-weight: 600; color: var(--muted); }
 .stack { display: grid; gap: 16px; }
@@ -708,7 +708,7 @@ textarea { width: 100%; resize: vertical; line-height: 1.45; }
 .summary.with-tool > .head-tools { flex: 0 1 auto; }
 /* The words take the line and a heading's tool sits at its right end. */
 .summary.with-tool > .sum-words { flex: 1 1 280px; min-width: 0; }
-.band { gap: 12px; margin-top: 12px; }
+.band, .help-band { gap: 12px; margin-top: 12px; }
 .band .group, .set-group .group, .apps-head .group { font-size: 1rem; font-weight: 600; }
 .todo-group { gap: 8px; }
 .todo-employer { font-size: 0.875rem; font-weight: 600; color: var(--muted); }

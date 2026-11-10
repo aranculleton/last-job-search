@@ -241,11 +241,12 @@ def test_a_note_waiting_on_a_read_says_why_and_where_the_reading_happens(page):
     _waiting(page, VARGA)
     m = page.model()
     (msg,) = [x for x in m["messages"] if x["contact"] == VARGA]
-    # When, not only where: the reading runs while this page is open in the Claude app on a
-    # computer (the maintainer, 2026-11-07: "when exactly is this waiting for claude thing going
-    # to happen?").
-    assert msg["hold"] == ("Waiting for their profile: Claude reads it next time this page is "
-                           "open in the Claude app on your computer, then rewrites this note"), msg["hold"]
+    # When, not only where (the maintainer, 2026-11-07: "when exactly is this waiting for claude
+    # thing going to happen?"). The example person's computer is set up and ready, so the read is
+    # sent there by itself (2026-11-10); with none, it runs while this page is open in the Claude
+    # app on a computer (test_a_note_waiting_on_a_read_says_when_once.py has both).
+    assert msg["hold"] == ("Waiting for their profile: Claude reads it on your computer by "
+                           "itself, then rewrites this note"), msg["hold"]
     # Not ready, so not on To do's "Messages to send": on its one reading card (to_read).
     assert msg["id"] not in m["to_send"]["ids"] and m["to_read"]["contacts"] == [VARGA], (m["to_send"], m["to_read"])
     # Said once: no alert repeating it, and a paste's gauge is one note's rewrite, not a run's.
@@ -253,4 +254,4 @@ def test_a_note_waiting_on_a_read_says_why_and_where_the_reading_happens(page):
     assert msg["paste"]["cost"]["state"] < 3 and msg["paste"]["cost"]["seconds"] < 300, msg["paste"]
     # Every place the page may be open has its line, from the engine (linkedin.reading.hold).
     words = m["linkedin"]["reading"]["hold"]
-    assert set(words) >= {"browser", "paste", "tab", "sign_in", "paused", "next", "reading", "read", "again"}, words
+    assert set(words) >= {"browser", "paste", "computer", "tab", "sign_in", "paused", "next", "reading", "read", "again"}, words

@@ -547,12 +547,28 @@ S.parts = async (a) => {
 // Opened on `clock`, against the moment the page says it was built (a page built moments
 // ago whose file is missing is one still being put up, and says so with no button).
 S.broken = async (a) => {
-  const o = await open({html: a.parts, seed: a.seed || {}, viewport: a.viewport, noSettle: true, clock: a.clock});
+  const o = await open({html: a.parts, seed: a.seed || {}, viewport: a.viewport, noSettle: true, clock: a.clock, scheme: a.scheme});
   const {page} = o;
   await page.waitForSelector("#ljs-broken", {timeout: 8000}).catch(() => {});
   await turn(page, 4);
   const r = {box: await one(page, "#ljs-broken"), shell: await visible(page, "#shell"), opening: await visible(page, "#opening"),
     button: !!(await page.$("#ljs-broken-ask")), built: await page.evaluate(() => (window.__ljsGuard || {}).built || null)};
+  // How the waiting line is drawn: its ring, in the page's own colours (the palette's tokens).
+  const look = () => page.evaluate(() => {
+    const box = document.getElementById("ljs-broken");
+    const spin = box && box.querySelector(".ljs-wait");
+    const root = getComputedStyle(document.documentElement);
+    const rgb = (v) => { const d = document.createElement("i"); d.style.color = v; document.body.appendChild(d); const c = getComputedStyle(d).color; d.remove(); return c; };
+    const cs = spin ? getComputedStyle(spin) : null;
+    return {spin: !!spin, hidden: spin ? spin.getAttribute("aria-hidden") : null, anim: cs ? cs.animationName : null,
+      top: cs ? cs.borderTopColor : null, bg: box ? getComputedStyle(box).backgroundColor : null, ink: box ? getComputedStyle(box).color : null,
+      mark: rgb(root.getPropertyValue("--mark").trim()), surface: rgb(root.getPropertyValue("--surface").trim()), text: rgb(root.getPropertyValue("--ink").trim())};
+  });
+  r.look = await look();
+  if (a.still) {
+    await page.emulateMedia({reducedMotion: "reduce"});
+    r.still = await look();
+  }
   if (r.button && a.tap) {
     await page.click("#ljs-broken-ask");
     await page.waitForFunction(() => /told|reach|reached/.test((document.querySelector("#ljs-broken [role=status]") || {}).textContent || ""), null, {timeout: 8000}).catch(() => {});
@@ -1785,6 +1801,8 @@ S.you = async (a) => {
   // Finish your profile waits at the end of "Show N more" while today's things show (2026-11-02).
   await page.$$eval("details.band-more:not([open])", (ds) => ds.forEach((d) => { d.open = true; }));
   await turn(page, 2);
+  // It is the first of Help Claude do more, one tap on its card (DESIGN.md, Places).
+  if (await page.$('[data-k="help-start"]')) { await page.click('[data-k="help-start"]'); await turn(page, 3); }
   const r = {card: await T(page, '#main [data-item="you"] .card-title')};
   await page.locator('#main [data-item="you"]').getByRole("button", {name: "Add what you did"}).click();
   await turn(page, 3);

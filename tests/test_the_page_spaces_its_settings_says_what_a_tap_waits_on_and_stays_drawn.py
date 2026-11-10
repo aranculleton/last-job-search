@@ -340,6 +340,9 @@ def test_a_card_of_notes_to_check_says_what_it_is(run, tmp_path):
     be read (the maintainer, 2026-11-07: "is there a simple way to do it in to do"), with every
     name on it, and none of them is on Messages to send."""
     m = copy.deepcopy(_sample())
+    # With no computer known ready: one that is reads them by itself, and its card says so
+    # (test_a_note_waiting_on_a_read_says_when_once.py).
+    m["person"]["computer"] = False
     held = [x for x in m["messages"] if x.get("kind") == "first_note"][:2]
     assert len(held) == 2
     for x in held:

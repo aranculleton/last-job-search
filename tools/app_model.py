@@ -744,6 +744,32 @@ def _person(ctx: Ctx, targets: dict) -> dict:
             "computer": computer}
 
 
+def computer_reads(ctx: Ctx) -> bool:
+    """Is the person's computer known ready to read LinkedIn (tools/computer.py reads_there),
+    so a LinkedIn read is sent there as work and done there by itself? Once a build."""
+    def make() -> bool:
+        try:
+            import place
+            import computer as _computer
+            return bool(_computer.reads_there(place.place_record(),
+                                              ctx._got.get("computer") or {}, ctx.now))
+        except Exception:  # noqa: BLE001  no record: not known ready
+            return False
+    return ctx._once("computer_reads", make)
+
+
+def read_hold(ctx: Ctx) -> str:
+    """The line on a first note waiting for its person's profile, by the person's setting. With
+    their computer known ready, the read is sent there as work by itself (tools/app.py
+    computer_reads), and the line says so on every device: "press Read them in To do" with no
+    such card there was the line before (the maintainer, 2026-11-10)."""
+    import reading
+    setting = ctx._once("reads_now", reading.reads_now)
+    if setting == "browser" and computer_reads(ctx):
+        return READ_HOLD["computer"]
+    return READ_HOLD.get(setting, READ_HOLD["browser"])
+
+
 # ------------------------------------------------------------------ needs you
 
 
@@ -1913,7 +1939,31 @@ def files_missing(ctx=None) -> list:
         if names:
             out.append({"id": rid, "company": str(row.get("company") or ""), "files": names,
                         "paths": paths})
+    # A resume made for a contact with no job named (general_resume.py --for-contact keeps it
+    # in their folder, not on the tracker): put in the store as it is made, like an
+    # application's, so its Get it downloads at once. Missed here, it was never uploaded, and
+    # Get it started a new piece of work to fetch it (the maintainer, 2026-11-10).
+    try:
+        recs = sorted(glob.glob(person.state("documents", "network", "*", "resume.json")))
+    except Exception:  # noqa: BLE001  no copy: nothing made for anyone
+        recs = []
+    if recs:
+        book = {str(c.get("contact_id") or "").strip(): c for c in ctx.contacts}
+        noun = _noun()
+        for rec in recs:
+            cid = os.path.basename(os.path.dirname(rec))
+            got = resume_made_for(cid)
+            if not got or got.get("asset"):
+                continue
+            who = first_name((book.get(cid) or {}).get("name")) or "them"
+            out.append({"id": RESUME_FOR_PREFIX + cid, "company": "",
+                        "what": f"the {noun} for {who}", "files": [got["name"]],
+                        "paths": [got["path"]]})
     return out
+
+
+# The id a contact's own resume goes under in the `files` work that puts it in the page's store.
+RESUME_FOR_PREFIX = "resfor-"
 
 
 def _files(row) -> list:
@@ -2574,7 +2624,7 @@ def _messages(ctx: Ctx, targets: dict) -> list:
             # Why it waits and where the reading happens, in a line: "Written before their
             # profile was read: read it first" on every note drafted in the cloud said neither
             # (2026-11-06).
-            hold = READ_HOLD.get(ctx._once("reads_now", reading.reads_now), READ_HOLD["browser"])
+            hold = read_hold(ctx)
         mid = f"msg-{cid}"
         from network import state as _st
         subject, body = _st.split_subject(text)
@@ -2716,6 +2766,10 @@ READ_HOLD = {
     "browser": "Waiting for their profile: Claude reads it next time this page is open in the "
                "Claude app on your computer, then rewrites this note",
     "paste": "Waiting for their profile: paste it here and Claude rewrites this note",
+    # Their computer is set up and ready (tools/computer.py reads_there): the read is sent
+    # there as work by itself (tools/app.py self_fixes), nothing pressed.
+    "computer": "Waiting for their profile: Claude reads it on your computer by itself, then "
+                "rewrites this note",
     # Open in the Claude app on a computer, where the page reads by itself:
     "tab": "Waiting for their profile: press Read them in To do once, and Claude reads it by "
            "itself from then on",
