@@ -583,3 +583,28 @@ def test_cancel_puts_back_the_words_edited_by_hand(run, page, model):
     before, cancelled, kept = got["after"][0]["eval"], got["after"][4]["eval"], got["after"][8]["eval"]
     assert len(before) > 20 and cancelled == before, (before, cancelled)
     assert "Hi" in kept and kept != before, kept
+
+
+def test_a_resume_being_made_for_them_is_the_one_that_goes_with_it(run, model, tmp_path):
+    """A reply saying "my resume is attached" showed the general resume to attach while Claude
+    was still making the one for that person (the maintainer, 2026-11-09). While theirs is being
+    made, the line says so, with nothing to save yet."""
+    import copy
+    from test_the_page_works_in_a_browser import _write
+    rafe = "kestrel_foods_thorne"
+    m2 = copy.deepcopy(model)
+    msg = next(x for x in m2["messages"] if x["contact"] == rafe)
+    msg["text"] = msg["body"] = "Thanks Rafe, CV attached. Happy to talk whenever suits."
+    msg["sends"] = "resume"
+    html = _write(tmp_path, "making", m2)
+    seed = dict(fixed(m2))
+    seed["work/contact_resume~" + rafe + "~general"] = {
+        "kind": "resume_for_contact", "status": "running", "title": "Resume for Rafe",
+        "args": {"contact": rafe, "job": None}, "created_at": "2026-10-25T08:00:00Z"}
+    got = run("engine", html=html, viewport=WIDE, clock=CLOCK, seed=seed, steps=[
+        {"hash": "contacts", "read": _card(rafe),
+         "eval": "[...document.querySelectorAll('%s .sends-line button')].length" % _card(rafe)},
+    ])
+    assert not got["errors"], got["errors"]
+    assert "which Claude is making now" in got["after"][0]["text"], got["after"][0]["text"]
+    assert got["after"][0]["eval"] == 0

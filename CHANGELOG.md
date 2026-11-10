@@ -66,6 +66,8 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **A reply that sends your resume shows the one Claude is making for that person.** While it was being made, the reply offered your general resume to attach instead.
+
 - **The page's helper no longer asks before starting, messaging or archiving its chats.** Its list of pre-approved steps had been split over two lines, and everything after the break asked you each time.
 
 - **A chat Claude starts on your computer asks you once to switch it to Auto, then never again.** One started from the cloud is refused Auto and began in Manual without a word, stopping on every step; you are now told the one switch, and the app remembers it for the chats after it there. The app also sets no reminders of its own while that chat works, each one a prompt.

@@ -7042,9 +7042,14 @@
     const made = readyItems().find((a) => readyLive(a) && txt(obj(a.for_contact).id || a.for_contact) === txt(m.contact));
     const theirs = made ? arr(made.files).find((f) => f.kind === "resume" && f.asset) : null;
     const cur = obj(obj(M().resume).file);
-    const f = theirs || (cur.asset ? {kind: "resume", name: txt(cur.name), asset: cur.asset} : null);
     const key = "dl:sends:" + m.id;
     const who = txt(m.first_name);
+    // A resume Claude is making for them now is the one that goes with it: offering the
+    // general one while theirs was being made sent the wrong file (the maintainer, 2026-11-09).
+    const making = !theirs && [...allWork()].some(([, w]) => txt(w.kind) === "resume_for_contact" &&
+      txt(obj(w.args).contact) === txt(m.contact) && ACTIVE.has(txt(w.status) || "queued"));
+    if (making) return h("div", {class: "sends-line"}, h("span", {class: "small muted"}, "Goes with it: the " + noun() + " for " + who + ", which Claude is making now"));
+    const f = theirs || (cur.asset ? {kind: "resume", name: txt(cur.name), asset: cur.asset} : null);
     return h("div", {class: "sends-line"},
       h("span", {class: "small muted"}, "Goes with it: "),
       f ? btn((made ? "The " + noun() + " for " + who : "Your " + noun()) + " (" + (txt(f.name).split(".").pop() || "pdf").toUpperCase() + ")", () => download(f, key),
