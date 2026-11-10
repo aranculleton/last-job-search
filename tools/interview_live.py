@@ -86,6 +86,11 @@ PART_TITLES = {
     "personal": "A time you did it",
     "close": "Your questions for them",
 }
+# Each part's name on its chip in the bar: a word or two, found at a glance mid-interview.
+PART_SHORT = {"opening": "Intro", "motivation": "Why them", "basics": "The basics",
+              "experience": "Your work", "behaviour": "Examples", "technical": "Technical",
+              "presenting": "Take-home", "case": "The case", "personal": "Examples",
+              "close": "Your questions"}
 # Who usually asks in each part, first of these the room holds.
 PART_WHO = {
     "opening": ("recruiter", "manager", "partner", "senior", "technical"),
@@ -337,7 +342,8 @@ def build(ctx) -> dict:
     total = round_minutes(ctx, shape)
     kinds = [k for k, _n in parts_def]
     mins = _part_minutes(shape, total)
-    parts = [{"id": "p%d" % (i + 1), "kind": k, "title": PART_TITLES[k], "minutes": m,
+    parts = [{"id": "p%d" % (i + 1), "kind": k, "title": PART_TITLES[k], "short": PART_SHORT[k],
+              "minutes": m,
               "who": _who(k, room), "say": [], "questions": []}
              for i, (k, m) in enumerate(zip(kinds, mins))]
     by_kind = {p["kind"]: p for p in parts}
@@ -377,9 +383,10 @@ def build(ctx) -> dict:
     asks = []
     for ln in P.ask_lines(ctx):
         text = P.plain_line(ln)[0]
-        q, _sep, why = text.partition(" (")
+        q, why = P._last_parens(text)
+        q = said_ask(q)
         if q.endswith("?"):
-            asks.append({"id": "a%d" % (len(asks) + 1), "q": q, "why": why.rstrip(")"),
+            asks.append({"id": "a%d" % (len(asks) + 1), "q": q, "why": why,
                          "follow": []})
     asks.append({"id": "a%d" % (len(asks) + 1), "q": P.CLOSE_QUESTION,
                  "why": "the last word on any doubt, while you are still in the room", "follow": []})
@@ -391,6 +398,40 @@ def build(ctx) -> dict:
            "stories": stories, "ask": asks, "terms": {}, "known": known,
            "private": private_notes(ctx)}
     return finish(doc)
+
+
+# A question to ask anchored on what was read, as the pack writes it for the person to see
+# where it came from ('The research says "Opened a cross-dock in January". What has that
+# changed for your team?'), is read aloud as written in the minutes before. The live prep
+# says it the way a person would.
+_ANCHORED = re.compile(r"^The (research says|posting describes) [\"“](.+?)[\"”]\.?\s+(.+)$")
+_DID = re.compile(r"^(?:\w+ed|won|began|bought|made|set|led|grew|built|ran|took|became|"
+                  r"launched|raised|opened|moved|hired|cut|sold|split|spun|chose)\b", re.I)
+
+
+def _lc(text) -> str:
+    """Its first letter small, unless the first word is a name or an acronym."""
+    t = _t(text)
+    return t[:1].lower() + t[1:] if t[:1].isupper() and t[1:2].islower() else t
+
+
+def said_ask(question) -> str:
+    """A question to ask them as it would be said: 'I saw you opened a cross-dock in January,
+    so what has that changed for your team?'. Anything else is left as it is."""
+    m = _ANCHORED.match(_t(question))
+    if not m:
+        return _t(question)
+    kind, fact, tail = m.group(1), m.group(2).strip().rstrip(".!"), _lc(m.group(3))
+    # A name keeps its capital ("Fernhill Freight runs ..."); an ordinary first word does not.
+    common = _lc(fact) if _DID.match(fact) or re.match(
+        r"(?i)(?:the|a|an|its|their|it|this|they|there|more|most|over|about)\b", fact) else fact
+    if kind == "posting describes":
+        lead = "I saw the role covers %s" % common
+    elif _DID.match(fact):
+        lead = "I saw you %s" % common
+    else:
+        lead = "I read that %s" % common
+    return "%s, so %s" % (lead, tail)
 
 
 def _place_known(known, questions, parts, room) -> None:
@@ -552,7 +593,7 @@ def merge(fresh, filled) -> dict:
     # Terms are Claude's alone.
     doc["terms"] = {k: v for k, v in (filled.get("terms") or {}).items() if isinstance(v, dict)}
     # The questions to ask: the records' with Claude's follow-ups, then Claude's own.
-    old_ask = {_norm(a.get("q")): a for a in filled.get("ask") or []}
+    old_ask = {_norm(said_ask(a.get("q"))): a for a in filled.get("ask") or []}
     for a in doc["ask"]:
         old = old_ask.pop(_norm(a["q"]), None)
         if old and old.get("follow"):
@@ -560,7 +601,7 @@ def merge(fresh, filled) -> dict:
     for old in old_ask.values():
         if _t(old.get("q")):
             doc["ask"].insert(len(doc["ask"]) - 1, {"id": "a%d" % (len(doc["ask"]) + 1),
-                                                    "q": _t(old["q"]), "why": _t(old.get("why")),
+                                                    "q": said_ask(old["q"]), "why": _t(old.get("why")),
                                                     "follow": old.get("follow") or []})
     priv = doc["private"]
     old_priv = filled.get("private") or {}
@@ -820,7 +861,9 @@ def grounding(doc, ctx=None) -> list:
         if draft:
             continue
         t = plain(text, terms)
-        if not re.search(P._PAY_Q + r"|\bnotice\b|\bstart\b", question or "", re.I):
+        # A question to ask them is about their work, never a claim about the person's.
+        about_them = where.startswith("your question")
+        if not about_them and not re.search(P._PAY_Q + r"|\bnotice\b|\bstart\b", question or "", re.I):
             for f in check_numbers.check(t, allowed=allowed):
                 if P._PLAN.search(f.get("context") or ""):
                     continue

@@ -124,6 +124,22 @@ def test_each_kind_of_round_has_its_own_parts(stage, company_type, shape):
         assert "basics" in kinds and doc["minutes"] == 30
 
 
+def test_the_questions_to_ask_are_said_as_a_person_says_them():
+    # The pack shows where a question came from ('The research says "..."'); read aloud in the
+    # minutes before, that was no question anyone asks (the review, 2026-11-10).
+    asks = [a["q"] for a in _built(stage="Recruiter screen")["ask"]]
+    assert not [a for a in asks if "research says" in a.lower() or '"' in a], asks
+    assert "I saw you opened a cross-dock in Warrington in January 2026, so what has that changed " \
+           "for your team?" in asks
+    assert L.said_ask('The research says "Fernhill Freight runs fourteen sites". Is that still how '
+                      'the team is set up?') == ("I read that Fernhill Freight runs fourteen sites, so "
+                                                 "is that still how the team is set up?")
+    # The pack itself still says where each came from, as its checks require.
+    assert any('The research says "' in ln for ln in P.ask_lines(_ctx(stage="Recruiter screen")))
+    # Each part has a short name for its chip.
+    assert all(p["short"] and len(p["short"]) <= 15 for p in _built()["parts"])
+
+
 def test_an_offer_is_not_built_as_an_interview():
     with pytest.raises(ValueError):
         L.build(_ctx(stage="Offer received"))

@@ -10872,7 +10872,7 @@
     }
     const n = root.querySelectorAll(".lp-part:not([hidden]) .lp-q:not([hidden])").length;
     const said = root.querySelector(".lp-found");
-    if (said) said.textContent = qy ? (n ? plural(n, "question", "questions") + " found" : "Nothing found: try fewer words") : "";
+    if (said) { said.textContent = qy ? (n ? plural(n, "question", "questions") + " found" : "Nothing found: try fewer words") : ""; said.hidden = !qy; }
   }
   // The term panel: a side panel on a wide screen, a sheet from the bottom on a phone, Back
   // through the terms opened inside it.
@@ -10896,6 +10896,8 @@
     panel.querySelector(".lp-back").hidden = !panel._hist.length;
     panel.hidden = false;
     root.classList.add("lp-panel-open");
+    const scrim = root.querySelector(".lp-scrim");
+    if (scrim) scrim.hidden = false;
     try { hd.focus({preventScroll: true}); } catch (e) { hd.focus(); }
   }
   function lpTermBack(root, lv) {
@@ -10909,22 +10911,19 @@
     if (!panel || panel.hidden) return false;
     panel.hidden = true;
     root.classList.remove("lp-panel-open");
+    const scrim = root.querySelector(".lp-scrim");
+    if (scrim) scrim.hidden = true;
     const op = panel._opener;
     panel._hist = [];
     panel._cur = null;
     if (op && op.isConnected) op.focus();
     return true;
   }
-  function lpTimingLine(lv) {
-    const t = obj(lv.timing);
-    const total = Number(t.minutes || lv.minutes) || 0;
-    return "About " + plural(total, "minute", "minutes") + " in all. You talk for " + lpMins(t.talk) + " of it, at " + (Number(t.wpm || lv.wpm) || 150) + " words a minute; the rest is their questions and yours. A Likely to prompt link is where what you say steers them to an answer you have ready.";
-  }
   function lpPrivate(lv) {
     const priv = obj(lv.private);
     const list = (label, items) => { const l = arr(items).map(txt).filter(Boolean); return l.length ? h("div", {class: "lp-pv"}, h("h4", {class: "lp-pv-h"}, label), h("ul", {class: "lp-pv-list"}, l.map((x) => h("li", {}, x.replace(/([^.!?”"])$/, "$1."))))) : null; };
     const line = (label, text) => txt(text) ? h("p", {class: "lp-pv-line"}, h("span", {class: "lp-pv-k"}, label + ": "), cap1(txt(text)).replace(/\.?$/, ".")) : null;
-    return h("section", {class: "lp-private", "aria-labelledby": "lpv-h"},
+    return h("section", {class: "lp-private", id: "lp-private", tabindex: "-1", "aria-labelledby": "lpv-h"},
       h("h3", {class: "lp-sec-h", id: "lpv-h"}, "Just for you"),
       h("p", {class: "small muted"}, "Notes for you, never to say as they are written here."),
       line("If pay comes up", priv.pay), line("Your notice", priv.notice), line("Where you are based", txt(priv.based) ? "say " + txt(priv.based) : ""),
@@ -10947,14 +10946,18 @@
     const root = h("div", {class: "lp", "data-mode": mode});
     const setAll = (v) => { setPref("lp:mode", v === "simple" ? null : v); root.dataset.mode = v; for (const b of root.querySelectorAll(".lp-ans")) lpSetMode(b, v); };
     const fid = "lp-find-" + seg(iv.id);
-    const practise = btn("Practise", (e) => {
+    // Named for what it does, never a second "Practise" under Practise with Claude, and drawn
+    // pressed while it is on, with one line saying what to do (the review, 2026-11-10).
+    const hide = btn("Hide the answers", (e) => {
       const on = root.dataset.practice !== "1";
       root.dataset.practice = on ? "1" : "";
       e.currentTarget.setAttribute("aria-pressed", String(on));
+      root.querySelector(".lp-hidden-line").hidden = !on;
       lpPracticeOff(root);
-      announce(on ? "Practice: every answer is hidden. Start, say it aloud, then Show the answer." : "Practice is off: every answer shows.");
-    }, {small: true, key: "lp-practise", pressed: false});
-    const knownIdx = known.length ? h("section", {class: "lp-known", "aria-labelledby": "lpk-h"},
+      announce(on ? "Answers hidden: tap Start, say it aloud." : "Every answer shows again.");
+    }, {small: true, kind: "filter", key: "lp-hide", pressed: false});
+    hide.classList.add("lp-hide");
+    const knownIdx = known.length ? h("section", {class: "lp-known", id: "lp-known", tabindex: "-1", "aria-labelledby": "lpk-h"},
       h("h3", {class: "lp-sec-h", id: "lpk-h"}, "What they are known to ask"),
       h("ul", {class: "plain lp-known-list"}, known.map((k) => {
         const q = qById.get(k.question);
@@ -10988,7 +10991,7 @@
             txt(a.why) ? h("p", {class: "small muted"}, cap1(txt(a.why)).replace(/\.?$/, ".")) : null,
             arr(a.follow).length ? h("ul", {class: "lp-ask-f small"}, arr(a.follow).map((f) => h("li", {}, "If they say " + txt(obj(f).if) + ", ask: ", lpRich(lv, obj(f).then)))) : null)))) : null);
     });
-    const storyEls = stories.length ? h("section", {class: "lp-stories", "aria-labelledby": "lps-h"},
+    const storyEls = stories.length ? h("section", {class: "lp-stories", id: "lp-stories", tabindex: "-1", "aria-labelledby": "lps-h"},
       h("h3", {class: "lp-sec-h", id: "lps-h"}, "Your stories"),
       stories.map((s) => h("article", {class: "lp-story", id: "lps-" + seg(s.id), tabindex: "-1", "aria-label": txt(s.title)},
         h("h4", {class: "lp-story-t"}, txt(s.title)),
@@ -10997,7 +11000,7 @@
         arr(s.questions).filter((x) => qById.has(x)).length ? h("p", {class: "small"}, "Answers: ", arr(s.questions).filter((x) => qById.has(x)).map((x, i) => [i ? " · " : "",
           h("button", {type: "button", class: "btn link", "data-k": "lpsq:" + s.id + ":" + x, onclick: () => lpJump("lpq-" + seg(x))}, lpPlain(lv, qById.get(x).q))])) : null))) : null;
     const termKeys = Object.keys(terms).filter((k) => txt(obj(terms[k]).name)).sort((a, b) => txt(terms[a].name).localeCompare(txt(terms[b].name)));
-    const az = termKeys.length ? h("section", {class: "lp-az", "aria-labelledby": "lpaz-h"},
+    const az = termKeys.length ? h("section", {class: "lp-az", id: "lp-az", tabindex: "-1", "aria-labelledby": "lpaz-h"},
       h("h3", {class: "lp-sec-h", id: "lpaz-h"}, "Words to know, A to Z"),
       h("ul", {class: "plain lp-az-list"}, termKeys.map((k) => h("li", {}, h("button", {type: "button", class: "lp-term", "data-term": k, "aria-haspopup": "dialog", "aria-label": txt(terms[k].name) + ": what it means"}, txt(terms[k].name)))))) : null;
     const back = btn("Back", () => lpTermBack(root, lv), {small: true, key: "lp-term-back"});
@@ -11007,28 +11010,40 @@
         h("h3", {class: "lp-panel-title", id: "lp-panel-t-" + seg(iv.id), tabindex: "-1"}, ""),
         h("span", {class: "lp-panel-acts"}, back, btn("Close", () => lpTermClose(root), {small: true, key: "lp-term-close"}))),
       h("div", {class: "lp-panel-body"}));
+    const priv = obj(lv.private);
+    const talk = Number(obj(lv.timing).talk) || 0;
+    const total = Number(obj(lv.timing).minutes || lv.minutes) || 0;
+    // What is found in two seconds mid-interview: the bar stays at the top with search and a
+    // chip to every part and every list; the pay and the notice are read at once in the head.
+    const chip = (label, id, key) => btn(label, () => lpJump(id), {small: true, key: "lpchip:" + key});
+    const chips = parts.map((p, i) => chip((i + 1) + " " + (txt(p.short) || txt(p.title)), "lpp-" + seg(p.id), p.id))
+      .concat(known.length ? [chip("They ask", "lp-known", "known")] : [], stories.length ? [chip("Stories", "lp-stories", "stories")] : [],
+        termKeys.length ? [chip("Words", "lp-az", "words")] : [], [chip("Just for you", "lp-private", "private")]);
+    const keyLine = (label, text) => txt(text) ? h("p", {class: "lp-key"}, h("span", {class: "lp-key-k"}, label + ": "), cap1(txt(text)).replace(/([^.!?])$/, "$1.")) : null;
     put(root,
       h("div", {class: "lp-head"},
-        h("p", {class: "lp-shape"}, txt(lv.shape_name) + (Number(lv.minutes) ? ", " + plural(Number(lv.minutes), "minute", "minutes") : ""),
+        h("p", {class: "lp-shape"}, txt(lv.shape_name) + " · " + plural(total, "minute", "minutes") + "; you talk for " + (talk < 1 ? "under a minute" : "about " + Math.max(1, Math.round(talk))),
           txt(lv.assumed) ? h("span", {class: "small muted lp-assumed"}, " (assumed: " + txt(lv.assumed) + ")") : null),
+        keyLine("If pay comes up", priv.pay), keyLine("Your notice", priv.notice),
+        Number(lv.drafts) > 0 ? h("p", {class: "small"}, stateWord("Draft", "warn"), " " + plural(Number(lv.drafts), "answer is a draft", "answers are drafts") + " you asked for: check each is true before you say it.") : null,
         h("div", {class: "lp-tools"},
-          h("label", {class: "lp-search", for: fid}, h("span", {class: "sr-only"}, "Search the questions and answers"),
-            h("input", {type: "search", id: fid, "data-k": "lp-find", placeholder: "Search the questions and answers", autocomplete: "off", oninput: (e) => lpSearch(root, e.target.value)})),
           h("span", {class: "lp-all-wrap"}, h("span", {class: "small muted lp-all-l", "aria-hidden": "true"}, "Every answer"), lpSwitch("Every answer", mode, setAll, "lp-all", "lp-all")),
           btn("Open all", (e) => {
             // One pill for both: Open all opens every follow-up, then says Close all.
             const open = e.currentTarget.textContent === "Open all";
             for (const d of root.querySelectorAll("details")) d.open = open;
             e.currentTarget.textContent = open ? "Close all" : "Open all";
-          }, {small: true, key: "lp-open-all"}),
-          practise),
-        h("p", {class: "lp-found small muted", "aria-live": "polite"}, ""),
-        h("nav", {class: "lp-chips", "aria-label": "The parts of the interview"},
-          parts.map((p, i) => btn((i + 1) + " · " + txt(p.title), () => lpJump("lpp-" + seg(p.id)), {small: true, key: "lpchip:" + p.id}))),
-        h("p", {class: "lp-timing"}, lpTimingLine(lv)),
-        Number(lv.drafts) > 0 ? h("p", {class: "small"}, stateWord("Draft", "warn"), " " + plural(Number(lv.drafts), "answer is a draft", "answers are drafts") + " you asked for: check each is true before you say it.") : null,
-        knownIdx),
-      partEls, storyEls, az, lpPrivate(lv), panel,
+          }, {small: true, key: "lp-open-all"}))),
+      h("div", {class: "lp-bar"},
+        h("div", {class: "lp-bar-row"},
+          h("label", {class: "lp-search", for: fid}, h("span", {class: "sr-only"}, "Search the questions and answers"),
+            h("input", {type: "search", id: fid, "data-k": "lp-find", placeholder: "Search", autocomplete: "off", oninput: (e) => lpSearch(root, e.target.value)})),
+          hide),
+        h("p", {class: "lp-hidden-line small", hidden: true}, "Answers hidden: tap Start, say it aloud."),
+        h("p", {class: "lp-found small muted", "aria-live": "polite", hidden: true}, ""),
+        h("nav", {class: "lp-chips", "aria-label": "The parts of the interview, and your lists"}, chips)),
+      partEls, knownIdx, storyEls, az, lpPrivate(lv), panel,
+      h("div", {class: "lp-scrim", hidden: true, "aria-hidden": "true", onclick: () => lpTermClose(root)}),
       h("p", {class: "small muted prep-live"}, "For before and after the interview: Claude never joins, helps during or records one."));
     // One listener for every term, wherever it is drawn: inside the panel it goes deeper, with
     // Back; anywhere else it starts afresh. In a summary it never opens or shuts the fold.

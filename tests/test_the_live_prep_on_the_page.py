@@ -14,6 +14,7 @@ from __future__ import annotations
 import copy
 import json
 import os
+import re
 import sys
 
 import pytest
@@ -119,7 +120,8 @@ def test_the_parts_are_in_the_order_the_interview_runs(run, tmp_path, vp):
     assert seen["full"] and seen["wide"] == seen["vw"], "the prep is full screen on every screen"
     titles = [p["title"] for p in lv["parts"]]
     assert [t.split(" · ", 1)[1] for t in seen["parts"]] == titles
-    assert seen["cards"] == len(lv["questions"]) and seen["chips"] == len(titles)
+    # A chip to every part, then to what they ask, the stories, the words and the notes.
+    assert seen["cards"] == len(lv["questions"]) and seen["chips"] == len(titles) + 4
     text = got["after"][0]["text"]
     assert "A technical interview" in text and "What they are known to ask" in text
     assert "Just for you" in text and "Your stories" in text and "Words to know, A to Z" in text
@@ -186,7 +188,7 @@ def test_practice_hides_the_answers_and_a_tap_shows_one(run, tmp_path, vp):
                 " first: vis(d.querySelector('#lpq-q1 .lp-reveal')), timer: d.querySelector('#lpq-q1 .lp-timer').textContent};")
     got = _go(run, tmp_path, _model(_ctx()), [
         dict(OPEN, eval=state),
-        {"click": "Practise", "exact": True, "within": "dialog.detail .lp-tools", "eval": state},
+        {"click": "Hide the answers", "exact": True, "within": "dialog.detail .lp-bar", "eval": state},
         {"click": "Start answering", "within": "#lpq-q1", "eval": state},
         {"click": "Show the answer", "within": "#lpq-q1", "eval": state},
     ], vp)
@@ -199,7 +201,7 @@ def test_practice_hides_the_answers_and_a_tap_shows_one(run, tmp_path, vp):
 
 def test_nothing_is_wider_than_a_phone_and_the_dark_look_draws(run, tmp_path):
     wide = ("(() => { const d = document.querySelector('dialog.detail'); const b = d.querySelector('.detail-body');"
-            " const over = [...d.querySelectorAll('.lp *')].filter((e) => e.getBoundingClientRect().right > innerWidth + 1 && e.getClientRects().length).map((e) => e.className).slice(0, 5);"
+            " const over = [...d.querySelectorAll('.lp *:not(.lp-chips *)')].filter((e) => e.getBoundingClientRect().right > innerWidth + 1 && e.getClientRects().length).map((e) => e.className).slice(0, 5);"
             " const bg = getComputedStyle(d).backgroundColor.match(/\\d+/g).slice(0, 3).map(Number);"
             " return {sideways: b.scrollWidth > b.clientWidth + 1, over, light: (bg[0] + bg[1] + bg[2]) / 3}; })()")
     steps = [dict(OPEN), {"open": "det:lp:q1.0", "eval": wide}]
@@ -208,6 +210,107 @@ def test_nothing_is_wider_than_a_phone_and_the_dark_look_draws(run, tmp_path):
     dark = _go(run, tmp_path, _model(_ctx()), steps, PHONE, scheme="dark")["after"][1]["eval"]
     assert not dark["sideways"] and dark["over"] == [], dark
     assert dark["light"] < 100 < light["light"], "the dark look is dark and the light look light"
+
+
+# ------------------------------------------------------------------ the review of 2026-11-10
+
+def _bg(sel):
+    return "getComputedStyle(document.querySelector(%r)).backgroundColor" % sel
+
+
+def test_the_chosen_side_of_each_switch_shows(run, tmp_path, vp):
+    # Simple and Detailed looked the same, at the top and on every answer: the page styled
+    # aria-pressed and the switch set aria-checked.
+    look = ("(() => { const on = (s) => getComputedStyle(document.querySelector(s)).backgroundColor;"
+            " return {top: [on('.lp-all [data-v=simple]'), on('.lp-all [data-v=detailed]')],"
+            " one: [on('#lpq-q1 .lp-ans-top [data-v=simple]'), on('#lpq-q1 .lp-ans-top [data-v=detailed]')]}; })()")
+    got = _go(run, tmp_path, _model(_ctx()), [dict(OPEN, eval=look),
+        {"click": "Detailed", "role": "radio", "within": "dialog.detail .lp-all", "wait": 500, "eval": look}], vp)
+    before, after = (a["eval"] for a in got["after"])
+    for pair in (before["top"], before["one"], after["top"], after["one"]):
+        assert pair[0] != pair[1], pair
+    assert before["top"] == after["top"][::-1], "the chosen side moves with the choice"
+
+
+def test_hiding_the_answers_says_so_and_looks_pressed(run, tmp_path, vp):
+    look = ("(() => { const b = [...document.querySelectorAll('.lp-bar button')].find((x) => x.textContent === 'Hide the answers');"
+            " const line = document.querySelector('.lp-hidden-line');"
+            " return {bg: getComputedStyle(b).backgroundColor, pressed: b.getAttribute('aria-pressed'),"
+            " line: line.checkVisibility() ? line.textContent : '',"
+            " practise: [...document.querySelectorAll('dialog.detail button')].filter((x) => x.textContent.trim() === 'Practise').length}; })()")
+    got = _go(run, tmp_path, _model(_ctx()), [dict(OPEN, eval=look),
+        {"click": "Hide the answers", "exact": True, "within": "dialog.detail .lp-bar", "wait": 500, "eval": look}], vp)
+    off, on = (a["eval"] for a in got["after"])
+    assert off["practise"] == 0, "never a second Practise under Practise with Claude"
+    assert off["pressed"] == "false" and on["pressed"] == "true"
+    lum = lambda c: sum(int(x) for x in re.findall(r"\d+", c)[:3]) / 3  # noqa: E731
+    assert abs(lum(on["bg"]) - lum(off["bg"])) > 60, (off["bg"], on["bg"])
+    assert off["line"] == "" and on["line"] == "Answers hidden: tap Start, say it aloud."
+
+
+def test_search_and_the_chips_stay_in_reach_however_far_down(run, tmp_path, vp):
+    look = ("(() => { const b = document.querySelector('dialog.detail .detail-body'); b.scrollTop = b.scrollHeight;"
+            " return new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(() => {"
+            " const bar = document.querySelector('.lp-bar').getBoundingClientRect();"
+            " const f = document.querySelector('.lp-bar input');"
+            " ok({top: Math.round(bar.top), bottom: Math.round(bar.bottom), vh: innerHeight, placeholder: f.placeholder,"
+            " fits: f.scrollWidth <= f.clientWidth + 1,"
+            " chips: [...document.querySelectorAll('.lp-chips .btn')].map((x) => x.textContent)}); }))); })()")
+    got = _go(run, tmp_path, _model(_ctx()), [dict(OPEN, eval=look)], vp)
+    at = got["after"][0]["eval"]
+    assert 0 <= at["top"] < 140 and at["bottom"] < at["vh"] / 3, at
+    assert at["placeholder"] == "Search"
+    for name in ("Stories", "Words", "Just for you", "They ask"):
+        assert name in at["chips"], at["chips"]
+    assert at["chips"][0] == "1 Intro"
+
+
+def test_the_top_is_three_blocks_with_pay_and_notice_at_once(run, tmp_path, vp):
+    look = ("(() => { const lp = document.querySelector('.lp'); const kids = [...lp.children];"
+            " const first = kids.findIndex((x) => x.classList.contains('lp-part'));"
+            " const head = document.querySelector('.lp-head').textContent;"
+            " return {before: kids.slice(0, first).map((x) => x.className), head,"
+            " top: Math.round(lp.querySelector('.lp-part').getBoundingClientRect().top), vh: innerHeight}; })()")
+    got = _go(run, tmp_path, _model(_ctx()), [dict(OPEN, eval=look)], vp)
+    at = got["after"][0]["eval"]
+    # The card's own actions, the head and the bar: nothing else before part 1.
+    assert at["before"] == ["lp-head", "lp-bar"], at["before"]
+    assert "If pay comes up:" in at["head"] and "Your notice: One month." in at["head"]
+    assert "60 minutes; you talk for" in at["head"]
+    assert "words a minute" not in at["head"] and "Likely to prompt" not in at["head"], at["head"]
+    assert at["top"] < at["vh"], "part 1 starts on the first screen"
+
+
+def test_a_term_on_a_wide_screen_opens_beside_the_column_and_nothing_moves(run, tmp_path):
+    box = ("(() => { const c = document.querySelector('.lp').getBoundingClientRect(); const p = document.querySelector('.lp-panel');"
+           " const r = p.hidden ? null : p.getBoundingClientRect();"
+           " return {left: Math.round(c.left), right: Math.round(c.right), panel: r ? Math.round(r.left) : null}; })()")
+    got = _go(run, tmp_path, _model(_ctx()), [dict(OPEN, eval=box),
+        {"click": "forecasts: what it means", "within": "dialog.detail .lp-part", "eval": box}], WIDE)
+    before, after = (a["eval"] for a in got["after"])
+    assert (before["left"], before["right"]) == (after["left"], after["right"]), (before, after)
+    assert after["panel"] >= after["right"], "the panel sits over the margin, never over the column"
+
+
+def test_a_term_on_a_phone_is_a_sheet_over_a_dimmed_page(run, tmp_path):
+    look = ("(() => { const s = document.querySelector('.lp-scrim'); const p = document.querySelector('.lp-panel');"
+            " return {scrim: !s.hidden && s.checkVisibility(), opacity: Number(getComputedStyle(s).opacity),"
+            " open: !p.hidden, edge: getComputedStyle(p).borderTopColor !== getComputedStyle(p).backgroundColor}; })()")
+    for scheme in (None, "dark"):
+        got = _go(run, tmp_path, _model(_ctx()), [OPEN,
+            {"click": "forecasts: what it means", "within": "dialog.detail .lp-part", "eval": look},
+            {"eval": "(() => { document.querySelector('.lp-scrim').click(); return 1; })()"},
+            {"eval": look}], PHONE, scheme=scheme)
+        shown, _tap, gone = (a["eval"] for a in got["after"][1:])
+        assert shown["scrim"] and shown["opacity"] >= 0.5 and shown["open"] and shown["edge"], shown
+        assert not gone["open"] and not gone["scrim"], "a tap on the dimmed page closes the sheet"
+
+
+def test_the_answer_is_drawn_a_step_larger_than_the_text_around_it(run, tmp_path, vp):
+    look = ("(() => { const px = (s) => parseFloat(getComputedStyle(document.querySelector(s)).fontSize);"
+            " return {answer: px('#lpq-q1 .lp-simple'), beat: px('.lp-beat-t'), body: px('.lp-key')}; })()")
+    at = _go(run, tmp_path, _model(_ctx()), [dict(OPEN, eval=look)], vp)["after"][0]["eval"]
+    assert at["answer"] > at["body"] and at["answer"] > at["beat"], at
 
 
 def test_the_brief_reads_likely_to_come_up_from_the_live_prep(run, tmp_path, vp):
