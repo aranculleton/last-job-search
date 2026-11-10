@@ -7222,16 +7222,31 @@
   function holdKey(m) {
     const st = readHere();
     if (st === "off") return "paste";
-    if (st === "paused" || st === "sign_in") return st;
-    if (st !== "ready") return "browser";
+    if (st === "paused") return st;
     const cid = txt(m.contact);
     const q = arr(readingInfo().queue).find((x) => txt(x.contact) === cid);
+    // Their computer is set up and ready: the engine sends the read there as work, by itself
+    // (tools/app.py computer_reads), wherever this page is open (the maintainer, 2026-11-10).
+    if (computerReads()) return q && S.reading.busy && S.reading.cur === cid ? "reading" : q && effective(txt(q.id), ["reading.done"]) ? "read" : "computer";
+    if (st === "sign_in") return st;
+    if (st !== "ready") return "browser";
     if (!q) return null;
     if (S.reading.busy && S.reading.cur === cid) return "reading";
     if (effective(txt(q.id), ["reading.done"])) return "read";
-    if (S.reading.needTab) return "tab";
+    // "Press Read them in To do" only while To do holds that button: the line named a card
+    // that was not there (the maintainer, 2026-11-10). Until it is, it waits its turn.
+    if (S.reading.needTab) return readThemOnTodo() ? "tab" : "next";
     if (S.reading.tried.has(txt(q.id)) || readToday(q) || autoHeld(S.autoReads || S.autoSeen)) return "again";
     return "next";
+  }
+  // The person's computer reads LinkedIn by itself (the engine's person.computer,
+  // tools/computer.py reads_there), unless they paste profiles instead.
+  function computerReads() { return !!person().computer && txt(readingInfo().setting) !== "paste"; }
+  // Does To do show the Read them button now: its reading card is the one To do draws, and
+  // that card carries it (readThemShows).
+  function readThemOnTodo() {
+    const it = readingTodo();
+    return !!it && it.key === "reading-queue" && readThemShows(waitingReads(), readHere());
   }
   function holdLine(m) {
     const k = holdKey(m);
@@ -12412,7 +12427,7 @@
     if (untaken.length && !rungFor(untaken)) {
       return {key: "reads-taken", kind: "message", band: "first", employer: null, tab: "contacts", counts: false, node: () => readsTakenCard(untaken)};
     }
-    if (people.length && (st === "ready" || st === "paused" || st === "desktop" || st === "off")) {
+    if (people.length && (st === "ready" || st === "paused" || st === "desktop" || st === "off" || computerReads())) {
       return {key: "reading-queue", kind: "message", band: "week", employer: null, tab: "contacts", counts: false, node: () => readQueueCard(queue, st, people)};
     }
     if (st === "ready" || st === "off" || st === "paused") return null;
@@ -12473,13 +12488,17 @@
     const r = S.reading;
     // Started by itself, or about to be (maybeAutoRead): nobody presses anything.
     const auto = st === "ready" && autoNow(queue);
-    const title = st === "desktop" ? "Open your page in the Claude app on your computer to read " + nWord(n, "profile", "profiles")
+    // Read on their computer, sent there by the engine by itself: nothing to press anywhere.
+    const there = computerReads() && st !== "paused" && st !== "off" && !r.busy;
+    const title = there ? "Claude reads " + nWord(n, "profile", "profiles") + " on your computer by itself"
+      : st === "desktop" ? "Open your page in the Claude app on your computer to read " + nWord(n, "profile", "profiles")
       : st === "off" || (st === "ready" && !queue.length) ? "Paste " + nWord(n, "profile", "profiles") + " so Claude can write " + (n === 1 ? "the note" : "the notes")
       : r.busy ? "Claude is reading " + nWord(n, "profile", "profiles")
       : auto ? "Claude reads " + nWord(n, "profile", "profiles") + " by itself"
       : "Read " + nWord(n, "profile", "profiles") + " before Claude writes";
     // When and where they are read, said once: the notes they hold back wait on this card.
-    const why = st === "paused" ? "LinkedIn asked Claude to slow down, so these wait until tomorrow. Then it reads them by itself." :
+    const why = there ? "It reads them in the Claude app on your computer, then rewrites each note. Nothing to press." :
+      st === "paused" ? "LinkedIn asked Claude to slow down, so these wait until tomorrow. Then it reads them by itself." :
       st === "desktop" ? "Claude reads them there, in its own browser, by itself, then rewrites each note. Their notes wait until then." :
       st === "off" || !queue.length ? "Copy each one's LinkedIn page and paste it on their card in Contacts. Claude rewrites the note from it." :
       r.needTab ? "Claude reads them in a tab of its own in Claude's browser, out of your way. Press Read them once to open that tab; after that it reads by itself." :
@@ -12492,17 +12511,22 @@
       names.length ? h("p", {class: "small muted"}, names.slice(0, 5).join(", ") + (names.length > 5 ? " and " + (names.length - 5) + " more" : "")) : null,
       running ? h("p", {class: "small reading-line", role: "status"}, h("span", {class: "spin", "aria-hidden": "true"}), " Reading " + txt(r.at || "their profiles") + (r.total ? ", " + (r.done + 1 > r.total ? r.total : r.done + 1) + " of " + r.total : "")) : null,
       why && !running ? h("p", {class: "small"}, why) : null,
+      there ? null :
       st === "off" || (st === "ready" && !queue.length) ? h("div", {class: "card-actions"}, btn("Open Contacts", () => go("contacts", {focus: true}), {kind: "primary", small: true, key: "read-open-contacts"})) :
-      st !== "ready" || auto ? null :
+      !readThemShows(queue, st) ? null :
         h("div", {class: "card-actions"}, btn("Read them", () => { S.reading.tried.clear(); readProfiles(queue, "reading"); }, {kind: "primary", small: true, key: "read-them"})),
       // No computer: the card had no button and came back every week (the stranger audit,
       // X-53). Pasting works on any device, and the setting takes the queue with it.
-      st === "desktop" && settingItem("profile_reads") ? h("div", {class: "card-actions"}, btn("I'll paste them instead", () => {
+      st === "desktop" && !there && settingItem("profile_reads") ? h("div", {class: "card-actions"}, btn("I'll paste them instead", () => {
         const s = settingItem("profile_reads");
         act([{item: setId(s), action: "setting.set", value: {value: "paste"}, rev: txt(s.rev) || null}], "You paste profiles from now on");
       }, {kind: "secondary", small: true, key: "read-paste"}), h("span", {class: "hint"}, "No computer? Copy a profile's text on your phone and paste it to Claude.")) : null,
       noteFor("reading"));
   }
+  // The reading card's Read them: where this page reads (open in the Claude app on a
+  // computer), with someone waiting, and not reading by itself now. Never where their
+  // computer reads them, which needs nothing pressed.
+  function readThemShows(queue, st) { return st === "ready" && queue.length > 0 && !autoNow(queue) && !computerReads(); }
   // The small panel for Claude's browser: what it is doing, and Close, which only hides it.
   function browserPanel() {
     const r = S.reading;

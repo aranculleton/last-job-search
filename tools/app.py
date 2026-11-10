@@ -201,6 +201,50 @@ def no_screen(dump: str, db: dict) -> str:
             "run this again with --dump that folder.")
 
 
+COMPUTER_READS = "network~read~"
+
+
+def computer_reads(model: dict, work: dict, now) -> tuple[str, dict] | None:
+    """The notes waiting for their person's profile, read on the person's computer with no one
+    pressing anything, where it is known ready (model person.computer: computer.reads_there)
+    and they read in the browser: one `network` item sent `to: computer` (page_db.computer_only
+    keeps it there), `args.read_first` with `args.contacts`, each read there and its note
+    rewritten in one run. None when nothing waits, or each is already on its way. Its id is
+    the day and the people, so a view run again queues nothing more, and one the computer
+    could not finish is tried again the next day, never in a loop. Without it the note said
+    "press Read them in To do" with no such card there (the maintainer, 2026-11-10)."""
+    import hashlib
+    import page_db
+    if not (model.get("person") or {}).get("computer"):
+        return None
+    reading = (model.get("linkedin") or {}).get("reading") or {}
+    if reading.get("setting") != "browser" or reading.get("paused"):
+        return None
+    want = [str(q.get("contact") or "") for q in reading.get("queue") or []] \
+        + [str(c) for c in (model.get("to_read") or {}).get("contacts") or []]
+    going: set = set()
+    for doc in work.values():
+        d = (doc or {}).get("data") or {}
+        if d.get("kind") == "network" and str(d.get("status") or "queued") not in page_db.FINISHED:
+            a = d.get("args") if isinstance(d.get("args"), dict) else {}
+            if a.get("rewrite") or a.get("read_first"):
+                going |= {str(c) for c in a.get("contacts") or []} | {str(a.get("contact") or "")}
+    cids = [c for c in dict.fromkeys(want) if c and c not in going]
+    if not cids:
+        return None
+    first = {str(q.get("contact") or ""): str(q.get("first_name") or "")
+             for q in reading.get("queue") or []}
+    day = now.date().isoformat().replace("-", "")
+    key = hashlib.sha1(" ".join(sorted(cids)).encode("utf-8")).hexdigest()[:10]
+    title = (f"Reading {first.get(cids[0]) or 'their'}'s profile on your computer"
+             if len(cids) == 1 and first.get(cids[0]) else
+             f"Reading {len(cids)} profiles on your computer")
+    fields = page_db.queued("network", title, {"contacts": cids, "read_first": True,
+                                               "rewrite": True, "auto": True}, now)
+    fields["to"] = "computer"
+    return page_db.safe_id(f"{COMPUTER_READS}{day}~{key}"), fields
+
+
 def self_fixes(db: dict | None, model: dict, out_dir: str, now, dump_dir: str = "") -> list[str]:
     """The batches that queue, once each, what a draft on the page needs and Claude can do
     with no one asking: its remake where a check failed with a fix Claude makes (the checks
@@ -249,6 +293,9 @@ def self_fixes(db: dict | None, model: dict, out_dir: str, now, dump_dir: str = 
             "prep", f"Interview prep: {iv.get('company') or ''}, {iv.get('role') or ''}",
             {"interview": iv["id"], "note": None, "auto": True}, now),
             if_version=have.get("version") if have else None)
+    got = computer_reads(model, work, now)
+    if got:
+        w.add("set", "work", got[0], got[1], if_version=None)
     out = w.save("self") if w.entries else []
     ever = set()
     for d in work.values():

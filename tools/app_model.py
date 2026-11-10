@@ -735,13 +735,37 @@ def _person(ctx: Ctx, targets: dict) -> dict:
         # Known ready, never only said: "Find people" goes to the computer on this (the page's
         # peopleTo), and sent there with no computer that could take it, it waited for good
         # (the release review, 2026-11-09).
-        import computer as _computer
-        computer = _computer.reads_there(place.place_record(), ctx._got.get("computer") or {},
-                                         ctx.now)
+        computer = computer_reads(ctx)
     except Exception:  # noqa: BLE001
         pass
     return {"first_name": first, "doc_noun": noun, "time_zone": zone, "repo": repo,
             "computer": computer}
+
+
+def computer_reads(ctx: Ctx) -> bool:
+    """Is the person's computer known ready to read LinkedIn (tools/computer.py reads_there),
+    so a LinkedIn read is sent there as work and done there by itself? Once a build."""
+    def make() -> bool:
+        try:
+            import place
+            import computer as _computer
+            return bool(_computer.reads_there(place.place_record(),
+                                              ctx._got.get("computer") or {}, ctx.now))
+        except Exception:  # noqa: BLE001  no record: not known ready
+            return False
+    return ctx._once("computer_reads", make)
+
+
+def read_hold(ctx: Ctx) -> str:
+    """The line on a first note waiting for its person's profile, by the person's setting. With
+    their computer known ready, the read is sent there as work by itself (tools/app.py
+    computer_reads), and the line says so on every device: "press Read them in To do" with no
+    such card there was the line before (the maintainer, 2026-11-10)."""
+    import reading
+    setting = ctx._once("reads_now", reading.reads_now)
+    if setting == "browser" and computer_reads(ctx):
+        return READ_HOLD["computer"]
+    return READ_HOLD.get(setting, READ_HOLD["browser"])
 
 
 # ------------------------------------------------------------------ needs you
@@ -2597,7 +2621,7 @@ def _messages(ctx: Ctx, targets: dict) -> list:
             # Why it waits and where the reading happens, in a line: "Written before their
             # profile was read: read it first" on every note drafted in the cloud said neither
             # (2026-11-06).
-            hold = READ_HOLD.get(ctx._once("reads_now", reading.reads_now), READ_HOLD["browser"])
+            hold = read_hold(ctx)
         mid = f"msg-{cid}"
         from network import state as _st
         subject, body = _st.split_subject(text)
@@ -2739,6 +2763,10 @@ READ_HOLD = {
     "browser": "Waiting for their profile: Claude reads it next time this page is open in the "
                "Claude app on your computer, then rewrites this note",
     "paste": "Waiting for their profile: paste it here and Claude rewrites this note",
+    # Their computer is set up and ready (tools/computer.py reads_there): the read is sent
+    # there as work by itself (tools/app.py self_fixes), nothing pressed.
+    "computer": "Waiting for their profile: Claude reads it on your computer by itself, then "
+                "rewrites this note",
     # Open in the Claude app on a computer, where the page reads by itself:
     "tab": "Waiting for their profile: press Read them in To do once, and Claude reads it by "
            "itself from then on",

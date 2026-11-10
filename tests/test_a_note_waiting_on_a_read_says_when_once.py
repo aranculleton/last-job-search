@@ -82,6 +82,59 @@ def test_a_rewrite_is_timed_apart_from_a_networking_run():
     assert page_db.work_times(db, now) == {"network": 28 * 60, "rewrite": 2 * 60}
 
 
+class _Ctx:
+    def __init__(self):
+        self._got = {}
+
+    def _once(self, key, make):
+        if key not in self._got:
+            self._got[key] = make()
+        return self._got[key]
+
+
+@pytest.mark.parametrize("setting,ready,want", [("browser", True, "computer"), ("browser", False, "browser"),
+                                                ("paste", True, "paste")])
+def test_the_notes_line_says_where_it_is_read(monkeypatch, setting, ready, want):
+    import reading
+    monkeypatch.setattr(reading, "reads_now", lambda: setting)
+    monkeypatch.setattr(app_model, "computer_reads", lambda ctx: ready)
+    assert app_model.read_hold(_Ctx()) == app_model.READ_HOLD[want]
+    assert "press" not in app_model.READ_HOLD["computer"].lower()
+
+
+def _reads_model(computer=True, setting="browser"):
+    return {"person": {"computer": computer},
+            "linkedin": {"reading": {"setting": setting, "paused": False,
+                                     "queue": [{"id": "read-kit_a", "contact": "kit_a", "first_name": "Kit"}]}},
+            "to_read": {"n": 2, "ids": ["msg-kit_a", "msg-ash_b"], "contacts": ["kit_a", "ash_b"]}}
+
+
+def test_with_their_computer_ready_the_read_is_sent_there_by_itself():
+    """No one presses anything: the view's own fixes queue one `network` item `to: computer`,
+    reading each waiting person there and rewriting their notes, which no cloud chat may
+    take (page_db.computer_only). Once a day for the same people, never twice while going."""
+    import datetime as dt
+    import app
+    now = dt.datetime(2026, 10, 25, 9, tzinfo=dt.timezone.utc)
+    wid, fields = app.computer_reads(_reads_model(), {}, now)
+    assert wid.startswith(page_db.safe_id(app.COMPUTER_READS + "20261025")), wid
+    assert fields["kind"] == "network" and fields["to"] == "computer" and fields["status"] == "queued", fields
+    assert fields["args"]["contacts"] == ["kit_a", "ash_b"] and fields["args"]["read_first"] is True, fields
+    assert fields["title"] == "Reading 2 profiles on your computer", fields
+    assert page_db.computer_only(fields, "cloud") and not page_db.computer_only(fields, "computer")
+    # The same view again: the same id, which the store refuses to make twice.
+    assert app.computer_reads(_reads_model(), {}, now)[0] == wid
+    # Already on its way, by this or a rewrite: nothing more.
+    going = {wid: {"data": dict(fields, status="running")}}
+    assert app.computer_reads(_reads_model(), going, now) is None
+    # No computer known ready, or profiles pasted: never sent there.
+    assert app.computer_reads(_reads_model(computer=False), {}, now) is None
+    assert app.computer_reads(_reads_model(setting="paste"), {}, now) is None
+    # The computer's chat is told how to do it.
+    with open(os.path.join(os.path.dirname(HERE), ".claude", "skills", "app", "SKILL.md"), encoding="utf-8") as fh:
+        assert "`args.read_first`" in fh.read()
+
+
 # ------------------------------------------------------------------ the page
 
 
@@ -90,8 +143,11 @@ def run():
     yield from browser()
 
 
-def _model():
+def _model(computer=False):
     m = copy.deepcopy(_sample())
+    # The page's own reading, with no computer known ready (the example person has one: the
+    # last test here is theirs).
+    m["person"]["computer"] = computer
     ash = next(x for x in m["messages"] if x["id"] == "msg-ash-1")
     body = (ash.get("body") or ash["text"]).strip()
     body = (body + " " + "x" * 300)[:291]
@@ -174,3 +230,54 @@ def test_a_count_is_grey_at_rest_amber_only_while_editing_near_the_limit_and_red
     cls, words = got["steps"][3]["eval"]
     assert "tone-bad" in cls and "5 over the limit" in words, (cls, words)
     assert "tone-muted" in got["steps"][4]["eval"], got["steps"][4]["eval"]
+
+
+# ------------------------------------------------------------------ the line names what is there
+
+HOLD = "(document.querySelector('[data-k=\"held:msg-kit-1\"]') || {getAttribute: () => ''}).getAttribute('data-hold')"
+READ_THEM = "!!document.querySelector('[data-item=\"reading-queue\"] [data-k=\"read-them\"]')"
+TAB = IN_APP.replace("{more}", "r.busy = false; r.cur = null; r.needTab = true;")
+
+
+def test_a_line_saying_press_read_them_has_that_button_on_to_do(run, tmp_path):
+    """The maintainer, 2026-11-10: "Waiting for their profile: press Read them in To do once"
+    with no Read them card on To do. The line says to press it only while To do shows it:
+    with another card in its place (profiles read, waiting for their notes), it waits its turn."""
+    m, kit = _model()
+    html = _write(tmp_path, "tab", m)
+    other = {"actions/act~read-someone~reading.done~1": {
+        "item": "read-someone_else", "action": "reading.done", "value": {"text": "A profile."},
+        "at": "2026-10-25T08:00:00Z", "rev_seen": "q0", "tab": "t0"}}
+    seen = []
+    for seed in ({}, other):
+        got = run("engine", html=html, viewport={"width": 1280, "height": 900}, clock=CLOCK, seed=seed, steps=[
+            {"hash": "contacts", "eval": TAB},
+            {"eval": HOLD},
+            {"hash": "todo", "eval": READ_THEM}])
+        assert not got["errors"], got["errors"]
+        seen.append((got["after"][1]["eval"], got["after"][2]["eval"]))
+    for hold, button in seen:
+        assert hold != "tab" or button, seen
+    # Alone, it is the button's line; behind the read profiles' card, never.
+    assert seen[0] == ("tab", True), seen
+    assert seen[1][0] != "tab", seen
+
+
+def test_with_their_computer_ready_it_is_read_there_by_itself(run, tmp_path):
+    """Their computer is set up and ready (`computer_ready`, computer.reads_there): the note says
+    Claude reads it on their computer by itself, on a phone as in the Claude app, and To do's
+    card says the same with nothing to press. The engine sends the read there (app.py
+    computer_reads)."""
+    m, kit = _model(computer=True)
+    kit["hold"] = app_model.READ_HOLD["computer"]
+    html = _write(tmp_path, "computer", m)
+    for vp, first in ((PHONE, []), ({"width": 1280, "height": 900}, [{"hash": "contacts", "eval": TAB}])):
+        got = run("engine", html=html, viewport=vp, clock=CLOCK, seed={}, steps=first + [
+            {"hash": "contacts", "eval": "[" + HOLD + ", " + LINE + "]"},
+            {"hash": "todo", "eval": QUEUE}])
+        assert not got["errors"], got["errors"]
+        hold, line = got["after"][len(first)]["eval"]
+        assert hold == "computer" and line.startswith("Waiting for their profile: Claude reads it on your computer by itself"), (hold, line)
+        todo, read_them = got["after"][len(first) + 1]["eval"]
+        assert "Claude reads 1 profile on your computer by itself" in todo and "Nothing to press" in todo, todo
+        assert not read_them and "I'll paste them instead" not in todo, todo
