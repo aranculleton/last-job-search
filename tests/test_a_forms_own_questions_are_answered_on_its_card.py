@@ -92,7 +92,11 @@ def test_each_state_is_said_on_the_card_and_done_only_once_the_answers_are_on_it
         {"view": {"ready": _answered(m)["ready"]}, "read": LINE},
         # The line itself opens the answer where it is (2026-11-05: it said "under More", and
         # More held only the box to ask again).
-        {"click": "Show it", "read": CARD + " .send"},
+        # Waited for, never read the moment after the tap: Safari's engine drew it a beat later
+        # and the read saw the line before it (the Everywhere run, 2026-11-10).
+        {"click": "Show it", "read": CARD + " .send",
+         "ready": "((document.querySelector(%r) || {}).textContent || '').includes('Its research reaches')"
+                  % (CARD + " .send")},
         {"write": {"work/" + WID: failed}, "read": LINE},
     ], WIDE, model=m, seed=seed, clock=T)
     running, unshown, shown, copy_row, broke = (x for x in got["after"])
