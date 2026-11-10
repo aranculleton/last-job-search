@@ -40,6 +40,15 @@ RESUME_HEAD = r"""%% {noun_title} - {name}
 {consent}%% Compile with: {engine} {fname}.tex
 
 \documentclass[{body_size}pt,{paper},sans]{{moderncv}}
+%% ATS: no kerning. A kern pair (A-W, W-A, V-a) is written as a gap inside the word, and
+%% pypdf reads any gap of nearly a space's width as a space: the summary said "A WS" while
+%% the bullets, patched word by word, said "AWS" (2026-11-10). Latin Modern Sans comes from
+%% the kernel's own font definitions (tulmss.fd), read into the format with this macro's
+%% features already in them, so they are read again with kerning off: the same files at the
+%% same sizes. A design's fonts are set the same way (templates/doc_design.py
+%% fontspec_options).
+\ifdefined\UnicodeFontTeXLigatures\IfFileExists{{tulmss.fd}}{{%
+\edef\UnicodeFontTeXLigatures{{\UnicodeFontTeXLigatures -kern;}}\input{{tulmss.fd}}}}{{}}\fi
 \moderncvstyle{{banking}}
 %% Black: the name, the section titles, the rule under the name, the contact line and
 %% the bullet marks all take moderncv's black scheme (color1 and color2 both black).

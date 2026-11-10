@@ -408,6 +408,15 @@ def main(argv=None) -> int:
         if c_pdf and any(x and x not in " ".join(ct_text.split())
                          for x in (v["EMAIL"], v["PHONE"])):
             p += " CONTACT_LETTER"
+        # A word of the letter read with a space inside it ("L TV"): the resume's round trip
+        # names these, and the letter has no round trip of its own.
+        split = []
+        if c_pdf:
+            import verify_pdf
+            draft = next((x for x in batch if x.get("abbr") == a), None)
+            split = verify_pdf.letter_splits(draft, ct_text) if draft else []
+        if split:
+            p += " SPLIT_LETTER"
         # The round trip: every line the draft put on the page (contacts, headings, the
         # summary, each role's heading line and bullets, each skills line, education,
         # certifications) must be in the text layer, in order. A swallowed % or a glyph
@@ -463,6 +472,8 @@ def main(argv=None) -> int:
         _say("%-9s %s/%s  %-4s %-14s %s" % (a, rp_s, cp_s, b, cnt, p))
         if lost:
             _say("          contact lines not on the page: " + "; ".join(lost))
+        for line in split:
+            _say("          " + line)
         if " CHRONO" in p:
             # Which job is missing or out of place, said, never only the flag.
             want_roles = v["ROLE_ORDER"].rstrip(">").split(">")
