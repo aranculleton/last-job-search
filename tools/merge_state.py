@@ -424,7 +424,8 @@ JSON_NAMES = {
                      "ljs-reactions.json", "ljs-upgrades-listed.json", "ljs_own_tests.json",
                      ".reactions.json", "ljs-no-page.json", "ljs-page-held.json",
                      "ljs-job-chats.json", "ljs-tidy-planned.json", "ljs-versions.json",
-                     "ljs-save-held.json", "ljs-land-result.json", ".mirror.json"), _GITDIR),
+                     "ljs-save-held.json", "ljs-land-result.json", ".mirror.json",
+                     "ljs-touched.json"), _GITDIR),
     # The page's records as this checkout last read them (page_reads, the mirror in its git
     # folder), each under its own record's name: the meta records read by name, and every file
     # of a collection copied whole.

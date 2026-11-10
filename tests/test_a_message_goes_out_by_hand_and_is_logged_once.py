@@ -313,5 +313,7 @@ def test_where_a_note_goes_is_on_its_cards_face_beside_i_sent_it():
     with open(os.path.join(root, "templates", "app", "app.js"), encoding="utf-8") as fh:
         js = fh.read()
     assert "const onFace = !!(link && ready && !held);" in js
-    assert 'act: held ? paste : (onFace ? [sentBtn, link] : sentBtn)' in js
+    # A held one keeps Paste, except a note Claude or the person held on purpose (its record
+    # says so), whose own line carries its one way on (HELD_SENDABLE).
+    assert 'act: held ? (HELD_SENDABLE.has(txt(m.hold_why)) ? null : paste) : (onFace ? [sentBtn, link] : sentBtn)' in js
     assert "const extra = [onFace ? null : link," in js
