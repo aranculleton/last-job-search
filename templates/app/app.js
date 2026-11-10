@@ -3059,21 +3059,27 @@
     const searchable = !!o.search && (!!o.searchOnScreen || items.length > SEARCH_OVER);
     const q = searchable ? txt(st.q).trim().toLowerCase() : "";
     const onIn = (g) => arr(st.chips[g.key]).filter((v) => g.options.some((op) => op[0] === v));
-    const passes = (it, except) => {
+    const named = (it) => txt(o.search(it)).toLowerCase().indexOf(q) >= 0;
+    const passes = (it, except, chipsOnly) => {
       for (const g of groups) {
         if (g.key === except) continue;
         const on = onIn(g);
         if (on.length && !on.some((v) => g.options.find((op) => op[0] === v)[2](it))) return false;
       }
-      return !q || txt(o.search(it)).toLowerCase().indexOf(q) >= 0;
+      return chipsOnly || !q || named(it);
     };
-    const filtered = items.filter((it) => passes(it));
+    const chipOn = groups.some((g) => onIn(g).length > 0);
+    // A name searched for is always found, whatever the filters: those a filter hides are said
+    // under the list, one tap away (the maintainer, 2026-11-10: a contact with no employer was
+    // "missing" from a search for his name while one filter was on).
+    const byFilter = q && chipOn ? items.filter((it) => named(it) && !passes(it, null, true)) : [];
+    const showBy = byFilter.length > 0 && st.hidShown === q;
+    const filtered = items.filter((it) => passes(it)).concat(showBy ? byFilter : []);
     const hidden = items.length - filtered.length;
     const sorted = o.sort ? filtered.slice().sort(o.sort) : filtered.slice();
     // A search or a filter looks through everything, folded or not: a name typed is a name
     // found, and a filter chosen shows its people, never an empty list with them behind the
     // fold (2026-11-03: "Follow-up you could send (311)" showed 0 rows).
-    const chipOn = groups.some((g) => onIn(g).length > 0);
     const whole = !!q || chipOn;
     const folded = o.fold && !whole ? sorted.filter(o.fold) : [];
     const open = o.fold && !whole ? sorted.filter((it) => !o.fold(it)) : sorted;
@@ -3092,7 +3098,7 @@
     if ((chipsUseful || searchable) && o.bar) parts.push(filterBar(key, o, st, groups, items, passes, searchable));
     if (!shown.length) {
       // Said once: "Nothing matches" and a second line saying the same were both shown.
-      if (hidden) parts.push(empty("Nothing matches.", chipOn ? "Clear the filters to see everything again." : "Nothing here has those letters in it."));
+      if (hidden && !(byFilter.length && !showBy)) parts.push(empty("Nothing matches.", chipOn ? "Clear the filters to see everything again." : "Nothing here has those letters in it."));
       else if (!folded.length && o.empty) parts.push(o.empty());
     } else parts.push(box(shown.map(o.render)));
     if (cut) {
@@ -3118,8 +3124,13 @@
           btn("Show " + Math.min(fleft, PAGE_SIZE) + " more", () => { st.foldPages = (st.foldPages || 1) + 1; scheduleRender(); }, {kind: "link", key: "foldmore:" + key})));
       }
     }
+    if (byFilter.length && !showBy) {
+      const n = byFilter.length;
+      parts.push(h("p", {class: "fold", "data-hidden-by-filter": String(n)}, h("span", {}, n + " more hidden by your filter" + (groups.filter((g) => onIn(g).length).length > 1 ? "s" : "") + ": "),
+        btn("Show them", () => { st.hidShown = q; scheduleRender(); }, {kind: "link", key: "byfilter:" + key})));
+    }
     // A search is not a filter: it never says the rest are "hidden by your filters".
-    if (hidden && chipOn && shown.length) {
+    if (hidden && chipOn && shown.length && !q) {
       parts.push(h("p", {class: "fold"}, h("span", {}, plural(hidden, "more is", "more are") + " hidden by your filters: "),
         btn("Clear filters", () => clearFilters(key), {kind: "link", key: "clear-tail:" + key})));
     }
@@ -11111,7 +11122,7 @@
         h("div", {class: "card-actions"},
           btn("I withdrew them", () => act([{item: txt(target.id), action: "requests.withdrawn", value: {contacts: ids}, rev: txt(target.rev)}], "Withdrawn: " + nWord(n, "request", "requests")), {kind: "primary", small: true, key: "withdrawn"}),
           more("withdraw", "the requests", [
-            who.length ? h("ul", {class: "plain"}, who.map((p) => h("li", {}, txt(p.first_name) + " at ", h("bdi", {}, txt(p.employer))))) : null,
+            who.length ? h("ul", {class: "plain"}, who.map((p) => h("li", {}, txt(p.employer) ? [txt(p.first_name) + " at ", h("bdi", {}, txt(p.employer))] : txt(p.first_name)))) : null,
             h("div", {class: "more-acts"}, btn("Keep waiting", () => act(list.map((d) => ({item: d.id, action: "due.snooze", value: {until: plusDays(7)}, rev: d.rev})), "Kept waiting a week"), {kind: "quiet", small: true, key: "withdraw-wait"}))])),
         stateLine("withdraw", "withdraw"))};
   }
