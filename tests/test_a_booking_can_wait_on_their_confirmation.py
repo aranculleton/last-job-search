@@ -147,3 +147,15 @@ def test_a_changed_plan_queues_the_prep_update_by_itself_once(where, tmp_path):
     assert queued({"work": {"prep~int-quayside": since}}) == []
     going = {"version": 5, "data": {"kind": "prep", "status": "running"}}
     assert queued({"work": {"prep~int-quayside": going}}) == []
+    # A prep a chat asked for under its own id, for the same interview and still going: never
+    # a second one (the maintainer's copy, 2026-11-10: booking a round re-queued the pack
+    # while a chat was building it).
+    theirs = {"version": 2, "data": {"kind": "prep", "status": "running",
+                                     "args": {"interview": "int-quayside"}}}
+    assert queued({"work": {"prep~20261103T0850-ab12": theirs}}) == []
+    waiting = {"version": 1, "data": {"kind": "prep", "status": "queued",
+                                      "args": {"interview": "int-quayside"}}}
+    assert queued({"work": {"prep~20261103T0850-ab12": waiting}}) == []
+    # Once it has finished, an older pack is redone as before.
+    over = dict(theirs, data=dict(theirs["data"], status="done", finished_at="2026-11-01T09:00:00Z"))
+    assert [e["doc_id"] for e in queued({"work": {"prep~20261103T0850-ab12": over}})] == ["prep~int-quayside"]

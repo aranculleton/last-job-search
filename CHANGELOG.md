@@ -22,6 +22,8 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **Booking an interview no longer starts a second prep for it.** When a booking made an interview's prep out of date while a prep for it was already waiting or being built, the page queued another, and a second chat would have built the same pack. A prep already on its way for that interview, whoever asked for it, now holds the redo back.
+
 - **Your Brief lists every job it has room for in Safari.** Its panels share the room their rows give in turns now, the ones you need most first. Before, one panel took all the room it could before the next one had a turn, so in Safari Coming up took an extra row and Jobs showed four where six fit.
 - **A reply you have just had drafted shows on that person's card straight away.** When Claude drafted it in one chat, the page's helper, working from your last save, could put the old draft back on their card until the new one was saved. The new draft now stays on the card while it is being saved.
 - **A name you search for in Contacts is always found.** With a filter on, someone whose name matched could vanish from the search with nothing saying why, which made a contact with no employer look missing. The list now says "1 more hidden by your filter", with Show them, and someone with no employer is named by their name alone.

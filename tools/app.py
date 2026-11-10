@@ -325,9 +325,20 @@ def self_fixes(db: dict | None, model: dict, out_dir: str, now, dump_dir: str = 
     # never waiting for an "Update it" tap (the maintainer, 2026-11-05): once a change, under
     # the prep's own work id, so the card shows it going. Work on its way, or one finished or
     # stopped since the plan changed, is left as it is.
+    # A prep already waiting or running for an interview, whoever asked for it (a chat's own
+    # "prep~<stamp>" item as much as this one's "prep~<interview>"): never a second. Booking a
+    # round made the pack out of date while a chat was building it, and the next update queued
+    # another for the same interview (the maintainer's copy, 2026-11-10).
+    going = set()
+    for doc in work.values():
+        d = (doc or {}).get("data") or {}
+        a = d.get("args") if isinstance(d.get("args"), dict) else {}
+        if d.get("kind") == "prep" and a.get("interview") and \
+                str(d.get("status") or "queued") not in page_db.FINISHED:
+            going.add(str(a["interview"]))
     for iv in model.get("interviews") or []:
         prep = iv.get("prep") or {}
-        if not prep.get("stale") or iv.get("past") or not iv.get("id"):
+        if not prep.get("stale") or iv.get("past") or not iv.get("id") or str(iv["id"]) in going:
             continue
         wid = page_db.safe_id("prep~" + str(iv["id"]))
         have = work.get(wid) or {}
