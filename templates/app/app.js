@@ -9972,7 +9972,7 @@
       onSubmit: (v) => {
         const n = txt(v.note);
         const count = Number(v.count || 5);
-        requestWork([{id: "network~targets~" + todayIso(), kind: "network", to: peopleTo(), title: n ? "People: " + (n.length > 40 ? n.slice(0, 39) + "\u2026" : n) : "People at the employers you want", args: Object.assign({count}, n ? {note: n} : {}), redo: true}]);
+        requestWork([{id: "network~targets~" + stamp(), kind: "network", to: peopleTo(), title: n ? "People: " + (n.length > 40 ? n.slice(0, 39) + "\u2026" : n) : "People at the employers you want", args: Object.assign({count}, n ? {note: n} : {}), redo: true}]);
       }});
   }
   function findPeople(company) {

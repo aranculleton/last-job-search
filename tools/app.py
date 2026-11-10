@@ -1798,8 +1798,11 @@ def _again(a, chat: str) -> str:
 # The ring is a comment sent to Claude; left open it stays unread in the Claude app for ever.
 RESOLVE_RING = ("last, once this wake's work is done: ArtifactComments resolve (url {url}, "
                 "thread_id: the thread this wake came on, which the notification that woke you "
-                "names as thread=...). Resolving is not answering: leave no reply. A wake with "
-                "no such thread (a timer, a run by hand) has nothing to resolve.")
+                "names as thread=...), and any other open thread whose first line starts "
+                "\"[app]\" and whose work is finished or no longer on the page: each one left open "
+                "kept the blue dot on Claude's comments button (the maintainer, 2026-11-10). "
+                "Resolving is not answering: leave no reply. A wake with no such thread (a "
+                "timer, a run by hand) resolves only those older ones.")
 
 
 def cmd_wake(a) -> int:

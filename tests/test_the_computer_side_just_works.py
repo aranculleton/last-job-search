@@ -659,3 +659,13 @@ def test_the_computer_is_found_however_the_list_of_places_arrives():
                   {"ccr": {"data": [e]}}):
         got = computer.bridges(shape)
         assert [b["id"] for b in got] == ["env_x"] and got[0]["computer"] == "Mac", shape
+
+
+def test_the_route_asks_for_the_list_of_computers_before_calling_one_off():
+    """Judged by the Mac's last check-in alone, a Mac that was on and listed read as off, and
+    the work waited (a person's copy, 2026-11-10): with no list given, the chat is told to ask
+    for it first."""
+    db = _db()
+    got = computer.route(db, T, envs=None, tools=["create_session"])
+    if got["route"] != "none":
+        assert got["route"] == "ask" and "list_environments" in got["then"], got

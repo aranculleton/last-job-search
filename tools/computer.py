@@ -602,6 +602,15 @@ def route(db: dict, now: dt.datetime, chat: str = "", envs=None, folders=None,
                          "tools/app.py next <dump> --chat <id> --kind computer --computer-only "
                          "--lent and do it here, with --kind computer on every app.py done."),
                 "waiting": w}
+    # Never "the computer is off" on an old check-in alone: with no list of the person's
+    # computers given, the chat asks for it first. Judged by the Mac's last check-in, a Mac
+    # that was on and listed read as off, and the work waited (a person's copy, 2026-11-10).
+    if envs is None and "create_session" in tools:
+        return {"route": "ask", "work": wid, "line": "",
+                "then": ("list_environments first, save its answer to a file, then run "
+                         "python3 tools/computer.py route again with --envs <that file>: "
+                         "whether the computer is on is what that list says, never its last "
+                         "check-in alone."), "waiting": w}
     out = {"route": "paste", "work": wid, "line": st["line"], "action": st["action"],
            "paste": True, "waiting": w}
     if st["state"] == "ready":

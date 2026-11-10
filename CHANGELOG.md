@@ -66,6 +66,12 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **A second people search the same day keeps the first one's results.** Both were saved under the day's name, so the new one took the earlier one's place on the page.
+
+- **Claude asks which of your computers are on before saying yours is off.** Judged by its last check-in alone, a Mac that was on read as off, and "Find people" waited.
+
+- **The blue dot on Claude's comments button clears.** Each tap on your page opens a thread for the helper, and old ones were left open; the helper now closes them once their work is done.
+
 - **Claude finds your computer however the list of computers arrives.** Wrapped one way, it read as no computer at all, and "Find people" waited while your Mac was on.
 
 - **A work card's count reads cleanly.** "...big tech employers., 0 of 5 done" lost its stray full stop.
