@@ -204,6 +204,43 @@ def no_screen(dump: str, db: dict) -> str:
 COMPUTER_READS = "network~read~"
 
 
+def still_unread(cid: str, model: dict, now) -> bool:
+    """Is this person still owed a read before their first note, by this copy itself, never
+    by the page's own list alone (it holds what the page last drew)? Not when they already have
+    a fresh reading, when the note has gone or a request waits (their status is past never
+    written to, or the message log says so), or when they are held back on purpose (their
+    employer full: app_model.employer_held). A read queued for eight people, six read that day
+    and five already written to, was the third for the same people in a day (the maintainer,
+    2026-11-10). Unsure (no contact book to read): kept, as before."""
+    try:
+        import reading
+        got = reading.load(cid)
+        if got and reading.fresh(got, now.date()):
+            return False
+    except Exception:  # noqa: BLE001  no reading to look at: the rest decides
+        pass
+    for m in model.get("messages") or []:
+        if str(m.get("contact") or "") == cid and m.get("hold_why") == "employer_full":
+            return False
+    try:
+        from network import schema, state
+        rows = state.load_contacts(state.CONTACTS_CSV)
+        row = next((r for r in rows if str(r.get("contact_id") or "").strip() == cid), None)
+        if row is None:
+            return True
+        threads = state.load_threads(state.THREADS_CSV) if os.path.exists(state.THREADS_CSV) \
+            else []
+        msgs = [t for t in threads if str(t.get("contact_id") or "").strip() == cid]
+        if state.effective_status(row, msgs) not in schema.NEVER_SENT:
+            return False
+        if state.request_pending(msgs) or any(str(t.get("direction") or "") == "outbound"
+                                              for t in msgs):
+            return False
+    except Exception:  # noqa: BLE001  no contact book here: kept
+        return True
+    return True
+
+
 def computer_reads(model: dict, work: dict, now) -> tuple[str, dict] | None:
     """The notes waiting for their person's profile, read on the person's computer with no one
     pressing anything, where it is known ready (model person.computer: computer.reads_there)
@@ -223,18 +260,24 @@ def computer_reads(model: dict, work: dict, now) -> tuple[str, dict] | None:
     want = [str(q.get("contact") or "") for q in reading.get("queue") or []] \
         + [str(c) for c in (model.get("to_read") or {}).get("contacts") or []]
     going: set = set()
-    for doc in work.values():
+    day = now.date().isoformat().replace("-", "")
+    for wid, doc in work.items():
         d = (doc or {}).get("data") or {}
-        if d.get("kind") == "network" and str(d.get("status") or "queued") not in page_db.FINISHED:
-            a = d.get("args") if isinstance(d.get("args"), dict) else {}
-            if a.get("rewrite") or a.get("read_first"):
-                going |= {str(c) for c in a.get("contacts") or []} | {str(a.get("contact") or "")}
-    cids = [c for c in dict.fromkeys(want) if c and c not in going]
+        if d.get("kind") != "network":
+            continue
+        a = d.get("args") if isinstance(d.get("args"), dict) else {}
+        # Today's read, finished too: its people are not queued again until tomorrow. A read
+        # that finished with some still unread was written over by the next page update, under
+        # the same id, as a new job with its clock reset (the maintainer's page, 2026-11-10).
+        today = str(wid).startswith(page_db.safe_id(f"{COMPUTER_READS}{day}~"))
+        if (str(d.get("status") or "queued") not in page_db.FINISHED or today) and \
+                (a.get("rewrite") or a.get("read_first")):
+            going |= {str(c) for c in a.get("contacts") or []} | {str(a.get("contact") or "")}
+    cids = [c for c in dict.fromkeys(want) if c and c not in going and still_unread(c, model, now)]
     if not cids:
         return None
     first = {str(q.get("contact") or ""): str(q.get("first_name") or "")
              for q in reading.get("queue") or []}
-    day = now.date().isoformat().replace("-", "")
     key = hashlib.sha1(" ".join(sorted(cids)).encode("utf-8")).hexdigest()[:10]
     title = (f"Reading {first.get(cids[0]) or 'their'}'s profile on your computer"
              if len(cids) == 1 and first.get(cids[0]) else
@@ -242,7 +285,10 @@ def computer_reads(model: dict, work: dict, now) -> tuple[str, dict] | None:
     fields = page_db.queued("network", title, {"contacts": cids, "read_first": True,
                                                "rewrite": True, "auto": True}, now)
     fields["to"] = "computer"
-    return page_db.safe_id(f"{COMPUTER_READS}{day}~{key}"), fields
+    wid = page_db.safe_id(f"{COMPUTER_READS}{day}~{key}")
+    if wid in work:
+        return None                     # never written over, whatever it holds now
+    return wid, fields
 
 
 def self_fixes(db: dict | None, model: dict, out_dir: str, now, dump_dir: str = "") -> list[str]:
@@ -398,17 +444,38 @@ def cmd_view(a) -> int:
                 ahead_of_us[theirs_sha] = commit_ahead(
                     theirs_sha, os.environ.get("LJS_BASIS_SHA") or "HEAD")
             if ahead_of_us[theirs_sha] is not None:
-                return ahead_of_us[theirs_sha]
+                return ahead_of_us[theirs_sha] or holds_unlanded(d)
         theirs = str(d.get("base") or "")
         return bool(base) and bool(theirs) and theirs > base
+
+    def holds_unlanded(d: dict) -> bool:
+        """Was it drawn, a little while ago, from a copy holding work of its own not landed
+        yet that this copy lacks? A reply drafted and committed in the person's own chat was
+        on the page until the helper, drawing from master, put the old draft back on their
+        card until the save landed (the maintainer, 2026-11-10). Kept only for
+        UNLANDED_KEEP_S, so a save that never lands never stops this chat drawing for good."""
+        head = str(d.get("head_sha") or "")
+        made = app_model.parse_time(d.get("made_at"))
+        if not head or made is None or (now - made).total_seconds() > UNLANDED_KEEP_S:
+            return False
+        if ("head", head) not in ahead_of_us:
+            ahead_of_us[("head", head)] = commit_ahead(
+                head, os.environ.get("LJS_HEAD_SHA") or os.environ.get("LJS_BASIS_SHA") or "HEAD")
+        # Never seen here, or not in this copy's history: work this copy does not have.
+        return ahead_of_us[("head", head)] is not False
     kept: list = []
+    head_sha = copy_head_sha()
     stamp = {"by": by, **({"base": base} if base else {}),
+             # Only where this copy holds commits master does not have yet (holds_unlanded).
+             **({"head_sha": head_sha} if head_sha and head_sha != base_sha else {}),
              **({"base_sha": base_sha} if base_sha else {})}
     # The suggestions already on the page keep their day, so no more than three new ones
     # reach it a day.
     full: dict = {}
     model, _ = _build(today, now, shown=app_alerts.shown_in(db.get("view") or {}), full=full,
                       work_time=page_db.work_times(db, now) if db else None,
+                      # A message Claude's own change held is on hold on every screen.
+                      held_work=app_model.held_by_work(db.get("work")) if db else None,
                       computer=computer_seen(db or {}, now))
     w = page_db.Writes(a.out_dir)
     views = (db.get("view") or {}) if db else {}
@@ -416,7 +483,8 @@ def cmd_view(a) -> int:
     # one card had changed (2026-11-03). The page takes each document newer than its own copy,
     # so one left as it was still shows; a section in parts is kept or rewritten whole, so
     # its parts never mix two revs.
-    volatile = ("rev", "made_at", page_db.VERSION_FIELD, "by", "base", "base_sha")
+    volatile = ("rev", "made_at", page_db.VERSION_FIELD, "by", "base", "base_sha",
+                "head_sha")
 
     def unchanged(doc_id, doc):
         old = (views.get(doc_id) or {}).get("data")
@@ -525,13 +593,16 @@ def cmd_view(a) -> int:
     # What a draft needs that Claude can do by itself is queued by itself, once: a check
     # with its fix in hand made again, and the PDFs the page lacks put on it. Never "Make it
     # again" or "Get my files ready" for the person to tap (the maintainer, 2026-11-05).
+    fixes: list = []
     if a.dump:
         try:
-            batches = list(batches) + self_fixes(db, model, os.path.join(a.out_dir, "self"), now,
-                                                 dump_dir=a.dump)
+            fixes = self_fixes(db, model, os.path.join(a.out_dir, "self"), now, dump_dir=a.dump)
+            batches = list(batches) + fixes
         except Exception:  # noqa: BLE001  nothing to read it against: nothing queued
             pass
-    lines = app_listen.view_renewal(db, a.chat, now)
+    # Work this update queued for itself (a remake, the files, a computer read) wakes nobody by
+    # itself: the brief's run starts a fresh helper for it (app_listen.brief_wakes).
+    lines = app_listen.view_renewal(db, a.chat, now, queued=bool(fixes))
     # A yes the person gave, in another chat or on the page, that an unsent resume still
     # leaves off: this chat redoes it, unasked (tools/skill_answers.py). Work already on its way
     # for it is left to run.
@@ -841,6 +912,26 @@ def copy_basis_sha() -> str:
     code, out = _git_out("merge-base", "HEAD", "origin/master")
     if code != 0 or not out:
         code, out = _git_out("rev-parse", "HEAD")
+    return out if code == 0 else ""
+
+
+# How long screens drawn from a copy with work not landed yet are kept from a chat whose copy
+# lacks it (cmd_view's holds_unlanded): a landing takes minutes, and one that never comes must
+# not keep any chat from drawing them for good.
+UNLANDED_KEEP_S = 30 * 60
+
+
+def copy_head_sha() -> str:
+    """This copy's newest commit, its own not landed yet included: screens carry it as
+    `head_sha` where it is not `base_sha`, so a chat whose copy lacks that work does not draw
+    over them before it lands. "" where it cannot be told. LJS_HEAD_SHA is for tests (with
+    LJS_BASIS_SHA alone, the copy is taken to hold nothing unlanded)."""
+    given = os.environ.get("LJS_HEAD_SHA", os.environ.get("LJS_BASIS_SHA"))
+    if given is not None:
+        return given
+    if not os.path.isfile(os.path.join(person.ROOT, "profile", "person.json")):
+        return ""
+    code, out = _git_out("rev-parse", "HEAD")
     return out if code == 0 else ""
 
 
@@ -1233,7 +1324,10 @@ def _next_job(url: str, first_word: str = "Then", kind: str = "cloud",
             f"start it: ArtifactData query, url {url}, collections work, holds and beats, out_dir a "
             f"fresh folder $E; python3 tools/app.py next \"$E\" --chat <this chat's id> --kind "
             f"{flags} --on \"<your model>\" --claim-out \"$E/claim\". Nothing named: "
-            "stop. One named: send its claim batch (refused: another chat has it, stop), then "
+            "your work is saved and on the page, so put this chat away yourself: "
+            "archive_session with this chat's own id (refused, or not among your tools: leave "
+            "it, the chat that answers the page puts it away), then stop. A finished job's chat "
+            "stayed idle in the sidebar for up to a day (2026-11-10). One named: send its claim batch (refused: another chat has it, stop), then "
             "follow the `steps` it printed, in order: that job's own, with its id, its folder and "
             "its commands, never this one's. At most three jobs in this chat, so its history "
             "stays short.")
@@ -2502,20 +2596,32 @@ def cmd_done(a) -> int:
                     today=person.today(now).isoformat(),
                     path=person.state("job_scraper", "seen_jobs.json"))
         a.stopped, a.summary = True, a.summary or f"Not drafted: {left.rstrip('.')}."
+    made, noted, links, problem = _made(a, db, reply)
+    if problem:
+        print(f"app: not finished: {problem}", file=sys.stderr)
+        return 2
     try:
         got = page_db.finish(db, a.work, now, a.out or os.path.join(a.dump, "out"),
                              summary=a.summary, status="failed" if a.failed else
                              "stopped" if a.stopped else "done",
-                             error=a.failed, links=_links(a.link), reply=reply, thread=a.thread,
+                             error=a.failed, links=links, reply=reply, thread=a.thread,
                              chat_kind=a.kind or app_listen.chat_kind(), dump_dir=a.dump,
                              chat=a.chat, question=a.question, about=a.about,
                              answer=_answer(a), answered=a.answered, left_out=left,
-                             outcome=getattr(a, "outcome", "") or "")
+                             outcome=getattr(a, "outcome", "") or "",
+                             signin=getattr(a, "signin", "") or "", go=made)
     except (KeyError, ValueError) as e:
         print(f"app: not finished: {e.args[0] if e.args else e}", file=sys.stderr)
         return 2
+    if got.get("status") in ("done", "failed", "stopped") and not got.get("again"):
+        import touched
+        touched.clear(noted)
     kind = str((((db.get("work") or {}).get(page_db.safe_id(a.work)) or {}).get("data") or {})
                .get("kind") or "")
+    if got.get("status") == "done" and (getattr(a, "outcome", "") or "") == "held":
+        held = hold_on_record(db, a.work, a.summary, getattr(a, "until", "") or "", now)
+        if held:
+            got["held"] = held
     if got.get("again"):
         # This folder finished it already: the same batch, to send if it never was.
         got["said"] = ("this folder finished it already: here is that finish again; send it if "
@@ -2538,6 +2644,87 @@ def cmd_done(a) -> int:
             got["batches"] = list(got["batches"]) + queued["batches"]
     print(_dump(got), end="")
     return 0
+
+
+HELD_KINDS = ("tweak", "reply", "follow_up", "nudge")
+
+
+def hold_on_record(db: dict, work_id: str, summary: str, until: str, now) -> str:
+    """A change or a reply Claude finished by holding the message to someone (`done --outcome
+    held`) is put on their record, as their next action ("Hold until <day>: <why>", dated with
+    --until), so every screen, the due lists and the brief hold it, never only the card's
+    line: the card offered the draft as ready to send under "Finished: held until ..." (the
+    maintainer, 2026-11-10). "" where the work names nobody; else the line it wrote."""
+    import app_model
+    import page_db
+    from network import state
+    item = ((db.get("work") or {}).get(page_db.safe_id(work_id)) or {}).get("data") or {}
+    if str(item.get("kind") or "") not in HELD_KINDS:
+        return ""
+    args = item.get("args") if isinstance(item.get("args"), dict) else {}
+    target = args.get("target") if isinstance(args.get("target"), dict) else {}
+    cid = str(target.get("contact") or args.get("contact") or "").strip()
+    if not cid and str(target.get("id") or "").startswith("msg-"):
+        cid = str(target["id"])[4:]
+    if not cid:
+        return ""
+    why = app_model._HOLD_LEAD.sub("", " ".join(str(summary or "").split()), count=1)
+    why = why.strip().rstrip(" .;")
+    if until:
+        why = re.split(r"\s*;\s*", why)[0].rstrip(" .;")
+    # In words the contact's Next line reads well in, and state.hold_lifts ends on the day:
+    # "Hold until Kestrel Mutual posts a role, or until 2026-11-23".
+    if why.lower().startswith("until ") and until:
+        action = f"Hold {why}, or until {until}"
+    else:
+        action = (f"Hold until {until}" if until else "Hold") + (f": {why}" if why else "")
+    contacts = state.load_contacts()
+    threads = state.load_threads() if os.path.exists(state.THREADS_CSV) else []
+    try:
+        state.set_contact(contacts, threads, cid, next_action=action, due=until or None,
+                          today=person.today(now).isoformat())
+    except ValueError:
+        return ""
+    state.save_contacts(contacts)
+    return f"held on their record: {cid}: {action}"
+
+
+def _made(a, db: dict, reply: str = "") -> tuple[list, list, list, str]:
+    """What a finishing work item changed on the page, as its answer's buttons
+    (tools/touched.py): what the commands it ran noted, each --touched, each --link to a place
+    on the page, and a search's own jobs. (buttons, the noted rows to clear once it is
+    finished, the other links, why the answer may not go as written or "")."""
+    import page_db
+    import touched
+    item = ((db.get("work") or {}).get(page_db.safe_id(a.work)) or {}).get("data") or {}
+    try:
+        found, noted = touched.gather(a.work, item, a.chat)
+    except Exception:  # noqa: BLE001  a record it cannot read is a button fewer, never a stop
+        found, noted = [], []
+    places, links = touched.page_links(_links(a.link))
+    try:
+        given = [touched.from_arg(x) for x in getattr(a, "touched", None) or ()]
+    except ValueError as e:
+        return [], noted, links, str(e)
+    found = found + places + given
+    kind = str(item.get("kind") or "")
+    args = item.get("args") if isinstance(item.get("args"), dict) else {}
+    if kind == "prep" and args.get("interview"):
+        found.append(("interviews", str(args["interview"])))
+    if kind == "search" and not a.failed and not a.stopped:
+        run = page_db.search_run(a.work)
+        if not run:
+            try:
+                import app_model
+                newest = app_model.newest_round()
+                run = os.path.splitext(os.path.basename(newest))[0] if newest else ""
+            except Exception:  # noqa: BLE001  no profile here: no jobs to point at
+                run = ""
+        if run:
+            found.append(("jobs", "round:" + run))
+    made = touched.buttons(found) if not (a.failed or a.stopped or a.question) else []
+    problem = touched.pasted(reply, made, getattr(a, "in_thread", False))
+    return made, noted, links, problem
 
 
 def _answer(a) -> dict | None:
@@ -2885,6 +3072,9 @@ def cmd_ask(a) -> int:
     except ValueError as e:
         print(f"app: not asked: {e}", file=sys.stderr)
         return 2
+    # Work a chat starts is where its answer points: "Running in Claude's work", opening it.
+    import touched
+    touched.note("work", str(got.get("work") or ""), chat=a.chat)
     print(_dump(got), end="")
     return 0
 
@@ -3174,6 +3364,9 @@ def main(argv=None) -> int:
     p.add_argument("--about", default="",
                    help="with --question: the exact words of the draft or of their message "
                         "it is about, shown quoted over it")
+    p.add_argument("--signin", default="", choices=("", "linkedin"),
+                   help="with --question: it waits on a sign-in the page itself makes in the "
+                        "Claude app, and sends the work back once it sees it")
     p.add_argument("--answer", default="", choices=("", "yesno", "choice", "date", "time",
                                                     "number", "scale", "text"),
                    help="with --question: the kind of answer, so the page draws its control "
@@ -3186,7 +3379,13 @@ def main(argv=None) -> int:
     p.add_argument("--time-key", dest="time_key", default="",
                    help="with --answer date: ask the time beside the day")
     p.add_argument("--link", action="append", default=[],
-                   help="\"<label>=<address>\" shown with it (more than one allowed)")
+                   help="\"<label>=<address>\" shown with it (more than one allowed); a place "
+                        "on the page (page:contacts/<id>) is one of its buttons")
+    p.add_argument("--touched", action="append", default=[],
+                   help="\"<place>:<id>\" it changed that no command noted (contacts, jobs, "
+                        "drafts, interviews, you, work): a button under its answer opens it")
+    p.add_argument("--in-thread", dest="in_thread", action="store_true",
+                   help="they asked to see it here: the answer may paste what its card holds")
     p.add_argument("--chat", default="", help=CLAIMED_UNDER)
     p.add_argument("--kind", default="", choices=("", "cloud", "computer"))
     p.add_argument("--answered", action="append", default=[],
@@ -3197,6 +3396,9 @@ def main(argv=None) -> int:
                    help="it finished and changed nothing on the page: held, set aside, or "
                         "unchanged (not possible, or already as asked); its card says so at "
                         "once, with the summary")
+    p.add_argument("--until", default="",
+                   help="with --outcome held, on a message to someone: the day Claude looks "
+                        "again (YYYY-MM-DD); the hold goes on their record with it")
     p.add_argument("--left-out", dest="left_out", default="",
                    help="a draft stopped because the job is not one they can take: why, in "
                         "plain words; the job leaves Jobs, ruled out with that reason")

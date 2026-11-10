@@ -543,3 +543,25 @@ def test_t12_the_page_model_carries_every_rule_and_what_is_held(tmp_path):
     lines = [h["line"] for h in rules["held"]]
     assert any(x.startswith("Larchmont Health: 2 people there are waiting on a reply, so it opens again ") for x in lines), lines
     assert any(h["say"] == "more at Larchmont Health" and h["lift"] for h in rules["held"])
+
+
+def test_a_thread_the_follow_up_rule_closed_never_holds_its_employer(monkeypatch):
+    """Two unanswered messages from us close a thread (state.at_limit), yet it still counted
+    towards its employer's limit, holding the next person there until somebody replied (the
+    maintainer, 2026-11-10)."""
+    import reading
+    import schema
+    monkeypatch.setattr(schema, "FOLLOW_UP_DAYS", 14)
+    monkeypatch.setattr(schema, "MAX_UNANSWERED", 2)
+    today = dt.date(2026, 10, 20)
+    row = {"contact_id": "a", "name": "Ada Example", "company": "Harbourline Insurance",
+           "status": "awaiting_reply", "first_contacted": "2026-10-10"}
+    note = {"contact_id": "a", "date": "2026-10-10", "direction": "outbound",
+            "channel": "linkedin", "summary": "note", "full_text": "Hello"}
+    nudge = dict(note, date="2026-10-19", summary="nudge", full_text="Following up")
+    # One note, unanswered: it holds the employer until its follow-up is due.
+    waiting, _ = reading.at_employer("Harbourline Insurance", [row], today=today, threads=[note])
+    assert [c["contact_id"] for c in waiting] == ["a"]
+    # Two unanswered: closed by the rule, so it holds nothing.
+    waiting, _ = reading.at_employer("Harbourline Insurance", [row], today=today, threads=[note, nudge])
+    assert waiting == []

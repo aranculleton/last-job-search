@@ -127,6 +127,13 @@ def test_with_their_computer_ready_the_read_is_sent_there_by_itself():
     # Already on its way, by this or a rewrite: nothing more.
     going = {wid: {"data": dict(fields, status="running")}}
     assert app.computer_reads(_reads_model(), going, now) is None
+    # Finished today, with some still unread: never written over as a new job, and its people
+    # not queued again until tomorrow (the maintainer's page, 2026-11-10: a read that finished
+    # came back as a live job with its clock reset).
+    done = {wid: {"data": dict(fields, status="done"), "version": 4}}
+    assert app.computer_reads(_reads_model(), done, now) is None
+    tomorrow = app.computer_reads(_reads_model(), done, now + dt.timedelta(days=1))
+    assert tomorrow and tomorrow[0] != wid
     # No computer known ready, or profiles pasted: never sent there.
     assert app.computer_reads(_reads_model(computer=False), {}, now) is None
     assert app.computer_reads(_reads_model(setting="paste"), {}, now) is None
@@ -281,3 +288,35 @@ def test_with_their_computer_ready_it_is_read_there_by_itself(run, tmp_path):
         todo, read_them = got["after"][len(first) + 1]["eval"]
         assert "Claude reads 1 profile on your computer by itself" in todo and "Nothing to press" in todo, todo
         assert not read_them and "I'll paste them instead" not in todo, todo
+
+
+def test_the_automatic_read_skips_anyone_already_read_written_to_or_held(monkeypatch):
+    """A read was queued for eight people, six read that day and five already written to: the
+    third for the same people in a day, built from the page's own stale list (the maintainer,
+    2026-11-10). The copy decides who is still owed a read."""
+    import datetime as dt
+    import app
+    import reading
+    from network import state
+    now = dt.datetime(2026, 10, 25, 9, tzinfo=dt.timezone.utc)
+    rows = [{"contact_id": "kit_a", "status": "not_contacted"},
+            {"contact_id": "ash_b", "status": "not_contacted"}]
+    monkeypatch.setattr(state, "load_contacts", lambda path=None: rows)
+    monkeypatch.setattr(state, "load_threads", lambda path=None: [])
+    monkeypatch.setattr(os.path, "exists", lambda p: True)
+    monkeypatch.setattr(reading, "load", lambda cid: None)
+    wid, fields = app.computer_reads(_reads_model(), {}, now)
+    assert fields["args"]["contacts"] == ["kit_a", "ash_b"]
+    # Read already today: left out.
+    monkeypatch.setattr(reading, "load", lambda cid: {"read_on": "2026-10-25"} if cid == "kit_a" else None)
+    monkeypatch.setattr(reading, "fresh", lambda got, today=None, signed_in_now=None: bool(got))
+    assert app.computer_reads(_reads_model(), {}, now)[1]["args"]["contacts"] == ["ash_b"]
+    # Written to (a request waits): nobody left, nothing queued.
+    rows[1]["status"] = "awaiting_reply"
+    assert app.computer_reads(_reads_model(), {}, now) is None
+    # Held back for its employer: left out too.
+    rows[1]["status"] = "not_contacted"
+    monkeypatch.setattr(reading, "load", lambda cid: None)
+    held = _reads_model()
+    held.setdefault("messages", []).append({"contact": "ash_b", "hold_why": "employer_full"})
+    assert app.computer_reads(held, {}, now)[1]["args"]["contacts"] == ["kit_a"]

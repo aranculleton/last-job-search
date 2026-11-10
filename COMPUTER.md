@@ -131,18 +131,25 @@ know whether it worked.
    `list_environments` lists this computer as an active environment of kind `bridge`
    (`computer-bridge`). Not listed after they say done: give the steps once more, then the
    fallbacks below still work.
-2. **The one approval** (`computer-bridge`). From the cloud chat, `python3 tools/computer.py
-   route` prints the `create_session` call; refused as an untrusted device, run its
-   `trust-check` first (a chat that approves is tied to their devices for good, so no
-   scheduled task may fire into it), then `confirm_repository_trust`: one card, once.
+2. **The one approval** (`computer-bridge`), held by one small chat of its own, "Job search:
+   starts chats on your computer" (`tools/computer.py` STARTER_TITLE). A chat that approves is
+   tied to the person's devices for good: no chat can archive it, itself included, no
+   scheduled task may fire into it and no other chat's message reaches it. So the page's
+   helper and the brief never approve: their `route` makes the starter once (`create_session`)
+   and later wakes it by republishing its bell, a tiny page it published and watches. The
+   starter's own `route` prints the `create_session` on the computer; refused as an untrusted
+   device, it runs `trust-check`, then `confirm_repository_trust`: one card, once.
 3. **Auto, once.** A chat started on the computer gets Auto only when the chat starting it is
    in Auto itself ("requires the parent session to be in auto mode (parent is default)",
    2026-11-10, from a helper whose mode menu showed Auto). So on that refusal the person is
    asked once to switch the helper to Auto, and the call is made again; every chat after it
    then starts in Auto (`app_listen.MODE_REFUSED` says each step).
-4. **Signed in to LinkedIn, and staying signed in** (`browser-pane-stay-signed-in`). Check:
-   the chat on the computer reads one LinkedIn page and writes its heartbeat
-   (`computer.py beat --linkedin in`).
+4. **Signed in to LinkedIn, and staying signed in** (`browser-pane-stay-signed-in`, whose
+   steps include keeping the sign-in). Check: the chat on the computer reads one LinkedIn page and
+   writes its heartbeat (`computer.py beat --linkedin in`). No chat can read whether the
+   browser keeps sign-ins, so it is judged by its effect: a sign-in seen and then lost by the next look
+   marks it off (`computer.cookies_seen`), the card and the brief then say to sign in again
+   and keep the sign-in, and a sign-in that holds for a day clears it.
 5. **No scheduled task.** An hourly task on the computer started a Claude run every hour the
    app was open, waiting work or not, and needed its own Auto switch and a first run by hand
    (2026-11-09). The cloud already starts a chat on the computer when work waits, so none is
@@ -158,11 +165,13 @@ once, saying one line (`computer.py memory`).
 
 Work that needs a LinkedIn read is `to: computer` and is refused to any cloud chat
 (`tools/page_db.py` `computer_only`). The page's helper runs `python3 tools/computer.py
-waiting` on each wake and, while something waits, `route`, which picks the first that works:
+waiting` on each wake, and the brief on each run, and, while something waits, `route`, which picks the first that works:
 a chat already on the computer; a chat started there from the cloud (`create_session` on the
-bridge, in Auto, titled `Job search · <job> · <computer>`, its prompt complete, its results
-back through the page and the copy and never `send_message`, archived by the helper once its
-work is finished); the scheduled task; a folder the computer offers (`folder-attach`); a cloud
+bridge by the computer starter, woken by its bell, in Auto, titled `Job search · <job> ·
+<computer>`, its prompt complete, its results back through the page and the copy and never
+`send_message`, archived by the starter once its work is finished or waits on the person: a
+job stopped at the LinkedIn sign-in rings the bell at its end, so its chat is put away at
+once, and a fresh one starts only once they answer); the scheduled task; a folder the computer offers (`folder-attach`); a cloud
 chat lent the computer's browser (`cloud-linked-browser`); and last, the page's one line and
 the paste. On the computer the work runs in the chat itself (`app.py next --kind computer
 --computer-only`), never as a background agent, which has no browser. Each run is measured

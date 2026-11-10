@@ -134,6 +134,9 @@ def test_the_chat_that_started_it_closes_it_only_when_it_is_done_and_on_master(c
     assert tidy.close(LIVE, "prep~1", db, {LIVE: _detail(LIVE, "Job search page")}, listener,
                       LIVE, REPO, set())[0] == "keep"
     assert tidy.close(PREP, "prep~1", db, {}, listener, LIVE, REPO, set())[0] == "keep"
+    # A folder that lacks the job (a read of only what changed since): the page is read again,
+    # never "keep" for a day (the maintainer, 2026-11-10).
+    assert tidy.close(PREP, "prep~9", db, det, listener, LIVE, REPO, set())[0] == "read"
 
     # The commands, as the chat that answers the page runs them.
     dump = tmp_path / "dump"
@@ -630,3 +633,12 @@ def test_session_details_are_read_in_any_shape():
     for shape in ([a, b], [{"ccr": a}, {"ccr": b}], {"ccr": {"data": [a, b]}}, {"data": [a, b]},
                   [[a], {"ccr": b}]):
         assert set(tidy.details(tidy._as_pages(shape))) == {"session_aaa", "session_bbb"}, shape
+
+
+def test_a_jobs_chat_puts_itself_away_once_nothing_is_left():
+    """A finished search's chat stayed idle in the sidebar until the next daily tidy-up (the
+    maintainer, 2026-11-10): with no next job, it archives itself."""
+    import app
+    said = app._next_job("https://claude.ai/artifact/x")
+    assert "archive_session with this chat's own id" in said
+    assert "Nothing named: your work is saved" in said

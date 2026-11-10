@@ -294,6 +294,18 @@ def read_work(path: str) -> dict:
     return got
 
 
+def _work_id(path: str) -> str:
+    """The id of a work item read from its file in the dump: its own `id`, else its name."""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            got = json.load(fh)
+    except (OSError, ValueError):
+        got = {}
+    wid = str(got.get("id") or "") if isinstance(got, dict) else ""
+    # A dump names its files with @ for ~ (page_db.load).
+    return wid or os.path.splitext(os.path.basename(path))[0].replace("@", "~")
+
+
 def _canon(obj) -> str:
     return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
@@ -2540,6 +2552,13 @@ def main(argv=None) -> int:
             got = {"status": "refused", "summary": str(e)}
     elif a.cmd == "apply":
         got = apply(work)
+        if got.get("status") in ("done", "needs_model"):
+            # Where the change is, for its answer's button (tools/touched.py).
+            import touched
+            place = touched.tweak_place((work.get("args") or {}).get("target") or {})
+            if place:
+                for path in a.work:
+                    touched.note(*place, work=_work_id(path))
     elif a.cmd == "merge":
         got = merge(work, a.round)
     else:

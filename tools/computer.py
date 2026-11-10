@@ -42,6 +42,7 @@ whose trend the brief reports (`trend`).
     python3 tools/computer.py route <dump> --chat ID [--envs FILE] [--folders FILE] [--tools T]
     python3 tools/computer.py started <dump> --work ID --session ID --env ID --computer NAME
     python3 tools/computer.py archived <dump> --work ID
+    python3 tools/computer.py signed-in <dump> --work ID          # its own sign-in question, answered
     python3 tools/computer.py measure <dump> --work ID --chat ID [--transcript FILE]
     python3 tools/computer.py check <dump> [--envs FILE]       # the sync's and the brief's lines
     python3 tools/computer.py trend [--days 7]
@@ -74,6 +75,9 @@ FRESH_S = 20 * 60
 OFF_S = 2 * 3600
 # Not seen for this long while it was set up: its chat, folder or task may have been deleted.
 GONE_S = 7 * 24 * 3600
+# A LinkedIn sign-in that held this long, between two looks, after one was lost: the browser
+# keeps it now (cookies_seen).
+SIGNIN_HELD_S = 20 * 3600
 # Computer work waiting this long with nothing to start it puts one card on To do.
 CARD_AFTER_S = 10 * 60
 # A chat started on the computer is believed to be at work for this long (its claim's lease
@@ -107,6 +111,8 @@ SAY = {
     "gone": ("Claude hasn't been able to start on your computer for a week: set it up again "
              "once and it starts by itself."),
     "signed_out": "LinkedIn is signed out in Claude's browser on your computer: sign in there once.",
+    "signed_out_lost": ("LinkedIn signed out in Claude's browser on your computer: sign in again "
+                        "and keep the sign-in this time."),
     "forgets": ("Claude's browser on your computer forgets LinkedIn each time the app quits: "
                 "keep its sign-in once."),
     "paused": "LinkedIn asked Claude to slow down: reading starts again tomorrow, by itself.",
@@ -119,6 +125,7 @@ ACTION = {
     "off": None,
     "gone": ("remote-control-settings", "Set it up again"),
     "signed_out": ("browser-pane-stay-signed-in", "Sign in once"),
+    "signed_out_lost": ("browser-pane-stay-signed-in", "Sign in again"),
     "forgets": ("browser-pane-stay-signed-in", "Stay signed in"),
     "no_bridge": ("remote-control-settings", "Switch it on"),
     "not_set_up": ("remote-control-settings", "Set it up"),
@@ -134,6 +141,8 @@ WAITING_SAY = {
             "again once.",
     "signed_out": "{what} until you sign in to LinkedIn in Claude's browser. Open LinkedIn and "
                   "sign in once.",
+    "signed_out_lost": "{what} because LinkedIn signed out in Claude's browser. Sign in again, "
+                       "and keep the sign-in this time.",
     "forgets": "{what} because Claude's browser forgets your LinkedIn sign-in when the app "
                "quits. Keep the sign-in once.",
     "no_bridge": "{what} until Claude is switched on for your computer. Switch it on once in "
@@ -185,6 +194,175 @@ def runs_there(computer: str) -> str:
     name = _plain_name(computer)
     where = name if name == "your computer" else "your " + name
     return f"This runs in a chat on {where}, which you can delete when it's done."
+
+
+# ------------------------------------------------------------------ the computer starter
+
+# The one chat that holds the computer approval (confirm_repository_trust) and does nothing but
+# start the chats on the person's computer and put them away. Approving ties a chat to the
+# person's own devices for good: from then on no chat could archive it, itself included, no
+# scheduled task could fire into it and no other chat's message reached it. When the page's
+# helper held it, every daily hand-over left an old "Job search page (finishing up)" chat in
+# the sidebar for the person to delete by hand (the maintainer, 2026-11-10). So the helpers
+# never approve: they stay ordinary chats, carry the work, and archive themselves.
+#
+# Nothing a person taps rings it, and no chat may message it, so it is woken the one way
+# that needs nobody's approval: it publishes a tiny page of its own (the bell) and watches
+# it, and any chat that has computer work for it republishes the bell ("this session is
+# woken with a new turn when the watched artifact is republished elsewhere": the Artifact
+# watch). Its record is the page's `meta/computer_starter`: {chat, bell, made_at, rung_at}.
+STARTER_DOC = ("meta", "computer_starter")
+STARTER_TITLE = "Job search: starts chats on your computer"
+# A starter asked for and not ready (no bell yet) this long: made again.
+STARTER_WAIT_S = 30 * 60
+# A ring answered by nothing this long is rung again.
+RING_S = 10 * 60
+BELL_TITLE = "Job search computer bell"
+
+
+def starter(db: dict) -> dict:
+    """The computer starter's record on the page, or {}."""
+    doc = ((db.get(STARTER_DOC[0]) or {}).get(STARTER_DOC[1]) or {})
+    return dict(doc.get("data") or {}) if isinstance(doc, dict) else {}
+
+
+def is_starter(db: dict, chat: str) -> bool:
+    return bool(chat) and str(starter(db).get("chat") or "") == chat
+
+
+def starter_prompt(url: str, copy: str) -> str:
+    """What the computer starter is told once, complete: every wake does the same few steps."""
+    return "\n".join([
+        "This chat starts the chats on my computer for my job search, and nothing else. It "
+        f"never answers my page, never publishes it and never messages another chat. Its copy "
+        f"is {copy or 'the one attached'}; my page is {url}. Say nothing to me unless a step "
+        "below says to.",
+        "First, once: python3 tools/sync_app.py --if-stale --on \"<your model>\" --tools none "
+        "(nothing else of the start command: this chat is not the page's). Then python3 "
+        "tools/computer.py bell-file \"<your scratchpad>/bell.html\" and publish that file with "
+        f"the Artifact tool (icon: bell, a new page, no url): publishing it is what lets other "
+        "chats wake this one. Then read the page's meta into a fresh folder $D (ArtifactData "
+        f"query, url {url}, collection meta, out_dir $D, limit 1000) and run python3 "
+        "tools/computer.py starter-ready \"$D\" --chat <your id> --bell <the bell's url>, and "
+        "send its batch (ArtifactData batch).",
+        "Then, now and every time this chat is woken (the bell republished): read the page's "
+        "work, beats and meta into a fresh folder $D (one ArtifactData query each, out_dir $D, "
+        "limit 1000). python3 tools/computer.py waiting \"$D\": under `finished`, "
+        "archive_session each session, then python3 tools/computer.py archived \"$D\" --work "
+        "<its id> and send the batch, then python3 tools/land.py in the background "
+        "(run_in_background) and the GitHub calls it prints: it brings the work the chat on "
+        "the computer saved to master, which no chat there may merge. Under `queued`: list_environments, saved to a file, then "
+        "python3 tools/computer.py route \"$D\" --chat <your id> --envs <that file> --tools "
+        "\"<this chat's tool names, comma separated>\", and do what it prints: a `call` exactly "
+        "as printed, then its `then`. Then end the turn with nothing said.",
+    ])
+
+
+def starter_call(url: str, copy: str, owner: str, name: str) -> dict:
+    """The create_session that makes the computer starter, from the person's copy."""
+    import app_listen
+    return {"title": STARTER_TITLE, "prompt": starter_prompt(url, copy),
+            "source_url": f"https://github.com/{owner}/{name}",
+            "extra_allowed_tools": ["ArtifactData", "ArtifactComments"],
+            "permission_mode": app_listen.SESSION_MODE}
+
+
+def bell_html(now: dt.datetime) -> str:
+    """The bell page: a few plain words, and the moment it was rung, so each publish differs."""
+    return ("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport"
+            "\" content=\"width=device-width,initial-scale=1\"><title>" + BELL_TITLE + "</title>"
+            "<style>:root{--bg:#fbfaf7;--fg:#2b2a27}@media (prefers-color-scheme:dark){:root:not("
+            "[data-theme=\"light\"]){--bg:#1c1b19;--fg:#ecebe6}}:root[data-theme=\"dark\"]{--bg:"
+            "#1c1b19;--fg:#ecebe6}body{background:var(--bg);color:var(--fg);font:16px/1.5 "
+            "system-ui,sans-serif;margin:0;padding:24px 16px}</style></head><body><p>This page "
+            "wakes the chat that starts Claude on your computer for your job search. Nothing "
+            "to do here.</p><p><small>" + _stamp(now) + "</small></p></body></html>\n")
+
+
+def write_bell(path: str, now: dt.datetime) -> str:
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(bell_html(now))
+    return path
+
+
+def _starter_set(db: dict, fields: dict, out_dir: str, dump_dir: str = "",
+                 label: str = "starter") -> list[str]:
+    import page_db
+    doc = (db.get(STARTER_DOC[0]) or {}).get(STARTER_DOC[1])
+    w = page_db.Writes(out_dir)
+    if doc:
+        w.add("update", *STARTER_DOC, fields, if_version=doc.get("version"))
+        new = dict(doc.get("data") or {}, **fields)
+    else:
+        w.add("set", *STARTER_DOC, fields)
+        new = dict(fields)
+    if dump_dir:
+        page_db._keep_dump(dump_dir, *STARTER_DOC, new,
+                           int((doc or {}).get("version") or 0) + 1)
+    return w.save(label)
+
+
+def starter_made(db: dict, session: str, now: dt.datetime, out_dir: str,
+                 dump_dir: str = "") -> list[str]:
+    """A new computer starter was asked for: kept, with no bell yet."""
+    return _starter_set(db, {"chat": session, "bell": "", "made_at": _stamp(now),
+                             "rung_at": None}, out_dir, dump_dir)
+
+
+def starter_ready(db: dict, chat: str, bell: str, now: dt.datetime, out_dir: str,
+                  dump_dir: str = "") -> list[str]:
+    """The starter published its bell and watches it: any chat can wake it now."""
+    return _starter_set(db, {"chat": chat, "bell": bell, "ready_at": _stamp(now)}, out_dir,
+                        dump_dir)
+
+
+def rung(db: dict, now: dt.datetime, out_dir: str, dump_dir: str = "") -> list[str]:
+    return _starter_set(db, {"rung_at": _stamp(now)}, out_dir, dump_dir, "starter-rung")
+
+
+def ring_steps(bell: str, path: str) -> str:
+    """How any chat wakes the computer starter: the bell republished, its own watch on the bell
+    stopped (a publish can start one, and the starter's next ring would wake this chat too)."""
+    return (f"Artifact publish with file_path {path} and url {bell} (read it first only if the "
+            "publish is refused; never a new page), then ArtifactComments watch with url "
+            f"{bell} and on: false, then python3 tools/computer.py rung <dump> and send its "
+            "batch. Say nothing about it to the person.")
+
+
+def _starter_route(db: dict, now: dt.datetime, wid: str, w: dict, url: str, copy: str,
+                   line: str) -> dict:
+    """For any chat but the starter: wake the computer starter, or make it once."""
+    rec = starter(db)
+    item = ((db.get("work") or {}).get(wid) or {}).get("data") or {}
+    asked = _time(item.get("asked_at"))
+    if rec.get("chat") and rec.get("bell"):
+        last = _time(rec.get("rung_at"))
+        if last and (now - last).total_seconds() < RING_S and not (asked and asked > last):
+            return {"route": "starter rung", "work": wid, "line": line, "waiting": w}
+        return {"route": "ring starter", "work": wid, "line": line, "bell": rec["bell"],
+                "then": ("python3 tools/computer.py bell-file <your scratchpad>/bell.html, then "
+                         + ring_steps(rec["bell"], "<your scratchpad>/bell.html")),
+                "waiting": w}
+    made = _time(rec.get("made_at"))
+    if rec.get("chat") and made and (now - made).total_seconds() < STARTER_WAIT_S:
+        return {"route": "starter starting", "work": wid, "line": line, "waiting": w}
+    try:
+        import app_setup
+        owner, name = app_setup.origin()
+    except Exception:  # noqa: BLE001  no address to start it from
+        owner, name = "", ""
+    if not owner or not name:
+        return {"route": "none", "line": "", "waiting": w}
+    import app_listen
+    return {"route": "make starter", "work": wid, "line": line,
+            "call": starter_call(url, copy, owner, name),
+            "then": ("create_session with this call, from this chat, unasked." +
+                     app_listen.MODE_REFUSED + " Started: python3 tools/computer.py "
+                     "starter-made <dump> --session <its id>, and send its batch. It starts the "
+                     "chat on the computer itself; this chat never approves computer access. "
+                     "Say nothing about it to the person."),
+            "waiting": w}
 
 
 # ------------------------------------------------------------------ the heartbeat
@@ -242,12 +420,42 @@ def beat(db: dict, name: str, now: dt.datetime, out_dir: str, dump_dir: str = ""
     fields = beat_fields(name, now, **facts)
     if fields["last_read"] is None and old.get("last_read"):
         fields["last_read"] = old["last_read"]          # nothing read this time: kept
+    fields.update(cookies_seen(old, fields))
     w = page_db.Writes(out_dir)
     w.add("set", "chats", did, fields, if_version=mine["version"] if mine else None)
     if dump_dir:
         page_db._keep_dump(dump_dir, "chats", did, fields,
                            int(mine["version"] or 1) + 1 if mine else 1)
     return w.save("computer")
+
+
+def cookies_seen(old: dict, new: dict) -> dict:
+    """Whether the browser keeps sign-ins (browser-pane-stay-signed-in), by its effect: no chat can read the browser's menu, so a LinkedIn sign-in
+    seen (`in`) and then lost (`out`) by the next look says the browser did not keep it (it was
+    signed in one day and signed out the next morning, and a job stopped with nothing read:
+    the maintainer, 2026-11-10). Kept off until a later look finds the sign-in held across a
+    gap of SIGNIN_HELD_S; never guessed on, said by the person or measured otherwise."""
+    if new.get("keep_cookies") in ("on", "off"):
+        return {}
+    was, now_ = old.get("linkedin"), new.get("linkedin")
+    out: dict = {}
+    if now_ == "in":
+        if was != "in" or not old.get("signed_in_at"):
+            out["signed_in_at"] = new.get("seen_at")
+        else:
+            out["signed_in_at"] = old["signed_in_at"]
+    if was == "in" and now_ == "out":
+        out["keep_cookies"] = "off"
+        out["signin_lost"] = {"in_at": old.get("signed_in_at") or old.get("seen_at"),
+                              "out_at": new.get("seen_at")}
+    elif old.get("keep_cookies") == "off" and now_ != "in":
+        out["keep_cookies"] = "off"
+    elif old.get("keep_cookies") == "off" and now_ == "in":
+        start = _time(out.get("signed_in_at"))
+        seen = _time(new.get("seen_at"))
+        held = start and seen and (seen - start).total_seconds() >= SIGNIN_HELD_S
+        out["keep_cookies"] = "unknown" if held else "off"
+    return out
 
 
 def heartbeat(db: dict) -> dict:
@@ -315,7 +523,11 @@ def waiting(db: dict, now: dt.datetime) -> dict:
             continue
         status = str(d.get("status") or "")
         sess = d.get("computer_session") if isinstance(d.get("computer_session"), dict) else {}
-        if status in page_db.FINISHED:
+        # Stopped for the person (LinkedIn signed out: app.py done --question): its chat on the
+        # computer is put away at once, like a finished one, and a fresh one is started only
+        # once they answer, which queues the work again. The stopped chat sat in their sidebar
+        # while the page waited on them (the maintainer, 2026-11-10).
+        if status in page_db.FINISHED or status == "needs_you":
             if sess.get("id") and not sess.get("archived_at"):
                 finished.append({"work": wid, "session": sess["id"]})
             continue
@@ -367,7 +579,9 @@ def state(db: dict, now: dt.datetime, envs=None, version: str = "",
         oldest = t if oldest is None or (t and t < oldest) else oldest
         asked.append((str(d.get("asked_at") or ""), str(d.get("title") or "").strip()))
     waited = (now - oldest).total_seconds() if oldest else 0
-    act = ACTION.get(key)
+    # The words for a sign-in that did not last (cookies_seen): the same state, a truer line.
+    say = "signed_out_lost" if key == "signed_out" and beat_.get("signin_lost") else key
+    act = ACTION.get(say)
     action = None
     if act:
         import claude_surfaces
@@ -375,7 +589,7 @@ def state(db: dict, now: dt.datetime, envs=None, version: str = "",
                   "steps": [ln for ln in claude_surfaces.steps(act[0], page=True)
                             if ln[:1].isdigit()]}
     needs_them = key in ("off", "gone", "signed_out", "forgets", "no_bridge", "not_set_up")
-    return {"state": key, "line": SAY[key], "action": action,
+    return {"state": key, "line": SAY[say], "action": action, "say": say,
             "card": bool(w["queued"]) and needs_them and waited >= CARD_AFTER_S,
             "computer": beat_.get("computer") or "", "seen_at": beat_.get("seen_at"),
             "waiting": len(w["queued"]) + len(w["started"]),
@@ -433,7 +647,7 @@ def card(st: dict) -> dict | None:
     if not st.get("card"):
         return None
     import app_model
-    said = WAITING_SAY.get(st["state"])
+    said = WAITING_SAY.get(st.get("say") or st["state"]) or WAITING_SAY.get(st["state"])
     body = said.format(what=waiting_words(st.get("titles") or [])) if said else st["line"]
     # Its one obvious next step on its face; Done only where there is something the person did
     # to confirm (signed in, switched it on). With the computer off, its own heartbeat says
@@ -485,9 +699,14 @@ def session_prompt(wid: str, title: str, url: str, copy: str) -> str:
         "--name \"<this computer's name>\" --browser <shown|hidden> --linkedin "
         "<in|out|unknown>, and send the batch it prints (ArtifactData batch). LinkedIn signed "
         "out: put it on their page with python3 tools/app.py done \"$D\" --work <its id> --chat "
-        "<your id> --kind computer --question \"LinkedIn is signed out in Claude's browser on "
-        "your computer. Sign in there once, then tap Done.\" and send its batch; then go to "
-        "step 7. Never ask in this chat.",
+        "<your id> --kind computer --signin linkedin --question \"LinkedIn is signed out in "
+        "Claude's browser.\" and send its batch: the page signs them in inside the Claude app "
+        "and sends the work back by itself. Then go to step 7. Never ask in this chat.",
+        "Signed in after all (the person says so in this chat, or any later look shows LinkedIn "
+        "signed in) while a job of yours waits on its sign-in: python3 tools/computer.py "
+        "signed-in \"$D\" --work <its id>, send its batch, write the heartbeat with --linkedin "
+        "in, then step 4 again and carry on from step 6. Never tell them to tap anything on the "
+        "page for it.",
         "6. Follow the `steps` step 4 printed, in order. Reading LinkedIn: only the pages the "
         "work names, one at a time, as tools/network/pace.py PACE_RULE says; say what you do "
         "as you do it, and nothing about waiting you do not do. Where its steps did not measure "
@@ -502,7 +721,10 @@ def session_prompt(wid: str, title: str, url: str, copy: str) -> str:
         "\"$D/chats.json\", run python3 tools/computer.py archivable \"$D/chats.json\", and "
         "archive each chat it names. Where this chat cannot list them, skip it and say nothing "
         "about it.",
-        "8. Your last message says what was done in a few plain words, and nothing about saving, "
+        "8. Wake the chat that started you, so it puts this one away now: python3 "
+        "tools/computer.py ring \"$D\" --file \"<your scratchpad>/bell.html\", and do what it "
+        "prints where the Artifact tool is among yours (nothing to do where it says so).",
+        "9. Your last message says what was done in a few plain words, and nothing about saving, "
         "pull requests, merging or chats put away: the page shows how it went. Then stop: the "
         "chat that started you archives this one.",
     ])
@@ -602,6 +824,11 @@ def route(db: dict, now: dt.datetime, chat: str = "", envs=None, folders=None,
     tools = {str(t) for t in tools or ()}
     st = state(db, now, envs=envs, works_on=works_on)
     if not w["queued"]:
+        # A chat on the computer whose work is over (or waits on the person) is put away by the
+        # starter, the one chat whose approval reaches the computer: woken for it here.
+        if w["finished"] and chat and starter(db).get("bell") and not is_starter(db, chat) \
+                and app_listen.chat_kind() == "cloud":
+            return _starter_route(db, now, w["finished"][0]["work"], w, url, copy, "")
         return {"route": "none", "line": "", "waiting": w}
     wid = w["queued"][0]
     item = (db["work"][wid] or {}).get("data") or {}
@@ -613,6 +840,12 @@ def route(db: dict, now: dt.datetime, chat: str = "", envs=None, folders=None,
         return {"route": "computer chat", "work": wid,
                 "line": "Your computer's chat takes it.", "waiting": w}
     found = bridges(envs)
+    if found and "create_session" in tools and chat and not is_starter(db, chat) \
+            and app_listen.chat_kind() == "cloud":
+        # Any cloud chat but the starter wakes the starter (or makes it once): the approval a
+        # chat on the computer needs ties the approving chat to the person's devices for good,
+        # and a helper that held it could not archive itself (the maintainer, 2026-11-10).
+        return _starter_route(db, now, wid, w, url, copy, runs_there(found[0]["computer"]))
     if found and "create_session" in tools:
         b = found[0]
         title = session_title(item.get("title") or item.get("kind"), b["computer"])
@@ -629,8 +862,9 @@ def route(db: dict, now: dt.datetime, chat: str = "", envs=None, folders=None,
                          "own devices for good, and a scheduled task bound to it then fails, so "
                          "each is moved to a chat of its own with the copy attached first. Then "
                          "confirm_repository_trust with the content_digest the refusal gave (one "
-                         "card for the person, once), python3 tools/computer.py trusted --chat "
-                         "<your id>, and the same create_session again. Started: "
+                         "card for the person, once, and only ever in this chat, the one that "
+                         "starts chats on their computer), python3 tools/computer.py trusted "
+                         "--chat <your id>, and the same create_session again. Started: "
                          f"python3 tools/computer.py started <dump> --work {wid} --session <its "
                          f"id> --env {b['id']} --computer \"{b['computer']}\", and send its "
                          "batch. Never send_message it, and set no reminder or check-in for "
@@ -697,6 +931,51 @@ def started(db: dict, wid: str, session: str, env: str, computer: str, now: dt.d
     if dump_dir:
         page_db._keep_dump(dump_dir, "work", wid, dict(d, **fields), int(doc["version"] or 1) + 1)
     return w.save("computer-started")
+
+
+SIGNED_IN_SAID = "Signed in to LinkedIn"
+
+
+def waits_on_signin(item: dict) -> bool:
+    """Is this work stopped on a LinkedIn sign-in only (app.py done --signin linkedin, or a
+    question from before that said it was signed out)?"""
+    if str(item.get("status") or "") != "needs_you":
+        return False
+    needs = item.get("needs") if isinstance(item.get("needs"), dict) else {}
+    if needs.get("signin") == "linkedin":
+        return True
+    return str(item.get("to") or "") == "computer" and \
+        "signed out" in str(item.get("note") or "").lower()
+
+
+def signed_in(db: dict, wid: str, now: dt.datetime, out_dir: str, dump_dir: str = "") -> list[str]:
+    """The batch that answers a job's own sign-in question once a chat on the computer has seen
+    LinkedIn signed in, and puts the job back in the queue for that chat to carry on with. A
+    chat that saw the sign-in work still told the person to tap Done on the page, and the job
+    stayed parked (the maintainer, 2026-11-10). Its chat there is kept as at work, so no second
+    one is started for it meanwhile."""
+    import page_db
+    doc = (db.get("work") or {}).get(page_db.safe_id(wid))
+    if doc is None:
+        raise KeyError(f"no work {wid!r} in the dump; read work again")
+    d = doc["data"]
+    if not waits_on_signin(d):
+        raise KeyError(f"{wid!r} is not waiting on a sign-in; carry on as it is")
+    args = dict(d.get("args") or {}) if isinstance(d.get("args"), dict) else {}
+    answers = dict(args.get("answers") or {}) if isinstance(args.get("answers"), dict) else {}
+    answers[str(d.get("note") or "question")[:200]] = SIGNED_IN_SAID
+    args["answers"] = answers
+    fields = {"args": args, "status": "queued", "note": None, "claimed_by": None,
+              "claimed_at": None, "lease_until": None, "with": None,
+              "answered_at": _stamp(now)}
+    sess = d.get("computer_session") if isinstance(d.get("computer_session"), dict) else {}
+    if sess.get("id"):
+        fields["computer_session"] = dict(sess, at=_stamp(now))
+    w = page_db.Writes(out_dir)
+    w.add("update", "work", wid, fields, if_version=doc["version"])
+    if dump_dir:
+        page_db._keep_dump(dump_dir, "work", wid, dict(d, **fields), int(doc["version"] or 1) + 1)
+    return w.save("computer-signed-in")
 
 
 def archived(db: dict, wid: str, now: dt.datetime, out_dir: str) -> list[str]:
@@ -966,6 +1245,11 @@ def check(db: dict, now: dt.datetime, envs=None, version: str = "", triggers=Non
                    "approved computer access, so it fails; move it: python3 tools/computer.py "
                    f"trust-check --chat {locked} --triggers <list_triggers saved>, and do what "
                    "it prints.")
+    if st["state"] == "signed_out":
+        # First in the brief, whatever waits: a sign-out found only when a job stopped was
+        # found by the maintainer checking, hours later (2026-11-10).
+        out.append("computer: first line of the message, before the headline, in these words: "
+                   f"\"{st['line']}\"")
     if st["card"]:
         out.append(f"computer: work waits for the computer and the person is needed: "
                    f"{st['line']} The page's To do card says so; say it in one line.")
@@ -1211,6 +1495,33 @@ def main(argv=None) -> int:
     p.add_argument("--folders", default="", help="list_computer_folders' answer, saved")
     p.add_argument("--tools", default="", help="this chat's tool names, comma separated")
     p.add_argument("--now", default=None)
+    p = sub.add_parser("bell-file", help="write the computer starter's bell page")
+    p.add_argument("path")
+    p.add_argument("--now", default=None)
+    p = sub.add_parser("starter-made", help="a computer starter was asked for")
+    p.add_argument("dump")
+    p.add_argument("--session", required=True)
+    p.add_argument("--out", default="")
+    p.add_argument("--now", default=None)
+    p = sub.add_parser("starter-ready", help="the starter published its bell")
+    p.add_argument("dump")
+    p.add_argument("--chat", required=True)
+    p.add_argument("--bell", required=True)
+    p.add_argument("--out", default="")
+    p.add_argument("--now", default=None)
+    p = sub.add_parser("rung", help="the starter's bell was republished")
+    p.add_argument("dump")
+    p.add_argument("--out", default="")
+    p.add_argument("--now", default=None)
+    p = sub.add_parser("ring", help="wake the starter, where one is ready (a chat on the computer)")
+    p.add_argument("dump")
+    p.add_argument("--file", required=True)
+    p.add_argument("--now", default=None)
+    p = sub.add_parser("signed-in", help="a job's own sign-in question, answered once seen")
+    p.add_argument("dump")
+    p.add_argument("--work", required=True)
+    p.add_argument("--out", default="")
+    p.add_argument("--now", default=None)
     p = sub.add_parser("started")
     p.add_argument("dump")
     for k in ("--work", "--session", "--env", "--computer"):
@@ -1302,8 +1613,28 @@ def main(argv=None) -> int:
         print("\n".join(got) or "shell: runs the same in zsh and bash")
         return 1 if got else 0
     now = _now(a.now)
+    if a.cmd == "bell-file":
+        print("bell: " + write_bell(a.path, now))
+        return 0
     db = page_db.load(a.dump)
     out = getattr(a, "out", "") or os.path.join(a.dump, "out")
+    if a.cmd == "ring":
+        rec = starter(db)
+        if not rec.get("bell"):
+            print("ring: no starter yet; nothing to do")
+            return 0
+        write_bell(a.file, now)
+        print("ring: " + ring_steps(rec["bell"], a.file))
+        return 0
+    if a.cmd in ("starter-made", "starter-ready", "rung"):
+        if a.cmd == "starter-made":
+            batches = starter_made(db, a.session, now, out, dump_dir=a.dump)
+        elif a.cmd == "starter-ready":
+            batches = starter_ready(db, a.chat, a.bell, now, out, dump_dir=a.dump)
+        else:
+            batches = rung(db, now, out, dump_dir=a.dump)
+        print(json.dumps({"batches": batches}))
+        return 0
     if a.cmd == "beat":
         print(json.dumps({"batches": beat(db, a.name, now, out, dump_dir=a.dump,
                                           browser=a.browser, linkedin=a.linkedin,
@@ -1342,6 +1673,8 @@ def main(argv=None) -> int:
             batches = started(db, a.work, a.session, a.env, a.computer, now, out, dump_dir=a.dump)
         elif a.cmd == "archived":
             batches = archived(db, a.work, now, out)
+        elif a.cmd == "signed-in":
+            batches = signed_in(db, a.work, now, out, dump_dir=a.dump)
         else:
             import helper_usage
             doc = (db.get("work") or {}).get(page_db.safe_id(a.work))

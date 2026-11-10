@@ -88,6 +88,8 @@ APP_TITLE = re.compile(r"^(?:[^\w\s]{1,3}\s*)?Job search(?::\s*\S.{0,60}|\s+(?:h
 # meta/listen names, is kept: the rest are put away as soon as their work is on master, never
 # kept for being used lately (the maintainer, 2026-11-04: at most two such chats, the person's
 # own and the live page helper; a heavy user's renewals had stacked up several).
+# The computer starter (tools/computer.py STARTER_TITLE), kept for good.
+STARTER_NAME = re.compile(r"^(?:[^\w\s]{1,3}\s*)?Job search:\s+starts chats on your computer\b", re.I)
 HELPER_NAME = re.compile(r"^(?:[^\w\s]{1,3}\s*)?Job search\s+(?:helper|page)\b", re.I)
 # Once after the update that brought that rule, the tidy-up is due even if it ran that day,
 # so the helpers left over from before are put away by themselves (`due`). Moved on with
@@ -825,6 +827,11 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
         if sid == ops:
             keep("the older ops chat, which relays to the phone and is never rebuilt")
             continue
+        if STARTER_NAME.match(title):
+            # The one chat that holds the computer approval: it can be archived by no chat,
+            # and it is woken again for the next work on the computer (tools/computer.py).
+            keep("it starts the chats on the person's computer")
+            continue
         if fires.get(sid, set()) - moving:
             keep("a scheduled task that is on runs in it")
             continue
@@ -1371,7 +1378,10 @@ def close(sid: str, work: str, db: dict, info: dict, listener: dict, this_chat: 
     items = {k: (v.get("data") or {}) for k, v in (db.get("work") or {}).items()
              if k == work or str((v.get("data") or {}).get("with") or "") == work}
     if work not in items:
-        return "keep", f"the page has no work item {work}"
+        # Never judged from an old read: a folder that holds only what changed since an earlier
+        # read lacks a job finished before it, and a finished chat stayed in the sidebar for a
+        # day (the maintainer, 2026-11-10). The page itself is read for it, then judged again.
+        return "read", f"this folder does not hold the work item {work}"
     going = [k for k, v in items.items() if str(v.get("status") or "") not in page_db.FINISHED]
     if going:
         return "keep", "its job is still going (" + ", ".join(sorted(going)) + ")"
@@ -1430,6 +1440,16 @@ def run_close(a) -> int:
             for p in paths:
                 print(p)
         what = "archive"
+    if what == "read":
+        try:
+            import app_setup
+            url = app_setup.page_record().get("url", "") or "<the page's url>"
+        except Exception:  # noqa: BLE001
+            url = "<the page's url>"
+        print(f"read {a.id}: {said}. Read the page's work as it is now: ArtifactData query, url "
+              f"{url}, collection work, out_dir {a.dump}, limit 1000; then run this same "
+              "command again. Say nothing about it.")
+        return 0
     if what != "archive":
         print(f"keep {a.id}: {said}. Leave it: the daily tidy-up puts it away once it can. "
               "Say nothing about it.")
