@@ -72,12 +72,18 @@ def test_a_change_finished_as_held_puts_the_hold_on_their_record(ring):
                               "--outcome", "held", "--until", "2026-11-23", "--now", R.NOW))
     assert got["status"] == "done" and got.get("held"), got
     from network import state
+    # The whole suite's own state folder is put back after (tests/conftest.py sets it once):
+    # popped, every test after this one lost it (the Mac run, 2026-11-10).
+    was = os.environ.get("LJS_STATE")
     os.environ["LJS_STATE"] = ring.state
     try:
         row = next(c for c in state.load_contacts(os.path.join(ring.state, "network_contacts.csv"))
                    if c["contact_id"] == PELL)
     finally:
-        os.environ.pop("LJS_STATE", None)
+        if was is None:
+            os.environ.pop("LJS_STATE", None)
+        else:
+            os.environ["LJS_STATE"] = was
     assert row["next_action"] == "Hold until Kestrel Mutual posts a fitting role, or until 2026-11-23", row
     assert row["next_action_due"] == "2026-11-23"
     # Every screen holds it: the draft, To do's count of messages to send.
