@@ -92,7 +92,7 @@ def test_find_people_sent_to_the_computer_is_the_whole_run_there(tmp_path, monke
     for tools in ([], ["chrome"]):
         assert reading.route(tools, "browser", {"CLAUDECODE": "1"})["route"] == "page"
     out = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "network", "reading.py"),
-                          "route", "--tools", "browser"], capture_output=True, text=True,
+                          "route", "--tools", "browser"], capture_output=True, text=True, encoding="utf-8",
                          env=dict(os.environ, LJS_PROFILE=os.path.join(ROOT, "profile.example")))
     assert "route: here" in out.stdout or "route: hand" in out.stdout, out.stdout + out.stderr
     with open(os.path.join(ROOT, ".claude", "commands", "network.md"), encoding="utf-8") as fh:
@@ -222,7 +222,7 @@ def test_signin_wait_says_look_stop_or_answered(tmp_path):
             json.dump({"data": item, "version": 4}, fh)
         r = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "computer.py"),
                             "signin-wait", str(dump), "--work", "network~read~1", "--every", "0",
-                            "--now", NOW], capture_output=True, text=True)
+                            "--now", NOW], capture_output=True, text=True, encoding="utf-8")
         assert r.returncode == 0 and r.stdout.startswith(first), r.stdout + r.stderr
 
 

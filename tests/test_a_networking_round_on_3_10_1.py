@@ -221,15 +221,24 @@ def test_the_extractors_output_reaches_read_as_it_came(book, wrap):
 
 
 def test_network_step_five_queues_the_page_and_writes_the_note_now():
-    """Since 4.3 no chat reads a profile, so no chat runs the extractor: step five queues the
-    short list for the person's page and saves each note now, waiting on its read."""
+    """Since 4.3 a cloud chat reads no profile, so it runs no extractor: step five queues the
+    short list for the person's page and saves each note now, waiting on its read. A chat with
+    Claude's own browser on the person's computer (route `here`) is the exception the
+    maintainer set on 2026-11-10 ("do the full networking skill, not just launch a cloud chat
+    that does half-assed networking"): it reads the short list itself and writes each note
+    from what it read."""
     with open(os.path.join(ROOT, ".claude", "commands", "network.md"), encoding="utf-8") as fh:
         text = " ".join(fh.read().split())
     step = text[text.index("5. **Read the short list"):text.index("6. **Read what they have taught it**")]
-    assert "reading.py queue-page" in step and "--wait-for-read" in step
-    assert step.index("queue-page") < step.index("--wait-for-read")
+    page = step[step.index("With route `page`"):]
+    assert "reading.py queue-page" in page and "--wait-for-read" in page
+    assert page.index("queue-page") < page.index("--wait-for-read")
+    assert "reading.py signin" not in page
+    here = step[step.index("with route `here`:"):step.index("With route `page`")]
+    assert "reading.py next" in here and "--source browser" in here
+    assert "never `--wait-for-read`" in here
     assert "ONE piece of `network` work" in step
-    assert not re.search(r"\bscroll|\bextractor\b|reading\.py signin|\bnew-computer\b", step)
+    assert not re.search(r"\bscroll|\bextractor\b|\bnew-computer\b", step)
 
 
 # ------------------------------------------------------------ 11. the opening slot
