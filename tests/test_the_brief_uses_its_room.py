@@ -68,8 +68,22 @@ def test_the_jobs_panel_lists_more_where_it_has_room(run, tmp_path):
     base = next(r for r in m["jobs"]["rows"] if r.get("status") in ("new", None) and not r.get("draft"))
     for i in range(10):
         m["jobs"]["rows"].append(dict(base, id="extra-%d" % i, rank=100 + i, status="new", draft=None, title="Planning Analyst %d" % i, score=70 - i))
+    # Beside the count, what decided it, as drawn (the harness's __drawnRect): the room left
+    # under each panel's content, the rows' heights, whether the page scrolls, and the pointer
+    # the engine reports. Safari showed four here while Chrome, measuring Safari's way, shows
+    # six (CI, 2026-11-10): a failure says which of these differs.
     look = ("(() => { const l = document.querySelector('[data-k=\"bp:jobs\"] [data-fit]');"
-            " return {shown: [...l.children].filter((x) => !x.hidden).length, all: [...document.querySelectorAll('[data-k=\"bp:jobs\"] a.navlink')].map((a) => a.textContent)}; })()")
+            " const d = (e) => e.__drawnRect(); const g = document.querySelector('#main .brief-grid');"
+            " const room = (p) => { const b = p.querySelector(':scope > .bp-body'); const k = b ? [...b.children].filter((x) => x.getClientRects().length) : [];"
+            " return b && k.length ? Math.round(d(b).bottom - Math.max(...k.map((x) => d(x).bottom))) : null; };"
+            " const mm = (q) => matchMedia(q).matches;"
+            " return {shown: [...l.children].filter((x) => !x.hidden).length, all: [...document.querySelectorAll('[data-k=\"bp:jobs\"] a.navlink')].map((a) => a.textContent),"
+            " rows: [...l.children].filter((x) => !x.hidden).map((x) => Math.round(d(x).height)),"
+            " panels: [...g.children].map((p) => [p.getAttribute('data-k'), Math.round(d(p).top), Math.round(d(p).bottom), room(p), p.getAttribute('data-air')]),"
+            " grid: [g.style.height, g.classList.contains('is-filled'), document.documentElement.classList.contains('brief-short')],"
+            " scroll: document.documentElement.scrollHeight - innerHeight, window: [innerWidth, innerHeight, document.body.style.zoom],"
+            " pointer: ['fine', 'coarse', 'none'].filter((x) => mm('(pointer: ' + x + ')')), hover: mm('(hover: hover)'),"
+            " font: getComputedStyle(document.documentElement).fontSize}; })()")
     got = _go(run, tmp_path, [{"hash": "brief", "eval": look}], WIDE, model=m, clock=T, zone=PERSON_ZONE)
     r = got["after"][0]["eval"]
     assert r["shown"] > 5, r
