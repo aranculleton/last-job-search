@@ -85,7 +85,7 @@ def test_the_message_links_the_page_and_its_questions_wait_there(tmp_path):
     assert "notice period" not in message
     assert "the questions are on the page as To do cards" in claude
     assert "app.py view <D>/view --dump <D> --chat brief" in claude
-    assert "collections screen, meta, addr and work" in claude      # the page's own collections
+    assert "collections screen, meta, addr, work and beats" in claude      # the page's own collections, and the computer's heartbeat
     # With no page, the record on GitHub and the questions at the end, as before.
     bare = Search(tmp_path / "bare", page=False)
     _questions(bare.sync)
