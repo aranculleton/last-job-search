@@ -993,6 +993,16 @@ REQUEST_WITHDRAW_DAYS = 21
 # in `owed`, marked `old`, and /threads still lists it; the due list counts it in one line
 # instead. A date the person put on the row themselves keeps it live.
 OLD_OWED_DAYS = _THROTTLE_SILENCE_DAYS
+# A thread with no answer this long after our last message (or their acceptance) is closed
+# as gone cold by itself (`close_gone_cold`): about three months, the person's own
+# GONE_COLD_DAYS in networking.py where set. Imported conversations from years back and notes
+# sent a season ago still read "waiting on a reply", were counted against their employer and
+# shown as owed a follow-up (the maintainer, 2026-11-10). It is recorded on the row, and a
+# reply from them opens it again (REOPENED_BY_A_REPLY), as does `state.py set <id> --status
+# awaiting_reply`.
+GONE_COLD_DAYS = schema.GONE_COLD_DAYS
+GONE_COLD_NOTE = ("gone cold {today}: no answer in {days} days since {since}, closed by itself; "
+                  "a reply from them opens it again")
 
 
 # A resume they asked for, with nothing from them since, is closed by itself this long after
@@ -2388,6 +2398,49 @@ def _app_dates(msgs, action: str = "") -> set:
     return out
 
 
+def close_gone_cold(contacts, threads, today, days: int | None = None) -> list[str]:
+    """Close as `gone_cold` every thread still waiting on them with nothing from them in
+    `days` (GONE_COLD_DAYS) since our last message or their acceptance, and say so in the
+    row's outcome (GONE_COLD_NOTE). Returns a line for each row closed. Left as they are: a
+    connection request nobody accepted (one to withdraw, `owed` lists it), a row whose date
+    the person set and which is still ahead, and a next action in the person's own words.
+    Reversible: a reply from them opens it again by itself (REOPENED_BY_A_REPLY), and
+    `state.py set <id> --status awaiting_reply` by hand. The lists change in place; the
+    caller saves."""
+    today = _need_date(today, "today")
+    days = GONE_COLD_DAYS if days is None else days
+    if not days or days < 1:
+        return []
+    index = by_contact(threads)
+    said = []
+    for contact in contacts:
+        cid = str(contact.get("contact_id") or "").strip()
+        msgs = [r for r in _rows_of(index, cid) if _direction(r)]
+        if effective_status(contact, msgs) not in ("awaiting_reply", "connected_no_reply"):
+            continue
+        if request_pending(msgs) is not None:
+            continue
+        action = " ".join(str(contact.get("next_action") or "").split())
+        if action and not _APP_ACTION.fullmatch(action) and not STOP_LINE.match(action):
+            continue
+        due = as_date(contact.get("next_action_due"))
+        if due is not None and due >= today and dated_by_person(contact, msgs):
+            continue
+        try:
+            since = follow_up_due(contact, msgs)[0]
+        except (TypeError, ValueError):
+            since = None
+        if since is None or (today - since).days < days:
+            continue
+        contact["status"] = "gone_cold"
+        put_next(contact, msgs, "", "")
+        _note(contact, "outcome", GONE_COLD_NOTE.format(today=today.isoformat(), days=days,
+                                                        since=since.isoformat()))
+        said.append(f"{contact.get('name') or cid} ({cid}): gone cold, no answer since "
+                    f"{since.isoformat()}; a reply from them opens it again")
+    return said
+
+
 def write_follow_ups(contacts, threads, today, only_undated: bool = False) -> list[str]:
     """Write onto every contact waiting on a reply what follows by the person's rule
     (`follow_up_plan`): the day a follow-up falls due, or, once their limit is reached,
@@ -2398,11 +2451,14 @@ def write_follow_ups(contacts, threads, today, only_undated: bool = False) -> li
     date or a date the app would have written (`_app_dates`), or any date beside its line
     at the limit, which is never dated. A date the person set, a hold or a note of their
     own is theirs. A thread that ended more than OLD_OWED_DAYS ago is left as it is.
-    `only_undated` touches only rows with no date at all. Running it twice changes nothing
-    the second time. The lists are changed in place; the caller saves."""
+    `only_undated` touches only rows with no date at all. A thread silent past
+    GONE_COLD_DAYS is closed as gone cold first (`close_gone_cold`), unless `only_undated`.
+    Running it twice changes nothing the second time. The lists are changed in place; the
+    caller saves."""
     _need_date(today, "today")
+    # A thread silent past GONE_COLD_DAYS is closed first, and recorded: it is owed nothing.
+    said = [] if only_undated else close_gone_cold(contacts, threads, today)
     index = by_contact(threads)
-    said = []
     for contact in contacts:
         cid = str(contact.get("contact_id") or "").strip()
         action = str(contact.get("next_action") or "").strip()
@@ -3654,6 +3710,31 @@ def close(contacts, contact_id, today, reason, row=None) -> dict:
     _note(contact, "outcome", f"skipped after a read {today.isoformat()}: {why}")
     _drop_draft(cid)
     return contact
+
+
+# What `close` writes: a run's own ruling after a read, never the person's word.
+RUN_CLOSE = re.compile(r"\bskipped after a read (\d{4}-\d{2}-\d{2}): ?([^;]*)")
+
+
+def closed_by_a_run(contact, msgs=()) -> str:
+    """Why a run closed this contact, or "" when it was not a run's doing: closed by `close`
+    (a read ruled them out, "skipped after a read <date>: <why>"), never written to, and
+    nothing on the row saying the person closed it on purpose. Closed should mean closed by
+    the person: a head of the function with "Hiring" in their headline, closed by an earlier
+    round's housekeeping, was skipped by every later run (the maintainer, 2026-11-10). A run
+    looks at such a person again, by today's rules."""
+    c = contact or {}
+    if str(c.get("status") or "").strip() != "closed":
+        return ""
+    if any(_direction(r) for r in msgs or ()):
+        return ""
+    if CLOSED_ON_PURPOSE.search(" ".join(str(c.get(k) or "") for k in ("next_action", "notes"))):
+        return ""
+    m = RUN_CLOSE.search(str(c.get("outcome") or ""))
+    if not m:
+        return ""
+    return f"an earlier run closed them on {m.group(1)}" + (f" ({m.group(2).strip()})"
+                                                            if m.group(2).strip() else "")
 
 
 def add_row(contacts, contact_id, fields) -> dict:
@@ -5493,6 +5574,30 @@ def _cli_follow_ups(argv) -> int:
     return 0
 
 
+def _cli_gone_cold(argv) -> int:
+    """`state.py gone-cold [--dry]`: close as gone cold every conversation with no answer in
+    GONE_COLD_DAYS, recorded on its row; a reply from them opens it again."""
+    ap = argparse.ArgumentParser(prog="state.py gone-cold",
+                                 description="Close conversations with no answer in months.")
+    ap.add_argument("--dry", action="store_true", help="count them, change nothing")
+    ap.add_argument("--today", default=datetime.date.today().isoformat())
+    a = ap.parse_args(argv)
+    contacts, threads = load_contacts(), load_threads()
+    said = close_gone_cold(contacts, threads, a.today)
+    if a.dry:
+        print(len(said))
+        return 0
+    if said:
+        save_contacts(contacts)
+    print(f"gone cold: {len(said)} conversation(s) with no answer in {GONE_COLD_DAYS} days "
+          "closed; a reply from them opens one again")
+    for line in said[:40]:
+        print("  " + line)
+    if len(said) > 40:
+        print(f"  ... and {len(said) - 40} more")
+    return 0
+
+
 def _cli_same_person(argv) -> int:
     """state.py same-person <the row to close> <the row to keep>"""
     if len(argv) != 2:
@@ -5554,6 +5659,8 @@ def main(argv=None) -> int:
         return _cli_no_reply(argv[1:])
     if argv[:1] == ["follow-ups"]:
         return _cli_follow_ups(argv[1:])
+    if argv[:1] == ["gone-cold"]:
+        return _cli_gone_cold(argv[1:])
     try:  # a chat that carried on into a new day has not checked the app since
         import sync_app
         sync_app.nudge()

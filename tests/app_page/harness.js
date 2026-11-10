@@ -547,12 +547,28 @@ S.parts = async (a) => {
 // Opened on `clock`, against the moment the page says it was built (a page built moments
 // ago whose file is missing is one still being put up, and says so with no button).
 S.broken = async (a) => {
-  const o = await open({html: a.parts, seed: a.seed || {}, viewport: a.viewport, noSettle: true, clock: a.clock});
+  const o = await open({html: a.parts, seed: a.seed || {}, viewport: a.viewport, noSettle: true, clock: a.clock, scheme: a.scheme});
   const {page} = o;
   await page.waitForSelector("#ljs-broken", {timeout: 8000}).catch(() => {});
   await turn(page, 4);
   const r = {box: await one(page, "#ljs-broken"), shell: await visible(page, "#shell"), opening: await visible(page, "#opening"),
     button: !!(await page.$("#ljs-broken-ask")), built: await page.evaluate(() => (window.__ljsGuard || {}).built || null)};
+  // How the waiting line is drawn: its ring, in the page's own colours (the palette's tokens).
+  const look = () => page.evaluate(() => {
+    const box = document.getElementById("ljs-broken");
+    const spin = box && box.querySelector(".ljs-wait");
+    const root = getComputedStyle(document.documentElement);
+    const rgb = (v) => { const d = document.createElement("i"); d.style.color = v; document.body.appendChild(d); const c = getComputedStyle(d).color; d.remove(); return c; };
+    const cs = spin ? getComputedStyle(spin) : null;
+    return {spin: !!spin, hidden: spin ? spin.getAttribute("aria-hidden") : null, anim: cs ? cs.animationName : null,
+      top: cs ? cs.borderTopColor : null, bg: box ? getComputedStyle(box).backgroundColor : null, ink: box ? getComputedStyle(box).color : null,
+      mark: rgb(root.getPropertyValue("--mark").trim()), surface: rgb(root.getPropertyValue("--surface").trim()), text: rgb(root.getPropertyValue("--ink").trim())};
+  });
+  r.look = await look();
+  if (a.still) {
+    await page.emulateMedia({reducedMotion: "reduce"});
+    r.still = await look();
+  }
   if (r.button && a.tap) {
     await page.click("#ljs-broken-ask");
     await page.waitForFunction(() => /told|reach|reached/.test((document.querySelector("#ljs-broken [role=status]") || {}).textContent || ""), null, {timeout: 8000}).catch(() => {});
@@ -1785,6 +1801,8 @@ S.you = async (a) => {
   // Finish your profile waits at the end of "Show N more" while today's things show (2026-11-02).
   await page.$$eval("details.band-more:not([open])", (ds) => ds.forEach((d) => { d.open = true; }));
   await turn(page, 2);
+  // It is the first of Help Claude do more, one tap on its card (DESIGN.md, Places).
+  if (await page.$('[data-k="help-start"]')) { await page.click('[data-k="help-start"]'); await turn(page, 3); }
   const r = {card: await T(page, '#main [data-item="you"] .card-title')};
   await page.locator('#main [data-item="you"]').getByRole("button", {name: "Add what you did"}).click();
   await turn(page, 3);
@@ -1899,6 +1917,121 @@ S.copy = async (a) => {
     sentFilled: await main('#main [data-item="larkspur_retail_castellan"] [data-k="sent:msg-juno-1"]'),
     selected: await page.evaluate(() => String(window.getSelection())), errors: o.errors};
   if (!a.denied) r.clip = await copied(page);
+  await o.ctx.close();
+  return r;
+};
+
+// The card whose Copy or "Open their profile" was pressed last, found again on coming back to
+// the page (app.js backToPage): leaving is simulated as the browser reports it, the page
+// hidden (or the window blurred) and shown again.
+S.last_used = async (a) => {
+  const o = await open({html: a.html, hash: "contacts", viewport: a.viewport, reducedMotion: a.reducedMotion, seed: a.seed});
+  const {page} = o;
+  await page.$$eval("#main details:not([open])", (ds) => ds.forEach((d) => { if (d.querySelector(".pdraft, [data-card]") || d.classList.contains("band-more")) d.open = true; }));
+  await turn(page, 4);
+  const ids = await page.$$eval("#main .pdraft[data-msg]", (xs) => xs.filter((x) => x.querySelector(".bubble-copy") && x.closest("[data-card]").getClientRects().length).map((x) => x.getAttribute("data-msg")));
+  const first = a.first || ids[0];
+  const second = a.second || ids[ids.length - 1];
+  const box = (id) => '#main .pdraft[data-msg="' + id + '"]';
+  const cardOf = (id) => page.locator(box(id)).locator("xpath=ancestor::*[@data-card][1]");
+  const leave = async (how) => {
+    await page.evaluate(() => { const se = document.scrollingElement || document.documentElement; se.scrollTop = 0; window.scrollTo(0, 0); });
+    await page.evaluate((w) => {
+      if (w === "blur") { window.dispatchEvent(new Event("blur")); return; }
+      Object.defineProperty(document, "hidden", {configurable: true, get: () => true});
+      Object.defineProperty(document, "visibilityState", {configurable: true, get: () => "hidden"});
+      document.dispatchEvent(new Event("visibilitychange"));
+    }, how);
+    await turn(page, 2);
+    await page.evaluate((w) => {
+      if (w === "blur") { window.dispatchEvent(new Event("focus")); return; }
+      Object.defineProperty(document, "hidden", {configurable: true, get: () => false});
+      Object.defineProperty(document, "visibilityState", {configurable: true, get: () => "visible"});
+      document.dispatchEvent(new Event("visibilitychange"));
+    }, how);
+    // A smooth scroll is the browser's own, on its own clock: wait for it in real time.
+    for (let i = 0; i < 15; i++) { await page.waitForTimeout(100); await turn(page, 2); }
+  };
+  const read = (id) => page.evaluate(([sel, mid]) => {
+    const d = document.querySelector(sel);
+    const c = d ? d.closest("[data-card]") : null;
+    if (!c) return null;
+    // Measured as drawn, after the page's zoom (Safari measures before it: __drawnRect).
+    const box = (el) => (el.__drawnRect ? el.__drawnRect() : el.getBoundingClientRect());
+    const r = box(c);
+    const sent = c.querySelector('[data-k="sent:' + mid + '"]');
+    const sr = sent ? box(sent) : null;
+    const ring = getComputedStyle(c).boxShadow;
+    let kept = null;
+    try { kept = sessionStorage.getItem("ljs:lastused"); } catch (e) { kept = "refused"; }
+    return {inView: r.top < window.innerHeight && r.bottom > 0, sentInView: !!sr && sr.top >= 0 && sr.bottom <= window.innerHeight,
+      marked: c.classList.contains("last-used"), ring: !!ring && ring !== "none",
+      sentFilled: !!sent && sent.classList.contains("primary"), filled: [...document.querySelectorAll("#main .btn.primary")].map((b) => b.getAttribute("data-k")),
+      kept};
+  }, [box(id), id]);
+  const r = {ids, first, second};
+  await page.locator(box(first) + " .bubble-copy").click();
+  await turn(page, 4);
+  r.afterCopy = await read(first);
+  await leave(a.how || "hidden");
+  r.back = await read(first);
+  r.other = await read(second);
+  // The ring fades; I sent it stays the filled pill.
+  await page.clock.runFor(5000);
+  await turn(page, 4);
+  r.later = await read(first);
+  // A second card's Copy moves the mark.
+  await page.locator(box(second) + " .bubble-copy").click();
+  await turn(page, 4);
+  await leave(a.how || "hidden");
+  r.moved = await read(second);
+  r.oldOne = await read(first);
+  // A tap elsewhere lets it go.
+  await page.$eval("#main h1, #main h2", (el) => el.click());
+  await turn(page, 4);
+  r.tapped = await read(second);
+  // Open their profile does what Copy does (its new tab kept from opening here).
+  r.link = await page.evaluate((sel) => {
+    const c = document.querySelector(sel).closest("[data-card]");
+    const l = c && c.querySelector('a[data-k^="open:"]');
+    if (!l) return null;
+    l.addEventListener("click", (e) => e.preventDefault(), {once: true});
+    l.click();
+    return l.textContent;
+  }, box(first));
+  await turn(page, 4);
+  if (r.link) {
+    r.afterOpen = await read(first);
+    await leave(a.how || "hidden");
+    r.opened = await read(first);
+    // I sent it lets it go too.
+    await cardOf(first).locator('[data-k="sent:' + first + '"]').click();
+    await turn(page, 6);
+    r.afterSent = await page.evaluate(() => { let k = null; try { k = sessionStorage.getItem("ljs:lastused"); } catch (e) { k = "refused"; } return {kept: k, marked: document.querySelectorAll("#main .last-used").length}; });
+  }
+  r.errors = o.errors;
+  await o.ctx.close();
+  return r;
+};
+
+// Work started in a chat on the person's computer (tools/computer.py started) says so on its
+// card while it runs, past the steps written after it.
+S.runs_there = async (a) => {
+  const say = a.say;
+  const sess = {id: "session_x1", env: "env_bridge1", computer: "Studio Laptop", at: T0, say};
+  const o = await open({html: a.html, hash: "work", clock: T0, viewport: a.viewport,
+    seed: {"work/network~1": runningDoc({kind: "network", title: "People at Harbourline Bank", to: "computer", computer_session: sess,
+      steps: [{at: T0, text: say}, {at: T0, text: "Reading 4 profiles"}]})}});
+  const {page, store} = o;
+  const where = () => page.evaluate(() => [...document.querySelectorAll('[data-work="network~1"] [data-where="computer"]')].map((x) => x.textContent));
+  const r = {running: await where(), now: (await bar(page, "network~1") || {}).sentence};
+  store.chat("work/network~1", {computer_session: Object.assign({}, sess, {archived_at: T0})}, undefined, "update");
+  await turn(page, 6);
+  r.archived = await where();
+  store.chat("work/network~1", {computer_session: sess, status: "done", finished_at: T0, result: {summary: "4 people found", links: []}}, undefined, "update");
+  await turn(page, 6);
+  r.done = await where();
+  r.errors = o.errors;
   await o.ctx.close();
   return r;
 };

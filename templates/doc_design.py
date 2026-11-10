@@ -320,13 +320,19 @@ def _font_path(folder, tex_dir):
 
 def fontspec_options(name, tex_dir, extra=""):
     """fontspec's options for one font: its four files, ligatures off so a parser reads
-    'fi' and 'fl' as letters, and lining figures where the font has old-style ones."""
+    'fi' and 'fl' as letters, and lining figures where the font has old-style ones.
+
+    Kerning off too: a kern pair is written as a gap inside the word, and pypdf reads any
+    gap of nearly a space's width as a space. Liberation Serif read "W A V", "V A T" and
+    "V ancouver", Latin Modern Sans "A WS" (2026-11-10); with no kerns every word is one
+    run of glyphs. The template's own font is turned the same way in resume_gen."""
     folder, files, _what, _uses = FONTS[name]
     reg, bold, ital, bital = files
     stem, ext = os.path.splitext(reg)
     opts = [f"Extension={ext}", f"UprightFont={stem}", f"BoldFont={os.path.splitext(bold)[0]}",
             f"ItalicFont={os.path.splitext(ital)[0]}",
-            f"BoldItalicFont={os.path.splitext(bital)[0]}", "Ligatures={NoCommon}"]
+            f"BoldItalicFont={os.path.splitext(bital)[0]}", "Ligatures={NoCommon}",
+            "Kerning=Off"]
     if folder:
         opts.insert(0, f"Path={_font_path(folder, tex_dir)}")
     if extra:

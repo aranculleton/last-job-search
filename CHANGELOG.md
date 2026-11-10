@@ -22,6 +22,14 @@ make sense to somebody whose repo just received it.
 
 ### Added
 
+- **Conversations with no answer in about three months close by themselves.** A thread still read as waiting on a reply with nothing from them in 90 days is set to gone cold, written on the contact with the day, and opened again by itself if they reply; your own number goes in `GONE_COLD_DAYS`. Imported conversations from years back and notes sent a season ago were counted against their employer and shown as owed a follow-up. Profile upgrade: `threads-gone-cold`
+
+- **A people search goes to the likely employers first.** `candidates.py order` (and `search`, which follows it) puts first the employers where people who fit are already known in your city, from your contact book and earlier checks, and skips one an earlier check found nobody for there in the last 30 days, saying when it is looked at again. Runs searched employer by employer and kind by kind, many of them empty.
+
+- **A run's time is split into searching and reading.** Its record keeps how long the searching and the profile reads each took, even where no stage was marked, and the brief's weekly line says it.
+
+- **Back from LinkedIn, the page shows you whose note you were sending.** The message whose Copy or Open their profile you pressed last is brought into view when you come back to the page, ringed for a few seconds, with its I sent it as the filled button, until you press I sent it or tap somewhere else. Going to LinkedIn and back, it was easy to lose track of which card the sent note belonged to.
+
 - **Claude starts its LinkedIn work on your computer by itself.** When "Find people" needs to read profiles, the helper in the cloud starts a chat on your computer, in Auto, named "Job search · what it is doing · your computer", and its results come back to your page; you never keep a chat open there. Before, the run sat queued until you opened a chat on your computer yourself.
 
 - **Your computer's state, in one line.** Settings shows whether your computer is ready, off, signed out of LinkedIn or not switched on yet, with the steps only when you are needed, and To do gets one card only while work waits for it. Before, the page said only "open Claude on your computer".
@@ -44,6 +52,38 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
+- **Your morning brief runs in a chat of its own.** It is made as "Job search: morning brief", with your copy attached, and never in the chat that answers your page. Approving computer access in that chat had stopped every scheduled brief there, and a fresh chat for each run had no copy of your files and failed on its first morning. Profile upgrade: brief-own-chat
+
+- **The brief's news comes in one round.** Today's searches and the wider ones run together, then the best items are ranked newest and most relevant first, with each story shown once. Before, a thin morning waited for a second round of searches. A subject that finds nothing new three mornings running is now left out for a week, then tried again.
+
+- **People who answer you come first.** A people run ranks the kind of reader who replies to you most (by your own reply rates) first, then anyone whose headline says they are hiring, and fills with peers only once recruiters, hiring leaders and founders at every employer have been tried, saying so and naming the next employers to search. A run asked for five filled its list with engineers and peers, whom the person's own log shows answer least, where an employer had no recruiter in the city.
+
+- **Closed means closed by you.** Someone an earlier run closed after reading them, never written to and never closed by you, is checked again by today's rules and opened again if chosen, with the earlier reason shown. A head of the function whose headline said "Hiring" was skipped by every later run for an earlier run's housekeeping.
+
+- **A job that runs in a chat on your computer now says so from the start.** Its card shows "This runs in a chat on your Mac, which you can delete when it's done." for as long as the job runs. Before, a chat appeared on the computer and nothing on the page explained it.
+
+- **A save that changes only your own files lands at once.** Every save ran the app's code checks for minutes, longer on a computer, though most change only your tracker, messages and documents, which cannot break the app's code; now such a save reads each changed file cleanly (JSON parses, every table reads with its key columns, no merge markers) and lands, and anything of the app's or of your own settings code is still checked in full.
+
+- **A chat on your computer draws your page first, then saves quietly in the background.** A computer chat held the page for its save's three minutes and more, and its last message told the person about a pull request and a merge; now the page is brought up to date from its copy at once, the save goes on by itself, and nothing about saving is said.
+
+- **With your computer set up, a note waiting for someone's profile is read there by itself.** The note says "Claude reads it on your computer by itself", and Claude sends the read to your computer with nothing to press. Before, the note said to press Read them in To do when no such button was there.
+
+- **Help Claude do more is a card you can see.** It sits right after today's things as one soft card: what the first thing gives you, and one button to start it, with the rest folded under "and N more". As a faint line at the foot of To do it was easy to miss.
+
+- **While your page is being updated, it shows a small turning ring in its own colours**, light or dark, instead of a plain line on a blank page.
+
+- **Claude's chat for a big job no longer messages your page's helper chat.** It saves its work, waiting for the save to finish, and updates your page itself. Messages between chats needed your approval every time, and one was refused.
+
+- **The final check names any word that reads back with a space inside it.** The check that compares a resume's text with its draft ignored spaces, so a split word passed it; it now names the word and where it is, and the font check reads these letter pairs too.
+
+- **A cover letter reads the same way.** The letter's own fonts split "LTV" into "L TV"; they are now set without those adjustments too, and the final check names any word in a letter that reads back as two.
+
+- **Your progress counts the people you write to, not only the jobs you apply for.** The Brief's panel showed applied, replied, interviews and offers whatever you were doing, so a month spent writing to people read as "0 applied" beside noughts. It now shows up to four numbers chosen for you from both sides (applied, interviews, offers, messages sent, accepted, people replied, calls, referrals, and interviews or referrals that came through people), what moved furthest first, and never a nought beside real work.
+
+- **One line says what is working, when your own numbers show it.** Under the numbers, a line such as which kind of person answers your first notes most, or how applications went where you had talked to someone there, said as plain counts and only once each group holds at least five; with too few, nothing is claimed.
+
+- **The weekly chart shows applications and messages sent.** Two quiet bars a week in the page's two chart colours, each named by a swatch in the line under them (one series when you only do one); Progress, which the numbers open, counts messages sent too and draws the same two series.
+
 - **Held back for now says why, ends at its day, and gives you one tap to lift it.** Each line read "open again Fri 27 Nov, or say 'more at <employer>'", leaving you to type it; now it says why ("2 people there are waiting on a reply") and has its own pill ("Open it now"), with Claude's answer under the row.
 
 - **"How every rule ends" is grouped and in plain words.** It was one wall of 34 lines with "<employer>", "No thanks", "InMail", "6 business days" and "kept, as" in it; now it sits under small headings (Jobs, People, Messages...) with room between rows.
@@ -58,13 +98,73 @@ make sense to somebody whose repo just received it.
 
 - **Suggested InMails come only from what is already known.** The chooser suggested InMails that could only be confirmed by opening a message window on LinkedIn, which a chat never does; those people now keep their connection note.
 
-- **An employer frees up by your own follow-up rule, not after a fixed 45 days.** Someone waiting on a reply holds their employer for one follow-up wait for each message your limit still allows, then one more, counted from the last contact: about four weeks under a rule of 14 days and two messages. Before, 45 days from the first note held an employer six weeks and more, a number nobody chose. A number of days of your own can be set instead, and "more at" still works.
+- **An employer frees up by your own follow-up rule, not after a fixed 45 days.** Someone waiting on a reply holds their employer for one follow-up wait from the last contact: once a follow-up is due, the employer is free, about two weeks under a rule of 14 days. A connection request nobody accepted stops counting once it is worth withdrawing (21 days), whatever wait is set. Before, 45 days from the first note held an employer six weeks and more, a number nobody chose. A number of days of your own can be set instead, and "more at" still works.
 
 - **A message to Claude from the page's chat carries its words with its work.** The page puts what the person typed on the work item, and `app.py wake` shows it with the item (for an older item, the one read that fetches it), so no chat reads the thread for the words.
 
 - **The app skill says to load the page's database tools first in a cloud chat**, where ArtifactData and ArtifactComments can be listed by name with no schema until ToolSearch loads them.
 
 ### Fixed
+
+- **The brief makes its own chat again if that chat is lost.** The daily tidy-up makes a new one by itself, without asking, if the brief's chat is deleted, archived or has approved computer access. A new page helper no longer carries the brief from one helper to the next.
+
+- **The setup reminder no longer depends on the chat you set up in.** It runs in a chat of its own, and no chat sets itself a reminder any more. A reminder set in a chat that later approved computer access could never run.
+
+- **News about employers you ruled out stays off your brief.** The rules that keep jobs off your shortlist now apply to news items too: a sector you will not work in, an employer you turned down or a public body you named. One brief had shown news about a kind of employer the person had ruled out.
+
+- **When the news search finds nothing, the brief searches once more by itself.** It no longer runs that extra search when only one or two items come back. The search can now also keep a clearly new result that shows no date, without making up a date for it.
+
+- **Taking one person off today's short list takes off that one alone.** The short list is kept on your own day everywhere, and is saved only when it changed. `reading.py shortlist --remove` read the computer's calendar, found no list for its day late in the evening, and saved an empty one over yours.
+
+- **A headline that reads as selling is left out, and a chosen person stays chosen.** A sales, account or partnership role, or a headline that names only an industry it covers or the clients it helps, is out (your `SKIP_HEADLINES` add to it; never where your own work is sales). A second check had swapped a chosen person for exactly such a headline, because the chosen one, now in the contact book, read as "already there".
+
+- **A batch check is shown only what involves its own notes.** `reading.py batch` checks the run's notes (the ids given, else today's short list) against every note waiting, and no longer flags two older notes from earlier runs that the run had no reason to rewrite.
+
+- **A contact's card shows its ring when the page points at it.** Cards in Contacts dropped the ring that marks the card a link has taken you to, so a card you were sent to looked like every other card.
+
+- **A save on your computer is never stopped at its last step.** Claude's own safety check on the computer refused to merge a save without review, twice in one evening, so the work sat unmerged; a computer chat's save now ends once it is on GitHub, and the chat that answers your page in the cloud brings it in with its next save.
+
+- **An old note in Claude's memory on your computer no longer contradicts your settings.** The start step found a note ("updates only when I say") that disagreed with the person's setting, reported it and left it, so every chat there met it again; it now removes just that note, once, says so in one line, and where it cannot, says once how to remove it.
+
+- **The chat on your computer puts away the app's earlier chats there, the setup chat included.** Its clean-up looked only for chats named "Job search · ...", so the setup chat, which the desktop app names from the line pasted into it, was never found; `computer.py archivable` now picks them from the desktop app's own list, and a chat that cannot list them says nothing instead of reporting a clean-up.
+
+- **A tap made while the page's helper was busy is picked up when its turn ends.** A job sat at "Starting in a moment" for over a minute until the person asked in a chat; a turn that ran past a minute and a half since it read the page now looks once more and starts anything asked meanwhile.
+
+- **A reply that says your resume is attached offers the resume made for that person.** It used to offer your general resume, because the one made for them was looked for in the wrong place.
+
+- **A resume made for someone downloads at once.** It now goes onto your page as soon as it is made. Before, Get it started a new piece of work to fetch it.
+
+- **A finished resume made for someone opens their card in Contacts.** It opened Jobs with a search for their name, which found nothing.
+
+- **"Press Read them" appears only while To do shows the Read them button.** When another card took its place, the note pointed at a button that was not there.
+
+- **Claude takes the next job without being turned away by your page.** When Claude picked up its next job, it saved its own status without first reading what your page held, so your page refused the save. Claude now reads that status first.
+
+- **An update to your page that your page refuses now succeeds on the second try.** When another chat had changed the page in the meantime, Claude now reads again everything that may have changed, in one go. Before, it fixed one record at a time and was refused again for the next.
+
+- **An applicant tracking system reads "AWS", "VAT" or "Vancouver" as one word on every resume.** A resume's summary read back as "production pipelines on Azure and A WS" because the font tucks some letter pairs closer together, and the text reader took that gap for a space; the classic design split "V ancouver" and "Y AML" the same way. Every font on a resume is now set without those adjustments, and applications not yet sent are made again.
+
+- **This week's date under the chart is no longer cut off.** In bold at the panel's edge it read "19 Oc"; it now ends at the edge.
+
+- **A second people search the same day keeps the first one's results.** Both were saved under the day's name, so the new one took the earlier one's place on the page.
+
+- **Claude asks which of your computers are on before saying yours is off.** Judged by its last check-in alone, a Mac that was on read as off, and "Find people" waited.
+
+- **The blue dot on Claude's comments button clears.** Each tap on your page opens a thread for the helper, and old ones were left open; the helper now closes them once their work is done.
+
+- **Claude finds your computer however the list of computers arrives.** Wrapped one way, it read as no computer at all, and "Find people" waited while your Mac was on.
+
+- **A work card's count reads cleanly.** "...big tech employers., 0 of 5 done" lost its stray full stop.
+
+- **A resume made for someone is named as your own resume.** It was called "..._Resume_For_<their name>.pdf", which they would see when you sent it; it now keeps your usual name, in their own folder.
+
+- **Every page update records its version numbers itself.** A helper started before the update could not use the new automatic step, was told it had, and every change it sent the page was refused.
+
+- **When Claude can't start a chat in Auto, you're asked once to switch the right chat.** The chat that starts it must be in Auto itself; you're now told that, once, instead of the new chat silently starting in Manual.
+
+- **An update that changes your page puts the new page up by itself.** A chat that took the update only refreshed the page's data, so you kept the old buttons until you asked for it; every page update now republishes while the page is behind.
+
+- **A reply that sends your resume shows the one Claude is making for that person.** While it was being made, the reply offered your general resume to attach instead.
 
 - **The page's helper no longer asks before starting, messaging or archiving its chats.** Its list of pre-approved steps had been split over two lines, and everything after the break asked you each time.
 
@@ -94,7 +194,7 @@ make sense to somebody whose repo just received it.
 
 - **An old note in a chat's memory no longer outranks your settings.** The start of every chat reports a memory note that disagrees with your settings (such as "only update when I say") and follows your settings; a chat had obeyed the old note.
 
-- **Approving computer access no longer breaks your morning brief.** Before a chat asks for computer access, any scheduled task that fires into it moves to a fresh chat each run, and the daily check spots one left behind; a brief bound to that chat would have failed the next morning.
+- **Approving computer access no longer breaks your morning brief.** Before a chat asks for computer access, any scheduled task that fires into it moves to a chat of its own made with your copy attached, and the daily check spots one left behind. A fresh chat each run was tried first and could not work: it has no copy of your files.
 
 - **Commands the app gives work the same on a Mac.** A check holds every command the app prints to what runs alike in zsh and bash; a loop of fifty fixes all "failed" on a Mac.
 

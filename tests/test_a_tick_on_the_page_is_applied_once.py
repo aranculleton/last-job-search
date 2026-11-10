@@ -433,6 +433,9 @@ def test_next_writes_its_claim_pinned_with_its_locks(search):
     # (`locks`) has no version a write to `holds` can be pinned to, and is moved instead.
     search.put("holds", "emp~kestrel_mutual", {"work": "draft~old", "until": "2026-10-24T00:00:00Z"},
                version=2)
+    # The read took the heartbeats too, and this chat has none yet: its own is made new. A read
+    # without them leaves it out (test_every_work_move_is_a_command_pinned_to_its_read.py).
+    os.makedirs(os.path.join(search.dump, "beats"), exist_ok=True)
     # The other chat's own read, made at the same moment (the claiming chat's folder holds its
     # claim as landed once it is made).
     import shutil

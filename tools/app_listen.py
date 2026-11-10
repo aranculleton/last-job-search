@@ -84,16 +84,16 @@ WAKE_PROMPT = "Look after my job search page from now on."
 # stricter mode than Auto is refused it ("cannot be more permissive than the calling
 # session's mode"), so the call is made again without it (MODE_REFUSED).
 SESSION_MODE = "auto"
-MODE_REFUSED = (" If it is refused because of its permission_mode, make the same call again "
-                "without permission_mode. Where that new chat is on the person's computer, it "
-                "starts in Manual and stops on every step (a chat in Auto was refused Auto for "
-                "one on a Mac, 2026-11-09; the desktop app keeps a mode chosen in a folder for "
-                "the chats after it there, code.claude.com/docs/en/permission-modes), so say "
-                "exactly this to the person, once, with its title: \"One step, once: on your "
-                "computer, in the chat named <its title>, change Manual to Auto at the bottom. "
-                "Claude's chats there then run by themselves.\" Where it is a cloud chat, this "
-                "chat is not in Auto: say once \"One step, once: at the bottom of this chat, "
-                "change the mode to Auto.\"")
+MODE_REFUSED = (" If it is refused because of its permission_mode: where the refusal says "
+                "this chat (the parent) is not in auto mode, say exactly this to the person, "
+                "once, and wait for \"done\": \"One step, once: at the bottom of this chat, "
+                "change the mode to Auto, then say done. Every chat Claude starts for you then "
+                "runs by itself.\" Then make the same call again (a chat whose mode menu said "
+                "Auto was refused as default on 2026-11-10: the menu is not the proof, the "
+                "refusal is). Only where they say Auto is not offered, or it is refused for any "
+                "other reason, make it without permission_mode; where that new chat is on the "
+                "person's computer, say once: \"On your computer, in the chat named <its "
+                "title>, change Manual to Auto at the bottom.\"")
 WAKE_COMMAND = "python3 tools/app.py start --listen --helper"
 REPUBLISH_TITLE = "Bringing your page up to date"
 # All the person hears about their page after an update: one line. A chat that took an
@@ -319,6 +319,41 @@ def waiting_since(db: dict, now: dt.datetime | None = None) -> dt.datetime | Non
     return min(times) if times else None
 
 
+# A ring that came while a long turn ran (a small job in this chat, a check, a read of many
+# pages) was the page's work sitting at "Starting in a moment" for over a minute, until the
+# person asked in a chat (the maintainer's copy, 2026-11-10). Whether the platform holds a
+# comment sent to Claude mid-turn and delivers it after, or drops it, is not documented
+# (ArtifactComments: "this session is woken with a new turn when ... a comment on it is sent
+# to Claude"). So a turn that ran past RING_LOOK_S since its read looks once more before it
+# ends, and anything queued meanwhile starts now, whether or not its ring ever arrives.
+RING_LOOK_S = 90
+
+
+def read_at(dump: str) -> float:
+    """When the page's work was read into `dump` (its files' time), or 0 when it was not."""
+    folder = os.path.join(dump or "", "work")
+    try:
+        times = [os.path.getmtime(os.path.join(folder, f)) for f in os.listdir(folder)]
+    except OSError:
+        return 0.0
+    return min(times) if times else os.path.getmtime(folder)
+
+
+def rings_meanwhile(dump: str, url: str, now: float | None = None) -> str:
+    """The line that ends a long turn of the chat that answers the page: read the work again
+    and start what was asked meanwhile. "" for a short turn, or one with no read."""
+    at = read_at(dump)
+    now = __import__("time").time() if now is None else now
+    if not at or now - at < RING_LOOK_S:
+        return ""
+    return ("listen: this turn ran %d seconds since the page was read, and a tap meanwhile may "
+            "not wake this chat: last, read the page's work and holds again (ArtifactData "
+            "query, url %s, collections work and holds, out_dir a fresh folder $E, limit 1000), "
+            "then python3 tools/app_listen.py waiting \"$E\"; where it says work waits, do what "
+            "a ring does (the app skill, step 1). Nothing waits: end the turn, saying nothing "
+            "about it." % (int(now - at), url or "<the page>"))
+
+
 # How many earlier helpers the page's record keeps by id, for the tidy-up.
 HELPERS_KEPT = 8
 
@@ -499,7 +534,8 @@ def decide(db: dict, chat: str, out_dir: str, now: dt.datetime | None = None,
             # Never archived from here: the chat it took from may still be writing the brief
             # or saving the morning's work. The tidy-up, due at once after a hand-over
             # (tidy.retiring), puts an old helper away as soon as it has stopped and its work
-            # is on master, the brief moved here first; it keeps a chat that is running or
+            # is on master, a brief still in it moved to a chat of its own first (never here:
+            # the renewal never carries the brief, 2026-11-10); it keeps a chat that is running or
             # holds work not landed (X-27), and tries again at a later check-in.
             lines.append("listen: the chat that answered before stops by itself: its next "
                          "check finds this one.")
@@ -1585,3 +1621,20 @@ def after_update(landed: bool = False, chat: str = "") -> list[str]:
             "2. If it says another chat answers the page: " + _ask_listener(url) +
             " Then stop here."] + _publish_now(url, 3)
 
+
+def main(argv=None) -> int:
+    """python3 tools/app_listen.py waiting <dump>: whether work waits for a chat in a read of
+    the page's work (rings_meanwhile)."""
+    argv = sys.argv[1:] if argv is None else argv
+    if argv[:1] != ["waiting"] or len(argv) != 2:
+        print("usage: python3 tools/app_listen.py waiting <dump>", file=sys.stderr)
+        return 2
+    import page_db
+    since = waiting_since(page_db.load(argv[1]))
+    print("waiting: work waits since %s" % since.strftime("%Y-%m-%dT%H:%M:%SZ") if since
+          else "waiting: nothing")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -201,6 +201,50 @@ def no_screen(dump: str, db: dict) -> str:
             "run this again with --dump that folder.")
 
 
+COMPUTER_READS = "network~read~"
+
+
+def computer_reads(model: dict, work: dict, now) -> tuple[str, dict] | None:
+    """The notes waiting for their person's profile, read on the person's computer with no one
+    pressing anything, where it is known ready (model person.computer: computer.reads_there)
+    and they read in the browser: one `network` item sent `to: computer` (page_db.computer_only
+    keeps it there), `args.read_first` with `args.contacts`, each read there and its note
+    rewritten in one run. None when nothing waits, or each is already on its way. Its id is
+    the day and the people, so a view run again queues nothing more, and one the computer
+    could not finish is tried again the next day, never in a loop. Without it the note said
+    "press Read them in To do" with no such card there (the maintainer, 2026-11-10)."""
+    import hashlib
+    import page_db
+    if not (model.get("person") or {}).get("computer"):
+        return None
+    reading = (model.get("linkedin") or {}).get("reading") or {}
+    if reading.get("setting") != "browser" or reading.get("paused"):
+        return None
+    want = [str(q.get("contact") or "") for q in reading.get("queue") or []] \
+        + [str(c) for c in (model.get("to_read") or {}).get("contacts") or []]
+    going: set = set()
+    for doc in work.values():
+        d = (doc or {}).get("data") or {}
+        if d.get("kind") == "network" and str(d.get("status") or "queued") not in page_db.FINISHED:
+            a = d.get("args") if isinstance(d.get("args"), dict) else {}
+            if a.get("rewrite") or a.get("read_first"):
+                going |= {str(c) for c in a.get("contacts") or []} | {str(a.get("contact") or "")}
+    cids = [c for c in dict.fromkeys(want) if c and c not in going]
+    if not cids:
+        return None
+    first = {str(q.get("contact") or ""): str(q.get("first_name") or "")
+             for q in reading.get("queue") or []}
+    day = now.date().isoformat().replace("-", "")
+    key = hashlib.sha1(" ".join(sorted(cids)).encode("utf-8")).hexdigest()[:10]
+    title = (f"Reading {first.get(cids[0]) or 'their'}'s profile on your computer"
+             if len(cids) == 1 and first.get(cids[0]) else
+             f"Reading {len(cids)} profiles on your computer")
+    fields = page_db.queued("network", title, {"contacts": cids, "read_first": True,
+                                               "rewrite": True, "auto": True}, now)
+    fields["to"] = "computer"
+    return page_db.safe_id(f"{COMPUTER_READS}{day}~{key}"), fields
+
+
 def self_fixes(db: dict | None, model: dict, out_dir: str, now, dump_dir: str = "") -> list[str]:
     """The batches that queue, once each, what a draft on the page needs and Claude can do
     with no one asking: its remake where a check failed with a fix Claude makes (the checks
@@ -249,6 +293,9 @@ def self_fixes(db: dict | None, model: dict, out_dir: str, now, dump_dir: str = 
             "prep", f"Interview prep: {iv.get('company') or ''}, {iv.get('role') or ''}",
             {"interview": iv["id"], "note": None, "auto": True}, now),
             if_version=have.get("version") if have else None)
+    got = computer_reads(model, work, now)
+    if got:
+        w.add("set", "work", got[0], got[1], if_version=None)
     out = w.save("self") if w.entries else []
     ever = set()
     for d in work.values():
@@ -516,14 +563,43 @@ def cmd_view(a) -> int:
     first = own_tests_first()
     if first:
         lines = [first] + list(lines or [])
+    stale = page_code_behind()
+    if stale:
+        lines = list(lines or []) + stale
     if getattr(a, "end", False):
         lines = list(lines or []) + end_of_batch(a.chat, getattr(a, "message", "") or "", now)
+        try:
+            import app_listen
+            import app_setup
+            late = app_listen.rings_meanwhile(a.dump, app_setup.page_record().get("url") or "")
+        except Exception:  # noqa: BLE001  never a reason the page is not answered
+            late = ""
+        if late:
+            lines.append(late)
     # The taps that came in while the work ran go first: the screens are drawn with them.
     batches = list(late_batches) + list(batches)
     print(_dump({"rev": model["rev"], "batches": batches,
                  **({"kept_newer": kept} if kept else {}),
                  **({"for_claude": lines} if lines else {})}), end="")
     return 0
+
+
+def page_code_behind() -> list[str]:
+    """The republish, where the page's own code is older than this copy's: a chat that took an
+    update only refreshed the page's data, and the person saw the old buttons until they asked
+    for a republish (the maintainer, 2026-11-09). Every `view` says it, so no update's page
+    change waits on one chat following one step. [] when the page is current or not set up."""
+    try:
+        import app_listen
+        import app_setup
+        url = str(app_setup.page_record().get("url") or "")
+        if not url or not app_setup.set_up() or app_setup._page_current():
+            return []
+        return ["Claude: the page's own code is older than this copy (an update changed it): "
+                "republish it now, after sending these batches, saying nothing first:"] + \
+            app_listen._publish_now(url, 1)
+    except Exception:  # noqa: BLE001  the data still goes
+        return []
 
 
 def app_listen_chat(chat: str) -> str:
@@ -838,7 +914,7 @@ def cmd_apply(a) -> int:
 
 def choose(db: dict, chat: str, kind: str, now, on: str = "", no_sessions: bool = False,
            claim_out: str | None = None, job_chat: bool = False,
-           computer_only: bool = False, lent: bool = False) -> dict | None:
+           computer_only: bool = False, lent: bool = False, beat: bool = True) -> dict | None:
     """The queued work this chat should take (None: nothing is), with the model a chat
     started for it gets (tools/model_guide.py for_work), `run`: where it is done
     (where_it_runs), and with `claim_out` the claim as batch files. Small work done here is
@@ -890,7 +966,7 @@ def choose(db: dict, chat: str, kind: str, now, on: str = "", no_sessions: bool 
     if claim_out:
         chosen["batches"] = page_db.claim(db, chosen, chat, kind, now, claim_out,
                                           running=chosen.get("run") == "here",
-                                          watching=not (lent or job_chat))
+                                          watching=not (lent or job_chat), beat=beat)
     return chosen
 
 
@@ -907,7 +983,8 @@ def cmd_next(a) -> int:
                         no_sessions=a.no_sessions, claim_out=a.claim_out,
                         job_chat=getattr(a, "job_chat", False),
                         computer_only=getattr(a, "computer_only", False),
-                        lent=getattr(a, "lent", False))
+                        lent=getattr(a, "lent", False),
+                        beat=page_db.read_has(a.dump, "beats"))
     except ValueError as e:
         print(f"app: {e.args[0] if e.args else e}", file=sys.stderr)
         return 2
@@ -959,7 +1036,7 @@ def work_row(kind: str) -> str:
 
 def child_prompt(chosen: dict, parent: str, url: str, session: bool = True) -> str:
     """What a chat (or, where none can be started, a background agent) is told for one big
-    job: run that item, pin its progress, finish it, land it, and say it is finished. It
+    job: run that item, pin its progress, finish it, land it and bring the page up to date. It
     never publishes, watches or answers the page. `parent` is the chat that claimed it."""
     wid, kind = chosen["work"], chosen["kind"]
     where = "in a chat of its own" if session else "as a background agent"
@@ -1079,62 +1156,71 @@ def job_steps(chosen: dict, claimer: str, url: str, session: bool = True,
     files = (" Its PDFs reach the page's file store by themselves: app.py done queues the "
              "upload for the chat that answers the page (send every batch it prints), so upload "
              "nothing here." if kind in ("draft", "resume_for_contact") else "")
-    if session and report_to:
-        # A job's chat tells the chat that started it, which puts the results on the page and
-        # archives it at once (claude_surfaces: cloud-chat-reports-back): finished chats sat in
-        # the sidebar until the next day's tidy-up, and nobody could tell whether one was still
-        # working (the maintainer, 2026-11-04). Landed or not: a failed check leaves the work for
-        # the next chat to land, and said nothing, so the page stayed stale with its card
-        # already Done (the audit, 2026-11-03).
-        step(f"Finish as step 5 says ({done}), without its heartbeat line and without bringing "
-             f"the page up to date.{files} Save and land your work on master (CLAUDE.md, \"Saving\"), "
-             "and wait until the landing has ended.")
-        step("Then, landed or not, tell the chat that started you, in one message, and stop: "
-             "load send_message and get_session (ToolSearch, select:"
-             "mcp__claude-code-remote__send_message,mcp__claude-code-remote__get_session); your "
-             f"own id is get_session with no session_id; send_message, session_id {report_to}, "
-             f"message \"{REPORT.format(work=wid, landed='on master', chat='<your own id>')}"
-             f"<what it made, in a few plain words>.\", or \"not landed\" in place of \"on "
-             "master\" where the check failed and the work waits on its branch. That chat puts "
-             "the results on the page and closes this chat at once, so do nothing after it. "
-             "Never write to the person: the page shows how it went.")
-        # Where the message cannot go (the chat that started it was replaced by a fresh helper
-        # and archived, or the tool is not here), the old way: the page brought up to date
-        # from here, and the next job waiting taken here, so a queue keeps moving.
-        step(f"Only where send_message is not there or is refused: bring the page up to date "
-             f"yourself: ArtifactData query, url {url}, collections screen, meta, addr and "
-             f"work, out_dir $D; python3 tools/app.py view \"$D/view\" --dump \"$D\" --chat "
-             f"<your own id> --work {wid} (it takes master first, so the page has every other chat's work "
-             "too); and send every batch it prints (ArtifactData batch). A refused batch: read "
-             "those four again and run it once more. Then the next big job waiting, as below.")
-        step(_next_job(url, first_word="Only in that case"))
-    elif session:
-        # A job's chat started by another job's chat (`next --job-chat`) has nobody it was
-        # started by to tell: it brings the page up to date itself and takes the next one.
+    if session:
+        # A job's chat lands its work and brings the page up to date itself, then takes the
+        # next job: it never messages the chat that started it. send_message asks the person
+        # for approval every time, and was refused (the maintainer, 2026-11-10); the helper's
+        # daily tidy archives the finished chat (tools/tidy.py). Two writers of the page are
+        # safe: each write is pinned and drawn from master (2026-11-03).
         if computer_only:
             # Measured, never guessed: a computer run's own report of its time and steps was
             # wrong by a third (2026-11-09). Its transcript says what it took (tools/computer.py).
             step(f"Before it finishes: python3 tools/computer.py measure \"$D\" --work {wid} "
                  f"--chat {claimer}, and send its batch; say its line, never your own count.")
-        step(f"Finish as step 5 says ({done}), without its heartbeat line.{files} Save and land "
-             f"your work on master (CLAUDE.md, \"Saving\"). Then, landed or not (a failed check "
-             f"leaves the work for the next chat to land, and this step still runs), bring the "
-             f"page up to date yourself: "
+        if computer_only:
+            # The page first, from this copy, then the save in a process of its own: a chat on
+            # the computer held the page for its save's three minutes and more, and its save
+            # ends at its push, the chat in the cloud merging it (land.on_computer; the
+            # maintainer's computer, 2026-11-10). Nothing about saving is the person's.
+            step(f"Finish as step 5 says ({done}), without its heartbeat line.{files} Then bring "
+                 f"the page up to date at once, from this copy: ArtifactData query, url {url}, "
+                 f"collections screen, meta, addr and work, out_dir $D; python3 tools/app.py view "
+                 f"\"$D/view\" --dump \"$D\" --chat <this chat's id> --work {wid}; and send every "
+                 "batch it prints (ArtifactData batch). "
+                 f"{REFUSED_ONCE} Only then save, in the background: python3 tools/land.py "
+                 "--detach --message \"<what changed>\" (an ordinary call that returns at once; "
+                 "the chat in the cloud brings it to master). Never wait for it, and never say "
+                 "anything about saving, pull requests or merging: the page shows how it went.")
+            step(_next_job(url, kind=chat_kind, computer_only=computer_only))
+            return lines
+        step(f"Finish as step 5 says ({done}), without its heartbeat line.{files} "
+             f"{LAND_AND_WAIT} Then, landed or not (a failed check leaves the work for the "
+             f"next chat to land, and this step still runs), bring the page up to date yourself: "
              f"ArtifactData query, url {url}, collections screen, meta, addr and work, out_dir "
              f"$D; python3 tools/app.py view \"$D/view\" --dump \"$D\" --chat <this chat's id> "
              f"--work {wid} (it takes master first, so the page has every other chat's work too, "
              "and never writes over a screen drawn from a newer copy than this one); and send "
-             "every batch it prints (ArtifactData batch). A refused batch: read those four again "
-             "and run it once more. Never write to the person: the page shows how it went.")
+             f"every batch it prints (ArtifactData batch). {REFUSED_ONCE} Never message another "
+             "chat, and never write to the person: "
+             "the page shows how it went.")
         step(_next_job(url, kind=chat_kind, computer_only=computer_only))
     else:
         step(f"Finish as step 5 says ({done}), without its heartbeat line and without app.py "
-             f"view.{files} Save and land your work on master (CLAUDE.md, \"Saving\"). Then end with "
+             f"view.{files} {LAND_AND_WAIT} Then end with "
              f"one line, landed or not: \"Finished {wid}, on master: bring the page up to "
              f"date.\", or where the check failed and the work waits on its branch, \"Finished "
              f"{wid}, not landed: bring the page up to date.\" Never write to the person: the "
              "page shows how it went.")
     return lines
+
+
+# A refused batch, in one line: the version command reads again just what moved on since the
+# read (the record it names, and the screens, meta and heartbeats other chats keep moving:
+# page_db.read_again) and the same command runs once more. "Read those four again" read all
+# four collections, and a second record moved on was refused again (2026-11-10).
+REFUSED_ONCE = ("A refused batch: python3 tools/app.py version \"$D\" <the record> <the version> "
+                "the refusal names, which reads again just what moved on, then the same command "
+                "once more and send what it prints.")
+
+
+# How a job's chat saves and waits for the save before its next step: land.py in the
+# foreground, which ends when the landing has. A chat told only to "wait until the landing has
+# ended" waited with `until ! pgrep -f tools/land.py`, which matched its own command line and
+# never ended (2026-11-10).
+LAND_AND_WAIT = ("Save and land your work on master (CLAUDE.md, \"Saving\"): run python3 "
+                 "tools/land.py in the foreground (never --detach, never in the background), so the "
+                 "command itself ends when the landing has, then make the calls it prints. Never "
+                 "wait on it with a pgrep loop: it matches its own command line and never ends.")
 
 
 def _next_job(url: str, first_word: str = "Then", kind: str = "cloud",
@@ -1144,7 +1230,7 @@ def _next_job(url: str, first_word: str = "Then", kind: str = "cloud",
     what, flags = (("piece of work for this computer", f"{kind} --computer-only")
                    if computer_only else ("big job", f"{kind} --job-chat"))
     return (f"{first_word}, the next {what} waiting, so a queue keeps moving with nobody to "
-            f"start it: ArtifactData query, url {url}, collections work and holds, out_dir a "
+            f"start it: ArtifactData query, url {url}, collections work, holds and beats, out_dir a "
             f"fresh folder $E; python3 tools/app.py next \"$E\" --chat <this chat's id> --kind "
             f"{flags} --on \"<your model>\" --claim-out \"$E/claim\". Nothing named: "
             "stop. One named: send its claim batch (refused: another chat has it, stop), then "
@@ -1777,8 +1863,11 @@ def _again(a, chat: str) -> str:
 # The ring is a comment sent to Claude; left open it stays unread in the Claude app for ever.
 RESOLVE_RING = ("last, once this wake's work is done: ArtifactComments resolve (url {url}, "
                 "thread_id: the thread this wake came on, which the notification that woke you "
-                "names as thread=...). Resolving is not answering: leave no reply. A wake with "
-                "no such thread (a timer, a run by hand) has nothing to resolve.")
+                "names as thread=...), and any other open thread whose first line starts "
+                "\"[app]\" and whose work is finished or no longer on the page: each one left open "
+                "kept the blue dot on Claude's comments button (the maintainer, 2026-11-10). "
+                "Resolving is not answering: leave no reply. A wake with no such thread (a "
+                "timer, a run by hand) resolves only those older ones.")
 
 
 def cmd_wake(a) -> int:

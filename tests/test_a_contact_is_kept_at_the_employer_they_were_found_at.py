@@ -149,7 +149,7 @@ def _row(cid, name, company, **kw):
 
 
 def _two_waiting_at_kestrel():
-    sent = (TODAY - datetime.timedelta(days=8)).isoformat()
+    sent = (TODAY - datetime.timedelta(days=2)).isoformat()
     return [_row(f"kestrel_w{i}", n, "Kestrel Mutual", status="awaiting_reply",
                  first_contacted=sent) for i, n in enumerate(("Ana Rook", "Bo Venn"))]
 

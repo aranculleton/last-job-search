@@ -232,9 +232,15 @@ def employer_out(company: str, today=None) -> str:
     return ""
 
 
-def check(person: dict, ctx: dict | None = None, queued: bool = False) -> dict:
+def check(person: dict, ctx: dict | None = None, queued: bool = False,
+          again_after_run: bool = False) -> dict:
     """Show this person, or not, and why: {"show", "reason", "warn": [...], "contact_id",
-    "how", "needs_read"}.
+    "how", "needs_read", "reopen"}.
+
+    `again_after_run` is for a people search (candidates.py check): a row closed by an
+    earlier run's own ruling after a read (state.closed_by_a_run), never by the person and
+    never written to, is checked again by today's rules rather than refused, with the earlier
+    reason as a warning, and `reopen` names the row to open again if they are chosen.
 
     `person` holds what the list had: name, company, linkedin_url (or url), contact_id,
     connected_on. `queued` is for the queue of first notes: a row of the book nobody has
@@ -248,7 +254,7 @@ def check(person: dict, ctx: dict | None = None, queued: bool = False) -> dict:
     url = str(p.get("linkedin_url") or p.get("url") or "").strip()
     pid = str(p.get("contact_id") or "").strip()
     out = {"show": True, "reason": "", "warn": [], "contact_id": "", "how": "",
-           "needs_read": False}
+           "needs_read": False, "reopen": ""}
 
     def no(reason):
         out.update(show=False, reason=reason)
@@ -273,12 +279,20 @@ def check(person: dict, ctx: dict | None = None, queued: bool = False) -> dict:
                                for m in ctx["threads"].get(str(r.get("contact_id") or "").strip(), ())
                                if state._direction(m)])
         statuses = [(r, state.effective_status(r, msgs)) for r in rows]
+        if again_after_run:
+            for r, _s in statuses:
+                why_run = state.closed_by_a_run(r, msgs)
+                if why_run:
+                    out["warn"].append(f"{why_run}, not you: checked again by today's rules")
+                    out["reopen"] = out["reopen"] or str(r.get("contact_id") or "").strip()
+            statuses = [(r, s_) for r, s_ in statuses if not state.closed_by_a_run(r, msgs)] \
+                if out["reopen"] else statuses
         for r, status in statuses:
             if status in state.schema.TERMINAL:
                 why = str(r.get("outcome") or r.get("next_action") or "").strip()
                 return no(f"{status} in your contact book as {r.get('contact_id')}"
                           + (f": {why}" if why else ""))
-        status = statuses[0][1]
+        status = statuses[0][1] if statuses else "not_contacted"
         if msgs:
             line = _thread_line(msgs)
             if any(s in state.schema.OWED_BY_US for _r, s in statuses):
@@ -294,7 +308,7 @@ def check(person: dict, ctx: dict | None = None, queued: bool = False) -> dict:
             hold = state.action_hold(r.get("next_action"), ctx["today"], r.get("next_action_due"))
             if hold:
                 return no(f"{hold} ({r.get('contact_id')})")
-        if not queued:
+        if not queued and statuses:
             return no(f"already in your contact book as {cid}, not written to yet: it is in "
                       "the queue, not someone new")
         company = str(rows[0].get("company") or "").strip() or company

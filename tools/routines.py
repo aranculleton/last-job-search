@@ -11,10 +11,10 @@ whenever ci_local.sh runs, and the app's tests check the example's.
     python3 tools/routines.py stub <key>     # the exact prompt to store for that task
     python3 tools/routines.py brief [--triggers <listing.json>]... [--chat <id>] [--page-chat <id>]
                                              # is there a brief already? never make a second;
-                                             # in a cloud chat, the calls that make one; one
-                                             # firing in a chat that handed the page on is moved
-                                             # to the chat that answers it (--page-chat, else
-                                             # the one this copy last saw)
+                                             # in a cloud chat, the calls that make one in a
+                                             # chat of its own; one in a chat not made for it
+                                             # (the page's helper, a fresh chat each run, one
+                                             # that approved computer access) is moved there
     python3 tools/routines.py default        # the brief's days, time and zone, and the line
     python3 tools/routines.py record --session <id> --trigger <id> [--cron "<cron>"] [--asked HH:MM] [--own-chat]
                                              # write the brief made into profile/routines.json
@@ -329,48 +329,167 @@ def no_copy(reg: dict, r: dict, live: dict | None, now: datetime.datetime | None
 
 
 def move_here(reg: dict, r: dict, live: dict, day: str, here: str, repo: str,
-              today: datetime.date | None = None) -> dict:
-    """The calls that move a brief whose chat cannot open the copy into `here` (the chat that
-    answers the page), in order, as tidy.py moves one whose chat is gone: the new task first,
-    so a refusal leaves the old one running; the registry; then the old task turned off,
-    never deleted. Then that day's brief runs here, as the helper did by hand (2026-11-04)."""
+              today: datetime.date | None = None, now: datetime.datetime | None = None) -> dict:
+    """The calls that move a brief whose chat cannot open the copy into a chat of its own
+    (own_chat_calls), and one run of the brief that did not come in that chat a few minutes
+    on (never fire_trigger, which starts a new chat with no copy). `here` is kept for the
+    callers' sake: the brief never moves into the chat that asks (the maintainer,
+    2026-11-10: a chat that approved computer access can run no scheduled task)."""
     calls = move_calls(reg, r, live, here, repo)
     d = datetime.date.fromisoformat(day)
     when = "this morning" if d == (today or person_today()) else "on " + _short(d)
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    first = (now + datetime.timedelta(minutes=5)).replace(microsecond=0)
+    calls.insert(2, {"tool": "create_trigger", "args": {
+        "name": "Job search: brief that did not come", "persistent_session_id": NEW_CHAT,
+        "run_once_at": first.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "prompt": calls[1]["args"]["prompt"], "initiation": "own_followup"},
+        "why": "the brief that did not come runs once in its new chat, a few minutes on"})
     return {"calls": calls,
-            "then": "then run the brief that did not come, here and now: follow "
-                    "automation/prompts/_common.md and automation/prompts/morning_brief.md as "
-                    "its scheduled run would",
+            "then": "the one-off run above brings the brief that did not come, in its own chat",
             "tell": f"Your brief didn't come {when}: the chat it ran in had lost your files. "
-                    "It comes from this chat from now on."}
+                    "It has a chat of its own now, and today's comes in a few minutes."}
 
 
 def handed_over(reg: dict, chat: str) -> bool:
     """Has `chat`, a brief's task fires in it while another chat answers the page, handed the
-    page on? Every chat the app bound a brief to answered the page when it did (`plan` binds
-    it there), except the older ops chat, which relays to the phone and keeps its brief."""
+    page on? Every chat the app bound a brief to answered the page when it did, except the
+    older ops chat, which relays to the phone and keeps its brief."""
     ops = str((reg.get("ops_session") or {}).get("id") or "")
     return bool(chat) and not (ops and chat == ops)
 
 
 def move_calls(reg: dict, r: dict, live: dict, here: str, repo: str) -> list[dict]:
-    """The calls that move a brief's task into `here`, in order: the new task first, so a
-    refusal leaves the old one running; the registry; then the old task turned off, never
-    deleted."""
+    """The calls that move a brief's task into a chat of its own (own_chat_calls). `here` is
+    kept for the callers' sake and never used: the brief no longer moves into the chat that
+    asks, nor from helper to helper as the page's helper renews."""
+    return own_chat_calls(reg, r, (live or {}).get("id") or r.get("trigger_id") or "", repo)
+
+
+# ------------------------------------------------------------------ the brief's own chat
+
+# The brief runs in a chat of its own, "Job search: morning brief", made with create_session
+# and the person's copy as its source, its task bound to it (persistent_session_id). Bound to
+# the chat that answers the page, it failed every morning once that chat approved computer
+# access (confirm_repository_trust ties it to the person's own devices for good, and a
+# scheduled run there is refused); a task that starts a fresh chat each run gets no copy, no
+# add_repo and no way to clone one, and failed on its first run (the maintainer, 2026-11-10).
+# Never moved from helper to helper as the page's helper renews: its chat stays its own.
+NEW_CHAT = "<the brief's new chat id>"
+BRIEF_CHAT_PROMPT = ("This chat runs the job search's morning brief on its schedule, and "
+                     "nothing else. Nothing to do now: reply with the one word Ready.")
+
+
+def copy_url(repo: str = "") -> str:
+    """The person's copy on GitHub, for a chat that needs it attached ("owner/name")."""
+    repo = repo or _repo()
+    if not re.fullmatch(r"[\w.-]+/[\w.-]+", repo or ""):
+        try:
+            import app_setup
+            owner, name = app_setup.origin()
+            repo = f"{owner}/{name}" if owner and name else ""
+        except Exception:  # noqa: BLE001  no address: the call says to find it
+            repo = ""
+    return f"https://github.com/{repo}" if repo else "<the copy's GitHub address>"
+
+
+def brief_chat_call(repo: str = "") -> dict:
+    """The create_session call that makes the brief's own chat, the copy attached, in Auto as
+    every chat the app starts (app_listen.SESSION_MODE): a scheduled run in Manual stops at
+    its first permission prompt with nobody there to answer it."""
+    try:
+        import app_listen
+        mode = app_listen.SESSION_MODE
+    except Exception:  # noqa: BLE001
+        mode = "auto"
+    return {"title": BRIEF_NAME, "source_url": copy_url(repo), "prompt": BRIEF_CHAT_PROMPT,
+            "permission_mode": mode}
+
+
+def mode_refused() -> str:
+    """What to do where create_session refuses the permission_mode (app_listen)."""
+    try:
+        import app_listen
+        return app_listen.MODE_REFUSED.strip()
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+def owns_chat(r: dict | None) -> bool:
+    """Was the brief's chat made for it alone (record --own-chat)?"""
+    return bool(((r or {}).get("chat") or {}).get("own"))
+
+
+def trusted_chat() -> str:
+    """The chat that approved computer access, as profile/place.json keeps it, or ""."""
+    try:
+        import place
+        got = str(place.place_record().get("computer_trusted_chat") or "")
+    except Exception:  # noqa: BLE001  no profile: none known
+        return ""
+    return got if got.startswith("session_") else ""
+
+
+def fresh_each_run(reg: dict, r: dict | None) -> bool:
+    """A brief the app moved to a task that starts a fresh chat each run (4.12's computer
+    trust check did, recorded as a routine with no notifications): it gets no copy of the
+    files. A routine the person made themself has notifications on and works."""
+    r = r or {}
+    return (setup_of(reg) == "routines_screen" and bool(r.get("trigger_id"))
+            and (r.get("notifications") or {}).get("push") is not True)
+
+
+def needs_own_chat(reg: dict, r: dict | None, live: dict | None = None,
+                   trusted: str = "") -> str:
+    """Why the brief must move into a chat of its own, in a few words, or "" where it is fine
+    or must stay: one bound to the chat that answers the page or any other chat not made for
+    it, one set to a fresh chat each run, one whose task fires elsewhere than its own chat,
+    or one whose chat approved computer access (`trusted`). Never while it is off or resting,
+    and never the older ops chat's brief, which relays to the phone."""
+    if not r or r.get("off") or reg.get("pause") or not r.get("cron"):
+        return ""
+    if live is not None and live.get("enabled") is False:
+        return ""
+    setup = setup_of(reg)
+    bound = str((r.get("chat") or {}).get("session_id") or "")
+    fires = str((live or {}).get("session") or (live or {}).get("persistent_session_id") or "")
+    if setup == "routines_screen":
+        return "it starts a fresh chat each run, with no copy of the files" \
+            if fresh_each_run(reg, r) else ""
+    ops = str((reg.get("ops_session") or {}).get("id") or "")
+    if setup == "ops_relay" and not bound and (not fires or fires == ops):
+        return ""
+    if not owns_chat(r):
+        return "it runs in a chat that was not made for it"
+    if fires and bound and fires != bound:
+        return "its task fires in another chat than its own"
+    if trusted and trusted in (bound, fires):
+        return "its chat approved computer access, so no scheduled run can open it"
+    return ""
+
+
+def own_chat_calls(reg: dict, r: dict, old_id: str, repo: str,
+                   why: str = "the brief runs in a chat of its own from now on") -> list[dict]:
+    """The calls, in order, that give the brief a chat of its own: create_session with the
+    copy attached, the task bound to it on the same days and time, the registry, then the
+    old task turned off, never deleted (a refusal part way leaves the old one running)."""
     cron = r.get("cron") or ""
     prompt = with_copy(stub(reg, r.get("key") or "morning_brief", own_chat=True), repo)
-    return [
+    out = [
+        {"tool": "create_session", "args": brief_chat_call(repo),
+         "why": f"the brief's own chat, with the copy attached; its id is {NEW_CHAT} below. "
+                + mode_refused()},
         {"tool": "create_trigger", "args": {
-            "name": r.get("name") or BRIEF_NAME, "persistent_session_id": here,
-            "cron_expression": cron, "prompt": prompt,
-            "initiation": "own_followup"},
-         "why": "the brief runs in this chat, which has the files, from now on"},
-        {"run": f"python3 tools/routines.py record --session {here} --trigger <the new task's "
-                f"id> --cron \"{cron}\"" + (" --own-chat" if setup_of(reg) == "ops_relay" else ""),
-         "why": "the registry names the new task and its chat"},
-        {"tool": "update_trigger", "args": {"trigger_id": live.get("id") or r.get("trigger_id"),
-                                            "enabled": False},
-         "why": "the old task is turned off, never deleted"}]
+            "name": BRIEF_NAME, "persistent_session_id": NEW_CHAT,
+            "cron_expression": cron, "prompt": prompt, "initiation": "own_initiative"},
+         "why": why},
+        {"run": f"python3 tools/routines.py record --session {NEW_CHAT} --trigger <the new "
+                f"task's id> --cron \"{cron}\" --own-chat",
+         "why": "the registry names the new task and its own chat"}]
+    if old_id:
+        out.append({"tool": "update_trigger", "args": {"trigger_id": old_id, "enabled": False},
+                    "why": "the old task is turned off, never deleted"})
+    return out
 
 
 def person_today() -> datetime.date:
@@ -391,9 +510,11 @@ def existing_brief(reg: dict | None, triggers=None, now: datetime.datetime | Non
     `triggers` is the account's scheduled tasks as `listing` gives them, or None when the
     session cannot list them. An empty listing is a listing: a registry entry missing from
     it is asked about, never read as set up. A registered brief whose chat cannot open the
-    copy (`no_copy`) is "lost", with the calls that move it into `here`. One whose task
-    fires in a chat that has handed the page on, while `page` answers it now, is
-    "elsewhere", with the calls that move it into `page`.
+    copy (`no_copy`) is "lost", and one that needs a chat of its own (`needs_own_chat`: bound
+    to the chat that answers the page or another not made for it, a fresh chat each run, or
+    a chat that approved computer access) is "elsewhere", each with the calls that give it a
+    chat of its own (own_chat_calls). `here` is only the chat asking, never where it moves;
+    `page` is kept for the callers' sake.
     Returns {"state": "registered" | "lost" | "elsewhere" | "found" | "ask" | "none", "id",
     "name", "say"}.
     """
@@ -411,35 +532,29 @@ def existing_brief(reg: dict | None, triggers=None, now: datetime.datetime | Non
                            + ", and no scheduled task like it is listed: ask the person before "
                            "making another"}
         lost = no_copy(reg, r, live, now, days_on_file, here) if live else ""
+        repo_ = _repo() if repo is None else repo
         if lost:
             what = (f"the brief {r.get('name')!r} ({live.get('id')}) ran in a chat that cannot "
                     f"open the person's files: the brief due {lost} left no record. ")
-            if not here:
-                return {"state": "lost", "id": live.get("id", ""), "name": r.get("name", ""),
-                        "calls": [], "say": what + "Move it into this chat: this chat's id "
-                        "could not be read; get_session with no session_id gives it, then run "
-                        "this again with --chat <its id>"}
-            got = move_here(reg, r, live, lost, here, _repo() if repo is None else repo,
-                            today=now.date() if now else None)
+            got = move_here(reg, r, live, lost, here, repo_,
+                            today=now.date() if now else None, now=now)
             return dict(got, state="lost", id=live.get("id", ""), name=r.get("name", ""),
-                        say=what + "Move it into this chat, with the calls below, in order, "
+                        say=what + "Give it a chat of its own, with the calls below, in order, "
                         "stopping at the first that fails.")
-        # Where its task fires, by the listing: "set up" said over a brief still bound to a
-        # chat that had handed the page on, so the helper took it as moved (the maintainer's
-        # copy, 2026-11-05). `page` is the chat that answers the page now.
-        woke = str((live or {}).get("session") or "")
-        if live and live.get("enabled") is not False and page and woke and woke != page \
-                and r.get("cron") and handed_over(reg or {}, woke):
+        # Where its task fires, by the listing, never the registry alone: a brief bound to the
+        # chat that answers the page fails once that chat approves computer access, and one
+        # carried from helper to helper as the page renewed was reported moved when it had not
+        # (the maintainer's copy, 2026-11-05 and 2026-11-10). It moves into a chat of its own.
+        why = needs_own_chat(reg or {}, r, live, trusted_chat()) if live else ""
+        if why:
             return {"state": "elsewhere", "id": live.get("id", ""), "name": r.get("name", ""),
-                    "calls": move_calls(reg or {}, r, live, page,
-                                        _repo() if repo is None else repo),
+                    "calls": move_calls(reg or {}, r, live, "", repo_),
                     "then": "it has moved only once a new list_triggers shows its task firing "
-                            f"in {page}: never say it moved before",
+                            "in its own new chat: never say it moved before",
                     "tell": "",
-                    "say": f"the brief {r.get('name')!r} ({live.get('id')}) still fires in "
-                           f"{woke}, a chat that has handed the page on, not in the chat that "
-                           f"answers the page ({page}): it has not moved. Move it there with "
-                           "the calls below, in order, stopping at the first that fails"}
+                    "say": f"the brief {r.get('name')!r} ({live.get('id')}) needs a chat of its "
+                           f"own: {why}. Move it with the calls below, in order, stopping at "
+                           "the first that fails"}
         moved = (f" The account lists it as {live['id']}: record that id (routines.py record)."
                  if live and live.get("id") and live["id"] != r.get("trigger_id") else "")
         return {"state": "registered", "id": r.get("trigger_id") or "", "name": r.get("name", ""),
@@ -469,7 +584,7 @@ def existing_brief(reg: dict | None, triggers=None, now: datetime.datetime | Non
 BRIEF_NAME = "Job search: morning brief"
 # What a chat on the person's computer says to "set up my brief": the bell does it, in the cloud.
 BRIEF_BELL = ("Your morning brief is ready to start: press the bell on your Brief once. It "
-              "comes from Claude's helper in the cloud, so it arrives when your computer is off.")
+              "runs in the cloud, in a chat of its own, so it arrives when your computer is off.")
 # The same, with no page and so no bell (X-37): the page comes first, made by this chat.
 BRIEF_NO_PAGE_LOCAL = ("make their page first: python3 tools/app.py start, and do what it prints "
                        "(it publishes the page); then tell them: " + BRIEF_BELL)
@@ -624,36 +739,31 @@ def _page_chat() -> str:
 
 def plan(owner: str, name: str, zone: str = "", now: datetime.datetime | None = None,
          chat: str = "", initiation: str = "human_request") -> dict:
-    """The exact calls a cloud chat makes to set the brief up with no questions: a task
-    bound to the chat that answers the page where there is one, else this chat (`chat`
-    overrides both), so the brief starts no chat of its own and never lands in whichever chat
-    a background upgrade happened to run in (X-11), and one first run a few minutes on (never
-    fire_trigger, which starts a new chat with no copy in it). No chat is ever made for it:
-    where this chat's id cannot be read, `chat` is empty and the caller asks get_session for
-    it first. `initiation` is own_initiative where nobody asked (the brief-daily upgrade)."""
+    """The exact calls a cloud chat makes to set the brief up with no questions: a chat of its
+    own, "Job search: morning brief", made with create_session and the person's copy as its
+    source; the task bound to it (persistent_session_id); and one first run there a few
+    minutes on (never fire_trigger, which starts a new chat with no copy in it). Never bound
+    to the chat that answers the page or the chat asking: one that approves computer access
+    can run no scheduled task from then on (the maintainer, 2026-11-10). `chat` is kept for
+    the callers' sake and never used. `initiation` is own_initiative where nobody asked (the
+    brief-daily upgrade)."""
     d = default(zone)
+    repo = f"{owner}/{name}" if owner and name else ""
     stub_text = with_copy(DEFAULT_STUB.format(label="morning brief", Label="Morning brief",
-                                              prompt_file=BRIEF_FILE, relay_id=""),
-                          f"{owner}/{name}" if owner and name else "")
+                                              prompt_file=BRIEF_FILE, relay_id=""), repo)
     now = now or datetime.datetime.now(datetime.timezone.utc)
     first = (now + datetime.timedelta(minutes=5)).replace(microsecond=0)
-    if not chat and has_page():
-        chat = _page_chat()
-    if not chat:
-        import app_listen
-        chat = app_listen.this_chat()
-    chat = chat if str(chat).startswith("session_") else ""
-    sid = chat or "<the session id>"
     out = {
-        "create_trigger": {"name": BRIEF_NAME, "persistent_session_id": sid,
+        "create_session": brief_chat_call(repo),
+        "create_trigger": {"name": BRIEF_NAME, "persistent_session_id": NEW_CHAT,
                            "cron_expression": d["cron"], "prompt": stub_text,
                            "initiation": initiation},
-        "first_brief": {"name": "Job search: first brief", "persistent_session_id": sid,
+        "first_brief": {"name": "Job search: first brief", "persistent_session_id": NEW_CHAT,
                         "run_once_at": first.strftime("%Y-%m-%dT%H:%M:%SZ"),
                         "prompt": stub_text, "initiation": initiation},
-        "record": (f"python3 tools/routines.py record --session {sid} --trigger "
-                   f"<the task's id> --cron \"{d['cron']}\" --asked {d['asked']}"),
-        "say": d["say"], "zone": d["zone"], "chat": chat}
+        "record": (f"python3 tools/routines.py record --session {NEW_CHAT} --trigger "
+                   f"<the task's id> --cron \"{d['cron']}\" --asked {d['asked']} --own-chat"),
+        "say": d["say"], "zone": d["zone"], "chat": NEW_CHAT}
     return out
 
 
@@ -699,23 +809,26 @@ def where_once(write: bool = False, path: str | None = None) -> str:
 
 def remind_plan(owner: str, name: str, chat: str = "",
                 now: datetime.datetime | None = None) -> dict:
-    """The one setup reminder: a run a day from now, bound to this chat, whose brief says only
-    that setup waits on the page and sends that line as a push (tools/brief.py). Made when the
-    page first goes up with setup unfinished; never a second (`remind_due`)."""
+    """The one setup reminder: a run a day from now, in a chat of its own made with the copy
+    attached, whose brief says only that setup waits on the page and sends that line as a push
+    (tools/brief.py). Never bound to the chat asking: a chat that approves computer access in
+    the meantime can run no scheduled task (the maintainer, 2026-11-10). Made when the page
+    first goes up with setup unfinished; never a second (`remind_due`). `chat` is kept for the
+    callers' sake and never used."""
     now = now or datetime.datetime.now(datetime.timezone.utc)
     at = (now + datetime.timedelta(hours=REMIND_HOURS)).replace(microsecond=0)
-    if not chat:
-        import app_listen
-        chat = app_listen.this_chat()
-    chat = chat if str(chat).startswith("session_") else ""
+    repo = f"{owner}/{name}" if owner and name else ""
     prompt = with_copy(DEFAULT_STUB.format(label="setup reminder", Label="Setup reminder",
-                                           prompt_file=BRIEF_FILE, relay_id=""),
-                       f"{owner}/{name}" if owner and name else "")
-    return {"create_trigger": {"name": REMIND_NAME, "persistent_session_id": chat or
-                               "<the session id>", "run_once_at": at.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                                           prompt_file=BRIEF_FILE, relay_id=""), repo)
+    home = dict(brief_chat_call(repo), title=REMIND_NAME,
+                prompt="This chat runs one setup reminder tomorrow, and nothing else. Nothing "
+                       "to do now: reply with the one word Ready.")
+    return {"create_session": home,
+            "create_trigger": {"name": REMIND_NAME, "persistent_session_id": NEW_CHAT,
+                               "run_once_at": at.strftime("%Y-%m-%dT%H:%M:%SZ"),
                                "prompt": prompt, "initiation": "own_initiative"},
             "record": "python3 tools/routines.py reminded --trigger <the task's id>",
-            "chat": chat}
+            "chat": NEW_CHAT}
 
 
 def remind_due(path: str | None = None) -> bool:
@@ -795,9 +908,18 @@ def record(session: str, trigger: str, cron: str = "", path: str | None = None,
     entry["copy"] = True
     reg["told_where"] = reg.get("told_where") or entry["made"]   # its maker said where it comes
     ops = (reg.get("ops_session") or {}).get("id", "")
+    # Out of a fresh chat each run into a chat of its own: a chat set-up from then on, unless
+    # another task still runs as a routine (each of those needs no chat).
+    if own_chat and session and reg["setup"] == "routines_screen" and all(
+            (r.get("chat") or {}).get("session_id") for r in keep if r.get("mode") != "fresh_session"):
+        reg["setup"] = "chat_per_briefing"
     if reg["setup"] == "chat_per_briefing" or (
             reg["setup"] == "ops_relay" and own_chat and session and session != ops):
         entry["chat"] = {"session_id": session, **({"title": title} if title else {})}
+        if own_chat:
+            # Made for the brief alone (create_session, the copy attached): the daily tidy-up
+            # makes it again where it is gone, archived or approved computer access.
+            entry["chat"].update(title=title or BRIEF_NAME, own=True)
     reg["routines"] = [entry] + keep
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(reg, fh, indent=2, ensure_ascii=False)
@@ -1698,11 +1820,10 @@ def main(argv: list[str]) -> int:
         import place
         owner, name = place.repo()
         got = remind_plan(owner, name)
-        if not got["chat"]:
-            print("chat: this chat's id could not be read: get_session with no session_id gives it")
-            return 1
-        print("make it now, asking nothing (one run tomorrow, in this chat; it says only that "
-              "setup waits on their page):")
+        print("make it now, asking nothing (one run tomorrow, in a chat of its own; it says "
+              "only that setup waits on their page), stopping at the first that fails:")
+        print(f"  create_session: {json.dumps(got['create_session'], ensure_ascii=False)} "
+              f"(its id is {NEW_CHAT} below)")
         print(f"  create_trigger: {json.dumps(got['create_trigger'], ensure_ascii=False)}")
         print(f"  then: {got['record']}, and say nothing about it")
         return 0
@@ -1749,13 +1870,13 @@ def main(argv: list[str]) -> int:
             reg = load()
         except Exception:  # no profile yet (setup), no registry, or a bad one: none on file
             reg = None
-        here = chat_arg or (_page_chat() if has_page() else "")
+        here = chat_arg
         if not here:
             import app_listen
             here = app_listen.this_chat()
         here = here if str(here).startswith("session_") else ""
-        # The chat that answers the page now (meta/listen's, as this checkout last saw it):
-        # the brief belongs there, whichever chat asks.
+        # The chat that answers the page now (meta/listen's, as this checkout last saw it),
+        # kept for the record; the brief belongs in a chat of its own, whichever chat asks.
         page_chat = page_arg or (_page_chat() if has_page() else "")
         found = existing_brief(reg, triggers, here=here,
                                page=page_chat if str(page_chat).startswith("session_") else "")
@@ -1769,6 +1890,16 @@ def main(argv: list[str]) -> int:
                           "profile/routines.json; commit it with the rest, and say nothing")
             except Exception:  # noqa: BLE001  never stops the check over a record
                 pass
+        if found["state"] in ("elsewhere", "lost") and found.get("calls"):
+            import place
+            if place.surface() == "local":
+                # A chat on the computer makes no chat in the cloud: the chat that answers the
+                # page gives the brief its own chat at its daily tidy-up.
+                print("tell them: " + BRIEF_BELL if found["state"] == "lost" else
+                      "move: nothing to do here; the chat in the cloud that answers the page "
+                      "gives the brief a chat of its own at its daily tidy-up. Say nothing "
+                      "about it")
+                return 0
         if found["state"] == "elsewhere" and found.get("calls"):
             for i, c in enumerate(found["calls"], 1):
                 print(f"move {i}: " + (f"{c['tool']} {json.dumps(c['args'], ensure_ascii=False)}"
@@ -1777,10 +1908,6 @@ def main(argv: list[str]) -> int:
                   "person")
             return 0
         if found["state"] == "lost" and found.get("calls"):
-            import place
-            if place.surface() == "local":
-                print("tell them: " + BRIEF_BELL)
-                return 0
             for i, c in enumerate(found["calls"], 1):
                 print(f"move {i}: " + (f"{c['tool']} {json.dumps(c['args'], ensure_ascii=False)}"
                                        if c.get("tool") else c["run"]) + f" ({c['why']})")
@@ -1808,22 +1935,21 @@ def main(argv: list[str]) -> int:
             print("tell them: " + place.BRIEF_LOCAL if found["state"] in ("registered", "found")
                   else ("tell them: " + BRIEF_BELL) if has_page() else BRIEF_NO_PAGE_LOCAL)
         elif found["state"] == "none" and triggers is not None:
-            # A cloud chat makes it itself, asking nothing: a task bound to the chat that
-            # answers the page, or with no page this chat, and a first run in a few minutes
-            # (automation/README.md (a)). Never a chat of its own.
+            # A cloud chat makes it itself, asking nothing: a chat of its own with the copy
+            # attached, the task bound to it, and a first run there in a few minutes
+            # (automation/README.md (a)). Never bound to the chat that answers the page.
             owner, name = place.repo()
-            got = plan(owner, name, chat=chat_arg,
+            got = plan(owner, name,
                        initiation="own_initiative" if "--own-initiative" in argv else "human_request")
             if not got["zone"]:
                 print("zone: the profile names no time zone (networking.py TIMEZONE or "
                       "HOME_CITY): set it from where they live, then run this again")
                 return 1
-            if not got["chat"]:
-                print("chat: this chat's id could not be read: get_session with no session_id "
-                      "gives it; run this again with --chat <its id>. Never make a chat for it.")
-                return 1
-            print("make it now, asking nothing, with these calls in this order (it runs in "
-                  "this chat, so no chat is made for it):")
+            print("make it now, asking nothing, with these calls in this order, stopping at the "
+                  "first that fails (a refused create_session makes nothing: the next chat that "
+                  "starts tries again):")
+            print(f"  create_session: {json.dumps(got['create_session'], ensure_ascii=False)} "
+                  f"(the brief's own chat; its id is {NEW_CHAT} below. {mode_refused()})")
             for call in ("create_trigger", "first_brief"):
                 print(f"  create_trigger ({call}): {json.dumps(got[call], ensure_ascii=False)}")
             print(f"  then: {got['record']}, then commit and land it")

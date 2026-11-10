@@ -83,23 +83,22 @@ def _json(tmp_path, name, value):
 # ------------------------------------------------------------------ note 7: a job's chat reports back
 
 
-def test_a_jobs_chat_reports_back_to_the_chat_that_started_it(monkeypatch):
-    """The job's chat, once its work is landed, sends one message to the chat that started it,
-    whose id is in its prompt: it never sits waiting for tomorrow's tidy-up."""
+def test_a_jobs_chat_lands_and_brings_the_page_up_to_date_itself_never_messaging(monkeypatch):
+    """The job's chat, once its work is landed, brings the page up to date itself and takes
+    the next job: it never messages the chat that started it. A message between chats asks the
+    person's approval every time, and was refused (the maintainer, 2026-11-10); the daily tidy
+    archives the finished chat. It waits for its landing by running land.py in the foreground,
+    never a pgrep loop, which matched its own command line and never ended (2026-11-10)."""
     monkeypatch.setattr(app_setup, "origin", lambda: ("example-owner", "example-copy"))
     monkeypatch.setattr(app_setup, "page_record", lambda: {"url": PAGE})
     chosen = {"work": "prep~1", "kind": "prep", "title": "Interview prep: Larkspur Retail, Data Analyst",
               "heavy": True, "stages": page_db.progress("prep")["stages"]}
     got = app.where_it_runs(chosen, LIVE, "cloud")
     said = " ".join(got["create_session"]["prompt"].split())
-    assert f"send_message, session_id {LIVE}" in said
-    assert "[app] Finished prep~1, on master, in chat <your own id>:" in said
-    assert "your own id is get_session with no session_id" in said
-    # Landed first, then the message, and the page brought up to date here only where the
-    # message cannot go (the chat that started it was replaced and archived).
-    assert said.index("land your work on master") < said.index("send_message, session_id")
-    assert said.index("send_message, session_id") < said.index("Only where send_message is not there")
-    assert said.index("Only where send_message is not there") < said.index("tools/app.py view")
+    assert "send_message" not in said and "Never message another chat" in said
+    assert "python3 tools/land.py in the foreground (never --detach" in said and "pgrep loop" in said
+    assert said.index("land your work on master") < said.index("tools/app.py view")
+    assert said.index("tools/app.py view") < said.index("the next big job waiting")
     assert "first" not in got
     # The chat that started it reads the message back by the app's own pattern.
     m = app.REPORTED.search("[app] Finished prep~1, on master, in chat session_EXAMPLEJOB: a pack")
@@ -269,6 +268,19 @@ REG = {"setup": "chat_per_briefing", "timezone": "Europe/London", "routines": [
      "chat": {"session_id": "session_EXAMPLEOLDA"}}]}
 
 
+
+def _own_chat_move(calls, old_id):
+    """The brief moved into a chat of its own (routines.own_chat_calls): never into the live
+    helper, which carried it from helper to helper and failed once a helper approved computer
+    access (the maintainer, 2026-11-10)."""
+    assert [c.get("tool") or "run" for c in calls] == [
+        "create_session", "create_trigger", "run", "update_trigger"], calls
+    assert calls[0]["args"]["title"] == routines.BRIEF_NAME
+    assert calls[0]["args"]["source_url"] == f"https://github.com/{REPO}"
+    assert calls[1]["args"]["persistent_session_id"] == routines.NEW_CHAT
+    assert "--own-chat" in calls[2]["run"] and routines.NEW_CHAT in calls[2]["run"]
+    assert calls[3]["args"] == {"trigger_id": old_id, "enabled": False}
+
 def _helpers_plan(**kw):
     chats = [
         _chat(LIVE, "Job search page"),                                # the live page helper
@@ -301,17 +313,12 @@ def test_the_helpers_left_over_are_put_away_the_brief_moved_first():
     assert got["ask"] == []
     gone = {c["id"]: c["why"] for c in got["archive"]}
     assert set(gone) == {"session_EXAMPLEOLDA", "session_EXAMPLEOLDB", "session_EXAMPLEOLDD"}
-    assert gone["session_EXAMPLEOLDA"] == "the brief moved into the chat that answers the page"
+    assert gone["session_EXAMPLEOLDA"] == "the brief moved into a chat of its own"
     kept = {c["id"]: c["why"] for c in got["keep"]}
     assert "not on master" in kept["session_EXAMPLEOLDC"]
     assert kept[LIVE] == "it answers the page"
     assert "session_PERSONSOWN" not in gone and "session_PERSONSTOOK" not in gone
-    calls = got["brief"]
-    assert calls[0]["tool"] == "create_trigger" and calls[0]["args"]["persistent_session_id"] == LIVE
-    assert "routines.py record" in calls[1]["run"]
-    assert calls[2] == {"tool": "update_trigger", "args": {"trigger_id": "trig_EXAMPLEBRIEF",
-                                                           "enabled": False},
-                        "why": "the old task is turned off, never deleted"}
+    _own_chat_move(got["brief"], "trig_EXAMPLEBRIEF")
     # Once landed, the one with unsaved work goes too.
     later = _helpers_plan(branches=set())
     assert "session_EXAMPLEOLDC" in {c["id"] for c in later["archive"]}
@@ -454,35 +461,29 @@ def test_a_brief_left_in_the_helper_a_hand_over_replaced_moves_and_that_helper_g
         got = _live_run(here)
         assert got["ask"] == []
         gone = {c["id"]: c["why"] for c in got["archive"]}
-        assert gone[OLD] == "the brief moved into the chat that answers the page", here
-        calls = got["brief"]
-        assert calls[0]["tool"] == "create_trigger"
-        assert calls[0]["args"]["persistent_session_id"] == LIVE
-        assert "routines.py record --session " + LIVE in calls[1]["run"]
-        assert calls[2]["tool"] == "delete_trigger"
-        assert calls[2]["args"] == {"trigger_id": "trig_EXAMPLELEFTBRIEF"}
+        assert gone[OLD] == "the brief moved into a chat of its own", here
+        _own_chat_move(got["brief"], "trig_EXAMPLELEFTBRIEF")
     # Run from the old helper itself (the brief's own run): the brief moves now, and the chat
     # is kept only until a tidy-up from another chat puts it away.
     got = _live_run(OLD)
-    assert [c["tool"] for c in got["brief"] if "tool" in c] == ["create_trigger", "delete_trigger"]
+    _own_chat_move(got["brief"], "trig_EXAMPLELEFTBRIEF")
     assert {c["id"]: c["why"] for c in got["keep"]}[OLD] == "it is this chat"
     # Used moments ago, with no status read for it, it is kept until a later tidy-up; the
     # brief in it is not: it moves into the live helper in this same pass (the maintainer's
     # copy, 2026-11-05: left there, it waited half an hour for a check-in).
     soon = _live_run(LIVE, now=dt.datetime(2026, 11, 5, 8, 50, tzinfo=dt.timezone.utc))
     assert OLD not in {c["id"] for c in soon["archive"]}
-    assert [c.get("tool") or "run" for c in soon["brief"]] == [
-        "create_trigger", "run", "delete_trigger"]
-    assert soon["brief"][0]["args"]["persistent_session_id"] == LIVE
+    _own_chat_move(soon["brief"], "trig_EXAMPLELEFTBRIEF")
 
 
-def test_the_live_helper_asks_for_its_own_check_in_while_the_old_one_finishes(copy):
+def test_the_live_helper_marks_a_second_look_while_the_old_one_finishes(copy):
     """After two hand-overs in an hour, both "(finishing up)" chats stayed until the next
     morning: the new helper's first tidy-up kept each while it was still finishing, and nothing
     rang the new helper again (the maintainer's live run, 2026-11-05). Run by the live helper
-    within a day of its hand-over, with an old helper kept only for now, the tidy-up asks for a
-    check-in half an hour on, one at a time; from any other chat, a day on, or with nothing
-    kept for now, it asks for none."""
+    within a day of its hand-over, with an old helper kept only for now, the tidy-up marks a
+    second look half an hour on, one at a time, which the page's next check-in takes (tidy.due),
+    never a reminder the helper sets itself, which cannot run once it has approved computer
+    access (2026-11-10); from any other chat, a day on, or with nothing kept for now, none."""
     soon = dt.datetime(2026, 11, 5, 8, 50, tzinfo=dt.timezone.utc)
     assert _live_run(LIVE, now=soon)["recheck"] is True          # the old one used moments ago
     assert _live_run(OWN, now=soon)["recheck"] is False          # not the live helper
@@ -524,7 +525,7 @@ def test_a_new_helper_tidies_what_earlier_hand_overs_left_without_their_check_in
                     now=dt.datetime(2026, 11, 5, 8, 41, tzinfo=dt.timezone.utc))
     assert got["ask"] == []
     assert {c["id"] for c in got["archive"]} == {first, second}
-    assert got["brief"][0]["args"]["persistent_session_id"] == LIVE
+    _own_chat_move(got["brief"], "trig_EXAMPLEFIRST")
     assert "another chat answers the page, do nothing else" in tidy.RECHECK
 
 
@@ -610,7 +611,7 @@ def test_an_old_helper_kept_for_any_reason_brings_the_live_helper_back_to_check(
     unsure = run(None)                                  # git could not say
     assert {k["id"]: k["why"] for k in unsure["keep"]}[old] == \
         "git could not say whether its work is on master"
-    assert unsure["brief"][0]["args"]["persistent_session_id"] == live
+    _own_chat_move(unsure["brief"], "trig_EXAMPLEDAY")
     assert unsure["recheck"] is True
     assert run({"claude/example-brief"})["recheck"] is True      # still landing
     saved = run(set())                                            # on master: put away now

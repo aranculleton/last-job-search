@@ -390,7 +390,47 @@ def test_every_read_that_claims_reads_the_locks():
     assert "holds" in app.WAKE_READS
     steps = " ".join(app.job_steps({"work": "search~1", "kind": "search", "stages": []},
                                    "session_listener", "https://claude.ai/artifact/x"))
-    assert "collections work, holds" in steps and "collections work and holds" in steps
+    assert "collections work, holds" in steps and "collections work, holds and beats" in steps
+
+
+def test_a_claim_writes_only_what_its_read_listed(tmp_path):
+    """The maintainer's helper, 2026-11-10: `next --claim-out`'s claim wrote this chat's own
+    heartbeat as new, pinned to nothing, while the page held it at 6, because the read for the
+    next job took work and holds only. The read names the heartbeats now, and a claim from a
+    read without them leaves the heartbeat out rather than write it blind."""
+    db = db_of({"draft~lead": (draft("Larkspur Retail"), 3)})
+    db["chats"] = {"session_job": {"data": {"kind": "cloud", "seen_at": "2026-11-03T16:00:00Z"}, "version": 6}}
+    chosen = page_db.next_item(db, "cloud", T("17:05"), cap=page_db.HEAVY_CAP_CHATS)
+    read = entries(page_db.claim(db, chosen, "session_job", "cloud", T("17:05"), str(tmp_path / "a")))
+    beat = next(e for e in read if e["collection"] == page_db.STORE["chats"])
+    assert beat["if_version"] == 6, beat
+    blind = entries(page_db.claim(db_of({"draft~lead": (draft("Larkspur Retail"), 3)}), chosen, "session_job",
+                                  "cloud", T("17:05"), str(tmp_path / "b"), beat=False))
+    assert not [e for e in blind if e["collection"] == page_db.STORE["chats"]], blind
+    # `next` knows from the folder whether the heartbeats were read.
+    unread = db_of({"draft~lead": (draft("Larkspur Retail"), 3)})
+    del unread["chats"]
+    d = dump_dir(str(tmp_path / "d"), unread)
+    assert not page_db.read_has(d, "beats")
+    os.makedirs(os.path.join(d, "beats"))
+    assert page_db.read_has(d, "beats") and page_db.read_has(d, "chats")
+
+
+def test_a_refused_page_update_reads_again_what_other_chats_moved_on_and_says_so_in_one_line(tmp_path):
+    """The maintainer's helper, 2026-11-10: a page update pinned screen/listener at 96 (the
+    page had 106) and meta/now at 141 (154). The store names one record a refusal, so the
+    save made again was refused for the next. `app.py version` reads again, in one go, the
+    screens, meta and heartbeats the refused batch writes, and the save lands once. A job's
+    chat is told exactly that in one line."""
+    d = str(tmp_path / "d")
+    os.makedirs(d)
+    with open(os.path.join(d, page_db.SENT), "w", encoding="utf-8") as fh:
+        json.dump([{"records": ["screen/listener", "meta/now", "screen/jobs"]}], fh)
+    assert page_db.read_again(d, "screen/listener") == ["meta", "screen"]
+    steps = " ".join(app.job_steps({"work": "prep~1", "kind": "prep", "stages": []},
+                                   "session_job", "https://claude.ai/artifact/x"))
+    assert app.REFUSED_ONCE in steps and "read those four again" not in steps
+    assert "app.py version" in app.REFUSED_ONCE and "once more" in app.REFUSED_ONCE
 
 
 def test_the_brief_ends_with_the_wake_that_ends_stranded_work():

@@ -208,9 +208,13 @@ def test_a_career_changer_with_no_laptop(tmp_path):
     got = _check(tmp_path, people, "--want", "3")
     out = _out(got)
     assert "not your function" in out["Juno Orrin"] and "not your function" in out["Riley Reed"]
-    # Somebody who left the same kitchen comes first: shared background.
-    assert got["chosen"][0]["name"] == "Bo Venn"
-    assert "worked at Harbour Kitchens, like you" in got["chosen"][0]["why"]
+    # The founder first: someone who can hire comes before peers (2026-11-10). Of the peers,
+    # somebody who left the same kitchen comes first: shared background.
+    assert got["chosen"][0]["name"] == "Wren Allard"
+    assert got["chosen"][1]["name"] == "Bo Venn"
+    assert "worked at Harbour Kitchens, like you" in got["chosen"][1]["why"]
+    # No other employer to try, so the peers fill what is left, and it says so.
+    assert got["peers_filled"] == 2 and not got["peers_held"]
     assert set(_names(got["chosen"])) == {"Bo Venn", "Ana Rook", "Wren Allard"}
     # And they are added to the contact book in one go, never twice.
     text = _run(tmp_path, people, "--want", "3", "--add")

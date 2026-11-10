@@ -108,6 +108,8 @@ def test_the_chain_picks_the_best_place_there_is_in_order():
     assert "network~people" in call["prompt"] and "Never message another chat" in call["prompt"]
     assert "send_message" not in call["prompt"]
     assert "confirm_repository_trust" in got["then"] and "computer.py started" in got["then"]
+    # Said up front, in plain words, that it runs in a chat there they can delete (2026-11-10).
+    assert got["line"] == "This runs in a chat on your Studio Laptop, which you can delete when it's done."
     # 3. With no way to start one, the computer's scheduled task takes it.
     with_task = dict(db, chats=_beat(age_s=600))
     assert computer.route(with_task, T, envs={"environments": []}, tools=[])["route"] == "computer task"
@@ -132,6 +134,11 @@ def test_a_chat_already_started_is_not_started_twice_and_is_archived_when_over(t
     entry = json.load(open(batches[0], encoding="utf-8"))[0]
     sess = json.load(open(entry["file_path"], encoding="utf-8")) if entry.get("file_path") else entry["data"]
     db["work"]["network~people"]["data"].update(computer_session=sess["computer_session"])
+    # Its card says where it runs, as its newest step and kept on the record while it runs.
+    said = "This runs in a chat on your Studio Laptop, which you can delete when it's done."
+    assert sess["steps"][-1]["text"] == said and sess["computer_session"]["say"] == said
+    # A computer with no name is "your computer", never "your your computer".
+    assert computer.runs_there("") == "This runs in a chat on your computer, which you can delete when it's done."
     assert computer.waiting(db, T)["started"] == {"network~people": "session_x1"}
     assert computer.route(db, T, envs=BRIDGE, tools=["create_session"])["route"] == "none"
     db["work"]["network~people"]["data"]["status"] = "done"
@@ -406,6 +413,25 @@ def test_a_run_is_measured_from_its_own_transcript(tmp_path, monkeypatch):
     computer.record_run("w", "network", u, T)
     line = computer.trend(T.date())
     assert line.startswith("Your computer did 1 LinkedIn run this week: about 12 min")
+    # Where the time went, from the stages (2026-11-10).
+    assert "5 min searching and 7 min reading profiles" in line
+
+
+def test_a_network_run_with_no_pin_is_split_by_its_own_steps(tmp_path):
+    f = tmp_path / "s.jsonl"
+    use = lambda name, **inp: {"type": "tool_use", "name": name, "input": inp}  # noqa: E731
+    lines = [
+        _line("2026-11-10T19:00:00Z", [use("Bash", command="python3 tools/network/candidates.py search \"Wrenfield Labs\"")]),
+        _line("2026-11-10T19:01:00Z", [use("mcp__Claude_Browser__navigate", url="https://www.linkedin.com/search/results/people/?keywords=x")]),
+        _line("2026-11-10T19:04:00Z", [use("Bash", command="python3 tools/network/candidates.py check found.json --want 5")]),
+        _line("2026-11-10T19:06:00Z", [use("mcp__Claude_Browser__navigate", url="https://www.linkedin.com/in/example-person/")]),
+        _line("2026-11-10T19:15:00Z", [use("Bash", command="python3 tools/network/reading.py drafts notes.json")]),
+        _line("2026-11-10T19:18:00Z", [use("Bash", command="python3 tools/network/inmail_pick.py pick a b")]),
+        _line("2026-11-10T19:19:00Z", []),
+    ]
+    f.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    u = computer.measure(str(f))
+    assert u["stages"] == {"find": 360, "read": 540, "write": 180, "check": 60}
 
 
 # ------------------------------------------------------------------ 2.7, B21: the chats it makes
@@ -433,13 +459,22 @@ TRIGGERS = {"triggers": [
 def test_computer_access_is_never_approved_where_a_scheduled_task_fires():
     """Approving computer access ties the chat to the person's devices for good, and a brief
     bound to it then failed with access denied (2026-11-09): each task is moved first to a
-    fresh chat a run, with no connectors field (the brief needs none, and some organisations refuse the field), the old one turned off."""
+    chat of its own with the copy attached, with no connectors field (the brief needs none, and some organisations refuse the field), the old one turned off."""
     moves = computer.trust_check("session_helper", TRIGGERS)
-    assert len(moves) == 1 and moves[0].startswith("move trig_brief: create_trigger ")
+    # A chat of its own, made with the copy as its source, takes the task: a fresh chat a run
+    # has no copy attached and failed on its first run (a person's copy, 2026-11-10).
+    assert len(moves) == 2 and moves[0].startswith("first, once: create_session ")
+    home = json.loads(moves[0].split("create_session ", 1)[1].split("; its id", 1)[0])
+    assert "source_url" in home
+    moves = moves[1:]
+    assert moves[0].startswith("move trig_brief: create_trigger ")
     call = json.loads(moves[0].split("create_trigger ", 1)[1].split(", then update_trigger")[0])
-    assert call["create_new_session_on_fire"] is True and "connectors" not in call
-    assert call["cron_expression"].startswith("CRON_TZ=") and "persistent_session_id" not in call
-    assert '"enabled": false' in moves[0] and "--setup routines_screen" in moves[0]
+    assert "create_new_session_on_fire" not in call and "connectors" not in call
+    assert call["cron_expression"].startswith("CRON_TZ=") and call["persistent_session_id"] == "<home>"
+    assert '"enabled": false' in moves[0] and "--setup routines_screen" not in moves[0]
+    # The brief's own chat, recorded as made for it alone, so the daily tidy-up keeps it so.
+    assert home["title"] == "Job search: morning brief" and "--own-chat" in moves[0]
+    assert "--session <home>" in moves[0]
     assert computer.trust_check("session_fresh", TRIGGERS) == [
         "trust: ok, no scheduled task fires into this chat"]
     # The daily check spots a task bound to the chat that approved it.
@@ -518,6 +553,8 @@ def test_a_chat_lent_the_computers_browser_finishes_what_it_claimed_and_is_not_i
     s = Search(str(tmp_path))
     s.put("work", "network~people", _w("network", "Harbourline Bank", to="computer",
                                        title="People at Harbourline Bank"), version=4)
+    # Its read took the heartbeats (none there yet), so the claim writes its own.
+    os.makedirs(os.path.join(s.dump, "beats"), exist_ok=True)
     got = json.loads(s.run("next", s.dump, "--chat", "cloud-7", "--kind", "computer",
                            "--computer-only", "--lent", "--now", NOW,
                            "--claim-out", os.path.join(s.dump, "claim")))
@@ -585,8 +622,9 @@ def test_the_apps_hook_keeps_each_reads_versions_so_no_step_is_asked():
     ArtifactData, the maintainer's own edit of 2026-11-09), so no read asks for `app.py
     versions`; a copy without it is asked, and the step is there for it."""
     assert page_db.hook_keeps_versions() is True
-    assert page_db.versions_step("$D") == ""
-    assert "app.py versions" in page_db.VERSIONS_STEP
+    # Asked for all the same: a chat started before the hook was added runs without it, and
+    # pinned every write to a stale number when told the hook did it (2026-11-10).
+    assert "app.py versions" in page_db.versions_step("$D")
 
 
 # ------------------------------------------------------------------ on the page
@@ -647,3 +685,112 @@ def test_the_page_draws_the_computer_once_under_linkedin_and_its_card_with_its_s
     assert page["steps"] and not any("Done" in x for x in page["steps"]), page
     assert card and card["body"].startswith("“People at Harbourline Bank” waits"), card
     assert card["pills"][:2] == [["Open LinkedIn", True], ["Done", False]], card
+
+
+def test_the_computer_is_found_however_the_list_of_places_arrives():
+    """list_environments' answer handed over wrapped read as no computer, and work for the
+    computer waited while the Mac was on (a person's copy, 2026-11-10)."""
+    e = {"environment_id": "env_x", "name": "Mac:Documents:1a2b",
+         "description": "Bridge environment (Mac)", "state": "active", "kind": "bridge"}
+    for shape in ({"environments": [e]}, {"ccr": {"environments": [e]}}, {"data": [e]}, [e],
+                  {"ccr": {"data": [e]}}):
+        got = computer.bridges(shape)
+        assert [b["id"] for b in got] == ["env_x"] and got[0]["computer"] == "Mac", shape
+
+
+def test_the_route_asks_for_the_list_of_computers_before_calling_one_off():
+    """Judged by the Mac's last check-in alone, a Mac that was on and listed read as off, and
+    the work waited (a person's copy, 2026-11-10): with no list given, the chat is told to ask
+    for it first."""
+    db = _db()
+    got = computer.route(db, T, envs=None, tools=["create_session"])
+    if got["route"] != "none":
+        assert got["route"] == "ask" and "list_environments" in got["then"], got
+
+
+# ------------------------------------------------------------------ 2.10: the evening of 11-10
+
+
+def test_an_old_memory_note_is_removed_once_and_said_in_one_plain_line(tmp_path):
+    """The start step on a computer met an old note ("updates only when he says so") that
+    disagreed with the person's setting, reported it and left it, so every chat there met it
+    again (2026-11-10). It is removed now, only the note, and one plain line says so."""
+    home = tmp_path / "home"
+    copy = tmp_path / "Documents" / "search"
+    copy.mkdir(parents=True)
+    proj = re.sub(r"[^A-Za-z0-9]", "-", str(copy))
+    mem = home / ".claude" / "projects" / proj / "memory"
+    mem.mkdir(parents=True)
+    (mem / "feedback_updates.md").write_text(
+        "---\nname: updates\ntype: feedback\n---\nOnly update the app when I say so; never "
+        "take updates by themselves.\n", encoding="utf-8")
+    (mem / "habits.md").write_text(
+        "# Habits\n\nA nurse in Vancouver, applying to clinics.\n\nOnly update the app when I "
+        "say so.\n\nPrefers short messages.\n", encoding="utf-8")
+    (mem / "MEMORY.md").write_text("- [Updates](feedback_updates.md): when to update\n"
+                                   "- [Habits](habits.md): how they work\n", encoding="utf-8")
+    os.environ.pop("CLAUDE_CONFIG_DIR", None)
+    setting = {"profile/person.json app_updates": "auto"}
+    got = computer.memory_conflicts(str(copy), home=str(home), settings=setting)
+    assert sorted(os.path.basename(c["file"]) for c in got) == ["feedback_updates.md", "habits.md"]
+    removed, left = computer.memory_remove(got)
+    assert len(removed) == 2 and left == []
+    assert not (mem / "feedback_updates.md").exists()
+    assert (mem / "MEMORY.md").read_text(encoding="utf-8") == "- [Habits](habits.md): how they work\n"
+    habits = (mem / "habits.md").read_text(encoding="utf-8")
+    assert "Only update" not in habits and "nurse in Vancouver" in habits and "short messages" in habits
+    line = computer.memory_said(removed, left)
+    assert "I removed an old note on this computer that said updates come only when you say" in line
+    assert "Leave the note" not in line
+    # Once: nothing disagrees any more, so nothing is said again.
+    assert computer.memory_conflicts(str(copy), home=str(home), settings=setting) == []
+
+
+def test_a_note_that_cannot_be_removed_is_said_once_with_how_to_remove_it(tmp_path):
+    c = {"file": str(tmp_path / "gone" / "note.md"), "setting": "profile/person.json app_updates",
+         "memory_says": "when_asked", "setting_says": "auto"}
+    removed, left = computer.memory_remove([c])                # no such file: cannot be written
+    assert removed == [] and left == [c]
+    line = computer.memory_said(removed, left)
+    assert "Tell the person once" in line and "/memory" in line
+    assert "say nothing" in computer.memory_said(removed, left, told_before=True)
+
+
+def test_the_computer_chat_puts_away_the_apps_earlier_chats_by_name():
+    """The clean-up on a Mac found nothing (2026-11-10): the earlier chat, the setup one, was
+    deleted by hand, and its name, made by the desktop app from the line pasted into it, was not
+    the app's either. Invented titles."""
+    listing = json.dumps([
+        {"title": "Job search · Find 10 people at Larkspur · Studio Laptop", "status": "idle"},
+        {"title": "Job search · Rewrite a note · Studio Laptop", "status": "running"},
+        {"title": "Open my job search on this computer", "status": "idle"},
+        {"title": "Open job search on this Mac"},
+        {"title": "Job search tips for nurses"},
+        {"title": "Holiday plans"},
+    ])
+    names = [r["title"] for r in computer.archivable(listing, set_up=True)]
+    assert names == ["Job search · Find 10 people at Larkspur · Studio Laptop",
+                     "Open my job search on this computer", "Open job search on this Mac"]
+    # Before the computer is set up, its setup chat is still at work.
+    assert [r["title"] for r in computer.archivable(listing, set_up=False)] == [names[0]]
+    # Titles saved one a line work as well.
+    assert len(computer.archivable("- Job search · A · B\n- Holiday plans\n", True)) == 1
+    title = computer.session_title("Find people", "Studio Laptop")
+    assert computer.archivable([title], set_up=False)[0]["title"] == title
+    prompt = computer.session_prompt("w~1", "t", "https://claude.ai/artifact/x", "c")
+    assert "computer.py archivable" in prompt and "cannot list them, skip it" in prompt
+
+
+def test_a_computer_chat_draws_the_page_first_saves_in_the_background_and_says_nothing_of_it():
+    """A computer chat held the page for its save's three minutes and more, and its last
+    message told the person about a pull request and a merge (2026-11-10)."""
+    import app
+    steps = "\n".join(app.job_steps({"work": "network~1", "kind": "network", "stages": []},
+                                    "local-1", "https://claude.ai/artifact/x", session=True,
+                                    chat_kind="computer", computer_only=True))
+    view, save = steps.find("tools/app.py view"), steps.find("tools/land.py --detach")
+    assert 0 < view < save, steps
+    assert "Save and land your work on master" not in steps
+    assert "never say anything about saving, pull requests or merging" in steps
+    prompt = computer.session_prompt("w~1", "t", "https://claude.ai/artifact/x", "c")
+    assert "nothing about saving, pull requests, merging" in prompt

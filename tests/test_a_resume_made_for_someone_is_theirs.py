@@ -49,7 +49,9 @@ def test_it_is_kept_in_their_folder_named_for_them_and_the_persons_own_is_untouc
                           "print(json.dumps([g.keep_paths(%r)[0], g.keep_paths()[0]]))" % JUNO))
     theirs, own = got
     assert theirs.startswith(os.path.join(state, "documents", "network", JUNO) + os.sep), theirs
-    assert os.path.basename(theirs).endswith("_For_Juno.pdf"), theirs
+    # Named as the person's own: the contact receives the file, and "_For_Juno" told them it
+    # was made for them (a person's copy, 2026-11-10). Their folder keeps it apart.
+    assert os.path.basename(theirs) == "Morgan_Ellis_CV.pdf", theirs   # the example says CV
     assert own != theirs and os.path.join("documents", "cv") in own
 
 
@@ -72,3 +74,34 @@ def test_their_card_says_it_and_offers_it(copy):
     # Never in place of the person's own.
     assert _run(copy, "import docpaths", "print(docpaths.current_resume())").strip() == before
     assert not any(p.get("resume_for_them") for p in model["people"] if p["id"] != JUNO)
+
+
+def test_it_goes_into_the_pages_store_as_it_is_made_so_get_it_downloads_at_once(copy):
+    """Made with no job named, it was never put in the page's own store: its Get it started a
+    new piece of work ("The resume made for Juno, ready to download") instead of downloading
+    (the maintainer, 2026-11-10). Its making's finish queues it with the applications' files
+    (app_model.files_missing, page_db.queue_files), and once uploaded, Get it is the file."""
+    state, _ = copy
+    pdf = os.path.join(state, "documents", "network", JUNO, "Morgan_Ellis_Resume_For_Juno.pdf")
+    os.makedirs(os.path.dirname(pdf), exist_ok=True)
+    with open(pdf, "wb") as fh:
+        fh.write(b"%PDF-1.4\n")
+    _run(copy, "import general_resume as g", "g.keep_for_contact(%r, %r, '2026-10-24')" % (JUNO, pdf))
+    rel = "documents/network/%s/Morgan_Ellis_Resume_For_Juno.pdf" % JUNO
+    got = json.loads(_run(
+        copy, "import app_model, page_db, json, datetime as dt, tempfile",
+        "miss = [x for x in app_model.files_missing() if x['id'].startswith(app_model.RESUME_FOR_PREFIX)]",
+        "q = page_db.queue_files({}, miss, dt.datetime(2026, 10, 25, tzinfo=dt.timezone.utc), tempfile.mkdtemp())",
+        "print(json.dumps({'miss': miss, 'q': q['applications']}))"))
+    (one,) = got["miss"]
+    assert one["id"] == "resfor-" + JUNO and one["paths"] == [rel], one
+    # In the person's own word for the document (the example person says CV).
+    assert one["what"] == "the CV for Juno", one
+    assert got["q"] == ["resfor-" + JUNO], got
+    # Uploaded (`app.py files-saved`): their card's Get it is the file, and nothing is missing.
+    after = json.loads(_run(
+        copy, "import app_model, json",
+        "app_model.record_assets([(%r, %r)])" % (rel, "c" * 32),
+        "print(json.dumps([app_model.resume_made_for(%r)['asset'], "
+        "[x['id'] for x in app_model.files_missing()]]))" % JUNO))
+    assert after[0] == "c" * 32 and not any(i.startswith("resfor-") for i in after[1]), after

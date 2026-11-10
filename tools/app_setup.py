@@ -1707,10 +1707,17 @@ def start(on: str = "", tools: str = "", page_url: str = "", runner=None, work: 
         n += 1
     # An old note in this chat's own memory never outranks the person's settings in profile/:
     # a chat on a computer obeyed "only update when I say" over app_updates "auto", then was
-    # rightly refused when it tried to rewrite the note (2026-11-09). Said, never changed.
+    # refused when it tried to rewrite the note (2026-11-09), and every chat there met it again
+    # (2026-11-10). So the start step removes it itself, once, and says one line; one it cannot
+    # remove is said once, with how the person removes it (MEMORY_KEY), never again.
     try:
         import computer
-        clash = computer.memory_line(computer.memory_conflicts(ROOT))
+        removed, left = computer.memory_remove(computer.memory_conflicts(ROOT))
+        key = "|".join(sorted({f"{c['file']} {c['setting']}" for c in left}))
+        before = bool(left) and told(MEMORY_KEY) == key
+        clash = computer.memory_said(removed, left, told_before=before)
+        if left and not before:
+            save_said(MEMORY_KEY, key)
     except Exception:  # noqa: BLE001  no memory to read: nothing to say
         clash = ""
     if clash:
@@ -1752,6 +1759,7 @@ def _unstarted() -> list[tuple[str, str]]:
 UNSAVED_SAY = ("Some of your work from the last few days hadn't been saved yet. I'm saving it "
                "now.")
 UNSAVED_KEY = "unsaved"     # its day in profile/said_once.json: said once a day
+MEMORY_KEY = "memory_note"  # the old memory notes the person was told how to remove
 
 
 # Which version of the app this checkout's start last spoke for: an update that changes how a

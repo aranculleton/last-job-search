@@ -196,20 +196,24 @@ def test_setup_names_the_brief_in_its_last_message_with_or_without_a_page():
 # ------------------------------------------------------------------ binding and pressing
 
 
-def test_with_a_page_the_brief_binds_to_the_chat_that_answers_it_and_asked_by_nobody_says_so(
+def test_the_brief_binds_to_a_chat_of_its_own_and_asked_by_nobody_says_so(
         tmp_path, monkeypatch):
     """X-11, X-69: the brief-daily upgrade bound the brief to whichever chat ran it, and every
-    task the app made by itself was reported as a person's request."""
+    task the app made by itself was reported as a person's request. With a page or without,
+    it now gets a chat of its own, never the chat that answers the page nor the one asking
+    (the maintainer, 2026-11-10)."""
     monkeypatch.setattr(routines, "has_page", lambda: True)
     monkeypatch.setattr(routines, "_page_chat", lambda: "session_EXAMPLEHELPER")
     monkeypatch.setenv("LJS_CHAT", "session_EXAMPLECOVERLETTER")
     got = routines.plan("example-owner", "my-job-search", "Europe/London",
                         initiation="own_initiative")
-    assert got["create_trigger"]["persistent_session_id"] == "session_EXAMPLEHELPER"
+    assert got["create_trigger"]["persistent_session_id"] == routines.NEW_CHAT
+    assert got["create_session"]["source_url"] == "https://github.com/example-owner/my-job-search"
     assert got["create_trigger"]["initiation"] == "own_initiative"
     monkeypatch.setattr(routines, "has_page", lambda: False)
     got = routines.plan("example-owner", "my-job-search", "Europe/London")
-    assert got["create_trigger"]["persistent_session_id"] == "session_EXAMPLECOVERLETTER"
+    assert got["create_trigger"]["persistent_session_id"] == routines.NEW_CHAT
+    assert "session_EXAMPLE" not in str(got)
     import profile_upgrades
     assert "--own-initiative" in profile_upgrades.by_id("brief-daily").run
 
@@ -407,7 +411,8 @@ def test_a_shortlist_in_a_helper_the_page_no_longer_uses_moves_with_the_brief():
         "sources": [{"git_repository": {"url": "https://github.com/" + REPO}}]}}}
     got = tidy.plan(chats, trig, info, reg, {"chat": "session_EXAMPLEHELPER", "took_from": old},
                     "session_EXAMPLEHELPER", REPO, dt.date(2026, 11, 3), set(), set(), set())
-    assert got["brief"][0]["args"]["persistent_session_id"] == "session_EXAMPLEHELPER"
+    assert got["brief"][0]["tool"] == "create_session"
+    assert got["brief"][1]["args"]["persistent_session_id"] == routines.NEW_CHAT
     assert got["moves"][0]["args"]["persistent_session_id"] == "session_EXAMPLEHELPER"
     assert "rebind job_round" in got["moves"][1]["run"]
     assert [a["id"] for a in got["archive"]] == [old]
@@ -463,7 +468,12 @@ def test_a_stranger_who_stops_after_the_page_goes_up_is_reminded_once(tmp_path, 
     got = routines.remind_plan("example-owner", "my-job-search", chat=CHAT,
                                now=dt.datetime(2026, 11, 3, 14, 0, tzinfo=dt.timezone.utc))
     call = got["create_trigger"]
-    assert call["run_once_at"] == "2026-11-04T14:00:00Z" and call["persistent_session_id"] == CHAT
+    # In a chat of its own with the copy attached, never the chat asking, which may approve
+    # computer access before it fires and then run no scheduled task (2026-11-10).
+    assert got["create_session"]["source_url"] == "https://github.com/example-owner/my-job-search"
+    assert got["create_session"]["title"] == routines.REMIND_NAME
+    assert call["run_once_at"] == "2026-11-04T14:00:00Z"
+    assert call["persistent_session_id"] == routines.NEW_CHAT != CHAT
     assert call["initiation"] == "own_initiative" and "create_new_session_on_fire" not in call
     assert not routines._is_brief_prompt(call["prompt"])        # never read as a second brief
     routines.reminded("trig_EXAMPLEREMIND", path=str(path))

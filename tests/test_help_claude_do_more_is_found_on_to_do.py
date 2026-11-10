@@ -2,9 +2,10 @@
 
 The maintainer, 2026-11-07: "i feel like help claude do more is more important but its a bit
 too tucked away here": it sat at the foot of To do as a quiet fold after "Not due yet", among
-the hidden and done lines. Now it is one line right after today's things and above Not due
-yet, saying what it gives; with nothing due today, its first card shows under its own
-heading. It is never counted among today's things (DESIGN.md, Places). The sample (tests/
+the hidden and done lines. Then it was one faint line right after today's things, and that
+was "so hidden" too (2026-11-10). Now it is one soft card there, above Not due yet: its
+title, what the first one gives, and its one pill to start it; with nothing due today, its
+first card shows under its own heading. It is never counted among today's things (DESIGN.md, Places). The sample (tests/
 fixtures/app_model_sample.json) is an invented search.
 """
 from __future__ import annotations
@@ -35,19 +36,33 @@ def run():
     yield from browser()
 
 
+HELP = ("(() => { const m = document.querySelector('#main'); const c = m.querySelector('[data-item=\"help\"]');"
+        " const all = [...m.querySelectorAll('.band, details.band-more, [data-item=\"help\"]')];"
+        " return c ? {title: (c.querySelector('.card-title') || {}).textContent, text: c.textContent, folded: !!c.closest('details:not([open])'),"
+        " pills: [...c.querySelectorAll('.card-actions .btn')].map((b) => b.textContent.trim()), soft: c.classList.contains('card'),"
+        " more: [...m.querySelectorAll('.help-band details.band-more > summary')].map((s) => s.textContent.trim()),"
+        " before: all.filter((e) => e.matches('details.band-more') && /^Not due yet/.test(e.textContent.trim())).every((e) => c.compareDocumentPosition(e) & 4)} : null; })()")
+
+
 @pytest.mark.parametrize("vp", [PHONE, WIDE], ids=["phone", "wide"])
-def test_help_is_one_line_after_todays_things_and_above_not_due_yet(run, tmp_path, vp):
-    got = _go(run, tmp_path, [{"hash": "todo", "eval": READ}], vp, clock=T)
-    r = got["after"][0]["eval"]
-    helps = [f for f in r["folds"] if f.startswith("Help Claude do more")]
-    assert len(helps) == 1, r["folds"]
-    # It says what it gives, in a line.
-    assert "built from it" in helps[0], helps[0]
-    later = [i for i, f in enumerate(r["folds"]) if f.startswith(("Not due yet", "1 hidden", "Done today", "1 put off"))]
-    assert all(r["folds"].index(helps[0]) < i for i in later), r["folds"]
+def test_help_is_one_soft_card_after_todays_things_and_above_not_due_yet(run, tmp_path, vp):
+    """The maintainer, 2026-11-10: "help claude do more is so hidden". A faint line at the foot
+    of To do is now one soft card in To do's own style: its title, the first one's line saying
+    what it gives, its one pill to start it; the rest folded under "and N more"."""
+    got = _go(run, tmp_path, [{"hash": "todo", "eval": READ}, {"eval": HELP},
+                              {"open": "help-start", "eval": READ}], vp, clock=T)
+    r, c = got["after"][0]["eval"], got["after"][1]["eval"]
+    assert c and c["soft"] and not c["folded"] and c["title"] == "Help Claude do more", c
+    assert "built from it" in c["text"] and c["pills"] == ["Finish your profile"], c
+    assert all(not f.startswith("Help Claude do more") for f in r["folds"]), r["folds"]
+    assert c["before"], c                                     # above Not due yet
+    assert all(m.startswith("and ") and m.endswith(" more") for m in c["more"]), c
     # Today's five are still today's things only, and the help is no card among them.
-    assert len(r["cards"]) <= 5, r["cards"]
-    assert not any("Finish your profile" in c for c in r["cards"]) and not r["youOpen"], r
+    today = [x for x in r["cards"] if not x.startswith(": Help Claude do more") and not x.startswith("Help Claude do more")]
+    assert len(today) <= 5, r["cards"]
+    assert not any("Finish your profile" in x for x in r["cards"]) and not r["youOpen"], r
+    # Its pill puts the first one's own card in its place.
+    assert got["after"][2]["eval"]["youOpen"], got["after"][2]["eval"]
 
 
 def test_with_nothing_due_today_its_first_card_shows(run, tmp_path):
@@ -65,3 +80,14 @@ def test_with_nothing_due_today_its_first_card_shows(run, tmp_path):
     assert "Help Claude do more" in text
     # Never counted as something to do today.
     assert "1 thing today" not in text and "things today" not in text, text[:400]
+
+
+def test_hidden_with_its_bin_it_comes_back_from_the_end_of_to_do(run, tmp_path):
+    got = _go(run, tmp_path, [
+        {"hash": "todo", "open": "hide:help", "count": '[data-item="help"]'},
+        {"click": "Show 1 hidden this week", "read": ".todo-hidden-list"},
+        {"click": "Bring back: Help Claude do more", "count": '[data-item="help"]'},
+    ], PHONE, clock=T)
+    first, shown, back = got["after"]
+    assert first["count"] == 0 and "Help Claude do more" in shown["text"], (first, shown["text"])
+    assert back["count"] == 1

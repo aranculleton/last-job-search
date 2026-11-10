@@ -27,11 +27,13 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   answered with its own control (answerBox), the next there the moment it is answered.
   (tired-person tests, quick answers test)
 - What helps Claude do more (your profile, reading profiles, the LinkedIn download) is never
-  counted among today's things: it is one line right after them, above "Not due yet", saying
-  what it gives ("Help Claude do more (2) · Your profile: every resume and letter is built
-  from it"); with nothing due today, its first card shows under its own heading, the rest one
-  tap below. Why: at the foot of To do, among the folds, it was not found (the maintainer,
-  2026-11-07). (help test)
+  counted among today's things: it is one soft card right after them, above "Not due yet", in
+  To do's own style: its title "Help Claude do more", the first one's one plain line saying
+  what it gives ("Your profile: every resume and letter is built from it"), and its one pill
+  to start it, which puts that one's own card in its place; the rest fold under "and N more".
+  With nothing due today, its first card shows at once under its own heading. Why: at the foot
+  of To do, among the folds, it was not found (the maintainer, 2026-11-07), and as one faint
+  line after today's things it was "so hidden" (2026-11-10). (help test)
 - One card an act and one card a person. A person is never on three cards: their follow-up,
   what they asked for and a job's "ask them before you apply" are one card for them, led by
   what they asked, the referral its grey box, its Done finishing all of it. A referral with no
@@ -93,6 +95,16 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   that the pills a step under what they open, the spare room at the panel's foot. Your
   progress's chart grows into its room, up to 160px. (the maintainer, 2026-11-07: "u see how
   its bunched at the top? be smart about this"; room tests)
+- **Your progress is jobs and people, chosen for the person.** At most four numbers, picked by
+  the engine (`app_model._glance`) from what is true now: applied, interviews, offers;
+  messages sent, accepted, replies, calls, referrals; and interviews or referrals through
+  people. What moved furthest first, both sides where both moved, and never a nought beside
+  real work: a month of notes and no applications shows the notes. Under them one line on
+  what is working, only when the person's own numbers carry it (two groups of five or more),
+  said as counts, never a cause. The weeks are applications and messages sent, the two chart
+  colours, each named by a swatch in the line under them; one series where the person only
+  does one. Progress says the same. (the maintainer, 2026-11-10: "not make it look like im
+  doing nothing"; progress glance tests)
 
 ## Cards and lists
 

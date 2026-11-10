@@ -53,6 +53,9 @@ def _claude(out: str) -> list[str]:
 
 
 def test_a_thin_day_widens_inside_the_one_reader_call(tmp_path):
+    """Today's searches and the wider ones go to the reader at once, numbered, run in parallel
+    and ranked in one round: a second round when the first came back thin was a whole extra
+    wait most mornings (the maintainer, 2026-11-10)."""
     state = _state(tmp_path)
     # A month's first week: no search carries the month, which found almost nothing on the 2nd.
     early = _claude(_run(state, "--today", "2026-11-02").stdout)
@@ -62,10 +65,18 @@ def test_a_thin_day_widens_inside_the_one_reader_call(tmp_path):
     lines = _claude(out)
     first = next(x for x in lines if "given these searches: " in x)
     fresh = first.split("given these searches: ", 1)[1].split("; at most", 1)[0].split(" | ")
-    wide = next(x for x in lines if x.startswith("- news, never none: "))
-    # Three to five items, back a week and then a month from the day, never none.
-    assert "3 to 5 items" in wide and "back to 2026-11-05, then 2026-10-15" in wide
-    more = wide.split("with these searches too: ", 1)[1].split(" | ")
+    wide = next(x for x in lines if x.startswith("- news, one round: "))
+    # Every search at once, then three to five items, newest and most relevant first, each
+    # story once, back a week and then a month from the day.
+    assert "every search at once, in parallel" in wide and "each story once" in wide
+    assert "newest and most relevant first" in wide and "3 to 5 items" in wide
+    assert "back to 2026-11-05, then 2026-10-15" in wide
+    more = wide.split("; the wider: ", 1)[1].split(" | ")
+    # Numbered as one list, so each item says which search found it.
+    nums = [int(q.split("]", 1)[0].lstrip("[")) for q in fresh + more]
+    assert nums == list(range(1, len(nums) + 1))
+    fresh = [q.split("] ", 1)[1] for q in fresh]
+    more = [q.split("] ", 1)[1] for q in more]
     # The wider ones carry no month (a "November 2026" search on the 2nd finds almost
     # nothing), repeat none of today's, and keep the reader within eight searches in all.
     assert more and not any("November 2026" in q for q in more)

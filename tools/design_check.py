@@ -197,7 +197,10 @@ PROBE = ["Zo\u00eb \u00c5ngstr\u00f6m-N\u00fa\u00f1ez",
          "Certified workflow office affluent efficient fifty fluent",
          "SQL, Python, dbt, Power BI", "+44 7700 900123", "zoe.angstrom@example.com",
          "Reduced forecast error from 22% to 14% across 2,400 SKUs",
-         "\u00a31.1M saved, \u20ac40k, 30+ managers"]
+         "\u00a31.1M saved, \u20ac40k, 30+ managers",
+         # Kern pairs: pypdf reads a kern nearly a space wide as a space ("A WS", "V ancouver"),
+         # so every font is set with kerning off (doc_design.fontspec_options).
+         "AWS, AVL, WAV, VAT, YAML, Tyneside, Vancouver, Wyoming"]
 
 
 def probe_font(name, engine, workdir):
@@ -225,7 +228,7 @@ def probe_font(name, engine, workdir):
         found.append("REPLACEMENT: a character the font cannot map back")
     missing = [x for x in PROBE if text.count(x) < 3]
     if missing:
-        found.append("READS_AS: " + "; ".join(missing[:2]) + " (words run together, or a "
+        found.append("READS_AS: " + "; ".join(missing[:2]) + " (words run together or split, or a "
                      "letter lost, in the regular, bold or italic)")
     return found
 

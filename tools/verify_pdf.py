@@ -411,6 +411,70 @@ def _symbols(text) -> set:
             and ch not in _KEEP and ch not in "~^`|"}
 
 
+_WORD = re.compile(r"[^\W_]+")
+
+
+def split_words(groups, text) -> list:
+    """[(label, word, as read)] for each word the draft put on the page that the text layer
+    holds with a space inside it ("AWS" read as "A WS"), and the draft nowhere says so.
+
+    `canon` drops every space, so a word read as two still matched its line: a kern pair
+    wide enough for pypdf to read as a word gap split "AWS" in a summary while the bullets
+    read it whole, and the round trip passed it (2026-11-10). An applicant tracking system
+    searching for the word does not find it. A hyphen at a line break is not a space, and
+    neither is a new line."""
+    raw = " ".join(fold_typography(str(text or "")).split("\n"))
+    raw = re.sub(r"[ \t ]+", " ", raw)
+    said = " " + " ".join(" ".join(str(f) for _w, f in fields) for _l, fields in groups) + " "
+    said = re.sub(r"\s+", " ", fold_typography(said))
+    out, seen = [], set()
+    for label, fields in groups:
+        for _what, field in fields:
+            for word in _WORD.findall(fold_typography(str(field))):
+                if len(word) < 2 or word in seen:
+                    continue
+                # The word with a space allowed between any two letters ("W A V" as well as
+                # "WA V"), and only a form with a space in it that the draft does not have.
+                pat = r"(?<![^\W_])%s(?![^\W_])" % " ?".join(re.escape(c) for c in word)
+                for m in re.finditer(pat, raw):
+                    form = m.group(0)
+                    edge = r"(?<![^\W_])%s(?![^\W_])" % re.escape(form)
+                    if " " in form and not re.search(edge, said):
+                        seen.add(word)
+                        out.append((label, word, form))
+                        break
+    return out
+
+
+def letter_fields(draft):
+    """[(label, [(what, text)])] for the words a draft puts on its cover letter: the
+    paragraphs, the lead line, each bullet's label and text, and who it is to. Read from the
+    draft as written: the words are the same ones the letter prints, and a draft too thin
+    to build a resume from still has its letter read."""
+    import person
+    ident = person.get("identity") or {}
+    s = lambda key: str(draft.get(key) or "")  # noqa: E731
+    # The header, the date and who it is to: never split on a good page, and a space they
+    # hold (a phone number's, a date's) is one the draft has, not a split.
+    groups = [("the letter's header", [(k, str(ident.get(k) or "")) for k in (
+        "name", "location", "phone", "email")] + [(k, s(k)) for k in (
+            "letter_date", "company", "contact_person", "salutation")])]
+    groups += [("the letter's %s" % name, [(key, s(key))])
+               for key, name in (("p1", "first paragraph"), ("p2", "second paragraph"),
+                                 ("lead", "lead line"))]
+    groups += [("the letter's bullet %d" % i, [("bullet", "%s: %s" % (
+        b.get("label", ""), b.get("text", "")) if isinstance(b, dict) else str(b))])
+               for i, b in enumerate(draft.get("cl_bullets") or [], 1)]
+    groups.append(("the letter's closing paragraph", [("p4", s("p4"))]))
+    return groups
+
+
+def letter_splits(draft, text) -> list:
+    """The letter's words its text layer reads with a space inside them, as plain lines."""
+    return ["split: %s: \"%s\" reads as \"%s\" in the text layer" % hit
+            for hit in split_words(letter_fields(draft), text)]
+
+
 def roundtrip(groups, text):
     """What the text layer lacks or holds out of order, as plain lines; [] when every line
     the draft put on the page is there, in order.
@@ -431,6 +495,10 @@ def roundtrip(groups, text):
             if lost:
                 out.append("missing: %s: the sign %s is not in the text layer (the font has no "
                            "glyph for it): write it in words" % (label, " ".join(lost)))
+    for label, word, form in split_words(groups, raw):
+        out.append("split: %s: \"%s\" reads as \"%s\" in the text layer, so a search for it "
+                   "misses it: the font's spacing inside the word is read as a gap between "
+                   "words" % (label, word, form))
     for label, fields in groups:
         ends = []
         for _what, field in fields:

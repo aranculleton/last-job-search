@@ -76,6 +76,11 @@ QUERIES_MAX = 6
 # last items forward with their day, so the page's News panel is always drawn.
 SEARCHES_MAX = 8
 NEWS_MIN = 3
+# A watched thing whose search found nothing new this many runs in a row rests for REST_DAYS,
+# then is tried again; the dates are kept in watched.json and expire (`_rest`, `_empty`).
+EMPTY_RUNS = 3
+REST_DAYS = 7
+EMPTY_KEEP_DAYS = 30
 WIDEN_DAYS = (7, 28)
 CARRY_DAYS = 28
 IN_PLAY_MAX = 6
@@ -433,13 +438,63 @@ def last_searched() -> dict:
             if not str(k).startswith("_") and _d(v)}
 
 
-def plan_searched(whats: list[str], today: dt.date) -> None:
+def plan_searched(whats: list[str], today: dt.date, searches: list[dict] | None = None) -> None:
     """The watched things today's searches carry, kept until the news step says they ran
     (`brief.py news`): marked searched at the gather, a search the run never made, or one a
-    rewritten list replaced, waited a week or a month for nothing."""
+    rewritten list replaced, waited a week or a month for nothing. `searches` is the numbered
+    list the reader is handed (`numbered`), so the news step knows which watched thing each
+    item came from."""
     got = _watched_file()
-    got["_planned"] = {"day": today.isoformat(), "whats": list(whats)}
+    got["_planned"] = {"day": today.isoformat(), "whats": list(whats),
+                       **({"searches": searches} if searches else {})}
     _save_watched(got)
+
+
+def resting(today: dt.date, got: dict | None = None) -> set[str]:
+    """The watched things (lower case) resting today: each found nothing new on its last
+    EMPTY_RUNS runs, so it is left out until its day comes (`note_found`). A rest whose day
+    has come is over."""
+    got = _watched_file() if got is None else got
+    rest = got.get("_rest") if isinstance(got.get("_rest"), dict) else {}
+    return {str(k).lower() for k, v in rest.items() if _d(v) and _d(v) > today}
+
+
+def note_found(found: dict, today: dt.date) -> list[str]:
+    """After a round whose items say which search found them: each watched thing searched
+    today that brought nothing new gets today's date (`_empty`), and one with EMPTY_RUNS such
+    dates in a row rests for REST_DAYS (`_rest`); one that found something starts again from
+    none. `found` is {what: count of items kept}. Dates older than EMPTY_KEEP_DAYS, and rests
+    whose day has come, are dropped. Returns the things that now rest."""
+    got = _watched_file()
+    empty = got.get("_empty") if isinstance(got.get("_empty"), dict) else {}
+    rest = got.get("_rest") if isinstance(got.get("_rest"), dict) else {}
+    cut = today - dt.timedelta(days=EMPTY_KEEP_DAYS)
+    empty = {k: [d for d in v if _d(d) and _d(d) >= cut] for k, v in empty.items()
+             if isinstance(v, list)}
+    rest = {k: v for k, v in rest.items() if _d(v) and _d(v) > today}
+    now_rest = []
+    for what, n in found.items():
+        k = str(what).lower()
+        if not k:
+            continue
+        if n:
+            empty.pop(k, None)
+            continue
+        days = sorted(set(empty.get(k, []) + [today.isoformat()]))[-EMPTY_RUNS:]
+        if len(days) >= EMPTY_RUNS:
+            rest[k] = (today + dt.timedelta(days=REST_DAYS)).isoformat()
+            empty.pop(k, None)
+            now_rest.append(what)
+        else:
+            empty[k] = days
+    got["_empty"] = {k: v for k, v in empty.items() if v}
+    got["_rest"] = rest
+    if not got["_empty"]:
+        got.pop("_empty")
+    if not got["_rest"]:
+        got.pop("_rest")
+    _save_watched(got)
+    return now_rest
 
 
 def note_searched(whats: list[str] | None, today: dt.date) -> None:
@@ -455,13 +510,17 @@ def note_searched(whats: list[str] | None, today: dt.date) -> None:
 
 
 def due_watch(today: dt.date, watch: list[dict] | None = None,
-              searched: dict | None = None) -> list[dict]:
+              searched: dict | None = None, rest: set | None = None) -> list[dict]:
     """The watched things this brief searches, in the person's order: each whose days since it
-    was last searched have reached how often it changes, or that was never searched."""
+    was last searched have reached how often it changes, or that was never searched, and that
+    is not resting after three runs that found nothing new (`resting`)."""
     watch = watch_list() if watch is None else watch
     searched = last_searched() if searched is None else searched
+    rest = resting(today) if rest is None else rest
     out = []
     for n, w in enumerate(watch):
+        if w["what"].lower() in rest:
+            continue
         last = searched.get(w["what"].lower())
         if last is None or (today - last).days >= EVERY[w["every"]]:
             out.append((last or dt.date.min, n, w))
@@ -506,8 +565,8 @@ def queries(today: dt.date, live_employers: list[str], watch: list[dict] | None 
 
 def wider(today: dt.date, live_employers: list[str], watch: list[dict] | None = None,
           qs: list[str] | None = None) -> list[str]:
-    """The searches the news reader widens with when today's bring fewer than NEWS_MIN items
-    not sent before, each with no month, so last week's and last month's news is found (a
+    """The wider searches the news reader runs in the same round as today's, all at once, each
+    with no month, so last week's and last month's news is found (a
     "November 2026" search on the 2nd finds almost nothing): what the person's list watches
     that today's searches leave out first, as a new subject brings new items, then the
     employers in play, then the rest of the list. Only as many as keep the reader within
@@ -517,6 +576,8 @@ def wider(today: dt.date, live_employers: list[str], watch: list[dict] | None = 
     room = SEARCHES_MAX - len(qs)
     if room <= 0 or not qs:
         return []
+    rest = resting(today)
+    watch = [w for w in watch if w["what"].lower() not in rest]
     due = {w["what"] for w in watch if _dated(w["what"], today) in qs}
     where = home_place()
     out = [w["what"] for w in watch if w["what"] not in due]
@@ -555,6 +616,26 @@ def in_play(tracker, contacts, threads, live_employers: list[str]) -> list[str]:
             ["talking to " + " and ".join(names[k][:2])] if names.get(k) else [])
         out.append("%s (%s)" % (n, ", ".join(bits)) if bits else n)
     return out
+
+
+def numbered(qs: list[str], wide: list[str], watch: list[dict], today: dt.date) -> list[dict]:
+    """Today's searches and the wider ones as one numbered list for the reader's one round:
+    {"n", "q", "what" (the watched thing it carries, or ""), "wider"}. Each item it returns
+    starts with the number of the search that found it, so a watched thing that keeps finding
+    nothing new can rest (note_found)."""
+    whats = {}
+    for w in watch or []:
+        whats.setdefault(_dated(w["what"], today), w["what"])
+        whats.setdefault(w["what"], w["what"])
+    out = []
+    for wider_, group in ((False, qs), (True, wide)):
+        for q in group:
+            out.append({"n": len(out) + 1, "q": q, "what": whats.get(q, ""), "wider": wider_})
+    return out
+
+
+def numbered_text(searches: list[dict], wider_: bool) -> str:
+    return " | ".join("[%d] %s" % (x["n"], x["q"]) for x in searches if bool(x["wider"]) is wider_)
 
 
 def searched_whats(qs: list[str], watch: list[dict], today: dt.date) -> list[str]:
@@ -845,6 +926,7 @@ def _gather(today: dt.date, write: bool) -> dict:
     watch = watch_list()
     qs = queries(today, live_names, watch)
     wide = wider(today, live_names, watch, qs)
+    searches = numbered(qs, wide, watch, today)
     b = {
         "date": iso, "weekday": today.strftime("%A"), "since": since.isoformat(),
         "counts": {"owed": len(live), **{k: v for k, v in counts.items() if k != "processes"}},
@@ -853,7 +935,7 @@ def _gather(today: dt.date, write: bool) -> dict:
         "set_aside": _set_aside(asks, old, held),
         "lines": lines, "next_three": three,
         "drafts": got, "pack": pack, "closed": closed, "preps": preps,
-        "queries": qs, "wider": wide, "watch": watch,
+        "queries": qs, "wider": wide, "watch": watch, "searches": searches,
         "in_play": in_play(tracker, contacts, threads, live_names), "watch_due": watch_needs_writing(claude_md),
         "language": news_language(person.country()),
         "what_counts": what_counts(claude_md, watch), "skip_links": links_sent(earlier),
@@ -868,7 +950,7 @@ def _gather(today: dt.date, write: bool) -> dict:
         b["tip"] = _tip(today)
         write_record(b)
         if setting("news") and not b["paused"]:
-            plan_searched(searched_whats(qs, watch, today), today)
+            plan_searched(searched_whats(qs, watch, today), today, searches)
     return b
 
 
@@ -1642,20 +1724,21 @@ def claude_lines(b: dict) -> list[str]:
                        b["watch_due"], "; they turned off before, so leave out: " +
                        "; ".join(turned_off_before()) if turned_off_before() else ""))
     if n and b["queries"]:
+        searches = b.get("searches") or numbered(b["queries"], b.get("wider") or [], [],
+                                                 _d(b["date"]) or dt.date.today())
         out.append("news: the news-reader agent, given these searches: %s; at most %d item%s in the "
-                   "message (the person's setting)%s" % (
-                       " | ".join(b["queries"]), n, "" if n == 1 else "s",
+                   "message%s" % (
+                       numbered_text(searches, False), n, "" if n == 1 else "s",
                        "; news in the language %s counts as much as in English" % b["language"]
                        if b.get("language") else ""))
         today = _d(b["date"]) or dt.date.today()
         week, month = (today - dt.timedelta(days=d) for d in WIDEN_DAYS)
-        out.append("news, never none: today is %s; %d to %d items, each ending in how the person "
-                   "can use it; when fewer than %d are new since the since date, it widens back "
-                   "to %s, then %s%s" % (
-                       today.isoformat(), NEWS_MIN, NEWS_MAX, NEWS_MIN, week.isoformat(),
-                       month.isoformat(),
-                       ", with these searches too: " + " | ".join(b["wider"])
-                       if b.get("wider") else ""))
+        wide = numbered_text(searches, True)
+        out.append("news, one round: today is %s; every search at once, in parallel, then %d to "
+                   "%d items, newest and most relevant first, each story once, each opening with "
+                   "its search's [n]; the wider back to %s, then %s%s" % (
+                       today.isoformat(), NEWS_MIN, NEWS_MAX, week.isoformat(),
+                       month.isoformat(), "; the wider: " + wide if wide else ""))
         if b.get("in_play"):
             out.append("news, in play (for how to use each item, never searched): "
                        + "; ".join(b["in_play"]))
@@ -1800,26 +1883,62 @@ def take_news(text: str, today: dt.date) -> dict:
     earlier brief carried, and a dated note on a live application's row for a freeze or
     layoffs at that employer. {"kept", "dropped", "noted", "path"}."""
     # The news reader ran today's searches, whatever it found: what they carried is searched.
+    planned = (_watched_file().get("_planned") or {})
+    searches = planned.get("searches") if planned.get("day") == today.isoformat() else None
     note_searched(None, today)
-    items = []
+    items, tags = [], []
     for ln in text.splitlines():
         s = ln.strip()
         if not s or s.lower().startswith(("quiet week", "nothing new", "none", "no news")):
             continue
         s = s.lstrip("-*• ").strip()
+        m = _TAG.match(s)
+        if m:
+            s = s[m.end():].lstrip("-*• ").strip()
         if s:
             items.append(s)
+            tags.append([int(x) for x in re.findall(r"\d+", m.group(1))] if m else [])
     # Earlier briefs only: today's own record is replaced below, and counting it sent every
     # item of a second run that day as already sent (the release review, 2026-11-02).
     seen = set(links_sent(earlier_briefs(today)))
-    kept, dropped = [], []
-    for s in items:
+    kept, dropped, ruled, found_by = [], [], [], []
+    same: dict = {}
+    for s, tag in zip(items, tags):
         links = [u.rstrip(".,;") for u in _LINK.findall(s)]
         if links and any(u in seen for u in links):
             dropped.append(s)
             continue
+        # One story once: the reader ran every search at once, and two of them can find it;
+        # each search that found it is counted as having found something.
+        key = tuple(sorted(links)) or (re.sub(r"\W+", " ", s.lower()).strip(),)
+        if key in same:
+            if same[key] is not None:
+                found_by[same[key]] = found_by[same[key]] + tag
+            continue
+        same[key] = None
+        # The person's own exclusions, as the job round applies them: news about an employer
+        # kind they ruled out is no use to them (the maintainer's brief, 2026-11-10).
+        why = ruled_out(s)
+        if why:
+            ruled.append(s)
+            continue
+        same[key] = len(found_by)
+        found_by.append(tag)
         if len(kept) < NEWS_MAX:
             kept.append(news_as_of(s, today))
+    # Which watched things found something new: only from a reader that numbered its items,
+    # and never from one that returned nothing (it may not have run at all).
+    if searches and any(tags):
+        found: dict = {}
+        for x in searches:
+            if x.get("what"):
+                found.setdefault(x["what"], 0)
+        for tag in found_by:
+            for n in tag:
+                x = next((y for y in searches if y.get("n") == n), None)
+                if x and x.get("what"):
+                    found[x["what"]] = found.get(x["what"], 0) + 1
+        note_found(found, today)
     path = brief_path(today.isoformat())
     body = _read(path)
     carried, day = ([], "") if kept else carry_news(today)
@@ -1847,7 +1966,35 @@ def take_news(text: str, today: dt.date) -> dict:
         fh.write(new)
     noted = _note_news(kept, today)
     return {"kept": kept, "dropped": dropped, "noted": noted, "path": path,
-            "carried": carried, "carried_from": day}
+            "carried": carried, "carried_from": day, "ruled_out": ruled}
+
+
+_TAG = re.compile(r"^\[(\d+(?:\s*,\s*\d+)*)\]\s*")
+
+
+def ruled_out(line: str) -> str:
+    """Why a news item is about an employer or a kind of employer the person ruled out, or "":
+    the same hard rules the job round applies by name (tools/bar.py excluded_by_name: a sector
+    they will not work in, an employer they declined, a public body they named), read in what
+    the item says happened. Public bodies in general are not read here: a government's change
+    to the right to work is news they need."""
+    m = _ITEM_SOURCE.search(line) or _UNDATED_SOURCE.search(line)
+    what = line[:m.start()] if m else line
+    try:
+        import bar
+    except Exception:  # noqa: BLE001  no profile to read the rules from: nothing ruled out
+        return ""
+    for rx, why in bar.EXCLUDED_RULES:
+        if rx.search(what):
+            return why
+    low = " %s " % re.sub(r"\W+", " ", what.lower())
+    for k, why in bar.DECLINED.items():
+        name = re.sub(r"\W+", " ", str(k).lower()).strip()
+        if name and " %s " % name in low:
+            return why
+    if bar.NAMED_PUBLIC.search(what):
+        return bar._NAMED_WHY
+    return ""
 
 
 def news_items(text: str) -> list[str]:
@@ -1889,7 +2036,7 @@ def carry_news(today: dt.date, need: int = NEWS_MAX, skip=(), paths=None) -> tup
             break
         for s in gathered_news(_read(p)):
             got = {u.rstrip(".,;") for u in _LINK.findall(s)}
-            if s in texts or got & links:
+            if s in texts or got & links or ruled_out(s):
                 continue
             texts.add(s)
             # A line written without its day keeps the day it was found, so a carried point
@@ -1963,7 +2110,7 @@ def news_as_of(line: str, today: dt.date) -> str:
 
 
 def again_line(n: int, today: dt.date) -> str:
-    """Too few came back from the news reader: the chat searches again itself, once. On 4
+    """Nothing came back from the news reader: the chat searches again itself, once. On 4
     November it returned none, dropping every result whose date was not shown day by day,
     while three ordinary searches straight after found a results miss and a funding round
     from the week before (the maintainer, 2026-11-04)."""
@@ -2086,10 +2233,12 @@ def watch_main(argv: list[str]) -> int:
         contacts, threads = state.load_contacts(), state.load_threads()
         tracker = open_actions._tracker()
         watch = watch_list()
-        qs = queries(today, _live_employers(tracker, contacts, threads, today), watch)
-        plan_searched(searched_whats(qs, watch, today), today)
-        for q in qs:
-            print(q)
+        live = _live_employers(tracker, contacts, threads, today)
+        qs = queries(today, live, watch)
+        searches = numbered(qs, wider(today, live, watch, qs), watch, today)
+        plan_searched(searched_whats(qs, watch, today), today, searches)
+        for x in searches:
+            print("[%d] %s%s" % (x["n"], x["q"], " (wider)" if x["wider"] else ""))
         return 0
     else:
         kept = watch_list()
@@ -2130,7 +2279,12 @@ def main(argv=None) -> int:
             print("for the message, the first %d, each with its day:" % setting("news"))
             for ln in lines[:setting("news")]:
                 print("- " + message_news(ln))
-        if len(got["kept"]) < NEWS_MIN and setting("news") and not a.again:
+        if got.get("ruled_out"):
+            print("news: %d left out, about an employer or a kind of employer the person ruled "
+                  "out" % len(got["ruled_out"]))
+        # One search of the chat's own, only when the reader brought nothing at all: on 4 and
+        # 10 November it came back empty while a plain search found three (2026-11-10).
+        if not got["kept"] and not got.get("ruled_out") and setting("news") and not a.again:
             print(again_line(len(got["kept"]), _today(a.today)))
         return 0
     if argv[:1] == ["watch"]:

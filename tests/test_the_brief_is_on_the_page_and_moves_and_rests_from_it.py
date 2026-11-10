@@ -247,7 +247,7 @@ def test_a_break_holds_the_brief_and_every_follow_up_and_coming_back_early_undoe
     assert [c["tool"] for c in owed] == ["update_trigger", "create_trigger"]
     assert owed[0]["args"] == {"trigger_id": "trig_EXAMPLEBRIEF", "enabled": False}
     back = owed[1]["args"]
-    assert back["persistent_session_id"] == "session_EXAMPLEHELPER"
+    assert back["persistent_session_id"] == "session_EXAMPLEBRIEFCHAT"     # the brief's own chat
     assert back["run_once_at"] == "2026-11-08T07:38:00Z"        # 7:38 in London, in winter
     assert "automation/prompts/morning_brief.md" in back["prompt"]
     s.run("routines.py", "called", "2", "--id", "trig_EXAMPLEBACK", "--today", TODAY)

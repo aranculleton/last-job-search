@@ -139,7 +139,8 @@ before replying** (where: RUNBOOK.md, "What changes, and where it goes"). With t
 out, once a turn, land it on master before the chat ends: `python3 tools/land.py` in the
 background, then the calls it prints. There `python3 tools/save_state.py` stages the
 person's files (never edit `.gitignore`, never force in build noise), and never onto master
-without CI green (in a person's copy, `./tools/ci_local.sh --quick`, never the full run).
+without CI green (in a person's copy, `./tools/ci_local.sh --quick`, or a data check if only
+theirs changed).
 By hand, each git and gh command on its own line, never chained; independent ones as
 separate calls in one message, never a push or a merge before its check (RUNBOOK.md step 4).
 

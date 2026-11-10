@@ -253,7 +253,7 @@ def test_a_first_message_after_a_bare_request_is_accepted_drops_the_request_line
 
 def test_someone_the_log_shows_answered_is_not_counted_as_waiting(files):
     today = datetime.date.today()
-    sent_on = (today - datetime.timedelta(days=10)).isoformat()
+    sent_on = (today - datetime.timedelta(days=2)).isoformat()
     state.save_contacts([
         _c("kes_rook", "Ana Rook", status="awaiting_reply", first_contacted=sent_on),
         _c("kes_venn", "Bo Venn", "Kestrel Mutual Ltd", status="awaiting_reply",

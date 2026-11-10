@@ -314,6 +314,9 @@ def test_a_thats_all_saved_as_a_job_before_is_read_right_and_its_question_asked(
 
 def test_a_phone_can_act_on_the_reading_card_and_a_held_note_is_not_offered(run, tmp_path):
     m = _sample()
+    # A phone with no computer set up: the reading card offers what this page can do (with a
+    # computer ready, Claude reads there by itself and the card has no button).
+    m.setdefault("person", {})["computer"] = False
     m["linkedin"] = {"reading": {"queue": [{"id": "copperleaf_pay_ash", "first_name": "Ash"}]}}
     m["where"]["reading"] = {"state": "open_in_app"}
     m["settings"].append({"id": "setting-profile_reads", "key": "profile_reads",

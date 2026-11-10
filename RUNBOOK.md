@@ -527,10 +527,21 @@ master cannot see work sitting on another chat's branch, and builds it a second 
    start `python3 tools/land.py --message "<what changed>"` in the background (Bash,
    `run_in_background`), so the chat stays free for the person and the page while it runs
    (in the foreground the check held the chat that answers the page for minutes,
-   2026-10-29). It does every step on this side, each git command on its own: saves and
+   2026-10-29). A chat whose next step needs the landing done (a job's own chat) runs it in
+   the foreground instead, so the command itself ends when the landing has; never a `pgrep`
+   loop to wait on it, which matches its own command line and never ends (2026-11-10). It does every step on this side, each git command on its own: saves and
    commits, `git fetch origin master` and `git merge --no-edit origin/master`, runs
    `./tools/ci_local.sh --quick`, and only when that is green `git push -u origin HEAD`
-   (a network failure is retried; nothing is ever forced). In the turn its ending wakes:
+   (a network failure is retried; nothing is ever forced). **When every file it changes
+   since master is the person's own data** (`tools/personal_paths.py`, none of it code: not
+   `profile/*.py`, `profile/tests/`, `profile/person.json` or a portal), it runs no code
+   checks, which cannot fail on their data, only a data check (every changed JSON parses,
+   every changed CSV reads with the columns `merge_state` keys it by, no merge markers), and
+   lands at once (`land.data_only`). **In a chat on the person's computer** it ends at the
+   push (`land: saved to GitHub on <branch>`): no pull request and no merge there, where
+   Claude's own safety check refused the merge; the chat that answers the page in the cloud
+   brings it to master with its next save, and the computer chat says nothing about it. In
+   the turn its ending wakes:
    - `land: ready <branch>`: make the calls it prints, each its own step:
      `create_pull_request` (head that branch, base master); at once `unsubscribe_pr_activity`
      for it (a cloud chat is subscribed to a pull request it opens by itself, 2026-10-30, and
@@ -582,7 +593,8 @@ without CI green**. It is the branch every other chat starts from, so a broken m
 all of them at once. **On a private copy, green is established locally, and that is the
 rule: `./tools/ci_local.sh --quick`** (it skips the compile of the app's example documents,
 which a person's copy never edits, and a second run of their own tests on the oldest Python;
-the full run is for a change to the app). A
+the full run is for a change to the app). A save of only the person's own data needs no code
+check at all: its data check is its green (step 2). A
 clean run is the evidence and merging on it is allowed; say so in the pull request and name
 anything it reported as SKIP (the body `land.py` prints does both). Why, what CI's Python 3.9 leg is for, and the one case worth a
 billed CI run: MAINTAINING.md, "CI on a private repo".
@@ -596,9 +608,9 @@ first line says so when another chat is working in the main folder):
 where Claude Code keeps its own, on a new, unique branch from master), and every command runs
 there: `cd` into it once, and since it is inside the project the chat stays there. Two chats in one folder switch branches under each
 other and fight over git's index. Files git does not carry (the connections export) are read
-from the main folder. Then, from that folder, land as above: `python3 tools/land.py` prints
-the `gh` lines to use in place of the GitHub calls. By hand, each line pre-approved, it is
-commit, and:
+from the main folder. Then, from that folder, land as above: `python3 tools/land.py`
+(`--detach` for a save in the background) ends at the push, and the chat that answers the
+page in the cloud merges it. By hand, each line pre-approved, it is commit, and:
 
 ```bash
 git fetch origin master

@@ -1,5 +1,5 @@
 ---
-framework_version: 2.1.15
+framework_version: 2.1.16
 ---
 
 # Resume Templates and Tailoring Guide
@@ -463,8 +463,9 @@ and location in one `\cventry` cell ("Brindle & Hart Logistics, Manchester"): th
 pdfminer read the location before the employer on most entries and pypdf glue them.
 A depth rule under the 30pt name, because a name with no descenders ("Jane Smith") lets layout
 extractors read "Jane SmithManchester". A text bullet from the body font instead of the
-FontAwesome circle, whose metrics inserted blank lines mid-bullet. `A\kern0pt WS` wherever
-AWS is written, because pypdf reads the A-W kern pair as a word gap. The LinkedIn URL as
+FontAwesome circle, whose metrics inserted blank lines mid-bullet. Every font set with no
+kerning, because pypdf reads a kern pair nearly a space wide as a word gap ("A WS",
+"V ancouver"); the round trip names any word read with a space inside it. The LinkedIn URL as
 literal text, not only a link annotation. Dates as "Mar 2022 - Aug 2024" with spaced hyphen.
 
 **No fontawesome contact icons.** The glyphs extract into the text layer as their own

@@ -389,12 +389,10 @@ def test_a_big_job_is_never_run_by_the_chat_that_answers_the_page(monkeypatch):
         said = call["prompt"]
         assert f"--work {kind}~1" in said and "app.py pin" in said and PAGE in said
         assert "Never publish, watch or answer the page" in said
-        # Landed, it reports back to the chat that started it (2026-11-04), which puts the
-        # results on the page and archives it; only where that message cannot go does it
-        # bring the page up to date itself (2026-11-03: a search's ten jobs sat off the page).
-        assert "send_message, session_id listener-1" in said and "in chat <your own id>" in said
-        assert said.index("land your work on master") < said.index("send_message, session_id")
-        assert said.index("send_message, session_id") < said.index("tools/app.py view")
+        # Landed, it brings the page up to date itself (2026-11-03: a search's ten jobs sat
+        # off the page), never messaging the chat that started it: that asks the person's
+        # approval every time (2026-11-10).
+        assert "send_message" not in said
         assert "tools/app.py view" in said and PAGE in said
         # Landed first, then drawn from master; the page's documents are stored as "screen".
         assert said.index("land your work on master") < said.index("tools/app.py view")

@@ -78,11 +78,13 @@ def test_a_field_to_answer_is_listed_from_its_bullet_with_no_bar_down_its_side(r
 
 def test_a_card_hidden_by_mistake_comes_back_from_the_end_of_to_do(run, tmp_path, vp):
     got = _go(run, tmp_path, [
-        {"hash": "todo", "open": "hide:you-finish", "count": '[data-k="hide:you-finish"]'},
+        # Its card is one tap into Help Claude do more (DESIGN.md, Places).
+        {"hash": "todo", "open": "help-start"},
+        {"open": "hide:you-finish", "count": '[data-k="hide:you-finish"]'},
         {"click": "Show 1 hidden this week", "read": ".todo-hidden-list"},
         {"click": "Bring back: Finish your profile", "count": '[data-k="hide:you-finish"]'},
     ], vp, clock=T)
-    first, shown, back = got["after"]
+    _, first, shown, back = got["after"]
     assert first["count"] == 0, "hidden"
     assert "1 hidden this week: Show" in first["text"], "said at the end of To do, as Jobs says what was set aside"
     assert "Finish your profile" in shown["text"] and "Bring back" in shown["text"]
@@ -216,9 +218,9 @@ def test_the_chat_footer_never_sits_half_under_the_tab_bar(run, tmp_path):
 FIRST = ("(() => { document.querySelectorAll('details.band-more').forEach((d) => { d.open = false; });"
          " const open = (c) => !c.closest('details:not([open])');"
          " const cards = [...document.querySelectorAll('#main .band [data-card]')].filter(open).map((c) => ({title: (c.querySelector('.card-title') || {}).textContent,"
-         " band: c.closest('.band').querySelector('h3').textContent}));"
+         " band: (c.closest('.band').querySelector('h3') || {}).textContent || ''}));"
          " const you = document.querySelector('#main [data-item=\"you\"]');"
-         " return {cards, youFolded: !!you && !open(you), fold: (document.querySelector('#main .band-more-sum') || {}).textContent}; })()")
+         " return {cards, youFolded: !you || !open(you), fold: (document.querySelector('#main .band-more-sum') || {}).textContent}; })()")
 
 
 def test_to_do_opens_on_what_is_late_or_due_today_and_folds_the_setup(run, tmp_path, vp):
@@ -236,9 +238,9 @@ def test_to_do_opens_on_what_is_late_or_due_today_and_folds_the_setup(run, tmp_p
         assert bands.index("Needs your answer") > last_owed, ("questions come after what is owed", r["cards"])
     assert r["youFolded"], "Finish your profile waits behind the fold while today's things show"
     # Four cards today all show (one card an act and a person, 2026-11-05): the first fold is
-    # Help Claude do more, right after today's things (2026-11-07), or what is not due yet;
+    # Help Claude do more's "and N more", its card right after today's things (2026-11-10), or what is not due yet;
     # more than five, and it is "Show N more".
-    assert r["fold"].startswith(("Show ", "Help Claude do more", "Not due yet")), r
+    assert r["fold"].startswith(("Show ", "and ", "Not due yet")), r
 
 
 # Found along the way, 2026-11-02. "Did your note to Wren go?" is answered once the note is

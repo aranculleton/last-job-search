@@ -51,7 +51,13 @@ second --detach while one runs only asks it to. What it could not do on GitHub i
    a container that goes, leaves its work waiting on GitHub for the next landing: the
    "Finding jobs" chat timed out in its check and its shortlist was lost (2026-11-06). Work
    another landing took to master meanwhile is landed, with nothing to open (--after-merge).
-6. git push -u origin HEAD, a network failure retried four times (2, 4, 8 and 16 s).
+   A landing whose every file changed since master is the person's own data (data_only: no
+   app file, none of their code, not profile/person.json) runs no code checks, only a data
+   check of those files (data_check), and lands at once.
+6. git push -u origin HEAD, a network failure retried four times (2, 4, 8 and 16 s). In a
+   chat on the person's computer (on_computer) the landing ends here, having checked only
+   its data: no pull request and no merge from there (Claude's own safety check refused the
+   merge), and the chat that answers the page in the cloud lands it with its next save.
 7. "land: ready <branch>", then the two GitHub calls to make (open the pull request, merge
    it) and --after-merge.
 
@@ -577,6 +583,112 @@ def _check_command(root: str, check) -> list[str]:
 CHECKED_ALREADY = "the same commit the last landing checked green and pushed\n"
 BEAT_S = 60
 
+# A save that changes only the person's own data (their tracker, threads, documents, state)
+# cannot break the app's code, and ./tools/ci_local.sh --quick still made each one wait
+# minutes, longer on a computer (the maintainer's copy, 2026-11-10). Such a save lands at once
+# after a data check of the files it changes. Code of theirs is still checked in full: their
+# settings modules and own tests (profile/*.py, profile/tests/), their portals (.agents/), and
+# profile/person.json, which every page update reads (a person.json with no identity loaded,
+# landed and broke every page update: the stranger audit, 2026-11-03, X-39).
+_CODE = re.compile(r"\.(?:py|pyw|sh|bash|zsh|ps1|bat|cmd|js|mjs|cjs|ts|tsx)$", re.I)
+_CHECKED_IN_FULL = ("profile/tests/", ".agents/")
+_FULL_FILES = ("profile/person.json",)
+_TEMPLATE = re.compile(r"\[YOUR_NAME\]|\[YOUR_EMAIL\]|\[YOUR_PRIMARY_SKILLS\]")
+_TEMPLATE_FILES = ("profile/CLAUDE.md", "profile/01-candidate-profile.md")
+_TEXT = (".json", ".csv", ".md", ".txt", ".tex", ".yml", ".yaml", ".html", ".log")
+DATA_CHECKED = ("Checked here: only the person's own files changed (%d), so the app's checks "
+                "were not needed; each file reads cleanly\n")
+
+
+# A chat on the person's own computer: Claude Code sets CLAUDECODE in the commands it runs, and
+# CLAUDE_CODE_REMOTE ("true") only in a cloud chat (as place.surface reads them). Its save ends
+# at the push (_land): the chat that answers the page in the cloud does the merge.
+COMPUTER_PUSHED = ("land: saved to GitHub on %s; the chat that answers the page in the cloud "
+                   "brings it to master with its next save. Nothing to do, and nothing to say "
+                   "about saving")
+
+
+def on_computer(env=None) -> bool:
+    """Is this a chat on the person's computer (not a cloud chat, not a script)?"""
+    env = os.environ if env is None else env
+    return bool(env.get("CLAUDECODE")) and \
+        str(env.get("CLAUDE_CODE_REMOTE", "")).lower() != "true"
+
+
+def data_only(root: str) -> list[str] | None:
+    """The files this landing changes against master, when every one is the person's own
+    data (tools/personal_paths.py, and none of it code); else None, and the full check runs."""
+    r = _git(root, "diff", "--name-only", "--no-renames", "-z", "origin/master", "HEAD")
+    if r.returncode != 0:
+        return None
+    paths = [p for p in (r.stdout or "").split("\0") if p]
+    if not paths:
+        return None
+    try:
+        import personal_paths
+    except Exception:  # noqa: BLE001  unsure: the full check
+        return None
+    for p in paths:
+        if (not personal_paths.is_personal(p) or _CODE.search(p) or p in _FULL_FILES
+                or p.startswith(_CHECKED_IN_FULL)):
+            return None
+    return paths
+
+
+def data_check(root: str, paths: list[str]) -> list[str]:
+    """What is wrong with the person's changed files, read the way the tools read them: every
+    JSON parses, every CSV reads (csv_store, no merge markers, every column named, the columns
+    merge_state keys its rows by present), no text file holds git's conflict markers, and the
+    profile is not a template again. [] when all is well."""
+    try:
+        import csv_store
+    except Exception as e:  # noqa: BLE001
+        return ["the data check could not start: %s" % e]
+    try:
+        import merge_state
+        keys = merge_state.KEYS
+    except Exception:  # noqa: BLE001
+        keys = {}
+    bad: list[str] = []
+    for rel in paths:
+        f = os.path.join(root, *rel.split("/"))
+        if not os.path.isfile(f) or not rel.lower().endswith(_TEXT):
+            continue                                 # removed, or not text (a PDF)
+        try:
+            with open(f, "rb") as fh:
+                text = csv_store.decode(fh.read())[0]
+        except OSError as e:
+            bad.append("%s: could not be read (%s)" % (rel, e))
+            continue
+        found = csv_store.conflict_marker(text)
+        if found:
+            bad.append("%s: git's conflict markers at line %d" % (rel, found[0]))
+            continue
+        low = rel.lower()
+        if low.endswith(".json"):
+            try:
+                json.loads(text)
+            except ValueError as e:
+                bad.append("%s: not valid JSON (%s)" % (rel, e))
+        elif low.endswith(".csv"):
+            import csv
+            rows = list(csv.reader(io.StringIO(text, newline="")))
+            head = [h.strip() for h in (rows[0] if rows else [])]
+            if rows and not all(head):
+                bad.append("%s: a column with no name in its first line" % rel)
+            need = keys.get(os.path.basename(rel)) or ()
+            missing = [c for c in need if c not in head]
+            if rows and missing:
+                bad.append("%s: its %s column(s) are missing" % (rel, ", ".join(missing)))
+            try:
+                csv_store.read_rows(f)
+            except Exception as e:  # noqa: BLE001
+                bad.append("%s: could not be read as rows (%s)" % (rel, e))
+        if rel in _TEMPLATE_FILES and _TEMPLATE.search(text):
+            bad.append("%s reverted to template placeholders: the populated profile is lost"
+                       % rel)
+    return bad
+
 
 ASIDE_ENV = "LJS_OWN_TESTS_ASIDE"     # ci_local.sh: a file of the person's tests to set aside
 ASIDE_FILE = "ljs-own-tests-aside.txt"
@@ -879,7 +991,8 @@ def _wait_on_branch(root: str, head: str, sleep) -> None:
         there, r = _push(root, name, sleep)
         if r.returncode == 0:
             print("%s; the work waits on %s, pushed with no pull request: open none. The next "
-                  "landing, in this chat or any other, brings it in and lands it" % (head, there))
+                  "landing, in this chat or any other, brings it in and lands it. Nothing about "
+                  "it is said to the person" % (head, there))
             return
         why = _said(r)
         print("%s; nothing was pushed (%s), and the work stays committed here" % (head, why))
@@ -1737,10 +1850,25 @@ def _land(root: str, message: str, check, sleep) -> int:
                   len(owed), "; bringing them in line is queued for the background"
                   if queued else ""))
     head = _git(root, "rev-parse", "HEAD").stdout.strip()
+    mine_only = None if check or os.environ.get("LJS_LAND_CHECK", "").strip() else \
+        data_only(root)
+    computer = on_computer()
     if head and head == pushed(root):
         # Exactly what the last landing checked green and pushed: never checked again (a save
         # queued behind another, with nothing new, ran a second ten-minute check).
         rc, out = 0, CHECKED_ALREADY
+    elif computer and not check:
+        # A chat on the person's computer checks nothing but its data: the chat that answers
+        # the page in the cloud brings the branch in and checks it as it lands (on_computer).
+        bad = data_check(root, mine_only) if mine_only else []
+        rc = 1 if bad else 0
+        out = "".join("  %s  FAIL\n" % b for b in bad)
+    elif mine_only:
+        # Only the person's own data: read cleanly, then landed at once (data_only).
+        bad = data_check(root, mine_only)
+        rc = 1 if bad else 0
+        out = "".join("  %s  FAIL\n" % b for b in bad) if bad else \
+            DATA_CHECKED % len(mine_only)
     else:
         _send_early(root, sleep)
         rc, out = _run_check(root, _check_command(root, check), aside)
@@ -1795,12 +1923,22 @@ def _land(root: str, message: str, check, sleep) -> int:
         _told(_trouble(r))
         return 2
     _record_pushed(root, name)
+    if computer:
+        # Never a pull request from the person's computer: Claude's own safety check there
+        # refused the merge ("merge without review") at the last step of a save, twice in one
+        # evening (the maintainer's computer, 2026-11-10). The work waits on its branch, and
+        # the chat that answers the page in the cloud brings it to master with its next save
+        # (every landing brings in what waits: waiting()).
+        READY.clear()
+        print(COMPUTER_PUSHED % there)
+        return 0
 
     owner, repo = _slug(root)
     title = (message.strip().splitlines() or [DEFAULT_MESSAGE])[0][:70]
     skipped = _skips(out)
-    body = ("Checked here with ./tools/ci_local.sh --quick: green" +
-            ("; skipped: " + ", ".join(skipped) if skipped else "") + ".")
+    body = (out.strip().rstrip(".") if mine_only and out.startswith("Checked here: only") else
+            "Checked here with ./tools/ci_local.sh --quick: green" +
+            ("; skipped: " + ", ".join(skipped) if skipped else "")) + "."
     READY.clear()
     READY.update({"owner": owner, "repo": repo, "head": there, "title": title, "body": body})
     print("land: ready %s (%s commit(s) ahead of master)" % (there, ahead))

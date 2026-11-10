@@ -254,8 +254,9 @@ Then the state files (setup-sections.md, the last section), and commit and push.
   changes (`python3 tools/brief.py watch --help` says what belongs), written with `python3
   tools/brief.py watch write`. Asking nothing: they see it and change it in Edit the brief.
 - **The brief is on from the start, every day, with or without a page.** Turn it on now,
-  asking nothing: it runs in the chat that answers the page, or with no page in this chat, so
-  no chat is made for it. `list_triggers` (every page), `python3 tools/routines.py brief
+  asking nothing: it runs in a chat of its own, made with the copy attached
+  (`create_session`), never in the chat that answers the page or this one, which may approve
+  computer access and then run no scheduled task. `list_triggers` (every page), `python3 tools/routines.py brief
   --triggers <each page>`, and the calls it prints, then keep the one line it prints (where
   and when it comes, and how to change it) for the closing message. In a chat on their
   computer it prints the one line to pass on instead: the bell starts it from the cloud with

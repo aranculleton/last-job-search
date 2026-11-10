@@ -15,6 +15,9 @@
 \usepackage{titlesec}
 \usepackage[absolute]{textpos}
 \usepackage{fontspec,xltxtra,xunicode}
+% No kerning in any font this class loads: pypdf reads a kern pair nearly a space wide as a
+% space, and a letter read "L TV" (2026-11-10). The resume's fonts are set the same way.
+\defaultfontfeatures+{Kerning=Off}
 
 % Publications
 \usepackage{cite}

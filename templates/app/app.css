@@ -226,7 +226,7 @@ bdi { unicode-bidi: isolate; }
 
 
 .group { font-size: var(--t-md); font-weight: 600; color: var(--ink); }
-.band { display: grid; gap: 16px; }
+.band, .help-band { display: grid; gap: 16px; }
 .todo-group { display: grid; gap: 12px; }
 .todo-employer { font-size: var(--t-sm); font-weight: 600; color: var(--muted); }
 .stack { display: grid; gap: 16px; }
@@ -239,6 +239,8 @@ bdi { unicode-bidi: isolate; }
 .card:focus { outline: none; }
 .card:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .card.flash { box-shadow: 0 0 0 3px var(--mark); }
+/* The card whose Copy or Open their profile was pressed last, ringed the same way on return (app.js backToPage). */
+.person.flash, ul.people > li.person.flash { box-shadow: 0 0 0 3px var(--mark); }
 
 .card h3, .card-title { font-size: var(--t-lg); font-weight: 600; }
 .org { color: var(--muted); }
@@ -708,7 +710,7 @@ textarea { width: 100%; resize: vertical; line-height: 1.45; }
 .summary.with-tool > .head-tools { flex: 0 1 auto; }
 /* The words take the line and a heading's tool sits at its right end. */
 .summary.with-tool > .sum-words { flex: 1 1 280px; min-width: 0; }
-.band { gap: 12px; margin-top: 12px; }
+.band, .help-band { gap: 12px; margin-top: 12px; }
 .band .group, .set-group .group, .apps-head .group { font-size: 1rem; font-weight: 600; }
 .todo-group { gap: 8px; }
 .todo-employer { font-size: 0.875rem; font-weight: 600; color: var(--muted); }
@@ -1202,12 +1204,15 @@ label.pick { display: flex; align-items: flex-start; justify-content: center; wi
   .btn.filter[aria-pressed="true"], .btn.answer[aria-pressed="true"], .tab[aria-current="page"], .side-list a[aria-current="page"],
   .look-choice:has(input:checked) { outline: 3px solid Highlight; outline-offset: -3px; }
   :focus-visible { outline: 3px solid Highlight; }
+  .last-used { outline: 3px solid Highlight; outline-offset: 2px; }
   .bar, .fun-track { border: 1px solid CanvasText; background: Canvas; }
   .fill, .fun-fill, .dot, .sw, .wc-steps li::before, .tab[aria-current="page"]::before, .side-list a[aria-current="page"]::before { forced-color-adjust: none; background: Highlight; border-color: CanvasText; }
   .spin { forced-color-adjust: none; border-color: CanvasText; border-top-color: Highlight; }
   .weeks-svg { forced-color-adjust: none; }
   .weeks-svg .bar-a { fill: Highlight; }
   .weeks-svg .bar-b { fill: CanvasText; }
+  .bp-spark .bp-bar:not(.is-sent) { forced-color-adjust: none; background: Highlight; }
+  .bp-spark .bp-bar.is-sent, .sw.sw-b { forced-color-adjust: none; background: CanvasText; }
   .weeks-svg .tick { fill: CanvasText; }
   .weeks-svg .grid, .weeks-svg .axis { stroke: GrayText; }
 }
@@ -1671,11 +1676,22 @@ body.has-fab .shell { padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-b
    beside the numbers instead of a short strip under them with empty space to the right. */
 .bpanel.bp-numbers { container-type: inline-size; }
 .bp-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
-@container (max-width: 431px) { .bp-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* As many columns as the person's tiles (one to four, chosen by the engine), never empty ones. */
+.bp-stats[data-n="1"] { grid-template-columns: minmax(0, 1fr); }
+.bp-stats[data-n="2"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.bp-stats[data-n="3"] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@container (max-width: 431px) { .bp-stats:not([data-n="1"]) { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* The numbers and the one line on what is working, a block of their own. */
+.bp-glance { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.bp-working { margin: 0; color: var(--ink); }
+.bp-title-days { font-weight: 400; color: var(--muted); }
+.bp-title-days::before { content: "\00b7"; margin: 0 8px; }
+/* In a narrow panel the tiles sit closer, so the weeks' chart keeps its room. */
+@container (max-width: 431px) { .bp-stat { padding: 4px 8px; gap: 0; } .bp-n { font-size: 1.25rem; } }
 @container (min-width: 792px) {
   .bp-numbers .bp-body { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); column-gap: 24px; row-gap: 12px; align-items: end; }
-  .bp-numbers .bp-body > :not(.bp-stats):not(.bp-spark-wrap) { grid-column: 1 / -1; }
-  .bp-numbers .bp-body > .bp-stats:last-child, .bp-numbers .bp-body > .bp-stats.is-alone { grid-column: 1 / -1; }
+  .bp-numbers .bp-body > :not(.bp-glance):not(.bp-spark-wrap) { grid-column: 1 / -1; }
+  .bp-numbers .bp-body > .bp-glance:last-child, .bp-numbers .bp-body > .bp-glance.is-alone { grid-column: 1 / -1; }
 }
 .bp-stat { display: flex; flex-direction: column; gap: 2px; padding: 8px 12px; background: var(--sunk); border-radius: var(--r-sm); min-width: 0; }
 /* The Brief keeps to a few type styles: one bold weight for its greeting and numbers, 600 for
@@ -1817,8 +1833,15 @@ ul.bp-news { gap: 12px; }
    maintainer, 2026-11-06: "the latest one as the blue bar and the rest as that colour"): faded
    to 55% the rose read as a dull grey on the dark look, and below 3:1 on the light one. */
 .bp-spark .bp-bar { display: block; width: 100%; max-width: 28px; border-radius: 3px 3px 0 0; background: var(--chart-a); opacity: 1; transition: opacity 0.15s; }
-.bp-spark .bp-col.is-now .bp-bar, .bp-spark .bp-col.is-on .bp-bar { background: var(--chart-b); opacity: 1; }
+/* Since 2026-11-10 the bars are two series, applications in the first chart colour and messages
+   sent in the second, side by side in each week's column; this week is said by its date, in
+   bold under it. Both colours are 3:1 on the panel in both looks (palettes.py). */
+.bp-spark .bp-bar.is-sent { background: var(--chart-b); }
+.bp-spark.is-two .bp-col { gap: 2px; }
+.bp-spark.is-two .bp-bar { max-width: 14px; }
 .bp-spark .bp-bar.is-zero { background: var(--line); }
+.bp-sw { margin: 0 4px 0 0; vertical-align: -1px; }
+.bp-sw + .bp-sw { margin-left: 0; }
 .bp-spark .bp-col:focus { outline: none; }
 .bp-spark .bp-col:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
 .bp-spark.has-on .bp-col:not(.is-on) .bp-bar { opacity: 0.4; }
@@ -1834,6 +1857,10 @@ ul.bp-news { gap: 12px; }
    other one, and this week's, each free to run into the empty space beside it. */
 .bp-wk:nth-last-child(even):not(.is-now) { visibility: hidden; }
 .bp-wk { overflow: visible; }
+/* This week's date ends at the panel's edge, into the hidden one beside it: centred, "19 Oct"
+   in bold ran past the panel and was cut to "19 Oc" (a line that overflows ignores
+   text-align, so it is a flex row ending at the edge, which overflows to the start). */
+.bp-wk.is-now:last-child { display: flex; justify-content: flex-end; }
 /* Each week is a column that answers the pointer, a tap or the keyboard; the one pointed at
    stays full and the others step back, and the line under them says its week. */
 /* Where a conversation is, as one line of words with ticks: outlined pills beside the buttons

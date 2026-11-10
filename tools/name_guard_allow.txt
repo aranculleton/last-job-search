@@ -693,3 +693,33 @@ Pip Varga                # invented, tests/test_who_to_find_is_one_call_for_anyo
 Quickmart Pharmacy       # invented, tests/test_who_to_find_is_one_call_for_anyone.py
 Paediatric Nurse         # invented, tests/test_who_to_find_is_one_call_for_anyone.py
 Paid LinkedIn            # plain words for a paid message, tools/holds.py
+Tallowmere Clinic        # invented employer, tests/test_your_progress_counts_people_and_jobs.py
+Quillfen Care            # invented employer, tests/test_your_progress_counts_people_and_jobs.py
+Brackenlow Hospital      # invented employer, tests/test_your_progress_counts_people_and_jobs.py
+Mossgate Studio          # invented employer, tests/test_your_progress_counts_people_and_jobs.py
+Hi Bexley               # invented, tests/test_a_save_waits_on_nothing_it_does_not_need.py
+Hi Quillon              # invented, the same test
+Ama Rhodes               # invented, tests/test_a_people_run_reaches_the_people_who_answer.py
+Bea Lowry                # invented, tests/test_a_people_run_reaches_the_people_who_answer.py
+Bex Torrance             # invented, tests/test_a_people_run_reaches_the_people_who_answer.py
+Brackenmoor Freight      # invented, tests/test_a_people_run_reaches_the_people_who_answer.py
+Cal Strand               # invented, tests/test_a_people_run_reaches_the_people_who_answer.py
+Cy Wardle                # invented, tests/test_a_people_run_reaches_the_people_who_answer.py
+Eli Tamsett              # invented, tests/test_a_people_run_reaches_the_people_who_answer.py
+Fen Arkwright            # invented, tests/test_a_people_run_reaches_the_people_who_answer.py
+Fernlea Clinics          # invented, tests/test_a_people_run_reaches_the_people_who_answer.py
+Gus Penrith              # invented, tests/test_a_people_run_reaches_the_people_who_answer.py
+Jem Rawle                # invented, tests/test_a_people_run_reaches_the_people_who_answer.py
+Joss Penhale             # invented, tests/test_every_hold_says_when_it_ends.py
+Kit Sowerby              # invented, tests/test_a_people_run_reaches_the_people_who_answer.py
+Lyn Ottery               # invented, tests/test_a_people_run_reaches_the_people_who_answer.py
+Mae Holroyd              # invented, tests/test_a_people_run_reaches_the_people_who_answer.py
+Ned Coldwell             # invented, tests/test_a_people_run_reaches_the_people_who_answer.py
+Nell Ashby               # invented, tests/test_a_people_run_reaches_the_people_who_answer.py
+Pia Rudd                 # invented, tests/test_a_people_run_reaches_the_people_who_answer.py
+Quillstone Labs          # invented, tests/test_a_people_run_reaches_the_people_who_answer.py
+Rafe Mallory             # invented, tests/test_every_hold_says_when_it_ends.py
+Rue Vane                 # invented, tests/test_a_people_run_reaches_the_people_who_answer.py
+Thornbury Games          # invented, tests/test_a_people_run_reaches_the_people_who_answer.py
+Nova Scotia              # a Canadian province, tests/test_a_people_run_reaches_the_people_who_answer.py
+Glowline Cosmetic Clinics  # invented employer, tests/test_the_brief_news_is_one_round.py

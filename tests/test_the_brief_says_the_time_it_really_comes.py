@@ -32,7 +32,7 @@ def _registry(tmp_path, cron, **brief):
     path = str(tmp_path / "routines.json")
     reg = {"setup": "chat_per_briefing", "timezone": LONDON,
            "routines": [{"key": "morning_brief", "name": routines.BRIEF_NAME,
-                         "chat": {"session_id": "session_EXAMPLEHELPER"},
+                         "chat": {"session_id": "session_EXAMPLEHELPER", "own": True},
                          "trigger_id": "trig_EXAMPLEBRIEF", "cron": cron,
                          "prompt_file": routines.BRIEF_FILE, **brief}]}
     with open(path, "w", encoding="utf-8") as fh:

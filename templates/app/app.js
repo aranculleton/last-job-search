@@ -253,6 +253,13 @@
     focusAfter: null,
     online: navigator.onLine !== false,
     copied: new Set(),
+    // The messages whose "Open their profile" was pressed, and the one whose Copy or Open was
+    // pressed last, kept for this tab (useLast): coming back, its card is the one marked.
+    opened: new Set(),
+    lastUsed: sget("session", "ljs:lastused"),
+    away: false,
+    marked: false,
+    markUntil: 0,
     copyBox: new Map(),
     // Contacts: the people whose "They replied" box is open (its words are kept as drafts).
     replyOpen: new Set(),
@@ -3848,6 +3855,8 @@
   // Cards that help Claude do more and ask nothing of today (renderTodo's last line).
   const HELP_KEYS = new Set(["reading", "export"]);
   // What each way of helping Claude gives, in a line, for the fold that holds it.
+  // The help card's one pill: what starting the first one is, in its own words.
+  const HELP_START = {"you-finish": "Finish your profile", reading: "Set it up", export: "Add your download"};
   function helpWhy(i) {
     const k = txt(obj(i).key);
     return k === "you-finish" ? "Your profile: every " + noun() + " and letter is built from it"
@@ -3890,6 +3899,9 @@
     if (settingUp) return [];
     const list = every.filter(todoHidden);
     if (todoHidden({key: "you-finish"}) && finishProfileCard()) list.push({key: "you-finish", node: () => finishProfileCard()});
+    // Help Claude do more's own card, hidden with its bin, comes back from here like any other.
+    if (todoHidden({key: "help"})) list.push({key: "help", node: () => card("article", {class: "card todo help-card", "aria-labelledby": "help-hidden-title", "data-item": "help-hidden"},
+      h("p", {class: "card-title", id: "help-hidden-title"}, "Help Claude do more"))});
     return list;
   }
   function hiddenFold(list) {
@@ -4124,20 +4136,31 @@
       if (first) first.focus({preventScroll: true});
     }}, h("summary", {class: "band-more-sum", onclick: (e) => { e.currentTarget.parentElement.dataset.tapped = "1"; }}, "Show " + restN + " more"), rest));
     // Help Claude do more: what makes Claude better at the rest, asked nothing today and never
-    // counted in it. Right after today's things and above Not due yet, one line that says what
-    // it gives; with nothing due today, its first card shows under its own heading, the rest
-    // one tap below (the maintainer, 2026-11-07: "help claude do more is more important but
-    // its a bit too tucked away here"). Today's things always come first (DESIGN.md, Places).
-    const helpRoom = !settingUp && !restN && !top && helpNodes.length && shown === 0;
-    if (helpRoom) {
-      put(wrap, h("section", {class: "band help-band", "aria-labelledby": "band-help"}, h("h3", {class: "group", id: "band-help"}, "Help Claude do more"),
-        h("div", {class: "todo-group"}, h("div", {class: "stack"}, helpNodes[0])),
-        helpNodes.length > 1 ? det("todo-help", false, {class: "band-more"}, h("summary", {class: "band-more-sum"}, "Show " + (helpNodes.length - 1) + " more"),
+    // counted in it. Right after today's things and above Not due yet, one soft card in To do's
+    // own style: its title, the first one's line saying what it gives, and its one pill to
+    // start it, which puts that one's own card in its place; the rest fold under "and N more".
+    // A faint line at the foot was not found (the maintainer, 2026-11-07 and 2026-11-10: "help
+    // claude do more is so hidden"). With nothing due today, the first one's card shows at
+    // once. Today's things always come first (DESIGN.md, Places).
+    if (helpNodes.length && !todoHidden({key: "help"})) {
+      const nothingToday = !settingUp && !restN && !top && shown === 0;
+      const started = nothingToday || openState.get("det:todo-help-first") === true;
+      const first = helpList[0];
+      const start = () => {
+        openState.set("det:todo-help-first", true);
+        scheduleRender();
+        setTimeout(() => { const c = document.querySelector("#main .help-band [data-card]"); if (c) c.focus({preventScroll: false}); }, 0);
+      };
+      const head = started ? h("div", {class: "todo-group"}, h("div", {class: "stack"}, helpNodes[0]))
+        : withHide({key: "help"}, card("article", {class: "card todo help-card", "aria-labelledby": "help-title", "data-item": "help"},
+          h("div", {class: "todo-top"}, kindMark("setup")),
+          h("p", {class: "card-title", id: "help-title"}, "Help Claude do more"),
+          helpWhy(first) ? h("p", {class: "small"}, helpWhy(first)) : null,
+          h("div", {class: "card-actions"}, btn(HELP_START[txt(first.key)] || "Start", start, {kind: "primary", small: true, key: "help-start"}))));
+      put(wrap, h("section", {class: started ? "band help-band" : "help-band", "aria-labelledby": started ? "band-help" : "help-title"},
+        started ? h("h3", {class: "group", id: "band-help"}, "Help Claude do more") : null, head,
+        helpNodes.length > 1 ? det("todo-help", false, {class: "band-more"}, h("summary", {class: "band-more-sum"}, "and " + (helpNodes.length - 1) + " more"),
           h("div", {class: "stack todo-help"}, helpNodes.slice(1))) : null));
-    } else if (helpNodes.length) {
-      put(wrap, det("todo-help", false, {class: "band-more soon-more help-more"}, h("summary", {class: "band-more-sum"}, "Help Claude do more (" + helpNodes.length + ")",
-        helpWhy(helpList[0]) ? h("span", {class: "band-more-why"}, " · " + helpWhy(helpList[0])) : null),
-        h("div", {class: "stack todo-help"}, helpNodes)));
     }
     if (soonCount) put(wrap, det("todo-soon", !shown && !top, {class: "band-more soon-more"}, h("summary", {class: "band-more-sum"}, "Not due yet (" + soonCount + ")"), soon));
     const hidden = dueItems().find((d) => txt(d.kind) === "hidden");
@@ -4986,29 +5009,42 @@
     if (sget("local", k)) return null;
     return {text: BRIEF_TIPS[day % BRIEF_TIPS.length], done: () => { sset("local", k, "1"); scheduleRender(); }};
   }
-  // A week's applications as small bars, the last eight weeks.
+  // A week's applications and messages sent as small bars, the last eight weeks: two quiet
+  // series side by side in each week's column, the applications in the first chart colour and
+  // the messages in the second, on one scale (the maintainer, 2026-11-10: "both jobs and
+  // people, not just jobs"). A series with nothing in all eight weeks is not drawn, so a
+  // person who only applies, or only writes to people, sees their own one.
   function sparkBars(weeks) {
     const w = arr(weeks).slice(-8);
-    if (w.filter((x) => Number(x.applied)).length < 2) return null;
-    const max = Math.max(1, ...w.map((x) => Number(x.applied) || 0));
-    // Each bar says its week and its count on hover or a tap, and a line under them says what
-    // they are: bars with no words meant nothing (the maintainer, 2026-10-30).
-    const said = (x) => { const st = isoWeekMonday(x.week); const v = Number(x.applied) || 0; return (st ? "Week of " + fmtDay(st) + ": " : "") + plural(v, "application", "applications"); };
-    const now1 = Number(w[w.length - 1].applied) || 0;
-    // This week against the usual one (the middle of the weeks before it): a number with
-    // nothing to compare it to says little (2026-11-02).
-    // The weeks' own average: the middle week said "usually 0" under a week of 51 (2026-11-03).
-    const total = w.reduce((a, x) => a + (Number(x.applied) || 0), 0);
-    const avg = Math.round(total / w.length);
-    const base = "Applications each week, the last " + w.length + " weeks. This week " + now1 + ", " + (avg ? "about " + avg + " a week on average" : "fewer than one a week on average") + ".";
+    const a = (x) => Number(x.applied) || 0;
+    const m = (x) => Number(x.sent) || 0;
+    if (w.filter((x) => a(x) || m(x)).length < 2) return null;
+    const both = [["applied", a, "application", "applications", "sw-a"], ["sent", m, "message sent", "messages sent", "sw-b"]]
+      .filter(([, f]) => w.some((x) => f(x)));
+    const max = Math.max(1, ...w.map((x) => Math.max(a(x), m(x))));
+    // Each week says its counts on hover or a tap, and a line under the bars says what they
+    // are: bars with no words meant nothing (the maintainer, 2026-10-30).
+    const said = (x) => { const st = isoWeekMonday(x.week); return (st ? "Week of " + fmtDay(st) + ": " : "") + both.map(([, f, one, many]) => plural(f(x), one, many)).join(", "); };
+    const last = w[w.length - 1];
+    // This week against the weeks' own average: a number with nothing to compare it to says
+    // little (2026-11-02), and the middle week said "usually 0" under a week of 51 (2026-11-03).
+    const avg = (f) => { const v = w.reduce((t, x) => t + f(x), 0) / w.length; return v && v < 0.5 ? "under 1" : String(Math.round(v)); };
+    const avg1 = (f) => avg(f) === "0" || avg(f) === "under 1" ? "fewer than one a week on average" : "about " + avg(f) + " a week on average";
+    const what = both.length === 2 ? "Applications and messages sent" : both[0][0] === "sent" ? "Messages sent" : "Applications";
+    // Its colours said in the line itself, a swatch before the words, never a legend of its own.
+    const base = () => [
+      ...both.map(([k, , , , sw]) => h("span", {class: "sw " + sw + " bp-sw", "aria-hidden": "true", "data-k": "spark-sw:" + k})),
+      both.length === 2 ? what + " each week. This week " + both.map(([, f]) => f(last)).join(" and ") + "; on average " + both.map(([, f]) => avg(f)).join(" and ") + "."
+        : what + " each week, the last " + w.length + " weeks. This week " + both[0][1](last) + ", " + avg1(both[0][1]) + "."];
     // The line under the bars says the week under the pointer, a tap or the keyboard: an
     // SVG title alone showed nothing in the Claude app, on a hover or a tap (the maintainer,
     // 2026-10-31). Each week's whole column answers, so a week with nothing (a 2px bar) can
     // still be pointed at.
-    const cap = h("p", {class: "small muted bp-spark-cap", "data-k": "spark-cap"}, base);
+    const cap = h("p", {class: "small muted bp-spark-cap", "data-k": "spark-cap"}, base());
     const cols = [];
     const show = (i) => {
-      cap.textContent = i === null ? base : said(w[i]) + ".";
+      cap.textContent = "";
+      for (const k of i === null ? base() : [said(w[i]) + "."]) cap.append(k);
       chart.classList.toggle("has-on", i !== null);
       cols.forEach((c, j) => c.classList.toggle("is-on", j === i));
     };
@@ -5016,10 +5052,11 @@
     // the panel turned them into blobs with squashed corners (the maintainer, 2026-11-02: "the
     // chart design looks weird").
     const labels = [];
-    const chart = h("div", {class: "bp-spark", role: "group", "aria-label": "Applications a week, the last " + w.length + " weeks: " + w.map((x) => Number(x.applied) || 0).join(", ")},
-      w.map((x, i) => { const v = Number(x.applied) || 0; const pct = v ? Math.max(6, Math.round((v / max) * 100)) : 0;
+    const bar = (v, cls) => h("span", {class: "bp-bar " + cls + (v ? "" : " is-zero"), style: "height:" + (v ? Math.max(6, Math.round((v / max) * 100)) + "%" : "2px")});
+    const chart = h("div", {class: "bp-spark" + (both.length === 2 ? " is-two" : ""), role: "group", "aria-label": what + " a week, the last " + w.length + " weeks: " + w.map(said).join("; ")},
+      w.map((x, i) => {
         const col = h("div", {class: "bp-col" + (i === w.length - 1 ? " is-now" : ""), tabindex: "0", role: "img", "aria-label": said(x), title: said(x), "data-k": "spark:" + i},
-          h("span", {class: "bp-bar" + (v ? "" : " is-zero"), style: "height:" + (v ? pct + "%" : "2px")}));
+          both.map(([k, f]) => bar(f(x), k === "sent" ? "is-sent" : "is-applied")));
         // Under each bar, the day its week starts (the maintainer, 2026-11-02: "days of week or
         // dates of month or something ... idk what its measuring").
         const st = isoWeekMonday(x.week);
@@ -5037,6 +5074,17 @@
     const wrap = h("div", {class: "bp-spark-wrap"}, chart, h("div", {class: "bp-wks", "aria-hidden": "true"}, labels), cap);
     wrap.__ljsOn = true;
     return wrap;
+  }
+  // Your progress's tiles: the engine's glance (app_model._glance), or, from a model made
+  // before it, the four numbers as they were, a share of applied past five applications.
+  function glanceTiles(d) {
+    const g = arr(obj(d.glance).tiles);
+    if (g.length) return g.slice(0, 4);
+    const c = obj(obj(d.recent).counts || d.counts);
+    const sent = Number(c.applied) || 0;
+    return [["applied", "applied", "applied"], ["replies", "contact replied", "contacts replied"], ["interviews", "interview", "interviews", 1], ["offers", "offer", "offers", 1]]
+      .map(([k, one, many, sh]) => { const v = Number(c[k]) || 0;
+        return {k, n: v, label: v === 1 ? one : many, short: k === "replies" ? "replied" : v === 1 ? one : many, share: sh && sent >= 5 && v ? Math.round((v / sent) * 100) + "% of applied" : null}; });
   }
   // How far applications went, opened in place: "See your progress" led to a page of its own
   // that read as left over (the maintainer, 2026-10-30). Applied, then interviews, then
@@ -5814,38 +5862,42 @@
       [h("button", {type: "button", class: "btn link", "data-k": "bp-news-more", "data-fit-more": "news", hidden: true, onclick: (e) => fitOpenFrom(e.currentTarget)}, ""),
         newsAsOf(b.news_date || b.date, b.news_searched)],
       {icon: "k-message", w: 3, m: 2, ws: 4}));
-    // The numbers: the last 30 days, how far applications got, and the weeks. A share is said
-    // where there is something to share (never "0 0%"), and what it is a share of.
+    // Your progress: at most four numbers, chosen for this person by the engine from jobs and
+    // people both (app_model._glance), one line on what is working when their own numbers say
+    // something, and the weeks. A nought is never shown beside real work (the maintainer,
+    // 2026-11-10: "not make it look like im doing nothing"); a share only where it means
+    // something, and what it is a share of.
     const d = obj(M().done);
-    const c = obj(obj(d.recent).counts || d.counts);
-    const sent = Number(c.applied) || 0;
-    // A share needs enough applications to mean something: "100% of applied" from one read as
-    // a boast (the walk-through, 2026-11-03).
-    const SHARE_FROM = 5;
+    const g = obj(d.glance);
+    const tiles = glanceTiles(d);
     // Each number opens where those things are (the maintainer, 2026-11-06: "applied went to
     // jobs page applied, contacts went to contacts, interviews went to interviews part of
-    // coming up"): applications and offers on Jobs' Applied tab, replies in Contacts, interviews
+    // coming up"): applications and offers on Jobs' Applied tab, people in Contacts, interviews
     // in Coming up's Interviews. A nought opens nothing.
-    const TILE_TO = {applied: ["jobs", () => setPref("jobs:tab", "applied")], offers: ["jobs", () => setPref("jobs:tab", "applied")],
-      replies: ["contacts", null], interviews: ["interviews", () => setPref("up:view", "interviews")]};
-    const tile = (k, one, many, share) => { const v = Number(c[k]) || 0; const to = v ? TILE_TO[k] : null;
-      const parts = [h("span", {class: "bp-n"}, String(v)), h("span", {class: "bp-l"}, v === 1 ? one : many),
-        share && sent >= SHARE_FROM && v ? h("span", {class: "bp-share"}, Math.round((v / sent) * 100) + "% of applied") : null];
-      return to ? h("a", {href: "#" + to[0], class: "bp-stat bp-link", "data-k": "bp-stat:" + k, onclick: (e) => { e.preventDefault(); if (to[1]) to[1](); go(to[0], {focus: true}); }}, parts)
-        : h("div", {class: "bp-stat"}, parts); };
+    const toApplied = ["jobs", () => setPref("jobs:tab", "applied")];
+    const TILE_TO = {applied: toApplied, offers: toApplied, warm: toApplied, interviews: ["interviews", () => setPref("up:view", "interviews")],
+      replies: ["contacts", null], sent: ["contacts", null], accepted: ["contacts", null], calls: ["contacts", null], referrals: ["contacts", null]};
+    const tile = (t) => { const k = txt(t.k); const v = Number(t.n) || 0; const to = v ? TILE_TO[k] : null;
+      const parts = [h("span", {class: "bp-n"}, String(v)), h("span", {class: "bp-l"}, txt(t.label)), txt(t.share) && v ? h("span", {class: "bp-share"}, txt(t.share)) : null];
+      return to ? h("a", {href: "#" + to[0], class: "bp-stat bp-link", "data-k": "bp-stat:" + k, "data-side": txt(t.side) || null, onclick: (e) => { e.preventDefault(); if (to[1]) to[1](); go(to[0], {focus: true}); }}, parts)
+        : h("div", {class: "bp-stat", "data-side": txt(t.side) || null}, parts); };
     // The panel's title says what its numbers cover; with the weeks' chart under them it is
     // "Your progress", the numbers' own days said over them ("Your last 30 days" sat over an
     // eight-week chart, the walk-through, 2026-11-03).
-    const days = obj(d.recent).counts ? Number(obj(d.recent).days) || 30 : 0;
+    const days = obj(d.recent).counts ? Number(g.days || obj(d.recent).days) || 30 : 0;
     const bars = sparkBars(d.weeks);
+    const idle = !tiles.some((t) => Number(t.n));
+    const working = txt(g.working) ? h("p", {class: "small bp-working", "data-k": "bp-working"}, txt(g.working))
+      : idle ? h("p", {class: "small muted bp-working", "data-k": "bp-working"}, "Each application and message you send is counted here.") : null;
     // On a short laptop window the numbers are one line under the greeting, opening Progress
     // with its chart, and the panel gives its room to the rest (the maintainer, 2026-11-05).
     const helloSum = wrap.querySelector(".brief-hello .summary");
-    if (helloSum) put(helloSum, h("p", {class: "sum-small bp-head-numbers"}, navLink("progress", [["applied", "applied", "applied"], ["replies", "replied", "replied"], ["interviews", "interview", "interviews"], ["offers", "offer", "offers"]]
-      .map(([k, one, many]) => { const v = Number(c[k]) || 0; return v + " " + (v === 1 ? one : many); }).join(" · "))));
-    put(grid, briefPanel("numbers", days && !bars ? "Your last " + days + " days" : "Your progress", [
-      days && bars ? h("p", {class: "small muted"}, "The last " + days + " days") : null,
-      h("div", {class: "bp-stats" + (bars ? "" : " is-alone")}, tile("applied", "applied", "applied"), tile("replies", "contact replied", "contacts replied"), tile("interviews", "interview", "interviews", true), tile("offers", "offer", "offers", true)),
+    if (helloSum) put(helloSum, h("p", {class: "sum-small bp-head-numbers"}, navLink("progress", tiles.map((t) => (Number(t.n) || 0) + " " + (txt(t.short) || txt(t.label))).join(" · "))));
+    // The numbers' own days said in the title's row, quietly, beside "Your progress": a line of
+    // its own took room the weeks' chart needs once people are counted too (2026-11-10).
+    put(grid, briefPanel("numbers", days && !bars ? "Your last " + days + " days" : days ? ["Your progress", h("span", {class: "bp-title-days"}, "the last " + days + " days")] : "Your progress", [
+      // The numbers and the line under them one block, beside the weeks on a wide panel.
+      h("div", {class: "bp-glance" + (bars ? "" : " is-alone")}, h("div", {class: "bp-stats", "data-n": String(Math.max(1, tiles.length))}, tiles.map(tile)), working),
       bars,
       // A fold that keeps its place across redraws (det): a plain one closed again on the next
       // redraw, so a tap on it could come to nothing (Safari's engine, CI, 2026-11-04).
@@ -6845,10 +6897,19 @@
     const r = obj(p.resume_for_them);
     if (!txt(r.name)) return null;
     const key = (where || "p") + "resfor:" + p.id;
-    const g = obj(r.get);
-    const get = txt(r.asset) ? btn("Get it", () => getFiles({id: "resfor-" + seg(p.id), company: ""}, [{name: r.name, path: r.path, asset: r.asset}]), {kind: "link", small: true, key})
-      : g.kind ? btn("Get it", () => requestWork([{id: txt(g.id), kind: txt(g.kind), title: "The " + noun() + " made for " + txt(p.first_name) + ", ready to download", args: obj(g.args), redo: true}]), {kind: "link", small: true, key}) : null;
+    const fetchIt = getMadeFor(p, key);
+    const get = fetchIt ? btn("Get it", fetchIt, {kind: "link", small: true, key}) : null;
     return h("p", {class: "small", "data-resume-for": txt(p.id)}, cap1(noun()) + " made for " + txt(p.first_name) + (txt(r.made_on) ? ", " + fmtDay(r.made_on) : ""), get ? [" · ", get] : null);
+  }
+  // Getting the resume made for them: saved at once from the page's own store, where its
+  // making put it (page_db.queue_files, app_model.files_missing); one made before that is
+  // fetched for the page first, the way any file is. Null: nothing to get.
+  function getMadeFor(p, key) {
+    const r = obj(p.resume_for_them);
+    if (!txt(r.name)) return null;
+    if (txt(r.asset)) return () => download({kind: "resume", name: txt(r.name), path: r.path, asset: r.asset}, key);
+    const g = obj(r.get);
+    return g.kind ? () => requestWork([{id: txt(g.id), kind: txt(g.kind), title: "The " + noun() + " made for " + txt(p.first_name) + ", ready to download", args: obj(g.args), redo: true}]) : null;
   }
   async function getFiles(a, files) {
     for (const f of files) await download(Object.assign({company: txt(a.company)}, f), "dl:" + a.id);
@@ -7040,16 +7101,35 @@
   function sendsLine(m) {
     if (txt(m.sends) !== "resume") return null;
     const made = readyItems().find((a) => readyLive(a) && txt(obj(a.for_contact).id || a.for_contact) === txt(m.contact));
-    const theirs = made ? arr(made.files).find((f) => f.kind === "resume" && f.asset) : null;
+    // The one made for them with no job named (general_resume.py --for-contact) is on their
+    // own card (people[].resume_for_them), never among the applications: looked up only
+    // there, it was missed, and "Your resume" offered the general one (the maintainer,
+    // 2026-11-10).
+    const p = personById(txt(m.contact)) || {};
+    const forThem = obj(p.resume_for_them);
+    const madeFile = made ? arr(made.files).find((f) => f.kind === "resume") || null : null;
+    const theirs = madeFile ? (madeFile.asset ? madeFile : null)
+      : txt(forThem.asset) ? {kind: "resume", name: txt(forThem.name), path: forThem.path, asset: forThem.asset} : null;
+    const hasTheirs = !!(madeFile || txt(forThem.name));
     const cur = obj(obj(M().resume).file);
-    const f = theirs || (cur.asset ? {kind: "resume", name: txt(cur.name), asset: cur.asset} : null);
     const key = "dl:sends:" + m.id;
     const who = txt(m.first_name);
+    // A resume Claude is making for them now is the one that goes with it: offering the
+    // general one while theirs was being made sent the wrong file (the maintainer, 2026-11-09).
+    const making = !theirs && [...allWork()].some(([, w]) => txt(w.kind) === "resume_for_contact" &&
+      txt(obj(w.args).contact) === txt(m.contact) && ACTIVE.has(txt(w.status) || "queued"));
+    if (making) return h("div", {class: "sends-line"}, h("span", {class: "small muted"}, "Goes with it: the " + noun() + " for " + who + ", which Claude is making now"));
+    // Theirs, made but not yet in the page's store: the way to it, never the general file
+    // under their name.
+    const f = theirs || (hasTheirs ? null : cur.asset ? {kind: "resume", name: txt(cur.name), asset: cur.asset} : null);
+    const label = hasTheirs ? "The " + noun() + " for " + who : "Your " + noun();
+    const reach = hasTheirs && !made ? getMadeFor(p, key)
+      : () => go("drafts", {focus: true, drafts: "apps", item: made ? made.id : txt(obj(M().resume).id) || "resume-general"});
     return h("div", {class: "sends-line"},
       h("span", {class: "small muted"}, "Goes with it: "),
-      f ? btn((made ? "The " + noun() + " for " + who : "Your " + noun()) + " (" + (txt(f.name).split(".").pop() || "pdf").toUpperCase() + ")", () => download(f, key),
-        {kind: "secondary", small: true, key, aria: "Save " + (made ? "the " + noun() + " for " + who : "your " + noun()) + " to attach to the message to " + who})
-        : btn("Your " + noun(), () => go("drafts", {focus: true, drafts: "apps", item: made ? made.id : txt(obj(M().resume).id) || "resume-general"}), {kind: "secondary", small: true, key, aria: "Your " + noun() + ", to attach to the message to " + who}),
+      f ? btn(label + " (" + (txt(f.name).split(".").pop() || "pdf").toUpperCase() + ")", () => download(f, key),
+        {kind: "secondary", small: true, key, aria: "Save " + label.charAt(0).toLowerCase() + label.slice(1) + " to attach to the message to " + who})
+        : reach ? btn(label, reach, {kind: "secondary", small: true, key, aria: label + ", to attach to the message to " + who}) : null,
       noteFor(key));
   }
   // A web address written out in a line of words is a short link named by its site, "(canada.ca)":
@@ -7062,6 +7142,65 @@
       .replace(/(^|[^\]])\((https?:\/\/[^\s)]+)\)/g, (m, pre, u) => pre + "([" + host(clean(u)) + "](" + clean(u) + "))")
       .replace(/(^|[\s])(https?:\/\/[^\s)\]]+)/g, (m, pre, u) => { const c = clean(u); return pre + "[" + host(c) + "](" + c + ")" + u.slice(c.length); });
   }
+  // The message whose Copy or "Open their profile" was pressed last, on this device and kept
+  // for this tab: coming back to the page from LinkedIn, its card is brought into view and
+  // ringed for a few seconds in the selected style, and its I sent it is the filled pill, so
+  // whose note went is never in doubt (the maintainer, 2026-11-10: "i might forget which one to
+  // put I sent it on"). I sent it, or a tap anywhere else once it is marked, lets it go.
+  const MARK_MS = 4000;
+  let markTimer = null;
+  function useLast(id) {
+    S.lastUsed = txt(id) || null;
+    S.marked = false;
+    sset("session", "ljs:lastused", S.lastUsed);
+  }
+  function lastCard(root) {
+    const id = S.lastUsed;
+    if (!id || !root) return null;
+    let box = null;
+    try { box = root.querySelector('.pdraft[data-msg="' + (window.CSS && CSS.escape ? CSS.escape(id) : id) + '"]'); } catch (e) { box = null; }
+    return box ? box.closest("[data-card]") : null;
+  }
+  // Drawn into each screen while the ring lasts, so a live update keeps it (patch's probe).
+  function markLast(root) {
+    const c = S.markUntil > now() ? lastCard(root) : null;
+    if (c) c.classList.add("flash", "last-used");
+  }
+  function unmark() {
+    S.markUntil = 0;
+    clearTimeout(markTimer);
+    for (const c of document.querySelectorAll("#main .last-used")) c.classList.remove("flash", "last-used");
+  }
+  function leftPage() { if (S.lastUsed) S.away = true; }
+  function backToPage() {
+    if (!S.away) return;
+    S.away = false;
+    const m = S.lastUsed ? messageById(S.lastUsed) : null;
+    // Sent or set aside meanwhile (here, another tab or a chat): nothing to point at.
+    if (m && !msgLive(m)) { useLast(null); scheduleRender(); return; }
+    const c = m && !txt(m.hold) ? lastCard($("main")) : null;
+    if (!c || !c.getClientRects().length) return;
+    S.marked = true;
+    S.markUntil = now() + MARK_MS;
+    c.classList.add("flash", "last-used");
+    const still = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    // Its I sent it is what is wanted next, so that is what is brought to the middle: centring
+    // a tall card left the button below the fold in Safari (2026-11-10).
+    const sent = c.querySelector('[data-k^="sent:"]');
+    try { (sent || c).scrollIntoView({block: "center", behavior: still ? "auto" : "smooth"}); } catch (e) { /* no scrolling here */ }
+    clearTimeout(markTimer);
+    markTimer = setTimeout(unmark, MARK_MS);
+    scheduleRender();
+  }
+  // Once marked, a tap anywhere but its card lets it go (a Copy on another card then takes it).
+  document.addEventListener("click", (e) => {
+    if (!S.marked) return;
+    const c = lastCard($("main"));
+    if (c && e.target && c.contains(e.target)) return;
+    useLast(null);
+    unmark();
+    scheduleRender();
+  }, true);
   function draftParts(m, o) {
     o = o || {};
     const tid = "msgt-" + seg(m.id);
@@ -7087,7 +7226,7 @@
     // Not ready: written before their profile was read (X-53), or a fix still to come.
     const ready = !held && !fixing;
     const copyBtn = h("button", {type: "button", class: "btn small copy bubble-copy" + (copied ? "" : " primary"), "data-k": "copy:" + tid, "data-primary": copied ? null : "1",
-      "aria-label": copied ? null : copyName, onclick: () => { S.copied.add(m.id); copyText(txt(draftGet(penKey)) || parts.body, (parts.subject ? "message" : what) + " to " + name, "copy:" + tid, tid); }},
+      "aria-label": copied ? null : copyName, onclick: () => { S.copied.add(m.id); useLast(m.id); copyText(txt(draftGet(penKey)) || parts.body, (parts.subject ? "message" : what) + " to " + name, "copy:" + tid, tid); }},
       icon("copy"), copied ? (fresh ? "Copied" : "Copy again") : "Copy");
     // The pencil: the words changed in place, or Claude asked to change them.
     const penBtn = btn("", () => { if (S.penOpen.has(m.id)) S.penOpen.delete(m.id); else { S.penOpen.add(m.id); S.focusAfter = {key: "penask:" + m.id}; } scheduleRender(); },
@@ -7095,8 +7234,11 @@
     penBtn.classList.add("bubble-pen");
     const sentNow = (text) => act([{item: m.id, action: "msg.sent", value: msgSentValue(m, text), rev: m.rev}], "Marked as sent: " + name);
     // Copy first, filled, then I sent it is: the order the work is done in.
-    const sentBtn = ready ? btn("I sent it", () => { const t = txt(draftGet(penKey)).trim(); draftSet(penKey, null); S.penOpen.delete(m.id); sentNow(t || parts.body); },
-      {kind: copied ? "primary" : "secondary", small: true, key: "sent:" + m.id, aria: "I sent it: the " + what + " to " + name}) : null;
+    // Copied or their profile opened, I sent it is filled; on the one pressed last it is the
+    // screen's filled pill (lead), so coming back from LinkedIn it is the one to press.
+    const last = S.lastUsed === m.id;
+    const sentBtn = ready ? btn("I sent it", () => { const t = txt(draftGet(penKey)).trim(); draftSet(penKey, null); S.penOpen.delete(m.id); if (S.lastUsed === m.id) { useLast(null); unmark(); } sentNow(t || parts.body); },
+      {kind: copied || last || S.opened.has(m.id) ? "primary" : "secondary", lead: last, small: true, key: "sent:" + m.id, aria: "I sent it: the " + what + " to " + name}) : null;
     const sid = "msgs-" + seg(m.id);
     const heading = (DRAFT_WORD[txt(m.type)] || DRAFT_WORD[txt(m.kind)] || "Your message") + (CHANNEL[txt(m.channel)] ? " · " + CHANNEL[txt(m.channel)] : "");
     const area = editing ? h("textarea", {id: tid, class: "sendtext big pen-text", rows: 5, "data-k": "pentext:" + m.id, "aria-label": "The " + what + " to " + name + ", to change",
@@ -7171,6 +7313,7 @@
     // their profile is open, and under More it was not found (the maintainer, 2026-11-09:
     // "open their profile is a bit hidden").
     const link = openLink(m);
+    if (link) { link.addEventListener("click", () => { S.opened.add(m.id); useLast(m.id); scheduleRender(); }); link.__ljsOn = true; }
     const onFace = !!(link && ready && !held);
     if (onFace) link.classList.add("btn", "secondary", "small");
     const extra = [onFace ? null : link,
@@ -7194,16 +7337,31 @@
   function holdKey(m) {
     const st = readHere();
     if (st === "off") return "paste";
-    if (st === "paused" || st === "sign_in") return st;
-    if (st !== "ready") return "browser";
+    if (st === "paused") return st;
     const cid = txt(m.contact);
     const q = arr(readingInfo().queue).find((x) => txt(x.contact) === cid);
+    // Their computer is set up and ready: the engine sends the read there as work, by itself
+    // (tools/app.py computer_reads), wherever this page is open (the maintainer, 2026-11-10).
+    if (computerReads()) return q && S.reading.busy && S.reading.cur === cid ? "reading" : q && effective(txt(q.id), ["reading.done"]) ? "read" : "computer";
+    if (st === "sign_in") return st;
+    if (st !== "ready") return "browser";
     if (!q) return null;
     if (S.reading.busy && S.reading.cur === cid) return "reading";
     if (effective(txt(q.id), ["reading.done"])) return "read";
-    if (S.reading.needTab) return "tab";
+    // "Press Read them in To do" only while To do holds that button: the line named a card
+    // that was not there (the maintainer, 2026-11-10). Until it is, it waits its turn.
+    if (S.reading.needTab) return readThemOnTodo() ? "tab" : "next";
     if (S.reading.tried.has(txt(q.id)) || readToday(q) || autoHeld(S.autoReads || S.autoSeen)) return "again";
     return "next";
+  }
+  // The person's computer reads LinkedIn by itself (the engine's person.computer,
+  // tools/computer.py reads_there), unless they paste profiles instead.
+  function computerReads() { return !!person().computer && txt(readingInfo().setting) !== "paste"; }
+  // Does To do show the Read them button now: its reading card is the one To do draws, and
+  // that card carries it (readThemShows).
+  function readThemOnTodo() {
+    const it = readingTodo();
+    return !!it && it.key === "reading-queue" && readThemShows(waitingReads(), readHere());
   }
   function holdLine(m) {
     const k = holdKey(m);
@@ -8615,8 +8773,9 @@
     const n = (k) => Number(c[k]) || 0;
     const nothing = !arr(d.funnel).length && !weeks.length && !apps.length && !Object.values(allC).some((v) => Number(v) > 0);
     const when = range === "recent" ? "In the last " + (Number(recent.days) || 30) + " days: " : "Since you started: ";
-    const sum = nothing ? "Nothing counted yet." : when + n("applied") + " applied, " + nWord(n("replies"), "reply", "replies") + ", " + nWord(n("interviews"), "interview", "interviews") + ", " + (n("offers") ? nWord(n("offers"), "offer", "offers") : "no offers yet") + ".";
-    const small = nothing ? "Each application you mark as sent is counted here." : funnelReading(funnel);
+    const sum = nothing ? "Nothing counted yet." : when + n("applied") + " applied, " + ("sent" in c ? nWord(n("sent"), "message sent", "messages sent") + ", " : "") + nWord(n("replies"), "reply", "replies") + ", " + nWord(n("interviews"), "interview", "interviews") + ", " + (n("offers") ? nWord(n("offers"), "offer", "offers") : "no offers yet") + ".";
+    // What is working, the Brief's own line (app_model._working), else how far applications got.
+    const small = nothing ? "Each application you mark as sent is counted here." : txt(obj(d.glance).working) || funnelReading(funnel);
     const wrap = h("section", {class: "sec", "aria-labelledby": "h-progress" + (where ? "-" + where : "")}, screenHead("progress", "Progress", sum, small, where));
     if (nothing) { put(wrap, empty("Nothing counted yet.", "Each application you mark as sent is counted here, with every reply and interview after it.",
       h("div", {class: "card-actions"}, btn("Go to Jobs", () => go("jobs", {focus: true}), {kind: "secondary", small: true, key: "progress-go-jobs"})))); return wrap; }
@@ -8626,7 +8785,7 @@
     }
     if (funnel.length) put(wrap, funnelChart(funnel));
     if (apps.length) put(wrap, appsTable(apps));
-    if (weeks.filter((w) => Number(w.applied) || Number(w.replies)).length >= 2) put(wrap, weeksChart(weeks));
+    if (weeks.filter((w) => Number(w.applied) || Number(w.sent) || Number(w.replies)).length >= 2) put(wrap, weeksChart(weeks));
     return wrap;
   }
   function funnelReading(funnel) {
@@ -8660,8 +8819,12 @@
     const mon = new Date(jan4.getTime() - ((jan4.getUTCDay() + 6) % 7) * DAY + (wk - 1) * 7 * DAY);
     try { return dtf(LOC, {day: "numeric", month: "short", timeZone: "UTC"}).format(mon); } catch (e) { return txt(w); }
   }
+  // Applications and messages sent each week, the Brief's two series in its two colours; a
+  // model from before messages were counted draws applications and replies as it did.
   function weeksChart(weeks) {
-    const max = Math.max(1, ...weeks.map((w) => Math.max(Number(w.applied) || 0, Number(w.replies) || 0)));
+    const second = weeks.some((w) => "sent" in obj(w)) ? ["sent", "Messages sent", "messages sent"] : ["replies", "Replies", "replies"];
+    const b2 = (w) => Number(w[second[0]]) || 0;
+    const max = Math.max(1, ...weeks.map((w) => Math.max(Number(w.applied) || 0, b2(w))));
     const step = max <= 5 ? 1 : max <= 10 ? 2 : max <= 25 ? 5 : 10;
     const top = Math.ceil(max / step) * step;
     const W = 640;
@@ -8683,18 +8846,18 @@
     weeks.forEach((w, i) => {
       const cx = L + gw * i + gw / 2;
       const a = Number(w.applied) || 0;
-      const r = Number(w.replies) || 0;
+      const r = b2(w);
       kids.push(svg("rect", {x: cx - bw - 1, y: y(a), width: bw, height: Math.max(0, y(0) - y(a)), class: "bar-a", rx: 2}));
       kids.push(svg("rect", {x: cx + 1, y: y(r), width: bw, height: Math.max(0, y(0) - y(r)), class: "bar-b", rx: 2}));
       if (weeks.length <= 8 || i % 2 === 0 || i === weeks.length - 1) kids.push(svg("text", {x: cx, y: H - 12, "text-anchor": "middle", class: "tick"}, [document.createTextNode(weekStart(w.week))]));
     });
     const last = weeks[weeks.length - 1];
-    const summary = "Applications and replies each week for the last " + weeks.length + " weeks. Latest week: " + (Number(last.applied) || 0) + " applied, " + (Number(last.replies) || 0) + " replies.";
+    const summary = "Applications and " + second[2] + " each week for the last " + weeks.length + " weeks. Latest week: " + (Number(last.applied) || 0) + " applied, " + b2(last) + " " + second[2] + ".";
     const chart = svg("svg", {viewBox: "0 0 " + W + " " + H, class: "weeks-svg", role: "img", "aria-label": summary, preserveAspectRatio: "xMidYMid meet"}, kids);
-    const table = h("table", {class: "data"}, h("caption", {class: "sr-only"}, "Each week"), h("thead", {}, h("tr", {}, h("th", {scope: "col"}, "Week of"), h("th", {scope: "col"}, "Applied"), h("th", {scope: "col"}, "Replies"))),
-      h("tbody", {}, weeks.map((w) => h("tr", {}, h("td", {}, weekStart(w.week)), h("td", {class: "num"}, String(Number(w.applied) || 0)), h("td", {class: "num"}, String(Number(w.replies) || 0))))));
+    const table = h("table", {class: "data"}, h("caption", {class: "sr-only"}, "Each week"), h("thead", {}, h("tr", {}, h("th", {scope: "col"}, "Week of"), h("th", {scope: "col"}, "Applied"), second[0] === "sent" ? h("th", {scope: "col"}, "Messages sent") : null, h("th", {scope: "col"}, "Replies"))),
+      h("tbody", {}, weeks.map((w) => h("tr", {}, h("td", {}, weekStart(w.week)), h("td", {class: "num"}, String(Number(w.applied) || 0)), second[0] === "sent" ? h("td", {class: "num"}, String(b2(w))) : null, h("td", {class: "num"}, String(Number(w.replies) || 0))))));
     return det("weeks", false, {class: "chart"}, h("summary", {}, "Each week"),
-      h("p", {class: "legend"}, h("span", {class: "sw sw-a", "aria-hidden": "true"}), "Applied", h("span", {class: "sw sw-b", "aria-hidden": "true"}), "Replies"),
+      h("p", {class: "legend"}, h("span", {class: "sw sw-a", "aria-hidden": "true"}), "Applied", h("span", {class: "sw sw-b", "aria-hidden": "true"}), second[1]),
       h("div", {class: "svg-wrap"}, chart), det("weeks-table", false, {}, h("summary", {}, "Show as a table"), h("div", {class: "scroll-x"}, table)));
   }
   function appLive(a) { return a.live === true || (a.live !== false && APP_LIVE.has(txt(a.status))); }
@@ -9967,7 +10130,7 @@
       onSubmit: (v) => {
         const n = txt(v.note);
         const count = Number(v.count || 5);
-        requestWork([{id: "network~targets~" + todayIso(), kind: "network", to: peopleTo(), title: n ? "People: " + (n.length > 40 ? n.slice(0, 39) + "\u2026" : n) : "People at the employers you want", args: Object.assign({count}, n ? {note: n} : {}), redo: true}]);
+        requestWork([{id: "network~targets~" + stamp(), kind: "network", to: peopleTo(), title: n ? "People: " + (n.length > 40 ? n.slice(0, 39) + "\u2026" : n) : "People at the employers you want", args: Object.assign({count}, n ? {note: n} : {}), redo: true}]);
       }});
   }
   function findPeople(company) {
@@ -12384,7 +12547,7 @@
     if (untaken.length && !rungFor(untaken)) {
       return {key: "reads-taken", kind: "message", band: "first", employer: null, tab: "contacts", counts: false, node: () => readsTakenCard(untaken)};
     }
-    if (people.length && (st === "ready" || st === "paused" || st === "desktop" || st === "off")) {
+    if (people.length && (st === "ready" || st === "paused" || st === "desktop" || st === "off" || computerReads())) {
       return {key: "reading-queue", kind: "message", band: "week", employer: null, tab: "contacts", counts: false, node: () => readQueueCard(queue, st, people)};
     }
     if (st === "ready" || st === "off" || st === "paused") return null;
@@ -12445,13 +12608,17 @@
     const r = S.reading;
     // Started by itself, or about to be (maybeAutoRead): nobody presses anything.
     const auto = st === "ready" && autoNow(queue);
-    const title = st === "desktop" ? "Open your page in the Claude app on your computer to read " + nWord(n, "profile", "profiles")
+    // Read on their computer, sent there by the engine by itself: nothing to press anywhere.
+    const there = computerReads() && st !== "paused" && st !== "off" && !r.busy;
+    const title = there ? "Claude reads " + nWord(n, "profile", "profiles") + " on your computer by itself"
+      : st === "desktop" ? "Open your page in the Claude app on your computer to read " + nWord(n, "profile", "profiles")
       : st === "off" || (st === "ready" && !queue.length) ? "Paste " + nWord(n, "profile", "profiles") + " so Claude can write " + (n === 1 ? "the note" : "the notes")
       : r.busy ? "Claude is reading " + nWord(n, "profile", "profiles")
       : auto ? "Claude reads " + nWord(n, "profile", "profiles") + " by itself"
       : "Read " + nWord(n, "profile", "profiles") + " before Claude writes";
     // When and where they are read, said once: the notes they hold back wait on this card.
-    const why = st === "paused" ? "LinkedIn asked Claude to slow down, so these wait until tomorrow. Then it reads them by itself." :
+    const why = there ? "It reads them in the Claude app on your computer, then rewrites each note. Nothing to press." :
+      st === "paused" ? "LinkedIn asked Claude to slow down, so these wait until tomorrow. Then it reads them by itself." :
       st === "desktop" ? "Claude reads them there, in its own browser, by itself, then rewrites each note. Their notes wait until then." :
       st === "off" || !queue.length ? "Copy each one's LinkedIn page and paste it on their card in Contacts. Claude rewrites the note from it." :
       r.needTab ? "Claude reads them in a tab of its own in Claude's browser, out of your way. Press Read them once to open that tab; after that it reads by itself." :
@@ -12464,17 +12631,22 @@
       names.length ? h("p", {class: "small muted"}, names.slice(0, 5).join(", ") + (names.length > 5 ? " and " + (names.length - 5) + " more" : "")) : null,
       running ? h("p", {class: "small reading-line", role: "status"}, h("span", {class: "spin", "aria-hidden": "true"}), " Reading " + txt(r.at || "their profiles") + (r.total ? ", " + (r.done + 1 > r.total ? r.total : r.done + 1) + " of " + r.total : "")) : null,
       why && !running ? h("p", {class: "small"}, why) : null,
+      there ? null :
       st === "off" || (st === "ready" && !queue.length) ? h("div", {class: "card-actions"}, btn("Open Contacts", () => go("contacts", {focus: true}), {kind: "primary", small: true, key: "read-open-contacts"})) :
-      st !== "ready" || auto ? null :
+      !readThemShows(queue, st) ? null :
         h("div", {class: "card-actions"}, btn("Read them", () => { S.reading.tried.clear(); readProfiles(queue, "reading"); }, {kind: "primary", small: true, key: "read-them"})),
       // No computer: the card had no button and came back every week (the stranger audit,
       // X-53). Pasting works on any device, and the setting takes the queue with it.
-      st === "desktop" && settingItem("profile_reads") ? h("div", {class: "card-actions"}, btn("I'll paste them instead", () => {
+      st === "desktop" && !there && settingItem("profile_reads") ? h("div", {class: "card-actions"}, btn("I'll paste them instead", () => {
         const s = settingItem("profile_reads");
         act([{item: setId(s), action: "setting.set", value: {value: "paste"}, rev: txt(s.rev) || null}], "You paste profiles from now on");
       }, {kind: "secondary", small: true, key: "read-paste"}), h("span", {class: "hint"}, "No computer? Copy a profile's text on your phone and paste it to Claude.")) : null,
       noteFor("reading"));
   }
+  // The reading card's Read them: where this page reads (open in the Claude app on a
+  // computer), with someone waiting, and not reading by itself now. Never where their
+  // computer reads them, which needs nothing pressed.
+  function readThemShows(queue, st) { return st === "ready" && queue.length > 0 && !autoNow(queue) && !computerReads(); }
   // The small panel for Claude's browser: what it is doing, and Close, which only hides it.
   function browserPanel() {
     const r = S.reading;
@@ -12758,7 +12930,7 @@
     const kind = txt(obj(w).kind);
     const t = obj(a.target);
     const card = kind === "talk" ? obj(a.about) : {};
-    const who = txt(a.contact) || txt(t.contact) || (card.kind === "person" ? txt(card.id) : "") || (card.kind === "message" ? txt(obj(messageById(txt(card.id))).contact) : "");
+    const who = txt(a.contact) || txt(t.contact) || (card.kind === "person" ? txt(card.id) : "") || (card.kind === "message" ? txt(obj(messageById(txt(card.id))).contact) : "") || resumeContact(w);
     if (who || txt(t.output) === "message") {
       const note = who ? messageItems().find((m) => txt(m.contact) === who && msgLive(m)) : messageById(txt(t.id));
       return {tab: "contacts", item: note ? note.id : who || txt(t.id) || null};
@@ -12773,6 +12945,30 @@
     }
     if (kind === "prep" && txt(a.interview)) return {tab: "interviews", item: txt(a.interview)};
     return {tab: WORK_HOME[kind] || null, item: null};
+  }
+  // Whose resume a piece of work made or fetched: a resume made for a contact lives on their
+  // card in Contacts, so its row opens there. Its `files` work names it only by its path
+  // (documents/network/<id>/) or its `resfor-<id>`, and one asked in a chat may name them only
+  // in its title ("Resume for Juno (Larkspur Retail)"): each opened Jobs, searching for the
+  // name, and found nothing (the maintainer, 2026-11-10).
+  function resumeContact(w) {
+    const a = obj(obj(w).args);
+    const kind = txt(obj(w).kind);
+    if (kind !== "resume_for_contact" && kind !== "files") return "";
+    const fc = txt(obj(a.for_contact).id || a.for_contact);
+    if (fc) return fc;
+    for (const p of arr(a.paths).concat(txt(a.resume) ? [a.resume] : [])) {
+      const m = /^documents\/network\/([^/]+)\//.exec(txt(p).replace(/\\/g, "/"));
+      if (m) return m[1];
+    }
+    for (const x of arr(a.applications).concat(txt(a.application) ? [a.application] : [])) if (/^resfor-./.test(txt(x))) return txt(x).slice(7);
+    if (kind !== "resume_for_contact") return "";
+    const m = /\bfor ([^(),:]+?)\s*(?:\(([^)]+)\))?\s*(?:[,:]|$)/i.exec(txt(obj(w).title));
+    if (!m) return "";
+    const name = m[1].trim().toLowerCase(), at = txt(m[2]).trim().toLowerCase();
+    const hit = peopleItems().filter((p) => [txt(p.name), txt(p.first_name)].some((n) => n && n.toLowerCase() === name) &&
+      (!at || txt(p.employer).toLowerCase() === at));
+    return hit.length === 1 ? txt(hit[0].id) : "";
   }
   const WORK_HOME = {search: "jobs", draft: "drafts", resume_for_contact: "drafts", prep: "interviews", reply: "contacts", follow_up: "contacts",
     network: "contacts", talk: "chat", update: "settings", files: "drafts", tweak: "drafts", evaluate: "jobs", general_resume: "settings", profile: "settings", own_profile: "todo"};
@@ -12818,7 +13014,7 @@
     const st = p.status;
     const toComputer = w.to === "computer";
     // A chat the helper started on the computer for it (tools/computer.py started) is not
-    // "away": its own step says "Starting on your Mac".
+    // "away": its own step says "This runs in a chat on your Mac, ...".
     const away = toComputer && !computerListening() && !obj(w.computer_session).id;
     // Slower than usual is still running (a spinner, no warning); only a missed check-in may
     // mean it stopped.
@@ -12857,7 +13053,8 @@
     if (st === "running" || st === "claimed") {
       const c = obj(w.count);
       now1 = lastStep && tms(lastStep.at) && tms(v.stage_at) && tms(lastStep.at) >= tms(v.stage_at) ? txt(lastStep.text) : cur ? cur.name : "Working";
-      if (Number(c.total) > 0) now1 += ", " + Number(c.done || 0) + " of " + Number(c.total) + " " + (txt(c.word) || "done");
+      // The count joins the line without its full stop: "employers., 0 of 5" (2026-11-10).
+      if (Number(c.total) > 0) now1 = now1.replace(/[.\s]+$/, "") + ", " + Number(c.done || 0) + " of " + Number(c.total) + " " + (txt(c.word) || "done");
       if (lead) now1 = now1.replace(/[.\s]+$/, "") + ". Drafted in one go with " + clipWords(txt(lead.title).replace(/^Draft(ing)?:?\s*/i, ""), 40) + ".";
     } else if (picked) {
       now1 = "Claude has picked this up";
@@ -12958,6 +13155,11 @@
         "aria-valuenow": String(p.pct), "aria-valuetext": barText(p)}, h("span", {class: "fill", style: "width:" + p.pct + "%"})));
     }
     put(cardEl, h("p", {class: "wc-time", "data-time": "1"}, ACTIVE.has(st) || TERMINAL.has(st) ? timeText(w, p, stepClock && !!now1 && sameSpan(ws.v, p)) : ""));
+    // Started in a chat on their computer (tools/computer.py started): said while it runs, in
+    // the engine's words, so the chat that appears there is no surprise (2026-11-10).
+    const ranOn = obj(w.computer_session);
+    const runsThere = ACTIVE.has(st) && txt(ranOn.id) && !txt(ranOn.archived_at) ? txt(ranOn.say) : "";
+    if (runsThere && runsThere !== txt(now1)) put(cardEl, h("p", {class: "wc-where small muted", "data-where": "computer"}, runsThere));
     // Work nobody has started yet can be called off in one plain tap: the small "Stop" at the
     // end of the time line went unseen, and a tap that queued a nudge looked unstoppable
     // (the maintainer, 2026-10-26).
@@ -15240,7 +15442,7 @@
       const node = (sec, b) => guarded(() => sectionNode(sec, b), () => h("section", {class: "section"},
         empty("This part could not be shown.", "Something in it is not as the page expects. Refresh, and if it stays, tell Claude in a chat what you see, or the app's makers (Settings, Something looks wrong).")));
       patch(main, split ? [h("div", {class: "col"}, node(S.section)), h("div", {class: "col"}, node(S.split, "b"))] : [node(S.section)],
-        (probe) => { fitKept(probe); demotePrimaries([probe]); nameByItem(probe); }, true);
+        (probe) => { fitKept(probe); markLast(probe); demotePrimaries([probe]); nameByItem(probe); }, true);
     }
     const rail = $("rail");
     // The Brief is a page to take in at a glance, so it has the whole width: no Work rail
@@ -15455,8 +15657,9 @@
     // Re-laid out where the frame changes: the phone below 760px, the rail from 1280px.
     let lastBand = window.innerWidth < 760 ? 0 : wide() ? 2 : 1;
     window.addEventListener("resize", () => { const w = wide(); const band = window.innerWidth < 760 ? 0 : w ? 2 : 1; if (w !== lastWide || band !== lastBand) { if ((band === 0) !== (lastBand === 0)) applySize(S.size); lastWide = w; lastBand = band; if (w) closeWork(); render(); } });
-    window.addEventListener("focus", () => { refreshCanSend(); recheckReading().catch(() => {}); freshen(false); });
-    document.addEventListener("visibilitychange", () => { if (!document.hidden) { refreshCanSend(); liveRender(); recheckReading().catch(() => {}); freshen(false); } });
+    window.addEventListener("blur", leftPage);
+    window.addEventListener("focus", () => { backToPage(); refreshCanSend(); recheckReading().catch(() => {}); freshen(false); });
+    document.addEventListener("visibilitychange", () => { if (document.hidden) leftPage(); else { backToPage(); refreshCanSend(); liveRender(); recheckReading().catch(() => {}); freshen(false); } });
     setInterval(() => { if (now() - lastCheck >= CHECK_EVERY_MS) freshen(false); }, 60000);
     document.addEventListener("keydown", onKey);
     setInterval(tick, 1000);

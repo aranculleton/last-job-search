@@ -307,7 +307,8 @@ MOMENTS_AGO = "2026-10-25T08:59:00Z"
 LONG_AGO = "2026-10-25T08:40:00Z"
 
 
-def _open_broken(tmp_path, how: str, built: str, tap: bool = True, later: int = 0) -> dict:
+def _open_broken(tmp_path, how: str, built: str, tap: bool = True, later: int = 0,
+                 scheme: str = "light", still: bool = False) -> dict:
     """The page in parts built at `built`, opened at OPENED with one code file withheld, a
     stylesheet withheld, or a part that throws ("throws then withheld": a part throws and a
     later one is missing too)."""
@@ -335,7 +336,7 @@ def _open_broken(tmp_path, how: str, built: str, tap: bool = True, later: int = 
         if not run.first().get("ready"):
             pytest.skip("Chromium would not start")
         return run("broken", parts=str(tmp_path / "parts.html"), seed=seed, tap=tap, clock=OPENED,
-                   later=later)
+                   later=later, scheme=scheme, still=still)
     finally:
         proc.stdin.close()
         proc.wait(timeout=60)
@@ -371,6 +372,25 @@ def test_a_page_built_moments_ago_with_a_file_still_coming_says_it_is_being_upda
         assert not r["shell"], r
     # 45 seconds on, it has opened itself again, and still waits on its update.
     assert r["reloads"] == 1 and r["later"] == r["box"], r
+
+
+@pytest.mark.parametrize("scheme", ["light", "dark"])
+def test_being_updated_it_turns_a_small_ring_in_the_pages_own_colours(tmp_path, scheme):
+    """"Your page is being updated" was a plain line on a blank page, in the device's colours
+    (the maintainer, 2026-11-10). It is the page's own now: its surface and ink, with the small
+    ring every running piece of work turns (DESIGN.md, Moving parts), in light and dark, even
+    with the stylesheet the one file missing; reduced motion stills it. CSS alone: nothing is
+    polled for it."""
+    r = _open_broken(tmp_path, "no-style", MOMENTS_AGO, scheme=scheme, still=True)
+    assert r["box"] == "Your page is being updated. It will be ready in a moment.", r
+    look = r["look"]
+    assert look["spin"] and look["hidden"] == "true" and look["anim"] == "ljs-turn", look
+    assert look["top"] == look["mark"] and look["bg"] == look["surface"] and look["ink"] == look["text"], look
+    assert r["still"]["anim"] == "none", r["still"]
+    # The failure keeps the device's own colours, and no ring: nothing is under way.
+    (tmp_path / "f").mkdir()
+    failed = _open_broken(tmp_path / "f", "withheld", LONG_AGO, tap=False, scheme=scheme)
+    assert not failed["look"]["spin"], failed["look"]
 
 
 @pytest.mark.parametrize("how", ["withheld", "throws", "no-style"])

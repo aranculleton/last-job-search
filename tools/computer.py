@@ -45,7 +45,8 @@ whose trend the brief reports (`trend`).
     python3 tools/computer.py measure <dump> --work ID --chat ID [--transcript FILE]
     python3 tools/computer.py check <dump> [--envs FILE]       # the sync's and the brief's lines
     python3 tools/computer.py trend [--days 7]
-    python3 tools/computer.py memory                           # chat memory that disagrees with profile/
+    python3 tools/computer.py memory                           # chat memory that disagrees with profile/, removed
+    python3 tools/computer.py archivable <saved list>           # the app's earlier chats here to archive
     python3 tools/computer.py shell "<command>"                # does it run the same in zsh and bash?
 
 Standard library only.
@@ -177,6 +178,15 @@ def _plain_name(name: str) -> str:
     return (name.split(":")[0].strip() or name)[:40] or "your computer"
 
 
+def runs_there(computer: str) -> str:
+    """Said up front where a chat is started on the person's computer for a job: the route's
+    line and the step its work card shows while it runs (the maintainer, 2026-11-10: a chat
+    appeared on the computer with nothing on the page saying so)."""
+    name = _plain_name(computer)
+    where = name if name == "your computer" else "your " + name
+    return f"This runs in a chat on {where}, which you can delete when it's done."
+
+
 # ------------------------------------------------------------------ the heartbeat
 
 
@@ -255,8 +265,14 @@ def heartbeat(db: dict) -> dict:
 def bridges(envs) -> list[dict]:
     """The person's computers a cloud chat can start a chat on: list_environments' active
     bridge environments, as [{id, computer, folder}] (claude_surfaces: computer-bridge)."""
-    if isinstance(envs, dict):
-        envs = envs.get("environments") or []
+    # The tool's answer as it came: {"environments": [...]}, a page wrapped as {"ccr": {...}}
+    # or {"data": [...]}, or a plain list. Wrapped, it read as no computer at all, and work
+    # for the computer waited while the Mac was on (a person's copy, 2026-11-10).
+    for _ in range(3):
+        if isinstance(envs, dict) and isinstance(envs.get("ccr"), (dict, list)):
+            envs = envs["ccr"]
+        if isinstance(envs, dict):
+            envs = envs.get("environments") or envs.get("data") or []
     out = []
     for e in envs or []:
         if not isinstance(e, dict) or str(e.get("kind") or "") != "bridge" \
@@ -480,11 +496,61 @@ def session_prompt(wid: str, title: str, url: str, copy: str) -> str:
         "7. At the end: python3 tools/computer.py beat \"$D\" --name \"<this computer's name>\" "
         "--browser <shown|hidden> --linkedin <in|out|unknown> --read <ok|stopped|none>, and "
         "send its batch. Never make a scheduled task: the cloud starts a chat here when work "
-        "waits (COMPUTER.md, section 6, step 5). Archive "
-        "this computer's earlier chats named \"Job search · ...\" whose work is finished, where "
-        "this chat can (claude_surfaces: computer-chat-archive). Then stop: the chat that "
-        "started you archives this one.",
+        "waits (COMPUTER.md, section 6, step 5). Then put away this computer's earlier chats of "
+        "the app's (claude_surfaces: computer-chat-archive): list the desktop app's other chats "
+        "here, asked in plain words, save what it shows as JSON ([{\"title\", \"status\"}]) to "
+        "\"$D/chats.json\", run python3 tools/computer.py archivable \"$D/chats.json\", and "
+        "archive each chat it names. Where this chat cannot list them, skip it and say nothing "
+        "about it.",
+        "8. Your last message says what was done in a few plain words, and nothing about saving, "
+        "pull requests, merging or chats put away: the page shows how it went. Then stop: the "
+        "chat that started you archives this one.",
     ])
+
+
+# The chats on the computer the app may put away: the ones it starts there (SESSION_TITLE), and,
+# once the computer is set up, the setup chat, which the desktop app names from the line the
+# person pasted into it ("Open my job search on this computer...", place.computer_paste). The
+# one on a Mac on 2026-11-10 found none: the person had deleted the earlier chat by hand, and
+# that one, the setup chat, did not carry the app's name either.
+APP_CHAT = re.compile(r"^\s*Job search\s+\u00b7\s+\S.*\s+\u00b7\s+\S.*$", re.I)
+SETUP_CHAT = re.compile(r"^\s*(?:open|set\s*up|setup|start)\b.*\bjob\s+search\b.*\b(?:this\s+)?"
+                        r"(?:computer|mac|laptop|pc)\b", re.I)
+_RUNNING = ("running", "working", "busy", "active", "in progress", "streaming")
+
+
+def _chat_rows(listing) -> list[dict]:
+    """The chats as the desktop app listed them, saved as JSON ([{title, id, status}], or
+    titles alone) or as plain lines of titles."""
+    if isinstance(listing, str):
+        try:
+            listing = json.loads(listing)
+        except ValueError:
+            listing = [ln.strip(" -*\t") for ln in listing.splitlines() if ln.strip()]
+    if isinstance(listing, dict):
+        listing = listing.get("sessions") or listing.get("chats") or []
+    rows = []
+    for x in listing or []:
+        rows.append({"title": str(x)} if not isinstance(x, dict) else
+                    {"title": str(x.get("title") or x.get("name") or ""),
+                     "id": str(x.get("id") or x.get("session_id") or ""),
+                     "status": str(x.get("status") or x.get("state") or "")})
+    return rows
+
+
+def archivable(listing, set_up: bool) -> list[dict]:
+    """The chats to archive on this computer, of those the desktop app listed (this chat is
+    never among them): every finished one the app started there, and the setup chat once the
+    computer is set up (`set_up`, profile/place.json computer_ready). A chat still running, or
+    any other the person keeps, is left."""
+    out = []
+    for r in _chat_rows(listing):
+        t = r["title"].strip()
+        if not t or any(w in r.get("status", "").lower() for w in _RUNNING):
+            continue
+        if APP_CHAT.match(t) or (set_up and SETUP_CHAT.match(t)):
+            out.append(r)
+    return out
 
 
 def ready(name: str, today: dt.date) -> str:
@@ -555,13 +621,13 @@ def route(db: dict, now: dt.datetime, chat: str = "", envs=None, folders=None,
                                          copy or "their job search"),
                 "permission_mode": app_listen.SESSION_MODE}
         return {"route": "computer session", "work": wid, "computer": b["computer"],
-                "line": f"Starting on your {b['computer']}.", "call": call,
+                "line": runs_there(b["computer"]), "call": call,
                 "then": (f"create_session with this call.{app_listen.MODE_REFUSED} Refused as "
                          "elevated_session_untrusted_device: list_triggers, saved to a file, then "
                          "python3 tools/computer.py trust-check --chat <your id> --triggers <that "
                          "file>, and do what it prints: approving ties this chat to the person's "
                          "own devices for good, and a scheduled task bound to it then fails, so "
-                         "each is moved to a fresh chat a run first. Then "
+                         "each is moved to a chat of its own with the copy attached first. Then "
                          "confirm_repository_trust with the content_digest the refusal gave (one "
                          "card for the person, once), python3 tools/computer.py trusted --chat "
                          "<your id>, and the same create_session again. Started: "
@@ -596,6 +662,15 @@ def route(db: dict, now: dt.datetime, chat: str = "", envs=None, folders=None,
                          "tools/app.py next <dump> --chat <id> --kind computer --computer-only "
                          "--lent and do it here, with --kind computer on every app.py done."),
                 "waiting": w}
+    # Never "the computer is off" on an old check-in alone: with no list of the person's
+    # computers given, the chat asks for it first. Judged by the Mac's last check-in, a Mac
+    # that was on and listed read as off, and the work waited (a person's copy, 2026-11-10).
+    if envs is None and "create_session" in tools:
+        return {"route": "ask", "work": wid, "line": "",
+                "then": ("list_environments first, save its answer to a file, then run "
+                         "python3 tools/computer.py route again with --envs <that file>: "
+                         "whether the computer is on is what that list says, never its last "
+                         "check-in alone."), "waiting": w}
     out = {"route": "paste", "work": wid, "line": st["line"], "action": st["action"],
            "paste": True, "waiting": w}
     if st["state"] == "ready":
@@ -612,10 +687,11 @@ def started(db: dict, wid: str, session: str, env: str, computer: str, now: dt.d
     if doc is None:
         raise KeyError(f"no work {wid!r} in the dump; read work again")
     d = doc["data"]
-    steps = list(d.get("steps") or [])[-5:] + [{"at": _stamp(now),
-                                                 "text": f"Starting on your {_plain_name(computer)}."}]
+    say = runs_there(computer)
+    steps = list(d.get("steps") or [])[-5:] + [{"at": _stamp(now), "text": say}]
+    # `say`: the work card keeps the line while the work runs, past the steps after it.
     fields = {"computer_session": {"id": session, "env": env, "computer": _plain_name(computer),
-                                   "at": _stamp(now)}, "steps": steps}
+                                   "at": _stamp(now), "say": say}, "steps": steps}
     w = page_db.Writes(out_dir)
     w.add("update", "work", wid, fields, if_version=doc["version"])
     if dump_dir:
@@ -644,6 +720,16 @@ _PAGE_KINDS = (("experience", re.compile(r"linkedin\.com/in/[^/]+/details/experi
                ("company", re.compile(r"linkedin\.com/company/")),
                ("sign-in", re.compile(r"linkedin\.com/(?:login|authwall|checkpoint|uas/login)")))
 _STAGE = re.compile(r"app\.py pin .*?--stage[ =]\"?([\w-]+)")
+# Where a run pinned no stage, its own steps mark them (network.md "The run, in order"): a
+# people search or candidates.py is `find`, a profile read is `read`, saving notes is
+# `write`, the InMail choice is `check`. A run's time was one number, so nobody could tell
+# whether the searching or the reading took it (2026-11-10).
+_NET_STAGE = ((re.compile(r"candidates\.py\s+(?:order|search|check|employers)\b"), "find"),
+              (re.compile(r"reading\.py\s+(?:next|read|people|extractor)\b"), "read"),
+              (re.compile(r"reading\.py\s+(?:drafts?|batch)\b"), "write"),
+              (re.compile(r"inmail_pick\.py\b"), "check"))
+_PAGE_STAGE = {"people search": "find", "company": "find", "profile": "read",
+               "experience": "read", "education": "read"}
 
 
 def page_kind(url: str) -> str:
@@ -664,6 +750,7 @@ def measure(file: str, since: str = "") -> dict:
     pages: dict = {}
     searches = 0
     marks: list = []
+    steps: list = []                     # the stages a run's own steps mark, where none is pinned
     try:
         fh = open(file, encoding="utf-8", errors="replace")
     except OSError:
@@ -692,14 +779,21 @@ def measure(file: str, since: str = "") -> dict:
                 inp = part.get("input") if isinstance(part.get("input"), dict) else {}
                 if name == "WebSearch":
                     searches += 1
+                step = ""
                 if name.endswith("navigate") or name.endswith("__navigate"):
                     kind = page_kind(inp.get("url"))
                     pages[kind] = pages.get(kind, 0) + 1
-                m = _STAGE.search(str(inp.get("command") or ""))
+                    step = _PAGE_STAGE.get(kind, "")
+                cmd = str(inp.get("command") or "")
+                m = _STAGE.search(cmd)
                 if m:
                     marks.append((at, m.group(1)))
+                step = step or next((st for rx, st in _NET_STAGE if rx.search(cmd)), "")
+                if step and (not steps or steps[-1][1] != step):
+                    steps.append((at, step))
     if first is None:
         return {}
+    marks = marks or steps
     stages: dict = {}
     for i, (at, name) in enumerate(marks):
         end = marks[i + 1][0] if i + 1 < len(marks) else last
@@ -776,6 +870,12 @@ def trend(today: dt.date, days: int = 7) -> str:
             f"{round(med(now_, 'linkedin_pages'))} LinkedIn pages each")
     cost = med(now_, "est_usd")
     line += f", about ${cost:.2f} each" if cost else ""
+    # Where the time went: the searching (`find`) against the profile reads (`read`).
+    split = [(round(statistics.median([float((r.get("stages") or {}).get(st) or 0)
+                                       for r in now_]) / 60), words)
+             for st, words in (("find", "searching"), ("read", "reading profiles"))]
+    if any(r.get("stages") for r in now_) and any(m for m, _w in split):
+        line += ", " + " and ".join(f"{m} min {w}" for m, w in split)
     if before:
         was = round(med(before, "wall_s") / 60)
         if was and was != mins:
@@ -800,29 +900,41 @@ def bound_to(chat: str, triggers) -> list[dict]:
 
 def trust_check(chat: str, triggers) -> list[str]:
     """Before a chat approves computer access (confirm_repository_trust), which ties it to the
-    person's own devices for good: every scheduled task that fires into it is moved to a fresh
-    chat a run, or it fails from then on with access denied, the person told only by a
-    "routine failed" push (2026-11-09). The brief needs no connectors (claude_surfaces:
-    routine-connectors), so the field is left out (some organisations refuse it)."""
+    person's own devices for good: every scheduled task that fires into it is moved to a chat
+    of its own made with the person's copy as its source, or it fails from then on with access
+    denied, the person told only by a "routine failed" push (2026-11-09). Never a fresh chat a
+    run: one a scheduled task starts has no copy attached, no add_repo and no way to clone it,
+    and failed on its first run (a person's copy, 2026-11-10). The brief needs no connectors
+    (claude_surfaces: routine-connectors), so the field is left out (some refuse it)."""
     tasks = bound_to(chat, triggers)
     if not tasks:
         return ["trust: ok, no scheduled task fires into this chat"]
-    out = []
+    import routines
+    brief = any(routines._is_brief_prompt(str(t.get("prompt") or "")) or
+                "brief" in str(t.get("name") or "").lower() for t in tasks)
+    # The brief's own chat (routines.brief_chat_call), which the rest join: one chat made.
+    home = routines.brief_chat_call()
+    if not brief:
+        home = dict(home, title="Job search: scheduled runs",
+                    prompt="This chat runs the job search's scheduled tasks. Nothing to do now.")
+    out = [f"first, once: create_session {json.dumps(home, ensure_ascii=False)}; its id is "
+           "<home> below (a chat of its own with the copy attached, never the one approving "
+           "computer access)"]
     for t in tasks:
         call = {"name": t.get("name"), "prompt": t.get("prompt") or "<its prompt, as get_trigger "
-                "shows it>", "create_new_session_on_fire": True,
+                "shows it>", "persistent_session_id": "<home>",
                 "initiation": "own_followup"}
         if t.get("cron_expression"):
             call["cron_expression"] = t["cron_expression"]
         elif t.get("run_once_at"):
             call["run_once_at"] = t["run_once_at"]
+        is_brief = (routines._is_brief_prompt(str(t.get("prompt") or "")) or
+                    "brief" in str(t.get("name") or "").lower()) and t.get("cron_expression")
         out.append(f"move {t.get('id')}: create_trigger {json.dumps(call, ensure_ascii=False)}, "
                    f"then update_trigger {{\"trigger_id\": \"{t.get('id')}\", \"enabled\": "
                    "false}} (turned off and kept, never deleted)" +
-                   (", then python3 tools/routines.py record --trigger <the new id> --cron "
-                    f"\"{t['cron_expression']}\" --setup routines_screen"
-                    if "brief" in str(t.get("name") or "").lower() and t.get("cron_expression")
-                    else ""))
+                   (", then python3 tools/routines.py record --session <home> --trigger <the new "
+                    f"id> --cron \"{t['cron_expression']}\" --own-chat" if is_brief else ""))
     return out
 
 
@@ -900,7 +1012,7 @@ def memory_conflicts(root: str, home: str | None = None, settings: dict | None =
     """Each chat memory that says otherwise than the person's settings in profile/, which win:
     [{file, setting, memory_says, setting_says}]. Read only: an old note on a computer ("only
     update when I say") was obeyed over the person's current setting, and rewriting it from a
-    chat was rightly blocked (2026-11-09), so it is reported, never changed."""
+    chat was blocked (2026-11-09); the start step now removes it (memory_remove)."""
     import learned
     if settings is None:
         import app_model
@@ -938,6 +1050,97 @@ def memory_line(conflicts: list[dict]) -> str:
             "it is (a chat rewriting its own memory is refused, and should be) and tell the "
             "person once, in one line, that an old note on this computer says otherwise and "
             "their setting is what counts.")
+
+
+# A setting in plain words, for the one line the person hears when a note about it is removed.
+PLAIN_SETTINGS = {
+    "profile/person.json app_updates": {"when_asked": "updates come only when you say",
+                                        "auto": "updates come by themselves"},
+}
+_FRONT = re.compile(r"\A---\n.*?\n---\n?", re.S)
+
+
+def _plain(setting: str, value) -> str:
+    return PLAIN_SETTINGS.get(setting, {}).get(value, "") or f"{setting.split()[-1]} is {value}"
+
+
+def _substance(text: str) -> str:
+    """What a memory file says once its frontmatter and headings are set aside."""
+    body = _FRONT.sub("", text or "", count=1)
+    return "\n".join(ln for ln in body.splitlines() if ln.strip() and not ln.lstrip().startswith("#"))
+
+
+def memory_remove(conflicts: list[dict]) -> tuple[list[dict], list[dict]]:
+    """Take each note that disagrees with the person's settings out of the chat memory that
+    holds it, once, as the start step finds it: (removed, still there). A note kept and only
+    reported was met again by every chat on the computer (the maintainer's computer,
+    2026-11-10). Only the note goes: the rest of the file stays as it was, and a file left
+    with nothing but its heading or frontmatter goes with its line in MEMORY.md, the folder's
+    index (code.claude.com/docs/en/memory: "Auto memory files are plain markdown you can edit
+    or delete at any time"). Where the file cannot be written, the note is still there."""
+    import learned
+    removed, left = [], []
+    by_file: dict[str, list[dict]] = {}
+    for c in conflicts:
+        by_file.setdefault(c["file"], []).append(c)
+    for f, cs in by_file.items():
+        wrong = {(c["setting"], c["memory_says"]) for c in cs}
+        try:
+            with open(f, encoding="utf-8", errors="replace") as fh:
+                text = fh.read()
+            parts = re.split(r"(\n\s*\n|\n(?=[-*] ))", text)
+            keep = []
+            for i in range(0, len(parts), 2):
+                para, sep = parts[i], parts[i + 1] if i + 1 < len(parts) else ""
+                if set(learned.known_settings("other", para, "")) & wrong:
+                    continue
+                keep.append(para + sep)
+            rest = "".join(keep)
+            if not _substance(rest):
+                os.remove(f)
+                index = os.path.join(os.path.dirname(f), "MEMORY.md")
+                name = os.path.basename(f)
+                if name != "MEMORY.md" and os.path.isfile(index):
+                    with open(index, encoding="utf-8", errors="replace") as fh:
+                        lines = fh.read().splitlines(keepends=True)
+                    kept = [ln for ln in lines if name not in ln]
+                    if kept != lines:
+                        with open(index, "w", encoding="utf-8", newline="") as fh:
+                            fh.write("".join(kept))
+            else:
+                with open(f, "w", encoding="utf-8", newline="") as fh:
+                    fh.write(rest.rstrip("\n") + "\n")
+            removed += cs
+        except OSError:
+            left += cs
+    return removed, left
+
+
+def memory_said(removed: list[dict], left: list[dict], told_before: bool = False) -> str:
+    """The start step's line about the notes memory_remove took out or could not: for Claude,
+    with the one line the person hears, in plain words, once."""
+    if not removed and not left:
+        return ""
+    c = (left or removed)[0]
+    old, now = _plain(c["setting"], c["memory_says"]), _plain(c["setting"], c["setting_says"])
+    if left:
+        if told_before:
+            return ("An old note in this chat's memory still disagrees with the person's settings "
+                    "in profile/, and could not be removed here. The settings win: follow "
+                    "profile/, never the note. The person was told how to remove it: say nothing.")
+        try:
+            import claude_surfaces
+            how = " " + claude_surfaces.say("memory-remove-note")
+        except Exception:  # noqa: BLE001  the line goes without the steps
+            how = ""
+        return ("An old note in this chat's memory disagrees with the person's settings in "
+                "profile/, and it could not be removed here. The settings win: follow profile/, "
+                "never the note. Tell the person once, in one line: \"An old note in Claude's "
+                f"memory on this computer says {old}, but your setting says {now}, and your "
+                f"setting is what counts.{how}\"")
+    return ("An old note in this chat's memory disagreed with the person's settings in profile/ "
+            "and is removed now. Follow profile/. Tell the person once, in one line: \"I removed "
+            f"an old note on this computer that said {old}: your setting says {now}.\"")
 
 
 # Patterns that run differently in zsh, the Mac's shell, and bash: unquoted words zsh does not
@@ -1030,6 +1233,8 @@ def main(argv=None) -> int:
     p = sub.add_parser("trend")
     p.add_argument("--days", type=int, default=7)
     sub.add_parser("memory")
+    p = sub.add_parser("archivable")
+    p.add_argument("listing", help="the desktop app's list of its other chats, saved to a file")
     p = sub.add_parser("shell")
     p.add_argument("command")
     sub.add_parser("task", help="is the scheduled task on this computer, and how to make it")
@@ -1076,9 +1281,21 @@ def main(argv=None) -> int:
         import person
         print(trend(person.today(), a.days))
         return 0
+    if a.cmd == "archivable":
+        import place
+        try:
+            with open(a.listing, encoding="utf-8") as fh:
+                listing = fh.read()
+        except OSError:
+            listing = ""
+        got = archivable(listing, bool(place.place_record().get("computer_ready")))
+        print("\n".join(f"archive: {r['title']}" + (f" ({r['id']})" if r.get("id") else "")
+                        for r in got) or "archivable: none")
+        return 0
     if a.cmd == "memory":
         import person
-        print(memory_line(memory_conflicts(person.state())) or "memory: nothing disagrees")
+        removed, left = memory_remove(memory_conflicts(person.state()))
+        print(memory_said(removed, left) or "memory: nothing disagrees")
         return 0
     if a.cmd == "shell":
         got = shell_problems(a.command)

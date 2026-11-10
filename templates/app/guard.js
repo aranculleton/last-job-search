@@ -137,6 +137,37 @@
       });
     });
   }
+  // While it is being updated, the line is the page's own, not a plain line on a blank page:
+  // its colours and type (the palettes are inline in the page, so they are here whatever file
+  // is missing; the device's own colours where they are not) and the small turning ring every
+  // running piece of work shows (templates/app/DESIGN.md, Moving parts), still with reduced
+  // motion. CSS alone: nothing is polled and nothing is fetched for it.
+  var WAIT_CSS = "@keyframes ljs-turn{to{transform:rotate(360deg)}}" +
+    "#ljs-broken .ljs-wait{display:inline-block;flex:none;width:16px;height:16px;border-radius:50%;" +
+    "border:2.5px solid var(--accent-soft,GrayText);border-top-color:var(--mark,CanvasText);animation:ljs-turn .9s linear infinite}" +
+    "@media (prefers-reduced-motion:reduce){#ljs-broken .ljs-wait{animation:none;border-right-color:var(--mark,CanvasText)}}" +
+    "@media (forced-colors:active){#ljs-broken .ljs-wait{forced-color-adjust:none;border-color:CanvasText;border-top-color:Highlight}}";
+  // The box's colours: the page's own while it waits, the device's own for the failure, whose
+  // button is drawn in them.
+  function look(own) {
+    var s = G.box.style;
+    s.background = own ? "var(--surface, Canvas)" : "Canvas";
+    s.color = own ? "var(--ink, CanvasText)" : "CanvasText";
+    s.borderBottomColor = own ? "var(--line, GrayText)" : "GrayText";
+    s.fontFamily = own ? "var(--font-ui, system-ui, -apple-system, sans-serif)" : "system-ui, -apple-system, sans-serif";
+  }
+  function waiting() {
+    look(true);
+    if (!document.getElementById("ljs-wait-style")) {
+      var st = el("style", {id: "ljs-wait-style"});
+      st.textContent = WAIT_CSS;
+      (document.head || document.documentElement).appendChild(st);
+    }
+    if (!G.spin) {
+      G.spin = el("span", {"class": "ljs-wait", "aria-hidden": "true"});
+      G.box.insertBefore(G.spin, G.line);
+    }
+  }
   function show() {
     var body = document.body;
     if (!body) return;
@@ -161,8 +192,10 @@
     } else if (updating()) {
       G.box.setAttribute("data-state", "updating");
       G.line.textContent = "Your page is being updated. It will be ready in a moment.";
+      waiting();
       wait();
     } else {
+      if (G.spin) { G.spin.remove(); G.spin = null; look(false); }
       clearInterval(G.again);
       clearTimeout(G.until);
       G.box.setAttribute("data-state", "failed");

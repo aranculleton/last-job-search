@@ -27,14 +27,15 @@ and keeps every chat that is:
 - or holding work that is not on master yet: a branch it pushed that master does not hold.
   The day's update lands such a branch; the chat is archived once it has.
 
-A brief that works stays where it is, and so does its chat (the builder's decision of 3
-November: a working brief is never moved, turned off or made again). Only a brief whose chat
-no longer works moves into the chat that answers the page: a chat that was deleted, or a
-helper the page no longer uses (its renewal archives it). It moves as a task bound to that
-chat on the same days and time, the old task turned off (kept, never deleted), and then the
-old chat archived. The shortlist moves by the same rule. A brief in the older ops chat moves
-the same way only once that chat is gone (not listed, and the task now names the empty chat
-it woke instead). Not while the brief is off or resting, never for a routine (each run its
+The brief runs in a chat of its own, "Job search: morning brief", made with the person's copy
+attached (routines.own_chat_calls, 2026-11-10), and is never carried from helper to helper. A
+brief in a chat not made for it (the chat that answers the page, an old helper, a fresh chat
+each run) moves into one, and so does one whose own chat is gone, archived or approved
+computer access: a new chat, a task bound to it on the same days and time, the old task
+turned off (kept, never deleted), and then the old chat archived where it is the app's. The
+shortlist moves into the chat that answers the page. A brief in the older ops chat moves only
+once that chat is gone (not listed, and the task now names the empty chat it woke instead).
+Not while the brief is off or resting, never for a routine the person made (each run its
 own chat: the run chats are archived, the routine kept). list_sessions never lists a chat a
 scheduled task started, so each run's chat is read from list_triggers' last run and
 remembered (profile/tidy.json `runs`) until it is old enough to tidy.
@@ -666,14 +667,16 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
     brief_chat = str((brief.get("chat") or {}).get("session_id") or "")
     out: dict = {"ask": [], "archive": [], "keep": [], "brief": [], "save": [], "lost": []}
 
-    # A brief stays where it works (the builder's decision, 2026-11-03: a working brief is
-    # never moved, turned off or made again). It moves into the chat that answers the page
-    # only when the chat it is bound to no longer works: deleted (not among the person's
-    # chats), or a helper the page no longer uses, which its renewal archives. A brief in the
-    # older ops chat stays there while that chat lives (it relays to the phone); once the
-    # chat is gone, the task wakes a new empty chat with no copy of the files every morning
-    # ("Morning brief could not start: no git repo", 2026-10-31), so it moves too. The job
-    # round moves by the same rule, so the chat it runs in is never archived under it (X-50).
+    # The brief runs in a chat of its own, made with create_session and the copy attached
+    # (routines.own_chat_calls; the maintainer, 2026-11-10). Bound to the chat that answers the
+    # page, it failed once that chat approved computer access, and it was carried from helper
+    # to helper as the page renewed: never again. A brief in a chat not made for it moves into
+    # one of its own (whichever chat that was, the live helper included), and so does one whose
+    # own chat is gone, archived or approved computer access, saying nothing to the person. A
+    # brief in the older ops chat stays there while that chat lives (it relays to the phone);
+    # once the chat is gone, the task wakes a new empty chat with no copy of the files every
+    # morning ("Morning brief could not start: no git repo", 2026-10-31), so it moves too. The
+    # job round moves into the chat that answers the page by its own rule (X-50).
     adopt = ""
     helper = listener.get("chat") or ""
     setup = routines.setup_of(reg)
@@ -705,13 +708,10 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
         return bool(sid) and sid != helper and sid not in mine_only and sid != theirs and (
             sid in helped or bool(HELPER_NAME.match(titles.get(sid, "").strip())))
 
-    # Where the brief runs is where its task fires: a registry that names no chat, or the ops
-    # chat, while the task wakes an old helper (the maintainer's live run, 2026-11-05: a brief
-    # remade in the helper a hand-over had just replaced) kept that helper for good.
-    # The listing, never the registry, says where it fires: a registry that already named
-    # this chat while the task still fired in the old one let the helper report the brief
-    # moved when it had not (the maintainer's copy, 2026-11-05). A registry naming a task the
-    # listing lacks is read by the brief's own prompt instead.
+    # Where the brief runs is where its task fires, by the listing, never the registry alone:
+    # a registry that already named the new chat while the task still fired in the old one let
+    # the helper report the brief moved when it had not (the maintainer's copy, 2026-11-05). A
+    # registry naming a task the listing lacks is read by the brief's own prompt instead.
     live_brief = next((t for t in triggers if brief.get("trigger_id")
                        and t.get("id") == brief.get("trigger_id")), None) or (next(
                            (t for t in triggers if t.get("enabled") is not False
@@ -719,48 +719,50 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
                            if brief else None) or {}
     tid = str(live_brief.get("id") or brief.get("trigger_id") or "")
     fired_in = str(live_brief.get("session") or live_brief.get("persistent_session_id") or "")
-    if fired_in and fired_in != home and (
-            home == helper or (fired_in in listed_ids and old_helper(fired_in))):
+    if fired_in and fired_in != home and (not home or home == helper or (
+            fired_in in listed_ids and old_helper(fired_in))):
         home = fired_in
     out["brief_fires"] = fired_in
+    out["brief_own"] = brief_chat if routines.owns_chat(brief) else ""
 
-    if (setup in ("chat_per_briefing", "ops_relay") and home and helper.startswith("session_")
-            and home != helper and not brief.get("off") and not reg.get("pause")
-            and tid and brief.get("cron")):
-        live = next((t for t in triggers if t.get("id") == tid), None)
+    if (setup in ("chat_per_briefing", "ops_relay", "routines_screen") and live_brief
+            and live_brief.get("enabled") is not False and not brief.get("off")
+            and not reg.get("pause") and tid and brief.get("cron")):
+        trusted = routines.trusted_chat()
+        why = routines.needs_own_chat(reg, brief, live_brief, trusted)
+        if why and not routines.owns_chat(brief) and setup != "routines_screen" \
+                and not ((fired_in or home) and (retired(fired_in or home)
+                                                 or (fired_in or home) == trusted)):
+            # A working brief in a chat not made for it (the live helper's, a chat of the
+            # person's) is moved by its profile upgrade (brief-own-chat), never here: here only
+            # one whose chat no longer works, a helper the page no longer uses or one that
+            # approved computer access.
+            why = ""
+        if not why and routines.owns_chat(brief) and home:
+            chat_rec = next((c for c in chats if c.get("id") == home), None)
+            if chat_rec is None:
+                why = "its own chat is gone"
+            elif "archived" in _status(chat_rec, info.get(home)):
+                why = "its own chat was archived"
         # Gone, for the ops chat: not among the person's chats, and the task itself now
         # names another chat, one that works on no copy at all (the empty one it woke
         # instead). All three, so a listing that missed a page never moves a brief whose ops
-        # chat still relays, and a brief someone bound to a chat of their own stays there.
-        woke = str((live or {}).get("session") or "")
-        gone = False
-        if home == ops and home not in listed_ids and woke not in ("", home, helper):
+        # chat still relays.
+        woke = str(live_brief.get("session") or "")
+        brief_home = brief_chat or (ops if setup == "ops_relay" else "")
+        if not why and setup == "ops_relay" and brief_home == ops and ops not in listed_ids \
+                and woke not in ("", ops):
             if woke not in listed_ids:
-                gone = True
+                why = "the older ops chat is gone"
             elif woke not in info:
                 out["ask"].append(woke)
-            else:
-                gone = not _repo_of(info[woke])
-        if live and live.get("enabled") and ((home != ops and retired(home)) or gone):
-            adopt = home
-            stub = routines.with_copy(routines.stub(reg, brief["key"], own_chat=True), repo)
-            out["brief"] = [
-                {"tool": "create_trigger", "args": {
-                    "name": routines.BRIEF_NAME, "persistent_session_id": helper,
-                    "cron_expression": brief["cron"], "prompt": stub,
-                    "initiation": "own_initiative"},
-                 "why": "the brief runs in the chat that answers the page from now on"},
-                {"run": f"python3 tools/routines.py record --session {helper} --trigger "
-                        f"<the new task's id> --cron \"{brief['cron']}\""
-                        + (" --own-chat" if setup == "ops_relay" else ""),
-                 "why": "the registry names the new task and its chat"},
-                ({"tool": "delete_trigger", "args": {"trigger_id": tid},
-                  "why": "the copy made for the helper this one replaced: one a day piled up "
-                         "turned off in their list of scheduled tasks"}
-                 if home == (listener.get("took_from") or "") and home != ops else
-                 {"tool": "update_trigger", "args": {"trigger_id": tid,
-                                                     "enabled": False},
-                  "why": "the old task is turned off, never deleted"})]
+            elif not _repo_of(info[woke]):
+                why = "the older ops chat is gone"
+        if why:
+            adopt = home if home and home != helper else ""
+            out["brief"] = routines.own_chat_calls(
+                reg, brief, tid, repo, "the brief runs in a chat of its own from now on (" + why + ")")
+            out["brief_why"] = why
 
     moved_from = {adopt} - {""}
     out["moves"] = []
@@ -793,7 +795,7 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
         # Its chat was deleted: the task fails every morning, so it moves to the helper, and
         # there is nothing to archive.
         out["keep"].append({"id": adopt, "title": "", "why": "the brief's chat is gone; the "
-                                                            "brief moves to the helper"})
+                                                            "brief gets a chat of its own"})
     # The daily upkeep moves to the helper in this same run (made there, then the old one
     # deleted), so the chat it was bound to is not kept for it.
     up_calls = _upkeep_calls(reg, triggers, helper, listener, repo)
@@ -910,20 +912,13 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
         if local and quiet < IDLE_DAYS:
             keep("its work is not on GitHub yet (" + ", ".join(local) + ")")
             continue
-        why = ("the brief moved into the chat that answers the page" if sid == adopt else
+        why = ("the brief moved into a chat of its own" if sid == adopt else
                "the shortlist moved into the chat that answers the page" if sid in moved_from else
                "a helper the page no longer uses" if sid in old_helpers or sid in helped
                or re.search(r"helper", title, re.I)
                else "a chat for one run or one job, finished")
         out["archive"].append({"id": sid, "title": title, "why": why})
     listed = {s.get("id") for s in chats}
-    if adopt and adopt in listed and not any(a["id"] == adopt for a in out["archive"]) \
-            and not old_helper(adopt):
-        # Its chat is kept: the brief stays put. Never where it is an old helper, kept only
-        # until it finishes: the brief moves into the live helper in this same pass. Left
-        # there, the plan said "nothing to tidy" and the brief waited half an hour for a
-        # check-in in the helper being put away (the maintainer's copy, 2026-11-05).
-        out["brief"] = []
     if rchat in moved_from and rchat in listed and not any(a["id"] == rchat for a in out["archive"]):
         out["moves"] = []                             # its chat is kept: the round stays put
     out["ask"] = list(dict.fromkeys(out["ask"]))
@@ -1228,20 +1223,21 @@ def run_plan(a) -> int:
     if got.get("upkeep"):
         print("upkeep: make these in order and stop at the first that fails; say nothing about it")
     if len(got["brief"]) > 1:
-        print("brief: make these in order and stop at the first that fails; archive the old "
-              "brief's chat only once all three are made. Never say the brief moved until a "
-              "new list_triggers shows its task firing in the chat that answers the page "
-              "(this plan, run again on it, says so)")
+        print("brief: make these in order and stop at the first that fails, asking nobody and "
+              "saying nothing to the person; archive the old brief's chat only once all are "
+              "made. Never say the brief moved until a new list_triggers shows its task firing "
+              "in its own new chat (this plan, run again on it, says so)")
     elif got["brief"]:
         print("brief: make this call, then carry on")
     fires = str(got.get("brief_fires") or "")
-    if fires and fires == listener.get("chat"):
-        print("brief: the task listing shows the brief fires in the chat that answers the page")
-    elif fires and len(got["brief"]) <= 1:
-        print(f"brief: the task listing shows the brief still fires in {fires}, not in the chat "
-              "that answers the page: it has not moved, so never say it has")
+    own = str(got.get("brief_own") or "")
+    if fires and fires == own and not got["brief"]:
+        print("brief: the task listing shows the brief fires in its own chat")
+    elif fires and got["brief"]:
+        print(f"brief: the task listing shows the brief still fires in {fires}, not in a chat of "
+              "its own: it has not moved, so never say it has")
     if got["brief"] or got.get("moves") or got.get("upkeep") or got.get("recheck"):
-        print("nested: where a create_trigger (or send_later) is turned down because this "
+        print("nested: where a create_session or create_trigger is turned down because this "
               "chat cannot start any more chats or scheduled tasks: python3 tools/app.py nested "
               f"--chat {me or '<this chat id>'}, keep the chat that task is in (archive nothing "
               "for it) and carry on with the rest; the fresh helper the brief's next run "
@@ -1268,10 +1264,9 @@ def run_plan(a) -> int:
         # never handed to the person: the live helper told them "you can archive it yourself"
         # (the maintainer's live run, 2026-11-05).
         print("then: an archive_session that is refused is left as it is, never mentioned and "
-              "never asked of the person; " + (
-                  f"if one is, send_later {json.dumps({'delay_minutes': RECHECK_MIN, 'message': RECHECK})} "
-                  "once, and that check-in tries again"
-                  if me and me == listener.get("chat") else "the next tidy-up tries again"))
+              "never asked of the person; the next tidy-up tries again (it is due again by "
+              "itself, at the page's next check-in or the brief's next run). Set no reminder "
+              "or check-in for it")
     elif got["brief"] or got.get("moves") or got.get("upkeep") or got.get("mend") or rings:
         # Never "nothing to tidy" over calls still to make: the helper took it as the brief
         # already moved (the maintainer's copy, 2026-11-05).
@@ -1280,10 +1275,11 @@ def run_plan(a) -> int:
         print("tidy: nothing to tidy. python3 tools/tidy.py done")
     stamp = now or dt.datetime.combine(today, dt.time(12), tzinfo=dt.timezone.utc)
     if got.get("recheck") and recheck_due(stamp):
+        # No send_later: a reminder this chat sets for itself never runs once it has approved
+        # computer access (the maintainer, 2026-11-10). The tidy-up is due again by itself
+        # (due(): every RETIRE_AGAIN_S while the old helper is still there), so the page's
+        # next check-in or the brief's next run puts it away.
         mark_recheck(stamp)
-        print(f"check-in: send_later {json.dumps({'delay_minutes': RECHECK_MIN, 'message': RECHECK})} "
-              "(once, asking nobody; the helper this chat took over from is still finishing, and "
-              "it is put away at that check-in)")
     if a.verbose:
         for c in got["keep"]:
             print(f"keep {c['id']}: {c['title']} ({c['why']})")
