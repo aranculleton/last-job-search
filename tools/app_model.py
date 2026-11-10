@@ -4977,6 +4977,9 @@ def _done(ctx: Ctx, targets: dict) -> dict:
     book = {str(c.get("contact_id") or "").strip() for c in ctx.contacts}
     replied_on = []
     replied: dict = {}
+    # The people side, for the glance (_glance): every note, message or request the person
+    # sent, each acceptance and each call, by day, read in the same pass as the replies.
+    people = {"sent": [], "accepted": {}, "calls": {}}
     grouped = getattr(ctx, "by_contact", None)
     grouped = state.by_contact(ctx.threads) if grouped is None else grouped
     for cid, rows_ in grouped.items():
@@ -4984,6 +4987,18 @@ def _done(ctx: Ctx, targets: dict) -> dict:
             continue
         wrote = False
         for t in rows_:
+            if state.is_call(t):
+                d = _date(t.get("date"))
+                if d and state.call_held(t):
+                    people["calls"][cid] = max(people["calls"].get(cid, d), d)
+            elif state.is_acceptance(t):
+                d = _date(t.get("date"))
+                if d:
+                    people["accepted"][cid] = max(people["accepted"].get(cid, d), d)
+            elif state.direction(t) == "out" and not state.is_withdrawal(t):
+                d = _date(t.get("date"))
+                if d:
+                    people["sent"].append(d)
             if state.direction(t) == "out":
                 wrote = True
             elif wrote and state.said_something(t):
@@ -4995,7 +5010,7 @@ def _done(ctx: Ctx, targets: dict) -> dict:
                 elif cid not in replied:
                     replied[cid] = None
     counts = {"applied": len(sent), "interviews": interviews, "offers": n_offers,
-              "replies": len(replied)}
+              "replies": len(replied), "sent": len(people["sent"])}
     funnel = [{"stage": "applied", "n": len(sent)},
               {"stage": "interview", "n": interviews}, {"stage": "offer", "n": n_offers}]
     # The last 30 days, the page's first view: what was sent in them, how far those got, and
@@ -5009,7 +5024,8 @@ def _done(ctx: Ctx, targets: dict) -> dict:
     r_iv = sum(1 for r in recent + undated if _status(r) in throttle.REACHED_INTERVIEW)
     r_of = sum(1 for r in recent + undated if _status(r) in offers)
     window = {"days": 30, "counts": {"applied": len(recent), "interviews": r_iv, "offers": r_of,
-                                     "replies": sum(1 for d in replied.values() if d and d >= since)},
+                                     "replies": sum(1 for d in replied.values() if d and d >= since),
+                                     "sent": sum(1 for d in people["sent"] if d >= since)},
               "funnel": [{"stage": "applied", "n": len(recent)}, {"stage": "interview", "n": r_iv},
                          {"stage": "offer", "n": r_of}]}
     weeks = []
@@ -5018,7 +5034,8 @@ def _done(ctx: Ctx, targets: dict) -> dict:
         lo = start - dt.timedelta(weeks=k)
         hi = lo + dt.timedelta(days=7)
         weeks.append({"week": _week(lo), "applied": sum(1 for _, d in sent if lo <= d < hi),
-                      "replies": sum(1 for d in replied_on if lo <= d < hi)})
+                      "replies": sum(1 for d in replied_on if lo <= d < hi),
+                      "sent": sum(1 for d in people["sent"] if lo <= d < hi)})
     # Every application still open, whatever its age; a closed one for 30 days after its
     # last word (tools/app_lists.py); all of them, cut down, in the page's database.
     import app_lists
@@ -5038,8 +5055,180 @@ def _done(ctx: Ctx, targets: dict) -> dict:
         if item["live"] or (quiet is not None and quiet <= fold):
             apps.append(item)
     _list(ctx, "applications", full, len(apps))
+    glance = _glance(ctx, sent, window, replied, people,
+                     [t for cid in book for t in grouped.get(cid, ())])
     return {"counts": counts, "funnel": funnel, "weeks": weeks, "applications": apps,
-            "recent": window}
+            "recent": window, "glance": glance}
+
+
+# ------------------------------------------------------------------ the progress glance
+
+# The most tiles the Brief's Your progress shows: a glance, never a dashboard.
+GLANCE_TILES = 4
+# A share is said only past these: "100% of applied" from one application read as a boast
+# (the page's SHARE_FROM), and a reply rate from three notes is luck.
+GLANCE_SHARE_FROM = 5
+GLANCE_RATE_FROM = 10
+# The "what's working" line compares two groups only when each holds this many, and the
+# better one has at least GLANCE_HITS: a line from two applications is an anecdote.
+GLANCE_GROUP_FROM = 5
+GLANCE_KIND_FROM = 8
+GLANCE_HITS = 2
+# How much each tile matters when there is more than room for: what has moved furthest (an
+# offer, an interview, a referral) before what was done (applied, written to).
+_GLANCE_RANK = {"offers": 120, "interviews": 110, "warm": 100, "referrals": 95, "calls": 90,
+                "replies": 80, "applied": 50, "sent": 50, "accepted": 45}
+# The order the tiles are drawn in, whichever are chosen: jobs, then both, then people.
+_GLANCE_ORDER = ("applied", "interviews", "offers", "warm", "sent", "accepted", "replies",
+                 "calls", "referrals")
+_GLANCE_SIDE = {"applied": "jobs", "interviews": "jobs", "offers": "jobs", "warm": "both",
+                "sent": "people", "accepted": "people", "replies": "people", "calls": "people",
+                "referrals": "people"}
+# Each tile's words: (one, many) under its number, and (one, many) for the one-line form
+# under the greeting on a short window.
+_GLANCE_WORDS = {
+    "applied": (("applied", "applied"), ("applied", "applied")),
+    "interviews": (("interview", "interviews"), ("interview", "interviews")),
+    "offers": (("offer", "offers"), ("offer", "offers")),
+    "warm": (("interview or referral through people", "interviews or referrals through people"),
+             ("through people", "through people")),
+    "sent": (("message sent", "messages sent"), ("message sent", "messages sent")),
+    "accepted": (("accepted your request", "accepted your requests"), ("accepted", "accepted")),
+    "replies": (("person replied", "people replied"), ("replied", "replied")),
+    "calls": (("call", "calls"), ("call", "calls")),
+    "referrals": (("referral in progress", "referrals in progress"),
+                  ("referral", "referrals")),
+}
+# The kinds of reader (network/candidates.kind_of), in plain words for the working line.
+_KIND_WORDS = {"recruiter": "Recruiters", "founder": "Founders",
+               "hiring_leader": "Hiring managers", "senior_peer": "Senior people",
+               "peer": "People in roles like yours"}
+
+
+def _glance(ctx: Ctx, sent: list, window: dict, replied: dict, people: dict,
+            threads: list) -> dict:
+    """Your progress at a glance: at most four tiles chosen for this person from what is true
+    now, jobs and people both, and one "what's working" line their own numbers support.
+
+    Counted from what `_done` already read (the tracker, the contact book and its messages):
+    no run, no model call. A tile with nothing in it is never shown beside one with
+    something, so a month of notes and no applications reads as the notes, never "0
+    applied" (the maintainer, 2026-11-10: "not make it look like im doing nothing"). Only
+    a search with nothing at all done shows its noughts, and says how they fill.
+    """
+    import throttle
+    from company_key import key as _ckey
+    days = int(window.get("days") or 30)
+    since = ctx.today - dt.timedelta(days=days)
+    wc = window.get("counts") or {}
+    status = {str(c.get("contact_id") or "").strip(): str(c.get("status") or "").strip()
+              for c in ctx.contacts}
+    company = {str(c.get("contact_id") or "").strip(): _ckey(c.get("company") or "")
+               for c in ctx.contacts}
+    referrals = {cid for cid, st in status.items() if st == "referral_in_progress"}
+    calls = {cid for cid, d in people["calls"].items() if d >= since} | \
+        {cid for cid, st in status.items() if st == "call_booked"}
+    # Who answered at each employer, ever: a conversation there is what "through people" and
+    # the working line's comparison count.
+    talked: set = {company[cid] for cid in set(replied) | referrals | set(people["calls"])
+                   if company.get(cid)}
+    # Applications live now at an employer where someone talked to the person, that reached an
+    # interview; and each referral at an employer applied to. One a employer, however counted.
+    applied_at = {_ckey(r.get("company") or ""): r for r, _d in sent}
+    warm = {k for k, r in applied_at.items()
+            if k and k in talked and _status(r) in throttle.REACHED_INTERVIEW
+            and _status(r) not in throttle.FINAL}
+    warm |= {company[cid] for cid in referrals if company.get(cid) in applied_at}
+    n = {"applied": int(wc.get("applied") or 0), "interviews": int(wc.get("interviews") or 0),
+         "offers": int(wc.get("offers") or 0), "sent": int(wc.get("sent") or 0),
+         "replies": int(wc.get("replies") or 0),
+         "accepted": sum(1 for d in people["accepted"].values() if d >= since),
+         "calls": len(calls), "referrals": len(referrals), "warm": len(warm)}
+    # The person's own reply rate: first notes answered, of those decided (answered, or two
+    # weeks without), from what_works, the one place it is counted.
+    cases = []
+    try:
+        import what_works
+        cases = [c for c in what_works.message_cases(ctx.contacts, threads, ctx.today)
+                 if c["attempt"] == "opener"]
+    except Exception:  # noqa: BLE001  a log it cannot read: no rate, nothing claimed
+        cases = []
+    won = sum(1 for c in cases if c["won"])
+    share = {}
+    if n["applied"] >= GLANCE_SHARE_FROM and n["interviews"]:
+        share["interviews"] = f"{round(100 * n['interviews'] / n['applied'])}% of applied"
+    if len(cases) >= GLANCE_RATE_FROM and won:
+        share["replies"] = f"{round(100 * won / len(cases))}% answered"
+
+    moving = [k for k in _GLANCE_ORDER if n[k] > 0]
+    if moving:
+        rank = lambda k: _GLANCE_RANK[k] + (min(n[k], 30) if k in ("applied", "sent") else 0)  # noqa: E731
+        pick: list = []
+        # Both sides where both moved: the best of jobs and the best of people first.
+        for side in ("jobs", "people"):
+            mine = [k for k in moving if _GLANCE_SIDE[k] in (side, "both")]
+            if mine and not any(_GLANCE_SIDE[k] in (side, "both") for k in pick):
+                pick.append(max(mine, key=rank))
+        for k in sorted(moving, key=rank, reverse=True):
+            if len(pick) >= GLANCE_TILES:
+                break
+            if k not in pick:
+                pick.append(k)
+        chosen = [k for k in _GLANCE_ORDER if k in pick]
+    else:
+        # Nothing done yet: the two things that start a search, at nought, and nothing else.
+        chosen = ["applied", "sent"]
+    tiles = []
+    for k in chosen:
+        (one, many), (s_one, s_many) = _GLANCE_WORDS[k]
+        v = n[k]
+        tiles.append({"k": k, "n": v, "label": one if v == 1 else many,
+                      "short": s_one if v == 1 else s_many, "side": _GLANCE_SIDE[k],
+                      "share": share.get(k)})
+    return {"days": days, "tiles": tiles, "working": _working(ctx, sent, talked, cases)}
+
+
+def _working(ctx: Ctx, sent: list, talked: set, cases: list) -> str | None:
+    """One plain line on what is working, from the person's own numbers, or None.
+
+    Each line is a count said as it stands ("3 of 6"), never a cause, and only past a
+    minimum: two groups of GLANCE_GROUP_FROM or more, the better with GLANCE_HITS hits
+    and at least twice the other's rate.
+    """
+    import throttle
+    from company_key import key as _ckey
+
+    def better(a_hit, a_n, b_hit, b_n):
+        return (a_n >= GLANCE_GROUP_FROM and b_n >= GLANCE_GROUP_FROM and a_hit >= GLANCE_HITS
+                and a_hit * b_n >= 2 * b_hit * a_n)
+    # Applications that had time to hear back: a week sent, or already answered.
+    old = [r for r, d in sent
+           if (ctx.today - d).days >= 7 or _status(r) in throttle.REACHED_INTERVIEW]
+    warm = [r for r in old if _ckey(r.get("company") or "") in talked]
+    cold = [r for r in old if _ckey(r.get("company") or "") not in talked]
+    w_hit = sum(1 for r in warm if _status(r) in throttle.REACHED_INTERVIEW)
+    c_hit = sum(1 for r in cold if _status(r) in throttle.REACHED_INTERVIEW)
+    if better(w_hit, len(warm), c_hit, len(cold)):
+        return (f"Where you'd talked to someone there, {w_hit} of {len(warm)} applications "
+                f"got an interview; elsewhere {c_hit} of {len(cold)}.")
+    # Which kind of person answers first notes most.
+    if cases:
+        import candidates
+        title = {str(c.get("contact_id") or "").strip(): c.get("title", "") for c in ctx.contacts}
+        kinds: dict = {}
+        for c in cases:
+            k = candidates.kind_of(title.get(c["contact_id"], ""))
+            h, m = kinds.get(k, (0, 0))
+            kinds[k] = (h + int(bool(c["won"])), m + 1)
+        won, total = sum(h for h, _m in kinds.values()), sum(m for _h, m in kinds.values())
+        big = [(k, h, m) for k, (h, m) in kinds.items() if m >= GLANCE_KIND_FROM]
+        if big:
+            k, h, m = max(big, key=lambda x: (x[1] / x[2], x[2]))
+            rest_h, rest_m = won - h, total - m
+            if better(h, m, rest_h, rest_m):
+                return (f"{_KIND_WORDS.get(k, k)} answer most: {h} of {m} first notes; "
+                        f"everyone else {rest_h} of {rest_m}.")
+    return None
 
 
 # ------------------------------------------------------------------ settings and brief

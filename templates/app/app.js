@@ -4986,29 +4986,42 @@
     if (sget("local", k)) return null;
     return {text: BRIEF_TIPS[day % BRIEF_TIPS.length], done: () => { sset("local", k, "1"); scheduleRender(); }};
   }
-  // A week's applications as small bars, the last eight weeks.
+  // A week's applications and messages sent as small bars, the last eight weeks: two quiet
+  // series side by side in each week's column, the applications in the first chart colour and
+  // the messages in the second, on one scale (the maintainer, 2026-11-10: "both jobs and
+  // people, not just jobs"). A series with nothing in all eight weeks is not drawn, so a
+  // person who only applies, or only writes to people, sees their own one.
   function sparkBars(weeks) {
     const w = arr(weeks).slice(-8);
-    if (w.filter((x) => Number(x.applied)).length < 2) return null;
-    const max = Math.max(1, ...w.map((x) => Number(x.applied) || 0));
-    // Each bar says its week and its count on hover or a tap, and a line under them says what
-    // they are: bars with no words meant nothing (the maintainer, 2026-10-30).
-    const said = (x) => { const st = isoWeekMonday(x.week); const v = Number(x.applied) || 0; return (st ? "Week of " + fmtDay(st) + ": " : "") + plural(v, "application", "applications"); };
-    const now1 = Number(w[w.length - 1].applied) || 0;
-    // This week against the usual one (the middle of the weeks before it): a number with
-    // nothing to compare it to says little (2026-11-02).
-    // The weeks' own average: the middle week said "usually 0" under a week of 51 (2026-11-03).
-    const total = w.reduce((a, x) => a + (Number(x.applied) || 0), 0);
-    const avg = Math.round(total / w.length);
-    const base = "Applications each week, the last " + w.length + " weeks. This week " + now1 + ", " + (avg ? "about " + avg + " a week on average" : "fewer than one a week on average") + ".";
+    const a = (x) => Number(x.applied) || 0;
+    const m = (x) => Number(x.sent) || 0;
+    if (w.filter((x) => a(x) || m(x)).length < 2) return null;
+    const both = [["applied", a, "application", "applications", "sw-a"], ["sent", m, "message sent", "messages sent", "sw-b"]]
+      .filter(([, f]) => w.some((x) => f(x)));
+    const max = Math.max(1, ...w.map((x) => Math.max(a(x), m(x))));
+    // Each week says its counts on hover or a tap, and a line under the bars says what they
+    // are: bars with no words meant nothing (the maintainer, 2026-10-30).
+    const said = (x) => { const st = isoWeekMonday(x.week); return (st ? "Week of " + fmtDay(st) + ": " : "") + both.map(([, f, one, many]) => plural(f(x), one, many)).join(", "); };
+    const last = w[w.length - 1];
+    // This week against the weeks' own average: a number with nothing to compare it to says
+    // little (2026-11-02), and the middle week said "usually 0" under a week of 51 (2026-11-03).
+    const avg = (f) => { const v = w.reduce((t, x) => t + f(x), 0) / w.length; return v && v < 0.5 ? "under 1" : String(Math.round(v)); };
+    const avg1 = (f) => avg(f) === "0" || avg(f) === "under 1" ? "fewer than one a week on average" : "about " + avg(f) + " a week on average";
+    const what = both.length === 2 ? "Applications and messages sent" : both[0][0] === "sent" ? "Messages sent" : "Applications";
+    // Its colours said in the line itself, a swatch before the words, never a legend of its own.
+    const base = () => [
+      ...both.map(([k, , , , sw]) => h("span", {class: "sw " + sw + " bp-sw", "aria-hidden": "true", "data-k": "spark-sw:" + k})),
+      both.length === 2 ? what + " each week. This week " + both.map(([, f]) => f(last)).join(" and ") + "; on average " + both.map(([, f]) => avg(f)).join(" and ") + "."
+        : what + " each week, the last " + w.length + " weeks. This week " + both[0][1](last) + ", " + avg1(both[0][1]) + "."];
     // The line under the bars says the week under the pointer, a tap or the keyboard: an
     // SVG title alone showed nothing in the Claude app, on a hover or a tap (the maintainer,
     // 2026-10-31). Each week's whole column answers, so a week with nothing (a 2px bar) can
     // still be pointed at.
-    const cap = h("p", {class: "small muted bp-spark-cap", "data-k": "spark-cap"}, base);
+    const cap = h("p", {class: "small muted bp-spark-cap", "data-k": "spark-cap"}, base());
     const cols = [];
     const show = (i) => {
-      cap.textContent = i === null ? base : said(w[i]) + ".";
+      cap.textContent = "";
+      for (const k of i === null ? base() : [said(w[i]) + "."]) cap.append(k);
       chart.classList.toggle("has-on", i !== null);
       cols.forEach((c, j) => c.classList.toggle("is-on", j === i));
     };
@@ -5016,10 +5029,11 @@
     // the panel turned them into blobs with squashed corners (the maintainer, 2026-11-02: "the
     // chart design looks weird").
     const labels = [];
-    const chart = h("div", {class: "bp-spark", role: "group", "aria-label": "Applications a week, the last " + w.length + " weeks: " + w.map((x) => Number(x.applied) || 0).join(", ")},
-      w.map((x, i) => { const v = Number(x.applied) || 0; const pct = v ? Math.max(6, Math.round((v / max) * 100)) : 0;
+    const bar = (v, cls) => h("span", {class: "bp-bar " + cls + (v ? "" : " is-zero"), style: "height:" + (v ? Math.max(6, Math.round((v / max) * 100)) + "%" : "2px")});
+    const chart = h("div", {class: "bp-spark" + (both.length === 2 ? " is-two" : ""), role: "group", "aria-label": what + " a week, the last " + w.length + " weeks: " + w.map(said).join("; ")},
+      w.map((x, i) => {
         const col = h("div", {class: "bp-col" + (i === w.length - 1 ? " is-now" : ""), tabindex: "0", role: "img", "aria-label": said(x), title: said(x), "data-k": "spark:" + i},
-          h("span", {class: "bp-bar" + (v ? "" : " is-zero"), style: "height:" + (v ? pct + "%" : "2px")}));
+          both.map(([k, f]) => bar(f(x), k === "sent" ? "is-sent" : "is-applied")));
         // Under each bar, the day its week starts (the maintainer, 2026-11-02: "days of week or
         // dates of month or something ... idk what its measuring").
         const st = isoWeekMonday(x.week);
@@ -5037,6 +5051,17 @@
     const wrap = h("div", {class: "bp-spark-wrap"}, chart, h("div", {class: "bp-wks", "aria-hidden": "true"}, labels), cap);
     wrap.__ljsOn = true;
     return wrap;
+  }
+  // Your progress's tiles: the engine's glance (app_model._glance), or, from a model made
+  // before it, the four numbers as they were, a share of applied past five applications.
+  function glanceTiles(d) {
+    const g = arr(obj(d.glance).tiles);
+    if (g.length) return g.slice(0, 4);
+    const c = obj(obj(d.recent).counts || d.counts);
+    const sent = Number(c.applied) || 0;
+    return [["applied", "applied", "applied"], ["replies", "contact replied", "contacts replied"], ["interviews", "interview", "interviews", 1], ["offers", "offer", "offers", 1]]
+      .map(([k, one, many, sh]) => { const v = Number(c[k]) || 0;
+        return {k, n: v, label: v === 1 ? one : many, short: k === "replies" ? "replied" : v === 1 ? one : many, share: sh && sent >= 5 && v ? Math.round((v / sent) * 100) + "% of applied" : null}; });
   }
   // How far applications went, opened in place: "See your progress" led to a page of its own
   // that read as left over (the maintainer, 2026-10-30). Applied, then interviews, then
@@ -5814,38 +5839,42 @@
       [h("button", {type: "button", class: "btn link", "data-k": "bp-news-more", "data-fit-more": "news", hidden: true, onclick: (e) => fitOpenFrom(e.currentTarget)}, ""),
         newsAsOf(b.news_date || b.date, b.news_searched)],
       {icon: "k-message", w: 3, m: 2, ws: 4}));
-    // The numbers: the last 30 days, how far applications got, and the weeks. A share is said
-    // where there is something to share (never "0 0%"), and what it is a share of.
+    // Your progress: at most four numbers, chosen for this person by the engine from jobs and
+    // people both (app_model._glance), one line on what is working when their own numbers say
+    // something, and the weeks. A nought is never shown beside real work (the maintainer,
+    // 2026-11-10: "not make it look like im doing nothing"); a share only where it means
+    // something, and what it is a share of.
     const d = obj(M().done);
-    const c = obj(obj(d.recent).counts || d.counts);
-    const sent = Number(c.applied) || 0;
-    // A share needs enough applications to mean something: "100% of applied" from one read as
-    // a boast (the walk-through, 2026-11-03).
-    const SHARE_FROM = 5;
+    const g = obj(d.glance);
+    const tiles = glanceTiles(d);
     // Each number opens where those things are (the maintainer, 2026-11-06: "applied went to
     // jobs page applied, contacts went to contacts, interviews went to interviews part of
-    // coming up"): applications and offers on Jobs' Applied tab, replies in Contacts, interviews
+    // coming up"): applications and offers on Jobs' Applied tab, people in Contacts, interviews
     // in Coming up's Interviews. A nought opens nothing.
-    const TILE_TO = {applied: ["jobs", () => setPref("jobs:tab", "applied")], offers: ["jobs", () => setPref("jobs:tab", "applied")],
-      replies: ["contacts", null], interviews: ["interviews", () => setPref("up:view", "interviews")]};
-    const tile = (k, one, many, share) => { const v = Number(c[k]) || 0; const to = v ? TILE_TO[k] : null;
-      const parts = [h("span", {class: "bp-n"}, String(v)), h("span", {class: "bp-l"}, v === 1 ? one : many),
-        share && sent >= SHARE_FROM && v ? h("span", {class: "bp-share"}, Math.round((v / sent) * 100) + "% of applied") : null];
-      return to ? h("a", {href: "#" + to[0], class: "bp-stat bp-link", "data-k": "bp-stat:" + k, onclick: (e) => { e.preventDefault(); if (to[1]) to[1](); go(to[0], {focus: true}); }}, parts)
-        : h("div", {class: "bp-stat"}, parts); };
+    const toApplied = ["jobs", () => setPref("jobs:tab", "applied")];
+    const TILE_TO = {applied: toApplied, offers: toApplied, warm: toApplied, interviews: ["interviews", () => setPref("up:view", "interviews")],
+      replies: ["contacts", null], sent: ["contacts", null], accepted: ["contacts", null], calls: ["contacts", null], referrals: ["contacts", null]};
+    const tile = (t) => { const k = txt(t.k); const v = Number(t.n) || 0; const to = v ? TILE_TO[k] : null;
+      const parts = [h("span", {class: "bp-n"}, String(v)), h("span", {class: "bp-l"}, txt(t.label)), txt(t.share) && v ? h("span", {class: "bp-share"}, txt(t.share)) : null];
+      return to ? h("a", {href: "#" + to[0], class: "bp-stat bp-link", "data-k": "bp-stat:" + k, "data-side": txt(t.side) || null, onclick: (e) => { e.preventDefault(); if (to[1]) to[1](); go(to[0], {focus: true}); }}, parts)
+        : h("div", {class: "bp-stat", "data-side": txt(t.side) || null}, parts); };
     // The panel's title says what its numbers cover; with the weeks' chart under them it is
     // "Your progress", the numbers' own days said over them ("Your last 30 days" sat over an
     // eight-week chart, the walk-through, 2026-11-03).
-    const days = obj(d.recent).counts ? Number(obj(d.recent).days) || 30 : 0;
+    const days = obj(d.recent).counts ? Number(g.days || obj(d.recent).days) || 30 : 0;
     const bars = sparkBars(d.weeks);
+    const idle = !tiles.some((t) => Number(t.n));
+    const working = txt(g.working) ? h("p", {class: "small bp-working", "data-k": "bp-working"}, txt(g.working))
+      : idle ? h("p", {class: "small muted bp-working", "data-k": "bp-working"}, "Each application and message you send is counted here.") : null;
     // On a short laptop window the numbers are one line under the greeting, opening Progress
     // with its chart, and the panel gives its room to the rest (the maintainer, 2026-11-05).
     const helloSum = wrap.querySelector(".brief-hello .summary");
-    if (helloSum) put(helloSum, h("p", {class: "sum-small bp-head-numbers"}, navLink("progress", [["applied", "applied", "applied"], ["replies", "replied", "replied"], ["interviews", "interview", "interviews"], ["offers", "offer", "offers"]]
-      .map(([k, one, many]) => { const v = Number(c[k]) || 0; return v + " " + (v === 1 ? one : many); }).join(" · "))));
-    put(grid, briefPanel("numbers", days && !bars ? "Your last " + days + " days" : "Your progress", [
-      days && bars ? h("p", {class: "small muted"}, "The last " + days + " days") : null,
-      h("div", {class: "bp-stats" + (bars ? "" : " is-alone")}, tile("applied", "applied", "applied"), tile("replies", "contact replied", "contacts replied"), tile("interviews", "interview", "interviews", true), tile("offers", "offer", "offers", true)),
+    if (helloSum) put(helloSum, h("p", {class: "sum-small bp-head-numbers"}, navLink("progress", tiles.map((t) => (Number(t.n) || 0) + " " + (txt(t.short) || txt(t.label))).join(" · "))));
+    // The numbers' own days said in the title's row, quietly, beside "Your progress": a line of
+    // its own took room the weeks' chart needs once people are counted too (2026-11-10).
+    put(grid, briefPanel("numbers", days && !bars ? "Your last " + days + " days" : days ? ["Your progress", h("span", {class: "bp-title-days"}, "the last " + days + " days")] : "Your progress", [
+      // The numbers and the line under them one block, beside the weeks on a wide panel.
+      h("div", {class: "bp-glance" + (bars ? "" : " is-alone")}, h("div", {class: "bp-stats", "data-n": String(Math.max(1, tiles.length))}, tiles.map(tile)), working),
       bars,
       // A fold that keeps its place across redraws (det): a plain one closed again on the next
       // redraw, so a tap on it could come to nothing (Safari's engine, CI, 2026-11-04).
@@ -8620,8 +8649,9 @@
     const n = (k) => Number(c[k]) || 0;
     const nothing = !arr(d.funnel).length && !weeks.length && !apps.length && !Object.values(allC).some((v) => Number(v) > 0);
     const when = range === "recent" ? "In the last " + (Number(recent.days) || 30) + " days: " : "Since you started: ";
-    const sum = nothing ? "Nothing counted yet." : when + n("applied") + " applied, " + nWord(n("replies"), "reply", "replies") + ", " + nWord(n("interviews"), "interview", "interviews") + ", " + (n("offers") ? nWord(n("offers"), "offer", "offers") : "no offers yet") + ".";
-    const small = nothing ? "Each application you mark as sent is counted here." : funnelReading(funnel);
+    const sum = nothing ? "Nothing counted yet." : when + n("applied") + " applied, " + ("sent" in c ? nWord(n("sent"), "message sent", "messages sent") + ", " : "") + nWord(n("replies"), "reply", "replies") + ", " + nWord(n("interviews"), "interview", "interviews") + ", " + (n("offers") ? nWord(n("offers"), "offer", "offers") : "no offers yet") + ".";
+    // What is working, the Brief's own line (app_model._working), else how far applications got.
+    const small = nothing ? "Each application you mark as sent is counted here." : txt(obj(d.glance).working) || funnelReading(funnel);
     const wrap = h("section", {class: "sec", "aria-labelledby": "h-progress" + (where ? "-" + where : "")}, screenHead("progress", "Progress", sum, small, where));
     if (nothing) { put(wrap, empty("Nothing counted yet.", "Each application you mark as sent is counted here, with every reply and interview after it.",
       h("div", {class: "card-actions"}, btn("Go to Jobs", () => go("jobs", {focus: true}), {kind: "secondary", small: true, key: "progress-go-jobs"})))); return wrap; }
@@ -8631,7 +8661,7 @@
     }
     if (funnel.length) put(wrap, funnelChart(funnel));
     if (apps.length) put(wrap, appsTable(apps));
-    if (weeks.filter((w) => Number(w.applied) || Number(w.replies)).length >= 2) put(wrap, weeksChart(weeks));
+    if (weeks.filter((w) => Number(w.applied) || Number(w.sent) || Number(w.replies)).length >= 2) put(wrap, weeksChart(weeks));
     return wrap;
   }
   function funnelReading(funnel) {
@@ -8665,8 +8695,12 @@
     const mon = new Date(jan4.getTime() - ((jan4.getUTCDay() + 6) % 7) * DAY + (wk - 1) * 7 * DAY);
     try { return dtf(LOC, {day: "numeric", month: "short", timeZone: "UTC"}).format(mon); } catch (e) { return txt(w); }
   }
+  // Applications and messages sent each week, the Brief's two series in its two colours; a
+  // model from before messages were counted draws applications and replies as it did.
   function weeksChart(weeks) {
-    const max = Math.max(1, ...weeks.map((w) => Math.max(Number(w.applied) || 0, Number(w.replies) || 0)));
+    const second = weeks.some((w) => "sent" in obj(w)) ? ["sent", "Messages sent", "messages sent"] : ["replies", "Replies", "replies"];
+    const b2 = (w) => Number(w[second[0]]) || 0;
+    const max = Math.max(1, ...weeks.map((w) => Math.max(Number(w.applied) || 0, b2(w))));
     const step = max <= 5 ? 1 : max <= 10 ? 2 : max <= 25 ? 5 : 10;
     const top = Math.ceil(max / step) * step;
     const W = 640;
@@ -8688,18 +8722,18 @@
     weeks.forEach((w, i) => {
       const cx = L + gw * i + gw / 2;
       const a = Number(w.applied) || 0;
-      const r = Number(w.replies) || 0;
+      const r = b2(w);
       kids.push(svg("rect", {x: cx - bw - 1, y: y(a), width: bw, height: Math.max(0, y(0) - y(a)), class: "bar-a", rx: 2}));
       kids.push(svg("rect", {x: cx + 1, y: y(r), width: bw, height: Math.max(0, y(0) - y(r)), class: "bar-b", rx: 2}));
       if (weeks.length <= 8 || i % 2 === 0 || i === weeks.length - 1) kids.push(svg("text", {x: cx, y: H - 12, "text-anchor": "middle", class: "tick"}, [document.createTextNode(weekStart(w.week))]));
     });
     const last = weeks[weeks.length - 1];
-    const summary = "Applications and replies each week for the last " + weeks.length + " weeks. Latest week: " + (Number(last.applied) || 0) + " applied, " + (Number(last.replies) || 0) + " replies.";
+    const summary = "Applications and " + second[2] + " each week for the last " + weeks.length + " weeks. Latest week: " + (Number(last.applied) || 0) + " applied, " + b2(last) + " " + second[2] + ".";
     const chart = svg("svg", {viewBox: "0 0 " + W + " " + H, class: "weeks-svg", role: "img", "aria-label": summary, preserveAspectRatio: "xMidYMid meet"}, kids);
-    const table = h("table", {class: "data"}, h("caption", {class: "sr-only"}, "Each week"), h("thead", {}, h("tr", {}, h("th", {scope: "col"}, "Week of"), h("th", {scope: "col"}, "Applied"), h("th", {scope: "col"}, "Replies"))),
-      h("tbody", {}, weeks.map((w) => h("tr", {}, h("td", {}, weekStart(w.week)), h("td", {class: "num"}, String(Number(w.applied) || 0)), h("td", {class: "num"}, String(Number(w.replies) || 0))))));
+    const table = h("table", {class: "data"}, h("caption", {class: "sr-only"}, "Each week"), h("thead", {}, h("tr", {}, h("th", {scope: "col"}, "Week of"), h("th", {scope: "col"}, "Applied"), second[0] === "sent" ? h("th", {scope: "col"}, "Messages sent") : null, h("th", {scope: "col"}, "Replies"))),
+      h("tbody", {}, weeks.map((w) => h("tr", {}, h("td", {}, weekStart(w.week)), h("td", {class: "num"}, String(Number(w.applied) || 0)), second[0] === "sent" ? h("td", {class: "num"}, String(b2(w))) : null, h("td", {class: "num"}, String(Number(w.replies) || 0))))));
     return det("weeks", false, {class: "chart"}, h("summary", {}, "Each week"),
-      h("p", {class: "legend"}, h("span", {class: "sw sw-a", "aria-hidden": "true"}), "Applied", h("span", {class: "sw sw-b", "aria-hidden": "true"}), "Replies"),
+      h("p", {class: "legend"}, h("span", {class: "sw sw-a", "aria-hidden": "true"}), "Applied", h("span", {class: "sw sw-b", "aria-hidden": "true"}), second[1]),
       h("div", {class: "svg-wrap"}, chart), det("weeks-table", false, {}, h("summary", {}, "Show as a table"), h("div", {class: "scroll-x"}, table)));
   }
   function appLive(a) { return a.live === true || (a.live !== false && APP_LIVE.has(txt(a.status))); }

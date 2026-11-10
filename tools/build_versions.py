@@ -873,8 +873,10 @@ METHODS: dict[str, dict] = {
             (87, "2026-11-09", False, "the Brief greets by the clock of the device it is read on, and a ready message has Open their profile on its face beside I sent it"),
             (88, "2026-11-10", False, "a reply that sends a resume shows the one Claude is making for that person, never the general one, while it is made"),
             (89, "2026-11-10", False, "a work card's count joins its line without a stray full stop; each people search asked from the page has its own id, so a second one the same day never overwrites the first"),
+            (90, "2026-11-10", False, "a work card's count joins its line without a stray full stop"),
+            (91, "2026-11-10", False, "Your progress counts people as well as jobs: up to four numbers chosen for you (applied, interviews, messages sent, replies, calls, referrals and the like), never a nought beside real work, one line on what is working when your own numbers show it, and the weeks as applications and messages sent"),
         ),
-        "fingerprint": "a22b7521229b204a",
+        "fingerprint": "3baa979eea0c8837",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

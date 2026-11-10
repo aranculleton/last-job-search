@@ -693,3 +693,7 @@ Pip Varga                # invented, tests/test_who_to_find_is_one_call_for_anyo
 Quickmart Pharmacy       # invented, tests/test_who_to_find_is_one_call_for_anyone.py
 Paediatric Nurse         # invented, tests/test_who_to_find_is_one_call_for_anyone.py
 Paid LinkedIn            # plain words for a paid message, tools/holds.py
+Tallowmere Clinic        # invented employer, tests/test_your_progress_counts_people_and_jobs.py
+Quillfen Care            # invented employer, tests/test_your_progress_counts_people_and_jobs.py
+Brackenlow Hospital      # invented employer, tests/test_your_progress_counts_people_and_jobs.py
+Mossgate Studio          # invented employer, tests/test_your_progress_counts_people_and_jobs.py

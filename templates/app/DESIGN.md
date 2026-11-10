@@ -93,6 +93,16 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   that the pills a step under what they open, the spare room at the panel's foot. Your
   progress's chart grows into its room, up to 160px. (the maintainer, 2026-11-07: "u see how
   its bunched at the top? be smart about this"; room tests)
+- **Your progress is jobs and people, chosen for the person.** At most four numbers, picked by
+  the engine (`app_model._glance`) from what is true now: applied, interviews, offers;
+  messages sent, accepted, replies, calls, referrals; and interviews or referrals through
+  people. What moved furthest first, both sides where both moved, and never a nought beside
+  real work: a month of notes and no applications shows the notes. Under them one line on
+  what is working, only when the person's own numbers carry it (two groups of five or more),
+  said as counts, never a cause. The weeks are applications and messages sent, the two chart
+  colours, each named by a swatch in the line under them; one series where the person only
+  does one. Progress says the same. (the maintainer, 2026-11-10: "not make it look like im
+  doing nothing"; progress glance tests)
 
 ## Cards and lists
 
