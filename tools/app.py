@@ -474,6 +474,8 @@ def cmd_view(a) -> int:
     full: dict = {}
     model, _ = _build(today, now, shown=app_alerts.shown_in(db.get("view") or {}), full=full,
                       work_time=page_db.work_times(db, now) if db else None,
+                      # A message Claude's own change held is on hold on every screen.
+                      held_work=app_model.held_by_work(db.get("work")) if db else None,
                       computer=computer_seen(db or {}, now))
     w = page_db.Writes(a.out_dir)
     views = (db.get("view") or {}) if db else {}
@@ -2609,6 +2611,10 @@ def cmd_done(a) -> int:
         return 2
     kind = str((((db.get("work") or {}).get(page_db.safe_id(a.work)) or {}).get("data") or {})
                .get("kind") or "")
+    if got.get("status") == "done" and (getattr(a, "outcome", "") or "") == "held":
+        held = hold_on_record(db, a.work, a.summary, getattr(a, "until", "") or "", now)
+        if held:
+            got["held"] = held
     if got.get("again"):
         # This folder finished it already: the same batch, to send if it never was.
         got["said"] = ("this folder finished it already: here is that finish again; send it if "
@@ -2631,6 +2637,49 @@ def cmd_done(a) -> int:
             got["batches"] = list(got["batches"]) + queued["batches"]
     print(_dump(got), end="")
     return 0
+
+
+HELD_KINDS = ("tweak", "reply", "follow_up", "nudge")
+
+
+def hold_on_record(db: dict, work_id: str, summary: str, until: str, now) -> str:
+    """A change or a reply Claude finished by holding the message to someone (`done --outcome
+    held`) is put on their record, as their next action ("Hold until <day>: <why>", dated with
+    --until), so every screen, the due lists and the brief hold it, never only the card's
+    line: the card offered the draft as ready to send under "Finished: held until ..." (the
+    maintainer, 2026-11-10). "" where the work names nobody; else the line it wrote."""
+    import app_model
+    import page_db
+    from network import state
+    item = ((db.get("work") or {}).get(page_db.safe_id(work_id)) or {}).get("data") or {}
+    if str(item.get("kind") or "") not in HELD_KINDS:
+        return ""
+    args = item.get("args") if isinstance(item.get("args"), dict) else {}
+    target = args.get("target") if isinstance(args.get("target"), dict) else {}
+    cid = str(target.get("contact") or args.get("contact") or "").strip()
+    if not cid and str(target.get("id") or "").startswith("msg-"):
+        cid = str(target["id"])[4:]
+    if not cid:
+        return ""
+    why = app_model._HOLD_LEAD.sub("", " ".join(str(summary or "").split()), count=1)
+    why = why.strip().rstrip(" .;")
+    if until:
+        why = re.split(r"\s*;\s*", why)[0].rstrip(" .;")
+    # In words the contact's Next line reads well in, and state.hold_lifts ends on the day:
+    # "Hold until Kestrel Mutual posts a role, or until 2026-11-23".
+    if why.lower().startswith("until ") and until:
+        action = f"Hold {why}, or until {until}"
+    else:
+        action = (f"Hold until {until}" if until else "Hold") + (f": {why}" if why else "")
+    contacts = state.load_contacts()
+    threads = state.load_threads() if os.path.exists(state.THREADS_CSV) else []
+    try:
+        state.set_contact(contacts, threads, cid, next_action=action, due=until or None,
+                          today=person.today(now).isoformat())
+    except ValueError:
+        return ""
+    state.save_contacts(contacts)
+    return f"held on their record: {cid}: {action}"
 
 
 def _answer(a) -> dict | None:
@@ -3293,6 +3342,9 @@ def main(argv=None) -> int:
                    help="it finished and changed nothing on the page: held, set aside, or "
                         "unchanged (not possible, or already as asked); its card says so at "
                         "once, with the summary")
+    p.add_argument("--until", default="",
+                   help="with --outcome held, on a message to someone: the day Claude looks "
+                        "again (YYYY-MM-DD); the hold goes on their record with it")
     p.add_argument("--left-out", dest="left_out", default="",
                    help="a draft stopped because the job is not one they can take: why, in "
                         "plain words; the job leaves Jobs, ruled out with that reason")

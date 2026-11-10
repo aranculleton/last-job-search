@@ -793,6 +793,69 @@ def read_hold(ctx: Ctx) -> str:
     return READ_HOLD.get(setting, READ_HOLD["browser"])
 
 
+# A hold's own words, as Claude's finish or a contact's next action says them: "Held: no message
+# to Kit until a fitting role appears", "Hold until 2026-11-23: Fernhill Freight posts a role".
+_HOLD_LEAD = re.compile(r"^\W*(?:(?:on\s+)?hold(?:ing)?|held)\b(?:\s+until\s+(\d{4}-\d{2}-\d{2}))?"
+                        r"[\s:,.-]*", re.I)
+
+
+def hold_words(why, until: dt.date | None = None) -> str:
+    """A draft on hold, in a line for its card: "On hold until Fernhill Freight posts a
+    fitting role. Claude checks again on Mon 23 Nov." Never the draft offered as ready under a
+    line saying it was held (the maintainer, 2026-11-10)."""
+    why = _HOLD_LEAD.sub("", " ".join(str(why or "").split()), count=1).strip().rstrip(" .;")
+    if until is not None:
+        # The day is said once, from the record: never a second "I check again 23 Nov".
+        why = re.split(r"\s*;\s*", why)[0].rstrip(" .;")
+    why = re.sub(r",?\s*(?:or\s+)?until\s+\d{4}-\d{2}-\d{2}\b", "", why).rstrip(" .;,")
+    why = re.sub(r"\bI (check|look)\b", r"Claude \1s", why)
+    head = "On hold" + ((" " + why) if why.lower().startswith(("until ", "while ", "till "))
+                        else (": " + why) if why else "")
+    return head + "." + (f" Claude checks again on {holds_day(until)}." if until else "")
+
+
+def holds_day(d: dt.date) -> str:
+    return f"{d.strftime('%a')} {d.day} {d.strftime('%b')}"
+
+
+def person_hold(c: dict, today: dt.date) -> str:
+    """The hold their contact record carries (its next action "Hold ...", state.action_hold),
+    in a line for the draft to them, or "" when there is none or it has lifted: Settings and
+    the due lists held them while their draft was offered as ready to send."""
+    from network import state
+    text = " ".join(str(c.get("next_action") or "").split())
+    if not state.action_hold(text, today, c.get("next_action_due")):
+        return ""
+    return hold_words(text, state.hold_end(text, c.get("next_action_due")))
+
+
+def held_by_work(work: dict | None) -> dict:
+    """{message id: {"rev", "said", "at"}} from the page's work items: the newest change Claude
+    finished on each message, where it held it (`done --outcome held`, or a summary beginning
+    "Held" from before the outcome was kept), with the version of the message it was asked
+    about. While the message is still that version it is on hold (app.py view passes these)."""
+    out: dict = {}
+    for _wid, doc in sorted((work or {}).items()):
+        w = (doc or {}).get("data") if isinstance(doc, dict) else None
+        if not isinstance(w, dict) or str(w.get("status") or "") != "done" \
+                or str(w.get("kind") or "") != "tweak":
+            continue
+        args = w.get("args") if isinstance(w.get("args"), dict) else {}
+        target = args.get("target") if isinstance(args.get("target"), dict) else {}
+        mid, rev = str(target.get("id") or ""), str(target.get("rev") or "")
+        res = w.get("result") if isinstance(w.get("result"), dict) else {}
+        said = " ".join(str(res.get("summary") or "").split())
+        outcome = str(res.get("outcome") or "")
+        if not mid.startswith("msg-") or not rev or args.get("back"):
+            continue
+        at = str(w.get("finished_at") or w.get("done_at") or w.get("asked_at") or "")
+        if mid in out and out[mid]["at"] > at:
+            continue
+        held = outcome == "held" or (not outcome and bool(re.match(r"^\W*held\b", said, re.I)))
+        out[mid] = {"rev": rev, "said": said, "at": at, "held": held}
+    return {k: {x: y for x, y in v.items() if x != "held"} for k, v in out.items() if v["held"]}
+
+
 # ------------------------------------------------------------------ needs you
 
 
@@ -2656,6 +2719,18 @@ def _messages(ctx: Ctx, targets: dict) -> list:
             if full:
                 hold, hold_why = full, "employer_full"
         mid = f"msg-{cid}"
+        rev = rev_of(cid, text, kind, channel, live)
+        if hold is None:
+            # Held on their record (a next action "Hold ..."), or by Claude's own finish on
+            # this very version of the draft: on hold, with why and when, and one way to send
+            # it anyway on the page. It was offered as ready under "Finished: held ..." (the
+            # maintainer, 2026-11-10).
+            mine = person_hold(c, ctx.today)
+            work = (ctx._got.get("held_work") or {}).get(mid)
+            if mine:
+                hold, hold_why = mine, "person_hold"
+            elif work and work.get("rev") == rev:
+                hold, hold_why = hold_words(work.get("said")), "decided"
         from network import state as _st
         subject, body = _st.split_subject(text)
         body = body.strip()
@@ -2676,7 +2751,7 @@ def _messages(ctx: Ctx, targets: dict) -> list:
                                      f"They work at {c.get('company') or 'an employer you want'}"),
                 "due": str(c.get("next_action_due") or "") or None, "hold": hold,
                 "hold_why": hold_why,
-                "rev": rev_of(cid, text, kind, channel, live)}
+                "rev": rev}
         if mtype == "first_note" and channel == "linkedin_note" and hold is None \
                 and not item["blocked"]:
             # First notes waiting to go are one wave: one To do card ("4 first notes ready to
@@ -5889,7 +5964,8 @@ EMPTY = {
 
 def build(today: dt.date | None = None, now: dt.datetime | None = None,
           only=None, shown: dict | None = None, full: dict | None = None,
-          work_time: dict | None = None, computer: dict | None = None) -> tuple[dict, dict]:
+          work_time: dict | None = None, computer: dict | None = None,
+          held_work: dict | None = None) -> tuple[dict, dict]:
     """(the model, what each item id stands for in the repo). `only` builds just those
     sections, for an applier that needs one item's rev and not the whole page. `shown` is
     {suggestion id: the day it first showed} from the page's database, so at most three new
@@ -5901,6 +5977,8 @@ def build(today: dt.date | None = None, now: dt.datetime | None = None,
     ctx = Ctx(today, now)
     # This copy's own work times, for a cost said on an item (a pasted profile's rewrite).
     ctx._got["work_time"] = dict(work_time or {})
+    # The messages Claude's own finished changes held (held_by_work), from `app.py view`.
+    ctx._got["held_work"] = dict(held_work or {})
     # The computer as the page's database says it (tools/computer.py state), from `app.py
     # view`: its row in Settings and, while computer work waits on the person, one card.
     ctx._got["computer"] = dict(computer or {})

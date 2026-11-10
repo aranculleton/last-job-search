@@ -265,6 +265,8 @@
     replyOpen: new Set(),
     // Contacts: the drafts open under the pencil, their words changed in place.
     penOpen: new Set(),
+    // Contacts: drafts on hold the person chose to send anyway (Send it anyway), this visit.
+    unheld: new Set(),
     reach: new Map(),
     // Claude's browser (flow B): whether this device has read a LinkedIn page through it.
     reading: {ok: false, tried: new Set()},
@@ -7266,7 +7268,7 @@
     const fresh = !!(cn && cn.text === "Copied." && cn.until > now());
     const copyName = "Copy " + (parts.subject ? "message" : what + " to " + name);
     const fixing = fixState(m);
-    const held = txt(m.hold);
+    const held = txt(m.hold) && !S.unheld.has(m.id);
     // Not ready: written before their profile was read (X-53), or a fix still to come.
     const ready = !held && !fixing;
     const copyBtn = h("button", {type: "button", class: "btn small copy bubble-copy" + (copied ? "" : " primary"), "data-k": "copy:" + tid, "data-primary": copied ? null : "1",
@@ -7367,8 +7369,8 @@
     // A note held for their profile has no Copy and nothing else on its face: its one line says
     // why and when, and Paste is its row's one pill.
     // Its gauge is the engine's, one note's rewrite (app_alerts.paste_profile), never a run's.
-    const pasteCost = held && paste && Number(obj(obj(m.paste).cost).state) > 0 ? costEl(obj(m.paste).cost, null, "cost-paste-" + seg(m.id)) : null;
-    return {box, notes: null, act: held ? paste : (onFace ? [sentBtn, link] : sentBtn), cost: pasteCost, extra, blocked: fixing === "failed", fixing: fixing === "going", line: stateLine(m.id, "msg:" + m.id)};
+    const pasteCost = held && paste && !HELD_SENDABLE.has(txt(m.hold_why)) && Number(obj(obj(m.paste).cost).state) > 0 ? costEl(obj(m.paste).cost, null, "cost-paste-" + seg(m.id)) : null;
+    return {box, notes: null, act: held ? (HELD_SENDABLE.has(txt(m.hold_why)) ? null : paste) : (onFace ? [sentBtn, link] : sentBtn), cost: pasteCost, extra, blocked: fixing === "failed", fixing: fixing === "going", line: stateLine(m.id, "msg:" + m.id)};
   }
   // Where reading LinkedIn stands for this opening of the page: readingState, except that a
   // read that worked lately elsewhere is no read here unless this page is open in the Claude
@@ -7380,7 +7382,9 @@
   // "when exactly is this waiting for claude thing going to happen?"). Null: the note's own.
   function holdKey(m) {
     // Held back on purpose (people at the employer already wait on a reply): its own line.
-    if (txt(m.hold_why) === "employer_full") return null;
+    // Held back on purpose (people at the employer already wait on a reply, a hold on their
+    // record, Claude's own decision): its own line, never a read that is coming.
+    if (txt(m.hold_why)) return null;
     const st = readHere();
     if (st === "off") return "paste";
     if (st === "paused") return st;
@@ -7409,6 +7413,7 @@
     const it = readingTodo();
     return !!it && it.key === "reading-queue" && readThemShows(waitingReads(), readHere());
   }
+  const HELD_SENDABLE = new Set(["person_hold", "decided"]);
   function holdLine(m) {
     const k = holdKey(m);
     const said = txt(obj(readingInfo().hold)[k]) || txt(m.hold);
@@ -7421,8 +7426,12 @@
       args: {contacts: [txt(m.contact)], read_first: true, rewrite: true,
         note: "Go ahead at " + (txt(m.employer) || "this employer") + " anyway, though people there already wait on a reply: read " + (txt(m.first_name) || "this person") + "'s profile and rewrite the note."}}]),
       {kind: "quiet", small: true, key: "anyway:" + m.id, aria: "Go ahead anyway: " + (txt(m.first_name) || "this note")}) : null;
+    // On hold on their record or by Claude's own decision: the one way to send it regardless,
+    // which puts Copy and I sent it back on the draft (the maintainer, 2026-11-10).
+    const regardless = HELD_SENDABLE.has(txt(m.hold_why)) ? btn("Send it anyway", () => { S.unheld.add(m.id); scheduleRender(); },
+      {kind: "quiet", small: true, key: "unhold:" + m.id, aria: "Send it anyway: the message to " + (txt(m.first_name) || "them")}) : null;
     return h("p", {class: "small hint-line msg-check msg-held", "data-k": "held:" + m.id, "data-hold": k || "own", role: running ? "status" : null},
-      running ? [h("span", {class: "spin", "aria-hidden": "true"}), " "] : null, said.replace(/[.…\s]+$/, "") + (running ? "…" : "."), anyway ? [" ", anyway] : null);
+      running ? [h("span", {class: "spin", "aria-hidden": "true"}), " "] : null, said.replace(/[.…\s]+$/, "") + (running ? "…" : "."), anyway ? [" ", anyway] : null, regardless ? [" ", regardless] : null);
   }
   // "To Juno at Acme", or "To Juno" where no employer is on file: never a dangling "at".
   function toWho(m) {
@@ -9447,6 +9456,8 @@
         btn("Undo it", () => act([{item: txt(item.id), action: "tweak.undo", value: {key: txt(last.key)}, rev: item.rev}], "Undoing: " + (said || "the last change")),
           {kind: "link", key: "tweak-undo:" + item.id}), stateLine(txt(item.id), "tweak-undo:" + item.id));
     }
+    // On hold: its one line says why and when (holdLine), never a second "Finished: held".
+    if (txt(item.hold) && HELD_SENDABLE.has(txt(item.hold_why)) && !S.unheld.has(txt(item.id))) return null;
     const done = [...allWork()].filter(([id, w]) => id.startsWith("tweak~") && txt(obj(obj(w.args).target).id) === txt(item.id) && w.status === "done")
       .sort((a, b) => txt(b[1].done_at || b[1].asked_at).localeCompare(txt(a[1].done_at || a[1].asked_at)));
     if (!done.length) return null;

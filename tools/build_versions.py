@@ -890,8 +890,9 @@ METHODS: dict[str, dict] = {
             (95, "2026-11-10", False, "work waiting for the computer says Waiting for your computer, with no clock and never Claude has picked this up or No answer from Claude, until a chat there starts it; an answer tapped on a card whose work has finished since does nothing and says so, never sending the job round again"),
             (96, "2026-11-10", False, "a first note held back because people at its employer already wait on a reply says On hold and why, with Go ahead anyway, never that Claude reads the profile by itself"),
             (97, "2026-11-10", False, "work for the computer that Claude called off before it began says why on its card"),
+            (98, "2026-11-10", False, "a draft written in one chat stays on its person's card while that chat's save lands, never drawn over by a copy that lacks it; a name searched for in Contacts is found whatever the filters, those a filter hides said as N more hidden by your filter with Show them; a message Claude held is on hold on its card with why, when and Send it anyway, and on the person's record, never offered as ready under Finished: held"),
         ),
-        "fingerprint": "ae68d1c202db49a1",
+        "fingerprint": "65339a7497498ce2",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",
