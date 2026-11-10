@@ -367,3 +367,18 @@ def test_a_follow_up_from_to_do_is_named_after_the_person(small):
     for d in named:
         assert d["work"]["title"].startswith("Follow up with "), d
         assert not re.search(r"\d{4}-\d{2}-\d{2}", d["work"]["title"]), d
+
+
+def test_a_page_update_says_to_republish_when_the_pages_code_is_behind(monkeypatch):
+    """An update changed the page's own code, the chat that took it only refreshed the page's
+    data, and the person saw the old buttons until they asked (the maintainer, 2026-11-09).
+    Every `view` says to republish while the page's code is behind; none when it is current."""
+    import app
+    import app_setup
+    monkeypatch.setattr(app_setup, "page_record", lambda: {"url": "https://claude.ai/artifact/x"})
+    monkeypatch.setattr(app_setup, "set_up", lambda: True)
+    monkeypatch.setattr(app_setup, "_page_current", lambda: False)
+    lines = app.page_code_behind()
+    assert lines and "republish it now" in lines[0] and "app.py page" in " ".join(lines)
+    monkeypatch.setattr(app_setup, "_page_current", lambda: True)
+    assert app.page_code_behind() == []

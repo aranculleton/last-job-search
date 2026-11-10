@@ -66,6 +66,8 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **An update that changes your page puts the new page up by itself.** A chat that took the update only refreshed the page's data, so you kept the old buttons until you asked for it; every page update now republishes while the page is behind.
+
 - **A reply that sends your resume shows the one Claude is making for that person.** While it was being made, the reply offered your general resume to attach instead.
 
 - **The page's helper no longer asks before starting, messaging or archiving its chats.** Its list of pre-approved steps had been split over two lines, and everything after the break asked you each time.

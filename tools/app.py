@@ -516,6 +516,9 @@ def cmd_view(a) -> int:
     first = own_tests_first()
     if first:
         lines = [first] + list(lines or [])
+    stale = page_code_behind()
+    if stale:
+        lines = list(lines or []) + stale
     if getattr(a, "end", False):
         lines = list(lines or []) + end_of_batch(a.chat, getattr(a, "message", "") or "", now)
     # The taps that came in while the work ran go first: the screens are drawn with them.
@@ -524,6 +527,24 @@ def cmd_view(a) -> int:
                  **({"kept_newer": kept} if kept else {}),
                  **({"for_claude": lines} if lines else {})}), end="")
     return 0
+
+
+def page_code_behind() -> list[str]:
+    """The republish, where the page's own code is older than this copy's: a chat that took an
+    update only refreshed the page's data, and the person saw the old buttons until they asked
+    for a republish (the maintainer, 2026-11-09). Every `view` says it, so no update's page
+    change waits on one chat following one step. [] when the page is current or not set up."""
+    try:
+        import app_listen
+        import app_setup
+        url = str(app_setup.page_record().get("url") or "")
+        if not url or not app_setup.set_up() or app_setup._page_current():
+            return []
+        return ["Claude: the page's own code is older than this copy (an update changed it): "
+                "republish it now, after sending these batches, saying nothing first:"] + \
+            app_listen._publish_now(url, 1)
+    except Exception:  # noqa: BLE001  the data still goes
+        return []
 
 
 def app_listen_chat(chat: str) -> str:
