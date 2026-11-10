@@ -95,6 +95,8 @@ ALLOWED_PERMISSIONS = {
     # and its comments only: publishing or deleting a page (Artifact) still asks.
     "ArtifactData",
     "ArtifactComments",
+    "WebSearch",
+
 }
 
 # Personal-data ignore rules that must never disappear from .gitignore.
