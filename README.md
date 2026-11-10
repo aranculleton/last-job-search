@@ -8,7 +8,7 @@ private page. It never sends anything for you.
 [![CI](https://github.com/aranculleton/last-job-search/actions/workflows/ci.yml/badge.svg)](https://github.com/aranculleton/last-job-search/actions/workflows/ci.yml)
 
 <p align="center">
-  <img src="docs/images/page-brief-light-dark-a1fa097c.png" width="720"
+  <img src="docs/images/page-brief-light-dark-c4315f6c.png" width="720"
        alt="The Brief, light on one side of a diagonal cut and dark on the other: today's most pressing thing, the next three things to do, who is waiting on you, the best new jobs, news with what to do with each item, and your numbers by week">
   <br>
   <sub><b>The Brief</b>: your day at a glance, in light or dark</sub>
@@ -43,7 +43,7 @@ No resume yet? Say "build one with me". [START_HERE.md](START_HERE.md) has each 
 </p>
 
 <p align="center">
-  <img src="docs/images/page-contacts-c1ddd018.png" width="62%"
+  <img src="docs/images/page-contacts-3208bb25.png" width="62%"
        alt="Contacts on a computer: who needs you first, each person's latest draft on their card">
   &nbsp;
   <img src="docs/images/page-coming-up-phone-5637e739.png" width="18%" alt="Coming up on a phone">
