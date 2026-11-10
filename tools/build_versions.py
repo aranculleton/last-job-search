@@ -385,8 +385,9 @@ METHODS: dict[str, dict] = {
             (81, "2026-11-06", False, "the landing steps unsubscribe from a save's pull request as soon as it is opened, before its merge, so a save no longer wakes the chat twice more"),
             (82, "2026-11-06", False, "a general resume's summary goes through the grounding audit's own questions, a written one with its claim map (stage_picks.py general --claims-file), and one questioned is never made; its draft is kept (documents/cv/general/draft.json) so the pencil changes its bullets, its look and its summary as an application's, the summary through both audits, which ask a general draft only grounding questions; one made before has no pencil until a fresh one is made, and nothing made before needs making again"),
             (83, "2026-11-09", False, "a hold on a contact with no end day lifts on the day beside it; the runbook says where every hold is listed"),
+            (84, "2026-11-10", False, "a resume made for a contact goes into the page's store as it is made, so its Get it downloads at once; a job's own chat lands its work with land.py in the foreground and brings the page up to date itself, never messaging another chat; a networking item sent to the computer with args.read_first reads each profile there before rewriting its note"),
         ),
-        "fingerprint": "c2c9ce3007f5a1b9",
+        "fingerprint": "289ff1f9fad5a026",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -870,8 +871,9 @@ METHODS: dict[str, dict] = {
             (86, "2026-11-09", False, "a change that finished with nothing changed (held, set aside, not possible) says so on its card at once, with Claude's own answer where it wrote one, never a spinner waiting for a new version; one whose new version is late stops spinning after a few minutes; a person whose draft a change set aside is never told \"Reply written\"; a message to Claude carries its words on its work item"),
             (87, "2026-11-09", False, "the Brief greets by the clock of the device it is read on, and a ready message has Open their profile on its face beside I sent it"),
             (88, "2026-11-10", False, "a reply that sends a resume shows the one Claude is making for that person, never the general one, while it is made"),
+            (89, "2026-11-10", False, "a note waiting for its person's profile names only what is there: with your computer ready, it says Claude reads it on your computer by itself and the read is sent there with nothing pressed, and \"press Read them\" only while To do shows that button; a reply that sends the resume made for that person offers that one, from the page's store; a finished resume made for someone opens their card in Contacts; Help Claude do more is one soft card after today's things with its one pill to start; the page being updated turns a small ring in its own colours"),
         ),
-        "fingerprint": "8fa16b06d0218b2a",
+        "fingerprint": "de2a558c764c2874",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",
