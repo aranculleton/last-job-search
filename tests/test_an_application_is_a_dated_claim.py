@@ -121,7 +121,10 @@ def tracker_day_before_release(tracker):
 # The example person's tracker, in the temporary state tests/conftest.py makes:
 # the app's suite never reads a real person's tracker, which can hold anything
 # (a repo's very first /apply leaves one drafted row and nothing to release).
-STATE_TRACKER = Path(os.environ.get("LJS_STATE", ROOT)) / "job_search_tracker.csv"
+# Read from the example's own committed file, never the shared state a worker's other tests
+# write to: a test that changed that copy left no open row on the day, and this failed in some
+# orders (2026-11-10). Nothing here writes it (the last test checks exactly that).
+STATE_TRACKER = Path(ROOT) / "profile.example" / "state" / "job_search_tracker.csv"
 
 
 class TheCommittedTrackerReleasesOverTime(unittest.TestCase):
