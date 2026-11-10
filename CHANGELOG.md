@@ -20,6 +20,8 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+## [4.14.0] - 2026-11-10
+
 ### Added
 
 - **Conversations with no answer in about three months close by themselves.** A thread still read as waiting on a reply with nothing from them in 90 days is set to gone cold, written on the contact with the day, and opened again by itself if they reply; your own number goes in `GONE_COLD_DAYS`. Imported conversations from years back and notes sent a season ago were counted against their employer and shown as owed a follow-up. Profile upgrade: `threads-gone-cold`
