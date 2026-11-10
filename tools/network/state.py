@@ -5271,7 +5271,7 @@ def end_role_hold(contact_id: str, path: str | None = None) -> bool:
     row = already_contacted(contacts, contact_id=contact_id)
     if not row or not role_hold(row.get("next_action")):
         return False
-    row["next_action"], row["next_action_due"] = "", ""
+    put_next(row, (), action="", due="")
     save_contacts(contacts, path)
     return True
 
