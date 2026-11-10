@@ -1801,6 +1801,8 @@ S.you = async (a) => {
   // Finish your profile waits at the end of "Show N more" while today's things show (2026-11-02).
   await page.$$eval("details.band-more:not([open])", (ds) => ds.forEach((d) => { d.open = true; }));
   await turn(page, 2);
+  // It is the first of Help Claude do more, one tap on its card (DESIGN.md, Places).
+  if (await page.$('[data-k="help-start"]')) { await page.click('[data-k="help-start"]'); await turn(page, 3); }
   const r = {card: await T(page, '#main [data-item="you"] .card-title')};
   await page.locator('#main [data-item="you"]').getByRole("button", {name: "Add what you did"}).click();
   await turn(page, 3);

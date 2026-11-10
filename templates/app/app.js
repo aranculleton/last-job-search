@@ -4147,7 +4147,7 @@
           h("p", {class: "card-title", id: "help-title"}, "Help Claude do more"),
           helpWhy(first) ? h("p", {class: "small"}, helpWhy(first)) : null,
           h("div", {class: "card-actions"}, btn(HELP_START[txt(first.key)] || "Start", start, {kind: "primary", small: true, key: "help-start"}))));
-      put(wrap, h("section", {class: "band help-band", "aria-labelledby": started ? "band-help" : "help-title"},
+      put(wrap, h("section", {class: started ? "band help-band" : "help-band", "aria-labelledby": started ? "band-help" : "help-title"},
         started ? h("h3", {class: "group", id: "band-help"}, "Help Claude do more") : null, head,
         helpNodes.length > 1 ? det("todo-help", false, {class: "band-more"}, h("summary", {class: "band-more-sum"}, "and " + (helpNodes.length - 1) + " more"),
           h("div", {class: "stack todo-help"}, helpNodes.slice(1))) : null));
