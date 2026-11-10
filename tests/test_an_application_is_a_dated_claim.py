@@ -23,7 +23,6 @@ once its row is older than the threshold.
 from __future__ import annotations
 
 import datetime as dt
-import os
 import sys
 import unittest
 from pathlib import Path
