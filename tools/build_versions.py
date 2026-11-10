@@ -387,7 +387,7 @@ METHODS: dict[str, dict] = {
             (83, "2026-11-09", False, "a hold on a contact with no end day lifts on the day beside it; the runbook says where every hold is listed"),
             (84, "2026-11-10", True, "every font on a resume is set with no kerning, so an applicant tracking system reads AWS, VAT or Vancouver as one word (a kern pair read as a space split \"AWS\" in summaries, and \"V ancouver\" under the classic design); the round trip names any word the text layer splits, and the font probe reads kern pairs; unsent applications are made again so none goes out with a split word"),
         ),
-        "fingerprint": "a69bb7298cb2d2c4",
+        "fingerprint": "a147bad6aeb1d130",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
