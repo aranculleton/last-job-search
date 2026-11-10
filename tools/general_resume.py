@@ -259,7 +259,10 @@ def keep_paths(for_contact: str = "") -> tuple[str, str]:
     the place of the person's own (a person's copy, 2026-11-05: one made for a recruiter
     replaced "Your resume", and nothing on his card said it had been made for him)."""
     if for_contact:
-        stem = docpaths.general_stem(for_contact_word(for_contact))
+        # Named as the person's own resume (<Prefix>_<Noun>): the contact receives the file,
+        # and "..._Resume_For_<them>.pdf" told them it was made for them (a person's copy,
+        # 2026-11-10). Their own folder keeps it apart from the person's own.
+        stem = f"{docpaths.prefix()}_{docpaths.noun_word()}"
         folder = person.state("documents", "network", for_contact)
         return os.path.join(folder, stem + ".pdf"), os.path.join(folder, stem + ".txt")
     stem = docpaths.general_stem(KEEP_SUFFIX)

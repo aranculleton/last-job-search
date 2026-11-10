@@ -135,11 +135,11 @@ know whether it worked.
    route` prints the `create_session` call; refused as an untrusted device, run its
    `trust-check` first (a chat that approves is tied to their devices for good, so no
    scheduled task may fire into it), then `confirm_repository_trust`: one card, once.
-3. **Auto, once.** A chat started on the computer from the cloud is refused Auto and starts
-   in Manual (seen 2026-11-09, from a cloud chat that was in Auto itself). The desktop app keeps
-   a mode chosen in a folder for the chats after it there, so the person switches the first
-   one once: "On your computer, in the chat named <its title>, change Manual to Auto at the
-   bottom" (`app_listen.MODE_REFUSED` says it). Every chat started there after it runs in Auto.
+3. **Auto, once.** A chat started on the computer gets Auto only when the chat starting it is
+   in Auto itself ("requires the parent session to be in auto mode (parent is default)",
+   2026-11-10, from a helper whose mode menu showed Auto). So on that refusal the person is
+   asked once to switch the helper to Auto, and the call is made again; every chat after it
+   then starts in Auto (`app_listen.MODE_REFUSED` says each step).
 4. **Signed in to LinkedIn, and staying signed in** (`browser-pane-stay-signed-in`). Check:
    the chat on the computer reads one LinkedIn page and writes its heartbeat
    (`computer.py beat --linkedin in`).

@@ -49,7 +49,9 @@ def test_it_is_kept_in_their_folder_named_for_them_and_the_persons_own_is_untouc
                           "print(json.dumps([g.keep_paths(%r)[0], g.keep_paths()[0]]))" % JUNO))
     theirs, own = got
     assert theirs.startswith(os.path.join(state, "documents", "network", JUNO) + os.sep), theirs
-    assert os.path.basename(theirs).endswith("_For_Juno.pdf"), theirs
+    # Named as the person's own: the contact receives the file, and "_For_Juno" told them it
+    # was made for them (a person's copy, 2026-11-10). Their folder keeps it apart.
+    assert os.path.basename(theirs) == "Morgan_Ellis_CV.pdf", theirs   # the example says CV
     assert own != theirs and os.path.join("documents", "cv") in own
 
 

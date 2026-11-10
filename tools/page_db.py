@@ -244,8 +244,11 @@ def hook_keeps_versions() -> bool:
 
 
 def versions_step(dump: str) -> str:
-    """The step that keeps the read's versions, or "" where the hook keeps them."""
-    return "" if hook_keeps_versions() else VERSIONS_STEP.format(dump=dump)
+    """The step that keeps the read's versions, always: a chat's hooks are the ones its
+    settings held when it started, so a helper started before the update added the hook
+    kept none, was told the hook did it, and pinned every write to a stale number (a
+    person's copy, 2026-11-10). The hook doing it too changes nothing: the same versions."""
+    return VERSIONS_STEP.format(dump=dump)
 
 
 def keep_listed(text: str, out_dir: str) -> int:

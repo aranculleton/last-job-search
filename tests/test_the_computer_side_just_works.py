@@ -585,8 +585,9 @@ def test_the_apps_hook_keeps_each_reads_versions_so_no_step_is_asked():
     ArtifactData, the maintainer's own edit of 2026-11-09), so no read asks for `app.py
     versions`; a copy without it is asked, and the step is there for it."""
     assert page_db.hook_keeps_versions() is True
-    assert page_db.versions_step("$D") == ""
-    assert "app.py versions" in page_db.VERSIONS_STEP
+    # Asked for all the same: a chat started before the hook was added runs without it, and
+    # pinned every write to a stale number when told the hook did it (2026-11-10).
+    assert "app.py versions" in page_db.versions_step("$D")
 
 
 # ------------------------------------------------------------------ on the page

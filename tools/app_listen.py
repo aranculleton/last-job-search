@@ -84,16 +84,16 @@ WAKE_PROMPT = "Look after my job search page from now on."
 # stricter mode than Auto is refused it ("cannot be more permissive than the calling
 # session's mode"), so the call is made again without it (MODE_REFUSED).
 SESSION_MODE = "auto"
-MODE_REFUSED = (" If it is refused because of its permission_mode, make the same call again "
-                "without permission_mode. Where that new chat is on the person's computer, it "
-                "starts in Manual and stops on every step (a chat in Auto was refused Auto for "
-                "one on a Mac, 2026-11-09; the desktop app keeps a mode chosen in a folder for "
-                "the chats after it there, code.claude.com/docs/en/permission-modes), so say "
-                "exactly this to the person, once, with its title: \"One step, once: on your "
-                "computer, in the chat named <its title>, change Manual to Auto at the bottom. "
-                "Claude's chats there then run by themselves.\" Where it is a cloud chat, this "
-                "chat is not in Auto: say once \"One step, once: at the bottom of this chat, "
-                "change the mode to Auto.\"")
+MODE_REFUSED = (" If it is refused because of its permission_mode: where the refusal says "
+                "this chat (the parent) is not in auto mode, say exactly this to the person, "
+                "once, and wait for \"done\": \"One step, once: at the bottom of this chat, "
+                "change the mode to Auto, then say done. Every chat Claude starts for you then "
+                "runs by itself.\" Then make the same call again (a chat whose mode menu said "
+                "Auto was refused as default on 2026-11-10: the menu is not the proof, the "
+                "refusal is). Only where they say Auto is not offered, or it is refused for any "
+                "other reason, make it without permission_mode; where that new chat is on the "
+                "person's computer, say once: \"On your computer, in the chat named <its "
+                "title>, change Manual to Auto at the bottom.\"")
 WAKE_COMMAND = "python3 tools/app.py start --listen --helper"
 REPUBLISH_TITLE = "Bringing your page up to date"
 # All the person hears about their page after an update: one line. A chat that took an

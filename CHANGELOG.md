@@ -66,6 +66,12 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **A resume made for someone is named as your own resume.** It was called "..._Resume_For_<their name>.pdf", which they would see when you sent it; it now keeps your usual name, in their own folder.
+
+- **Every page update records its version numbers itself.** A helper started before the update could not use the new automatic step, was told it had, and every change it sent the page was refused.
+
+- **When Claude can't start a chat in Auto, you're asked once to switch the right chat.** The chat that starts it must be in Auto itself; you're now told that, once, instead of the new chat silently starting in Manual.
+
 - **An update that changes your page puts the new page up by itself.** A chat that took the update only refreshed the page's data, so you kept the old buttons until you asked for it; every page update now republishes while the page is behind.
 
 - **A reply that sends your resume shows the one Claude is making for that person.** While it was being made, the reply offered your general resume to attach instead.
