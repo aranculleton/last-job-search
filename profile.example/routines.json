@@ -1,10 +1,10 @@
 {
-  "_about": "The example person's registry of scheduled tasks, with placeholder ids. A real profile fills in the ids its chats report; automation/README.md walks through it. `setup` is chat_per_briefing (each task bound to a chat, the one that answers the page, whose reply is the briefing) or routines_screen (each task made as a routine with the repo ticked and notifications on; trigger_id may be left null). Check it with python3 tools/routines.py check; print a task's prompt with python3 tools/routines.py stub <key>.",
+  "_about": "The example person's registry of scheduled tasks, with placeholder ids. A real profile fills in the ids its chats report; automation/README.md walks through it. `setup` is chat_per_briefing (each task bound to a chat whose reply is the briefing: the brief to a chat of its own, made with the copy attached, `own` true; the shortlist to the one that answers the page) or routines_screen (each task made as a routine with the repo ticked and notifications on; trigger_id may be left null). Check it with python3 tools/routines.py check; print a task's prompt with python3 tools/routines.py stub <key>.",
   "setup": "chat_per_briefing",
   "timezone": "Europe/London",
   "routines": [
     {"key": "morning_brief", "name": "Job search: morning brief",
-     "chat": {"session_id": "session_EXAMPLEHELPER"},
+     "chat": {"session_id": "session_EXAMPLEBRIEFCHAT", "title": "Job search: morning brief", "own": true},
      "trigger_id": "trig_EXAMPLEBRIEF", "cron": "CRON_TZ=Europe/London 38 7 * * *", "copy": true,
      "prompt_file": "automation/prompts/morning_brief.md", "what": "Each morning: what is owed, the counts since the last brief, three things to do, and the news that matters."},
     {"key": "job_round", "name": "Job search: shortlist",

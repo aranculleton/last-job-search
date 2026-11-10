@@ -534,7 +534,8 @@ def decide(db: dict, chat: str, out_dir: str, now: dt.datetime | None = None,
             # Never archived from here: the chat it took from may still be writing the brief
             # or saving the morning's work. The tidy-up, due at once after a hand-over
             # (tidy.retiring), puts an old helper away as soon as it has stopped and its work
-            # is on master, the brief moved here first; it keeps a chat that is running or
+            # is on master, a brief still in it moved to a chat of its own first (never here:
+            # the renewal never carries the brief, 2026-11-10); it keeps a chat that is running or
             # holds work not landed (X-27), and tries again at a later check-in.
             lines.append("listen: the chat that answered before stops by itself: its next "
                          "check finds this one.")

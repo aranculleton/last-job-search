@@ -760,8 +760,9 @@ METHODS: dict[str, dict] = {
             (40, "2026-11-07", False, "after a hand-over the new page helper comes back half an hour on whenever it kept the old one, for any reason: one kept because git could not yet say its save was on master stayed in the list all day"),
             (41, "2026-11-09", False, "tidying reads chats' details however they arrive (a plain list was dropped, so the same chats were asked for again), and every chat the app starts asks for Auto"),
             (42, "2026-11-09", False, "the chats the app starts on your computer, \"Job search \u00b7 <job> \u00b7 <computer>\", are known as the app's by the daily tidy-up"),
+            (43, "2026-11-10", False, "the brief runs in a chat of its own, made with create_session and the copy attached, never bound to the chat that answers the page nor carried from helper to helper; the daily tidy-up makes that chat again where it is gone, archived or approved computer access; the setup reminder gets a chat of its own too, and no helper sets itself a reminder (the brief-own-chat upgrade moves an existing brief)"),
         ),
-        "fingerprint": "696b4c394155101c",
+        "fingerprint": "0a29e66332800cd7",
     },
     "expand": {
         "by": "upgrade", "priority": 4, "time": "~15 min",

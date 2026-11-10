@@ -627,7 +627,7 @@ def route(db: dict, now: dt.datetime, chat: str = "", envs=None, folders=None,
                          "python3 tools/computer.py trust-check --chat <your id> --triggers <that "
                          "file>, and do what it prints: approving ties this chat to the person's "
                          "own devices for good, and a scheduled task bound to it then fails, so "
-                         "each is moved to a fresh chat a run first. Then "
+                         "each is moved to a chat of its own with the copy attached first. Then "
                          "confirm_repository_trust with the content_digest the refusal gave (one "
                          "card for the person, once), python3 tools/computer.py trusted --chat "
                          "<your id>, and the same create_session again. Started: "
@@ -909,14 +909,14 @@ def trust_check(chat: str, triggers) -> list[str]:
     tasks = bound_to(chat, triggers)
     if not tasks:
         return ["trust: ok, no scheduled task fires into this chat"]
-    try:
-        import app_setup
-        owner, name = app_setup.origin()
-    except Exception:  # noqa: BLE001  no address: the step says to find it
-        owner, name = "", ""
-    source = f"https://github.com/{owner}/{name}" if owner and name else "<the copy's GitHub address>"
-    home = {"title": "Job search: scheduled runs", "source_url": source,
-            "prompt": "This chat runs the job search's scheduled tasks. Nothing to do now."}
+    import routines
+    brief = any(routines._is_brief_prompt(str(t.get("prompt") or "")) or
+                "brief" in str(t.get("name") or "").lower() for t in tasks)
+    # The brief's own chat (routines.brief_chat_call), which the rest join: one chat made.
+    home = routines.brief_chat_call()
+    if not brief:
+        home = dict(home, title="Job search: scheduled runs",
+                    prompt="This chat runs the job search's scheduled tasks. Nothing to do now.")
     out = [f"first, once: create_session {json.dumps(home, ensure_ascii=False)}; its id is "
            "<home> below (a chat of its own with the copy attached, never the one approving "
            "computer access)"]
@@ -928,13 +928,13 @@ def trust_check(chat: str, triggers) -> list[str]:
             call["cron_expression"] = t["cron_expression"]
         elif t.get("run_once_at"):
             call["run_once_at"] = t["run_once_at"]
+        is_brief = (routines._is_brief_prompt(str(t.get("prompt") or "")) or
+                    "brief" in str(t.get("name") or "").lower()) and t.get("cron_expression")
         out.append(f"move {t.get('id')}: create_trigger {json.dumps(call, ensure_ascii=False)}, "
                    f"then update_trigger {{\"trigger_id\": \"{t.get('id')}\", \"enabled\": "
                    "false}} (turned off and kept, never deleted)" +
-                   (", then python3 tools/routines.py record --trigger <the new id> --cron "
-                    f"\"{t['cron_expression']}\" --setup routines_screen"
-                    if "brief" in str(t.get("name") or "").lower() and t.get("cron_expression")
-                    else ""))
+                   (", then python3 tools/routines.py record --session <home> --trigger <the new "
+                    f"id> --cron \"{t['cron_expression']}\" --own-chat" if is_brief else ""))
     return out
 
 

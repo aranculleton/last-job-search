@@ -1509,13 +1509,13 @@
   {
    "id": "setups",
    "was": "Automation: what runs without anyone asking",
-   "rule": "Two set-ups work: (a) in the chat that answers the page, (b) a routine with the repo ticked.",
+   "rule": "Two set-ups work: (a) in a chat of its own, (b) a routine with the repo ticked.",
    "bold": [
     "(a)",
     "(b)"
    ],
    "home": "automation/README.md",
-   "anchor": "### (a) In the chat that answers your page",
+   "anchor": "### (a) In a chat of its own",
    "needed_by": [
     "brief set-up"
    ]
@@ -1624,10 +1624,10 @@
   {
    "id": "cloud-calls",
    "was": "Automation: what runs without anyone asking",
-   "rule": "In a cloud chat: create_trigger bound to the chat that answers the page, or with no page this chat, a one-off first brief, never fire_trigger and never a task that starts a new chat each run; no chat is made for it.",
+   "rule": "In a cloud chat: create_session for the brief's own chat with the copy attached, create_trigger bound to it, a one-off first brief, never fire_trigger, never the chat that answers the page and never a task that starts a new chat each run.",
    "bold": "In a cloud chat",
    "home": "automation/README.md",
-   "anchor": "bound to the chat that answers the page, or with no page this chat (`persistent_session_id`)",
+   "anchor": "`create_trigger` bound to that new chat (`persistent_session_id`, never the chat that",
    "needed_by": [
     "brief set-up",
     "/setup"

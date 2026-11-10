@@ -1027,6 +1027,32 @@
       "verified_against": "code.claude.com/docs/en/routines read 2026-11-09 and the create_trigger tool description that day",
       "ui_sensitive": false,
       "verified_on": "2026-11-09"
+    },
+    {
+      "id": "routine-bound-chat",
+      "claim": "A scheduled task made by a chat (create_trigger) either fires into one chat it is bound to (persistent_session_id) or starts a fresh chat each run. A fresh chat a run has no copy of the person's files attached, no add_repo and no way to clone one, so the brief cannot run there. A chat that approves computer access (confirm_repository_trust) is limited to the person's own trusted devices for good, and a scheduled task bound to it then fails, so the brief runs in a chat of its own, made with create_session and the person's copy as its source_url, and no chat that may approve computer access sets a reminder (send_later) for itself. A manual fire_trigger of a task bound to a chat starts a fresh chat instead, so a manual test cannot show the bound run: a one-off task bound to the same chat a few minutes on does.",
+      "sources": [
+        {
+          "url": "tool:create_trigger",
+          "quote": "fires into a SPECIFIC OTHER SESSION you name"
+        },
+        {
+          "url": "tool:confirm_repository_trust",
+          "quote": "allowing it limits the session to the owner's trusted devices for good."
+        },
+        {
+          "url": "tool:create_session",
+          "quote": "Optional git repository URL to check out."
+        },
+        {
+          "url": "tool:fire_trigger",
+          "quote": "Fire a scheduled task immediately, outside of its schedule."
+        }
+      ],
+      "status": "observed",
+      "verified_against": "the tool descriptions as offered to a cloud chat on 2026-11-10; observed in a person's copy: a brief bound to a chat that approved computer access failed with access denied (2026-11-09), a task that started a fresh chat each run had no copy and failed on its first run (2026-11-10), and a manual fire_trigger of a bound task started a new chat with no copy (2026-10-12, 2026-10-29, 2026-10-31)",
+      "ui_sensitive": false,
+      "verified_on": "2026-11-10"
     }
   ]
 }

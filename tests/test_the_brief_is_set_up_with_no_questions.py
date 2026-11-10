@@ -34,7 +34,7 @@ RAW = {"data": [{"id": "trig_EXAMPLEA", "name": "Mon/Thu summary",
        "has_more": True}
 REG = {"setup": "chat_per_briefing", "timezone": "Europe/London", "routines": [
     {"key": "morning_brief", "name": "Job search: morning brief",
-     "chat": {"title": "Job search: morning brief", "session_id": "session_EXAMPLEA"},
+     "chat": {"title": "Job search: morning brief", "session_id": "session_EXAMPLEA", "own": True},
      "trigger_id": "trig_EXAMPLEA", "cron": "CRON_TZ=Europe/London 38 7 * * 1,4",
      "prompt_file": routines.BRIEF_FILE}]}
 
@@ -70,12 +70,14 @@ def test_a_brief_turned_off_or_failing_is_said_and_never_made_again():
     assert "lists it as trig_EXAMPLEC" in routines.existing_brief(REG, moved)["say"]
 
 
-def test_a_brief_whose_chat_lost_the_files_is_said_and_moved_into_this_chat():
+def test_a_brief_whose_chat_lost_the_files_is_said_and_given_a_chat_of_its_own():
     """The 07:56 brief fired in the chat it is bound to, which had been made again without
     the person's files, so it wrote nothing and sent nothing, and routines.py brief still
     said it was set up (the maintainer, 2026-11-04; the helper moved it into itself by hand).
     A task that fired after its time with no record of that day's brief, or that now wakes
-    another chat, is said plainly, with the calls that move it into this chat."""
+    another chat, is said plainly, with the calls that give it a chat of its own, made with
+    the copy attached, and one run there of the brief that did not come: never this chat,
+    which may approve computer access and then run no scheduled task (2026-11-10)."""
     reg = dict(REG, routines=[dict(REG["routines"][0], made="2026-10-20",
                                    cron="CRON_TZ=Europe/London 56 7 * * *")])
     task = routines.listing(RAW)[0][0]
@@ -90,14 +92,20 @@ def test_a_brief_whose_chat_lost_the_files_is_said_and_moved_into_this_chat():
                                        repo="example-owner/example-copy")
     got = look(ran, {"2026-11-03"})
     assert got["state"] == "lost" and "cannot open" in got["say"], got
-    make, record, old = got["calls"]
-    assert make["tool"] == "create_trigger" and make["args"]["persistent_session_id"] == here
+    chat, make, once, record, old = got["calls"]
+    assert chat["tool"] == "create_session"
+    assert chat["args"]["source_url"] == "https://github.com/example-owner/example-copy"
+    assert make["tool"] == "create_trigger" and \
+        make["args"]["persistent_session_id"] == routines.NEW_CHAT
     assert make["args"]["cron_expression"] == "CRON_TZ=Europe/London 56 7 * * *"
     assert "example-owner/example-copy" in make["args"]["prompt"]   # it gets its files
-    assert f"record --session {here} --trigger" in record["run"]
+    assert once["args"]["run_once_at"] == "2026-11-04T12:05:00Z"
+    assert once["args"]["persistent_session_id"] == routines.NEW_CHAT
+    assert f"record --session {routines.NEW_CHAT} --trigger" in record["run"]
+    assert "--own-chat" in record["run"] and here not in json.dumps(got["calls"])
     assert old["tool"] == "update_trigger" and old["args"] == {"trigger_id": "trig_EXAMPLEA",
                                                               "enabled": False}
-    assert "morning_brief.md" in got["then"] and got["tell"]
+    assert "did not come" in got["then"] and got["tell"]
     # Today's record on file: it worked, and stays where it is.
     assert look(ran, {"2026-11-04"})["state"] == "registered"
     # Not fired yet today (the scheduler runs late) and still bound to its own chat: not lost.
@@ -129,48 +137,80 @@ def test_the_brief_command_prints_the_move_for_a_brief_whose_chat_lost_the_files
                          capture_output=True, text=True, encoding="utf-8", errors="replace",
                          env=env)
     assert got.returncode == 0 and got.stdout.startswith("lost: "), got.stdout + got.stderr
-    assert "move 1: create_trigger" in got.stdout and "session_EXAMPLEHELPER" in got.stdout
+    assert "move 1: create_session" in got.stdout and "move 2: create_trigger" in got.stdout
+    assert "session_EXAMPLEHELPER" not in got.stdout
     assert '"enabled": false' in got.stdout and "morning_brief.md" in got.stdout
     assert "the brief is set up" not in got.stdout
 
 
-def test_a_brief_firing_in_a_chat_that_handed_the_page_on_is_moved_never_set_up(tmp_path):
-    """`routines.py brief` said the brief was set up, never to make a second, while its task
-    still fired in the chat that had handed the page on, so the helper took it as moved (the
-    maintainer's copy, 2026-11-05). It reads where the task fires and, when that is not the
-    chat answering the page, prints the move there."""
+def test_a_brief_in_a_chat_not_made_for_it_gets_one_of_its_own_never_set_up(tmp_path):
+    """`routines.py brief` said the brief was set up while its task fired in the chat that
+    had handed the page on (the maintainer's copy, 2026-11-05), and a brief bound to the chat
+    that answers the page failed every morning once that chat approved computer access
+    (2026-11-10). A brief in a chat not made for it, whichever chat that is, moves into a
+    chat of its own, made with the copy attached."""
     tasks, _ = routines.listing(RAW)
-    page = "session_EXAMPLEHELPER"
-    got = routines.existing_brief(REG, tasks[:1], page=page, repo="example-owner/example-copy")
-    assert got["state"] == "elsewhere" and "has not moved" in got["say"], got
-    make, record, old = got["calls"]
-    assert make["tool"] == "create_trigger" and make["args"]["persistent_session_id"] == page
-    assert f"record --session {page}" in record["run"]
+    helper_bound = dict(REG, routines=[dict(REG["routines"][0],
+                                            chat={"session_id": "session_EXAMPLEA"})])
+    got = routines.existing_brief(helper_bound, tasks[:1], page="session_EXAMPLEHELPER",
+                                  repo="example-owner/example-copy")
+    assert got["state"] == "elsewhere" and "needs a chat of its own" in got["say"], got
+    chat, make, record, old = got["calls"]
+    assert chat["tool"] == "create_session" and chat["args"]["title"] == routines.BRIEF_NAME
+    assert make["tool"] == "create_trigger" and \
+        make["args"]["persistent_session_id"] == routines.NEW_CHAT
+    assert f"record --session {routines.NEW_CHAT}" in record["run"] and "--own-chat" in record["run"]
     assert old["args"] == {"trigger_id": "trig_EXAMPLEA", "enabled": False}
     assert "list_triggers" in got["then"]
-    # Already firing in the chat that answers the page: set up, nothing to move.
-    assert routines.existing_brief(REG, tasks[:1], page="session_EXAMPLEA")["state"] == \
+    # Already in a chat of its own: set up, nothing to move, whichever chat answers the page.
+    assert routines.existing_brief(REG, tasks[:1], page="session_EXAMPLEHELPER")["state"] == \
         "registered"
+    # Its own chat approved computer access: no scheduled run can open it, so a new one.
+    trusted = routines.needs_own_chat(REG, REG["routines"][0], tasks[0], "session_EXAMPLEA")
+    assert "computer access" in trusted
     # The older ops chat relays to the phone and keeps its brief.
-    ops = dict(REG, setup="ops_relay", ops_session={"id": "session_EXAMPLEA"})
-    assert routines.existing_brief(ops, tasks[:1], page=page)["state"] == "registered"
-    # On the real path, with the chat that answers the page named.
+    ops = dict(REG, setup="ops_relay", ops_session={"id": "session_EXAMPLEA"},
+               routines=[{k: v for k, v in REG["routines"][0].items() if k != "chat"}])
+    assert routines.existing_brief(ops, tasks[:1])["state"] == "registered"
+    # A task the app moved to a fresh chat each run (no copy, no notifications) moves; a
+    # routine the person made on the Routines screen, notifications on, stays.
+    fresh = dict(REG, setup="routines_screen", routines=[
+        {k: v for k, v in REG["routines"][0].items() if k != "chat"}])
+    assert routines.existing_brief(fresh, [dict(tasks[0], session="")])["state"] == "elsewhere"
+    theirs = json.loads(json.dumps(fresh))
+    theirs["routines"][0]["notifications"] = {"push": True}
+    assert routines.existing_brief(theirs, [dict(tasks[0], session="")])["state"] == "registered"
+    # On the real path.
     profile, state = tmp_path / "profile", tmp_path / "state"
     profile.mkdir()
     state.mkdir()
-    (profile / "routines.json").write_text(json.dumps(REG), encoding="utf-8")
+    (profile / "routines.json").write_text(json.dumps(helper_bound), encoding="utf-8")
     listing = tmp_path / "page.json"
     listing.write_text(json.dumps({"data": RAW["data"][:1], "has_more": False}),
                        encoding="utf-8")
     env = dict(os.environ, LJS_PROFILE=str(profile), LJS_STATE=str(state),
                CLAUDE_CODE_REMOTE="true")
     out = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "routines.py"), "brief",
-                          "--triggers", str(listing), "--page-chat", page],
+                          "--triggers", str(listing)],
                          capture_output=True, text=True, encoding="utf-8", errors="replace",
                          env=env)
     assert out.returncode == 0 and out.stdout.startswith("elsewhere: "), out.stdout + out.stderr
-    assert "move 1: create_trigger" in out.stdout and page in out.stdout
+    assert "move 1: create_session" in out.stdout and "move 2: create_trigger" in out.stdout
     assert "the brief is set up" not in out.stdout and "never create a second" not in out.stdout
+    # Recorded, it is the brief's own chat, and the check is clean.
+    path = profile / "routines.json"
+    routines.record("session_EXAMPLENEWCHAT", "trig_EXAMPLENEW",
+                    "CRON_TZ=Europe/London 38 7 * * 1,4", path=str(path), own_chat=True)
+    reg = json.loads(path.read_text(encoding="utf-8"))
+    assert reg["routines"][0]["chat"] == {"session_id": "session_EXAMPLENEWCHAT",
+                                          "title": routines.BRIEF_NAME, "own": True}
+    assert routines.check(reg) == [] and routines.owns_chat(reg["routines"][0])
+    # Out of a fresh chat each run, the registry becomes a chat set-up.
+    path.write_text(json.dumps(fresh), encoding="utf-8")
+    routines.record("session_EXAMPLENEWCHAT", "trig_EXAMPLENEW",
+                    "CRON_TZ=Europe/London 38 7 * * 1,4", path=str(path), own_chat=True)
+    reg = json.loads(path.read_text(encoding="utf-8"))
+    assert reg["setup"] == "chat_per_briefing" and routines.check(reg) == []
 
 
 def test_a_registry_with_nothing_scheduled_yet_is_clean():
@@ -220,13 +260,22 @@ def test_the_defaults_are_every_day_at_738_their_time():
         "Mondays and Thursdays at 7:38"
 
 
-def test_the_plan_binds_the_brief_to_the_chat_that_sets_it_up_and_makes_no_chat():
+def test_the_plan_gives_the_brief_a_chat_of_its_own_with_the_copy_attached(monkeypatch):
+    """Bound to the chat that answers the page, the brief failed every morning once that chat
+    approved computer access, and a fresh chat each run has no copy (the maintainer,
+    2026-11-10): the plan makes the brief's own chat with create_session and the copy as its
+    source, and binds the task and the first run to it, whichever chat asks."""
+    monkeypatch.setenv("LJS_CHAT", "session_EXAMPLEHELPER")
     now = datetime.datetime(2026, 10, 25, 14, 0, tzinfo=datetime.timezone.utc)
     got = routines.plan("example-owner", "my-job-search", "Europe/London", now=now,
                         chat="session_EXAMPLEHELPER")
-    assert "create_session" not in got and got["chat"] == "session_EXAMPLEHELPER"
+    assert got["create_session"] == {
+        "title": "Job search: morning brief",
+        "source_url": "https://github.com/example-owner/my-job-search",
+        "prompt": routines.BRIEF_CHAT_PROMPT, "permission_mode": "auto"}
+    assert "session_EXAMPLEHELPER" not in json.dumps(got)
     task = got["create_trigger"]
-    assert task["persistent_session_id"] == "session_EXAMPLEHELPER"
+    assert task["persistent_session_id"] == routines.NEW_CHAT
     assert task["cron_expression"] == "CRON_TZ=Europe/London 38 7 * * *"
     # The brief runs in any chat it lands in: where its chat is gone and the task wakes a new,
     # empty one, the prompt says how to get this copy first (2026-10-31).
@@ -236,25 +285,10 @@ def test_the_plan_binds_the_brief_to_the_chat_that_sets_it_up_and_makes_no_chat(
     assert task["initiation"] == "human_request"
     first = got["first_brief"]
     assert first["run_once_at"] == "2026-10-25T14:05:00Z" and "connectors" not in first
-    assert first["persistent_session_id"] == "session_EXAMPLEHELPER"
-    assert "--session session_EXAMPLEHELPER" in got["record"] and "--title" not in got["record"]
+    assert first["persistent_session_id"] == routines.NEW_CHAT
+    assert f"--session {routines.NEW_CHAT}" in got["record"] and "--own-chat" in got["record"]
     assert "in the chat called" not in got["say"]
     assert "fire_trigger" not in json.dumps(got)
-
-
-def test_where_this_chats_id_is_unknown_no_chat_is_made_for_it(monkeypatch, tmp_path):
-    """The app never starts a chat by itself (the maintainer, 2026-10-29: "fewest possible
-    chats"): with no id to bind to, the chat asks get_session for its own and runs it again."""
-    for key in ("LJS_CHAT", "CLAUDE_CODE_REMOTE_SESSION_ID", "CLAUDE_CODE_BRIDGE_SESSION_ID",
-                "CLAUDE_CODE_SESSION_ID"):
-        monkeypatch.delenv(key, raising=False)
-    now = datetime.datetime(2026, 10, 25, 14, 0, tzinfo=datetime.timezone.utc)
-    got = routines.plan("example-owner", "my-job-search", "Europe/London", now=now)
-    assert "create_session" not in got and got["chat"] == ""
-    assert "--title" not in got["record"]
-    got = routines.plan("example-owner", "my-job-search", "Europe/London", now=now,
-                        chat="session_EXAMPLEHELPER")
-    assert got["create_trigger"]["persistent_session_id"] == "session_EXAMPLEHELPER"
 
 
 def test_a_chat_on_the_computer_points_at_the_bell_and_makes_nothing(tmp_path):

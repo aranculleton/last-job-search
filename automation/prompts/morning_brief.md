@@ -38,11 +38,10 @@ once on its findings and checked again; still refused, it stays listed as needs 
 
 ## 3. The news: one call
 
-The `news-reader` agent, given every FOR CLAUDE news line as printed. It returns three to six
-lines, each ending in how the person can use it, widening rather than coming back empty.
-No such agent here (a copy cloned this run loads none): a general one on haiku, its prompt
-`.claude/agents/news-reader.md` below its header, then the lines. Nothing else finds the
-news; if it cannot run, step 4 gives `brief.py news` nothing.
+The `news-reader` agent, given every FOR CLAUDE news line as printed (all its searches run
+in one round). No such agent here (a copy cloned this run loads none): a general one on
+haiku, its prompt `.claude/agents/news-reader.md` below its header, then the lines. You
+search yourself only when the reader returned nothing, once, as `brief.py news` says.
 
 ## 4. Record: one command
 

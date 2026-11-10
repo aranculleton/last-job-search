@@ -52,6 +52,10 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
+- **Your morning brief runs in a chat of its own.** It is made as "Job search: morning brief", with your copy attached, and never in the chat that answers your page. Approving computer access in that chat had stopped every scheduled brief there, and a fresh chat for each run had no copy of your files and failed on its first morning. Profile upgrade: brief-own-chat
+
+- **The brief's news comes in one round.** Today's searches and the wider ones run together, then the best items are ranked newest and most relevant first, with each story shown once. Before, a thin morning waited for a second round of searches. A subject that finds nothing new three mornings running is now left out for a week, then tried again.
+
 - **People who answer you come first.** A people run ranks the kind of reader who replies to you most (by your own reply rates) first, then anyone whose headline says they are hiring, and fills with peers only once recruiters, hiring leaders and founders at every employer have been tried, saying so and naming the next employers to search. A run asked for five filled its list with engineers and peers, whom the person's own log shows answer least, where an employer had no recruiter in the city.
 
 - **Closed means closed by you.** Someone an earlier run closed after reading them, never written to and never closed by you, is checked again by today's rules and opened again if chosen, with the earlier reason shown. A head of the function whose headline said "Hiring" was skipped by every later run for an earlier run's housekeeping.
@@ -101,6 +105,14 @@ make sense to somebody whose repo just received it.
 - **The app skill says to load the page's database tools first in a cloud chat**, where ArtifactData and ArtifactComments can be listed by name with no schema until ToolSearch loads them.
 
 ### Fixed
+
+- **The brief makes its own chat again if that chat is lost.** The daily tidy-up makes a new one by itself, without asking, if the brief's chat is deleted, archived or has approved computer access. A new page helper no longer carries the brief from one helper to the next.
+
+- **The setup reminder no longer depends on the chat you set up in.** It runs in a chat of its own, and no chat sets itself a reminder any more. A reminder set in a chat that later approved computer access could never run.
+
+- **News about employers you ruled out stays off your brief.** The rules that keep jobs off your shortlist now apply to news items too: a sector you will not work in, an employer you turned down or a public body you named. One brief had shown news about a kind of employer the person had ruled out.
+
+- **When the news search finds nothing, the brief searches once more by itself.** It no longer runs that extra search when only one or two items come back. The search can now also keep a clearly new result that shows no date, without making up a date for it.
 
 - **Taking one person off today's short list takes off that one alone.** The short list is kept on your own day everywhere, and is saved only when it changed. `reading.py shortlist --remove` read the computer's calendar, found no list for its day late in the evening, and saved an empty one over yours.
 

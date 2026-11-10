@@ -101,19 +101,21 @@ def test_a_working_brief_in_a_chat_of_its_own_stays_where_it_works():
     assert all(c["id"] != "session_EXAMPLEBRIEFCHAT" for c in got["archive"])
 
 
-def test_a_brief_whose_chat_no_longer_works_moves_into_the_helper():
+def test_a_brief_whose_chat_no_longer_works_moves_into_a_chat_of_its_own():
     got = _plan(chats=[c for c in CHATS if c["id"] != "session_EXAMPLEBRIEFCHAT"])
     calls = got["brief"]
-    assert [c.get("tool") or "run" for c in calls] == ["create_trigger", "run", "update_trigger"]
+    assert [c.get("tool") or "run" for c in calls] == ["create_session", "create_trigger", "run", "update_trigger"]
+    assert calls[0]["args"]["source_url"] == "https://github.com/" + REPO
+    calls = calls[1:]
     new = calls[0]["args"]
-    assert new["persistent_session_id"] == HELPER
+    assert new["persistent_session_id"] == routines.NEW_CHAT
     assert new["cron_expression"] == "CRON_TZ=Europe/London 38 7 * * 1,4"   # their own days kept
     # With the line that gets the files where the chat has none (routines.with_copy).
     assert new["prompt"] == routines.with_copy(routines.stub(REG, "morning_brief"), REPO)
     # No connectors field at all: some organisations refuse it, and the printed call failed
     # as written (the maintainer's copy, 2026-11-05).
     assert "connectors" not in new
-    assert "--session " + HELPER in calls[1]["run"]
+    assert "--session " + routines.NEW_CHAT in calls[1]["run"] and "--own-chat" in calls[1]["run"]
     assert calls[2]["args"] == {"trigger_id": "trig_EXAMPLEBRIEF", "enabled": False}  # off, kept
     assert "delete_trigger" not in json.dumps(got)
 
@@ -187,11 +189,11 @@ def test_done_records_what_went_and_undo_brings_it_all_back(tmp_path, monkeypatc
     assert 'unarchive_session {"session_id": "session_EXAMPLEDRAFTS"}' in back
 
 
-def test_a_brief_whose_chat_was_deleted_moves_to_the_helper():
+def test_a_brief_whose_chat_was_deleted_moves_to_a_chat_of_its_own():
     gone = [c for c in CHATS if c["id"] != "session_EXAMPLEBRIEFCHAT"]
     got = _plan(chats=gone)
-    assert [c.get("tool") or "run" for c in got["brief"]] == ["create_trigger", "run", "update_trigger"]
-    assert got["brief"][0]["args"]["persistent_session_id"] == HELPER
+    assert [c.get("tool") or "run" for c in got["brief"]] == ["create_session", "create_trigger", "run", "update_trigger"]
+    assert got["brief"][1]["args"]["persistent_session_id"] == routines.NEW_CHAT
     assert all(c["id"] != "session_EXAMPLEBRIEFCHAT" for c in got["archive"])
 
 
@@ -214,12 +216,13 @@ OPS = {"timezone": "Europe/London",
             "prompt_file": "automation/prompts/job_round.md"}]}
 
 
-def test_an_ops_brief_whose_chat_is_gone_moves_to_the_helper():
+def test_an_ops_brief_whose_chat_is_gone_moves_to_a_chat_of_its_own():
     woke = [{"id": "trig_EXAMPLEB", "session": "session_EXAMPLEEMPTY", "enabled": True}]
     got = _plan(reg=OPS, triggers=woke)
-    assert [c.get("tool") or "run" for c in got["brief"]] == ["create_trigger", "run", "update_trigger"]
+    assert [c.get("tool") or "run" for c in got["brief"]] == ["create_session", "create_trigger", "run", "update_trigger"]
+    got["brief"] = got["brief"][1:]
     new = got["brief"][0]["args"]
-    assert new["persistent_session_id"] == HELPER
+    assert new["persistent_session_id"] == routines.NEW_CHAT
     assert new["cron_expression"] == "CRON_TZ=Europe/London 56 7 * * *"
     # The plain stub: the moved brief is not told it is in the ops chat, nor to relay; it
     # says how to get the files where the chat has none.
@@ -262,14 +265,15 @@ def test_the_moved_ops_brief_is_recorded_and_the_registry_stays_an_ops_one(tmp_p
     assert routines.setup_of(reg) == "ops_relay" and reg["setup"] == "ops_relay"
     # The move out of a lost ops chat (tidy's run line carries --own-chat).
     move = _plan(reg=OPS, triggers=[{"id": "trig_EXAMPLEB", "session": "session_EXAMPLEEMPTY",
-                                     "enabled": True}])["brief"][1]["run"]
+                                     "enabled": True}])["brief"][2]["run"]
     assert move.endswith(" --own-chat")
     routines.record(HELPER, "trig_EXAMPLENEW", "CRON_TZ=Europe/London 56 7 * * *", path=str(path),
                     own_chat=True)
     reg = json.loads(path.read_text(encoding="utf-8"))
     assert routines.setup_of(reg) == "ops_relay" and routines.check(reg) == []
     brief = next(r for r in reg["routines"] if r["key"] == "morning_brief")
-    assert brief["trigger_id"] == "trig_EXAMPLENEW" and brief["chat"] == {"session_id": HELPER}
+    assert brief["trigger_id"] == "trig_EXAMPLENEW" and brief["chat"] == {
+        "session_id": HELPER, "title": routines.BRIEF_NAME, "own": True}
     assert "mode" not in brief
     # Its stub from now on is the plain one; the job round, still in the ops chat, keeps the
     # registry's own.
@@ -309,20 +313,21 @@ def test_an_ops_brief_bound_to_a_chat_with_a_copy_is_never_moved():
     woke = [dict(bound[0], session="session_EXAMPLEEMPTY")]
     info = dict(INFO, session_EXAMPLEEMPTY={"id": "session_EXAMPLEEMPTY", "session_context": {}})
     got = _plan(reg=OPS, triggers=woke, chats=CHATS + [empty], info=info)
-    assert got["brief"][0]["args"]["persistent_session_id"] == HELPER
+    assert got["brief"][1]["args"]["persistent_session_id"] == routines.NEW_CHAT
     # Not read yet: read first, nothing moved meanwhile.
     got = _plan(reg=OPS, triggers=woke, chats=CHATS + [empty])
     assert got["ask"] == ["session_EXAMPLEEMPTY"] and got["brief"] == []
 
 
-def test_a_moved_ops_brief_follows_a_new_helper():
+def test_a_moved_ops_brief_left_in_an_old_helper_gets_a_chat_of_its_own():
     moved = json.loads(json.dumps(OPS))
     brief = next(r for r in moved["routines"] if r["key"] == "morning_brief")
     brief.pop("mode")
     brief["chat"] = {"session_id": "session_EXAMPLEOLDHELPER"}
     on_old = [{"id": "trig_EXAMPLEB", "session": "session_EXAMPLEOLDHELPER", "enabled": True}]
     got = _plan(reg=moved, triggers=on_old)
-    assert got["brief"][0]["args"]["persistent_session_id"] == HELPER
+    assert got["brief"][0]["tool"] == "create_session"
+    assert got["brief"][1]["args"]["persistent_session_id"] == routines.NEW_CHAT
     assert any(c["id"] == "session_EXAMPLEOLDHELPER" and "brief moved" in c["why"]
                for c in got["archive"])
 
@@ -423,19 +428,23 @@ def test_the_upkeep_follows_a_renewed_helper_and_its_old_copy_is_deleted_not_pil
     assert _plan(reg=reg, triggers=trig)["upkeep"] == []
 
 
-def test_a_brief_moved_off_the_helper_this_one_replaced_is_deleted_there_not_left_off():
+def test_a_brief_left_in_the_helper_this_one_replaced_moves_once_into_its_own_chat():
     """Each daily renewal of the helper moved the brief and left the old copy turned off: one
-    a day piled up in the person's list of scheduled tasks (2026-11-02)."""
+    a day piled up in the person's list of scheduled tasks (2026-11-02). The brief now moves
+    once, into a chat of its own, and no renewal moves it again (the maintainer, 2026-11-10),
+    so the one copy turned off is all there is."""
     moved = json.loads(json.dumps(REG))
     brief = next(r for r in moved["routines"] if r["key"] == "morning_brief")
     brief["chat"] = {"session_id": "session_EXAMPLEOLDHELPER"}
     on_old = [{"id": "trig_EXAMPLEBRIEF", "session": "session_EXAMPLEOLDHELPER", "enabled": True}]
     calls = _plan(reg=moved, triggers=on_old)["brief"]
-    assert [c.get("tool") or "run" for c in calls] == ["create_trigger", "run", "delete_trigger"]
-    assert calls[2]["args"] == {"trigger_id": "trig_EXAMPLEBRIEF"}
-    # A brief moved out of a chat of its own that was deleted is only turned off, never deleted.
-    gone = [c for c in CHATS if c["id"] != "session_EXAMPLEBRIEFCHAT"]
-    assert _plan(chats=gone)["brief"][2]["tool"] == "update_trigger"
+    assert [c.get("tool") or "run" for c in calls] == ["create_session", "create_trigger", "run", "update_trigger"]
+    assert calls[3]["args"] == {"trigger_id": "trig_EXAMPLEBRIEF", "enabled": False}
+    # Once in its own chat, a new helper taking the page moves nothing.
+    own = json.loads(json.dumps(REG))
+    next(r for r in own["routines"] if r["key"] == "morning_brief")["chat"] = {
+        "session_id": "session_EXAMPLEBRIEFCHAT", "own": True}
+    assert _plan(reg=own)["brief"] == []
 
 
 def test_a_registry_with_the_upkeep_in_it_is_clean(tmp_path, monkeypatch):

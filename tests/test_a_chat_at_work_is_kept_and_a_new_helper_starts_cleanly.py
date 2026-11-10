@@ -126,8 +126,8 @@ def test_a_helper_still_at_work_is_never_named_for_archiving(copy, tmp_path, mon
                  used="2026-11-05T11:56:00Z", github=())
     assert f"archive {DESK}" not in said, said
     assert f"keep {DESK}:" in said
-    assert f'"persistent_session_id": "{LIVE}"' in next(
-        ln for ln in said.splitlines() if ln.startswith("brief 1:"))
+    assert f'"persistent_session_id": "{routines.NEW_CHAT}"' in next(
+        ln for ln in said.splitlines() if ln.startswith("brief 2:"))
 
 
 @pytest.mark.parametrize("sign,kw,why", [
@@ -142,9 +142,10 @@ def test_each_sign_of_a_chat_at_work_keeps_it_alone(copy, tmp_path, monkeypatch,
     said = _tidy(copy, tmp_path, monkeypatch, **kw)
     assert f"archive {DESK}" not in said, (sign, said)
     assert why in next(ln for ln in said.splitlines() if ln.startswith(f"keep {DESK}:")), sign
-    # Kept until it finishes; the brief is not: it moves into the live helper now.
-    assert f'"persistent_session_id": "{LIVE}"' in next(
-        ln for ln in said.splitlines() if ln.startswith("brief 1:")), sign
+    # Kept until it finishes; the brief is not: it moves into a chat of its own now, never
+    # into the live helper (the maintainer, 2026-11-10).
+    assert f'"persistent_session_id": "{routines.NEW_CHAT}"' in next(
+        ln for ln in said.splitlines() if ln.startswith("brief 2:")), sign
 
 
 def test_an_old_helper_used_moments_ago_goes_once_get_session_calls_it_idle(copy, tmp_path, monkeypatch):
@@ -154,8 +155,8 @@ def test_an_old_helper_used_moments_ago_goes_once_get_session_calls_it_idle(copy
     moved first; one get_session calls running stays."""
     said = _tidy(copy, tmp_path, monkeypatch, once=False, used="2026-11-05T11:56:00Z")
     assert f"archive {DESK}: Job search helper" in said, said
-    assert f'"persistent_session_id": "{LIVE}"' in next(
-        ln for ln in said.splitlines() if ln.startswith("brief 1:"))
+    assert f'"persistent_session_id": "{routines.NEW_CHAT}"' in next(
+        ln for ln in said.splitlines() if ln.startswith("brief 2:"))
     said = _tidy(copy, tmp_path, monkeypatch, once=False, used="2026-11-05T11:56:00Z",
                  told="running")
     assert f"archive {DESK}" not in said
@@ -166,8 +167,8 @@ def test_an_old_helper_at_rest_is_put_away_once_the_brief_has_moved(copy, tmp_pa
     """With every sign at rest it goes, its brief made in the live helper first."""
     said = _tidy(copy, tmp_path, monkeypatch, once=False)
     assert f"archive {DESK}: Job search helper" in said, said
-    assert f'"persistent_session_id": "{LIVE}"' in next(
-        ln for ln in said.splitlines() if ln.startswith("brief 1:"))
+    assert f'"persistent_session_id": "{routines.NEW_CHAT}"' in next(
+        ln for ln in said.splitlines() if ln.startswith("brief 2:"))
     # A refusal for nesting has a way on, never a dead end (the maintainer's copy, 2026-11-05).
     assert "python3 tools/app.py nested" in next(
         ln for ln in said.splitlines() if ln.startswith("nested:"))
@@ -193,22 +194,27 @@ def test_the_brief_has_moved_only_when_the_task_listing_says_so(copy, tmp_path, 
     moved_on_paper = json.loads(json.dumps(REG))
     moved_on_paper["routines"][0]["chat"] = {"session_id": LIVE}
     said = _tidy(copy, tmp_path, monkeypatch, once=False, reg=moved_on_paper)
-    move = next(ln for ln in said.splitlines() if ln.startswith("brief 1:"))
-    assert "create_trigger" in move and f'"persistent_session_id": "{LIVE}"' in move, said
+    assert "brief 1: create_session" in said, said
+    move = next(ln for ln in said.splitlines() if ln.startswith("brief 2:"))
+    assert "create_trigger" in move and f'"persistent_session_id": "{routines.NEW_CHAT}"' in move
     assert "Never say the brief moved until a new list_triggers shows" in said
-    assert "fires in the chat that answers the page" not in said
-    # Once the listing shows the task firing here, it says so, and asks for no move.
+    assert "fires in its own chat" not in said
+    # Once the listing shows the task firing in its own chat, it says so, and asks for no move.
+    own = "session_EXAMPLEBRIEFCHAT"
+    in_own = json.loads(json.dumps(REG))
+    in_own["routines"][0]["chat"] = {"session_id": own, "own": True}
+    monkeypatch.setattr(routines, "load", lambda *a, **k: json.loads(json.dumps(in_own)))
     monkeypatch.setattr(tidy, "_listener", lambda d: {"chat": LIVE, "kind": "cloud", "helper": True})
-    tasks = [{"id": "trig_EXAMPLEBRIEF", "persistent_session_id": LIVE, "enabled": True}]
-    sessions = {"data": [{"id": LIVE, "title": "Job search page", "status": "idle"}]}
+    tasks = [{"id": "trig_EXAMPLEBRIEF", "persistent_session_id": own, "enabled": True}]
+    sessions = {"data": [{"id": LIVE, "title": "Job search page", "status": "idle"},
+                         {"id": own, "title": "Job search: morning brief", "status": "idle"}]}
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
         assert tidy.main(["plan", "--chat", LIVE, "--today", TODAY,
                           "--sessions", _json(tmp_path, "s2.json", sessions),
                           "--triggers", _json(tmp_path, "t2.json", {"data": tasks})]) == 0
     said = buf.getvalue()
-    assert "brief: the task listing shows the brief fires in the chat that answers the page" \
-        in said, said
+    assert "brief: the task listing shows the brief fires in its own chat" in said, said
     assert not [ln for ln in said.splitlines() if ln.startswith("brief 1:")]
 
 
@@ -241,8 +247,8 @@ def test_a_brief_in_the_chat_that_handed_the_page_on_is_moved_never_nothing_to_t
                           "--triggers", _json(tmp_path, "t3.json", {"data": tasks}),
                           "--details", _json(tmp_path, "d3.json", detail)]) == 0
     said = buf.getvalue()
-    move = next((ln for ln in said.splitlines() if ln.startswith("brief 1:")), "")
-    assert "create_trigger" in move and f'"persistent_session_id": "{LIVE}"' in move, said
+    move = next((ln for ln in said.splitlines() if ln.startswith("brief 2:")), "")
+    assert "create_trigger" in move and f'"persistent_session_id": "{routines.NEW_CHAT}"' in move, said
     assert "nothing to tidy" not in said
 
 
@@ -343,13 +349,15 @@ def test_the_upgrade_prompt_names_the_whole_no_command():
 def test_an_archive_refused_is_tried_again_never_handed_to_the_person(copy, tmp_path, monkeypatch):
     """The live helper's archive of the chat it took over from was refused (it was still
     finishing), and it told the person "you can archive it yourself" (the maintainer's live
-    run, 2026-11-05). The plan says a refused archive is never mentioned, and from the live
-    helper it asks for one check-in that tries again."""
+    run, 2026-11-05). The plan says a refused archive is never mentioned, and the next tidy-up
+    tries again by itself: no reminder, which a chat that approved computer access could never
+    run (the maintainer, 2026-11-10)."""
     said = _tidy(copy, tmp_path, monkeypatch, listed="idle", told="idle",
                  used="2026-11-01T08:00:00Z", once=False)
     assert f"archive {DESK}" in said, said
-    line = next(ln for ln in said.splitlines() if "refused" in ln)
-    assert "never asked of the person" in line and '"delay_minutes": 31' in line, line
+    line = next(ln for ln in said.splitlines() if ln.startswith("then:") and "refused" in ln)
+    assert "never asked of the person" in line and "send_later" not in line, line
+    assert "the next tidy-up tries again" in line and "send_later" not in said
 
 
 def test_every_chat_the_app_starts_asks_for_auto(monkeypatch):

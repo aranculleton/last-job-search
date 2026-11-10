@@ -147,7 +147,7 @@ def test_the_final_reply_is_the_message():
 
 
 def test_both_set_ups_are_written_down_step_by_step():
-    for heading in ("### (a) In the chat that answers your page", "### (b) A routine, a new chat each run",
+    for heading in ("### (a) In a chat of its own", "### (b) A routine, a new chat each run",
                     "### Test it, without fire_trigger"):
         assert heading in README, heading
     assert "run_once_at" in README and "do not archive, delete or rebuild" in README

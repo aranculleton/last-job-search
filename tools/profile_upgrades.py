@@ -614,6 +614,23 @@ def _copy_line() -> str:
     return ("%s may not run if the chat it was set up in is gone" % ", ".join(old)) if old else ""
 
 
+def _brief_own_chat() -> str:
+    """A brief bound to the chat that answers the page (or any chat not made for it), or set
+    to a fresh chat each run: the first fails every morning once that chat approves computer
+    access, the second has no copy of the files (the maintainer, 2026-11-10). The trace:
+    `own` on the brief's chat in profile/routines.json (routines.py record --own-chat)."""
+    try:
+        import routines
+        reg = routines.load()
+    except Exception:  # noqa: BLE001  no registry: nothing scheduled
+        return ""
+    r = next((x for x in routines.work(reg or {}) if routines._is_brief(x)), None)
+    if not r or not r.get("trigger_id"):
+        return ""
+    why = routines.needs_own_chat(reg, r, None, routines.trusted_chat())
+    return f"the morning brief needs a chat of its own ({why})" if why else ""
+
+
 def _doorbells() -> str:
     """Every tap on the page left a comment sent to Claude that nothing resolved, so the Claude
     app shows a growing unread count on the page. The trace: the day in said_once.json."""
@@ -1660,8 +1677,8 @@ REGISTRY: tuple[Upgrade, ...] = (
             "to your search",
             _brief_daily, "in a cloud chat, with or without a page: `list_triggers` (every "
             "page), `python3 tools/routines.py brief --triggers <each page> --own-initiative` "
-            "(it binds the brief to the chat that answers the page, or with no page to this "
-            "chat), the calls it prints, and the one line it prints to say, which names where "
+            "(it makes the brief a chat of its own with the copy attached, never the chat "
+            "that answers the page), the calls it prints, and the one line it prints to say, which names where "
             "and when it comes. In a chat on their computer it prints the line instead (one "
             "press of the bell starts it from the cloud; with no page, it says to make the page "
             "first): put it on their page as a To do", "edit", "~1 min", priority=3),
@@ -1671,6 +1688,14 @@ REGISTRY: tuple[Upgrade, ...] = (
             _copy_line, "`list_triggers` (every page), `python3 tools/routines.py brief "
             "--triggers <each page>`, make each `mend` call it prints, then `python3 "
             "tools/routines.py mended`. Say nothing about it", "edit", "~1 min", priority=2),
+    Upgrade("brief-own-chat", "2026-11-10",
+            "your morning brief keeps coming every day, in a chat of its own, whatever you "
+            "approve in your other chats",
+            _brief_own_chat, "in a cloud chat: `list_triggers` (every page), `python3 "
+            "tools/routines.py brief --triggers <each page>`, and make each `move` call it "
+            "prints, in order, stopping at the first that fails. In a chat on their computer "
+            "nothing: the chat in the cloud that answers the page does it at its daily tidy-up. "
+            "Say nothing about it", "edit", "~1 min", priority=1),
     Upgrade("doorbells", "2026-11-04",
             "your page stops showing a number of unread messages that never goes away",
             _doorbells, "`python3 tools/app.py doorbells` prints what to do: resolve each "

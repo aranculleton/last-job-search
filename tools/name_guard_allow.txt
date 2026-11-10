@@ -722,3 +722,4 @@ Rafe Mallory             # invented, tests/test_every_hold_says_when_it_ends.py
 Rue Vane                 # invented, tests/test_a_people_run_reaches_the_people_who_answer.py
 Thornbury Games          # invented, tests/test_a_people_run_reaches_the_people_who_answer.py
 Nova Scotia              # a Canadian province, tests/test_a_people_run_reaches_the_people_who_answer.py
+Glowline Cosmetic Clinics  # invented employer, tests/test_the_brief_news_is_one_round.py

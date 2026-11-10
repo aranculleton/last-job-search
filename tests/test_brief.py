@@ -591,13 +591,14 @@ def test_the_message_carries_the_news_without_its_links(tmp_path):
     assert "Example Business News, 28 Oct" in shown and "https://" not in shown, r.stdout
 
 
-def test_too_few_news_items_have_the_chat_search_again_once(tmp_path):
-    """The news reader came back with none on 4 November, dropping every result not dated on
-    its own line, while three ordinary searches found two items at once. Fewer than three: the
-    chat searches again itself, once, reading a day from a result's title, text or link."""
+def test_a_reader_that_brings_nothing_has_the_chat_search_once_itself(tmp_path):
+    """The news reader came back with none on 4 and 10 November, while ordinary searches found
+    items at once. Only when it brings nothing does the chat search itself, once, reading a
+    day from a result's title, text or link; a reader that brought some is the round, never a
+    second one (the maintainer, 2026-11-10: a whole extra wait most mornings)."""
     state = _state(tmp_path)
     _run(state, "--today", "2026-11-04", "--write")
-    for stdin, args, asks in ((NEWS_ITEM, (), True), ("", (), True), (NEWS_ITEM, ("--again",), False),
+    for stdin, args, asks in (("", (), True), (NEWS_ITEM, (), False), ("", ("--again",), False),
                               (NEWS_ITEM * 3, (), False)):
         if stdin == NEWS_ITEM * 3:
             stdin = "".join(NEWS_ITEM.replace("raise)", "raise-%d)" % i) for i in range(3))
@@ -608,6 +609,9 @@ def test_too_few_news_items_have_the_chat_search_again_once(tmp_path):
             assert "/2026/11/04/" in said[0] and "--again" in said[0] and "2026-10-07" in said[0]
     brief_lines = _run(state, "--today", "2026-11-04").stdout
     assert "today is 2026-11-04" in brief_lines
+    prompt = " ".join(open(os.path.join(ROOT, "automation", "prompts", "morning_brief.md"),
+                           encoding="utf-8").read().split())
+    assert "only when the reader returned nothing" in prompt
 
 
 def test_the_news_reader_reads_a_day_wherever_a_result_gives_it():

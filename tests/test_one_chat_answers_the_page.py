@@ -1059,7 +1059,7 @@ def test_a_newer_copy_is_judged_by_its_commit_not_its_clock(copy):
     assert ("meta", "now") not in writes and not [d for (c, d) in writes if c == "screen"]
 
 
-def test_a_tidy_up_from_a_folder_read_before_the_take_over_binds_this_chat(copy, monkeypatch):
+def test_a_tidy_up_from_a_folder_read_before_the_take_over_reads_the_new_helper(copy, monkeypatch):
     """The start steps reuse the folder read before `listen`'s take-over was sent, so its
     meta/listen still named the helper just replaced: the first tidy-up made the brief's new
     task in that old helper and deleted the one that worked (the maintainer's copy,
@@ -1096,6 +1096,9 @@ def test_a_tidy_up_from_a_folder_read_before_the_take_over_binds_this_chat(copy,
                      set(), set(), set(),
                      now=dt.datetime(2026, 11, 5, 17, 5, tzinfo=dt.timezone.utc))
     assert plan["ask"] == []
-    made = plan["brief"][0]
-    assert made["tool"] == "create_trigger" and made["args"]["persistent_session_id"] == new
+    # The brief leaves the old helper for a chat of its own, never for the new helper
+    # (the maintainer, 2026-11-10), and the old helper goes.
+    assert plan["brief"][0]["tool"] == "create_session"
+    made = plan["brief"][1]
+    assert made["tool"] == "create_trigger" and made["args"]["persistent_session_id"] == routines.NEW_CHAT
     assert [a["id"] for a in plan["archive"]] == [old]
