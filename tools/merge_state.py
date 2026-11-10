@@ -382,6 +382,8 @@ _HASHED = ("a snapshot named by the hash of what it holds: two chats that write 
 _PER_ROUND = ("named after the round that wrote it, once, and never written again; a round "
               "is run by one chat")
 JSON_NAMES = {
+    ".people_seen.json": "where an earlier people search found nobody in a place, by employer and date, so the next run searches likely employers first (candidates.order); expires after 30 days, and either side's copy is a hint, never a record",
+    "tools/land.py: .json": "a changed file's own name, read only to check it parses before a data-only save lands (land.data_check); never written",
     ".sent.json": "each view batch's records as they stood before it was sent, in the view's own folder, so a refused save can be put back and made again (page_db.keep_landed); never committed",
     ".refused.json": "the record a page save was refused for, in the view's own folder, read once by the next run; never committed",
     ".finished.json": "each finish made from a page dump, with its batches, in the dump's own scratch folder, so the same finish run again gives the same batch (page_db.finished_here); never committed",

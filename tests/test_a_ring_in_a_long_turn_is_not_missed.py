@@ -45,11 +45,11 @@ def test_waiting_says_whether_work_was_asked_for_meanwhile(tmp_path):
     queued = _dump(tmp_path, {"network-2": {"status": "queued",
                                             "asked_at": "2026-11-10T20:01:00Z"}}, age_s=0)
     cmd = [sys.executable, os.path.join(ROOT, "tools", "app_listen.py"), "waiting", queued]
-    out = subprocess.run(cmd, capture_output=True, text=True, check=True).stdout
+    out = subprocess.run(cmd, capture_output=True, encoding="utf-8", check=True).stdout
     assert out.startswith("waiting: work waits since 2026-11-10T20:01:00Z"), out
     os.makedirs(tmp_path / "E" / "work")
     (tmp_path / "E" / "work" / "network-2.json").write_text(
         json.dumps({"data": {"status": "running"}, "version": 2}), encoding="utf-8")
     cmd[-1] = str(tmp_path / "E")
-    out = subprocess.run(cmd, capture_output=True, text=True, check=True).stdout
+    out = subprocess.run(cmd, capture_output=True, encoding="utf-8", check=True).stdout
     assert out.strip() == "waiting: nothing"
