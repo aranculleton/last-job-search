@@ -885,7 +885,7 @@ def cmd_apply(a) -> int:
 
 def choose(db: dict, chat: str, kind: str, now, on: str = "", no_sessions: bool = False,
            claim_out: str | None = None, job_chat: bool = False,
-           computer_only: bool = False, lent: bool = False) -> dict | None:
+           computer_only: bool = False, lent: bool = False, beat: bool = True) -> dict | None:
     """The queued work this chat should take (None: nothing is), with the model a chat
     started for it gets (tools/model_guide.py for_work), `run`: where it is done
     (where_it_runs), and with `claim_out` the claim as batch files. Small work done here is
@@ -937,7 +937,7 @@ def choose(db: dict, chat: str, kind: str, now, on: str = "", no_sessions: bool 
     if claim_out:
         chosen["batches"] = page_db.claim(db, chosen, chat, kind, now, claim_out,
                                           running=chosen.get("run") == "here",
-                                          watching=not (lent or job_chat))
+                                          watching=not (lent or job_chat), beat=beat)
     return chosen
 
 
@@ -954,7 +954,8 @@ def cmd_next(a) -> int:
                         no_sessions=a.no_sessions, claim_out=a.claim_out,
                         job_chat=getattr(a, "job_chat", False),
                         computer_only=getattr(a, "computer_only", False),
-                        lent=getattr(a, "lent", False))
+                        lent=getattr(a, "lent", False),
+                        beat=page_db.read_has(a.dump, "beats"))
     except ValueError as e:
         print(f"app: {e.args[0] if e.args else e}", file=sys.stderr)
         return 2
@@ -1144,8 +1145,8 @@ def job_steps(chosen: dict, claimer: str, url: str, session: bool = True,
              f"$D; python3 tools/app.py view \"$D/view\" --dump \"$D\" --chat <this chat's id> "
              f"--work {wid} (it takes master first, so the page has every other chat's work too, "
              "and never writes over a screen drawn from a newer copy than this one); and send "
-             "every batch it prints (ArtifactData batch). A refused batch: read those four again "
-             "and run it once more. Never message another chat, and never write to the person: "
+             f"every batch it prints (ArtifactData batch). {REFUSED_ONCE} Never message another "
+             "chat, and never write to the person: "
              "the page shows how it went.")
         step(_next_job(url, kind=chat_kind, computer_only=computer_only))
     else:
@@ -1156,6 +1157,15 @@ def job_steps(chosen: dict, claimer: str, url: str, session: bool = True,
              f"{wid}, not landed: bring the page up to date.\" Never write to the person: the "
              "page shows how it went.")
     return lines
+
+
+# A refused batch, in one line: the version command reads again just what moved on since the
+# read (the record it names, and the screens, meta and heartbeats other chats keep moving:
+# page_db.read_again) and the same command runs once more. "Read those four again" read all
+# four collections, and a second record moved on was refused again (2026-11-10).
+REFUSED_ONCE = ("A refused batch: python3 tools/app.py version \"$D\" <the record> <the version> "
+                "the refusal names, which reads again just what moved on, then the same command "
+                "once more and send what it prints.")
 
 
 # How a job's chat saves and waits for the save before its next step: land.py in the
@@ -1175,7 +1185,7 @@ def _next_job(url: str, first_word: str = "Then", kind: str = "cloud",
     what, flags = (("piece of work for this computer", f"{kind} --computer-only")
                    if computer_only else ("big job", f"{kind} --job-chat"))
     return (f"{first_word}, the next {what} waiting, so a queue keeps moving with nobody to "
-            f"start it: ArtifactData query, url {url}, collections work and holds, out_dir a "
+            f"start it: ArtifactData query, url {url}, collections work, holds and beats, out_dir a "
             f"fresh folder $E; python3 tools/app.py next \"$E\" --chat <this chat's id> --kind "
             f"{flags} --on \"<your model>\" --claim-out \"$E/claim\". Nothing named: "
             "stop. One named: send its claim batch (refused: another chat has it, stop), then "

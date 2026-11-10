@@ -223,7 +223,7 @@ def test_a_refusal_naming_no_version_reads_the_record_again_and_saves_once_more(
                               "--now", LATER, LJS_PAGE_MIRROR=ring.mirror, ok=(0, 2)))
     assert not all(land(ring, got["batches"]))
     code, said = app_in(ring, "version", d, "screen/" + victim[:-5].replace("@", "~"))
-    assert code == 0 and "read screen again into this folder" in said, said
+    assert code == 0 and "First read" in said and "screen again into this folder" in said, said
     listing = query(ring, d, {"collection": "screen", "query": {"limit": 1000}})
     code, _ = app_in(ring, "versions", d, text="\n".join(listing))
     assert code == 0

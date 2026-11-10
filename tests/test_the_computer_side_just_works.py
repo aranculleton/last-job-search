@@ -518,6 +518,8 @@ def test_a_chat_lent_the_computers_browser_finishes_what_it_claimed_and_is_not_i
     s = Search(str(tmp_path))
     s.put("work", "network~people", _w("network", "Harbourline Bank", to="computer",
                                        title="People at Harbourline Bank"), version=4)
+    # Its read took the heartbeats (none there yet), so the claim writes its own.
+    os.makedirs(os.path.join(s.dump, "beats"), exist_ok=True)
     got = json.loads(s.run("next", s.dump, "--chat", "cloud-7", "--kind", "computer",
                            "--computer-only", "--lent", "--now", NOW,
                            "--claim-out", os.path.join(s.dump, "claim")))

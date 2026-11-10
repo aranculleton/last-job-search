@@ -1250,7 +1250,8 @@ def heartbeat(chat_id: str, chat_kind: str, now: dt.datetime, busy: str | None =
 
 
 def claim(db: dict, chosen: dict, chat_id: str, chat_kind: str, now: dt.datetime,
-          out_dir: str, running: bool = False, watching: bool = True) -> list[str]:
+          out_dir: str, running: bool = False, watching: bool = True,
+          beat: bool = True) -> list[str]:
     """The claim for `chosen` (next_item's answer) as batch files: the item pinned to the
     version read, each lock created (a lock left by a finished job is replaced, pinned to
     its version), and the chat's heartbeat. A refused batch means another chat has it.
@@ -1323,10 +1324,21 @@ def claim(db: dict, chosen: dict, chat_id: str, chat_kind: str, now: dt.datetime
     # a computer chat's, a cloud chat lent the computer's browser made the page and
     # computer.route believe a chat on the computer listened for twenty minutes (the release
     # review, 2026-11-09).
-    w.add("set", "chats", chat_id, heartbeat(chat_id, chat_kind, now, busy=line,
-                                             watching=watching),
-          if_version=mine["version"] if mine else None)
+    # Only where the read had the heartbeats (`beat`): unread, its record was written as new,
+    # pinned to nothing while the page held it at 6, and the whole claim was refused (the
+    # maintainer's helper, 2026-11-10). A batch writes only what its read listed.
+    if beat:
+        w.add("set", "chats", chat_id, heartbeat(chat_id, chat_kind, now, busy=line,
+                                                 watching=watching),
+              if_version=mine["version"] if mine else None)
     return w.save("claim")
+
+
+def read_has(dump_dir: str, collection: str) -> bool:
+    """Did the read into `dump_dir` take `collection` (by its stored name or its old one)?"""
+    names = {collection, STORE.get(collection, collection)}
+    names |= {k for k, v in STORE.items() if v == collection}
+    return any(os.path.isdir(os.path.join(dump_dir, n)) for n in names)
 
 
 # ------------------------------------------------------------------ progress as it goes
@@ -1661,6 +1673,10 @@ def version_known(dump_dir: str, key: str) -> bool:
     return False
 
 
+# Stored collections every chat and the page itself write while a save is on its way.
+MOVED_BY_OTHERS = ("screen", "meta", "beats")
+
+
 def read_again(dump_dir: str, ref: str, missing: bool = False) -> list[str]:
     """The collections to read again into the folder before a refused save is made again:
     those of every record the refused batch (and any sent after it) pins only by its stamp,
@@ -1674,6 +1690,11 @@ def read_again(dump_dir: str, ref: str, missing: bool = False) -> list[str]:
                if key in (sent[i].get("records") or [])), None)
     recs = [r for s in sent[at:] for r in s.get("records") or []] if at is not None else []
     colls = {r.rpartition("/")[0] for r in recs if r != key and not version_known(dump_dir, r)}
+    # What other chats move on all the time (the page's screens, its meta and heartbeats) is
+    # read again too, whatever the read listed: the store names one record a refusal, so a
+    # page update refused for screen/listener was refused again for meta/now (the
+    # maintainer's helper, 2026-11-10). Read again once, the save made again lands once.
+    colls |= {r.rpartition("/")[0] for r in recs if r.rpartition("/")[0] in MOVED_BY_OTHERS}
     if missing:
         colls.add(key.rpartition("/")[0])
     return sorted(colls)
