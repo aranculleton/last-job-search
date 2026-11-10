@@ -162,7 +162,7 @@ The engine writes everything a record holds: the parts and their minutes against
 - **`ask`**: for each question to ask them, `follow` as `{"if": "<their likely answer>", "then": "<what to ask next>"}`.
 - **`private`**: add to `confirm` whatever the person cannot answer yet. The answer to an unknown is "I'll confirm that and come back to you", and nothing is guessed. The pay, notice and place are the engine's and are made again on every build.
 
-Every fact is the profile's own (CLAUDE.md, "grounded"). When the person asks for an example, a metric or an anecdote, write it and set `"draft": true` on it: it is shown to them as a draft to confirm, and never reaches anything an employer sees until they confirm it and the profile holds it (rule 2). Never invent a figure otherwise. Then keep it:
+Every fact is the profile's own (CLAUDE.md, "The person": a claim is grounded only when the profile's sources carry it). When the person asks for an example, a metric or an anecdote, write it and set `"draft": true` on it: it is shown to them as a draft to confirm, and never reaches anything an employer sees until they confirm it and the profile holds it (rule 2). Never invent a figure otherwise. Then keep it:
 
 ```bash
 python3 tools/interview_pack.py live "<Company>" --role "<Role>" --stage "<Stage>" --fill <scratchpad>/live.json --write

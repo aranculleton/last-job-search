@@ -442,7 +442,7 @@ METHODS: dict[str, dict] = {
             (32, "2026-11-10", False, "an interview booked or registered notes where it is on the page, so the answer that booked it carries a Ready in Coming up button to it; nothing made before needs making again"),
             (33, "2026-11-10", True, "each interview still ahead gets a live prep beside its living document, in the order the interview runs and its own shape (a recruiter screen, a hiring manager, a technical round or a take-home, a case with a personal experience interview, a panel, a final): what to say first in each part with the questions it is likely to prompt, every likely question with who asks it, other ways it is put, a Simple and a Detailed answer and follow-ups by who asks, the stories each once, the role's words explained in the employer's own work with a worked example, the questions to ask them with what to ask next, the time each part takes at your own speaking speed, the questions they are known to ask answered first, and notes just for you; it is checked before it is kept (answers two to four sentences, the detailed one a little fuller, no long dashes, nothing assuming an earlier conversation, every term explained, every figure your profile's own); a prep for a round already held stays as it is"),
         ),
-        "fingerprint": "048faf77c916c520",
+        "fingerprint": "d4ded6b8d0fcc2d8",
     },
     "research": {
         "by": "upgrade", "priority": 3, "applies": "live_applications", "time": "~5 min each",
