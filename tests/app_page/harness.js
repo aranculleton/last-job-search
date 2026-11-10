@@ -204,7 +204,14 @@ async function open(o) {
     page.on("console", (m) => { if (m.type() === "error" && !/net::ERR_FAILED|Failed to load resource/.test(m.text())) errors.push(m.text()); });
     // Every page runs on the sample's own morning unless a scenario sets another time, so what
     // is due, late or this week does not move with the day the tests run.
-    await page.clock.install({time: new Date(o.clock || process.env.LJS_TEST_NOW || "2026-10-25T09:00:00Z")});
+    const startAt = Date.parse(o.clock || process.env.LJS_TEST_NOW || "2026-10-25T09:00:00Z");
+    // `still`: the page's clock held at that moment, moving only when a step moves it
+    // (runFor). Left running, it moves with the real time a page takes to start and draw,
+    // which Safari's engine on a busy machine spent seconds of: a clock read as "30s" said
+    // "35s" and a bar read at 150 s was past it (CI, 2026-11-10). Installed a second early
+    // and held at once, before the page loads, so the hold is never in the past.
+    if (o.still) { await page.clock.install({time: new Date(startAt - 1000)}); await page.clock.pauseAt(new Date(startAt)); }
+    else await page.clock.install({time: new Date(startAt)});
     // A fresh load never opens on Settings (4.3): a test that starts there arrives the way a
     // person does, from the page itself.
     if (o.hash === "settings") { await page.goto("https://ljs.test/"); await settle(page); await page.evaluate(() => { location.hash = "settings"; }); }
@@ -1058,7 +1065,7 @@ async function bar(page, id) {
 }
 
 S.progress = async (a) => {
-  const o = await open({html: a.html, hash: "work", clock: T0, seed: {"work/search~1": runningDoc()}});
+  const o = await open({html: a.html, hash: "work", clock: T0, still: true, seed: {"work/search~1": runningDoc()}});
   const {page, store} = o;
   // A work row is compact; its title opens its steps.
   await page.locator('[data-k="wct:search~1"]').click();
@@ -1252,7 +1259,7 @@ S.stop = async (a) => {
 // read waits for what it checks, with a time limit.
 S.picked_up = async (a) => {
   const at = (s) => new Date(Date.parse(T0) + s * 1000).toISOString();
-  const o = await open({html: a.html, hash: "work", clock: T0, seed: {
+  const o = await open({html: a.html, hash: "work", clock: T0, still: true, seed: {
     "work/search~1": runningDoc({stage_at: at(-65), steps: [{at: at(-65), text: "Searching 4 job sites"}]}),
     "work/files~resume-current": {kind: "files", title: "Your resume, ready to download", to: "cloud", args: {}, asked_at: at(-90), status: "queued", stages: [], stage: 0, steps: [], stop_asked: false, attempt: 1},
     "work/prep~int-larkspur-supply": {kind: "prep", title: "Interview prep: Larkspur Retail", to: "cloud", args: {}, asked_at: at(-10), status: "queued", stages: [], stage: 0, steps: [], stop_asked: false, attempt: 1},

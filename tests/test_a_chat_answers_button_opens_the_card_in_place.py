@@ -60,10 +60,13 @@ def _seed(extra=()):
     return seed
 
 
+# Where the card is drawn, in every engine (the harness's __drawnRect): Safari measures a box
+# inside the zoomed page before the zoom, so the phone's work sheet, drawn at the foot of the
+# screen, read as below it there (CI's Safari run, 2026-11-10).
 PROBE = r"""((sel) => {
   const el = document.querySelector(sel);
   const box = el && (el.closest('.card') || el);
-  const r = box ? box.getBoundingClientRect() : null;
+  const r = box ? box.__drawnRect() : null;
   return {marker: window.__ljsMarker || null, found: !!el,
           inView: !!r && r.bottom > 0 && r.top < window.innerHeight && r.height > 0,
           marked: !!box && (box.classList.contains('flash') || !!box.closest('.flash')),
