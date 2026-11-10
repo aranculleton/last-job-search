@@ -1002,7 +1002,18 @@ def assemble(round_dir: str, only=()) -> tuple[list[dict], list[str], list[str]]
                          "consent`, and draft again. Never record a no they did not give.")
     import skill_answers
     shared = skill_answers.load()
-    drafts, missing, rejected = [], [], []
+    drafts, missing, rejected, waits = [], [], [], []
+    # A pick held for the person's answer (held.json: ruled out before, a second role at one
+    # employer, a fixed-term contract) is named with the question it waits on, never left out
+    # without a word: assembled, a held pick vanished from the batch (2026-11-10).
+    for p in _read_held(round_dir):
+        if not isinstance(p, dict) or (want and p.get("slug") not in want):
+            continue
+        asks = [str((h or {}).get("question") or "").strip() for h in p.get("hold") or []
+                if isinstance(h, dict)]
+        asks = [x for x in asks if x]
+        waits.append(f"{p.get('company') or p.get('slug') or 'a pick'} (waiting on the "
+                     "person's answer" + (f": {asks[0]}" if asks else "") + ")")
     for p in staged:
         path = os.path.join(round_dir, f"audit_{p['slug']}.json")
         try:
@@ -1085,7 +1096,7 @@ def assemble(round_dir: str, only=()) -> tuple[list[dict], list[str], list[str]]
     with open(os.path.join(round_dir, "drafts.json"), "w", encoding="utf-8", newline="\n") as fh:
         json.dump(drafts, fh, indent=1)
         fh.write("\n")
-    return drafts, missing, rejected
+    return drafts, missing + waits, rejected
 
 
 def _report(staged: list[dict], round_dir: str) -> None:

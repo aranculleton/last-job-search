@@ -390,8 +390,9 @@ METHODS: dict[str, dict] = {
             (86, "2026-11-10", False, "a resume made for a contact goes into the page's store as it is made, so its Get it downloads at once; a job's own chat lands its work with land.py in the foreground and brings the page up to date itself, never messaging another chat; a networking item sent to the computer with args.read_first reads each profile there before rewriting its note"),
             (87, "2026-11-10", False, "how a draft's work is saved changed: a save of only the person's own files lands after a data check with no code checks, and a chat on the person's computer saves to GitHub and leaves the merge to the chat that answers the page; nothing made before needs making again"),
             (88, "2026-11-10", False, "a draft recorded in the tracker notes where it is on the page, so the answer that made it carries a Ready in Jobs button to that draft; nothing made before needs making again"),
+            (89, "2026-11-10", False, "assembling a batch names each pick still held for the person's answer, with its question, never leaving it out without a word"),
         ),
-        "fingerprint": "d7a5b96b17d352e5",
+        "fingerprint": "f22c971ec9a9673a",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
