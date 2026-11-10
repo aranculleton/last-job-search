@@ -5238,6 +5238,14 @@
   const FILL_SHARE = 0.75;
   // The compact Brief (the numbers a line under the greeting): a short window always, and any
   // window where the whole Brief does not fit without it (fitBrief decides; app.css).
+  // What a panel may measure past its own box and still be full rather than overflowing: two
+  // px. A panel's scrollHeight and clientHeight are whole numbers each rounded its own way, and
+  // a box's edges are rounded to the page's px before its zoom in Safari, so a panel exactly
+  // full read a px or two over there: Jobs gave up a row at each of two checks and showed four
+  // of eleven with room for six (Safari's run, 2026-11-10). Two px under the zoom is never a
+  // row of anything.
+  const FIT_SLACK = 2;
+  function fitSpills(panel) { return panel.scrollHeight > panel.clientHeight + FIT_SLACK; }
   function briefShort(v) { const r = document.documentElement; if (r.classList.contains("brief-short") !== !!v) r.classList.toggle("brief-short", !!v); }
   function fitBrief(forceShort) {
     const grid = document.querySelector("#main .brief-grid");
@@ -5277,7 +5285,7 @@
       for (const li of [...l.children].filter((x) => x.hidden)) {
         const before = panel.getBoundingClientRect().height;
         li.hidden = false;
-        if (panel.getBoundingClientRect().height > before + 1 || panel.scrollHeight > panel.clientHeight + 1) { li.hidden = true; break; }
+        if (panel.getBoundingClientRect().height > before + 1 || fitSpills(panel)) { li.hidden = true; break; }
       }
     }
     // Shrink: while the Brief runs past the bottom of the window, one item gives way at a
@@ -5342,7 +5350,7 @@
         if (!panel) continue;
         for (const li of [...l.children].filter((x) => x.hidden)) {
           li.hidden = false;
-          if (bottom() > room + 1 || panel.scrollHeight > panel.clientHeight + 1) { li.hidden = true; break; }
+          if (bottom() > room + 1 || fitSpills(panel)) { li.hidden = true; break; }
         }
       }
       // Still past the window with Your progress as a panel, which cannot give way: the compact
@@ -5400,7 +5408,7 @@
     // page: none runs out of room, and nothing scrolls.
     const scrolls = () => (document.scrollingElement || document.documentElement).scrollHeight - window.innerHeight;
     const roomNow = () => new Map(panels.map((q) => [q, airRoom(q)]));
-    const holds = (was, sc) => scrolls() <= Math.max(0, sc) && panels.every((q) => airRoom(q) >= Math.min(-2, was.get(q)) - 1);
+    const holds = (was, sc) => scrolls() <= Math.max(0, sc) && panels.every((q) => airRoom(q) >= Math.min(-2, was.get(q)) - FIT_SLACK);
     for (const p of panels) {
       if (!p.querySelector(":scope > .bp-body > .bp-sub")) continue;
       const was = roomNow(), sc = scrolls();
