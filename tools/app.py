@@ -444,11 +444,30 @@ def cmd_view(a) -> int:
                 ahead_of_us[theirs_sha] = commit_ahead(
                     theirs_sha, os.environ.get("LJS_BASIS_SHA") or "HEAD")
             if ahead_of_us[theirs_sha] is not None:
-                return ahead_of_us[theirs_sha]
+                return ahead_of_us[theirs_sha] or holds_unlanded(d)
         theirs = str(d.get("base") or "")
         return bool(base) and bool(theirs) and theirs > base
+
+    def holds_unlanded(d: dict) -> bool:
+        """Was it drawn, a little while ago, from a copy holding work of its own not landed
+        yet that this copy lacks? A reply drafted and committed in the person's own chat was
+        on the page until the helper, drawing from master, put the old draft back on their
+        card until the save landed (the maintainer, 2026-11-10). Kept only for
+        UNLANDED_KEEP_S, so a save that never lands never stops this chat drawing for good."""
+        head = str(d.get("head_sha") or "")
+        made = app_model.parse_time(d.get("made_at"))
+        if not head or made is None or (now - made).total_seconds() > UNLANDED_KEEP_S:
+            return False
+        if ("head", head) not in ahead_of_us:
+            ahead_of_us[("head", head)] = commit_ahead(
+                head, os.environ.get("LJS_HEAD_SHA") or os.environ.get("LJS_BASIS_SHA") or "HEAD")
+        # Never seen here, or not in this copy's history: work this copy does not have.
+        return ahead_of_us[("head", head)] is not False
     kept: list = []
+    head_sha = copy_head_sha()
     stamp = {"by": by, **({"base": base} if base else {}),
+             # Only where this copy holds commits master does not have yet (holds_unlanded).
+             **({"head_sha": head_sha} if head_sha and head_sha != base_sha else {}),
              **({"base_sha": base_sha} if base_sha else {})}
     # The suggestions already on the page keep their day, so no more than three new ones
     # reach it a day.
@@ -462,7 +481,8 @@ def cmd_view(a) -> int:
     # one card had changed (2026-11-03). The page takes each document newer than its own copy,
     # so one left as it was still shows; a section in parts is kept or rewritten whole, so
     # its parts never mix two revs.
-    volatile = ("rev", "made_at", page_db.VERSION_FIELD, "by", "base", "base_sha")
+    volatile = ("rev", "made_at", page_db.VERSION_FIELD, "by", "base", "base_sha",
+                "head_sha")
 
     def unchanged(doc_id, doc):
         old = (views.get(doc_id) or {}).get("data")
@@ -890,6 +910,26 @@ def copy_basis_sha() -> str:
     code, out = _git_out("merge-base", "HEAD", "origin/master")
     if code != 0 or not out:
         code, out = _git_out("rev-parse", "HEAD")
+    return out if code == 0 else ""
+
+
+# How long screens drawn from a copy with work not landed yet are kept from a chat whose copy
+# lacks it (cmd_view's holds_unlanded): a landing takes minutes, and one that never comes must
+# not keep any chat from drawing them for good.
+UNLANDED_KEEP_S = 30 * 60
+
+
+def copy_head_sha() -> str:
+    """This copy's newest commit, its own not landed yet included: screens carry it as
+    `head_sha` where it is not `base_sha`, so a chat whose copy lacks that work does not draw
+    over them before it lands. "" where it cannot be told. LJS_HEAD_SHA is for tests (with
+    LJS_BASIS_SHA alone, the copy is taken to hold nothing unlanded)."""
+    given = os.environ.get("LJS_HEAD_SHA", os.environ.get("LJS_BASIS_SHA"))
+    if given is not None:
+        return given
+    if not os.path.isfile(os.path.join(person.ROOT, "profile", "person.json")):
+        return ""
+    code, out = _git_out("rev-parse", "HEAD")
     return out if code == 0 else ""
 
 
