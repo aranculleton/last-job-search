@@ -735,7 +735,9 @@ def _person(ctx: Ctx, targets: dict) -> dict:
         # Known ready, never only said: "Find people" goes to the computer on this (the page's
         # peopleTo), and sent there with no computer that could take it, it waited for good
         # (the release review, 2026-11-09).
-        computer = computer_reads(ctx)
+        import computer as _computer
+        computer = _computer.reads_there(place.place_record(), ctx._got.get("computer") or {},
+                                         ctx.now)
     except Exception:  # noqa: BLE001
         pass
     return {"first_name": first, "doc_noun": noun, "time_zone": zone, "repo": repo,

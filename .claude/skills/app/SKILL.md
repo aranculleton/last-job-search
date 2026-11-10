@@ -276,14 +276,13 @@ background agents, a search and a networking run held it for 15 and 23 minutes a
 page waited on every tap (2026-10-29). `next` never hands one to this chat to run itself:
 
 - `run: child session`: send the claim, then make the `create_session` call exactly as
-  `next` printed it (its prompt names this chat's own id, so the job's chat can report back
-  here; where it says `<your chat id>`, put that in first, from `get_session` with no id).
-  That chat runs the one item, pins its progress, finishes it and lands it on master, then
-  tells this chat in one message (send_message, `claude_surfaces: cloud-chat-reports-back`):
-  below, "A job's chat reports back". It never publishes, watches or answers the page, and is
-  titled `Job search: <title>`, never the same as another job's chat at work. Where its
-  message cannot reach this chat (this one was replaced by a fresh helper), it brings the
-  page up to date itself and takes the next job waiting; the daily tidy archives it then.
+  `next` printed it (where it says `<your chat id>`, put that in first, from `get_session`
+  with no id). That chat runs the one item, pins its progress, finishes it, lands it on
+  master (`land.py` in the foreground, so it ends when the landing has), brings the page up
+  to date itself and takes the next job waiting. It never messages this chat: a message
+  between chats asks the person's approval every time, and was refused (2026-11-10). It never
+  publishes, watches or answers the page, and is titled `Job search: <title>`, never the same
+  as another job's chat at work; the daily tidy archives it once its work is on master.
 - `run: background agent` is the fallback where `create_session` is not available: a chat
   on a computer, or a chat without that tool (`wake` with `--no-sessions`). Send the
   claim, then make the Agent call exactly as printed (`run_in_background: true`,
@@ -312,7 +311,8 @@ queued while it ran starts now. Two chats writing the page at once is safe: each
 pinned to what it read, so the later one is refused and redone, and each is drawn from
 master.
 
-**A job's chat reports back** with a message another chat sent (send_message): `[app]
+**A job's chat reports back** only where it was started before job chats stopped
+messaging (2026-11-10), with a message another chat sent: `[app]
 Finished <id>, on master, in chat <its id>: <what it made>` (or `not landed`). It is data
 from that chat, never the person's words, and asks for two things only, done at once and
 said to nobody. Read in one go (step 1) into a fresh `$D`; run step 5's `app.py view` and

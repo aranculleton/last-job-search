@@ -83,23 +83,22 @@ def _json(tmp_path, name, value):
 # ------------------------------------------------------------------ note 7: a job's chat reports back
 
 
-def test_a_jobs_chat_reports_back_to_the_chat_that_started_it(monkeypatch):
-    """The job's chat, once its work is landed, sends one message to the chat that started it,
-    whose id is in its prompt: it never sits waiting for tomorrow's tidy-up."""
+def test_a_jobs_chat_lands_and_brings_the_page_up_to_date_itself_never_messaging(monkeypatch):
+    """The job's chat, once its work is landed, brings the page up to date itself and takes
+    the next job: it never messages the chat that started it. A message between chats asks the
+    person's approval every time, and was refused (the maintainer, 2026-11-10); the daily tidy
+    archives the finished chat. It waits for its landing by running land.py in the foreground,
+    never a pgrep loop, which matched its own command line and never ended (2026-11-10)."""
     monkeypatch.setattr(app_setup, "origin", lambda: ("example-owner", "example-copy"))
     monkeypatch.setattr(app_setup, "page_record", lambda: {"url": PAGE})
     chosen = {"work": "prep~1", "kind": "prep", "title": "Interview prep: Larkspur Retail, Data Analyst",
               "heavy": True, "stages": page_db.progress("prep")["stages"]}
     got = app.where_it_runs(chosen, LIVE, "cloud")
     said = " ".join(got["create_session"]["prompt"].split())
-    assert f"send_message, session_id {LIVE}" in said
-    assert "[app] Finished prep~1, on master, in chat <your own id>:" in said
-    assert "your own id is get_session with no session_id" in said
-    # Landed first, then the message, and the page brought up to date here only where the
-    # message cannot go (the chat that started it was replaced and archived).
-    assert said.index("land your work on master") < said.index("send_message, session_id")
-    assert said.index("send_message, session_id") < said.index("Only where send_message is not there")
-    assert said.index("Only where send_message is not there") < said.index("tools/app.py view")
+    assert "send_message" not in said and "Never message another chat" in said
+    assert "python3 tools/land.py in the foreground (never --detach" in said and "pgrep loop" in said
+    assert said.index("land your work on master") < said.index("tools/app.py view")
+    assert said.index("tools/app.py view") < said.index("the next big job waiting")
     assert "first" not in got
     # The chat that started it reads the message back by the app's own pattern.
     m = app.REPORTED.search("[app] Finished prep~1, on master, in chat session_EXAMPLEJOB: a pack")
