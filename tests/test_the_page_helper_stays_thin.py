@@ -246,8 +246,12 @@ def test_a_save_asked_for_is_aged_on_the_clock_that_asked(landing_copy):
     assert land.wanted(str(chat))
     land._mark(str(chat), land.WANTED_FILE, json.dumps({"message": "Notes", "at": old}) + "\n")
     assert not land.wanted(str(chat))              # asked a month ago, never finished: stale
-    land._mark(str(chat), land.WANTED_FILE, "\n")  # no stamp: aged by the file, as before
+    p = land._mark(str(chat), land.WANTED_FILE, "\n")  # no stamp: aged by the file, as before
+    now = time.time()
+    os.utime(p, (now, now))                        # written now, on this clock (a moved one too)
     assert land.wanted(str(chat))
+    os.utime(p, (old, old))
+    assert not land.wanted(str(chat))
 
 
 def test_a_detached_save_opens_and_merges_its_pull_request_itself(landing_copy, capsys):

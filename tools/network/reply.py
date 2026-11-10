@@ -2065,6 +2065,11 @@ def save_draft(contact_id: str, text: str, msgs=None) -> str:
         state.note_draft_answers(contact_id, msgs)
     except Exception:  # noqa: BLE001  the draft stands without it
         pass
+    try:
+        # Written for them now: a wait for a role on their row is over (state.role_hold).
+        state.end_role_hold(contact_id)
+    except Exception:  # noqa: BLE001  the draft stands; the row is as it was
+        pass
     return path
 
 

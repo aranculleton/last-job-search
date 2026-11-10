@@ -32,6 +32,7 @@ import os
 import shutil
 import subprocess
 import sys
+import zoneinfo
 
 import pytest
 
@@ -49,7 +50,12 @@ def _own_talked_cache(monkeypatch):
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [os.path.join(ROOT, "tools"), os.path.join(ROOT, "tools", "network")]
 
-_DAY = datetime.date.today()
+import person  # noqa: E402
+
+# The example person's own day, the one candidates.py counts on (person.today()), never the
+# machine's: 14 hours ahead of London they are a day apart (the far time zones, 2026-11-10).
+_ZONE = person.home_zone_named(os.path.join(ROOT, "profile.example"))
+_DAY = datetime.datetime.now(zoneinfo.ZoneInfo(_ZONE)).date() if _ZONE else datetime.date.today()
 TODAY = _DAY.isoformat()
 
 

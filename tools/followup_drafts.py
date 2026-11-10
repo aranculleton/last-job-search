@@ -42,6 +42,7 @@ passed by `check --pack` went only into the pack, and Messages never showed one 
     python3 tools/followup_drafts.py context --due       # what a writer needs, for what code could not draft
     python3 tools/followup_drafts.py context <id>...
     python3 tools/followup_drafts.py check <drafts.json> [--pack]   # the gate, for drafts written by hand
+    python3 tools/followup_drafts.py role-holds [--dry]  # set aside drafts written before the role they wait for
 
 `check` reads a JSON list of {"id": <contact id or app:...>, "text": "<the draft>"} (and
 "kind" where it is not the usual one), runs validate, the restatement check against their
@@ -106,6 +107,120 @@ def gate(text: str, kind: str, name: str = "", title: str = "", company: str = "
     return ([f"{v.rule}: {v.text}" for v in found],
             [f"{a.rule}: {a.text}" + (f" ({a.fix})" if getattr(a, "fix", "") else "")
              for a in warned])
+
+
+# How much of two drafts, the name and the employer taken out of each, must be the same
+# words for the second to be the first with those swapped.
+SAME_SHARE = 0.9
+_GREET = re.compile(r"^\s*(?:hi|hello|hey|dear)\b[^,.!?\n]{0,40}[,.!]\s*", re.I)
+
+
+def _bare(text: str, name: str = "", company: str = "") -> str:
+    """A draft with its greeting, the reader's name and their employer taken out, in small
+    letters: what is left is what was written, whoever it is to."""
+    t = _GREET.sub("", " ".join(str(text or "").split()))
+    words = [w for w in re.split(r"\s+", str(name or "").strip()) if len(w) > 1]
+    for w in sorted(set(words + ([company.strip()] if company.strip() else [])),
+                    key=len, reverse=True):
+        t = re.sub(r"(?<!\w)" + re.escape(w) + r"(?:'s)?(?!\w)", "*", t, flags=re.I)
+    return re.sub(r"[^a-z0-9* ]+", "", t.lower()).strip()
+
+
+def same_but_for_name(text: str, contact: str, name: str = "", company: str = "",
+                      others: dict | None = None) -> str:
+    """Why this draft is not written for its reader, or "": it is the draft waiting for
+    someone else, with the name and the employer swapped (SAME_SHARE of the words the same
+    once both are taken out). `others` is {contact id: (their draft, name, employer)}; None
+    reads every draft waiting on a card (documents/network/<id>/draft.md) with the contact
+    book. Two cards carried one referral follow-up, word for word but for those (the
+    maintainer, 2026-11-10): every message is built for its reader."""
+    import difflib
+    mine = _bare(text, name, company)
+    if len(mine.split()) < 8:
+        return ""                      # a line or two of thanks is the same to anyone
+    if others is None:
+        others = _waiting_drafts(skip=contact)
+    for cid, (theirs, their_name, their_company) in sorted(others.items()):
+        if cid == contact:
+            continue
+        other = _bare(theirs, their_name, their_company)
+        if other and difflib.SequenceMatcher(None, mine.split(), other.split()).ratio() \
+                >= SAME_SHARE:
+            first = (str(their_name or "").split() or ["someone else"])[0]
+            return ("the same words as your draft to %s, with the name and the employer "
+                    "swapped: write it from what this person said and does" % first)
+    return ""
+
+
+# Code's old follow-up on their offer, as it stood on a card: one message for everyone, with
+# the name and the employer swapped.
+_OFFER_TEMPLATE = re.compile(
+    r"you (?:kindly )?offered to (?:refer me if a role came up|put me in touch with someone) at "
+    r".{1,80}?, and I'd still be glad of that\. If (?:one does|a role there appeals), would it "
+    r"be all right to send you the link\?", re.I | re.S)
+
+
+def drafts_before_a_role(contacts=None) -> list[tuple[str, str]]:
+    """[(contact id, why)] for each draft waiting on a card that should carry no words yet:
+    one to someone on hold until a role is posted (it was written before the role), and
+    code's old follow-up on their offer, which was the same message on every card."""
+    from network import state
+    contacts = state.load_contacts() if contacts is None else contacts
+    book = {str(c.get("contact_id") or "").strip(): c for c in contacts}
+    out = []
+    today = person.today()
+    for cid, (body, _name, _company) in sorted(_waiting_drafts().items()):
+        c = book.get(cid) or {}
+        # Only while the hold is on: a draft saved for them ends it (reply.save_draft).
+        if state.role_hold(c.get("next_action")) and state.action_hold(
+                c.get("next_action"), today, c.get("next_action_due")):
+            out.append((cid, "on hold until a role is posted"))
+        elif _OFFER_TEMPLATE.search(body):
+            out.append((cid, "the follow-up on their offer that code wrote for everyone"))
+    return out
+
+
+def set_aside_before_a_role(write: bool = True) -> list[str]:
+    """Set each of `drafts_before_a_role` aside, kept (state.park_draft), and put its person
+    on hold until a role is posted where they are not on hold already. A line each."""
+    from network import state
+    contacts = state.load_contacts()
+    found = drafts_before_a_role(contacts)
+    said, changed = [], False
+    for cid, why in found:
+        said.append("%s: %s" % (cid, why))
+        if not write:
+            continue
+        if state.hold_for_role(contacts, cid, "they offered to refer you", today=person.today()):
+            changed = True                 # on hold now, its draft set aside with it
+        else:
+            state.park_draft(cid)
+    if changed:
+        state.save_contacts(contacts)
+    return said
+
+
+def _waiting_drafts(skip: str = "") -> dict:
+    """{contact id: (the draft waiting on their card, their name, their employer)}."""
+    try:
+        import reading
+        from network import state
+        book = {str(c.get("contact_id") or "").strip(): c for c in state.load_contacts()}
+    except Exception:  # noqa: BLE001  no book: nothing to compare with
+        return {}
+    out = {}
+    for path in glob.glob(person.state("documents", "network", "*", "draft.md")):
+        cid = os.path.basename(os.path.dirname(path))
+        if cid == skip or cid not in book:
+            continue
+        try:
+            with open(path, encoding="utf-8") as fh:
+                body = reading.note_body(fh.read()).strip()
+        except OSError:
+            continue
+        if body:
+            out[cid] = (body, book[cid].get("name") or "", book[cid].get("company") or "")
+    return out
 
 
 def limit_of(kind: str) -> int:
@@ -379,11 +494,32 @@ def draft(item: dict, contacts_by_id: dict, threads_index: dict, tracker, earlie
                         "from what was read about them (/network)")
     if item.get("kind") != "nudge":
         return refused or _new("none", why=item.get("what") or "")
-    # A nudge needs something new to answer: a posting the search found at their employer,
-    # said only to a reader allowed to hear the role (compose.SAY_THE_ROLE).
     compose = _compose()
     reader = compose.reader_type(title)
     since = item.get("since") or ""
+    offer = their_offer(msgs)
+    if offer is not None:
+        # They offered to refer the person, or to put them in touch, once there is a role.
+        # With one posted, the referral ask is written for that role and this person, from
+        # what they offered, by the chat (compose.referral_ask). With none, nothing is
+        # written: code's follow-up on the offer was one message with the name and the
+        # employer swapped, on two cards at once (the maintainer, 2026-11-10). They wait on
+        # hold until a role is posted (`hold_for_role`, state.ROLE_HOLD), and come back by
+        # themselves.
+        role = posting_reason(contact, since, rows, tracker)
+        if role:
+            return refused or _new(
+                "write", kind=kind, who="here",
+                why="%s has posted %s since their offer of %s: write the referral ask for that "
+                    "one role, in what they offered, with the posting's link "
+                    "(compose.referral_ask)" % (company or "their employer",
+                                               _clean_title(role.get("title")),
+                                               offer.get("date") or "an earlier day"))
+        got = _new("none", kind=kind, why=ROLE_WAIT_WHY % (company or "their employer"))
+        got["hold_role"] = True
+        return got
+    # A nudge needs something new to answer: a posting the search found at their employer,
+    # said only to a reader allowed to hear the role (compose.SAY_THE_ROLE).
     posting = posting_reason(contact, since, rows, tracker) if compose.SAY_THE_ROLE.get(reader) else {}
     if posting:
         try:
@@ -396,26 +532,6 @@ def draft(item: dict, contacts_by_id: dict, threads_index: dict, tracker, earlie
                        their_message=their, source="code", today=today)
         if got["status"] != "write":
             got["why"] = "new reason: %s posted %s" % (company, _clean_title(posting.get("title")))
-        return got
-    offer = their_offer(msgs)
-    last = compose.unanswered_ours(msgs)
-    if offer is not None and last is not None:
-        # Their offer to refer is the reason to answer, and the person's own note since is
-        # what this follows up: never written as though the offer were the last word.
-        try:
-            # Dated the day it is drafted for (`--today`), never the computer's: run for another
-            # day it said "from August last year" (the date check, 2026-10-29).
-            reason, close = offer_words(offer)
-            text = compose.follow_up(name, msgs, reason % (company or "your company"),
-                                     close=close, today=today or None)
-        except ValueError as e:
-            return refused or _new("write", kind=kind, who="here",
-                                   why="the follow-up on their offer did not pass: " + _one_line(e))
-        got = _checked(text, kind, name=name, title=title, company=company, contact=cid,
-                       their_message=their, source="code", today=today)
-        if got["status"] != "write":
-            got["why"] = "follows up on your note of %s, on their offer of %s" % (
-                last.get("date"), offer.get("date"))
         return got
     if refused:
         return refused                      # their own words, to rewrite on its findings
@@ -526,7 +642,13 @@ def plain_nudge(contact: dict, msgs, today: str = "") -> str:
                          their=(company,) if company else ())
 
 
-# Their own offer to refer, as the one thing a follow-up gives them to answer.
+# Why nothing is drafted for someone who offered to refer the person while no role is posted.
+ROLE_WAIT_WHY = ("they offered to refer you once there is a role, and none is posted at %s yet: "
+                 "on hold until one is, and written then for that role")
+
+# Their own offer to refer, as the one thing a follow-up gives them to answer. Kept for a
+# message a chat writes about one posted role; code no longer drafts a follow-up from them
+# (ROLE_WAIT_WHY).
 OFFER_REASON = ("in your last message you offered to refer me if a role came up at %s, and I'd "
                 "still be glad of that")
 OFFER_CLOSE = "If one does, would it be all right to send you the link?"
@@ -894,6 +1016,7 @@ def check(entries, contacts, threads, today: str, got=None) -> list[dict]:
     by_id = {str(c.get("contact_id") or "").strip(): c for c in contacts}
     index = state.by_contact(threads) if threads else {}
     drafted = {i["id"]: i for i in (got or ())}
+    waiting = _waiting_drafts()
     out = []
     for e in entries:
         iid = str(e.get("id") or e.get("contact_id") or "").strip()
@@ -924,6 +1047,17 @@ def check(entries, contacts, threads, today: str, got=None) -> list[dict]:
                                       their_message=_their_last(index.get(iid, ())), today=today)
         except ValueError as err:
             findings, warnings = [_one_line(err)], []
+        # Written for its reader: never the draft waiting for someone else, or one earlier
+        # in this batch, with the name and the employer swapped.
+        if c and not iid.startswith("app:"):
+            others = dict(waiting)
+            others.update({o["id"]: (o["text"], (by_id.get(o["id"]) or {}).get("name") or "",
+                                     (by_id.get(o["id"]) or {}).get("company") or "")
+                           for o in out if o.get("text") and o["id"] in by_id})
+            same = same_but_for_name(text, iid, name=c.get("name") or "",
+                                     company=c.get("company") or "", others=others)
+            if same:
+                findings = list(findings) + ["not_written_for_its_reader: " + same]
         out.append({"id": iid, "ok": not findings, "kind": kind, "text": text,
                     "findings": findings, "warnings": warnings, "item": it})
     return out
@@ -975,9 +1109,29 @@ def keep(pairs) -> list[str]:
 
 
 def keep_drafted(got) -> list[str]:
-    """`keep` for what code drafted: each contact's draft that came out clean."""
+    """`keep` for what code drafted: each contact's draft that came out clean. Everyone whose
+    follow-up waits for a role goes on hold on their record in the same step (`hold_for_role`)."""
+    hold_for_role(got)
     return keep((i.get("contact_id"), i["draft"]["text"]) for i in got
                 if i.get("half") == "contact" and i["draft"]["status"] in ("ready", "check"))
+
+
+def hold_for_role(got) -> list[str]:
+    """Each contact whose follow-up waits for a role to be posted (`draft`'s `hold_role`),
+    put on hold on their record (state.hold_for_role): the due list stops asking for a
+    follow-up there is nothing to say in, and the page lists them under On hold until a role
+    is posted. The ids put on hold."""
+    ids = [str(i.get("contact_id") or "") for i in got
+           if i.get("half") == "contact" and (i.get("draft") or {}).get("hold_role")]
+    if not ids:
+        return []
+    from network import state
+    contacts = state.load_contacts()
+    held = [cid for cid in ids if state.hold_for_role(contacts, cid, "they offered to refer you",
+                                                      today=person.today())]
+    if held:
+        state.save_contacts(contacts)
+    return held
 
 
 def keep_checked(checked, contacts) -> list[str]:
@@ -1043,6 +1197,21 @@ def _main(argv=None) -> int:
                   "rest need the person")
             return 0
         sys.stdout.write(context(ids, contacts, threads, a.today, got))
+        return 0
+    if argv[:1] == ["role-holds"]:
+        ap = argparse.ArgumentParser(
+            prog="followup_drafts.py role-holds",
+            description="Set aside (kept) each draft written before the role it waits for.")
+        ap.add_argument("--dry", action="store_true", help="count them, change nothing")
+        a = ap.parse_args(argv[1:])
+        said = set_aside_before_a_role(write=not a.dry)
+        if a.dry:
+            print(len(said))
+            return 0
+        print("set aside, kept: %d draft(s) written before the role they wait for; each is "
+              "written for that role once it is posted" % len(said))
+        for line in said[:40]:
+            print("  " + line)
         return 0
     if argv[:1] == ["check"]:
         ap = argparse.ArgumentParser(prog="followup_drafts.py check")

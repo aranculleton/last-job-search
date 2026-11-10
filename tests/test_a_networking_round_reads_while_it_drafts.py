@@ -101,8 +101,8 @@ def test_reading_waits_are_spent_on_notes_that_can_be_written_now(book):
     reading.shortlist(["kestrel_achterberg"], contacts=book.contacts(), sends_left=10)
     reading.save("kestrel_achterberg", {
         "name": "Rosalind Achterberg", "company": "Kestrel Mutual",
-        "read_on": datetime.date.today().isoformat(), "headline": "Head of Pricing",
-        "sources": [{"kind": "browser", "date": datetime.date.today().isoformat(),
+        "read_on": reading.person.today().isoformat(), "headline": "Head of Pricing",
+        "sources": [{"kind": "browser", "date": reading.person.today().isoformat(),
                      "at": datetime.datetime.now().isoformat(timespec="seconds")}]})
     got = reading.meanwhile(contacts=book.contacts())
     assert [c for c, _w in got] == ["kestrel_achterberg"]

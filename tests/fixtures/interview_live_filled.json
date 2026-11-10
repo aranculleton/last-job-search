@@ -1,0 +1,905 @@
+{
+ "version": 1,
+ "built": "2026-03-11",
+ "company": "Fernhill Freight",
+ "role": "Demand Planning Analyst",
+ "stage": "Second round",
+ "date": "2026-03-14",
+ "with": "Shirin Example, Head of Planning",
+ "format": "personal experience interview, live Python coding exercise, 60 minutes",
+ "shape": "combined:personal+technical",
+ "shape_name": "A personal experience interview and a technical interview in one sitting",
+ "assumed": "",
+ "minutes": 60,
+ "wpm": 150,
+ "room": [
+  "manager",
+  "senior",
+  "technical",
+  "peer"
+ ],
+ "parts": [
+  {
+   "id": "p1",
+   "kind": "opening",
+   "title": "Hello, and tell me about yourself",
+   "short": "Intro",
+   "minutes": 5,
+   "who": "manager",
+   "say": [
+    {
+     "t": "Thanks for making the time, I've been looking forward to talking about the planning work at Fernhill Freight.",
+     "prompts": []
+    },
+    {
+     "t": "I'm an operations analyst with seven years turning warehouse, transport and supplier data into forecasts and decisions that move stock and vans, most recently at Brindle & Hart Logistics.",
+     "prompts": [
+      "q11"
+     ]
+    },
+    {
+     "t": "The work I'm proudest of is a weekly [[demand-forecast|demand forecast]] I rebuilt there, which took [[forecast-error|forecast error]] from 22% to 14%, and it is the story I'd most like to walk you through today.",
+     "prompts": [
+      "q10"
+     ]
+    }
+   ],
+   "bridge": "So that is the short version, and I'm happy to start wherever is most useful to you.",
+   "questions": [
+    "q11"
+   ]
+  },
+  {
+   "id": "p2",
+   "kind": "personal",
+   "title": "One story in depth, and the probes behind it",
+   "short": "Your story",
+   "minutes": 18,
+   "who": "senior",
+   "say": [
+    {
+     "t": "The story I'd like to tell in depth is the forecast I rebuilt at Brindle & Hart Logistics, because it shows how I work from a messy problem through to a result the planners trusted.",
+     "prompts": [
+      "q10",
+      "q1"
+     ]
+    },
+    {
+     "t": "Trust is usually the first thing people ask about with a forecast, so I'll take it head on: I showed the planners the error by distribution centre every week, so they could see for themselves where it held and where it did not.",
+     "prompts": [
+      "q15"
+     ],
+     "known": "k1"
+    },
+    {
+     "t": "It was not all smooth, and the part I learned most from was getting 30+ operations managers to agree one definition of [[service-level|service level]], which I can go into as well.",
+     "prompts": [
+      "q6"
+     ]
+    }
+   ],
+   "bridge": "That is the outline, and I can go deeper on any part of it.",
+   "questions": [
+    "q6",
+    "q7",
+    "q8",
+    "q9",
+    "q10",
+    "q15"
+   ]
+  },
+  {
+   "id": "p3",
+   "kind": "technical",
+   "title": "A problem, worked aloud",
+   "short": "The problem",
+   "minutes": 21,
+   "who": "technical",
+   "say": [
+    {
+     "t": "Before I write anything I'll say back what I think the problem is and ask what the data looks like, so that we agree on the inputs and the output.",
+     "prompts": [
+      "q12"
+     ]
+    },
+    {
+     "t": "Then I'll talk through a plain first version in Python, test it on a small example I can check by hand, and only then tidy it or make it faster.",
+     "prompts": []
+    },
+    {
+     "t": "If I get stuck I'll say what I'm thinking rather than go quiet, and the way I like to work is the way I rebuilt a warehouse feed as [[dbt]] models, in small steps with a test on each.",
+     "prompts": [
+      "q4"
+     ]
+    }
+   ],
+   "bridge": "That is how I'd like to work through it, if that suits you.",
+   "questions": [
+    "q1",
+    "q2",
+    "q3",
+    "q4",
+    "q5",
+    "q12"
+   ]
+  },
+  {
+   "id": "p4",
+   "kind": "probes",
+   "title": "The follow-up probes and trade-offs",
+   "short": "Probes",
+   "minutes": 9,
+   "who": "technical",
+   "say": [
+    {
+     "t": "When you push on my solution I'll take each trade-off out loud, what it costs in speed or in how easy it is to read, and what I'd choose for a weekly job.",
+     "prompts": [
+      "q13"
+     ]
+    },
+    {
+     "t": "Where I don't know something I'll say so and reason from what I do know, rather than guess.",
+     "prompts": []
+    }
+   ],
+   "bridge": "",
+   "questions": [
+    "q13",
+    "q14"
+   ]
+  },
+  {
+   "id": "p5",
+   "kind": "close",
+   "title": "Your questions for them",
+   "short": "Your questions",
+   "minutes": 7,
+   "who": "manager",
+   "say": [
+    {
+     "t": "I'd like to use the last few minutes on the work itself, starting with the Warrington [[cross-dock]] and what it has changed for the planning team.",
+     "prompts": []
+    },
+    {
+     "t": "Before we finish I'll ask whether there is anything in my background you'd like me to go into more, so that no doubt is left unanswered.",
+     "prompts": []
+    }
+   ],
+   "bridge": "",
+   "questions": []
+  }
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "part": "p3",
+   "who": "senior",
+   "q": "Tell me about your experience with demand forecasting.",
+   "also": [
+    "How have you forecast demand before?"
+   ],
+   "simple": "Forecasting is the centre of my work, and the clearest example is at Brindle & Hart Logistics. I rebuilt the weekly demand forecast in Python and SQL, with promotions and seasonality as features, and forecast error came down from 22% to 14% across 2,400 SKUs. That let the planners release about £1.1M of safety stock they had been holding to cover the gap.",
+   "detailed": "Forecasting is the centre of my work, and the clearest example is at Brindle & Hart Logistics. Forecast error sat at 22% across 2,400 SKUs and six distribution centres, and the planners were covering the gap with extra safety stock. I rebuilt the weekly forecast in Python and SQL, with promotions and seasonality as features, and tracked the error by distribution centre so the planners could see where it held. Error came down to 14%, about £1.1M of safety stock was released, and I learned that a forecast only counts once its users can check it themselves.",
+   "story": "s1",
+   "known": null,
+   "draft": false,
+   "from": [
+    "What the letter answered it with: Cut forecast error from 22% to 14% across 2,400 SKUs at Brindle & Hart Logistics",
+    "Your story: The forecast that freed safety stock (it carries the letter's evidence)"
+   ],
+   "follow": [
+    {
+     "who": "manager",
+     "q": "What was your part in it, exactly?",
+     "also": [],
+     "simple": "I built the model and the weekly error tracking myself, from the raw data through to the numbers the planners saw. The planners owned the stock decisions it fed, and I worked with them each week on where the forecast held.",
+     "detailed": "",
+     "follow": []
+    },
+    {
+     "who": "technical",
+     "q": "How did you know it had worked?",
+     "also": [],
+     "simple": "I tracked the error by distribution centre every week against what actually sold, so it was measured rather than felt. It came down from 22% to 14%, and the planners released about £1.1M of safety stock on the strength of it.",
+     "detailed": "",
+     "follow": [
+      {
+       "who": "peer",
+       "q": "And where did it not hold?",
+       "also": [],
+       "simple": "It held least on new lines with little history, where there was not much for the model to learn from. I showed those to the planners as they were, so they kept their own judgement on those lines and used the forecast on the rest.",
+       "detailed": "",
+       "follow": [],
+       "draft": true
+      }
+     ]
+    },
+    {
+     "who": "senior",
+     "q": "What would you do differently now?",
+     "also": [],
+     "simple": "I would bring the planners in earlier, at the point of choosing the features, because they knew which promotions mattered long before the data showed it. I would also publish the error by site from the first week, since that was what won their trust.",
+     "detailed": "",
+     "follow": []
+    }
+   ]
+  },
+  {
+   "id": "q2",
+   "part": "p3",
+   "who": "senior",
+   "q": "What is your experience with SAP?",
+   "also": [
+    "How well do you know SAP?"
+   ],
+   "simple": "My experience with SAP is on the reporting side, where I have reported from SAP extracts and the warehouse system behind them. I have not configured it or worked inside it as a planner would, and I would rather say that plainly. What I can do from the first week is turn what it holds into a forecast, in Python and SQL.",
+   "detailed": "My experience with SAP is on the reporting side, where I have reported from SAP extracts and the warehouse system behind them. I have not configured it or worked inside it as a planner would, and I would rather say that plainly than have you find out later. What I can do from the first week is turn what it holds into a forecast in Python and SQL, as I did for the weekly forecast across 2,400 SKUs at Brindle & Hart Logistics. I'd expect to learn your own set-up quickly from someone who knows it well.",
+   "story": null,
+   "known": null,
+   "draft": false,
+   "from": [
+    "I have reported from SAP extracts and the warehouse system behind them.",
+    "What the letter answered it with: Reported from SAP extracts and the warehouse system behind them"
+   ],
+   "follow": []
+  },
+  {
+   "id": "q3",
+   "part": "p3",
+   "who": "senior",
+   "q": "What is your experience with Chartered procurement?",
+   "also": [
+    "Are you a member of CIPS?"
+   ],
+   "simple": "I am not a member of the chartered procurement institute, and I would not want that to be unclear. My route into planning has been through the data, seven years of forecasting, stock and service-level work, rather than through procurement. If membership matters for this role, I'd like to understand what it is needed for, and I'm open to working towards it.",
+   "detailed": "I am not a member of the chartered procurement institute, and I would not want that to be unclear. My route into planning has been through the data, seven years of forecasting, stock and service-level work, rather than through procurement. Where I have worked closest to it is at Oakmere Foods, giving the buyers specific order changes for the chilled lines, which cut write-offs 18% over two quarters. If membership matters for this role, I'd like to understand what it is needed for, and I'm open to working towards it.",
+   "story": null,
+   "known": null,
+   "draft": false,
+   "from": [
+    "No honest framing written for this yet: settle one with Claude before the interview. Say plainly what you do not hold, then the nearest true thing. Ask Claude for an example of using it and it drafts one for you to check."
+   ],
+   "follow": []
+  },
+  {
+   "id": "q4",
+   "part": "p3",
+   "who": "technical",
+   "q": "Walk me through some code you're proud of.",
+   "also": [
+    "Show me something you have built."
+   ],
+   "simple": "The code I'm proudest of is the warehouse feed I rebuilt as dbt models with data-quality tests. Before it, someone spent two hours every morning reconciling the feed against the reports, and afterwards a bad load failed loudly instead of surfacing in a report. It is plain, well-tested code, which is what I'd aim for today as well.",
+   "detailed": "The code I'm proudest of is the warehouse feed I rebuilt as dbt models with data-quality tests. Before it, someone spent two hours every morning reconciling the feed against the reports built on it. I split the feed into small models, each doing one thing, and put a test on every assumption the reports relied on, so a bad load failed loudly instead of surfacing in a report. The reconciliation ended, and it is plain, well-tested code, which is what I'd aim for today as well.",
+   "story": "s2",
+   "known": null,
+   "draft": false,
+   "from": [
+    "No story or prepared answer covers this yet: Claude writes one from your profile, and asked for an example you cannot recall, drafts one for you to check."
+   ],
+   "follow": []
+  },
+  {
+   "id": "q5",
+   "part": "p3",
+   "who": "technical",
+   "q": "Tell me about a hard bug you tracked down.",
+   "also": [
+    "How do you debug?"
+   ],
+   "simple": "The hardest was a forecast that looked right in total and wrong by site, and it took me a while to see that two distribution centres were being counted under one code after a system change. I found it by checking the inputs site by site against the warehouse records, rather than staring at the model. Since then I test the joins before I trust any number built on them.",
+   "detailed": "The hardest was a forecast that looked right in total and wrong by site, and it took me a while to see that two distribution centres were being counted under one code after a system change. I had spent a day looking at the model before I thought to doubt the data going into it. I found it by checking the inputs site by site against the warehouse records, and the fix was a test that every site appears once and only once. Since then I test the joins before I trust any number built on them.",
+   "story": null,
+   "known": null,
+   "draft": true,
+   "from": [
+    "No story or prepared answer covers this yet: Claude writes one from your profile, and asked for an example you cannot recall, drafts one for you to check."
+   ],
+   "follow": []
+  },
+  {
+   "id": "q6",
+   "part": "p2",
+   "who": "senior",
+   "q": "Tell me about a time you changed someone's mind.",
+   "also": [
+    "How do you handle conflicting numbers?",
+    "Tell me about getting people to adopt your work."
+   ],
+   "simple": "I had 30+ operations managers reading service levels from eleven spreadsheets, and the numbers disagreed. I built one Power BI report, agreed the definitions with the managers team by team, and retired each spreadsheet as its team moved over. Nobody was told to switch, they moved because the one report answered their questions.",
+   "detailed": "I had 30+ operations managers reading service levels from eleven spreadsheets, and the numbers disagreed. I built one Power BI report and agreed the definition of service level with the managers team by team, before I showed anyone a chart. I retired each spreadsheet as its team moved over, and nobody was told to switch, they moved because the one report answered their questions. It taught me that people change their minds about numbers once they have had a hand in defining them.",
+   "story": "s3",
+   "known": null,
+   "draft": false,
+   "from": [
+    "Your story: One report in place of eleven spreadsheets (matched by its Use for tags)"
+   ],
+   "follow": [
+    {
+     "who": "manager",
+     "q": "What was your part in it, exactly?",
+     "also": [],
+     "simple": "I built the report and ran the conversations about the definitions myself. The managers decided when their own team was ready to give up its spreadsheet, which is why the change held.",
+     "detailed": "",
+     "follow": []
+    },
+    {
+     "who": "technical",
+     "q": "How did you know it had worked?",
+     "also": [],
+     "simple": "I knew it had worked when the last of the eleven spreadsheets was retired and the 30+ managers were all reading the one report. The arguments about whose number was right stopped, because there was only one number.",
+     "detailed": "",
+     "follow": []
+    },
+    {
+     "who": "senior",
+     "q": "What would you do differently now?",
+     "also": [],
+     "simple": "I would agree the definitions before building anything at all, since that was the slow part and the part that mattered. The report itself was the easy half.",
+     "detailed": "",
+     "follow": []
+    }
+   ]
+  },
+  {
+   "id": "q7",
+   "part": "p2",
+   "who": "senior",
+   "q": "Tell me about a time you took something on without being asked.",
+   "also": [
+    "Tell me about a process you improved."
+   ],
+   "simple": "Every morning someone spent two hours reconciling the warehouse data feed against the reports built on it, and nobody had asked me to fix it. I rebuilt the feed as dbt models with data-quality tests, so a bad load failed loudly instead of surfacing in a report. The daily two-hour reconciliation ended.",
+   "detailed": "Every morning someone spent two hours reconciling the warehouse data feed against the reports built on it, and nobody had asked me to fix it. I thought the manual step should go rather than be absorbed for ever, so I rebuilt the feed as dbt models with data-quality tests. From then on a bad load failed loudly at the start of the day instead of surfacing in a report at the end of it. The daily two-hour reconciliation ended.",
+   "story": "s2",
+   "known": null,
+   "draft": false,
+   "from": [
+    "No story or prepared answer covers this yet: Claude writes one from your profile, and asked for an example you cannot recall, drafts one for you to check."
+   ],
+   "follow": [
+    {
+     "who": "manager",
+     "q": "Why did nobody ask you to fix it?",
+     "also": [],
+     "simple": "Because it had become part of the morning, and people had stopped seeing it as a problem. I only noticed because I was the one waiting for the reports it held up.",
+     "detailed": "",
+     "follow": []
+    },
+    {
+     "who": "technical",
+     "q": "What did the tests check?",
+     "also": [],
+     "simple": "They checked that each load was complete and that the values made sense before anything was built on it, for example that no site came through blank. A failed test stopped the run, so nobody read a report built on a bad load.",
+     "detailed": "",
+     "follow": []
+    }
+   ]
+  },
+  {
+   "id": "q8",
+   "part": "p2",
+   "who": "senior",
+   "q": "Tell me about a time you worked with someone very different from you.",
+   "also": [
+    "Tell me about working with a commercial team."
+   ],
+   "simple": "At Oakmere Foods I worked with the buyers for the chilled lines, who think in orders and suppliers where I think in data. Chilled stock was being lost to expiry, so I modelled shelf life against order patterns and gave them specific order changes rather than a general finding. Write-offs fell 18% over two quarters.",
+   "detailed": "At Oakmere Foods I worked with the buyers for the chilled lines, who think in orders and suppliers where I think in data. Chilled stock was being lost to expiry, and ordering took no account of shelf life, so I modelled how the two interact for those lines. I gave the buyers specific order changes they could make that week, rather than a general finding. Write-offs fell 18% over two quarters, and I learned to hand people a decision in their own terms, not an analysis in mine.",
+   "story": "s4",
+   "known": null,
+   "draft": false,
+   "from": [
+    "Your story: Chilled-line write-offs (matched by its Use for tags)"
+   ],
+   "follow": [
+    {
+     "who": "manager",
+     "q": "What was your part in it, exactly?",
+     "also": [],
+     "simple": "The modelling was mine, and so was turning it into order changes the buyers could act on. The buyers made the changes with their suppliers, which only they could do.",
+     "detailed": "",
+     "follow": []
+    },
+    {
+     "who": "technical",
+     "q": "How did you know it had worked?",
+     "also": [],
+     "simple": "Write-offs on the chilled lines fell 18% over two quarters, measured against the same lines before the change. The buyers kept the new order patterns, which told me as much as the number did.",
+     "detailed": "",
+     "follow": []
+    },
+    {
+     "who": "senior",
+     "q": "What would you do differently now?",
+     "also": [],
+     "simple": "I would sit with the buyers for a day before modelling anything, to learn how they place an order. I worked some of that out the slow way, from the data.",
+     "detailed": "",
+     "follow": []
+    }
+   ]
+  },
+  {
+   "id": "q9",
+   "part": "p2",
+   "who": "senior",
+   "q": "Tell me about something you owned that went wrong.",
+   "also": [
+    "Tell me about a mistake you made."
+   ],
+   "simple": "An early version of my weekly forecast went out with a promotion missing from its inputs, and one distribution centre ran short that week. I told the planners the same day, and I added a check that every planned promotion was in the data before the forecast ran. It did not happen again, and I now test the inputs as carefully as the model.",
+   "detailed": "An early version of my weekly forecast went out with a promotion missing from its inputs, and one distribution centre ran short that week. I told the planners the same day rather than wait for them to find it, and we covered the gap from a neighbouring site. Then I added a check that every planned promotion was in the data before the forecast ran, so the same mistake could not get through twice. It did not happen again, and I now test the inputs as carefully as the model.",
+   "story": null,
+   "known": null,
+   "draft": true,
+   "from": [
+    "No story or prepared answer covers this yet: Claude writes one from your profile, and asked for an example you cannot recall, drafts one for you to check."
+   ],
+   "follow": []
+  },
+  {
+   "id": "q10",
+   "part": "p2",
+   "who": "senior",
+   "q": "Walk me through a project end to end.",
+   "also": [
+    "Tell me about the work you are proudest of.",
+    "What has been your biggest impact?"
+   ],
+   "simple": "The one I'd choose is the forecast I rebuilt at Brindle & Hart Logistics. Error was at 22% across 2,400 SKUs and the planners were covering it with extra safety stock, so I rebuilt the weekly forecast in Python and SQL and tracked the error by distribution centre. It came down to 14%, and about £1.1M of safety stock was released.",
+   "detailed": "The one I'd choose is the forecast I rebuilt at Brindle & Hart Logistics. Error was at 22% across 2,400 SKUs and six distribution centres, and the planners were covering the gap with safety stock, so the task was a forecast they would trust. I rebuilt it in Python and SQL, with promotions and seasonality as features, and tracked the error by distribution centre so they could see where it held. It came down to 14%, about £1.1M of safety stock was released, and my lesson was to show the evidence every week, not ask for trust.",
+   "story": "s1",
+   "known": null,
+   "draft": false,
+   "from": [
+    "Your story: The forecast that freed safety stock (matched by its Use for tags)"
+   ],
+   "follow": [
+    {
+     "who": "manager",
+     "q": "What was your part in it, exactly?",
+     "also": [],
+     "simple": "The model, the features and the error tracking were mine from start to finish. The decision to release safety stock was the planners', made on numbers they could check each week.",
+     "detailed": "",
+     "follow": []
+    },
+    {
+     "who": "technical",
+     "q": "How did you know it had worked?",
+     "also": [],
+     "simple": "The measure was forecast error against actual demand, by distribution centre, every week. When it had come down from 22% to 14% and stayed there, the planners released about £1.1M of safety stock.",
+     "detailed": "",
+     "follow": []
+    },
+    {
+     "who": "senior",
+     "q": "What would you do differently now?",
+     "also": [],
+     "simple": "I would prove the model on fewer sites first and widen it once it had earned its place, rather than rebuild for all six distribution centres at once. It would have reached the same result with less risk along the way.",
+     "detailed": "",
+     "follow": []
+    }
+   ]
+  },
+  {
+   "id": "q11",
+   "part": "p1",
+   "who": "manager",
+   "q": "Tell me about yourself.",
+   "also": [
+    "Walk me through your background.",
+    "Give me the short version of your career."
+   ],
+   "simple": "I'm an operations analyst with seven years turning warehouse, transport and supplier data into forecasts and decisions that move stock and vans. Most recently, at Brindle & Hart Logistics, I rebuilt the weekly demand forecast and cut forecast error from 22% to 14% across 2,400 SKUs. I work in Python, SQL and dbt, and I'm looking for a planning role where the forecast is mine to own, which is what this one is.",
+   "detailed": "I'm an operations analyst with seven years turning warehouse, transport and supplier data into forecasts and decisions that move stock and vans. Most recently, at Brindle & Hart Logistics, I rebuilt the weekly demand forecast in Python and SQL and cut forecast error from 22% to 14% across 2,400 SKUs and six distribution centres, which released about £1.1M of safety stock. At Oakmere Foods I modelled shelf life and order patterns for the chilled lines, and write-offs fell 18% over two quarters. I work in Python, SQL and dbt, and I'm looking for a planning role where the forecast is mine to own, which is what this one is.",
+   "story": null,
+   "known": null,
+   "draft": false,
+   "from": [
+    "From your profile: Operations analyst with seven years turning warehouse, transport and supplier data into forecasts and decisions that move stock and vans, most recently cutting forecast error from 22% to 14% across 2,400 SKUs. Works in Python, SQL and dbt, and reports in Power BI."
+   ],
+   "follow": []
+  },
+  {
+   "id": "q12",
+   "part": "p3",
+   "who": "technical",
+   "q": "Given weekly demand and forecasts by SKU, write a function that returns the SKUs whose forecast error is above a threshold.",
+   "also": [
+    "Flag the lines where the forecast was furthest out."
+   ],
+   "simple": "I'd start by saying it back: for each [[sku|SKU]] I need the gap between forecast and actual as a share of actual, and I return the ones above the threshold. I'd write it plainly first, as a loop that skips any SKU with no actual demand so that I never divide by zero, and check it by hand on a few rows. Then I'd ask how big the data is before deciding whether it needs pandas.",
+   "detailed": "I'd start by saying it back: for each [[sku|SKU]] I need the gap between forecast and actual as a share of actual, and I return the ones above the threshold. Before writing anything I'd ask what the data looks like, whether a SKU can be missing a week, and whether the threshold is a share or a number of units. I'd write it plainly first, as a loop that skips any SKU with no actual demand so that I never divide by zero, and check it by hand on a few rows. Then I'd ask how big the data is before deciding whether it needs pandas, and I'd say each of those choices out loud as I make it.",
+   "story": null,
+   "known": null,
+   "draft": false,
+   "from": [],
+   "follow": [
+    {
+     "who": "technical",
+     "q": "How would you test it?",
+     "also": [],
+     "simple": "I'd write a few small cases I can work out by hand, one SKU well under the threshold, one well over, one exactly on it and one with no demand at all. If those pass, I'd run it on a real week and compare the number it flags with what I'd expect from the overall error.",
+     "detailed": "",
+     "follow": [
+      {
+       "who": "peer",
+       "q": "What if actual demand is zero?",
+       "also": [],
+       "simple": "Then the error as a share of actual has no meaning, so I'd leave that SKU out of the percentage and report it separately. I'd say that choice out loud, because a planner may well want to see those lines.",
+       "detailed": "",
+       "follow": []
+      }
+     ]
+    },
+    {
+     "who": "technical",
+     "q": "Can you make it faster?",
+     "also": [],
+     "simple": "Yes, the plain loop is fine for a few thousand SKUs, and for more I'd move it into pandas so the arithmetic runs over whole columns at once. I'd only do that once the simple version is right, because a fast wrong answer is no use to a planner.",
+     "detailed": "",
+     "follow": []
+    }
+   ]
+  },
+  {
+   "id": "q13",
+   "part": "p4",
+   "who": "technical",
+   "q": "What are the trade-offs in your solution?",
+   "also": [
+    "Why did you write it that way?"
+   ],
+   "simple": "The plain loop is the easiest to read and to check, and it is slower than working on whole columns. For a weekly job that matters very little, so I'd keep it readable. I'd change my mind if the same code had to run across every SKU every hour.",
+   "detailed": "The plain loop is the easiest to read and to check, and it is slower than working on whole columns. For a weekly job that matters very little, so I'd keep it readable and spend the time on tests instead. Working on whole columns is faster and shorter, and harder to step through when a number looks wrong. I'd change my mind if the same code had to run across every SKU every hour.",
+   "story": null,
+   "known": null,
+   "draft": false,
+   "from": [],
+   "follow": []
+  },
+  {
+   "id": "q14",
+   "part": "p4",
+   "who": "peer",
+   "q": "What would you do differently with more time?",
+   "also": [],
+   "simple": "I'd add tests for the awkward inputs first, missing weeks, negative returns and SKUs that changed code, since those are what break a forecast in practice. Then I'd move the threshold out of the code and into a setting, so a planner could change it without me.",
+   "detailed": "I'd add tests for the awkward inputs first, missing weeks, negative returns and SKUs that changed code, since those are what break a forecast in practice. Then I'd move the threshold out of the code and into a setting, so a planner could change it without me, and I'd write down what the function assumes about its inputs so the next person need not guess.",
+   "story": null,
+   "known": null,
+   "draft": false,
+   "from": [],
+   "follow": []
+  },
+  {
+   "id": "q15",
+   "part": "p2",
+   "who": "manager",
+   "q": "How do you get depot managers to trust a forecast?",
+   "also": [
+    "Why would a site manager believe your numbers?"
+   ],
+   "simple": "I show them the evidence rather than ask for their trust. At Brindle & Hart Logistics I tracked forecast error by distribution centre every week, so each planner could see where the forecast held for their own site and where it did not. Once they could check it for themselves they used it, and the safety stock came down.",
+   "detailed": "I show them the evidence rather than ask for their trust. At Brindle & Hart Logistics I tracked forecast error by distribution centre every week, so each planner could see where the forecast held for their own site and where it did not. I never argued for the model in a meeting, I put the weekly error in front of the people who would live with it. Once they could check it for themselves they used it, error came down from 22% to 14%, and about £1.1M of safety stock was released.",
+   "story": null,
+   "known": "k1",
+   "draft": false,
+   "from": [],
+   "follow": []
+  }
+ ],
+ "stories": [
+  {
+   "id": "s1",
+   "title": "The forecast that freed safety stock",
+   "proves": [
+    "Project end to end",
+    "Model you built",
+    "Validate a forecast",
+    "Biggest impact"
+   ],
+   "star": {
+    "S": "forecast error at 22% across 2,400 SKUs and six distribution centres, and planners covering the gap with extra safety stock.",
+    "T": "a weekly demand forecast the planners would trust.",
+    "A": "rebuilt it in Python and SQL with promotions and seasonality as features, and tracked error by distribution centre so the planners could see where it held.",
+    "R": "error down to 14%, about £1.1M of safety stock released."
+   },
+   "questions": [
+    "q1",
+    "q10"
+   ]
+  },
+  {
+   "id": "s2",
+   "title": "Ending a daily reconciliation",
+   "proves": [
+    "Time you took initiative",
+    "Improve a process",
+    "Test data pipelines",
+    "Data quality"
+   ],
+   "star": {
+    "S": "every morning someone spent two hours reconciling the warehouse-management data feed against the reports built on it.",
+    "T": "remove the manual step rather than keep absorbing it.",
+    "A": "rebuilt the feed as dbt models with data-quality tests, so a bad load failed loudly instead of surfacing in a report.",
+    "R": "the daily two-hour reconciliation ended."
+   },
+   "questions": [
+    "q4",
+    "q7"
+   ]
+  },
+  {
+   "id": "s3",
+   "title": "One report in place of eleven spreadsheets",
+   "proves": [
+    "Managing stakeholders",
+    "Handle conflicting numbers",
+    "Getting people to adopt your work",
+    "Reporting and dashboards"
+   ],
+   "star": {
+    "S": "30+ operations managers read service levels from eleven spreadsheets, and the numbers disagreed.",
+    "T": "one definition of service level and one place to read it.",
+    "A": "built the Power BI service-level reporting, agreed the definitions with the managers, and retired the spreadsheets as each team moved over.",
+    "R": "one report used by 30+ operations managers, in place of eleven spreadsheets."
+   },
+   "questions": [
+    "q6"
+   ]
+  },
+  {
+   "id": "s4",
+   "title": "Chilled-line write-offs",
+   "proves": [
+    "Time analysis changed a business result",
+    "Turn a finding into an action",
+    "Working with commercial teams"
+   ],
+   "star": {
+    "S": "at Oakmere Foods, chilled lines were losing stock to expiry, and ordering took no account of shelf life.",
+    "T": "turn how shelf life and order patterns interact into a change the buyers could make.",
+    "A": "modelled shelf-life and order patterns for the chilled lines and gave the buyers specific order changes rather than a general finding.",
+    "R": "write-offs fell 18% over two quarters."
+   },
+   "questions": [
+    "q8"
+   ]
+  }
+ ],
+ "ask": [
+  {
+   "id": "a1",
+   "q": "I saw you opened a cross-dock in Warrington in January 2026, so what has that changed for your team?",
+   "why": "",
+   "follow": [
+    {
+     "if": "it has taken volume from the older sites",
+     "then": "How has that changed what the forecast has to get right for each of them?"
+    },
+    {
+     "if": "it is still settling in",
+     "then": "What would you most like the forecast to tell you about it in its first year?"
+    }
+   ]
+  },
+  {
+   "id": "a2",
+   "q": "I read that Fernhill Freight runs fourteen cross-dock sites across the North of England, so how much of that reaches the work day to day?",
+   "why": "",
+   "follow": [
+    {
+     "if": "most of it, the sites drive everything",
+     "then": "Which sites are hardest to forecast, and why?"
+    }
+   ]
+  },
+  {
+   "id": "a3",
+   "q": "Where does the Demand Planning Analyst sit against what you have just described?",
+   "why": "",
+   "follow": [
+    {
+     "if": "it owns the weekly forecast",
+     "then": "Who uses it first each week, and what do they do with it?"
+    }
+   ]
+  },
+  {
+   "id": "a4",
+   "q": "Is there room to grow into more architectural or strategic decisions?",
+   "why": "a common one about tech and growth: skip it if their own pages answer it",
+   "follow": [
+    {
+     "if": "yes, in time",
+     "then": "What did the last person who grew in this role go on to do?"
+    }
+   ]
+  },
+  {
+   "id": "a5",
+   "q": "How does the team stay current with new tools and methods?",
+   "why": "a common one about tech and growth: skip it if their own pages answer it",
+   "follow": [
+    {
+     "if": "we learn on the job",
+     "then": "What is the last new method the team took up, and how did it come about?"
+    }
+   ]
+  },
+  {
+   "id": "a6",
+   "q": "How big is the team, and how do you divide work?",
+   "why": "a common one about the team: skip it if their own pages answer it",
+   "follow": [
+    {
+     "if": "it is a small team",
+     "then": "Who would I work with most closely in the first three months?"
+    }
+   ]
+  },
+  {
+   "id": "a7",
+   "q": "Is there anything about my background you'd like me to go into more?",
+   "why": "the last word on any doubt, while you are still in the room",
+   "follow": [
+    {
+     "if": "no, you have covered it",
+     "then": "Then what would you most want the person in this role to have done by the end of the first six months?"
+    }
+   ]
+  }
+ ],
+ "terms": {
+  "demand-forecast": {
+   "name": "Demand forecast",
+   "match": [
+    "demand forecast",
+    "weekly forecast"
+   ],
+   "here": "At Fernhill Freight, the weekly estimate of how many pallets each [[cross-dock]] site will move, which is the forecast this role owns.",
+   "example": "If the Warrington site moved 1,000 pallets last week and a customer's promotion starts on Monday, the forecast for next week might be 1,150.",
+   "plain": "A best estimate of how much will be needed, made from what happened before.",
+   "technical": "A time-series model of volume by site and week."
+  },
+  "forecast-error": {
+   "name": "Forecast error",
+   "match": [
+    "forecast error"
+   ],
+   "here": "At Fernhill Freight, how far the pallets a site was forecast to move were from the pallets it actually moved, as a share of the actual.",
+   "example": "If Warrington was forecast 1,100 pallets and moved 1,000, the error for that week is 10%.",
+   "plain": "The gap between what was predicted and what happened.",
+   "technical": "Usually measured as mean absolute percentage error, by site and week."
+  },
+  "cross-dock": {
+   "name": "Cross-dock",
+   "match": [
+    "cross-dock"
+   ],
+   "here": "A Fernhill Freight site where pallets come off one lorry and go straight onto another, with little or no storage in between. Fernhill runs fourteen of them across the North of England.",
+   "example": "Forty pallets arrive at Warrington at six, and by eight they are on three outbound lorries.",
+   "plain": "A depot that moves goods straight through instead of storing them.",
+   "technical": ""
+  },
+  "safety-stock": {
+   "name": "Safety stock",
+   "match": [
+    "safety stock"
+   ],
+   "here": "At Fernhill Freight, the spare room a site keeps in case the [[demand-forecast|forecast]] is wrong, which a better forecast lets the planners reduce.",
+   "example": "If Warrington expects 1,000 pallets and plans for 1,150 to be safe, the extra 150 is the safety margin.",
+   "plain": "Extra stock or room kept in case demand is higher than expected.",
+   "technical": "Sized from forecast error and the service level wanted."
+  },
+  "sku": {
+   "name": "SKU",
+   "match": [
+    "SKUs",
+    "SKU"
+   ],
+   "here": "One distinct product line in a Fernhill Freight customer's range, counted on its own when demand is forecast.",
+   "example": "A customer's small and large bottles of the same drink are two SKUs, each with its own forecast at Fernhill.",
+   "plain": "A single product, as a stock system counts it.",
+   "technical": "Stock keeping unit."
+  },
+  "dbt": {
+   "name": "dbt",
+   "match": [
+    "dbt"
+   ],
+   "here": "A tool for building tested data tables in SQL, which at Fernhill Freight could turn the raw feed from each cross-dock into the tables a forecast reads.",
+   "example": "A dbt test stops the load if Warrington's pallets for a day come through blank, before any Fernhill report uses them.",
+   "plain": "A way of writing the steps that clean data as code, with checks built in.",
+   "technical": "SQL models with schema and data tests, run in dependency order."
+  },
+  "service-level": {
+   "name": "Service level",
+   "match": [
+    "service levels",
+    "service level"
+   ],
+   "here": "At Fernhill Freight, the share of pallets delivered on time and in full to the customer.",
+   "example": "If 970 of 1,000 pallets leave Warrington on time and in full, the service level is 97%.",
+   "plain": "How often the customer gets what was promised, when it was promised.",
+   "technical": ""
+  }
+ },
+ "known": [
+  {
+   "id": "k1",
+   "text": "How do you get depot managers to trust a forecast?",
+   "from": "the recruiter",
+   "question": "q15"
+  }
+ ],
+ "private": {
+  "pay": "say what the form said, GBP 48,000 to 58,000: a recruiter checks what you say against it",
+  "notice": "One month.",
+  "based": "Chorlton, Manchester",
+  "not_to_say": [
+   "Do not call it a parcel carrier: it moves pallets.",
+   "Never claim Chartered procurement: A credential, not a skill. Do not claim it. Ask Claude for an example and it drafts one for you to check"
+  ],
+  "figures": [
+   "Your lowest figure, 42,000: it stays with you."
+  ],
+  "weaknesses": [
+   {
+    "what": "SAP",
+    "frame": "I have reported from SAP extracts and the warehouse system behind them."
+   },
+   {
+    "what": "Chartered procurement",
+    "frame": "Say plainly you have not done it as such, then the nearest true thing."
+   }
+  ],
+  "red_flags": [
+   "Speaking badly of an employer you have worked for.",
+   "A number your own work does not hold, or one you cannot explain if asked how.",
+   "Naming the other employers you are talking to, or an offer you do not have.",
+   "\"I'll take anything\": say why this role, every time.",
+   "Answering a question they did not ask: answer, then stop."
+  ],
+  "confirm": []
+ },
+ "timing": {
+  "minutes": 60,
+  "parts_minutes": 60,
+  "talk": 9.0,
+  "wpm": 150,
+  "parts": {
+   "p1": {
+    "minutes": 5,
+    "talk": 1.0,
+    "words": 169
+   },
+   "p2": {
+    "minutes": 18,
+    "talk": 3.0,
+    "words": 467
+   },
+   "p3": {
+    "minutes": 21,
+    "talk": 3.5,
+    "words": 505
+   },
+   "p4": {
+    "minutes": 9,
+    "talk": 1.0,
+    "words": 148
+   },
+   "p5": {
+    "minutes": 7,
+    "talk": 0.5,
+    "words": 53
+   }
+  }
+ },
+ "checked": {
+  "on": "2026-03-11",
+  "problems": 0,
+  "drafts": 3
+ }
+}

@@ -606,6 +606,17 @@ their row says they replied before the log began.
 If they have already offered to refer the candidate, in whatever words, the ask
 is answered: do what they said, then thank them.
 
+**No referral ask, and no follow-up on their offer, before there is a role.** Someone who
+offered to refer the candidate "if a role comes up" waits on hold until one is posted at
+their employer (`state.ROLE_HOLD`, written by `followup_drafts.py` and by `app.py done
+--outcome held`), with no draft on their card: a message written before the role exists
+is one template with the name and the employer swapped. Once a posting is on the list
+there, their card offers "Draft the referral ask" (`args.kind: referral_ask`, with
+`args.role` and `args.url`), and it is written then, for that role, from what they
+offered in their own words. `followup_drafts.py check` (which `reply.py finish` runs)
+refuses a draft that is another person's with the name and the employer swapped
+(`not_written_for_its_reader`): write it again from what this reader said and does.
+
 **InMail, under 200 words, with a subject.** `compose.inmail()` returns an `InMail`: the
 text as before, and `.subject` and `.body` for LinkedIn's two fields. The shape that drew a
 reply: "Hi <name>, hope you're well."; who they are, with the years; one piece of real work

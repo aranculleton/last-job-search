@@ -1010,7 +1010,7 @@ def parse(text: str, *, name: str = "", company: str = "", source: str = "paste"
     it is refused: a wrong tab pasted is the mistake this catches, and a note
     built on someone else's profile is worse than a generic one.
     """
-    today = today or datetime.date.today()
+    today = today or person.today()
     if is_structured(text):
         text = from_structured(text)
     lines = [x for x in _clean_lines(text) if not _PAGE_ONE.match(x)]
@@ -1502,7 +1502,7 @@ def verdict(reading: dict, company: str = "") -> tuple[bool, str]:
     company = company or reading.get("company", "")
     headline = reading.get("headline", "")
     posts = " ".join(i.get("text", "") for i in reading.get("items", [])
-                     if i.get("kind") in ("post", "repost") and (_item_days(i.get("date", ""), datetime.date.today()) or 0) <= 90)
+                     if i.get("kind") in ("post", "repost") and (_item_days(i.get("date", ""), person.today()) or 0) <= 90)
     person_ = {"title": headline, "headline": headline,
                "about": _clip(reading.get("about", ""), ABOUT_CHARS),
                "activity": posts, "company": company, "location": reading.get("location", "")}
@@ -1594,7 +1594,7 @@ def shown_date(date: str) -> str:
 
 def hooks(reading: dict, today: datetime.date | None = None) -> list:
     """What a note to them can rest on, best first: (strength, kind, what, evidence)."""
-    today = today or datetime.date.today()
+    today = today or person.today()
     out = []
     shared = reading.get("shared") or {}
     for e in shared.get("employers", []):
@@ -1668,7 +1668,7 @@ def grounded(common_ground: str, reading: dict | None, today=None) -> tuple[bool
     # prove nothing: "your work at <Employer>" is the note a snippet already made.
     known = _words(reading.get("name", "")) | _words(reading.get("company", ""))
     mine = _words(cg) - known
-    today = today or datetime.date.today()
+    today = today or person.today()
     # A dated item older than POST_DAYS is history, as hooks() treats it: a 2018
     # appointment is evidence of who was appointed, not of what they do now.
     sources = [(i.get("kind", "item"), i.get("text", "")) for i in reading.get("items", [])
@@ -1839,7 +1839,7 @@ def queue_for_page(ids, mode: str = "deep", today: str = "") -> list:
     """Add each contact to the page's reading queue once; returns the ids newly queued."""
     rows = page_queue()
     have = {q["contact"] for q in rows}
-    day = today or datetime.date.today().isoformat()
+    day = today or person.today().isoformat()
     added = []
     for cid in ids:
         path(cid)                                    # a contact id, or ValueError
@@ -1891,10 +1891,11 @@ def fresh(reading: dict | None, today: datetime.date | None = None,
           signed_in_now: bool | None = None) -> bool:
     """Read from their page within FRESH_DAYS. A reading made signed out is only part of
     their page, so once the person is signed in (today, or `signed_in_now`) it is read again
-    whatever its age."""
-    today = today or datetime.date.today()
+    whatever its age. A sign-in is kept on its own clock (signed_in_today), so it is asked on
+    the day given, else on that clock, never on the person's day a read is dated by."""
+    given, today = today, today or person.today()
     if (reading or {}).get("signed_out"):
-        now_in = signed_in_today(today) if signed_in_now is None else signed_in_now
+        now_in = signed_in_today(given) if signed_in_now is None else signed_in_now
         if now_in:
             return False
     age = _days((reading or {}).get("read_on", ""), today)
@@ -2670,7 +2671,7 @@ def at_employer(company: str, contacts, also=(), today: datetime.date | None = N
     k = company_key(company)
     if not k:
         return [], []
-    today = today or datetime.date.today()
+    today = today or person.today()
     if threads is None:
         try:
             threads = (state.load_threads(state.THREADS_CSV)
@@ -2750,7 +2751,7 @@ def set_more_at(employer: str, said: str, up_to: int | None = None,
     rows = [r for r in more_at().values() if company_key(r.get("employer", "")) != k]
     row = {"employer": " ".join(employer.split()), "limit": up_to,
            "said": " ".join(str(said or "").split()),
-           "date": (today or datetime.date.today()).isoformat()}
+           "date": (today or person.today()).isoformat()}
     if not remove:
         rows.append(row)
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
@@ -2922,7 +2923,7 @@ def read_recently(reading: dict | None, today: datetime.date | None = None) -> b
     talk or a post was listed as waiting on a read for good."""
     if not has_read(reading):
         return False
-    age = _days((reading or {}).get("read_on", ""), today or datetime.date.today())
+    age = _days((reading or {}).get("read_on", ""), today or person.today())
     return age is None or age <= FRESH_DAYS
 
 
@@ -3215,7 +3216,7 @@ def keep_own_facts(contact_id: str, found, reason: str, today: str = "") -> str:
     for what, who in found:
         if what.lower() not in have:
             kept.append({"what": what, "example_for": who, "reason": reason[:300],
-                         "date": today or datetime.date.today().isoformat()})
+                         "date": today or person.today().isoformat()})
             have.add(what.lower())
     os.makedirs(os.path.dirname(p), exist_ok=True)
     with open(p, "w", encoding="utf-8", newline="\n") as fh:
@@ -3260,7 +3261,7 @@ def invitations(text: str, today: datetime.date | None = None) -> list:
     above it, never a name: kept on that card as `note` (`note_cut` where the page folds
     it), so a send recorded from this page logs the words the person wrote.
     """
-    today = today or datetime.date.today()
+    today = today or person.today()
     out, block = [], []
     for line in _clean_lines(text):
         m = _SENT_AGE.match(line)
@@ -3703,7 +3704,7 @@ def from_list(contact_id: str, person_: dict, company: str, url: str = "",
     """Keep what a one-page read showed about one person, beside anything read before.
     A "list" source: it places them and screens them, and it is never a read of their
     own page, so a note still cannot rest on it."""
-    today = today or datetime.date.today()
+    today = today or person.today()
     old = load(contact_id) or {}
     new = {"name": person_.get("name", ""), "company": company, "read_on": old.get("read_on", ""),
            "sources": [{"kind": "list", "url": url, "date": today.isoformat()}],
@@ -4265,7 +4266,7 @@ def record_message_check(contact_id: str, raw: str, today: datetime.date | None 
     if not answer:
         raise ValueError(f"not a message check: say free, credits or connected, or give the "
                          f"snippet's output ({', '.join(MESSAGE_ANSWERS)})")
-    today = today or datetime.date.today()
+    today = today or person.today()
     got = load(contact_id) or {}
     got["message_window"] = {"answer": answer, "on": today.isoformat(), "how": how}
     save(contact_id, got)
@@ -4314,7 +4315,7 @@ def inmail_hold(contact_id: str, contacts, reading: dict | None,
                 "their message window, so it is checked first: python3 tools/network/"
                 "reading.py extractor --message-check (run on their page), then python3 "
                 f"tools/network/reading.py message-check {contact_id} <what it returned>")
-    today = today or datetime.date.today()
+    today = today or person.today()
     try:
         threads = state.load_threads()
     except Exception:  # noqa: BLE001  no log yet: nothing spent
@@ -4857,7 +4858,7 @@ def set_channel(contact_id: str, reading: dict, today: datetime.date | None = No
     if channel != "inmail":
         return f"channel: {channel}, from what their page shows"
     b = state.platform_budget(contacts, state.load_threads(),
-                              (today or datetime.date.today()).isoformat())
+                              (today or person.today()).isoformat())
     return (f"channel: an InMail (only Message shows and you are not connected). Credits: "
             f"{b['inmails_left']} left this month ({b['inmails_source']}); one goes when it is "
             "sent (state.py sent --channel inmail --subject \"...\"). Whether it is free (an "
@@ -4943,7 +4944,7 @@ def record_pending(contact_id: str, today: datetime.date | None = None, row: dic
     own = contacts is None
     if own:
         contacts, threads = state.load_contacts(), state.load_threads()
-    today = today or datetime.date.today()
+    today = today or person.today()
     c = state.already_contacted(contacts, contact_id=contact_id)
     if c is None and row:
         c = state.already_contacted(contacts, name=row.get("name"), company=row.get("company"),
@@ -5029,7 +5030,7 @@ def save_drafts(batch: dict, own_facts_why: dict | None = None) -> int:
         if row is None:
             # A draft for someone read and never written to the book: their row comes from
             # the reading, so the queue, the batch check and the send all find them.
-            row, how = state.from_reading(contacts, cid, datetime.date.today())
+            row, how = state.from_reading(contacts, cid, person.today())
             if how == "existing":
                 print(f"reading: not saved. {row.get('name')} is already in the contact book as "
                       f"{row['contact_id']} (their LinkedIn address, or their name at that "
@@ -5924,7 +5925,7 @@ def main(argv: list | None = None) -> int:
                 "location": got.get("location", ""), "title": got.get("headline", "")}
                if got.get("name") else None)
         try:
-            c = state.close(contacts, a.contact_id, datetime.date.today(), a.reason, row=row)
+            c = state.close(contacts, a.contact_id, person.today(), a.reason, row=row)
         except ValueError as e:
             raise SystemExit(f"reading: {e}") from None
         state.save_contacts(contacts)
@@ -5943,9 +5944,9 @@ def main(argv: list | None = None) -> int:
                        getattr(a, "company", "") or known.get("company", ""))
     if a.cmd == "add":
         new = {"name": contact.get("name", ""), "company": contact.get("company", ""),
-               "read_on": (old or {}).get("read_on", "") or datetime.date.today().isoformat(),
+               "read_on": (old or {}).get("read_on", "") or person.today().isoformat(),
                "sources": [{"kind": "public", "url": a.url,
-                            "date": datetime.date.today().isoformat()}],
+                            "date": person.today().isoformat()}],
                "items": [item(a.kind, a.url, a.text, a.date)]}
         reading = merge(old, new) if old else {**new, "headline": "", "location": "",
                                                "about": "", "shared": {}}
@@ -6486,7 +6487,7 @@ def _cli_invitations(a) -> int:
         if a.record:
             try:
                 words, cut = sent_words(c["contact_id"], card)
-                state.sent(contacts, threads, c["contact_id"], datetime.date.today(),
+                state.sent(contacts, threads, c["contact_id"], person.today(),
                            date=card["sent"], outside=True, text=words, preview=cut)
                 done += 1
                 line += ": recorded as sent, draft removed"

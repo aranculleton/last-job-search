@@ -180,7 +180,7 @@ def test_every_id_given_to_remove_is_removed(book, capsys, monkeypatch):
                       contacts=book.contacts(), sends_left=10)
     assert reading.main(["shortlist", "--remove", "larkspur_rook", "--remove",
                          "larkspur_venn"]) == 0
-    assert reading._shortlist_file(datetime.date.today()) == ["larkspur_mire"]
+    assert reading._shortlist_file(reading.person.today()) == ["larkspur_mire"]
 
 
 # ------------------------------------------------------------ 9. a recruiter's card

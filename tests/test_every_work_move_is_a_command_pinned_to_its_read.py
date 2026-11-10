@@ -439,3 +439,17 @@ def test_the_brief_ends_with_the_wake_that_ends_stranded_work():
     src = open(os.path.join(ROOT, "tools", "brief.py"), encoding="utf-8").read()
     assert "Then the app skill's steps 1 to 3, for work still waiting" in src
     assert "fail_stranded" in open(os.path.join(ROOT, "tools", "app.py"), encoding="utf-8").read()
+
+
+def test_interview_preps_queued_together_are_one_job():
+    # Several interviews ahead, each asked for on its card: one job takes them (the
+    # maintainer, 2026-11-10: "can't multiple interviews be batched into one"), each keeping its
+    # own work item, and the batch stops at its size.
+    def prep(iv, at):
+        return {"kind": "prep", "status": "queued", "asked_at": at, "args": {"interview": iv},
+                "stages": page_db.progress("prep")["stages"]}
+    ids = ["prep~iv-" + str(i) for i in range(page_db.PREP_BATCH + 1)]
+    work = {w: (prep(w.split("~")[1], "2026-11-03T16:0" + str(i) + ":00Z"), 1) for i, w in enumerate(ids)}
+    chosen = page_db.next_item(db_of(work), "cloud", T("17:05"), cap=page_db.HEAVY_CAP_CHATS)
+    assert chosen["work"] == ids[0]
+    assert [w["work"] for w in chosen["with"]] == ids[1:page_db.PREP_BATCH]

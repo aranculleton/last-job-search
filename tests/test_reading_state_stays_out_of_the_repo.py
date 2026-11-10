@@ -64,7 +64,7 @@ def test_an_older_copys_files_are_moved_into_the_ledger_and_removed(here):
 
 
 def test_a_read_waiting_past_midnight_says_today_needs_its_own_list(here, monkeypatch, capsys):
-    today = datetime.date.today()
+    today = reading.person.today()
     reading._save_shortlist(["ana_rook", "bo_venn"], today - datetime.timedelta(days=1))
     monkeypatch.setattr(reading, "next_up", lambda contacts=None: None)
     import argparse

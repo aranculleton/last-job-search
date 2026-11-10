@@ -68,7 +68,7 @@ def test_a_change_finished_as_held_puts_the_hold_on_their_record(ring):
     _tweak(ring, "tweak~msg-pell~1", msg["rev"])
     d = ring.dump()
     got = json.loads(ring.run("done", d, "--work", "tweak~msg-pell~1", "--summary",
-                              "Held until Kestrel Mutual posts a fitting role; I check again 23 Nov.",
+                              "Held until Pell is back from leave; I check again 23 Nov.",
                               "--outcome", "held", "--until", "2026-11-23", "--now", R.NOW))
     assert got["status"] == "done" and got.get("held"), got
     from network import state
@@ -84,28 +84,66 @@ def test_a_change_finished_as_held_puts_the_hold_on_their_record(ring):
             os.environ.pop("LJS_STATE", None)
         else:
             os.environ["LJS_STATE"] = was
-    assert row["next_action"] == "Hold until Kestrel Mutual posts a fitting role, or until 2026-11-23", row
+    # With the day it was made and how many of their messages it saw, so what they write
+    # after it, the same day included, is owed an answer all the same.
+    assert row["next_action"] == ("Hold until Pell is back from leave, or until 2026-11-23 "
+                                  "(since 2026-10-25, after 0 from them)"), row
     assert row["next_action_due"] == "2026-11-23"
     # Every screen holds it: the draft, To do's count of messages to send.
     m, msg = _message(ring)
-    assert msg["hold"] == ("On hold until Kestrel Mutual posts a fitting role. Claude checks "
-                           "again on Mon 23 Nov."), msg["hold"]
+    assert msg["hold"] == ("On hold until Pell is back from leave. Claude checks again on "
+                           "Mon 23 Nov."), msg["hold"]
     assert msg["hold_why"] == "person_hold" and MID not in m["to_send"]["ids"]
+    # A hold that waits for a role sets the draft aside, kept: it was written before the role
+    # it should be about, and nothing is on their card until one is posted (2026-11-10).
+    _tweak(ring, "tweak~msg-pell~2", msg["rev"])
+    got = json.loads(ring.run("done", ring.dump(), "--work", "tweak~msg-pell~2", "--summary",
+                              "Held until Kestrel Mutual posts a fitting role; I check again 23 Nov.",
+                              "--outcome", "held", "--until", "2026-11-23", "--now", R.NOW))
+    assert "set aside (kept)" in got["held"], got
+    folder = os.path.join(ring.state, "documents", "network", PELL)
+    assert not os.path.exists(os.path.join(folder, "draft.md"))
+    assert os.path.exists(os.path.join(folder, "draft.not-needed.md"))
+    m = json.loads(ring.run("model", "--now", R.NOW))
+    assert not [x for x in m["messages"] if x["id"] == MID]
+    pell = next(p for p in m["people"] if p["id"] == PELL)
+    assert pell["group"] == "held" and pell["on_hold"]["role"] is True
+    assert pell["on_hold"]["said"] == (
+        "On hold until Kestrel Mutual posts a fitting role. Claude checks again on Mon 23 Nov. "
+        "Claude writes this when a role is posted."), pell["on_hold"]
 
 
 def test_a_change_held_before_the_record_holds_the_version_it_was_about(ring):
     _m, msg = _message(ring)
     _tweak(ring, "tweak~msg-pell~old", msg["rev"], status="done",
            finished_at="2026-10-25T17:40:00Z",
-           result={"summary": "held: no message to Pell until a fitting role appears.", "links": []})
+           result={"summary": "held: no message to Pell until the merger is announced.", "links": []})
     d, _ = T.read(ring, "r0")
     T.wake(ring, d)
     got, ok = T.view(ring, d)
     assert ok, got
-    with open(os.path.join(ring.db, "screen", "messages.json"), encoding="utf-8") as fh:
-        shown = next(x for x in json.load(fh)["data"]["data"] if x["id"] == MID)
-    assert shown["hold"] == "On hold: no message to Pell until a fitting role appears.", shown
+
+    def screen(name):
+        with open(os.path.join(ring.db, "screen", name + ".json"), encoding="utf-8") as fh:
+            return json.load(fh)["data"]["data"]
+    shown = next(x for x in screen("messages") if x["id"] == MID)
+    assert shown["hold"] == "On hold: no message to Pell until the merger is announced.", shown
     assert shown["hold_why"] == "decided"
+    # Their person is on hold with it: a group of their own, nothing owed (2026-11-10).
+    pell = next(p for p in screen("people") if p["id"] == PELL)
+    assert pell["group"] == "held" and pell["on_hold"]["said"] == shown["hold"], pell
+    # One held for want of a role carries no draft on the page at all.
+    _tweak(ring, "tweak~msg-pell~role", msg["rev"], status="done",
+           finished_at="2026-10-25T17:50:00Z",
+           result={"summary": "held: no message to Pell until a fitting role appears.", "links": []})
+    d, _ = T.read(ring, "r1")
+    got, ok = T.view(ring, d, "2026-10-25T18:05:00Z")
+    assert ok, got
+    assert not [x for x in screen("messages") if x["id"] == MID]
+    pell = next(p for p in screen("people") if p["id"] == PELL)
+    assert pell["on_hold"] == {"said": "On hold: no message to Pell until a fitting role appears. "
+                                       "Claude writes this when a role is posted.",
+                               "role": True, "until": None}, pell
     # A new version of the draft is not the one held.
     assert app_model.held_by_work({"w": {"data": {
         "kind": "tweak", "status": "done", "args": {"target": {"id": MID, "rev": "other"}},

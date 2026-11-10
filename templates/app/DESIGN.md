@@ -167,24 +167,37 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   by itself", "Claude is reading 3 profiles" with its spinner), with Read them only to open its
   tab the first time or to try again after trouble. Why: "when exactly is this waiting for
   claude thing going to happen?" (the maintainer, 2026-11-07). (waiting-note tests)
-- **An interview's live prep reads full screen, in the order the interview runs**, on every
-  screen. Before part 1 come the card's actions, the head and the bar, nothing else. The head
-  says the round, its length and the person's talk in one short line ("60 minutes; you talk
-  for about 3", never how the screen works), the pay and the notice to say, and the one
-  Simple|Detailed switch for every answer (the chosen side filled) with Open all. The bar stays
-  at the top however far down: "Search", Hide the answers (filled while on, with one line
-  saying the answers are hidden) and a chip to every part, then They ask, Stories, Words and
-  Just for you, one row that scrolls on its own on a phone. Each part:
-  its "Say first" in a soft grey box, a "Likely to prompt" pill under a line taking the person
-  to that answer and marking it; each question a soft card with who asks it, the other ways it
-  is put and its answer in a soft grey box with its own switch, its follow-ups folds by who
-  asks; then the stories, the words A to Z and the notes just for them. A term is a dotted
-  word inside its sentence, never a pill: it opens a panel at the side on a wide screen and a
-  sheet from the bottom on a phone over the page dimmed, with Back through a term inside a term,
-  and Close; on a wide screen the reading column keeps room for it at its right, so nothing
-  moves when it opens. An answer is drawn a step larger than the text around it. Hide the
-  answers puts each behind Start, with a small timer. Nothing in it is a filled accent pill:
-  the screen's one is Practise with Claude above it. The words, the order and the timing are the
+- **An interview's live prep reads full screen, one interview in the order it runs**, laid out
+  as the maintainer's call-prep page (2026-11-10: "this is what i want ... more tailored to
+  interviews"), on every screen. On screen is only what the moment needs; depth is one tap
+  away (the detailed answer, the follow-ups, a word's meaning, the A to Z), never all at once.
+  The head: the day, one muted line saying what it is ("A technical interview for the ...
+  role, in the order it runs ...", and the drafts the person asked for), one pill, Practise
+  with Claude (Update my prep and the calendar stay on its card in Coming up), search with Open all and Close all, "All
+  answers" with the one Simple|Detailed switch (the chosen side filled), and a chip to every
+  part, then Stories, Words and Your notes, wrapping, the parts with a known question marked in
+  gold. Nothing stays on the screen over the reading. Then two plain boxes: the timing, said in
+  words (the minutes, the person's own talk at their pace, the longest stop, the minutes kept
+  for their questions, and a guessed kind of interview said so with "Not this kind of
+  interview?" one tap from the right one), and what they are known to ask with the part each
+  is in. Each part: a small-capitals line (its number, its minutes, the person's talk in it)
+  and its title over a rule; "Say first" in a plain box, each line a bullet, a known question
+  answered there marked, its "Likely to prompt" or "Full answer and follow-ups" lines dashed
+  under it, going to the answer and marking it until a moment after it arrives, and the line
+  to end on in italics; then its questions as cards, each with who asks it in a pill, the other
+  ways it is put, its answer in the soft accent box with its own switch, the story it comes
+  from, and its follow-ups folded by who asks, three deep at most; the questions to ask them in
+  the last part, each with what to ask next folded under its likely answers. Then the stories,
+  each once with the questions it answers; every word A to Z, folded; and the notes that are
+  the person's alone, pay and notice among them, last in a gold box. A term is a dotted word
+  inside its sentence, never a pill: it opens a panel at the side on a wide screen and a sheet
+  from the bottom on a phone over the page dimmed, with Back through a term inside a term, and
+  Close; on a wide screen the reading column keeps room for it at its right, so nothing moves
+  when it opens. Practice is Practise with Claude alone: no second way on this screen. Every id
+  in it carries the interview's, and its listeners are on its own root. Two of the page's
+  rules give way here to the call-prep page: labels are small capitals (a letter-spaced
+  uppercase the rest of the page keeps for the Brief's day), and an answer is drawn at the size
+  of the words around it, not a step larger. The words, the order and the timing are the
   engine's (`interview_live`). (live prep tests)
 - Many of one small thing are one checklist card, a row an item: each row has its own next
   step and Done beside its trash, the trash keeping the rest (They replied, Tomorrow, Next week,
@@ -262,6 +275,20 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   rewrite (`app_alerts.paste_profile`), never a networking run's. Why: the line and an alert
   said the same twice, and the paste read as "a lot of your allowance" (the maintainer,
   2026-11-07). (waiting-note tests)
+- Someone on hold (the engine's `on_hold`: a hold on their record, or Claude's own decision
+  on the draft to them) is never in the list of people to act on. Everyone on hold is one
+  group at the foot of the list, folded, titled with its count and the reason where they
+  share one ("On hold: 2, waiting for a role to be posted", else "On hold: 3"), with Show.
+  Inside, a card says "On hold" in its corner and why and until when in its one line, with
+  no filled pill and They replied under More. A draft kept for them is folded away, with no
+  Copy and no I sent it, and "Send it anyway" inside the fold is the one way on: it puts the
+  card back in the list with the draft open. One who waits for a role has no draft at all:
+  it is written for that role once it is posted, and they come back to the list by
+  themselves, with "Draft the referral ask" as their step. Nobody on hold counts in "to
+  send" or "need you", is a To do row, or is on the Brief. A search or a filter still finds
+  them. Why: held notes sat among the people to act on with the draft open and a "Talking"
+  state, so they read as waiting on the person (the maintainer, 2026-11-10). (on hold tests,
+  `tests/test_the_on_hold_group_is_last_and_folded.py`)
 - What wakes Claude carries its cost beside it (the gauge: "Draft my reply", "Ask Claude",
   "Draft the follow-up"; the pencil box's chips only fill it); what only the page does (I sent it, an edit in place,
   the trash) carries none, and wakes nothing. (`data-wakes` marks the first kind.)

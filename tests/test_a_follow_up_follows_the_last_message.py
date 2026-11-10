@@ -123,17 +123,23 @@ def test_a_draft_that_follows_up_on_the_august_note_passes(thread):
     assert "ignores_your_last_message" not in rules and "repeats_your_last_message" not in rules
 
 
-def test_code_drafts_the_follow_up_to_the_august_note_and_never_repeats_it(thread):
+def test_code_never_repeats_the_august_note_and_holds_their_offer_for_a_role(thread):
     out = io.StringIO()
     with redirect_stdout(out):
         followup_drafts.main(["--contact", CID, "--today", "2026-09-04", "--json"])
     item = next(i for i in json.loads(out.getvalue()) if i["id"] == CID)
     draft = item["draft"]
-    assert draft["status"] in ("ready", "check"), draft
-    # The August note went by email: it is followed up as that.
-    assert "following up on my email from August" in draft["text"]
-    assert "moved" not in draft["text"].lower() and "last year" not in draft["text"].lower()
-    assert compose.thread_findings(draft["text"], CID, today="2026-09-04") == []
+    # Code wrote the follow-up on her offer here, one sentence for everyone who had offered
+    # ("... you offered to refer me if a role came up at <employer>, and I'd still be glad of
+    # that"), and two cards carried it word for word but for the name and the employer (the
+    # maintainer, 2026-11-10). With no role posted there is nothing new to say: nothing is
+    # written, and she waits on hold until one is
+    # (tests/test_a_referral_ask_waits_for_its_role.py).
+    assert draft["status"] == "none" and draft["text"] == "" and draft.get("hold_role"), draft
+    # A follow-up a chat writes by hand still follows the August note, sent by email.
+    assert compose.thread_findings(
+        "Hi Ana, following up on my email from August. Is the pricing team still growing?",
+        CID, today="2026-09-04") == []
     # What a chat writing it by hand is told, first.
     told = followup_drafts.context([CID], state.load_contacts(), state.load_threads(),
                                    "2026-10-26")

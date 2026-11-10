@@ -180,7 +180,8 @@ def test_the_short_list_refuses_an_id_that_names_nobody(book, capsys):
     assert "nobody by these ids is in the contact book or read about yet" in capsys.readouterr().out
     # Someone read about (a name and an employer) is on it, and `next` says who and where.
     _read_about("fernhill_oyelaran")
-    got = reading.shortlist(["fernhill_oyelaran"], TODAY, contacts=[], sends_left=10)
+    got = reading.shortlist(["fernhill_oyelaran"], reading.person.today(), contacts=[],
+                            sends_left=10)          # the day a read is kept under
     assert got["added"] == ["fernhill_oyelaran"]
 
 

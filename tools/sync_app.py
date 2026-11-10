@@ -1918,9 +1918,15 @@ def app_watch(landed: bool = False, popen=None) -> None:
         except OSError:
             pass
         try:
-            if time.time() - os.path.getmtime(started) < WATCH_AGAIN_S:
+            # When it was started, as written on this process's own clock: a file's time is
+            # the file system's, which a clock moved for the person's day (or a test's) does
+            # not move, so a look started a minute ago read as a month old.
+            with open(started, encoding="utf-8") as fh:
+                at = fh.read().split()
+            at = float(at[-1]) if len(at) > 2 else os.path.getmtime(started)
+            if time.time() - at < WATCH_AGAIN_S:
                 return                  # started lately: it says what it found when it ends
-        except (OSError, TypeError):
+        except (OSError, TypeError, ValueError):
             pass
     kw = {"start_new_session": True} if os.name == "posix" else \
         {"creationflags": getattr(subprocess, "DETACHED_PROCESS", 0)
@@ -1935,7 +1941,7 @@ def app_watch(landed: bool = False, popen=None) -> None:
     if started:
         try:
             with open(started, "w", encoding="utf-8", newline="\n") as fh:
-                fh.write(_day_line() + "\n")
+                fh.write("%s %d\n" % (_day_line(), time.time()))
         except OSError:
             pass
 
