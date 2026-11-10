@@ -388,7 +388,7 @@ METHODS: dict[str, dict] = {
             (84, "2026-11-10", False, "a resume made for a contact is named as the person's own (<Prefix>_<Noun>.pdf) in the contact's folder, never _For_<them>: the contact receives the file; older ones keep their names"),
             (85, "2026-11-10", True, "every font on a resume is set with no kerning, so an applicant tracking system reads AWS, VAT or Vancouver as one word (a kern pair read as a space split \"AWS\" in summaries, and \"V ancouver\" under the classic design); the cover letter's fonts likewise (it read \"L TV\"); the round trip names any word the text layer splits, verify_batch flags one in a letter (SPLIT_LETTER), and the font probe reads kern pairs; unsent applications are made again so none goes out with a split word"),
         ),
-        "fingerprint": "826e366aa38824d8",
+        "fingerprint": "fa97b2a1da91931d",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
