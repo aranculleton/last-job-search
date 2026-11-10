@@ -1956,9 +1956,11 @@ S.last_used = async (a) => {
     const d = document.querySelector(sel);
     const c = d ? d.closest("[data-card]") : null;
     if (!c) return null;
-    const r = c.getBoundingClientRect();
+    // Measured as drawn, after the page's zoom (Safari measures before it: __drawnRect).
+    const box = (el) => (el.__drawnRect ? el.__drawnRect() : el.getBoundingClientRect());
+    const r = box(c);
     const sent = c.querySelector('[data-k="sent:' + mid + '"]');
-    const sr = sent ? sent.getBoundingClientRect() : null;
+    const sr = sent ? box(sent) : null;
     const ring = getComputedStyle(c).boxShadow;
     let kept = null;
     try { kept = sessionStorage.getItem("ljs:lastused"); } catch (e) { kept = "refused"; }
