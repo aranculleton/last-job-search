@@ -871,8 +871,9 @@ METHODS: dict[str, dict] = {
             (86, "2026-11-09", False, "a change that finished with nothing changed (held, set aside, not possible) says so on its card at once, with Claude's own answer where it wrote one, never a spinner waiting for a new version; one whose new version is late stops spinning after a few minutes; a person whose draft a change set aside is never told \"Reply written\"; a message to Claude carries its words on its work item"),
             (87, "2026-11-09", False, "the Brief greets by the clock of the device it is read on, and a ready message has Open their profile on its face beside I sent it"),
             (88, "2026-11-10", False, "a reply that sends a resume shows the one Claude is making for that person, never the general one, while it is made"),
+            (89, "2026-11-10", False, "a work card's count joins its line without a stray full stop"),
         ),
-        "fingerprint": "8fa16b06d0218b2a",
+        "fingerprint": "b3c4ef6efa283e1d",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

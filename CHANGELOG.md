@@ -66,6 +66,10 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **Claude finds your computer however the list of computers arrives.** Wrapped one way, it read as no computer at all, and "Find people" waited while your Mac was on.
+
+- **A work card's count reads cleanly.** "...big tech employers., 0 of 5 done" lost its stray full stop.
+
 - **A resume made for someone is named as your own resume.** It was called "..._Resume_For_<their name>.pdf", which they would see when you sent it; it now keeps your usual name, in their own folder.
 
 - **Every page update records its version numbers itself.** A helper started before the update could not use the new automatic step, was told it had, and every change it sent the page was refused.

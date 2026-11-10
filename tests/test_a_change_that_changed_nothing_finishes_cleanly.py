@@ -172,3 +172,13 @@ def test_claudes_work_finishes_a_change_that_changed_nothing_at_once_with_its_re
     assert "Putting on page" not in juno["text"] and "Open in" not in juno["text"], juno
     assert "Kept as it was · Her last message asked for a call" in juno["text"], juno
     assert kit and "Yes: the team is in the office three days a week." in kit["text"], kit
+
+
+def test_a_work_cards_count_joins_its_line_without_a_full_stop():
+    """"Looking at who you want at big tech employers., 0 of 5 done" (2026-11-10): the count
+    joins the stage's line with the line's own full stop taken off first."""
+    import os
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    with open(os.path.join(root, "templates", "app", "app.js"), encoding="utf-8") as fh:
+        js = fh.read()
+    assert 'if (Number(c.total) > 0) now1 = now1.replace(/[.\\s]+$/, "") + ", "' in js

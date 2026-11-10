@@ -648,3 +648,14 @@ def test_the_page_draws_the_computer_once_under_linkedin_and_its_card_with_its_s
     assert page["steps"] and not any("Done" in x for x in page["steps"]), page
     assert card and card["body"].startswith("“People at Harbourline Bank” waits"), card
     assert card["pills"][:2] == [["Open LinkedIn", True], ["Done", False]], card
+
+
+def test_the_computer_is_found_however_the_list_of_places_arrives():
+    """list_environments' answer handed over wrapped read as no computer, and work for the
+    computer waited while the Mac was on (a person's copy, 2026-11-10)."""
+    e = {"environment_id": "env_x", "name": "Mac:Documents:1a2b",
+         "description": "Bridge environment (Mac)", "state": "active", "kind": "bridge"}
+    for shape in ({"environments": [e]}, {"ccr": {"environments": [e]}}, {"data": [e]}, [e],
+                  {"ccr": {"data": [e]}}):
+        got = computer.bridges(shape)
+        assert [b["id"] for b in got] == ["env_x"] and got[0]["computer"] == "Mac", shape

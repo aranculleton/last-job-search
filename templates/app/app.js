@@ -12862,7 +12862,8 @@
     if (st === "running" || st === "claimed") {
       const c = obj(w.count);
       now1 = lastStep && tms(lastStep.at) && tms(v.stage_at) && tms(lastStep.at) >= tms(v.stage_at) ? txt(lastStep.text) : cur ? cur.name : "Working";
-      if (Number(c.total) > 0) now1 += ", " + Number(c.done || 0) + " of " + Number(c.total) + " " + (txt(c.word) || "done");
+      // The count joins the line without its full stop: "employers., 0 of 5" (2026-11-10).
+      if (Number(c.total) > 0) now1 = now1.replace(/[.\s]+$/, "") + ", " + Number(c.done || 0) + " of " + Number(c.total) + " " + (txt(c.word) || "done");
       if (lead) now1 = now1.replace(/[.\s]+$/, "") + ". Drafted in one go with " + clipWords(txt(lead.title).replace(/^Draft(ing)?:?\s*/i, ""), 40) + ".";
     } else if (picked) {
       now1 = "Claude has picked this up";

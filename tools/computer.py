@@ -255,8 +255,14 @@ def heartbeat(db: dict) -> dict:
 def bridges(envs) -> list[dict]:
     """The person's computers a cloud chat can start a chat on: list_environments' active
     bridge environments, as [{id, computer, folder}] (claude_surfaces: computer-bridge)."""
-    if isinstance(envs, dict):
-        envs = envs.get("environments") or []
+    # The tool's answer as it came: {"environments": [...]}, a page wrapped as {"ccr": {...}}
+    # or {"data": [...]}, or a plain list. Wrapped, it read as no computer at all, and work
+    # for the computer waited while the Mac was on (a person's copy, 2026-11-10).
+    for _ in range(3):
+        if isinstance(envs, dict) and isinstance(envs.get("ccr"), (dict, list)):
+            envs = envs["ccr"]
+        if isinstance(envs, dict):
+            envs = envs.get("environments") or envs.get("data") or []
     out = []
     for e in envs or []:
         if not isinstance(e, dict) or str(e.get("kind") or "") != "bridge" \
