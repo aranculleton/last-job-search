@@ -2006,7 +2006,8 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
            status: str = "done", error: str = "", links=(), reply: str = "", thread: str = "",
            chat_kind: str = "cloud", dump_dir: str = "", chat: str = "",
            question: str = "", about: str = "", answer: dict | None = None,
-           answered=(), left_out: str = "", outcome: str = "", signin: str = "") -> dict:
+           answered=(), left_out: str = "", outcome: str = "", signin: str = "",
+           go=()) -> dict:
     """The batch that finishes one work item (the app skill, step 5): the item `done` (or
     `failed`, with `error` in plain words, or `stopped` after their Stop), its one-sentence
     summary and links, pinned to the version read; each of its locks the dump holds, deleted
@@ -2017,6 +2018,8 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
     (the exact words it concerns) and `answer` ({kind, choices, min, max, time}: the kind of
     answer it needs, tools/app_actions.py ANSWER_KINDS) go with it as `needs`, and the page
     draws the control that fits on the card (templates/app/DESIGN.md, "Asking the person").
+    `go` ([{label, to}], tools/touched.py `buttons`): where on the page what it changed is, as
+    buttons under its answer and on its result, worked out from the records it wrote.
     {work, status, thread, message, locks, batches}. Raises ValueError, in plain words, for a
     summary that will not do or a reply with no thread; KeyError for an item not in the dump
     or already finished."""
@@ -2138,13 +2141,18 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
         # a change that will not come (a held change's spinner turned for good, 2026-11-09).
         if outcome:
             fields["result"]["outcome"] = outcome
+    go = [{"label": str(b["label"]), "to": str(b["to"])} for b in go or ()
+          if isinstance(b, dict) and b.get("label") and str(b.get("to") or "").startswith("page:")]
+    if go and status == "done":
+        fields["result"]["go"] = go
     w = Writes(out_dir)
     mid = ""
     if str(reply or "").strip():
         mid = message_id(now)
         w.add("set", f"talk/{safe_id(thread)}/messages", mid,
               {"from": chat_kind if chat_kind in ("cloud", "computer") else "cloud",
-               "text": str(reply).strip(), "at": at, "work": work_id})
+               "text": str(reply).strip(), "at": at, "work": work_id,
+               **({"go": go} if go and status == "done" else {})})
     w.add("update", "work", work_id, fields, if_version=doc["version"])
     freed = []
     for lid, lock in sorted((db.get("locks") or {}).items()):

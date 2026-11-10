@@ -186,6 +186,12 @@ def chat_kind() -> str:
 
 
 def _cache_path() -> str:
+    return checkout_file(CACHE)
+
+
+def checkout_file(name: str) -> str:
+    """Where this checkout keeps a record of its own, never committed: `name` in its git
+    folder, or `.<name>` in the state folder where there is none."""
     import person
     root = person.state()
     try:
@@ -195,7 +201,7 @@ def _cache_path() -> str:
         d = r.stdout.strip() if r.returncode == 0 else ""
     except (OSError, subprocess.TimeoutExpired):
         d = ""
-    return os.path.join(d, CACHE) if d else os.path.join(root, "." + CACHE)
+    return os.path.join(d, name) if d else os.path.join(root, "." + name)
 
 
 def seen() -> dict:

@@ -5728,6 +5728,16 @@ def _clock(value) -> str:
     raise argparse.ArgumentTypeError("%r is not a time: write it like 14:00 or 2pm" % value)
 
 
+
+def _touched(company: str, role: str) -> None:
+    """Where the interview is on the page, for the answer's button (tools/touched.py)."""
+    import touched
+    try:
+        for rid in touched.draft_ids([(company, role)]):
+            touched.note("interviews", touched.interview_id(rid))
+    except Exception:  # noqa: BLE001  a button fewer, never a booking lost
+        pass
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -5885,6 +5895,7 @@ def main(argv=None) -> int:
             line = record_stage(folder, company, role, label, date, a.with_, today=today,
                                 time=a.time, zone=a.zone, minutes=a.minutes, due=a.due)
             print("saved in %s/outcome.md: %s" % (_rel(folder), line))
+            _touched(company, role)
             print("The page shows it once it is brought up to date (python3 tools/app.py view).")
             return 0
         if a.cmd == "postings":
@@ -5902,6 +5913,7 @@ def main(argv=None) -> int:
             print("%s: %s at %s, led by %s; its folder is %s.\n"
                   % ("registered" if added else "already registered", row["role"], row["company"],
                      row["contact_person"], _rel(folder)))
+            _touched(row["company"], row["role"])
             # One command from a booked call to its document: the prep is built and kept now.
             ctx = gather(row["company"], row["role"], a.stage, a.date, a.with_, a.today,
                          format_=a.format_)

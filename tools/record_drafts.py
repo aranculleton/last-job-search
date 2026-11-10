@@ -349,6 +349,15 @@ def main() -> int:
     for action, row in done:
         print(f"{action:<8} {row['company']} | {row['role']} | fit {row['fit_rating']} | "
               f"{row['cv_file']}" + ("" if row.get("cover_letter_file") else " | no letter"))
+    if done:
+        # Where each draft is on the page, for the answer's button (tools/touched.py).
+        import touched
+        try:
+            for rid in touched.draft_ids([(r["company"], r["role"]) for _, r in done],
+                                         csv_store.tracker(tracker)):
+                touched.note("drafts", rid)
+        except Exception:  # noqa: BLE001  a button fewer, never a draft left unrecorded
+            pass
     # The check after writing: the tracker records what exists, nothing else.
     left = unmade(done, tracker)
     for line in left:

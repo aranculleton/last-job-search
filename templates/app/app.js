@@ -7982,7 +7982,7 @@
       const answered = x.a.filter((m) => txt(m.text));
       return h("div", {class: "ct-pair"},
         clipBlock(txt(x.q.text).replace(/^about [^:]{1,80}:\s*/i, ""), "ctq:" + th + ":" + i, {cls: "ct-q", lead: [h("span", {class: "ct-who"}, "You asked"), " "]}),
-        answered.length ? answered.map((m, j) => answerOf(m, "cta:" + th + ":" + i + ":" + j))
+        answered.length ? answered.map((m, j) => [answerOf(m, "cta:" + th + ":" + i + ":" + j), heldAnswer(m) ? null : pageButtons(m.go, "cta:" + th + ":" + i + ":" + j)])
           : w ? workInline(txt(x.q.work), w, {key: "ct:" + th, done: () => null}) : null,
         answered.length && latest ? talkSteps(kind, id, w) : null);
     };
@@ -13182,7 +13182,7 @@
     const r = pl.tab ? resolveSection(pl.tab) || {section: pl.tab} : null;
     const where = pl.tab ? TAB_WORDS[pl.tab] || TAB_WORDS[r.section] || labelOf(r.section) : "";
     const open = () => { workSeenAt.set(id, 0); if (r) go(r.section, {focus: !pl.item, drafts: r.drafts, item: pl.item || null}); };
-    const links = arr(obj(w.result).links).map((l) => safeUrl(l.url) ? h("a", {href: safeUrl(l.url), target: "_blank", rel: "noopener noreferrer"}, txt(l.label)) : null).filter(Boolean);
+    const links = workLinks(w);
     const when = finishedAt(w);
     const head = [h("span", {class: "wc-title", id: titleId}, workName(w) || "Work"), sum ? h("span", {class: "wc-sum"}, sum) : null];
     return card("article", {class: "work-card wc-done st-done", "data-work": id, "data-phase": "done", "data-fold": String(workFolded(id, w)), "aria-labelledby": titleId, "data-item": "work:" + id},
@@ -13255,7 +13255,7 @@
     const putAway = TERMINAL.has(st) && st !== "done" ? btn("", () => { workSeenAt.set(id, 0); hiddenWork.add(id); scheduleRender(); }, {kind: "quiet icon-only", small: true, icon: "bin", key: "wput:" + id, aria: "Put away: " + txt(w.title)}) : null;
     if (st === "done") {
       if (!workSeenAt.has(id)) workSeenAt.set(id, now());
-      const links = arr(obj(w.result).links).map((l) => safeUrl(l.url) ? h("a", {href: safeUrl(l.url), target: "_blank", rel: "noopener noreferrer"}, txt(l.label)) : null).filter(Boolean);
+      const links = workLinks(w);
       if (links.length) put(cardEl, h("p", {class: "wc-links"}, links));
       // A follow-up or a reply for someone opens that person in Contacts, where what was done
       // shows: "Open in Jobs" sat under "Closed: no more messages to <them>" (the maintainer,
@@ -13722,7 +13722,9 @@
     return h("li", {class: "talk-msg from-" + seg(m.from === "you" ? "you" : m.from === "note" ? "note" : "claude")},
       m.from === "note" ? null : h("p", {class: "talk-who"}, m.from === "you" ? "You" : "Claude", h("span", {class: "muted small"}, " " + ago(m.at))),
       imgs.length ? h("div", {class: "talk-pics"}, imgs.map((id, i) => threadPic(id, i, imgs.length))) : null,
-      heldAnswer(m) ? h("p", {class: "talk-text muted", role: "status"}, HELD_SAID) : txt(m.text) || !imgs.length ? h("p", {class: "talk-text"}, txt(m.text)) : null,
+      heldAnswer(m) ? h("p", {class: "talk-text muted", role: "status"}, HELD_SAID) : txt(m.text) || !imgs.length ? h("p", {class: "talk-text"}, pageText(m.text)) : null,
+      // Where what it changed is, each a button opening that card (tools/touched.py).
+      m.from !== "you" && !heldAnswer(m) ? pageButtons(m.go, "talk:" + txt(m.id)) : null,
       // A message of yours that got no answer before your next one says so, so it never reads
       // the same as one Claude answered (2026-11-03: one asked again three days later).
       unanswered ? h("p", {class: "small muted talk-unanswered"}, "No answer to this one") : null);
@@ -14983,6 +14985,160 @@
     el.classList.add("flash");
     try { el.focus({preventScroll: true}); } catch (e) { el.focus(); }
     setTimeout(() => el.classList.remove("flash"), 2000);
+  }
+  // A finished work's links: an address opens in a new tab; a place on the page (page:...)
+  // opens it in place, as the buttons under its answer do.
+  function workLinks(w) {
+    const r = obj(obj(w).result);
+    return arr(r.links).map((l) => pageAddr(l.url) ? h("button", {type: "button", class: "btn link", "data-k": "go-link:" + txt(l.url), onclick: () => openPage(l.url)}, txt(l.label))
+      : safeUrl(l.url) ? h("a", {href: safeUrl(l.url), target: "_blank", rel: "noopener noreferrer"}, txt(l.label)) : null).filter(Boolean);
+  }
+  // ------------------------------------------------------------------ a place on the page
+  // `page:<section>/<id>[,<id>]` (tools/touched.py): where a piece of work's change landed, as
+  // the buttons under its answer ("Updated in Contacts"), worked out by the engine from the
+  // records the work wrote. Never shown as an address, never leaving or reloading the page: it
+  // opens the screen, the card on it (scrolled into view and marked), and a card since set aside
+  // or gone opens its screen with a short note, never an error (the maintainer, 2026-11-10).
+  const PAGE_RE = /^page:(contacts|jobs|drafts|interviews|you|work)(?:\/(.*))?$/;
+  const PAGE_GONE = "This is no longer on your page.";
+  const PAGE_ASIDE = "This was set aside.";
+  const PROFILE_PART = {jobs: "pf-jobs", experience: "pf-jobs", skills: "pf-skills", edu: "pf-edu", education: "pf-edu", certificates: "pf-edu", missing: "pf-missing"};
+  function pageAddr(to) {
+    const m = PAGE_RE.exec(txt(to).trim());
+    if (!m) return null;
+    const ids = (m[2] || "").split(",").map((x) => { try { return decodeURIComponent(x); } catch (e) { return x; } }).filter(Boolean);
+    return {section: m[1], ids};
+  }
+  function pageNote(t) { toast({text: t, ids: []}); announce(t); }
+  const bareUrl = (u) => txt(u).trim().toLowerCase().replace(/[#?].*$/, "").replace(/\/+$/, "");
+  // A job named by its id on Jobs, its posting's address, or a whole search ("round:<name>").
+  function jobsNamed(ids) {
+    const rows = jobRows();
+    const out = [];
+    for (const key of ids) {
+      const hit = key.startsWith("round:") ? rows.filter((r) => txt(r.id).startsWith(key.slice(6) + "-"))
+        : rows.filter((r) => r.id === key || (/^https?:/i.test(key) && bareUrl(obj(obj(r.draft_work).args).url) === bareUrl(key)));
+      for (const r of hit) if (out.indexOf(r) < 0) out.push(r);
+    }
+    return out;
+  }
+  // The card a job is drawn as: its draft's, once it has one (Jobs, DESIGN.md).
+  function jobCardId(r) { const d = listDraft(r); return d ? txt(d.id) : txt(r.id); }
+  function markItems(ids) {
+    for (const id of ids) {
+      let el = null;
+      try { el = $("main").querySelector('[data-item="' + CSS.escape(id) + '"]'); } catch (e) { el = null; }
+      if (!el) continue;
+      el.classList.add("flash");
+      setTimeout(() => el.classList.remove("flash"), 2000);
+    }
+  }
+  function openPage(to) {
+    const a = pageAddr(to);
+    if (!a) return false;
+    if (detailDlg) closeDetail(true);
+    const first = a.ids[0] || "";
+    if (a.section === "work") {
+      openWork(first || undefined);
+      if (first && !workDoc(first)) pageNote(PAGE_GONE);
+      return true;
+    }
+    if (a.section === "contacts") {
+      if (!first) { go("contacts", {focus: true}); return true; }
+      const m = messageById(first);
+      const p = personById(first) || (m && txt(m.contact) ? personById(txt(m.contact)) : null);
+      if (!p && !m) { go("contacts", {focus: true}); pageNote(PAGE_GONE); return true; }
+      // Their card opens expanded: the message to them unfolded under their name.
+      const mine = p ? messageItems().find((x) => txt(x.contact) === p.id && msgLive(x)) : m;
+      if (mine) openState.set("det:draft:" + txt(mine.id), true);
+      go("contacts", {item: p ? p.id : txt(m.id)});
+      return true;
+    }
+    if (a.section === "jobs") {
+      if (!a.ids.length) { go("jobs", {focus: true}); return true; }
+      const hits = jobsNamed(a.ids);
+      const live = hits.filter((r) => jobStatus(r) !== "dismissed");
+      if (!live.length) {
+        if (hits.length) listState("jobs:aside").open = true;
+        go("jobs", hits.length ? {item: txt(hits[0].id)} : {focus: true});
+        pageNote(hits.length ? PAGE_ASIDE : PAGE_GONE);
+        return true;
+      }
+      // Every one marked, the first in view: a list folded below its first few is opened.
+      for (const k of ["jobs:new", "jobs:found", "jobs:applied"]) { const st = listState(k); st.open = true; st.all = true; st.pages = Math.max(st.pages, 10); }
+      go("jobs", {item: jobCardId(live[0])});
+      markItems(live.slice(1).map(jobCardId));
+      return true;
+    }
+    if (a.section === "drafts") {
+      const d = first ? readyItems().find((x) => x.id === first) : null;
+      if (d) { go("drafts", {drafts: "apps", item: d.id}); return true; }
+      const sent = first ? applicationItems().find((x) => x.id === first) : null;
+      if (sent) { setPref("jobs:tab", "applied"); go("jobs", {item: sent.id}); return true; }
+      go("drafts", {focus: true, drafts: "apps"});
+      if (first) pageNote(PAGE_GONE);
+      return true;
+    }
+    if (a.section === "interviews") {
+      const iv = first ? allInterviews().find((x) => x.id === first) : null;
+      go("interviews", iv ? {item: iv.id} : {focus: true});
+      if (first && !iv) pageNote(PAGE_GONE);
+      return true;
+    }
+    go("profile", {focus: !first});
+    const hd = first && PROFILE_PART[first] ? $(PROFILE_PART[first]) : null;
+    const box = hd ? hd.closest(".card") || hd : null;
+    if (box) {
+      try { box.scrollIntoView({block: "center"}); } catch (e) { /* no scrolling here */ }
+      box.classList.add("flash");
+      try { hd.setAttribute("tabindex", "-1"); hd.focus({preventScroll: true}); } catch (e) { /* not focusable */ }
+      setTimeout(() => box.classList.remove("flash"), 2000);
+    }
+    return true;
+  }
+  // What a button names when two under one answer would read the same: the person, the
+  // employer or the work it opens.
+  function pageName(to) {
+    const a = pageAddr(to);
+    const id = a ? a.ids[0] || "" : "";
+    if (!id) return "";
+    if (a.section === "contacts") { const m = messageById(id); const p = personById(id) || (m ? personById(txt(m.contact)) : null); return p ? txt(p.first_name) : ""; }
+    if (a.section === "drafts") { const d = readyItems().find((x) => x.id === id) || applicationItems().find((x) => x.id === id); return d ? txt(d.company) : ""; }
+    if (a.section === "interviews") { const iv = allInterviews().find((x) => x.id === id); return iv ? txt(iv.company) : ""; }
+    if (a.section === "work") { const w = workDoc(id); return w ? txt(w.title) : ""; }
+    if (a.section === "jobs") { const r = jobsNamed(a.ids)[0]; return r && a.ids.length === 1 ? txt(r.company) : ""; }
+    return "";
+  }
+  // The buttons under an answer, one row of soft pills, in the engine's own words.
+  function pageButtons(list, key) {
+    const go2 = arr(list).filter((b) => pageAddr(obj(b).to) && txt(obj(b).label));
+    if (!go2.length) return null;
+    const seen = {};
+    for (const b of go2) seen[txt(b.label)] = (seen[txt(b.label)] || 0) + 1;
+    return h("div", {class: "card-actions page-go", role: "group", "aria-label": "Where it is on your page"}, go2.map((b, i) => {
+      const name = seen[txt(b.label)] > 1 ? pageName(b.to) : "";
+      return btn(txt(b.label) + (name ? ": " + name : ""), () => openPage(b.to), {kind: "secondary", small: true, key: "go:" + key + ":" + i});
+    }));
+  }
+  // A place written into an answer's words is a link that opens it, never its address.
+  function pageText(s) {
+    s = txt(s);
+    if (s.indexOf("page:") < 0) return s;
+    const out = [];
+    let at = 0;
+    const re = /page:(?:contacts|jobs|drafts|interviews|you|work)(?:\/[^\s)]*)?/g;
+    let m;
+    while ((m = re.exec(s))) {
+      const to = m[0].replace(/[.,;:!?]+$/, "");
+      const a = pageAddr(to);
+      if (!a) continue;
+      out.push(s.slice(at, m.index));
+      const word = labelOf(a.section === "you" ? "profile" : a.section === "drafts" ? "jobs" : a.section) || (a.section === "work" ? "Claude's work" : "your page");
+      out.push(h("button", {type: "button", class: "btn link", "data-k": "go-in:" + to, onclick: () => openPage(to)}, pageName(to) || word));
+      at = m.index + to.length;
+    }
+    out.push(s.slice(at));
+    return out;
   }
   // The section, the drafts it shows and the item opened, in the address: Back goes back
   // through them, and a pinned window reopens the same way.

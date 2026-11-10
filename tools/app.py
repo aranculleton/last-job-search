@@ -2596,19 +2596,26 @@ def cmd_done(a) -> int:
                     today=person.today(now).isoformat(),
                     path=person.state("job_scraper", "seen_jobs.json"))
         a.stopped, a.summary = True, a.summary or f"Not drafted: {left.rstrip('.')}."
+    made, noted, links, problem = _made(a, db, reply)
+    if problem:
+        print(f"app: not finished: {problem}", file=sys.stderr)
+        return 2
     try:
         got = page_db.finish(db, a.work, now, a.out or os.path.join(a.dump, "out"),
                              summary=a.summary, status="failed" if a.failed else
                              "stopped" if a.stopped else "done",
-                             error=a.failed, links=_links(a.link), reply=reply, thread=a.thread,
+                             error=a.failed, links=links, reply=reply, thread=a.thread,
                              chat_kind=a.kind or app_listen.chat_kind(), dump_dir=a.dump,
                              chat=a.chat, question=a.question, about=a.about,
                              answer=_answer(a), answered=a.answered, left_out=left,
                              outcome=getattr(a, "outcome", "") or "",
-                             signin=getattr(a, "signin", "") or "")
+                             signin=getattr(a, "signin", "") or "", go=made)
     except (KeyError, ValueError) as e:
         print(f"app: not finished: {e.args[0] if e.args else e}", file=sys.stderr)
         return 2
+    if got.get("status") in ("done", "failed", "stopped") and not got.get("again"):
+        import touched
+        touched.clear(noted)
     kind = str((((db.get("work") or {}).get(page_db.safe_id(a.work)) or {}).get("data") or {})
                .get("kind") or "")
     if got.get("status") == "done" and (getattr(a, "outcome", "") or "") == "held":
@@ -2680,6 +2687,44 @@ def hold_on_record(db: dict, work_id: str, summary: str, until: str, now) -> str
         return ""
     state.save_contacts(contacts)
     return f"held on their record: {cid}: {action}"
+
+
+def _made(a, db: dict, reply: str = "") -> tuple[list, list, list, str]:
+    """What a finishing work item changed on the page, as its answer's buttons
+    (tools/touched.py): what the commands it ran noted, each --touched, each --link to a place
+    on the page, and a search's own jobs. (buttons, the noted rows to clear once it is
+    finished, the other links, why the answer may not go as written or "")."""
+    import page_db
+    import touched
+    item = ((db.get("work") or {}).get(page_db.safe_id(a.work)) or {}).get("data") or {}
+    try:
+        found, noted = touched.gather(a.work, item, a.chat)
+    except Exception:  # noqa: BLE001  a record it cannot read is a button fewer, never a stop
+        found, noted = [], []
+    places, links = touched.page_links(_links(a.link))
+    try:
+        given = [touched.from_arg(x) for x in getattr(a, "touched", None) or ()]
+    except ValueError as e:
+        return [], noted, links, str(e)
+    found = found + places + given
+    kind = str(item.get("kind") or "")
+    args = item.get("args") if isinstance(item.get("args"), dict) else {}
+    if kind == "prep" and args.get("interview"):
+        found.append(("interviews", str(args["interview"])))
+    if kind == "search" and not a.failed and not a.stopped:
+        run = page_db.search_run(a.work)
+        if not run:
+            try:
+                import app_model
+                newest = app_model.newest_round()
+                run = os.path.splitext(os.path.basename(newest))[0] if newest else ""
+            except Exception:  # noqa: BLE001  no profile here: no jobs to point at
+                run = ""
+        if run:
+            found.append(("jobs", "round:" + run))
+    made = touched.buttons(found) if not (a.failed or a.stopped or a.question) else []
+    problem = touched.pasted(reply, made, getattr(a, "in_thread", False))
+    return made, noted, links, problem
 
 
 def _answer(a) -> dict | None:
@@ -3027,6 +3072,9 @@ def cmd_ask(a) -> int:
     except ValueError as e:
         print(f"app: not asked: {e}", file=sys.stderr)
         return 2
+    # Work a chat starts is where its answer points: "Running in Claude's work", opening it.
+    import touched
+    touched.note("work", str(got.get("work") or ""), chat=a.chat)
     print(_dump(got), end="")
     return 0
 
@@ -3331,7 +3379,13 @@ def main(argv=None) -> int:
     p.add_argument("--time-key", dest="time_key", default="",
                    help="with --answer date: ask the time beside the day")
     p.add_argument("--link", action="append", default=[],
-                   help="\"<label>=<address>\" shown with it (more than one allowed)")
+                   help="\"<label>=<address>\" shown with it (more than one allowed); a place "
+                        "on the page (page:contacts/<id>) is one of its buttons")
+    p.add_argument("--touched", action="append", default=[],
+                   help="\"<place>:<id>\" it changed that no command noted (contacts, jobs, "
+                        "drafts, interviews, you, work): a button under its answer opens it")
+    p.add_argument("--in-thread", dest="in_thread", action="store_true",
+                   help="they asked to see it here: the answer may paste what its card holds")
     p.add_argument("--chat", default="", help=CLAIMED_UNDER)
     p.add_argument("--kind", default="", choices=("", "cloud", "computer"))
     p.add_argument("--answered", action="append", default=[],

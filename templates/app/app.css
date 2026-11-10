@@ -248,6 +248,8 @@ bdi { unicode-bidi: isolate; }
 .job-top h3 { min-width: 0; flex: 1 1 200px; overflow-wrap: anywhere; }
 .card-actions, .opts, .wc-actions, .inline, .sheet-actions, .talk-row, .bulk-btns, .more-acts, .suggest-acts, .examples { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
 .card-actions { margin-top: 4px; }
+/* Where an answer's change is on the page: its buttons under the words (tools/touched.py). */
+.card-actions.page-go { margin-top: 8px; }
 .todo-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; }
 /* A row's state pill ("Draft ready") beside its day, together at the line's end. */
 .todo-top .todo-state { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; }

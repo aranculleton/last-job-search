@@ -215,11 +215,15 @@ def test_finish_saves_the_draft_for_the_page_and_writes_the_finishing_batch(sear
     (said, work, lock) = batch(got["batches"][0])
     assert (said["op"], said["collection"]) == ("set", "talk/cloud-c1/messages")
     assert said["body"]["from"] == "cloud" and said["body"]["work"] == wid
-    assert "Thanks Juno, that is kind of you." in said["body"]["text"]
+    # The thread says where the draft is, with the button to their card, never the draft
+    # itself (the maintainer, 2026-11-10): it is on Juno's card with its Copy.
+    assert "Thanks Juno, that is kind of you." not in said["body"]["text"], said["body"]["text"]
+    go = [{"label": "Updated in Contacts", "to": f"page:contacts/{LARKSPUR}"}]
+    assert said["body"]["go"] == go
     assert (work["op"], work["if_version"]) == ("update", 3)
     assert work["body"]["status"] == "done"
     assert work["body"]["result"] == {"summary": "Your reply to Juno is ready to copy.",
-                                      "links": []}
+                                      "links": [], "go": go}
     assert (lock["op"], lock["collection"], lock["doc_id"], lock["if_version"]) == \
         ("delete", "holds", f"contact~{LARKSPUR}", 2)      # the other job's lock stays
 

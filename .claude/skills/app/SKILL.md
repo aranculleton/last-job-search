@@ -203,6 +203,15 @@ section) writes `talk/<thread>/messages/<id>`: `{from: "you", text, at, work}`, 
 `images: [{id, type, name, bytes}]` when the person added pictures. Read the thread's
 messages (ArtifactData `query`, collection `talk/<thread>/messages`, `out_dir: $D`).
 
+**The thread is a pointer, never a copy.** An answer that changed something is one or two
+plain lines saying what changed; the buttons under it ("Updated in Contacts", "Ready in Jobs",
+"Running in Claude's work") come from `done` by itself, worked out from the records the work
+wrote (`tools/touched.py`), so no chat types one. Never paste into the thread a drafted reply
+or note, a resume or letter, a job list, an interview pack or a profile change: each is on its
+own card, and the button opens it. Paste it only when the person asked to see it there ("show
+me here", "paste it", "what does it say?"), with `--in-thread`, or when it has no card
+anywhere. A plain answer to a question stays a short answer, with no button.
+
 - **Every picture is read before you answer.** For each `images[].id`: Artifact `read`, the
   page as `url`, the id as `path`, `out_dir: $D/pics`; then Read the file it saved and look
   at it. Usually it is a screenshot: a LinkedIn or email conversation, a job someone sent, an
@@ -217,12 +226,13 @@ messages (ArtifactData `query`, collection `talk/<thread>/messages`, `out_dir: $
   `contact` (find them in the contact book first; someone not in it is added with
   `network/state.py add "<name>" --company "<employer>"`). Draft the application (the drafting path in RUNBOOK.md step 2) only
   when the message asks for it or says to apply. Answer in the thread with where it is:
-  the score, who it is linked to, and where it shows (Jobs, or Drafts once drafted).
+  the score and who it is linked to, in a line; the button to it in Jobs comes by itself.
 - **Screenshots of someone's LinkedIn profile** (the page's "Send screenshots instead", for
   a note to them): find who in the contact book, transcribe what the pictures show word for
   word under LinkedIn's own headings (About, Experience, Education) into a file, never filling
   a gap, and run `reading.py read <contact> <file> --source screenshot`; then rewrite their
-  waiting note on it (`/network`, `args.rewrite`) and put it in the thread, ready to copy.
+  waiting note on it (`/network`, `args.rewrite`); the answer says it is rewritten, and its
+  button opens their card.
 - **Someone wrote to them**: two commands, with nothing to look up first (`/reply` says
   what each does); someone not yet in the contact book (a recruiter who wrote first) is added
   first with `python3 tools/network/state.py add "<name>"`, and "they accepted my request" is
@@ -235,8 +245,10 @@ messages (ArtifactData `query`, collection `talk/<thread>/messages`, `out_dir: $
   the reply from that, then run `python3 tools/network/reply.py finish <contact id>
   --draft-file - --work <id> --dump "$D"` with the draft on its input. It refuses while the
   draft check finds anything or a reaction of theirs is unrecorded, saves the draft where
-  the person's card in Contacts shows it, and writes this item's finishing batch with the draft in the thread in
-  full, ready to copy. Send that batch before anything is saved. Nothing is ever sent.
+  the person's card in Contacts shows it, and writes this item's finishing batch: one line in
+  the thread with "Updated in Contacts" opening their card, where the draft is ready to copy
+  (`--in-thread` only when they asked to see the draft there). Send that batch before anything
+  is saved. Nothing is ever sent.
 - **Someone proposed a time for a call** ("how about 2pm ET Thursday?"): `reply.py
   prepare` logs their message; record the call booked on that day with `network/state.py
   set <contact> --status call_booked --due <day>`, draft the short yes (`reply.py finish`),
@@ -249,7 +261,10 @@ messages (ArtifactData `query`, collection `talk/<thread>/messages`, `out_dir: $
   person to add a time, or fix any record, themselves.
 - **Anything else** is answered in the thread in plain words: `python3 tools/app.py done
   "$D" --work <id> --summary "<one sentence>" --reply-file -`, with the answer on its input,
-  writes it, the item done and its locks removed, in one batch. Work it starts is queued
+  writes it, the item done and its locks removed, in one batch, with a button for each place
+  its commands changed. A change no command notes (the profile edited, say) is named with
+  `--touched <place>:<id>` (contacts, jobs, drafts, interviews, you, work), and an answer of
+  more than a few lines with a button is refused unless `--in-thread`. Work it starts is queued
   with `python3 tools/app.py ask "$D" --kind <kind> --title "<a few plain words>" --args
   '<json>'` (the args step 4's table names), the item the page's own Ask writes, never one
   written by hand; `next` takes it, and it shows in the page's Work list as it runs.
@@ -406,17 +421,23 @@ now." Never offer it again in a chat; the page asks by itself, now and then.
 chat has taken on since is refused, and nothing is written): `--reply-file -` (or a file) for the answer in its
 `talk` thread, `--failed "<why, in plain words>"` when it did not finish, `--link
 "<label>=<address>"` for each link (a reply's own is `reply.py finish ... --work <id>
---dump "$D"`). A summary past one sentence or 15 words is refused. A finish holds:
+--dump "$D"`). A summary past one sentence or 15 words is refused. Where on the page the work
+changed things is never typed: `done` reads what this work's commands noted
+(`tools/touched.py`) and puts one button for each under the answer and on its result, at most
+four and then "and N more"; `--touched <place>:<id>` adds one no command noted, and a
+`--link` to `page:<place>/<id>` is one of them. The answer is a line or two beside them, the
+thing itself only with `--in-thread`, when they asked to see it there. A finish holds:
 
 - `work/<id>`: `status: done` (or `failed`, `error` in plain words), `finished_at`,
-  `result: {summary, links}` (web addresses or repo paths; downloads go to the asset store).
+  `result: {summary, links, go}` (links are web addresses or repo paths, downloads go to the
+  asset store; `go` the buttons to where it changed things).
   The summary is one short sentence, at most 15 words, of what is ready ("Your Larkspur Retail
   pack now covers the technical round."): the page shows its first sentence
   only (a paragraph was too wordy to read, 2026-10-30). Detail goes in the work itself.
 - its locks deleted, each pinned; your heartbeat `chats/<your id>`, `busy: "Saving your
   work"` while the landing check below runs (`null` when nothing is left to land; `view
   --end` clears it with its own batch, the save going on by itself).
-- from a `talk` thread, a reply there (`from: cloud` or `computer`, plain words).
+- from a `talk` thread, a reply there (`from: cloud` or `computer`, plain words, with `go`).
 
 Bring the page up to date, once for the whole batch of work (`--end`, in a wake's
 subagent):

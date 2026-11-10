@@ -96,6 +96,9 @@ def main(argv=None) -> int:
         except (OSError, ValueError) as e:
             print(f"added_jobs: not added: {e}")
             return 1
+        # Where it is on the page, for the answer's button (tools/touched.py): Jobs.
+        import touched
+        touched.note("jobs", f"added-{n}")
         print(f"added_jobs: added-{n} {'added' if new else 'brought up to date'}: "
               f"{row.get('title')} at {row.get('company')}")
         return 0
