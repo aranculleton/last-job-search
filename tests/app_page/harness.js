@@ -2030,13 +2030,21 @@ S.runs_there = async (a) => {
     seed: {"work/network~1": runningDoc({kind: "network", title: "People at Harbourline Bank", to: "computer", computer_session: sess,
       steps: [{at: T0, text: say}, {at: T0, text: "Reading 4 profiles"}]})}});
   const {page, store} = o;
-  const where = () => page.evaluate(() => [...document.querySelectorAll('[data-work="network~1"] [data-where="computer"]')].map((x) => x.textContent));
+  const sel = '[data-work="network~1"] [data-where="computer"]';
+  const where = () => page.evaluate((x) => [...document.querySelectorAll(x)].map((e) => e.textContent), sel);
+  // Each change is waited for, with a time limit, never read after a set number of turns: the
+  // store's write reaches the page in its own time, and Safari's engine on a busy machine read
+  // the card before it had (CI, 2026-11-10).
+  const gone = () => page.waitForFunction((x) => !document.querySelector(x), sel, {timeout: 5000}).catch(() => {});
+  await page.waitForFunction((x) => !!document.querySelector(x), sel, {timeout: 5000}).catch(() => {});
   const r = {running: await where(), now: (await bar(page, "network~1") || {}).sentence};
   store.chat("work/network~1", {computer_session: Object.assign({}, sess, {archived_at: T0})}, undefined, "update");
   await turn(page, 6);
+  await gone();
   r.archived = await where();
   store.chat("work/network~1", {computer_session: sess, status: "done", finished_at: T0, result: {summary: "4 people found", links: []}}, undefined, "update");
   await turn(page, 6);
+  await gone();
   r.done = await where();
   r.errors = o.errors;
   await o.ctx.close();
