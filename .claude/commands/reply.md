@@ -131,7 +131,9 @@ The steps the two commands carry, for when one is done by hand:
 ## Present
 
 The scenario and the evidence for it. The draft, in full and ready to paste: never only
-where it was saved. The `what_works.py event` line from step 7, when there is one. The recommendation on whether
+where it was saved. (Asked on the page, its Chat gets one line and a button to their card,
+where the draft is; in full there only when they asked: the `app` skill, "A message in the
+chat".) The `what_works.py event` line from step 7, when there is one. The recommendation on whether
 the thread is worth continuing at all. Any action owed outside the thread, with
 a date.
 
