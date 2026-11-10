@@ -597,8 +597,9 @@ METHODS: dict[str, dict] = {
             (88, "2026-11-09", False, "who to write to is one call (candidates.py check): the search result's headline is filtered on the person's settings (a recruiter for another function is out), every list check runs at once, the per-employer limit included in the one surfacing check, and the list is ranked by who is likeliest to help and filled to the number asked, widening to more employers rather than padding; the InMail chooser picks only from what is known; LinkedIn is never fetched over the web and read only in the signed-in browser on the person's computer; a draft is held with state.py hold, never over another; the people already found need nothing redone"),
             (89, "2026-11-10", False, "someone waiting holds their employer for one follow-up wait from the last contact, a request nobody accepted no longer than the days to withdraw it, and a conversation with no answer in GONE_COLD_DAYS (90) is closed as gone cold by itself, recorded and opened again by a reply; a people run ranks the kind of reader who answers the person first, then a hiring signal in the headline, and fills with peers only once the hiring side at every employer has been tried, saying so; a headline that reads as selling is out; someone chosen stays chosen; someone an earlier run closed (not the person) is checked again; candidates.py order searches the employers with people known in the place first and skips one found empty there for 30 days; a run's time is split into searching and reading; the people already found need nothing redone"),
             (90, "2026-11-10", False, "a reply finished for the page's Chat says in one line that it is on their card, with an Updated in Contacts button opening it, and puts the draft in the thread only with --in-thread; a contact added or changed notes where it is, for the answer's button; nothing made before needs making again"),
+            (91, "2026-11-10", False, "a chat with Claude's own browser on the person's computer does the whole networking run there, reading the short list itself and writing every note from what it read, never queuing the reads for a second chat; a run asked in a cloud chat while the computer is ready is sent there; notes already waiting on a read are still rewritten as before"),
         ),
-        "fingerprint": "69b91c2713c44b39",
+        "fingerprint": "7d8813d4f9cd4982",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
@@ -661,8 +662,9 @@ METHODS: dict[str, dict] = {
             (45, "2026-11-10", False, "the company limit frees an employer one follow-up wait after the last contact; today's short list is kept on the person's own day and a removal takes off that one alone; reading.py batch checks the run's own notes against the whole queue and says only what involves them; notes are written as before"),
             (46, "2026-11-10", False, "a profile whose roles are grouped under one employer, with a place or a kind of work under its name instead of the time there, keeps that employer as theirs: the first role's title was read as the employer and someone still there was skipped as having moved on"),
             (47, "2026-11-10", False, "someone whose thread the follow-up rule has closed (two unanswered messages from you) no longer counts towards their employer's limit, so the next person there is not held until somebody replies"),
+            (48, "2026-11-10", False, "on the person's computer each note is written from the profile read in that same run, never saved to wait on a read; nothing written before needs writing again"),
         ),
-        "fingerprint": "f5943b7d3b689436",
+        "fingerprint": "d5a80370f87a5626",
     },
     "screening": {
         "by": "round", "priority": 2,

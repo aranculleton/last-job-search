@@ -357,7 +357,9 @@ this chat's, running at its first stage. Do the work here, pin each stage as a b
 (`app.py pin ... --chat <your chat id>`, every ten minutes on a long one, "Progress costs
 nothing extra" below), and finish it with `app.py done` (step 5), so its card shows the
 result. A chat that answers the page sends a big job to a chat of its own instead (`ask`
-without `--here`). `app.py busy "$D" "<a few plain words>"` (read `beats` first) is only for
+without `--here`). A networking run asked in a cloud chat while the person's computer is
+ready is never that chat's: `ask` sends it `to: computer` by itself (`sent_to: computer`), where
+the whole run is done with Claude's browser; do what its `then` says. `app.py busy "$D" "<a few plain words>"` (read `beats` first) is only for
 an answer given in the chat itself, never for work: the page shows "Claude is busy in your
 chat: <those words>"; `busy "$D" --done` when it is given.
 

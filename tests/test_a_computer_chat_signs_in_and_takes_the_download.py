@@ -126,8 +126,9 @@ def test_no_warning_remains_where_a_read_was_asked_for(monkeypatch):
 # ------------------------------------------------------------------ no question first
 
 def test_reading_needs_no_question_first_and_is_the_pages_whatever_the_chat_has():
-    """Unset reads (no question first); and since 4.3 the page reads, never a chat, whatever
-    browser the chat has (2026-10-29)."""
+    """Unset reads (no question first); and since 4.3 the page reads whatever browser the
+    chat has (2026-10-29), but for a chat holding Claude's own browser on the person's
+    computer, which reads the short list itself, in the run (2026-11-10)."""
     class Unset:
         pass
 
@@ -139,10 +140,12 @@ def test_reading_needs_no_question_first_and_is_the_pages_whatever_the_chat_has(
     assert profile_upgrades._profile_reads() == ""
     for tools in (["browser"], ["chrome"], ["enable"], []):
         got = reading.route(tools, reading.reads_setting(Unset()), {"CLAUDECODE": "1"})
-        assert got["route"] == "page" and got["usable"], got
+        here = tools in (["browser"], ["enable"])
+        assert got["route"] == ("here" if here else "page") and got["usable"], got
         # The rule since 2026-11-09: never fetched over the web, read only in the signed-in
         # browser on the person's computer.
-        assert "queue-page" in got["do"] and "Never fetch linkedin.com over the web" in got["do"]
+        assert ("queue-page" in got["do"]) is not here
+        assert "never fetch linkedin.com over the web" in got["do"].lower()
         assert "signed-in browser on the person's computer" in got["do"]
     assert reading.route(["browser"], "paste", {"CLAUDECODE": "1"})["route"] == "hand"
 

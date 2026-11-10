@@ -49,6 +49,14 @@ time honestly. The run's record splits its time by these stages (`computer.py me
 the time went on. Pin `find` before the first search and `read` before the first profile,
 every run, never one stage for both.
 
+**Where it runs.** A run is whole where Claude's own browser is: a chat on the person's
+computer (`reading.py route --tools <its browser tools>` prints `here`) does every step below
+itself, the reads included. A cloud chat with no browser, asked in the chat, first queues it
+as work (`python3 tools/app.py ask "$D" --kind network --title "<a few plain words>" --args
+'<json>' --here --chat <your chat id>`, `work` and `holds` read into `$D` first): while the
+person's computer is ready it prints `sent_to: computer`, and the run goes there, whole, and
+this chat does none of it but what `then` says. Otherwise it is this chat's, as below.
+
 1. **start.** `python3 tools/learned.py brief people` and `brief targets` (who they want, in
    their words), and the queue an earlier run left (step 1 of "Run it", below).
 2. **Who can help** is the person's settings, never a guess: their titles (`TITLE_SETS`,
@@ -330,9 +338,13 @@ every run, never one stage for both.
    `tools/network/reading.py`, which keeps only what a note could rest on, under
    `documents/network/<contact_id>/reading.json`.
 
-   0. **The route, never asked of the person.** `python3 tools/network/reading.py route`
-      prints it: `page` (their page reads the profiles: the default), `hand` (they chose to
-      paste profiles instead) or `public`, and the one line, if any, to tell the person.
+   0. **The route, never asked of the person.** `python3 tools/network/reading.py route
+      --tools "<this chat's browser tools: browser, chrome, enable, or none>"` prints it:
+      `here` (this chat has Claude's own browser on the person's computer, so it reads the
+      short list itself, now, in this run, and writes every note from what it read: a run on
+      the computer is the whole run, never half of one), `page` (their page reads the
+      profiles), `hand` (they chose to paste profiles instead) or `public`, and the one line,
+      if any, to tell the person.
       Never tell the person to press a key, click, tap or find anything: a path they follow
       comes from `tools/claude_surfaces.py`, written as where to go at the time of writing,
       with the official page.
@@ -351,7 +363,16 @@ every run, never one stage for both.
       never a skip. Never a people-search or
       data-broker site (`reading.BROKERS`; the tool refuses them), and never a fetch of
       linkedin.com from this session: its robots.txt disallows it and it answers HTTP 999.
-   2. **Queue the short list for their page, and write each note now.** With route `page`:
+   2. **Read the short list here, with route `here`:** `reading.py shortlist <ids, best
+      first>`, then `reading.py next` and what it prints, one person at a time (their profile
+      and its Experience page, `reading.py read <id> - --source browser`, the verdict in 3),
+      until it says done; then write each note from its reading (step 7, `reading.py draft
+      <id> -`, never `--wait-for-read`). LinkedIn's sign-in page instead of a profile is a
+      wait, never a stop: `reading.py signin` prints its steps (the sign-in page opened in
+      this browser), and in a chat the app started on the computer its own prompt's sign-in
+      step puts the Sign in to LinkedIn card on their page too; the run carries on by itself
+      once they are signed in.
+      **Queue the short list for their page, and write each note now.** With route `page`:
       `python3 tools/network/reading.py queue-page <ids, best first>`, then write each note
       from what is known now (the card, the public findings) with `reading.py draft <id> -
       --wait-for-read` (step 7): saved under `WAITS ON A READ`, shown to the person as

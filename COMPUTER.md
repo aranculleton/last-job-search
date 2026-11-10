@@ -170,11 +170,17 @@ a chat already on the computer; a chat started there from the cloud (`create_ses
 bridge by the computer starter, woken by its bell, in Auto, titled `Job search · <job> ·
 <computer>`, its prompt complete, its results back through the page and the copy and never
 `send_message`, archived by the starter once its work is finished or waits on the person: a
-job stopped at the LinkedIn sign-in rings the bell at its end, so its chat is put away at
-once, and a fresh one starts only once they answer); the scheduled task; a folder the computer offers (`folder-attach`); a cloud
+chat that finds LinkedIn signed out opens its sign-in page in Claude's browser, puts the Sign
+in to LinkedIn card on the page and looks again by itself for a quarter of an hour
+(`computer.py signin-wait`), carrying on the moment they are signed in; only after that does
+it ring the bell, its chat is put away, and a fresh one starts once they sign in); the scheduled task; a folder the computer offers (`folder-attach`); a cloud
 chat lent the computer's browser (`cloud-linked-browser`); and last, the page's one line and
 the paste. On the computer the work runs in the chat itself (`app.py next --kind computer
---computer-only`), never as a background agent, which has no browser. Each run is measured
+--computer-only`), never as a background agent, which has no browser, and it is the whole
+networking run: the people searches, the short list, each profile read in Claude's browser
+(`reading.py route --tools browser` says `here`), every note written from what was read and
+checked, and the page brought up to date. A networking run asked in a cloud chat while the
+computer is ready is sent there the same way (`app.py ask`), never half done in the cloud. Each run is measured
 from its own transcript (`computer.py measure`) and its heartbeat says how the computer is,
 so the page shows one line and, only while work waits on the person, one To do card.
 

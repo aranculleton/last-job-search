@@ -1042,6 +1042,13 @@ def choose(db: dict, chat: str, kind: str, now, on: str = "", no_sessions: bool 
     # to overrule by hand (2026-11-09).
     sent_here = bool(page_db.computer_only((((db.get("work") or {}).get(
         page_db.safe_id(chosen["work"])) or {}).get("data") or {}), "cloud"))
+    # A networking run taken by a chat on the computer whatever it was sent to: the whole run
+    # here, its reads in this chat's browser. Sent anywhere (the computer not known ready
+    # yet), a chat on the computer that answers the page handed it to a background agent with
+    # no browser, which found people from search results and left every note waiting on a
+    # read (the maintainer, 2026-11-10: "not just ... half-assed networking").
+    reads_here = (not sent_here and kind == "computer"
+                  and chosen["kind"] in page_db.READS_ON_COMPUTER and _reads_in_browser())
     info = model_guide.for_work(chosen["kind"], on)
     heavy = bool(page_db.WORK_KINDS.get(chosen["kind"], {}).get("heavy"))
     chosen.update(model=info["model"], effort=info["effort"], heavy=heavy)
@@ -1050,7 +1057,7 @@ def choose(db: dict, chat: str, kind: str, now, on: str = "", no_sessions: bool 
              ((doc.get("data") or {}) for doc in (db.get("work") or {}).values())
              if str(d.get("status") or "") in ("claimed", "running")} - {""}
     chosen.update(where_it_runs(chosen, chat, kind, no_sessions, taken=taken))
-    if job_chat or sent_here:
+    if job_chat or sent_here or reads_here:
         # A big job's own chat takes the next big job waiting and does it itself: no chat
         # can tell the one that answers the page that a slot is free, so a queue of drafts
         # waited behind the cap with nobody to start it (2026-11-03).
@@ -1064,12 +1071,24 @@ def choose(db: dict, chat: str, kind: str, now, on: str = "", no_sessions: bool 
             import app_setup
             url = app_setup.page_record().get("url", "") or "<url>"
             chosen["steps"] = job_steps(chosen, chat, url, session=True, first=1,
-                                        chat_kind=kind, computer_only=sent_here)
+                                        chat_kind=kind, computer_only=sent_here or reads_here,
+                                        own_chat=job_chat or (computer_only and not lent))
     if claim_out:
         chosen["batches"] = page_db.claim(db, chosen, chat, kind, now, claim_out,
                                           running=chosen.get("run") == "here",
                                           watching=not (lent or job_chat), beat=beat)
     return chosen
+
+
+def _reads_in_browser() -> bool:
+    """Does the person have LinkedIn profiles read in the browser (their reading setting,
+    tools/network/reading.py reads_now), so a networking run on the computer reads them?"""
+    try:
+        sys.path.insert(0, os.path.join(_HERE, "network"))
+        import reading
+        return reading.reads_now() == "browser"
+    except Exception:  # noqa: BLE001  no setting to read: the default, read in the browser
+        return True
 
 
 def cmd_next(a) -> int:
@@ -1163,7 +1182,7 @@ def _versions_said(dump: str) -> str:
 
 def job_steps(chosen: dict, claimer: str, url: str, session: bool = True,
               first: int = 1, report_to: str = "", chat_kind: str = "cloud",
-              computer_only: bool = False) -> list[str]:
+              computer_only: bool = False, own_chat: bool = True) -> list[str]:
     """The steps for one big job, numbered from `first`, every one naming this job's own id,
     its own folder ($D, read afresh), its kind's commands and its pins (a search's round.log
     as well), with `--chat <claimer>` (the id it was claimed under) on each write. A job
@@ -1206,6 +1225,18 @@ def job_steps(chosen: dict, claimer: str, url: str, session: bool = True,
          "nothing of .claude/skills/app/SKILL.md but its step 5, for the finish." if row else
          f"Do it as .claude/skills/app/SKILL.md says for a {kind}: step 4 (its row, and "
          "\"Progress costs nothing extra\") and step 5. Read only those parts.")
+    if computer_only and kind in ("network",):
+        # The whole run on the computer: finding, the short list, each profile read in this
+        # chat's browser, every note written from it and checked. Told only "the networking
+        # skill", the chat on the computer queued its reads "for the page" and left every note
+        # waiting on a read, for a second chat there to finish (the maintainer, 2026-11-10).
+        step("This chat has Claude's own browser on the person's computer, so the whole run is "
+             "done here, in this chat: the people searches opened in that browser, the short "
+             "list, each person's profile read in it (python3 tools/network/reading.py route "
+             "--tools browser says `here`: reading.py next, then reading.py read <id> - "
+             "--source browser, one at a time), and every note written from what was read "
+             "and checked. Never queue a profile for the page, never --wait-for-read, and "
+             "never hand any of it to another chat or a background agent.")
     step(f"At each stage ({keys}): python3 tools/app.py pin \"$D\" --work {wid} --chat "
          f"{claimer} --stage <stage> --line \"<one plain line>\", and send the batch it prints "
          f"(ArtifactData batch, url {url}). On a long stage, pin it again with a new line every "
@@ -1283,7 +1314,10 @@ def job_steps(chosen: dict, claimer: str, url: str, session: bool = True,
                  "--detach --message \"<what changed>\" (an ordinary call that returns at once; "
                  "the chat in the cloud brings it to master). Never wait for it, and never say "
                  "anything about saving, pull requests or merging: the page shows how it went.")
-            step(_next_job(url, kind=chat_kind, computer_only=computer_only))
+            step(_next_job(url, kind=chat_kind, computer_only=computer_only) if own_chat else
+                 "Then carry on as the chat that answers the page: the app skill's step 3 again "
+                 "(wake with a fresh read), so work queued meanwhile starts now. Never put this "
+                 "chat away: it answers the page.")
             return lines
         step(f"Finish as step 5 says ({done}), without its heartbeat line.{files} "
              f"{LAND_AND_WAIT} Then, landed or not (a failed check leaves the work for the "
@@ -2225,13 +2259,23 @@ def cmd_wake(a) -> int:
                              f"also:), as step 4's row says for its kind; they are "
                              f"{len(also) + 1} items, every one claimed in this pass" +
                              (f"; for the follow-ups, one run: {run_ups}" if ups else ""))
-            then.append(f"then: once {'its claim is' if not also else 'their claims are'} "
-                        f"accepted, {what}. Its claim marks it running at its first "
-                        "stage, so no progress pin follows; " + (
-                            "it finishes them itself." if not also and ups else
-                            "finish it as step 5 says.") + (
-                            " More is waiting: then read again into a new folder and wake "
-                            "once more (step 3 again)." if more else ""))
+            if chosen.get("steps"):
+                # A big job done here (a networking run on the computer, whose reads need this
+                # chat's browser): its own steps, pins and finish, never "as step 4's row says"
+                # with "no progress pin follows", which a twenty-minute run took at its word.
+                then.append("then: once its claim is accepted, follow the `steps` under next: "
+                            "below, in order, here in this chat: it has the browser this run "
+                            "needs." + (" More is waiting: once it is done, read again into a "
+                                        "new folder and wake once more (step 3 again)."
+                                        if more else ""))
+            else:
+                then.append(f"then: once {'its claim is' if not also else 'their claims are'} "
+                            f"accepted, {what}. Its claim marks it running at its first "
+                            "stage, so no progress pin follows; " + (
+                                "it finishes them itself." if not also and ups else
+                                "finish it as step 5 says.") + (
+                                " More is waiting: then read again into a new folder and wake "
+                                "once more (step 3 again)." if more else ""))
         else:
             call = "create_session" if chosen.get("run") == "child session" else "Agent"
             import app_listen
