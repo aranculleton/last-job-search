@@ -28,7 +28,9 @@
       "Bash(./tools/ci_local.sh:*)",
       "Bash(python3 tools/app.py:*)",
       "ArtifactData",
-      "ArtifactComments"
+      "ArtifactComments",
+      "WebSearch"
+
     ]
   },
   "hooks": {
