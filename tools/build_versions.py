@@ -897,8 +897,9 @@ METHODS: dict[str, dict] = {
             (98, "2026-11-10", False, "a draft written in one chat stays on its person's card while that chat's save lands, never drawn over by a copy that lacks it; a name searched for in Contacts is found whatever the filters, those a filter hides said as N more hidden by your filter with Show them; a message Claude held is on hold on its card with why, when and Send it anyway, and on the person's record, never offered as ready under Finished: held"),
             (99, "2026-11-10", False, "a Chat answer, or one under a card's Something else, that changed something carries a button for each place it changed (Updated in Contacts, Updated in Jobs, Ready in Jobs, Ready in Coming up, Updated in Your profile, Running in Claude's work), at most four then and N more, worked out by app.py done from what its work wrote; each opens that card in place, scrolled into view and marked, and one set aside or gone opens its screen with a short note; the answer is a line or two, never the draft pasted, unless asked"),
             (100, "2026-11-10", False, "the Brief's lists count a panel as full, not overflowing, within two px, as Safari rounds its measures: its Jobs panel showed four of eleven with room for six there"),
+            (101, "2026-11-10", False, "the Brief's lists take the room its rows share in turns, the most needed first, rather than one list taking all it can before the next: in Safari Coming up took a fourth row and left Jobs four of eleven"),
         ),
-        "fingerprint": "ba52912b82816fa1",
+        "fingerprint": "bbb2981921c6cbab",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",
