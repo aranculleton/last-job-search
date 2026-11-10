@@ -1685,9 +1685,9 @@ body.has-fab .shell { padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-b
 .bp-glance { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .bp-working { margin: 0; color: var(--ink); }
 .bp-title-days { font-weight: 400; color: var(--muted); }
-.bp-title-days::before { content: "\00b7"; margin: 0 6px; }
+.bp-title-days::before { content: "\00b7"; margin: 0 8px; }
 /* In a narrow panel the tiles sit closer, so the weeks' chart keeps its room. */
-@container (max-width: 431px) { .bp-stat { padding: 6px 10px; gap: 0; } .bp-n { font-size: 1.25rem; } }
+@container (max-width: 431px) { .bp-stat { padding: 4px 8px; gap: 0; } .bp-n { font-size: 1.25rem; } }
 @container (min-width: 792px) {
   .bp-numbers .bp-body { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); column-gap: 24px; row-gap: 12px; align-items: end; }
   .bp-numbers .bp-body > :not(.bp-glance):not(.bp-spark-wrap) { grid-column: 1 / -1; }

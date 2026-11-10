@@ -882,7 +882,7 @@ METHODS: dict[str, dict] = {
             (92, "2026-11-10", False, "a note waiting for its person's profile names only what is there: with your computer ready, it says Claude reads it on your computer by itself and the read is sent there with nothing pressed, and \"press Read them\" only while To do shows that button; a reply that sends the resume made for that person offers that one, from the page's store; a finished resume made for someone opens their card in Contacts; Help Claude do more is one soft card after today's things with its one pill to start; the page being updated turns a small ring in its own colours"),
             (93, "2026-11-10", False, "coming back to the page from LinkedIn, the message whose Copy or Open their profile was pressed last is brought into view and ringed for a few seconds, its I sent it the filled pill, until I sent it or a tap elsewhere; work started in a chat on your computer says so on its card while it runs, and that you can delete that chat when it's done"),
         ),
-        "fingerprint": "40377b45561b0006",
+        "fingerprint": "a7f5747a7e66e6f8",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",
