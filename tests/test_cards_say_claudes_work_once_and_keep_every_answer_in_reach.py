@@ -170,6 +170,12 @@ DONE = dict(LISTEN, **{
     "work/tweak~b": _done("tweak", "Change the message to Juno", {"target": {"id": "msg-juno-1", "output": "message", "contact": JUNO}}),
     "work/tweak~c": _done("tweak", "Change the resume: Ellerwick Trust", {"target": {"id": "app-ellerwick-insight", "output": "resume"}}),
     "work/talk~d": _done("talk", "About Larkspur Retail", {"about": {"kind": "job", "id": "r12-2", "label": "Larkspur Retail"}}),
+    # A resume made for a contact lives on their card: asked in a chat with only their name in
+    # its title, and its download fetched by path (the maintainer, 2026-11-10: each opened Jobs
+    # searching for the name, "Nothing matches").
+    "work/resume_for_contact~e": _done("resume_for_contact", "Resume for Juno (Larkspur Retail)", {"job": None}),
+    "work/files~resume-" + JUNO: _done("files", "The resume made for Juno, ready to download",
+                                       {"paths": ["documents/network/%s/Resume_For_Juno.pdf" % JUNO], "files": ["Resume_For_Juno.pdf"]}),
 })
 ROWS = r"""(() => [...document.querySelectorAll('#rail [data-work]')].map((c) => ({id: c.getAttribute('data-work'),
   open: (c.querySelector('a.wc-open') || {getAttribute: () => null}).getAttribute('data-k'), chip: !!c.querySelector('.state-word'),
@@ -185,6 +191,8 @@ def test_finished_work_is_a_compact_row_opening_where_its_record_lives(run, tmp_
     assert rows["tweak~b"]["open"].startswith("open:contacts:"), rows          # a person's, never Jobs
     assert rows["tweak~c"]["open"].startswith("open:drafts:app-ellerwick-insight"), rows
     assert rows["talk~d"]["open"] == "open:jobs:r12-2", rows
+    for wid in ("resume_for_contact~e", "files~resume-" + JUNO):
+        assert rows[wid]["open"].startswith("open:contacts:"), rows[wid]
     for r in rows.values():
         assert not r["chip"] and not r["pills"] and r["bin"], r
 

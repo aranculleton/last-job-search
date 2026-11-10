@@ -12810,7 +12810,7 @@
     const kind = txt(obj(w).kind);
     const t = obj(a.target);
     const card = kind === "talk" ? obj(a.about) : {};
-    const who = txt(a.contact) || txt(t.contact) || (card.kind === "person" ? txt(card.id) : "") || (card.kind === "message" ? txt(obj(messageById(txt(card.id))).contact) : "");
+    const who = txt(a.contact) || txt(t.contact) || (card.kind === "person" ? txt(card.id) : "") || (card.kind === "message" ? txt(obj(messageById(txt(card.id))).contact) : "") || resumeContact(w);
     if (who || txt(t.output) === "message") {
       const note = who ? messageItems().find((m) => txt(m.contact) === who && msgLive(m)) : messageById(txt(t.id));
       return {tab: "contacts", item: note ? note.id : who || txt(t.id) || null};
@@ -12825,6 +12825,30 @@
     }
     if (kind === "prep" && txt(a.interview)) return {tab: "interviews", item: txt(a.interview)};
     return {tab: WORK_HOME[kind] || null, item: null};
+  }
+  // Whose resume a piece of work made or fetched: a resume made for a contact lives on their
+  // card in Contacts, so its row opens there. Its `files` work names it only by its path
+  // (documents/network/<id>/) or its `resfor-<id>`, and one asked in a chat may name them only
+  // in its title ("Resume for Juno (Larkspur Retail)"): each opened Jobs, searching for the
+  // name, and found nothing (the maintainer, 2026-11-10).
+  function resumeContact(w) {
+    const a = obj(obj(w).args);
+    const kind = txt(obj(w).kind);
+    if (kind !== "resume_for_contact" && kind !== "files") return "";
+    const fc = txt(obj(a.for_contact).id || a.for_contact);
+    if (fc) return fc;
+    for (const p of arr(a.paths).concat(txt(a.resume) ? [a.resume] : [])) {
+      const m = /^documents\/network\/([^/]+)\//.exec(txt(p).replace(/\\/g, "/"));
+      if (m) return m[1];
+    }
+    for (const x of arr(a.applications).concat(txt(a.application) ? [a.application] : [])) if (/^resfor-./.test(txt(x))) return txt(x).slice(7);
+    if (kind !== "resume_for_contact") return "";
+    const m = /\bfor ([^(),:]+?)\s*(?:\(([^)]+)\))?\s*(?:[,:]|$)/i.exec(txt(obj(w).title));
+    if (!m) return "";
+    const name = m[1].trim().toLowerCase(), at = txt(m[2]).trim().toLowerCase();
+    const hit = peopleItems().filter((p) => [txt(p.name), txt(p.first_name)].some((n) => n && n.toLowerCase() === name) &&
+      (!at || txt(p.employer).toLowerCase() === at));
+    return hit.length === 1 ? txt(hit[0].id) : "";
   }
   const WORK_HOME = {search: "jobs", draft: "drafts", resume_for_contact: "drafts", prep: "interviews", reply: "contacts", follow_up: "contacts",
     network: "contacts", talk: "chat", update: "settings", files: "drafts", tweak: "drafts", evaluate: "jobs", general_resume: "settings", profile: "settings", own_profile: "todo"};
