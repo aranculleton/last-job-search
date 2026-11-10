@@ -3848,6 +3848,8 @@
   // Cards that help Claude do more and ask nothing of today (renderTodo's last line).
   const HELP_KEYS = new Set(["reading", "export"]);
   // What each way of helping Claude gives, in a line, for the fold that holds it.
+  // The help card's one pill: what starting the first one is, in its own words.
+  const HELP_START = {"you-finish": "Finish your profile", reading: "Set it up", export: "Add your download"};
   function helpWhy(i) {
     const k = txt(obj(i).key);
     return k === "you-finish" ? "Your profile: every " + noun() + " and letter is built from it"
@@ -4124,20 +4126,31 @@
       if (first) first.focus({preventScroll: true});
     }}, h("summary", {class: "band-more-sum", onclick: (e) => { e.currentTarget.parentElement.dataset.tapped = "1"; }}, "Show " + restN + " more"), rest));
     // Help Claude do more: what makes Claude better at the rest, asked nothing today and never
-    // counted in it. Right after today's things and above Not due yet, one line that says what
-    // it gives; with nothing due today, its first card shows under its own heading, the rest
-    // one tap below (the maintainer, 2026-11-07: "help claude do more is more important but
-    // its a bit too tucked away here"). Today's things always come first (DESIGN.md, Places).
-    const helpRoom = !settingUp && !restN && !top && helpNodes.length && shown === 0;
-    if (helpRoom) {
-      put(wrap, h("section", {class: "band help-band", "aria-labelledby": "band-help"}, h("h3", {class: "group", id: "band-help"}, "Help Claude do more"),
-        h("div", {class: "todo-group"}, h("div", {class: "stack"}, helpNodes[0])),
-        helpNodes.length > 1 ? det("todo-help", false, {class: "band-more"}, h("summary", {class: "band-more-sum"}, "Show " + (helpNodes.length - 1) + " more"),
+    // counted in it. Right after today's things and above Not due yet, one soft card in To do's
+    // own style: its title, the first one's line saying what it gives, and its one pill to
+    // start it, which puts that one's own card in its place; the rest fold under "and N more".
+    // A faint line at the foot was not found (the maintainer, 2026-11-07 and 2026-11-10: "help
+    // claude do more is so hidden"). With nothing due today, the first one's card shows at
+    // once. Today's things always come first (DESIGN.md, Places).
+    if (helpNodes.length && !todoHidden({key: "help"})) {
+      const nothingToday = !settingUp && !restN && !top && shown === 0;
+      const started = nothingToday || openState.get("det:todo-help-first") === true;
+      const first = helpList[0];
+      const start = () => {
+        openState.set("det:todo-help-first", true);
+        scheduleRender();
+        setTimeout(() => { const c = document.querySelector("#main .help-band [data-card]"); if (c) c.focus({preventScroll: false}); }, 0);
+      };
+      const head = started ? h("div", {class: "todo-group"}, h("div", {class: "stack"}, helpNodes[0]))
+        : withHide({key: "help"}, card("article", {class: "card todo help-card", "aria-labelledby": "help-title", "data-item": "help"},
+          h("div", {class: "todo-top"}, kindMark("setup")),
+          h("p", {class: "card-title", id: "help-title"}, "Help Claude do more"),
+          helpWhy(first) ? h("p", {class: "small"}, helpWhy(first)) : null,
+          h("div", {class: "card-actions"}, btn(HELP_START[txt(first.key)] || "Start", start, {kind: "primary", small: true, key: "help-start"}))));
+      put(wrap, h("section", {class: "band help-band", "aria-labelledby": started ? "band-help" : "help-title"},
+        started ? h("h3", {class: "group", id: "band-help"}, "Help Claude do more") : null, head,
+        helpNodes.length > 1 ? det("todo-help", false, {class: "band-more"}, h("summary", {class: "band-more-sum"}, "and " + (helpNodes.length - 1) + " more"),
           h("div", {class: "stack todo-help"}, helpNodes.slice(1))) : null));
-    } else if (helpNodes.length) {
-      put(wrap, det("todo-help", false, {class: "band-more soon-more help-more"}, h("summary", {class: "band-more-sum"}, "Help Claude do more (" + helpNodes.length + ")",
-        helpWhy(helpList[0]) ? h("span", {class: "band-more-why"}, " · " + helpWhy(helpList[0])) : null),
-        h("div", {class: "stack todo-help"}, helpNodes)));
     }
     if (soonCount) put(wrap, det("todo-soon", !shown && !top, {class: "band-more soon-more"}, h("summary", {class: "band-more-sum"}, "Not due yet (" + soonCount + ")"), soon));
     const hidden = dueItems().find((d) => txt(d.kind) === "hidden");

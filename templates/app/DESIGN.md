@@ -27,11 +27,13 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   answered with its own control (answerBox), the next there the moment it is answered.
   (tired-person tests, quick answers test)
 - What helps Claude do more (your profile, reading profiles, the LinkedIn download) is never
-  counted among today's things: it is one line right after them, above "Not due yet", saying
-  what it gives ("Help Claude do more (2) · Your profile: every resume and letter is built
-  from it"); with nothing due today, its first card shows under its own heading, the rest one
-  tap below. Why: at the foot of To do, among the folds, it was not found (the maintainer,
-  2026-11-07). (help test)
+  counted among today's things: it is one soft card right after them, above "Not due yet", in
+  To do's own style: its title "Help Claude do more", the first one's one plain line saying
+  what it gives ("Your profile: every resume and letter is built from it"), and its one pill
+  to start it, which puts that one's own card in its place; the rest fold under "and N more".
+  With nothing due today, its first card shows at once under its own heading. Why: at the foot
+  of To do, among the folds, it was not found (the maintainer, 2026-11-07), and as one faint
+  line after today's things it was "so hidden" (2026-11-10). (help test)
 - One card an act and one card a person. A person is never on three cards: their follow-up,
   what they asked for and a job's "ask them before you apply" are one card for them, led by
   what they asked, the referral its grey box, its Done finishing all of it. A referral with no
