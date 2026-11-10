@@ -227,6 +227,18 @@ def test_a_method_with_nothing_made_has_nothing_to_redo(profile, monkeypatch):
         w = csv.DictWriter(fh, fieldnames=list(rows[0]))
         w.writeheader()
         w.writerows(rows)
+    # A process whose rounds have all been held has nothing to prepare again (the live prep,
+    # 2026-11-10): only a round still to come is.
+    import docpaths
+    folder = docpaths.app_folder(rows[0]["company"], rows[0]["role"])
+    os.makedirs(folder, exist_ok=True)
+    gone = (person.today() - dt.timedelta(days=3)).isoformat()
+    with open(os.path.join(folder, "outcome.md"), "w", encoding="utf-8") as fh:
+        fh.write("## Interview stages reached\n- [x] Phone screen (%s)\n" % gone)
+    assert U.by_id("method-interview").pending() == ""
+    ahead = (person.today() + dt.timedelta(days=5)).isoformat()
+    with open(os.path.join(folder, "outcome.md"), "a", encoding="utf-8") as fh:
+        fh.write("- [ ] Technical interview (scheduled %s)\n" % ahead)
     assert "a better pack" in U.by_id("method-interview").pending()
 
 

@@ -3936,6 +3936,10 @@ def _interviews(ctx: Ctx, targets: dict) -> list:
                 "prep_read": _scrubbed(interview_pack.reading(text, row.get("company") or ""),
                                        ctx.names) if text else None,
                 "practice": interview_pack.practice(text) if text else None,
+                # The live prep, the interview in the order it runs (tools/interview_live.py):
+                # only for a round still ahead and only the one it was built for; any other
+                # interview draws its prep as before, until /interview makes it again.
+                "live": _live_prep(folder, stage, ctx.names) if live and text else None,
                 "sent_files": _sent_files(ctx, row),
                 "referrer": referrer_of(ctx, row),
                 "past": not live,
@@ -3963,6 +3967,20 @@ def _interviews(ctx: Ctx, targets: dict) -> list:
     _list(ctx, "interviews", full, len(out), folded)
     ctx._got["coming_up"] = coming_up(out)
     return out
+
+
+def _live_prep(folder: str, stage: dict, names) -> dict | None:
+    """The live prep saved for this round, as the page draws it, or None: none saved, one
+    no longer fit to show, or one built for another round."""
+    import interview_live
+    import interview_pack
+    doc = interview_live.for_page(interview_live.load(folder))
+    if not doc:
+        return None
+    label = str(stage.get("label") or "")
+    if label and doc.get("stage") and not interview_pack._same_round(doc["stage"], label):
+        return None
+    return _scrubbed(doc, names)
 
 
 def _round_gone(day, clock, zone, ctx: Ctx) -> bool:

@@ -167,6 +167,18 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   by itself", "Claude is reading 3 profiles" with its spinner), with Read them only to open its
   tab the first time or to try again after trouble. Why: "when exactly is this waiting for
   claude thing going to happen?" (the maintainer, 2026-11-07). (waiting-note tests)
+- **An interview's live prep reads full screen, in the order the interview runs**, on every
+  screen. Its head says the round and how long, then search, one Simple|Detailed switch for
+  every answer, Open all and Practise, chips to each part and one line of timing. Each part:
+  its "Say first" in a soft grey box, a "Likely to prompt" pill under a line taking the person
+  to that answer and marking it; each question a soft card with who asks it, the other ways it
+  is put and its answer in a soft grey box with its own switch, its follow-ups folds by who
+  asks; then the stories, the words A to Z and the notes just for them. A term is a dotted
+  word inside its sentence, never a pill: it opens a panel at the side on a wide screen and a
+  sheet from the bottom on a phone, with Back through a term inside a term, and Close. Practise
+  hides each answer behind Start, with a small timer. Nothing in it is a filled pill: the
+  screen's one is Practise with Claude above it. The words, the order and the timing are the
+  engine's (`interview_live`). (live prep tests)
 - Many of one small thing are one checklist card, a row an item: each row has its own next
   step and Done beside its trash, the trash keeping the rest (They replied, Tomorrow, Next week,
   the person's choices), and the card's own actions keep to the card's anatomy above.

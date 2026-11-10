@@ -42,6 +42,14 @@ three hooks, the money line, what not to say), then the detail.
             --question "..." --note "..."
     python3 tools/interview_pack.py feedback --question "..." --answer-file F
             --band Strong|Solid|Gap --point "<their words>" "<what to keep or change>"
+    python3 tools/interview_pack.py live "<Company>" [--role R] [--stage S] --out F
+    python3 tools/interview_pack.py live "<Company>" [--role R] [--stage S] --fill F --write
+    python3 tools/interview_pack.py live-check "<Company>" [--role R]
+
+The live prep (tools/interview_live.py) is the same interview in the order it runs, for
+the minutes before and for practice: the engine builds its parts, questions, stories and
+private notes from these records, Claude writes the words, and it is kept only once every
+check passes.
 """
 
 from __future__ import annotations
@@ -5842,8 +5850,25 @@ def main(argv=None) -> int:
     fb.add_argument("--point", nargs=2, action="append", default=[],
                     metavar=("THEIR_WORDS", "NOTE"),
                     help="their own words, then what worked or what to sharpen; repeatable")
+    lv = sub.add_parser("live", help="the live prep: the interview's parts in order, what to "
+                                     "say first, every answer Simple and Detailed with its "
+                                     "follow-ups, terms, timing and private notes")
+    lv.add_argument("company")
+    lv.add_argument("--role", default="")
+    lv.add_argument("--stage", default="", help="as outcome.md names it; default the next booked")
+    lv.add_argument("--format", dest="format_", default="")
+    lv.add_argument("--out", default="", help="write the prep as built, for Claude to fill")
+    lv.add_argument("--fill", default="", help="the copy Claude filled: its words are kept")
+    lv.add_argument("--write", action="store_true", help="save it, once every check passes")
+    lv.add_argument("--today", type=_day)
+    lc = sub.add_parser("live-check", help="is the saved live prep still fit to show")
+    lc.add_argument("company")
+    lc.add_argument("--role", default="")
+    lc.add_argument("--today", type=_day)
     a = ap.parse_args(argv)
     try:
+        if a.cmd in ("live", "live-check"):
+            return _live(a)
         if a.cmd == "feedback":
             answer = a.answer if a.answer is not None else _read(a.answer_file)
             if not _text(answer):
@@ -6025,6 +6050,60 @@ def main(argv=None) -> int:
     return 0
 
 
+def _live(a) -> int:
+    """`live` and `live-check`: the live prep built, filled, checked and kept
+    (tools/interview_live.py)."""
+    import interview_live
+    ctx = gather(a.company, a.role, getattr(a, "stage", ""), today=a.today,
+                 format_=getattr(a, "format_", ""))
+    if a.cmd == "live-check":
+        doc = interview_live.load(ctx["folder"])
+        if doc is None:
+            print("interview_pack: no live prep saved for %s yet: build it with live --write"
+                  % ctx["company"])
+            return 1
+        found = interview_live.problems(interview_live.merge(interview_live.build(ctx), doc), ctx)
+        for where, why in found:
+            print("- %s: %s" % (where, why))
+        print("%d thing(s) to fix before it is shown." % len(found) if found
+              else "The live prep is fit to show.")
+        return 1 if found else 0
+    filled = None
+    if a.fill:
+        with open(a.fill, encoding="utf-8") as fh:
+            filled = json.load(fh)
+    elif os.path.exists(interview_live.path_for(ctx["folder"])):
+        # What was written before is kept on every rebuild: Claude's words are never lost.
+        with open(interview_live.path_for(ctx["folder"]), encoding="utf-8") as fh:
+            filled = json.load(fh)
+    doc = interview_live.merge(interview_live.build(ctx), filled)
+    found = interview_live.problems(doc, ctx)
+    if a.out:
+        with open(a.out, "w", encoding="utf-8", newline="\n") as fh:
+            json.dump(doc, fh, ensure_ascii=False, indent=1)
+            fh.write("\n")
+        print("built: %s (%s, %d minutes, %d parts, %d questions)" % (
+            a.out, doc["shape_name"], doc["minutes"], len(doc["parts"]), len(doc["questions"])))
+    if a.write:
+        path, found = interview_live.write(ctx, filled)
+        if path:
+            print("written: %s" % _rel(path))
+            drafts = interview_live.drafts(interview_live.load(ctx["folder"]) or {})
+            if drafts:
+                print("drafts they asked for, shown to them as drafts: %s" % "; ".join(drafts))
+            _touched(ctx["company"], ctx["role"])
+            print("The page shows it once it is brought up to date (python3 tools/app.py view).")
+            return 0
+    if found:
+        print("still to write before it is shown (%d):" % len(found))
+        for where, why in found:
+            print("- %s: %s" % (where, why))
+        return 1 if a.write else 0
+    print("Every check passes%s." % ("" if a.write else ": run again with --fill and --write "
+                                                       "to keep it"))
+    return 0
+
+
 def _show(ctx, write=False) -> bool:
     """Print the living document as a rebuild writes it (every line the person wrote kept),
     and with `write`, write it (`_keep`). False when it was not written: a line of theirs
@@ -6101,6 +6180,28 @@ def _report(ctx, path) -> None:
     if unfit:
         print("not yet fit to say: %d answer(s); write them in the document as you would say "
               "them, then `interview_pack.py check \"%s\"`" % (unfit, ctx["company"]))
+    _live_line(ctx)
+
+
+def _live_line(ctx) -> None:
+    """What the live prep needs now the living document changed (interview.md Step 3b)."""
+    import interview_live
+    try:
+        saved = interview_live.load(ctx["folder"])
+        doc = interview_live.merge(interview_live.build(ctx), saved)
+        found = interview_live.problems(doc, ctx)
+    except (ValueError, LookupError) as exc:
+        print("live prep: none for this stage (%s)" % exc)
+        return
+    if not saved:
+        print("live prep: not made yet; build it (Step 3b): python3 tools/interview_pack.py live "
+              "\"%s\" --role \"%s\" --stage \"%s\" --out <scratch>/live.json"
+              % (ctx["company"], ctx["role"], ctx["stage"]))
+    elif found:
+        print("live prep: %d thing(s) to write before it is kept again (the saved one still "
+              "shows): live --out, fill, then live --fill --write" % len(found))
+    else:
+        print("live prep: still fit to show; live --write keeps the records it has changed")
 
 
 if __name__ == "__main__":
