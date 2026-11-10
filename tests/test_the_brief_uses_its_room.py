@@ -136,3 +136,26 @@ def test_a_new_text_size_fits_the_brief_again(run, tmp_path, size):
     before, after = got["after"][0]["eval"], got["after"][2]["eval"]
     assert before["filled"] and before["gap"] <= 24, before
     assert after["scroll"] <= 0 and (not after["filled"] or after["gap"] <= 24), (size, after)
+
+
+def test_next_never_counts_fewer_in_to_do_than_it_shows(run, tmp_path):
+    """"Next three" over "All 2 in To do": To do counts its cards, a checklist of people as one,
+    so its count can be below the steps the panel lists (the maintainer's page, 2026-11-10). A
+    count is said only where To do holds more than the panel shows."""
+    look = ("(() => { const p = document.querySelector('[data-k=\"bp:next\"]');"
+            " return {steps: p ? p.querySelectorAll('.bp-steps > li').length : 0,"
+            " links: p ? [...p.querySelectorAll('a.navlink')].map((a) => a.textContent.trim()) : []}; })()")
+    m = _full()
+    # A quiet To do (one or two cards) under the brief's own three steps.
+    for k in ("needs_you", "to_send", "ready", "messages", "refusal_asks"):
+        if isinstance(m.get(k), list):
+            m[k] = []
+    if isinstance(m.get("due"), list):
+        m["due"] = m["due"][:1]
+    got = _go(run, tmp_path, [{"hash": "brief", "eval": look}], WIDE, model=m, clock=T, zone=PERSON_ZONE)
+    r = got["after"][0]["eval"]
+    assert r["steps"] >= 1, r
+    import re as _re
+    for t in r["links"]:
+        m = _re.match(r"All (\d+) in To do$", t)
+        assert not m or int(m.group(1)) > r["steps"], r

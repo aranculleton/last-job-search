@@ -774,7 +774,45 @@ def _job_chat() -> str:
         return ""
 
 
-def view_renewal(db: dict, chat: str, now: dt.datetime) -> list[str]:
+def brief_wakes(rec: dict, db: dict, now: dt.datetime, queued: bool = False) -> bool:
+    """Should the brief's run start a fresh helper for the helper `rec` names? Its day is up
+    (a later day than it took the page, past RENEW_MIN_S), or work waits that it has not
+    answered (`queued`: this run queued some), and in either case it is not at work on
+    something small now, nor already handing the page on. A chat on a computer is never
+    renewed: it answers for as long as it runs."""
+    import page_db
+    helper = str(rec.get("chat") or "")
+    if not helper or str(rec.get("kind") or "cloud") != "cloud":
+        return False
+    try:
+        import tidy
+        if tidy.retiring(rec, now):
+            return False                        # two chats already: never a third
+    except Exception:  # noqa: BLE001  no record of what was put away: the rest decides
+        pass
+    work = db.get("work") or {}
+    for doc in work.values():
+        d = (doc or {}).get("data") or {}
+        if str(d.get("claimed_by") or "") == helper and page_db._live_claim(d, now, work) \
+                and not page_db.WORK_KINDS.get(str(d.get("kind") or ""), {}).get("heavy"):
+            return False                        # awake, and takes what waits after it
+    since = _time(rec.get("since"))
+    if since is not None and (now - since).total_seconds() >= RENEW_MIN_S \
+            and new_day(rec, now):
+        return True
+    answered = _time(rec.get("answered_at")) or since
+    for doc in work.values():
+        d = (doc or {}).get("data") or {}
+        if str(d.get("status") or "") != "queued" or d.get("stop_asked"):
+            continue
+        asked = _time(d.get("asked_at"))
+        if asked and (answered is None or asked > answered) and \
+                (now - asked).total_seconds() >= LAPSE_S:
+            return True
+    return bool(queued)
+
+
+def view_renewal(db: dict, chat: str, now: dt.datetime, queued: bool = False) -> list[str]:
     """The renewal line when a page update by the chat that answers the page finds its day
     or its size up: the morning brief runs in that chat and brings the page up to date, but
     the renewal was printed only at a check-in the brief never made, so one helper ran for
@@ -788,10 +826,16 @@ def view_renewal(db: dict, chat: str, now: dt.datetime) -> list[str]:
     if not chat or "work" not in db:
         return []
     if rec.get("chat") != chat:
-        # The helper could start no fresh one (nested too deep: `app.py nested` said so on
-        # the page's record): the brief's own run, in a chat of its own, starts it.
-        if not (scheduled and rec.get("nested_at") and rec.get("helper")
-                and chat_kind() == "cloud" and not nested(chat)):
+        # The brief's own run, in a chat of its own, starts the fresh helper itself: where the
+        # helper could start none (nested too deep: `app.py nested` said so on the page's
+        # record), where its day is up, or where work waits that no chat is awake to take.
+        # Since the brief left the helper's chat (4.14), a quiet morning woke no helper, so none
+        # renewed (one was still answering at 11:00) and work the brief queued at 08:12 sat
+        # unstarted for three hours (the maintainer, 2026-11-10).
+        if not (scheduled and rec.get("helper") and chat_kind() == "cloud"
+                and not nested(chat)):
+            return []
+        if not (rec.get("nested_at") or brief_wakes(rec, db, now, queued)):
             return []
         renew = renewal(dict(rec, chat=chat, since=None), db, chat, now, scheduled=True,
                         for_other=True)

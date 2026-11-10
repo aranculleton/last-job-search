@@ -229,6 +229,18 @@ def _take_master() -> str:
                 "then run this again. The page was left as it is.")
     if _git("fetch", "-q", "origin", "master", timeout=60)[0] != 0:
         return ""
+    # Work other chats left waiting on GitHub comes in first: a chat on the person's computer
+    # saves to a branch of its own (no merge from there, land.on_computer), and a page drawn
+    # in the cloud before the next landing dropped its new notes while its job said Done (the
+    # maintainer, 2026-11-10). Brought into this copy only; the next landing takes it to
+    # master with this chat's own work.
+    try:
+        import land
+        if land.fetch_waiting(ROOT):
+            for ref in land.waiting(ROOT):
+                land.merge_in(ROOT, ref)
+    except Exception:  # noqa: BLE001  drawn from master alone, as before
+        pass
     if _git("merge-base", "--is-ancestor", "origin/master", "HEAD")[0] == 0:
         return ""
     # The row-by-row driver set first, and a file two chats changed settled, never left: a

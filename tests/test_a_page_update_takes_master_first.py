@@ -173,3 +173,19 @@ def test_the_app_itself_and_a_copy_with_no_profile_are_left_alone(tmp_path, monk
     assert app_setup.take_master() == ""
     monkeypatch.setattr(app_setup, "ROOT", str(tmp_path / "nowhere"))
     assert app_setup.take_master() == ""
+
+
+def test_work_a_chat_on_the_computer_left_waiting_is_in_the_page_drawn_next(tmp_path, monkeypatch):
+    """A chat on the person's computer saves to a branch of its own and merges nothing (its
+    safety check refused the merge), and a page drawn in the cloud before the next landing
+    dropped its new notes while its job said Done (the maintainer, 2026-11-10)."""
+    a, b = _copies(tmp_path)
+    _git(b, "checkout", "-qb", "claude/computer-reads")
+    (b / "network_threads.csv").write_text("contact,note\nc1,Read on the computer\n")
+    _git(b, "add", "-A")
+    _git(b, "commit", "-qm", "notes from the computer")
+    _git(b, "push", "-q", "origin", "claude/computer-reads")
+    _here(monkeypatch, a)
+    assert app_setup.take_master() == ""
+    assert (a / "network_threads.csv").exists(), "the computer's notes are in this copy now"
+    assert "Read on the computer" in (a / "network_threads.csv").read_text()

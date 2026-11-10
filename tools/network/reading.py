@@ -770,9 +770,46 @@ def page_degree(text: str) -> str:
     return _reach_and_connect(pre)[0]
 
 
+# A line under an employer's name that heads the roles grouped under it, never a role's
+# title: the time there ("6 yrs 2 mos"), the kind of work ("Full-time", "Permanent Full-time
+# · 6 yrs"), or where ("Toronto, Ontario, Canada · Hybrid", "Remote"). With anything but the
+# time there, the first role's title was read as the employer and someone still at the
+# employer they were found at was skipped as having moved on (2026-11-10).
+_KINDS = r"(?:full-time|part-time|contract|internship|self-employed|freelance|seasonal|" \
+         r"apprenticeship|permanent|temporary)"
+_GROUP_KIND = re.compile(r"^" + _KINDS + r"(?:\s+" + _KINDS + r")?(?:\s*·\s*(?:\d+\s+(?:yrs?|years?)"
+                         r"(?:,?\s+\d+\s+(?:mos?|months?))?|\d+\s+(?:mos?|months?)))?$", re.I)
+
+
+def _group_meta(line: str) -> bool:
+    x = " ".join(str(line or "").split())
+    if not x or _DATES.search(x) or len(x) > 90:
+        return False
+    if _TENURE.match(x) or _GROUP_KIND.match(x):
+        return True
+    return bool(_WORK_MODE.search(x)) or fold(x).strip().lower() == "remote" or x.count(",") >= 2
+
+
+def _group_at(lines: list, i: int) -> int | None:
+    """Where the first role's title is, when `lines[i]` is an employer heading roles grouped
+    under it: its name, one or more group lines (_group_meta), then a title over dates (a
+    kind of work alone may sit between them). None otherwise."""
+    if i >= len(lines) or _DATES.search(lines[i]) or _group_meta(lines[i]):
+        return None
+    k = i + 1
+    while k < len(lines) and k - i <= 3 and _group_meta(lines[k]):
+        k += 1
+    if k == i + 1 or k + 1 >= len(lines) or _DATES.search(lines[k]):
+        return None
+    nxt = k + 2 if _TYPE_ONLY.match(lines[k + 1]) and k + 2 < len(lines) else k + 1
+    return k if _DATES.search(lines[nxt]) else None
+
+
 def _current(exp: list) -> str:
     """The employer of their first, most recent Experience entry, or "" if unclear."""
     lines = _exp_lines(exp[:20])[:10]
+    if lines and _group_at(lines, 0) is not None:
+        return lines[0][:120]                      # several roles grouped under one employer
     for line in lines[:6]:
         m = _EMPLOYMENT.match(line)
         if m:
@@ -807,11 +844,13 @@ def _entries(exp: list, most: int = 6) -> list:
     out = []
     group = ""
     for i, line in enumerate(lines):
-        if i + 1 < len(lines) and _TENURE.match(lines[i + 1]) and not _DATES.search(line):
+        if i + 1 < len(lines) and not _DATES.search(line) and (
+                _TENURE.match(lines[i + 1]) or _group_at(lines, i) is not None):
             group = line                           # several roles under one employer
         if not _DATES.search(line) or len(line) > 90:
             continue
-        above = [x for x in lines[max(0, i - 2):i] if not _TENURE.match(x)]
+        above = [x for x in lines[max(0, i - 2):i] if not _TENURE.match(x)
+                 and not (group and (_group_meta(x) or _TYPE_ONLY.match(x)) and x != group)]
         employer, title = "", ""
         for x in reversed(above):
             m = _EMPLOYMENT.match(x)
@@ -2624,8 +2663,12 @@ def at_employer(company: str, contacts, also=(), today: datetime.date | None = N
             until[str(c.get("contact_id") or "")] = day
         return day is not None and day > today
 
+    # Never someone whose thread the follow-up rule has closed: two unanswered messages from
+    # us is the limit (state.at_limit), and a closed thread at an employer held the next person
+    # there until somebody replied, which might be never (the maintainer, 2026-11-10).
     waiting = [c for c in contacts or () if state.row_company_key(c) == k
-               and state.effective_status(c, msgs(c)) in WAITING and recent(c)]
+               and state.effective_status(c, msgs(c)) in WAITING
+               and not state.at_limit(c, msgs(c)) and recent(c)]
     there = [x for x in also if x and company_key(x.get("company")) == k]
     return waiting, there
 

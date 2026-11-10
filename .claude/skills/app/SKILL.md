@@ -165,7 +165,7 @@ folder and wake once more. Never take an item `wake` or `next` did not give you:
 the locks and the heavy-job cap. `run` says where it is done: `here`, `child session` or
 `background agent` (below, "A big job runs in a chat of its own"); a `create_session` or
 Agent call is made only once the claim is accepted. Small work done here (`run: here`) is
-claimed running at its first stage, and no progress pin follows it. Every small item waiting
+claimed running at its first stage, and no progress pin follows it, unless something else comes first (a page update, a read): then `python3 tools/app.py pin "$D" --work <its id> --line "<what, in a few plain words>"` first, so the page shows it running. It is finished only with the answer itself: a reply saying the answer follows is refused, as the page then showed nothing running while the work went on (2026-11-10). Every small item waiting
 (a talk, a reply, a tweak) is claimed in that same pass: each further one is under `also:`, done
 in order after the one under `next:`, with no new read between. Step 3 again is `wake`
 run again: with the same folder after a big job's call, from a new read after small work
@@ -290,13 +290,16 @@ page waited on every tap (2026-10-29). `next` never hands one to this chat to ru
 - **Work for the computer** (a LinkedIn read: a networking run the page sent `to: computer`)
   is never `next`'s for a cloud chat: the engine refuses its claim, finish and fail there.
   After each `wake`, `python3 tools/computer.py waiting "$D"` (read `beats` with the rest).
-  Nothing printed: nothing to do. Under `queued`: `list_environments`, saved to a file, then
-  `python3 tools/computer.py route "$D" --chat <your id> --envs <that file> --tools "<this
-  chat's tool names, comma separated>"`, and do what it prints: a `call` exactly as printed,
-  then its `then`; `paste` needs nothing more, the page already says it. Under `finished`:
-  `archive_session` each, then `python3 tools/computer.py archived "$D" --work <its id>`, and
-  send the batch. Never `send_message` a chat on the computer: it reports through the page and
-  the copy. On the computer itself, `next --kind computer --computer-only` runs it in that
+  Nothing printed: nothing to do. Under `queued` or `finished`: `list_environments`, saved to
+  a file, then `python3 tools/computer.py route "$D" --chat <your id> --envs <that file>
+  --tools "<this chat's tool names, comma separated>"`, and do what it prints: a `call` exactly
+  as printed, then its `then`; `paste` needs nothing more, the page already says it. **This
+  chat never approves computer access** (`confirm_repository_trust`): one small chat of its
+  own, "Job search: starts chats on your computer", holds that approval and starts and puts
+  away the chats there; `route` makes it once and wakes it by republishing its bell page.
+  An approved chat could never be archived, itself included, so every hand-over left an old
+  helper in the sidebar (2026-11-10). Never `send_message` a chat on the computer: it reports
+  through the page and the copy. On the computer itself, `next --kind computer --computer-only` runs it in that
   chat, which has the browser, never as an agent (COMPUTER.md, "How the work reaches the
   computer").
 

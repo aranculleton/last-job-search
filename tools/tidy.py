@@ -88,6 +88,8 @@ APP_TITLE = re.compile(r"^(?:[^\w\s]{1,3}\s*)?Job search(?::\s*\S.{0,60}|\s+(?:h
 # meta/listen names, is kept: the rest are put away as soon as their work is on master, never
 # kept for being used lately (the maintainer, 2026-11-04: at most two such chats, the person's
 # own and the live page helper; a heavy user's renewals had stacked up several).
+# The computer starter (tools/computer.py STARTER_TITLE), kept for good.
+STARTER_NAME = re.compile(r"^(?:[^\w\s]{1,3}\s*)?Job search:\s+starts chats on your computer\b", re.I)
 HELPER_NAME = re.compile(r"^(?:[^\w\s]{1,3}\s*)?Job search\s+(?:helper|page)\b", re.I)
 # Once after the update that brought that rule, the tidy-up is due even if it ran that day,
 # so the helpers left over from before are put away by themselves (`due`). Moved on with
@@ -824,6 +826,11 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
             continue
         if sid == ops:
             keep("the older ops chat, which relays to the phone and is never rebuilt")
+            continue
+        if STARTER_NAME.match(title):
+            # The one chat that holds the computer approval: it can be archived by no chat,
+            # and it is woken again for the next work on the computer (tools/computer.py).
+            keep("it starts the chats on the person's computer")
             continue
         if fires.get(sid, set()) - moving:
             keep("a scheduled task that is on runs in it")

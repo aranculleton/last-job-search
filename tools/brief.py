@@ -1762,10 +1762,15 @@ def claude_lines(b: dict) -> list[str]:
                        "says (an older one said never to republish; this update replaced that "
                        "rule): %s" % (behind, " ".join(behind_steps(b["page"]))))
         out.append("the page, once the news is recorded (step 4): ArtifactData query, url %s, "
-                   "collections screen, meta, addr and work, out_dir <D>, limit 1000; python3 "
-                   "tools/app.py view <D>/view --dump <D> --chat brief; send every batch it "
-                   "prints, and do any for_claude line it prints at once, unasked (a fresh "
-                   "helper when this chat's day is up). "
+                   "collections screen, meta, addr, work and beats, out_dir <D>, limit 1000; "
+                   "python3 tools/app.py view <D>/view --dump <D> --chat brief; send every batch "
+                   "it prints, and do any for_claude line it prints at once, unasked (a fresh "
+                   "helper when the helper's day is up or work waits that no chat is awake to "
+                   "take: this run starts it). Then python3 tools/computer.py waiting <D>; "
+                   "under queued: list_environments, saved to a file, then python3 "
+                   "tools/computer.py route <D> --chat <this chat's id> --envs <that file> "
+                   "--tools \"<this chat's tool names, comma separated>\", and do what it prints "
+                   "(it wakes the chat that starts chats on the computer, or makes it once). "
                    "Then the app skill's steps 1 to 3, for work still waiting" % b["page"])
     try:
         import routines

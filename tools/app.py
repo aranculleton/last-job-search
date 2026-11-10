@@ -204,6 +204,43 @@ def no_screen(dump: str, db: dict) -> str:
 COMPUTER_READS = "network~read~"
 
 
+def still_unread(cid: str, model: dict, now) -> bool:
+    """Is this person still owed a read before their first note, by this copy itself, never
+    by the page's own list alone (it holds what the page last drew)? Not when they already have
+    a fresh reading, when the note has gone or a request waits (their status is past never
+    written to, or the message log says so), or when they are held back on purpose (their
+    employer full: app_model.employer_held). A read queued for eight people, six read that day
+    and five already written to, was the third for the same people in a day (the maintainer,
+    2026-11-10). Unsure (no contact book to read): kept, as before."""
+    try:
+        import reading
+        got = reading.load(cid)
+        if got and reading.fresh(got, now.date()):
+            return False
+    except Exception:  # noqa: BLE001  no reading to look at: the rest decides
+        pass
+    for m in model.get("messages") or []:
+        if str(m.get("contact") or "") == cid and m.get("hold_why") == "employer_full":
+            return False
+    try:
+        from network import schema, state
+        rows = state.load_contacts(state.CONTACTS_CSV)
+        row = next((r for r in rows if str(r.get("contact_id") or "").strip() == cid), None)
+        if row is None:
+            return True
+        threads = state.load_threads(state.THREADS_CSV) if os.path.exists(state.THREADS_CSV) \
+            else []
+        msgs = [t for t in threads if str(t.get("contact_id") or "").strip() == cid]
+        if state.effective_status(row, msgs) not in schema.NEVER_SENT:
+            return False
+        if state.request_pending(msgs) or any(str(t.get("direction") or "") == "outbound"
+                                              for t in msgs):
+            return False
+    except Exception:  # noqa: BLE001  no contact book here: kept
+        return True
+    return True
+
+
 def computer_reads(model: dict, work: dict, now) -> tuple[str, dict] | None:
     """The notes waiting for their person's profile, read on the person's computer with no one
     pressing anything, where it is known ready (model person.computer: computer.reads_there)
@@ -223,18 +260,24 @@ def computer_reads(model: dict, work: dict, now) -> tuple[str, dict] | None:
     want = [str(q.get("contact") or "") for q in reading.get("queue") or []] \
         + [str(c) for c in (model.get("to_read") or {}).get("contacts") or []]
     going: set = set()
-    for doc in work.values():
+    day = now.date().isoformat().replace("-", "")
+    for wid, doc in work.items():
         d = (doc or {}).get("data") or {}
-        if d.get("kind") == "network" and str(d.get("status") or "queued") not in page_db.FINISHED:
-            a = d.get("args") if isinstance(d.get("args"), dict) else {}
-            if a.get("rewrite") or a.get("read_first"):
-                going |= {str(c) for c in a.get("contacts") or []} | {str(a.get("contact") or "")}
-    cids = [c for c in dict.fromkeys(want) if c and c not in going]
+        if d.get("kind") != "network":
+            continue
+        a = d.get("args") if isinstance(d.get("args"), dict) else {}
+        # Today's read, finished too: its people are not queued again until tomorrow. A read
+        # that finished with some still unread was written over by the next page update, under
+        # the same id, as a new job with its clock reset (the maintainer's page, 2026-11-10).
+        today = str(wid).startswith(page_db.safe_id(f"{COMPUTER_READS}{day}~"))
+        if (str(d.get("status") or "queued") not in page_db.FINISHED or today) and \
+                (a.get("rewrite") or a.get("read_first")):
+            going |= {str(c) for c in a.get("contacts") or []} | {str(a.get("contact") or "")}
+    cids = [c for c in dict.fromkeys(want) if c and c not in going and still_unread(c, model, now)]
     if not cids:
         return None
     first = {str(q.get("contact") or ""): str(q.get("first_name") or "")
              for q in reading.get("queue") or []}
-    day = now.date().isoformat().replace("-", "")
     key = hashlib.sha1(" ".join(sorted(cids)).encode("utf-8")).hexdigest()[:10]
     title = (f"Reading {first.get(cids[0]) or 'their'}'s profile on your computer"
              if len(cids) == 1 and first.get(cids[0]) else
@@ -242,7 +285,10 @@ def computer_reads(model: dict, work: dict, now) -> tuple[str, dict] | None:
     fields = page_db.queued("network", title, {"contacts": cids, "read_first": True,
                                                "rewrite": True, "auto": True}, now)
     fields["to"] = "computer"
-    return page_db.safe_id(f"{COMPUTER_READS}{day}~{key}"), fields
+    wid = page_db.safe_id(f"{COMPUTER_READS}{day}~{key}")
+    if wid in work:
+        return None                     # never written over, whatever it holds now
+    return wid, fields
 
 
 def self_fixes(db: dict | None, model: dict, out_dir: str, now, dump_dir: str = "") -> list[str]:
@@ -525,13 +571,16 @@ def cmd_view(a) -> int:
     # What a draft needs that Claude can do by itself is queued by itself, once: a check
     # with its fix in hand made again, and the PDFs the page lacks put on it. Never "Make it
     # again" or "Get my files ready" for the person to tap (the maintainer, 2026-11-05).
+    fixes: list = []
     if a.dump:
         try:
-            batches = list(batches) + self_fixes(db, model, os.path.join(a.out_dir, "self"), now,
-                                                 dump_dir=a.dump)
+            fixes = self_fixes(db, model, os.path.join(a.out_dir, "self"), now, dump_dir=a.dump)
+            batches = list(batches) + fixes
         except Exception:  # noqa: BLE001  nothing to read it against: nothing queued
             pass
-    lines = app_listen.view_renewal(db, a.chat, now)
+    # Work this update queued for itself (a remake, the files, a computer read) wakes nobody by
+    # itself: the brief's run starts a fresh helper for it (app_listen.brief_wakes).
+    lines = app_listen.view_renewal(db, a.chat, now, queued=bool(fixes))
     # A yes the person gave, in another chat or on the page, that an unsent resume still
     # leaves off: this chat redoes it, unasked (tools/skill_answers.py). Work already on its way
     # for it is left to run.
@@ -2510,7 +2559,8 @@ def cmd_done(a) -> int:
                              chat_kind=a.kind or app_listen.chat_kind(), dump_dir=a.dump,
                              chat=a.chat, question=a.question, about=a.about,
                              answer=_answer(a), answered=a.answered, left_out=left,
-                             outcome=getattr(a, "outcome", "") or "")
+                             outcome=getattr(a, "outcome", "") or "",
+                             signin=getattr(a, "signin", "") or "")
     except (KeyError, ValueError) as e:
         print(f"app: not finished: {e.args[0] if e.args else e}", file=sys.stderr)
         return 2
@@ -3174,6 +3224,9 @@ def main(argv=None) -> int:
     p.add_argument("--about", default="",
                    help="with --question: the exact words of the draft or of their message "
                         "it is about, shown quoted over it")
+    p.add_argument("--signin", default="", choices=("", "linkedin"),
+                   help="with --question: it waits on a sign-in the page itself makes in the "
+                        "Claude app, and sends the work back once it sees it")
     p.add_argument("--answer", default="", choices=("", "yesno", "choice", "date", "time",
                                                     "number", "scale", "text"),
                    help="with --question: the kind of answer, so the page draws its control "

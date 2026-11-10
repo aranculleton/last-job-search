@@ -758,6 +758,29 @@ def computer_reads(ctx: Ctx) -> bool:
     return ctx._once("computer_reads", make)
 
 
+def employer_held(ctx: Ctx, company: str, cid: str) -> str:
+    """"On hold: ..." for a first note whose employer already has as many people waiting on a
+    reply as the person allows there (reading.employer_full_line), or "". Once an employer."""
+    if not company:
+        return ""
+    memo = ctx._got.setdefault("employer_held", {})
+    if company not in memo:
+        said = ""
+        try:
+            import reading
+            limit, _theirs = reading.employer_limit(company)
+            waiting, _there = reading.at_employer(company, ctx.contacts, today=ctx.today,
+                                                  threads=ctx.threads) if limit else ([], [])
+            if limit and len(waiting) >= limit:
+                n = len(waiting)
+                said = (f"On hold: you already have {n} {'person' if n == 1 else 'people'} "
+                        f"waiting on a reply at {company}")
+        except Exception:  # noqa: BLE001  no limit known: nothing held for it
+            said = ""
+        memo[company] = said
+    return memo[company]
+
+
 def read_hold(ctx: Ctx) -> str:
     """The line on a first note waiting for its person's profile, by the person's setting. With
     their computer known ready, the read is sent there as work by itself (tools/app.py
@@ -2619,12 +2642,19 @@ def _messages(ctx: Ctx, targets: dict) -> list:
         if _st.draft_predates(cid, ctx.by_contact.get(cid) or []):
             continue
         channel = _channel(c, kind)
-        hold = None
+        hold, hold_why = None, None
         if kind == "first_note" and raw.startswith(reading.WAITS_ON_A_READ):
             # Why it waits and where the reading happens, in a line: "Written before their
             # profile was read: read it first" on every note drafted in the cloud said neither
             # (2026-11-06).
             hold = read_hold(ctx)
+            # Held back on purpose, because people at their employer already wait on a reply
+            # (reading.employer_full_line): said as that, never as a read that is coming. A
+            # note skipped by the read for that reason said "Claude reads it on your computer
+            # by itself" when nothing would (the maintainer, 2026-11-10).
+            full = employer_held(ctx, str(c.get("company") or ""), cid)
+            if full:
+                hold, hold_why = full, "employer_full"
         mid = f"msg-{cid}"
         from network import state as _st
         subject, body = _st.split_subject(text)
@@ -2645,6 +2675,7 @@ def _messages(ctx: Ctx, targets: dict) -> list:
                 "why": ROUTE_WHY.get(str(c.get("route") or "").strip().lower(),
                                      f"They work at {c.get('company') or 'an employer you want'}"),
                 "due": str(c.get("next_action_due") or "") or None, "hold": hold,
+                "hold_why": hold_why,
                 "rev": rev_of(cid, text, kind, channel, live)}
         if mtype == "first_note" and channel == "linkedin_note" and hold is None \
                 and not item["blocked"]:

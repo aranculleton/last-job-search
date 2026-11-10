@@ -711,8 +711,12 @@ def test_a_helper_nested_too_deep_keeps_answering_and_the_brief_starts_the_fresh
     assert len(lines) == 1 and lines[0].startswith("listen: renew:"), lines
     call = renew_call(lines[0])
     assert "create_trigger" not in lines[0] and call["source_url"].endswith("/my-job-search")
-    # Not without the mark, and not from a chat that is not the brief's run.
-    assert app_listen.view_renewal({"meta": {"listener": {"data": rec, "version": 3}},
+    # Not without the mark for a helper that took the page today with nothing waiting (a
+    # helper whose day is up is renewed by the brief too: test_the_brief_wakes_the_helper...),
+    # and not from a chat that is not the brief's run.
+    app_listen._save_seen({k: v for k, v in app_listen.seen().items() if k != "renewed_at"})
+    today = dict(rec, since="2026-10-31T08:00:00Z", answered_at="2026-10-31T09:00:00Z")
+    assert app_listen.view_renewal({"meta": {"listener": {"data": today, "version": 3}},
                                     "work": {}}, "brief", later) == []
     assert app_listen.view_renewal(marked, "chat", later) == []
 
@@ -743,9 +747,11 @@ def test_a_page_update_by_the_listener_brings_its_renewal(copy, tmp_path, monkey
                                           "claimed_by": "session_old",
                                           "lease_until": "2026-11-03T08:20:00Z"}, "version": 1}})
     assert app_listen.view_renewal(busy, "brief", now) == []
-    # Another chat's page update: nothing.
+    # Another chat's page update: nothing (the brief's own run in a chat of its own starts the
+    # fresh helper: test_the_brief_wakes_the_helper_and_the_computer.py).
     monkeypatch.setenv("LJS_CHAT", "session_other")
-    assert app_listen.view_renewal(db, "brief", now) == []
+    app_listen._save_seen({k: v for k, v in app_listen.seen().items() if k != "renewed_at"})
+    assert app_listen.view_renewal(db, "chat", now) == []
 
 
 def test_a_helper_hands_over_only_near_the_most_a_chat_can_hold(copy, tmp_path, monkeypatch):

@@ -4523,11 +4523,38 @@
   // --question --answer): its control on the card, answered in one tap, never a sheet or a
   // chat (DESIGN.md, "Asking the person"). A long answer in words keeps its sheet.
   function workAnswerBox(id, w, key) {
+    const sign = signinBox(id, w, key);
+    if (sign) return sign;
     const n = obj(w.needs);
     const kind = txt(obj(n.answer).kind);
     if (!kind || kind === "text") return null;
     return answerBox(Object.assign({}, n, {question: txt(n.question) || txt(w.note)}), key,
       (got) => answerWork(id, got.value + (got.time ? " at " + got.time : ""), got.words));
+  }
+  // A question that is a sign-in only the person can make (needs.signin, app.py done --signin):
+  // made here, inside the Claude app, in the page's own LinkedIn panel (openReading), and the
+  // work goes back to Claude by itself once the page sees them signed in. "Sign in there once,
+  // then tap Done" over an Answer box sent the person out of the page to a chat on their
+  // computer to find the sign-in (the maintainer, 2026-11-10).
+  const SIGNIN_SENT = new Set();
+  function signinNeeded(w) {
+    if (txt(obj(obj(w).needs).signin) === "linkedin") return true;
+    // Asked before the page knew the kind (4.14): a read on the computer that stopped there.
+    return txt(obj(w).to) === "computer" && /signed out/i.test(txt(obj(w).note));
+  }
+  function signinBox(id, w, key) {
+    if (!signinNeeded(w)) return null;
+    const tried = S.signinFor === id;
+    if (tried && S.reading.ok === true && !SIGNIN_SENT.has(id)) {
+      SIGNIN_SENT.add(id);
+      setTimeout(() => answerWork(id, "Signed in to LinkedIn", "signed in"), 0);
+    }
+    return h("div", {class: "wc-signin", "data-signin": "linkedin"},
+      h("p", {class: "tone-warn"}, "LinkedIn is signed out in Claude's browser. Sign in here and Claude carries on by itself."),
+      h("div", {class: "wc-actions"},
+        btn(tried ? "Check again" : "Sign in to LinkedIn", () => { S.signinFor = id; openReading(true, false, false); },
+          {kind: "primary", small: true, key: key + ":signin", aria: "Sign in to LinkedIn: " + txt(w.title)}),
+        tried ? btn("I've signed in", () => answerWork(id, "Signed in to LinkedIn", "signed in"), {small: true, key: key + ":signed"}) : null));
   }
   // Work finished in the last few minutes whose result the page does not hold yet (its model
   // was made before the finish): "Finished: putting it on your page", never "Done" over a
@@ -4569,6 +4596,9 @@
   async function answerWork(id, text, words) {
     const w = workDoc(id);
     if (!w || !text) return;
+    // Only a question still waiting is answered: a late tap on a card drawn before its work
+    // finished another way never sends the whole job round again (the maintainer, 2026-11-10).
+    if (txt(w.status) !== "needs_you") { toast({text: quoted(workName(w)) + (TERMINAL.has(txt(w.status)) ? " is already finished." : " is already with Claude."), ids: []}); scheduleRender(); return; }
     if (readOnlyTap()) return;
     const t0 = now();
     const db = await CAP.db;
@@ -5789,7 +5819,10 @@
         h("button", {type: "button", class: "btn link", "data-k": "bp-up-add", onclick: () => askAddSomething()}, "Add something")],
       {icon: "interviews", w: 4, m: 2}));
     put(grid, briefPanel("next", steps.length === 3 ? "Next three" : "Next", steps.length ? h("ol", {class: "plain bp-list bp-steps", "data-fit": "3,3,2"}, steps) : h("p", {class: "muted"}, "Nothing else needs you today."),
-      navLink("todo", need ? "All " + need + " in To do" : "All of it in To do"), {icon: "k-update", w: 4}));
+      // A count only where To do holds more than the panel shows: To do counts its cards, a
+      // checklist of people as one, so "All 2 in To do" sat under three steps (the maintainer's
+      // page, 2026-11-10).
+      navLink("todo", need > steps.length ? "All " + need + " in To do" : steps.length ? "To do" : "All of it in To do"), {icon: "k-update", w: 4}));
     put(grid, briefPanel("people", "Waiting on you", ppl.length ? h("ul", {class: "plain bp-list bp-people", "data-fit": "2,3,3"}, ppl.map((p) => {
       const move = txt(p.next_action) && txt(p.next_action).length <= 28 ? txt(p.next_action) : (BRIEF_PERSON_WORD[txt(p.status)] || "Follow up");
       return h("li", {}, h("a", {href: "#contacts/" + p.id, class: "bp-text bp-link", "data-k": "bp-person:" + p.id, onclick: (e) => { e.preventDefault(); openDetail("person", p.id); }},
@@ -7335,6 +7368,8 @@
   // on a computer, and said where to open it everywhere else (the maintainer, 2026-11-07:
   // "when exactly is this waiting for claude thing going to happen?"). Null: the note's own.
   function holdKey(m) {
+    // Held back on purpose (people at the employer already wait on a reply): its own line.
+    if (txt(m.hold_why) === "employer_full") return null;
     const st = readHere();
     if (st === "off") return "paste";
     if (st === "paused") return st;
@@ -7367,8 +7402,16 @@
     const k = holdKey(m);
     const said = txt(obj(readingInfo().hold)[k]) || txt(m.hold);
     const running = k === "reading";
+    // Held back because people at the employer already wait on a reply: one way to go ahead
+    // anyway, which asks Claude to read their profile and rewrite the note regardless (the
+    // maintainer, 2026-11-10: "with a way to go ahead anyway").
+    const anyway = txt(m.hold_why) === "employer_full" && txt(m.contact) ? btn("Go ahead anyway", () => requestWork([{id: "network~anyway~" + seg(txt(m.contact)), kind: "network", to: peopleTo(),
+      title: "Reading " + (txt(m.first_name) || "their") + "'s profile", redo: true,
+      args: {contacts: [txt(m.contact)], read_first: true, rewrite: true,
+        note: "Go ahead at " + (txt(m.employer) || "this employer") + " anyway, though people there already wait on a reply: read " + (txt(m.first_name) || "this person") + "'s profile and rewrite the note."}}]),
+      {kind: "quiet", small: true, key: "anyway:" + m.id, aria: "Go ahead anyway: " + (txt(m.first_name) || "this note")}) : null;
     return h("p", {class: "small hint-line msg-check msg-held", "data-k": "held:" + m.id, "data-hold": k || "own", role: running ? "status" : null},
-      running ? [h("span", {class: "spin", "aria-hidden": "true"}), " "] : null, said.replace(/[.…\s]+$/, "") + (running ? "…" : "."));
+      running ? [h("span", {class: "spin", "aria-hidden": "true"}), " "] : null, said.replace(/[.…\s]+$/, "") + (running ? "…" : "."), anyway ? [" ", anyway] : null);
   }
   // "To Juno at Acme", or "To Juno" where no employer is on file: never a dangling "at".
   function toWho(m) {
@@ -9468,6 +9511,8 @@
     // Try again (the maintainer, 2026-11-06: Try again drafted a job already ruled out).
     if (st === "stopped" && leftOut(w)) return box("", "Not drafted: " + lc1(leftOut(w)).replace(/\.?$/, "."));
     if (st === "stopped") {
+      // Called off by Claude before it began (a repeat of work already done): why, in its words.
+      if (w.withdrawn) return box("", txt(obj(w.result).summary) || "Claude called this off before it began.", null);
       // Called off before Claude began: it is gone at once, as nothing was done.
       if (!w.claimed_at && !w.stage_at) return null;
       return box("", w.stop_asked ? "Stopped. Nothing more is done on it." : "This stopped part way. Anything already saved is kept.",
@@ -9478,7 +9523,7 @@
       return box("tone-bad", "Claude could not finish this" + (why ? ": " + why.replace(/\.?$/, ".") : "."),
         (Number(w.attempt) || 1) < 3 ? btn("Try again", () => retryWork(id), {small: true, key: key + ":again", aria: "Try again: " + title}) : null);
     }
-    if (st === "needs_you") return jobNeedsBox(id, w) || box("tone-warn", txt(w.note) || "It has a question for you.", btn("Answer", () => askWorkAnswer(id), {small: true, key: key + ":answer"}));
+    if (st === "needs_you") return jobNeedsBox(id, w) || signinBox(id, w, key) || box("tone-warn", txt(w.note) || "It has a question for you.", btn("Answer", () => askWorkAnswer(id), {small: true, key: key + ":answer"}));
     const ws = workSay(id, w);
     if (ws.p.stopping) return box("", [h("span", {class: "spin", "aria-hidden": "true"}), " Stopping after this step."]);
     if (ws.unsent) return box("tone-warn", ws.now1, [btn("Send to Claude", () => sendNow([id]), {small: true, key: key + ":send"}), cancel()]);
@@ -13029,21 +13074,30 @@
     // Light work waits in the chat that answers the page behind the light work running there,
     // and says what that is ("Next, after ..."), behind what came before it if anything did.
     const ahead = st === "queued" && !inLine && !p.stopping && !away && !HEAVY_KINDS.has(txt(w.kind)) ? lightAhead(id, w) : null;
-    const picked = st === "queued" && !inLine && !ahead && !p.stopping && pickedUp(w) > 0;
-    const late = p.late && !picked && !inLine && !ahead && !helperStarting();
+    // Work for the computer is picked up when a chat there is started for it, never when the
+    // chat that answers the page checks in: that read "Claude has picked this up" with a clock
+    // while it still waited for the Mac (the maintainer's page, 2026-11-10).
+    const onMac = obj(w.computer_session);
+    const picked = st === "queued" && !inLine && !ahead && !p.stopping && (toComputer
+      ? !!txt(onMac.id) && (tms(onMac.at) || 0) >= (tms(w.answered_at) || tms(w.asked_at) || 0)
+      : pickedUp(w) > 0);
+    // Nor "No answer from Claude" for it: the chat that answers the page has nothing to answer.
+    const late = p.late && !picked && !inLine && !ahead && !helperStarting() && !toComputer;
     // Not while this window is still writing it or ringing for it: the card drew Send to Claude
     // where Try again had been, and a double tap's second tap rang a second time (Firefox, CI,
     // 2026-11-04).
     const unsent = st === "queued" && p.unsent && !p.stopping && !away && !workWriting.has(id);
     // Sent, and its chat not yet back: the page's own clock runs, as a chat shows its setup.
-    const waking = st === "queued" && !!p.sentAt && !picked && !late && !inLine && !ahead && !p.stopping;
+    // Never for work that waits for the computer: its clock read as stuck work ("Waking Claude ·
+    // 23m 41s") while it waited for the Mac (the maintainer's page, 2026-11-10).
+    const waking = st === "queued" && !!p.sentAt && !picked && !late && !inLine && !ahead && !p.stopping && !toComputer;
     // One honest word for waiting work, and the sentence under it says when: "Waiting to
     // start", "Waiting for Claude to start." and "Asked just now." said three things and none
     // said when (the walk-through, 2026-11-03).
     // Its own chat stopped on a question to the person (tools/page_db.py mark_blocked): said
     // as that, never as a job that may have stopped (the stranger audit, X-7 and X-8).
     const blocked = (st === "running" || st === "claimed") && !!txt(w.blocked_at);
-    const label = p.stopping ? "Stopping after this step" : picked ? "Starting" : st === "queued" ? (unsent ? "Not sent yet" : late ? "No answer yet" : inLine ? (place.pos === 1 ? "Next" : "Waiting its turn") : ahead ? (ahead.pos === 1 ? "Next" : "Waiting its turn") : waking ? (freshHeartbeat() ? "Sent" : "Waking Claude") : "Waiting for Claude") : st === "running" || st === "claimed" ? (blocked ? "Waiting for you" : slow ? "May have stopped" : null) : st === "done" && notOnPageYet(w) ? "Putting on page" : st === "stopped" && leftOut(w) ? "Not drafted" : WORK_WORDS[st] || cap1(st);
+    const label = p.stopping ? "Stopping after this step" : picked ? "Starting" : st === "queued" ? (unsent ? "Not sent yet" : late ? "No answer yet" : inLine ? (place.pos === 1 ? "Next" : "Waiting its turn") : ahead ? (ahead.pos === 1 ? "Next" : "Waiting its turn") : waking ? (freshHeartbeat() ? "Sent" : "Waking Claude") : toComputer ? "Waiting for your computer" : "Waiting for Claude") : st === "running" || st === "claimed" ? (blocked ? "Waiting for you" : slow ? "May have stopped" : null) : st === "done" && notOnPageYet(w) ? "Putting on page" : st === "stopped" && leftOut(w) ? "Not drafted" : WORK_WORDS[st] || cap1(st);
     const tone = p.stopping ? "held" : {done: "ok", failed: "bad", stopped: "held", needs_you: "warn"}[st] || (blocked || slow || late || unsent ? "warn" : null);
     const cur = p.stages[Math.min(p.i, p.n - 1)];
     // The newest line Claude wrote on it, from after it was asked (or answered).
@@ -13074,6 +13128,7 @@
         // One short state, said once: the card's chip is not drawn beside it (workCard), and
         // its clock follows ("Waking Claude · 1m 4s"; the maintainer, 2026-11-05).
         waking ? (freshHeartbeat() ? "Starting in a moment" : "Waking Claude") :
+        toComputer ? computerLine() :
         tms(w.answered_at) ? "Answered " + askedWhen(w) + ". Your answer is with Claude." :
         "Asked " + askedWhen(w) + ". Claude starts it when it next looks at this page.";
     }

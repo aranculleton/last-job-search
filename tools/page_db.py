@@ -797,6 +797,8 @@ ACTIVE = ("claimed", "running")
 # included); after that it waits for the person's "Ask Claude again".
 AUTO_TRIES = 2
 FINISHED = ("done", "failed", "stopped")
+# The sign-ins a question can be (finish, `signin`): the page has its own way to make each.
+SIGNINS = ("linkedin",)
 # A claim not moved on in this long is not believed: a lock it holds is free again.
 LEASE_S = 30 * 60
 
@@ -1896,6 +1898,20 @@ def summary_problem(summary: str) -> str:
     return ""
 
 
+# A reply that only says the answer is coming ("The answer follows in a moment"): finished
+# with it, the page showed nothing running while the chat went on with the work, and the next
+# question read "Starting in a moment" (the maintainer, 2026-11-10).
+_DEFERS = re.compile(r"\b(?:the )?(?:answer|reply|rest)\s+(?:follows|is coming|comes|will follow|"
+                     r"will come)\b|\b(?:back|answer|reply)\s+(?:to you\s+)?(?:in a moment|shortly|"
+                     r"in a minute|soon)\b|\bone moment\b|\bgive me a (?:moment|minute)\b", re.I)
+
+
+def reply_defers(reply: str) -> bool:
+    """Does this reply only put the answer off? A short one saying the answer comes later."""
+    text = " ".join(str(reply or "").split())
+    return bool(text) and len(text.split()) <= 40 and bool(_DEFERS.search(text))
+
+
 def _drop_from_dump(dump_dir: str, collection: str, doc_id: str) -> None:
     where = os.path.join(dump_dir, STORE.get(collection, collection))
     for name in (safe_id(doc_id), safe_id(doc_id).replace("~", "@")):
@@ -1990,7 +2006,7 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
            status: str = "done", error: str = "", links=(), reply: str = "", thread: str = "",
            chat_kind: str = "cloud", dump_dir: str = "", chat: str = "",
            question: str = "", about: str = "", answer: dict | None = None,
-           answered=(), left_out: str = "", outcome: str = "") -> dict:
+           answered=(), left_out: str = "", outcome: str = "", signin: str = "") -> dict:
     """The batch that finishes one work item (the app skill, step 5): the item `done` (or
     `failed`, with `error` in plain words, or `stopped` after their Stop), its one-sentence
     summary and links, pinned to the version read; each of its locks the dump holds, deleted
@@ -2021,7 +2037,14 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
     if taken:
         raise KeyError(taken)
     refused = computer_only(item, claimed_kind(item, chat_kind, chat))
-    if refused and not (status == "stopped" and item.get("stop_asked")):
+    # Work for the computer nobody has started yet may be withdrawn by any chat, with its
+    # reason on the card: a repeat of a read already done could only be called off by the
+    # person's own Stop (the maintainer, 2026-11-10).
+    unstarted = str(item.get("status") or "queued") == "queued" and not item.get("claimed_by")
+    withdrawn = status == "stopped" and not item.get("stop_asked") and unstarted
+    if withdrawn and not " ".join(str(summary or "").split()):
+        raise ValueError("say why it is called off, in one short sentence (--summary)")
+    if refused and not (status == "stopped" and (item.get("stop_asked") or unstarted)):
         raise ValueError(f"not finished: {refused}")
     if chat and str(item.get("status") or "queued") == "queued" and not item.get("claimed_by") \
             and status != "stopped":
@@ -2053,6 +2076,11 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
             problem = ("its drafts are still being written: finish each one as it is made "
                        "(app.py done --work <its id>), and the search finishes with the last, "
                        "once app.py search-drafts --last has run")
+    if not problem and status == "done" and reply_defers(reply):
+        problem = ("the reply says the answer comes later, so the work would show as finished "
+                   "while it still runs: keep it running (python3 tools/app.py pin <dump> --work "
+                   f"{work_id} --stage <its next stage> --line \"<what it is doing, in a few "
+                   "plain words>\") and finish it with the answer itself")
     if problem:
         raise ValueError(problem)
     args = item.get("args") if isinstance(item.get("args"), dict) else {}
@@ -2076,6 +2104,12 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
         needs = {"question": question[:600], "about": " ".join(str(about or "").split())[:600],
                  "work": work_id, "answer": clean or {"key": "answer", "label": "",
                                                       "kind": "text", "type": "text"}}
+        # A sign-in only the person can make (`signin`: "linkedin"): the page signs them in
+        # inside the Claude app, in its own reading panel, and sends the work back by itself
+        # once it sees them signed in. A text box asking them to "tap Done" sent them to a chat
+        # on their computer to find the sign-in (the maintainer, 2026-11-10).
+        if signin in SIGNINS:
+            needs["signin"] = signin
         fields = {"status": status, "note": question[:600], "lease_until": None,
                   "claimed_by": None, "asked_you_at": at, "needs": needs,
                   # The choices as pages before 4.10 read them: their words alone.
@@ -2085,6 +2119,8 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
         fields = {"status": status, "finished_at": at, "lease_until": None,
                   "result": {"summary": summary, "links": [dict(x) for x in links or ()]},
                   "error": error or None}
+        if withdrawn:
+            fields["withdrawn"] = True          # its card says why (the page, workBox)
         # A form's questions answered, as the form asked them: the card that asked says Done
         # once each is on it, and "Finished: putting it on your page" until then.
         said = [" ".join(str(q).split())[:300] for q in answered or () if str(q).strip()]
