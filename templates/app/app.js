@@ -3892,6 +3892,9 @@
     if (settingUp) return [];
     const list = every.filter(todoHidden);
     if (todoHidden({key: "you-finish"}) && finishProfileCard()) list.push({key: "you-finish", node: () => finishProfileCard()});
+    // Help Claude do more's own card, hidden with its bin, comes back from here like any other.
+    if (todoHidden({key: "help"})) list.push({key: "help", node: () => card("article", {class: "card todo help-card", "aria-labelledby": "help-hidden-title", "data-item": "help-hidden"},
+      h("p", {class: "card-title", id: "help-hidden-title"}, "Help Claude do more"))});
     return list;
   }
   function hiddenFold(list) {

@@ -873,7 +873,7 @@ METHODS: dict[str, dict] = {
             (88, "2026-11-10", False, "a reply that sends a resume shows the one Claude is making for that person, never the general one, while it is made"),
             (89, "2026-11-10", False, "a note waiting for its person's profile names only what is there: with your computer ready, it says Claude reads it on your computer by itself and the read is sent there with nothing pressed, and \"press Read them\" only while To do shows that button; a reply that sends the resume made for that person offers that one, from the page's store; a finished resume made for someone opens their card in Contacts; Help Claude do more is one soft card after today's things with its one pill to start; the page being updated turns a small ring in its own colours"),
         ),
-        "fingerprint": "dd2c338e367f93a7",
+        "fingerprint": "41580baee83af5be",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

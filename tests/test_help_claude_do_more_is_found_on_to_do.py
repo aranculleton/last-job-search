@@ -80,3 +80,14 @@ def test_with_nothing_due_today_its_first_card_shows(run, tmp_path):
     assert "Help Claude do more" in text
     # Never counted as something to do today.
     assert "1 thing today" not in text and "things today" not in text, text[:400]
+
+
+def test_hidden_with_its_bin_it_comes_back_from_the_end_of_to_do(run, tmp_path):
+    got = _go(run, tmp_path, [
+        {"hash": "todo", "open": "hide:help", "count": '[data-item="help"]'},
+        {"click": "Show 1 hidden this week", "read": ".todo-hidden-list"},
+        {"click": "Bring back: Help Claude do more", "count": '[data-item="help"]'},
+    ], PHONE, clock=T)
+    first, shown, back = got["after"]
+    assert first["count"] == 0 and "Help Claude do more" in shown["text"], (first, shown["text"])
+    assert back["count"] == 1
