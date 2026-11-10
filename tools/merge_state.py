@@ -315,6 +315,9 @@ JSON_FILES = {
                                                "stamps": ("started", "declined"),
                                                "indent": 1, "ascii": True},
     "documents/applications/*/.interview_prep.built.json": {"whole": ("",), "indent": 1},
+    # The live prep for the interview's next round (interview_live.write), one object, written
+    # whole, so two chats' copies keep the newer one, as the prep it sits beside does.
+    "documents/applications/*/interview_live.json": {"whole": ("",), "indent": 1},
     # The kept draft both documents are rendered from (outreach.write, fit_to_page.save,
     # tweak), and what drafting it cost (draft_cost): each one object, written whole.
     "documents/applications/*/draft.json": {"whole": ("",), "indent": 1},
@@ -382,6 +385,7 @@ _HASHED = ("a snapshot named by the hash of what it holds: two chats that write 
 _PER_ROUND = ("named after the round that wrote it, once, and never written again; a round "
               "is run by one chat")
 JSON_NAMES = {
+    "interview_live.json": "an interview's live prep beside its interview_prep.md (interview_live.path_for); merged as documents/applications/*/interview_live.json",
     ".people_seen.json": "where an earlier people search found nobody in a place, by employer and date, so the next run searches likely employers first (candidates.order); expires after 30 days, and either side's copy is a hint, never a record",
     "tools/land.py: .json": "a changed file's own name, read only to check it parses before a data-only save lands (land.data_check); never written",
     ".sent.json": "each view batch's records as they stood before it was sent, in the view's own folder, so a refused save can be put back and made again (page_db.keep_landed); never committed",

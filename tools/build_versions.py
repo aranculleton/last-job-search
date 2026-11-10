@@ -395,13 +395,17 @@ METHODS: dict[str, dict] = {
         "fingerprint": "f22c971ec9a9673a",
     },
     "interview": {
-        "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
-        "gives": "the prep pack for each interview still running rewritten the current way",
-        "run": "for each tracker row at `interview`, /interview <company> again, its pack "
-               "written beside the old one. A pack the person wrote by hand is refused and "
-               "left as it is (exit 1, said in a plain line): that pack is done, so record "
-               "the version once the others are rebuilt",
-        "files": (".claude/commands/interview.md", "tools/interview_pack.py"),
+        # Only a process with a round still to come is prepared again: a prep for a round
+        # already held is history, and drawn as it was (the live prep, 2026-11-10).
+        "by": "upgrade", "priority": 2, "applies": "interviews_ahead", "time": "~15 min",
+        "gives": "the prep for each interview still ahead rewritten the current way",
+        "run": "for each tracker row at `interview` with a round still to come, /interview "
+               "<company> again, its pack written beside the old one and its live prep made "
+               "(Step 3b). A pack the person wrote by hand is refused and left as it is (exit "
+               "1, said in a plain line): that pack is done, so record the version once the "
+               "others are rebuilt",
+        "files": (".claude/commands/interview.md", "tools/interview_pack.py",
+                  "tools/interview_live.py"),
         "versions": (
             _first(),
             (2, "2026-10-15", False, "reads what the person has taught it (tools/learned.py) before drafting, flags the phrases they never want, their wording replaces the defaults, and every output is shown in the reply"),
@@ -436,8 +440,9 @@ METHODS: dict[str, dict] = {
             (30, "2026-11-06", False, "a pack knows a resume or letter by either order of its name (<Prefix>_<ABBR>_Resume, or <Prefix>_Resume_<ABBR> before); packs are built as before"),
             (31, "2026-11-07", False, "a label on a line of its own above the words to say (\"SAY.\", \"**Say this:**\", \"Talking point\") is never shown as a bullet or said as part of an answer, the words under it are; a note to you (\"Note to you, not to say: ...\") is shown apart, under what it is about; the check fails a pack that still has such a label; the page reads every pack this way at once, so nothing needs making again"),
             (32, "2026-11-10", False, "an interview booked or registered notes where it is on the page, so the answer that booked it carries a Ready in Coming up button to it; nothing made before needs making again"),
+            (33, "2026-11-10", True, "each interview still ahead gets a live prep beside its living document, in the order the interview runs and its own shape (a recruiter screen, a hiring manager, a technical round or a take-home, a case with a personal experience interview, a panel, a final): what to say first in each part with the questions it is likely to prompt, every likely question with who asks it, other ways it is put, a Simple and a Detailed answer and follow-ups by who asks, the stories each once, the role's words explained in the employer's own work with a worked example, the questions to ask them with what to ask next, the time each part takes at your own speaking speed, the questions they are known to ask answered first, and notes just for you; it is checked before it is kept (answers two to four sentences, the detailed one a little fuller, no long dashes, nothing assuming an earlier conversation, every term explained, every figure your profile's own); a prep for a round already held stays as it is"),
         ),
-        "fingerprint": "7f26e4eb53d0ac71",
+        "fingerprint": "d4ded6b8d0fcc2d8",
     },
     "research": {
         "by": "upgrade", "priority": 3, "applies": "live_applications", "time": "~5 min each",
@@ -898,8 +903,9 @@ METHODS: dict[str, dict] = {
             (99, "2026-11-10", False, "a Chat answer, or one under a card's Something else, that changed something carries a button for each place it changed (Updated in Contacts, Updated in Jobs, Ready in Jobs, Ready in Coming up, Updated in Your profile, Running in Claude's work), at most four then and N more, worked out by app.py done from what its work wrote; each opens that card in place, scrolled into view and marked, and one set aside or gone opens its screen with a short note; the answer is a line or two, never the draft pasted, unless asked"),
             (100, "2026-11-10", False, "the Brief's lists count a panel as full, not overflowing, within two px, as Safari rounds its measures: its Jobs panel showed four of eleven with room for six there"),
             (101, "2026-11-10", False, "the Brief's lists take the room its rows share in turns, the most needed first, rather than one list taking all it can before the next: in Safari Coming up took a fourth row and left Jobs four of eleven"),
+            (102, "2026-11-10", False, "an interview's live prep opens full screen from its card: its parts in order with chips to each, the time each takes, what they are known to ask, what to say first with its Likely to prompt links to the answer, each question with who asks it and other ways it is put, one Simple or Detailed switch for every answer and one on each, follow-ups that open by who asks, your stories, every term a dotted word that opens beside the page or from the bottom on a phone with Back, the words A to Z, the questions to ask them, notes just for you, Open all, and a bar that stays at the top with search, Hide the answers (which puts each answer behind Start and a small timer) and a chip to every part and to the stories, the words and your notes; the pay and notice to say are at the top, the questions to ask them read as you would say them, and an answer is drawn a step larger; the Brief's Likely to come up reads it; an interview with none reads as before"),
         ),
-        "fingerprint": "bbb2981921c6cbab",
+        "fingerprint": "90219736ab921ce9",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",
@@ -1282,11 +1288,38 @@ def _older_notes() -> bool:
                for f in glob.glob(person.state("documents", "network", "*", "draft.md")))
 
 
+def _interviews_ahead() -> bool:
+    """A process at `interview` with a round still to come on its outcome record: only those
+    are prepared again, never a round already held."""
+    import csv_store
+    import docpaths
+    import what_works
+    today = person.today().isoformat()
+    try:
+        rows = csv_store.read_rows(person.state("job_search_tracker.csv"))
+    except OSError:
+        return False
+    for r in rows:
+        if (r.get("status") or "").strip().lower() != "interview":
+            continue
+        folder = docpaths.app_folder(r.get("company") or "", r.get("role") or "")
+        try:
+            with open(os.path.join(folder, "outcome.md"), encoding="utf-8") as fh:
+                text = fh.read()
+        except OSError:
+            continue
+        if any(s["date"] and not s["done"] and s["date"] >= today
+               for s in what_works.outcome_stages(text, today)):
+            return True
+    return False
+
+
 APPLIES = {
     "prep_docs": lambda: bool(glob.glob(person.state("documents", "network", "*", "prep.md"))),
     "queued_notes": lambda: _older_notes(),
     "unsent_drafts": lambda: "drafted" in _tracker_statuses(),
     "live_interviews": lambda: "interview" in _tracker_statuses(),
+    "interviews_ahead": lambda: _interviews_ahead(),
     "live_applications": lambda: bool({"drafted", "interview"} & _tracker_statuses()),
     "contacts": lambda: _has_rows(person.state("network_contacts.csv")),
     "routines": lambda: person.exists("routines.json"),

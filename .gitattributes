@@ -94,4 +94,5 @@ documents/applications/*/campaign.json merge=ljs-state text eol=lf
 documents/applications/*/.interview_prep.built.json merge=ljs-state text eol=lf
 documents/applications/*/draft.json merge=ljs-state text eol=lf
 documents/applications/*/cost.json merge=ljs-state text eol=lf
+documents/applications/*/interview_live.json merge=ljs-state text eol=lf
 company_research/*.json merge=ljs-state text eol=lf
