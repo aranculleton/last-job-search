@@ -815,17 +815,29 @@ def bound_to(chat: str, triggers) -> list[dict]:
 
 def trust_check(chat: str, triggers) -> list[str]:
     """Before a chat approves computer access (confirm_repository_trust), which ties it to the
-    person's own devices for good: every scheduled task that fires into it is moved to a fresh
-    chat a run, or it fails from then on with access denied, the person told only by a
-    "routine failed" push (2026-11-09). The brief needs no connectors (claude_surfaces:
-    routine-connectors), so the field is left out (some organisations refuse it)."""
+    person's own devices for good: every scheduled task that fires into it is moved to a chat
+    of its own made with the person's copy as its source, or it fails from then on with access
+    denied, the person told only by a "routine failed" push (2026-11-09). Never a fresh chat a
+    run: one a scheduled task starts has no copy attached, no add_repo and no way to clone it,
+    and failed on its first run (a person's copy, 2026-11-10). The brief needs no connectors
+    (claude_surfaces: routine-connectors), so the field is left out (some refuse it)."""
     tasks = bound_to(chat, triggers)
     if not tasks:
         return ["trust: ok, no scheduled task fires into this chat"]
-    out = []
+    try:
+        import app_setup
+        owner, name = app_setup.origin()
+    except Exception:  # noqa: BLE001  no address: the step says to find it
+        owner, name = "", ""
+    source = f"https://github.com/{owner}/{name}" if owner and name else "<the copy's GitHub address>"
+    home = {"title": "Job search: scheduled runs", "source_url": source,
+            "prompt": "This chat runs the job search's scheduled tasks. Nothing to do now."}
+    out = [f"first, once: create_session {json.dumps(home, ensure_ascii=False)}; its id is "
+           "<home> below (a chat of its own with the copy attached, never the one approving "
+           "computer access)"]
     for t in tasks:
         call = {"name": t.get("name"), "prompt": t.get("prompt") or "<its prompt, as get_trigger "
-                "shows it>", "create_new_session_on_fire": True,
+                "shows it>", "persistent_session_id": "<home>",
                 "initiation": "own_followup"}
         if t.get("cron_expression"):
             call["cron_expression"] = t["cron_expression"]

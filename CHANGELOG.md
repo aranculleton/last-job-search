@@ -148,7 +148,7 @@ make sense to somebody whose repo just received it.
 
 - **An old note in a chat's memory no longer outranks your settings.** The start of every chat reports a memory note that disagrees with your settings (such as "only update when I say") and follows your settings; a chat had obeyed the old note.
 
-- **Approving computer access no longer breaks your morning brief.** Before a chat asks for computer access, any scheduled task that fires into it moves to a fresh chat each run, and the daily check spots one left behind; a brief bound to that chat would have failed the next morning.
+- **Approving computer access no longer breaks your morning brief.** Before a chat asks for computer access, any scheduled task that fires into it moves to a chat of its own made with your copy attached, and the daily check spots one left behind. A fresh chat each run was tried first and could not work: it has no copy of your files.
 
 - **Commands the app gives work the same on a Mac.** A check holds every command the app prints to what runs alike in zsh and bash; a loop of fifty fixes all "failed" on a Mac.
 

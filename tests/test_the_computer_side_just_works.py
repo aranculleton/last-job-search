@@ -435,10 +435,16 @@ def test_computer_access_is_never_approved_where_a_scheduled_task_fires():
     bound to it then failed with access denied (2026-11-09): each task is moved first to a
     fresh chat a run, with no connectors field (the brief needs none, and some organisations refuse the field), the old one turned off."""
     moves = computer.trust_check("session_helper", TRIGGERS)
-    assert len(moves) == 1 and moves[0].startswith("move trig_brief: create_trigger ")
+    # A chat of its own, made with the copy as its source, takes the task: a fresh chat a run
+    # has no copy attached and failed on its first run (a person's copy, 2026-11-10).
+    assert len(moves) == 2 and moves[0].startswith("first, once: create_session ")
+    home = json.loads(moves[0].split("create_session ", 1)[1].split("; its id", 1)[0])
+    assert "source_url" in home
+    moves = moves[1:]
+    assert moves[0].startswith("move trig_brief: create_trigger ")
     call = json.loads(moves[0].split("create_trigger ", 1)[1].split(", then update_trigger")[0])
-    assert call["create_new_session_on_fire"] is True and "connectors" not in call
-    assert call["cron_expression"].startswith("CRON_TZ=") and "persistent_session_id" not in call
+    assert "create_new_session_on_fire" not in call and "connectors" not in call
+    assert call["cron_expression"].startswith("CRON_TZ=") and call["persistent_session_id"] == "<home>"
     assert '"enabled": false' in moves[0] and "--setup routines_screen" in moves[0]
     assert computer.trust_check("session_fresh", TRIGGERS) == [
         "trust: ok, no scheduled task fires into this chat"]
