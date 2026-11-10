@@ -67,7 +67,11 @@ def _close(tmp_path, dump, now):
 
 
 def _batch(out):
-    paths = [p for p in re.findall(r"\S+\.json", out) if os.path.isfile(p)]
+    # Each batch is printed on a line of its own, and a path may hold a space (a Windows user
+    # folder such as "C:\\Users\\Ada Example"): read whole lines, never \\S+ (the Git Bash run,
+    # 2026-11-09 and 2026-11-10).
+    paths = [ln.strip() for ln in out.splitlines()
+             if ln.strip().endswith(".json") and os.path.isfile(ln.strip())]
     assert paths, out
     with open(paths[-1], encoding="utf-8") as fh:
         return json.load(fh)
