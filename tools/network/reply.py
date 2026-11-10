@@ -38,7 +38,7 @@ Usage:
     python3 tools/network/reply.py "sure, send your resume to wren@example.com"
     python3 tools/network/reply.py prepare "<name or contact id>" --text-file <their message>
     python3 tools/network/reply.py finish <contact id> --draft-file <the reply>
-        [--work <id> --dump <dir> [--thread <thread>]]
+        [--work <id> --dump <dir> [--thread <thread>] [--in-thread]]
 """
 
 from __future__ import annotations
@@ -2084,6 +2084,9 @@ def finish(argv) -> int:
     ap.add_argument("--thread", default="", help="the page's conversation (default: the item's own)")
     ap.add_argument("--dump", default="", help="the page's database, as read ($D)")
     ap.add_argument("--summary", default="", help="one short sentence (default: the reply is ready)")
+    ap.add_argument("--in-thread", dest="in_thread", action="store_true",
+                    help="they asked to see the draft in the page's conversation: it goes there "
+                         "too (by default the answer is one line and a button to their card)")
     ap.add_argument("--kind", default="", choices=("", "cloud", "computer"))
     ap.add_argument("--out", default="", help="where the batch goes (default <dump>/out)")
     ap.add_argument("--contacts", default=state.CONTACTS_CSV)
@@ -2156,10 +2159,14 @@ def finish(argv) -> int:
         # reply on the page while they were part of the answer (2026-11-05). Said here, marked
         # as Claude's, and never added to what the page shows.
         print(f"what worked (for you, not for the reply): {said}")
+    import touched
+    # Where the draft now is, for the answer's button (tools/touched.py): their card in Contacts.
+    touched.note("contacts", cid, work=a.work)
     try:
         import tips
         tip = ""
-        if person.exists("person.json"):
+        # A tip is a line of the answer; one that is a line and a button carries none.
+        if person.exists("person.json") and (a.in_thread or not a.work):
             kept = tips.load()
             tip = tips.line("reply", state=kept)
             if tip:
@@ -2169,8 +2176,8 @@ def finish(argv) -> int:
     if tip:
         extra.append(tip)
         print(f"end with: {tip}")
-    print("Show the draft in full, ready to copy, never only where it was saved.")
     if not a.work:
+        print("Show the draft in full, ready to copy, never only where it was saved.")
         return 0
     import app_listen
     import app_model
@@ -2179,9 +2186,14 @@ def finish(argv) -> int:
     db = page_db.load(a.dump)
     first = _first(c)
     what = "reply" if kind == "reply" else "follow-up"
-    answer = "\n\n".join([f"Your {what} to {first}, ready to copy (nothing is sent):", draft]
-                         + extra)
+    # The thread is a pointer, never a copy: one line and a button to their card, where the
+    # draft is with its Copy and "I sent it" (the maintainer, 2026-11-10). The draft goes in the
+    # thread too only when they asked to see it there.
+    answer = ("\n\n".join([f"Your {what} to {first}, ready to copy (nothing is sent):", draft]
+                          + extra) if a.in_thread
+              else f"Your {what} to {first} is drafted, ready to copy on their card.")
     item = ((db.get("work") or {}).get(page_db.safe_id(a.work)) or {}).get("data") or {}
+    made, noted = touched.gather(a.work, item)
     args = item.get("args") if isinstance(item.get("args"), dict) else {}
     thread = a.thread or str(args.get("thread") or "")
     summary = a.summary or (f"Your {what} to {first} is ready to copy"
@@ -2189,10 +2201,16 @@ def finish(argv) -> int:
     try:
         done = page_db.finish(db, a.work, now, a.out or os.path.join(a.dump, "out"),
                               summary=summary, reply=answer if thread else "", thread=thread,
-                              chat_kind=a.kind or app_listen.chat_kind(), dump_dir=a.dump)
+                              chat_kind=a.kind or app_listen.chat_kind(), dump_dir=a.dump,
+                              go=touched.buttons(made))
     except (KeyError, ValueError) as e:
         print(f"finish: the page's work not finished: {e.args[0] if e.args else e}")
         return 2
+    if not done.get("again"):
+        touched.clear(noted)
+    if not a.in_thread:
+        print("page: the draft is on their card in Contacts, and the conversation says so in a "
+              "line with its button: never paste it there unless they asked (--in-thread)")
     print("page: send each batch (ArtifactData batch), then bring the page up to date "
           "(app.py view, the app skill's step 5):")
     print(json.dumps(done, ensure_ascii=False, indent=1))

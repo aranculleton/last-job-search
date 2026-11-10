@@ -2657,6 +2657,16 @@ def add_contact(contacts, name, company="", today=None, new=False, **fields) -> 
     return row, "added"
 
 
+def _touched(cid) -> None:
+    """Where the contact is on the page, for the answer's button (tools/touched.py)."""
+    try:
+        import touched
+        if str(cid or "").strip():
+            touched.note("contacts", str(cid).strip())
+    except Exception:  # noqa: BLE001  a button fewer, never a contact left unsaved
+        pass
+
+
 def _cli_add(argv) -> int:
     ap = argparse.ArgumentParser(
         prog="state.py add",
@@ -2698,6 +2708,7 @@ def _cli_add(argv) -> int:
               "nothing added")
         return 0
     save_contacts(contacts, a.contacts)
+    _touched(cid)
     print(f"add: {row.get('name')}{where} added as {cid}. A message from them: state.py "
           f"received {cid} --text-file <file>")
     return 0
@@ -4396,6 +4407,7 @@ def _cli_set(argv) -> int:
         print(f"set: {e}")
         return 1
     save_contacts(contacts, a.contacts)
+    _touched(row.get("contact_id"))
     said += _draft_follows_row(row, a.status, a.next_action, before.get(id(row)))
     print(f"{row.get('contact_id')} ({row.get('name')}, {row.get('company')}): "
           + "; ".join(said))
