@@ -448,24 +448,24 @@ def split_words(groups, text) -> list:
 
 def letter_fields(draft):
     """[(label, [(what, text)])] for the words a draft puts on its cover letter: the
-    paragraphs, the lead line, each bullet's label and text, and the salutation."""
-    import copy
-    import render_application as R
+    paragraphs, the lead line, each bullet's label and text, and who it is to. Read from the
+    draft as written: the words are the same ones the letter prints, and a draft too thin
+    to build a resume from still has its letter read."""
     import person
-    d = R.build(copy.deepcopy(draft))
     ident = person.get("identity") or {}
-    # The header and the date: never split on a good page, and a space they hold (a
-    # phone number's, a date's) is one the draft has, not a split.
+    s = lambda key: str(draft.get(key) or "")  # noqa: E731
+    # The header, the date and who it is to: never split on a good page, and a space they
+    # hold (a phone number's, a date's) is one the draft has, not a split.
     groups = [("the letter's header", [(k, str(ident.get(k) or "")) for k in (
-        "name", "location", "phone", "email")] + [("date", str(d.get("letter_date") or ""))])]
-    groups.append(("the letter's salutation", [("salutation",
-                                                tex_plain(d.get("salutation", "")))]))
-    groups += [("the letter's %s" % name, [(key, tex_plain(d.get(key, "")))])
+        "name", "location", "phone", "email")] + [(k, s(k)) for k in (
+            "letter_date", "company", "contact_person", "salutation")])]
+    groups += [("the letter's %s" % name, [(key, s(key))])
                for key, name in (("p1", "first paragraph"), ("p2", "second paragraph"),
                                  ("lead", "lead line"))]
-    groups += [("the letter's bullet %d" % i, [("bullet", tex_plain("%s: %s" % (t, x)))])
-               for i, (t, x) in enumerate(d.get("cl_bullets") or [], 1)]
-    groups.append(("the letter's closing paragraph", [("p4", tex_plain(d.get("p4", "")))]))
+    groups += [("the letter's bullet %d" % i, [("bullet", "%s: %s" % (
+        b.get("label", ""), b.get("text", "")) if isinstance(b, dict) else str(b))])
+               for i, b in enumerate(draft.get("cl_bullets") or [], 1)]
+    groups.append(("the letter's closing paragraph", [("p4", s("p4"))]))
     return groups
 
 
