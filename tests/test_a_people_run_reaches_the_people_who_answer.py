@@ -35,6 +35,17 @@ import sys
 
 import pytest
 
+
+@pytest.fixture(autouse=True)
+def _own_talked_cache(monkeypatch):
+    """reading.talked_with keeps what it read by the shared files' time and size, which these
+    tests' own books bypass: a cache of their own, so a later test in the worker never reads
+    one of these books' answers for the shared example (a follow-up test failed after them)."""
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                                    "tools", "network"))
+    import reading
+    monkeypatch.setattr(reading, "_TALKED", {})
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [os.path.join(ROOT, "tools"), os.path.join(ROOT, "tools", "network")]
 
