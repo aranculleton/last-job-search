@@ -36,6 +36,10 @@ make sense to somebody whose repo just received it.
 - **Someone still at the employer you found them at is no longer skipped as having moved on.** When LinkedIn grouped their roles under one employer with a place or "Full-time" under its name, the first role's title was read as their employer.
 - **A LinkedIn sign-out is fixed on your page, and the job carries on by itself.** A job that stops because LinkedIn is signed out in Claude's browser now shows Sign in to LinkedIn on its card. That signs you in inside the Claude app, in the page's own LinkedIn panel, and sends the job back as soon as the page sees you signed in. Before, the card said "tap Done" over an Answer box, and signing in meant leaving the page to find the job's chat on your computer. A chat on your computer that sees you signed in clears the job's question itself and carries on reading; before, it said you were signed in and still told you to tap Done on the page. Its chat there is put away by itself once the job stops, and a sign-out the computer found is the first line of the morning brief. A sign-in seen one day and gone the next marks the browser as not keeping it, so the card and the brief say to sign in again and keep the sign-in; before, the setup never checked this and the computer never reported it.
 
+### Added
+
+- **Claude's answers in Chat take you straight to what changed.** When you ask for something in Chat, or under a card's Something else, the answer is now a line or two with a button under it: "Updated in Contacts" opens that person's card with your reply on it, "Ready in Jobs" opens the draft, and likewise for a job, an interview, your profile, or a search Claude started. Several changes get a button each, up to four. The reply, note or list itself stays on its own card instead of being pasted into the conversation, unless you ask to see it there. A button to something you have since set aside or that has gone opens its screen and says so.
+
 ## [4.14.0] - 2026-11-10
 
 ### Added

@@ -212,6 +212,14 @@ def test_a_reply_drafted_from_a_screenshot_is_a_line_and_its_button_not_the_draf
         assert fh.read().strip() == DRAFT
 
 
+def test_every_buttons_words_are_plain():
+    from test_a_beginner_is_told_in_plain_words import _plain
+    for label in [b["label"] for b in touched.buttons([(s, "x") for s in touched.SECTIONS]
+                                                       + [("contacts", "y")])]:
+        _plain(label)
+        assert "page:" not in label and "/" not in label and "_" not in label, label
+
+
 def test_asked_to_see_it_in_the_thread_the_draft_goes_there_too(search):
     msg = _reply(search, "--in-thread")
     assert DRAFT in msg["text"], msg["text"]
