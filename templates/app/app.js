@@ -5345,12 +5345,22 @@
       const top = screenY(grid.getBoundingClientRect().top) + window.scrollY;
       const tall = room - top;
       if (bottom() <= room + 1 && bottom() - top >= FILL_SHARE * tall) fitFill(grid, Math.max(0, Math.floor((room - top - 2) / z)) + "px");
-      for (const l of lists) {
-        const panel = l.closest(".bpanel");
-        if (!panel) continue;
-        for (const li of [...l.children].filter((x) => x.hidden)) {
+      // One more a list at a time, in turn, the most needed first (`keep`, the order they give
+      // way in reversed), each stopping at its first that does not fit. The rows share the
+      // height, so a list that took every row it could first left the next with none: Coming
+      // up's fourth, a px short of fitting in Chrome and just fitting in Safari, whose lines are
+      // a px shorter, took Jobs' room there, four of eleven where Chrome shows six (Safari's
+      // run, 2026-11-10).
+      const full = new Set(lists.filter((l) => !l.closest(".bpanel")));
+      const turns = [...lists].sort((a, b) => fit(b).keep - fit(a).keep);
+      for (let grew = true; grew;) {
+        grew = false;
+        for (const l of turns) {
+          if (full.has(l)) continue;
+          const li = [...l.children].find((x) => x.hidden);
+          if (!li) { full.add(l); continue; }
           li.hidden = false;
-          if (bottom() > room + 1 || fitSpills(panel)) { li.hidden = true; break; }
+          if (bottom() > room + 1 || fitSpills(l.closest(".bpanel"))) { li.hidden = true; full.add(l); } else grew = true;
         }
       }
       // Still past the window with Your progress as a panel, which cannot give way: the compact

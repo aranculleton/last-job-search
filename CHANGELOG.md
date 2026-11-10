@@ -22,7 +22,7 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
-- **Your Brief lists every job it has room for in Safari.** Safari measures a full panel a pixel or two over, so the Jobs panel gave up rows it had room for and showed four where six fit. A panel within two pixels of full now counts as full.
+- **Your Brief lists every job it has room for in Safari.** Its panels share the room their rows give in turns now, the ones you need most first. Before, one panel took all the room it could before the next one had a turn, so in Safari Coming up took an extra row and Jobs showed four where six fit.
 - **A reply you have just had drafted shows on that person's card straight away.** When Claude drafted it in one chat, the page's helper, working from your last save, could put the old draft back on their card until the new one was saved. The new draft now stays on the card while it is being saved.
 - **A name you search for in Contacts is always found.** With a filter on, someone whose name matched could vanish from the search with nothing saying why, which made a contact with no employer look missing. The list now says "1 more hidden by your filter", with Show them, and someone with no employer is named by their name alone.
 - **A message Claude decided to hold is no longer offered as ready to send.** Its card showed Copy and I sent it while the line under it said it was held. It now says it is on hold, why, and when Claude looks again, with Send it anyway; the hold goes on that person's record, so To do and the brief agree.
