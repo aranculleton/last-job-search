@@ -1282,7 +1282,10 @@ def _next_job(url: str, first_word: str = "Then", kind: str = "cloud",
             f"start it: ArtifactData query, url {url}, collections work, holds and beats, out_dir a "
             f"fresh folder $E; python3 tools/app.py next \"$E\" --chat <this chat's id> --kind "
             f"{flags} --on \"<your model>\" --claim-out \"$E/claim\". Nothing named: "
-            "stop. One named: send its claim batch (refused: another chat has it, stop), then "
+            "your work is saved and on the page, so put this chat away yourself: "
+            "archive_session with this chat's own id (refused, or not among your tools: leave "
+            "it, the chat that answers the page puts it away), then stop. A finished job's chat "
+            "stayed idle in the sidebar for up to a day (2026-11-10). One named: send its claim batch (refused: another chat has it, stop), then "
             "follow the `steps` it printed, in order: that job's own, with its id, its folder and "
             "its commands, never this one's. At most three jobs in this chat, so its history "
             "stays short.")

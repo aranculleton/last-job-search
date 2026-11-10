@@ -764,8 +764,9 @@ METHODS: dict[str, dict] = {
             (42, "2026-11-09", False, "the chats the app starts on your computer, \"Job search \u00b7 <job> \u00b7 <computer>\", are known as the app's by the daily tidy-up"),
             (43, "2026-11-10", False, "the brief runs in a chat of its own, made with create_session and the copy attached, never bound to the chat that answers the page nor carried from helper to helper; the daily tidy-up makes that chat again where it is gone, archived or approved computer access; the setup reminder gets a chat of its own too, and no helper sets itself a reminder (the brief-own-chat upgrade moves an existing brief)"),
             (44, "2026-11-10", False, "the brief's run starts the fresh page helper itself when the helper's day is up or work waits that no chat is awake to take, and routes work for the computer; one small chat of its own, \"Job search: starts chats on your computer\", holds the computer approval and starts and puts away the chats there, woken by republishing its bell page, so a helper never approves and archives itself as designed; a computer job stopped at the LinkedIn sign-in has its chat put away at once and starts again only once the person answers; a sign-in that did not last says to keep the sign-in, and a signed-out LinkedIn leads the brief"),
+            (45, "2026-11-10", False, "a big job's chat puts itself away once its work is saved and nothing else waits; the tidy-up reads the page again for a job its folder does not hold, never keeping a finished chat a day for an old read"),
         ),
-        "fingerprint": "9b08f26a8a55116b",
+        "fingerprint": "9a299d75858a302d",
     },
     "expand": {
         "by": "upgrade", "priority": 4, "time": "~15 min",

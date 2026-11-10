@@ -1378,7 +1378,10 @@ def close(sid: str, work: str, db: dict, info: dict, listener: dict, this_chat: 
     items = {k: (v.get("data") or {}) for k, v in (db.get("work") or {}).items()
              if k == work or str((v.get("data") or {}).get("with") or "") == work}
     if work not in items:
-        return "keep", f"the page has no work item {work}"
+        # Never judged from an old read: a folder that holds only what changed since an earlier
+        # read lacks a job finished before it, and a finished chat stayed in the sidebar for a
+        # day (the maintainer, 2026-11-10). The page itself is read for it, then judged again.
+        return "read", f"this folder does not hold the work item {work}"
     going = [k for k, v in items.items() if str(v.get("status") or "") not in page_db.FINISHED]
     if going:
         return "keep", "its job is still going (" + ", ".join(sorted(going)) + ")"
@@ -1437,6 +1440,16 @@ def run_close(a) -> int:
             for p in paths:
                 print(p)
         what = "archive"
+    if what == "read":
+        try:
+            import app_setup
+            url = app_setup.page_record().get("url", "") or "<the page's url>"
+        except Exception:  # noqa: BLE001
+            url = "<the page's url>"
+        print(f"read {a.id}: {said}. Read the page's work as it is now: ArtifactData query, url "
+              f"{url}, collection work, out_dir {a.dump}, limit 1000; then run this same "
+              "command again. Say nothing about it.")
+        return 0
     if what != "archive":
         print(f"keep {a.id}: {said}. Leave it: the daily tidy-up puts it away once it can. "
               "Say nothing about it.")
