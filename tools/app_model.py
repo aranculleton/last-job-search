@@ -1913,7 +1913,31 @@ def files_missing(ctx=None) -> list:
         if names:
             out.append({"id": rid, "company": str(row.get("company") or ""), "files": names,
                         "paths": paths})
+    # A resume made for a contact with no job named (general_resume.py --for-contact keeps it
+    # in their folder, not on the tracker): put in the store as it is made, like an
+    # application's, so its Get it downloads at once. Missed here, it was never uploaded, and
+    # Get it started a new piece of work to fetch it (the maintainer, 2026-11-10).
+    try:
+        recs = sorted(glob.glob(person.state("documents", "network", "*", "resume.json")))
+    except Exception:  # noqa: BLE001  no copy: nothing made for anyone
+        recs = []
+    if recs:
+        book = {str(c.get("contact_id") or "").strip(): c for c in ctx.contacts}
+        noun = _noun()
+        for rec in recs:
+            cid = os.path.basename(os.path.dirname(rec))
+            got = resume_made_for(cid)
+            if not got or got.get("asset"):
+                continue
+            who = first_name((book.get(cid) or {}).get("name")) or "them"
+            out.append({"id": RESUME_FOR_PREFIX + cid, "company": "",
+                        "what": f"the {noun} for {who}", "files": [got["name"]],
+                        "paths": [got["path"]]})
     return out
+
+
+# The id a contact's own resume goes under in the `files` work that puts it in the page's store.
+RESUME_FOR_PREFIX = "resfor-"
 
 
 def _files(row) -> list:

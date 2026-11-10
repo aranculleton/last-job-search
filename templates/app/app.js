@@ -6845,10 +6845,19 @@
     const r = obj(p.resume_for_them);
     if (!txt(r.name)) return null;
     const key = (where || "p") + "resfor:" + p.id;
-    const g = obj(r.get);
-    const get = txt(r.asset) ? btn("Get it", () => getFiles({id: "resfor-" + seg(p.id), company: ""}, [{name: r.name, path: r.path, asset: r.asset}]), {kind: "link", small: true, key})
-      : g.kind ? btn("Get it", () => requestWork([{id: txt(g.id), kind: txt(g.kind), title: "The " + noun() + " made for " + txt(p.first_name) + ", ready to download", args: obj(g.args), redo: true}]), {kind: "link", small: true, key}) : null;
+    const fetchIt = getMadeFor(p, key);
+    const get = fetchIt ? btn("Get it", fetchIt, {kind: "link", small: true, key}) : null;
     return h("p", {class: "small", "data-resume-for": txt(p.id)}, cap1(noun()) + " made for " + txt(p.first_name) + (txt(r.made_on) ? ", " + fmtDay(r.made_on) : ""), get ? [" · ", get] : null);
+  }
+  // Getting the resume made for them: saved at once from the page's own store, where its
+  // making put it (page_db.queue_files, app_model.files_missing); one made before that is
+  // fetched for the page first, the way any file is. Null: nothing to get.
+  function getMadeFor(p, key) {
+    const r = obj(p.resume_for_them);
+    if (!txt(r.name)) return null;
+    if (txt(r.asset)) return () => download({kind: "resume", name: txt(r.name), path: r.path, asset: r.asset}, key);
+    const g = obj(r.get);
+    return g.kind ? () => requestWork([{id: txt(g.id), kind: txt(g.kind), title: "The " + noun() + " made for " + txt(p.first_name) + ", ready to download", args: obj(g.args), redo: true}]) : null;
   }
   async function getFiles(a, files) {
     for (const f of files) await download(Object.assign({company: txt(a.company)}, f), "dl:" + a.id);
@@ -7040,7 +7049,16 @@
   function sendsLine(m) {
     if (txt(m.sends) !== "resume") return null;
     const made = readyItems().find((a) => readyLive(a) && txt(obj(a.for_contact).id || a.for_contact) === txt(m.contact));
-    const theirs = made ? arr(made.files).find((f) => f.kind === "resume" && f.asset) : null;
+    // The one made for them with no job named (general_resume.py --for-contact) is on their
+    // own card (people[].resume_for_them), never among the applications: looked up only
+    // there, it was missed, and "Your resume" offered the general one (the maintainer,
+    // 2026-11-10).
+    const p = personById(txt(m.contact)) || {};
+    const forThem = obj(p.resume_for_them);
+    const madeFile = made ? arr(made.files).find((f) => f.kind === "resume") || null : null;
+    const theirs = madeFile ? (madeFile.asset ? madeFile : null)
+      : txt(forThem.asset) ? {kind: "resume", name: txt(forThem.name), path: forThem.path, asset: forThem.asset} : null;
+    const hasTheirs = !!(madeFile || txt(forThem.name));
     const cur = obj(obj(M().resume).file);
     const key = "dl:sends:" + m.id;
     const who = txt(m.first_name);
@@ -7049,12 +7067,17 @@
     const making = !theirs && [...allWork()].some(([, w]) => txt(w.kind) === "resume_for_contact" &&
       txt(obj(w.args).contact) === txt(m.contact) && ACTIVE.has(txt(w.status) || "queued"));
     if (making) return h("div", {class: "sends-line"}, h("span", {class: "small muted"}, "Goes with it: the " + noun() + " for " + who + ", which Claude is making now"));
-    const f = theirs || (cur.asset ? {kind: "resume", name: txt(cur.name), asset: cur.asset} : null);
+    // Theirs, made but not yet in the page's store: the way to it, never the general file
+    // under their name.
+    const f = theirs || (hasTheirs ? null : cur.asset ? {kind: "resume", name: txt(cur.name), asset: cur.asset} : null);
+    const label = hasTheirs ? "The " + noun() + " for " + who : "Your " + noun();
+    const reach = hasTheirs && !made ? getMadeFor(p, key)
+      : () => go("drafts", {focus: true, drafts: "apps", item: made ? made.id : txt(obj(M().resume).id) || "resume-general"});
     return h("div", {class: "sends-line"},
       h("span", {class: "small muted"}, "Goes with it: "),
-      f ? btn((made ? "The " + noun() + " for " + who : "Your " + noun()) + " (" + (txt(f.name).split(".").pop() || "pdf").toUpperCase() + ")", () => download(f, key),
-        {kind: "secondary", small: true, key, aria: "Save " + (made ? "the " + noun() + " for " + who : "your " + noun()) + " to attach to the message to " + who})
-        : btn("Your " + noun(), () => go("drafts", {focus: true, drafts: "apps", item: made ? made.id : txt(obj(M().resume).id) || "resume-general"}), {kind: "secondary", small: true, key, aria: "Your " + noun() + ", to attach to the message to " + who}),
+      f ? btn(label + " (" + (txt(f.name).split(".").pop() || "pdf").toUpperCase() + ")", () => download(f, key),
+        {kind: "secondary", small: true, key, aria: "Save " + label.charAt(0).toLowerCase() + label.slice(1) + " to attach to the message to " + who})
+        : reach ? btn(label, reach, {kind: "secondary", small: true, key, aria: label + ", to attach to the message to " + who}) : null,
       noteFor(key));
   }
   // A web address written out in a line of words is a short link named by its site, "(canada.ca)":

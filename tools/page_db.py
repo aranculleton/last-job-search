@@ -2457,6 +2457,7 @@ def queue_files(db: dict, apps: list, now: dt.datetime, out_dir: str, dump_dir: 
     wid = safe_id("files~" + str(left[0]["id"]))
     title = "Make the files downloadable: " + (f"{len(left)} applications" if len(left) > 1
                                                else str(left[0].get("company") or "")
+                                               or str(left[0].get("what") or "")
                                                or "your application")
     # `applications` even for one: each card finds the work its files wait on by it
     # (templates/app/app.js filesWorkFor), whatever the item's id is spelled as.
