@@ -813,6 +813,18 @@ def start(argv: list[str], model: str) -> int:
                          "instructions: read %s again now, and follow the new ones, not the copy "
                          "read before this command.\n\n" % " and ".join(changed))
         sys.stdout.flush()
+    # The person's own setting for updates, as the rule that wins: a scheduled task that wakes
+    # the same chat each morning still held the October "say so and wait" in its history a
+    # month after they set updates to come by themselves (the maintainer, 2026-11-11). The
+    # check's own copy of the line went to the log with the rest of what it printed.
+    try:
+        import sync_app
+        setting = sync_app.setting_line()
+    except Exception:  # noqa: BLE001  the brief goes on without it
+        setting = ""
+    if setting:
+        sys.stdout.write(setting + "\n\n")
+        sys.stdout.flush()
     # The Python side, after the update check, so a package an update adds is installed; the
     # script itself asks the package index nothing where everything already imports, from its
     # one list (efficiency audit E-12; review of fix/helpers, item 13).

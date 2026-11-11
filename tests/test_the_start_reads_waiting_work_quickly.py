@@ -85,7 +85,7 @@ def test_the_start_runs_the_days_check_itself_and_once_more_on_the_new_code(tmp_
     import app_listen
     import app_setup
     said = "sync_app: brought in the app's update.\n" + app_setup.START_CHANGED + "\n"
-    monkeypatch.setattr(app, "days_check", lambda on, chat, tools="": {
+    monkeypatch.setattr(app, "days_check", lambda on, chat, tools="", new_chat=False: {
         "ran": True, "rc": 0, "said": said, "landed": True, "before": "abc"})
     monkeypatch.setattr(app_setup, "_local_file", lambda name: str(tmp_path / name))
     again = []
@@ -126,7 +126,7 @@ def test_the_update_check_inside_the_start_never_sends_the_chat_to_start_again(m
     import app_listen
     import app_setup
     said = "sync_app: up to date with the app.\n" + app_setup.PAGE_NOT_YET + "\n"
-    monkeypatch.setattr(app, "days_check", lambda on, chat, tools="": {
+    monkeypatch.setattr(app, "days_check", lambda on, chat, tools="", new_chat=False: {
         "ran": True, "rc": 0, "said": said, "landed": False, "before": "abc"})
     monkeypatch.delenv(app.START_UPDATED, raising=False)
     monkeypatch.setattr(app_setup, "start", lambda **k: (
@@ -169,7 +169,7 @@ def test_a_new_helper_says_the_link_before_the_update_check_runs(monkeypatch, ca
     monkeypatch.setattr(app_listen, "role", lambda chat, listen=False, url="": "listener")
     before = []
 
-    def check(on, chat, tools=""):
+    def check(on, chat, tools="", new_chat=False):
         before.append(capsys.readouterr().out)
         return {"ran": False}
     monkeypatch.setattr(app, "days_check", check)

@@ -1950,7 +1950,7 @@ def cmd_start(a) -> int:
             url = ""
     said: list[str] = []
     if not a.work and os.environ.get(START_UPDATED) is None:
-        check = days_check(a.on, app_listen.this_chat(a.chat), a.tools or "")
+        check = days_check(a.on, app_listen.this_chat(a.chat), a.tools or "", new_chat=True)
         if check.get("ran"):
             said = check["said"].rstrip("\n").splitlines()
             if check.get("landed"):
@@ -1980,16 +1980,27 @@ def cmd_start(a) -> int:
     step = own_tests_first() if code == 0 else ""
     if step:
         lines = lines[:1] + [step] + lines[1:]
+    try:
+        import sync_app
+        setting, settings = sync_app.setting_line(), set(sync_app.SETTING_LINES.values())
+    except Exception:  # noqa: BLE001  the start goes on without it
+        setting, settings = "", set()
     if said:
         # This start already runs on whatever code the check brought in: its "run start again"
-        # is said of a start from before, never of this one.
+        # is said of a start from before, never of this one. The setting's line is said once,
+        # last, below.
         said = [ln for ln in said if not ln.startswith(app_setup.START_CHANGED[:40])
-                and ln.strip() != app_setup.PAGE_NOT_YET]
+                and ln.strip() != app_setup.PAGE_NOT_YET and ln.strip() not in settings]
         lines = lines[:2] + [
             "Before the steps below: the day's update check ran in this command (python3 "
             f"tools/sync_app.py --if-stale; {app_setup.SYNC_DO}{app_setup.SYNC_PAGE}). What it "
             "printed:"] + ["  " + ln for ln in said] + [
             "(end of what the update check printed)"] + lines[2:]
+    if setting and code == 0 and not a.work:
+        # The person's setting as the rule that wins, in every new chat and every chat that
+        # runs the start again: the chat's own history may still hold an older one (the
+        # maintainer, 2026-11-11). Never a job's chat, which takes no update part way through.
+        lines.append(setting)
     print("\n".join(lines))
     return code
 
@@ -2351,21 +2362,27 @@ def _git(*args: str) -> tuple[int, str]:
         return 1, ""
 
 
-def days_check(on: str, chat: str, tools: str = "") -> dict:
+def days_check(on: str, chat: str, tools: str = "", new_chat: bool = False) -> dict:
     """The day's update check, as `brief.py --start` runs it: `sync_app.py --if-stale`, and
-    only while today's has not run. {"ran", "rc", "said", "landed", "before"}."""
+    only while today's has not run. `new_chat`: the start of a new chat, which on a day
+    already checked looks once more at the app (sync_app.moved: one round trip, nothing
+    fetched) and takes what moved (`--if-moved`), so a new chat is on the newest version its
+    copy follows; a chat already open keeps the once-a-day rule. {"ran", "rc", "said",
+    "landed", "before"}."""
     import subprocess
     try:
         import sync_app
         stale = sync_app.stale()
+        moved = not stale and new_chat and sync_app.moved()
     except Exception:  # noqa: BLE001  never a reason not to answer the page
-        stale = False
-    if not stale:
+        stale = moved = False
+    if not stale and not moved:
         return {"ran": False}
     before = _git("rev-parse", "HEAD")[1]
     # The chat's id goes with it, so the update's page steps know which chat this is.
     env = dict(os.environ, **({"LJS_CHAT": chat} if chat else {}))
-    r = subprocess.run([sys.executable, os.path.join(_HERE, "sync_app.py"), "--if-stale",
+    r = subprocess.run([sys.executable, os.path.join(_HERE, "sync_app.py"),
+                        "--if-stale" if stale else "--if-moved",
                         "--on", on or "<this chat's model>"] + (["--tools", tools] if tools else []),
                        cwd=os.path.dirname(_HERE),
                        env=env, capture_output=True, text=True, encoding="utf-8",

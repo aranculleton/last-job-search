@@ -223,6 +223,14 @@ _UPDATES_AUTO = re.compile(r"\bupdat\w*\b[^.;]{0,40}\b(?:by (?:them|it)sel(?:f|v
 _ASK_OFF = re.compile(r"\b(?:never|don'?t|do not|no need to|no more|stop|quit)\s+"
                       r"(?:(?:ever|even|again|me|him|her|them|you|bother)\s+){0,2}"
                       r"ask(?:ing|s)?\b", re.I)
+# The same for waiting: "STOP WAITING FOR ME TO SAY UPDATE", "never wait for his word on app
+# updates", "don't hold updates back" say the updates come by themselves, and read as "stop ...
+# update" each wrote the opposite, when_asked, from the person asking for full automatic
+# updates (2026-11-11). Only a "not" right before the waiting, so "don't update without
+# waiting for my word" still waits.
+_WAIT_OFF = re.compile(r"\b(?:never|don'?t|do not|no need to|no more|no|stop|quit|not)\s+"
+                       r"(?:(?:ever|even|again|bother|to|be)\s+){0,2}"
+                       r"(?:wait(?:ing|s)?\b|hold(?:ing|s)?\s+(?:\w+\s+){0,2}back\b)", re.I)
 # "Only update when I say", the app's own words for the choice (CLAUDE.md), names no app: an
 # update with no object of its own is the app's; "update my resume" is not (2026-11-11).
 _BARE_UPDATE = re.compile(r"\bupdat(?:e|es|ing)\b(?!\s+(?:my|the|his|her|their|your|this|that|"
@@ -244,7 +252,7 @@ def updates_said(text: str) -> str:
     asked_off = False
     for part in _SENTENCE.split(text):
         part = _REPLY_NO.sub("", part)
-        rest = _ASK_OFF.sub(" ", part)
+        rest = _WAIT_OFF.sub(" ", _ASK_OFF.sub(" ", part))
         # Only a sentence about updates: "Don't ask me again about LinkedIn. App updates: I'll
         # say when." was read as updates by themselves (the review of SV-1, 2026-11-11).
         asked_off = asked_off or (rest != part and re.search(r"\bupdat", part, re.I) is not None)

@@ -406,8 +406,9 @@ METHODS: dict[str, dict] = {
             (97, "2026-11-11", False, "the save steps a chat follows say land.py --detach, and what an ending of saved to master asks; nothing made changes"),
             (98, "2026-11-11", False, "RUNBOOK's map says /reply belongs to no skill, and the networking skill owns /network, /threads and /prep"),
             (99, "2026-11-11", False, "the experience section's heading moves to the next page with its first role rather than staying alone at the foot of a page; a resume whose heading never sat there comes out the same; RUNBOOK.md says a computer chat's save finishes there where the chat that answers the page is on the computer too"),
+            (100, "2026-11-11", False, "RUNBOOK.md says the person's update setting wins over anything earlier in a chat or its memory, and that a new chat's start takes what moved in the app (sync_app.py --if-moved)"),
         ),
-        "fingerprint": "880242e9dc4178ca",
+        "fingerprint": "47def15f7d76ea3d",
     },
     "interview": {
         # Only a process with a round still to come is prepared again: a prep for a round

@@ -29,6 +29,8 @@ The brief does all four of these in one command, given in its own file. Every ot
    current. Where their profile says updates wait for their word (`"app_updates": "when_asked"`),
    the same command only looks: a line "An update is waiting" goes at the end of the message,
    once, left out when the last message (the newest `documents/briefs/*.md`) already said it.
+   The line it ends with names the person's setting, which wins over anything older in this
+   chat's history or memory.
    Its model check and its place check are for a person's own chat: leave both out. If it
    prints "Job sites blocked", those words open the message, every run until it is fixed.
    Exit 1 or 2: one line in the message, and carry on. If it lists upgrades Claude applies

@@ -2043,12 +2043,147 @@ def memory_files(root: str, home: str | None = None) -> list[str]:
     return out + ([local] if os.path.isfile(local) else [])
 
 
+# An old note about the app's updates, read more widely than learned.known_settings reads a rule.
+# That reader WRITES the setting, so it reads only what is said plainly: a misreading flipped a
+# person's setting on 2026-11-10. A note in a chat's memory is only ever judged against a setting
+# the person wrote, which wins, so here any note about the app's updates that holds them back
+# goes where they come by themselves, and any that takes them without asking goes where they
+# wait for the person's word. Chats kept obeying the October rule in November, in words the
+# narrow reader missed: "If an update is waiting, say so in one plain line and wait.", "Ask
+# before taking app updates", "app_updates is when_asked" (the maintainer, 2026-11-11).
+UPDATES_SETTING = "profile/person.json app_updates"
+# About the app's updates on its own: the app, sync_app, the app's updates or new version,
+# taking or merging updates, master. Never an update to their resume, a contact or a person.
+_NOTE_APP = re.compile(
+    r"\bapp_updates\b|\bsync_app\b|"
+    r"\bapp(?:'s|s)?\s+(?:own\s+)?(?:updates?|upgrades?|new\s+versions?|releases?)\b|"
+    r"\b(?:updates?|upgrades?|new\s+versions?|releases?)\s+(?:to|of|for|from)\s+the\s+app\b|"
+    r"\bthe\s+app\s+(?:to\s+)?updat\w*|\bupdat\w*\s+the\s+app\b|"
+    r"\b(?:tak|merg|pull|fetch|bring)\w*\s+(?:in\s+)?(?:the\s+app'?s\s+)?master\b|"
+    r"\b(?:an?|the|any|new)\s+(?:app\s+)?updates?\s+(?:is|are|'s)\s+"
+    r"(?:waiting|available|pending|ready|out|in)\b|"
+    r"\b(?:tak|merg|appl|accept|install)\w*\s+(?:in\s+)?(?:the\s+|an\s+|any\s+|new\s+|its\s+)?"
+    r"updates?\b(?!\s+(?:to|on|of|for|in|into|from|about|with)\s+(?!the\s+app\b))",
+    re.I)
+# An update that is theirs, never the app's: a status update to a recruiter, their resume's.
+_NOTE_THEIRS = re.compile(
+    r"\b(?:status|progress|weekly|daily|quick|job|application|resume|cv|profile|contact|linkedin|"
+    r"tracker|page|brief)\s+updates?\b|"
+    r"\bupdat\w*\s+(?:to|on|for|about|with|from)\s+(?!the\s+app\b)(?:my|his|her|their|your|a|an|"
+    r"the|this|that)\b", re.I)
+# The update itself waiting is no instruction to wait: "If an update is waiting, ..."
+_NOTE_STATE = re.compile(r"\b(?:is|are|'s|be|been|sits?|sitting|still)\s+(?:waiting|pending)\b",
+                         re.I)
+# Taken on their word ("when he says update, take it") is neither holding back nor by itself.
+_NOTE_ON_WORD = re.compile(r"\b(?:when|whenever|if|once|after|as soon as)\s+(?:he|she|they|i|"
+                           r"the person|you)\s+(?:says?|said|asks?|asked|tells?|told)\b", re.I)
+_NOTE_HOLDS = re.compile(
+    r"\bwait(?:s|ed)?\b|\bwaiting\s+(?:for|on|until|till)\b|"
+    r"\bhold\w*\s+(?:\w+\s+){0,2}(?:back|off)\b|"
+    r"\bask(?:s|ing)?\s+(?:him|her|them|me|you|the person|first|before|whether|if|about|for)\b|"
+    r"(?:^|[:;,(]\s*|\b(?:and|then|first|always)\s+)ask\b|"
+    r"\bcheck\w*\s+with\b|\bconfirm\w*\s+(?:with|first|before)\b|"
+    r"\b(?:his|her|their|my|your|the person'?s)\s+(?:word|ok|okay|yes|say-?so|go-?ahead|approval|"
+    r"permission|sign-?off|consent)\b|\bpermission\b|\bgo-?ahead\b|"
+    r"\b(?:until|unless|till|before|only\s+(?:when|if|after|once|on))\b[^.;]{0,50}\b(?:he|she|"
+    r"they|i|the person|you)\s+(?:says?|said|asks?|asked|tells?|told|gives?|gave|decides?|"
+    r"agrees?|confirms?|approves?|wants?)\b|"
+    r"\bwhen[_ ]asked\b|"
+    r"\b(?:never|don'?t|do not|not)\s+(?:\w+\s+){0,2}(?:take|taking|merge|merging|pull|pulling|"
+    r"apply|install|accept)\b",
+    re.I)
+_NOTE_TAKES = re.compile(
+    r"\bby\s+(?:them|it)sel(?:f|ves)\b|\bautomatic\w*\b|\bauto\b|\bon\s+(?:its|their)\s+own\b|"
+    r"\b(?:right|straight)\s+away\b|\bas\s+(?:soon\s+as\s+)?(?:they|it|one)\s+(?:comes?|lands?|"
+    r"arrives?)\b|\b(?:always|just)\s+(?:take|merge|pull|apply|install)\b|"
+    r"\bwithout\s+(?:first\s+)?(?:asking|being\s+asked|waiting|checking)\b",
+    re.I)
+
+
+def _about_updates(text: str) -> bool:
+    """Are these words about the app's updates? Read the way learned reads a rule, and never
+    where the update is the person's own (their resume's, a status update)."""
+    import learned
+    if _NOTE_APP.search(text or ""):
+        return True
+    if _NOTE_THEIRS.search(text or ""):
+        return False
+    return bool((learned._ABOUT_UPDATES.search(text or "") or learned._BARE_UPDATE.search(text or ""))
+                and re.search(r"\bupdat", text or "", re.I))
+
+
+def note_says(text: str, about: bool = False) -> set:
+    """What a note in a chat's memory says about how the app's updates come, read sentence by
+    sentence: "when_asked" where it holds them back (waits, asks, needs their word), "auto"
+    where it takes them without asking; both, or neither. A sentence counts only where it is
+    about the app's updates, or `about` says the note is (filed under that name or heading)."""
+    import learned
+    got = set()
+    for s in learned._SENTENCE.split(text or ""):
+        if not s.strip() or not (about or _about_updates(s)):
+            continue
+        said = learned.updates_said(s)
+        if said:
+            got.add(said)
+            continue
+        rest = _NOTE_STATE.sub(" ", s)
+        if re.search(r"\b(?:never|don'?t|do not|not|no)\b[^.;]{0,60}\bwithout\b", rest, re.I):
+            got.add("when_asked")          # "never take master without his word": both "not"s
+            continue
+        off = learned._WAIT_OFF.sub(" ", learned._ASK_OFF.sub(" ", rest))
+        if _NOTE_HOLDS.search(off):
+            got.add("when_asked")
+        elif (off != rest or _NOTE_TAKES.search(off)) and not _NOTE_ON_WORD.search(off):
+            got.add("auto")
+    return got
+
+
+def _named_for_updates(f: str, text: str) -> bool:
+    """A memory file filed under the app's updates, by its file name or its frontmatter's name
+    (code.claude.com/docs/en/memory: a topic file per subject): its body is about them though
+    no line of it says so ("Wait for him to say so.")."""
+    m = _FRONT.match(text or "")
+    named = re.search(r"^name:\s*(.+)$", m.group(0), re.M) if m else None
+    for words in (re.sub(r"[_\-.]+", " ", os.path.splitext(os.path.basename(f))[0]),
+                  named.group(1) if named else ""):
+        if words and (_NOTE_APP.search(words) or re.search(r"\bupdat", words, re.I)) \
+                and not _NOTE_THEIRS.search(words) \
+                and not re.search(r"\b(?:resume|cv|cover|letter|contact|status|linkedin|"
+                                  r"tracker|profile|page|job|application)s?\b", words, re.I):
+            return True
+    return False
+
+
+def _paragraphs(text: str) -> list[str]:
+    return re.split(r"(\n\s*\n|\n(?=[-*] ))", text)
+
+
+def _readings(f: str, text: str) -> tuple[bool, list[set]]:
+    """(the whole file is about the app's updates, what each paragraph of it says): a
+    paragraph's readings are (setting, value) pairs, learned.known_settings' own and, for the
+    app's updates, this side's wider ones (note_says). A heading about the app's updates makes
+    the paragraphs under it about them, until the next heading."""
+    import learned
+    whole = _named_for_updates(f, text)
+    parts = _paragraphs(text)
+    out, under = [], False
+    for i in range(0, len(parts), 2):
+        para = parts[i]
+        head = re.match(r"^\s*#+\s+(.*)$", para.strip().splitlines()[0]) if para.strip() else None
+        if head:
+            under = _about_updates(head.group(1)) or bool(re.search(r"\bupdat", head.group(1), re.I)
+                                                            and not _NOTE_THEIRS.search(head.group(1)))
+        said = set(learned.known_settings("other", para, ""))
+        said |= {(UPDATES_SETTING, v) for v in note_says(para, about=whole or under)}
+        out.append(said)
+    return whole, out
+
+
 def memory_conflicts(root: str, home: str | None = None, settings: dict | None = None) -> list[dict]:
     """Each chat memory that says otherwise than the person's settings in profile/, which win:
     [{file, setting, memory_says, setting_says}]. Read only: an old note on a computer ("only
     update when I say") was obeyed over the person's current setting, and rewriting it from a
     chat was blocked (2026-11-09); the start step now removes it (memory_remove)."""
-    import learned
     if settings is None:
         # Only what the person wrote: with no app_updates in person.json (a computer's copy not
         # yet up to date with it) the page reads "auto", and a note saying updates come when
@@ -2067,8 +2202,8 @@ def memory_conflicts(root: str, home: str | None = None, settings: dict | None =
                 text = fh.read()
         except OSError:
             continue
-        for para in re.split(r"\n\s*\n|\n(?=[-*] )", text):
-            for name, value in learned.known_settings("other", para, ""):
+        for said in _readings(f, text)[1]:
+            for name, value in sorted(said, key=str):
                 have = settings.get(name)
                 if have is not None and value != have:
                     out.append({"file": f, "setting": name, "memory_says": value,
@@ -2107,8 +2242,8 @@ def memory_remove(conflicts: list[dict]) -> tuple[list[dict], list[dict]]:
     2026-11-10). Only the note goes: the rest of the file stays as it was, and a file left
     with nothing but its heading or frontmatter goes with its line in MEMORY.md, the folder's
     index (code.claude.com/docs/en/memory: "Auto memory files are plain markdown you can edit
-    or delete at any time"). Where the file cannot be written, the note is still there."""
-    import learned
+    or delete at any time"). A file filed under the app's updates (_named_for_updates) is that
+    one note, and goes whole. Where the file cannot be written, the note is still there."""
     removed, left = [], []
     by_file: dict[str, list[dict]] = {}
     for c in conflicts:
@@ -2118,14 +2253,15 @@ def memory_remove(conflicts: list[dict]) -> tuple[list[dict], list[dict]]:
         try:
             with open(f, encoding="utf-8", errors="replace") as fh:
                 text = fh.read()
-            parts = re.split(r"(\n\s*\n|\n(?=[-*] ))", text)
+            parts = _paragraphs(text)
+            whole, said = _readings(f, text)
             keep = []
             for i in range(0, len(parts), 2):
                 para, sep = parts[i], parts[i + 1] if i + 1 < len(parts) else ""
-                if set(learned.known_settings("other", para, "")) & wrong:
+                if said[i // 2] & wrong:
                     continue
                 keep.append(para + sep)
-            rest = "".join(keep)
+            rest = "" if whole and len(keep) < len(said) else "".join(keep)
             if not _substance(rest):
                 os.remove(f)
                 index = os.path.join(os.path.dirname(f), "MEMORY.md")

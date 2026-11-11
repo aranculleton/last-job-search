@@ -32,6 +32,7 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **Updates you set to come by themselves stay that way.** Chats kept waiting for your word because of something said weeks before: an old note on your computer in words the app did not read as about updates, or the chat's own earlier messages. Those notes are removed now, every chat is told your setting is what counts, and saying "stop waiting for me to say update" no longer sets the opposite. A new chat also starts on the newest version your copy follows, not the one from that morning.
 - **"Only update when I say" is understood.** Said without naming the app, it set nothing; an update to your resume or CV is still never taken for the app's.
 - **A note on your computer that agrees with your update choice is kept.** Where your choice was not yet saved in that copy, the note was taken for one that disagreed and removed.
 - **Your page never says your computer is off while it is on.** A Mac connected that day read as off on a check-in from the day before, so Start it now did nothing; the computer's own connection now counts, and the chat that can start Claude there is woken.

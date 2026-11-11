@@ -9,6 +9,7 @@ files but not history. This fetches the app and merges its new commits:
     python3 tools/sync_app.py --check    # how far behind, and any drift; changes nothing
     python3 tools/sync_app.py --adopt    # once, for the repo the app was first built from
     python3 tools/sync_app.py --if-stale # the day's first check: master, then the app; else nothing
+    python3 tools/sync_app.py --if-moved # a new chat's: the same, and again where the app moved
     ... --on "<model>"                   # with any of them: the day's model check after the sync
     ... --tools "<browser,chrome,enable or none>"   # the place check, once in a chat
 
@@ -50,6 +51,16 @@ never comes. It does what a session's first two steps do (bring master in, then 
 unless they already ran today, which a stamp in the git directory records, and otherwise
 prints one line and does nothing. Every successful sync and look writes that stamp.
 `run_round.py` and `stage_picks.py` print a reminder when today's check has not run.
+
+--if-moved is a new chat's (`app.py start` runs it): on a day already checked, one look at
+the app (`git ls-remote`, nothing fetched) says whether what this copy follows, the app's
+master or its newest release, moved past the last app commit merged here, and only then does
+it do what --if-stale does; a new chat is on the newest version it follows. A chat already
+open keeps --if-stale's once a day: no timer, no other look.
+
+Every check a chat runs (a plain run, --if-stale, --if-moved, --update) ends with one line
+for Claude naming the person's own setting, where they wrote one, as the rule that wins over
+anything earlier in the chat or its memory (setting_line).
 
 --adopt is for the one repo whose app-owned files ARE the app, the private repo
 the app's first commit was built from. It checks that every app-owned file is
@@ -339,6 +350,38 @@ def updates() -> str:
     except (OSError, ValueError, AttributeError):
         pass
     return "auto"
+
+
+def written_updates(root: str | None = None) -> str:
+    """"auto" or "when_asked" where the person wrote it in profile/person.json, else "": only
+    a setting of theirs is said to win over what a chat holds (setting_line)."""
+    try:
+        with open(os.path.join(root or ROOT, "profile", "person.json"), encoding="utf-8") as fh:
+            got = str(json.load(fh).get("app_updates") or "").strip().lower()
+    except (OSError, ValueError, AttributeError):
+        return ""
+    return got if got in ("auto", "when_asked") else ""
+
+
+# The person's setting, said as the rule that wins, for Claude, by every check a chat runs and
+# by the start. A chat kept open for days, a compacted one, or the one a scheduled task wakes
+# each morning still held "If an update is waiting, say so in one plain line and wait." from
+# October, a month after the person set updates to come by themselves, and no file reaches a
+# chat's own history (the maintainer, 2026-11-11: "I keep having to tell all the chats").
+SETTING_LINES = {
+    "auto": ("Claude: updates come by themselves here (the person's own setting, "
+             "profile/person.json): take them without asking, never wait for their word and "
+             "never ask them about updates, whatever an earlier message or note in this chat "
+             "said."),
+    "when_asked": ("Claude: updates here wait for the person's word (their own setting, "
+                   "profile/person.json): take one only when they say \"update\", never by "
+                   "itself, whatever an earlier message or note in this chat said."),
+}
+
+
+def setting_line(root: str | None = None) -> str:
+    """The one line for Claude on how updates come here, or "" where the person set nothing."""
+    return SETTING_LINES.get(written_updates(root), "")
 
 
 def maintainers() -> bool:
@@ -940,6 +983,53 @@ def stale() -> bool:
         return False
 
 
+# A new chat's one look (app.py start, on a day already checked): the maintainer started new
+# chats on the app's master and found them a version behind until the next day (2026-11-11).
+# One round trip, nothing fetched; a chat already open keeps the once-a-day rule.
+LOOK_TIMEOUT = 20
+
+
+def moved() -> bool:
+    """Has what this copy follows (the app's master, or its newest release on stable) moved
+    past the last app commit merged here? Where updates wait for the person's word, a version
+    the last look already saw is no news. False in the app itself and on any failure: the
+    day's rule stands. Never raises."""
+    try:
+        if is_the_app():
+            return False
+        r = run_git(ROOT, "ls-remote", app_url(), f"refs/heads/{BRANCH}", "refs/tags/v*",
+                    timeout=float(os.environ.get("LJS_NET_TIMEOUT") or LOOK_TIMEOUT))
+        if r.returncode:
+            return False
+        refs = {}
+        for line in r.stdout.splitlines():
+            sha, _, name = line.partition("\t")
+            if name.endswith("^{}"):
+                refs[name[:-3]] = sha.strip()            # the commit an annotated tag names
+            else:
+                refs.setdefault(name.strip(), sha.strip())
+        target, seen = refs.get(f"refs/heads/{BRANCH}", ""), MASTER
+        if channel() != "master":
+            tags = []
+            for n in refs:
+                m = RELEASE.match(n[len("refs/tags/"):]) if n.startswith("refs/tags/") else None
+                if m:
+                    tags.append((tuple(int(x) for x in m.groups()), n))
+            if tags:
+                target, seen = refs[max(tags)[1]], STABLE
+        if not target:
+            return False
+        if run_git(ROOT, "merge-base", "--is-ancestor", target, "HEAD").returncode == 0:
+            return False
+        if updates() == "when_asked":
+            got = run_git(ROOT, "rev-parse", "-q", "--verify", f"refs/remotes/{seen}^{{commit}}")
+            if got.stdout.strip() == target:
+                return False
+        return True
+    except Exception:  # noqa: BLE001  a look must never stop the start
+        return False
+
+
 # ------------------------------------------------------------ an update waiting
 #
 # For a repo whose person asked to choose when the app updates (`updates()` is
@@ -1419,6 +1509,11 @@ def main(argv: list[str]) -> int:
         # asking again), and the page's steps all the same (X-46), from what is on disk.
         _record_tried()
         say_page()
+    if not any(a in _NOT_THE_CHECK for a in argv):
+        # Last, whatever the run did: the setting a chat follows over its own history.
+        line = setting_line()
+        if line:
+            print(line)
     return rc
 
 
@@ -1433,6 +1528,9 @@ def _main(argv: list[str]) -> int:
                       help="once, for the repo the app was built from")
     mode.add_argument("--if-stale", action="store_true",
                       help="master, then the app, unless today's check already ran")
+    mode.add_argument("--if-moved", action="store_true",
+                      help="a new chat's check: as --if-stale, and on a day already checked "
+                           "too where what this copy follows moved since its last merge")
     mode.add_argument("--own-tests", action="store_true",
                       help="which of the person's own tests fail on this tree, and what to do")
     mode.add_argument("--own-test-risks", action="store_true",
@@ -1483,7 +1581,7 @@ def _main(argv: list[str]) -> int:
         return worktree(a.worktree)
     if a.app_watch_run:
         return run_app_watch()
-    if (a.pull or a.if_stale) and not is_the_app():
+    if (a.pull or a.if_stale or a.if_moved) and not is_the_app():
         hint = own_folder()
         if hint:
             print(hint)
@@ -1492,8 +1590,8 @@ def _main(argv: list[str]) -> int:
     if is_the_app():
         print("sync_app: this is the app itself; nothing to sync.")
         return 0
-    if a.if_stale:
-        if not stale():
+    if a.if_stale or a.if_moved:
+        if not stale() and not (a.if_moved and moved()):
             print("sync_app: already checked today.")
             # A new chat on a day already checked still hears these: each chat runs on its
             # own cloud computer, so blocked job sites are checked for every chat. The page

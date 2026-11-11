@@ -112,6 +112,12 @@ BY_THEMSELVES = [
     "never ask about app updates again, they come by themselves",
     "No, updates come by themselves",
     "Take the app's updates without asking me",
+    # A "not" that belongs to waiting is about waiting: each of these wrote when_asked, from a
+    # person asking for full automatic updates (2026-11-11).
+    "STOP WAITING FOR ME TO SAY UPDATE",
+    "stop waiting for my word on updates",
+    "Never wait for his word on app updates",
+    "dont hold updates back",
 ]
 WAIT_FOR_ME = [
     "only update when I say. never take the app's update by itself",
@@ -123,6 +129,7 @@ WAIT_FOR_ME = [
     # The app's own words for the choice (CLAUDE.md), naming no app: missed until 2026-11-11.
     "Only update when I say",
     "only update when i say so",
+    "don't update without waiting for my word",
 ]
 
 
