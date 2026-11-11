@@ -2857,6 +2857,14 @@ def cmd_wake(a) -> int:
             "nothing else is waiting for this chat. ") + (
             "Commit what the taps changed (python3 tools/save_state.py) with this wake's "
             "other work, then end the turn." if applied_any else "End the turn."))
+    if kind == "cloud":
+        # Work for the person's computer is never `next`'s in the cloud, so it is named here,
+        # on every wake, with how to route it (local review 1): only the brief routed it, once
+        # a day, and Start it now, Try again and a sign-in answered on the page rang wakes that
+        # did nothing for 16 hours.
+        said = computer_line(page_db.load(a.dump), chat, now, a.dump)
+        if said:
+            then.insert(0, said)
     _save_wake_state(a.dump, {"phase": "done", "runs": run})
     last = [RESOLVE_RING.format(url=url)
             + (RESOLVE_OTHERS.format(url=url) if rings_sweep_due(now) else "")]
@@ -2868,6 +2876,35 @@ def cmd_wake(a) -> int:
             last.append(TIDY_SAID)
     _print_wake(head, notes, _send_as(sends, rd, a.dump), url, then=then + last)
     return 0
+
+
+def computer_line(db: dict, chat: str, now, dump: str) -> str:
+    """The `computer:` line a wake prints while work waits for the person's computer (queued,
+    or a chat there to put away), with exactly what to do, or "" (local review 1)."""
+    import computer
+    try:
+        w = computer.waiting(db, now)
+    except Exception:  # noqa: BLE001  a record it cannot read: the brief still routes it
+        return ""
+    if not w["queued"] and not w["finished"]:
+        return ""
+    what = []
+    if w["queued"]:
+        n = len(w["queued"])
+        what.append(f"{n} piece{'s' if n != 1 else ''} of work wait{'s' if n == 1 else ''} for "
+                    f"the person's computer ({', '.join(w['queued'][:3])}"
+                    f"{', ...' if n > 3 else ''})")
+    if w["finished"]:
+        n = len(w["finished"])
+        what.append(f"{n} chat{'s' if n != 1 else ''} there to put away")
+    return ("computer: " + "; ".join(what) + ". Once this wake's batches are sent, route it: "
+            f"python3 tools/computer.py route \"{dump}\" --chat {chat} --tools \"<this chat's "
+            "tool names, comma separated>\" (with --envs <file> where this chat has "
+            "list_environments, its answer saved to that file), and do what it prints: its "
+            "batches first, then a `call` exactly as printed, then its `then`. Where it prints "
+            "`handback`, make none of its calls here: end your answer with its lines, exactly "
+            "as printed, for the chat that started you. Say nothing about it to the person: "
+            "the page says it.")
 
 
 def talk_words(shown: dict, dump: str, url: str) -> dict:

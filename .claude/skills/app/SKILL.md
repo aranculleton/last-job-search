@@ -42,7 +42,11 @@ nothing read first:
   thread=... included>.`
 
 Its answer is one line. One that starts `agent:` is an Agent call to make as it is printed
-(`run_in_background: true`; a subagent cannot start one); anything else is said to nobody.
+(`run_in_background: true`; a subagent cannot start one). Lines that start `call:` and
+`then:` are a hand-back, a step for the person's computer the subagent had no tool for: make
+each `call:` in order, exactly as printed (the tool it names, the JSON after it as its
+arguments; a tool listed by name only is loaded first with ToolSearch), then do the `then:`
+line, and what that prints, here, never in another subagent. Anything else is said to nobody.
 Then end the turn, with no text. Held at that end because work the pass named is still
 waiting, make the same call once more for it, as the hold says. **Why the line falls there** (measured on an invented page
 with two months of use): a wake done in the listener printed about 30,000 characters into it
@@ -59,7 +63,8 @@ ring and end, with no subagent.
 whole, and do what it says for this one wake: steps 1 to 5, the daily tidy, a renewal's
 `create_session` and resolving the ring (ArtifactComments `resolve`) when they come up. Then
 answer in one line: what the page now shows, never a path or a command; or `agent: <the
-Agent call>` for a big job that needs one (`wake --no-sessions`).
+Agent call>` for a big job that needs one (`wake --no-sessions`). Where `computer.py route`
+printed a `handback`, its lines follow that line, exactly as printed, one a line.
 
 ## Where the rest is
 

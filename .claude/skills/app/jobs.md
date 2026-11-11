@@ -29,11 +29,14 @@ page waited on every tap (2026-10-29). `next` never hands one to this chat to ru
   `isolation: "worktree"`).
 - **Work for the computer** (a LinkedIn read: a networking run the page sent `to: computer`)
   is never `next`'s for a cloud chat: the engine refuses its claim, finish and fail there.
-  After each `wake`, `python3 tools/computer.py waiting "$D"` (read `beats` with the rest).
-  Nothing printed: nothing to do. Under `queued` or `finished`: `list_environments`, saved to
-  a file, then `python3 tools/computer.py route "$D" --chat <your id> --envs <that file>
-  --tools "<this chat's tool names, comma separated>"`, and do what it prints: a `call` exactly
-  as printed, then its `then`; `paste` needs nothing more, the page already says it. **This
+  `wake` names it on every wake in a `computer:` line, while any waits there or a chat there
+  is left to put away, and says what to do: `python3 tools/computer.py route "$D" --chat <your
+  id> --tools "<this chat's tool names, comma separated>"` (with `--envs <that file>` where
+  this chat has `list_environments`, its answer saved to a file), and do what it prints: its
+  batches first (the list of computers, kept for the page), then a `call` exactly as printed,
+  then its `then`. A `handback` is a step this chat has no tool for: a subagent ends its answer
+  with its lines, exactly as printed, and its listener makes them (SKILL.md, step 0). `paste`
+  needs nothing more, the page already says it. **This
   chat never approves computer access** (`confirm_repository_trust`): one small chat of its
   own, "Job search: starts chats on your computer", holds that approval and starts and puts
   away the chats there; `route` makes it once and wakes it by republishing its bell page.

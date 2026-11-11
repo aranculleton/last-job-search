@@ -1877,7 +1877,9 @@ def _computer_lines(b: dict) -> list[str]:
         trend = computer.trend(today) if today.weekday() == 0 else ""
     except Exception:  # noqa: BLE001  a check never stops the brief
         return []
-    out = ["computer: python3 tools/computer.py check <page work+beats> --envs "
+    # The page's meta too: the list of computers the check is given is kept there for the
+    # page's row (tools/computer.py envs_kept, local review 2), pinned to the version read.
+    out = ["computer: python3 tools/computer.py check <work+beats+meta> --envs "
            "<list_environments saved> --triggers <list_triggers saved>; do each line"]
     if trend:
         out.append(f"the computer's week, one line at the end of the message: \"{trend}\"")
@@ -2002,8 +2004,9 @@ def claude_lines(b: dict) -> list[str]:
                    "take: this run starts it). Then python3 tools/computer.py waiting <D>; "
                    "under queued: list_environments, saved to a file, then python3 "
                    "tools/computer.py route <D> --chat <this chat's id> --envs <that file> "
-                   "--tools \"<this chat's tool names, comma separated>\", and do what it prints "
-                   "(it wakes the chat that starts chats on the computer, or makes it once). "
+                   "--tools \"<this chat's tool names, comma separated>\", and do what it prints, "
+                   "its batches first (it wakes or makes the chat that starts chats on the "
+                   "computer). "
                    "Then the app skill's steps 1 to 3, for work still waiting" % b["page"])
         # A publish subscribes the chat that makes it to the page's comments: the page rang the
         # brief's chat twice the day it republished, each ring a paid run that ended "Nothing to

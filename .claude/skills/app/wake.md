@@ -116,7 +116,12 @@ for one it created). `wake` says when either is due.
 
 `wake` takes the next item that is yours (`app.py next --claim-out`, in code) and prints it
 under `next:` exactly as `next` prints it, its claim in the last batch. Nothing waiting: it
-says so; end the turn. A refused claim means another chat took it: read again into a new
+says so; end the turn. **Work for the person's computer** is never this chat's to take, so
+`wake` names it in a `computer:` line whenever some waits there or a chat there is left to put
+away: do exactly what that line says once the wake's batches are sent, before ending the
+turn. Its `computer.py route` may ring the chat that starts chats on the computer (an
+Artifact publish), or print a `handback`: the steps this chat has no tool for, whose lines end
+your answer exactly as printed, for the listener to make (SKILL.md, step 0). A refused claim means another chat took it: read again into a new
 folder and wake once more. Never take an item `wake` or `next` did not give you: they keep
 the locks and the heavy-job cap. `run` says where it is done: `here`, `child session` or
 `background agent` (`.claude/skills/app/jobs.md`, "A big job runs in a chat of its own"); a `create_session` or

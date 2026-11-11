@@ -132,10 +132,13 @@ READS = ("ok", "stopped", "none")
 SAY = {
     "ready": "Your computer is ready: Claude reads LinkedIn there when it needs to.",
     "working": "Claude is reading LinkedIn on your computer now.",
-    "off": ("Your computer is off or Claude isn't open on it: open Claude there and this "
-            "starts by itself."),
+    # Nothing starts the work by itself when Claude opens there: the person's next use of the
+    # page rings it (catchUp, Start it now), or the brief. "This starts by itself" left a read
+    # waiting 16 hours for nothing (the maintainer, 2026-11-11, local review 2).
+    "off": ("Your computer is off or Claude isn't open on it: open Claude there, and work for "
+            "it starts the next time you use this page."),
     "gone": ("Claude hasn't been able to start on your computer for a week: set it up again "
-             "once and it starts by itself."),
+             "once, and work for it starts the next time you use this page."),
     "signed_out": "LinkedIn is signed out in Claude's browser on your computer: sign in there once.",
     "signed_out_lost": ("LinkedIn signed out in Claude's browser on your computer: sign in again "
                         "and keep the sign-in this time."),
@@ -158,6 +161,16 @@ SAY = {
                       "it in the Claude app and approve what it asks, once."),
     "starter_silent": ("Claude's chat that starts work on your computer isn't answering: open it "
                        "in the Claude app once."),
+    # Connected, but in no folder that holds the copy (local review 8): the folder is added once.
+    "no_folder": ("Claude can start on your computer, but not in the folder that holds your job "
+                  "search: add that folder once in the Claude app there."),
+    # A chat started there that has not come yet: the computer asleep, or Claude closed there
+    # (local review 9). Said on the row beside Ready, never "reading now".
+    "starting": ("Claude has started a chat on your computer: it begins once your computer is "
+                 "awake with Claude open there."),
+    # The list of computers asked of the chat that started this one and not answered yet: the
+    # page draws no row for it (nothing for the person to do), and never says off.
+    "checking": "Claude is checking that your computer is on before it starts there.",
 }
 # The registry entry whose steps each action shows, and its button's words.
 ACTION = {
@@ -172,14 +185,17 @@ ACTION = {
     "starter_waits": None,
     "starter_silent": None,
     "signin_unsure": None,
+    "checking": None,
+    "starting": None,
+    "no_folder": ("remote-control-settings", "Add the folder"),
 }
 # The To do card's words: one plain sentence naming the work that waits and what it waits
 # for, then its one step. "Waiting for your computer: LinkedIn is signed out in Claude's
 # browser on your computer: sign in there once." said "your computer" twice, had two colons and
 # never said what was waiting (the screen review, 2026-11-09).
 WAITING_SAY = {
-    "off": "{what} until Claude is open on your computer. Open Claude there and it starts by "
-           "itself.",
+    "off": "{what} until Claude is open on your computer. Open Claude there, and it starts the "
+           "next time you use this page.",
     "gone": "{what} because Claude has not started on your computer for a week. Set it up "
             "again once.",
     "signed_out": "{what} until you sign in to LinkedIn in Claude's browser. Open LinkedIn and "
@@ -197,6 +213,8 @@ WAITING_SAY = {
                      "app. Open it from here and approve what it asks.",
     "starter_silent": "{what} because Claude's chat that starts work on your computer is not "
                       "answering. Open that chat in the Claude app once.",
+    "no_folder": "{what} until Claude can start in the folder that holds your job search. Add "
+                 "the folder {folder} once in the Claude app on your computer.",
 }
 # Where the card's one step is a page LinkedIn opens in Claude's own browser, it is on the
 # card's face, as the LinkedIn setup card's is (tools/app_setup.py outside_item).
@@ -250,12 +268,19 @@ def _plain_name(name: str) -> str:
     return (name.split(":")[0].strip() or name)[:40] or "your computer"
 
 
+def _yours(computer: str, start: bool = True) -> str:
+    """"Your Mac", or "Your computer" where it has no name: never "your your computer" (the
+    review of 4.15.1, finding 7)."""
+    name = _plain_name(computer)
+    where = name if name == "your computer" else "your " + name
+    return where[:1].upper() + where[1:] if start else where
+
+
 def runs_there(computer: str) -> str:
     """Said up front where a chat is started on the person's computer for a job: the route's
     line and the step its work card shows while it runs (the maintainer, 2026-11-10: a chat
     appeared on the computer with nothing on the page saying so)."""
-    name = _plain_name(computer)
-    where = name if name == "your computer" else "your " + name
+    where = _yours(computer, start=False)
     return f"This runs in a chat on {where}, which you can delete when it's done."
 
 
@@ -329,15 +354,16 @@ def starter_prompt(url: str, copy: str) -> str:
         "says this chat answered). python3 tools/computer.py waiting \"$D\": under `finished`, "
         "archive_session each session (get_session on it first: archived already, it is done, "
         "never archived again), then python3 tools/computer.py archived \"$D\" --work "
-        "<its id> and send the batch, whatever archive_session answered (not found or already "
+        "<its id> --session <its session> and send the batch, whatever archive_session answered (not found or already "
         "archived count as put away: unrecorded, it was rung for again at every wake), except "
         "a refusal because that chat is still at work: then the same command with --refused, "
         "and it is asked again later; then python3 tools/land.py in the background "
         "(run_in_background) and the GitHub calls it prints: it brings the work the chat on "
         "the computer saved to master, which no chat there may merge. Under `queued`: list_environments, saved to a file, then "
         "python3 tools/computer.py route \"$D\" --chat <your id> --envs <that file> --tools "
-        "\"<this chat's tool names, comma separated>\", and do what it prints: a `call` exactly "
-        "as printed, then its `then`. Then end the turn with nothing said.",
+        "\"<this chat's tool names, comma separated>\", and do what it prints: its batches "
+        "first, then a `call` exactly as printed, then its `then`. Then end the turn with "
+        "nothing said.",
     ])
 
 
@@ -503,15 +529,77 @@ def ring_steps(bell: str, path: str) -> str:
             "batch. Say nothing about it to the person.")
 
 
+# ------------------------------------------------------------------ handing a step back
+
+# The page's work runs in a subagent of the chat that answers the page, with the page's tools
+# and none of the remote ones (list_environments, create_session, get_session): `route` said
+# the computer was off when it could not list it, "ask the chat that answers the page" when it
+# could not start it (a subagent's only way back is its answer), and named tools it did not
+# have (the maintainer's copy, 2026-11-11, local review 3). Now a step this chat has no tool
+# for is handed back: `handback` lines, `call: <tool> <json>` each and the `then:` after them,
+# which the subagent ends its answer with and its listener makes exactly as printed
+# (.claude/skills/app/SKILL.md, step 0).
+TOOL_WORDS = ("list_environments", "create_session", "get_session", "archive_session",
+              "list_triggers", "confirm_repository_trust", "request_computer_folder",
+              "ArtifactComments", "ArtifactData", "Artifact")
+_TOOL_RX = re.compile(r"(?<![\w-])(" + "|".join(TOOL_WORDS) + r")(?![\w-])")
+HAND_BACK = ("This chat has no tool for part of this: make none of it here. End your answer "
+             "with the `handback` lines, exactly as printed, one a line: the chat that started "
+             "you makes them. What they do: ")
+ROUTE_AGAIN = ("python3 tools/computer.py route <dump> --chat {chat} --tools \"<your tool "
+               "names, comma separated>\", and do what it prints: its batches first, then a "
+               "`call` exactly as printed, then its `then`")
+
+
+def tools_named(*texts) -> set[str]:
+    """The tools a route's words name."""
+    return {t for x in texts for t in _TOOL_RX.findall(str(x or ""))}
+
+
+def tools_had(tools) -> set[str]:
+    """The tool names a chat gave, each also by its own name: a chat passes its tools as it
+    has them, and mcp__claude-code-remote__create_session was not create_session, so a helper
+    that could start the starter was told it could not (local review 3)."""
+    out: set[str] = set()
+    for t in tools or ():
+        t = str(t).strip()
+        if t:
+            out.add(t)
+            if t.startswith("mcp__"):
+                out.add(t.split("__")[-1])
+    return out
+
+
+def _hand_back(out: dict, had: set, chat: str) -> dict:
+    """`out`, with the steps this chat has no tool for handed back to the chat that started it
+    (`handback`), or as it is where it has every tool its steps name."""
+    calls = out.pop("_calls", None)
+    after = out.pop("_after", "")
+    need = tools_named(out.get("then")) | ({out["tool"]} if out.get("tool") else set())
+    missing = sorted(need - had)
+    if not missing:
+        return out
+    if calls is None:
+        calls = [(out["tool"], out.get("call") or {})] if out.get("tool") else []
+    who = chat or "<your id>"
+    lines = [f"call: {t} {json.dumps(a, ensure_ascii=False)}" for t, a in calls]
+    lines.append("then: " + (after or out.get("then") or "").replace("{chat}", who)
+                 .replace("<your id>", who))
+    out["handback"] = lines
+    out["then"] = HAND_BACK + str(out.get("then") or "")
+    return out
+
+
 def _starter_check(rec: dict, wid: str, line: str, w: dict) -> dict:
     """The starter did not answer, or is not ready long after it was asked for: looked at."""
-    return {"route": "check starter", "work": wid, "line": line,
+    seen = ("python3 tools/computer.py starter-seen <dump> --status <its status_bucket, or gone "
+            "where it says the chat is not found or archived>, and send its batch")
+    return {"route": "check starter", "work": wid, "line": line, "tool": "get_session",
             "call": {"session_id": rec.get("chat") or ""},
-            "then": ("get_session with this call, then python3 tools/computer.py starter-seen "
-                     "<dump> --status <its status_bucket, or gone where it says the chat is "
-                     "not found or archived>, and send its batch, then route again. Never "
-                     "send_message it, and say nothing about it to the person: where it waits "
-                     "on them, their page asks them."),
+            "then": (f"get_session with this call, then {seen}, then route again. Never "
+                     "message it, and say nothing about it to the person: where it waits on "
+                     "them, their page asks them."),
+            "_after": (f"{seen}, then {ROUTE_AGAIN}. Say nothing about it to the person."),
             "waiting": w}
 
 
@@ -537,6 +625,12 @@ def _starter_route(db: dict, now: dt.datetime, wid: str, w: dict, url: str, copy
         return {"route": "ring starter", "work": wid, "line": line, "bell": rec["bell"],
                 "then": ("python3 tools/computer.py bell-file <your scratchpad>/bell.html, then "
                          + ring_steps(rec["bell"], "<your scratchpad>/bell.html")),
+                "_calls": [("Artifact", {"action": "publish", "file_path": "<dump>/bell.html",
+                                         "url": rec["bell"]}),
+                           ("ArtifactComments", {"action": "watch", "url": rec["bell"],
+                                                 "on": False})],
+                "_after": ("python3 tools/computer.py rung <dump>, and send its batch "
+                           "(ArtifactData batch). Say nothing about it to the person."),
                 "waiting": w}
     made = _time(rec.get("made_at"))
     if rec.get("chat") and made and (now - made).total_seconds() < STARTER_WAIT_S:
@@ -556,14 +650,108 @@ def _starter_route(db: dict, now: dt.datetime, wid: str, w: dict, url: str, copy
     if not owner or not name:
         return {"route": "none", "line": "", "waiting": w}
     import app_listen
-    return {"route": "make starter", "work": wid, "line": line,
+    made = (" Started: python3 tools/computer.py starter-made <dump> --session <its id>, and "
+            "send its batch. It starts the chat on the computer itself; this chat never "
+            "approves computer access. Say nothing about it to the person.")
+    return {"route": "make starter", "work": wid, "line": line, "tool": "create_session",
             "call": starter_call(url, copy, owner, name),
             "then": ("create_session with this call, from this chat, unasked." +
-                     app_listen.MODE_REFUSED + " Started: python3 tools/computer.py "
-                     "starter-made <dump> --session <its id>, and send its batch. It starts the "
-                     "chat on the computer itself; this chat never approves computer access. "
-                     "Say nothing about it to the person."),
+                     app_listen.MODE_REFUSED + made),
+            "_after": (app_listen.MODE_REFUSED + made).strip(),
             "waiting": w}
+
+
+# ------------------------------------------------------------------ the person's list of computers
+
+# The person's own list of their computers (list_environments), as the last chat that routed
+# work for the computer, or the brief's check, saw it: kept on the page with its time
+# (`meta/computer_envs`: {at, environments: every bridge, on or not, with its name, folder and
+# state}). The page's row and its To do card are drawn from the page's database alone
+# (`seen`), which never had the list, so a Mac connected and active that day was said to be
+# off on a check-in 25 hours old (the maintainer's copy, 2026-11-11, local review 2). The row,
+# and a chat with no list of its own, judge the computer by it while it is fresh.
+ENVS_DOC = ("meta", "computer_envs")
+ENVS_FRESH_S = 6 * 3600
+# An unchanged list is kept again only this long after the last time.
+ENVS_AGAIN_S = 30 * 60
+# Asked of the chat that started this one (a hand-back) and not answered yet: the computer is
+# unknown, never said off, for this long.
+ENVS_ASKED_S = 20 * 60
+
+
+def _listed_bridges(envs) -> list[dict]:
+    """Every bridge environment in list_environments' answer, on or not, however it arrived
+    (_bridge_rows), as the page keeps it: {environment_id, name, kind, state, description},
+    and the computer's system where the list says it (reported_system reads it back)."""
+    out = []
+    for e in _bridge_rows(envs, active=False):
+        eid = str(e.get("environment_id") or e.get("id") or "")
+        if eid:
+            row = {"environment_id": eid, "name": str(e.get("name") or ""), "kind": "bridge",
+                   "state": str(e.get("state") or ""),
+                   "description": str(e.get("description") or "")}
+            row.update({k: str(e[k]) for k in ("system", "platform", "os", "os_type",
+                                                "operating_system") if e.get(k)})
+            out.append(row)
+    return out
+
+
+def envs_record(db: dict) -> dict:
+    """The list of computers kept on the page, or {}."""
+    doc = ((db.get(ENVS_DOC[0]) or {}).get(ENVS_DOC[1]) or {})
+    return dict(doc.get("data") or {}) if isinstance(doc, dict) else {}
+
+
+def known_envs(db: dict, now: dt.datetime) -> dict | None:
+    """The person's list of computers as last kept, while it is fresh (ENVS_FRESH_S), in
+    list_environments' own shape, or None where it is not known."""
+    rec = envs_record(db)
+    at = _time(rec.get("at"))
+    if not at or (now - at).total_seconds() >= ENVS_FRESH_S or \
+            at > now + dt.timedelta(minutes=5):
+        return None
+    return {"environments": [e for e in rec.get("environments") or [] if isinstance(e, dict)]}
+
+
+def envs_asked(db: dict, now: dt.datetime) -> bool:
+    """Was the list asked of the chat that started this one lately, and not kept since?"""
+    rec = envs_record(db)
+    asked, at = _time(rec.get("asked_at")), _time(rec.get("at"))
+    return bool(asked and (now - asked).total_seconds() < ENVS_ASKED_S
+                and (at is None or at < asked))
+
+
+def _envs_set(db: dict, fields: dict, out_dir: str, dump_dir: str = "") -> list[str]:
+    import page_db
+    doc = (db.get(ENVS_DOC[0]) or {}).get(ENVS_DOC[1])
+    w = page_db.Writes(out_dir)
+    if doc:
+        w.add("update", *ENVS_DOC, fields, if_version=doc.get("version"))
+        new = dict(doc.get("data") or {}, **fields)
+    else:
+        w.add("set", *ENVS_DOC, fields)
+        new = dict(fields)
+    if dump_dir:
+        page_db._keep_dump(dump_dir, *ENVS_DOC, new, int((doc or {}).get("version") or 0) + 1)
+    return w.save("computer-envs")
+
+
+def envs_kept(db: dict, envs, now: dt.datetime, out_dir: str, dump_dir: str = "") -> list[str]:
+    """The batch that keeps this list of computers on the page, or [] where the page already
+    holds the same list, kept lately."""
+    rows = _listed_bridges(envs)
+    rec = envs_record(db)
+    at = _time(rec.get("at"))
+    if at and rec.get("environments") == rows and not envs_asked(db, now) \
+            and 0 <= (now - at).total_seconds() < ENVS_AGAIN_S:
+        return []
+    return _envs_set(db, {"at": _stamp(now), "environments": rows}, out_dir, dump_dir)
+
+
+def envs_ask(db: dict, now: dt.datetime, out_dir: str, dump_dir: str = "") -> list[str]:
+    """The batch that notes the list was asked of the chat that started this one: until it is
+    kept, the page draws Claude checking, never off."""
+    return _envs_set(db, {"asked_at": _stamp(now)}, out_dir, dump_dir)
 
 
 # ------------------------------------------------------------------ the heartbeat
@@ -679,11 +867,13 @@ def _day(t: dt.datetime) -> str:
 def beat_fields(name: str, now: dt.datetime, browser: str = "none", linkedin: str = "unknown",
                 cookies: str = "unknown", read: str = "none", version: str = "",
                 task: bool | None = None, chat: str = "", stop: dict | None = None,
-                system: str | None = None) -> dict:
+                system: str | None = None, copy: str = "") -> dict:
     """The heartbeat a computer writes: what it is, as it measured it, never a guess. `stop`:
     today's LinkedIn stop on this computer (stop_here), carried so the cloud sees it.
     `system`: the computer's own (claude_surfaces.this_system: darwin, win32 or linux), so
-    the cloud and the page give the steps for its own keys and menus."""
+    the cloud and the page give the steps for its own keys and menus. `copy`: where the
+    person's copy is on it (copy_place), so a chat is started in a folder that holds it
+    (local review 8)."""
     import claude_surfaces
     for value, allowed in ((browser, BROWSER), (linkedin, LINKEDIN), (cookies, COOKIES),
                            (read, READS)):
@@ -703,7 +893,7 @@ def beat_fields(name: str, now: dt.datetime, browser: str = "none", linkedin: st
             "task": bool(task_present() if task is None else task),
             "stop": dict(stop) if stop else None,
             "system": system,
-            **({"chat": chat} if chat else {})}
+            **({"chat": chat} if chat else {}), **({"copy": copy} if copy else {})}
 
 
 def beat(db: dict, name: str, now: dt.datetime, out_dir: str, dump_dir: str = "",
@@ -718,6 +908,14 @@ def beat(db: dict, name: str, now: dt.datetime, out_dir: str, dump_dir: str = ""
     fields = beat_fields(name, now, **facts)
     if fields["last_read"] is None and old.get("last_read"):
         fields["last_read"] = old["last_read"]          # nothing read this time: kept
+    # Which chats wrote it lately, newest first: several chats write this one record, and one
+    # refused its claim was never seen to have come, so it was never put away (local review 9).
+    seen_by = [x for x in old.get("chats_seen") or [] if isinstance(x, dict)
+               and x.get("chat") and x.get("chat") != fields.get("chat")]
+    if fields.get("chat"):
+        seen_by.insert(0, {"chat": fields["chat"], "at": fields["seen_at"]})
+    if seen_by:
+        fields["chats_seen"] = seen_by[:CHATS_SEEN_KEEP]
     fields.update(cookies_seen(old, fields, since_in=since_in, said_on=said_on))
     w = page_db.Writes(out_dir)
     w.add("set", "chats", did, fields, if_version=mine["version"] if mine else None)
@@ -917,32 +1115,152 @@ def system_seen(db: dict, envs=None, folders=None) -> str:
     return seen.pop() if len(seen) == 1 else ""
 
 
-def pick_bridge(found: list[dict], db: dict, now: dt.datetime) -> list[dict]:
-    """The person's computers, best first: the one whose heartbeat is fresh and signed in to
-    LinkedIn, then the one the setup was tested on (place.json computer_name), then the rest
-    as listed. The first listed was always used, with no fallback, though it could be the
-    one signed out or set up in another folder (the builder audit, 2026-11-10, CC-22)."""
-    beats = {}
+def _fold(name) -> str:
+    """A name as two are compared: lower case, apostrophes dropped, anything not a letter or a
+    digit (in any language: "Zoë") a space."""
+    t = str(name or "").lower().replace("'", "").replace("\u2019", "")
+    return " ".join(re.sub(r"[\W_]+", " ", t).split())
+
+
+def same_computer(listed: str, beat_name: str, beat_names=()) -> bool:
+    """Is the computer a connection names (`listed`, "Mac") the one a heartbeat names
+    ("Morgan's MacBook Air")? The same name, case and marks aside; or one inside the other
+    where no other heartbeat's name holds it too. The connection's name and the computer's own
+    differ, so the fresh heartbeat and the tested computer never matched (local review 8)."""
+    a, b = _fold(_plain_name(listed)), _fold(_plain_name(beat_name))
+    if not a or not b:
+        return False
+    if a == b:
+        return True
+    if a not in b and b not in a:
+        return False
+    others = {_fold(_plain_name(x)) for x in beat_names} - {b, ""}
+    return not any(a in n or n in a for n in others)
+
+
+def _folder_names(path) -> list[str]:
+    return [f for f in (_fold(x) for x in re.split(r"[\\/]+", str(path or ""))) if f]
+
+
+def copy_place(root: str = "") -> str:
+    """Where this copy is on this computer, under the person's home folder
+    ("Documents/GitHub/my-job-search"), or its folder's own name where it is not under it. A
+    chat's own working folder inside the copy names the copy. The heartbeat and the setup
+    carry it, so the chat started for work there starts in a folder that holds it (local
+    review 8)."""
+    root = os.path.abspath(root or os.path.dirname(_HERE))
+    m = re.search(r"[\\/]\.claude[\\/]worktrees([\\/]|$)", root)
+    if m:
+        root = root[:m.start()]
+    home = os.path.abspath(os.path.expanduser("~"))
+    try:
+        rel = os.path.relpath(root, home)
+    except ValueError:                     # another drive, on Windows
+        rel = ""
+    if not rel or rel == "." or rel.startswith(".."):
+        return os.path.basename(root)
+    return rel.replace(os.sep, "/")
+
+
+def copy_known(db: dict) -> str:
+    """Where the copy is on the person's computer, as its newest heartbeat or its setup said
+    (copy_place), or "" where neither did."""
+    got = str(heartbeat(db).get("copy") or "")
+    if got:
+        return got
+    try:
+        import place
+        return str(place.place_record().get("computer_copy") or "")
+    except Exception:  # noqa: BLE001  no profile here
+        return ""
+
+
+LOST_PREFIX = "computer_lost~"
+
+
+def lost_folders(db: dict) -> list[str]:
+    """The folders a chat started on the computer found no copy in, said since the computer's
+    last heartbeat (meta/computer_lost~<chat>, written by that chat), newest first."""
+    seen = _time(heartbeat(db).get("seen_at"))
+    got = []
+    for did, doc in ((db.get("meta") or {}).items()):
+        if not str(did).startswith(LOST_PREFIX):
+            continue
+        d = (doc or {}).get("data") or {}
+        at = _time(d.get("at"))
+        if at and (seen is None or at > seen) and d.get("folder"):
+            got.append((at, str(d["folder"])))
+    return [f for _, f in sorted(got, reverse=True)]
+
+
+def copy_folder(db: dict) -> str:
+    """The name of the folder that holds the copy on the computer, as the person sees it, or
+    "" where it is not known."""
+    where = copy_known(db)
+    if not where:
+        try:
+            import app_setup
+            where = app_setup.origin()[1]
+        except Exception:  # noqa: BLE001
+            where = ""
+    got = [x for x in re.split(r"[\\/]+", where) if x]
+    return got[-1] if got else ""
+
+
+def _fit(b: dict, parts: list[str], exact: bool, lost: set) -> int:
+    """How well a connection's folder holds the copy: 0 the copy's own folder, 1 a folder above
+    it or not known, 2 another folder by the copy's name alone, 3 one known not to hold it."""
+    names = _folder_names(b.get("folder"))
+    if names and names[-1] in lost:
+        return 3
+    if not names or not parts:
+        return 1
+    if names[-1] == parts[-1]:
+        return 0
+    if names[-1] in parts[:-1]:
+        return 1
+    return 3 if exact else 2
+
+
+def pick_bridge(found: list[dict], db: dict, now: dt.datetime, copy: str = "") -> list[dict]:
+    """The person's computers, best first, leaving out a folder known not to hold the copy:
+    the one whose folder is the copy's own, then one above it (copy_known, else the copy's
+    name from `copy`), then the one whose heartbeat is fresh and signed in to LinkedIn, then
+    the one the setup was tested on (place.json computer_name), then the rest as listed. The
+    first listed was always used, with no fallback, though it could be the one signed out or
+    set up in another folder (the builder audit, 2026-11-10, CC-22), and the folder was never
+    looked at (local review 8)."""
+    beats = []
     for doc in (db.get("chats") or {}).values():
         d = (doc or {}).get("data") or {}
         if d.get("kind") == "computer" and d.get("computer") and _time(d.get("seen_at")):
-            name = _plain_name(d["computer"]).lower()
-            if name not in beats or d["seen_at"] > beats[name]["seen_at"]:
-                beats[name] = d
+            beats.append(d)
+    names = [d["computer"] for d in beats]
     try:
         import place
-        tested = _plain_name(place.place_record().get("computer_name") or "").lower()
+        tested = str(place.place_record().get("computer_name") or "")
     except Exception:  # noqa: BLE001
         tested = ""
+    where = copy_known(db)
+    exact = bool(where)
+    if not where:
+        m = re.search(r"github\.com[:/]+[\w.-]+/([\w.-]+?)(?:\.git)?/?$", str(copy or ""))
+        where = m.group(1) if m else ""
+    parts = _folder_names(where)
+    lost = {(_folder_names(f) or [""])[-1] for f in lost_folders(db)} - {""}
 
     def rank(pair):
         n, b = pair
-        d = beats.get(_plain_name(b["computer"]).lower()) or {}
+        mine = [d for d in beats if same_computer(b["computer"], d["computer"], names)]
+        d = max(mine, key=lambda x: str(x.get("seen_at") or ""), default={})
         seen = _time(d.get("seen_at"))
         fresh = bool(seen and (now - seen).total_seconds() < OFF_S)
-        return (0 if fresh and d.get("linkedin") != "out" else 1 if fresh else 2,
-                0 if tested and _plain_name(b["computer"]).lower() == tested else 1, n)
-    return [b for _, b in sorted(enumerate(found), key=rank)]
+        return (_fit(b, parts, exact, lost),
+                0 if fresh and d.get("linkedin") != "out" else 1 if fresh else 2,
+                0 if tested and same_computer(b["computer"], tested, names or [tested]) else 1,
+                n)
+    ranked = sorted(enumerate(found), key=rank)
+    return [b for n, b in ranked if rank((n, b))[0] < 3]
 
 
 # ------------------------------------------------------------------ the one line
@@ -1011,6 +1329,12 @@ def waiting(db: dict, now: dt.datetime) -> dict:
             continue
         status = str(d.get("status") or "")
         sess = d.get("computer_session") if isinstance(d.get("computer_session"), dict) else {}
+        # The chats started for it before its newest one: put away, unless one holds the work
+        # after all, or refused that lately because it is at work (local review 9).
+        for e in earlier_sessions(d):
+            if e["id"] != sess.get("id") and not _at_work(db, e["id"], now) \
+                    and not _refused_lately(e, now):
+                finished.append({"work": wid, "session": e["id"]})
         # Stopped for the person (LinkedIn signed out: app.py done --question): its chat on the
         # computer is put away at once, like a finished one, and a fresh one is started only
         # once they answer, which queues the work again. The stopped chat sat in their sidebar
@@ -1031,12 +1355,93 @@ def waiting(db: dict, now: dt.datetime) -> dict:
                 finished.append({"work": wid, "session": sess["id"]})
             continue
         at = _time(sess.get("at"))
+        age = (now - at).total_seconds() if at else None
         if (status == "queued" or lapsed(d, now, work)) and not d.get("stop_asked"):
-            if live and ((at and (now - at).total_seconds() < STARTED_S) or waits):
-                started[wid] = sess["id"]
-            else:
+            if not live:
                 queued.append(wid)
+                continue
+            # One at a time: a chat started that has not come yet (the computer asleep, or
+            # Claude closed there, while its connection shows active) is waited for, never
+            # joined by another every half hour (local review 9); one that came is believed at
+            # work for STARTED_S, as before.
+            came = _shown_up(db, sess["id"], at)
+            if waits or _at_work(db, sess["id"], now) or \
+                    (age is not None and age < (STARTED_S if came else SHOW_UP_S)):
+                started[wid] = sess["id"]
+                continue
+            # Not come in time, or come and gone: put away, and another may start.
+            if not _refused_lately(sess, now):
+                finished.append({"work": wid, "session": sess["id"]})
+            queued.append(wid)
+        elif live and str(d.get("claimed_by") or "") != sess["id"] \
+                and status in page_db.ACTIVE and not _at_work(db, sess["id"], now) \
+                and not _refused_lately(sess, now) \
+                and (_shown_up(db, sess["id"], at) or (age is not None and age >= SHOW_UP_S)):
+            # Its work taken by another chat there (one started for other work takes the next):
+            # this one, refused its claim, ran its last steps (its heartbeat came) and is put
+            # away; never put away mid-steps.
+            finished.append({"work": wid, "session": sess["id"]})
     return {"queued": queued, "started": started, "finished": finished}
+
+
+# A chat started on the computer that has not come (no claim, no heartbeat of its own) is
+# waited for this long before it is put away and another started: the Mac asleep, or Claude
+# closed there, while its connection still showed active, and every half hour another chat was
+# started, the earlier ids written over and never put away (local review 9).
+SHOW_UP_S = 2 * 3600
+# The earlier chats started for one piece of work kept on it, newest last.
+EARLIER_KEEP = 12
+# The chats that wrote a computer's heartbeat lately, kept on it (newest first): several write
+# one record, and a chat refused its claim was never seen to have come.
+CHATS_SEEN_KEEP = 10
+
+
+def not_come(db: dict, wid: str, sid: str, now: dt.datetime) -> bool:
+    """Is the chat `sid`, started for `wid` more than FRESH_S ago, still not come?"""
+    d = ((db.get("work") or {}).get(wid) or {}).get("data") or {}
+    sess = d.get("computer_session") if isinstance(d.get("computer_session"), dict) else {}
+    at = _time(sess.get("at")) if sess.get("id") == sid else None
+    return bool(at and (now - at).total_seconds() > FRESH_S and not _shown_up(db, sid, at))
+
+
+def earlier_sessions(d: dict) -> list[dict]:
+    """The chats started on the computer for this work before its newest one, not yet put
+    away (`computer_earlier`)."""
+    return [dict(x) for x in d.get("computer_earlier") or []
+            if isinstance(x, dict) and x.get("id") and not x.get("archived_at")]
+
+
+def _shown_up(db: dict, sid: str, since: dt.datetime | None) -> bool:
+    """Has the chat `sid`, started on the computer, come: claimed any work, or written a
+    heartbeat there since `since`?"""
+    if not sid:
+        return False
+    for doc in (db.get("work") or {}).values():
+        if str(((doc or {}).get("data") or {}).get("claimed_by") or "") == sid:
+            return True
+    for doc in (db.get("chats") or {}).values():
+        b = (doc or {}).get("data") or {}
+        if b.get("kind") != "computer":
+            continue
+        marks = [(b.get("chat"), b.get("seen_at"))] + [
+            (x.get("chat"), x.get("at")) for x in b.get("chats_seen") or [] if isinstance(x, dict)]
+        for c, t in marks:
+            t = _time(t)
+            if str(c or "") == sid and t and (since is None or t >= since):
+                return True
+    return False
+
+
+def _at_work(db: dict, sid: str, now: dt.datetime) -> bool:
+    """Does the chat `sid` hold a live claim on any work?"""
+    import page_db
+    work = db.get("work") or {}
+    for doc in work.values():
+        d = (doc or {}).get("data") or {}
+        if sid and str(d.get("claimed_by") or "") == sid and \
+                str(d.get("status") or "") in page_db.ACTIVE and page_db._live_claim(d, now, work):
+            return True
+    return False
 
 
 def page_signed_in_at() -> str:
@@ -1128,20 +1533,32 @@ def state(db: dict, now: dt.datetime, envs=None, version: str = "",
     w = waiting(db, now)
     seen = _time(beat_.get("seen_at"))
     age = (now - seen).total_seconds() if seen else None
+    # With no list given, the one kept on the page while it is fresh: drawn from the database
+    # alone, the row said a Mac on that day was off (local review 2).
+    if envs is None:
+        envs = known_envs(db, now)
     has_bridge = None if envs is None else bool(bridges(envs))
+    # In the person's own list, but not on: off, never "not switched on yet".
+    listed = bool(envs is not None and not has_bridge and _listed_bridges(envs))
+    # The list asked of the chat that started this one, not answered yet: unknown, never off.
+    unsure = envs is None and envs_asked(db, now)
     if not beat_ and works_on == "phone":
         key = "no_computer"
     elif not beat_ and not has_bridge:
-        key = "not_set_up"
+        key = "checking" if unsure else "off" if listed else "not_set_up"
     elif has_bridge is False and (age is None or age >= OFF_S):
-        key = "gone" if age is not None and age >= GONE_S else "no_bridge"
+        key = "gone" if age is not None and age >= GONE_S else "off" if listed else "no_bridge"
     elif age is not None and age >= GONE_S and not has_bridge:
         # Never "gone" on the check-in alone while the person's own list shows the computer
         # on: a Mac connected that day read as gone on a check-in from the day before (the
         # maintainer's copy, 2026-11-11).
-        key = "gone"
+        key = "checking" if unsure else "gone"
     elif age is not None and age >= OFF_S and not has_bridge:
-        key = "off"
+        key = "checking" if unsure else "off"
+    elif has_bridge and not pick_bridge(bridges(envs), db, now):
+        # On, but in no folder known to hold the copy (local review 8): a chat started there
+        # finds nothing, so none is started, and the person is asked to add the folder.
+        key = "no_folder"
     elif w["queued"] and starter_stuck(db) == "waits":
         # Nothing can start on the computer until the person approves in the chat that starts
         # it there (CC-6): said, with the work that waits and a link to that chat, never
@@ -1200,6 +1617,9 @@ def state(db: dict, now: dt.datetime, envs=None, version: str = "",
     if say == "keep_signin":
         asked += [(str(d.get("asked_at") or ""), str(d.get("title") or "").strip())
                   for d in on_signin]
+    if key == "working" and all(not_come(db, wid, sid, now) for wid, sid in w["started"].items()):
+        # A chat started there that has not come yet (local review 9): never "reading now".
+        say = "starting"
     act = ACTION.get(say)
     action = None
     system = system_seen(db, envs, folders)
@@ -1210,7 +1630,7 @@ def state(db: dict, now: dt.datetime, envs=None, version: str = "",
                   "steps": [ln for ln in claude_surfaces.steps(eid, page=True)
                             if ln[:1].isdigit()]}
     needs_them = key in ("off", "gone", "signed_out", "forgets", "no_bridge", "not_set_up",
-                         "starter_waits", "starter_silent")
+                         "starter_waits", "starter_silent", "no_folder")
     rec = starter(db)
     return {"state": key, "line": SAY[say], "action": action, "say": say,
             "card": needs_them and ((bool(w["queued"]) and waited >= CARD_AFTER_S) or
@@ -1230,6 +1650,8 @@ def state(db: dict, now: dt.datetime, envs=None, version: str = "",
             "waiting": len(set(w["queued"]) | set(w["started"]) | {wid for wid, _ in held}),
             # What waits, oldest first: the card names it (WAITING_SAY).
             "titles": [t for _, t in sorted(asked)],
+            # The folder to add, where none Claude can start in holds the copy.
+            "folder": copy_folder(db) if key == "no_folder" else "",
             "behind": older(beat_.get("version"), version)}
 
 
@@ -1315,6 +1737,7 @@ def card(st: dict) -> dict | None:
     import app_model
     said = WAITING_SAY.get(st.get("say") or st["state"]) or WAITING_SAY.get(st["state"])
     body = said.format(what=waiting_words(st.get("titles") or []),
+                       folder=f"“{st['folder']}”" if st.get("folder") else "that holds it",
                        title=(st.get("starter") or {}).get("title") or STARTER_TITLE) \
         if said else st["line"]
     # Its one obvious next step on its face; Done only where there is something the person did
@@ -1348,6 +1771,22 @@ def session_title(job: str, computer: str) -> str:
     return SESSION_TITLE.format(job=job, computer=_plain_name(computer))
 
 
+def find_copy_command(copy: str) -> str:
+    """The one shell line that finds the person's copy in the folder a chat on the computer
+    starts in, as deep as Documents/GitHub/<copy>, and by its own GitHub address, so the app's
+    own copy, or a second one, beside it is never taken (local review 8). Runs the same in zsh
+    and bash."""
+    find = ("find . -maxdepth 6 -path '*/tools/app.py' -not -path '*/node_modules/*' "
+            "-not -path '*/.claude/worktrees/*' -print 2>/dev/null")
+    m = re.search(r"github\.com[:/]+([\w.-]+)/([\w.-]+?)(?:\.git)?/?$", str(copy or ""))
+    if not m:
+        return find
+    who = f"{m.group(1)}/{m.group(2)}".replace(".", "\\.")
+    return (find + " | while IFS= read -r f; do d=\"${f%/tools/app.py}\"; if git -C \"$d\" "
+            "remote get-url origin 2>/dev/null | grep -qiE '[:/]" + who + "(\\.git)?/?$'; then "
+            "echo \"$d\"; fi; done")
+
+
 def session_prompt(wid: str, title: str, url: str, copy: str) -> str:
     """The whole of what a chat started on the computer is told, complete from the start: it
     never needs another chat, and nothing it does waits on a message between chats."""
@@ -1356,8 +1795,15 @@ def session_prompt(wid: str, title: str, url: str, copy: str) -> str:
         f"(work item {wid}), then anything else waiting for this computer, without asking them "
         "anything in this chat. Never message another chat: the page and their copy carry "
         "everything back. Run every command below as written: they work in zsh and bash alike.",
-        "1. Find their copy: the folder you are in, or the one inside it holding tools/app.py "
-        f"(the copy of {copy}): find . -maxdepth 3 -path '*/tools/app.py' -print. Work there.",
+        f"1. Find their copy (the copy of {copy}): the folder you are in, or the one below it "
+        f"whose GitHub address is that copy's: {find_copy_command(copy)} and work in the first "
+        "folder it prints. It prints nothing: their copy is not in this folder. Then tell their "
+        "page, so it asks them to add the right folder: load ArtifactData (ToolSearch, "
+        f"select:ArtifactData), then ArtifactData batch, url {url}, writes [{{\"op\": \"set\", "
+        f"\"collection\": \"meta\", \"doc_id\": \"{LOST_PREFIX}<your id>\", \"data\": "
+        "{\"folder\": \"<this folder's full path>\", \"chat\": \"<your id>\", \"at\": \"<the "
+        "time now in UTC, as 2026-11-11T09:30:00Z>\", \"_v\": 1}}]; say in one line that their "
+        "job search is not in this folder, and stop.",
         "2. python3 tools/app.py start --on \"<your model>\" --tools browser --work " + wid +
         ", and do what it prints.",
         "3. Load ArtifactData (ToolSearch, select:ArtifactData). Read the page's database into "
@@ -1365,8 +1811,10 @@ def session_prompt(wid: str, title: str, url: str, copy: str) -> str:
         "the collections work, holds, beats and meta, each with out_dir $D and limit 1000. The "
         "page's screens are read only where a step brings the page up to date.",
         "4. python3 tools/app.py next \"$D\" --chat <your id> --kind computer --computer-only "
-        "--on \"<your model>\" --claim-out \"$D/claim\", and send its claim batch (refused: "
-        "another chat has it, stop).",
+        "--on \"<your model>\" --claim-out \"$D/claim\", and send its claim batch. Refused, "
+        "or nothing to take: another chat has it; go straight to step 7 and do steps 7 to 9, "
+        "which let the chat that started you put this one away (stopped here, it stayed in "
+        "the person's sidebar).",
         "5. Say how this computer is: look at Claude's browser (tabs_context, and whether a "
         "LinkedIn page shows the person signed in), then python3 tools/computer.py beat \"$D\" "
         "--chat <your id> --browser <shown|hidden> --linkedin "
@@ -1508,7 +1956,7 @@ def ready(name: str, today: dt.date) -> str:
     if not person.exists("person.json"):
         return "ready: no profile here, nothing written"
     got = dict(place.place_record(), computer_ready=today.isoformat(),
-               computer_name=_plain_name(name))
+               computer_name=_plain_name(name), computer_copy=copy_place())
     path = person.path(place.PLACE_FILE)
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(got, fh, indent=2)
@@ -1546,13 +1994,18 @@ def route(db: dict, now: dt.datetime, chat: str = "", envs=None, folders=None,
     import app_listen
     w = waiting(db, now)
     tools = {str(t) for t in tools or ()}
+    had = tools_had(tools)
+    # With no list given, the one kept on the page while it is fresh (local review 2).
+    if envs is None:
+        envs = known_envs(db, now)
     st = state(db, now, envs=envs, works_on=works_on)
     if not w["queued"]:
         # A chat on the computer whose work is over (or waits on the person) is put away by the
         # starter, the one chat whose approval reaches the computer: woken for it here.
         if w["finished"] and chat and starter(db).get("bell") and not is_starter(db, chat) \
                 and app_listen.chat_kind() == "cloud":
-            return _starter_route(db, now, w["finished"][0]["work"], w, url, copy, "")
+            return _hand_back(_starter_route(db, now, w["finished"][0]["work"], w, url, copy,
+                                             ""), had, chat)
         return {"route": "none", "line": "", "waiting": w}
     wid = w["queued"][0]
     item = (db["work"][wid] or {}).get("data") or {}
@@ -1586,24 +2039,36 @@ def route(db: dict, now: dt.datetime, chat: str = "", envs=None, folders=None,
         return {"route": "computer busy", "work": wid,
                 "line": ("It starts once you are signed in to LinkedIn." if busy == SIGNING_IN
                          else "Your computer's chat takes it next."), "waiting": w}
-    found = pick_bridge(bridges(envs), db, now)
-    can_start = "create_session" in tools
+    listed_on = bridges(envs)
+    found = pick_bridge(listed_on, db, now, copy)
+    if listed_on and not found:
+        # On, but in no folder known to hold the copy: a chat started there finds nothing, so
+        # none is started; the page asks the person to add the folder (local review 8).
+        return {"route": "no folder", "work": wid, "line": SAY["no_folder"], "waiting": w}
+    can_start = "create_session" in had
     # A chat that cannot start one itself (a page helper's own agent has no create_session)
-    # still rings the starter that can: it said the computer was off and that nothing in the
-    # cloud could start it, while the person's list showed the Mac on (2026-11-11).
+    # still rings the starter, and hands back what it has no tool for (making the starter,
+    # looking at it): it said the computer was off and that nothing in the cloud could start
+    # it, while the person's list showed the Mac on (2026-11-11, local review 3).
     helper = bool(found) and bool(chat) and not is_starter(db, chat) \
-        and app_listen.chat_kind() == "cloud" and (can_start or bool(starter(db).get("bell")))
+        and app_listen.chat_kind() == "cloud"
     if helper:
         # Any cloud chat but the starter wakes the starter (or makes it once): the approval a
         # chat on the computer needs ties the approving chat to the person's devices for good,
         # and a helper that held it could not archive itself (the maintainer, 2026-11-10).
         got = _starter_route(db, now, wid, w, url, copy, runs_there(found[0]["computer"]))
-        # No starter can be made from here (no copy to start it from, or no create_session to
-        # make it with): the rest of the chain still works, a folder or the browser the
-        # computer lends this chat. "none" here left the work waiting with both on offer.
-        if got["route"] != "none" and (can_start or got["route"] != "make starter"):
-            return got
-    if found and "create_session" in tools and not helper:
+        if got["route"] == "make starter" and not can_start:
+            # On, and only a chat with create_session can start the starter: handed back to it
+            # (local review 3), and said to the person without a word about chats, which chat
+            # starts it being Claude's business (the maintainer, 2026-11-11).
+            got = dict(got, route="on, start it elsewhere", computer=found[0]["computer"],
+                       line=f"{_yours(found[0]['computer'])} is on, and Claude starts reading "
+                            "there next.")
+        # "none": no copy to start it from; the rest of the chain still works, a folder or
+        # the browser the computer lends this chat.
+        if got["route"] != "none":
+            return _hand_back(got, had, chat)
+    if found and can_start and not helper:
         b = found[0]
         title = session_title(item.get("title") or item.get("kind"), b["computer"])
         call = {"environment_id": b["id"], "title": title,
@@ -1616,8 +2081,8 @@ def route(db: dict, now: dt.datetime, chat: str = "", envs=None, folders=None,
                 # open (the second audit, 2026-11-10, C6).
                 "extra_allowed_tools": list(STARTER_TOOLS),
                 "permission_mode": app_listen.SESSION_MODE}
-        return {"route": "computer session", "work": wid, "computer": b["computer"],
-                "line": runs_there(b["computer"]), "call": call,
+        return _hand_back({"route": "computer session", "work": wid, "computer": b["computer"],
+                "line": runs_there(b["computer"]), "tool": "create_session", "call": call,
                 "then": (f"create_session with this call.{app_listen.MODE_REFUSED} Refused as "
                          "elevated_session_untrusted_device: list_triggers, saved to a file, then "
                          "python3 tools/computer.py trust-check --chat <your id> --triggers <that "
@@ -1630,10 +2095,10 @@ def route(db: dict, now: dt.datetime, chat: str = "", envs=None, folders=None,
                          "--chat <your id>, and the same create_session again. Started: "
                          f"python3 tools/computer.py started <dump> --work {wid} --session <its "
                          f"id> --env {b['id']} --computer \"{b['computer']}\", and send its "
-                         "batch. Never send_message it, and set no reminder or check-in for "
+                         "batch. Never message it, and set no reminder or check-in for "
                          "it (each is one more prompt for the person): it reports through the "
                          "page."),
-                "waiting": w}
+                "waiting": w}, had, chat)
     beat_ = heartbeat(db)
     seen = _time(beat_.get("seen_at"))
     if beat_.get("task") and seen and (now - seen).total_seconds() < OFF_S:
@@ -1646,7 +2111,7 @@ def route(db: dict, now: dt.datetime, chat: str = "", envs=None, folders=None,
         f = usable[0]
         return {"route": "computer folder", "work": wid,
                 "line": f"Using your {_plain_name(f.get('computer_name'))}.",
-                "call": {k: f.get(k) for k in ("environment_id", "computer_name", "folder")},
+                "tool": "request_computer_folder", "call": {k: f.get(k) for k in ("environment_id", "computer_name", "folder")},
                 "then": ("request_computer_folder with this call; attached: claim it here with "
                          "python3 tools/app.py next <dump> --chat <id> --kind computer "
                          "--computer-only --lent and do it here, with --kind computer on every "
@@ -1661,30 +2126,88 @@ def route(db: dict, now: dt.datetime, chat: str = "", envs=None, folders=None,
     # Never "the computer is off" on an old check-in alone: with no list of the person's
     # computers given, the chat asks for it first. Judged by the Mac's last check-in, a Mac
     # that was on and listed read as off, and the work waited (a person's copy, 2026-11-10).
-    if envs is None and "create_session" in tools:
-        return {"route": "ask", "work": wid, "line": "",
-                "then": ("list_environments first, save its answer to a file, then run "
-                         "python3 tools/computer.py route again with --envs <that file>: "
-                         "whether the computer is on is what that list says, never its last "
-                         "check-in alone."), "waiting": w}
+    # A chat with no list of its own (a subagent of the page's chat) hands the asking back to
+    # the chat that started it, and the page's row says Claude is checking meanwhile.
+    if envs is None and (app_listen.chat_kind() == "cloud"
+                         or had & {"create_session", "list_environments"}):
+        return _hand_back({
+            "route": "ask", "work": wid, "line": "", "tool": "list_environments", "call": {},
+            "then": ("list_environments first, save its answer to a file, then run "
+                     "python3 tools/computer.py route again with --envs <that file>: "
+                     "whether the computer is on is what that list says, never its last "
+                     "check-in alone."),
+            "_after": ("save its answer to <dump>/envs.json, then "
+                       + ROUTE_AGAIN.replace("--tools", "--envs <dump>/envs.json --tools")
+                       + ". Say nothing about it to the person."),
+            "waiting": w}, had, chat)
     if found:
-        # On, by the person's own list, and this chat cannot start Claude there: the chat that
-        # answers the page can, so it is handed there, never "your computer is off".
         name = found[0]["computer"]
-        return {"route": "on, start it elsewhere", "work": wid, "computer": name,
-                # Said to the person without a word about chats: which chat starts it is
-                # Claude's business (`then`), never theirs (the maintainer, 2026-11-11).
-                "line": f"Your {name} is on, and Claude starts reading there next.",
-                "then": ("this chat has no create_session to start Claude on the computer: ask the "
-                         "chat that answers the page (it has create_session) to run python3 "
-                         "tools/computer.py route with --envs and --tools create_session, and do "
-                         "what it prints. Never tell the person the computer is off."),
-                "waiting": w}
+        yours = _yours(name)
+        if is_starter(db, chat) or can_start:
+            # The starter with no way to start it here, or a chat with create_session but no
+            # address of the copy to make the starter from: said plainly, never handed on (the
+            # starter's rules forbid it) and never "this chat has no create_session" to a chat
+            # that has it (the review of 4.15.1, finding 5).
+            return {"route": "on, next brief", "work": wid, "computer": name,
+                    "line": f"{yours} is on: Claude starts there with your next brief.",
+                    "waiting": w}
+        # On, by the person's own list, and no starter can be made from here: handed to the
+        # chat that started this one, which routes with its own tools; never "off".
+        return _hand_back({
+            "route": "on, start it elsewhere", "work": wid, "computer": name,
+            "line": f"{yours} is on, and Claude starts reading there next.",
+            "then": ("this chat has no create_session to start Claude on the computer with. "
+                     "Never tell the person the computer is off."),
+            "_calls": [],
+            "_after": (ROUTE_AGAIN + " (a chat with create_session). Say nothing about it to "
+                       "the person."),
+            "waiting": w}, had, chat)
     out = {"route": "paste", "work": wid, "line": st["line"], "action": st["action"],
            "paste": True, "waiting": w}
-    if st["state"] == "ready":
-        out["line"] = SAY["off"]
+    if st["state"] == "ready" and envs is not None:
+        # Seen lately, but the person's own list does not show it on for Claude: never "off"
+        # on a check-in that is fresh (local review 3).
+        out["line"] = SAY["no_bridge"]
     return out
+
+
+_DUMP_RX = re.compile(r"<dump>([^\s,;\"']*)")
+
+
+def filled(got: dict, dump: str, now: dt.datetime) -> dict:
+    """A route as the command prints it: the bell page written where it rings the starter, and
+    the folder named in its steps and hand-back, which the chat that makes a hand-back's calls
+    does not know (it started the one that read the page)."""
+    got = dict(got)
+    if got.get("route") == "ring starter" and got.get("bell"):
+        path = write_bell(os.path.join(dump, "bell.html"), now)
+        if not got.get("handback"):
+            got["then"] = ring_steps(got["bell"], path)
+
+    def text(x: str) -> str:
+        return _DUMP_RX.sub(lambda m: '"' + os.path.abspath(dump) + m.group(1) + '"', x)
+
+    def value(v):
+        if isinstance(v, str):
+            return v.replace("<dump>", os.path.abspath(dump))
+        if isinstance(v, dict):
+            return {k: value(x) for k, x in v.items()}
+        if isinstance(v, list):
+            return [value(x) for x in v]
+        return v
+    if got.get("then"):
+        got["then"] = text(got["then"])
+    lines = []
+    for ln in got.get("handback") or []:
+        if ln.startswith("call: "):
+            tool, _, args = ln[len("call: "):].partition(" ")
+            ln = f"call: {tool} {json.dumps(value(json.loads(args)), ensure_ascii=False)}"
+        else:
+            ln = text(ln)
+        lines.append(ln)
+    if lines:
+        got["handback"] = lines
+    return got
 
 
 def started(db: dict, wid: str, session: str, env: str, computer: str, now: dt.datetime,
@@ -1698,9 +2221,18 @@ def started(db: dict, wid: str, session: str, env: str, computer: str, now: dt.d
     d = doc["data"]
     say = runs_there(computer)
     steps = list(d.get("steps") or [])[-5:] + [{"at": _stamp(now), "text": say}]
+    # The chat started before this one is kept, to be put away: written over, its id was lost
+    # and the chat stayed in the person's sidebar (local review 9).
+    # Put away ones are kept too, so the record says every chat started for it was.
+    earlier = [dict(x) for x in d.get("computer_earlier") or [] if isinstance(x, dict) and x.get("id")]
+    prev = d.get("computer_session") if isinstance(d.get("computer_session"), dict) else {}
+    if prev.get("id") and prev["id"] != session and all(e["id"] != prev["id"] for e in earlier):
+        earlier.append({k: prev[k] for k in ("id", "env", "computer", "at", "archive_refused",
+                                             "archived_at") if prev.get(k)})
     # `say`: the work card keeps the line while the work runs, past the steps after it.
     fields = {"computer_session": {"id": session, "env": env, "computer": _plain_name(computer),
-                                   "at": _stamp(now), "say": say}, "steps": steps}
+                                   "at": _stamp(now), "say": say}, "steps": steps,
+              "computer_earlier": earlier[-EARLIER_KEEP:]}
     w = page_db.Writes(out_dir)
     w.add("update", "work", wid, fields, if_version=doc["version"])
     if dump_dir:
@@ -1955,7 +2487,7 @@ def signin_wait(item: dict, now: dt.datetime) -> tuple[str, int]:
 
 
 def archived(db: dict, wid: str, now: dt.datetime, out_dir: str,
-             refused: bool = False) -> list[str]:
+             refused: bool = False, session: str = "", dump_dir: str = "") -> list[str]:
     """The batch that notes its computer chat was archived (archive_session), or, `refused`,
     that archive_session refused because the chat is still at work: then it is not put away,
     so no second chat starts beside it (busy_there), and it is asked again later. Recorded as
@@ -1965,14 +2497,37 @@ def archived(db: dict, wid: str, now: dt.datetime, out_dir: str,
     doc = (db.get("work") or {}).get(page_db.safe_id(wid))
     if doc is None:
         raise KeyError(f"no work {wid!r} in the dump; read work again")
-    sess = dict(doc["data"].get("computer_session") or {})
-    if refused:
-        sess["archive_refused"] = _stamp(now)
-    else:
-        sess["archived_at"] = _stamp(now)
-        sess.pop("archive_refused", None)
+    d = doc["data"]
+    sess = dict(d.get("computer_session") or {})
+    # Which chats: the one named (`session`), else every one `waiting` lists for this work to
+    # put away, which is what a starter made before it named them has just archived, else
+    # the newest (local review 9).
+    names = {session} if session else \
+        {f["session"] for f in waiting(db, now)["finished"] if f["work"] == page_db.safe_id(wid)} \
+        or {sess.get("id")}
+
+    def mark(x: dict) -> dict:
+        x = dict(x)
+        if refused:
+            x["archive_refused"] = _stamp(now)
+        else:
+            x["archived_at"] = _stamp(now)
+            x.pop("archive_refused", None)
+        return x
+    fields: dict = {}
+    if sess.get("id") in names or not sess.get("id"):
+        fields["computer_session"] = mark(sess)
+    earlier = [x for x in d.get("computer_earlier") or [] if isinstance(x, dict)]
+    if any(x.get("id") in names for x in earlier):
+        fields["computer_earlier"] = [mark(x) if x.get("id") in names else x for x in earlier]
+    if not fields:
+        fields["computer_session"] = mark(sess)
     w = page_db.Writes(out_dir)
-    w.add("update", "work", wid, {"computer_session": sess}, if_version=doc["version"])
+    w.add("update", "work", wid, fields, if_version=doc["version"])
+    if dump_dir:
+        # So a chat started for the same work in this wake is pinned past it, and keeps it put
+        # away (started keeps the earlier one).
+        page_db._keep_dump(dump_dir, "work", wid, dict(d, **fields), int(doc["version"] or 1) + 1)
     return w.save("computer-archived")
 
 
@@ -2676,6 +3231,7 @@ def main(argv=None) -> int:
     p.add_argument("--work", required=True)
     p.add_argument("--refused", action="store_true",
                    help="archive_session refused: the chat is still at work")
+    p.add_argument("--session", default="", help="the chat put away, as `waiting` named it")
     p.add_argument("--out", default="")
     p.add_argument("--now", default=None)
     p = sub.add_parser("measure")
@@ -2864,7 +3420,7 @@ def main(argv=None) -> int:
                                           since_in=signed_in_here(), said_on=keep_said(),
                                           browser=a.browser, linkedin=a.linkedin,
                                           cookies=a.cookies, read=a.read, chat=a.chat,
-                                          stop=stop_here())}))
+                                          stop=stop_here(), copy=copy_place())}))
         return 0
     if a.cmd == "state":
         print(json.dumps(state(db, now, envs=_load_json(a.envs), version=app_version(),
@@ -2883,24 +3439,42 @@ def main(argv=None) -> int:
             locked = str(place.place_record().get("computer_trusted_chat") or "")
         except Exception:  # noqa: BLE001
             locked = ""
-        for line in check(db, now, envs=_load_json(a.envs), version=app_version(),
+        envs = _load_json(a.envs)
+        for line in check(db, now, envs=envs, version=app_version(),
                           triggers=_load_json(a.triggers), locked=locked):
             print(line)
+        # The list the brief checked with is kept for the page's row (local review 2), only
+        # where the page's meta was read, so the write is pinned to the version read.
+        if envs is not None and os.path.isdir(os.path.join(a.dump, "meta")):
+            for path in envs_kept(db, envs, now, out, dump_dir=a.dump):
+                print("computer: send this batch, saying nothing (the person's list of "
+                      f"computers, kept for their page): {path}")
         return 0
     if a.cmd == "route":
         import app_setup
         owner, name = app_setup.origin()
-        got = route(db, now, chat=a.chat, envs=_load_json(a.envs), folders=_load_json(a.folders),
+        envs = _load_json(a.envs)
+        got = route(db, now, chat=a.chat, envs=envs, folders=_load_json(a.folders),
                     tools=[t.strip() for t in a.tools.split(",") if t.strip()],
                     url=app_setup.page_record().get("url", "") or "<url>",
                     copy=f"github.com/{owner}/{name}" if owner else "", works_on=_works_on())
-        print(json.dumps(got, ensure_ascii=False))
+        # Whoever routes with the person's list keeps it for the page's row (local review 2):
+        # sent first, before the call it prints. Asked of the chat that started this one, the
+        # row says Claude is checking until it comes, never off (local review 3).
+        batches = envs_kept(db, envs, now, os.path.join(out, "envs"), dump_dir=a.dump) \
+            if envs is not None else []
+        if any(ln.startswith("call: list_environments") for ln in got.get("handback") or []):
+            batches += envs_ask(db, now, os.path.join(out, "envs-asked"), dump_dir=a.dump)
+        if batches:
+            got = dict(got, batches=batches)
+        print(json.dumps(filled(got, a.dump, now), ensure_ascii=False))
         return 0
     try:
         if a.cmd == "started":
             batches = started(db, a.work, a.session, a.env, a.computer, now, out, dump_dir=a.dump)
         elif a.cmd == "archived":
-            batches = archived(db, a.work, now, out, refused=a.refused)
+            batches = archived(db, a.work, now, out, refused=a.refused, session=a.session,
+                               dump_dir=a.dump)
         elif a.cmd == "signed-in":
             batches = signed_in(db, a.work, now, out, dump_dir=a.dump)
         else:

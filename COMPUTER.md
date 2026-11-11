@@ -183,8 +183,11 @@ CC-20).
 ### How the work reaches the computer (for Claude)
 
 Work that needs a LinkedIn read is `to: computer` and is refused to any cloud chat
-(`tools/page_db.py` `computer_only`). The page's helper runs `python3 tools/computer.py
-waiting` on each wake, and the brief on each run, and, while something waits, `route`, which picks the first that works:
+(`tools/page_db.py` `computer_only`). `app.py wake` names it on every wake of the page's
+helper (a `computer:` line, while work waits there or a chat there is left to put away), and
+the brief looks on each run; while something waits, the chat runs `route` (a step it has no
+tool for, such as `list_environments` in the helper's subagent, is handed back to the chat
+that started it: `handback`), which picks the first that works:
 a chat already on the computer; a chat started there from the cloud (`create_session` on the
 bridge by the computer starter, woken by its bell, in Auto, titled `Job search · <job> ·
 <computer>`, its prompt complete, its results back through the page and the copy and never
