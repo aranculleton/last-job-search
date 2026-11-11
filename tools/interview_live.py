@@ -280,6 +280,25 @@ def _t(value) -> str:
     return " ".join(str(value or "").split())
 
 
+# Where a beat of what to say first keeps its words: "t" is the engine's own, and a chat has
+# written them as plain words or under another name ("text"). The merge read "t" alone, so
+# every line written another way was kept as "" and the page drew "Say first" over empty
+# bullets, the night before an interview (2026-11-11).
+_BEAT_KEYS = ("t", "text", "line", "say")
+
+
+def _beat_words(beat) -> str:
+    """A beat's words to say, however they were written: plain words, or an object holding
+    them under "t" (or "text", "line", "say"). "" when it holds none."""
+    if isinstance(beat, str):
+        return _t(beat)
+    if isinstance(beat, dict):
+        for key in _BEAT_KEYS:
+            if isinstance(beat.get(key), str) and _t(beat[key]):
+                return _t(beat[key])
+    return ""
+
+
 def plain(text, terms=None) -> str:
     """A text as it is said: each [[term]] its label, or the term's own name."""
     terms = terms or {}
@@ -935,7 +954,12 @@ def merge(fresh, filled) -> dict:
             continue
         say = []
         for b in old.get("say") or []:
-            beat = {"t": _t(b.get("t"))}
+            # A beat with no words under any name is left out, never kept as an empty line.
+            text = _beat_words(b)
+            if not text:
+                continue
+            b = b if isinstance(b, dict) else {}
+            beat = {"t": text}
             prompts = [new_qid.get(old_qid.get(x)) for x in b.get("prompts") or []]
             beat["prompts"] = [x for x in prompts if x]
             if b.get("known"):
@@ -1031,6 +1055,16 @@ def words_shape(words) -> str:
             if not isinstance(w, dict):
                 return ("the words file's \"%s\" entry %r is not an object of words: write it "
                         "as {\"say\": [...]} or {\"simple\": \"...\"} (interview.md Step 3b)" % (k, key))
+    for key, w in (words.get("parts") or {}).items():
+        if "say" in w and not isinstance(w["say"], list):
+            return ("the words file's part %r writes \"say\" as one value: write it as a list of "
+                    "lines, [{\"t\": \"<the words to say>\", \"prompts\": [...]}] (interview.md "
+                    "Step 3b)" % key)
+        for i, b in enumerate(w.get("say") or []):
+            if not _beat_words(b):
+                return ("the words file's part %r has a line to say first with no words in it "
+                        "(line %d): write each as {\"t\": \"<the words to say>\", \"prompts\": "
+                        "[...]} (interview.md Step 3b)" % (key, i + 1))
     return ""
 
 
@@ -1375,6 +1409,9 @@ def problems(doc, ctx=None) -> list:
             out.append(("\"%s\"" % p.get("title"), "%d things to say first: keep it to %d"
                         % (len(say), MAX_BEATS)))
         for i, b in enumerate(say):
+            if not _t(b.get("t")):
+                out.append(("\"%s\", what to say first (%d)" % (p.get("title"), i + 1),
+                            "it has no words: write them, or take the line out"))
             if _NUMBERED.match(_t(b.get("t"))):
                 out.append(("\"%s\", what to say first (%d)" % (p.get("title"), i + 1),
                             "take the number off the front: the words say the order already"))
@@ -1628,6 +1665,9 @@ def for_page(doc) -> dict | None:
     # A prep saved before the follow-ups after any story were the part's says them once too,
     # as it is read: nothing needs making again (the screen review, 2026-11-11).
     for p in out.get("parts") or []:
+        # A line to say first with no words, as a prep saved before 2026-11-11 can hold, is
+        # left out rather than drawn as an empty bullet.
+        p["say"] = [b for b in p.get("say") or [] if isinstance(b, dict) and _t(b.get("t"))]
         _follow_once(p, [q for qid in p.get("questions") or [] for q in out["questions"] if q["id"] == qid])
     for q in out["questions"]:
         q.pop("from", None)
