@@ -803,7 +803,8 @@ def hold_words(why, until: dt.date | None = None) -> str:
     """A draft on hold, in a line for its card: "On hold until Fernhill Freight posts a
     fitting role. Claude checks again on Mon 23 Nov." Never the draft offered as ready under a
     line saying it was held (the maintainer, 2026-11-10)."""
-    why = _HOLD_LEAD.sub("", " ".join(str(why or "").split()), count=1).strip().rstrip(" .;")
+    why = re.sub(r"\s*\(since \d{4}-\d{2}-\d{2}(?:, after \d+ from them)?\)", "", " ".join(str(why or "").split()))
+    why = _HOLD_LEAD.sub("", why, count=1).strip().rstrip(" .;")
     if until is not None:
         # The day is said once, from the record: never a second "I check again 23 Nov".
         why = re.split(r"\s*;\s*", why)[0].rstrip(" .;")
@@ -827,6 +828,47 @@ def person_hold(c: dict, today: dt.date) -> str:
     if not state.action_hold(text, today, c.get("next_action_due")):
         return ""
     return hold_words(text, state.hold_end(text, c.get("next_action_due")))
+
+
+# What a hold that waits for a role says after its reason: nothing is drafted until then.
+ROLE_HOLD_NOTE = "Claude writes this when a role is posted."
+# The reason a group of people on hold shares, where they all wait for a role.
+ROLE_WAIT = "waiting for a role to be posted"
+
+
+def role_posted(ctx: "Ctx", c: dict, msgs=()) -> dict:
+    """The posting the search found at their employer since the last message with them, worth
+    a look and not applied to (followup_drafts.posting_reason), or {}: what lifts a hold that
+    waits for a role, by itself."""
+    import followup_drafts
+    rows = ctx._once("newest_round_rows", followup_drafts.newest_round_rows)
+    since = max((str(m.get("date") or "")[:10] for m in msgs or ()), default="")
+    try:
+        return followup_drafts.posting_reason(c, since, rows, ctx.tracker) or {}
+    except Exception:  # noqa: BLE001  no round to read: nothing has been posted
+        return {}
+
+
+def _role_words(text) -> bool:
+    from network import state
+    return bool(state._ROLE_WORDS.search(str(text or "")))
+
+
+def on_hold(ctx: "Ctx", c: dict, msgs=()) -> dict | None:
+    """The hold on their record (a next action "Hold ...") as the page says it: {"said", "role"
+    (it waits for a role to be posted), "until" (its day, or None)}. None when there is none,
+    its day has come, or it waited for a role and one is on the list at their employer now
+    (role_posted): they come back to the list by themselves."""
+    from network import state
+    text = " ".join(str(c.get("next_action") or "").split())
+    if not state.action_hold(text, ctx.today, c.get("next_action_due")):
+        return None
+    role = state.role_hold(text)
+    if role and role_posted(ctx, c, msgs):
+        return None
+    until = state.hold_end(text, c.get("next_action_due"))
+    return {"said": hold_words(text, until) + (" " + ROLE_HOLD_NOTE if role else ""),
+            "role": role, "until": until.isoformat() if until else None}
 
 
 def held_by_work(work: dict | None) -> dict:
@@ -2671,9 +2713,15 @@ def sends_of(text) -> str | None:
     return "resume" if _SENDS_RESUME.search(str(text or "")) else None
 
 
+def _owed_by_us() -> tuple:
+    from network import schema
+    return tuple(schema.OWED_BY_US)
+
+
 def _messages(ctx: Ctx, targets: dict) -> list:
     files = sorted(glob.glob(person.state("documents", "network", "*", "draft.md")))
     ctx._got["message_by_contact"] = {}
+    ctx._got["decided_hold"] = {}
     # No draft waiting for anyone still lists an application's follow-up: returning early
     # here left every one out until some person had a draft too (2026-11-04).
     import reading
@@ -2720,17 +2768,28 @@ def _messages(ctx: Ctx, targets: dict) -> list:
                 hold, hold_why = full, "employer_full"
         mid = f"msg-{cid}"
         rev = rev_of(cid, text, kind, channel, live)
-        if hold is None:
-            # Held on their record (a next action "Hold ..."), or by Claude's own finish on
-            # this very version of the draft: on hold, with why and when, and one way to send
-            # it anyway on the page. It was offered as ready under "Finished: held ..." (the
+        # Held on their record (a next action "Hold ..."), or by Claude's own finish on this
+        # very version of the draft: on hold, with why and when, and one way to send it
+        # anyway on the page. It was offered as ready under "Finished: held ..." (the
+        # maintainer, 2026-11-10). Never over a reply they are owed.
+        owed = live in _owed_by_us() and not _st.hold_stands(
+            c.get("next_action"), ctx.by_contact.get(cid) or [])
+        mine = None if owed else on_hold(ctx, c, ctx.by_contact.get(cid) or [])
+        work = (ctx._got.get("held_work") or {}).get(mid)
+        if not mine and not owed and work and work.get("rev") == rev:
+            said = hold_words(work.get("said"))
+            role = _role_words(said)
+            mine = {"said": said + (" " + ROLE_HOLD_NOTE if role else ""), "role": role,
+                    "until": None, "decided": True}
+            ctx._got.setdefault("decided_hold", {})[cid] = mine
+        if mine and mine["role"]:
+            # A hold that waits for a role carries no draft at all: what was written before
+            # the role exists is one template with the name and the employer swapped, and
+            # the message is written for that role, and that person, once it is posted (the
             # maintainer, 2026-11-10).
-            mine = person_hold(c, ctx.today)
-            work = (ctx._got.get("held_work") or {}).get(mid)
-            if mine:
-                hold, hold_why = mine, "person_hold"
-            elif work and work.get("rev") == rev:
-                hold, hold_why = hold_words(work.get("said")), "decided"
+            continue
+        if mine and hold is None:
+            hold, hold_why = mine["said"], "decided" if mine.get("decided") else "person_hold"
         from network import state as _st
         subject, body = _st.split_subject(text)
         body = body.strip()
@@ -3190,7 +3249,8 @@ def owed_button(cid: str, status: str, due: str, today: dt.date, has_draft: bool
 
 
 def standing(ctx: Ctx, c: dict, cid: str, status: str, msgs: list, due_rows: list,
-             message: dict | None, hold: dict | None, call: dict | None) -> dict:
+             message: dict | None, hold: dict | None, call: dict | None,
+             on_hold: dict | None = None, role: dict | None = None) -> dict:
     """{"group", "owed" (the one button, or None), "next" (the line under their name), "late"}
     for one person: the engine's one answer, which the page renders and never works out."""
     from network import schema
@@ -3210,6 +3270,11 @@ def standing(ctx: Ctx, c: dict, cid: str, status: str, msgs: list, due_rows: lis
         out.update(group="leave", next=hold.get("said") or "", owed={
             "kind": "close", "label": "Close", "due": None, "action": "person.status",
             "value": {"status": "gone_cold", "why": "no reply to your limit of messages"}})
+        return out
+    if on_hold:
+        # On hold (their record's, or Claude's own decision on the draft): nothing is owed,
+        # nothing counts as to send or as needing the person, until it lifts.
+        out.update(group="held", next=on_hold["said"])
         return out
     if message:
         mt = message.get("type") or message.get("kind")
@@ -3234,6 +3299,17 @@ def standing(ctx: Ctx, c: dict, cid: str, status: str, msgs: list, due_rows: lis
         if reply.get("sub") == "resume":
             out["owed"]["resume"] = True
         out["next"] = reply.get("step") or "Reply"
+        return out
+    if role:
+        # The role their hold waited for is posted: back on the list by themselves, with the
+        # referral ask for that one role as the step, written then from what they offered.
+        title = " ".join(str(role.get("title") or "a role").split())
+        company = str(c.get("company") or role.get("company") or "Their employer").strip()
+        out.update(group="now", next=f"{company} has posted {title}: ask them to refer you",
+                   owed={"kind": "referral", "label": "Draft the referral ask",
+                         "id": f"reply~{cid}~ref",
+                         "args": {"contact": cid, "kind": "referral_ask", "role": title,
+                                  "url": str(role.get("url") or role.get("link") or "") or None}})
         return out
     day = _date((call or {}).get("day"))
     # A call that has happened (state.move_past_calls moved the row on, keeping its day in
@@ -3358,6 +3434,8 @@ def _people(ctx: Ctx, targets: dict) -> list:
     due_by = ctx._got.get("due_by_contact") or {}
     asked = {str((n.get("about") or {}).get("contact") or ""): n["id"]
              for n in ctx._got.get("sent_questions") or ()}
+    decided = ctx._got.get("decided_hold") or {}
+    holds: dict = {}
     fold = app_lists.FOLD_DAYS["people"]
     # The same first name at the same employer (or with none) more than once: each is told
     # apart by their surname's first letter, never more of it.
@@ -3396,12 +3474,26 @@ def _people(ctx: Ctx, targets: dict) -> list:
                             memo=ctx._got.setdefault("held_memo", {}))
         call = _call_of(cid, "call_booked" if str(c.get("status") or "") == "call_booked"
                         else status, due, c.get("next_action"), ctx.zone, ctx.names, folders)
+        # On hold: their record's (on_hold), or Claude's own decision on the draft to them
+        # (_messages). Never over a reply they are owed. A hold that waited for a role and
+        # found one posted is lifted, and the referral ask for it is their step.
+        waits, posted = None, {}
+        if status not in schema.TERMINAL and (status not in schema.OWED_BY_US or
+                                               state.hold_stands(c.get("next_action"), msgs)):
+            waits = on_hold(ctx, c, msgs) or decided.get(cid)
+            text = str(c.get("next_action") or "")
+            if waits is None and state.role_hold(text) and state.action_hold(
+                    text, ctx.today, c.get("next_action_due")):
+                posted = role_posted(ctx, c, msgs)
         where = standing(ctx, c, cid, status, msgs, due_by.get(cid) or [], shown.get(cid),
-                         hold, call)
+                         hold, call, on_hold=waits, role=posted)
         group = where["group"]
         counts[group] += 1
+        waiting_on = bool(waits) and group == "held"
+        if waiting_on:
+            holds[cid] = waits
         finished = group in ("done", "held")
-        live = group in ("now", "follow", "leave") or cid in shown or (
+        live = group in ("now", "follow", "leave") or cid in shown or waiting_on or (
             not finished and (bool(due) or status in throttle_responded()
                               or (status in schema.NEVER_SENT and cid in drafts)
                               or (status in throttle_sent() and days is not None
@@ -3429,7 +3521,9 @@ def _people(ctx: Ctx, targets: dict) -> list:
     # Someone with a message already drafted first, then who needs you: Contacts is one page,
     # each person with what to send them, and what is written is the quickest thing to finish
     # (the maintainer, 2026-11-04).
-    live_rows.sort(key=lambda x: (x[1] not in shown, order[x[8]["group"]], -x[8]["late"],
+    # Anyone on hold last: nothing is owed to them until it lifts.
+    live_rows.sort(key=lambda x: (x[1] in holds, x[1] not in shown, order[x[8]["group"]],
+                                  -x[8]["late"],
                                   -open_actions.HEAT.get(x[2], 0), x[3] or "9999", x[1]))
     rest.sort(key=lambda x: (x[4] or "", x[1]), reverse=True)
     out, used = [], 2
@@ -3442,6 +3536,11 @@ def _people(ctx: Ctx, targets: dict) -> list:
                 "owed": where["owed"], "next": where["next"], "late": where["late"],
                 # Why nothing is offered, in their words, where their rules stop it.
                 "hold": hold["said"] if hold and hold.get("said") else None,
+                # On hold until something happens (a role posted, a day): why and until
+                # when, for their card in the page's own On hold group, with no draft where
+                # it waits for a role. Gone by itself once the hold lifts.
+                "on_hold": ({"said": holds[cid]["said"], "role": bool(holds[cid].get("role")),
+                             "until": holds[cid].get("until")} if cid in holds else None),
                 "stopped": where["group"] == "leave",
                 # Whether the person has written to them: someone who wrote first has not
                 # been "written to" until a message of theirs went back.
@@ -3504,7 +3603,11 @@ def _people(ctx: Ctx, targets: dict) -> list:
                                 "leave": counts["leave"], "waiting": counts["waiting"],
                                 "held": counts["held"],
                                 # People with a message drafted to them, on the list's top.
-                                "drafted": sum(1 for r in live_rows if r[1] in shown)}
+                                "drafted": sum(1 for r in live_rows
+                                               if r[1] in shown and r[1] not in holds),
+                                # Who is on hold, and the one reason where they share it.
+                                "on_hold": {"n": len(holds), "why": ROLE_WAIT if holds and all(
+                                    h.get("role") for h in holds.values()) else None}}
     _list(ctx, "people", whole, len(out))
     return out
 
@@ -3570,6 +3673,13 @@ def _due(ctx: Ctx, targets: dict) -> list:
         if rule and rule.get("why") != "limit" and len(i.get("held") or []) == 1:
             ruled[rule["why"]] = ruled.get(rule["why"], 0) + 1
     items = [i for i in items if not i.get("held") and not _left_alone(i, book)]
+    # A draft Claude decided to hold (not yet on their record) owes nothing either: its
+    # person is on hold in Contacts, never a To do row, nor in the Brief's lists.
+    if "decided_hold" not in ctx._got:
+        _messages(ctx, {})
+    waits = ctx._got.get("decided_hold") or {}
+    items = [i for i in items if not (i.get("half") == "contact" and i.get("contact_id") in waits
+                                      and i.get("kind") != "reply")]
     # Requests nobody accepted are never nudged: nothing can be sent to them. They are one
     # row, withdraw them on LinkedIn, then tick (FUNCTIONS_SPEC G8; state.py withdraw).
     pending = [i for i in items if i.get("half") == "contact" and i.get("kind") == "request_pending"]

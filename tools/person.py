@@ -338,6 +338,15 @@ def today(now=None):
     hook and the improvements' record count this one day: on two clocks, a Toronto evening
     marked an improvement started tomorrow and the hold started a second one (2026-11-03)."""
     import datetime as dt
+    # The app's one fixed clock, as app_model.clock reads it: a run told its day (LJS_TODAY,
+    # a date or a date and a time) counts every decision on that day, never the computer's,
+    # or two clocks split one run at midnight (the surfacing check, 2026-11-11).
+    fixed = "" if now is not None else str(os.environ.get("LJS_TODAY") or "").strip()
+    if fixed[:10]:
+        try:
+            return dt.date.fromisoformat(fixed[:10])
+        except ValueError:
+            pass
     now = now or dt.datetime.now(dt.timezone.utc)
     z = home_zone()
     return (now.astimezone(z) if z else now.astimezone()).date()

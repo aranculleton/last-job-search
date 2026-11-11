@@ -93,7 +93,7 @@ def test_a_read_right_after_another_is_saved_with_no_pause_and_nothing_logged(
     monkeypatch.setattr(state, "load_threads", lambda *a, **k: [])
     now = datetime.datetime.now()
     _browsed(here, [now - datetime.timedelta(seconds=1)], gap=0)
-    reading.shortlist(["kestrel_achterberg"], now.date(), contacts=[row], sends_left=10)
+    reading.shortlist(["kestrel_achterberg"], reading.person.today(now), contacts=[row], sends_left=10)
     page = here / "p.txt"
     page.write_text(_card("Manchester, England, United Kingdom", "Contact info", "Kestrel Mutual"),
                     encoding="utf-8")
@@ -421,7 +421,7 @@ def test_a_page_kept_after_a_stop_still_exits_as_a_stop(here, monkeypatch, capsy
     monkeypatch.setattr(state, "load_contacts", lambda *a, **k: [row])
     monkeypatch.setattr(state, "load_threads", lambda *a, **k: [])
     now = datetime.datetime.now()
-    reading.shortlist(["kestrel_achterberg"], now.date(), contacts=[row], sends_left=10)
+    reading.shortlist(["kestrel_achterberg"], reading.person.today(now), contacts=[row], sends_left=10)
     reading.stop("LinkedIn showed a check: Let's do a quick security check")
     page = here / "p.txt"
     page.write_text(_card("Manchester, England, United Kingdom", "Contact info", "Kestrel Mutual"),

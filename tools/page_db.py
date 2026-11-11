@@ -1124,6 +1124,27 @@ def next_item(db: dict, chat_kind: str, now: dt.datetime,
                     break
             got["with"] = [{"work": w, "version": work[w]["version"]} for w in same]
             got["locks"] = sorted(mine)
+        elif item["kind"] == "prep":
+            # Interview preps queued together are one job (the maintainer, 2026-11-10: "can't
+            # multiple interviews be batched into one"): one wake, the person's stories read
+            # once, an employer's research and terms shared by its rounds, and every prep's
+            # words written in the same pass. Each interview keeps its own work item and prep.
+            mine = set(got["locks"])
+            same = []
+            for _at, w in sorted((str(d["data"].get("asked_at") or ""), w) for w, d in work.items()
+                                 if w != wid and d["data"].get("kind") == "prep"
+                                 and str(d["data"].get("status") or "") == "queued"
+                                 and not d["data"].get("stop_asked")
+                                 and can_take(d["data"], chat_kind)):
+                theirs = locks_for(work[w]["data"])
+                if any(lk in held and held[lk] != w for lk in theirs) or mine & set(theirs):
+                    continue
+                same.append(w)
+                mine |= set(theirs)
+                if len(same) >= PREP_BATCH - 1:
+                    break
+            got["with"] = [{"work": w, "version": work[w]["version"]} for w in same]
+            got["locks"] = sorted(mine)
         elif item["kind"] == "draft":
             # Drafts queued together are one job: the drafting workflow takes a batch in one
             # run, so ten resumes asked for at once take one chat, never ten, and never wait
@@ -2579,6 +2600,9 @@ DRAFT_BATCH = 10    # drafts one job takes at most: the workflow's own batch
 # Follow-ups one job takes at most: each is drafted in code, so the bound is the finishing
 # batch (two writes each, BATCH_MAX a batch).
 FOLLOW_UP_BATCH = 20
+# Interview preps one job takes at most: the stories, each employer's research and its words
+# are gathered once for all of them, and each interview keeps its own prep.
+PREP_BATCH = 4
 PRUNE_CAP = 150     # deletes a wake sends at most, so one wake never sends a long batch
 
 

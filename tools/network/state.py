@@ -5211,6 +5211,90 @@ def hold_end(next_action, due=None) -> datetime.date | None:
     return hold_lifts(text) or (as_date(due) if _BARE_HOLD.match(text) else None)
 
 
+# A hold that waits for a role to be posted: "Hold until a role is posted at Kestrel Mutual",
+# "Hold until Fernhill Freight posts a data role, or until 2026-11-23". Nothing is drafted
+# while it holds, and it lifts by itself once a role is on the list at their employer
+# (app_model.role_posted): a message written before the role exists is one template with the
+# name and the employer swapped (the maintainer, 2026-11-10).
+ROLE_HOLD = "Hold until a role is posted at %s"
+_ROLE_WORDS = re.compile(r"\b(?:role|job|posting|vacancy|opening)s?\b", re.I)
+
+
+def role_hold(next_action) -> bool:
+    """Is this next action a hold that waits for a role (a job, a posting) to appear?"""
+    text = str(next_action or "").strip()
+    return bool(_HOLD.match(text)) and bool(_ROLE_WORDS.search(text))
+
+
+# The day a hold was made, where the app wrote it: "Hold until ... (since 2026-11-10)".
+_HOLD_SINCE = re.compile(r"\s*\(since (\d{4}-\d{2}-\d{2})(?:, after (\d+) from them)?\)")
+
+
+def _theirs(msgs) -> int:
+    return sum(1 for r in msgs or () if said_something(r))
+
+
+def hold_since(next_action, today=None, msgs=None) -> str:
+    """`next_action` saying the day the hold was made and, given their thread, how many of
+    their messages it was made on, so a message of theirs after it is known to be news the
+    hold never saw (hold_stands), even one sent the same day."""
+    text = _HOLD_SINCE.sub("", " ".join(str(next_action or "").split()))
+    day = as_date(today) or datetime.date.today()
+    seen = "" if msgs is None else ", after %d from them" % _theirs(msgs)
+    return f"{text} (since {day.isoformat()}{seen})"
+
+
+def hold_stands(next_action, msgs=()) -> bool:
+    """Does this hold stand over a reply they are owed? Only where it says when it was made
+    and nothing of theirs came after: a hold decided on their last message holds the reply to
+    it, and anything they write later is owed an answer, hold or no hold. A hold that counted
+    their messages is judged by the count, so a reply the same day is still owed one; an older
+    one by the day. A hold with no day of its own never holds a reply."""
+    m = _HOLD_SINCE.search(str(next_action or ""))
+    if not m or not _HOLD.match(str(next_action or "").strip()):
+        return False
+    if m.group(2) is not None:
+        return _theirs(msgs) <= int(m.group(2))
+    return not any(said_something(r) and str(r.get("date") or "")[:10] > m.group(1)
+                   for r in msgs or ())
+
+
+def end_role_hold(contact_id: str, path: str | None = None) -> bool:
+    """A message has been written for them: where their row still says they wait for a role
+    (role_hold), the wait is over, and the row says so no more. The referral ask written once
+    a role was posted would otherwise be held, and set aside, as one written before it. True
+    when the row changed."""
+    path = path or CONTACTS_CSV
+    if not os.path.exists(path):
+        return False
+    contacts = load_contacts(path)
+    row = already_contacted(contacts, contact_id=contact_id)
+    if not row or not role_hold(row.get("next_action")):
+        return False
+    put_next(row, (), action="", due="")
+    save_contacts(contacts, path)
+    return True
+
+
+def hold_for_role(contacts, contact_id, why: str = "", today=None) -> bool:
+    """Put `contact_id` on hold until a role is posted at their employer (ROLE_HOLD, with
+    `why` after it and the day it was made), and set any draft waiting for them aside, kept:
+    it was written before the role it should be about. False where they are already on hold
+    or are not in the book."""
+    row = already_contacted(contacts, contact_id=contact_id)
+    if not row or _HOLD.match(str(row.get("next_action") or "").strip()):
+        return False
+    company = str(row.get("company") or "").strip() or "their employer"
+    was = {"status": row.get("status") or "", "next_action": row.get("next_action") or ""}
+    cid = str(row.get("contact_id") or "").strip()
+    msgs = [r for r in (load_threads() if os.path.exists(THREADS_CSV) else [])
+            if str(r.get("contact_id") or "").strip() == cid]
+    row["next_action"] = hold_since(
+        ROLE_HOLD % company + (": " + " ".join(str(why).split()) if why else ""), today, msgs)
+    park_draft(str(row.get("contact_id") or "").strip(), was=was)
+    return True
+
+
 def action_hold(next_action, today, due=None) -> str:
     """Why this next_action is held today, or "" when it is not a hold or has lifted (its end,
     hold_end). With no end, it holds until the person says otherwise, and the page lists it

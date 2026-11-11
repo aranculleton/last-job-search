@@ -37,6 +37,19 @@ import profile_names  # noqa: E402
 import profile_upgrades as U  # noqa: E402
 
 EXAMPLE = os.path.join(ROOT, "profile.example")
+# The day the example's conversations were last read as current (threads-gone-cold shipped):
+# the fixture moves their dates on by as many days as the calendar has moved since.
+EXAMPLE_DAY = dt.date(2026, 11, 10)
+
+
+def _move_dates_on(path, days):
+    """Every date in `path` moved `days` on, so the example reads as of the run."""
+    with open(path, encoding="utf-8", newline="") as fh:
+        text = fh.read()
+    text = re.sub(r"\b(\d{4}-\d{2}-\d{2})\b", lambda m: (
+        dt.date.fromisoformat(m.group(1)) + dt.timedelta(days=days)).isoformat(), text)
+    with open(path, "w", encoding="utf-8", newline="") as fh:
+        fh.write(text)
 
 
 @pytest.fixture
@@ -58,6 +71,14 @@ def profile(tmp_path, monkeypatch):
     # red on their files.
     st = tmp_path / "example_state"
     shutil.copytree(os.path.join(EXAMPLE, "state"), st)
+    # Its conversations are as recent as the run too: the one it shows waiting on a reply is
+    # closed as gone cold GONE_COLD_DAYS after its note, so on a calendar three months on
+    # "the example is fully upgraded" went red on the example's own thread (the clock moved
+    # on, 2026-11-10). Closing them is tested in test_a_people_run_reaches_the_people_who_answer.
+    moved = (dt.date.today() - EXAMPLE_DAY).days
+    if moved > 0:
+        for name in ("network_contacts.csv", "network_threads.csv"):
+            _move_dates_on(st / name, moved)
     monkeypatch.setenv(person.STATE_ENV, str(st))
     person._modules.clear()
     person._data.clear()
@@ -315,8 +336,8 @@ def test_a_contact_waiting_with_no_follow_up_date_gets_one(profile):
     with open(log, encoding="utf-8") as fh:
         text = fh.read()
     with open(log, "w", encoding="utf-8") as fh:
-        fh.write(text.replace("fernhill_freight_halloway,2026-09-21,",
-                              "fernhill_freight_halloway,%s," % week_ago))
+        fh.write(re.sub(r"fernhill_freight_halloway,\d{4}-\d{2}-\d{2},",
+                        "fernhill_freight_halloway,%s," % week_ago, text))
     assert "1 contact(s) waiting on a reply have no follow-up date" in \
         U.by_id("follow-up-dates").pending()
     import subprocess

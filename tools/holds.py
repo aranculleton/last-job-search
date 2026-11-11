@@ -458,10 +458,12 @@ def _inmail(today, contacts, threads) -> list:
 
 def _reading(today) -> list:
     import reading
-    why = reading.stopped(today)
+    # A stop is kept on the computer's own day, as reads write it, so it is asked for on that
+    # day: asked on the person's day it vanished, or held on, whenever the two days differ.
+    why = reading.stopped()
     if not why:
         return []
-    nxt = today + dt.timedelta(days=1)
+    nxt = max(today, dt.date.today()) + dt.timedelta(days=1)
     return [_hold("reading_stop", "Reading profiles", "Reading profiles: stopped for today "
                   f"after LinkedIn showed a check, starts again {day_words(nxt)} by itself", nxt)]
 

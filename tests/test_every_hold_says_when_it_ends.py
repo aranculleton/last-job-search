@@ -565,3 +565,18 @@ def test_a_thread_the_follow_up_rule_closed_never_holds_its_employer(monkeypatch
     # Two unanswered: closed by the rule, so it holds nothing.
     waiting, _ = reading.at_employer("Harbourline Insurance", [row], today=today, threads=[note, nudge])
     assert waiting == []
+
+
+@pytest.mark.parametrize("shift", [-1, 0, 1], ids=["person-behind", "same-day", "person-ahead"])
+def test_a_reading_stop_holds_on_the_day_it_was_written_whatever_the_persons_day(tmp_path, monkeypatch, shift):
+    """A stop is written on the computer's day; Held back asked for it on the person's day, so
+    a person a day ahead of their computer (or behind it) saw no stop while reads were stopped."""
+    import reading
+    monkeypatch.setattr(reading.person, "state", lambda *p: str(tmp_path.joinpath("repo", *p)))
+    monkeypatch.setenv("LJS_LEDGER", str(tmp_path / "ledger"))
+    machine = dt.date.today()
+    reading._write_stop("LinkedIn showed a security check")
+    got = holds._reading(machine + dt.timedelta(days=shift))
+    assert [h["rule"] for h in got] == ["reading_stop"], got
+    # It ends the day after the later of the two days, never before the computer's next day.
+    assert got[0]["until"] >= (machine + dt.timedelta(days=1)).isoformat(), got

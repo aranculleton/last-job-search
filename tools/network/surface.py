@@ -36,7 +36,6 @@ location: their profile is read before anything is written to them.
 from __future__ import annotations
 
 import argparse
-import datetime
 import json
 import os
 import sys
@@ -85,7 +84,7 @@ def context(contacts=None, threads=None, connections=None, today=None, index=Non
         threads = state.load_threads() if os.path.exists(state.THREADS_CSV) else []
     if connections is None:
         connections = state.first_degree()
-    today = state.as_date(today) or datetime.date.today()
+    today = state.as_date(today) or state.person.today()
     by_handle: dict = {}
     by_name: dict = {}
     for c in connections or ():
@@ -225,7 +224,7 @@ def employer_out(company: str, today=None) -> str:
         return (f"not judged against your bar yet: judge it once (python3 tools/bar.py judge "
                 f"\"{company}\" <pay|prestige|signal|none> \"<why>\"), then check again")
     try:
-        if discovery.presence_ruled_out(company, today or datetime.date.today()):
+        if discovery.presence_ruled_out(company, today or state.person.today()):
             return "an earlier run found no relevant team there (company_research/)"
     except (OSError, ValueError):            # a research file that cannot be read
         pass

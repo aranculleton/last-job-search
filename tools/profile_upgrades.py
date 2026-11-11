@@ -983,9 +983,9 @@ def _follow_up_dates() -> str:
     """Contacts waiting on a reply with no follow-up date on their row: the brief reads the
     date from the row, so a thread imported from LinkedIn's download, or logged before the
     dates were written, was never brought back (2026-10-23)."""
-    found = _probe("import datetime, state; c = state.load_contacts(); print(len("
+    found = _probe("import person, state; c = state.load_contacts(); print(len("
                    "state.write_follow_ups([dict(r) for r in c], state.load_threads(), "
-                   "datetime.date.today(), only_undated=True)))")
+                   "person.today(), only_undated=True)))")
     n = int(found) if found.isdigit() else 0
     return ("%d contact(s) waiting on a reply have no follow-up date on their row" % n
             if n else "")
@@ -996,12 +996,22 @@ def _gone_cold() -> str:
     threads from years back and notes sent a season ago were counted against their employer
     and shown as owed a follow-up (2026-11-10). Closing them as gone cold is instant, and a
     reply from them opens one again."""
-    found = _probe("import state; c = state.load_contacts(); import datetime; print(len("
+    found = _probe("import person, state; c = state.load_contacts(); print(len("
                    "state.close_gone_cold([dict(r) for r in c], state.load_threads(), "
-                   "datetime.date.today())))")
+                   "person.today())))")
     n = int(found) if found.isdigit() else 0
     return ("%d conversation(s) with no answer in months still read as waiting on a reply" % n
             if n else "")
+
+
+def _drafts_before_a_role() -> str:
+    """Drafts waiting on a card for someone who is on hold until a role is posted, and the
+    follow-up on their offer to refer that code wrote the same for everyone: two cards
+    carried one message with the name and the employer swapped (2026-11-10). Setting them
+    aside (kept) is instant; each is written for its role once one is posted."""
+    found = _probe("import followup_drafts; print(len(followup_drafts.drafts_before_a_role()))")
+    n = int(found) if found.isdigit() else 0
+    return ("%d draft(s) were written before the role they wait for" % n if n else "")
 
 
 def _old_sweep_cursor() -> str:
@@ -2016,6 +2026,13 @@ REGISTRY: tuple[Upgrade, ...] = (
             _gone_cold, "python3 tools/network/state.py gone-cold", "instant",
             command=("python3", "tools/network/state.py", "gone-cold"),
             paths=("network_contacts.csv",), priority=2),
+    Upgrade("drafts-before-a-role", "2026-11-10",
+            "drafts written before the role they wait for set aside (kept), and their people "
+            "put on hold until a role is posted, so no card carries one message with the name "
+            "swapped; each is written for its role then",
+            _drafts_before_a_role, "python3 tools/followup_drafts.py role-holds", "instant",
+            command=("python3", "tools/followup_drafts.py", "role-holds"),
+            paths=("network_contacts.csv", "documents/network/*/draft*"), priority=2),
     Upgrade("one-record", "2026-11-05",
             "anyone kept twice in your contacts joined into one, and people you knew only by "
             "first name given the surname, employer and title your LinkedIn download shows",

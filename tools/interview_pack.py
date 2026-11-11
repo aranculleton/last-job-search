@@ -1513,6 +1513,33 @@ def _listdir(folder) -> list:
 
 # ---------------------------------------------------------------- questions
 
+# Ordinary words that open a posting's requirement line ("Demand forecasting for our network").
+_ORDINARY_OPENERS = frozenset("""
+ability advanced analysis analytical analytics attention background building business
+commercial communication credit customer data deep delivering demand design developing
+excellent experience familiarity financial forecasting good great hands knowledge leadership
+leading machine management managing modeling modelling operational people pricing problem
+process product project proven quantitative reporting research risk solid stakeholder
+statistical statistics strategic strong supply team technical track understanding working
+written""".split())
+
+
+def mid_sentence(phrase, seen="") -> str:
+    """A posting's line read inside a sentence: 'Demand forecasting' becomes 'demand
+    forecasting'. Only an ordinary word loses its capital: one of the words that open
+    requirement lines, or one written small elsewhere in what was read. Anything else may be a
+    name ('Excel', 'Python', 'Power BI') and keeps it: a capital left is a smaller fault than
+    a product written small."""
+    t = _text(phrase)
+    m = re.match(r"([A-Z][a-z]+)\b(\s+(\S+))?", t)
+    if not m or (m.group(3) or "")[:1].isupper():
+        return t
+    word = m.group(1).lower()
+    if word in _ORDINARY_OPENERS or re.search(r"\b%s\b" % re.escape(word), seen or ""):
+        return t[:1].lower() + t[1:]
+    return t
+
+
 def likely_questions(ctx) -> list:
     """[{question, why, source, framing, evidence}], in the order to prepare them.
 
@@ -1564,13 +1591,14 @@ def likely_questions(ctx) -> list:
         if same is not None:
             same.setdefault("evidence", evidence)
         elif len(group["reqs"]) < MAX_REQUIREMENTS:
-            group["reqs"].append(("Tell me about your experience with %s." % re.sub(
+            group["reqs"].append(("Tell me about your experience with %s." % mid_sentence(re.sub(
                                       r"^(?:(?:proven|strong|solid|demonstrable)\s+)?"
                                       r"experience (?:with|in|of)\s+", "", req, flags=re.I),
+                                      " ".join([ctx.get("posting") or "", evidence])),
                                   "a stated requirement", _text(draft.get("_path")),
                                   {"evidence": evidence, "req": True,
                                    "evidence_source": _text(draft.get("_path"))}))
-    group["gaps"] = [("What is your experience with %s?" % g["gap"],
+    group["gaps"] = [("What is your experience with %s?" % mid_sentence(g["gap"], ctx.get("posting") or ""),
                       "the posting asks for it and the profile does not hold it as such",
                       g["source"], {"framing": g["framing"], "gap": True,
                                     "evidence": g.get("evidence", ""),
@@ -6056,6 +6084,14 @@ def _live(a) -> int:
     import interview_live
     ctx = gather(a.company, a.role, getattr(a, "stage", ""), today=a.today,
                  format_=getattr(a, "format_", ""))
+    # The format a chat set once (--format "personal experience, technical coding") holds for
+    # every rebuild of this interview's prep, until another is said.
+    if not _text(getattr(a, "format_", "")):
+        saved = interview_live.load(ctx["folder"]) or {}
+        if _text(saved.get("format")) and (not _text(saved.get("stage")) or not _text(ctx.get("stage"))
+                                           or _same_round(saved["stage"], ctx["stage"])):
+            ctx = gather(a.company, a.role, getattr(a, "stage", ""), today=a.today,
+                         format_=saved["format"])
     if a.cmd == "live-check":
         doc = interview_live.load(ctx["folder"])
         if doc is None:

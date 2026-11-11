@@ -94,7 +94,7 @@ def test_the_one_screen_practice_and_format_are_read_as_the_pack_wrote_them(app)
 
 def test_an_answer_the_person_wrote_is_what_the_practice_holds(app):  # noqa: F811
     text = _pack()
-    q = "Tell me about your experience with Demand forecasting."
+    q = "Tell me about your experience with demand forecasting."
     mine = ("I rebuilt the weekly forecast in Python and SQL, and error fell from 22% to "
             "14% across the network.")
     # Written where the pack leaves room for it, in place of its "to write" line.

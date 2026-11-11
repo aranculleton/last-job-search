@@ -172,7 +172,7 @@ def test_a_question_asked_here_before_leads_with_the_story_that_landed(app):
 def test_a_technical_round_asks_the_requirements_with_what_the_letter_said(app):
     text = _pack()
     detail = "\n".join(_section(text, "Likely questions"))
-    assert "Tell me about your experience with Demand forecasting." in detail
+    assert "Tell me about your experience with demand forecasting." in detail
     # 2026-11-03: an unwritten answer lists the notes it is said from under Your answers, and
     # Likely questions no longer repeats them; every source is said in words, never a path.
     yours = "\n".join(_section(text, "Your answers"))
@@ -182,7 +182,7 @@ def test_a_technical_round_asks_the_requirements_with_what_the_letter_said(app):
 
 
 def test_the_session_maps_what_the_tags_do_not_reach(app):
-    q = "Tell me about your experience with Demand forecasting."
+    q = "Tell me about your experience with demand forecasting."
     text = _pack(story_map={q: "Ending a daily reconciliation",
                             "Walk me through how forecasts reach the depots.":
                                 "The forecast that freed safety stock"})

@@ -2733,15 +2733,25 @@ def hold_on_record(db: dict, work_id: str, summary: str, until: str, now) -> str
         action = f"Hold {why}, or until {until}"
     else:
         action = (f"Hold until {until}" if until else "Hold") + (f": {why}" if why else "")
+    # With the day it was made: what they write after it is owed an answer, hold or no hold.
     contacts = state.load_contacts()
     threads = state.load_threads() if os.path.exists(state.THREADS_CSV) else []
+    action = state.hold_since(action, person.today(now),
+                              [r for r in threads if str(r.get("contact_id") or "").strip() == cid])
+    before = state.already_contacted(contacts, contact_id=cid) or {}
+    was = {"status": before.get("status") or "", "next_action": before.get("next_action") or ""}
     try:
         state.set_contact(contacts, threads, cid, next_action=action, due=until or None,
                           today=person.today(now).isoformat())
     except ValueError:
         return ""
     state.save_contacts(contacts)
-    return f"held on their record: {cid}: {action}"
+    aside = ""
+    if state.role_hold(action) and state.park_draft(cid, was=was):
+        # Waiting for a role: the draft written before there is one is set aside, kept, and
+        # the message is written for that role once it is posted (state.role_hold).
+        aside = "; the draft written before the role is set aside (kept)"
+    return f"held on their record: {cid}: {action}{aside}"
 
 
 def _made(a, db: dict, reply: str = "") -> tuple[list, list, list, str]:
@@ -2864,12 +2874,17 @@ FOLLOW_UP_ASK = "What should the follow-up to {first} say? I could not write one
 # follow up only with something new, the item says so and asks nothing.
 FOLLOW_UP_WAITS = "The note to {first} waits until their profile is read."
 FOLLOW_UP_NOTHING = "No follow-up to {first} yet: nothing new turned up to say."
+# They offered to refer the person once there is a role, and none is posted: on hold until one
+# is, with nothing drafted, never one follow-up for everyone who offered (2026-11-10).
+FOLLOW_UP_ROLE = ("{first} is on hold until a role is posted at their employer: the referral "
+                  "ask is written then, for that role.")
 # What a finish says when its own words are refused (a name it could not shorten): the batch's
 # other items keep their writes.
 FOLLOW_UP_PLAIN = {"done": "Your follow-up is ready to send.", "none": "No follow-up is owed now.",
                    "held": "No follow-up: your own rules stop it.",
                    "waits": "The note waits until their profile is read.",
-                   "nothing": "No follow-up yet: nothing new turned up to say."}
+                   "nothing": "No follow-up yet: nothing new turned up to say.",
+                   "role": "On hold until a role is posted at their employer."}
 
 
 def _next_dir(base: str) -> str:
@@ -2992,6 +3007,12 @@ def follow_ups(dump: str, chat: str, now, today: str, out_dir: str,
             elif cid in nothing:
                 finishes.append({"work": wid, "plain": "nothing",
                                  "summary": FOLLOW_UP_NOTHING.format(first=first)})
+            elif d.get("hold_role"):
+                # They offered to refer the person and no role is posted: nothing is written,
+                # and they go on hold on their record until one is (keep_drafted).
+                keep.append(due)
+                finishes.append({"work": wid, "plain": "role",
+                                 "summary": FOLLOW_UP_ROLE.format(first=first)})
             elif due is None or d.get("status") == "none":
                 finishes.append({"work": wid, "plain": "none", "summary": FOLLOW_UP_NONE.format(first=first)})
             elif d.get("status") == "ready" and not answered:

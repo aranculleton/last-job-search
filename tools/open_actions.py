@@ -594,7 +594,17 @@ def due_items(contacts, threads, tracker, today, docs=None, network=None, now=No
                       + o["next_action"]) if o.get("unconfirmed") else o["next_action"]),
             "to": "",
             "text": _stored_draft(c),
-            "held": [h for h in (state.action_hold(o["next_action"], today),) if h],
+            # A hold on their row holds whatever is due to them but a reply they are owed:
+            # the row's action rides on an item only once its own day is past (state.owed),
+            # so a follow-up fell due, and was listed, for someone on hold until a later day
+            # (the maintainer, 2026-11-10: held notes "look like work to do").
+            # A reply is held only by a hold made since their last message (state.hold_stands).
+            # A reply no hold stands over is held by nothing, whatever day the row is due: an
+            # old due day on the row carried the hold onto the reply and hid it.
+            "held": [h for h in (() if o["kind"] == "reply" and not state.hold_stands(
+                                     c.get("next_action"), index.get(o["contact_id"], ()))
+                                 else (state.action_hold(c.get("next_action") or o["next_action"],
+                                                         today, c.get("next_action_due")),)) if h],
             "quiet": False, "kind": o["kind"], "status": o["status"],
             "contact_id": o["contact_id"], "old": bool(o.get("old")),
             "since": o.get("since", "")})

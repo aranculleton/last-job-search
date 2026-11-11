@@ -77,7 +77,7 @@ def test_the_engine_builds_the_rounds_own_shape_from_the_records():
     doc = _built()
     # outcome.md books a technical interview next, with the head of planning.
     assert doc["shape"] == "technical" and doc["shape_name"] == "A technical interview"
-    assert [p["kind"] for p in doc["parts"]] == ["opening", "experience", "technical", "close"]
+    assert [p["kind"] for p in doc["parts"]] == ["opening", "technical", "probes", "close"]
     assert sum(p["minutes"] for p in doc["parts"]) <= doc["minutes"] == 60
     assert doc["company"] == COMPANY and doc["role"] == ROLE
     # Each question sits in a part, with who is likely to ask it, and the story it is told with.
@@ -263,7 +263,7 @@ def test_a_numbered_beat_is_caught(ready_doc):
 
 def test_too_many_words_for_the_parts_time_is_caught(ready_doc):
     def pad(d):
-        d["parts"][0]["say"] = [{"t": " ".join(["and the forecast held up across the sites"] * 150) + ".",
+        d["parts"][0]["say"] = [{"t": " ".join(["and the forecast held up across the sites"] * 250) + ".",
                                  "prompts": []}]
     got = _one(ready_doc, pad)
     assert any("minutes to say at 150 words a minute" in w for w in got)
@@ -354,3 +354,202 @@ def test_the_page_gets_the_live_prep_only_for_the_round_it_was_built_for():
     with open(path, "w", encoding="utf-8") as fh:
         fh.write('{"version": 99, "parts": [')
     assert app_model._live_prep(folder, {"label": ctx["stage"]}, []) is None
+
+
+# ------------------------------------------------------------------ every kind of interview, one sitting each
+
+def _shaped(monkeypatch, stage, fmt="", consulting=False, **kw):
+    """A prep built for one interview of the kind its own words say. The employer is the
+    invented one of this file; `consulting` makes it read as a consulting firm."""
+    if consulting:
+        monkeypatch.setattr(P, "employer_type", lambda ctx: "consulting")
+    ctx = _ctx(**kw)
+    ctx["stage"], ctx["format"] = stage, fmt
+    return L.build(ctx)
+
+
+def _kinds(doc):
+    return [p["kind"] for p in doc["parts"]]
+
+
+@pytest.mark.parametrize("stage, fmt, consulting, shape, kinds", [
+    ("Recruiter screen", "", False, "screen", ["opening", "motivation", "experience", "basics", "close"]),
+    ("Hiring manager interview", "", False, "manager", ["opening", "experience", "behaviour", "motivation", "close"]),
+    ("Technical interview", "SQL and statistics", False, "technical", ["opening", "technical", "probes", "close"]),
+    ("Online assessment", "a timed numerical reasoning test", False, "assessment", ["format", "approach", "pacing", "practice"]),
+    ("Second round", "case interview and personal experience interview", True, "case",
+     ["opening", "personal", "case", "maths", "synthesis", "close"]),
+    ("Case interview", "", False, "case_only", ["opening", "case", "maths", "synthesis", "close"]),
+    ("Personal experience interview", "", True, "personal", ["opening", "personal", "close"]),
+    ("Take-home review", "present back your analysis", False, "take_home", ["opening", "presenting", "technical", "close"]),
+    ("Panel interview", "", False, "panel", ["opening", "experience", "behaviour", "technical", "motivation", "close"]),
+    ("Final round", "", False, "final", ["opening", "motivation", "behaviour", "experience", "close"]),
+])
+def test_each_kind_of_interview_has_its_own_stages(monkeypatch, stage, fmt, consulting, shape, kinds):
+    doc = _shaped(monkeypatch, stage, fmt, consulting)
+    assert doc["shape"] == shape and _kinds(doc) == kinds, (doc["shape"], _kinds(doc))
+    assert sum(p["minutes"] for p in doc["parts"]) <= doc["minutes"]
+    assert not doc["assumed"], "the round's own words say what it is"
+
+
+def test_a_technical_round_runs_warm_up_problem_probes_and_their_questions(monkeypatch):
+    doc = _shaped(monkeypatch, "Technical interview, 45 minutes", "live SQL and Python")
+    assert [p["title"] for p in doc["parts"]] == ["Warm-up, and your background", "A problem, worked aloud",
+                                                  "The follow-up probes and trade-offs", "Your questions for them"]
+    assert doc["minutes"] == 45 and sum(p["minutes"] for p in doc["parts"]) == 45
+    # The problem worked aloud is the longest stop.
+    assert max(doc["parts"], key=lambda p: p["minutes"])["kind"] == "technical"
+
+
+def test_an_assessment_is_practised_not_talked_through(monkeypatch):
+    doc = _shaped(monkeypatch, "Online assessment", "a timed problem-solving test, 70 minutes")
+    assert doc["shape"] == "assessment" and doc["minutes"] == 70
+    assert _kinds(doc) == ["format", "approach", "pacing", "practice"]
+    # Nothing in it asks them about themselves: only items to practise, said by the test.
+    practice = next(p for p in doc["parts"] if p["kind"] == "practice")
+    assert all(q["part"] == practice["id"] and q["who"] == "test" for q in doc["questions"])
+    assert not any("about yourself" in q["q"].lower() for q in doc["questions"])
+    # How it works, how to take each item and the pacing are said even with no question in them.
+    found = [w for w, _why in L.problems(doc)]
+    for title in ("How the test works", "How to take each kind of item", "Pacing against the time"):
+        assert any(title in w for w in found), title
+
+
+def test_a_case_with_a_personal_experience_interview_is_one_sitting(monkeypatch):
+    doc = _shaped(monkeypatch, "Second round", "personal experience interview, then a case", consulting=True)
+    assert doc["shape"] == "case" and doc["shape_name"] == "A case interview with a personal experience interview"
+    assert _kinds(doc) == ["opening", "personal", "case", "maths", "synthesis", "close"]
+    assert sum(p["minutes"] for p in doc["parts"]) == doc["minutes"] == 60
+
+
+def test_a_personal_story_and_live_coding_in_one_sitting_run_in_that_order(monkeypatch):
+    # The maintainer's own round (2026-11-10): "personal story plus technical HackerRank
+    # stuff, Python etc", at an invented consulting firm.
+    doc = _shaped(monkeypatch, "Second round", "personal experience, technical coding (HackerRank, Python), 60 minutes",
+                  consulting=True)
+    assert doc["shape"] == "combined:personal+technical"
+    assert doc["shape_name"] == "A personal experience interview and a technical interview in one sitting"
+    assert _kinds(doc) == ["opening", "personal", "technical", "probes", "close"]
+    assert sum(p["minutes"] for p in doc["parts"]) == 60 and not doc["assumed"]
+    # The other order is the other sitting.
+    other = _shaped(monkeypatch, "Second round", "live coding, then a personal experience interview", consulting=True)
+    assert _kinds(other) == ["opening", "technical", "probes", "personal", "close"]
+
+
+def test_a_skill_or_a_certificate_is_asked_where_the_work_is_tested_never_in_the_story(monkeypatch):
+    # The maintainer's review of the HackerRank round (2026-11-10): "What is your experience with
+    # SAP?" and a certificate question sat in "Your story", the one story told in depth.
+    doc = _shaped(monkeypatch, "Second round", "personal experience, technical coding (HackerRank, Python), 60 minutes",
+                  consulting=True)
+    kind = {p["id"]: p["kind"] for p in doc["parts"]}
+    skills = [q for q in doc["questions"] if L.kind_of(q["q"]) == "skill"]
+    assert skills, [q["q"] for q in doc["questions"]]
+    assert all(kind[q["part"]] == "technical" for q in skills), [(q["q"], kind[q["part"]]) for q in skills]
+    for text in ("What is your experience with SAP?", "Do you hold the dbt certification?",
+                 "How familiar are you with Power BI?", "Have you used Airflow?"):
+        assert L._place(L.kind_of(text), _kinds(doc)) == "technical", text
+    # With no technical part it is asked with the rest of the experience; only a personal
+    # experience interview on its own leaves the story as the place for it.
+    assert L._place("skill", ["opening", "experience", "behaviour", "motivation", "close"]) == "experience"
+    assert L._place("skill", ["opening", "personal", "close"]) == "personal"
+
+
+def test_a_requirement_reads_inside_a_sentence_and_a_name_keeps_its_capital():
+    # "Tell me about your experience with Demand forecasting." (the maintainer's screen, 2026-11-10)
+    seen = "Strong SQL and Python\nDemand forecasting for our network\nPower BI reporting"
+    assert P.mid_sentence("Demand forecasting", seen) == "demand forecasting"
+    assert P.mid_sentence("Stakeholder management", "") == "stakeholder management"
+    # Written small elsewhere in what was read, so an ordinary word.
+    assert P.mid_sentence("Inventory planning", "you will own inventory levels") == "inventory planning"
+    for name in ("Python scripting", "Power BI reporting", "SQL", "Excel modelling", "Google Analytics"):
+        assert P.mid_sentence(name, seen) == name
+    questions = [q["q"] for q in L.build(_ctx())["questions"]]
+    assert "Tell me about your experience with demand forecasting." in questions, questions
+    assert not any(" with Demand " in q for q in questions), questions
+
+
+def test_an_acronym_nobody_spelled_out_is_never_read_as_a_kind(monkeypatch):
+    # "PSA" at a consulting firm: the closest kind is chosen and said to be assumed.
+    doc = _shaped(monkeypatch, "PSA", "", consulting=True)
+    assert doc["shape"] == "case" and doc["assumed"]
+    # Said in so many words, the format decides it.
+    said = _shaped(monkeypatch, "PSA", "a timed problem-solving test", consulting=True)
+    assert said["shape"] == "assessment" and not said["assumed"]
+
+
+def test_a_short_round_prepares_fewer_questions_than_a_long_one(monkeypatch):
+    short = _shaped(monkeypatch, "Recruiter screen, 20 minutes")
+    long = _shaped(monkeypatch, "Hiring manager interview, 60 minutes")
+    assert short["minutes"] == 20 and len(short["questions"]) < len(long["questions"])
+
+
+def test_the_line_to_end_a_part_on_is_kept_counted_and_checked(ready_doc):
+    d = copy.deepcopy(ready_doc)
+    d["parts"][0]["bridge"] = "Which is why the planning role here caught my eye."
+    doc = L.merge(L.build(_ctx()), d)
+    assert doc["parts"][0]["bridge"] == "Which is why the planning role here caught my eye."
+    assert doc["timing"]["parts"][doc["parts"][0]["id"]]["words"] > L.finish(copy.deepcopy(ready_doc))["timing"]["parts"][doc["parts"][0]["id"]]["words"]
+    got = _one(ready_doc, lambda x: x["parts"][0].update(bridge="As we discussed, the planning role."))
+    assert any("assumes you have spoken before" in w for w in got)
+
+
+def test_one_phrase_opens_one_term(ready_doc):
+    def two(d):
+        d["terms"]["demand-forecast"]["match"] = ["forecast"]
+        d["terms"]["volume-forecast"] = dict(d["terms"]["demand-forecast"], name="Volume forecast", match=["forecast"])
+    assert any("one phrase for one term" in w for w in _one(ready_doc, two))
+
+
+def test_words_explained_for_one_role_at_an_employer_start_the_next(tmp_path):
+    ctx = _ctx()
+    path, found = L.write(ctx, _fill(L.build(ctx)))
+    assert path and not found
+    other = dict(ctx, folder=os.path.join(os.path.dirname(ctx["folder"]), os.path.basename(ctx["folder"]) + "_Other_Role"))
+    os.makedirs(other["folder"])
+    assert "demand-forecast" in L.build(other)["terms"]
+
+
+# ------------------------------------------------------------------ words a person can say aloud
+
+@pytest.mark.parametrize("text, refused", [
+    ("Their care history. Their frailty. Then the rest of it came together over the following weeks.", True),
+    ("They were wary at first. Seeing the error by site won them over.", True),
+    ("I rebuilt the weekly forecast in Python and SQL, with promotions and seasonality in it, and "
+     "error came down from 22% to 14%. That released about £1.1M of safety stock.", False),
+    ("I owned the model and the error tracking by site.", False),
+])
+def test_clipped_fragments_are_not_flowing_sentences(text, refused):
+    assert L.choppy(text) is refused
+
+
+def test_an_answer_or_a_beat_written_as_fragments_is_refused(ready_doc):
+    def clip_answer(d):
+        d["questions"][0]["simple"] = "I rebuilt it. Error fell. The planners released about £1.1M of safety stock afterwards."
+    got = _one(ready_doc, clip_answer)
+    assert any("write this as flowing sentences, joined with commas and \"and\"" in w for w in got), got
+
+    def clip_beat(d):
+        d["parts"][0]["say"][0]["t"] = "Thanks for the time. Glad to be here. The planning work is why."
+    assert any("flowing sentences" in w for w in _one(ready_doc, clip_beat))
+    # The basics are short on purpose, and a question to ask them is a question.
+    assert not any("flowing sentences" in w for w in _one(ready_doc, lambda d: None))
+
+
+def test_every_part_has_something_to_say_first(ready_doc):
+    got = _one(ready_doc, lambda d: d["parts"][1].update(say=[]))
+    assert any("nothing to say first yet" in w for w in got)
+
+
+def test_a_known_question_is_marked_on_a_beat_by_its_words(ready_doc):
+    d = copy.deepcopy(ready_doc)
+    text = "How do you get depot managers to trust a forecast?"
+    d["known"] = [{"text": text, "from": "the recruiter"}]
+    d["questions"].append({"id": "mine", "part": d["parts"][1]["id"], "who": "manager", "q": text, "also": [],
+                           "simple": d["questions"][0]["simple"], "detailed": d["questions"][0]["detailed"], "follow": []})
+    d["parts"][1]["say"].append({"t": "Trust usually comes up first with a forecast, so I will take it head on.",
+                                 "prompts": ["mine"], "known": text})
+    doc = L.merge(L.build(_ctx()), d)
+    k = doc["known"][-1]
+    beat = doc["parts"][1]["say"][-1]
+    assert beat["known"] == k["id"] and beat["prompts"] == [k["question"]]
+    assert not any("known to ask" in w for _where, w in L.problems(doc, _ctx()))

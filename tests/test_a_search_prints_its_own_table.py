@@ -28,11 +28,15 @@ HEAD = ("| # | Score | Verdict | Title | Company | Location | Salary | Deadline 
 
 
 def _printed(stdout: str) -> str:
-    """The table as the round printed it: after its heading, up to the line after it."""
+    """The table as the round printed it: after its heading, up to the line after it. The
+    round's own line for Claude about improvements waiting (profile_upgrades.line) may come
+    between, and is not the table: the example's nos are asked again once REASK_DAYS pass,
+    so on a later calendar it is printed there (the clock moved on, 2026-11-10)."""
     start = stdout.index("table for the person")
     body = stdout[start:].split("\n", 1)[1]
-    end = body.find("\nnext:")
-    return body[:end] if end >= 0 else body.rstrip("\n")
+    ends = [i for i in (body.find("\nnext:"), body.find("\nClaude: improvements waiting"))
+            if i >= 0]
+    return body[:min(ends)] if ends else body.rstrip("\n")
 
 
 def _write(path, rows):

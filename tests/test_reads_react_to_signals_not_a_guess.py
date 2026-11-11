@@ -46,7 +46,7 @@ def here(tmp_path, monkeypatch):
 
 def _profile_load(cid, when, gap=60):
     reading.save(cid, {"sources": [{"kind": "browser", "at": when.isoformat(), "next_gap": gap,
-                                    "date": when.date().isoformat()}]})
+                                    "date": reading.person.today(when).isoformat()}]})
 
 
 # ------------------------------------------------------------------ no limit of the app's own
@@ -158,7 +158,7 @@ def test_a_load_far_slower_than_usual_is_a_soft_signal(here):
 
 def test_a_page_that_did_not_render_is_not_a_read(here, monkeypatch, capsys):
     monkeypatch.setattr(reading, "PROFILE_READS", "browser")
-    reading.shortlist(["c9"], datetime.date.today(), contacts=[{"contact_id": "c9", "location": "Leeds"}],
+    reading.shortlist(["c9"], reading.person.today(), contacts=[{"contact_id": "c9", "location": "Leeds"}],
                       sends_left=10)
     page = here / "blank.txt"
     page.write_text("LinkedIn\n", encoding="utf-8")
@@ -205,7 +205,7 @@ def test_next_names_who_to_read_and_says_done_at_the_end(here, monkeypatch, caps
     people = [{"contact_id": "r1", "name": "Wren Allard", "company": "Fernhill Freight",
                "location": "Leeds", "linkedin_url": "https://www.linkedin.com/in/wren-allard-example"}]
     monkeypatch.setattr(state, "load_contacts", lambda *a, **k: people)
-    reading.shortlist(["r1"], datetime.date.today(), contacts=people, sends_left=10)
+    reading.shortlist(["r1"], reading.person.today(), contacts=people, sends_left=10)
     assert reading.main(["next", "--mode", "card"]) == reading.EXIT["ok"]
     out = capsys.readouterr().out
     # Since 2026-10-21 every read scrolls to the very end first: Experience and Education
