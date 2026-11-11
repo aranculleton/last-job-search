@@ -62,6 +62,8 @@ make sense to somebody whose repo just received it.
 - **A person's card in Contacts reads as one calm card.** Under a note, its facts are one quiet line, "290/300 · Waiting for their profile · Location not on record", with what each means behind its "?", instead of a line each.
 - **A change you ask for with the pencil sits in one grey block under the note**, what you asked and then where it stands, with Stop Claude right beside it. It says "Starting in a moment" for half a minute at most, then "Waiting for Claude, asked at 10:42", never a clock running under "starting in a moment".
 - **Asking one note's pencil about every note waiting for a profile does that for them all.** They all go on your page's reading list, that note is left as it is, and its card says so at once. Before, it was taken as a rewrite of that one note.
+- **Your page takes Claude's updates when Claude's copy of it lacks one of its screens.** The update then wrote that screen with no version and the page refused all of it, so cards sat on "Putting it on your page"; Claude now reads your page's screens first in that case, then updates it.
+- **A tap on your page reads only what changed, and what Claude saves after it is taken first time.** Each tap brought back every piece of work not finished, a follow-up untouched since the day before among them, and the saves after it could be refused until Claude typed in each record's number by hand. Every change to a piece of work now says when it was made, so only what changed is read; work Claude saved that never reached your page is read again before anything is pinned to it; and an update from a fresh copy no longer rewrites your Interviews screen with nothing in it changed (issue 217).
 
 ## [4.15.0] - 2026-11-11
 

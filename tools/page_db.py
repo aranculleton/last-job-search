@@ -95,6 +95,19 @@ _WRAPPER = {"id", "doc_id", "version", "data", "path", "collection", "created_at
 # `_v` is how a chat reading a dump knows what to pin its next write to.
 VERSION_FIELD = "_v"
 
+# Every write to a work item, by a chat or by the page, also says when it was made
+# (`changed_at`), so a read can ask for only the work that changed since the last one
+# (page_reads.plan). Work has no other field every write moves: a read asked for every item
+# not finished, and each tap brought back every open item, a follow-up nobody had touched
+# since the day before among them (issue 217).
+CHANGED_FIELD = "changed_at"
+CHANGED_COLLECTIONS = ("work",)
+
+
+def changed_now() -> str:
+    """The moment a write is made, as the store's other times are written."""
+    return dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
 
 def _version_of(obj) -> tuple[dict, int | None, bool]:
     """(fields, version, whether the store itself gave the version): the wrapper's or
@@ -825,6 +838,8 @@ class Writes:
         if op != "delete":
             data = dict(data or {})
             data[VERSION_FIELD] = int(if_version) + 1 if if_version is not None else 1
+            if collection in CHANGED_COLLECTIONS:
+                data[CHANGED_FIELD] = changed_now()
             body = json.dumps(data, ensure_ascii=False, indent=1, sort_keys=True)
             if len(body.encode("utf-8")) > DOC_MAX:
                 raise ValueError(f"page_db: {collection}/{doc_id} is over 256 KiB"
@@ -1811,6 +1826,10 @@ def _keep_dump(dump_dir: str, collection: str, doc_id: str, fields: dict, versio
     path = os.path.join(where, safe_id(doc_id).replace("~", "@") + ".json")
     _keep_read_stamp(dump_dir, os.path.basename(where), safe_id(doc_id), (path, plain))
     known = version_known(dump_dir, f"{os.path.basename(where)}/{safe_id(doc_id)}")
+    if os.path.basename(where) in CHANGED_COLLECTIONS:
+        # Changed here now, as the write says it was: a write that never lands is then told
+        # from one that did by the next read (page_reads.assemble), whoever made this copy.
+        fields = dict(fields, **{CHANGED_FIELD: changed_now()})
     if plain != path and os.path.exists(plain):
         os.remove(plain)
     with open(path, "w", encoding="utf-8", newline="\n") as fh:

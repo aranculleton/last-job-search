@@ -2051,7 +2051,7 @@
     }
     const doc = {kind: s.kind, title: clip(s.title, 140), to: s.to, args: s.args || {}, asked_at: iso(),
       asked_from: {tab: S.tab}, status: "queued", stages: arr(s.stages).length ? s.stages : defaultStages(s.kind), stage: 0, stage_at: null,
-      steps: [], claimed_by: null, claimed_at: null, stop_asked: false, attempt: 1, _v: nextV(had)};
+      steps: [], claimed_by: null, claimed_at: null, stop_asked: false, attempt: 1, _v: nextV(had), changed_at: iso()};
     S.localWork.set(s.id, doc);
     scheduleRender();
     try { await ref.set(doc); return {ok: true, doc}; }
@@ -2060,14 +2060,15 @@
   // One write at a time to a work record from this window, each pinned to the record as the
   // store holds it now: a double tap on Stop, "Don't do it" or Try again wrote twice from the
   // replica and left `_v` one behind the store, so every chat's pinned write was refused for
-  // good (robustness audit 2).
+  // good (robustness audit 2). Each says when it was made (`changed_at`, as every chat's write
+  // does: tools/page_db.py CHANGED_FIELD), so a chat reads only the work that changed.
   const workWriting = new Set();
   async function writeWork(db, id, make) {
     let cur = workDoc(id);
     try { const snap = await within(db.doc("work/" + id).get(), CAP_WAIT_MS); if (snap && snap !== "timeout" && snap.exists) cur = snap.data(); } catch (e) { /* the replica's copy */ }
     const patch = make(cur);
     if (!patch) return "same";
-    await db.doc("work/" + id).update(Object.assign(patch, {_v: nextV(cur)}));
+    await db.doc("work/" + id).update(Object.assign(patch, {_v: nextV(cur), changed_at: iso()}));
     return "ok";
   }
   async function stopWork(id) {

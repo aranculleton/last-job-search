@@ -122,6 +122,7 @@ def test_only_the_refused_batch_and_those_after_it_are_put_back(tmp_path):
     # The second batch was refused: its records are as the first left them.
     assert set(page_db.put_back(d, "screen/due")) == {"screen/due", "work/draft~one"}
     db = page_db.load(d)
+    assert db["work"]["draft~one"]["data"].pop(page_db.CHANGED_FIELD)    # as the first left it
     assert db["work"]["draft~one"] == {"data": {"kind": "draft", "status": "running"},
                                        "version": 4}
     assert "due" not in db["view"]
