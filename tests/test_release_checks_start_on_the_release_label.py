@@ -107,11 +107,12 @@ def test_only_platforms_runs_weekly():
     runners) before a new person's set-up meets it. Everywhere's engines are pinned, so a
     weekly run only checked a master nothing had changed (the maintainer, 2026-11-11: "cheap
     and efficient"): every release runs it on the label."""
-    import yaml
     def on(name):
+        # The workflow's own `on:` block, read as text: the Python 3.9 leg has no YAML library.
         with open(os.path.join(ROOT, ".github", "workflows", name), encoding="utf-8") as fh:
-            doc = yaml.safe_load(fh)
-        return doc.get("on", doc.get(True))
+            text = fh.read()
+        block = re.search(r"^on:\n((?:[ #].*\n|\n)*)", text, re.M).group(1)
+        return re.findall(r"^  ([a-z_]+):", block, re.M)
     assert "schedule" not in on("everywhere.yml")
     assert "schedule" in on("platforms.yml")
     inputs = {"suite": True, "variants": "", "tests": ""}
