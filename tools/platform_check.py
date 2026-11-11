@@ -547,22 +547,16 @@ def step_suite() -> None:
 
 def suite_part(shard: str) -> tuple[str, list[str]]:
     """The test files one runner takes when the suite is split ("2/3": the second of three),
-    so Windows runs it on three runners side by side (2026-10-30). Each file goes, largest
-    first, to the part with the least so far, the same way on every runner; an empty or
-    malformed value is the whole suite."""
-    m = re.fullmatch(r"\s*(\d+)\s*/\s*(\d+)\s*", shard or "")
-    if not m or not 1 <= int(m.group(1)) <= int(m.group(2)):
+    so Windows runs it on three runners side by side (2026-10-30). The split is
+    tools/ci_plan.py's, the one CI's own suite and page jobs use: each file, largest first,
+    to the part with the least so far, the same way on every runner. An empty or malformed
+    value is the whole suite."""
+    import ci_plan
+    mine = ci_plan.part(shard)
+    if mine is None:
         return "", ["tests"]
-    k, n = int(m.group(1)), int(m.group(2))
-    tests = os.path.join(ROOT, "tests")
-    names = sorted(f for f in os.listdir(tests) if f.startswith("test_") and f.endswith(".py"))
-    loads, mine = [0] * n, []
-    for f in sorted(names, key=lambda f: (-os.path.getsize(os.path.join(tests, f)), f)):
-        i = loads.index(min(loads))
-        loads[i] += os.path.getsize(os.path.join(tests, f))
-        if i == k - 1:
-            mine.append(os.path.join("tests", f))
-    return f" (part {k} of {n})", sorted(mine)
+    k, n = (int(x) for x in shard.split("/"))
+    return f" (part {k} of {n})", mine
 
 
 # ------------------------------------------------------------------ a computer chat
