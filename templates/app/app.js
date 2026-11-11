@@ -10892,6 +10892,7 @@
     // Its own address, and when it opened: the frame it sits in may answer the address it
     // pushes (sheetStays).
     detailDlg._addr = "#" + section + "/" + id + "/open";
+    detailDlg._from = location.hash;
     detailDlg._at = performance.now();
     detailDlg.addEventListener("cancel", (e) => { e.preventDefault(); closeDetail(false); });
     document.body.appendChild(detailDlg);
@@ -16293,11 +16294,21 @@
   // sheet pushes its address (its own address again, or the one before put back) closed it the
   // instant it opened. Its own address again is never a reason to close or redraw it, and
   // nothing in its first moment is the person's Back.
+  // Only the two answers a frame gives are let pass: the sheet's own address said again, and,
+  // in its first second, the address it was opened from put back. A move anywhere else (a
+  // name tapped in the sheet, a link to another screen) is the person's, and closes it at once:
+  // ignoring every move in the first second kept a sheet open over the next one tapped.
+  // Only inside another page's frame (the Claude app shows the page in one; a tab never
+  // does), so in a tab Back closes the sheet at once, as it always has.
   const SHEET_SETTLE_MS = 1000;
+  function inFrame() {
+    try { return window.self !== window.top || window.__ljsFramed === true; } catch (e) { return true; }
+  }
   function sheetStays() {
     if (!detailDlg) return false;
     if (location.hash === detailDlg._addr) return true;
-    return performance.now() - (detailDlg._at || 0) < SHEET_SETTLE_MS;
+    return inFrame() && location.hash === (detailDlg._from || "") &&
+      performance.now() - (detailDlg._at || 0) < SHEET_SETTLE_MS;
   }
   function focusMainHeading() {
     const hd = $("main").querySelector("h2[id]") || $("main");
