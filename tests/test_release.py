@@ -5,6 +5,7 @@ published once, and no tag is ever moved, replaced or deleted.
 that nothing reminded anyone of, and a session cannot push a tag.
 """
 import json
+import os
 import pathlib
 import re
 import subprocess
@@ -220,6 +221,34 @@ def test_cut_refuses_and_changes_nothing(tmp_path, monkeypatch, capsys, version,
     assert len("x" * 140) == release.HEADLINE_MAX and not release.headline_problem("x" * 140)
 
 
+def test_cut_refuses_a_handover_still_waiting_to_be_written(tmp_path, monkeypatch, capsys):
+    """The process review of 2026-11-11: the hand-over named 4.15.1, so the cut took it,
+    with "[4.15.1's final test results go here, written at the release.]" still in it."""
+    monkeypatch.setattr(release, "tags", lambda root=None: ["v3.3.0"])
+    waiting = ("# Notes for the next builder\n\nWritten at the release of 3.4.0.\n\n"
+               "## Not tested at this release\n\n- Windows, by hand.\n"
+               "- [3.4.0's final test results go here, written at the release.]\n")
+    root = _copy(tmp_path, note=waiting)
+    before = (tmp_path / "CHANGELOG.md").read_text(encoding="utf-8")
+    assert release.cut("3.4.0", HEADLINE, root=root) == 1
+    said = _said(capsys)
+    assert "nothing changed" in said and "line 8" in said
+    assert "[3.4.0's final test results go here, written at the release.]" in said
+    assert (tmp_path / "CHANGELOG.md").read_text(encoding="utf-8") == before
+    # Any wording of it, in any case; a bracket that is not one passes.
+    for line in ("[The numbers Go Here.]", "- [what the release checked goes here]"):
+        assert release.placeholder("ok\n" + line + "\n") == (2, line)
+    for line in ("[Everywhere](docs/x.md) ran here.", "It goes here, not there.",
+                 "[here]", "[go]"):
+        assert release.placeholder(line) is None, line
+    # Written, it cuts.
+    (tmp_path / "docs" / "NEXT_BUILDER.md").write_text(
+        waiting.replace("[3.4.0's final test results go here, written at the release.]",
+                        "Every check passed on GitHub; the Mac by hand."), encoding="utf-8")
+    assert release.cut("3.4.0", HEADLINE, root=root, day="2026-10-20") == 0
+    capsys.readouterr()
+
+
 def test_cut_still_checks_the_changelog_when_github_cannot_be_read(tmp_path, monkeypatch, capsys):
     root = _copy(tmp_path, note="3.3.0")
 
@@ -281,11 +310,26 @@ def test_the_newest_release_opens_on_a_headline_a_person_is_told_whole():
 # ------------------------------------------------------------------ the copy's bugs it fixed
 
 
-class _GitHub:
-    """A fake `gh`: the open issues labelled fixed-unreleased, and every call made. No network."""
+TAGGED = "2026-11-11T12:00:00Z"        # when the commit a release is tagged on was made
 
-    def __init__(self, fixed=(), refuse=()):
+
+class _GitHub:
+    """A fake `gh`: the open issues labelled fixed-unreleased, the tagged commit's time, the
+    repo's issue events (newest first, `labelled` {number: when the label went on}, `noise`
+    other events), and every call made. No network."""
+
+    def __init__(self, fixed=(), refuse=(), labelled=None, committed=TAGGED, noise=0,
+                 events_fail=False):
         self.fixed, self.refuse, self.calls = list(fixed), set(refuse), []
+        self.labelled = dict(labelled or {n: "2026-11-10T09:00:00Z" for n in self.fixed})
+        self.committed, self.noise, self.events_fail = committed, noise, events_fail
+
+    def events(self) -> list:
+        got = [{"event": "labeled", "created_at": when, "label": {"name": "fixed-unreleased"},
+                "issue": {"number": n}} for n, when in self.labelled.items()]
+        got += [{"event": "commented", "created_at": "2026-11-11T13:00:00Z",
+                 "issue": {"number": 999}}] * self.noise
+        return sorted(got, key=lambda e: e["created_at"], reverse=True)[:100]
 
     def __call__(self, args):
         self.calls.append(args)
@@ -296,12 +340,19 @@ class _GitHub:
             code = 1
         elif args[:2] == ["release", "view"]:
             out = "the old wall of text"
+        elif args[:2] == ["api", "repos/{owner}/{repo}/commits/" + args[1].rsplit("/", 1)[-1]]:
+            out = json.dumps({"commit": {"committer": {"date": self.committed}}}) \
+                if self.committed else ""
+            code = 0 if self.committed else 1
+        elif args[:2] == ["api", "repos/{owner}/{repo}/issues/events?per_page=100"]:
+            out, code = ("", 1) if self.events_fail else (json.dumps(self.events()), 0)
         return type("Done", (), {"returncode": code, "stdout": out, "stderr": ""})()
 
 
 def test_a_release_closes_every_bug_fixed_since_the_last_one_and_takes_its_label_off(monkeypatch):
     gh = _GitHub(fixed=[211, 212])
     monkeypatch.setattr(release, "_gh", gh)
+    monkeypatch.delenv("GITHUB_SHA", raising=False)
     monkeypatch.setattr(release, "tags", lambda: ["v3.2.5"])
     sample = release.sections(TEXT)
     monkeypatch.setattr(release, "sections", lambda text=None: sample)
@@ -320,6 +371,75 @@ def test_an_issue_that_cannot_be_closed_keeps_its_label_and_the_release_still_st
     assert release.close_fixed("v3.3.0", gh=gh) == [214]
     assert ["issue", "edit", "213", "--remove-label", "fixed-unreleased"] not in gh.calls
     assert "#213 could not be closed" in capsys.readouterr().out
+
+
+def test_an_issue_marked_fixed_after_the_tagged_commit_waits_for_the_next_release(capsys):
+    """The process review of 2026-11-11: an issue labelled fixed-unreleased between the
+    release's merge and the release job was called fixed in a tag that does not hold the fix.
+    Only one labelled before the tagged commit was made is closed; the time comes from the
+    repo's issue events, one call, whatever the number of issues."""
+    gh = _GitHub(fixed=[220, 221, 222], labelled={220: "2026-11-11T11:59:59Z",
+                                                   221: "2026-11-11T12:00:01Z",
+                                                   222: "2026-11-01T08:00:00Z"})
+    assert release.close_fixed("v3.3.0", gh=gh) == [220, 222]
+    said = capsys.readouterr().out
+    assert "#221 was marked fixed after v3.3.0's commit" in said and "closed 2 of 3" in said
+    assert not any(c[:3] == ["issue", "close", "221"] for c in gh.calls)
+    assert not any(c[:3] == ["issue", "edit", "221"] for c in gh.calls)
+    assert [c[:2] for c in gh.calls if c[0] == "api"] == [
+        ["api", "repos/{owner}/{repo}/commits/v3.3.0"],
+        ["api", "repos/{owner}/{repo}/issues/events?per_page=100"]]
+    # Labelled again after the commit, though first before it: it waits too.
+    gh = _GitHub(fixed=[223], labelled={223: "2026-11-11T12:30:00Z"})
+    gh.events = lambda: [
+        {"event": "labeled", "created_at": "2026-11-11T12:30:00Z",
+         "label": {"name": "fixed-unreleased"}, "issue": {"number": 223}},
+        {"event": "unlabeled", "created_at": "2026-11-11T12:20:00Z",
+         "label": {"name": "fixed-unreleased"}, "issue": {"number": 223}},
+        {"event": "labeled", "created_at": "2026-11-10T12:00:00Z",
+         "label": {"name": "fixed-unreleased"}, "issue": {"number": 223}}]
+    assert release.close_fixed("v3.3.0", gh=gh) == []
+
+
+@pytest.mark.parametrize("gh, why", [
+    (_GitHub(fixed=[230], committed=""), "the commit's time unknown"),
+    (_GitHub(fixed=[230], events_fail=True), "the events unread"),
+    (_GitHub(fixed=[230], noise=100), "a whole page of events after the commit"),
+])
+def test_when_it_cannot_be_told_nothing_is_called_fixed(gh, why, capsys):
+    assert release.close_fixed("v3.3.0", gh=gh) == [], why
+    assert not any(c[:2] == ["issue", "close"] for c in gh.calls), why
+    assert "wait for the next release" in capsys.readouterr().out
+
+
+def test_the_tagged_commits_time_is_read_from_the_checkout_that_holds_it(tmp_path):
+    """release.yml checks out the commit it tags: its time is read there, with no call."""
+    env = dict(os.environ, GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@example.com",
+               GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@example.com",
+               GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM="1",
+               GIT_COMMITTER_DATE="2026-11-11T12:00:00+00:00")
+    for args in (["init", "-q", "-b", "master"], ["commit", "-q", "--allow-empty", "-m", "x"]):
+        subprocess.run(["git", "-C", str(tmp_path), *args], env=env, check=True)
+    sha = subprocess.run(["git", "-C", str(tmp_path), "rev-parse", "HEAD"], env=env, check=True,
+                         capture_output=True, text=True).stdout.strip()
+    gh = _GitHub(fixed=[240, 241], labelled={240: "2026-11-11T11:00:00Z",
+                                              241: "2026-11-11T12:05:00Z"}, committed="")
+    assert release.close_fixed("v3.3.0", sha, gh=gh, root=str(tmp_path)) == [240]
+    assert not any(c[1].startswith("repos/{owner}/{repo}/commits/") for c in gh.calls
+                   if c[0] == "api")
+
+
+def test_gh_api_is_told_the_repo_its_own_way(monkeypatch):
+    """`gh api` refuses --repo ("unknown flag"): in the release job it reads GH_REPO."""
+    seen = []
+    monkeypatch.setenv("GITHUB_REPOSITORY", "someone/app")
+    monkeypatch.setattr(release.subprocess, "run",
+                        lambda cmd, **kw: seen.append((cmd, (kw.get("env") or {}).get("GH_REPO"))))
+    release._gh(["api", "repos/{owner}/{repo}/issues/events?per_page=100"])
+    release._gh(["issue", "list", "--label", "x"])
+    assert seen[0] == (["gh", "api", "repos/{owner}/{repo}/issues/events?per_page=100"],
+                       "someone/app")
+    assert seen[1] == (["gh", "issue", "list", "--label", "x", "--repo", "someone/app"], None)
 
 
 def test_notes_rewritten_for_a_release_already_out_close_nothing(monkeypatch):

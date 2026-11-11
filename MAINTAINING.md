@@ -107,8 +107,9 @@ the version was built.
    before its last push: `python3 tools/release.py cut X.Y.Z --headline "<the line a person
    reads>"`. It renames `[Unreleased]` to `## [X.Y.Z] - <date>` under a fresh one, puts the
    headline first under `### Changed` and commits nothing. It refuses an empty section, a
-   number not newer than the newest release, a hand-over without the number, and a headline
-   over 140 characters, of two sentences, with marks, or naming the maintainer.
+   number not newer than the newest release, a hand-over without the number or with a
+   bracketed line still saying what goes there, and a headline over 140 characters, of two
+   sentences, with marks, or naming the maintainer.
 3. Label the pull request `release` once it has code: Everywhere and every system in
    Platforms run on the label and each push under it, never block; title it "Release X.Y.Z: ...".
 4. When the page's look changed, `python3 tools/readme_pictures.py shoot` (Node, Playwright and
@@ -146,10 +147,10 @@ message give the builder prompt whole, in one copyable block. Never start that c
 - **The suite runs in parts side by side** (`ci_plan.py part`; every test file in exactly one
   part): a normal pull request is green in about six minutes.
 - **Platforms on an ordinary pull request** runs only when it touches what a person's set-up
-  runs on Linux or a Mac (`ci_plan.py` `PLATFORM_PATHS`, each path with its reason; add one when
-  the person job starts running a new tool), and then without the suite on Linux, which the
-  suite parts already run. Every system, Windows included, runs on the `release` label,
-  weekly and by hand.
+  runs on Linux or a Mac (`ci_plan.py` `PLATFORM_PATHS`, each path with its reason; a test
+  fails when the person job's steps run a tool not listed there), and then without the suite
+  on Linux, which the suite parts already run. Every system, Windows included, runs on the
+  `release` label, weekly and by hand.
 
 ## The builder prompt
 
@@ -210,7 +211,8 @@ again, fixes and releases everything at once, and no Actions workflow runs Claud
    says what the app's builder did (the maintainer, 2026-11-11).
 4. **A fix made elsewhere closes with the next release.** A `from-copy` issue fixed on master
    by hand is labelled `fixed-unreleased`; `tools/release.py publish` (`release.yml`, with
-   `issues: write`) closes each with "Fixed in vX.Y.Z" and takes the label off. A version's own
+   `issues: write`) closes each with "Fixed in vX.Y.Z" and takes the label off, if it was
+   labelled before the commit the tag is on was made (one labelled later waits for the next). A version's own
    pull request may instead say "Closes #N" when its merge is the release, never one merged
    before it. GitHub makes each label the first time it is set.
 

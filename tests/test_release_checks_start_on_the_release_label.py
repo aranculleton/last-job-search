@@ -40,6 +40,14 @@ def _plan(github: dict) -> dict:
     return {"plan": got}
 
 
+def _starts(workflow: str, github: dict) -> bool:
+    """Whether GitHub starts the workflow for this event at all: a pull request's action has
+    to be one of its `types`."""
+    if github["event_name"] != "pull_request":
+        return True
+    return github["event"]["action"] in W.load(workflow)["on"]["pull_request"]["types"]
+
+
 def _ran(workflow: str, github: dict, inputs=None) -> set:
     out = _plan(github) if workflow == "platforms.yml" else {}
     results = W.run(workflow, github, inputs=inputs, outputs=out)
@@ -49,6 +57,13 @@ def _ran(workflow: str, github: dict, inputs=None) -> set:
 @pytest.mark.parametrize("github, runs", [
     (W.pull_request("labeled", labels=["release"], label="release"), True),
     (W.pull_request("synchronize", labels=["release", "bug"]), True),
+    # Opened or reopened with the label on (the process review, 2026-11-11: reopened, it ran
+    # Windows in Platforms and nothing in Everywhere until its next push).
+    (W.pull_request("opened", labels=["release"]), True),
+    (W.pull_request("reopened", labels=["bug", "release"]), True),
+    (W.pull_request("opened", labels=["bug"], title=TITLE), False),
+    (W.pull_request("reopened", labels=[]), False),
+    (W.pull_request("reopened", labels=["release"], private=True), False),
     (W.pull_request("labeled", labels=["release", "bug"], label="bug"), False),
     (W.pull_request("synchronize", title=TITLE), False),
     (W.pull_request("labeled", labels=["documentation"], label="documentation", title=TITLE), False),
@@ -59,10 +74,32 @@ def _ran(workflow: str, github: dict, inputs=None) -> set:
 ])
 def test_everywhere_and_windows_run_on_the_label_and_never_the_title(github, runs):
     inputs = {"suite": True, "variants": "", "tests": ""}
+    assert _starts("everywhere.yml", github) or not runs
     assert (_ran("everywhere.yml", github, inputs) == set(EVERYWHERE)) is runs
     assert not runs or _ran("everywhere.yml", github, inputs) == set(EVERYWHERE)
     platforms = _ran("platforms.yml", github)
     assert all((j in platforms) is runs for j in WINDOWS), platforms
+
+
+ACTIONS = ("opened", "reopened", "synchronize", "labeled", "unlabeled", "edited", "closed",
+           "ready_for_review", "converted_to_draft")
+
+
+@pytest.mark.parametrize("action", ACTIONS)
+@pytest.mark.parametrize("labels, label", [(["release"], "release"), (["release", "bug"], "bug"),
+                                           (["bug"], "bug"), ([], "")])
+def test_everywhere_and_platforms_agree_on_every_pull_request_event(action, labels, label):
+    """Whatever happens to a pull request, Everywhere checks it exactly when Platforms runs
+    Windows on it: both when tools/ci_plan.py release_run says it is a release run, and the
+    event is one each workflow starts on."""
+    label = label if action in ("labeled", "unlabeled") else ""
+    github = W.pull_request(action, labels=labels, label=label)
+    want = ci_plan.release_run("pull_request", action, label, labels)
+    inputs = {"suite": True, "variants": "", "tests": ""}
+    everywhere = _starts("everywhere.yml", github) and \
+        _ran("everywhere.yml", github, inputs) == set(EVERYWHERE)
+    windows = _starts("platforms.yml", github) and set(WINDOWS) <= _ran("platforms.yml", github)
+    assert everywhere is want and windows is want, (everywhere, windows, want)
 
 
 def test_only_platforms_runs_weekly():
@@ -94,7 +131,7 @@ def test_the_label_or_the_title_decides_nothing_else_in_either_file():
         code = "\n".join(ln for ln in text.splitlines() if not ln.lstrip().startswith("#"))
         assert "pull_request.title" not in code, name
     on = W.load("everywhere.yml")["on"]
-    assert on["pull_request"]["types"] == ["labeled", "synchronize"]
+    assert on["pull_request"]["types"] == ["opened", "reopened", "labeled", "synchronize"]
     assert "labeled" in W.load("platforms.yml")["on"]["pull_request"]["types"]
 
 
@@ -112,7 +149,11 @@ def test_another_label_never_cancels_the_run_checking_the_release():
                                  ref="refs/pull/7/merge"))
         other = _group(name, dict(W.pull_request("labeled", ["release", "bug"], "bug"),
                                   ref="refs/pull/7/merge"))
-        assert release == push != other, (name, release, other)
+        # Opened or reopened with the label, GitHub sends that and `labeled` together: one
+        # group, so the second cancels the first and one run checks the release.
+        opened = [_group(name, dict(W.pull_request(action, ["release"]), ref="refs/pull/7/merge"))
+                  for action in ("opened", "reopened")]
+        assert release == push == opened[0] == opened[1] != other, (name, release, other)
         assert W.load(name)["concurrency"]["cancel-in-progress"] is True
 
 

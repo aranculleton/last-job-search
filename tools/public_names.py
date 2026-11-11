@@ -10,11 +10,13 @@ score_eval.EXPECTATIONS with nothing in their place. Nothing stopped either.
 
     python3 tools/public_names.py check      # every name the newest release ships is still here, or listed as gone
 
-The names people have are the newest release's: read from that tag's own files (`git
-ls-tree` and `git cat-file`), never from a copy kept beside the code. A clone without the
-tag fetches that one tag (`--depth=1` in a shallow clone, as CI's); a copy whose own remote
-has no app releases, as a person's copy has, says so and passes. Until 4.15.1 a snapshot of
-every name, 89 KB, was written afresh at each release, a step of its own.
+The names people have are the newest release's this copy is built on: read from that
+tag's own files (`git ls-tree` and `git cat-file`), never from a copy kept beside the code,
+and never from a release the copy does not hold, which nothing it changed could have broken.
+A copy whose own remote has no app releases, as a person's copy has, says so and passes, and
+so does a shallow clone that holds too little history to tell (CI's 3.9 leg; the 3.13 suite
+has the whole history). Until 4.15.1 a snapshot of every name, 89 KB, was written afresh at
+each release, a step of its own.
 
 The names are read with ast, never imported: every def, async def and class, and every
 module-level assignment, annotated ones included. A name may go only when
@@ -170,31 +172,36 @@ def _commit(root: str, tag: str, sha: str) -> str:
     return ""
 
 
+TOO_SHALLOW = ("this copy holds too little of its history to tell which release it is built "
+               "on, so its names were not compared (a full copy compares them)")
+NONE_HELD = "this copy is built on none of the app's releases, so no name can have gone"
+
+
 def newest_release(root: str = ROOT) -> tuple[str, str, str]:
-    """(tag, commit, "") for the newest release this tree holds, fetching that one tag where
-    the clone lacks it; ("", "", why) when there is none to compare with."""
+    """(tag, commit, "") for the newest release this tree is built on, the one HEAD holds;
+    ("", "", why) when there is none to compare with.
+
+    A release HEAD does not hold is never compared with: a copy made before it would be
+    told it lost every name the release added (it said so on its first run, and not on its
+    second, because the first fetched the tag). Nothing is fetched. A full clone holds every
+    commit HEAD is built on, so a release whose commit is missing here is not one HEAD
+    holds. A shallow clone may hold a release beyond the history it has, and only a release
+    within that history can be shown to be held; where none can, it passes and says so."""
     tags, asked = release_tags(root)
     if not tags:
-        return "", "", ("no release of the app is known here" if asked else
-                        "no release of the app is known here, and GitHub could not be asked")
-    order = sorted(tags, key=_key, reverse=True)
-    tag = order[0]
-    commit = _commit(root, tag, tags[tag])
+        return "", "", ("no release of the app is known here, so no name can have gone"
+                        if asked else "no release of the app is known here, and GitHub could "
+                        "not be asked, so no name can have gone")
     shallow = _git(root, "rev-parse", "--is-shallow-repository").stdout.decode().strip() == "true"
-    held = lambda c: _git(root, "merge-base", "--is-ancestor", c, "HEAD").returncode == 0  # noqa: E731
-    if commit and not held(commit) and not shallow:
-        # A copy made before the newest release: the newest it holds is what it must keep.
-        for older in order[1:]:
-            c = _commit(root, older, tags[older])
-            if c and held(c):
-                return older, c, ""
-    if not commit:
-        _git(root, "fetch", "--quiet", "--no-tags", *(["--depth=1"] if shallow else []),
-             "origin", f"refs/tags/{tag}")
+    unsure = False
+    for tag in sorted(tags, key=_key, reverse=True):
         commit = _commit(root, tag, tags[tag])
-    if not commit:
-        return "", "", f"the newest release, {tag}, could not be fetched"
-    return tag, commit, ""
+        if commit and _git(root, "merge-base", "--is-ancestor", commit, "HEAD").returncode == 0:
+            return tag, commit, ""
+        # Not held, or in a shallow clone perhaps held beyond its history. An older release
+        # HEAD does hold is still safe to compare with: what a newer one took away is listed.
+        unsure = unsure or shallow
+    return "", "", TOO_SHALLOW if unsure else NONE_HELD
 
 
 def names_at(root: str, commit: str) -> dict[str, list[str]]:
@@ -342,7 +349,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     if not found:
         print(f"public_names: every name {tag} ships is still here, or listed as gone" if tag
-              else f"public_names: nothing to compare with: {why}, so no name can have gone.")
+              else f"public_names: nothing to compare with: {why}.")
         return 0
     print(f"public_names: {len(found)} name{'s' if len(found) != 1 else ''} a person's own "
           f"tests may use {'are' if len(found) != 1 else 'is'} gone, or not yet announced:")

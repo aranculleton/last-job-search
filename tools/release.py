@@ -20,11 +20,13 @@ empty [Unreleased] above it and writes the headline as the section's first entry
 line a person who updates when they choose is told about the version (tools/sync_app.py,
 brings()). It refuses when [Unreleased] is empty, when X.Y.Z is not newer than the newest
 release, when the headline is longer than 140 characters or is not one plain sentence, and
-when docs/NEXT_BUILDER.md does not name X.Y.Z yet. It never commits.
+when docs/NEXT_BUILDER.md does not name X.Y.Z yet or still has a bracketed line saying what
+goes there. It never commits.
 
 Publishing a release also closes every open issue labelled `fixed-unreleased` (a bug from the
 maintainer's copy, fixed on master since the last release: tools/app_bug.py) with a comment
-"Fixed in vX.Y.Z", and takes the label off.
+"Fixed in vX.Y.Z", and takes the label off: each labelled before the tagged commit was made,
+so one labelled between the release's merge and the release job waits for the next.
 
 The notes are short on purpose: the version's headline (the section's first entry), then
 one line per change by kind, new things first, then changed, fixed and removed, each with
@@ -152,10 +154,14 @@ def short(notes: str) -> str:
 
 
 def _gh(args: list[str]) -> subprocess.CompletedProcess:
-    cmd = ["gh", *args]
+    cmd, env = ["gh", *args], None
     if os.environ.get("GITHUB_REPOSITORY"):
-        cmd += ["--repo", os.environ["GITHUB_REPOSITORY"]]
-    return subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True,
+        if args[:1] == ["api"]:
+            # `gh api` takes no --repo: its {owner}/{repo} come from GH_REPO.
+            env = dict(os.environ, GH_REPO=os.environ["GITHUB_REPOSITORY"])
+        else:
+            cmd += ["--repo", os.environ["GITHUB_REPOSITORY"]]
+    return subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, env=env,
                           encoding="utf-8", errors="replace")
 
 
@@ -176,6 +182,19 @@ VERSION = re.compile(r"^\d+\.\d+\.\d+$")
 UNRELEASED = re.compile(r"^## \[Unreleased\][^\n]*\n", re.M)
 NEXT_BUILDER = os.path.join("docs", "NEXT_BUILDER.md")
 HEADLINE_MAX = 140
+# A line of the hand-over left for the release to fill: "[4.15.1's final test results go
+# here, written at the release.]" named the version, so the hand-over passed, and the
+# release would have gone out with the placeholder in it (the process review, 2026-11-11).
+PLACEHOLDER = re.compile(r"\[[^\]\n]*\bgo(?:es)? here\b[^\]\n]*\]", re.I)
+
+
+def placeholder(text: str) -> tuple[int, str] | None:
+    """(line number, the line) for the first line of the hand-over that is still a bracketed
+    "... goes here", or None."""
+    for n, line in enumerate(text.splitlines(), 1):
+        if PLACEHOLDER.search(line):
+            return n, line.strip()
+    return None
 
 
 def headline_problem(headline: str) -> str:
@@ -289,12 +308,18 @@ def cut(version: str, headline: str, root: str = ROOT, day: str | None = None) -
     note = os.path.join(root, NEXT_BUILDER)
     try:
         with open(note, encoding="utf-8") as fh:
-            named = re.search(r"(?<![\d.])" + re.escape(version) + r"(?!\d|\.\d)", fh.read())
+            handover = fh.read()
     except OSError:
-        named = None
-    if not named:
+        handover = ""
+    if not re.search(r"(?<![\d.])" + re.escape(version) + r"(?!\d|\.\d)", handover):
         print(f"release: nothing changed: docs/NEXT_BUILDER.md does not name {version} yet. "
               f"Write the handover for {version} first, then cut it.")
+        return 1
+    waiting = placeholder(handover)
+    if waiting:
+        n, line = waiting
+        print(f"release: nothing changed: docs/NEXT_BUILDER.md still waits to be written at "
+              f"line {n}: \"{line}\". Write what goes there, then cut {version}.")
         return 1
     day = day or dt.datetime.now(dt.timezone.utc).date().isoformat()
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
@@ -348,20 +373,62 @@ def publish(sha: str | None = None) -> int:
     os.unlink(notes)
     print(f"release: published {tag}" if r.returncode == 0 else (r.stderr or r.stdout))
     if r.returncode == 0:
-        close_fixed(tag)
+        close_fixed(tag, sha or os.environ.get("GITHUB_SHA") or "")
     return r.returncode
 
 
 FIXED_LABEL = "fixed-unreleased"
+EVENTS_PAGE = 100
 
 
-def close_fixed(tag: str, gh=None) -> list[int]:
+def _when(stamp: str) -> dt.datetime:
+    """A time as git and GitHub write it ("2026-11-11T12:00:00Z", "...+00:00")."""
+    return dt.datetime.fromisoformat(stamp.strip().replace("Z", "+00:00"))
+
+
+def _tagged_at(tag: str, sha: str, gh, root: str) -> dt.datetime | None:
+    """When the commit `tag` is on was made: from this checkout when it holds `sha` (release.yml
+    checks out the very commit it tags), else from GitHub. None when neither can tell."""
+    if re.fullmatch(r"[0-9a-f]{40}", sha or ""):
+        r = subprocess.run(["git", "-C", root, "show", "-s", "--format=%cI", sha],
+                           capture_output=True, text=True, encoding="utf-8", errors="replace")
+        if r.returncode == 0 and r.stdout.strip():
+            return _when(r.stdout)
+    got = gh(["api", f"repos/{{owner}}/{{repo}}/commits/{tag}"])
+    try:
+        return _when(json.loads(got.stdout)["commit"]["committer"]["date"])
+    except (ValueError, TypeError, KeyError):
+        return None
+
+
+def _marked_late(numbers: list[int], since: dt.datetime, gh) -> set[int] | None:
+    """Which of these issues had FIXED_LABEL put on after `since`, from the repo's issue
+    events (one call, newest first); None when they cannot all be seen: the call failed, or
+    a whole page of events came after `since`."""
+    got = gh(["api", f"repos/{{owner}}/{{repo}}/issues/events?per_page={EVENTS_PAGE}"])
+    try:
+        events = json.loads(got.stdout or "") if got.returncode == 0 else None
+        if not isinstance(events, list):
+            return None
+        if len(events) >= EVENTS_PAGE and _when(events[-1]["created_at"]) > since:
+            return None
+        return {int(e["issue"]["number"]) for e in events
+                if e.get("event") == "labeled"
+                and (e.get("label") or {}).get("name") == FIXED_LABEL
+                and int(e["issue"]["number"]) in numbers and _when(e["created_at"]) > since}
+    except (ValueError, TypeError, KeyError):
+        return None
+
+
+def close_fixed(tag: str, sha: str = "", gh=None, root: str = ROOT) -> list[int]:
     """Every open issue labelled FIXED_LABEL (a bug from the maintainer's copy the builder
     fixed on master, tools/app_bug.py) closed with a comment naming the release that carries
     the fix, and the label taken off. Only when a release is first published, never when its
-    notes are rewritten: an issue fixed after it would be called fixed in it. One that could
-    not be closed is said and keeps its label, so the next release closes it; the release is
-    out either way. The numbers closed."""
+    notes are rewritten: an issue fixed after it would be called fixed in it. For the same
+    reason only an issue labelled before the tagged commit (`sha`) was made: one labelled
+    between the release's merge and this run waits for the next release, as do all of them
+    when that cannot be told. One that could not be closed is said and keeps its label, so
+    the next release closes it; the release is out either way. The numbers closed."""
     gh = gh or _gh
     got = gh(["issue", "list", "--label", FIXED_LABEL, "--state", "open", "--json", "number",
               "--limit", "200"])
@@ -374,8 +441,19 @@ def close_fixed(tag: str, gh=None) -> list[int]:
         print(f"release: the issues fixed in {tag} could not be listed: "
               f"{(got.stderr or got.stdout or '').strip()[:200]}")
         return []
+    if not numbers:
+        return []
+    since = _tagged_at(tag, sha, gh, root)
+    late = _marked_late(numbers, since, gh) if since else None
+    if late is None:
+        print(f"release: {len(numbers)} issue(s) marked fixed wait for the next release: when "
+              f"each was marked, against {tag}'s commit, could not be told.")
+        return []
+    for n in sorted(late):
+        print(f"release: issue #{n} was marked fixed after {tag}'s commit was made, so the "
+              f"next release closes it.")
     closed = []
-    for n in numbers:
+    for n in (n for n in numbers if n not in late):
         # Closed first, the label taken off after: a label gone from an issue still open
         # would leave it open for good.
         shut = gh(["issue", "close", str(n), "--reason", "completed",
@@ -386,10 +464,8 @@ def close_fixed(tag: str, gh=None) -> list[int]:
             continue
         gh(["issue", "edit", str(n), "--remove-label", FIXED_LABEL])
         closed.append(n)
-    if numbers:
-        print(f"release: closed {len(closed)} of {len(numbers)} issue(s) fixed in {tag}")
+    print(f"release: closed {len(closed)} of {len(numbers)} issue(s) fixed in {tag}")
     return closed
-
 
 
 def refresh(tag: str, text: str) -> int:

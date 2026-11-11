@@ -13,7 +13,8 @@
 #
 # The label, never the title: a "Release " title started this on every push, so a release's
 # CHANGELOG pull request ran it four times (#206), and retitling a pull request started
-# nothing. The run starts as the label goes on, and again on each push while it is on.
+# nothing. The run starts as the label goes on, and again on each push while it is on, and
+# when a pull request opens or reopens with it on.
 #
 # No list of paths, unlike Platforms' plan: any change to the app can break any of these.
 
@@ -22,8 +23,10 @@ name: Everywhere
 on:
   pull_request:
     # Each job runs only with the `release` label on (its `if:`); every other pull request
-    # event starts a run whose jobs are all skipped, which costs nothing.
-    types: [labeled, synchronize]
+    # event starts a run whose jobs are all skipped, which costs nothing. `opened` and
+    # `reopened` as Platforms has them (tools/ci_plan.py release_run): a release pull request
+    # reopened with the label ran Windows there and nothing here until its next push.
+    types: [opened, reopened, labeled, synchronize]
   workflow_dispatch:
     # By hand, a few files in one or two engines: a failure reproduced in minutes, not the
     # whole page in all eight (Safari's and Firefox's findings at 4.12, which this container
@@ -57,7 +60,7 @@ jobs:
     # Four jobs side by side, not eight variants one after another: the release waited about
     # 50 minutes on this job alone (2026-10-29). Each installs only the engine it needs.
     name: page everywhere (${{ matrix.name }})
-    if: ${{ github.event_name == 'workflow_dispatch' || (!github.event.repository.private && ((github.event.action == 'labeled' && github.event.label.name == 'release') || (github.event.action == 'synchronize' && contains(github.event.pull_request.labels.*.name, 'release')))) }}
+    if: ${{ github.event_name == 'workflow_dispatch' || (!github.event.repository.private && ((github.event.action == 'labeled' && github.event.label.name == 'release') || ((github.event.action == 'opened' || github.event.action == 'synchronize' || github.event.action == 'reopened') && contains(github.event.pull_request.labels.*.name, 'release')))) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     strategy:
@@ -115,7 +118,7 @@ jobs:
     # and one run stopped at the 60-minute limit (2026-11-11). The variants are
     # tools/everywhere.sh's own, and a test holds the two lists alike.
     name: suite everywhere (${{ matrix.variant }})
-    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.suite != false) || (!github.event.repository.private && ((github.event.action == 'labeled' && github.event.label.name == 'release') || (github.event.action == 'synchronize' && contains(github.event.pull_request.labels.*.name, 'release')))) }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.suite != false) || (!github.event.repository.private && ((github.event.action == 'labeled' && github.event.label.name == 'release') || ((github.event.action == 'opened' || github.event.action == 'synchronize' || github.event.action == 'reopened') && contains(github.event.pull_request.labels.*.name, 'release')))) }}
     runs-on: ubuntu-24.04
     # One variant is the whole suite once, about eight minutes.
     timeout-minutes: 30
