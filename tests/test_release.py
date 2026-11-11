@@ -15,6 +15,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
 sys.path.insert(0, str(ROOT / "tests"))
 import release  # noqa: E402
+import repo_files  # noqa: E402
 from test_a_beginner_is_told_in_plain_words import _plain  # noqa: E402
 
 TEXT = """# Changelog
@@ -240,7 +241,7 @@ def test_no_test_reads_unreleased_by_its_name_for_what_ships():
     named the section (tests/test_an_interview_has_a_live_prep.py, 2026-11-11): a test finds
     the section that carries its entry instead."""
     by_name = re.compile(r"\.(?:index|find|rfind|split|partition|rpartition)\(\s*[\"']## \[Unreleased\]")
-    found = [f"{p.name}:{n}" for p in sorted((ROOT / "tests").rglob("*.py"))
+    found = [f"{p.name}:{n}" for p in repo_files.files("tests/**/*.py")
              for n, line in enumerate(p.read_text(encoding="utf-8").splitlines(), 1)
              if by_name.search(line)]
     assert found == []

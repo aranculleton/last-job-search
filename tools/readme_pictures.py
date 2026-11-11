@@ -225,7 +225,7 @@ def take(root: str = ROOT) -> dict:
         model = json.load(fh)
     with tempfile.TemporaryDirectory(prefix="ljs-readme-") as tmp:
         html = os.path.join(tmp, "sample.html")
-        with open(html, "w", encoding="utf-8") as fh:
+        with open(html, "w", encoding="utf-8", newline="\n") as fh:
             fh.write(app_page.standalone(app_page.render(model)))
         env["LJS_SHOTS"] = os.path.join(tmp, "shots")
         ask = json.dumps({"id": 1, "scenario": "shots", "args": {"html": html, "list": SHOTS}})
