@@ -1833,29 +1833,107 @@ def start_changed_line() -> str:
     """After a sync: the line telling a chat its start's steps are out of date, when the app
     it took changed how a chat starts since start last spoke (or start never recorded it: a
     version from before this one). Said once a version."""
+    return _start_change()[0]
+
+
+def _start_change() -> tuple[str, str]:
+    """(start_changed_line's line, the commit the start last spoke for, or "")."""
     head = _head()
     if not head:
-        return ""
+        return "", ""
     try:
         with open(_local_file(START_HEAD), encoding="utf-8") as fh:
             was = fh.read().strip()
     except OSError:
         was = ""
     if was == head:
-        return ""
+        return "", was
     changed = True
     if was:
         code, out = _git("diff", "--name-only", was, head, "--", *START_FILES)
         changed = code != 0 or bool(out.strip())
     note_start()
     if not changed:
-        return ""
-    return START_CHANGED
+        return "", was
+    return START_CHANGED, was
 
 
 START_CHANGED = ("Claude: this update changed how a chat starts. If python3 tools/app.py start "
                  "printed steps earlier in this chat, they are out of date: run it again now and "
                  "follow what it prints instead, never the steps from before.")
+
+# A start from 4.15.0 on runs the day's update check itself and, when the check brings in an
+# update, runs again on the new code by itself (app.py cmd_start): its tools/app.py carries
+# this name (app.py START_UPDATED). An older start printed the check as a step, so a chat ran
+# it, the update changed how a chat starts, and START_CHANGED sent the chat round the whole
+# start a second time (the maintainer's copy taking 4.15.0, 2026-11-11).
+START_RUNS_AGAIN = "LJS_START_UPDATED"
+# Set by every command that runs the day's update check inside itself (app.py start and a
+# wake, the brief's run): the update check it runs never starts anything of its own, since
+# the command carries on from the new code itself.
+IN_COMMAND = "LJS_SYNC_IN_COMMAND"
+# What start_after_sync returns when the sync carries the start on itself (start_here).
+START_HERE = "start here"
+START_HERE_SAY = ("Claude: this update changed how a chat starts, so the start has carried on "
+                  "here, on the new version. Follow the steps below in place of every step "
+                  "python3 tools/app.py start printed earlier in this chat; the update check "
+                  "among them is done, and the start is not needed again for this update:")
+
+
+def _runs_again(commit: str) -> bool:
+    """Did the start at `commit` run the day's check itself and carry on by itself? True where
+    it cannot be told (a commit this clone lacks): then the sync says what it always said."""
+    code, text = _git("show", f"{commit}:tools/app.py")
+    return code != 0 or START_RUNS_AGAIN in text
+
+
+def _replaced() -> str:
+    """The commit this checkout was on before the update it holds now: the first parent of
+    its newest sync from the app, or "" with none."""
+    try:
+        import sync_app
+        subject = sync_app.SYNC_SUBJECT
+    except Exception:  # noqa: BLE001
+        return ""
+    code, out = _git("log", "-1", "--format=%P", f"--grep={subject}", "HEAD")
+    parents = out.split() if code == 0 else []
+    return parents[0] if parents else ""
+
+
+def start_after_sync() -> str:
+    """What a sync says about the start, once the update is in: "" (nothing changed for it),
+    START_CHANGED (the chat runs the start again), or START_HERE, where the sync was a step an
+    older start printed, one that never carries itself on: the sync then runs the new start
+    itself at its end (start_here) and the chat follows those steps, the start run once by
+    the chat. Never inside a command that runs the check itself, which carries on by itself
+    (IN_COMMAND, or the code the update replaced running its own check), and never where no
+    start spoke in this checkout: nothing printed steps to replace."""
+    line, was = _start_change()
+    if not line or not was or os.environ.get(IN_COMMAND):
+        return line
+    before = _replaced()
+    if _runs_again(was) or (before and _runs_again(before)):
+        return line
+    return START_HERE
+
+
+def start_here() -> list[str]:
+    """The start run again by the sync on the code it brought in (start_after_sync): its
+    lines under START_HERE_SAY, or START_CHANGED where it could not run. It takes no update
+    check of its own and never runs a further start (app.py START_UPDATED, set empty). Given
+    half the time the sync gives this whole step (sync_app.upgrades), so a slow one still
+    leaves the line that sends the chat round the start, never nothing."""
+    env = dict(os.environ, **{START_RUNS_AGAIN: "", IN_COMMAND: "1"})
+    try:
+        r = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "app.py"), "start"],
+                           cwd=ROOT, env=env, capture_output=True, text=True, encoding="utf-8",
+                           errors="replace", timeout=300, stdin=subprocess.DEVNULL)
+    except (OSError, subprocess.TimeoutExpired):
+        return [START_CHANGED]
+    out = (r.stdout or "").rstrip("\n")
+    if r.returncode not in (0, 1) or not out.startswith("app start:"):
+        return [START_CHANGED]
+    return [START_HERE_SAY] + out.splitlines()
 
 
 def _stranded() -> dict[str, int]:

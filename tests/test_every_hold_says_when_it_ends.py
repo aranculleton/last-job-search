@@ -140,9 +140,16 @@ def _declined(_s):
 
 def _dismissed(_s):
     import exclude
-    # A role set aside with no day holds nothing; one with a day ends, unless their words
-    # said for good.
-    assert exclude.set_aside_until({"exclusion_reason": "the pay"}) == dt.date.min
+    import person
+    # A role set aside with no day holds as if set today, and the next save dates it
+    # (exclude.date_undated), so it still ends. Moved on 2026-11-11 from "holds nothing", which
+    # left what a person's own check set aside unheld: four of the maintainer's own checks
+    # failed on 4.15.0. One with a day ends, unless their words said for good.
+    end = person.today() + dt.timedelta(days=exclude.set_aside_days())
+    assert exclude.set_aside_until({"exclusion_reason": "the pay"}) == end
+    got = {"seen": {"a": {"exclusion_reason": "the pay", "basis": "person",
+                          "status": "excluded"}}}
+    assert exclude.date_undated(got) == 1 and got["seen"]["a"]["held_from"]
     assert exclude.set_aside_until({"exclusion_reason": "the pay",
                                     "excluded_date": "2026-11-01"}) > TODAY
     assert exclude.set_aside_until({"exclusion_reason": "never again",
@@ -152,11 +159,15 @@ def _dismissed(_s):
 def _job_left_out(_s):
     import exclude
     import throttle
-    # A draft a chat stopped with no day holds nothing; with one it ends, even where its words
-    # say never (they are the chat's); and it holds that posting alone, never the role.
+    import person
+    # A draft a chat stopped with no day holds as if stopped today, until a save dates it (moved
+    # from "holds nothing" on 2026-11-11 with set_aside_until: _dismissed says why); with a day
+    # it ends, even where its words say never (they are the chat's); and it holds that posting
+    # alone, never the role.
     stop = {"exclusion_reason": "never one they can take", "basis": "person", "by": exclude.CHAT,
             "title": "Pricing Analyst", "company": "Fernway Insurance"}
-    assert exclude.set_aside_until(stop) == dt.date.min
+    assert exclude.set_aside_until(stop) == person.today() + dt.timedelta(
+        days=exclude.set_aside_days())
     assert exclude.set_aside_until(dict(stop, excluded_date="2026-11-01")) > TODAY
     assert throttle.entry_pair(stop) is None
 

@@ -162,14 +162,19 @@ def ruled_on(entry) -> dt.date | None:
 
 def set_aside_until(entry) -> dt.date | None:
     """The first day a role the person set aside no longer holds: set_aside_days() after the day
-    they did; None while it holds for good, their own words saying so (for_good); and
-    date.min for one nothing dates, which holds nothing. Only for their own rulings (basis
-    "person"): the rules' own lapse when the rule they rest on changes. A chat's judgement
-    (`by` "chat") is never for good: its words are the chat's, not theirs."""
+    they did; None while it holds for good, their own words saying so (for_good). One nothing
+    dates holds as if set today, until the next save writes that day on it (date_undated).
+    Only for their own rulings (basis "person"): the rules' own lapse when the rule they rest
+    on changes. A chat's judgement (`by` "chat") is never for good: its words are the chat's,
+    not theirs."""
     if (entry or {}).get("by") != CHAT and for_good((entry or {}).get("exclusion_reason")):
         return None
-    day = ruled_on(entry)
-    return day + dt.timedelta(days=set_aside_days()) if day else dt.date.min
+    # One with no day at all (a check of the person's own, or an older tool, wrote it so)
+    # held nothing in 4.15.0 until something dated it, so what such a writer set aside was not
+    # held, and four of the maintainer's own checks failed on the update (2026-11-11). It holds
+    # from the day it is read, and the next save dates it, so it still ends: never for ever.
+    day = ruled_on(entry) or person.today()
+    return day + dt.timedelta(days=set_aside_days())
 
 
 def set_aside_on(entry) -> dt.date | None:
@@ -190,8 +195,9 @@ def _undated_set_aside(entry) -> bool:
 
 def undated_set_asides(path=None) -> list[str]:
     """The keys of the roles the person set aside with no day of their own, kept from before a
-    set-aside had an end: each would end on its posting's first seen day's six months, or hold
-    nothing, all on the next search."""
+    set-aside had an end, or written since with none: each would end on its posting's first
+    seen day's six months, all on the next search, or hold from whichever day it is read
+    until a save dates it (date_undated)."""
     data = _load(path or SEEN)
     return [k for k, e in (data.get("seen") or {}).items() if _undated_set_aside(e)]
 
@@ -211,6 +217,29 @@ def date_set_asides(today: str = "", path=None) -> int:
             n += 1
     if n:
         _save(data, path)
+    return n
+
+
+def _no_day(entry) -> bool:
+    """A set-aside of the person's that nothing dates (no day it was made, none its posting
+    was seen: ruled_on) and that ends: set_aside_until counts it from the day it is read."""
+    return (isinstance(entry, dict) and entry.get("basis") == "person"
+            and str(entry.get("status") or "").lower() == "excluded"
+            and ruled_on(entry) is None and set_aside_until(entry) is not None)
+
+
+def date_undated(data: dict, today: str = "") -> int:
+    """Write today on each set-aside nothing dates (_no_day), as `held_from`, so it ends
+    set_aside_days() on from the day it was first saved rather than holding from whichever day
+    it is read. Every writer of the file calls it before it writes (save_seen, the search's
+    throttle.write_back). Never said as the day it was set aside (set_aside_on). How many."""
+    day = today or person.today().isoformat()
+    n = 0
+    seen = data.get("seen") if isinstance(data, dict) else None
+    for e in (seen.values() if isinstance(seen, dict) else ()):
+        if _no_day(e):
+            e["held_from"] = day
+            n += 1
     return n
 
 
@@ -391,6 +420,7 @@ def save_seen(data, path=SEEN) -> None:
     folder = os.path.dirname(path)
     if folder:
         os.makedirs(folder, exist_ok=True)
+    date_undated(data)
     tmp = path + ".tmp"
     with open(tmp, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(data, fh, indent=INDENT, ensure_ascii=False)

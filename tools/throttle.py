@@ -1622,6 +1622,10 @@ def write_back(path: str, data: dict, skipped: list[dict], today: str,
         if (e.get("status") or "new") in _ROUND_STATUSES:
             e["status"] = "surfaced"
         r["first_seen"] = e.get("first_seen") or today
+    # A set-aside written with no day (a check of the person's own) is dated as it is saved,
+    # so it ends six months on rather than holding from whichever day it is read.
+    import exclude
+    exclude.date_undated(data, today)
     tmp = tempfile.NamedTemporaryFile("w", newline="\n", dir=os.path.dirname(path) or ".",
                                       delete=False, encoding="utf-8", suffix=".tmp")
     with tmp:

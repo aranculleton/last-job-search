@@ -2399,8 +2399,11 @@ def days_check(on: str, chat: str, tools: str = "") -> dict:
     if not stale:
         return {"ran": False}
     before = _git("rev-parse", "HEAD")[1]
-    # The chat's id goes with it, so the update's page steps know which chat this is.
-    env = dict(os.environ, **({"LJS_CHAT": chat} if chat else {}))
+    # The chat's id goes with it, so the update's page steps know which chat this is; and the
+    # mark that this command carries itself on to the new code, so the check starts nothing
+    # of its own (app_setup.IN_COMMAND).
+    import app_setup
+    env = dict(os.environ, **({"LJS_CHAT": chat} if chat else {}), **{app_setup.IN_COMMAND: "1"})
     r = subprocess.run([sys.executable, os.path.join(_HERE, "sync_app.py"), "--if-stale",
                         "--on", on or "<this chat's model>"] + (["--tools", tools] if tools else []),
                        cwd=os.path.dirname(_HERE),
