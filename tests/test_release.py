@@ -220,6 +220,34 @@ def test_cut_refuses_and_changes_nothing(tmp_path, monkeypatch, capsys, version,
     assert len("x" * 140) == release.HEADLINE_MAX and not release.headline_problem("x" * 140)
 
 
+def test_cut_refuses_a_handover_still_waiting_to_be_written(tmp_path, monkeypatch, capsys):
+    """The process review of 2026-11-11: the hand-over named 4.15.1, so the cut took it,
+    with "[4.15.1's final test results go here, written at the release.]" still in it."""
+    monkeypatch.setattr(release, "tags", lambda root=None: ["v3.3.0"])
+    waiting = ("# Notes for the next builder\n\nWritten at the release of 3.4.0.\n\n"
+               "## Not tested at this release\n\n- Windows, by hand.\n"
+               "- [3.4.0's final test results go here, written at the release.]\n")
+    root = _copy(tmp_path, note=waiting)
+    before = (tmp_path / "CHANGELOG.md").read_text(encoding="utf-8")
+    assert release.cut("3.4.0", HEADLINE, root=root) == 1
+    said = _said(capsys)
+    assert "nothing changed" in said and "line 8" in said
+    assert "[3.4.0's final test results go here, written at the release.]" in said
+    assert (tmp_path / "CHANGELOG.md").read_text(encoding="utf-8") == before
+    # Any wording of it, in any case; a bracket that is not one passes.
+    for line in ("[The numbers Go Here.]", "- [what the release checked goes here]"):
+        assert release.placeholder("ok\n" + line + "\n") == (2, line)
+    for line in ("[Everywhere](docs/x.md) ran here.", "It goes here, not there.",
+                 "[here]", "[go]"):
+        assert release.placeholder(line) is None, line
+    # Written, it cuts.
+    (tmp_path / "docs" / "NEXT_BUILDER.md").write_text(
+        waiting.replace("[3.4.0's final test results go here, written at the release.]",
+                        "Every check passed on GitHub; the Mac by hand."), encoding="utf-8")
+    assert release.cut("3.4.0", HEADLINE, root=root, day="2026-10-20") == 0
+    capsys.readouterr()
+
+
 def test_cut_still_checks_the_changelog_when_github_cannot_be_read(tmp_path, monkeypatch, capsys):
     root = _copy(tmp_path, note="3.3.0")
 

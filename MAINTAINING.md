@@ -107,8 +107,9 @@ the version was built.
    before its last push: `python3 tools/release.py cut X.Y.Z --headline "<the line a person
    reads>"`. It renames `[Unreleased]` to `## [X.Y.Z] - <date>` under a fresh one, puts the
    headline first under `### Changed` and commits nothing. It refuses an empty section, a
-   number not newer than the newest release, a hand-over without the number, and a headline
-   over 140 characters, of two sentences, with marks, or naming the maintainer.
+   number not newer than the newest release, a hand-over without the number or with a
+   bracketed line still saying what goes there, and a headline over 140 characters, of two
+   sentences, with marks, or naming the maintainer.
 3. Label the pull request `release` once it has code: Everywhere and every system in
    Platforms run on the label and each push under it, never block; title it "Release X.Y.Z: ...".
 4. When the page's look changed, `python3 tools/readme_pictures.py shoot` (Node, Playwright and
