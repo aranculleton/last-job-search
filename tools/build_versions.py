@@ -913,7 +913,7 @@ METHODS: dict[str, dict] = {
             (85, "2026-11-10", False, "a job chat that stopped on a question to you counts as finished for the tidy-up while the question waits and after your answer; a job chat that reports one job while blocked part way through another it runs is kept, never put away at work; asking routines.py for help never changes the registry"),
             (86, "2026-11-11", False, "the app maker's own builder task is listed (it fixes the bugs their copy files); nothing changes for anyone else"),
         ),
-        "fingerprint": "d61e74624798f30f",
+        "fingerprint": "2c0fefd76c4204be",
     },
     "expand": {
         "by": "upgrade", "priority": 4, "time": "~15 min",
