@@ -10889,11 +10889,16 @@
       h("div", {class: "detail-top"}, back),
       h("div", {class: "detail-body"}, h("h2", {class: "detail-title", id: "detail-title", tabindex: "-1"}, title), body));
     detailDlg._opener = document.activeElement;
+    // Its own address, and when it opened: the frame it sits in may answer the address it
+    // pushes (sheetStays).
+    detailDlg._addr = "#" + section + "/" + id + "/open";
+    detailDlg._from = location.hash;
+    detailDlg._at = performance.now();
     detailDlg.addEventListener("cancel", (e) => { e.preventDefault(); closeDetail(false); });
     document.body.appendChild(detailDlg);
     try { detailDlg.showModal(); } catch (e) { detailDlg.setAttribute("open", ""); }
     gaugeWakers();
-    if (!o.fromHistory) { addrTaken = null; try { history.pushState(null, "", "#" + section + "/" + id + "/open"); } catch (e) { /* the frame refuses */ } }
+    if (!o.fromHistory) { addrTaken = null; try { history.pushState(null, "", detailDlg._addr); } catch (e) { /* the frame refuses */ } }
     const hd = $("detail-title");
     if (hd) hd.focus();
   }
@@ -11469,13 +11474,19 @@
     const close = parts.find((p) => p.kind === "close");
     return lpLength(total) + " in " + plural(parts.length, "part", "parts") + (close && close !== parts[0] ? ", the last " + (Number(close.minutes) || 0) + " minutes for your questions" : "");
   }
+  // A part's lines to say first that hold words: a prep saved before 2026-11-11 can hold empty
+  // ones, and "Say first" was drawn over blank bullets the night before an interview.
+  function lpBeats(p) {
+    return arr(obj(p).say).filter((b) => txt(obj(b).t).trim());
+  }
   // At a glance, first: the line to open with, what they are known to ask (or the first likely
   // question) with where it comes up, and two questions to ask them; a guessed kind of
   // interview is said here, one tap from the right one (the UX review, 2026-11-10, U-5).
   function lpGlance(iv, lv, qById) {
     const parts = arr(lv.parts);
     const first = parts[0] || {};
-    const beats = arr(first.say);
+    // A line with no words is never the one to open with (an empty "Open with", 2026-11-11).
+    const beats = lpBeats(first);
     const open = beats.find((b) => arr(b.prompts).length) || beats[0];
     const partOf = (q) => parts.findIndex((p) => p.id === obj(q).part);
     const go = (q, key) => h("button", {type: "button", class: "btn link lp-glance-q", "data-k": "lpg:" + key, onclick: () => lpJump(lpId(lv, "q", q.id))}, lpPlain(lv, q.q),
@@ -11521,7 +11532,7 @@
     const termKeys = Object.keys(terms).filter((k) => txt(obj(terms[k]).name)).sort((a, b) => txt(terms[a].name).localeCompare(txt(terms[b].name)));
     const partEls = parts.map((p, i) => {
       const t = obj(obj(obj(lv.timing).parts)[p.id]);
-      const beats = arr(p.say);
+      const beats = lpBeats(p);
       const hid = lpId(lv, "ph", p.id);
       const pq = arr(p.questions).map((id) => qById.get(id)).filter(Boolean);
       const asks = p.kind === "close" ? arr(lv.ask) : [];
@@ -16266,6 +16277,7 @@
     addrTaken = type === "popstate" ? location.hash : null;
     const p = parseHash();
     if (!p) return;
+    if (sheetStays()) return;
     if (p.work) { openWork(); return; }
     if (p.drafts) setPref("drafts:view", p.drafts);
     S.split = p.split || null;
@@ -16279,6 +16291,30 @@
       const kind = ["interview", "person", "application"].find((k) => detailOf(k, opened));
       if (kind) openDetail(kind, opened, {fromHistory: true});
     }
+  }
+  // An open sheet (a prep, a person, an application) is closed by the address only when the
+  // person moved it: Back, or a link to somewhere else. In the Claude app on a Mac, Read your
+  // prep and Practise 3 questions flickered and opened nothing (the maintainer, 2026-11-11, the
+  // night before an interview): the page in its viewer's frame works in every browser, and the
+  // one thing that closes a sheet unasked is an address move, so a move the frame makes as the
+  // sheet pushes its address (its own address again, or the one before put back) closed it the
+  // instant it opened. Its own address again is never a reason to close or redraw it, and
+  // nothing in its first moment is the person's Back.
+  // Only the two answers a frame gives are let pass: the sheet's own address said again, and,
+  // in its first second, the address it was opened from put back. A move anywhere else (a
+  // name tapped in the sheet, a link to another screen) is the person's, and closes it at once:
+  // ignoring every move in the first second kept a sheet open over the next one tapped.
+  // Only inside another page's frame (the Claude app shows the page in one; a tab never
+  // does), so in a tab Back closes the sheet at once, as it always has.
+  const SHEET_SETTLE_MS = 1000;
+  function inFrame() {
+    try { return window.self !== window.top || window.__ljsFramed === true; } catch (e) { return true; }
+  }
+  function sheetStays() {
+    if (!detailDlg) return false;
+    if (location.hash === detailDlg._addr) return true;
+    return inFrame() && location.hash === (detailDlg._from || "") &&
+      performance.now() - (detailDlg._at || 0) < SHEET_SETTLE_MS;
   }
   function focusMainHeading() {
     const hd = $("main").querySelector("h2[id]") || $("main");
