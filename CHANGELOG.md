@@ -42,6 +42,7 @@ make sense to somebody whose repo just received it.
 - **Saving your work no longer wakes Claude for nothing.** Each save could leave Claude following its own updates, every one a turn on your page's chat; the save steps now say never to follow them, and to stop at once if it was started anyway.
 - **A LinkedIn download you add on your page is taken straight away.** Its tap could wait through several rings, as Claude was told to stop before reading the files; reading them is now the first thing it does, with every file named.
 - **Settings and Your rules say what your last search left out.** Roles, Where and Pay said "38,547 left out lately": a month of searches added up, each cutting the same jobs again. Each rule now gives the number Jobs gives for your newest search, and an employer you turned down counts each job once over the last 30 days.
+- **Your page takes Claude's updates when Claude's copy of it lacks one of its screens.** The update then wrote that screen with no version and the page refused all of it, so cards sat on "Putting it on your page"; Claude now reads your page's screens first in that case, then updates it.
 
 ## [4.15.0] - 2026-11-11
 

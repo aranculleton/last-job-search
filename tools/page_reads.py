@@ -461,6 +461,7 @@ def assemble(dump: str, now: dt.datetime | None = None) -> dict:
     kept = 0
     import page_db
     laid_known: dict = {}
+    laid: set = set()
     if not p.get("full"):
         cursor = str(p.get("cursor") or "")
         root = mirror_dir()
@@ -488,12 +489,14 @@ def assemble(dump: str, now: dt.datetime | None = None) -> dict:
                 os.makedirs(dst, exist_ok=True)
                 shutil.copy(os.path.join(src, name), os.path.join(dst, name))
                 kept += 1
+                if coll in KEPT + ("view",):
+                    laid.add(coll)
                 stem = f"{coll}/{name[:-5]}"
                 if stem in mirror_known:
                     laid_known[stem] = mirror_known[stem]
     if laid_known:
         page_db.index_versions(dump, laid_known)
-    p.update({"assembled": True, "read": read, "kept": kept})
+    p.update({"assembled": True, "read": read, "kept": kept, "laid": sorted(laid)})
     _write(path, p)
     meta = _meta()
     meta.update({"url": p.get("url") or meta.get("url"), "read_at": p.get("at"),
@@ -506,10 +509,48 @@ def assemble(dump: str, now: dt.datetime | None = None) -> dict:
     return {"full": bool(p.get("full")), "read": read, "kept": kept}
 
 
+def screens_read(dump: str) -> bool:
+    """Were the page's screens read into this dump just now (a whole read, asked for by name,
+    or read again when asked), so a screen it lacks is truly not on the page? Not when they
+    were laid from the mirror, or asked for and never read: then a write to one with no
+    version is refused. A folder made by hand, with no plan, was read by the chat itself."""
+    p = _read(os.path.join(dump, PLAN))
+    if not isinstance(p, dict) or p.get("full"):
+        return True
+    here = os.path.isdir(os.path.join(dump, "screen"))
+    asked = {str((q or {}).get("collection") or "") for q in p.get("queries") or ()}
+    if "screen" in asked:
+        return True
+    if any(c in (p.get("laid") or ()) for c in ("screen", "view")):
+        return False
+    return here and ("screen" in (p.get("need") or ()) or bool(p.get("screens_reread")))
+
+
+def read_screens_again(dump: str) -> bool:
+    """Mark the screens to be read whole into `dump` (once): a page update found screens it
+    would write with no version while they came from the mirror. True when marked now."""
+    path = os.path.join(dump, PLAN)
+    p = _read(path)
+    if not isinstance(p, dict) or p.get("screens_reread"):
+        return False
+    for coll in ("screen", "view"):
+        shutil.rmtree(os.path.join(dump, coll), ignore_errors=True)
+    p.update({"screens_reread": True, "laid": [c for c in p.get("laid") or ()
+                                               if c not in ("screen", "view")]})
+    _write(path, p)
+    return True
+
+
 NEED_SCREENS = ("view: another chat drew the page since this copy last did, so its screens are "
                 "read now: ArtifactData query, collections {colls}, url <the page>, limit 1000, "
                 "out_dir \"{dump}\" (the same folder; never list or open what they save), {keep}then "
                 "run this again.")
+
+
+SCREENS_AGAIN = ("view: the copy this checkout keeps of the page lacks a screen the page holds, so "
+                 "its screens are read now: ArtifactData query, collection screen, url {url}, "
+                 "limit 1000, out_dir \"{dump}\" (the same folder; never list or open what they "
+                 "save), {keep}then run this again.")
 
 
 LATE = ("view: before this batch ends, read what came in while the work ran (taps and work "

@@ -638,6 +638,21 @@ def cmd_view(a) -> int:
         w.add("set", "meta", "current", {"rev": model["rev"], "made_at": model["made_at"],
                                          "model": model["model"], **stamp, **_published()},
               if_version=old["version"] if old else None)
+    # A screen written with no version while the screens came from this checkout's copy of the
+    # page, not a read: the copy may lack one the page holds, and every such write was refused,
+    # so the cards stayed stuck (the maintainer's copy, 2026-11-09: "view builds its page
+    # updates without version numbers"). Its screens are read whole first, once, then drawn.
+    drawn = bool(((db.get("meta") or {}).get("current") or {}).get("data")) if db else False
+    if planned and drawn and not page_reads.screens_read(a.dump) and any(
+            e.get("collection") in ("screen", "view") and e.get("op") == "set"
+            and e.get("if_version") is None for e in w.entries):
+        page_reads.read_screens_again(a.dump)
+        # The marks or taps already taken from this folder go now: the folder holds them as sent.
+        print(_dump({"rev": None, "batches": list(late_batches), "for_claude": list(
+            late_lines or []) + [page_reads.SCREENS_AGAIN.format(
+                url=app_setup.page_record().get("url") or "<the page>", dump=a.dump,
+                keep=page_reads.keep_step(a.dump))]}), end="")
+        return 2
     batches = w.save("view") if w.entries else []
     # A redraft the drafts rerun handed out (tools/remake_drafts.py) goes on the work list by
     # itself, once: read against the page's own work list, and sent in a batch of its own,
