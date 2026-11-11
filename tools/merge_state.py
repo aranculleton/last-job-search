@@ -397,7 +397,7 @@ JSON_NAMES = {
     # files themselves are wired as "documents/rounds/*.json" above.
     "tools/app.py: *.json": "a page dump's screen documents, read only to tell whether the dump holds the page's screens (app.py no_screen), in the chat's scratch folder; never committed",
     "tools/holds.py: *.json": "each employer's research file, read only for a people search's finding of no team there (holds._no_team_found); merged as company_research/*.json",
-    "tools/rules_view.py: *.json": "each search's left-out list, read only for how many each rule left out (rules_view.left_counts); merged as documents/rounds/filtered/*.json",
+    "tools/rules_view.py: .json": "each search's left-out list, read only for how many each rule left out (rules_view.left_counts); merged as documents/rounds/filtered/*.json",
     "tools/run_round.py: *.json": "every round summary, read only, to hold a set-aside made during a search; written by write_summary, merged as documents/rounds/*.json",
     "tools/network/candidates.py: *.json": "every round summary, read only, for the employers a short people search widens to (candidates.employers); written by run_round.write_summary, merged as documents/rounds/*.json",
     **dict.fromkeys(("00_portal_health.json", "01_dropped.json", "01_prefiltered.json",
@@ -431,7 +431,14 @@ JSON_NAMES = {
                      "ljs-job-chats.json", "ljs-tidy-planned.json", "ljs-versions.json",
                      "ljs-save-held.json", "ljs-land-result.json", ".mirror.json",
                      "ljs-touched.json", "ljs-pdf-pages.json", "ljs-claims.json",
-                     "ljs-retired-saves.json"), _GITDIR),
+                     "ljs-retired-saves.json", "ljs-app-bug.json"), _GITDIR),
+    # A bug a chat in the maintainer's copy checked but could not file (no GitHub tools there),
+    # one file a bug under handoff/app_bugs/, named by its key: two chats that held the same bug
+    # wrote the same file, so either side's copy is the bug, and `app_bug.py filed` deletes it.
+    **dict.fromkeys(("tools/app_bug.py: *.json", "tools/app_bug.py: .json"),
+                    "a held app bug, handoff/app_bugs/<key>.json (app_bug.hold); one file a bug, "
+                    "named by its key, so two chats never write different contents to one name; "
+                    "deleted once filed"),
     # The page's records as this checkout last read them (page_reads, the mirror in its git
     # folder), each under its own record's name: the meta records read by name, and every file
     # of a collection copied whole.
