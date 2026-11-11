@@ -159,7 +159,7 @@ def _save(path: str, name: str, counts: dict, found: list[dict]) -> None:
     # One posting a line: a round can filter a thousand, and a line each keeps the file a
     # third the size of an indented one and its changes readable. The first line holds the
     # counts, by the stage's rule and by the person's rule in plain words (rules_view.kinds_of),
-    # so Your rules reads a month of searches by their first lines alone.
+    # so Your rules reads a search's counts by its first line alone.
     head = {"round": name, "counts": dict(sorted(counts.items(), key=lambda kv: -kv[1]))}
     try:
         import rules_view

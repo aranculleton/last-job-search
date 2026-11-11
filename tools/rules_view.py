@@ -12,12 +12,12 @@ Two views the page draws, both computed here (the engine computes, the page draw
   maintainer, 2026-11-05).
 - **Your rules** (`your_rules`): every rule that shapes the search and the messages, each
   one sentence, the day it was set and the person's own words where they gave them, how
-  many jobs the newest search left out by it, and how to change or drop it, through the
+  many jobs the search Jobs shows left out by it, and how to change or drop it, through the
   writers the engine already has (tweak's search rows, exclude.py, bar.py's lists in
   search.py, learned.py).
 
 Preferences change, and nobody is pestered about it: a rule set more than REVIEW_DAYS ago that
-left out at least REVIEW_MIN jobs of the newest search, or one the person set "for now" whose
+left out at least REVIEW_MIN jobs of the last search, or one the person set "for now" whose
 own review day has come, carries a quiet "Still right?" on its row in Your rules, and the
 Brief says so in one line at most once a month (`review_line`), never as a To do. Keeping a
 rule as it is is remembered, and so is the Brief line being dismissed.
@@ -241,11 +241,11 @@ def _rev(obj) -> str:
     return app_model.rev_of(obj)
 
 
-# ------------------------------------------------------------------ what each rule cut lately
+# ------------------------------------------------------------------ what each rule cut last time
 
 def _head(path: str) -> dict:
     """A left-out list's first line, its round, counts and kinds, without reading its rows:
-    a search can leave out thirteen thousand, and every page build reads a month of them."""
+    a search can leave out thirteen thousand, and every page build reads its counts."""
     try:
         with open(path, encoding="utf-8") as fh:
             line = fh.readline()
@@ -275,46 +275,38 @@ def kinds_of(found: list[dict], declined: dict | None = None) -> dict:
     return out
 
 
-def recent(today: dt.date, days: int = WINDOW_DAYS) -> dict:
-    """{kind or "language:<Lang>": {"n": how many the newest search of the last `days` days
-    left out, "last": the newest day it left any out in them}}, from each search's left-out
-    list. The count is the newest search's, as Jobs says it ("What a search left out"): summed
-    over a month of searches, the same postings cut again on every search, Settings said
-    "38,547 left out lately" beside a search's own few thousand (2026-11-11)."""
-    import glob
-    lists = []
-    for p in glob.glob(person.state("documents", "rounds", "filtered", "*.json")):
-        head = _head(p)
-        # Its day from what it holds, never a file's time: a fresh clone touches every file,
-        # and the same state must read the same (app_model.model_rev).
-        day = _day(head.get("day")) or content_day(person.state(
-            "documents", "rounds", os.path.basename(p)))
-        if day is not None and not 0 <= (today - day).days <= days:
-            continue
-        day = day or today
-        kinds = head.get("kinds")
-        if not isinstance(kinds, dict):
-            # A list written before its first line counted kinds: its rows read as Jobs reads
-            # them (kind_of), so Your rules names a cut as Jobs does; its rules' names only where
-            # it holds no rows. "Other reasons" stood in Your rules for Jobs' "Needs a
-            # qualification you do not hold" (the review, 2026-11-05).
-            whole = _json(p, {})
-            rows = whole.get("filtered") if isinstance(whole, dict) else None
-            kinds = kinds_of(rows) if isinstance(rows, list) and rows else {}
-            for rule, n in ({} if kinds else (head.get("counts") or {})).items():
-                k = _RULE_KIND.get(str(rule), "other")
-                kinds[k] = kinds.get(k, 0) + int(n or 0)
-        lists.append((day, os.path.basename(p), kinds))
-    out: dict = {}
-    newest = max(lists, key=lambda x: (x[0], x[1]))[1] if lists else None
-    for day, name, kinds in lists:
-        for k, n in kinds.items():
-            got = out.setdefault(k, {"n": 0, "last": None})
-            if name == newest:
-                got["n"] += int(n or 0)
-            if n:
-                got["last"] = max(filter(None, [got["last"], day.isoformat()]))
-    return out
+def recent(today: dt.date | None = None, days: int | None = None) -> dict | None:
+    """{kind or "language:<Lang>": {"n": how many the search Jobs shows left out by it,
+    "last": the day that search ran}}, or None where no search has run, so no rule says a
+    number. The search is Jobs' own (app_model.newest_round), however old, and its counts are
+    its left-out list's, as Jobs says them ("What a search left out"). Summed over a month of
+    searches, each cutting the same postings again, Settings said "38,547 left out lately"
+    beside a search's own few thousand; the newest of a month picked apart from Jobs dated a
+    search whose shortlist came back empty today for ever, put "r9" after "r10", and said
+    "None left out" once a month had passed while Jobs showed thousands (2026-11-11).
+    `today` and `days` are kept for older callers and no longer read."""
+    import app_model
+    path = app_model.newest_round()
+    if not path:
+        return None
+    name = os.path.splitext(os.path.basename(path))[0]
+    p = person.state("documents", "rounds", "filtered", name + ".json")
+    head = _head(p)
+    kinds = head.get("kinds")
+    if not isinstance(kinds, dict):
+        # A list written before its first line counted kinds: its rows read as Jobs reads
+        # them (kind_of), so Your rules names a cut as Jobs does; its rules' names only where
+        # it holds no rows. "Other reasons" stood in Your rules for Jobs' "Needs a
+        # qualification you do not hold" (the review, 2026-11-05).
+        whole = _json(p, {})
+        rows = whole.get("filtered") if isinstance(whole, dict) else None
+        kinds = kinds_of(rows) if isinstance(rows, list) and rows else {}
+        for rule, n in ({} if kinds else (head.get("counts") or {})).items():
+            k = _RULE_KIND.get(str(rule), "other")
+            kinds[k] = kinds.get(k, 0) + int(n or 0)
+    day = app_model.round_day(path)
+    return {k: {"n": int(n or 0), "last": day.isoformat() if day and n else None}
+            for k, n in kinds.items()}
 
 
 def content_day(path: str) -> dt.date | None:
@@ -454,12 +446,14 @@ def for_now_review(words: str, set_on: str, kept_on: str | None = None) -> str:
 
 def your_rules(today: dt.date, seen: dict | None = None, learned_rows=None) -> list[dict]:
     """Every rule that shapes the search and the messages, as rows the page draws: one plain
-    sentence, the day it was set and the person's words where kept, how many jobs the newest
-    search of the last WINDOW_DAYS days left out by it, the pencil's setting (`edit`) and the bin's (`drop`),
-    and `still_right` where it is old and busy, or its own review day has come."""
+    sentence, the day it was set and the person's words where kept, how many jobs the search
+    Jobs shows left out by it (None before any search), the pencil's setting (`edit`) and the
+    bin's (`drop`), and `still_right` where it is old and busy, or its own review day has
+    come."""
     rec = set_record()
     lately = recent(today)
-    n = lambda k: (lately.get(k) or {}).get("n", 0)  # noqa: E731
+    # No search yet: no rule says a number, never "None left out" of a search never run.
+    n = lambda k: None if lately is None else (lately.get(k) or {}).get("n", 0)  # noqa: E731
     rows = []
     places = list(_search("SCRAPE_LOCATIONS", []) or [])
     if places:
@@ -480,7 +474,8 @@ def your_rules(today: dt.date, seen: dict | None = None, learned_rows=None) -> l
             said += ("; " if said else "") + f"a stated range topping out under {cur}{int(cut):,} is left out"
         rows.append(_row("rule~pay", "pay", said, n("pay"), rec, edit={"what": "pay"}))
     held = [str(x).capitalize() for x in _search("LANGUAGES_HELD", ("english",)) or ()]
-    langs = sum(v["n"] for k, v in lately.items() if k.startswith("language:"))
+    langs = None if lately is None else sum(v["n"] for k, v in lately.items()
+                                            if k.startswith("language:"))
     rows.append(_row("rule~languages", "language", f"You work in {_listed(held)}; a job that "
                      "needs another language is left out", langs, rec,
                      edit={"what": "languages"}, values=held))
@@ -536,7 +531,7 @@ def your_rules(today: dt.date, seen: dict | None = None, learned_rows=None) -> l
     # says was left out: the qualification cut had none, and Your rules summed fewer than Jobs
     # (the review, 2026-11-05).
     have = {r["kind"] for r in rows}
-    for k, got in sorted(lately.items()):
+    for k, got in sorted((lately or {}).items()):
         if k.startswith("language:") or k in have or k not in ALSO or not got.get("n"):
             continue
         rows.append(_row(f"rule~{k}", k, ALSO[k], got["n"], rec, name=KINDS[k][0]))
@@ -546,7 +541,8 @@ def your_rules(today: dt.date, seen: dict | None = None, learned_rows=None) -> l
     return rows
 
 
-# The cuts with no setting of their own, each said as a rule where it left a job out lately.
+# The cuts with no setting of their own, each said as a rule where the last search left a job
+# out by it.
 ALSO = {
     "credential": "A job that needs a qualification you do not hold is left out",
     "eligibility": "A job that needs a status or a place to live you do not have is left out",
@@ -585,7 +581,7 @@ def _where_sentence(places, remote) -> str:
 
 def still_right(row: dict, today: dt.date, kept_on: str | None = None) -> bool:
     """Whether a rule's row asks "Still right?": its own review day has come, or it was set
-    REVIEW_DAYS ago or more and left out REVIEW_MIN or more lately; a yes in the last
+    REVIEW_DAYS ago or more and left out REVIEW_MIN or more of the last search; a yes in the last
     REVIEW_DAYS days is kept."""
     kept = _day(kept_on)
     if kept and (today - kept).days < REVIEW_DAYS:
