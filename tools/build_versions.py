@@ -1099,6 +1099,7 @@ METHODS: dict[str, dict] = {
             (157, "2026-11-10", False, "Plan a time writes its event in UTC from your own zone, with your reminder and folded lines, and the Messages to send card has it too"),
             (158, "2026-11-10", False, "the person's own dates are told from someone else's as the engine writes them (an interview's test or day to choose, an offer's reply-by), and no row, card or Brief line of their own says days late or Follow-up due"),
             (159, "2026-11-10", False, "the Brief's tiles lead with this week's applications and messages sent; Progress's counts in words sit under the funnel; the next step reads plainly; a question after the Jobs line is its own sentence"),
+            (160, "2026-11-11", False, "Settings and Your rules say how many jobs your last search left out by each rule, the search Jobs shows, never a month of searches added up; employers you turned down say what they left out in the last 30 days"),
         ),
         "fingerprint": "8a56f798b90b39c5",
     },
