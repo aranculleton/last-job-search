@@ -76,7 +76,8 @@ def test_a_first_note_gives_the_words_to_copy_its_count_and_where_it_goes(search
     assert msg["body"] == msg["text"]
     assert msg["count"] == {"chars": len(msg["body"]), "limit": 300, "near_at": 285, "show": True,
                             "near": False, "over": False, "tone": "muted",
-                            "label": f"{len(msg['body'])} of 300 characters"}
+                            "label": f"{len(msg['body'])} of 300 characters",
+                            "short": f"{len(msg['body'])}/300"}
     assert msg["open"] == {"kind": "profile", "doc": f"reach/{PELL}",
                            "label": "Open their profile"}
     assert isinstance(msg["warnings"], list)

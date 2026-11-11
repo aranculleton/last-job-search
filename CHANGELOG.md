@@ -59,6 +59,9 @@ make sense to somebody whose repo just received it.
 - **Follow-ups already on a card that were never fitted to your rules come off it.** Claude's short follow-ups that earlier runs left on a card, word for word, before they were fitted to your own rules for messages still said ready to send; each is set aside (kept) and written again to fit your rules first. A draft you or Claude wrote or changed, and one already sent, stay as they are. Profile upgrade: `follow-ups-fitted`
 - **A greeting by either of someone's names is right.** For a name with another in brackets, such as "Ottilie (Lark) Fennimore", your page's check took the bracketed name as the only one, called "Hi Ottilie" the wrong name and queued a rewrite; a greeting by the name before the brackets or the one inside them now passes, and a greeting to somebody else is still caught.
 - **Steps on Claude's and LinkedIn's own screens match what they show today.** The setup script for the PDF tools opens from its own Setup script row, Auto can be greyed out for a chat's model, a new scheduled task may first offer Set up manually, and LinkedIn's InMail count is under Premium features.
+- **A person's card in Contacts reads as one calm card.** Under a note, its facts are one quiet line, "290/300 · Waiting for their profile · Location not on record", with what each means behind its "?", instead of a line each.
+- **A change you ask for with the pencil sits in one grey block under the note**, what you asked and then where it stands, with Stop Claude right beside it. It says "Starting in a moment" for half a minute at most, then "Waiting for Claude, asked at 10:42", never a clock running under "starting in a moment".
+- **Asking one note's pencil about every note waiting for a profile does that for them all.** They all go on your page's reading list, that note is left as it is, and its card says so at once. Before, it was taken as a rewrite of that one note.
 
 ## [4.15.0] - 2026-11-11
 

@@ -1,7 +1,7 @@
 {
  "model": 1,
  "made_at": "2026-10-25T18:00:00Z",
- "rev": "de09d5d7227e",
+ "rev": "69ccc65a576f",
  "app": {
   "version": "4.15.0",
   "url": null,
@@ -13,7 +13,7 @@
   ],
   "privacy": "Only you can open this page unless you share it. It holds first names, employers, your drafts and your setup answers, so keep it unshared.",
   "repo": "https://github.com/aranculleton/last-job-search",
-  "page": 164,
+  "page": 165,
   "not_saved": 0,
   "app_bugs": []
  },
@@ -77,7 +77,7 @@
  ],
  "jobs": {
   "round": "r9",
-  "made_at": "2026-11-11T18:07:50Z",
+  "made_at": "2026-11-11T18:33:31Z",
   "met": false,
   "summary": "3 roles from the last search to look at, 1 of them scoring 75 or more. 3 left out, each with its reason.",
   "rows": [
@@ -661,7 +661,8 @@
     "near": false,
     "over": false,
     "tone": "muted",
-    "label": "144 of 300 characters"
+    "label": "144 of 300 characters",
+    "short": "144/300"
    },
    "warnings": [],
    "blocked": [],
@@ -1012,7 +1013,7 @@
    "when": "2026-10-28",
    "prep": {
     "path": "documents/applications/thornbury_bank_risk_analyst_thornbury/interview_prep.md",
-    "updated": "2026-11-11T18:07:50Z"
+    "updated": "2026-11-11T18:33:31Z"
    },
    "questions": 2,
    "all_day": true,
@@ -1877,6 +1878,18 @@
     "reading": "Reading their profile…",
     "read": "Profile read: Claude rewrites this note next",
     "again": "Claude could not read their profile just now: it tries again later, by itself"
+   },
+   "hold_short": {
+    "browser": "Waiting for their profile",
+    "paste": "Waiting for their profile",
+    "computer": "Waiting for their profile",
+    "tab": "Waiting for their profile",
+    "sign_in": "Waiting for their profile",
+    "paused": "Waiting for their profile",
+    "next": "Their profile is read next",
+    "reading": "Reading their profile…",
+    "read": "Profile read",
+    "again": "Profile not read yet"
    },
    "check": {
     "state": "due",

@@ -1108,8 +1108,9 @@ METHODS: dict[str, dict] = {
             (162, "2026-11-11", False, "a time from another zone wraps in its own wider column on Coming up, never over the row's words"),
             (163, "2026-11-11", False, "an interview's More holds only its rare actions; when its prep was made and the pencil that changes it are on the card's line of facts"),
             (164, "2026-11-11", False, "To do holds a LinkedIn sign-in card back while the card asking to keep the sign-in is open, and a stop says LinkedIn stopped the reading, never that it asked Claude to slow down"),
+            (165, "2026-11-11", False, "a note's facts are one quiet line under it (\"290/300 · Waiting for their profile · Location not on record\"), what each means behind its one \"?\"; a change asked with the pencil is one soft grey block with its state and Stop Claude beside it, \"Starting in a moment\" for half a minute at most and then \"Waiting for Claude, asked at ...\""),
         ),
-        "fingerprint": "248378ef35343748",
+        "fingerprint": "84d70c7851724490",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

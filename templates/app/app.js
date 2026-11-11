@@ -7608,7 +7608,7 @@
     const kindWord = DRAFT_KIND[txt(m.type)] || DRAFT_KIND[txt(m.kind)] || "Message";
     const heading = kindWord === "Note" && txt(m.channel) === "linkedin_note" ? "Connection note" : kindWord + (CHANNEL_SHORT[txt(m.channel)] ? " · " + CHANNEL_SHORT[txt(m.channel)] : "");
     const area = editing ? h("textarea", {id: tid, class: "sendtext big pen-text", rows: 5, "data-k": "pentext:" + m.id, "aria-label": "The " + what + " to " + name + ", to change",
-      oninput: (e) => { draftSet(penKey, e.target.value); const c = $("cnt-" + seg(m.id)); const w = countWords(m, e.target.value.length, true); if (c && w) { c.textContent = w.text; c.className = "count tone-" + w.tone; } }}, body) : null;
+      oninput: (e) => { draftSet(penKey, e.target.value); paintCount($("cnt-" + seg(m.id)), countWords(m, e.target.value.length, true)); }}, body) : null;
     const askId = "pa-" + seg(m.id);
     // Room for their whole message pasted in, growing with what is put in it (the maintainer,
     // 2026-11-05: "the actual text box is too short, i was gonna paste his reply there").
@@ -7655,14 +7655,16 @@
           // still shows the edits i made"); Done editing keeps them.
           btn("Cancel", () => { if (S.penBefore.has(m.id)) { draftSet(penKey, S.penBefore.get(m.id)); S.penBefore.delete(m.id); } S.penOpen.delete(m.id); S.penEdit.delete(m.id); scheduleRender(); },
             {kind: "secondary", small: true, key: "penx:" + m.id, aria: "Close the box: no change to the " + what + " to " + name}))) : null,
-      // Why it waits and when that happens, said once (the maintainer, 2026-11-07: the line and
-      // an alert under it said the same thing twice).
-      held ? holdLine(m) : null,
+      // Held back on purpose (people at the employer already wait, a hold on their record,
+      // Claude's own decision): why, with its one way on, on a line of its own.
+      held && txt(m.hold_why) ? holdLine(m) : null,
+      // The note's facts, one quiet line: its count, why it waits for a read and when (the
+      // maintainer, 2026-11-07: said once), and where they live not on record (2026-11-03),
+      // each in a few words, the sentences behind its one "?". Lines of different weights under
+      // one note did not read as one card (the maintainer, 2026-11-09: "any better way to
+      // display").
+      factsLine(m, body, editing, held && !txt(m.hold_why)),
       sendsLine(m),
-      h("span", {id: "cnt-" + seg(m.id), class: "cnt-wrap"}, charCount(m, body, editing)),
-      // Where they live is not on record, so the person's own rule about where people are cannot
-      // be checked (2026-11-03): a fact of the card, never a fix.
-      m.where_unknown === true ? h("p", {class: "small hint-line msg-check"}, "Where they live is not on record: check their profile before you send.") : null,
       fixing === "failed" ? h("p", {class: "small hint-line msg-check msg-blocked"}, "Claude could not fix this by itself: " + lc1(txt(arr(obj(m.fix).reasons)[0])) + ". Change it with the pencil.") : null,
       noteFor("copy:" + tid),
       // A change asked with the pencil, or a fix Claude queued itself: the card says it is
@@ -7734,6 +7736,47 @@
     return !!it && it.key === "reading-queue" && readThemShows(waitingReads(), readHere());
   }
   const HELD_SENDABLE = new Set(["person_hold", "decided"]);
+  // A note's facts in one quiet line, in the engine's words: "290/300 · Waiting for their
+  // profile · Location not on record", the count red over its limit (and amber while being
+  // edited near it), "Reading their profile…" with the spinner while it is read. What each
+  // means, in a sentence, is behind its one "?" (DESIGN.md, Contacts). `waits`: it waits for a
+  // read of their profile (a hold of its own, `hold_why`, is its own line, holdLine).
+  function factsLine(m, body, editing, waits) {
+    const parts = [];
+    const why = [];
+    const c = countWords(m, txt(body).length, editing);
+    const ec = obj(m.count);
+    const atRest = ec.label && !editing && txt(body) === txt(msgParts(m).body);
+    // While the words are a field, the count is always there, so typing redraws it.
+    if (atRest ? ec.show !== false : c && (c.show || editing)) {
+      const tone = atRest ? (ec.over ? "bad" : "muted") : c.tone;
+      parts.push(h("span", {id: "cnt-" + seg(m.id), class: "cnt-wrap count tone-" + tone}, countNode(atRest ? {short: txt(ec.short) || txt(ec.label), text: txt(ec.label)} : c)));
+      if (tone !== "muted") why.push(atRest ? txt(ec.label) : c.text);
+    }
+    const k = waits ? holdKey(m) : null;
+    if (waits) {
+      const ri = readingInfo();
+      const running = k === "reading";
+      parts.push(h("span", {class: "msg-held", "data-k": "held:" + m.id, "data-hold": k || "own"},
+        running ? [h("span", {class: "spin", "aria-hidden": "true"}), " "] : null, txt(obj(ri.hold_short)[k]) || "Waiting for their profile"));
+      why.push((txt(obj(ri.hold)[k]) || txt(m.hold)).replace(/[.…\s]+$/, ""));
+    }
+    if (m.where_unknown === true) {
+      const wu = arr(obj(TABLES.facts).where_unknown);
+      parts.push(h("span", {class: "msg-where"}, txt(wu[0]) || "Location not on record"));
+      why.push(txt(wu[1]) || "Where they live is not on record: check their profile before you send");
+    }
+    if (!parts.length) return null;
+    const line = [];
+    parts.forEach((x, i) => { if (i) line.push(h("span", {class: "sep", "aria-hidden": "true"}, " · ")); line.push(x); });
+    return h("div", {class: "hint-line msg-facts", "data-k": "facts:" + m.id, role: k === "reading" ? "status" : null},
+      h("p", {class: "small facts-line"}, line),
+      why.length ? hintQ("facts:" + m.id, why.join(". "), "About this " + (txt(m.kind) === "first_note" ? "note" : "message")) : null);
+  }
+  // A count as the line of facts says it, "290/300", and in full to a screen reader.
+  function countNode(c) {
+    return [h("span", {"aria-hidden": "true"}, txt(c.short)), h("span", {class: "sr-only"}, txt(c.text))];
+  }
   function holdLine(m) {
     const k = holdKey(m);
     const said = txt(obj(readingInfo().hold)[k]) || txt(m.hold);
@@ -9933,9 +9976,14 @@
       // breaks, then its one state and Stop Claude. It was said twice, the whole paste as one
       // grey run near the top of the card and again under the draft (the maintainer, 2026-11-05).
       const asked = txt(obj(gw.args).text);
+      const shown = !!asked && obj(gw.args).auto !== true;
       return h("div", {class: "tweak-going", "data-tweak-going": gid},
-        asked && obj(gw.args).auto !== true ? clipBlock(asked, "tw:" + gid, {cls: "ct-q", lead: [h("span", {class: "ct-who"}, "You asked"), " "]}) : null,
-        workInline(gid, gw, {key: "tweak:" + item.id, lead: txt(gw.status) === "queued" ? "Changing it next" : "Changing it now"}));
+        shown ? clipBlock(asked, "tw:" + gid, {cls: "ct-q", lead: [h("span", {class: "ct-who"}, "You asked"), " "]}) : null,
+        // Under what was asked, its state alone while it waits ("Waiting for Claude, asked at
+        // 10:42", "Waiting its turn, after ..."): "Changing it next · starting in a moment" read
+        // as about to happen for two minutes (the maintainer, 2026-11-09). With nothing asked in
+        // words (a chip's change), what it is comes first.
+        workInline(gid, gw, {key: "tweak:" + item.id, lead: txt(gw.status) === "queued" ? (shown ? "" : "Changing it next") : "Changing it now", bare: shown}));
     }
     const last = arr(item.tweaks_done)[0];
     const said = last ? arr(last.said).map(txt).filter(Boolean).join(", ") : "";
@@ -10046,7 +10094,8 @@
     // The task in a few words from its own title, never the card's employer and role again
     // ("Answers for the form · Waking Claude · 22s"), then its one state (the maintainer,
     // 2026-11-05: the line said only "Saved. Sent to Claude ..." while Claude's work named it).
-    const task = o.lead || taskWords(w);
+    // `o.bare`: the block it sits in already says what it is (a pencil's "You asked").
+    const task = o.lead || (o.bare ? "" : taskWords(w));
     // Beside Claude's work on a wide screen, waiting work says its one state here and the panel
     // says the rest: the whole sentence on the card and again in the panel was said twice on
     // one screen (the screen review, 2026-11-11).
@@ -10500,14 +10549,15 @@
     const over = n > limit;
     const near = !over && n >= nearAt;
     return {text: n + " of " + limit + " characters" + (over ? ": " + (n - limit) + " over the limit" : near && editing ? ": close to the limit" : ""),
+      // As the line of facts says it: "290/300", "305/300, 5 over".
+      short: n + "/" + limit + (over ? ", " + (n - limit) + " over" : ""),
       tone: over ? "bad" : near && editing ? "warn" : "muted", show: txt(m.kind) === "first_note" || over || near};
   }
-  function charCount(m, text, editing) {
-    // The engine's own count for the draft as it stands; this page's for words changed here.
-    const ec = obj(m.count);
-    if (ec.label && !editing && txt(text) === txt(msgParts(m).body)) return ec.show === false ? null : h("p", {class: "count tone-" + (ec.over ? "bad" : "muted")}, txt(ec.label));
-    const c = countWords(m, txt(text).length, editing);
-    return c && c.show ? h("p", {class: "count tone-" + c.tone}, c.text) : null;
+  // The count in the line of facts, redrawn as the words are typed.
+  function paintCount(el, c) {
+    if (!el || !c) return;
+    el.className = "cnt-wrap count tone-" + c.tone;
+    el.replaceChildren(...countNode(c));
   }
   // Beside Copy: their profile in a new tab, or the email ready to send, from the owner-only
   // reach/<contact> document. Without one there is no button: an address is never guessed.
@@ -11879,6 +11929,9 @@
   // G2. One card when nobody is listening: what is tapped is saved and waits; one button
   // wakes Claude. It goes as soon as a chat says it is watching (a fresh heartbeat).
   const HEARTBEAT_MS = 15 * 60 * 1000;
+  // How long work sent to a chat that is up may say "Starting in a moment": past it, it is
+  // "Waiting for Claude" with when it was asked (workSay).
+  const START_SOON_MS = 30 * 1000;
   function freshHeartbeat() {
     for (const [, c] of S.chats) {
       const seen = tms(c.seen_at);
@@ -14181,7 +14234,13 @@
     // Sent, and its chat not yet back: the page's own clock runs, as a chat shows its setup.
     // Never for work that waits for the computer: its clock read as stuck work ("Waking Claude ·
     // 23m 41s") while it waited for the Mac (the maintainer's page, 2026-11-10).
-    const waking = st === "queued" && !!p.sentAt && !picked && !late && !inLine && !ahead && !p.stopping && !toComputer;
+    const sent0 = st === "queued" && !!p.sentAt && !picked && !late && !inLine && !ahead && !p.stopping && !toComputer;
+    // Sent to a chat that is up (its heartbeat fresh) and not taken within START_SOON_MS: it is
+    // waiting for Claude, said with when it was asked, never "starting in a moment" with a
+    // clock running for two minutes (the maintainer, 2026-11-09: "Changing it next · starting
+    // in a moment · 1m 53s"). A chat still waking keeps its "Waking Claude" and its clock.
+    const waitingOn = sent0 && freshHeartbeat() && now() - p.sentAt >= START_SOON_MS;
+    const waking = sent0 && !waitingOn;
     // One honest word for waiting work, and the sentence under it says when: "Waiting to
     // start", "Waiting for Claude to start." and "Asked just now." said three things and none
     // said when (the walk-through, 2026-11-03).
@@ -14219,6 +14278,7 @@
         // One short state, said once: the card's chip is not drawn beside it (workCard), and
         // its clock follows ("Waking Claude · 1m 4s"; the maintainer, 2026-11-05).
         waking ? (freshHeartbeat() ? "Starting in a moment" : "Waking Claude") :
+        waitingOn ? "Waiting for Claude, asked " + askedWhen(w) :
         toComputer && computerOverdue(w) ? "It has not started on your computer yet." :
         toComputer ? computerLine() :
         tms(w.answered_at) ? "Answered " + askedWhen(w) + ". Your answer is with Claude." :
@@ -14226,7 +14286,7 @@
         // neither (the UX review, 2026-11-10, U-15).
         andStart("Asked " + askedWhen(w) + ". " + waitWhen());
     }
-    return {p, v, lead, st, toComputer, away, slow, grace, over, place, inLine, ahead, picked, late, unsent, waking, label, tone, now1};
+    return {p, v, lead, st, toComputer, away, slow, grace, over, place, inLine, ahead, picked, late, unsent, waking, waitingOn, label, tone, now1};
   }
   // What light work waits behind in its chat: the one running there, or the light work asked
   // before it that waits too, with its place.
