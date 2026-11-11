@@ -20,6 +20,12 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Changed
+
+- **The maintainer's releases take one command.** `python3 tools/release.py cut X.Y.Z --headline "..."`
+  names and dates the version on its own pull request, so merging that pull request is the
+  release.
+
 ## [4.15.0] - 2026-11-11
 
 ### Changed

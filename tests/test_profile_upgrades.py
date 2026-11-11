@@ -646,7 +646,8 @@ MARK = re.compile(r"Profile upgrade: `([a-z0-9-]+)`")
 
 def _unreleased_and_later():
     text = open(os.path.join(ROOT, "CHANGELOG.md"), encoding="utf-8").read()
-    head = text[text.index("## [Unreleased]"):text.index("## [3.0.0]")]
+    # From the first section, whatever it is named: [Unreleased], or the version `cut` named.
+    head = text[text.index("\n## ["):text.index("## [3.0.0]")]
     return [b for b in re.split(r"\n(?=- \*\*)", head) if b.startswith("- **")]
 
 
