@@ -127,8 +127,10 @@ jobs:
     name: Checks (lint, guards, CLIs, tests)
     if: ${{ !github.event.repository.private || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-24.04
-    # 15, not 10: the suite grew past ten minutes on a slow runner at 4.12.
-    timeout-minutes: 15
+    # 20, not 15: the suite grew past ten minutes on a slow runner at 4.12, and its Python 3.9
+    # leg took 11 to 15 minutes of the same code on different runners at 4.15.0, one stopped at
+    # the limit. Still a cap on a hung job, which is what it is for.
+    timeout-minutes: 20
     outputs:
       latex: ${{ steps.changed.outputs.latex }}
     steps:
@@ -316,7 +318,7 @@ jobs:
     if: ${{ !github.event.repository.private || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-24.04
     # 15, not 10: the suite grew past ten minutes on a slow runner at 4.12 (two runs stopped at 96 and 98%).
-    timeout-minutes: 15
+    timeout-minutes: 20          # as Checks: the same suite, on Python 3.9
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
@@ -348,7 +350,12 @@ jobs:
           PW: "1.56.1"            # the Playwright the page's harness is tested with
         run: |
           npm install -g "playwright@$PW"
-          npx -y "playwright@$PW" install --with-deps chromium
+          # Its system packages come from Ubuntu's mirror, which the runners could not reach for
+          # an hour on 2026-11-11, each try spending ten minutes on the mirror's own timeouts: one
+          # try of four minutes at most, then the browser alone, whose libraries the runner image
+          # already carries for its own Chrome.
+          timeout 240 npx -y "playwright@$PW" install --with-deps chromium && exit 0
+          npx -y "playwright@$PW" install chromium
       - name: Browser tests
         run: |
           files=$(grep -lE 'app_page/harness\.js|journeys\.browser\(\)|_node_env|test_the_page_journeys import|import test_the_page_journeys|test_the_page_works_in_a_browser import|import test_the_page_works_in_a_browser' tests/*.py)

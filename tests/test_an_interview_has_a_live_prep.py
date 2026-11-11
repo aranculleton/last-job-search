@@ -848,7 +848,10 @@ def test_the_changelog_promises_only_what_the_live_prep_does():
     # pay and notice at the top, and Hide the answers behind Start with a timer, none of which
     # the page has, and a second entry described the same prep differently.
     text = open(os.path.join(ROOT, "CHANGELOG.md"), encoding="utf-8").read()
-    unreleased = text.split("## [Unreleased]", 1)[1].split("\n## [", 1)[0]
+    # The section that carries the live prep's entry: [Unreleased] until it ships, then its
+    # release's (4.15.0), which the release's rename leaves [Unreleased] empty above.
+    sections = ["## [" + part for part in text.split("\n## [")[1:]]
+    unreleased = next(sec for sec in sections if "- **Your interview prep" in sec)
     added = unreleased.split("### Added", 1)[1]
     for gone in ("stays in reach however far down", "pay and notice lines are at the top", "behind Start",
                  "small timer", "one calm page"):
