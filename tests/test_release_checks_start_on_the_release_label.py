@@ -1,5 +1,5 @@
-"""The Everywhere workflow and the Windows jobs of Platforms start on the `release` label, by
-hand and weekly, never on a pull request's title.
+"""The Everywhere workflow and the Windows jobs of Platforms start on the `release` label and by
+hand, never on a pull request's title; Platforms also weekly, Everywhere never on a schedule.
 
 A "Release " title started them on every push: the release's CHANGELOG pull request ran
 Everywhere four times for one documents change (#206, 2026-11-11), and retitling a pull
@@ -54,8 +54,6 @@ def _ran(workflow: str, github: dict, inputs=None) -> set:
     (W.pull_request("labeled", labels=["documentation"], label="documentation", title=TITLE), False),
     (W.pull_request("labeled", labels=["release"], label="release", private=True), False),
     (W.pull_request("synchronize", labels=["release"], private=True), False),
-    (W.event("schedule"), True),
-    (W.event("schedule", private=True), False),
     (W.event("workflow_dispatch"), True),
     (W.event("workflow_dispatch", private=True), True),
 ])
@@ -65,6 +63,24 @@ def test_everywhere_and_windows_run_on_the_label_and_never_the_title(github, run
     assert not runs or _ran("everywhere.yml", github, inputs) == set(EVERYWHERE)
     platforms = _ran("platforms.yml", github)
     assert all((j in platforms) is runs for j in WINDOWS), platforms
+
+
+def test_only_platforms_runs_weekly():
+    """Platforms' weekly run catches what changes outside the app (TinyTeX, Bun, GitHub's
+    runners) before a new person's set-up meets it. Everywhere's engines are pinned, so a
+    weekly run only checked a master nothing had changed (the maintainer, 2026-11-11: "cheap
+    and efficient"): every release runs it on the label."""
+    import yaml
+    def on(name):
+        with open(os.path.join(ROOT, ".github", "workflows", name), encoding="utf-8") as fh:
+            doc = yaml.safe_load(fh)
+        return doc.get("on", doc.get(True))
+    assert "schedule" not in on("everywhere.yml")
+    assert "schedule" in on("platforms.yml")
+    inputs = {"suite": True, "variants": "", "tests": ""}
+    assert _ran("everywhere.yml", W.event("schedule"), inputs) == set()
+    assert set(WINDOWS) <= _ran("platforms.yml", W.event("schedule"))
+    assert not set(WINDOWS) & _ran("platforms.yml", W.event("schedule", private=True))
 
 
 def test_a_run_by_hand_can_leave_the_suite_out():

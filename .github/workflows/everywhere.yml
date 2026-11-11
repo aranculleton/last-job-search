@@ -6,7 +6,8 @@
 #   suite   the rest of the suite with the clock 30, 90 and 400 days on, in the far time
 #           zones, from a folder with spaces, an accent and an apostrophe, on the newest Python
 #
-# On a pull request labelled `release`, weekly and by hand: free on the public app, skipped on
+# On a pull request labelled `release` and by hand, never on a schedule (a weekly run checked a
+# master nothing had changed, its engines pinned; 2026-11-11): free on the public app, skipped on
 # every private copy, never on an ordinary change. The page in four jobs side by side and the
 # suite in seven, one variant each, every job ending in one short summary to read.
 #
@@ -23,8 +24,6 @@ on:
     # Each job runs only with the `release` label on (its `if:`); every other pull request
     # event starts a run whose jobs are all skipped, which costs nothing.
     types: [labeled, synchronize]
-  schedule:
-    - cron: "41 5 * * 1"
   workflow_dispatch:
     # By hand, a few files in one or two engines: a failure reproduced in minutes, not the
     # whole page in all eight (Safari's and Firefox's findings at 4.12, which this container
@@ -58,7 +57,7 @@ jobs:
     # Four jobs side by side, not eight variants one after another: the release waited about
     # 50 minutes on this job alone (2026-10-29). Each installs only the engine it needs.
     name: page everywhere (${{ matrix.name }})
-    if: ${{ github.event_name == 'workflow_dispatch' || (!github.event.repository.private && (github.event_name == 'schedule' || (github.event.action == 'labeled' && github.event.label.name == 'release') || (github.event.action == 'synchronize' && contains(github.event.pull_request.labels.*.name, 'release')))) }}
+    if: ${{ github.event_name == 'workflow_dispatch' || (!github.event.repository.private && ((github.event.action == 'labeled' && github.event.label.name == 'release') || (github.event.action == 'synchronize' && contains(github.event.pull_request.labels.*.name, 'release')))) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     strategy:
@@ -116,7 +115,7 @@ jobs:
     # and one run stopped at the 60-minute limit (2026-11-11). The variants are
     # tools/everywhere.sh's own, and a test holds the two lists alike.
     name: suite everywhere (${{ matrix.variant }})
-    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.suite != false) || (!github.event.repository.private && (github.event_name == 'schedule' || (github.event.action == 'labeled' && github.event.label.name == 'release') || (github.event.action == 'synchronize' && contains(github.event.pull_request.labels.*.name, 'release')))) }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.suite != false) || (!github.event.repository.private && ((github.event.action == 'labeled' && github.event.label.name == 'release') || (github.event.action == 'synchronize' && contains(github.event.pull_request.labels.*.name, 'release')))) }}
     runs-on: ubuntu-24.04
     # One variant is the whole suite once, about eight minutes.
     timeout-minutes: 30
