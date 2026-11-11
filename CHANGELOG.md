@@ -36,6 +36,7 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **Read your prep and Practise 3 questions open your interview prep in the Claude app on a Mac.** Both flickered and opened nothing: the app moved the page's address as the prep opened, and any move of the address closed it at once. A prep, a person or an application now stays open until you close it or go Back.
 - **Steps for your computer name its own keys and menus, on a Mac, Windows or Linux.** Showing Claude's browser, keeping your LinkedIn sign-in and letting Claude start chats there named a Mac's keys first and said nothing of Linux; each computer now gets its own, and a computer not known yet gets all three in one line.
 - **A chat with Claude's browser reads profiles itself, whatever its tools are called.** Only the short words counted, so a chat holding the browser by its full tool names left the reading to your page.
 - **"Only update when I say" is understood.** Said without naming the app, it set nothing; an update to your resume or CV is still never taken for the app's.

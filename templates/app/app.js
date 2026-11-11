@@ -10893,11 +10893,15 @@
       h("div", {class: "detail-top"}, back),
       h("div", {class: "detail-body"}, h("h2", {class: "detail-title", id: "detail-title", tabindex: "-1"}, title), body));
     detailDlg._opener = document.activeElement;
+    // Its own address, and when it opened: the frame it sits in may answer the address it
+    // pushes (sheetStays).
+    detailDlg._addr = "#" + section + "/" + id + "/open";
+    detailDlg._at = performance.now();
     detailDlg.addEventListener("cancel", (e) => { e.preventDefault(); closeDetail(false); });
     document.body.appendChild(detailDlg);
     try { detailDlg.showModal(); } catch (e) { detailDlg.setAttribute("open", ""); }
     gaugeWakers();
-    if (!o.fromHistory) { addrTaken = null; try { history.pushState(null, "", "#" + section + "/" + id + "/open"); } catch (e) { /* the frame refuses */ } }
+    if (!o.fromHistory) { addrTaken = null; try { history.pushState(null, "", detailDlg._addr); } catch (e) { /* the frame refuses */ } }
     const hd = $("detail-title");
     if (hd) hd.focus();
   }
@@ -16270,6 +16274,7 @@
     addrTaken = type === "popstate" ? location.hash : null;
     const p = parseHash();
     if (!p) return;
+    if (sheetStays()) return;
     if (p.work) { openWork(); return; }
     if (p.drafts) setPref("drafts:view", p.drafts);
     S.split = p.split || null;
@@ -16283,6 +16288,20 @@
       const kind = ["interview", "person", "application"].find((k) => detailOf(k, opened));
       if (kind) openDetail(kind, opened, {fromHistory: true});
     }
+  }
+  // An open sheet (a prep, a person, an application) is closed by the address only when the
+  // person moved it: Back, or a link to somewhere else. In the Claude app on a Mac, Read your
+  // prep and Practise 3 questions flickered and opened nothing (the maintainer, 2026-11-11, the
+  // night before an interview): the page in its viewer's frame works in every browser, and the
+  // one thing that closes a sheet unasked is an address move, so a move the frame makes as the
+  // sheet pushes its address (its own address again, or the one before put back) closed it the
+  // instant it opened. Its own address again is never a reason to close or redraw it, and
+  // nothing in its first moment is the person's Back.
+  const SHEET_SETTLE_MS = 1000;
+  function sheetStays() {
+    if (!detailDlg) return false;
+    if (location.hash === detailDlg._addr) return true;
+    return performance.now() - (detailDlg._at || 0) < SHEET_SETTLE_MS;
   }
   function focusMainHeading() {
     const hd = $("main").querySelector("h2[id]") || $("main");
