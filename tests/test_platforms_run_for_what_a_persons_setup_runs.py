@@ -239,7 +239,8 @@ def test_platforms_and_everywhere_agree_on_what_a_release_run_is():
     expr = W.load("everywhere.yml")["jobs"]["page"]["if"]
     cases = [("labeled", "release", ["release"]), ("labeled", "bug", ["release", "bug"]),
              ("synchronize", "", ["release"]), ("synchronize", "", []),
-             ("labeled", "release", ["release", "bug"])]
+             ("labeled", "release", ["release", "bug"]), ("opened", "", ["release"]),
+             ("reopened", "", ["bug", "release"]), ("opened", "", []), ("reopened", "", [])]
     for action, label, labels in cases:
         gh = W.pull_request(action, labels=labels, label=label)
         assert W.truthy(W.evaluate(expr, {"github": gh})) is ci_plan.release_run(
