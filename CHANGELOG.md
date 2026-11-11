@@ -66,6 +66,9 @@ make sense to somebody whose repo just received it.
 - **Asking one note's pencil about every note waiting for a profile does that for them all.** They all go on your page's reading list, that note is left as it is, and its card says so at once. Before, it was taken as a rewrite of that one note.
 - **Your page takes Claude's updates when Claude's copy of it lacks one of its screens.** The update then wrote that screen with no version and the page refused all of it, so cards sat on "Putting it on your page"; Claude now reads your page's screens first in that case, then updates it.
 - **A tap on your page reads only what changed, and what Claude saves after it is taken first time.** Each tap brought back every piece of work not finished, a follow-up untouched since the day before among them, and the saves after it could be refused until Claude typed in each record's number by hand. Every change to a piece of work now says when it was made, so only what changed is read; work Claude saved that never reached your page is read again before anything is pinned to it; and an update from a fresh copy no longer rewrites your Interviews screen with nothing in it changed (issue 217).
+### Fixed
+
+- **An interview's prep never shows "Say first" or "Open with" over empty lines.** A line of what to say first written as plain words or under another name than the engine's own was kept with no words, and no check looked for one, so a prep could open on blank bullets. The words are now read however they were written, a line with no words is refused in plain words when it is written and left out of a prep saved with one, and `live-check` names each part left with nothing to say first, which a chat writes again with `live --fill` alone, every other word of the prep kept as it was.
 
 ## [4.15.0] - 2026-11-11
 

@@ -55,7 +55,9 @@ ANSWERS = {
 
 
 def _frame(answer):
-    return ("(() => { const orig = history.pushState.bind(history);"
+    # The page is in another page's frame, as the Claude app shows it (window.__ljsFramed
+    # stands in for window.self !== window.top, which a test's own tab cannot make true).
+    return ("(() => { window.__ljsFramed = true; const orig = history.pushState.bind(history);"
             " history.pushState = function (s, t, u) { const before = location.hash;"
             " const say = () => { window.dispatchEvent(new PopStateEvent('popstate', {state: history.state}));"
             " window.dispatchEvent(new HashChangeEvent('hashchange')); window.__answered = true; };"
