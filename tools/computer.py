@@ -950,7 +950,10 @@ def state(db: dict, now: dt.datetime, envs=None, version: str = "",
         key = "not_set_up"
     elif has_bridge is False and (age is None or age >= OFF_S):
         key = "gone" if age is not None and age >= GONE_S else "no_bridge"
-    elif age is not None and age >= GONE_S:
+    elif age is not None and age >= GONE_S and not has_bridge:
+        # Never "gone" on the check-in alone while the person's own list shows the computer
+        # on: a Mac connected that day read as gone on a check-in from the day before (the
+        # maintainer's copy, 2026-11-11).
         key = "gone"
     elif age is not None and age >= OFF_S and not has_bridge:
         key = "off"
@@ -1350,17 +1353,21 @@ def route(db: dict, now: dt.datetime, chat: str = "", envs=None, folders=None,
                 "line": ("It starts once you are signed in to LinkedIn." if busy == SIGNING_IN
                          else "Your computer's chat takes it next."), "waiting": w}
     found = pick_bridge(bridges(envs), db, now)
-    helper = bool(found) and "create_session" in tools and bool(chat) \
-        and not is_starter(db, chat) and app_listen.chat_kind() == "cloud"
+    can_start = "create_session" in tools
+    # A chat that cannot start one itself (a page helper's own agent has no create_session)
+    # still rings the starter that can: it said the computer was off and that nothing in the
+    # cloud could start it, while the person's list showed the Mac on (2026-11-11).
+    helper = bool(found) and bool(chat) and not is_starter(db, chat) \
+        and app_listen.chat_kind() == "cloud" and (can_start or bool(starter(db).get("bell")))
     if helper:
         # Any cloud chat but the starter wakes the starter (or makes it once): the approval a
         # chat on the computer needs ties the approving chat to the person's devices for good,
         # and a helper that held it could not archive itself (the maintainer, 2026-11-10).
         got = _starter_route(db, now, wid, w, url, copy, runs_there(found[0]["computer"]))
-        # No starter can be made from here (no copy to start it from): the rest of the chain
-        # still works, a folder or the browser the computer lends this chat. "none" here left
-        # the work waiting with both on offer.
-        if got["route"] != "none":
+        # No starter can be made from here (no copy to start it from, or no create_session to
+        # make it with): the rest of the chain still works, a folder or the browser the
+        # computer lends this chat. "none" here left the work waiting with both on offer.
+        if got["route"] != "none" and (can_start or got["route"] != "make starter"):
             return got
     if found and "create_session" in tools and not helper:
         b = found[0]
@@ -1427,6 +1434,17 @@ def route(db: dict, now: dt.datetime, chat: str = "", envs=None, folders=None,
                          "python3 tools/computer.py route again with --envs <that file>: "
                          "whether the computer is on is what that list says, never its last "
                          "check-in alone."), "waiting": w}
+    if found:
+        # On, by the person's own list, and this chat cannot start Claude there: the chat that
+        # answers the page can, so it is handed there, never "your computer is off".
+        name = found[0]["computer"]
+        return {"route": "on, start it elsewhere", "work": wid, "computer": name,
+                "line": f"Your {name} is on: Claude starts there from the chat that answers your page.",
+                "then": ("this chat has no create_session to start Claude on the computer: ask the "
+                         "chat that answers the page (it has create_session) to run python3 "
+                         "tools/computer.py route with --envs and --tools create_session, and do "
+                         "what it prints. Never tell the person the computer is off."),
+                "waiting": w}
     out = {"route": "paste", "work": wid, "line": st["line"], "action": st["action"],
            "paste": True, "waiting": w}
     if st["state"] == "ready":
