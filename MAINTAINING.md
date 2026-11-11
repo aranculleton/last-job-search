@@ -70,9 +70,9 @@ the one command before a push. **The whole suite runs once, on the pull request'
 on the public app; by hand, only the test files a change touches. The gate builds the
 denylist from the maintainer's repo, scans the exact tree, every patch and commit message
 since master and the text to be posted, runs the name guard, the version note and the quick
-checks, and pushes, never with force, only when every step passed. Invented names only; the
-app's address in full (`aranculleton/last-job-search`). A touched portal CLI also takes `bun
-run typecheck` and `bun test`; a document-generation change compiles and reads the PDFs
+checks, and pushes, never with force, only when every step passed. Invented names only, and
+the app's address in full (`aranculleton/last-job-search`). A touched portal CLI also takes
+`bun run typecheck` and `bun test`; a document-generation change compiles and reads the PDFs
 (`tools/fit_to_page.py`, `tools/verify_batch.sh`).
 
 - **`Fast checks` is the one check a merge waits for**: master's ruleset requires it and
