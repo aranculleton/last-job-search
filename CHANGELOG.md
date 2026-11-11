@@ -27,7 +27,8 @@ make sense to somebody whose repo just received it.
   release. The release notes open on that headline, then what is new, changed and fixed. The
   check that no public name goes unannounced reads the newest release's own files, so the
   snapshot a release wrote is gone, and with it `public_names.snapshot`, `public_names.stale`,
-  `public_names.SNAPSHOT` and `release.names_kept`.
+  `public_names.SNAPSHOT` and `release.names_kept`. `python3 tools/readme_pictures.py shoot`
+  takes the README's four pictures from the sample page and names them.
 
 ## [4.15.0] - 2026-11-11
 
