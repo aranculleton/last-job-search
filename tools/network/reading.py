@@ -1571,6 +1571,25 @@ def _job_signin_said(wid: str, why: str = "") -> str:
                                     enumerate(computer_signin_steps(wid), 1))
 
 
+def _job_friction_said(wid: str, why: str) -> str:
+    """A second sign-out (friction) in a chat the app started on the computer for `wid`: the
+    day's reads are stopped, and the sign-in goes on the person's page with the job. Nothing
+    waits in this chat: nobody reads it."""
+    steps = [
+        f"put it on their page, never in this chat: python3 tools/app.py done \"$D\" --work {wid} "
+        "--chat <your id> --kind computer --signin linkedin --question \"LinkedIn signed out "
+        "again in Claude's browser.\" and send its batch",
+        "write the heartbeat with --linkedin out (python3 tools/computer.py beat \"$D\" --chat "
+        "<your id> --browser <shown|hidden> --linkedin out) and send its batch, so the page "
+        "says how the computer is",
+        "read nobody more today and wait for nothing: go to step 7 of your prompt. Never ask or "
+        "tell the person anything in this chat",
+    ]
+    return (f"reading: {why}. That is friction: browser reads are stopped for today. This chat "
+            "was started on the person's computer for their page, and nobody reads it: it goes "
+            "on their page.\n" + "\n".join(f"  {i}. {x}" for i, x in enumerate(steps, 1)))
+
+
 def signin_steps() -> list:
     """What the session does when LinkedIn is not signed in yet: open its sign-in page
     in the pane, say one sentence, and wait, looking only at the pane's address."""
@@ -2732,13 +2751,19 @@ def _way_back(now: datetime.datetime | None = None) -> str:
 
 def _said_signout(got: dict) -> int:
     """What a session is told about a sign-out, and the exit code."""
+    wid = app_job_here()
+    if got["kind"] == "friction" and wid:
+        # A chat the app started on the computer: nobody reads it, so what was seen goes on
+        # the page with the job, never "tell the person" in its own conversation, which kept a
+        # second sign-out in a chat on the person's Mac (the maintainer, 2026-11-11).
+        print(_job_friction_said(wid, got["why"]))
+        return EXIT["check"]
     if got["kind"] == "friction":
         print(f"reading: {got['why']}. That is friction: browser reads are stopped for today. "
               "Tell the person what was seen.")
         if _way_back():
             print(f"  {_way_back()}")
         return EXIT["check"]
-    wid = app_job_here()
     if wid:
         print(_job_signin_said(wid, f"{got['why']}. Not a stop and not a signal; nothing is "
                                     "counted"))

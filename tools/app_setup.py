@@ -1957,9 +1957,21 @@ def end_claim(work: str, now_ts: float | None = None) -> bool:
     return _claim_mark(work, "ended", now_ts)
 
 
+def ask_claim(work: str, now_ts: float | None = None) -> bool:
+    """`work` stopped here on a question to the person (app.py done --question, a LinkedIn
+    sign-in above all): the question is on their page and the work waits there for their
+    answer, never finished. It stays this chat's own for what it says (reading.app_job_here),
+    so a sign-in it meets while it waits goes on the page too. Ended at the question, every
+    later sign-in line was the one for a chat the person watches ("tell the person ... then
+    say done"), and a chat on their computer kept the sign-in in its own conversation (the
+    maintainer, 2026-11-11)."""
+    return _claim_mark(work, "asked", now_ts)
+
+
 def current_claim() -> dict:
     """The work this checkout's chat holds now: the latest claim made here and not ended,
-    as {"work", "chat", "at", "renewed"}, or {} when it holds none (a finished job's chat)."""
+    as {"work", "chat", "at", "renewed"}, or {} when it holds none (a finished job's chat).
+    Work waiting on the person's answer (ask_claim) is still its own, with `asked` set."""
     got = _read_json(_local_file(CLAIMS), {})
     live = [(float(v.get("at") or 0), k, v) for k, v in got.items()
             if isinstance(v, dict) and not v.get("ended")]

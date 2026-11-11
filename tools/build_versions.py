@@ -407,7 +407,7 @@ METHODS: dict[str, dict] = {
             (98, "2026-11-11", False, "RUNBOOK's map says /reply belongs to no skill, and the networking skill owns /network, /threads and /prep"),
             (99, "2026-11-11", False, "the experience section's heading moves to the next page with its first role rather than staying alone at the foot of a page; a resume whose heading never sat there comes out the same; RUNBOOK.md says a computer chat's save finishes there where the chat that answers the page is on the computer too"),
         ),
-        "fingerprint": "36b55cdc4f0767ca",
+        "fingerprint": "880242e9dc4178ca",
     },
     "interview": {
         # Only a process with a round still to come is prepared again: a prep for a round
@@ -741,8 +741,9 @@ METHODS: dict[str, dict] = {
             (56, "2026-11-10", False, "every sign-in seen in a chat the app started on the computer (signin --page, --done, --url) names the step that sends its parked job back to work"),
             (57, "2026-11-10", False, "an HTTP error page (999, 429) is judged on the page's head alone, so an error number in someone's About is no stop"),
             (58, "2026-11-10", False, "a profile read in a chat of a person whom work waiting on the page reads is refused until that work is taken into the chat, so nobody is read twice; the chat that claimed or took the work, and work that has ended, refuse nothing; a number the person gave for one employer (more-at --up-to) is obeyed, a lower one included, and only Open it now's room is never below their usual number"),
+            (59, "2026-11-11", False, "a second sign-out the same day in a chat the app started on the computer goes on the person's page with the job, never told in that chat; notes are written as before"),
         ),
-        "fingerprint": "1b04cb5fe13ae193",
+        "fingerprint": "3b777a77abcca715",
     },
     "screening": {
         "by": "round", "priority": 2,

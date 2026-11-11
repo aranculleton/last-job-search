@@ -189,6 +189,20 @@ WAITING_SAY = {
 # Where the card's one step is a page LinkedIn opens in Claude's own browser, it is on the
 # card's face, as the LinkedIn setup card's is (tools/app_setup.py outside_item).
 LINKEDIN_LOGIN = {"label": "Open LinkedIn", "url": "https://www.linkedin.com/login"}
+# What every chat doing computer work is told of LinkedIn signed out, the steps `next` prints
+# and the prompt of a chat started there alike: one card on the person's page, the read left
+# waiting on it for their Done, and nothing of it in the chat. "Never parking the job" and
+# "never queue a profile for the page" read as keep it here: a chat on a Mac wrote the
+# sign-in's steps in its own conversation and kept the job there, "rather than parking it on
+# your page" (the maintainer, 2026-11-11).
+SIGNED_OUT_ON_PAGE = (
+    "LinkedIn signed out (now, or at any profile later) goes on their page, and only there: "
+    "do what reading.py prints for it, which puts one Sign in to LinkedIn card on their To do "
+    "(python3 tools/app.py done \"$D\" --work <its id> --chat <your id> --kind computer --signin "
+    "linkedin --question \"LinkedIn is signed out in Claude's browser.\") and leaves the read "
+    "waiting on that card, queued for their Done there or their sign-in on the page, either of "
+    "which sends it on. Never write the sign-in, its steps or any question about it in this "
+    "chat, and never keep the job in this conversation instead of on their page.")
 
 
 def waiting_words(titles: list) -> str:
@@ -1146,12 +1160,15 @@ def session_prompt(wid: str, title: str, url: str, copy: str) -> str:
         "in a tab of its own, so the sign-in is there when they look; put it on their page with "
         "python3 tools/app.py done \"$D\" --work <its id> --chat <your id> --kind computer "
         "--signin linkedin --question \"LinkedIn is signed out in Claude's browser.\" and send "
-        "its batch (the Sign in to LinkedIn card: the page signs them in inside the Claude app). "
-        "Then wait for it yourself, never parking the job, one look at a time, each look: "
-        + SIGNIN_LOOK.format(url=url, wid="<its id>") + ". Do what it prints: `look` is the "
-        "same three calls again; `signed-in`, `answered` and `stopped` say what next; `stop` "
-        "is step 7 (a fresh chat carries on once they sign in). Look only at the sign-in tab's "
-        "address, never the page. Never ask in this chat.",
+        "its batch (the Sign in to LinkedIn card on their To do: the page signs them in inside "
+        "the Claude app). The read now waits on that card, queued for their Done there or their "
+        "sign-in on the page, either of which sends it on; it is never kept in this "
+        "conversation instead, and nothing of the sign-in (its steps, a question, a wait) is "
+        "written here. Meanwhile look for the sign-in yourself, saying nothing, one look at a "
+        "time, each look: " + SIGNIN_LOOK.format(url=url, wid="<its id>") + ". Do what it "
+        "prints: `look` is the same three calls again; `signed-in`, `answered` and `stopped` "
+        "say what next; `stop` is step 7 (a fresh chat carries on once they sign in). Look "
+        "only at the sign-in tab's address, never the page. Never ask in this chat.",
         "Signed in (any look shows LinkedIn signed in, or the person says so here) while a job "
         "of yours waits on its sign-in: python3 tools/computer.py signed-in \"$D\" --work <its "
         "id> and send its batch (refused, or it says it is not waiting: the page sent the work "

@@ -22,6 +22,7 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **LinkedIn signed out on your computer goes on your page, not into a chat there.** When a read on your computer found LinkedIn signed out, the chat there could write the steps in its own conversation and keep the job, a second sign-out the same day above all. It now always puts one Sign in to LinkedIn card on your To do and leaves the read waiting there: your Done, or signing in on the page, sends it on.
 - **Settings and Your rules say what your last search left out.** Roles, Where and Pay said "38,547 left out lately": a month of searches added up, each cutting the same jobs again. Each rule now gives the number Jobs gives for your newest search, and an employer you turned down counts each job once over the last 30 days.
 
 ## [4.15.0] - 2026-11-11

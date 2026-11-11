@@ -183,7 +183,10 @@ def test_signed_out_the_chat_opens_the_sign_in_and_waits_never_parking_the_job(
     # The chat on the computer is told to open the sign-in, put the card up and look again.
     prompt = computer.session_prompt("network~read~1", "People", URL, "their job search")
     assert computer.LINKEDIN_LOGIN["url"] in prompt and "--signin linkedin" in prompt
-    assert "computer.py signin-wait" in prompt and "never parking the job" in prompt
+    # The job waits on the page's card, never in the chat: "never parking the job" read as
+    # keep it here, and a chat on a Mac did (the maintainer, 2026-11-11).
+    assert "computer.py signin-wait" in prompt and "queued for their Done" in prompt
+    assert "never kept in this conversation" in prompt and "parking" not in prompt
     # Each look is one command reading the sign-in tab's address and the work afresh
     # (`signin-wait --url`), never a separate `reading.py signin --url` on the copy taken before
     # the wait (the efficiency audit, 2026-11-10, E-10).

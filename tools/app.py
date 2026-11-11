@@ -1444,17 +1444,23 @@ def job_steps(chosen: dict, claimer: str, url: str, session: bool = True,
          "\"Progress costs nothing extra\" in .claude/skills/app/jobs.md and step 5 of "
          ".claude/skills/app/wake.md. Read only those parts.")
     if computer_only and kind in ("network",):
+        import computer
         # The whole run on the computer: finding, the short list, each profile read in this
         # chat's browser, every note written from it and checked. Told only "the networking
         # skill", the chat on the computer queued its reads "for the page" and left every note
         # waiting on a read, for a second chat there to finish (the maintainer, 2026-11-10).
+        # LinkedIn signed out is the one thing that stops it, and it goes on the page: told
+        # only "never queue a profile for the page", the chat on a Mac kept the sign-in and its
+        # steps in its own conversation, "rather than parking it on your page" (the maintainer,
+        # 2026-11-11).
         step("This chat has Claude's own browser on the person's computer, so the whole run is "
              "done here, in this chat: the people searches opened in that browser, the short "
              "list, each person's profile read in it (python3 tools/network/reading.py route "
              "--tools browser says `here`: reading.py next, then reading.py read <id> - "
              "--source browser, one at a time), and every note written from what was read "
-             "and checked. Never queue a profile for the page, never --wait-for-read, and "
-             "never hand any of it to another chat or a background agent.")
+             "and checked. Never queue a profile for the page to read, never --wait-for-read, "
+             "and never hand any of it to another chat or a background agent. "
+             + computer.SIGNED_OUT_ON_PAGE)
     step(f"At each stage ({keys}): python3 tools/app.py pin \"$D\" --work {wid} --chat "
          f"{claimer} --stage <stage> --line \"<one plain line>\", and send the batch it prints "
          f"(ArtifactData batch, url {url}). On a long stage, pin it again with a new line every "
@@ -3343,10 +3349,17 @@ def cmd_done(a) -> int:
             got["files"] = {"work": queued["work"], "applications": queued["applications"]}
             got["batches"] = list(got["batches"]) + queued["batches"]
     # Finished here: this chat holds it no more, so no read waits on its claim, and a sign-in
-    # goes back to being asked in the chat (reading.app_job_here).
+    # goes back to being asked in the chat (reading.app_job_here). A question is no finish: the
+    # work waits on the person's page, and a sign-in this chat meets meanwhile goes there too.
+    # Ended at the question, a chat on the computer that put the Sign in to LinkedIn card on
+    # the page was told the next time to tell the person in its own chat (the maintainer,
+    # 2026-11-11).
     try:
         import app_setup
-        app_setup.end_claim(a.work)
+        if got.get("status") == "needs_you":
+            app_setup.ask_claim(a.work)
+        else:
+            app_setup.end_claim(a.work)
     except OSError:
         pass
     print(_dump(got), end="")
