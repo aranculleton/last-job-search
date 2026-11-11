@@ -1285,3 +1285,81 @@ def test_notes_set_aside_on_the_page_before_they_had_an_end_are_dated_from_the_u
     assert got["ormsby_varga"]["outcome"].endswith("not now, said on the page")
     assert state.dropped_until(got["ormsby_quill"]) is None
     assert state.dropped_until(got["ormsby_hale"]) is None
+
+
+def test_follow_ups_never_fitted_to_your_rules_come_off_their_cards(profile, monkeypatch):
+    """Before 2026-11-11, `app.py follow-ups` and the brief kept code's plain follow-up on its
+    person's card even where it was flagged for Claude to fit to the person's own rules for
+    messages (followup_drafts.RULES_TO_FIT): the page said ready to send, and the next run read
+    it back from the card, unflagged, and finished it as ready. The upgrade takes off each card
+    that still holds code's words exactly (kept, beside it), so the follow-up is owed again and
+    drafted flagged; a clean draft, one the person edited and one already sent stay. Invented
+    people in the example's own state, as the app runs it."""
+    import csv
+    sys.path[:0] = [os.path.join(ROOT, "tools", "network"), os.path.join(ROOT, "tests")]
+    import app_state
+    day = "2026-10-25"
+    monkeypatch.setenv("LJS_TODAY", day)
+    st = os.environ[person.STATE_ENV]
+    flagged, also, clean, edited, sent = app_state.nudges_due(st, 5)
+    with open(profile / "learned.json", "w", encoding="utf-8") as fh:
+        json.dump({"entries": [{
+            "date": "2026-10-20", "area": "messages", "status": "active",
+            "said": "always thank them and say I'm looking for analytics roles in Manchester",
+            "rule": "thank them, and say the roles I want and where I am"}]}, fh)
+    up = U.by_id("follow-ups-fitted")
+    assert up.cost == "instant" and up.needs == "nobody" and up.conditional
+    assert up.pending() == ""                       # nothing on a card yet
+
+    def drafted() -> dict:
+        r = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "followup_drafts.py"),
+                            "--json", "--today", day], cwd=ROOT, capture_output=True,
+                           text=True, encoding="utf-8", env=dict(os.environ))
+        assert r.returncode == 0, r.stderr[-600:]
+        return {i["contact_id"]: i["draft"] for i in json.loads(r.stdout) if i.get("contact_id")}
+
+    code = drafted()
+    for cid in (flagged, also, clean, edited, sent):
+        assert code[cid]["status"] == "check" and code[cid]["source"] == "code", code[cid]
+    # The cards as the older runs left them: code's words on two, a draft written to fit on
+    # one, code's words the person changed on one, and code's words on one logged as sent.
+    folder = lambda cid: os.path.join(st, "documents", "network", cid)  # noqa: E731
+    cards = {flagged: code[flagged]["text"], also: code[also]["text"],
+             clean: ("Hi there, thanks again for connecting. Following up on my note from "
+                     "September: I'm looking for analytics roles in Manchester. How is the "
+                     "analytics team set up these days?"),
+             edited: code[edited]["text"] + " Thanks again for connecting.",
+             sent: code[sent]["text"]}
+    for cid, text in cards.items():
+        os.makedirs(folder(cid), exist_ok=True)
+        with open(os.path.join(folder(cid), "draft.md"), "w", encoding="utf-8") as fh:
+            fh.write(text + "\n")
+    threads = os.path.join(st, "network_threads.csv")
+    rows = list(csv.DictReader(open(threads, encoding="utf-8")))
+    rows.append(dict(rows[-1], contact_id=sent, date="2026-10-24", scenario="nudge",
+                     summary="follow-up", full_text=cards[sent]))
+    with open(threads, "w", encoding="utf-8", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=list(rows[0].keys()))
+        w.writeheader()
+        w.writerows(rows)
+    # On its card, code's unfitted follow-up reads as a stored draft with nothing to fit.
+    assert drafted()[flagged]["status"] == "ready", drafted()[flagged]
+    assert up.pending() == "2 follow-up(s) on a card were never fitted to your own rules for messages"
+    # As the app runs it (run_instant): "python3" is this Python, which Windows names otherwise.
+    r = subprocess.run([sys.executable, *up.command[1:]], cwd=ROOT, capture_output=True, text=True,
+                       encoding="utf-8", env=dict(os.environ))
+    assert r.returncode == 0, r.stderr[-600:]
+    assert up.pending() == ""
+    for cid in (flagged, also):
+        assert not os.path.exists(os.path.join(folder(cid), "draft.md")), cid
+        with open(os.path.join(folder(cid), "draft.unfitted.md"), encoding="utf-8") as fh:
+            assert fh.read().strip() == cards[cid]          # kept, word for word
+    for cid in (clean, edited, sent):
+        with open(os.path.join(folder(cid), "draft.md"), encoding="utf-8") as fh:
+            assert fh.read().strip() == cards[cid], cid
+        assert not os.path.exists(os.path.join(folder(cid), "draft.unfitted.md")), cid
+    # Back on the list to write: drafted again, flagged for Claude to fit, nothing on the card.
+    again = drafted()
+    import followup_drafts
+    for cid in (flagged, also):
+        assert again[cid]["status"] == "check" and followup_drafts.RULES_TO_FIT in again[cid]["warnings"]

@@ -1156,6 +1156,17 @@ def _drafts_before_a_role() -> str:
     return ("%d draft(s) were written before the role they wait for" % n if n else "")
 
 
+def _unfitted_follow_ups() -> str:
+    """Code's plain follow-ups left on a card before they were fitted to the person's own
+    rules for messages: runs before 2026-11-11 kept a draft flagged for a rewrite there, where
+    the page said ready to send, and the next run finished it unchanged. Setting them aside
+    (kept) is instant; each is written again to fit those rules before it is offered."""
+    found = _probe("import followup_drafts; print(len(followup_drafts.unfitted_on_cards()))")
+    n = int(found) if found.isdigit() else 0
+    return ("%d follow-up(s) on a card were never fitted to your own rules for messages" % n
+            if n else "")
+
+
 def _old_sweep_cursor() -> str:
     """3.7.0 kept the slow boards' resume point at documents/rounds/.sweep.json, beside the
     round summaries, and a person's own test that reads every documents/rounds/*.json as a
@@ -2304,6 +2315,13 @@ REGISTRY: tuple[Upgrade, ...] = (
             _notes_aside_dated, "python3 tools/network/state.py date-page-drops", "instant",
             command=("python3", "tools/network/state.py", "date-page-drops"),
             paths=("network_contacts.csv",), conditional=True, priority=2),
+    Upgrade("follow-ups-fitted", "2026-11-11",
+            "follow-ups Claude drafted but never fitted to your own rules for messages taken "
+            "off their cards (kept), so none is offered as ready to send; each is written "
+            "again to fit your rules first",
+            _unfitted_follow_ups, "python3 tools/followup_drafts.py unfitted", "instant",
+            command=("python3", "tools/followup_drafts.py", "unfitted"),
+            paths=("documents/network/*/draft*",), conditional=True, priority=2),
     Upgrade("drafts-before-a-role", "2026-11-10",
             "drafts written before the role they wait for set aside (kept), and their people "
             "put on hold until a role is posted, so no card carries one message with the name "
