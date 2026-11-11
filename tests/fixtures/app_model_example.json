@@ -1,7 +1,7 @@
 {
  "model": 1,
  "made_at": "2026-10-25T18:00:00Z",
- "rev": "30206322146c",
+ "rev": "383105088c37",
  "app": {
   "version": "4.15.0",
   "url": null,
@@ -661,7 +661,8 @@
     "near": false,
     "over": false,
     "tone": "muted",
-    "label": "144 of 300 characters"
+    "label": "144 of 300 characters",
+    "short": "144/300"
    },
    "warnings": [],
    "blocked": [],
@@ -1877,6 +1878,18 @@
     "reading": "Reading their profile…",
     "read": "Profile read: Claude rewrites this note next",
     "again": "Claude could not read their profile just now: it tries again later, by itself"
+   },
+   "hold_short": {
+    "browser": "Waiting for their profile",
+    "paste": "Waiting for their profile",
+    "computer": "Waiting for their profile",
+    "tab": "Waiting for their profile",
+    "sign_in": "Waiting for their profile",
+    "paused": "Waiting for their profile",
+    "next": "Their profile is read next",
+    "reading": "Reading their profile…",
+    "read": "Profile read",
+    "again": "Profile not read yet"
    },
    "check": {
     "state": "due",

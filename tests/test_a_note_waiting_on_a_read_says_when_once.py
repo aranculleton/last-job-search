@@ -166,6 +166,7 @@ def _model(computer=False):
     m["to_read"] = app_model.to_read(m["messages"])
     m["linkedin"] = {"reading": {"id": "linkedin-reader", "page_reads": False, "ok": None, "setting": "browser",
                                  "rev": "r0", "hold": dict(app_model.READ_HOLD),
+                                 "hold_short": dict(app_model.READ_HOLD_SHORT),
                                  "queue": [{"id": "read-" + kit["contact"], "contact": kit["contact"], "first_name": "Kit",
                                             "employer": kit["employer"], "mode": "deep", "asked_on": "2026-10-25",
                                             "reach": "reach/" + kit["contact"], "rev": "q1"}]}}
@@ -174,6 +175,8 @@ def _model(computer=False):
 
 KIT = "(document.querySelector('#main [data-item=\"{cid}\"]') || {{}}).innerText || ''"
 LINE = "(document.querySelector('[data-k=\"held:msg-kit-1\"]') || {}).textContent || ''"
+# The note's line of facts with the sentences behind its "?" (hidden until it is opened).
+FACTS = "(document.querySelector('[data-k=\"facts:msg-kit-1\"]') || {}).textContent || ''"
 QUEUE = ("[(document.querySelector('[data-item=\"reading-queue\"]') || {}).textContent || '',"
          " !!document.querySelector('[data-item=\"reading-queue\"] [data-k=\"read-them\"]')]")
 # The count as drawn, or as the field's own typing redraws it (the span itself).
@@ -187,11 +190,12 @@ def test_away_from_the_computer_the_card_says_when_once_and_paste_is_one_notes_m
     m, kit = _model()
     html = _write(tmp_path, "held", m)
     got = run("script", html=html, viewport=PHONE, clock=CLOCK, steps=[
-        {"hash": "contacts", "eval": KIT.format(cid=kit["contact"])},
+        {"hash": "contacts", "eval": "[" + KIT.format(cid=kit["contact"]) + ", " + FACTS + "]"},
         {"hash": "todo", "eval": QUEUE}])
-    card = got["steps"][0]["eval"]
+    card, facts = got["steps"][0]["eval"]
     assert card.count("Waiting for their profile") == 1, card
-    assert "next time this page is open in the Claude app on your computer" in card, card
+    # When, in a sentence behind the line's "?" (2026-11-09: one quiet line of facts).
+    assert "next time this page is open in the Claude app on your computer" in facts, facts
     assert "Not ready to send" not in card and "Copy" not in card, card
     # Paste is the alternative, beside it, with one note's rewrite as its gauge.
     assert "Paste Kit's profile" in card and "2 min" in card and "a lot of your allowance" not in card, card
@@ -207,13 +211,14 @@ def test_in_the_claude_app_it_reads_by_itself_and_the_card_says_reading(run, tmp
     cid = kit["contact"]
     got = run("script", html=html, viewport={"width": 1280, "height": 900}, clock=CLOCK, steps=[
         {"hash": "contacts", "eval": IN_APP.replace("{more}", "r.busy = false; r.cur = null;")},
-        {"eval": LINE},
+        {"eval": "[" + LINE + ", " + FACTS + "]"},
         {"hash": "todo", "eval": QUEUE},
         {"hash": "contacts", "eval": IN_APP.replace("{more}", "r.busy = true; r.cur = '" + cid + "'; r.at = \"Kit's profile\"; r.total = 1; r.done = 0;")},
         {"eval": "[" + LINE + ", !!document.querySelector('[data-k=\"held:msg-kit-1\"] .spin')]"},
         {"hash": "todo", "eval": QUEUE}])
-    waiting = got["steps"][1]["eval"]
-    assert waiting.startswith("Waiting its turn: Claude reads their profile here by itself"), waiting
+    waiting, facts = got["steps"][1]["eval"]
+    assert waiting.strip() == "Their profile is read next", waiting
+    assert "Waiting its turn: Claude reads their profile here by itself" in facts, facts
     todo, read_them = got["steps"][2]["eval"]
     # What Claude does by itself is never a button (DESIGN.md, Buttons).
     assert "Claude reads 1 profile by itself" in todo and "Nothing to press" in todo and not read_them, todo
@@ -280,11 +285,13 @@ def test_with_their_computer_ready_it_is_read_there_by_itself(run, tmp_path):
     html = _write(tmp_path, "computer", m)
     for vp, first in ((PHONE, []), ({"width": 1280, "height": 900}, [{"hash": "contacts", "eval": TAB}])):
         got = run("engine", html=html, viewport=vp, clock=CLOCK, seed={}, steps=first + [
-            {"hash": "contacts", "eval": "[" + HOLD + ", " + LINE + "]"},
+            {"hash": "contacts", "eval": "[" + HOLD + ", " + LINE + ", " + FACTS + "]"},
             {"hash": "todo", "eval": QUEUE}])
         assert not got["errors"], got["errors"]
-        hold, line = got["after"][len(first)]["eval"]
-        assert hold == "computer" and line.startswith("Waiting for their profile: Claude reads it on your computer by itself"), (hold, line)
+        hold, line, facts = got["after"][len(first)]["eval"]
+        # A few words in the note's line of facts, the sentence behind its "?".
+        assert hold == "computer" and line.strip() == "Waiting for their profile", (hold, line)
+        assert "Waiting for their profile: Claude reads it on your computer by itself" in facts, facts
         todo, read_them = got["after"][len(first) + 1]["eval"]
         assert "Claude reads 1 profile on your computer by itself" in todo and "Nothing to press" in todo, todo
         assert not read_them and "I'll paste them instead" not in todo, todo

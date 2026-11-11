@@ -120,9 +120,10 @@ def problems(model: object) -> list:
 
 def tables() -> dict:
     """The engine's own tables the page reads, so the two never drift: each kind of work's
-    stages with their seconds (page_db.STAGES) and how much of Claude it takes
-    (app_alerts.WORK_COST)."""
+    stages with their seconds (page_db.STAGES), how much of Claude it takes
+    (app_alerts.WORK_COST), and a note's facts in few words (app_model.WHERE_UNKNOWN)."""
     import app_alerts
+    import app_model
     import page_db
     # The resume drafted alone is `draft` work, not a kind of its own: its stages are an
     # estimate beside them, its own minutes beside "Draft the resume only", and as much of
@@ -132,7 +133,9 @@ def tables() -> dict:
             "estimates": {page_db.RESUME_ONLY_KIND: [[name, secs] for _key, name, secs
                                                      in page_db.RESUME_ONLY_STAGES]},
             "work_cost": dict(app_alerts.WORK_COST,
-                              **{page_db.RESUME_ONLY_KIND: app_alerts.WORK_COST["draft"]})}
+                              **{page_db.RESUME_ONLY_KIND: app_alerts.WORK_COST["draft"]}),
+            # A note's facts said in a few words, and in a sentence behind its "?".
+            "facts": {"where_unknown": list(app_model.WHERE_UNKNOWN)}}
 
 
 def compact_js(js: str) -> str:

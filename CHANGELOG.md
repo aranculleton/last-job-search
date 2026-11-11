@@ -44,6 +44,9 @@ make sense to somebody whose repo just received it.
 - **Saving your work no longer wakes Claude for nothing.** Each save could leave Claude following its own updates, every one a turn on your page's chat; the save steps now say never to follow them, and to stop at once if it was started anyway.
 - **A LinkedIn download you add on your page is taken straight away.** Its tap could wait through several rings, as Claude was told to stop before reading the files; reading them is now the first thing it does, with every file named.
 - **Settings and Your rules say what your last search left out.** Roles, Where and Pay said "38,547 left out lately": a month of searches added up, each cutting the same jobs again. Each rule now gives the number Jobs gives for the search it shows, however long ago that search ran, and no number before your first search; an employer you turned down counts each job once over the last 30 days.
+- **A person's card in Contacts reads as one calm card.** Under a note, its facts are one quiet line, "290/300 · Waiting for their profile · Location not on record", with what each means behind its "?", instead of a line each.
+- **A change you ask for with the pencil sits in one grey block under the note**, what you asked and then where it stands, with Stop Claude right beside it. It says "Starting in a moment" for half a minute at most, then "Waiting for Claude, asked at 10:42", never a clock running under "starting in a moment".
+- **Asking one note's pencil about every note waiting for a profile does that for them all.** They all go on your page's reading list, that note is left as it is, and its card says so at once. Before, it was taken as a rewrite of that one note.
 
 ## [4.15.0] - 2026-11-11
 

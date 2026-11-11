@@ -1100,8 +1100,9 @@ METHODS: dict[str, dict] = {
             (158, "2026-11-10", False, "the person's own dates are told from someone else's as the engine writes them (an interview's test or day to choose, an offer's reply-by), and no row, card or Brief line of their own says days late or Follow-up due"),
             (159, "2026-11-10", False, "the Brief's tiles lead with this week's applications and messages sent; Progress's counts in words sit under the funnel; the next step reads plainly; a question after the Jobs line is its own sentence"),
             (160, "2026-11-11", False, "Settings and Your rules say how many jobs your last search left out by each rule, the search Jobs shows, never a month of searches added up; employers you turned down say what they left out in the last 30 days"),
+            (161, "2026-11-11", False, "a note's facts are one quiet line under it (\"290/300 · Waiting for their profile · Location not on record\"), what each means behind its one \"?\"; a change asked with the pencil is one soft grey block with its state and Stop Claude beside it, \"Starting in a moment\" for half a minute at most and then \"Waiting for Claude, asked at ...\""),
         ),
-        "fingerprint": "8a56f798b90b39c5",
+        "fingerprint": "f891f133776aee26",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",
