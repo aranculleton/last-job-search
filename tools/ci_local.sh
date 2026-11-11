@@ -11,7 +11,7 @@
 #
 # The rule is right and the dependency on GitHub was never the point of it.
 # Every check in .github/workflows/ci.yml is a script in this repo; the runner
-# only provides the machine. So it runs here, in under two minutes, and a
+# only provides the machine. So it runs here, on this computer, and a
 # clean run is the same evidence.
 #
 # CI's second Python leg runs the floor, 3.9 (a Mac's own python3): a bare
