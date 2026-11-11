@@ -149,7 +149,7 @@ SETUP.md, "A. Fresh cloud container", says why each piece is there and what its 
 `verify_pdf.py` is a broken `cffi`). Then:
 
 ```bash
-./tools/ci_local.sh                 # in the app, before a change: every check CI runs, under two minutes
+./tools/ci_local.sh                 # every check CI runs, as long as CI takes; in the app, a pull request's own CI runs them
 ```
 
 A person's repo needs neither before work starts: the day's sync runs their own tests when an

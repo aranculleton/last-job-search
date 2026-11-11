@@ -96,10 +96,9 @@ run typecheck` and `bun test`; a document-generation change compiles and reads t
   only when a person must change their setup or relearn something they rely on. Say the
   number and the reason in one line.
 - **The CHANGELOG**: about 30 entries a release, each one a person would notice, in plain
-  words, no audit or review ids.
-- **The headline** is all a person who updates by hand (`"app_updates": "when_asked"`) is told,
-  once per version; they take it when they say "update" (`sync_app.py --update`), and a
-  security fix is offered the same way, never forced.
+  words, no audit or review ids. Its headline is all a person who updates by hand
+  (`"app_updates": "when_asked"`) is told; they take it when they say "update"
+  (`sync_app.py --update`), and a security fix is offered the same way, never forced.
 
 **Under 15 minutes from "release it"**: the review, the rehearsals and Everywhere ran while
 the version was built.
@@ -107,29 +106,30 @@ the version was built.
 1. Write the hand-over (below).
 2. On the version's pull request (with everything merged, a new one from `origin/master`),
    before its last push: `python3 tools/release.py cut X.Y.Z --headline "<the line a person
-   reads>"`. It renames `[Unreleased]` to `## [X.Y.Z] - <date>`, opens a fresh one, puts the
-   headline (140 characters or fewer) first and checks the hand-over is this version's.
+   reads>"`. It renames `[Unreleased]` to `## [X.Y.Z] - <date>` under a fresh one, puts the
+   headline first under `### Changed` and commits nothing. It refuses an empty section, a
+   number not newer than the newest release, a hand-over without the number, and a headline
+   over 140 characters, of two sentences, with marks, or naming the maintainer.
 3. Title the pull request "Release X.Y.Z: <headline>" and add the `release` label: Everywhere
    and Platforms run on the label, never on the title, and never block.
-4. When the page's look changed, `python3 tools/readme_pictures.py shoot` remakes the README's
-   pictures from the sample; look at each before it is committed.
+4. When the page's look changed, `python3 tools/readme_pictures.py shoot` (Node, Playwright and
+   Pillow) remakes the README's four pictures from the sample; look at each before committing.
 5. Push with the gate and merge with `Fast checks` green: merging it is the release.
    `release.yml` runs `tools/release.py publish`, which tags `vX.Y.Z` and publishes the notes
-   (the headline, then Added, Changed, Fixed); `python3 tools/release.py newest` confirms the
-   tag. Only if the workflow fails: Releases, **Draft a new release**, tag `vX.Y.Z` on master,
-   the output of `python3 tools/release.py notes` as the notes, **Publish**.
-6. A broken release is fixed forward with a new patch; a published tag never moves.
+   (the headline, then New, Changed, Fixed, Removed); `python3 tools/release.py newest` checks
+   the tag. Only if the workflow fails: Releases, **Draft a new release**, tag `vX.Y.Z` on
+   master, `python3 tools/release.py notes` as the notes, **Publish**. A broken release is
+   fixed forward with a new patch; a published tag never moves.
 
 ### Handing over
 
 `docs/NEXT_BUILDER.md` is written afresh before each cut, in 15 lines or fewer: what the
-release did not test and what is known red, in plain words, with no real person in it. It is
-background, never a list of work: no "do first" and no to-do heading. A decision that should
-outlast the version goes into this file the day it is made ("Decisions that hold" or its own
-section), never only into the hand-over. With the release out, tell the maintainer in one
-line the number, the reason, what changed for them, what was checked and what was not,
-recommend a new chat, and in that message give the builder prompt whole, in one copyable
-block. Never start that chat.
+release did not test and what is known red, in plain words, no real person in it. It is
+background, never a list of work: no "do first" and no to-do heading. A lasting decision goes
+into this file the day it is made ("Decisions that hold" or its own section), never only into
+the hand-over. With the release out, tell the maintainer in one line the number, the reason,
+what changed for them, what was checked and what was not; recommend a new chat; and in that
+message give the builder prompt whole, in one copyable block. Never start that chat.
 
 ## The builder prompt
 
@@ -222,9 +222,11 @@ is pushed and merged is in "Builder", above.
   (`employer-researcher` on sonnet, `grounding-auditor` with none set, so the session's own),
   so the auditor cannot be quietly downgraded.
 - **A public name leaves on the record.** A top-level name in `tools/` or `templates/` with no
-  leading underscore, outside `tools/openroles/`, may be used by a person's own tests: it is
-  taken out of the code only with a CHANGELOG line saying so and its record in
-  `docs/removed_names.json` (what, where, when).
+  leading underscore, outside `tools/openroles/`, may be used by a person's own tests. It is
+  taken out of the code only with a record in `docs/removed_names.json` (`module`, `name`,
+  `date`, `announced`: `Unreleased` until the cut writes the version) and a CHANGELOG entry in
+  that version naming it with its file (`place.SHORT_SIGN_IN`). `python3 tools/public_names.py
+  check` compares with the newest release tag's own files, fetching that tag where missing.
 - **A change to how documents, scores or messages come out** is checked by rendering the same
   inputs before and after and comparing the outputs; any difference is named in the PR, or it
   is a bug.
