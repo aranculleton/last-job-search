@@ -43,6 +43,7 @@ make sense to somebody whose repo just received it.
 - **A LinkedIn download you add on your page is taken straight away.** Its tap could wait through several rings, as Claude was told to stop before reading the files; reading them is now the first thing it does, with every file named.
 - **Settings and Your rules say what your last search left out.** Roles, Where and Pay said "38,547 left out lately": a month of searches added up, each cutting the same jobs again. Each rule now gives the number Jobs gives for your newest search, and an employer you turned down counts each job once over the last 30 days.
 - **A follow-up still to be rewritten is never shown as ready to send.** Where your own rules for messages ask for more than Claude's short follow-up says, the run listed it to rewrite and still put it on the person's card as ready to send, and the next run finished it unchanged; it now reaches the card only once it is rewritten and passes its checks.
+- **A greeting by either of someone's names is right.** For a name with another in brackets, such as "Ottilie (Lark) Fennimore", your page's check took the bracketed name as the only one, called "Hi Ottilie" the wrong name and queued a rewrite; a greeting by the name before the brackets or the one inside them now passes, and a greeting to somebody else is still caught.
 
 ## [4.15.0] - 2026-11-11
 
