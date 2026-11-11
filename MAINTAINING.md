@@ -60,8 +60,10 @@ when the work needs it. One chat builds one version, from the builder prompt (ne
   **real scale** (hundreds of people); **two chats at once** (one file changed by both).
 - **Rehearse before calling it done**: `python3 tools/try_personal_tests.py <the maintainer's
   repo>` lays this tree over a copy of it as a sync would; `python3 tools/rehearse_sync.py
-  <the maintainer's repo>` plays out a cloud chat and a chat on their computer taking it. A
-  failure the release causes is fixed in the app, or named in its CHANGELOG entry.
+  <the maintainer's repo>` plays out a cloud chat and a chat on their computer taking it;
+  `python3 tools/rehearse_sync.py --fresh <the last release's tag>` does the same for a new
+  person's copy made from that release, starting as every chat does. A failure the release
+  causes is fixed in the app, or named in its CHANGELOG entry.
 
 ### Before pushing, and merging
 

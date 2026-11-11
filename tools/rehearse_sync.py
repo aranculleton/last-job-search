@@ -24,6 +24,16 @@ throwaway copies, with nothing sent anywhere and nothing in either repository ch
 6. The cloud chat lands its work first; the computer chat then takes master, as its next
    sync would, and the merge must go through with no conflict.
 
+    python3 tools/rehearse_sync.py --fresh v4.14.0 [--app HEAD] [--no-ci] [--keep]
+
+`--fresh <tag>` needs no one's repo: it makes a new person's copy as the template makes one,
+from the app at that release, set up as the example person (profile.example, with one check
+of their own) and their page published on that version, offline. A cloud chat and a chat on
+their computer then each start as every chat does (`app.py start`), do the update check it
+prints, and must go round the start once; they build the page as the steps then printed say
+(`app.py page --out-dir`, and its plan of publishes, never sent), and record it; then the upgrades
+plan, their own tests and the everyday commands; then the two land one after the other.
+
 Exit 0 when every step passed, 1 when something failed (each named, with its output),
 2 when the copies could not be made.
 """
@@ -342,14 +352,258 @@ def rehearse(repo: str, ref: str, app_ref: str, ci: bool, keep: bool) -> int:
             shutil.rmtree(tmp, ignore_errors=True)
 
 
+# ------------------------------------------------------------------ a fresh copy (--fresh)
+
+# The page's address in a fresh rehearsal: invented, recorded offline, never published to.
+FRESH_PAGE = "https://claude.ai/code/artifact/00000000-0000-4000-8000-00000000f7e5"
+# The one check of their own a fresh person is given: it reads their profile through the
+# app's public names, as a check a chat writes for a person does.
+OWN_TEST = (
+    "import os\nimport sys\n\n"
+    "ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))\n"
+    "sys.path.insert(0, os.path.join(ROOT, \"tools\"))\n\n"
+    "import person  # noqa: E402\n\n\n"
+    "def test_my_profile_names_me():\n"
+    "    assert person.get(\"identity.name\")\n")
+# A step the start or the update check prints that sends the chat round the start again.
+_AGAIN = re.compile(r"run it again now|run python3 tools/app\.py start\b")
+# The update check's own commands, as a start prints them for the chat to run.
+_SYNC_STEP = re.compile(r"^\s*\d+\.\s+(python3 tools/sync_app\.py\b.*?)(?:\s{2,}\(|$)", re.M)
+# The page's build, as a start or an update prints it: `app.py page --out-dir <...> [--url ..]`.
+_PAGE_STEP = re.compile(r"python3 tools/app\.py page --out-dir <your scratchpad>/([^\s,]+)"
+                        r"(?: --url (https://[^\s,]+))?")
+
+
+def commands(text: str, pattern=_SYNC_STEP) -> list[list[str]]:
+    """The update check's commands a start printed as steps, in order, each as a list of
+    arguments with `python3` as this Python."""
+    import shlex
+    out = []
+    for m in pattern.finditer(text or ""):
+        try:
+            args = shlex.split(m.group(1))
+        except ValueError:
+            continue
+        out.append([sys.executable] + args[1:])
+    return out
+
+
+def page_steps(text: str) -> list[tuple[str, str]]:
+    """[(the folder under the scratchpad, the page's address or "")] for each build of the
+    page the steps name."""
+    return [(m.group(1).rstrip("."), (m.group(2) or "").rstrip("."))
+            for m in _PAGE_STEP.finditer(text or "")]
+
+
+def _seed_fresh(tag: str, tmp: str, env: dict) -> str:
+    """A person's copy made from the app at `tag` as the template makes one (its tree, one
+    commit), set up as the example person with one check of their own and their page
+    published on that version. "" when made, else why not."""
+    seed = os.path.join(tmp, "seed")
+    os.makedirs(seed)
+    tar = subprocess.run(["git", "-C", HERE, "archive", "--format=tar", tag],
+                         capture_output=True)
+    if tar.returncode:
+        return f"git archive {tag}: {tar.stderr.decode('utf-8', 'replace').strip()[:300]}"
+    import io
+    import tarfile
+    with tarfile.open(fileobj=io.BytesIO(tar.stdout)) as t:
+        t.extractall(seed, filter="data") if sys.version_info >= (3, 12) else t.extractall(seed)
+    example = os.path.join(seed, "profile.example")
+    if not os.path.isdir(example):
+        return f"{tag} has no example person to set up"
+    for cmd in (["init", "-q", "-b", "master"], ["add", "-A"],
+                ["commit", "-q", "-m", "Initial commit"]):
+        r = _git(*cmd, cwd=seed)
+        if r.returncode:
+            return f"git {cmd[0]}: {(r.stderr or r.stdout).strip()[:300]}"
+    shutil.copytree(example, os.path.join(seed, "profile"),
+                    ignore=shutil.ignore_patterns("state"))
+    state = os.path.join(example, "state")
+    names = [n for n in (os.listdir(state) if os.path.isdir(state) else []) if n != "README.md"]
+    for name in names:
+        src = os.path.join(state, name)
+        if os.path.isdir(src):
+            shutil.copytree(src, os.path.join(seed, name), dirs_exist_ok=True)
+        else:
+            shutil.copy(src, os.path.join(seed, name))
+    os.makedirs(os.path.join(seed, "profile", "tests"), exist_ok=True)
+    with open(os.path.join(seed, "profile", "tests", "test_my_search.py"), "w",
+              encoding="utf-8", newline="\n") as fh:
+        fh.write(OWN_TEST)
+    for cmd in (["add", "-A", "-f", "profile", *names], ["commit", "-q", "-m", "set me up"]):
+        r = _git(*cmd, cwd=seed)
+        if r.returncode:
+            return f"git {cmd[0]}: {(r.stderr or r.stdout).strip()[:300]}"
+    return ""
+
+
+def _day_one(reh: Rehearsal, seed: str, tmp: str, env: dict) -> None:
+    """Their page published on the old version, as its first chat did, recorded offline."""
+    py = sys.executable
+    built = os.path.join(tmp, "page-day-one")
+    ok, _ = reh.check("day one", "the page built on the old version",
+                      [py, "tools/app.py", "page", "--out-dir", built], seed, env)
+    if ok:
+        reh.check("day one", "its address kept", [py, "tools/app.py", "published", FRESH_PAGE,
+                                                   "--parts", built], seed, env)
+    _git("add", "-A", "-f", "profile", cwd=seed)
+    _git("commit", "-q", "-m", "the page published", cwd=seed)
+
+
+def _page_plan(reh: Rehearsal, chat: str, root: str, env: dict, scratch: str,
+               text: str) -> None:
+    """Each build of the page the steps printed, as a chat makes it, then its plan of
+    publishes as if the page held nothing yet, and the address kept: never published."""
+    py = sys.executable
+    for folder, url in page_steps(text):
+        out_dir = os.path.join(scratch, folder)
+        cmd = [py, "tools/app.py", "page", "--out-dir", out_dir] + (["--url", url] if url else [])
+        ok, out = reh.check(chat, "the page built as the steps say", cmd, root, env)
+        if ok and url:
+            # The plan asks for the page's own list of files first: here it holds none.
+            empty = os.path.join(scratch, "on-page.txt")
+            with open(empty, "w", encoding="utf-8") as fh:
+                fh.write("")
+            ok, out = reh.check(chat, "its plan of publishes", cmd + ["--on-page", empty],
+                                root, env)
+        planned = ok and "action publish" in out
+        reh.note(chat, "the plan names what to publish", planned, out,
+                 "" if planned else "no publish in the plan")
+        if ok:
+            reh.check(chat, "the page's address kept", [py, "tools/app.py", "published",
+                                                          url or FRESH_PAGE, "--parts", out_dir],
+                      root, env)
+        return                                  # one build a start: the first it names
+    if re.search(r"changed the person's page itself|page to publish", text or ""):
+        reh.note(chat, "the steps name the page's build", False, text,
+                 "the page is due, and no build of it was printed")
+
+
+def start_chat(reh: Rehearsal, chat: str, root: str, env: dict, sha: str,
+               scratch: str) -> None:
+    """A chat's first command, as every chat runs it, and the update check it prints."""
+    py = sys.executable
+    ok, out = reh.check(chat, "start (the old version's)",
+                        [py, "tools/app.py", "start", "--on", "rehearsal", "--tools", "none"],
+                        root, env)
+    said = ""
+    printed = commands(out)
+    for cmd in printed:
+        ok, got = reh.check(chat, "the update check it printed: " + " ".join(cmd[2:3]),
+                            cmd, root, env)
+        said += got
+    merged = _git("merge-base", "--is-ancestor", sha, "HEAD", cwd=root).returncode == 0
+    reh.note(chat, "the update is merged", merged, _git("log", "-1", "--format=%s",
+                                                         cwd=root).stdout,
+             "" if merged else "the app commit is not in the chat's history")
+    again = _AGAIN.findall(said)
+    reh.note(chat, "the chat goes round the start once", not again, said,
+             "" if not again else "told to run the start again")
+    # A start that printed the check as a step: the check carries the start on, on the new
+    # version, so the chat has the new steps without asking for them.
+    carried = not printed or "app start:" in said
+    reh.note(chat, "the new version's steps came with the update", carried, said,
+             "" if carried else "only the old version's steps")
+    # The page's steps, wherever they were printed: the update's own, or the start's.
+    _page_plan(reh, chat, root, env, scratch, said or out)
+    reh.check(chat, "their own tests, as the update check runs them",
+              [py, "tools/sync_app.py", "--own-tests"], root, env)
+    # The chat saves what it did, as every chat does before it lands.
+    reh.check(chat, "the chat's work saved", [py, "tools/save_state.py"], root, env)
+    if _git("diff", "--cached", "--quiet", cwd=root).returncode:
+        _git("commit", "-q", "-m", "a chat's work", cwd=root)
+
+
+def fresh(tag: str, app_ref: str, ci: bool, keep: bool) -> int:
+    tmp = tempfile.mkdtemp(prefix="ljs_rehearse_fresh_")
+    reh = Rehearsal()
+    try:
+        app, origin = os.path.join(tmp, "app"), os.path.join(tmp, "origin.git")
+        home = os.path.join(tmp, "home")
+        os.makedirs(home)
+        sha = _git("rev-parse", "--verify", "-q", app_ref + "^{commit}", cwd=HERE).stdout.strip()
+        if not sha:
+            print(f"rehearse_sync: {app_ref} is not a commit of this app")
+            return 2
+        if not _git("rev-parse", "--verify", "-q", tag + "^{commit}", cwd=HERE).stdout.strip():
+            print(f"rehearse_sync: {tag} is not a release of this app here (git fetch --tags)")
+            return 2
+        failed = copy_app(HERE, app, sha)
+        if not failed and _git("tag", "-f", CANDIDATE_TAG, sha, cwd=app).returncode:
+            failed = "the stand-in app could not be given its release"
+        # Their copy's origin is a folder here, so each chat is told what GitHub would say of
+        # it (private); and each is a chat of its own, never the one running this.
+        envs = {"cloud": dict(_env(True, app, home), LJS_COPY="private",
+                              LJS_CHAT="session_REHEARSALCLOUD"),
+                "computer": dict(_env(False, app, home), LJS_COPY="private",
+                                 LJS_CHAT="local-rehearsal")}
+        for env in envs.values():
+            for k in ("CLAUDE_CODE_REMOTE_SESSION_ID", "CLAUDE_CODE_SESSION_ID",
+                      "CLAUDE_CODE_BRIDGE_SESSION_ID"):
+                env.pop(k, None)
+        failed = failed or _seed_fresh(tag, tmp, envs["computer"])
+        if failed:
+            print(f"rehearse_sync: could not make the copies: {failed}")
+            return 2
+        seed = os.path.join(tmp, "seed")
+        _day_one(reh, seed, tmp, envs["computer"])
+        r = _git("clone", "-q", "--bare", "--no-local", seed, origin, cwd=tmp)
+        if r.returncode:
+            print(f"rehearse_sync: could not make the copies: {(r.stderr or r.stdout)[:300]}")
+            return 2
+        roots = {}
+        for chat in ("cloud", "computer"):
+            roots[chat] = os.path.join(tmp, chat)
+            _git("clone", "-q", origin, roots[chat], cwd=tmp)
+        for chat in ("cloud", "computer"):
+            scratch = os.path.join(tmp, chat + "-scratch")
+            os.makedirs(scratch)
+            start_chat(reh, chat, roots[chat], envs[chat], sha, scratch)
+            everyday(reh, chat, roots[chat], envs[chat], ci)
+        land_both(reh, roots["cloud"], roots["computer"], envs["computer"])
+        print(f"From {tag} to {app_ref} ({sha[:12]}), a new person's copy:")
+        print(reh.report())
+        return 0 if all(s[2] for s in reh.steps) else 1
+    finally:
+        if keep:
+            print(f"\nThe copies are kept in {tmp}")
+        else:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+
+def land_both(reh: Rehearsal, cloud: str, computer: str, env: dict) -> None:
+    """The cloud chat lands first; the computer chat then takes master, as its next sync
+    would: the merge must go through with no conflict, and its own landing after it."""
+    r = _git("push", "-q", "origin", "HEAD:master", cwd=cloud)
+    reh.note("cloud", "land on master", r.returncode == 0, r.stderr,
+             "" if r.returncode == 0 else "push refused")
+    reh.check("computer", "take master after the cloud chat landed",
+              [sys.executable, "tools/sync_app.py", "--pull"], computer, env)
+    left = _git("diff", "--name-only", "--diff-filter=U", cwd=computer).stdout.strip()
+    reh.note("computer", "no conflict with the cloud chat's update", not left, left,
+             "" if not left else "conflicted")
+    r = _git("push", "-q", "origin", "HEAD:master", cwd=computer)
+    reh.note("computer", "land on master after it", r.returncode == 0, r.stderr,
+             "" if r.returncode == 0 else "push refused")
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("repo", help="the person's repository, read only")
+    ap.add_argument("repo", nargs="?", default="", help="the person's repository, read only")
     ap.add_argument("--ref", default="origin/master", help="their commit to start from")
     ap.add_argument("--app", default="HEAD", help="the app commit to rehearse")
+    ap.add_argument("--fresh", metavar="TAG", default="",
+                    help="no one's repo: a new person's copy made from the app at this release")
     ap.add_argument("--no-ci", action="store_true", help="skip the local CI in each chat")
     ap.add_argument("--keep", action="store_true", help="keep the copies to look at")
     a = ap.parse_args(argv)
+    if a.fresh:
+        if a.repo:
+            ap.error("--fresh makes its own copy: name no repository with it")
+        return fresh(a.fresh, a.app, not a.no_ci, a.keep)
+    if not a.repo:
+        ap.error("name the person's repository, or --fresh <release tag>")
     if not os.path.isdir(os.path.join(a.repo, ".git")) and not os.path.isfile(
             os.path.join(a.repo, ".git")):
         print(f"rehearse_sync: {a.repo} is not a git repository")
