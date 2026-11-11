@@ -173,14 +173,27 @@ def test_a_starter_that_never_answers_is_looked_at_and_the_person_asked(tmp_path
     monkeypatch.setattr(__import__("app_setup"), "origin", lambda: ("someone", "my-job-search"))
     assert computer.route(gone, t, chat="session_helper", envs=BRIDGE, tools=tools, url=URL)["route"] == \
         "make starter"
-    # Alive but silent, twice: the person is asked to open it.
-    alive = db
-    for n in (1, 2):
-        alive = _apply(alive, computer.starter_seen(alive, "idle", t, str(tmp_path / f"a{n}")))
-    assert computer.starter_stuck(alive) == "silent"
+    # Alive but silent, twice: a new one is made, as for one that is gone, and the person is
+    # never asked to open a chat that changes nothing (the local review, 2026-11-11, 7).
+    alive = _apply(db, computer.starter_seen(db, "idle", t, str(tmp_path / "a1")))
+    assert computer.starter(alive)["chat"] == "session_starter"     # once: looked at again
+    alive = _apply(alive, computer.starter_seen(alive, "idle", t, str(tmp_path / "a2")))
+    assert computer.starter(alive)["chat"] == "" and \
+        computer.starter(alive)["gone"] == {"chat": "session_starter", "at": app_model.stamp(t),
+                                            "why": "silent"}
+    assert computer.route(alive, t, chat="session_helper", envs=BRIDGE, tools=tools,
+                          url=URL)["route"] == "make starter"
     silent = computer.state(alive, t, envs=BRIDGE)
-    assert silent["state"] == "starter_silent" and silent["card"]
-    assert "not answering" in computer.card(silent)["body"]
+    assert silent["state"] not in ("starter_silent", "starter_waits")
+    # An older record that says silent still asks nobody: the route looks at it again.
+    old = dict(db, meta={"computer_starter": {"data": dict(computer.starter(db), silent=2,
+                                                           checked_at=app_model.stamp(t)),
+                                              "version": 3}})
+    assert computer.state(old, t, envs=BRIDGE)["state"] != "starter_silent"
+    # Waiting on their approval, the card links the chat by its own address and name.
+    card = computer.card(st)
+    assert card["open"] == {"label": "Open it", "url": "https://claude.ai/code/session_starter"}
+    assert computer.STARTER_TITLE in card["body"]
     # A starter that answers each ring is never looked at.
     answered = dict(_db(work), **_starter(woke_at=app_model.stamp(T + timedelta(minutes=1))))
     answered = _apply(answered, computer.rung(answered, T, str(tmp_path / "w1")))

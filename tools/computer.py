@@ -181,8 +181,8 @@ WAITING_SAY = {
     "no_bridge": "{what} until Claude is switched on for your computer. Switch it on once in "
                  "the Claude app there.",
     "not_set_up": "{what} until Claude is set up on your computer. Set it up once.",
-    "starter_waits": "{what} until you approve one step in Claude's chat that starts work on "
-                     "your computer. Open that chat in the Claude app and approve what it asks.",
+    "starter_waits": "{what} until you approve one step in the chat “{title}” in the Claude "
+                     "app. Open it from here and approve what it asks.",
     "starter_silent": "{what} because Claude's chat that starts work on your computer is not "
                       "answering. Open that chat in the Claude app once.",
 }
@@ -249,6 +249,9 @@ def runs_there(computer: str) -> str:
 
 # ------------------------------------------------------------------ the computer starter
 
+# A cloud chat's own page, by its `session_` id (app_listen.this_chat).
+CHAT_URL = "https://claude.ai/code/"
+
 # The one chat that holds the computer approval (confirm_repository_trust) and does nothing but
 # start the chats on the person's computer and put them away. Approving ties a chat to the
 # person's own devices for good: from then on no chat could archive it, itself included, no
@@ -273,8 +276,8 @@ BELL_TITLE = "Job search computer bell"
 # no wake of its own): it is looked at with get_session before it is rung again. Rung for good,
 # a starter the person had deleted, or one waiting on their approval in a chat they never
 # open, left the work "ready" on the page with the bell ringing every ten minutes (the builder
-# audit, 2026-11-10, CC-6). Looked at alive this many times and still not answering: the
-# person is asked, on a To do card, to open it.
+# audit, 2026-11-10, CC-6). Looked at alive this many times and still not answering: a new one
+# is made (starter_seen), never the person asked to open a chat.
 STARTER_SILENT_RINGS = 2
 STARTER_SILENT_CHECKS = 2
 # What get_session says of a starter that is no more: made again. Waiting on the person (an
@@ -466,6 +469,13 @@ def starter_seen(db: dict, status: str, now: dt.datetime, out_dir: str,
                   "gone": {"chat": rec.get("chat") or "", "at": at}}
     elif said in STARTER_BLOCKED:
         fields = {"checked_at": at, "checked": said, "waits_on_person": at}
+    elif int(rec.get("silent") or 0) + 1 >= STARTER_SILENT_CHECKS:
+        # Alive and still not answering its bell: a new one is made, as for one that is gone.
+        # Asking the person to "open that chat once" named no chat and changed nothing they
+        # could see (the local review, 2026-11-11, 7).
+        fields = {"chat": "", "bell": "", "made_at": None, "rung_at": None, "rings": 0,
+                  "silent": 0, "waits_on_person": None, "checked_at": at, "checked": said,
+                  "gone": {"chat": rec.get("chat") or "", "at": at, "why": "silent"}}
     else:
         fields = {"checked_at": at, "checked": said or "unknown", "rings": 0,
                   "waits_on_person": None, "silent": int(rec.get("silent") or 0) + 1}
@@ -501,10 +511,10 @@ def _starter_route(db: dict, now: dt.datetime, wid: str, w: dict, url: str, copy
     asked = _time(item.get("asked_at"))
     checked = _time(rec.get("checked_at"))
     looked_lately = bool(checked and (now - checked).total_seconds() < STARTER_WAIT_S)
-    stuck = starter_stuck(db)
+    stuck = starter_stuck(db) == "waits"
     if rec.get("chat") and stuck and looked_lately:
-        # It waits on the person, or is not answering: the page's To do card asks them
-        # (state, card); ringing it again or making another changes nothing (CC-6, CC-14).
+        # It waits on the person's approval: the page's To do card asks them, with a link to
+        # it (state, card); ringing it again or making another changes nothing (CC-6, CC-14).
         return {"route": "starter waits", "work": wid, "line": line, "waiting": w}
     if rec.get("chat") and rec.get("bell"):
         last = _time(rec.get("rung_at"))
@@ -947,11 +957,33 @@ def busy_there(db: dict, now: dt.datetime, w: dict | None = None) -> str:
 SIGNING_IN = "your LinkedIn sign-in on the page"
 
 
+def held_there(db: dict, now: dt.datetime, w: dict | None = None) -> tuple[list, float]:
+    """([(id, item)], seconds the oldest has been held): work for the computer a chat there
+    holds (claimed, or its chat just started). Work waiting on the person's answer has its own
+    card on the page, and work nobody has started is `queued`: neither is held."""
+    import page_db
+    w = w if w is not None else waiting(db, now)
+    out, oldest = [], None
+    for wid, doc in sorted((db.get("work") or {}).items()):
+        d = (doc or {}).get("data") or {}
+        status = str(d.get("status") or "")
+        if wid in w["queued"] or not page_db.computer_only(d, "cloud"):
+            continue
+        if status not in page_db.ACTIVE and not (status == "queued" and wid in w["started"]):
+            continue
+        sess = d.get("computer_session") if isinstance(d.get("computer_session"), dict) else {}
+        since = _time(d.get("claimed_at")) or _time(sess.get("at")) or _time(d.get("asked_at"))
+        oldest = since if oldest is None or (since and since < oldest) else oldest
+        out.append((wid, d))
+    return out, (now - oldest).total_seconds() if oldest else 0.0
+
+
 def state(db: dict, now: dt.datetime, envs=None, version: str = "",
           works_on: str = "", page_signin: str = "") -> dict:
     """The computer as the page shows it: {state, line, action, card, computer, seen_at,
     waiting}. `action` is {label, steps} or None; `card` is True only while computer work
-    waits past CARD_AFTER_S and only the person can move it. `envs`: list_environments' answer
+    waits past CARD_AFTER_S (nobody started it, or a chat there holds it) and only the person
+    can move it. `envs`: list_environments' answer
     where the chat asked (None: not known). `works_on`: profile/place.json's answer."""
     beat_ = heartbeat(db)
     w = waiting(db, now)
@@ -971,10 +1003,11 @@ def state(db: dict, now: dt.datetime, envs=None, version: str = "",
         key = "gone"
     elif age is not None and age >= OFF_S and not has_bridge:
         key = "off"
-    elif w["queued"] and starter_stuck(db):
-        # Nothing can start on the computer until the person opens the chat that starts it
-        # there (CC-6): said, with the work that waits, never "ready".
-        key = "starter_" + starter_stuck(db)
+    elif w["queued"] and starter_stuck(db) == "waits":
+        # Nothing can start on the computer until the person approves in the chat that starts
+        # it there (CC-6): said, with the work that waits and a link to that chat, never
+        # "ready". One that is only silent is made again by the route, never the person's.
+        key = "starter_waits"
     elif beat_.get("linkedin") == "out" and _time(page_signin) and seen and \
             _time(page_signin) > seen:
         # Signed in since on the page (`page_signin`): "signed out" stayed on the computer's
@@ -1002,6 +1035,14 @@ def state(db: dict, now: dt.datetime, envs=None, version: str = "",
         oldest = t if oldest is None or (t and t < oldest) else oldest
         asked.append((str(d.get("asked_at") or ""), str(d.get("title") or "").strip()))
     waited = (now - oldest).total_seconds() if oldest else 0
+    # Work a chat on the computer holds while only the person can move it (LinkedIn signed out
+    # there, above all) is as stuck as work nobody started: the card says so too. Counted only
+    # for queued work, a read held by a chat on the Mac that met a sign-out showed "running" with
+    # nothing to tap, and the chat that answers the page sent the person to a chat (the
+    # maintainer, 2026-11-11). Work waiting on its own sign-in card (waits_on_signin) has that.
+    held, held_waited = held_there(db, now, w)
+    for _, d in held:
+        asked.append((str(d.get("asked_at") or ""), str(d.get("title") or "").strip()))
     # The words for a sign-in that did not last (cookies_seen): the same state, a truer line.
     say = "signed_out_lost" if key == "signed_out" and beat_.get("signin_lost") else key
     act = ACTION.get(say)
@@ -1013,13 +1054,19 @@ def state(db: dict, now: dt.datetime, envs=None, version: str = "",
                             if ln[:1].isdigit()]}
     needs_them = key in ("off", "gone", "signed_out", "forgets", "no_bridge", "not_set_up",
                          "starter_waits", "starter_silent")
+    rec = starter(db)
     return {"state": key, "line": SAY[say], "action": action, "say": say,
-            "card": bool(w["queued"]) and needs_them and waited >= CARD_AFTER_S,
+            "card": needs_them and ((bool(w["queued"]) and waited >= CARD_AFTER_S) or
+                                    (bool(held) and held_waited >= CARD_AFTER_S)),
+            # The chat the person approves in, linked from the card (card): "open that chat"
+            # named no chat and gave no way there (the local review, 2026-11-11, 7).
+            "starter": ({"chat": str(rec.get("chat") or ""), "title": STARTER_TITLE}
+                        if key == "starter_waits" and rec.get("chat") else None),
             "computer": beat_.get("computer") or "", "seen_at": beat_.get("seen_at"),
             # Today's LinkedIn stop on the computer: the page's reading row and the reads the
             # cloud queues for the computer both follow it (app_model, app.computer_reads).
             "stopped": stopped_today(beat_, now),
-            "waiting": len(w["queued"]) + len(w["started"]),
+            "waiting": len(set(w["queued"]) | set(w["started"]) | {wid for wid, _ in held}),
             # What waits, oldest first: the card names it (WAITING_SAY).
             "titles": [t for _, t in sorted(asked)],
             "behind": older(beat_.get("version"), version)}
@@ -1106,7 +1153,9 @@ def card(st: dict) -> dict | None:
         return None
     import app_model
     said = WAITING_SAY.get(st.get("say") or st["state"]) or WAITING_SAY.get(st["state"])
-    body = said.format(what=waiting_words(st.get("titles") or [])) if said else st["line"]
+    body = said.format(what=waiting_words(st.get("titles") or []),
+                       title=(st.get("starter") or {}).get("title") or STARTER_TITLE) \
+        if said else st["line"]
     # Its one obvious next step on its face; Done only where there is something the person did
     # to confirm (signed in, switched it on). With the computer off, its own heartbeat says
     # when Claude is open again, so nothing is tapped (the screen review, 2026-11-09: the
@@ -1117,6 +1166,10 @@ def card(st: dict) -> dict | None:
             "about": {"step": "computer"}, "rev": app_model.rev_of("computer", st["state"], body)}
     if st["state"] == "signed_out":
         item["browser"] = dict(LINKEDIN_LOGIN)
+    if (st.get("starter") or {}).get("chat"):
+        # The one way through is that chat's approval: the card opens it, by its own link
+        # (code.claude.com/docs/en/cloud-environments, "Link output back to the session").
+        item["open"] = {"label": "Open it", "url": CHAT_URL + st["starter"]["chat"]}
     if st.get("action"):
         import claude_surfaces
         e = claude_surfaces.entry(st["action"]["id"])
@@ -1456,7 +1509,9 @@ def route(db: dict, now: dt.datetime, chat: str = "", envs=None, folders=None,
         # answers the page can, so it is handed there, never "your computer is off".
         name = found[0]["computer"]
         return {"route": "on, start it elsewhere", "work": wid, "computer": name,
-                "line": f"Your {name} is on: Claude starts there from the chat that answers your page.",
+                # Said to the person without a word about chats: which chat starts it is
+                # Claude's business (`then`), never theirs (the maintainer, 2026-11-11).
+                "line": f"Your {name} is on, and Claude starts reading there next.",
                 "then": ("this chat has no create_session to start Claude on the computer: ask the "
                          "chat that answers the page (it has create_session) to run python3 "
                          "tools/computer.py route with --envs and --tools create_session, and do "
