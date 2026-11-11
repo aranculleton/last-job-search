@@ -351,12 +351,10 @@ jobs:
         run: |
           npm install -g "playwright@$PW"
           # Its system packages come from Ubuntu's mirror, which the runners could not reach for
-          # an hour on 2026-11-11: tried three times, then the browser alone, whose libraries the
-          # runner image already carries for its own Chrome.
-          for i in 1 2 3; do
-            npx -y "playwright@$PW" install --with-deps chromium && exit 0
-            sleep 30
-          done
+          # an hour on 2026-11-11, each try spending ten minutes on the mirror's own timeouts: one
+          # try of four minutes at most, then the browser alone, whose libraries the runner image
+          # already carries for its own Chrome.
+          timeout 240 npx -y "playwright@$PW" install --with-deps chromium && exit 0
           npx -y "playwright@$PW" install chromium
       - name: Browser tests
         run: |
