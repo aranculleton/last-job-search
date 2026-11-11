@@ -1276,6 +1276,7 @@ KEEPS_NOTHING: dict[str, str] = {
     "tools/ci_local.sh": "development tooling",
     "tools/push_gate.sh": "the maintainer's checks before a push to the app; keeps nothing",
     "tools/everywhere.sh": "release checks in other engines, fonts, languages, time zones and clocks; keeps nothing",
+    "tools/ci_plan.py": "what a CI run needs to run; never runs in a person's search",
     "docs/NEXT_BUILDER.md": "notes from one builder chat to the next; never in a person's search",
     "tools/check_framework_version.py": "development tooling",
     "tools/check_upstream_updates.py": "development tooling",

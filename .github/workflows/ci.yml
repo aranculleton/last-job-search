@@ -112,27 +112,57 @@ concurrency:
 # (Actions tab, CI, Run workflow) only when ci_local.sh reports a SKIP that
 # matters for the change. Skipped jobs bill nothing.
 jobs:
-  checks:
-    # ONE job, because GitHub bills per JOB rounded up to the nearest minute.
-    # This used to be six: lint, security-guards, example-templates,
-    # discover-clis, cli-checks and a 3.13 test leg. Each finished in 6 to 30
-    # seconds and each billed a full minute, so six billed minutes bought
-    # under a minute of work.
+  plan:
+    # What this change needs, decided once by tools/ci_plan.py before anything slow starts.
+    # A pull request that changes only documents no tool reads while it works (CHANGELOG.md,
+    # docs/NEXT_BUILDER.md, the README and its pictures, MAINTAINING.md: ci_plan.DOCS_ONLY,
+    # an allowlist) skips the suite, the 3.9 leg and the page's browser tests, and runs the
+    # tests that read those files instead (`docs`, below). A release's CHANGELOG pull request
+    # ran 8,273 tests twice and the browser for two changed documents (2026-11-11). Anything
+    # in doubt runs everything: a file not on the list, no usable base, a run by hand, and
+    # every push to master, so a merged documents change still meets the whole suite there.
     #
-    # What is lost is a separate red X per check. Every step below is named
-    # and grouped, so the log says which one failed; with one developer and
-    # several Claude sessions that is a fair trade for 6 minutes a push.
-    # What is NOT lost is any check: all of them still run, in one machine's
-    # worth of billed time.
-    name: Checks (lint, guards, CLIs, tests)
+    # It also says whether LaTeX compiles (ci_plan.LATEX), so the compile starts at once
+    # rather than after the checks: the example documents, their classes and fonts, the three
+    # modules that write a real resume and letter, the tools that fit and check a PDF, and
+    # this file. The page's own code under templates/app/ compiles nothing. It fails open: a
+    # compile that should have run and did not is worse than one that ran needlessly.
+    name: What this change needs
     if: ${{ !github.event.repository.private || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-24.04
-    # 20, not 15: the suite grew past ten minutes on a slow runner at 4.12, and its Python 3.9
-    # leg took 11 to 15 minutes of the same code on different runners at 4.15.0, one stopped at
-    # the limit. Still a cap on a hung job, which is what it is for.
-    timeout-minutes: 20
+    timeout-minutes: 5
     outputs:
-      latex: ${{ steps.changed.outputs.latex }}
+      docs_only: ${{ steps.plan.outputs.docs_only }}
+      latex: ${{ steps.plan.outputs.latex }}
+      tests: ${{ steps.plan.outputs.tests }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0             # the base it compares with
+      # The runner's own python3: the plan reads git and files, and needs no package.
+      - id: plan
+        name: Documents only and the tests that read them, and LaTeX
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          LATEX: ${{ inputs.latex }}         # a run by hand: its tick box
+        run: python3 tools/ci_plan.py lane --out "$GITHUB_OUTPUT"
+
+  checks:
+    # ONE job for the checks that take seconds, because GitHub bills per JOB rounded up to
+    # the nearest minute. This used to be six: lint, security-guards, example-templates,
+    # discover-clis, cli-checks and a 3.13 test leg. Each finished in 6 to 30 seconds and
+    # each billed a full minute, so six billed minutes bought under a minute of work.
+    #
+    # What is lost is a separate red X per check. Every step below is named and grouped, so
+    # the log says which one failed. The suite is the one thing that left, for `suite`
+    # below: it was nine of this job's ten minutes, and it splits across runners where
+    # these checks would only be repeated.
+    name: Checks (lint, guards, CLIs)
+    if: ${{ !github.event.repository.private || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-24.04
+    # About a minute of work; the cap is for a hung bun install.
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
@@ -142,31 +172,6 @@ jobs:
           python-version: "3.13"
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
       - run: pip install pyyaml ruff pytest pytest-xdist time-machine
-
-      # The two LaTeX legs are the only slow jobs left, ~3 billed minutes
-      # each, and most pushes are Python and Markdown. This job already
-      # fetches full history for the framework-version guard, so the check
-      # costs no job and no minute. It fails OPEN: a compile that should have
-      # run and did not is worse than one that ran needlessly.
-      - id: changed
-        name: Does this change touch LaTeX
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "manual run; latex=${{ inputs.latex }}"
-            echo "latex=${{ inputs.latex }}" >> "$GITHUB_OUTPUT"; exit 0
-          fi
-          base="${{ github.event.pull_request.base.sha || github.event.before }}"
-          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ] \
-             || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
-            echo "no usable base ref; compiling to be safe"
-            echo "latex=true" >> "$GITHUB_OUTPUT"; exit 0
-          fi
-          if git diff --name-only "$base" HEAD \
-             | grep -qE '^(cv/|cover_letters/|templates/|texmf/|tools/(fit_to_page|render_application|verify_pdf)\.py|\.github/workflows/)'; then
-            echo "latex=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "latex=false" >> "$GITHUB_OUTPUT"
-          fi
 
       - name: Lint skills, commands, settings
         run: python tools/lint_skills.py
@@ -289,6 +294,32 @@ jobs:
             exit 1
           fi
 
+  suite:
+    # The whole suite on three runners side by side, each taking its own third of the test
+    # files: tools/ci_plan.py `part`, largest file first to the part with the least so far,
+    # the same split on every runner, so each file runs in exactly one part. On one runner it
+    # took a median 9 minutes and up to 13 (2026-11-11), and every merge waited for it.
+    # A private copy run by hand takes it on one runner (part 1 of 1): each job bills at
+    # least a minute there, and three would bill the set-up three times.
+    name: Tests (Python 3.13, part ${{ matrix.part }} of ${{ strategy.job-total }})
+    needs: plan
+    if: ${{ needs.plan.outputs.docs_only != 'true' && (!github.event.repository.private || github.event_name == 'workflow_dispatch') }}
+    runs-on: ubuntu-24.04
+    # A part takes three or four minutes; 15 leaves room for a slow runner and still stops
+    # a hang.
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false             # every part reports, so one push shows every failure
+      matrix:
+        part: ${{ github.event.repository.private && fromJSON('[1]') || fromJSON('[1, 2, 3]') }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.13"
+      - run: pip install pyyaml pytest pytest-xdist time-machine
       # pytest, not `unittest discover`. The discover runner collects TestCase
       # subclasses only, and 201 of this repo's tests are module-level
       # functions using parametrize, tmp_path and monkeypatch. They passed
@@ -297,47 +328,68 @@ jobs:
       # known bad hit coming back.
       # Four workers, each file kept together: the suite in about a third of the time
       # (5,059 tests in 7 minutes rather than 20 on four cores, 2026-10-29).
-      - name: Tests (Python 3.13)
-        run: python -m pytest tests -q -n auto --dist loadfile
-      # A person's own suite, where there is one (never in the app). A separate
-      # process: the tools read the profile once, at import.
+      - name: Tests (Python 3.13), this part
+        run: |
+          files=$(python tools/ci_plan.py part ${{ matrix.part }}/${{ strategy.job-total }})
+          python -m pytest -q -n auto --dist loadfile $files
+      # A person's own suite, where there is one (never in the app), in the first part only.
+      # A separate process: the tools read the profile once, at import.
       - name: Person's tests (Python 3.13)
-        if: hashFiles('profile/tests/conftest.py') != ''
+        if: matrix.part == 1 && hashFiles('profile/tests/conftest.py') != ''
         run: python -m pytest profile/tests -q
 
   python-floor:
     # The one leg that is worth a second machine. It caught a bare `import
     # tomllib`, stdlib only from 3.11, that had passed locally and on every other
     # leg. It is 3.9, a Mac's own python3, since zip(strict=), a 3.10 keyword,
-    # crashed the merge driver on a person's Mac (tools/python_floor.py). 3.11, 3.12 and 3.14 have never failed alone while both
-    # ends were green, and each cost a billed minute on every push.
-    name: Tests (Python 3.9, the supported floor)
+    # crashed the merge driver on a person's Mac (tools/python_floor.py). 3.11, 3.12 and 3.14
+    # have never failed alone while both ends were green, and each cost a billed minute on
+    # every push. Split three ways as `suite` is, by the same files: it took 11 to 15 minutes
+    # on one runner at 4.15.0, and one run stopped at the limit.
+    name: Tests (Python 3.9, the supported floor, part ${{ matrix.part }} of ${{ strategy.job-total }})
     # Every Linux job names 24.04: on 2026-11-09 ubuntu-latest became 26.04, which has no
     # Python 3.9 and which Playwright 1.56 cannot install a browser on, and both checks a
     # merge waits for failed in their first minute.
-    if: ${{ !github.event.repository.private || github.event_name == 'workflow_dispatch' }}
+    needs: plan
+    if: ${{ needs.plan.outputs.docs_only != 'true' && (!github.event.repository.private || github.event_name == 'workflow_dispatch') }}
     runs-on: ubuntu-24.04
-    # 15, not 10: the suite grew past ten minutes on a slow runner at 4.12 (two runs stopped at 96 and 98%).
-    timeout-minutes: 20          # as Checks: the same suite, on Python 3.9
+    # A part takes four or five minutes on 3.9; 15 leaves room and still stops a hang.
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        part: ${{ github.event.repository.private && fromJSON('[1]') || fromJSON('[1, 2, 3]') }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.9"
       - run: pip install pytest pytest-xdist time-machine
-      - run: python -m pytest tests -q -n auto --dist loadfile
-      - if: hashFiles('profile/tests/conftest.py') != ''
+      - name: Tests (Python 3.9), this part
+        run: |
+          files=$(python tools/ci_plan.py part ${{ matrix.part }}/${{ strategy.job-total }})
+          python -m pytest -q -n auto --dist loadfile $files
+      - if: matrix.part == 1 && hashFiles('profile/tests/conftest.py') != ''
         run: python -m pytest profile/tests -q
 
   page:
     # The page's browser tests: a real Chromium driven by tests/app_page/harness.js. They need
     # Node and Playwright, which the checks job does not install, so before 4.3 they ran only on
     # a developer's machine, inside a 20-minute run repeated by hand before every release. Here
-    # they run beside the other jobs, in parallel workers, free on the public app.
-    name: Page tests (browser)
-    if: ${{ !github.event.repository.private || github.event_name == 'workflow_dispatch' }}
+    # they run beside the other jobs, in parallel workers, free on the public app. Two runners
+    # side by side, each with its half of the files (tools/ci_plan.py `part`): on one they took
+    # a median 10 minutes and up to 15 (2026-11-11).
+    name: Page tests (browser, part ${{ matrix.part }} of ${{ strategy.job-total }})
+    needs: plan
+    if: ${{ needs.plan.outputs.docs_only != 'true' && (!github.event.repository.private || github.event_name == 'workflow_dispatch') }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    # A part takes four to six minutes, and the browser's install up to four more when
+    # Ubuntu's mirror is out of reach.
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        part: ${{ github.event.repository.private && fromJSON('[1]') || fromJSON('[1, 2]') }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
@@ -356,10 +408,40 @@ jobs:
           # already carries for its own Chrome.
           timeout 240 npx -y "playwright@$PW" install --with-deps chromium && exit 0
           npx -y "playwright@$PW" install chromium
-      - name: Browser tests
+      - name: Browser tests, this part
         run: |
           files=$(grep -lE 'app_page/harness\.js|journeys\.browser\(\)|_node_env|test_the_page_journeys import|import test_the_page_journeys|test_the_page_works_in_a_browser import|import test_the_page_works_in_a_browser' tests/*.py)
-          python -m pytest -q -n auto --dist loadfile $files
+          mine=$(python tools/ci_plan.py part ${{ matrix.part }}/${{ strategy.job-total }} $files)
+          python -m pytest -q -n auto --dist loadfile $mine
+
+  docs:
+    # A documents-only pull request's tests, in place of the suite: each test that names a
+    # changed file, each that names code or data that names one (docs/rule_map.json names
+    # MAINTAINING.md, so the rule map's test runs), each that lists files, and the tests of
+    # the scans that read every file (tools/ci_plan.py tests_for). An empty list is a plan
+    # gone wrong, never a pass.
+    name: Tests that read the changed documents
+    needs: plan
+    if: ${{ needs.plan.outputs.docs_only == 'true' && (!github.event.repository.private || github.event_name == 'workflow_dispatch') }}
+    runs-on: ubuntu-24.04
+    # A quarter to a third of the suite, about three minutes; 15 leaves room.
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.13"
+      - run: pip install pyyaml pytest pytest-xdist time-machine
+      - name: The tests that read them
+        env:
+          TESTS: ${{ needs.plan.outputs.tests }}
+        run: |
+          if [ -z "$TESTS" ]; then
+            echo "::error::the plan named no test for these documents"; exit 1
+          fi
+          python -m pytest -q -n auto --dist loadfile $TESTS
 
   dependency-review:
     name: Dependency review
@@ -401,11 +483,12 @@ jobs:
     # README's Linux setup path is apt, so both ends of the moderncv range
     # users actually have stay compiled.
     #
-    # Gated on `checks`: these are ~3 billed minutes each and most pushes do
-    # not touch LaTeX at all.
+    # Gated on the plan's `latex`: these are ~3 billed minutes each on a private copy run by
+    # hand, and most pushes do not touch LaTeX at all. They wait for the plan alone, never
+    # for the suite: they took two minutes and waited nine for Checks (2026-11-11).
     name: Compile example CV and cover letter (${{ matrix.leg.name }})
-    needs: checks
-    if: ${{ needs.checks.outputs.latex == 'true' && (!github.event.repository.private || github.event_name == 'workflow_dispatch') }}
+    needs: plan
+    if: ${{ needs.plan.outputs.latex == 'true' && (!github.event.repository.private || github.event_name == 'workflow_dispatch') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     container: ${{ matrix.leg.container }}
@@ -483,16 +566,23 @@ jobs:
             --contains 'Dear [Hiring Manager / Team]'
 
   fast:
-    # The one check a merge waits for (MAINTAINING.md, "Releasing"): the four fast ones, with
-    # LaTeX counted only when the change touches it. Safari, Firefox, the language and clock
+    # The one check a merge waits for (MAINTAINING.md, "Before pushing, and merging"): the
+    # plan, Checks and every part of the suite on 3.13 and 3.9 and of the page's browser tests
+    # (or, for a change only to documents, the tests that read them), with LaTeX counted only
+    # when the change touches it. Safari, Firefox, the language and clock
     # variants and the Windows and Mac set-ups run in their own workflows and never block.
+    #
+    # A skipped job passes only where the plan says it was not needed (tools/ci_plan.py
+    # verdict): the suite skipped on a change that was not documents only, or a plan with no
+    # answer, is red. "No job failed" alone would read a job wrongly skipped as green.
     name: Fast checks
-    needs: [checks, python-floor, page, latex-smoke]
+    needs: [plan, checks, suite, python-floor, page, docs, latex-smoke]
     if: ${{ always() && (!github.event.repository.private || github.event_name == 'workflow_dispatch') }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 2
+    timeout-minutes: 3
     steps:
-      - name: Every fast check passed (LaTeX skipped when nothing touches it)
-        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
-        run: exit 1
-      - run: echo "Fast checks green"
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Every check this change needs ran and passed
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: python3 tools/ci_plan.py verdict
