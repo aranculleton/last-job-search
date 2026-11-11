@@ -40,7 +40,7 @@ on:
     # never start, label or not. The plan job reads the paths instead.
     types: [opened, synchronize, reopened, labeled]
   schedule:
-    - cron: "17 5 * * 1"
+    - cron: "17 20 * * 3" # 20:17 UTC every Wednesday: before the builder's weekly run (MAINTAINING.md)
   workflow_dispatch:
 
 permissions:
