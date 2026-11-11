@@ -165,3 +165,15 @@ def test_the_mark_is_the_one_the_start_sets_and_every_check_it_runs_carries_it()
     assert app.START_UPDATED == app_setup.START_RUNS_AGAIN
     assert "app_setup.IN_COMMAND" in inspect.getsource(app.days_check)
     assert app_setup.IN_COMMAND in inspect.getsource(brief.start)
+
+
+def test_a_start_that_cannot_run_here_leaves_the_line_that_sends_the_chat_round(monkeypatch):
+    """Never nothing: where the new start fails or runs out of time inside the check, the chat
+    is told to start again, as before."""
+    def slow(*a, **k):
+        raise subprocess.TimeoutExpired("app.py start", 300)
+    monkeypatch.setattr(app_setup.subprocess, "run", slow)
+    assert app_setup.start_here() == [app_setup.START_CHANGED]
+    monkeypatch.setattr(app_setup.subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(
+        a, 2, stdout="Traceback (most recent call last):\n", stderr=""))
+    assert app_setup.start_here() == [app_setup.START_CHANGED]

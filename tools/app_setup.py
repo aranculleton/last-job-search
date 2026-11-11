@@ -1917,12 +1917,14 @@ def start_after_sync() -> str:
 def start_here() -> list[str]:
     """The start run again by the sync on the code it brought in (start_after_sync): its
     lines under START_HERE_SAY, or START_CHANGED where it could not run. It takes no update
-    check of its own and never runs a further start (app.py START_UPDATED, set empty)."""
+    check of its own and never runs a further start (app.py START_UPDATED, set empty). Given
+    half the time the sync gives this whole step (sync_app.upgrades), so a slow one still
+    leaves the line that sends the chat round the start, never nothing."""
     env = dict(os.environ, **{START_RUNS_AGAIN: "", IN_COMMAND: "1"})
     try:
         r = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "app.py"), "start"],
                            cwd=ROOT, env=env, capture_output=True, text=True, encoding="utf-8",
-                           errors="replace", timeout=600, stdin=subprocess.DEVNULL)
+                           errors="replace", timeout=300, stdin=subprocess.DEVNULL)
     except (OSError, subprocess.TimeoutExpired):
         return [START_CHANGED]
     out = (r.stdout or "").rstrip("\n")
