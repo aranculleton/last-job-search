@@ -69,6 +69,7 @@ make sense to somebody whose repo just received it.
 ### Fixed
 
 - **An interview's prep never shows "Say first" or "Open with" over empty lines.** A line of what to say first written as plain words or under another name than the engine's own was kept with no words, and no check looked for one, so a prep could open on blank bullets. The words are now read however they were written, a line with no words is refused in plain words when it is written and left out of a prep saved with one, and `live-check` names each part left with nothing to say first, which a chat writes again with `live --fill` alone, every other word of the prep kept as it was.
+- **A Stop you press on your page is never lost, nor a draft you ask for there.** Where Claude's save of a tap never reached your page, the next time Claude found the tap done already and sent back only its answer: the page said "Stopping at its next step" while the work ran on, or "Queued" for a draft nobody would make. What the tap did now goes again with its answer, and the two always reach your page together.
 
 ## [4.15.0] - 2026-11-11
 
