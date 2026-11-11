@@ -601,7 +601,7 @@ METHODS: dict[str, dict] = {
             (91, "2026-11-10", False, "a chat with Claude's own browser on the person's computer does the whole networking run there, reading the short list itself and writing every note from what it read, never queuing the reads for a second chat; a run asked in a cloud chat while the computer is ready is sent there; notes already waiting on a read are still rewritten as before"),
             (92, "2026-11-10", False, "someone who offered to refer the person once a role comes up waits on hold until one is posted at their employer, with no draft on their card, and the referral ask is written then for that role; code no longer writes one follow-up on their offer for everyone; a draft that is another person's with the name and the employer swapped is refused (not_written_for_its_reader); a hold on a contact's row holds the follow-up due to them, and says the day it was made so a later message of theirs is still owed a reply"),
         ),
-        "fingerprint": "951b8db5c36e3033",
+        "fingerprint": "57c79c9a50679cd3",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
