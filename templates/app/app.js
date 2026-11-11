@@ -11474,13 +11474,19 @@
     const close = parts.find((p) => p.kind === "close");
     return lpLength(total) + " in " + plural(parts.length, "part", "parts") + (close && close !== parts[0] ? ", the last " + (Number(close.minutes) || 0) + " minutes for your questions" : "");
   }
+  // A part's lines to say first that hold words: a prep saved before 2026-11-11 can hold empty
+  // ones, and "Say first" was drawn over blank bullets the night before an interview.
+  function lpBeats(p) {
+    return arr(obj(p).say).filter((b) => txt(obj(b).t).trim());
+  }
   // At a glance, first: the line to open with, what they are known to ask (or the first likely
   // question) with where it comes up, and two questions to ask them; a guessed kind of
   // interview is said here, one tap from the right one (the UX review, 2026-11-10, U-5).
   function lpGlance(iv, lv, qById) {
     const parts = arr(lv.parts);
     const first = parts[0] || {};
-    const beats = arr(first.say);
+    // A line with no words is never the one to open with (an empty "Open with", 2026-11-11).
+    const beats = lpBeats(first);
     const open = beats.find((b) => arr(b.prompts).length) || beats[0];
     const partOf = (q) => parts.findIndex((p) => p.id === obj(q).part);
     const go = (q, key) => h("button", {type: "button", class: "btn link lp-glance-q", "data-k": "lpg:" + key, onclick: () => lpJump(lpId(lv, "q", q.id))}, lpPlain(lv, q.q),
@@ -11526,7 +11532,7 @@
     const termKeys = Object.keys(terms).filter((k) => txt(obj(terms[k]).name)).sort((a, b) => txt(terms[a].name).localeCompare(txt(terms[b].name)));
     const partEls = parts.map((p, i) => {
       const t = obj(obj(obj(lv.timing).parts)[p.id]);
-      const beats = arr(p.say);
+      const beats = lpBeats(p);
       const hid = lpId(lv, "ph", p.id);
       const pq = arr(p.questions).map((id) => qById.get(id)).filter(Boolean);
       const asks = p.kind === "close" ? arr(lv.ask) : [];

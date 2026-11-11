@@ -476,8 +476,9 @@ METHODS: dict[str, dict] = {
             (51, "2026-11-10", False, "a live prep made for another kind of round than its record now says is marked out of date, on the page and by live-check, so it is made again; nothing made before needs making again"),
             (52, "2026-11-10", True, "a part for a problem worked aloud leads with the problem as it is set and is not kept without one, and a question the stories already bring as a follow-up (What would you do differently now?) is asked there once, never also as a question of its own; preps for interviews still ahead are made again"),
             (53, "2026-11-11", False, "an interview's record, its posting and the questions kept from it are dated on the person's own day, never the computer's, and the next round booked is chosen against that day; the follow-ups that come after any story (What was your part in it, exactly?) are said once in each part a story is told in, never under each of its questions, and a follow-up written under two questions of a part is said once there; a prep saved before is read this way at once, so nothing needs making again"),
+            (54, "2026-11-11", False, "a line of what to say first is read however it was written (plain words, or under t, text, line or say), a line with no words is refused when it is written and left out of a prep saved with one, so the page never shows Say first or Open with over empty lines, and live-check names each part left with nothing to say first; nothing is made again, and a chat writes only those lines with live --fill, every other word kept"),
         ),
-        "fingerprint": "96d69e055765abf2",
+        "fingerprint": "c330584f959cba7d",
     },
     "research": {
         "by": "upgrade", "priority": 3, "applies": "live_applications", "time": "~5 min each",
@@ -1096,8 +1097,9 @@ METHODS: dict[str, dict] = {
             (158, "2026-11-10", False, "the person's own dates are told from someone else's as the engine writes them (an interview's test or day to choose, an offer's reply-by), and no row, card or Brief line of their own says days late or Follow-up due"),
             (159, "2026-11-10", False, "the Brief's tiles lead with this week's applications and messages sent; Progress's counts in words sit under the funnel; the next step reads plainly; a question after the Jobs line is its own sentence"),
             (160, "2026-11-11", True, "an interview's prep, a person and an application open full screen in the Claude app on a Mac and stay open: a move the app's frame made to the sheet's address closed it the instant it opened, so Read your prep and Practise 3 questions did nothing"),
+            (161, "2026-11-11", False, "a live prep's line to say first with no words is never drawn, as an empty bullet under Say first or as Open with; nothing to make again"),
         ),
-        "fingerprint": "89cdebd4733a46f6",
+        "fingerprint": "aaad9ba731dbdd7b",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

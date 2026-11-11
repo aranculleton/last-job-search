@@ -23,6 +23,7 @@ make sense to somebody whose repo just received it.
 ### Fixed
 
 - **Read your prep and Practise 3 questions open your interview prep in the Claude app on a Mac.** Both flickered and opened nothing: the app moved the page's address as the prep opened, and any move of the address closed it at once. A prep, a person or an application now stays open until you close it or go Back.
+- **An interview's prep never shows "Say first" or "Open with" over empty lines.** A line of what to say first written as plain words or under another name than the engine's own was kept with no words, and no check looked for one, so a prep could open on blank bullets. The words are now read however they were written, a line with no words is refused in plain words when it is written and left out of a prep saved with one, and `live-check` names each part left with nothing to say first, which a chat writes again with `live --fill` alone, every other word of the prep kept as it was.
 
 ## [4.15.0] - 2026-11-11
 
