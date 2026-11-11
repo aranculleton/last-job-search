@@ -11187,9 +11187,12 @@
   // Every id in the view carries its interview's, so two never meet.
   function lpId(lv, kind, x) { return "lp-" + seg(txt(lv.__iv)) + "-" + kind + "-" + seg(txt(x)); }
   const LP_TERM = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g;
-  // The phrases each term goes by, longest first, read once a prep.
+  // The phrases each term goes by, longest first, read once a prep. Kept beside the prep,
+  // never on it: the store hands the page its records frozen (db.d.ts), and a property set on
+  // one threw.
+  const lpPhrasesOf = new WeakMap();
   function lpPhrases(lv) {
-    if (lv.__phrases) return lv.__phrases;
+    if (lpPhrasesOf.has(lv)) return lpPhrasesOf.get(lv);
     const terms = obj(lv.terms);
     const out = [];
     for (const k of Object.keys(terms)) {
@@ -11198,7 +11201,7 @@
       for (const p of list) if (p.length > 1) out.push([p, k, new RegExp("(^|[^A-Za-z0-9])(" + p.replace(/[.*+?^$()|[\]\\{}]/g, "\\$&") + ")(?![A-Za-z0-9])", /^[A-Z0-9]+$/.test(p) ? "" : "i")]);
     }
     out.sort((a, b) => b[0].length - a[0].length);
-    Object.defineProperty(lv, "__phrases", {value: out, enumerable: false});
+    lpPhrasesOf.set(lv, out);
     return out;
   }
   // The words to say, with each term the prep explains as a dotted word that opens it. A term
@@ -11506,6 +11509,13 @@
         txt(lv.assumed) ? row("A best guess", [h("p", {}, cap1(txt(lv.assumed)) + "."), btn("Not this kind of interview?", () => askKind(iv), {kind: "secondary", small: true, key: "lp-kind:" + iv.id})]) : null));
   }
   function liveView(iv, lv, acts) {
+    // A copy of the prep carries its interview's id: the prep itself is the store's record,
+    // handed to the page frozen (db.d.ts, "Delivered snapshots and their data() are frozen"),
+    // and setting the id on it threw before the sheet was made, so Read your prep and Practise
+    // 3 questions looked pressed and opened nothing on every device (the maintainer,
+    // 2026-11-11, the night before an interview). The tests' store handed out copies anyone
+    // could change, so none of them saw it; it freezes them now as the real one does.
+    lv = Object.assign({}, lv);
     Object.defineProperty(lv, "__iv", {value: txt(iv.id), enumerable: false, configurable: true});
     const qs = arr(lv.questions);
     // Only the stories a question here is answered with: a test taken alone showed all four
