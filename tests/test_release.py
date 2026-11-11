@@ -85,14 +85,14 @@ def test_the_workflow_runs_only_in_the_app_and_never_moves_a_tag():
 def test_the_notes_a_person_reads_are_one_line_per_change_and_one_on_what_to_do():
     notes = release.short(release.sections(TEXT)[0]["notes"])
     lines = notes.splitlines()
-    assert lines[0] == "**New**"
-    assert "- Something new. (set up for you)" in lines
+    # The section's first entry is its headline, said first, on its own.
+    assert lines[:3] == ["Something new. (set up for you)", "", "**New**"]
     assert "- A question for you. (Claude asks you once)" in lines
     assert "- Headings that stop short." in lines and "- Or end on a colon." in lines
     # A big release shows the first few of each kind and counts the rest.
-    many = release.short("### Fixed\n\n" + "".join(f"- **Fix {i}.**\n" for i in range(12)))
+    many = release.short("### Fixed\n\n" + "".join(f"- **Fix {i}.**\n" for i in range(13)))
     fixed = [ln for ln in many.splitlines() if ln.startswith("- ")]
-    assert fixed[:release.MAX_PER_GROUP] == [f"- Fix {i}." for i in range(release.MAX_PER_GROUP)]
+    assert fixed[:release.MAX_PER_GROUP] == [f"- Fix {i}." for i in range(1, release.MAX_PER_GROUP + 1)]
     assert fixed[-1].startswith("- And 4 more (https://") and len(fixed) == release.MAX_PER_GROUP + 1
     # A release of fixes alone has nothing to set up, and says only that it is taken.
     fixes = release.short("### Fixed\n\n- **An old fix.**\n")
@@ -244,3 +244,32 @@ def test_no_test_reads_unreleased_by_its_name_for_what_ships():
              for n, line in enumerate(p.read_text(encoding="utf-8").splitlines(), 1)
              if by_name.search(line)]
     assert found == []
+
+
+# ------------------------------------------------------------------ the headline, then what is new
+
+def test_the_notes_open_on_the_headline_then_new_changed_and_fixed():
+    """4.15.0's notes showed eight fixes and "And 318 more" before its five new things, in the
+    order the section was written (the release audit, 2026-11-11)."""
+    section = ("### Changed\n\n- **The headline.**\n- **A change.**\n\n### Fixed\n\n- **A fix.**\n\n"
+               "### Added\n\n- **A new thing.**\n\n### Removed\n\n- **Gone.**\n\n"
+               "### Cheaper to run\n\n- **Cheaper.**\n\n### Fixed\n\n- **Another fix.**\n")
+    assert release.short(section).splitlines()[:-1] == [
+        "The headline.", "",
+        "**New**", "- A new thing.", "",
+        "**Changed**", "- A change.", "",
+        "**Fixed**", "- A fix.", "- Another fix.", "",
+        "**Removed**", "- Gone.", "",
+        "**Cheaper to run**", "- Cheaper.", ""]
+
+
+def test_the_newest_release_opens_on_a_headline_a_person_is_told_whole():
+    """The one line a person who updates when they choose hears is the release's first entry
+    (sync_app.brings), cut at 140 characters: `cut --headline` writes it, and every release
+    since 4.15.0 opens on one."""
+    newest = release.sections()[0]
+    m = re.match(r"### Changed\n\n- \*\*(.+?)\*\*", newest["notes"])
+    assert m, f"{newest['version']} does not open on a headline under its Changed heading"
+    assert len(m.group(1)) <= release.HEADLINE_MAX, (len(m.group(1)), m.group(1))
+    assert release.headline_problem(m.group(1)) == "", m.group(1)
+    assert release.short(newest["notes"]).splitlines()[0].startswith(m.group(1).rstrip("."))

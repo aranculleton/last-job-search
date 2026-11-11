@@ -22,8 +22,10 @@ brings()). It refuses when [Unreleased] is empty, when X.Y.Z is not newer than t
 release, when the headline is longer than 140 characters or is not one plain sentence, and
 when docs/NEXT_BUILDER.md does not name X.Y.Z yet. It never commits.
 
-The notes are short on purpose: one line per change, its headline from the CHANGELOG, a
-few plain words where a change needs the person, and one closing line on what to do. The
+The notes are short on purpose: the version's headline (the section's first entry), then
+one line per change by kind, new things first, then changed, fixed and removed, each with
+its headline from the CHANGELOG, a few plain words where a change needs the person, and one
+closing line on what to do. The
 CHANGELOG keeps the detail, for the sessions that work on the app; the release page held
 the whole section once, and to a person it read as walls of text.
 
@@ -84,12 +86,19 @@ def _needs(ids: list[str]) -> str:
 
 MAX_PER_GROUP = 8
 CHANGELOG_URL = "https://github.com/aranculleton/last-job-search/blob/master/CHANGELOG.md"
+# The order a person reads the kinds in, after the headline: what is new first. A section
+# lists them in the order it was written, and 4.15.0's notes showed eight fixes and "And 318
+# more" before its five new things (the release audit, 2026-11-11). Any other kind follows,
+# in the section's own order.
+ORDER = ("New", "Changed", "Fixed", "Removed")
 
 
 def short(notes: str) -> str:
-    """The release notes a person reads, from a CHANGELOG section."""
+    """The release notes a person reads, from a CHANGELOG section: its headline, the section's
+    first entry (`cut` writes it there), then the rest by kind, new things first."""
     groups: list[tuple[str, list[str]]] = []
     asks = set_up = 0
+    lead = ""
     entries: list[tuple[str, str]] = []           # (group, the entry's whole text)
     group = ""
     for line in notes.splitlines():
@@ -115,10 +124,14 @@ def short(notes: str) -> str:
         elif need == "nobody":
             set_up += 1
             head += " (set up for you)"
-        if not groups or groups[-1][0] != group:
+        if not lead:
+            lead = head
+            continue
+        if group not in (g for g, _ in groups):
             groups.append((group, []))
-        groups[-1][1].append(head)
-    out = []
+        next(hs for g, hs in groups if g == group).append(head)
+    groups.sort(key=lambda g: ORDER.index(g[0]) if g[0] in ORDER else len(ORDER))
+    out = [lead, ""] if lead else []
     for group, heads in groups:
         # A big release is still a page someone reads: the first few of each kind (the
         # CHANGELOG puts the ones a person notices first), then a count.
