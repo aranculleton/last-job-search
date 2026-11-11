@@ -11,7 +11,8 @@
 # every private copy carries this file and never runs it. The token is the built-in
 # GITHUB_TOKEN, scoped to this repo's contents (a tag and a release) and its issues: a release
 # closes the bugs from the maintainer's copy fixed since the last one (labelled
-# fixed-unreleased, tools/app_bug.py) with a comment naming it.
+# fixed-unreleased, tools/app_bug.py, before the commit it tags was made) with a comment
+# naming it.
 
 name: Release
 

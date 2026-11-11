@@ -211,7 +211,8 @@ again, fixes and releases everything at once, and no Actions workflow runs Claud
    their copy only).
 4. **A fix made elsewhere closes with the next release.** A `from-copy` issue fixed on master
    by hand is labelled `fixed-unreleased`; `tools/release.py publish` (`release.yml`, with
-   `issues: write`) closes each with "Fixed in vX.Y.Z" and takes the label off. A version's own
+   `issues: write`) closes each with "Fixed in vX.Y.Z" and takes the label off, if it was
+   labelled before the commit the tag is on was made (one labelled later waits for the next). A version's own
    pull request may instead say "Closes #N" when its merge is the release, never one merged
    before it. GitHub makes each label the first time it is set.
 
