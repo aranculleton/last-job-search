@@ -8,7 +8,7 @@ one job at a time.
 **"This chat can't reach job sites."**
 
 <!-- claude-surface: cloud-internet -->
-<!-- checked 2026-11-03; https://code.claude.com/docs/en/cloud-environments -->
+<!-- checked 2026-11-11; https://code.claude.com/docs/en/cloud-environments -->
 To let this chat reach job sites:
 1. At the top of this chat, open the small arrow after its title and choose Edit cloud
    environment.
@@ -20,7 +20,7 @@ Screens change: if yours looks different, tell Claude what you see.
 **Claude can't see your copy.** It needs the Claude GitHub App on it.
 
 <!-- claude-surface: connect-github -->
-<!-- checked 2026-11-03; https://code.claude.com/docs/en/web-quickstart -->
+<!-- checked 2026-11-11; https://code.claude.com/docs/en/web-quickstart -->
 To let Claude see your copy:
 1. Open https://claude.ai/code and sign in. When it asks to connect GitHub, follow it and
    approve.
@@ -36,7 +36,7 @@ Screens change: if yours looks different, tell Claude what you see.
 contacts. A fork can't be made private: make a new copy ([START_HERE.md](START_HERE.md) step 1).
 
 <!-- claude-surface: make-private -->
-<!-- checked 2026-11-03;
+<!-- checked 2026-11-11;
 https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/managing-repository-settings/setting-repository-visibility
 -->
 To make your copy private:
@@ -52,7 +52,7 @@ Screens change: if yours looks different, tell Claude what you see.
 Tell Claude: it sets your computer up with you, once.
 
 <!-- claude-surface: team-plan -->
-<!-- checked 2026-11-03; https://code.claude.com/docs/en/web-quickstart -->
+<!-- checked 2026-11-11; https://code.claude.com/docs/en/web-quickstart -->
 Get past a setting a work or team plan has locked: ask an Owner of your Claude organization
 to turn it on for you.
 <!-- /claude-surface -->

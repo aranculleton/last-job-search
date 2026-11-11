@@ -908,8 +908,9 @@ METHODS: dict[str, dict] = {
             (83, "2026-11-10", False, "the tidy-up counts a job to the job chat that ran it, so a finished job chat is put away and its unsaved work looked for"),
             (84, "2026-11-10", False, "a finished job chat asked to save its work is asked by one message and answers by none: the next tidy-up finds the work saved or says it was lost"),
             (85, "2026-11-10", False, "a job chat that stopped on a question to you counts as finished for the tidy-up while the question waits and after your answer; a job chat that reports one job while blocked part way through another it runs is kept, never put away at work; asking routines.py for help never changes the registry"),
+            (86, "2026-11-11", False, "the steps for making the brief in the cloud and the note on its phone notification follow Claude's own pages as read on 2026-11-11: a new scheduled task may first offer Set up manually and its form ends on Create, and the phone notification is documented from a cloud chat as well as with Remote Control; wording only"),
         ),
-        "fingerprint": "edd785189717635f",
+        "fingerprint": "ad4e12a04fc0cae8",
     },
     "expand": {
         "by": "upgrade", "priority": 4, "time": "~15 min",

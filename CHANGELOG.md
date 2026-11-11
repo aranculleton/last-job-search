@@ -28,6 +28,7 @@ make sense to somebody whose repo just received it.
 - **A note on your computer that agrees with your update choice is kept.** Where your choice was not yet saved in that copy, the note was taken for one that disagreed and removed.
 - **Your page never says your computer is off while it is on.** A Mac connected that day read as off on a check-in from the day before, so Start it now did nothing; the computer's own connection now counts, and the chat that can start Claude there is woken.
 - **Settings and Your rules say what your last search left out.** Roles, Where and Pay said "38,547 left out lately": a month of searches added up, each cutting the same jobs again. Each rule now gives the number Jobs gives for your newest search, and an employer you turned down counts each job once over the last 30 days.
+- **Steps on Claude's and LinkedIn's own screens match what they show today.** The setup script for the PDF tools opens from its own Setup script row, Auto can be greyed out for a chat's model, a new scheduled task may first offer Set up manually, and LinkedIn's InMail count is under Premium features.
 
 ## [4.15.0] - 2026-11-11
 
