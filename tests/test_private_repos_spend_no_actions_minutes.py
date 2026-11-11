@@ -39,7 +39,7 @@ def test_every_ci_job_is_skipped_on_a_private_repo_unless_dispatched():
 
 def test_a_manual_dispatch_can_still_run_the_checks_on_a_private_repo():
     jobs = _load("ci.yml")["jobs"]
-    for name in ("checks", "python-floor"):
+    for name in ("plan", "checks", "suite", "python-floor", "page", "docs"):
         assert "workflow_dispatch" in str(jobs[name]["if"]), name
 
 
