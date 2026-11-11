@@ -20,6 +20,12 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+## [4.15.0] - 2026-11-11
+
+### Changed
+
+- **A full review of the whole app, every finding fixed: your page reads right everywhere, and nothing is held back for ever by accident.** Hundreds of fixes from two audits, a review of every screen, a cost review and real use, each listed below.
+
 ### Fixed
 
 - **Interview records and the rules Claude learns from you are dated on your own day.** They used the computer's date, which in a cloud chat or on a laptop set to another time zone is a day off for hours of every day, so a rule could be dated tomorrow and the next interview round picked against the wrong day (final engine review, item 12).
