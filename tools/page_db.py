@@ -790,12 +790,19 @@ def sent_size(entry: dict) -> int:
 
 
 def _unit(entry: dict) -> tuple:
-    """What a write belongs to, to keep together in one batch: a section, its head and its
-    parts (`part~<section>~<n>`), or the record itself."""
+    """What a write belongs to, to keep together in one batch: a tap's writes and its receipt
+    (`Writes.unit`), a section, its head and its parts (`part~<section>~<n>`), or the record
+    itself."""
+    if entry.get(_TAP):
+        return ("tap", str(entry[_TAP]))
     doc = str(entry.get("doc_id") or "")
     if doc.startswith(PART_PREFIX):
         doc = doc[len(PART_PREFIX):].rpartition("~")[0] or doc
     return (str(entry.get("collection") or ""), doc)
+
+
+# On an entry while it is built, never in a batch file: the tap whose writes it is part of.
+_TAP = "_tap"
 
 
 class Writes:
@@ -814,6 +821,11 @@ class Writes:
         # profile question or changing the same search setting twice stranded every tap in
         # that wake (engine audit, 2026-11-03).
         self.db = db
+        # The tap the writes added now carry out (app_actions.apply_dir): they and its receipt
+        # go in one batch, so the receipt never reaches the page without them, nor they
+        # without it. A Stop's receipt landed in one batch while the Stop itself was in one
+        # never sent, and the next wake, finding the tap applied, sent the receipt alone.
+        self.unit = None
 
     def _read_version(self, collection: str, doc_id: str) -> int | None:
         if not self.db:
@@ -835,6 +847,8 @@ class Writes:
         self.entries = [e for e in self.entries
                         if not (e["collection"] == collection and e["doc_id"] == doc_id)]
         entry = {"op": op, "collection": collection, "doc_id": doc_id}
+        if self.unit is not None:
+            entry[_TAP] = str(self.unit)
         if op != "delete":
             data = dict(data or {})
             data[VERSION_FIELD] = int(if_version) + 1 if if_version is not None else 1
@@ -894,7 +908,8 @@ class Writes:
             suffix = "" if len(parts) == 1 else f"_{i + 1}"
             path = os.path.join(self.out_dir, f"{name}{suffix}.json")
             with open(path, "w", encoding="utf-8", newline="\n") as fh:
-                json.dump(part, fh, ensure_ascii=False, indent=1)
+                json.dump([{k: v for k, v in e.items() if k != _TAP} for e in part], fh,
+                          ensure_ascii=False, indent=1)
                 fh.write("\n")
             paths.append(os.path.abspath(path))
         return paths
