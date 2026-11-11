@@ -83,8 +83,8 @@ def test_employers_turned_down_are_one_row_that_opens_their_names_each_with_a_tr
     first, opened, all_ = got["after"]
     assert first["count"] == 0, "no row a turned-down employer"
     assert "Employers you've turned down (30)" in first["eval"] and "No more from Employer" not in first["eval"]
-    # The total they left out lately: 0+1+2 ten times over.
-    assert "30 left out lately" in first["eval"], first["eval"][:400]
+    # The total they left out in the last 30 days, each job once: 0+1+2 ten times over.
+    assert "30 left out in the last 30 days" in first["eval"], first["eval"][:400]
     assert opened["count"] == 5 and "Show all" in opened["text"], (opened["count"], opened["text"][:300])
     assert all_["count"] == 30
 
@@ -256,7 +256,9 @@ def test_your_rules_lists_what_left_something_out_and_your_search_carries_its_ow
         m["rules"] = __import__("json").load(fh)["rules"]
     got = _go(run, tmp_path, [{"hash": "settings", "eval": RULES}], vp, model=m)["after"][0]["eval"]
     where = dict(got["search"])["Where"]
-    assert "2 left out lately" in where, got["search"]
+    # What the newest search left out by it, as Jobs counts it (2026-11-11: a month of searches
+    # added up read "38,547 left out lately").
+    assert "2 left out by your last search" in where, got["search"]
     names = [n for n, _ in got["rules"]]
     assert not {"Where", "Pay", "Your field"} & set(names), got["rules"]
     assert not [v for _, v in got["rules"] if "None left out" in v], got["rules"]

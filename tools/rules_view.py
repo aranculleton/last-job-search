@@ -12,12 +12,12 @@ Two views the page draws, both computed here (the engine computes, the page draw
   maintainer, 2026-11-05).
 - **Your rules** (`your_rules`): every rule that shapes the search and the messages, each
   one sentence, the day it was set and the person's own words where they gave them, how
-  many jobs it left out in the last 30 days, and how to change or drop it, through the
+  many jobs the newest search left out by it, and how to change or drop it, through the
   writers the engine already has (tweak's search rows, exclude.py, bar.py's lists in
   search.py, learned.py).
 
 Preferences change, and nobody is pestered about it: a rule set more than REVIEW_DAYS ago that
-left out at least REVIEW_MIN jobs in the last 30 days, or one the person set "for now" whose
+left out at least REVIEW_MIN jobs of the newest search, or one the person set "for now" whose
 own review day has come, carries a quiet "Still right?" on its row in Your rules, and the
 Brief says so in one line at most once a month (`review_line`), never as a To do. Keeping a
 rule as it is is remembered, and so is the Brief line being dismissed.
@@ -276,10 +276,13 @@ def kinds_of(found: list[dict], declined: dict | None = None) -> dict:
 
 
 def recent(today: dt.date, days: int = WINDOW_DAYS) -> dict:
-    """{kind or "language:<Lang>": {"n": how many it left out in the last `days` days,
-    "last": the newest day it left any out}}, from each search's left-out list."""
+    """{kind or "language:<Lang>": {"n": how many the newest search of the last `days` days
+    left out, "last": the newest day it left any out in them}}, from each search's left-out
+    list. The count is the newest search's, as Jobs says it ("What a search left out"): summed
+    over a month of searches, the same postings cut again on every search, Settings said
+    "38,547 left out lately" beside a search's own few thousand (2026-11-11)."""
     import glob
-    out: dict = {}
+    lists = []
     for p in glob.glob(person.state("documents", "rounds", "filtered", "*.json")):
         head = _head(p)
         # Its day from what it holds, never a file's time: a fresh clone touches every file,
@@ -301,10 +304,16 @@ def recent(today: dt.date, days: int = WINDOW_DAYS) -> dict:
             for rule, n in ({} if kinds else (head.get("counts") or {})).items():
                 k = _RULE_KIND.get(str(rule), "other")
                 kinds[k] = kinds.get(k, 0) + int(n or 0)
+        lists.append((day, os.path.basename(p), kinds))
+    out: dict = {}
+    newest = max(lists, key=lambda x: (x[0], x[1]))[1] if lists else None
+    for day, name, kinds in lists:
         for k, n in kinds.items():
             got = out.setdefault(k, {"n": 0, "last": None})
-            got["n"] += int(n or 0)
-            got["last"] = max(filter(None, [got["last"], day.isoformat()]))
+            if name == newest:
+                got["n"] += int(n or 0)
+            if n:
+                got["last"] = max(filter(None, [got["last"], day.isoformat()]))
     return out
 
 
@@ -445,8 +454,8 @@ def for_now_review(words: str, set_on: str, kept_on: str | None = None) -> str:
 
 def your_rules(today: dt.date, seen: dict | None = None, learned_rows=None) -> list[dict]:
     """Every rule that shapes the search and the messages, as rows the page draws: one plain
-    sentence, the day it was set and the person's words where kept, how many jobs it left
-    out in the last WINDOW_DAYS days, the pencil's setting (`edit`) and the bin's (`drop`),
+    sentence, the day it was set and the person's words where kept, how many jobs the newest
+    search of the last WINDOW_DAYS days left out by it, the pencil's setting (`edit`) and the bin's (`drop`),
     and `still_right` where it is old and busy, or its own review day has come."""
     rec = set_record()
     lately = recent(today)

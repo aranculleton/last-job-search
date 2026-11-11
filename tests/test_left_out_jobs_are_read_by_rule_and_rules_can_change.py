@@ -343,3 +343,21 @@ def test_a_rule_is_dropped_or_changed_through_its_own_writer(state, profile):
 def test_bar_reads_a_kind_of_employer_turned_back_on():
     import bar
     assert all(why not in bar.EXCLUDED_OFF for _rx, why in bar.EXCLUDED_RULES)
+
+
+def test_a_rules_count_is_the_newest_searchs_never_a_month_of_them_added_up(state):
+    """Settings said "38,547 left out lately" for one rule over a search's own few thousand: a
+    month of searches were added up, and each cut the same postings again (2026-11-11). A rule
+    says what the newest search left out by it, the number Jobs says for that search."""
+    person.reset()
+    _left(state, "r19")
+    older = state / "documents" / "rounds" / "r19.json"
+    rows = json.loads(older.read_text(encoding="utf-8"))
+    rows[0]["first_seen"] = "2026-11-01"
+    older.write_text(json.dumps(rows), encoding="utf-8")
+    _left(state, "r20")
+    lately = rules_view.recent(TODAY)
+    one = rules_view.kinds_of(_left(state, "r20"))
+    assert {k: v["n"] for k, v in lately.items() if v["n"]} == {k: n for k, n in one.items() if n}, lately
+    by = {r["id"]: r for r in rules_view.your_rules(TODAY, {})}
+    assert by["rule~roles"]["left_out"] == one.get("field", 0)
