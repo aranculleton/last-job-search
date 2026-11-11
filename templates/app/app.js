@@ -598,11 +598,14 @@
   // "18:00 (13:00 here)", the card "10:00 London time, 5:00 here"): in the person's own zone,
   // and on a device in another one, the zone named and the time here beside it.
   function clockWords(t) {
+    const p = clockParts(t);
+    return p.here ? p.main + " (" + p.here + " here)" : p.main;
+  }
+  // Its two parts: the person's clock with its zone named, and the time here where that differs.
+  function clockParts(t) {
     const main = clock(t, zone());
-    if (DEVICE_TZ && zone() && zone() !== DEVICE_TZ && clock(t, DEVICE_TZ) !== main) {
-      return main + " " + city(zone()) + " time (" + clock(t, DEVICE_TZ) + " here)";
-    }
-    return main;
+    if (DEVICE_TZ && zone() && zone() !== DEVICE_TZ && clock(t, DEVICE_TZ) !== main) return {main: main + " " + city(zone()) + " time", here: clock(t, DEVICE_TZ)};
+    return {main, here: ""};
   }
   function fmtWhen(s) {
     if (!txt(s)) return "";
@@ -2587,15 +2590,6 @@
       go(r.section, {focus: true, drafts: r.drafts, item: txt(a.item) || null});
     }
   }
-  // A card's way into Tweak, inside its More: the one-time hint first, then the button(s).
-  function tweakSlot(output, item, label, opts) {
-    const outs = Array.isArray(output) ? output : [[output, label]];
-    const btns = outs.map(([o, l]) => tweakButton(o, item, l)).filter(Boolean);
-    if (!btns.length) return null;
-    // The brief carries no tip: it is the first thing read in the morning, and the tip there
-    // made it a lot to take in (the maintainer, 2026-10-26). It shows on the next Tweak instead.
-    return [obj(opts).hint === false ? null : tweakHint(), h("div", {class: "more-acts tweak-entry"}, btns), tweakResult(item)];
-  }
 
   // ------------------------------------------------------------------ downloads and copying
 
@@ -4332,13 +4326,14 @@
       h("p", {class: "card-title", id: hid}, ctx.where === "todo" ? h("a", {href: "#interviews/" + iv.id, class: "title-link", "data-k": "open:interviews:" + iv.id, title: "Open in Coming up",
         onclick: (e) => { e.preventDefault(); go("interviews", {focus: false, item: iv.id}); }}, stageName(iv) + " with ", h("bdi", {}, txt(iv.company)))
         : [stageName(iv) + " with ", h("bdi", {}, txt(iv.company))]),
-      h("p", {class: "meta"}, [fmtWhen(iv.when), has ? "Prep ready" : "No prep yet"].filter(Boolean).join(" · ")),
+      h("p", {class: "meta"}, withPen([fmtWhen(iv.when), has ? "Prep ready" : "No prep yet"].filter(Boolean).join(" · "), acts.pen)),
+      acts.tweak,
       ivDrillLine(iv),
       list.length ? alertLine(list[0], {where: "soon", section: "todo", item: iv.id, bare: true}) : null,
       // The same actions as its card in Coming up (ivActs), and its bin the same choices.
       // A new day waits under More, alone or not (DESIGN.md: an interview's card): "New day" on
       // the face beside Prepare me and Add to calendar (the review, 2026-11-05).
-      h("div", {class: "card-actions"}, acts.main, more("soon:" + k, txt(iv.company), [h("div", {class: "more-acts"}, acts.more), acts.tweak], true)),
+      h("div", {class: "card-actions"}, acts.main, more("soon:" + k, txt(iv.company), [h("div", {class: "more-acts"}, acts.more)], true)),
       cardTalk("interview", iv.id, "the interview with " + txt(iv.company)));
   }
   // Two days before and the day before, with its prep ready: a day to practise (the UX review,
@@ -4396,13 +4391,28 @@
     if (mockUp && !drill) main.push(mock("secondary"));
     const cal = calButton(iv, o.calKey || "ivcal:" + k);
     if (!mockUp) main.push(cal);
-    const moreActs = [mockUp ? cal : null, !busy && has && !offer && !offered.length && (!mockUp || drill) ? mock("secondary") : null,
+    // More holds the rare actions alone, in DESIGN.md's order (Practise with Claude, Update my
+    // prep, a new day), then the calendar on the days practice takes its place, then Something
+    // else. The prep's facts, "Also at" and the pencil's tip, and the pencil itself as a pill,
+    // made it eleven lines deep (the maintainer, 2026-11-11).
+    const moreActs = [!busy && has && !offer && !offered.length && (!mockUp || drill) ? mock("secondary") : null,
       has && !busy ? prepBtn("secondary") : null,
       offered.length || offer ? null : btn(dayOf(iv.when) && !timeOf(iv.when) ? "Add the time" : "New day", () => askMoved(iv), {kind: "secondary", small: true, key: "ivmoved:" + k, aria: "A new day or time: " + txt(iv.company)}),
+      mockUp ? cal : null,
       elseBtn("interview", iv.id, "the interview with " + txt(iv.company), "iv:" + k)];
-    return {main: main.filter(Boolean).slice(0, 2), more: moreActs.filter(Boolean), bin,
-      // Its prep changed in words, under More, where the prep is.
-      tweak: has && !busy ? tweakSlot("prep", iv, "Edit the prep") : null};
+    // Its prep changed in words: the pencil beside the prep's own word on the card, as a draft's
+    // is beside its resume's, and what it is doing or did under the card's facts.
+    const pen = has && !busy ? tweakButton("prep", iv, "Edit the prep") : null;
+    if (pen) pen.classList.add("icon-only", "quiet");
+    return {main: main.filter(Boolean).slice(0, 2), more: moreActs.filter(Boolean), bin, pen,
+      tweak: has && !busy ? tweakResult(iv) : null};
+  }
+  // A line of facts ending in the prep's word, its pencil kept with that last word, never alone
+  // on a line.
+  function withPen(words, pen) {
+    if (!pen || !words) return words;
+    const i = words.lastIndexOf(" ");
+    return [words.slice(0, i + 1), h("span", {class: "nowrap"}, words.slice(i + 1), pen)];
   }
   // An interview into the person's calendar, in words, wherever the interview is: a small
   // calendar icon on Coming up's rows was all there was, and people missed it (2026-11-02).
@@ -8772,6 +8782,15 @@
     const n = dayDiff(day);
     return n === 0 ? "Today" : n === 1 ? "Tomorrow" : fmtDay(day);
   }
+  // Coming up's own row: from another zone, the time here is one piece the column wraps before,
+  // never through, so "15:00 Toronto time" sits over "(20:00 here)" in the time's own column.
+  // Held to one line, it ran under the title and over the row's line of facts and its pill on a
+  // laptop (the maintainer, 2026-11-11).
+  function upWhenRow(u) {
+    const p = u.start ? clockParts(tms(u.start)) : null;
+    if (!p || !p.here) return upWhen(u);
+    return [p.main, " ", h("span", {class: "up-here"}, "(" + p.here + " here)")];
+  }
   function upWhen(u) {
     // On a device somewhere else, the time here as well, as every other time on the page.
     if (u.start) return clockWords(tms(u.start));
@@ -8894,7 +8913,7 @@
       h("span", {class: "up-main"}, h("span", {class: "up-when"}, [upDayLabel(u.day), upWhen(u)].filter(Boolean).join(" · ")), h("span", {class: "up-title"}, upGo(u)), maybe, prep), add);
     const sub = [UP_WORDS[txt(u.kind)] || "", txt(u.note), txt(u.place)].filter(Boolean).join(" \u00b7\u00a0");
     return h("li", {class: "up-row", "data-item": u.id, "data-card": "1", tabindex: "-1"},
-      h("span", {class: "up-when"}, upWhen(u) || (u.own || u.pending ? "" : addTimeBtn(u))),
+      h("span", {class: "up-when"}, upWhen(u) ? upWhenRow(u) : (u.own || u.pending ? "" : addTimeBtn(u))),
       h("span", {class: "up-main"}, h("span", {class: "up-title"}, upGo(u)), maybe, sub ? h("span", {class: "up-note small muted"}, sub) : null, prep,
         upTimeForm(u), upDayForm(u), upTimed.has(u.id) ? stateLine(txt(obj(upTimeTarget(u)).item), "up:" + u.id) : null),
       h("span", {class: "up-acts"}, upDayBtn(u), add, rm || callOff(u)));
@@ -9235,12 +9254,16 @@
         : [(gone ? goneDay : fmtWhen(iv.when)) || "No day yet", formatWord(iv.format)].filter(Boolean).join(" \u00b7\u00a0"))),
       // Whether the prep is ready is said only of what is still to come: "No prep yet" under
       // an interview that ended weeks ago asked for work nobody needs (2026-11-03).
-      h("p", {class: "meta"}, [txt(iv.role), gone || iv.past ? "" : stale ? "Prep is for an earlier plan of rounds" : has ? "Prep ready" : "No prep yet"].filter(Boolean).join(" · "), ref.id || ref.contact ? [" · Referred by ", itemLink("contacts", txt(ref.contact || ref.id), txt(ref.first_name), "ivref:" + iv.id)] : null),
+      // When the prep was last made is one of its facts, said on its line beside its pencil, not
+      // a line under More (DESIGN.md, "Buttons, links and taps": never the card's facts).
+      ((prepWords) => h("p", {class: "meta"}, withPen([txt(iv.role), prepWords].filter(Boolean).join(" · "), prepWords ? acts.pen : null),
+        ref.id || ref.contact ? [" · Referred by ", itemLink("contacts", txt(ref.contact || ref.id), txt(ref.first_name), "ivref:" + iv.id)] : null))(
+        gone || iv.past ? "" : stale ? "Prep is for an earlier plan of rounds" : has ? "Prep ready, updated " + ago(prep.updated) : "No prep yet"),
+      gone ? null : acts.tweak,
       ivDrillLine(iv),
       list.length ? alertLine(list[0], {where: "interviews", section: "interviews", item: iv.id, bare: true}) : null,
       gone ? h("div", {class: "card-actions"}, acts.main) : h("div", {class: "card-actions"}, acts.main,
-        more("iv:" + iv.id, txt(iv.company), [has ? h("p", {class: "small muted"}, "Prep updated " + ago(prep.updated) + ".") : null, relatedLinks(iv.company, iv.id, iv),
-          h("div", {class: "more-acts"}, acts.more), acts.tweak])),
+        more("iv:" + iv.id, txt(iv.company), [h("div", {class: "more-acts"}, acts.more)])),
       gone ? null : cardTalk("interview", iv.id, "the interview with " + txt(iv.company)),
       stateLine(iv.id, "iv:" + iv.id));
   }
@@ -9864,9 +9887,10 @@
     }
     closeTweak();
   }
-  // Where a Tweak starts: one quiet button, with the one-time hint before the first one the
-  // person ever sees (kept on this device, and in the model once the engine carries it).
-  function hintSeen() { return !!obj(M().hints).tweak || pref("hint:tweak", "") === "seen"; }
+  // Where a Tweak starts: one quiet button, the pencil. What it does is said by the page's own
+  // tips ("Tap the pencil on anything Claude writes", tools/tips.py) and its own name on hover;
+  // a hint inside an interview's More, the one place it was left, made More a drawer of
+  // everything (2026-11-11).
   function tweakButton(output, item, label) {
     if (!TWEAK[output]) return null;
     const live = item.general ? true : output === "resume" || output === "letter" ? readyLive(item) : output === "message" ? msgLive(item) : true;
@@ -9885,13 +9909,6 @@
     if (!b) return null;
     b.classList.add("icon-only");
     return b;
-  }
-  function tweakHint() {
-    if (hintSeen() || S.hintShown) return null;
-    S.hintShown = true;
-    return h("div", {class: "tweak-tip", role: "note"},
-      h("p", {}, "The ", icon("tweak"), " button changes the look, length or tone of anything Claude made."),
-      btn("Got it", () => { setPref("hint:tweak", "seen"); scheduleRender(); }, {kind: "secondary", small: true, key: "tweak-tip-ok"}));
   }
   // What a finished tweak left: the new version beside the old one, and a way back.
   // A change asked for to an item's resume or letter, waiting or being made: its Apply is no
@@ -16792,7 +16809,6 @@
     try { drawPage(skipMain); } finally { if (skipMain !== true) { drawnAt = performance.now(); drawMs = drawnAt - t0; } }
   }
   function drawPage(skipMain) {
-    S.hintShown = false;
     const ae = document.activeElement;
     const fk = ae && ae.dataset ? ae.dataset.k : null;
     const inMain = ae && $("main") && $("main").contains(ae);

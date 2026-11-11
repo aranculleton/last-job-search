@@ -763,3 +763,5 @@ Ormsby Retail            # invented employer, the same test and tests/test_profi
 Ansel Quill              # invented, tests/test_profile_upgrades.py
 Tamsin Hale              # invented, the same test
 Pennick Haulage             # invented employer, the page sample (tests/fixtures/app_model_sample.json)
+Merchant Services Group     # invented employer's name, tests/test_no_words_are_drawn_over_other_words_or_buttons.py
+Merchant Onboarding Analytics  # an invented role's words, the same test

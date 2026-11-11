@@ -1102,8 +1102,10 @@ METHODS: dict[str, dict] = {
             (159, "2026-11-10", False, "the Brief's tiles lead with this week's applications and messages sent; Progress's counts in words sit under the funnel; the next step reads plainly; a question after the Jobs line is its own sentence"),
             (160, "2026-11-11", False, "Settings and Your rules say how many jobs your last search left out by each rule, the search Jobs shows, never a month of searches added up; employers you turned down say what they left out in the last 30 days"),
             (161, "2026-11-11", True, "an interview's prep, a person and an application open full screen in the Claude app on a Mac and stay open: a move the app's frame made to the sheet's address closed it the instant it opened, so Read your prep and Practise 3 questions did nothing"),
+            (162, "2026-11-11", False, "a time from another zone wraps in its own wider column on Coming up, never over the row's words"),
+            (163, "2026-11-11", False, "an interview's More holds only its rare actions; when its prep was made and the pencil that changes it are on the card's line of facts"),
         ),
-        "fingerprint": "ba9ee143d8e433d3",
+        "fingerprint": "72fe7326e59e3295",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",
