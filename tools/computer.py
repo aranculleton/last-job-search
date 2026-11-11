@@ -523,8 +523,10 @@ def starter_seen(db: dict, status: str, now: dt.datetime, out_dir: str,
 def ring_steps(bell: str, path: str) -> str:
     """How any chat wakes the computer starter: the bell republished, its own watch on the bell
     stopped (a publish can start one, and the starter's next ring would wake this chat too)."""
-    return (f"Artifact publish with file_path {path} and url {bell} (read it first only if the "
-            "publish is refused; never a new page), then ArtifactComments watch with url "
+    # The path quoted: a user folder with a space in it ("Zoë Quillfeather") was read up to the
+    # space (the Windows check, 2026-11-11).
+    return (f"Artifact publish with file_path \"{path}\" and url {bell} (read it first only "
+            "if the publish is refused; never a new page), then ArtifactComments watch with url "
             f"{bell} and on: false, then python3 tools/computer.py rung <dump> and send its "
             "batch. Say nothing about it to the person.")
 
@@ -3447,8 +3449,10 @@ def main(argv=None) -> int:
         # where the page's meta was read, so the write is pinned to the version read.
         if envs is not None and os.path.isdir(os.path.join(a.dump, "meta")):
             for path in envs_kept(db, envs, now, out, dump_dir=a.dump):
+                # Quoted, as every path the app prints for a chat to use: a user folder with a
+                # space in it was read up to the space (the Windows check, 2026-11-11).
                 print("computer: send this batch, saying nothing (the person's list of "
-                      f"computers, kept for their page): {path}")
+                      f"computers, kept for their page): \"{path}\"")
         return 0
     if a.cmd == "route":
         import app_setup
