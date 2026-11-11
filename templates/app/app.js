@@ -3661,8 +3661,12 @@
     // the person, and a count of them only discouraged (the maintainer, 2026-10-29). Each
     // still says so on its own contact row.
     for (const extra of [listenTodo(), exportTodo(), readingTodo()].concat(refusedTodos())) if (extra) out.push(extra);
+    // Asked first to keep the LinkedIn sign-in (the computer's card, keep_signin): a sign-in
+    // waits behind it, never beside it, so the next one lasts (the maintainer's Mac, 2026-11-11).
+    const keepFirst = needsItems().some((n) => txt(n.id) === "q-setup-computer" && txt(obj(n.about).say) === "keep_signin" && !effective(n.id));
     for (const [id, w] of allWork()) {
       if (txt(w.status) !== "needs_you") continue;
+      if (keepFirst && signinNeeded(w)) continue;
       const it = {key: "work:" + id, kind: WORK_KIND[txt(w.kind)] || "setup", band: "answer", employer: txt(obj(w.args).company) || employerIn(w.title),
         tab: null, counts: true, node: (ctx) => workTodo(id, w, ctx)};
       if (!each && quickWork(w) && !todoHidden(it)) quick.push({id, kind: it.kind, w}); else out.push(it);
@@ -13212,7 +13216,7 @@
     return foldBody([
       h("p", {}, "Before Claude writes to someone, the Claude app on your computer reads their LinkedIn profile in its own browser, so the note fits them. Nothing is sent."),
       h("p", {class: "small muted", "data-k": "linkedin-rules"}, LINKEDIN_RULES),
-      st === "paused" ? h("p", {}, "LinkedIn asked Claude to slow down: reading starts again tomorrow, by itself.") : null,
+      st === "paused" ? h("p", {}, "LinkedIn stopped Claude's reading for today: it starts again tomorrow, by itself.") : null,
       // Ready says it is ready, and nothing more: "Ready" beside "open this page on your
       // computer to check it" said two things at once (2026-11-03).
       st === "off" || here || st === "ready" ? null : h("p", {class: "small muted"}, "Open this page in the Claude app on your computer to check it.")],
@@ -13740,7 +13744,7 @@
       : "Read " + nWord(n, "profile", "profiles") + " before Claude writes";
     // When and where they are read, said once: the notes they hold back wait on this card.
     const why = there ? "It reads them in the Claude app on your computer, then rewrites each note. Nothing to press." :
-      st === "paused" ? "LinkedIn asked Claude to slow down, so these wait until tomorrow. Then it reads them by itself." :
+      st === "paused" ? "LinkedIn stopped Claude's reading for today, so these wait until tomorrow. Then it reads them by itself." :
       st === "desktop" ? "Claude reads them there, in its own browser, by itself, then rewrites each note. Their notes wait until then." :
       st === "off" || !queue.length ? "Copy each one's LinkedIn page and paste it on their card in Contacts. Claude rewrites the note from it." :
       r.needTab ? "Claude reads them in a tab of its own in Claude's browser, out of your way. Press Read them once to open that tab; after that it reads by itself." :

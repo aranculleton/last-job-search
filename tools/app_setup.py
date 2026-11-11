@@ -822,6 +822,27 @@ def said_once() -> dict:
     return {**(old if isinstance(old, dict) else {}), **(got if isinstance(got, dict) else {})}
 
 
+# A chat the app could not start because the chat starting it is not in Auto (create_session
+# refused its permission_mode): "<when> <that chat's id>", kept with the things said once so
+# the page asks the person on a card (outside_items, "auto"), never the chat that was refused,
+# which nobody reads (the local review, 2026-11-11, 6). Their Done there (told "auto") is later.
+AUTO_REFUSED = "auto-refused"
+
+
+def record_auto_refused(chat: str, at: str) -> str:
+    """Keep that `chat` was refused a chat in Auto at `at` (app.py mode-refused)."""
+    return save_said(AUTO_REFUSED, f"{at} {chat}".strip())
+
+
+def auto_refused() -> dict:
+    """{"at", "chat"} of the newest Auto refusal not yet answered on the page, or {}."""
+    got = str(said_once().get(AUTO_REFUSED) or "").split()
+    if not got:
+        return {}
+    at, chat = got[0], (got[1] if len(got) > 1 else "")
+    return {} if told("auto") >= at else {"at": at, "chat": chat}
+
+
 DOORBELLS = "doorbells-cleared"
 
 
@@ -950,8 +971,21 @@ def outside_items(targets: dict, kind: dict | None = None) -> list:
                         "copy": setup_script_line(),
                         "checked": claude_surfaces.entry("cloud-setup-script").get("verified_on", "")}
         out.append(item)
+    refused = auto_refused() if k not in ("app", "public", "fork", "none") else {}
+    if refused:
+        # Refused a chat because the one starting it is not in Auto: the page says so and
+        # links that chat, whichever chat draws the page; its Done is their word.
+        item = outside_item("auto")
+        item["body"] = ("Claude couldn't start a chat for your work, because the chat that "
+                        "starts it is not in Auto. Switch that chat to Auto once, and Claude "
+                        "starts it by itself.")
+        item["rev"] = app_model_rev("auto", refused["at"], item["rev"])
+        if refused["chat"].startswith("session_"):
+            item["open"] = {"label": "Open that chat",
+                            "url": "https://claude.ai/code/" + refused["chat"]}
+        out.append(item)
     if _cloud() and k not in ("app", "public", "fork", "none"):
-        if not told("auto"):
+        if not told("auto") and not refused:
             out.append(outside_item("auto"))
         # The line in its own card, whenever a cloud chat starts without the PDF tools: it
         # was offered only beside blocked job sites, so it went with them (X-59). A chat that
@@ -970,6 +1004,11 @@ def outside_items(targets: dict, kind: dict | None = None) -> list:
     for item in out:
         targets[item["id"]] = {"kind": "outside", "key": item["about"]["step"], "rev": item["rev"]}
     return out
+
+
+def app_model_rev(*parts) -> str:
+    import app_model
+    return app_model.rev_of(*parts)
 
 
 def report_items(today: dt.date | None = None) -> list:
@@ -1999,9 +2038,10 @@ CLAIMS = "ljs-claims.json"
 
 
 def record_claim(work: str, chat: str, today: dt.date | None = None,
-                 now_ts: float | None = None) -> bool:
+                 now_ts: float | None = None, lent: bool = False) -> bool:
     """Remember that `work` was claimed here as `chat`, and when (`at`, and `renewed`, which
-    each pin moves on: the claim's lease runs from it)."""
+    each pin moves on: the claim's lease runs from it). `lent`: a cloud chat lent the
+    computer's browser claimed it as a computer chat (app.py next --lent)."""
     if not work or not chat:
         return False
     import time
@@ -2011,7 +2051,8 @@ def record_claim(work: str, chat: str, today: dt.date | None = None,
     path = _local_file(CLAIMS)
     got = _read_json(path, {})
     got = {k: v for k, v in got.items() if isinstance(v, dict) and str(v.get("day")) >= since}
-    got[str(work)] = {"chat": str(chat), "day": day.isoformat(), "at": ts, "renewed": ts}
+    got[str(work)] = {"chat": str(chat), "day": day.isoformat(), "at": ts, "renewed": ts,
+                      **({"lent": True} if lent else {})}
     _write_json(path, got)
     return True
 
@@ -2038,9 +2079,21 @@ def end_claim(work: str, now_ts: float | None = None) -> bool:
     return _claim_mark(work, "ended", now_ts)
 
 
+def ask_claim(work: str, now_ts: float | None = None) -> bool:
+    """`work` stopped here on a question to the person (app.py done --question, a LinkedIn
+    sign-in above all): the question is on their page and the work waits there for their
+    answer, never finished. It stays this chat's own for what it says (reading.app_job_here),
+    so a sign-in it meets while it waits goes on the page too. Ended at the question, every
+    later sign-in line was the one for a chat the person watches ("tell the person ... then
+    say done"), and a chat on their computer kept the sign-in in its own conversation (the
+    maintainer, 2026-11-11)."""
+    return _claim_mark(work, "asked", now_ts)
+
+
 def current_claim() -> dict:
     """The work this checkout's chat holds now: the latest claim made here and not ended,
-    as {"work", "chat", "at", "renewed"}, or {} when it holds none (a finished job's chat)."""
+    as {"work", "chat", "at", "renewed"}, or {} when it holds none (a finished job's chat).
+    Work waiting on the person's answer (ask_claim) is still its own, with `asked` set."""
     got = _read_json(_local_file(CLAIMS), {})
     live = [(float(v.get("at") or 0), k, v) for k, v in got.items()
             if isinstance(v, dict) and not v.get("ended")]

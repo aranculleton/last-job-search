@@ -41,7 +41,10 @@ page waited on every tap (2026-10-29). `next` never hands one to this chat to ru
   helper in the sidebar (2026-11-10). Never `send_message` a chat on the computer: it reports
   through the page and the copy. On the computer itself, `next --kind computer --computer-only` runs it in that
   chat, which has the browser, never as an agent (COMPUTER.md, "How the work reaches the
-  computer").
+  computer"). Where only the person can move it (LinkedIn signed out there, an approval), the
+  page says what is wrong in one line with one button (`computer.py state`: its To do card and
+  its row under LinkedIn): asked about it, point them there, and never send them to a chat as
+  the way through, the one on their computer included (2026-11-11).
 
 Never wait for either: go straight back to step 3 for the next item, so a search, a
 networking run and an interview prep run side by side (ten at most in the cloud, each in a chat of

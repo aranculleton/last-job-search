@@ -1070,7 +1070,10 @@ def _computer_card(ctx: Ctx, targets: dict) -> list:
     item = computer.card(ctx._got.get("computer") or {})
     if not item:
         return []
-    targets[item["id"]] = {"kind": "outside", "key": "computer", "rev": item["rev"]}
+    # What it asked (`say`), so its Done keeps the person's word where that is the answer
+    # (app_actions, keep_signin).
+    targets[item["id"]] = {"kind": "outside", "key": "computer", "rev": item["rev"],
+                           "say": item["about"].get("say") or ""}
     return [item]
 
 
@@ -3141,8 +3144,8 @@ READ_HOLD = {
            "itself from then on",
     "sign_in": "Waiting for their profile: sign in to LinkedIn in Claude's browser and Claude "
                "reads it by itself",
-    "paused": "Waiting for their profile: LinkedIn asked Claude to slow down, so it reads it "
-              "tomorrow, by itself",
+    "paused": "Waiting for their profile: LinkedIn stopped Claude's reading for today, so it "
+              "reads it tomorrow, by itself",
     "next": "Waiting its turn: Claude reads their profile here by itself, then rewrites this note",
     "reading": "Reading their profile…",
     "read": "Profile read: Claude rewrites this note next",
@@ -5261,8 +5264,8 @@ def _where(ctx: Ctx, targets: dict) -> dict:
     reading_row = ({"state": "paste", "say": "Off: you paste someone's profile when you write "
                                              "to them."}
                    if reading.reads_now() != "browser" else
-                   {"state": "paused", "say": "LinkedIn asked Claude to slow down: reading "
-                                              "starts again tomorrow, by itself."}
+                   {"state": "paused", "say": "LinkedIn stopped Claude's reading for today: "
+                                              "it starts again tomorrow, by itself."}
                    if reading.gate_state()["kind"] != "go" or _computer_stopped(ctx) else
                    {"state": "ready", "say": "Your page reads LinkedIn profiles in the Claude "
                                             "desktop app."} if reads else

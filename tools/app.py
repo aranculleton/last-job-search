@@ -1258,15 +1258,29 @@ def cmd_next(a) -> int:
     if ended["batches"]:
         chosen = dict(chosen, ended=ended["ended"],
                       batches=list(ended["batches"]) + list(chosen.get("batches") or []))
-    if chosen.get("batches") and getattr(a, "computer_only", False):
+    if chosen.get("batches") and (getattr(a, "computer_only", False) or (
+            (a.kind or "") == "computer" and chosen.get("run") == "here"
+            and chosen.get("kind") in page_db.READS_ON_COMPUTER)):
         # The id it was claimed under, kept on this computer for a chat that compacts and loses
-        # it (computer.py prompt says it again; the builder audit, 2026-11-10, CC-25).
+        # it (computer.py prompt says it again; the builder audit, 2026-11-10, CC-25). A read
+        # taken here by a chat on the computer with plain `next` (route's `here`) or lent its
+        # browser is the page's work too, so it is kept the same way: unkept, its sign-in was
+        # asked in a chat nobody reads (the local review, 2026-11-11, 4).
         import app_setup
         for wid in [chosen["work"]] + [str(o.get("work") or "") for o in chosen.get("with") or []]:
             try:
-                app_setup.record_claim(wid, a.chat)
+                app_setup.record_claim(wid, a.chat, lent=bool(getattr(a, "lent", False)))
             except OSError:
                 pass
+        # The person's sign-in answered on the page lifts today's sign-out stop, once, in code
+        # (reading.resume_from_page): signed in there, every read was still refused.
+        try:
+            sys.path.insert(0, os.path.join(_HERE, "network"))
+            import reading
+            reading.resume_from_page(((page_db.load(a.dump).get("work") or {}).get(
+                page_db.safe_id(chosen["work"])) or {}).get("data") or {})
+        except Exception:  # noqa: BLE001  nothing to lift, or no ledger here
+            pass
     if chosen.get("batches"):
         # Claimed, as it will be once sent: the pins and the finish made from this folder are
         # pinned to the claim's versions and free the holds it makes. Left as read, the first
@@ -1474,17 +1488,23 @@ def job_steps(chosen: dict, claimer: str, url: str, session: bool = True,
          "\"Progress costs nothing extra\" in .claude/skills/app/jobs.md and step 5 of "
          ".claude/skills/app/wake.md. Read only those parts.")
     if computer_only and kind in ("network",):
+        import computer
         # The whole run on the computer: finding, the short list, each profile read in this
         # chat's browser, every note written from it and checked. Told only "the networking
         # skill", the chat on the computer queued its reads "for the page" and left every note
         # waiting on a read, for a second chat there to finish (the maintainer, 2026-11-10).
+        # LinkedIn signed out is the one thing that stops it, and it goes on the page: told
+        # only "never queue a profile for the page", the chat on a Mac kept the sign-in and its
+        # steps in its own conversation, "rather than parking it on your page" (the maintainer,
+        # 2026-11-11).
         step("This chat has Claude's own browser on the person's computer, so the whole run is "
              "done here, in this chat: the people searches opened in that browser, the short "
              "list, each person's profile read in it (python3 tools/network/reading.py route "
              "--tools browser says `here`: reading.py next, then reading.py read <id> - "
              "--source browser, one at a time), and every note written from what was read "
-             "and checked. Never queue a profile for the page, never --wait-for-read, and "
-             "never hand any of it to another chat or a background agent.")
+             "and checked. Never queue a profile for the page to read, never --wait-for-read, "
+             "and never hand any of it to another chat or a background agent. "
+             + computer.SIGNED_OUT_ON_PAGE)
     step(f"At each stage ({keys}): python3 tools/app.py pin \"$D\" --work {wid} --chat "
          f"{claimer} --stage <stage> --line \"<one plain line>\", and send the batch it prints "
          f"(ArtifactData batch, url {url}). On a long stage, pin it again with a new line every "
@@ -3205,6 +3225,23 @@ def cmd_told(a) -> int:
     return 0
 
 
+def cmd_mode_refused(a) -> int:
+    """create_session refused a chat its Auto because this chat is not in Auto: one card on the
+    person's page (app_setup.auto_refused), with this chat's link and the registry's steps to
+    switch it, never a word in this chat, which nobody may be reading (the wake's agent, the
+    brief, the starter: the local review, 2026-11-11, 6)."""
+    import app_model
+    import app_listen
+    import app_setup
+    _, now = app_model.clock(None, a.now)
+    chat = app_listen.this_chat(a.chat)
+    app_setup.record_auto_refused(chat, app_model.stamp(now))
+    print("mode-refused: their page asks them on one card to switch this chat to Auto, with its "
+          "link. Say nothing about it here and wait for nothing; save it with the rest "
+          "(python3 tools/save_state.py) and bring the page up to date as this run does anyway.")
+    return 0
+
+
 def cmd_doorbells(a) -> int:
     """The page's old rings, cleared once: each tap leaves a comment sent to Claude that nothing
     resolved, and the Claude app counts them as unread. The chat resolves them, then notes it."""
@@ -3378,10 +3415,17 @@ def cmd_done(a) -> int:
             got["files"] = {"work": queued["work"], "applications": queued["applications"]}
             got["batches"] = list(got["batches"]) + queued["batches"]
     # Finished here: this chat holds it no more, so no read waits on its claim, and a sign-in
-    # goes back to being asked in the chat (reading.app_job_here).
+    # goes back to being asked in the chat (reading.app_job_here). A question is no finish: the
+    # work waits on the person's page, and a sign-in this chat meets meanwhile goes there too.
+    # Ended at the question, a chat on the computer that put the Sign in to LinkedIn card on
+    # the page was told the next time to tell the person in its own chat (the maintainer,
+    # 2026-11-11).
     try:
         import app_setup
-        app_setup.end_claim(a.work)
+        if got.get("status") == "needs_you":
+            app_setup.ask_claim(a.work)
+        else:
+            app_setup.end_claim(a.work)
     except OSError:
         pass
     print(_dump(got), end="")
@@ -4146,6 +4190,10 @@ def main(argv=None) -> int:
     p.add_argument("answer", choices=("yes", "no"))
     p = sub.add_parser("told", help="something said to the person once, never again")
     p.add_argument("key")
+    p = sub.add_parser("mode-refused", help="a chat could not be started in Auto: asked on the "
+                                            "page, never in this chat")
+    p.add_argument("--chat", default="")
+    p.add_argument("--now", default=None)
     p = sub.add_parser("doorbells", help="the page's old rings, cleared once")
     p.add_argument("--done", action="store_true", help="note they are cleared")
     p = sub.add_parser("resume-saved", help="the resume the page held, saved in the copy")
@@ -4282,7 +4330,7 @@ def main(argv=None) -> int:
             "progress": cmd_progress, "check": cmd_check,
             "start": cmd_start, "published": cmd_published, "resume-saved": cmd_resume_saved,
             "files-saved": cmd_files_saved, "propose": cmd_propose, "listen": cmd_listen,
-            "republish": cmd_republish, "pinned": cmd_pinned, "told": cmd_told, "doorbells": cmd_doorbells, "done": cmd_done,
+            "republish": cmd_republish, "pinned": cmd_pinned, "told": cmd_told, "mode-refused": cmd_mode_refused, "doorbells": cmd_doorbells, "done": cmd_done,
             "ask": cmd_ask, "wake": cmd_wake, "version": cmd_version, "versions": cmd_versions,
             "reads": cmd_reads, "search-drafts": cmd_search_drafts,
             "follow-ups": cmd_follow_ups, "nested": cmd_nested, "retired": cmd_retired, "hand-over": cmd_hand_over,

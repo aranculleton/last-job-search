@@ -744,8 +744,10 @@ METHODS: dict[str, dict] = {
             (56, "2026-11-10", False, "every sign-in seen in a chat the app started on the computer (signin --page, --done, --url) names the step that sends its parked job back to work"),
             (57, "2026-11-10", False, "an HTTP error page (999, 429) is judged on the page's head alone, so an error number in someone's About is no stop"),
             (58, "2026-11-10", False, "a profile read in a chat of a person whom work waiting on the page reads is refused until that work is taken into the chat, so nobody is read twice; the chat that claimed or took the work, and work that has ended, refuse nothing; a number the person gave for one employer (more-at --up-to) is obeyed, a lower one included, and only Open it now's room is never below their usual number"),
+            (59, "2026-11-11", False, "a second sign-out the same day in a chat the app started on the computer goes on the person's page with the job, never told in that chat; notes are written as before"),
+            (60, "2026-11-11", False, "a sign-in page before anything was read since the person signed in is a sign-in that did not last, never friction, and the day's first sign-out is kept on the job path; every read of the page's on the computer (plain next and a lent browser too) puts sign-ins and checks on the page, and an answer there lifts a sign-out stop; notes are written as before"),
         ),
-        "fingerprint": "28a037666b3bbb27",
+        "fingerprint": "3eb0477055400877",
     },
     "screening": {
         "by": "round", "priority": 2,
@@ -1105,8 +1107,9 @@ METHODS: dict[str, dict] = {
             (161, "2026-11-11", True, "an interview's prep, a person and an application open full screen in the Claude app on a Mac and stay open: a move the app's frame made to the sheet's address closed it the instant it opened, so Read your prep and Practise 3 questions did nothing"),
             (162, "2026-11-11", False, "a time from another zone wraps in its own wider column on Coming up, never over the row's words"),
             (163, "2026-11-11", False, "an interview's More holds only its rare actions; when its prep was made and the pencil that changes it are on the card's line of facts"),
+            (164, "2026-11-11", False, "To do holds a LinkedIn sign-in card back while the card asking to keep the sign-in is open, and a stop says LinkedIn stopped the reading, never that it asked Claude to slow down"),
         ),
-        "fingerprint": "72fe7326e59e3295",
+        "fingerprint": "248378ef35343748",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",
