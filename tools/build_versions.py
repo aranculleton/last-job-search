@@ -915,7 +915,7 @@ METHODS: dict[str, dict] = {
             (84, "2026-11-10", False, "a finished job chat asked to save its work is asked by one message and answers by none: the next tidy-up finds the work saved or says it was lost"),
             (85, "2026-11-10", False, "a job chat that stopped on a question to you counts as finished for the tidy-up while the question waits and after your answer; a job chat that reports one job while blocked part way through another it runs is kept, never put away at work; asking routines.py for help never changes the registry"),
             (86, "2026-11-11", False, "the app maker's own builder task is listed (it fixes the bugs their copy files); nothing changes for anyone else"),
-            (87, "2026-11-11", False, "the steps for making the brief in the cloud and the note on its phone notification follow Claude's own pages as read on 2026-11-11: a new scheduled task may first offer Set up manually and its form ends on Create, and the phone notification is documented from a cloud chat as well as with Remote Control; wording only"),
+            (87, "2026-11-11", False, "the steps for making the brief in the cloud and the note on its phone notification follow Claude's own pages as read on 2026-11-11: a new scheduled task may first offer Set up manually and its form ends on Create, and the phone notification is documented from a cloud chat too; wording only"),
         ),
         "fingerprint": "cb1132300b9ff533",
     },
