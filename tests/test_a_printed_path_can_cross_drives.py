@@ -18,6 +18,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WALKS_INSIDE_ONE_ROOT = {
     "tools/build_app.py": 2,         # the app's own tree, out_dir under it
     "tools/build_versions.py": 1,    # the app's tracked files, under ROOT
+    "tools/computer.py": 1,          # guarded: the copy from home; another drive names the folder
     "tools/followups.py": 1,         # guarded: only when the note is under ROOT
     "tools/leak_scan.py": 1,         # a scanned tree's own files
     "tools/local_path.py": 2,        # rel itself
