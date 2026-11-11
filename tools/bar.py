@@ -112,7 +112,13 @@ PUBLIC_SAID = re.compile(r"\b(?:we\s+are|we're|we’re)\s+(?P<said>" + _ITS_KIND
 
 
 def _named(company: str) -> re.Pattern | None:
-    """The employer's own name, then "is a <public body>" or ", a <public body>"."""
+    """The employer's own name, then "is a <public body>" or ", a <public body>": made once a
+    page build for each employer (remembered), never once a posting."""
+    import remembered
+    return remembered.get("named", str(company or ""), lambda: _make_named(company))
+
+
+def _make_named(company: str) -> re.Pattern | None:
     names = {" ".join(str(company or "").split()), own_name(company)}
     alts = ["\\W+".join(re.escape(w) for w in n.split()) for n in names if n and n.split()]
     if not alts:
@@ -218,9 +224,12 @@ def judged() -> dict:
     cannot be read is said once, and read as no judgements until it is fixed."""
     try:
         p = _judged_path()
-        m = os.path.getmtime(p)
+        st = os.stat(p)
     except (OSError, person.NoProfile):
         return {}
+    # Keyed on the file's time and size, never its time alone: a judgement taken back by
+    # another chat within the same clock tick was still read here (MAINTAINING.md).
+    m = (st.st_mtime_ns, st.st_size)
     if _judged_cache.get("at") != (p, m):
         try:
             got = _read_judged(p)
@@ -234,10 +243,53 @@ def judged() -> dict:
     return _judged_cache["rows"]
 
 
-def judgement(company: str | None) -> dict | None:
-    """The judgement recorded for this employer by its own name, or None."""
+# A judgement that an employer clears none of pay, prestige or signal is a chat's reading of
+# what it found that day, not a rule the person set: kept for good, it cut every job there and
+# hid everyone there, new people and follow-ups alike, though a company raises money, opens a
+# team or is bought, and nothing on the page said so. It speaks for its employer this long
+# after the day it was made; then the employer is judged again before anything is cut or
+# hidden for it, as one nobody has judged is. One with no day speaks for nothing. A judgement
+# that an employer clears the bar shuts nothing out, and keeps.
+JUDGED_NONE_DAYS = 90
+
+
+def judged_none_until(j) -> datetime.date | None:
+    """The first day a "none" judgement no longer speaks for its employer, or None when it
+    has no day to count from (then it speaks for nothing)."""
+    try:
+        made = datetime.date.fromisoformat(str((j or {}).get("date") or "")[:10])
+    except ValueError:
+        return None
+    return made + datetime.timedelta(days=JUDGED_NONE_DAYS)
+
+
+def judgement(company: str | None, today: datetime.date | None = None) -> dict | None:
+    """The judgement recorded for this employer by its own name, or None: a "none" past its
+    day (`judged_none_until`, on the person's own day) is none at all."""
     judged()
-    return _judged_cache.get("by_name", {}).get(own_name(company)) if company else None
+    j = _judged_cache.get("by_name", {}).get(own_name(company)) if company else None
+    if isinstance(j, dict) and j.get("verdict") == NONE:
+        until = judged_none_until(j)
+        if until is None or until <= (today or person.today()):
+            return None
+    return j
+
+
+def judged_none(today: datetime.date | None = None) -> list[tuple[str, dict, datetime.date]]:
+    """[(employer, its judgement, the day it is judged again)] for every "none" judgement that
+    still speaks for its employer, where the profile states a bar: what Held back for now
+    lists (tools/holds.py)."""
+    if not applies():
+        return []
+    today = today or person.today()
+    out = []
+    for k, r in sorted(judged().items()):
+        if not isinstance(r, dict) or r.get("verdict") != NONE:
+            continue
+        until = judged_none_until(r)
+        if until is not None and until > today:
+            out.append((str(r.get("name") or k), r, until))
+    return out
 
 
 @contextlib.contextmanager
@@ -278,7 +330,7 @@ def judge(company: str, what: str, why: str, today: str | None = None) -> str:
         rows = {k: r for k, r in rows.items()
                 if not (isinstance(r, dict) and own_name(r.get("name") or k) == name)}
         rows[name] = {"name": company, "verdict": what, "why": why,
-                      "date": today or datetime.date.today().isoformat()}
+                      "date": today or person.today().isoformat()}
         tmp = tempfile.NamedTemporaryFile("w", newline="\n", dir=os.path.dirname(p) or ".", delete=False,
                                           encoding="utf-8", suffix=".tmp")
         with tmp:
@@ -289,13 +341,36 @@ def judge(company: str, what: str, why: str, today: str | None = None) -> str:
     return f"{company}: {what} ({why}), kept in profile/{JUDGED_FILE}"
 
 
-def listed(company: str | None) -> bool:
+def unjudge(company: str) -> bool:
+    """Take back the judgement of this employer, by its own name: it is unjudged again, and
+    judged again before anything is cut or hidden for it. True when one was there. Held back
+    for now's Look again now (tools/holds.py lift)."""
+    name = own_name(company)
+    p = _judged_path()
+    with _one_writer(p):
+        rows = _read_judged(p)
+        kept = {k: r for k, r in rows.items()
+                if not (isinstance(r, dict) and own_name(r.get("name") or k) == name)}
+        if len(kept) == len(rows):
+            return False
+        tmp = tempfile.NamedTemporaryFile("w", newline="\n", dir=os.path.dirname(p) or ".",
+                                          delete=False, encoding="utf-8", suffix=".tmp")
+        with tmp:
+            json.dump(dict(sorted(kept.items())), tmp, indent=2, ensure_ascii=False)
+            tmp.write("\n")
+        os.replace(tmp.name, p)
+    _judged_cache.clear()
+    return True
+
+
+def listed(company: str | None, today: datetime.date | None = None) -> bool:
     """Whether any of the profile's bar or tier lists names this employer, or it has been
-    judged, so that its verdict says something about it."""
+    judged (a "none" read on `today`, `judgement`), so that its verdict says something about
+    it."""
     name = str(company or "")
     k = company_key(name)
     both = f"{name} {k}"
-    if excluded_by_name(company) or tier(name)[0] or COLLISIONS.search(both) or judgement(name):
+    if excluded_by_name(company) or tier(name)[0] or COLLISIONS.search(both) or judgement(name, today):
         return True
     if any(rx.search(both) for rx in (PUBLIC_PRESTIGE, PENSIONS, NAMED_PUBLIC, PUBLIC)):
         return True
@@ -304,8 +379,26 @@ def listed(company: str | None) -> bool:
                 or tech_name(name) or tech_name(k))
 
 
-def verdict(company: str | None, posting: str = "") -> tuple[str, str]:
-    """(verdict, reason). See the module docstring for the order and meaning."""
+def verdict(company: str | None, posting: str = "",
+            today: datetime.date | None = None) -> tuple[str, str]:
+    """(verdict, reason). See the module docstring for the order and meaning. `today` is the
+    day a "none" judgement is read on (`judgement`): the person's own day where not given.
+
+    Worked out once a page build for each employer, posting and day, and kept by the state
+    of the judgements file, so a judgement made meanwhile is read at once (remembered; the
+    second audit, D8: 657 verdicts, 6.9 s of a 12 s build)."""
+    import remembered
+    if not remembered.active():
+        return _verdict(company, posting, today)
+    judged()
+    day = today or remembered.day()
+    return remembered.get("verdict", (str(company or ""), str(posting or ""), day,
+                                      _judged_cache.get("at")),
+                          lambda: _verdict(company, posting, day))
+
+
+def _verdict(company: str | None, posting: str = "",
+             today: datetime.date | None = None) -> tuple[str, str]:
     name = str(company or "")
     k = company_key(name)
     both = f"{name} {k}"
@@ -328,7 +421,7 @@ def verdict(company: str | None, posting: str = "") -> tuple[str, str]:
     # An employer on none of the lists and judged by nobody: only now is its posting read
     # for what the employer says it is, and a public body it describes is held to the
     # public rule, its stricter paid exception included, before the midpoint rule below.
-    said = "" if listed(name) else public_said(posting, name)
+    said = "" if listed(name, today) else public_said(posting, name)
     if said:
         if public_paid(lo, hi):
             return PAY, public_paid_why(lo)
@@ -358,7 +451,7 @@ def verdict(company: str | None, posting: str = "") -> tuple[str, str]:
     if score < 0 or collided:
         return NONE, why or "a different company wearing a listed employer's name"
     stated = applies()
-    j = judgement(name)
+    j = judgement(name, today)
     if j and j.get("verdict") in ((PAY, PRESTIGE, SIGNAL, NONE) if stated else (PAY, PRESTIGE, SIGNAL)):
         return j["verdict"], f"judged {j.get('date', '')}: {j.get('why', '')}".replace(" :", ":")
     if not stated:
@@ -478,7 +571,7 @@ def unjudged_contacts(today=None) -> list[str]:
     contacts = rows("network_contacts.csv")
     threads = rows("network_threads.csv")
     tracker = csv_store.tracker()
-    today = today or datetime.date.today()
+    today = today or person.today()
     book = {str(c.get("contact_id") or "").strip(): c for c in contacts}
     out, seen = [], set()
     for i in open_actions.due_items(contacts, threads, tracker, today):

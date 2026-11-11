@@ -111,7 +111,9 @@ def test_to_do_never_offers_a_fix_and_the_draft_says_what_claude_will_fix(run, t
     todo = got["after"][0]["text"]
     for b in ("Make it again", "Shorten it", "Set it aside", "the CV runs to a second page"):
         assert b not in todo, (b, todo)
-    assert "the CV runs to a second page by two lines" in got["after"][1]["text"] and "Make it again" not in got["after"][1]["text"], got["after"][1]["text"]
+    # The check's own finding leads the line since the UX review of 2026-11-10 (U-19), so it
+    # starts with a capital: "The CV runs to ...: Claude makes it again next."
+    assert "The CV runs to a second page by two lines" in got["after"][1]["text"] and "Make it again" not in got["after"][1]["text"], got["after"][1]["text"]
 
 
 def test_a_fix_claude_could_not_make_is_said_on_to_do_with_no_button(run, tmp_path):

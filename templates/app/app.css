@@ -82,6 +82,12 @@ bdi { unicode-bidi: isolate; }
 .dot.conn-live { background: var(--st-done); }
 .dot.conn-connecting, .dot.conn-reconnecting { background: var(--line-strong); }
 .dot.conn-offline, .dot.conn-readonly, .dot.conn-stopped, .dot.conn-unheard { background: var(--st-overdue); }
+/* The dot's state is never its colour alone (WCAG 1.4.1; the review, 2026-11-10): connected is
+   a filled dot, and waiting a ring, grey while it connects and amber while Claude is not
+   listening, which To do's card says in words. Offline, read only and stopped are said in words
+   on the line under the header by themselves. */
+.dot.conn-connecting, .dot.conn-reconnecting { background: transparent; box-shadow: inset 0 0 0 2px var(--line-strong); }
+.dot.conn-unheard { background: transparent; box-shadow: inset 0 0 0 3px var(--st-overdue); }
 .top-tools { margin-left: auto; display: flex; align-items: center; gap: 8px; }
 .pulse { font-size: var(--t-sm); color: var(--muted); padding-bottom: 4px; }
 .pulse .refresh-btn { margin-left: 8px; vertical-align: middle; }
@@ -101,10 +107,18 @@ bdi { unicode-bidi: isolate; }
   border-radius: 999px; border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink); font-weight: 600; font-size: var(--t-sm); cursor: pointer;
 }
 .pill.warn { border-color: var(--st-overdue); color: var(--st-overdue); }
+@media (max-width: 759px) { .run-left { display: none; } }
+.pill .pill-count { display: none; }
+.pill.tight .pill-count { display: inline; }
+.pill.tight .pill-words { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 @media (max-width: 759px) {
   .top-in { gap: 8px; }
   .brand { font-size: var(--t-md); }
   .top-tools { gap: 2px; }
+  /* At double text in a wider font the header's buttons ran past the edge (the gear 6px out,
+     CI, 2026-11-11): they take a second line, right-aligned, only when they cannot fit beside
+     the dot. */
+  .top-tools { flex-wrap: wrap; justify-content: flex-end; row-gap: 2px; flex-shrink: 0; max-width: calc(100% - 40px); }
   .pill { padding: 4px 8px; gap: 4px; font-size: 0.875rem; }
   .pill .spin { width: 13px; height: 13px; border-width: 2px; }
   .conn-btn { margin-left: -12px; margin-right: -12px; }
@@ -261,12 +275,54 @@ bdi { unicode-bidi: isolate; }
 .g-main { min-width: 0; flex: 1 1 14rem; }
 .g-name { font-weight: 600; }
 .g-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.g-at { font-weight: 400; color: var(--muted); }
+/* On a wide screen a row is one line, the name and how it stands side by side, and each row's
+   button sits near the name it acts on rather than across the screen from it (the review,
+   2026-11-10: the name at the left edge, "See the draft" 650px away): the words take a reading
+   width, so the buttons stand in one column near them. The row itself spans the card, its
+   trash at the card's edge as every card's is: rows stopping 300px short of it left the pills
+   and trash a column in mid-card (the screen review, 2026-11-11). 30rem keeps the button under
+   520px from the name in Safari's engine too. */
+@media (min-width: 760px) {
+  .g-row { flex-wrap: nowrap; }
+  .g-main { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 4px; flex: 0 1 30rem; }
+  .g-main > .g-name + p.small::before { content: "· "; }
+  .g-acts { flex: 1 1 auto; }
+  .g-acts > [data-bin] { margin-left: auto; }
+}
+/* On a phone the name is its own line and where they work, with how it stands, the line under
+   it, both beside the row's button. */
+@media (max-width: 759px) {
+  .g-row { flex-wrap: nowrap; }
+  .g-acts { flex: none; }
+  .g-main { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 4px; }
+  .g-main > .g-name { display: contents; }
+  .g-name > .name-link { flex-basis: 100%; font-weight: 600; }
+  .g-name > .g-at { font-size: var(--t-sm); }
+  .g-main > .g-name:has(> .g-at) + p.small::before { content: "· "; }
+}
 .hidden-note { margin-top: 12px; }
 .top-end { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; }
+/* Never wider than its card: at double text in a wider font "Replied: your turn" ran 6px past a
+   phone's edge (CI, 2026-11-11). It keeps its width until the whole line cannot hold it, and
+   only then does its pill wrap. */
+.top-end { flex-shrink: 0; max-width: 100%; }
+.top-end > .state-word { white-space: normal; }
 .head-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+/* On a phone a screen's own buttons keep one row, and what a run costs goes on a short line of
+   its own under them, under the button it belongs to: Find jobs, its cost and Add a job took
+   two 44px rows and pushed the first job below its first screen (2026-11-11). */
+@media (max-width: 759px) {
+  .summary .head-tools { row-gap: 2px; }
+  .summary .head-tools > .cost { order: 9; flex-basis: 100%; }
+}
 .btn > .ic { width: 18px; height: 18px; margin-right: 8px; flex: none; }
 .btn.icon-only { padding-left: 12px; padding-right: 12px; }
 .btn.icon-only > .ic { margin-right: 0; }
+/* To do's Later: a clock and its word in the trash's corner, quiet, so putting off never
+   reads as throwing away (the review, 2026-11-10). */
+.btn.icon-only.later-x { padding-left: 8px; padding-right: 12px; gap: 4px; color: var(--muted); font-size: var(--t-sm); font-weight: 600; text-decoration: none; }
+.btn.icon-only.later-x > .later-word { position: static; width: auto; height: auto; overflow: visible; clip: auto; }
 .btn.icon-only > span:not(.sr-only) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 /* A line with its "?" beside it; the reason opens on its own line below. */
 /* A line and its "?": the "?" sits after the last word, never on a line of its own (the
@@ -343,6 +399,10 @@ bdi { unicode-bidi: isolate; }
 .fwrap { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .fsearch { flex: 1 1 180px; min-width: 0; border-radius: 999px; }
 .fold { color: var(--muted); font-size: var(--t-sm); }
+/* "1 closed: Show", "1 set aside: Show": a list's folds after it read as one short block, a
+   small step apart, never each a screen gap below the last (2026-11-10). On a touch screen
+   each Show keeps the room its 44px needs. */
+@media (min-width: 760px) and (pointer: fine), (min-width: 760px) and (pointer: none) { .sec > p.fold + p.fold { margin-top: -8px; } }
 .listv { display: grid; gap: 16px; }
 
 .chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 12px; border-radius: 999px; font-size: var(--t-sm); font-weight: 600; line-height: 1.5; white-space: nowrap; }
@@ -375,7 +435,7 @@ p.tone-bad, .note.tone-bad, .state.tone-bad { color: var(--st-failed); }
 .ask-about::after { content: close-quote; }
 .ask-q { margin: 0; }
 .note { font-size: var(--t-sm); }
-.cost { font-size: var(--t-sm); color: var(--muted); display: inline-flex; align-items: center; gap: 4px; }
+.cost { font-size: var(--t-sm); color: var(--muted); display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
 .gauge { width: 14px; height: 12px; flex: none; }
 .gauge .on { fill: currentColor; }
 .gauge .off { fill: var(--line); }
@@ -440,8 +500,9 @@ details.more.split[open] { flex-basis: auto; }
 .m-rows details.send { border-top: 0; }
 .m-rows details.send > summary { padding: 0; }
 @media (min-width: 760px) and (pointer: fine), (min-width: 760px) and (pointer: none) { .m-rows details.send > summary { min-height: 24px; } }
-/* The rarer actions under More are the soft grey pills of the card's own row. */
-.m-rows .more-acts .btn.secondary { background: var(--sunk); border-color: transparent; }
+/* The rarer actions under More are the soft grey pills of the card's own row, with their 3:1
+   edge: with none they were the one soft pill without (the screen review, 2026-11-11). */
+.m-rows .more-acts .btn.secondary { background: var(--sunk); border-color: var(--line-strong); }
 @media (hover: hover) { .m-rows .more-acts .btn.secondary:hover { background: var(--raised); } }
 @media (min-width: 760px) { .m-row { grid-template-columns: 10rem minmax(0, 1fr); column-gap: 16px; align-items: baseline; } }
 
@@ -509,7 +570,9 @@ details.more.split[open] { flex-basis: auto; }
 /* ------------------------------------------------------------------ drafts */
 .card.app { grid-template-columns: minmax(0, 1fr); }
 .card.app.selecting { grid-template-columns: 28px minmax(0, 1fr); column-gap: 12px; }
-.app-main { display: grid; gap: 12px; min-width: 0; }
+/* A draft's lines a step apart, as a find's and every other card's are: 12px between each of
+   four short lines made a draft twice as airy as the job beside it (2026-11-10). */
+.app-main { display: grid; gap: 8px; min-width: 0; }
 .checks { font-weight: 600; }
 .file-names { display: grid; gap: 4px; font-size: var(--t-sm); }
 .file-kind { font-weight: 600; }
@@ -524,6 +587,7 @@ details.send { border-top: 1px solid var(--line); }
    "slightly separate each one ... slight separators like bubbles"). */
 .stack.jobs, ul.people, .stack.list-panel { gap: 8px; background: transparent; border: 0; box-shadow: none; }
 .stack.jobs > .card.job, ul.people > li.person, .stack.list-panel > .card { border: 1px solid var(--line); border-radius: var(--r); box-shadow: none; background: var(--surface); padding: 16px; }
+
 .stack.list-panel > .card.is-marked, .stack.list-panel > .card.quiet-card { background: var(--sunk); }
 .after-list { margin-top: 8px; }
 .stack.jobs > .card.job.st-dismissed, .stack.jobs > .card.job.st-applied { background: var(--sunk); }
@@ -531,10 +595,39 @@ details.send { border-top: 1px solid var(--line); }
 /* The words to send, with Copy in the bubble's top corner, as on a code block: the words
    wrap round it, so it never covers them and the bubble keeps its width. */
 .sendbox { display: flow-root; }
-.sendbox > .btn.bubble-copy { float: right; margin: 4px 4px 0 8px; padding: 4px 12px; gap: 4px; }
-.sendbox > .btn.bubble-copy:not(.primary) { background: var(--surface); border-color: var(--line); color: var(--ink); }
-@media (hover: hover) { .sendbox > .btn.bubble-copy:not(.primary):hover { background: var(--raised); } }
-.sendtext { white-space: pre-wrap; background: var(--sunk); border-radius: var(--r-sm); padding: 12px 16px; user-select: text; -webkit-user-select: text; }
+.sendbox > .bubble-tools { float: right; display: inline-flex; flex-direction: row-reverse; align-items: center; gap: 4px; margin: 4px 4px 0 8px; }
+.bubble-tools > .btn.bubble-copy { padding: 4px 12px; gap: 4px; }
+.bubble-tools > .btn.bubble-copy:not(.primary) { background: var(--surface); border-color: var(--line); color: var(--ink); }
+@media (hover: hover) { .bubble-tools > .btn.bubble-copy:not(.primary):hover { background: var(--raised); } }
+/* On a person's card the Copy and the pencil sit at the right end of the draft's own heading
+   line ("Your note · LinkedIn connection note"), a line that was empty there, so the words take
+   the bubble's whole width. Floated into the bubble, they bent its first lines round them: on a
+   phone "Hi Juno, thank you / for coming back to / me so quickly" (the maintainer, 2026-11-10:
+   "not super padded eyesore"). An email's subject keeps its own Copy, an icon at its line's
+   end that never wraps alone onto a line of its own. */
+.pdraft { position: relative; }
+.pdraft > .sendbox > .bubble-tools { position: absolute; top: 0; right: 0; min-height: var(--target); margin: 0; float: none; }
+.pdraft > summary { padding-right: calc(var(--target) * 3); }
+/* At least as tall as the Copy and pencil on its line: in Firefox the heading drew 2px shorter
+   and they reached into the words (Everywhere, 2026-11-11). */
+.pdraft > summary { min-height: var(--target); box-sizing: border-box; }
+/* And the Copy and pencil exactly as tall as that line, on a computer: Firefox drew them 2px
+   taller than their target (34 against 32) and they reached into the words (Everywhere,
+   4.15.0). A phone keeps its 36px buttons and their 44px reach. */
+@media (min-width: 760px) { .pdraft > .sendbox > .bubble-tools { height: var(--target); } .pdraft > .sendbox > .bubble-tools > .btn { min-height: 0; height: 100%; box-sizing: border-box; } }
+.pdraft > .subject { display: grid; grid-template-columns: auto minmax(0, max-content) auto; justify-content: start; align-items: start; column-gap: 4px; --bh: calc(36px * var(--tz)); }
+/* Its Copy sits on the subject's first line: lined up by their tops, the button hung 7px under
+   the words (README picture, 4.15.0). A zero-width strut the button's height makes the first
+   line as tall as the button with the words in its middle; a wrapped subject's other lines
+   keep their own height. */
+.pdraft > .subject > span::before { content: ""; display: inline-block; width: 0; height: var(--bh); vertical-align: middle; }
+.pdraft > .subject > .btn { align-self: start; min-height: 0; height: var(--bh); }
+.pdraft > .subject > .btn.icon-only { background: none; border-color: transparent; }
+@media (hover: hover) { .pdraft > .subject > .btn.icon-only:hover { background: var(--raised); } }
+/* Its own hairline, as a card's answer box keeps: a hovered card turns the page's colour,
+   which in the dark look is the well's, and the words to copy lost their box on the very
+   card under the pointer (the screen review, 2026-11-11). */
+.sendtext { white-space: pre-wrap; background: var(--sunk); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 12px 16px; user-select: text; -webkit-user-select: text; }
 .sendtext.big { font-size: var(--t-lg); line-height: 1.5; }
 .qa { margin: 0; display: grid; gap: 16px; }
 .qa dt { font-weight: 600; }
@@ -554,6 +647,9 @@ p.count.tone-bad { color: var(--st-failed); }
 .person h3 { font-size: var(--t-lg); }
 .person-main { display: grid; gap: 8px; min-width: 0; }
 .avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--accent-soft); color: var(--ink); display: grid; place-items: center; font-weight: 600; }
+/* A card with no one to draw (a message to a hiring team) is one column, never its words
+   squeezed into the avatar's 40px. */
+.person:not(:has(> .avatar)) { grid-template-columns: minmax(0, 1fr); }
 .when { font-size: var(--t-lg); font-weight: 600; font-variant-numeric: tabular-nums; }
 .due-row.late { border-color: var(--st-overdue); }
 
@@ -607,7 +703,12 @@ p.count.tone-bad { color: var(--st-failed); }
    it never reads as an alarm. */
 .btn.bell:not(.is-on) .ic { color: var(--muted); }
 .btn.bell.is-asked .ic { animation: breathe 1.6s ease-in-out infinite; }
-.rail-head { display: flex; align-items: center; gap: 12px; }
+.rail-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+/* The sheet's Close sits on its title's line, at its right end: a row of its own above the
+   title held one word (2026-11-10). */
+dialog.work-sheet > .sheet-top { height: 0; padding: 0; }
+dialog.work-sheet > .sheet-top > .btn { margin-top: 8px; }
+dialog.work-sheet .rail-head { min-height: calc(var(--target) + 8px); padding-right: calc(var(--target) * 2); }
 .rail-head .n { color: var(--muted); font-size: var(--t-sm); }
 .rail-title { font-size: var(--t-lg); font-weight: 600; margin-right: auto; outline: none; }
 dialog.work-sheet { width: min(560px, calc(100vw - 16px)); }
@@ -615,6 +716,12 @@ dialog.work-sheet { width: min(560px, calc(100vw - 16px)); }
 /* ------------------------------------------------------------------ progress */
 .chart { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px 20px; display: grid; gap: 12px; min-width: 0; }
 .chart h3 { font-size: var(--t-md); font-weight: 600; }
+/* A fold in a chart's card says it opens, with the chevron Settings' rows use, turned when
+   open: "Each week" and "Show as a table" read as headings over nothing (2026-11-10). */
+.chart summary { list-style: none; gap: 8px; }
+.chart summary::-webkit-details-marker { display: none; }
+.chart summary::after { content: ""; width: 8px; height: 8px; flex: none; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg); margin-left: 4px; }
+.chart details[open] > summary::after, details.chart[open] > summary::after { transform: rotate(-135deg); }
 .funnel { display: grid; gap: 8px; }
 .fun-row { display: grid; grid-template-columns: 84px minmax(0, 1fr) auto; align-items: center; gap: 12px; }
 .fun-label { font-weight: 600; }
@@ -708,7 +815,7 @@ textarea { width: 100%; resize: vertical; line-height: 1.45; }
 .sum-small { font-size: 0.875rem; color: var(--muted); }
 .sum-small .btn.link { font-size: inherit; }
 .summary.with-tool > :last-child { flex: none; }
-.summary.with-tool { flex-wrap: wrap; }
+.summary.with-tool { flex-wrap: wrap; align-items: center; }
 .summary.with-tool > .head-tools { flex: 0 1 auto; }
 /* The words take the line and a heading's tool sits at its right end. */
 .summary.with-tool > .sum-words { flex: 1 1 280px; min-width: 0; }
@@ -778,6 +885,13 @@ textarea { width: 100%; resize: vertical; line-height: 1.45; }
 .seg-opt { flex: 1 1 0; display: inline-flex; align-items: center; justify-content: center; min-height: var(--target); padding: 8px 16px; border: 0; border-radius: 999px; background: none; color: var(--ink);
   font-weight: 600; font-size: 1rem; line-height: 1.2; cursor: pointer; white-space: nowrap; min-width: 0; }
 .seg-opt[aria-pressed="true"], .look-choice:has(input:checked) { background: var(--ink); color: var(--surface); }
+/* A switch alone on its row wraps an option's words rather than run them past its edge: at
+   double text on a phone, in a wider font, Coming up's switch scrolled sideways (CI,
+   2026-11-11). Beside other controls it keeps one line, so the row's controls stay level.
+   Each option is its own words' width and breaks between words, a word only where it alone
+   is wider than the screen: shared equally, with a break anywhere, "Interviews" broke into
+   "Intervie / ws" at every size (the screen review, 2026-11-11). */
+.controls > .segctl:only-child .seg-opt { flex: 1 1 auto; white-space: normal; overflow-wrap: break-word; text-align: center; }
 .look-choice { position: relative; }
 .look-choice input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; }
 .look-choice:has(input:focus-visible) { outline: 3px solid var(--focus); outline-offset: 2px; }
@@ -834,6 +948,17 @@ dialog.work-sheet { position: fixed; inset: auto 0 0 0; margin: 0; width: 100%; 
 /* A long state ("Finished: putting it on your page") wraps inside its pill rather than squeezing
    the title to a word a line (the maintainer, 2026-11-05). */
 .wc-head .state-word { max-width: 16ch; white-space: normal; text-align: center; }
+/* A card's Stop Claude sits at the end of its clock's line, not on a line of its own under
+   it: each running card was its title, its words, its bar, its clock and then a row holding
+   one quiet pill (the maintainer, 2026-11-10: "inline and things are good"). In a narrow
+   panel the state goes under the title rather than squeeze it to a word a line. */
+.work-card:not(.wc-done) { grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; container-type: inline-size; }
+.work-card:not(.wc-done) > * { grid-column: 1 / -1; }
+.work-card:not(.wc-done) > .wc-time:has(+ .wc-actions) { grid-column: 1; align-self: center; }
+.work-card:not(.wc-done) > .wc-time + .wc-actions { grid-column: 2; justify-content: flex-end; }
+@container (max-width: 400px) {
+  .wc-head > .state-word { grid-column: 2 / -1; grid-row: 2; justify-self: start; max-width: none; white-space: nowrap; }
+}
 .wc-title { font-size: 1rem; font-weight: 600; }
 .wc-toggle { border: 0; background: none; padding: 0; margin: 0; font: inherit; color: inherit; cursor: pointer; text-align: left; min-height: var(--target); }
 @media (hover: hover) { .wc-toggle:hover { text-decoration: underline; text-decoration-color: var(--link-line); } }
@@ -880,6 +1005,9 @@ dialog.work-sheet { position: fixed; inset: auto 0 0 0; margin: 0; width: 100%; 
 .talk { display: flex; flex-direction: column; gap: 12px; min-height: calc(100dvh * var(--tz) - 56px - var(--tabs-h) - 48px - env(safe-area-inset-bottom, 0px)); }
 .talk-form { margin-top: auto; position: sticky; bottom: calc(var(--tabs-h) + env(safe-area-inset-bottom, 0px) + 8px); z-index: 5; background: var(--bg); padding-block: 8px; display: grid; gap: 8px; }
 @media (min-width: 760px) { .talk { min-height: calc(100dvh - 120px); } .talk-form { bottom: 0; padding-bottom: 16px; } }
+/* No messages yet: the starters and the box under the header, never at the foot of a blank
+   screen (the screen review, 2026-11-11). */
+.talk.talk-empty .talk-form, .talk-body.talk-empty .talk-form { margin-top: 0; padding-top: 0; }
 .talk-row { display: flex; align-items: flex-end; gap: 8px; border: 1px solid var(--line-strong); border-radius: 24px; background: var(--surface); padding: 4px 4px 4px 16px; }
 .talk-row textarea { border: 0; background: transparent; min-height: var(--target); padding: 8px 0; resize: none; flex: 1 1 auto; width: auto; }
 .talk-row textarea:focus-visible { outline: none; }
@@ -953,7 +1081,6 @@ p.count.tone-warn { color: var(--st-overdue); }
 .going-word { font-weight: 600; }
 .going-sep { font-weight: 400; color: var(--muted); }
 /* The pencil beside Copy in the bubble's corner; changed in place, the words are a field. */
-.sendbox > .btn.bubble-pen { float: right; margin: 4px 4px 0 0; }
 .sendbox > textarea.pen-text { display: block; width: 100%; font: inherit; color: var(--ink); border: 1px solid var(--line-strong); }
 .pen-tell { display: grid; gap: 8px; }
 /* A job's details, corrected in place: each field its label above it. */
@@ -961,6 +1088,14 @@ p.count.tone-warn { color: var(--st-overdue); }
 /* "Why 84" and the pencil keep the line of facts one line: words in its own type, the
    pencil drawn inside the line's height and reaching its target past it. */
 .facts .info-toggle { font: inherit; font-weight: 600; }
+/* A job's last fact, "Why" and the pencil go to a new line together: "Why" alone, or the
+   pencil alone, on a line of its own named nothing (2026-11-10, at a phone's own size). */
+.facts .facts-end { display: inline-block; }
+.facts .why-pen { white-space: nowrap; }
+/* The pencil carries a line of text of its own (an empty one), so it lines up with "Why" by the
+   same baseline in any font: with none, a button's baseline is its box's bottom, and in a wider
+   font the two were 5px apart (GitHub's runner, 2026-11-11). */
+.facts .btn.icon-only::before { content: "\200b"; width: 0; }
 /* A document's words and its pencil keep together: a pencil alone on a line named nothing. */
 .checks .doc-part { white-space: nowrap; }
 @media (min-width: 760px) and (pointer: fine), (min-width: 760px) and (pointer: none) {
@@ -1168,11 +1303,16 @@ a.navlink, .applylink, .btn.link, .fold .btn.link, .bp-foot a { text-decoration-
   a.back-link, a.bp-go { display: inline-flex; align-items: center; min-height: var(--target); min-width: var(--target); }
   a.bp-link { min-height: var(--target); }
   /* A Coming up title and the prep line under it are each a whole target of their own: an
-     enlarged link reaching into the line above took a tap meant for the title (4.6). */
-  a.up-link { display: flex; align-items: center; min-height: var(--target); }
+     enlarged link reaching into the line above took a tap meant for the title (4.6). The
+     title is drawn its own height and reaches its 44px down into the line under it, never up:
+     the prep's link there is drawn over that reach and keeps its own taps, and a 44px title
+     line made every row a line of air taller (2026-11-10). */
+  a.up-link { display: inline-block; position: relative; }
+  a.up-link::after { content: ""; position: absolute; top: 0; left: 0; right: 0; bottom: calc(20px - var(--target)); }
   .up-prep .btn.link { margin-block: 0; }
-  /* A one-line row is centred in its target, never a line of text over an empty one. */
-  a.bp-text.bp-link { display: flex; align-items: center; }
+  /* A one-line row is centred in its target, never a line of text over an empty one; a row
+     that wraps reads from its start, never centred under itself (the review, 2026-11-10). */
+  a.bp-text.bp-link { display: flex; align-items: center; text-align: start; }
   .bp-jobs a.bp-text.bp-link, .bp-jobs .bp-link { align-items: flex-start; justify-content: center; }
   .bp-list { gap: 2px; }
   /* The Brief's Tweak is its pencil on a phone, beside the greeting, not a row of its own. */
@@ -1229,6 +1369,12 @@ label.pick { display: flex; align-items: flex-start; justify-content: center; wi
 .where-list .task:last-child { border-bottom: 0; }
 .task-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .tip { margin-top: 16px; }
+/* A tip's "Got it" is a soft pill, never underlined words as a control (DESIGN.md, "Buttons,
+   links and taps"), and on a computer one drawn to the tip's own line, so the line the
+   Brief's foot fits on keeps its height (the review, 2026-11-10). */
+@media (min-width: 760px) and (pointer: fine), (min-width: 760px) and (pointer: none) {
+  :is(.bp-tip, .tip, .tweak-tip) > .btn.secondary.small { min-height: 0; padding: 2px 12px; }
+}
 
 
 .quiet-card { background: var(--sunk); }
@@ -1464,7 +1610,13 @@ body.has-fab .shell { padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-b
   .card.job .job-top:has(.top-end .icon-only) h3 { padding-right: 44px; }
   .card.job .top-end:has(.state-word) { margin-left: 0; flex-basis: 100%; }
   /* A person's bin in the corner; their state stays under the name, where it reads. */
-  .person { position: relative; }
+  .person { position: relative; row-gap: 8px; }
+  /* Only the name sits beside the initial: the draft, its words and the buttons take the
+     card's whole width. Indented under the initial, a note had two thirds of a phone's
+     width and ran twice as many lines (the maintainer, 2026-11-10). */
+  .person:has(> .avatar) > .person-main { display: contents; }
+  .person:has(> .avatar) > .person-main > * { grid-column: 1 / -1; }
+  .person:has(> .avatar) > .person-main > :first-child { grid-column: 2; }
   .person .top-end .icon-only { position: absolute; top: 4px; right: 4px; }
   .person .job-top h3 { padding-right: 44px; }
   .person .top-end { margin-left: 0; flex-basis: 100%; }
@@ -1541,7 +1693,7 @@ body.has-fab .shell { padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-b
   .brief-grid.is-filled { grid-auto-rows: minmax(max-content, 1fr); }
   .brief-grid .bpanel { padding: 12px 16px; gap: 8px; max-height: none; }
   .brief-grid .bp-body { gap: 8px; }
-  .bpanel.bp-upcoming { container-type: inline-size; }
+  .bpanel.bp-upcoming, .bpanel.bp-people { container-type: inline-size; }
   .brief-page .bp-tip { padding: 8px 16px; }
   /* The room a row gives a panel past its content is the panel's to use, never a gap above its
      foot (the maintainer, 2026-11-07: "u see how its bunched at the top?"). The body reaches
@@ -1592,6 +1744,9 @@ body.has-fab .shell { padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-b
   html.brief-short .brief-grid > .bpanel.w12-s8 { grid-column: span 8; }
   html.brief-short .brief-grid > .bpanel.w12-s12 { grid-column: span 12; }
   html.brief-short .brief-grid .bp-iv .btn { margin-top: 0; }
+  /* A short window's panels keep 8px above and below their words, not 12: the drafts' line
+     said in full took one line more and ran the Brief 9px past a 960 by 600 window (4.15.0). */
+  html.brief-short .brief-grid .bpanel { padding-block: 8px; }
   html.brief-short .brief-grid .bp-foot > :is(.btn, html.brief-short a):not(.icon-only) { padding-inline: 8px; }
   /* The greeting, its day and the numbers on one line. */
   html.brief-short .brief-hello { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 12px; }
@@ -1609,15 +1764,6 @@ body.has-fab .shell { padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-b
   html.brief-short .bp-bottom .bp-tip .btn { white-space: nowrap; flex: none; }
   html.brief-short .bp-bottom .foot-line.open { flex: 1 1 auto; }
   html.brief-short .bp-bottom:has(.foot-line.open) .bp-tip { display: none; }
-}
-/* A narrow Coming up shows this week's seven days; the list and "All coming up" hold the rest. */
-@container (max-width: 420px) {
-  .bp-week { grid-template-columns: repeat(7, minmax(0, 1fr)); }
-  .bp-week > :nth-child(n+8) { display: none; }
-}
-@container (max-width: 320px) {
-  .bp-week { grid-template-columns: repeat(5, minmax(0, 1fr)); }
-  .bp-week > :nth-child(n+6) { display: none; }
 }
 .bpanel { --pc: var(--accent); --pcbg: var(--accent-soft); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; box-shadow: var(--shadow); }
 .bp-today { --pc: var(--mark); --pcbg: var(--accent-soft); background: linear-gradient(135deg, var(--accent-soft), var(--surface) 70%); }
@@ -1649,6 +1795,12 @@ body.has-fab .shell { padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-b
 /* A source in the news reads as part of the sentence: its underline the text's own colour and
    a hair thinner, never the accent (the maintainer, 2026-11-06). */
 .bp-news a { color: inherit; text-decoration-color: currentColor; text-decoration-thickness: 1px; }
+/* A link's brackets keep to it ("(" ended a line on a phone, the screen review, 2026-11-11). */
+.paren { white-space: nowrap; }
+/* An interview's pill leads its line of when on a phone (the screen review, 2026-11-11). */
+.iv-when-line { display: flex; flex-wrap: nowrap; align-items: baseline; gap: 8px; }
+.iv-when-line > .when { margin: 0; flex: 1 1 10em; min-width: 0; }
+.paren > a { white-space: normal; }
 .bp-go { flex: none; font-size: var(--t-sm); }
 .bp-steps li { align-items: baseline; }
 .bp-steps { counter-reset: step; }
@@ -1656,7 +1808,9 @@ body.has-fab .shell { padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-b
 .bp-people .bp-link, .bp-jobs .bp-link { display: flex; align-items: center; gap: 8px; -webkit-line-clamp: unset; }
 .bp-avatar { flex: none; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-size: var(--t-sm); font-weight: 600; color: var(--pc); background: var(--pcbg); }
 .bp-who, .bp-jobs .bp-link { display: flex; flex-direction: column; min-width: 0; flex: 1; align-items: flex-start; gap: 0; }
-.bp-who strong, .bp-jobs strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+/* A name or a job's title keeps to one line; the panel's lead ("2 drafts ready to apply, 1
+   waiting on you, 1 being made") is said whole, never cut off (README picture, 4.15.0). */
+.bp-who strong, .bp-jobs li strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
 .bp-at { font-size: var(--t-sm); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
 .bp-state { flex: none; font-size: var(--t-sm); font-weight: 600; color: var(--pc); white-space: nowrap; text-align: start; }
 /* Each person's next step in one column, every row's step and its day starting at the same
@@ -1667,6 +1821,17 @@ body.has-fab .shell { padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-b
   ul.bp-people { display: grid; grid-template-columns: auto minmax(0, 1fr) max-content; column-gap: 8px; }
   ul.bp-people > li, ul.bp-people > li > .bp-link { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; align-items: center; }
   ul.bp-people > li[hidden] { display: none; }
+}
+/* A narrow Waiting on you puts each step on its own line under the name, its day under it as
+   everywhere, so steps and days still start at one edge: beside the name, the step kept its
+   width and "Ellerwick Trust" was cut to "Ellerw..." at every laptop width up to 1280
+   (4.15.0). From 280px wide the name has its room beside it. */
+@container (max-width: 280px) {
+  @supports (grid-template-columns: subgrid) {
+    ul.bp-people { grid-template-columns: auto minmax(0, 1fr); }
+    ul.bp-people .bp-avatar { grid-row: span 2; align-self: start; }
+    ul.bp-people .bp-state { grid-column: 2; white-space: normal; }
+  }
 }
 .bp-score { flex: none; min-width: 32px; text-align: center; padding: 2px 8px; border-radius: 999px; font-variant-numeric: tabular-nums; font-weight: 600; font-size: var(--t-sm); color: var(--st-done); background: var(--st-done-bg); }
 .bp-score.tone-good { color: var(--st-running); background: var(--st-running-bg); }
@@ -1748,6 +1913,9 @@ ul.bp-news { gap: 12px; }
 .prof-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
 @media (min-width: 900px) { .prof-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .prof-card.wide { grid-column: 1 / -1; } }
 .prof-card { display: flex; flex-direction: column; gap: 12px; }
+/* What is still to fill in reads as the card's own rows, at its edge: a Settings row's 16px
+   inset and 52px height put each a step in from the card's title (2026-11-10). */
+.prof-missing .checks-list > li.toggle-row { padding: 0; min-height: 0; }
 .prof-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .prof-h { margin: 0; font-size: var(--t-sm); font-weight: 600; }
 .prof-jobs { display: flex; flex-direction: column; margin: 0; padding: 0; }
@@ -1915,16 +2083,37 @@ ul.bp-news { gap: 12px; }
 .up-days { display: grid; gap: 16px; }
 .up-day { display: grid; gap: 8px; }
 .up-list { display: grid; gap: 8px; }
-.up-row { display: grid; grid-template-columns: 6.5rem minmax(0, 1fr) auto; align-items: center; gap: 8px 12px; padding: 12px 16px;
+.up-row { display: grid; grid-template-columns: 7rem minmax(0, 1fr) auto; align-items: center; gap: 8px 12px; padding: 12px 16px;
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); }
-.up-when { font-weight: 600; font-variant-numeric: tabular-nums; }
+.up-when { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.up-when > .btn { padding-inline: 12px; }
 .up-main { display: grid; gap: 2px; min-width: 0; }
 .up-title { overflow-wrap: anywhere; }
-.up-acts { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+/* What it is and whether its prep is ready are one line under its title ("Interview · Supply
+   Chain Analyst · Prep ready"): a line each, on a phone each its own 44px, made a row of three
+   short lines 190px tall (the maintainer, 2026-11-10: "inline and things are good"). A box
+   that opens on the row (a new day, a time) still takes the whole width. */
+.up-row > .up-main { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 4px; }
+.up-row > .up-main > * { flex: 1 1 100%; min-width: 0; }
+.up-row > .up-main > :is(.up-note, .up-prep, .state-word) { flex: 0 1 auto; }
+/* The dot between them ends the first, so where they wrap no line starts with it. */
+/* The dot between what a row is and its prep only where they share a line: on a phone the
+   prep's pill takes the line under it, and the dot ended the line before ("Interview · Supply
+   Chain Analyst ·", the screen review, 2026-11-11), or began the prep's. */
+@media (min-width: 760px) { .up-row > .up-main > .up-note:has(+ .up-prep)::after { content: " ·"; } }
+/* The row's icons each keep their own place, the pencil, the calendar, then the trash, so
+   they line up down the list whether or not a row has a trash: pushed along by it, each row
+   put its calendar somewhere else (the review, 2026-11-10). */
+.up-acts { display: grid; grid-template-columns: repeat(3, 1fr); align-items: center; justify-items: center; gap: 4px; }
+.up-acts > [data-k^="up-day:"] { grid-column: 1; }
+.up-acts > :is([data-k^="cal:"], .state-word) { grid-column: 2; }
+.up-acts > :is([data-k^="up-rm:"], [data-k^="up-off:"]) { grid-column: 3; }
 /* On a phone: the time and the calendar button on one line, what it is under them. */
 @media (max-width: 759px) {
-  .up-row { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "when acts" "main main"; padding: 12px; }
-  .up-row > .up-when { grid-area: when; }
+  .up-row { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "when acts" "main main"; padding: 8px 12px 12px; row-gap: 0; }
+  /* A time read from another zone says both ("13:00 London time (3:00 here)"): on a phone it
+     wraps rather than running 205px past the screen at double text (Everywhere, 4.15.0). */
+  .up-row > .up-when { grid-area: when; white-space: normal; }
   .up-row > .up-main { grid-area: main; }
   .up-row > .up-acts { grid-area: acts; }
 }
@@ -1967,6 +2156,17 @@ dialog.sheet .sheet-body { display: grid; gap: 16px; }
 .up-day.is-tomorrow > .group::before { background: var(--day-tomorrow); }
 /* On a phone, the coming week: fourteen days do not fit a thumb. */
 @media (max-width: 559px) { .bp-week { grid-template-columns: repeat(7, minmax(0, 1fr)); } .bp-week > .bp-day:nth-child(n+8) { display: none; } }
+/* A narrow Coming up shows this week's seven days; the list and "All coming up" hold the rest.
+   After the strip's own fourteen columns, which won over them from earlier in the file and drew
+   seven days in seven of fourteen columns at every laptop width up to 1440 (4.15.0). */
+@container (max-width: 420px) {
+  .bp-week { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+  .bp-week > :nth-child(n+8) { display: none; }
+}
+@container (max-width: 320px) {
+  .bp-week { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .bp-week > :nth-child(n+6) { display: none; }
+}
 
 /* Coming up's next three, as small cards side by side where there is room. */
 .bp-up { display: grid; gap: 8px; margin: 0; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
@@ -2005,6 +2205,9 @@ ul.bp-news { max-width: 80ch; }
 .bp-when { color: var(--muted); font-size: var(--t-sm); }
 .bp-state .bp-when { display: block; font-weight: 400; }
 .up-prep { display: block; font-size: var(--t-sm); color: var(--muted); }
+/* A line with a pill ("No prep yet", Prepare me, its gauge) keeps room between the three: written
+   inline, the words ran into the pill and the pill into its gauge (README picture, 4.15.0). */
+.up-prep:has(> .btn:not(.link)) { display: flex; flex-wrap: wrap; align-items: center; column-gap: 8px; row-gap: 4px; }
 /* A link that starts the line lines up with the lines above it: a link's own 4px of padding
    pushed "Prep ready" in from its card's other lines (2026-11-02). */
 .up-prep > .btn.link:first-child { padding-left: 0; }
@@ -2092,6 +2295,10 @@ ul.bp-news { max-width: 80ch; }
 .l-say { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .l-on { flex: 0 0 auto; white-space: nowrap; }
 .few-more { padding-block: 4px; }
+/* Show all under a group of settings rows sits at the rows' own inset, under a line as a row
+   does: it stood on the card's left border (the screen review, 2026-11-11). */
+.set-rows > .few-more { list-style: none; border-top: 1px solid var(--line); padding: 4px 16px; }
+@media (max-width: 759px) { .set-rows > .few-more { padding-inline: 12px; } }
 /* Held back for now: a line each with its pill beside it, and every rule grouped by area under
    a small heading, a gap between rows, at card text width (the screen review, 2026-11-09). */
 .held-list { display: grid; gap: 8px; max-width: 64ch; }
@@ -2144,6 +2351,10 @@ dialog.detail.full { top: 0; bottom: 0; height: auto; max-height: none; }
    jumps"). */
 dialog.detail.full .detail-body { grid-template-columns: minmax(0, 1fr) minmax(0, 920px) minmax(0, 1fr); }
 dialog.detail.full .detail-body > * { grid-column: 2; min-width: 0; }
+/* Below the wide layout the side columns are empty, and the body's gap between them and the
+   reading column was 16px more padding on each side: on a phone the prep's first lines took a
+   line more each and its glance fell below the first screen (2026-11-11). */
+@media (max-width: 759px) { dialog.detail.full .detail-body { column-gap: 0; } }
 @media (min-width: 1180px) { dialog.detail.full .detail-body { grid-template-columns: minmax(0, 1fr) minmax(0, 920px) minmax(432px, 1fr); } }
 /* Laid out as the maintainer's call-prep page (2026-11-10), in the page's own colours, type and
    looks: a quiet head, the timing and what they are known to ask in two plain boxes, then each
@@ -2163,8 +2374,49 @@ dialog.detail.full .detail-body > * { grid-column: 2; min-width: 0; }
 .lp-switch.small .seg-opt { padding: 2px 8px; }
 .lp-switch .seg-opt[aria-checked="true"] { background: var(--ink); color: var(--surface); }
 .lp-found { font-size: var(--t-sm); color: var(--muted); }
+/* Search and Open all, Close all, folded under one small row beside the answers switch; open,
+   they take the row under it. */
+.lp-toolfold { margin-left: auto; min-width: 0; }
+.lp-toolfold[open] { flex: 1 1 100%; margin-left: 0; }
+.lp-toolfold-sum { cursor: pointer; list-style: none; display: inline-flex; align-items: center; gap: 4px; min-height: var(--target); padding: 4px 12px; border: 1px solid var(--line-strong); border-radius: 999px; font-size: var(--t-sm); font-weight: 600; color: var(--ink); }
+.lp-toolfold-sum::-webkit-details-marker { display: none; }
+.lp-toolfold-sum::before { content: "+"; width: 12px; }
+.lp-toolfold[open] > .lp-toolfold-sum::before { content: "\2212"; }
+.lp-toolfold-sum:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.lp-toolfold > .lp-tools { margin-top: 8px; }
+/* At a glance: a label and its line, stacked on a phone, side by side on a wide screen. */
+.lp-glance dl { margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.lp-glance-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; }
+.lp-glance-row dd { margin: 0; min-width: 0; }
+.lp-glance-row dd { display: flex; flex-direction: column; gap: 4px; }
+.lp-glance .btn.link { display: inline; text-align: left; font-weight: 400; }
+.lp-glance-row dd > .btn { align-self: flex-start; }
+.lp-glance-part { font-size: var(--t-sm); font-weight: 400; color: var(--muted); text-decoration: none; display: inline-block; margin-left: 4px; }
+@media (min-width: 760px) { .lp-glance-row { grid-template-columns: 9em minmax(0, 1fr); column-gap: 16px; align-items: baseline; } }
+/* On a phone the glance asks one question of them, the first; the second is in its part below.
+   With both, the glance ran past the first screen in a wider font (GitHub's runner, 2026-11-11). */
+@media (max-width: 759px) { .lp-glance-ask > dd > p + p { display: none; } }
+/* Hidden: the answer behind a small pill, to say it first and then look. */
+.lp-reveal { margin-left: auto; }
+.lp-narr-show { display: none; }
+.lp[data-mode="hidden"] .lp-narr:not(.lp-shown) > .lp-narr-show { display: inline-flex; align-self: flex-start; }
+.lp[data-mode="hidden"] .lp-narr:not(.lp-shown) > .lp-beats,
+.lp[data-mode="hidden"] .lp-narr:not(.lp-shown) > .lp-bridge,
+.lp[data-mode="hidden"] .lp-glance-open { display: none; }
+/* A simple answer, a sentence a line. */
+.lp-lines { display: flex; flex-direction: column; gap: 8px; }
 .lp-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+/* On a phone the chips are one row that scrolls sideways inside itself, its far end fading:
+   over three rows they pushed Part 1 more than a screen down (the screen review, 2026-11-11). */
+@media (max-width: 759px) {
+  .lp-chips { flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; padding-block: 2px;
+    -webkit-mask-image: linear-gradient(to right, var(--ink) calc(100% - 32px), transparent); mask-image: linear-gradient(to right, var(--ink) calc(100% - 32px), transparent); }
+  .lp-chips::-webkit-scrollbar { display: none; }
+  .lp-chips > .btn { flex: none; }
+}
 .lp-chips .btn.lp-chip-known { background: var(--st-overdue-bg); color: var(--st-overdue); border-color: var(--st-overdue); }
+/* The mark's key at a glance: a known question's part in the same gold as its chip. */
+.lp-glance-part.lp-chip-known { background: var(--st-overdue-bg); color: var(--st-overdue); border: 1px solid var(--st-overdue); border-radius: 999px; padding: 0 8px; }
 .lp-box { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px 20px; display: flex; flex-direction: column; gap: 8px; }
 .lp-box ol { padding-left: 24px; display: flex; flex-direction: column; gap: 4px; }
 .lp-box .btn.link { text-align: left; }
@@ -2204,13 +2456,25 @@ dialog.detail.full .detail-body > * { grid-column: 2; min-width: 0; }
 .lp-f .lp-ans { background: var(--surface); border: 1px solid var(--line); }
 .lp-f .lp-f .lp-ans { background: var(--accent-soft); border: 0; }
 @media (max-width: 759px) { .lp-box, .lp-narr, .lp-q { padding: 16px; } .lp-f-body { padding-left: 12px; } }
+/* On a phone who asks sits on its own line over the question, so a title never breaks after a
+   word or two beside it; the search box takes its row, and Open all and Close all share the
+   next (the review, 2026-11-10). */
+@media (max-width: 759px) { .lp-q-q > .lp-who { display: table; margin: 0 0 4px; } .lp-search { flex-basis: 100%; } .lp-toolfold { margin-left: 0; } }
+/* On a phone "All answers" heads its switch on a line of its own, so the switch and Tools share
+   the next row in any type: in a Mac's and Windows' type the three were wider than a phone
+   and Tools went to a row of its own (Everywhere, 4.15.0). */
+@media (max-width: 759px) { .lp-global > .lp-lbl { flex-basis: 100%; } }
 .lp-star { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; }
 .lp-star dt { font-size: var(--t-sm); font-weight: 600; color: var(--muted); }
 .lp-star dd { margin: 0 0 8px; }
 @media (min-width: 760px) { .lp-star { grid-template-columns: 8em minmax(0, 1fr); column-gap: 16px; } .lp-star dd { margin: 0; } }
 .lp-az { display: flex; flex-wrap: wrap; gap: 8px 16px; }
-.lp-term { font: inherit; color: inherit; background: none; border: 0; padding: 0; margin: 0; cursor: pointer; text-align: inherit; position: relative;
-  text-decoration: underline dotted; text-decoration-color: var(--mark); text-decoration-thickness: 2px; text-underline-offset: 4px; }
+/* A term: a word of its sentence, wrapping with it, under a dotted line in the words' own
+   muted tone. In the accent's red it read as a spelling mistake (the screen review,
+   2026-11-11). */
+.lp-term { cursor: pointer; position: relative; border-radius: 2px;
+  text-decoration: underline dotted; text-decoration-color: var(--muted); text-decoration-thickness: 2px; text-underline-offset: 4px; }
+.lp-term:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .lp-term::after { content: ""; position: absolute; inset: -8px 0; }
 @media (hover: hover) { .lp-term:hover { background: var(--accent-soft); } }
 .lp-notes { background: var(--st-overdue-bg); border-left: 4px solid var(--st-overdue); border-radius: var(--r); padding: 16px 20px; display: flex; flex-direction: column; gap: 8px; }
@@ -2228,3 +2492,38 @@ dialog.detail.full .detail-body > * { grid-column: 2; min-width: 0; }
 .lp-panel-body { display: flex; flex-direction: column; gap: 12px; }
 .lp-tp { display: flex; flex-direction: column; gap: 4px; }
 .lp-tp-here { background: var(--accent-soft); border-radius: var(--r-sm); padding: 12px 16px; }
+
+/* A phone drawn at its own size (2026-11-10) gets its density from less padding, never from
+   smaller type: a card's edge 12px, a row of pills 8px apart with 12px either side of a pill's
+   words, so a card's lines and buttons take what the 16px of each used to waste. */
+@media (max-width: 759px) {
+  .card, .person, .stack.jobs > .card.job, ul.people > li.person, .stack.list-panel > .card, .work-card { padding: 12px; }
+  .card-actions, .wc-actions, .more-acts, .suggest-acts, .opts { gap: 8px; }
+  :is(.card-actions, .wc-actions, .suggest-acts, .more-acts, .g-acts, .fix, .bp-foot, .sheet-actions) > :is(.btn, a):not(.icon-only),
+  :is(.card-actions, .wc-actions, .suggest-acts, .g-acts) > details.more > .more-btn { padding-left: 12px; padding-right: 12px; }
+  /* A To do card's Later or trash sits in its corner, as a job's and a person's trash do, so
+     its kind and its state pills wrap round it and Later is never alone on a line. */
+  .card.todo { position: relative; }
+  .card.todo > .todo-top > .hide-x { position: absolute; top: 4px; right: 4px; }
+  .card.todo > .todo-top { justify-content: flex-start; }
+  .card.todo > .todo-top > :nth-child(2):not(.todo-open) { margin-left: 0; }
+  .card.todo > .todo-top:has(> .hide-x) { padding-right: var(--target); }
+  .card.todo > .todo-top:has(> .later-x) { padding-right: calc(var(--target) * 2); }
+  /* A checklist row's button stays beside its name: under it, each row was three lines. */
+  .g-main { flex-basis: 9rem; }
+  /* The words to send in the body's own size: a step larger, a short note ran six lines. */
+  .sendtext.big { font-size: var(--t-md); }
+  /* A Brief panel's edge as a card's, and its week's days touching, so each day keeps its
+     44px across a 375px phone. */
+  .bpanel, .brief-grid .bpanel { padding: 12px; }
+  .bp-week { gap: 0; }
+  /* The Brief's bell and pencil beside the greeting, never a row of their own under it: the
+     phone's rule for it sat above the sheet's own and lost to it (2026-11-10). */
+  .brief-head { flex-wrap: nowrap; align-items: flex-start; }
+  .brief-head > .brief-hello { min-width: 0; }
+  .brief-head > .head-tools { flex: none; flex-wrap: nowrap; }
+  .brief-hello .screen-title { font-size: 1.375rem; }
+  /* A setting's row its 44px, its words 12px from the group's edge, as a card's are. */
+  .set-sum, .toggle-row, .look-row, .act-row, .update-row { min-height: var(--target); padding: 8px 12px; }
+  .set-body { padding: 0 12px 12px; }
+}

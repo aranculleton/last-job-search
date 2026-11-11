@@ -120,7 +120,8 @@ def test_coming_up_reads_a_round_had_as_had_below_what_is_ahead(tmp_path, old):
             text = got["after"][0]["text"]
             assert "1 interview coming up, no day yet." in text, text[:400]
             assert "1 interview waiting to hear back." in text, text[:400]
-            cards = got["after"][1]["eval"]
+            # Read as words: a dot keeps to what follows it with a no-break space.
+            cards = [[t.replace("\u00a0", " ") for t in c] for c in got["after"][1]["eval"]]
             # What is ahead first, then the round had; its day said as gone, with no weekday.
             assert [c[0] for c in cards] == ["Initial round with Larkspur Retail", "Recruiter screen with Harbourline Bank"], cards
             assert cards[1][1].split(" · ")[0] == "You had it 2 Nov", cards

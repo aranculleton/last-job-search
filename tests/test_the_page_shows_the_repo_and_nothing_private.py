@@ -151,9 +151,12 @@ def test_a_change_moves_only_the_revs_of_what_changed(small):
     seen = os.path.join(small, "job_scraper", "seen_jobs.json")
     with open(seen, encoding="utf-8") as fh:
         data = json.load(fh)
+    # Dated as `exclude.py add` dates it: a person's set-aside holds for about six months from
+    # its day, and one nothing dates holds nothing (exclude.set_aside_until).
     data.setdefault("seen", {})["jobs.example/brindle/demand"] = {
         "url": "https://jobs.example/brindle/demand", "status": "excluded",
-        "exclusion_reason": "not for me", "basis": "person"}
+        "exclusion_reason": "not for me", "basis": "person",
+        "excluded_date": app_state.NOW[:10]}
     with open(seen, "w", encoding="utf-8") as fh:
         json.dump(data, fh)
     after = model(small)
@@ -322,7 +325,7 @@ def test_a_section_too_big_for_one_document_goes_in_parts_and_comes_back_whole(t
     assert page_db.stored_size({"data": whole}) > page_db.DOC_MAX * 3 // 2
     dump = tmp_path / "dump"
     (dump / "screen").mkdir(parents=True)
-    for doc_id in ("part~jobs~9", "part~people~1"):    # left by an earlier, bigger write
+    for doc_id in ("part~jobs~99", "part~people~1"):    # left by an earlier, bigger write
         (dump / "screen" / f"{doc_id}.json").write_text(
             json.dumps({"rev": "old", "text": "[", "__version__": 2}), encoding="utf-8")
     out = json.loads(_app(state, "view", str(tmp_path / "out"), "--dump", str(dump),
@@ -331,7 +334,7 @@ def test_a_section_too_big_for_one_document_goes_in_parts_and_comes_back_whole(t
     for (coll, doc_id), (_op, body) in got.items():
         if body is not None:
             assert page_db.stored_size(body) <= page_db.DOC_MAX, f"{coll}/{doc_id}"
-    assert got[("screen", "part~jobs~9")][0] == got[("screen", "part~people~1")][0] == "delete"
+    assert got[("screen", "part~jobs~99")][0] == got[("screen", "part~people~1")][0] == "delete"
     head = got[("screen", "jobs")][1]
     assert "data" not in head and head["in_parts"] >= 2 and head["rev"] == out["rev"]
     view = {d: {"data": b, "version": None} for (c, d), (op, b) in got.items()

@@ -170,6 +170,85 @@ def findings(unread: list | None = None, kept: list | None = None) -> list[dict]
     return [f for f in found if _key(f) not in done]
 
 
+# A line saying a second figure is meant: it holds with one employer only, it is what a
+# contract says and not what employers hear, or it was superseded. A contract's three months,
+# beside the line saying only the current employer holds them to it and everyone else hears
+# one month, became a To do card calling it a contradiction (a helper chat, 2026-11-10, H-7).
+_SCOPED = re.compile(r"\b(?:applies|apply|holds?|counts?) only\b|\bonly (?:with|for|applies|"
+                     r"holds|to|at|when|if)\b|\bexcept (?:with|for|at|where)\b|\bsuperseded\b|"
+                     r"\bon purpose\b|\bdeliberate(?:ly)?\b|\b(?:every|any|all) other "
+                     r"employers?\b|\b(?:employers?|recruiters?|everyone else) (?:hears?|are "
+                     r"told|is told|get told)\b", re.I)
+_ITEM = re.compile(r"^(\s*)(?:[-*+]|\d+[.)])\s")
+_ABOUT_NOTICE = re.compile(r"\b(?:notice|contract\w*)\b", re.I)
+
+
+def _explained(text: str, start: int, length: int) -> bool:
+    """Does the sentence at `start`, or the list item it is part of (its first line and the
+    lines continuing it, never a heading or a neighbouring item), say its figure is meant to
+    differ (_SCOPED), about the notice or the contract? Any scoping word within two lines, a
+    heading included, hid a real second notice (the review of H-7, 2026-11-11)."""
+    if _SCOPED.search(text[start:start + length]):
+        return True
+    lines = text.splitlines()
+    i = text.count("\n", 0, start)
+    if i >= len(lines):
+        return False
+    first = i
+    while first >= 0 and lines[first].strip() and not _ITEM.match(lines[first]) \
+            and lines[first][:1].isspace():
+        first -= 1
+    if first < 0 or not _ITEM.match(lines[first]):
+        return False                     # not in a list item: the sentence alone explains it
+    end = first + 1
+    while end < len(lines) and lines[end].strip() and not _ITEM.match(lines[end]) \
+            and lines[end][:1].isspace():
+        end += 1
+    item = "\n".join(lines[first:end])
+    return bool(_SCOPED.search(item)) and bool(_ABOUT_NOTICE.search(item))
+
+
+# A sentence ranking a file as where the person's facts come from, and the file it names.
+# Only wording that makes a file the source of the person's facts: a bare "overrides" or
+# "takes precedence" is about rules or postings, and named three lines that ranked nothing
+# (the review of PD-4, 2026-11-11).
+_RANKS = re.compile(r"\b(?:(?:primary|main|first|only) )?source (?:of|for) (?:\w+ ){0,2}"
+                    r"facts?\b|\bsource of truth\b|\bfacts? (?:\w+ ){0,2}come from\b", re.I)
+# A line saying a file is not, or never, that source.
+_NEGATED = re.compile(r"\b(?:never|not|no longer|isn'?t|aren'?t|nor)\b", re.I)
+_A_FILE = re.compile(r"[\w./-]+\.(?:pdf|docx?|txt|md|tex|py|json)\b", re.I)
+
+
+def _outside_sources(texts: dict) -> list[dict]:
+    """Each sentence in the profile that makes a file outside person.json `grounding.sources`
+    the source of the person's facts, or ranks it above them: one person's candidate profile
+    called an old hand-made resume the "primary source for facts" and ranked it first, while
+    the rule is that the profile wins and an older resume is never a source (the audit's PD-4,
+    2026-11-10)."""
+    try:
+        sources = {os.path.basename(str(x)) for x in
+                   person.get("grounding.sources", ["01-candidate-profile.md", "CLAUDE.md",
+                                                    "bullets.py"])}
+    except person.NoProfile:
+        return []
+    out = []
+    for path, text in texts.items():
+        # By line: a file's name carries dots, which end a sentence for _sentence_spans.
+        for i, line in enumerate(text.splitlines(), 1):
+            if not _RANKS.search(line) or _NEGATED.search(line):
+                continue
+            for m in _A_FILE.finditer(line):
+                name = m.group(0).strip("./")
+                if os.path.basename(name) in sources:
+                    continue
+                out.append({"file": _rel(path), "line": i,
+                            "fact": "where facts come from", "said": name,
+                            "source": "the files person.json grounding.sources names (%s), "
+                                      "the profile first" % ", ".join(sorted(sources)),
+                            "sentence": " ".join(line.split())})
+    return out
+
+
 def _all_findings(unread: list | None = None) -> list[dict]:
     import screening_answers as sheet     # reads the profile as it loads
     out: list[dict] = []
@@ -221,6 +300,7 @@ def _all_findings(unread: list | None = None) -> list[dict]:
                             "source": "\"%s\" in %s" % (" ".join(rule[1].split())[:90],
                                                          _rel(rule[0])),
                             "sentence": " ".join(sent.split())})
+    out += _outside_sources(texts)
     evaluation = os.path.normpath(sheet.EVALUATION)
     for path, text in texts.items():
         # Quoted text is a question a form asks or words someone else said ("will you
@@ -260,7 +340,8 @@ def _all_findings(unread: list | None = None) -> list[dict]:
             if notice_m is not None and _NOTICE.search(sent):
                 after = sent[_NOTICE.search(sent).start():]
                 said = _months(after)
-                if said is not None and abs(said - notice_m) > 0.01:
+                if said is not None and abs(said - notice_m) > 0.01 \
+                        and not _explained(text, start, len(sent)):
                     out.append({"file": _rel(path), "line": i, "fact": "notice period",
                                 "said": _DURATION.search(after).group(0),
                                 "source": "%s in %s" % (notice, _rel(sheet.PROFILE)),

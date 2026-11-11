@@ -121,9 +121,24 @@ def _layout(obj, level: int) -> tuple[int, int]:
     return extra, lines
 
 
+# Where a whole list is cut: after an item whose own text says so (about one in CHUNK_CUT, by
+# its hash) once the part holds CHUNK_MIN, or where the next item would pass the limit. Cut
+# wherever the size fell, one item grown by a line moved every later cut, and every part of
+# the list went again (the second audit, 2026-11-10, D6).
+CHUNK_MIN = 48_000
+CHUNK_CUT = 16
+
+
+def _ends_chunk(item) -> bool:
+    import hashlib
+    text = json.dumps(item, ensure_ascii=False, sort_keys=True)
+    return int(hashlib.sha1(text.encode("utf-8")).hexdigest()[:8], 16) % CHUNK_CUT == 0
+
+
 def chunks(items: list[dict], limit: int = CHUNK_BYTES) -> list[list[dict]]:
-    """`items` in order, cut into lists that stay under `limit` bytes as stored. Never empty:
-    an empty list is one empty part, so the page always finds part 1."""
+    """`items` in order, cut into lists that stay under `limit` bytes as stored, ending where
+    an item says (_ends_chunk). Never empty: an empty list is one empty part, so the page
+    always finds part 1."""
     out, part, used = [], [], 2
     for it in items:
         n = stored(it)
@@ -132,8 +147,19 @@ def chunks(items: list[dict], limit: int = CHUNK_BYTES) -> list[list[dict]]:
             part, used = [], 2
         part.append(it)
         used += n
-    out.append(part)
+        if used >= CHUNK_MIN and _ends_chunk(it):
+            out.append(part)
+            part, used = [], 2
+    if part or not out:
+        out.append(part)
     return out
+
+
+def part_rev(items: list) -> str:
+    """What one part of a list holds, as a short hash of its items."""
+    import hashlib
+    text = json.dumps(items, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]
 
 
 def summary(name: str, full: list[dict], shown: int, folded: int | None = None) -> dict:
@@ -144,15 +170,57 @@ def summary(name: str, full: list[dict], shown: int, folded: int | None = None) 
             "counts": counts(full, FILTERS.get(name, ()))}
 
 
-def docs(full: dict, made_at: str, rev: str) -> list[tuple[str, dict]]:
-    """(doc id, document) for every part of every whole list, for `view/`."""
+def docs(full: dict, made_at: str, rev: str, by_hold: bool = True) -> list[tuple[str, dict]]:
+    """(doc id, document) for every part of every whole list, for `view/`. `by_hold` False: for
+    a published page whose code is from before parts were joined by what each holds
+    (app_page.joins_by_hold): every part under the page's `rev`, which that code joins by."""
     out = []
     for name, items in full.items():
         parts = chunks(items)
+        # Each part's rev is what it holds, and every part lists them all (`revs`), so a part
+        # left as it was joins with the ones written since (the page reads the newest's list).
+        revs = [part_rev(part) for part in parts] if by_hold else [rev] * len(parts)
         for n, part in enumerate(parts, 1):
             out.append((f"list~{name}~{n}", {"list": name, "part": n, "parts": len(parts),
-                                             "rev": rev, "made_at": made_at, "items": part}))
+                                             "rev": revs[n - 1],
+                                             **({"revs": revs} if by_hold else {}),
+                                             "made_at": made_at, "items": part}))
     return out
+
+
+def kept_as_they_are(docs_: list, views: dict, by_hold: bool = True) -> set:
+    """The ids of the list parts `docs_` (from `docs`) that the store (`views`, as load() gives
+    it) already holds as they would be written, so a page update leaves them. By what each
+    holds, part by part (`unchanged`); for a page whose code joins parts by the newest's rev
+    (`by_hold` False), a list's parts are left only all together, when every one holds the
+    same items in a list of as many parts under one rev, and are otherwise written again."""
+    def held(doc_id):
+        got = (views or {}).get(doc_id)
+        return got.get("data") if isinstance(got, dict) else None
+    if by_hold:
+        return {doc_id for doc_id, doc in docs_ if unchanged(held(doc_id), doc)}
+    groups: dict = {}
+    for doc_id, doc in docs_:
+        groups.setdefault(doc["list"], []).append((doc_id, doc))
+    out: set = set()
+    for parts in groups.values():
+        olds = [held(doc_id) for doc_id, _ in parts]
+        if all(isinstance(o, dict) and not o.get("revs") and o.get("parts") == d["parts"]
+               and o.get("items") == json.loads(json.dumps(d["items"], ensure_ascii=False))
+               for o, (_, d) in zip(olds, parts)) and len({o.get("rev") for o in olds}) == 1:
+            out.update(doc_id for doc_id, _ in parts)
+    return out
+
+
+def unchanged(held, doc: dict) -> bool:
+    """Does the store already hold this part of a list (`held`, its fields) as `doc` would
+    write it: the same items under the same rev, in a list of the same number of parts? A list
+    that lost its last part with the rest as they were left every part it kept saying the old
+    count, so the page looked for the part just taken off and its "Show" was empty until
+    another part changed (the review of 2026-11-11, D6)."""
+    return isinstance(held, dict) and held.get("rev") == doc["rev"] \
+        and held.get("parts") == doc["parts"] \
+        and held.get("items") == json.loads(json.dumps(doc["items"], ensure_ascii=False))
 
 
 def stale(full: dict, view: dict) -> list[str]:

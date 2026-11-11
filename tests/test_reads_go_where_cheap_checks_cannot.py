@@ -93,7 +93,7 @@ def test_a_read_right_after_another_is_saved_with_no_pause_and_nothing_logged(
     monkeypatch.setattr(state, "load_threads", lambda *a, **k: [])
     now = datetime.datetime.now()
     _browsed(here, [now - datetime.timedelta(seconds=1)], gap=0)
-    reading.shortlist(["kestrel_achterberg"], reading.person.today(now), contacts=[row], sends_left=10)
+    reading.shortlist(["kestrel_achterberg"], reading.person.today(now), contacts=[row])
     page = here / "p.txt"
     page.write_text(_card("Manchester, England, United Kingdom", "Contact info", "Kestrel Mutual"),
                     encoding="utf-8")
@@ -108,10 +108,10 @@ def test_a_read_right_after_another_is_saved_with_no_pause_and_nothing_logged(
 def test_a_full_hour_and_a_full_day_of_pages_still_go_and_a_stop_is_tomorrow(here):
     now = datetime.datetime(2026, 10, 19, 15, 0)
     _browsed(here, [now - datetime.timedelta(seconds=i + 1) for i in range(200)])
-    assert reading.gate_state(now, sends_left=None)["kind"] == "go"
-    assert reading.gate_state(now.replace(hour=23), sends_left=0)["kind"] == "go"
+    assert reading.gate_state(now)["kind"] == "go"
+    assert reading.gate_state(now.replace(hour=23))["kind"] == "go"
     reading.stop("LinkedIn showed a check: Let's do a quick security check", now.date())
-    g = reading.gate_state(now, sends_left=None)
+    g = reading.gate_state(now)
     assert g["kind"] == "tomorrow" and reading.EXIT[g["kind"]] == 9
 
 
@@ -147,10 +147,10 @@ def test_a_one_page_read_records_no_pause(here, monkeypatch):
 
 def test_the_short_list_adds_and_never_replaces(here):
     placed = [{"contact_id": f"p{i}", "location": "Manchester"} for i in range(9)]
-    got = reading.shortlist(["p0", "p1", "p2"], TODAY, contacts=placed, sends_left=2)
+    got = reading.shortlist(["p0", "p1", "p2"], TODAY, contacts=placed)
     assert got["ids"] == ["p0", "p1", "p2"]
     # No cap of the app's own: the second call adds everyone it names, behind the first.
-    got = reading.shortlist(["p3", "p4", "p5", "p6"], TODAY, contacts=placed, sends_left=2)
+    got = reading.shortlist(["p3", "p4", "p5", "p6"], TODAY, contacts=placed)
     assert got["ids"] == ["p0", "p1", "p2", "p3", "p4", "p5", "p6"] and got["full"] == []
 
 
@@ -169,7 +169,7 @@ def test_no_more_than_the_unplaced_cap_of_people_nothing_has_placed(here):
 def test_reads_left_says_there_is_no_limit_of_the_apps_own(here):
     now = datetime.datetime(2026, 10, 19, 15, 0)
     _browsed(here, [now - datetime.timedelta(minutes=i + 1) for i in range(5)])
-    assert reading.reads_left(now, sends_left=None) == (None, reading.NO_LIMITS)
+    assert reading.reads_left(now) == (None, reading.NO_LIMITS)
 
 
 def test_a_signal_yesterday_brings_no_slow_start_today(here, monkeypatch):
@@ -178,7 +178,7 @@ def test_a_signal_yesterday_brings_no_slow_start_today(here, monkeypatch):
     now = datetime.datetime(2026, 10, 19, 15, 0)
     _browsed(here, [now - datetime.timedelta(minutes=i + 1) for i in range(3)])
     pace.record_friction("check", "a security check", now - datetime.timedelta(days=1))
-    assert reading.reads_left(now, sends_left=None) == (None, reading.NO_LIMITS)
+    assert reading.reads_left(now) == (None, reading.NO_LIMITS)
     assert reading.gate_state(now)["kind"] == "go"
 
 
@@ -347,8 +347,8 @@ def test_a_one_page_read_holds_nothing_back(here):
     now = datetime.datetime(2026, 10, 19, 15, 0)
     reading.page_read("invitations", "https://www.linkedin.com/mynetwork/", now)
     nxt = now + datetime.timedelta(seconds=1)
-    assert reading.gate_state(nxt, sends_left=0)["kind"] == "go"
-    assert reading.gate_state(nxt, sends_left=0, profile=False)["kind"] == "go"
+    assert reading.gate_state(nxt)["kind"] == "go"
+    assert reading.gate_state(nxt)["kind"] == "go"
     with pytest.raises(ValueError):
         reading.page_read("profile", "", now)
 
@@ -421,7 +421,7 @@ def test_a_page_kept_after_a_stop_still_exits_as_a_stop(here, monkeypatch, capsy
     monkeypatch.setattr(state, "load_contacts", lambda *a, **k: [row])
     monkeypatch.setattr(state, "load_threads", lambda *a, **k: [])
     now = datetime.datetime.now()
-    reading.shortlist(["kestrel_achterberg"], reading.person.today(now), contacts=[row], sends_left=10)
+    reading.shortlist(["kestrel_achterberg"], reading.person.today(now), contacts=[row])
     reading.stop("LinkedIn showed a check: Let's do a quick security check")
     page = here / "p.txt"
     page.write_text(_card("Manchester, England, United Kingdom", "Contact info", "Kestrel Mutual"),

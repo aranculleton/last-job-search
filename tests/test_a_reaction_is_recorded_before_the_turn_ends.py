@@ -317,3 +317,33 @@ def test_a_compaction_summary_and_a_notification_are_not_the_persons_words(profi
                 origin={"kind": "task-notification"})
     turn = TURN_ONE + [summary, note, _line("user", text="carry on with the round")]
     assert _stop(_transcript(tmp_path, turn)) == {}
+
+
+# Audit D12 (2026-11-10): "it needs to be perfect and completely comprehensive" was kept as an
+# approval, and "this chat is too long" and "the page is too long to load" as reactions to a
+# draft: each forced a turn, a commit and a pull request to clear it. Said of what something
+# must be, or of the chat, the page or the app, they are neither; said of what was shown, both
+# still count.
+
+@pytest.mark.parametrize("said", [
+    "it needs to be perfect and completely comprehensive",
+    "hand over to a fresh helper and archive yourself, this chat is too long",
+    "the page is too long to load",
+    "make it perfect",
+])
+def test_words_about_the_app_or_a_requirement_are_no_reaction_and_no_approval(said):
+    assert learned.reaction(said) == "" and learned.approval(said) == "", said
+
+
+@pytest.mark.parametrize("said,kind", [
+    ("too long, cut it", "reaction"), ("that note is too long", "reaction"),
+    ("perfect, sending it now", "approval"), ("this is perfect", "approval"),
+    ("almost perfect", "approval"),
+    # The review of D12 (2026-11-11): these are reactions to what was shown.
+    ("the list is too long, just give me the top 5", "reaction"),
+    ("this list is too long", "reaction"),
+    ("the page is too long, cut the To do", "reaction"),
+    ("So perfect", "approval"),
+])
+def test_words_about_what_was_shown_still_count(said, kind):
+    assert getattr(learned, kind)(said), said

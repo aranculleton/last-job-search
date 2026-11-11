@@ -568,3 +568,21 @@ def test_a_finished_setup_outside_the_built_in_holiday_rules_is_not_read_as_unfi
     rule = step4[step4.index("python3 tools/profile_upgrades.py"):]
     rule = rule[:rule.index("a step skipped")]
     assert "may stay" in rule and "`public-holidays`" in rule and "`brief-watch`" in rule
+
+
+def test_a_stranger_is_told_what_each_setting_allows_and_one_count_of_questions():
+    """Audit U-16 (2026-11-10): START_HERE.md asked a stranger to choose Auto and full network
+    access with no word on what either allows; the desktop app that networking needs came only
+    after setup; and setup was "six short questions" in one place and "A few" in another."""
+    start = _read("START_HERE.md")
+    head = start.split("## 1.", 1)[0]
+    assert "desktop app" in head, "listed with what you need, before setup"
+    auto = start.split("<!-- claude-surface: cloud-auto -->", 1)[0].rstrip().rsplit("\n\n", 1)[-1]
+    assert "Auto lets Claude" in auto and "safety checks" in auto
+    net = start.split("<!-- claude-surface: cloud-internet -->", 1)[0].rstrip().rsplit("\n\n", 1)[-1]
+    assert "Full lets this chat open any" in net
+    words = {6: "six"}
+    assert f"{words[len(app_setup.STEPS)]} short questions" in start
+    js = _read("templates", "app", "app.js")
+    assert "A few short questions" not in js
+    assert '" short questions, then Claude does the rest."' in js

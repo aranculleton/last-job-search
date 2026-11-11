@@ -429,8 +429,9 @@ def test_a_finished_job_brings_the_page_up_to_date_even_when_its_check_failed():
     assert "landed or not" in own and own.index("landed or not") < own.index("tools/app.py view")
     agent = "\n".join(app.job_steps(chosen, "listener-1", "https://claude.ai/artifact/x", session=False))
     assert "\"Finished draft~a, not landed: bring the page up to date.\"" in agent and "landed or not" in agent
-    with open(os.path.join(ROOT, ".claude", "skills", "app", "SKILL.md"), encoding="utf-8") as fh:
-        assert "`Finished <id>, not landed`" in fh.read(), "the chat that answers the page knows the second line"
+    import app_skill
+    assert "`Finished <id>, not landed`" in app_skill.text(), \
+        "the chat that answers the page knows the second line"
 
 
 def test_a_yes_or_no_question_is_answered_in_one_tap_and_goes_back_as_its_own_job(run, tmp_path):

@@ -168,7 +168,8 @@ def test_a_draft_that_needs_a_fix_says_so_on_its_card_with_its_state_by_the_titl
     assert not r["folded"], "the failed check is on the card, not folded into More"
     # What Claude can do by itself is never a button (2026-11-05): the failed check is said on
     # the card, and Claude makes it again once its question is answered.
-    assert "the CV runs to a second page by two lines" in card and "Make it again" not in card, card
+    # The check's own finding leads, capitalised, since the UX review of 2026-11-10 (U-19).
+    assert "The CV runs to a second page by two lines" in card and "Make it again" not in card, card
     assert "Two answers about Quayside Foods" in card, "its question stays first"
     assert r["onRow"] or (r["atStart"] and r["gap"] <= 8), ("the state stays by the title, never pushed off to the right below it", r)
 
@@ -240,7 +241,9 @@ def test_to_do_opens_on_what_is_late_or_due_today_and_folds_the_setup(run, tmp_p
     # Four cards today all show (one card an act and a person, 2026-11-05): the first fold is
     # Help Claude do more's "and N more", its card right after today's things (2026-11-10), or what is not due yet;
     # more than five, and it is "Show N more".
-    assert r["fold"].startswith(("Show ", "and ", "Not due yet")), r
+    # Help's fold says what it holds since the screen review of 2026-11-11 ("1 more way to
+    # help Claude", where "and 1 more" said no noun).
+    assert r["fold"].startswith(("Show ", "Not due yet")) or r["fold"].endswith(("way to help Claude", "ways to help Claude")), r
 
 
 # Found along the way, 2026-11-02. "Did your note to Wren go?" is answered once the note is

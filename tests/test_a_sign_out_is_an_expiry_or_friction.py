@@ -57,7 +57,7 @@ def test_a_sign_in_page_hours_after_the_last_load_is_an_expiry_not_a_stop(tmp_pa
     assert not reading.stopped(MORNING.date())
     assert [x["kind"] for x in pace.friction()] == []                  # not a signal
     reading.mark_signed_in(MORNING + datetime.timedelta(minutes=2))    # signin --url
-    g = reading.gate_state(MORNING + datetime.timedelta(minutes=3), sends_left=5)
+    g = reading.gate_state(MORNING + datetime.timedelta(minutes=3))
     assert g["kind"] != "tomorrow", g
 
 
@@ -79,7 +79,7 @@ def test_a_sign_in_page_minutes_after_a_load_is_friction_and_says_what_was_seen(
     assert "7 min after the last page load (2026-10-20 09:00)" in got["why"]
     assert "mid-run" not in reading.stopped(now.date())
     assert [x["kind"] for x in pace.friction()] == ["signed_out"]
-    g = reading.gate_state(now, sends_left=5)
+    g = reading.gate_state(now)
     assert g["kind"] == "tomorrow" and "reading.py resume --reason" in g["why"]
 
 
@@ -118,7 +118,7 @@ def test_a_second_sign_out_after_a_resume_stops_the_day_with_no_way_back(tmp_pat
     assert reading.stopped(later.date())
     reading.mark_signed_in(later + datetime.timedelta(minutes=1))
     assert "spent" in reading.resumable(later + datetime.timedelta(minutes=2))
-    assert "resume" not in reading.gate_state(later, sends_left=5)["why"]
+    assert "resume" not in reading.gate_state(later)["why"]
 
 
 def test_an_expiry_then_another_sign_out_the_same_day_is_friction(tmp_path, monkeypatch):
@@ -146,7 +146,7 @@ def test_a_check_is_never_lifted_by_hand(tmp_path, monkeypatch):
     reading.stop("LinkedIn showed a check: Let's do a quick security check")   # today's
     reading.mark_signed_in(datetime.datetime.now() + datetime.timedelta(seconds=2))
     assert "never lifted by hand" in reading.resumable()
-    assert "resume" not in reading.gate_state(sends_left=5)["why"]
+    assert "resume" not in reading.gate_state()["why"]
 
 
 def test_a_read_and_the_signin_command_classify_it_and_never_suggest_a_stop(tmp_path, monkeypatch,

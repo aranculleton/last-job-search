@@ -51,12 +51,13 @@ def _info(chats):
         "url": f"https://github.com/{REPO}"}}]}} for c in chats}
 
 
-def _plan(reg, chats, fires=OWN, helper=HELPER, monkeypatch=None, trusted=""):
+def _plan(reg, chats, fires=OWN, helper=HELPER, monkeypatch=None, trusted="", info=None):
     if monkeypatch is not None:
         monkeypatch.setattr(routines, "trusted_chat", lambda: trusted)
     triggers = [{"id": "trig_EXAMPLEB", "session": fires, "enabled": True,
                  "prompt": routines.with_copy(routines.stub(reg, "morning_brief"), REPO)}]
-    return tidy.plan(chats, triggers, _info(chats), reg, {"chat": helper, "helper": True},
+    return tidy.plan(chats, triggers, dict(_info(chats), **(info or {})), reg,
+                     {"chat": helper, "helper": True},
                      helper, REPO, TODAY, set(), set(), set(),
                      now=dt.datetime(2026, 11, 10, 16, 0, tzinfo=dt.timezone.utc))
 
@@ -121,12 +122,16 @@ def test_a_brief_whose_own_chat_stopped_working_gets_a_new_one_said_to_nobody(mo
     reg = _reg({"session_id": OWN, "own": True})
     chats = [_chat(HELPER, "Job search page")]
     trusted = ""
+    info = {}
+    if how == "deleted":
+        # Deleted by get_session's word, never by a listing that lacks it (second audit B1).
+        info = {OWN: {"id": OWN, "gone": True}}
     if how == "archived":
         chats.append(_chat(OWN, "Job search: morning brief", session_status="archived"))
     elif how == "approved computer access":
         chats.append(_chat(OWN, "Job search: morning brief"))
         trusted = OWN
-    got = _plan(reg, chats, monkeypatch=monkeypatch, trusted=trusted)
+    got = _plan(reg, chats, monkeypatch=monkeypatch, trusted=trusted, info=info)
     _moved_to_its_own_chat(got["brief"])
     assert got["brief_why"]
 
@@ -166,8 +171,12 @@ def test_the_tidy_up_says_it_has_moved_only_once_the_listing_shows_its_own_chat(
     tasks = tmp_path / "t.json"
     tasks.write_text(json.dumps({"data": [{"id": "trig_EXAMPLEB", "persistent_session_id": OWN,
                                            "enabled": True}]}))
+    # get_session could not find it: gone by its word, not by the listing (second audit B1).
+    gone = tmp_path / "d.json"
+    gone.write_text(json.dumps({"id": OWN, "gone": True}))
     assert tidy.main(["plan", "--chat", HELPER, "--today", TODAY.isoformat(),
-                      "--sessions", str(sessions), "--triggers", str(tasks)]) == 0
+                      "--sessions", str(sessions), "--triggers", str(tasks),
+                      "--details", str(gone)]) == 0
     said = capsys.readouterr().out
     assert "brief 1: create_session" in said and "brief 2: create_trigger" in said
     assert "it has not moved, so never say it has" in said
@@ -186,9 +195,15 @@ def test_existing_copies_bound_to_the_helper_or_a_fresh_chat_each_run_are_moved_
     for reg, pending in ((_reg({"session_id": HELPER}), True),
                          (dict(_reg(), setup="routines_screen"), True),       # fresh chat a run
                          (_reg({"session_id": OWN, "own": True}), False),
+                         # The older ops shape, never read against a listing: due, so a
+                         # listing says where it runs (PD-7; review of fix/helpers, item 19)...
                          ({"setup": "ops_relay", "timezone": "America/Vancouver",
                            "ops_session": {"id": "session_EXAMPLEOPS"},
-                           "routines": _reg()["routines"]}, False)):          # relays: stays
+                           "routines": _reg()["routines"]}, True),
+                         # ...and once one showed it relays from the ops chat, it stays.
+                         ({"setup": "ops_relay", "timezone": "America/Vancouver",
+                           "ops_session": {"id": "session_EXAMPLEOPS"},
+                           "ops_checked": "2026-11-10", "routines": _reg()["routines"]}, False)):
         monkeypatch.setattr(routines, "load", lambda *a, reg=reg, **k: reg)
         assert bool(u.pending()) is pending, reg
     # A routine the person made themself, notifications on, works and stays.

@@ -74,7 +74,11 @@ def _letter(company="Wrenfield Freight Ltd", role="Senior Supply Chain Analyst",
         "p2": "Wrenfield moves goods across the North West for retailers.",
         "lead": "Where I would start:",
         "cl_bullets": [{"label": "Forecasting", "text": "Depot-level demand forecasts."}],
-        "p4": "Thank you for reading.",
+        # A close as the example person's letter rule has it (audit_letters.close_flags since
+        # 2026-11-11): where they are and their right to work, then the role. "Thank you for
+        # reading." is a close the rule never allowed, and this letter is the right way.
+        "p4": "I am based in Manchester with settled status and full right to work in the UK. "
+              "Depot forecasting for the North West is work I would like to do here.",
     }
 
 

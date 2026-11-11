@@ -104,6 +104,37 @@ BRIEF_LOCAL = ("Your brief runs in the cloud, so it arrives when your computer i
                "Nothing to do on your computer.")
 
 
+# A cloud chat runs in a container of the cloud's own, with markers a session on the person's
+# computer never has: the container's id, and the agent proxy's folder and the certificate it
+# hands every tool (/root/.ccr). CLAUDE_CODE_REMOTE alone ("true" in a cloud session) also
+# fits a session on the person's computer driven from their phone (claude_surfaces:
+# remote-control), which would then claim
+# as a cloud chat, open a pull request from there and take the page (the builder audit,
+# 2026-11-10, CC-18). The person's own place.json is no marker: the profile is in the copy,
+# so the cloud holds it too.
+CLOUD_MARKERS = ("CLAUDE_CODE_CONTAINER_ID", "CCR_AGENT_PROXY_ENABLED")
+CLOUD_CA_VARS = ("SSL_CERT_FILE", "NODE_EXTRA_CA_CERTS", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE")
+CCR_DIR = "/root/.ccr"          # LJS_CCR_DIR names another, for a test
+
+
+def in_cloud(env=None) -> bool:
+    """Is this chat in a cloud container (not on the person's computer, a session there
+    driven from the phone included)? CLAUDE_CODE_REMOTE, and one of the container's own markers. The folder
+    on disk is looked at only for this process's own environment, so a given `env` is judged
+    the same on every computer."""
+    real = env is None
+    env = os.environ if env is None else env
+    if str(env.get("CLAUDE_CODE_REMOTE", "")).lower() != "true":
+        return False
+    if "bridge" in str(env.get("CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE") or "").lower():
+        return False
+    if any(str(env.get(k) or "").strip() for k in CLOUD_MARKERS):
+        return True
+    if any("/.ccr/" in str(env.get(k) or "").replace("\\", "/") for k in CLOUD_CA_VARS):
+        return True
+    return real and os.path.isdir(os.environ.get("LJS_CCR_DIR") or CCR_DIR)
+
+
 def surface(env=None) -> str:
     """"phone", "web", "desktop-cloud", "local" or "unknown": where this chat runs.
 

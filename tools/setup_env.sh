@@ -111,8 +111,12 @@ fi
 # --upgrade a b c` aborts on the first package it cannot touch, and on this
 # image PyYAML belongs to Debian ("Cannot uninstall PyYAML, RECORD file not
 # found"), which took openpyxl down with it. cffi is the one package upgraded
-# even when present, for the pyo3 panic described above.
-if [ "$CONTAINER" = 1 ]; then
+# even when present, for the pyo3 panic described above, once anything fails to import.
+# Everything already importing (pypdf included, which is where a broken cffi shows) asks the
+# package index nothing: the upgrade of cffi on every run cost 4 to 5 seconds of each brief's
+# 8 (audit E-12, 2026-11-10).
+if [ "$CONTAINER" = 1 ] && ! { python3 -c "import pytest, pypdf, yaml, openpyxl" >/dev/null 2>&1 \
+    && python3 -m ruff --version >/dev/null 2>&1; }; then
   pip3 install --quiet --upgrade cffi >/dev/null 2>&1 || true
   for pair in pytest:pytest pypdf:pypdf yaml:pyyaml openpyxl:openpyxl; do
     mod="${pair%%:*}"; pkg="${pair##*:}"

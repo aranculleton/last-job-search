@@ -5,7 +5,9 @@ Usage: `/reply <contact name or company>`, then paste their message.
 ## Two commands
 
 The draft is yours; everything around it is two commands, so nothing is looked up first.
-Nothing is ever sent.
+Nothing is ever sent. No skill is loaded: what a reply needs, prepare prints, and finish holds
+the checks (nothing claimed the profile does not hold, the draft rewritten on its warnings, the
+log changed only by these commands, a referral ask for one linked role only once they engaged).
 
 1. **Prepare.** Run `python3 tools/network/reply.py prepare "<their name or contact id>"
    --text-file -` with their message, as it came, on its input (a heredoc, or a file's path)

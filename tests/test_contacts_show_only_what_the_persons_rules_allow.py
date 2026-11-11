@@ -666,7 +666,8 @@ def test_small_things_each_say_what_they_are(run, page, model):
     assert "was due" in a["shirin_page"]["dialog"], a["shirin_page"]["dialog"]        # 24
     assert "Don't contact Shirin" in a["stop"]["eval"], a["stop"]["eval"]              # 42
     rafe = a["rafe"]["text"]                                                    # 37
-    assert "Overdue" in rafe and "Due " not in rafe and "Paste" not in rafe, rafe
+    # Ready, never "Overdue", for a day he set himself (the UX review of 2026-11-10, U-6).
+    assert "Ready to send" in rafe and "Overdue" not in rafe and "Due " not in rafe and "Paste" not in rafe, rafe
     assert a["rafe"]["count"] <= 8, a["rafe"]["count"]                          # chat_2 22
     # A note waiting for their profile says so once, with Paste and its gauge beside it: one
     # note's rewrite in minutes (the engine's), never "a lot of your allowance", a networking

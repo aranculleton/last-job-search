@@ -320,18 +320,20 @@ def test_today_is_the_most_pressing_thing_with_what_matters_beside_it(run, tmp_p
     got = _go(run, tmp_path, [{"hash": "brief", "eval": TODAY}], vp, model=model, clock=T)
     r = got["after"][0]["eval"]
     # One date a card, said one way (the walk-through, 2026-11-03): about someone, the corner
-    # says Overdue and the facts lead with the day it is about; never "Rolled over · 2 days late".
-    assert r["when"] == "Overdue", r
+    # says it is ready and the facts lead with the day it is about; never "Rolled over · 2 days
+    # late", and since the UX review of 2026-11-10 (U-6) never "Overdue" for a day the person set.
+    assert r["when"] in ("Ready to send", "Ready to do"), r
     assert r["facts"][0].startswith("You wrote 21 Sep") and r["facts"][0].endswith("no reply"), r
     assert late["title"] in r["what"], r
     assert "Operations lead at Fernhill Freight" in r["facts"], r
     assert r["empty"] == 0 and r["upRows"] >= 1, r
     assert not any(late["title"] in n for n in r["next"]), ("Today's thing is never said again under it", r["next"])
-    # Not about anyone: how late it is, in two words.
+    # Not about anyone: a thank-you after an interview is the person's own to do, ready, never
+    # "2 days late" (the UX review of 2026-11-10, U-6: only someone else's date is late).
     other = copy.deepcopy(model)
     other["due"] = [d for d in other["due"] if d["id"] != late["id"]]
     got = _go(run, tmp_path, [{"hash": "brief", "eval": TODAY}], vp, model=other, clock=T)
-    assert got["after"][0]["eval"]["when"] == "2 days late", got["after"][0]["eval"]
+    assert got["after"][0]["eval"]["when"] == "Ready to do", got["after"][0]["eval"]
     # Prep not written yet: the interview leads instead, inside the prep window.
     iv["prep"] = {}
     got = _go(run, tmp_path, [{"hash": "brief", "eval": TODAY}], vp, model=model, clock=T)
@@ -452,27 +454,38 @@ def test_every_count_of_jobs_to_look_at_agrees_and_leaves_out_a_closed_one(run, 
     # its badge counts that list, as its tab does; the Brief lists the finds and names the
     # drafts ready apart. Every number agrees with the Jobs summary.
     import re
-    send = int((re.search(r"(\d+) to send", jobs_line) or [0, 0])[1])
+    # One sentence whose total is the tab's since the UX review of 2026-11-10 (U-9).
+    total = int((re.search(r"(\d+) to apply to", jobs_line) or [0, 0])[1])
     look = int((re.search(r"(\d+) to look at", jobs_line) or [0, 0])[1])
-    assert a["nav"] == send + look and a["brief"] == look, (a, jobs_line)
-    # The drafts ready and the ones still being made, said apart, add up to the summary's "to
-    # send" (the review, 2026-11-05: "2 drafts ready to apply" beside "2 to send, 1 still to make").
-    ready = int((re.search(r"(\d+) drafts? ready to apply", panel) or [0, 0])[1])
-    making = int((re.search(r"(\d+) (?:drafts? )?being made", panel) or [0, 0])[1])
-    assert (not send) or ready + making == send, (panel, jobs_line)
+    send = total - look
+    assert a["nav"] == total and a["brief"] == look, (a, jobs_line)
+    # The drafts ready, waiting on you, being made and still to make, said apart as Jobs says
+    # them, add up to the summary's drafts (the review, 2026-11-05: "2 drafts ready to apply"
+    # beside "2 to send, 1 still to make"; the screen review, 2026-11-11: a draft with a
+    # question "ready" on the Brief and "waiting on you" on Jobs).
+    # What Claude is making is its own work, said in the work pill: the Brief's line leaves it out
+    # when anything else is owed, so a small laptop's panel holds the line whole (4.15.0).
+    making = int((re.search(r"(\d+) being made", jobs_line) or [0, 0])[1])
+    parts = [int((re.search(r"(\d+) (?:drafts? )?" + w, panel) or [0, 0])[1]) for w in ("ready to apply", "waiting on you", "being made", "still to make")]
+    assert (not send) or sum(parts) == send or (sum(parts) == send - making and not parts[2]), (panel, jobs_line)
     assert (not todo_line) or todo_line.startswith("%d new" % look), todo_line
     assert "Analytics Consultant" not in panel, panel      # its posting has closed
 
 
 # Today's thing comes again in Next three only where there is room: the thank-you two days
-# late is on the Brief, and Wednesday's phone screen says when it is.
-def test_next_three_keeps_room_for_others_and_an_interview_says_when(run, tmp_path, vp):
+# late is on the Brief. Wednesday's phone screen says when it is in Coming up, its prep there
+# with it, never taken from Coming up by "Read the prep" in Next three: the week strip marked
+# Wednesday over a list that skipped it (the screen review, 2026-11-11).
+def test_next_three_keeps_room_for_others_and_a_booked_interview_stays_in_coming_up(run, tmp_path, vp):
     got = _go(run, tmp_path, [{"hash": "brief", "eval": "[document.querySelector('#main .bp-today .bp-iv-what').textContent, "
-                                                       "[...document.querySelectorAll('#main .bp-next li')].map((l) => l.textContent)]"}], vp, clock=T)
-    today, steps = got["after"][0]["eval"]
+                                                       "[...document.querySelectorAll('#main .bp-next li')].map((l) => l.textContent), "
+                                                       "[...document.querySelectorAll('#main .bp-up > li')].map((l) => l.textContent)]"}], vp, clock=T)
+    today, steps, coming = got["after"][0]["eval"]
     assert not any(today.strip() in s for s in steps), (today, steps)
-    assert any("Larkspur" in s and "28 Oct" in s and "13:00" in s for s in steps), steps
-    # A thank-you owed after a round is not given the next round's day.
+    assert any("Phone screen: Larkspur" in c and "28 Oct" in c and "13:00" in c for c in coming), coming
+    assert not any("phone screen" in s for s in steps), steps
+    # A thank-you owed after a round is its own step, and is not given the next round's day.
+    assert any("Thank-you" in s for s in steps) and len(steps) == 3, steps
     assert not any("Thank-you" in s and "4 Nov" in s for s in steps), steps
 
 
@@ -535,9 +548,15 @@ def test_fitting_the_brief_takes_what_saves_most_and_keeps_today_useful(run, tmp
 # Each person's next step sits in one column: every step, and the day under it, starts at the
 # same edge, so steps of different lengths never jut out (the maintainer, 2026-11-02).
 def test_every_persons_step_and_day_start_at_one_edge(run, tmp_path, vp):
+    # A second person waiting on a move of a different length: Tamsin, the sample's other, is
+    # a step in Next three since the phone screen's prep stays with its row in Coming up.
+    model = copy.deepcopy(_sample())
+    one = next(p for p in model["people"] if p["id"] == "ellerwick_trust_priya")
+    model["people"].append(dict(one, id="quayside_foods_odette", first_name="Odette", employer="Quayside Foods", rev="p-odette",
+                                next_action="Ask about the demand planning team", owed={"kind": "reply", "label": "Draft a reply", "reply": True}, related={}))
     got = _go(run, tmp_path, [{"hash": "brief", "eval": "[...document.querySelectorAll('#main .bp-people .bp-state')].map((s) => { "
                                                        "const w = s.querySelector('.bp-when'); const r = document.createRange(); r.selectNodeContents(s.firstChild); "
-                                                       "return [Math.round(r.getBoundingClientRect().left), w ? Math.round(w.getBoundingClientRect().left) : null]; })"}], vp, clock=T)
+                                                       "return [Math.round(r.getBoundingClientRect().left), w ? Math.round(w.getBoundingClientRect().left) : null]; })"}], vp, model=model, clock=T)
     rows = got["after"][0]["eval"]
     assert len(rows) >= 2, rows
     lefts = {left for left, _day in rows} | {day for _left, day in rows if day is not None}
@@ -595,7 +614,7 @@ def test_a_reply_already_drafted_opens_from_to_do_contacts_and_their_page(run, t
         text = got["after"][n]["text"]
         assert "I sent it" in text and "Copy" in text and "Draft a reply" not in text, (n, text)
     assert "Thursday at 12 suits me well" in got["after"][1]["text"], "her card shows the draft that is ready"
-    assert "Your thank-you" in got["after"][2]["text"], got["after"][2]["text"]
+    assert "Thank-you · " in got["after"][2]["text"], got["after"][2]["text"]      # its draft's heading
     page = got["after"][3]["text"]
     assert "See the draft" in page and "Draft a reply" not in page, page
     assert "Thursday at 12 suits me well" in page, "their page shows the draft that is ready"

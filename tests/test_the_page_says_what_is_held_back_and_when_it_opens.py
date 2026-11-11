@@ -9,6 +9,7 @@ engine's (tools/holds.py); the page only draws them.
 from __future__ import annotations
 
 import os
+import re
 import sys
 
 import pytest
@@ -68,7 +69,10 @@ def test_held_back_is_one_row_with_a_line_each_and_every_rule_one_tap_below(run,
     first, opened, every = got["after"]
     assert "Held back for now" in first["eval"] and "2 now" in first["eval"]
     assert opened["count"] == 2 and LINE in opened["text"], opened["text"][:400]
-    assert "How every rule ends (%d)" % len(holds.RULES) in opened["text"]
+    # Named for what it holds, with no count: "How every rule ends (35)" read as "you have
+    # 35 rules" (the screen review, 2026-11-11).
+    assert "How long each kind of hold lasts" in opened["text"] and "How every rule ends" not in opened["text"], opened["text"][-300:]
+    assert not re.search(r"lasts \(\d+\)", opened["text"]), opened["text"][-300:]
     assert every["count"] == len(holds.RULES)
 
 
@@ -109,6 +113,9 @@ def test_the_pill_asks_claude_under_the_row(run, tmp_path):
     asked = [w for w in last["work"] if w.get("kind") == "talk"]
     assert asked and asked[0]["args"]["text"] == "more at Larchmont Health", last["work"]
     assert asked[0]["args"]["about"]["id"] == "held", asked[0]
+    # The hold's own id goes with its words, which can name two holds (the rules review,
+    # 2026-11-11): Claude lifts it by the id (holds.py lift <id> --said <words>).
+    assert asked[0]["args"]["about"]["ref"] == "hold~employer_wait~larchmont health", asked[0]
     assert "more at Larchmont Health" in last["text"], last["text"][:600]
 
 
@@ -120,3 +127,49 @@ def test_with_nothing_held_it_says_so_and_still_opens_every_rule(run, tmp_path):
     first, opened = got["after"]
     assert "Nothing now" in first["eval"]
     assert "Nothing is held back today." in opened["text"]
+
+
+def test_a_learned_rule_said_for_now_is_asked_about_in_your_rules(run, tmp_path):
+    """Your rules drew no learned rule (they have their own list), so one the person said was
+    "for now" was asked about nowhere when its day came. One the engine marks Still right? is
+    drawn there, saying it was for now, with Keep it (rules_view.for_now_review)."""
+    m = _model(held=False)
+    m["rules"]["rows"] = list(m["rules"].get("rows") or []) + [
+        {"id": "rule~learned~1", "kind": "learned", "name": "Learned from you",
+         "sentence": "Keep first notes to two lines.", "set_on": "2026-09-20",
+         "words": "keep notes short for now", "review_on": "2026-10-20", "left_out": None,
+         "edit": None, "drop": {"kind": "learned", "n": 1}, "still_right": True, "rev": "r1"}]
+    got = _go(run, tmp_path, [
+        {"hash": "settings", "eval": "document.getElementById('main').textContent"},
+    ], WIDE, m)
+    text = got["after"][0]["eval"]
+    assert "Learned from you" in text and "Still right?" in text, text[:2000]
+
+
+def _declined(rev):
+    return {"id": "rule~declined~ormsby retail", "kind": "declined",
+            "name": "No more from Ormsby Retail", "sentence": "No more roles from Ormsby Retail.",
+            "set_on": "2026-11-08", "words": None, "review_on": None, "left_out": 0,
+            "edit": None, "drop": {"kind": "declined", "key": "ormsby retail"},
+            "still_right": False, "rev": rev}
+
+
+@pytest.mark.parametrize("seen, shown", [("r-old", True), ("r-new", False)],
+                         ids=["set-again-since", "the-one-binned"])
+def test_a_rule_set_again_after_its_bin_is_listed(run, tmp_path, seen, shown):
+    """The page hid a row of Your rules while an earlier bin on the same rule stood (up to 60
+    days): an employer turned down again, or a role set aside again, after its bin was not
+    listed. A bin hides only the row it was tapped on (its rev)."""
+    m = _model(held=False)
+    m["rules"]["rows"] = list(m["rules"].get("rows") or []) + [_declined("r-new")]
+    seed = {"actions/act~rule~declined~1": {
+        "item": "rule~declined~ormsby retail", "action": "rule.drop", "value": {},
+        "at": "2026-11-09T08:00:00Z", "rev_seen": seen, "tab": "t0"}}
+    path = os.path.join(str(tmp_path), "page.html")
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(app_page.standalone(app_page.render(m)))
+    got = run("engine", html=path, viewport=WIDE, seed=seed, fake={"canSend": "available"},
+              clock=CLOCK, steps=[{"hash": "settings",
+                                   "eval": "document.getElementById('main').textContent"}])
+    assert not got["errors"], got["errors"]
+    assert ("Employers you've turned down (1)" in got["after"][0]["eval"]) is shown

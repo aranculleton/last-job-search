@@ -22,10 +22,18 @@ Two signals drive the sort:
    subject) matches as already applied.
 
 2. Relevant to this fork? A commit that only touches files this fork deleted
-   (e.g. removed demo portals) is almost certainly N/A. We check each commit's
-   touched paths against the working tree and flag accordingly.
+   (e.g. removed demo portals) is almost certainly N/A. Each touched path is read
+   against HEAD and the upstream commit the fork was made from: a path that base
+   had and HEAD lacks, or one inside a folder that base had and the fork deleted,
+   is the fork's removal; a path neither had is new upstream work, worth reviewing.
 
-Usage: python tools/upstream_triage.py [--remote upstream] [--branch master]
+This app's history starts afresh at 3.0.0 and shares no commit with upstream, so
+git finds no merge base. FORK_POINT records the upstream commit it was made from,
+and the count starts there: without it, "behind" was every commit upstream ever
+made, and every file upstream added since read as one the app removed.
+(The new-path and removed-folder reading are from ai-job-search, #585 and #656.)
+
+Usage: python tools/upstream_triage.py [--remote upstream] [--branch master] [--base <sha>]
 Exits 0 always (a report, not a gate). Prints a note to stderr and exits 0 if
 the upstream ref is unavailable, so a scheduled job degrades gracefully.
 """
@@ -44,9 +52,33 @@ def git(*args: str) -> str:
     ).stdout
 
 
-def rev_list(range_spec: str) -> list[str]:
-    out = git("rev-list", "--no-merges", range_spec).strip()
+# The upstream commit this app was made from: ai-job-search at v1.7.0 plus the commits
+# through PR #413, 2 September 2026 (CHANGELOG-upstream.md says the same).
+FORK_POINT = "9833a5dcb75dcbeefb053c09f77639356de834a3"
+
+
+def rev_list(*specs: str) -> list[str]:
+    out = git("rev-list", "--no-merges", *specs).strip()
     return out.splitlines() if out else []
+
+
+def is_commit(ref: str) -> bool:
+    r = subprocess.run(["git", "cat-file", "-e", f"{ref}^{{commit}}"], capture_output=True)
+    return r.returncode == 0
+
+
+def fork_base(ref: str, given: str | None = None) -> tuple[str | None, bool]:
+    """(the upstream commit this fork was made from, whether git found it as a merge base).
+
+    --base when given, else the merge base of HEAD and `ref`, else FORK_POINT when this
+    clone holds it, else None: then nothing tells a removed path from a new one."""
+    if given:
+        return git("rev-parse", "--verify", f"{given}^{{commit}}").strip(), False
+    try:
+        return git("merge-base", "HEAD", ref).strip(), True
+    except subprocess.CalledProcessError:
+        pass
+    return (FORK_POINT, False) if is_commit(FORK_POINT) else (None, False)
 
 
 def patch_id(sha: str) -> str | None:
@@ -72,12 +104,32 @@ def files_touched(sha: str) -> list[str]:
     return [f for f in out.splitlines() if f]
 
 
-def path_exists(path: str) -> bool:
-    # ls-tree against HEAD is authoritative for "does this fork still ship it".
+def path_exists(path: str, ref: str = "HEAD") -> bool:
+    # The committed tree, not the working tree, is authoritative for "does this fork
+    # still ship it".
     r = subprocess.run(
-        ["git", "cat-file", "-e", f"HEAD:{path}"], capture_output=True
+        ["git", "cat-file", "-e", f"{ref}:{path}"], capture_output=True
     )
     return r.returncode == 0
+
+
+def removed_here(path: str, base: str | None) -> bool:
+    """Whether a path HEAD lacks is one this fork removed: the base had it, or the nearest
+    folder above it that either side has is one only the base has (a test upstream added
+    to a portal the fork deleted). A path in neither is new upstream work. With no base,
+    nothing says it was removed."""
+    if base is None:
+        return False
+    if path_exists(path, base):
+        return True
+    parts = path.split("/")[:-1]
+    for depth in range(len(parts), 0, -1):
+        parent = "/".join(parts[:depth])
+        if path_exists(parent):
+            return False
+        if path_exists(parent, base):
+            return True
+    return False
 
 
 def disabled_portal_prefixes(root: str = ".agents/skills") -> list[str]:
@@ -157,6 +209,8 @@ def main() -> int:
     ap.add_argument("--remote", default="upstream")
     ap.add_argument("--branch", default="master")
     ap.add_argument("--wontport", default=".github/upstream-wontport.txt")
+    ap.add_argument("--base", help="the upstream commit this fork was made from "
+                                   "(default: the merge base, else FORK_POINT)")
     args = ap.parse_args()
     ref = f"{args.remote}/{args.branch}"
     slug = remote_slug(args.remote)
@@ -173,7 +227,8 @@ def main() -> int:
         print(f"_Upstream ref `{ref}` was not available when this ran._")
         return 0
 
-    behind = rev_list(f"HEAD..{ref}")
+    base, shared = fork_base(ref, args.base)
+    behind = rev_list(ref, "^HEAD", *([f"^{base}"] if base and not shared else []))
     if not behind:
         print(f"Up to date with `{ref}`. Nothing to review. :white_check_mark:")
         _print_crossref(ref)
@@ -198,7 +253,7 @@ def main() -> int:
             skip.append((short, sha, subj, "on the fork's won't-port list"))
             continue
         touched = files_touched(sha)
-        present = [f for f in touched if path_exists(f)]
+        present = [f for f in touched if path_exists(f) or not removed_here(f, base)]
         # A commit whose only surviving footprint is the changelog is one whose
         # real change lives in files this fork removed - the code doesn't apply,
         # only a doc line would. Low signal; demote it.
@@ -221,8 +276,16 @@ def main() -> int:
             review.append((short, sha, subj, substantive))
 
     lines: list[str] = []
-    lines.append(f"Upstream `{ref}` has **{len(behind)}** commit(s) this fork lacks: "
+    since = (f" since `{base[:9]}`, the commit this fork was made from" if base and not shared
+             else "")
+    lines.append(f"Upstream `{ref}` has **{len(behind)}** commit(s) this fork lacks{since}: "
                  f"**{len(review)}** worth reviewing, **{len(skip)}** probably skippable.")
+    if base is None:
+        lines.append("")
+        lines.append("_This fork and upstream share no history and the commit it was made "
+                     "from is not here, so this counts all of upstream's history and cannot "
+                     "tell a file the fork removed from a new one. Fetch upstream in full or "
+                     "pass `--base <sha>`._")
     lines.append("")
     lines.append("_This is a triage report. Nothing was merged - review and port by hand._")
     lines.append("")

@@ -123,3 +123,16 @@ def test_a_save_that_never_lands_holds_the_page_only_for_a_while(ring):
     got, ok = _view(ring, R.CHAT, "2026-10-25T18:31:00Z", master, master)
     assert ok and not got.get("kept_newer"), got.get("kept_newer")
     assert _card_draft(ring) == OLD
+
+
+def test_a_reply_finished_in_a_chat_is_on_its_card_before_anything_is_saved(ring):
+    """PE-8 (the audit of 2026-11-10), checked as the review of 2026-11-11 asked: the chat that
+    drafts a reply (`reply.py finish`) brings the page up to date from its own copy at once, with
+    nothing committed, let alone landed, and the person's card shows the new draft."""
+    _draft(ring, OLD)
+    got, ok = _view(ring, R.CHAT, "2026-10-25T18:00:00Z", "", "")
+    assert ok and _card_draft(ring) == OLD, got
+    _draft(ring, NEW)                                  # saved in this copy only
+    got, ok = _view(ring, OWN, "2026-10-25T18:05:00Z", "", "")
+    assert ok, got
+    assert _card_draft(ring) == NEW

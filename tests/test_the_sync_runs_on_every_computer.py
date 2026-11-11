@@ -81,6 +81,16 @@ def test_a_git_that_hangs_is_stopped_and_is_an_ordinary_failure(tmp_path, monkey
 
 
 def test_no_git_on_the_computer_is_one_plain_line(tmp_path):
+    # The app looks for git in the folders a computer's installers use as well as on the PATH
+    # (local_path.extend: Homebrew's on a Mac), so a computer with git in one of them has no
+    # "no git" to try: GitHub's Mac keeps it in /opt/homebrew/bin, and the sync rightly found
+    # it there (2026-11-11). Every folder under the home is the test's own, and empty.
+    import local_path
+    first, last = local_path.dirs()
+    there = [d for d in first + last if not d.startswith(os.path.expanduser("~"))
+             and any(os.path.isfile(os.path.join(d, n)) for n in ("git", "git.exe"))]
+    if there:
+        pytest.skip(f"git is in {there[0]}, where the app always looks: no computer without it here")
     env = {"PATH": str(tmp_path), "HOME": str(tmp_path), "PYTHONDONTWRITEBYTECODE": "1"}
     r = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "sync_app.py"), "--pull"],
                        env=env, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60)
@@ -192,3 +202,18 @@ def test_the_first_sync_before_setup_says_nothing_about_what_changed(tmp_path):
     r = run()
     assert r.returncode == 0, r.stdout + r.stderr
     assert "What changed" in r.stdout and "One thing for you" in r.stdout
+
+
+def test_the_platform_report_names_a_failure_on_a_console_with_no_letter_for_it(monkeypatch, capsys):
+    # Windows' console (cp1252) has no letter for U+FFFD: a failing suite's output held one, the
+    # report crashed printing it, and the failures it was about were never named (2026-11-11).
+    import io
+    import platform_check
+    raw = io.BytesIO()
+    console = io.TextIOWrapper(raw, encoding="cp1252", errors="strict")
+    monkeypatch.setattr(sys, "stdout", console)
+    monkeypatch.setattr(platform_check, "RESULTS", [])
+    assert platform_check.check("the test suite", False, "FAILED tests/test_x.py - got �") is False
+    console.flush()
+    out = raw.getvalue().decode("cp1252")
+    assert "FAIL the test suite" in out and "FAILED tests/test_x.py" in out, out

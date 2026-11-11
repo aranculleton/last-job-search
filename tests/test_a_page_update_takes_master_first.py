@@ -189,3 +189,98 @@ def test_work_a_chat_on_the_computer_left_waiting_is_in_the_page_drawn_next(tmp_
     assert app_setup.take_master() == ""
     assert (a / "network_threads.csv").exists(), "the computer's notes are in this copy now"
     assert "Read on the computer" in (a / "network_threads.csv").read_text()
+
+
+# ---- audit SV-1: one run never mixes two versions of the app's code
+#
+# The page update imports part of the app before it takes master and the rest after, so when
+# master brought an app release in (another chat had taken it), one run drew the page with old
+# and new code at once (a person's computer, 2026-11-10: CLAUDE.md and tools/page_db.py changed
+# on disk mid-run). Taking master that brings in code runs the command again, once, on it.
+
+def test_taking_master_says_whether_it_brought_in_code(tmp_path, monkeypatch):
+    a, b = _copies(tmp_path)
+    _here(monkeypatch, a)
+    before = _git(a, "rev-parse", "HEAD").stdout.strip()
+    (b / "round.json").write_text('{"jobs": 10}\n')
+    _git(b, "add", "-A")
+    _git(b, "commit", "-qm", "a search")
+    _git(b, "push", "-q", "origin", "HEAD:master")
+    assert app_setup.take_master() == ""
+    assert not app_setup.code_moved(before), "data alone: nothing loaded is out of date"
+    before = _git(a, "rev-parse", "HEAD").stdout.strip()
+    (b / "tools").mkdir()
+    (b / "tools" / "page_db.py").write_text("VERSION = 2\n")
+    _git(b, "add", "-A")
+    _git(b, "commit", "-qm", "Sync from the app")
+    _git(b, "push", "-q", "origin", "HEAD:master")
+    assert app_setup.take_master() == ""
+    assert app_setup.code_moved(before)
+    assert not app_setup.code_moved(_git(a, "rev-parse", "HEAD").stdout.strip())
+
+
+def test_a_page_update_that_took_new_code_runs_again_on_it_once(tmp_path, monkeypatch):
+    import subprocess as sp
+    import types
+    import app
+    taken, again = [], []
+    monkeypatch.setattr(app_setup, "take_master", lambda: taken.append(1) or "")
+    monkeypatch.setattr(app_setup, "code_moved", lambda before: True)
+    real = sp.run
+
+    def run(cmd, *args, env=None, **k):
+        if cmd[0] != sys.executable:
+            return real(cmd, *args, env=env, **k)          # git, as it is
+        again.append((cmd, env))
+        return types.SimpleNamespace(returncode=0)
+    monkeypatch.setattr(sp, "run", run)
+    monkeypatch.delenv(app.VIEW_AGAIN, raising=False)
+    a = types.SimpleNamespace(argv=["view", str(tmp_path / "v"), "--dump", str(tmp_path / "d")])
+    assert app.cmd_view(a) == 0
+    assert len(again) == 1 and taken == [1]
+    cmd, env = again[0]
+    assert cmd[1:] == [os.path.abspath(app.__file__)] + a.argv
+    assert env[app.VIEW_AGAIN] == "1"
+    # The run made again never runs itself a third time, whatever master does meanwhile: it
+    # draws the page.
+    import app_model
+    import pytest
+
+    class Drawn(Exception):
+        pass
+
+    def drawn(*_a):
+        raise Drawn()
+    monkeypatch.setenv(app.VIEW_AGAIN, "1")
+    monkeypatch.setattr(app_model, "clock", drawn)
+    a.today = a.now = None
+    with pytest.raises(Drawn):
+        app.cmd_view(a)
+    assert len(again) == 1 and taken == [1, 1]
+
+
+def test_a_job_chat_on_the_computer_takes_master_before_its_job(tmp_path, monkeypatch, capsys):
+    """The engine review of 2026-11-11: a chat the app starts on the person's computer runs
+    `start --work` in their own folder, which skipped the day's check and so took no master;
+    nothing before the job's end did either, and people another chat had written to since were
+    read as never written to. Its start takes master first; a cloud job's chat, a fresh copy,
+    does not need to."""
+    import app
+    import app_listen
+    a, b = _copies(tmp_path)
+    (b / "job_search_tracker.csv").write_text("company\nKestrel Mutual\nLarkspur Retail\n")
+    _git(b, "commit", "-qam", "another chat wrote to someone at Larkspur Retail")
+    _git(b, "push", "-q", "origin", "HEAD:master")
+    _here(monkeypatch, a)
+    monkeypatch.setattr(app_setup, "record_job_chat", lambda work: True)
+    monkeypatch.setattr(app_setup, "start", lambda **k: (0, ["app start: the job's steps"]))
+    monkeypatch.setattr(app_listen, "shape", lambda code, lines, **k: lines)
+    monkeypatch.setattr(app, "own_tests_first", lambda: "")
+    monkeypatch.delenv(app.START_UPDATED, raising=False)
+    monkeypatch.setattr(app_listen, "chat_kind", lambda: "cloud")
+    assert app.main(["start", "--on", "test", "--tools", "browser", "--work", "draft~a"]) == 0
+    assert "Larkspur Retail" not in (a / "job_search_tracker.csv").read_text()
+    monkeypatch.setattr(app_listen, "chat_kind", lambda: "computer")
+    assert app.main(["start", "--on", "test", "--tools", "browser", "--work", "draft~a"]) == 0
+    assert "Larkspur Retail" in (a / "job_search_tracker.csv").read_text()
+    assert "the job's steps" in capsys.readouterr().out

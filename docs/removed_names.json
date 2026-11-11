@@ -287,6 +287,90 @@
    "date": "2026-11-06",
    "reason": "a chat a scheduled task started had no copy of the person's files and could not start the helper; the listener starts it with create_session",
    "changelog": "**Names your own checks might have used were retired**: `app_listen.fresh_task`, `app_listen.FRESH_FROM_TASK` and `app_listen.TASK_AHEAD_S`. The fresh page helper is now started by the chat that answers your page, never by a scheduled task."
+  },
+  {
+   "module": "tools/app_listen.py",
+   "name": "grown_tokens",
+   "date": "2026-11-11",
+   "reason": "nothing in the app called it: the helper's growth is read where it hands over",
+   "changelog": "**Eleven names your own checks might use were retired, since nothing in the app used them any more**: `app_listen.grown_tokens`, `app_model.owed_button`, `app_page.code_files`, `brief.news_items`, `computer.memory_line`, `general_resume.for_contact_word`, `merge_state.first_written`, `render_application.strip_legal`, `text_screen.other_language_named`, `ats_boards.shown_text` (openroles now counts what a posting hid itself) and `computer.SETUP_CHAT` (the chat you set the computer up in is now known by the exact words you pasted, so no other chat is put away for looking like it). Each did nothing the app runs: a check of yours that used one is brought in line by itself after the update (audit CS-3, CS-4)."
+  },
+  {
+   "module": "tools/app_model.py",
+   "name": "owed_button",
+   "date": "2026-11-11",
+   "reason": "the page's button is standing()'s, which reads the person's messages and rules; this older one was kept only for own tests",
+   "changelog": "**Eleven names your own checks might use were retired, since nothing in the app used them any more**: `app_listen.grown_tokens`, `app_model.owed_button`, `app_page.code_files`, `brief.news_items`, `computer.memory_line`, `general_resume.for_contact_word`, `merge_state.first_written`, `render_application.strip_legal`, `text_screen.other_language_named`, `ats_boards.shown_text` (openroles now counts what a posting hid itself) and `computer.SETUP_CHAT` (the chat you set the computer up in is now known by the exact words you pasted, so no other chat is put away for looking like it). Each did nothing the app runs: a check of yours that used one is brought in line by itself after the update (audit CS-3, CS-4)."
+  },
+  {
+   "module": "tools/app_page.py",
+   "name": "code_files",
+   "date": "2026-11-11",
+   "reason": "nothing in the app called it: the page is built in parts by app_page's own build",
+   "changelog": "**Eleven names your own checks might use were retired, since nothing in the app used them any more**: `app_listen.grown_tokens`, `app_model.owed_button`, `app_page.code_files`, `brief.news_items`, `computer.memory_line`, `general_resume.for_contact_word`, `merge_state.first_written`, `render_application.strip_legal`, `text_screen.other_language_named`, `ats_boards.shown_text` (openroles now counts what a posting hid itself) and `computer.SETUP_CHAT` (the chat you set the computer up in is now known by the exact words you pasted, so no other chat is put away for looking like it). Each did nothing the app runs: a check of yours that used one is brought in line by itself after the update (audit CS-3, CS-4)."
+  },
+  {
+   "module": "tools/brief.py",
+   "name": "news_items",
+   "date": "2026-11-11",
+   "reason": "nothing in the app called it: the brief's news comes from its own steps",
+   "changelog": "**Eleven names your own checks might use were retired, since nothing in the app used them any more**: `app_listen.grown_tokens`, `app_model.owed_button`, `app_page.code_files`, `brief.news_items`, `computer.memory_line`, `general_resume.for_contact_word`, `merge_state.first_written`, `render_application.strip_legal`, `text_screen.other_language_named`, `ats_boards.shown_text` (openroles now counts what a posting hid itself) and `computer.SETUP_CHAT` (the chat you set the computer up in is now known by the exact words you pasted, so no other chat is put away for looking like it). Each did nothing the app runs: a check of yours that used one is brought in line by itself after the update (audit CS-3, CS-4)."
+  },
+  {
+   "module": "tools/computer.py",
+   "name": "memory_line",
+   "date": "2026-11-11",
+   "reason": "the start removes a disagreeing memory note itself (memory_remove, memory_said); this line said to leave it, and only a test called it",
+   "changelog": "**Eleven names your own checks might use were retired, since nothing in the app used them any more**: `app_listen.grown_tokens`, `app_model.owed_button`, `app_page.code_files`, `brief.news_items`, `computer.memory_line`, `general_resume.for_contact_word`, `merge_state.first_written`, `render_application.strip_legal`, `text_screen.other_language_named`, `ats_boards.shown_text` (openroles now counts what a posting hid itself) and `computer.SETUP_CHAT` (the chat you set the computer up in is now known by the exact words you pasted, so no other chat is put away for looking like it). Each did nothing the app runs: a check of yours that used one is brought in line by itself after the update (audit CS-3, CS-4)."
+  },
+  {
+   "module": "tools/general_resume.py",
+   "name": "for_contact_word",
+   "date": "2026-11-11",
+   "reason": "nothing in the app called it",
+   "changelog": "**Eleven names your own checks might use were retired, since nothing in the app used them any more**: `app_listen.grown_tokens`, `app_model.owed_button`, `app_page.code_files`, `brief.news_items`, `computer.memory_line`, `general_resume.for_contact_word`, `merge_state.first_written`, `render_application.strip_legal`, `text_screen.other_language_named`, `ats_boards.shown_text` (openroles now counts what a posting hid itself) and `computer.SETUP_CHAT` (the chat you set the computer up in is now known by the exact words you pasted, so no other chat is put away for looking like it). Each did nothing the app runs: a check of yours that used one is brought in line by itself after the update (audit CS-3, CS-4)."
+  },
+  {
+   "module": "tools/merge_state.py",
+   "name": "first_written",
+   "date": "2026-11-11",
+   "reason": "the page record merges by newest_written since 2026-11-04; this was kept only for own tests",
+   "changelog": "**Eleven names your own checks might use were retired, since nothing in the app used them any more**: `app_listen.grown_tokens`, `app_model.owed_button`, `app_page.code_files`, `brief.news_items`, `computer.memory_line`, `general_resume.for_contact_word`, `merge_state.first_written`, `render_application.strip_legal`, `text_screen.other_language_named`, `ats_boards.shown_text` (openroles now counts what a posting hid itself) and `computer.SETUP_CHAT` (the chat you set the computer up in is now known by the exact words you pasted, so no other chat is put away for looking like it). Each did nothing the app runs: a check of yours that used one is brought in line by itself after the update (audit CS-3, CS-4)."
+  },
+  {
+   "module": "tools/render_application.py",
+   "name": "strip_legal",
+   "date": "2026-11-11",
+   "reason": "company_key.display_name does it, and only a test called this",
+   "changelog": "**Eleven names your own checks might use were retired, since nothing in the app used them any more**: `app_listen.grown_tokens`, `app_model.owed_button`, `app_page.code_files`, `brief.news_items`, `computer.memory_line`, `general_resume.for_contact_word`, `merge_state.first_written`, `render_application.strip_legal`, `text_screen.other_language_named`, `ats_boards.shown_text` (openroles now counts what a posting hid itself) and `computer.SETUP_CHAT` (the chat you set the computer up in is now known by the exact words you pasted, so no other chat is put away for looking like it). Each did nothing the app runs: a check of yours that used one is brought in line by itself after the update (audit CS-3, CS-4)."
+  },
+  {
+   "module": "tools/app.py",
+   "name": "data_current",
+   "date": "2026-11-10",
+   "reason": "nothing passed app.py start --dump, so it was never true; the start's page step reads through the page mirror instead (second audit D4)",
+   "changelog": "**A name your own checks might have used was retired**: `app.data_current`, which nothing called. A start brings your page up to date through what Claude keeps of it, so a page already current costs only a small read."
+  },
+  {
+   "module": "tools/text_screen.py",
+   "name": "other_language_named",
+   "date": "2026-11-11",
+   "reason": "only a test called it; the screen reads the posting's language another way",
+   "changelog": "**Eleven names your own checks might use were retired, since nothing in the app used them any more**: `app_listen.grown_tokens`, `app_model.owed_button`, `app_page.code_files`, `brief.news_items`, `computer.memory_line`, `general_resume.for_contact_word`, `merge_state.first_written`, `render_application.strip_legal`, `text_screen.other_language_named`, `ats_boards.shown_text` (openroles now counts what a posting hid itself) and `computer.SETUP_CHAT` (the chat you set the computer up in is now known by the exact words you pasted, so no other chat is put away for looking like it). Each did nothing the app runs: a check of yours that used one is brought in line by itself after the update (audit CS-3, CS-4)."
+  },
+  {
+   "module": "tools/ats_boards.py",
+   "name": "shown_text",
+   "date": "2026-11-11",
+   "reason": "openroles 0.5.0 counts what a posting's markup hid itself (Job.hidden), so the app no longer wraps its text converter; the app's own count was lost wherever a reader joined a description's parts",
+   "changelog": "**Eleven names your own checks might use were retired, since nothing in the app used them any more**: `app_listen.grown_tokens`, `app_model.owed_button`, `app_page.code_files`, `brief.news_items`, `computer.memory_line`, `general_resume.for_contact_word`, `merge_state.first_written`, `render_application.strip_legal`, `text_screen.other_language_named`, `ats_boards.shown_text` (openroles now counts what a posting hid itself) and `computer.SETUP_CHAT` (the chat you set the computer up in is now known by the exact words you pasted, so no other chat is put away for looking like it). Each did nothing the app runs: a check of yours that used one is brought in line by itself after the update (audit CS-3, CS-4)."
+  },
+  {
+   "module": "tools/computer.py",
+   "name": "SETUP_CHAT",
+   "date": "2026-11-11",
+   "reason": "a pattern that matched any chat title starting open, set up or start and naming a job search and a computer; the setup chat is now matched by the exact words the person pasted, so a chat of theirs with a similar title is never put away",
+   "changelog": "**Eleven names your own checks might use were retired, since nothing in the app used them any more**: `app_listen.grown_tokens`, `app_model.owed_button`, `app_page.code_files`, `brief.news_items`, `computer.memory_line`, `general_resume.for_contact_word`, `merge_state.first_written`, `render_application.strip_legal`, `text_screen.other_language_named`, `ats_boards.shown_text` (openroles now counts what a posting hid itself) and `computer.SETUP_CHAT` (the chat you set the computer up in is now known by the exact words you pasted, so no other chat is put away for looking like it). Each did nothing the app runs: a check of yours that used one is brought in line by itself after the update (audit CS-3, CS-4)."
   }
  ]
 }

@@ -41,7 +41,8 @@ def test_the_page_asks_how_many_and_says_ten_first_and_the_chat_passes_it_on():
     js = open(os.path.join(ROOT, "templates", "app", "app.js"), encoding="utf-8").read()
     assert re.search(r'label: "How many to bring back", value: "10"', js)
     assert "The best 10 (recommended)" in js and "size: Number(v.size || 10)" in js
-    skill = open(os.path.join(ROOT, ".claude", "skills", "app", "SKILL.md"), encoding="utf-8").read()
+    import app_skill
+    skill = app_skill.text()
     assert "`run_round.py --show <args.size>` (10 when it is not given" in skill
 
 

@@ -14,7 +14,6 @@
       "Bash(python3 salary_lookup.py:*)",
       "Bash(python tools/verify_pdf.py:*)",
       "Bash(python3 tools/verify_pdf.py:*)",
-      "Bash(pdftotext:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(git fetch origin:*)",

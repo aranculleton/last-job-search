@@ -40,7 +40,9 @@ DRAFT = {"company": "Wrenfield Freight Ltd", "role": "Supply Chain Analyst",
          "p1": "At Brindle & Hart I forecast by depot.", "p2": "Wrenfield moves goods.",
          "lead": "Where I would start:",
          "cl_bullets": [{"label": "Forecasting", "text": "Weekly models by depot."}],
-         "p4": "I am in Manchester."}
+         # Where they are and their right to work, as the example person's letter rule has
+         # it (audit_letters.close_flags): tools/platform_check.py checks this draft's letter.
+         "p4": "I am in Manchester with settled status and full right to work in the UK."}
 
 
 def _page(groups):

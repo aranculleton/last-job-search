@@ -124,9 +124,15 @@ def tables() -> dict:
     (app_alerts.WORK_COST)."""
     import app_alerts
     import page_db
+    # The resume drafted alone is `draft` work, not a kind of its own: its stages are an
+    # estimate beside them, its own minutes beside "Draft the resume only", and as much of
+    # Claude as any draft (page_db.RESUME_ONLY_STAGES).
     return {"stages": {kind: [[name, secs] for _key, name, secs in rows]
                        for kind, rows in page_db.STAGES.items()},
-            "work_cost": dict(app_alerts.WORK_COST)}
+            "estimates": {page_db.RESUME_ONLY_KIND: [[name, secs] for _key, name, secs
+                                                     in page_db.RESUME_ONLY_STAGES]},
+            "work_cost": dict(app_alerts.WORK_COST,
+                              **{page_db.RESUME_ONLY_KIND: app_alerts.WORK_COST["draft"]})}
 
 
 def compact_js(js: str) -> str:
@@ -197,14 +203,65 @@ def render(model: dict) -> str:
 # supporting files, one for each section of app.js and app.css, named by what they hold. A
 # file the published page already holds is left out of the next publish, and the Artifact
 # tool keeps it ("files it leaves out are kept"), so a republish reads the small page and only
-# the files that changed, and a change to one section is one small file.
+# the files that changed.
+#
+# What changes together decides where a part ends. A part was a whole section of app.js (up to
+# 60 KB), so 310 characters changed in one function re-read 59 KB, and a release re-read 480 to
+# 706 KB for about 150 KB of changed code (the efficiency audit, E-1). Cut where a size fell,
+# one line added early in a section moved every boundary after it. So a section is cut between
+# its top-level declarations, and a part ends after a declaration whose own name says so (about
+# one in PART_AIM, by a hash of the name, never of the code), once it holds PART_MIN: an edit
+# inside one function changes the one part that holds it, and an added or removed declaration
+# moves no boundary past the next named one. PART_CAP keeps parts small where no name ends
+# one. Over the app's last three releases this re-reads 271, 390 and 200 KB against 569, 689
+# and 468 (sections), with some 220 files against 76 (the parts load in parallel, in order).
+#
+# Sharing the code once instead, each person's page copying it from a page the app publishes
+# (Artifact `files` {artifact, path}), was weighed first and set aside: the source has to be
+# one the person can open, and a page is private to its owner by default (a stranger's chat
+# cannot open the maintainer's, least of all from another organization); the tool's own rule
+# is that Claude never publishes a file it has not read, which a copy made on the server skips;
+# and it would make a second place the page's code comes from, outside the person's copy.
 
 PART_MAX = 60 * 1024          # one Read of a few thousand tokens, far under its 256 KB limit
+PART_CAP = 16 * 1024          # a part grows past this only by one declaration bigger than it
+PART_MIN = 2 * 1024           # never ends a part smaller than this
+PART_AIM = 3                  # about one top-level declaration in three ends a part, by name
+# A published page holds at most 511 files a version, and the parts grow with the page's code
+# (417 KB of app.js on 26 October, about 1.2 MB and 216 files on 11 November): at about 3 MB
+# every republish would be refused (the review of 2026-11-11, E-1). Past FILES_MAX code files,
+# the build makes its parts bigger (PART_MIN and PART_CAP doubled, up to PART_MAX) until they
+# fit. Every boundary moves when it does, so that publish sends the whole code once.
+FILES_MAX = 300
+
+# The page version from which the page's code joins a big section's or a whole list's parts by
+# what each holds (the second audit, D6), found by its own words in build_versions so it holds
+# when the versions are numbered again. A page published before it joins only parts that carry
+# the head's own rev, so until it is republished a page update writes its parts that way
+# (`joins_by_hold`): sent the new way, a fresh load showed big sections and every "Show" list
+# blank for the minutes between an update and its republish (the review of 2026-11-11).
+JOINS_BY_HOLD = "a part of a long section or list holds what it holds"
+
+
+def joins_by_hold() -> bool:
+    """Does the published page's code join parts by what each holds? True where no page is
+    published (nothing reads them yet) or its version is that one or later."""
+    try:
+        import app_setup
+        import build_versions
+        if not app_setup.page_record().get("url"):
+            return True
+        since = next((v[0] for v in build_versions.METHODS["page"]["versions"]
+                      if JOINS_BY_HOLD in v[3]), None)
+        return since is None or int(build_versions.recorded().get("page") or 1) >= since
+    except Exception:  # noqa: BLE001  no profile: nothing published reads them
+        return True
 BATCH_MAX = 160 * 1024        # what one publish sends, so one agent reads it at a time
 PAGE_MAX = 64 * 1024          # the small page, whatever the size of the search
 _JS_HEAD = re.compile(r"^  // -{10,}\s*(.*)$")
 _CSS_HEAD = re.compile(r"^/\* -{10,}\s*(.*?)(?:\*/)?\s*$")
 _TOP_DECL = re.compile(r"^  (?:async function|function|const|let|class) ")
+_DECL_NAME = re.compile(r"^  (?:async function|function|const|let|class)\s+([A-Za-z0-9_$]+)")
 
 
 def _slug(text: str) -> str:
@@ -232,18 +289,101 @@ def _sections(lines: list[str], head: "re.Pattern", first: str) -> list[tuple[st
     return out
 
 
-def _cut(lines: list[str], fits) -> list[list[str]]:
-    """A section too big for one part, cut where a top-level declaration starts, so each
-    piece is still whole statements and the same edit always lands in the same piece."""
-    pieces, cur = [], []
+def _declarations(lines: list[str]) -> list[list[str]]:
+    """A section's lines, one list for each top-level declaration (the section's own head and
+    anything before its first declaration go with that first one)."""
+    out, cur = [], []
     for ln in lines:
-        if cur and _TOP_DECL.match(ln) and not fits(cur + [ln]):
-            pieces.append(cur)
+        if cur and _TOP_DECL.match(ln):
+            out.append(cur)
             cur = []
         cur.append(ln)
     if cur:
+        out.append(cur)
+    return out
+
+
+def _ends_part(first_line: str) -> str:
+    """The declaration's name where it ends a part (about one in PART_AIM, by the name's own
+    hash, so the same declaration always does), else ""."""
+    import hashlib
+    m = _DECL_NAME.match(first_line)
+    if not m:
+        return ""
+    return m.group(1) if int(hashlib.md5(m.group(1).encode("utf-8")).hexdigest(), 16) \
+        % PART_AIM == 0 else ""
+
+
+_WORD = re.compile(r"[A-Za-z_$][A-Za-z0-9_$]*")
+_FUNC = re.compile(r"^  (?:async )?function\s+([A-Za-z0-9_$]+)")
+
+
+def _safe_ends(decls: list[list[str]], texts: list[str]) -> list[bool]:
+    """After which declarations a part may end. A function declaration is there from the
+    start of its own script, so code that runs while the page loads (a const or a statement,
+    as `const S = {model: readModel(), ...}`) may call one written after it in its section;
+    in the next script it is not there yet. So a part never ends between such code and any
+    function it reaches, directly or through other functions of its section. Read from the
+    words alone, so it can only end parts less often than it might."""
+    owner = {}
+    for i, decl in enumerate(decls):
+        m = _FUNC.match(decl[0]) if decl else None
+        if m:
+            owner[m.group(1)] = i
+    words = [set(_WORD.findall(t)) for t in texts]
+    reach = [0] * len(decls)
+    for i, decl in enumerate(decls):
+        if decl and _FUNC.match(decl[0]):
+            continue                       # runs only when called
+        seen, todo, far = set(), [w for w in words[i] if w in owner], i
+        while todo:
+            w = todo.pop()
+            if w in seen:
+                continue
+            seen.add(w)
+            far = max(far, owner[w])
+            todo += [x for x in words[owner[w]] if x in owner and x not in seen]
+        reach[i] = far
+    out, most = [], -1
+    for i in range(len(decls)):
+        most = max(most, reach[i])
+        out.append(most <= i)
+    return out
+
+
+def _cut(lines: list[str], part_min: int = PART_MIN,
+         part_cap: int = PART_CAP) -> list[list[str]]:
+    """A section cut into parts between its top-level declarations, each part ending after a
+    declaration whose name ends one (_ends_part) once it holds `part_min`, or before a
+    declaration that would take it past `part_cap`, wherever a part may end (_safe_ends): every
+    piece is whole statements, and the same edit always lands in the same piece."""
+    decls = _declarations(lines)
+    texts = [compact_js("\n".join(d)) for d in decls]
+    safe = _safe_ends(decls, texts)
+    pieces, cur, size = [], [], 0
+    for i, decl in enumerate(decls):
+        n = len(texts[i].encode("utf-8")) + 1
+        if cur and size + n > part_cap and (i == 0 or safe[i - 1]):
+            pieces.append(cur)
+            cur, size = [], 0
+        cur += decl
+        size += n
+        if size >= part_min and safe[i] and _ends_part(decl[0]):
+            pieces.append(cur)
+            cur, size = [], 0
+    if cur:
         pieces.append(cur)
     return pieces
+
+
+def _piece_name(section: str, piece: list[str], first: bool) -> str:
+    """A part's name: its section's, and after the first, the declaration it opens with, so a
+    part keeps its name while its code is unchanged, wherever it falls in the section."""
+    head = _slug(section)[:24].rstrip("-")
+    if first:
+        return head
+    m = _DECL_NAME.match(next((ln for ln in piece if _TOP_DECL.match(ln)), ""))
+    return f"{head} {m.group(1) if m else 'part'}"
 
 
 def _named(kind: str, parts: list[tuple[str, str]], ext: str) -> list[tuple[str, str]]:
@@ -268,15 +408,33 @@ def js_parts() -> list[tuple[str, str]]:
     except ValueError as e:
         raise ValueError("app.js must open with (function () { and end with })();") from e
     body = [ln for ln in lines[start + 1:end] if ln.strip() != '"use strict";']
-    parts = []
-    for name, sec in _sections(body, _JS_HEAD, "start"):
-        fits = lambda ls: len(compact_js("\n".join(ls)).encode("utf-8")) <= PART_MAX  # noqa: E731
-        pieces = [sec] if fits(sec) else _cut(sec, fits)
-        for i, piece in enumerate(pieces):
-            text = compact_js("\n".join(piece))
-            if text.strip():
-                parts.append((name if i == 0 else f"{name} {i + 1}", '"use strict";\n' + text + "\n"))
-    return _named("js", parts, "js")
+    sections = _sections(body, _JS_HEAD, "start")
+    room = FILES_MAX - len(css_parts())
+    part_min, part_cap = PART_MIN, PART_CAP
+    while True:
+        parts = []
+        for name, sec in sections:
+            for piece in _cut(sec, part_min, part_cap):
+                text = compact_js("\n".join(piece))
+                if not text.strip():
+                    continue
+                # Grown past FILES_MAX: a section's last part under part_min joins the next
+                # section's first, so many small sections are not a file each.
+                if part_min > PART_MIN and parts and _size(parts[-1][1]) < part_min and \
+                        _size(parts[-1][1]) + _size(text) <= part_cap:
+                    parts[-1] = (parts[-1][0], parts[-1][1] + "\n" + text, name)
+                    continue
+                parts.append((_piece_name(name, piece, not parts or parts[-1][2] != name),
+                              text, name))
+        if len(parts) <= room or part_cap >= PART_MAX:
+            break
+        # More files than a version may hold with the rest: bigger parts (FILES_MAX).
+        part_min, part_cap = part_min * 2, min(part_cap * 2, PART_MAX)
+    return _named("js", [(n, '"use strict";\n' + t + "\n") for n, t, _sec in parts], "js")
+
+
+def _size(text: str) -> int:
+    return len(text.encode("utf-8"))
 
 
 def css_parts() -> list[tuple[str, str]]:
@@ -287,11 +445,6 @@ def css_parts() -> list[tuple[str, str]]:
         if text.strip():
             parts.append((name, text + "\n"))
     return _named("css", parts, "css")
-
-
-def code_files() -> dict:
-    """{published path: its text} for every code file the page in parts loads."""
-    return dict(css_parts() + js_parts())
 
 
 # The sections the page takes from its own store (app.py view writes each as view/<name>):
@@ -391,12 +544,15 @@ def plan(built: dict, held: list | None, caps: str = "", url: str = "",
         have = good
     new = [p for p in built["files"] if whole or p not in have]
     gone = sorted((set(listed) if listed is not None else have) - set(built["files"])) if url else []
+    # The page is read once, before the first publish, and named again, unchanged, by every
+    # publish after it: it counts in the first alone (it was read in all nine of a first
+    # publish, E-1).
     batches: list[list[str]] = [[]]
     size = built["sizes"]["page.html"]
     for p in new:
         if batches[-1] and size + built["sizes"][p] > BATCH_MAX:
             batches.append([])
-            size = built["sizes"]["page.html"]
+            size = 0
         batches[-1].append(p)
         size += built["sizes"][p]
     return {"new": new, "gone": gone, "missing": missing, "batches": batches,

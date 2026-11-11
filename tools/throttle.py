@@ -177,8 +177,13 @@ OVERRIDE_POINTS = 10
 # month. A do-not-target entry stopped suppressing at its review date and its
 # skips went on suppressing for ever. Honoured for `excluded` entries too: a
 # hand-written exclusion citing the company throttle is the same claim.
+#
+# The role already applied to is one of them: throttle() reads it from the tracker's current
+# row every run (closed_applications, silent_applications), and kept as a ruling it held its
+# posting out for good after the row was put right (the rules review, 2026-11-11).
 RE_EVALUATED = ("company throttle", "same-employer duplicate", "referral in progress",
-                "do not target", "candidate's bar")
+                "do not target", "candidate's bar", "already applied to this role",
+                "already in a hiring process for this role")
 
 # A queue decision, not a verdict: the posting passed every gate and was never
 # read, because the round ran out of slots or ranked it below a cut. Older rounds
@@ -394,7 +399,7 @@ SILENCE_DAYS = 45
 def _row_age_days(row: dict, today: "dt.date | None" = None) -> int | None:
     """Days since the application went (applied_on), or since the row's date where it
     names none, or None when neither can be read."""
-    return days_since(applied_on(row) or row.get("date"), today, iso_only=True)
+    return days_since(applied_on(row) or row.get("date"), today or person.today(), iso_only=True)
 
 
 def is_silent(row: dict, today: "dt.date | None" = None) -> bool:
@@ -414,7 +419,7 @@ def is_silent(row: dict, today: "dt.date | None" = None) -> bool:
     age = _row_age_days(row, today)
     # Silence counts from the posting's closing date where it closes after the application
     # went: nothing is reviewed before it (tools/followups.py closes_on).
-    closes = days_since(row.get("deadline"), today, iso_only=True)
+    closes = days_since(row.get("deadline"), today or person.today(), iso_only=True)
     if age is not None and closes is not None:
         age = min(age, closes)
     return age is not None and age >= SILENCE_DAYS
@@ -592,7 +597,7 @@ def ruled_out(entries: dict, today: str = "") -> tuple[dict[str, str],
             # and one /rank could not fetch, with no deadline, is shown when a round finds it.
             ended = as_date(e.get("deadline"), iso_only=True)
             n = norm(e.get("url") or u)
-            if n and ended and ended < (now or dt.date.today()):
+            if n and ended and ended < (now or person.today()):
                 urls[n] = f"expired in seen_jobs.json: its deadline, {ended.isoformat()}, has passed"
             continue
         if status not in ("excluded", "skipped"):
@@ -607,9 +612,14 @@ def ruled_out(entries: dict, today: str = "") -> tuple[dict[str, str],
         # to be able to say why.
         if not reason.strip():
             continue
-        # The person's own call (tools/exclude.py --basis person) holds until they
-        # lift it: no better screen and no rule change speaks for them.
+        # The person's own call (tools/exclude.py --basis person) holds until they lift it
+        # or its own end (exclude.set_aside_until: about six months, for good only where their
+        # words say so): no better screen and no rule change speaks for them. Past its end
+        # it blocks nothing, and the posting comes back once, marked (set_aside_returns).
         own_call = e.get("basis") == "person"
+        if own_call and status == "excluded" and not exclude.set_aside_holds(
+                e, now or person.today()):
+            continue
         # Resting on named parts of the person's own rules (a blocker row on their
         # triage card, one gate setting), it stands while those parts do: their card
         # is today's rule for it, and `exclude.holds` below lapses it the day the part
@@ -649,6 +659,53 @@ def ruled_out(entries: dict, today: str = "") -> tuple[dict[str, str],
     return urls, pairs
 
 
+def set_aside_returns(kept: list, entries: dict, today: str = "") -> list:
+    """Each surfaced row that a role the person set aside has come back as, past that ruling's
+    end (exclude.set_aside_until), marked once: `set_aside_note`, "You set a role like this
+    aside on <day> (<their reason>): showing it again in case things changed". The ruling is
+    recorded as lifted (in `entries`, which the caller saves), so it is shown this once and is
+    an ordinary posting after; setting it aside again starts a new ruling. Returns the keys
+    lifted."""
+    import exclude
+    now = as_date(today, iso_only=True) or person.today()
+    by_url: dict = {}
+    by_pair: dict = {}
+    for k, e in entries.items():
+        if not (isinstance(e, dict) and e.get("basis") == "person"
+                and str(e.get("status") or "").lower() == "excluded"):
+            continue
+        if exclude.set_aside_holds(e, now):
+            continue
+        n = norm(e.get("url") or k)
+        if n:
+            by_url.setdefault(n, k)
+        pair = entry_pair(e, str(e.get("exclusion_reason") or ""))
+        if pair:
+            by_pair.setdefault(pair, k)
+    lifted = []
+    for r in kept:
+        n = norm(r.get("url") or "")
+        k = by_url.get(n) if n else None
+        if k is None:
+            k = ruled_pair(by_pair, r) or None
+        if k is None:
+            continue
+        e = entries[k]
+        day = exclude.set_aside_on(e)
+        said = re.sub(r"\s*\(said on the page\)\s*$", "",
+                      " ".join(str(e.get("exclusion_reason") or "").split()))[:80].rstrip(" .")
+        when = f" on {day.day} {day.strftime('%B %Y')}" if day else ""
+        r["set_aside_note"] = (f"Claude left this out{when}" if e.get("by") == exclude.CHAT
+                               else f"You set a role like this aside{when}")
+        r["set_aside_note"] += ((f" ({said})" if said else "")
+                                + ": showing it again in case things changed")
+        if e.get("status") == "excluded":
+            e.update({"status": "lifted", "lifted_date": now.isoformat(),
+                      "lifted_because": "set aside long enough ago: shown again once"})
+            lifted.append(k)
+    return lifted
+
+
 def entry_pair(e: dict, reason: str = "") -> tuple[str, str, str] | None:
     """(title, employer, city) for a seen_jobs entry, the key its ruling is kept under, or None
     with no title or employer. The city is ANYWHERE for an entry with no location, with no
@@ -658,6 +715,11 @@ def entry_pair(e: dict, reason: str = "") -> tuple[str, str, str] | None:
     covers the same role posted remote in another country or in a city."""
     t, k = title_key(e.get("title")), key(e.get("company"))
     if not (t and k):
+        return None
+    import exclude
+    if e.get("by") == exclude.CHAT:
+        # A chat's judgement on one posting (a draft it stopped, app.py done --left-out) holds
+        # that posting by its own address, never the role wherever it is posted.
         return None
     said = reason or str(e.get("exclusion_reason") or "")
     if e.get("basis") == "person" and not _about_place(said):
@@ -704,6 +766,19 @@ def ruled_pair(pairs: dict, job: dict) -> str:
 # earlier of the two. A relist often comes under a new URL too, so a posting with
 # the same title, employer and city as one seen within this many days is that
 # posting again; past it, the same title is more likely a new opening.
+#
+# What this costs, said as it is (the rules review, 2026-11-11): a second requisition with the
+# same title, employer and city, opened while the first is still being seen, is read as the
+# first's copy and is as old as the first, so the person's search window leaves it out. Nothing
+# here can tell a copy on another board from a second requisition (no board gives a requisition
+# id every other board shares), and reading every such posting as new brought month-old copies
+# back as fresh. It is bounded, never for good: only a posting the search still sees refreshes
+# the first's days (this file is the only writer of last_seen), and once neither is inside the
+# search window it stops reaching here, so a second requisition is aged from the first for at
+# most the person's window plus RELIST_WINDOW days after the first was first seen. In that time
+# it is not shown, and a second requisition is not the same job, so it is missed; once the
+# first is past the window, neither shows. The cut is "age:", decided afresh by every search
+# and recorded nowhere as a ruling, so nothing about it outlives the window.
 RELIST_WINDOW = 30
 
 _CITY_NOISE = re.compile(r"\([^)]*\)|\b(?:hybrid|on[- ]?site|in[- ]office|remote|flexible)\b")
@@ -770,7 +845,7 @@ def _seen_index(entries: dict, today: str = "") -> tuple[dict, dict]:
     The second holds only postings seen within RELIST_WINDOW days of `today`, the
     one first seen earliest for each.
     """
-    now = as_date(today, iso_only=True) or dt.date.today()
+    now = as_date(today, iso_only=True) or person.today()
     since = (now - dt.timedelta(days=RELIST_WINDOW)).isoformat()
     urls: dict[str, str] = {}
     pairs: dict[tuple, str] = {}
@@ -812,7 +887,7 @@ def oldest_copies(rows: list, today: str = "") -> dict:
     new opening. The date of a copy is its own (`date` or `posted_date`) or the day this
     search first saw it.
     """
-    now = as_date(today, iso_only=True) or dt.date.today()
+    now = as_date(today, iso_only=True) or person.today()
     since = (now - dt.timedelta(days=RELIST_WINDOW)).isoformat()
     out: dict = {}
     for job in rows:
@@ -926,7 +1001,7 @@ def load_do_not_target(path: str = DO_NOT_TARGET, today: str = "",
     data = _read_do_not_target(path) if data is None else data
     if not data:
         return {}
-    today = today or dt.date.today().isoformat()
+    today = today or person.today().isoformat()
     out = {}
     for name, e in (data.get("companies") or {}).items():
         if not isinstance(e, dict):
@@ -948,7 +1023,7 @@ def expired_do_not_target(path: str = DO_NOT_TARGET, today: str = "",
     data = _read_do_not_target(path) if data is None else data
     if not data:
         return []
-    today = today or dt.date.today().isoformat()
+    today = today or person.today().isoformat()
     return sorted(n for n, e in (data.get("companies") or {}).items()
                   if isinstance(e, dict) and do_not_target_until(e) < today)
 
@@ -1105,15 +1180,73 @@ def is_route(row: dict) -> bool:
     return not NOT_A_ROUTE.search(said)
 
 
+# A route whatever its age: a referral in flight, a call booked.
+ROUTE_ANY_AGE = {"referral_in_progress", "call_booked"}
+
+
+def _heard(threads) -> dict[str, str]:
+    """{contact_id: the day of their latest message} from the message log's rows."""
+    try:
+        sys.path.insert(0, os.path.join(ROOT, "tools", "network"))
+        from state import said_something
+    except Exception:  # noqa: BLE001  no reading of the log: no ages
+        return {}
+    out: dict[str, str] = {}
+    for r in threads or ():
+        if said_something(r):
+            cid = str(r.get("contact_id") or "").strip()
+            day = str(r.get("date") or "")[:10]
+            if day > out.get(cid, ""):
+                out[cid] = day
+    return out
+
+
+def _still_a_route(row: dict, live: dict, heard: dict, today) -> bool:
+    """A reply is a way in while it is recent (SILENCE_DAYS), while the record says what it is
+    for (a next action), or whatever its age where a referral is in flight or a call booked. A
+    reply months old with no action recorded put "DO NOT APPLY COLD" and a fit bonus on its
+    employer: 96 employers in one book, 93 of their rows with nothing recorded (the audit,
+    2026-11-10). With no message of theirs in the log, as before: a route."""
+    # The row's own status counts as well as the log's reading: a referral in flight is the
+    # person's word on the row, and a word from the referrer since reads as a reply owed.
+    if (_status_of(row, live) in ROUTE_ANY_AGE
+            or str(row.get("status") or "").strip() in ROUTE_ANY_AGE
+            or str(row.get("next_action") or "").strip()):
+        return True
+    day = as_date(heard.get(str(row.get("contact_id") or "").strip()), iso_only=True)
+    return day is None or (today - day).days <= SILENCE_DAYS
+
+
+def route_rows(rows: list[dict], live: dict | None, threads=None, today=None) -> list[dict]:
+    """The contacts who are a way in at their employer: replied (RESPONDED), not marked as no
+    route (`is_route`), and still one (`_still_a_route`, from the message log's `threads`).
+    The one rule the warm routes and the brief both read."""
+    live = live or {}
+    heard = _heard(threads) if threads else {}
+    now = as_date(today, iso_only=True) or person.today()
+    return [r for r in rows or () if _status_of(r, live) in RESPONDED and is_route(r)
+            and _still_a_route(r, live, heard, now)]
+
+
 def warm_routes(path: str = CONTACTS, rows: list[dict] | None = None,
-                live: dict[str, str] | None = None) -> dict[str, list[dict]]:
-    """Employer key -> the people there who have actually replied and are a way in."""
+                live: dict[str, str] | None = None, threads=None,
+                today=None) -> dict[str, list[dict]]:
+    """Employer key -> the people there who have actually replied and are a way in
+    (`_still_a_route`). `threads` is the message log's rows, read from beside `path` when the
+    contact book is read here too; without it, every reply counts, as before."""
     if rows is None:
         rows = _contact_rows(path)
         if not rows:
             return {}
         live = _derived_statuses(rows, threads_beside(path))
-    return _contacts_by_employer(path, RESPONDED, [r for r in rows if is_route(r)], live)
+        if threads is None:
+            try:
+                import csv_store
+                tp = threads_beside(path)
+                threads = csv_store.read_rows(tp) if tp and os.path.exists(tp) else []
+            except Exception:  # noqa: BLE001  no log: every reply counts
+                threads = []
+    return _contacts_by_employer(path, RESPONDED, route_rows(rows, live, threads, today), live)
 
 
 def pending_outreach(path: str = CONTACTS, rows: list[dict] | None = None,
@@ -1185,6 +1318,8 @@ _TITLE_NOISE = re.compile(r"[\W_]+")
 _TITLE_TAG = re.compile(
     r"\((?:future opportunities|evergreen|talent pool|remote|hybrid|on[- ]?site|"
     r"full[- ]time|permanent|[mfwd]/[mfwd]/[mfwd]|all genders)\)", re.I)
+# The "++" of C++ and the "#" of C# and F#, written straight onto a word.
+_TITLE_LANGUAGE = re.compile(r"(?<=[^\W_])(?:\+\+|#)")
 
 
 def title_key(title) -> str:
@@ -1199,7 +1334,13 @@ def title_key(title) -> str:
     Data Analyst (Hybrid)" and "Sr. Data Analyst" were new postings to the age gate and
     to a ruling on "Senior Data Analyst" at the same employer and city.
     """
-    x = _TITLE_NOISE.sub(" ", _TITLE_TAG.sub(" ", str(title or "")).casefold())
+    x = _TITLE_TAG.sub(" ", str(title or "")).casefold()
+    # "C++", "C#" and "F#" are languages, and C++, C# and C three roles: with the "+" and
+    # "#" dropped as punctuation all three were "c developer", so an application, a ruling or
+    # a sighting of one stood for the others (from ai-job-search, #830). Spelled out only on
+    # a word, so a "+" or "#" standing alone is still nothing.
+    x = _TITLE_LANGUAGE.sub(lambda m: "plusplus" if m.group(0) == "++" else "sharp", x)
+    x = _TITLE_NOISE.sub(" ", x)
     x = re.sub(r"\b(sr|snr)\b", "senior", x)
     x = re.sub(r"\b(jr)\b", "junior", x)
     return " ".join(x.split())
@@ -1520,7 +1661,7 @@ def main() -> int:
     ap.add_argument("--threads", default=None,
                     help="the message log contact statuses are derived from (default: the "
                          "network_threads.csv beside --contacts)")
-    ap.add_argument("--today", default=dt.date.today().isoformat())
+    ap.add_argument("--today", default=person.today().isoformat())
     ap.add_argument("--no-write", action="store_true",
                     help="do not record skips in seen_jobs.json")
     ap.add_argument("--keep-ruled-out", dest="keep_ruled_out", action="store_true",
@@ -1557,6 +1698,9 @@ def main() -> int:
                              referral_holds(a.contacts, rows=contacts, live=live),
                              silent_applications(a.tracker, today, rows=tracker),
                              closed_applications(a.tracker, rows=tracker))
+
+    # A role set aside past its end, come back: marked once, and its ruling lifted.
+    set_aside_returns(kept, seen["seen"], a.today)
 
     stale = expired_do_not_target(a.do_not_target, a.today, data=dnt)
     if stale:
@@ -1601,7 +1745,7 @@ def main() -> int:
         print(f"  pri{r.get('priority', 0):>4} fit{r.get('fit', 0):>4} "
               f"{(r.get('company') or '')[:28]:28} {(r.get('title') or '')[:46]}")
         for note in ("warm_route_note", "referral_note", "throttle_override_note", "drafted_note",
-                     "silent_application_note"):
+                     "silent_application_note", "set_aside_note"):
             if r.get(note):
                 print(f"        {r[note][:110]}")
     return 0

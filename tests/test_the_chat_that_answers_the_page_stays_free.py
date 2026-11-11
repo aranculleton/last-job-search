@@ -131,8 +131,10 @@ def test_the_round_s_own_step_moves_the_stage_once_the_job_sites_are_done(search
                                       stage_at="2026-10-25T17:40:00Z", left_s=60, left_at="2026-10-25T17:50:00Z",
                                       lease_until="2026-10-25T18:10:00Z",
                                       stages=page_db.progress("search")["stages"]), version=3)
+    # Named by the chat it was claimed under: a pin naming none never writes over a live claim
+    # (the review of 2026-11-11, PE-1).
     got = json.loads(search.run("pin", search.dump, "--work", "search~1", "--stage", "scrape",
-                                "--log", log, "--now", NOW))
+                                "--log", log, "--chat", "cloud-1", "--now", NOW))
     _, body = _writes(got["batches"])[("work", "search~1")]
     # Reading postings starts its own clock, with no time left carried from the job sites.
     assert body["stage"] == 3 and body["stage_at"] == NOW
@@ -150,7 +152,7 @@ def test_a_pin_moves_the_stage_renews_the_lease_and_keeps_the_time_left(search, 
     _round_log(log)
     got = json.loads(search.run("pin", search.dump, "--work", "search~1", "--stage", "scrape",
                                 "--line", "Searching 4 job sites, 102 of 162 done",
-                                "--log", log, "--now", NOW))
+                                "--log", log, "--chat", "cloud-1", "--now", NOW))
     assert got["stage"] == 1 and got["count"] == {"done": 102, "total": 162}
     assert got["left_s"] == 600 and got["stop_asked"] is False
     entry, body = _writes(got["batches"])[("work", "search~1")]
@@ -161,8 +163,9 @@ def test_a_pin_moves_the_stage_renews_the_lease_and_keeps_the_time_left(search, 
     assert body["left_s"] == 600 and body["left_at"] == NOW
     assert [s["text"] for s in body["steps"]][-1] == "Searching 4 job sites, 102 of 162 done"
     # The next pin from the same folder is pinned to the version this one makes.
+    # Named by its chat, as every pin on work another chat could hold (the page review, PE-1).
     got = json.loads(search.run("pin", search.dump, "--work", "search~1", "--stage", "read",
-                                "--line", "Reading 40 postings", "--now", LATER))
+                                "--line", "Reading 40 postings", "--chat", "cloud-1", "--now", LATER))
     entry, body = _writes(got["batches"])[("work", "search~1")]
     assert entry["if_version"] == 4
     # A new stage starts its own clock, with no count and no time left of the last one.
@@ -302,7 +305,8 @@ def test_work_begun_in_a_chat_is_on_the_work_list_as_that_chats_own(search):
         page_db.ask(page_db.load(search.dump), "prep", "Kestrel Mutual prep",
                     app_model.parse_time(NOW), os.path.join(search.dump, "nobody"), here=True)
     # The skill says to use it for work, and the busy line for an answer only.
-    skill = " ".join(_read(".claude/skills/app/SKILL.md").split())
+    import app_skill
+    skill = " ".join(app_skill.text().split())
     assert "Work asked for in a chat is on the page's work list too" in skill
     assert "--here --chat <your chat id>" in skill and "never for work" in skill
 
@@ -360,8 +364,63 @@ def test_a_drafts_finish_queues_its_files_for_the_chat_that_answers_the_page(sea
               "stages": page_db.progress("draft")["stages"]}
     steps = " ".join(app.job_steps(chosen, "cloud-1", PAGE))
     assert "upload nothing here" in steps and "--work draft~3 (it takes master first" in steps
-    skill = " ".join(_read(".claude/skills/app/SKILL.md").split())
+    import app_skill
+    skill = " ".join(app_skill.text().split())
     assert "nobody uploads by hand" in skill and "`args.paths` names them" in skill
+
+
+def test_a_ring_loads_only_the_part_of_the_skill_it_needs():
+    """Each ring's subagent loaded the whole app skill, 50,540 characters, and the listener
+    carried it all, though a ring that is not a message in the chat needs neither that part
+    (17,606) nor most of step 4's table (12,087); and the skill said "already loaded on a wake:
+    read neither again", which a subagent had not (the efficiency audit, E-3). SKILL.md is
+    the listener's card and says where the rest is; a ring's subagent reads wake.md with it;
+    `wake` prints the item's own row, so the table is read only for a kind with none."""
+    import app_skill
+    card, wake = app_skill.read("SKILL.md"), app_skill.read("wake.md")
+    assert len(card) <= 12_000, len(card)
+    assert len(card) + len(wake) <= 25_000, len(card) + len(wake)
+    assert "already loaded on a wake" not in app_skill.text()
+    assert "read `.claude/skills/app/wake.md` once" in " ".join(card.split())
+    for name in app_skill.FILES[1:]:
+        assert f"`.claude/skills/app/{name}`" in card, name
+    for kind in page_db.WORK_KINDS:
+        assert app.work_row(kind), kind              # every kind's row, printed by `wake`
+    assert "chat.md" in app.work_row("talk")
+
+
+def test_a_pasted_message_is_sent_to_its_part_of_the_skill():
+    """The card said to read a part only "when the wake names its part", which steered a chat
+    with a pasted message (no wake at all) away from chat.md, and CLAUDE.md sent that chat to a
+    section name the card no longer holds; jobs.md sent a refused pin to "any refused write
+    (below)", which is in SKILL.md now (the review of 2026-11-11, E-3)."""
+    import app_skill
+    card = " ".join(app_skill.read("SKILL.md").split())
+    assert "when the wake names its part" not in card
+    assert "Read a file only when the work in hand is its part" in card
+    with open(os.path.join(ROOT, "CLAUDE.md"), encoding="utf-8") as fh:
+        row = next(ln for ln in fh if ln.startswith("| A screenshot, message or link pasted"))
+    assert "`.claude/skills/app/chat.md`" in row
+    jobs = " ".join(app_skill.read("jobs.md").split())
+    assert "any refused write (below)" not in jobs
+    assert "any refused write (SKILL.md" in jobs
+
+
+def test_the_folder_every_write_names_has_a_short_name():
+    """A page update's batch names each record's file by its whole path, which the chat types
+    out again for every write: 36 writes of about 190 characters, some 110 of each the folder's
+    path (the efficiency audit, E-18). The folder is the scratchpad's, which Claude reads
+    without asking; its own name is kept short, and chosen by the code: told to name it short,
+    every fresh subagent chose `w1` and read into an earlier wake's folder, and one name for
+    every job (`j1`) did the same to a job chat's second job (the review of 2026-11-11)."""
+    import app_skill
+    import page_reads
+    wake = " ".join(app_skill.read("wake.md").split())
+    assert "python3 tools/app.py reads --in \"<your scratchpad>\"" in wake
+    assert page_reads.FRESH_STEM == "w"
+    chosen = {"work": "draft~1", "kind": "draft", "title": "x", "stages": []}
+    assert "a fresh folder in your scratchpad named j-draft-1," in \
+        " ".join(app.job_steps(chosen, "cloud-1", PAGE))
 
 
 # ------------------------------------------------------------------ a big job runs elsewhere
@@ -386,7 +445,8 @@ def test_a_big_job_is_never_run_by_the_chat_that_answers_the_page(monkeypatch):
         # page's data. Only what this chat has pre-approved is carried (create_session drops the
         # rest), so Artifact, which still asks, is never claimed (the stranger audit, X-8).
         assert call["extra_allowed_tools"] == ["ArtifactData", "ArtifactComments"]
-        said = call["prompt"]
+        import job_prompt
+        said = job_prompt.followed(call["prompt"])       # as the job's chat sees it (E-8)
         assert f"--work {kind}~1" in said and "app.py pin" in said and PAGE in said
         assert "Never publish, watch or answer the page" in said
         # Landed, it brings the page up to date itself (2026-11-03: a search's ten jobs sat
@@ -396,7 +456,8 @@ def test_a_big_job_is_never_run_by_the_chat_that_answers_the_page(monkeypatch):
         assert "tools/app.py view" in said and PAGE in said
         # Landed first, then drawn from master; the page's documents are stored as "screen".
         assert said.index("land your work on master") < said.index("tools/app.py view")
-        assert "collections screen, meta, addr and work" in said
+        # Through the copy kept, only what changed (the review of 2026-11-11, 2C-4).
+        assert "app.py reads" in said and "--for-view" in said
         assert ("--log" in said) == (kind == "search")
         # Where no chat can be started: a chat on a computer, no create_session, no address.
         for args in ((chosen, "listener-1", "cloud", True), (chosen, "listener-1", "computer")):
@@ -404,8 +465,9 @@ def test_a_big_job_is_never_run_by_the_chat_that_answers_the_page(monkeypatch):
             assert got["run"] == "background agent" and "create_session" not in got
             agent = got["agent"]
             assert agent["run_in_background"] is True and agent["isolation"] == "worktree"
-            assert "app.py pin" in agent["prompt"] and "send_message" not in agent["prompt"]
-            assert f"\"Finished {kind}~1, on master: bring the page up to date.\"" in agent["prompt"]
+            told = job_prompt.followed(agent["prompt"])
+            assert "app.py pin" in told and "send_message" not in told
+            assert f"\"Finished {kind}~1, on master: bring the page up to date.\"" in told
     monkeypatch.setattr(app_setup, "origin", lambda: ("", ""))
     assert app.where_it_runs(chosen, "listener-1", "cloud")["run"] == "background agent"
     long = dict(chosen, title="An analyst role " * 10)
@@ -491,32 +553,39 @@ def test_the_landing_check_runs_in_the_background_and_the_page_says_so():
     runbook = _read("RUNBOOK.md")
     four = runbook[runbook.index("## 4. Record and persist, then land on master"):]
     four = " ".join(four[:four.index("\n## 5.")].split())
-    assert ("start `python3 tools/land.py --message \"<what changed>\"` in the background "
-            "(Bash, `run_in_background`)") in four
+    # One command, now detached (audit E-7, 2026-11-11): it finishes the save itself and wakes
+    # nobody, where a background run woke the chat for a turn of its whole history.
+    assert "`python3 tools/land.py --message \"<what changed>\"`" in four or \
+        "`python3 tools/land.py --detach" in four, four[:400]
     assert "runs `./tools/ci_local.sh --quick`, and only when that is green" in four
     assert "\"Saving your work\"" in four
     assert "at most once a turn" in four and "never subscribe to it" in four
     assert "**Independent commands go together, as separate calls.**" in four
     assert "A push or a merge never goes before its check has ended green." in four
-    skill = _read(".claude/skills/app/SKILL.md")
+    import app_skill
+    skill = app_skill.read("wake.md")
     five = " ".join(skill[skill.index("## 5. Finish in one batch"):].split())
     assert "`busy: \"Saving your work\"` while the landing check below runs" in five
     # The chat that answers the page saves once a batch, in a process of its own that wakes
     # no chat when it ends (the maintainer, 2026-11-05: every save woke the chat for a turn
-    # of its own); a chat the person writes in still lands in the background.
+    # of its own); a chat the person writes in saves detached too, as CLAUDE.md says (moved
+    # with the rule: the engine review, 2026-11-11, found wake.md still saying "in the
+    # background", a turn on every save).
     assert ("`--end` starts `python3 tools/land.py --detach` (it saves, commits, merges master "
             "and runs `./tools/ci_local.sh --quick`, then opens the pull request and merges it "
             "itself) in a process of its own") in five
     assert "never `run_in_background` one here" in five
-    assert "`python3 tools/land.py --message \"<what changed>\"` in the background" in five
+    assert "`python3 tools/land.py --detach --message \"<what changed>\"`, as CLAUDE.md says" \
+        in five
+    assert "in the background, as CLAUDE.md says" not in five
     assert "python3 tools/app.py busy \"$D\" --done" in five
     # The answer first: the page is brought up to date before the landing starts.
     assert five.index("python3 tools/app.py view") < five.index("python3 tools/land.py")
-    message = " ".join(skill[skill.index("### A message in the chat"):
-                             skill.index("## 5. Finish in one batch")].split())
+    message = " ".join((app_skill.read("chat.md") + app_skill.read("jobs.md")).split())
     assert "**The answer goes out first.**" in message and "once a turn" in message
     core = " ".join(_read("CLAUDE.md").split())
-    assert "`python3 tools/land.py` in the background" in core
+    # Detached, it ends by itself and wakes nobody (audit E-7, 2026-11-11).
+    assert "`python3 tools/land.py --detach`" in core
     assert "independent ones as separate calls in one message, never a push or a merge before " \
         "its check" in core
     brief = _read("automation/prompts/morning_brief.md")
@@ -524,8 +593,8 @@ def test_the_landing_check_runs_in_the_background_and_the_page_says_so():
     assert "it goes out before anything lands" in " ".join(brief.split())
     assert "python3 tools/land.py" in _read("automation/prompts/_common.md")
     import save_state
-    assert "in the background" in save_state.LAND and "Saving your work" in save_state.LAND
-    assert "tools/land.py" in save_state.LAND
+    assert "tools/land.py --detach" in save_state.LAND and "run_in_background" not in \
+        save_state.LAND and "Saving your work" in save_state.LAND
     usage = " ".join(_read("tools/ci_local.sh").replace("\n#", "\n").split())
     assert "the floor leg's second run of the person's own tests" in usage
     assert "--quick    # skips the LaTeX compile and the second run of your own tests" in \

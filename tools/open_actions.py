@@ -137,7 +137,7 @@ def _tracker(path=TRACKER):
     return csv_store.tracker(path)
 
 
-def network_views(contacts, threads, index=None):
+def network_views(contacts, threads, index=None, today=None):
     """Every contact's derived status, and the two throttle views read from it.
 
     The heat, the replied-contact recipients and the referral holds all need
@@ -150,17 +150,28 @@ def network_views(contacts, threads, index=None):
     for c in contacts:
         cid = str(c.get("contact_id") or "").strip()
         live[cid] = state.effective_status(c, list(index.get(cid, ())))
-    return (live, throttle.warm_routes(rows=contacts, live=live),
+    return (live, throttle.warm_routes(rows=contacts, live=live, threads=threads, today=today),
             throttle.referral_holds(rows=contacts, live=live))
 
 
 _network = network_views  # the module's own name for it; other modules call network_views
 
 
+# The group for the people whose row names no employer: shown, never passed by. A third of
+# one person's contact book had none, and someone owed a reply with no employer on the row
+# never reached this view at all (the audit's NW-6, 2026-11-10).
+NO_EMPLOYER = ""
+NO_EMPLOYER_NAME = "Employer not recorded"
+NO_EMPLOYER_LINE = ("%d people here have no employer recorded, so the checks made per employer "
+                    "(how many are waiting at one, a referral already running there) cannot "
+                    "count them: a read of their profile, or your next LinkedIn download, "
+                    "fills it")
+
+
 def build(contacts, threads, tracker, today, docs=None):
     """Employer key -> everything in flight there, sorted hottest first."""
     by_key: dict[str, dict] = {}
-    live, warm, holds = _network(contacts, threads)
+    live, warm, holds = _network(contacts, threads, today=today)
     # A nudge that is due is owed exactly the way a reply is owed, and it used
     # to live in a tool nothing imported. Keyed by id() of the tracker row so
     # two applications at one employer do not collide. Everything but
@@ -196,16 +207,17 @@ def build(contacts, threads, tracker, today, docs=None):
     index = state.by_contact(threads)       # one pass over the log, not one a contact
     for c in contacts:
         k = state.row_company_key(c) if hasattr(state, "row_company_key") else company_key(c.get("company"))
-        if not k:
-            continue
-        e = slot(k, (c.get("company") or "").strip())
+        e = slot(k, (c.get("company") or "").strip()) if k else slot(NO_EMPLOYER, NO_EMPLOYER_NAME)
         e["contacts"].append(c)
         cid = str(c.get("contact_id") or "").strip()
         for got in state.resumes_sent(index.get(cid, []), cid):
             e.setdefault("resumes_sent", []).append(dict(got, name=c.get("name", "")))
         status = live.get(str(c.get("contact_id") or "").strip()) or ""
         e["heat"] = max(e["heat"], HEAT.get(status, 0))
-        if c.get("contact_id") in owed_ids or (c.get("next_action") or "").strip():
+        # A closed, gone-cold or set-aside thread owes nothing, whatever its row still says:
+        # state.owed skips it, and here it was listed with a DUE date (the audit, 2026-11-10).
+        if c.get("contact_id") in owed_ids or ((c.get("next_action") or "").strip()
+                                               and status not in state.schema.TERMINAL):
             e["owed"].append((c, status))
 
     return sorted(by_key.values(),
@@ -227,6 +239,8 @@ def render(entries, today, only_live=True):
         if only_live and not e["owed"] and not live_apps and not shown and not resumes:
             continue
         lines.append("## %s" % (e["name"] or e["key"]))
+        if e["key"] == NO_EMPLOYER and e["contacts"]:
+            lines.append("- " + NO_EMPLOYER_LINE % len(e["contacts"]))
         chat = campaigns(live_apps).get(e["key"])
         if chat:
             # Shown whether or not anything is due: the brief and other chats leave this
@@ -570,6 +584,8 @@ def due_items(contacts, threads, tracker, today, docs=None, network=None, now=No
     today = state.as_date(today)
     by_id = {str(c.get("contact_id") or "").strip(): c for c in contacts}
     index = (state.by_contact(threads) if threads else {}) if index is None else index
+    # One person kept on two rows, one closed as the other: their whole thread (state.pooled).
+    index = state.pooled(index, contacts)
     items = []
     for o in state.owed(contacts, threads, today, index=index,
                         live=network[0] if network else None):
@@ -661,7 +677,7 @@ def due_items(contacts, threads, tracker, today, docs=None, network=None, now=No
             "contact_id": r["contact_id"], "old": old,
             **({"lapsed_on": lapsed.isoformat(), "asked": r["asked"]} if lapsed else {})})
     _hold_by_rule(items, by_id, threads, index)
-    _, warm, holds = network or _network(contacts, threads)
+    _, warm, holds = network or _network(contacts, threads, today=today)
     for n in followups.review(tracker, today, warm, holds, docs or followups.DOCS):
         quiet = n["state"] == "quiet" and n["notice"]
         if n["state"] not in ("due", "held") and not quiet:
@@ -855,7 +871,7 @@ def main():
                     help="only what is due today or overdue, both halves, summary first")
     ap.add_argument("--markdown", action="store_true",
                     help="write documents/network/open_actions.md")
-    ap.add_argument("--today", default=dt.date.today().isoformat())
+    ap.add_argument("--today", default=person.today().isoformat())
     a = ap.parse_args()
 
     today = dt.date.fromisoformat(a.today)

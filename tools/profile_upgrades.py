@@ -416,6 +416,33 @@ def _learned_choices() -> str:
         len(waiting), "; ".join(learned.question(o) for _, o in waiting[:3]))
 
 
+def _updates_choice() -> str:
+    """A rule about how updates arrive that an older version wrote the wrong way round: read
+    again with today's reader (learned.updates_said), the newest such rule says otherwise than
+    person.json's app_updates (audit SV-1, PD-5: "App updates come by themselves; never ask
+    him again" was written as when_asked). Asked once, never changed unasked: the person may
+    have changed their mind on the page since."""
+    try:
+        import learned
+        import person
+        rows = [r for r in learned.entries()
+                if "profile/person.json app_updates" in (r.get("applied_to") or [])]
+        if not rows:
+            return ""
+        newest = rows[-1]
+        meant = learned.updates_said(str(newest.get("said") or "")) or \
+            learned.updates_said(str(newest.get("rule") or ""))
+        have = "when_asked" if str(person.get("app_updates", "") or "").strip().lower() \
+            == "when_asked" else "auto"
+    except Exception:  # noqa: BLE001  no profile or no rules: nothing to ask
+        return ""
+    if not meant or meant == have:
+        return ""
+    say = {"auto": "by themselves", "when_asked": "only when you say"}
+    return (f"your words \"{newest.get('said')}\" say updates come {say[meant]}, but the "
+            f"setting says {say[have]}")
+
+
 def _brief_push() -> str:
     """A brief whose own run would send the phone notification, and nobody asked whether they
     want one: off until they say (brief.push_wanted), and asked once, as the setup sheet asks.
@@ -628,7 +655,70 @@ def _brief_own_chat() -> str:
     if not r or not r.get("trigger_id"):
         return ""
     why = routines.needs_own_chat(reg, r, None, routines.trusted_chat())
+    if not why and routines.old_ops_shape(reg):
+        # Read with no listing, the older shape said nothing was due, and the registry was
+        # never rewritten (audit PD-7; review of fix/helpers, item 19).
+        why = "the registry does not say which chat it runs in"
     return f"the morning brief needs a chat of its own ({why})" if why else ""
+
+
+def _brief_own_steps() -> str:
+    """A rule in profile/CLAUDE.md says every brief runs a script of the person's own, and
+    brief.before does not name it, so nothing runs it (audit BT-4). The trace: the script in
+    person.json `brief.before` (brief.py before --adopt)."""
+    try:
+        import brief
+        got = brief.unadopted_steps()
+    except Exception:  # noqa: BLE001  no profile: nothing of theirs to run
+        return ""
+    return ("your own rules say every brief runs " + ", ".join(got) +
+            ", and nothing runs it") if got else ""
+
+
+_RULE_CMD = re.compile(r"`(?:python3?\s+)?(tools/[\w/.-]+\.py)([^`]*)`")
+
+
+def profile_command_problems() -> list[str]:
+    """One line for each `python3 tools/...` command the person's own rules name
+    (profile/CLAUDE.md) that the app has no tool for, whose step the tool does not have, or
+    that only previews without --apply: a rule said to run export.py history without it, and
+    nothing was ever saved (audit PD-9). Read from the tool's own source and usage lines,
+    never by running it."""
+    try:
+        with open(person.path("CLAUDE.md"), encoding="utf-8") as fh:
+            text = fh.read()
+    except (OSError, person.NoProfile):
+        return []
+    out: list[str] = []
+    for tool, rest in _RULE_CMD.findall(text):
+        cmd = (tool + rest).strip()
+        path = os.path.join(ROOT, tool)
+        if not os.path.isfile(path):
+            line = f"`{cmd}`: the app has no {tool}"
+        else:
+            with open(path, encoding="utf-8") as fh:
+                src = fh.read()
+            words = rest.split()
+            sub = words[0] if words and re.fullmatch(r"[a-z][\w-]*", words[0]) else ""
+            usage = [ln for ln in src.splitlines()
+                     if re.search(r"python3 " + re.escape(tool) + r"\s+" + re.escape(sub) + r"\b",
+                                  ln)] if sub else []
+            if sub and f'"{sub}"' not in src and f"'{sub}'" not in src:
+                line = f"`{cmd}`: {tool} has no step called {sub}"
+            elif usage and any("--apply" in ln for ln in usage) and "--apply" not in rest:
+                line = (f"`{cmd}`: without --apply it only shows what it would do and saves "
+                        "nothing")
+            else:
+                continue
+        if line not in out:
+            out.append(line)
+    return out
+
+
+def _profile_commands() -> str:
+    got = profile_command_problems()
+    return ("your own rules name a command that does not do what they say: " + "; ".join(got)
+            ) if got else ""
 
 
 def _doorbells() -> str:
@@ -991,6 +1081,40 @@ def _follow_up_dates() -> str:
             if n else "")
 
 
+def _sends_counted_once() -> str:
+    """Rows the app marked at the limit of unanswered messages while one note logged as a
+    request and again as a message counted as two: their one follow-up was withheld and the
+    line itself kept them there (the audit, 2026-11-10: about 60 people in one book)."""
+    found = _probe("import person, state; c = state.load_contacts(); print(len("
+                   "state.recount([dict(r) for r in c], state.load_threads(), person.today())))")
+    n = int(found) if found.isdigit() else 0
+    return ("%d contact(s) marked as at your limit of unanswered messages, though one of "
+            "them was the same note logged twice" % n if n else "")
+
+
+def _linkedin_limits_ignored() -> str:
+    """Keys of LINKEDIN_LIMITS the app drops (connections_per_week, connections_per_day): one
+    profile kept both, and nothing said they did nothing (the audit, 2026-11-10)."""
+    found = _probe("import profile_set, schema\n"
+                   "try:\n    v = profile_set.get('networking.py', 'LINKEDIN_LIMITS')\n"
+                   "except Exception:\n    v = None\n"
+                   "print(len(schema.ignored_limits(v if isinstance(v, dict) else {})))")
+    n = int(found) if found.isdigit() else 0
+    return ("profile/networking.py LINKEDIN_LIMITS sets %d request cap(s) the app never reads"
+            % n if n else "")
+
+
+def _stop_lines_dated() -> str:
+    """Rows at the limit of unanswered messages that still carry a date, or the old "If still
+    silent by the date, close it": the follow-up run skipped closed rows and old threads, so 19
+    rows in one book kept them (the audit, 2026-11-10)."""
+    found = _probe("import state; print(sum(1 for c in state.load_contacts() "
+                   "if state.stop_line_dated(c)))")
+    n = int(found) if found.isdigit() else 0
+    return ("%d contact(s) at your limit of messages still carry a date or \"close it\"" % n
+            if n else "")
+
+
 def _gone_cold() -> str:
     """Conversations still read as waiting on a reply with no answer in months: imported
     threads from years back and notes sent a season ago were counted against their employer
@@ -1002,6 +1126,24 @@ def _gone_cold() -> str:
     n = int(found) if found.isdigit() else 0
     return ("%d conversation(s) with no answer in months still read as waiting on a reply" % n
             if n else "")
+
+
+def _set_asides_dated() -> str:
+    """Roles the person set aside before a set-aside had an end, with no day of their own:
+    the first search after the update would bring every one back at once, or count it from a
+    day long gone (2026-11-11). Giving each its months from the update is instant."""
+    found = _probe("import exclude; print(len(exclude.undated_set_asides()))")
+    n = int(found) if found.isdigit() else 0
+    return "%d role(s) you set aside have no day to count from" % n if n else ""
+
+
+def _notes_aside_dated() -> str:
+    """First notes set aside on the page before "for now" had an end: each held them for good
+    (2026-11-11). Giving each its months from the update is instant."""
+    found = _probe("import exclude, person, state; c = state.load_contacts(); print(len("
+                   "state.date_page_drops(c, person.today(), exclude.set_aside_days())))")
+    n = int(found) if found.isdigit() else 0
+    return "%d note(s) you set aside for now have no day to come back" % n if n else ""
 
 
 def _drafts_before_a_role() -> str:
@@ -1286,6 +1428,59 @@ def _profile_consistency() -> str:
         " and ".join(sorted({r["fact"] for r in rows})), len(rows),
         "; ".join("%s:%s says \"%s\"" % (r["file"], r["line"], r["said"]) for r in rows[:3]
                   if r["said"])))
+
+
+def _one_surface_check() -> str:
+    """A rule in the person's CLAUDE.md that runs a script of their own before anyone is
+    shown, where the script never calls the app's one check (tools/network/surface.py)."""
+    if not person.exists("CLAUDE.md"):
+        return ""
+    found = _probe("import json, surface; print(json.dumps(surface.bypassing()))")
+    try:
+        rows = json.loads(found) if found else []
+    except ValueError:
+        return ""
+    if not rows:
+        return ""
+    return ("your instructions check people with %s before showing them, which misses what "
+            "the app's own check knows (holds, people written to on another channel, the "
+            "employers you turned down, profile addresses)" % ", ".join(r for r, _ in rows))
+
+
+def _readings_linked() -> str:
+    """Contacts with no employer whose saved profile read names one: every check made per
+    employer passed them by (the audit's NW-6, NW-28 and PD-20)."""
+    found = _probe("import reading, state; print(len(reading.linkable(state.load_contacts())))")
+    n = int(found) if found.isdigit() else 0
+    return ("%d contact(s) with no employer recorded, though their read profile names one"
+            % n) if n else ""
+
+
+def _records_agree() -> str:
+    """What the person's own records disagree about that a chat can put right, from the three
+    checks nothing else runs: a letter on disk its row does not name (record_drafts.py
+    check), a research file with no employer or named apart from its key (company_research.py
+    check), and a reading kept under a name only one contact has (reading.py unlinked). What
+    nobody can put right is said by those commands, and never keeps this waiting (the review
+    of NW-23, NW-28 and NW-32, 2026-11-11)."""
+    found = _probe(
+        "import json, record_drafts, company_research, reading, state\n"
+        "letters = len(record_drafts.unrecorded()['letters'])\n"
+        "research = sum(1 for p in company_research.shape_problems() "
+        "if p['why'] == 'no company' or p['why'].startswith('named apart'))\n"
+        "readings = sum(1 for u in reading.unlinked(state.load_contacts()) if u['maybe'])\n"
+        "print(json.dumps([letters, research, readings]))")
+    try:
+        letters, research, readings = json.loads(found) if found else (0, 0, 0)
+    except (ValueError, TypeError):
+        return ""
+    parts = [("%d letter(s) on disk their application's row does not name" % letters)
+             if letters else "",
+             ("%d research file(s) without their employer, or named apart from it" % research)
+             if research else "",
+             ("%d reading(s) kept under a name their contact does not have" % readings)
+             if readings else ""]
+    return "; ".join(x for x in parts if x)
 
 
 def _country() -> str:
@@ -1703,9 +1898,24 @@ REGISTRY: tuple[Upgrade, ...] = (
             "approve in your other chats",
             _brief_own_chat, "in a cloud chat: `list_triggers` (every page), `python3 "
             "tools/routines.py brief --triggers <each page>`, and make each `move` call it "
-            "prints, in order, stopping at the first that fails. In a chat on their computer "
+            "prints, in order, stopping at the first that fails (where it names get_session "
+            "and `routines.py adopt`, those: a chat made for the brief is recorded as its own). In a chat on their computer "
             "nothing: the chat in the cloud that answers the page does it at its daily tidy-up. "
             "Say nothing about it", "edit", "~1 min", priority=1),
+    Upgrade("brief-own-steps", "2026-11-10",
+            "a step your own rules say every brief runs is run by the brief itself, every "
+            "morning, without anyone remembering it",
+            _brief_own_steps, "python3 tools/brief.py before --adopt", "instant",
+            command=("python3", "tools/brief.py", "before", "--adopt"),
+            paths=("profile/person.json",),
+            priority=2),
+    Upgrade("profile-commands", "2026-11-11",
+            "every command your own notes tell Claude to run exists and does what the note says",
+            _profile_commands, "for each command `python3 tools/profile_upgrades.py --check "
+            "profile-commands` lists, read the tool's own usage (the top of its file) and correct "
+            "the command in profile/CLAUDE.md to the one that does what the rule says (add "
+            "--apply where the rule means to save). Say nothing about it", "edit", "~2 min",
+            priority=2, every=lambda: profile_command_problems()),
     Upgrade("doorbells", "2026-11-04",
             "your page stops showing a number of unread messages that never goes away",
             _doorbells, "`python3 tools/app.py doorbells` prints what to do: resolve each "
@@ -1932,6 +2142,35 @@ REGISTRY: tuple[Upgrade, ...] = (
                 "first. Can I show you which, so you pick the right one?",
             why_ask="A form, a letter and an interview pack each read one of them, and a "
                     "recruiter remembers whichever they heard first."),
+    Upgrade("one-surface-check", "2026-11-10",
+            "one check, the app's own, decides who is shown to you for a message, with your "
+            "own rules in it",
+            _one_surface_check, "for each script it names: read the script and the rule in "
+            "profile/CLAUDE.md that runs it. Write the rule's own numbers into "
+            "profile/networking.py (its days since anyone was last written to as "
+            "QUIET_AFTER_SEND_DAYS, its unanswered limit as MAX_UNANSWERED) where they are "
+            "not set already; change the rule to run `python3 tools/network/surface.py "
+            "\"<name>\" --company \"<employer>\"` (people new to you) and `python3 "
+            "tools/open_actions.py --due` (people already written to) instead; and make the "
+            "script a thin call to surface.check() so anything that still runs it gets the "
+            "same answer. Keep every rule the script had that surface.py does not; change "
+            "nothing else", "edit", "~5 min", priority=2),
+    Upgrade("readings-linked", "2026-11-11",
+            "every contact whose profile was read has the employer it names",
+            _readings_linked, "python3 tools/network/reading.py link-all", "instant",
+            command=("python3", "tools/network/reading.py", "link-all"),
+            paths=("network_contacts.csv",), priority=2, conditional=True),
+    Upgrade("records-agree", "2026-11-11",
+            "your tracker, documents, research and profile reads agree with each other",
+            _records_agree, "run `python3 tools/record_drafts.py check`, `python3 "
+            "tools/company_research.py check` and `python3 tools/network/reading.py "
+            "unlinked`. Put right only these: name each letter on disk in its application's "
+            "cover_letter_file; give a research file with none its `company`, and save one "
+            "named apart from its employer's key under the key (company_research.file_key) "
+            "with its contents unchanged; move a reading kept under another name into the "
+            "folder of the one contact with that name. Delete nothing, invent no date or "
+            "source, and say in one plain line what was put right and what stays as it is",
+            "edit", "~5 min", priority=4, conditional=True),
     Upgrade("process-postings", "2026-10-19",
             "every hiring process folder keeps a copy of its job posting, so your own checks stay green",
             _process_postings, "python3 tools/interview_pack.py postings", "instant",
@@ -2020,12 +2259,50 @@ REGISTRY: tuple[Upgrade, ...] = (
             _export_repeats, "python3 tools/network/export.py tidy", "instant",
             command=("python3", "tools/network/export.py", "tidy"),
             paths=("network_threads.csv", "network_contacts.csv"), priority=2),
+    Upgrade("sends-counted-once", "2026-11-10",
+            "people written to once, whose note was logged twice and read as two messages with "
+            "no reply, given back the one follow-up your rule allows",
+            _sends_counted_once, "python3 tools/network/state.py recount --apply", "instant",
+            command=("python3", "tools/network/state.py", "recount", "--apply"),
+            paths=("network_contacts.csv",), priority=2),
+    # Asked, never done by itself: the setting is the person's, and a test of theirs may read
+    # it, which an upgrade deleting it would break on every save (the review, 2026-11-11).
+    Upgrade("linkedin-limits-ignored", "2026-11-11",
+            "your LinkedIn settings without the weekly and daily request caps the app never "
+            "reads, so nothing there says it keeps a cap it does not",
+            _linkedin_limits_ignored, "only after a yes: take connections_per_week and "
+            "connections_per_day out of LINKEDIN_LIMITS in profile/networking.py, keeping the "
+            "rest (python3 tools/network/state.py linkedin-limits names them), and bring any "
+            "test of theirs in profile/tests that reads them in line", "question", "~1 min",
+            names=("networking.LINKEDIN_LIMITS",), conditional=True, priority=4, needs="you",
+            ask="Your LinkedIn settings hold a weekly cap on connection requests that the app "
+                "never uses. Shall I take it out?",
+            why_ask="The app keeps no cap of its own, and LinkedIn tells you when its limit is "
+                    "reached."),
+    Upgrade("stop-lines-undated", "2026-11-10",
+            "no date and no \"close it\" beside anyone who has had your limit of messages with "
+            "no reply, so none of them comes back as due",
+            _stop_lines_dated, "python3 tools/network/state.py stop-lines --apply", "instant",
+            command=("python3", "tools/network/state.py", "stop-lines", "--apply"),
+            paths=("network_contacts.csv",), priority=2),
     Upgrade("threads-gone-cold", "2026-11-10",
             "conversations with no answer in months closed as gone cold, so they no longer "
             "count as waiting or hold their employer; a reply from them opens one again",
             _gone_cold, "python3 tools/network/state.py gone-cold", "instant",
             command=("python3", "tools/network/state.py", "gone-cold"),
             paths=("network_contacts.csv",), priority=2),
+    Upgrade("set-asides-dated", "2026-11-11",
+            "roles you set aside before they had an end each held for about six months from "
+            "the update, so they come back one by one, never all at once",
+            _set_asides_dated, "python3 tools/exclude.py date-set-asides", "instant",
+            command=("python3", "tools/exclude.py", "date-set-asides"),
+            paths=("job_scraper/seen_jobs.json",), conditional=True, priority=2),
+    Upgrade("notes-aside-dated", "2026-11-11",
+            "first notes you set aside for now on the page each offered again about six "
+            "months from the update, one by one, never all at once",
+            _notes_aside_dated, "python3 tools/network/state.py date-page-drops", "instant",
+            command=("python3", "tools/network/state.py", "date-page-drops"),
+            paths=("network_contacts.csv",), conditional=True, priority=2),
     Upgrade("drafts-before-a-role", "2026-11-10",
             "drafts written before the role they wait for set aside (kept), and their people "
             "put on hold until a role is posted, so no card carries one message with the name "
@@ -2136,6 +2413,16 @@ REGISTRY: tuple[Upgrade, ...] = (
             names=("search.INTERNAL_ONLY", "search.INTERNAL_ONLY_TITLE", "search.CANARY_QUERY"),
             conditional=True,
             priority=3),
+    Upgrade("updates-choice", "2026-11-11",
+            "updates arriving the way you said, where an older version wrote it the wrong way "
+            "round",
+            _updates_choice, "write their answer as the page's Settings does (How updates "
+            "arrive), or python3 tools/learned.py record with their words, which reads it back",
+            "question", "~0 min", conditional=True, priority=2,
+            needs="you",
+            ask="Should the app's updates come by themselves, or only when you say?",
+            why_ask="An older version may have saved what you said about this the wrong way "
+                    "round, so your setting may not be what you meant."),
     Upgrade("brief-push", "2026-11-04",
             "a phone notification each morning when your brief is ready, only if you want one",
             _brief_push, "write \"brief_push\": \"on\" or \"off\" into profile/person.json from "
@@ -2244,6 +2531,10 @@ SAFE_DEFAULTS: dict[str, str] = {
     "person.json:documents.style": "none: the colour comes from documents.styles or is "
                                    "black, as before",
     "search.JOB_AGE_DAYS": "14, the search window run_round.py used before it was a setting",
+    # How long a role the person set aside holds before it is shown once more
+    # (tools/exclude.py, 2026-11-11); with none, about six months.
+    "search.SET_ASIDE_DAYS": "182, about six months; a role set aside held for ever before it "
+                             "was a setting",
     # Written only by Your rules' bin on a kind of employer ruled out (tools/app_actions.py
     # rule.drop, 2026-11-05); with none, every BAR_EXCLUDED rule applies, as before.
     "search.BAR_EXCLUDED_OFF": "[]: every kind of employer the profile rules out stays ruled out",
@@ -2300,6 +2591,9 @@ SAFE_DEFAULTS: dict[str, str] = {
                                  "silence, as before it was a setting",
     "networking.MAX_UNANSWERED": "unset, two messages in a row with no reply (the first and one "
                                  "nudge), as before it was a setting",
+    "networking.QUIET_AFTER_SEND_DAYS": "unset, nobody is held for being written to lately: "
+                                        "the follow-up rule alone decides, as before it was "
+                                        "a setting",
     # Since 2026-11-09 the days someone waiting holds their employer follow the follow-up
     # rule, from the last contact, where a fixed 45 days from the first note held it.
     # Since 2026-11-10 one follow-up wait, not one for every message the limit allows: notes

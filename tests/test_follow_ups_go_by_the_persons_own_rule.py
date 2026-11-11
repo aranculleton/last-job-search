@@ -79,7 +79,11 @@ def test_the_cap_on_unanswered_messages_is_the_persons(rule):
     assert _kinds(contacts, log, "2026-10-04") == [("kestrel_haldane", "nudge", "2026-10-04")]
 
 
-def test_the_date_is_written_on_each_contact_and_never_over_the_persons_own(rule):
+def test_the_date_is_written_on_each_contact_and_never_over_the_persons_own(rule, monkeypatch):
+    # The line names a day's year only when it is not the person's own year (state._day_said):
+    # this story is in 2026, so their day is held there whatever the computer's clock says
+    # (the everywhere check, "400-days").
+    monkeypatch.setenv("LJS_TODAY", "2026-10-05")
     rule(days=14)
     contacts = [_c(), _c("fernhill_oyelaran", name="Tamsin Oyelaran", company="Fernhill Freight",
                          next_action="HOLD until 2026-12-01: interview running"),
@@ -91,8 +95,8 @@ def test_the_date_is_written_on_each_contact_and_never_over_the_persons_own(rule
            _out("2026-10-01", "larkspur_pellow"), _out("2026-10-01", "brannock_quarrie")]
     said = state.write_follow_ups(contacts, log, "2026-10-05")
     assert said == ["Corwin Haldane (kestrel_haldane): follow up on 2026-10-15"]
-    assert contacts[0]["next_action"] == ("Follow up if no reply (1 of 2 sent; your rule: 14 "
-                                          "days, at most 2 with no reply)")
+    # The line reads plainly since 2026-11-11, from the engine's own count (audit DW-5).
+    assert contacts[0]["next_action"] == "Sent 1 Oct, no reply yet: follow up after 14 days (one left), then stop"
     assert contacts[0]["next_action_due"] == "2026-10-15"
     for c in contacts[1:]:                       # their own words, untouched, and undated
         assert "your rule" not in c["next_action"] and not c["next_action_due"]
@@ -119,19 +123,19 @@ def test_at_the_limit_the_row_says_so_and_has_no_day(rule):
     assert state.write_follow_ups(contacts, log, "2026-10-16") == \
         ["Corwin Haldane (kestrel_haldane): no more follow-ups and no date: leave it unless "
          "they write back"]
-    assert contacts[0]["next_action"].startswith("No more follow-ups: 2 messages with no reply")
+    assert contacts[0]["next_action"] == state.FOLLOW_UP_STOP.format(n=2, s="s")     # the page's words
     assert contacts[0]["next_action_due"] == ""
     assert _kinds(contacts, log, "2026-10-29") == [] and _kinds(contacts, log, "2026-12-29") == []
     assert state.write_follow_ups(contacts, log, "2026-10-16") == []      # once only
-    rule()                                       # the app's own words, as they always were
+    rule()                                       # the app's own rule: the same words
     contacts = [_c()]
     state.write_follow_ups(contacts, log, "2026-10-16")
-    assert contacts[0]["next_action"] == "Nudged: nothing more unless they reply"
+    assert contacts[0]["next_action"] == state.FOLLOW_UP_STOP.format(n=2, s="s")
     assert contacts[0]["next_action_due"] == ""
     rule(days=14, unanswered=1)                  # one message, and no follow-up at all
     contacts, log = [_c()], [_out("2026-10-01")]
     state.write_follow_ups(contacts, log, "2026-10-02")
-    assert contacts[0]["next_action"].startswith("No more follow-ups: 1 messages with no reply")
+    assert contacts[0]["next_action"] == "No reply to 1 message: leave it unless they write back"
     assert not reply.nudge_due(log, "2026-10-20")["due"]
     assert _kinds(contacts, log, "2026-10-14") == [] and _kinds(contacts, log, "2026-10-15") == []
 
@@ -149,8 +153,9 @@ def test_a_day_the_app_put_on_a_row_at_the_limit_comes_off(rule):
         assert state.write_follow_ups(contacts, log, "2026-11-04") == [
             "Corwin Haldane (kestrel_haldane): no more follow-ups and no date: leave it unless "
             "they write back"]
+        # The old line, read as the app's own, is rewritten in today's words (audit DW-5).
         assert (contacts[0]["next_action"], contacts[0]["next_action_due"]) == (
-            "Nudged: nothing more unless they reply", "")
+            state.FOLLOW_UP_STOP.format(n=2, s="s"), "")
         assert _kinds(contacts, log, "2026-11-30") == []
     own = [_c(next_action="Ask about the Leeds depot when we speak", next_action_due="2026-11-11")]
     assert state.write_follow_ups(own, log, "2026-11-04") == []
@@ -167,19 +172,24 @@ def test_a_note_logged_as_sent_carries_the_persons_date(rule, monkeypatch):
 
 
 def test_a_nudge_says_what_follows_by_the_persons_rule(rule, monkeypatch):
+    # The line names a day's year only when it is not the person's own year (state._day_said):
+    # this story is in 2026, so their day is held there whatever the computer's clock says
+    # (the everywhere check, "400-days").
+    monkeypatch.setenv("LJS_TODAY", "2026-09-15")
     monkeypatch.setattr(state, "_drop_draft", lambda cid: False)
     rule(days=14, unanswered=3)
     contacts, log = [_c()], [_out("2026-09-01")]
     state.followed_up(contacts, log, "kestrel_haldane", "2026-09-15", kind="nudge",
                       text="Hi Corwin, is a call next week still good for you?")
-    assert contacts[0]["next_action"].startswith("Follow up if no reply (2 of 3 sent")
+    # The line reads plainly since 2026-11-11, from the engine's own count (audit DW-5).
+    assert contacts[0]["next_action"] == "Sent 15 Sep, no reply yet: follow up after 14 days (one left), then stop"
     assert contacts[0]["next_action_due"] == "2026-09-29"
     state.followed_up(contacts, log, "kestrel_haldane", "2026-09-29", kind="nudge",
                       text="Hi Corwin, one last thought on the planning team.")
-    assert contacts[0]["next_action"].startswith("No more follow-ups: 3 messages with no reply")
+    assert contacts[0]["next_action"] == state.FOLLOW_UP_STOP.format(n=3, s="s")
     assert contacts[0]["next_action_due"] == ""      # at the limit: nothing owed, so no day
     rule()                                     # the app's own rule: one nudge, said so
-    assert state.waiting_action(1) == "One nudge if no reply"
+    assert state.waiting_action(1) == "Follow up after 6 working days if no reply (one left), then stop"
 
 
 def test_only_undated_rows_count_for_the_upgrade(rule):
@@ -220,7 +230,7 @@ def test_the_apps_line_on_someone_who_has_written_since_comes_off(rule):
     contacts = [_c()]
     log = [_out("2026-10-01"), _out("2026-10-15", scenario="nudge")]
     state.write_follow_ups(contacts, log, "2026-10-16")
-    assert contacts[0]["next_action"].startswith("No more follow-ups")
+    assert contacts[0]["next_action"] == state.FOLLOW_UP_STOP.format(n=2, s="s")
     log.append({"contact_id": "kestrel_haldane", "date": "2026-10-16", "direction": "in",
                 "channel": "message", "scenario": "", "summary": "asked for the resume",
                 "full_text": "Thanks Corwin here, could you send your resume?"})

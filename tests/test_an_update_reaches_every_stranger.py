@@ -260,15 +260,21 @@ def test_every_start_names_the_improvements_still_waiting(copy, monkeypatch):
 # ------------------------------------------------------------------ X-62, X-75
 
 
-def test_a_turn_that_changed_the_persons_files_is_held_until_a_save_starts(copy, tmp_path):
+def test_a_turn_that_changed_the_persons_files_is_held_until_a_save_starts(copy, tmp_path,
+                                                                          monkeypatch):
     """X-62: a quick edit in a phone chat was answered and never committed, and was gone with
     the computer. The end of the turn is held once for it, and let go while the landing runs
-    or once it is saved."""
+    or once it is saved. Since D11 (2026-11-10) the hook starts that save itself, in a process
+    of its own, and holds the turn only where it could not."""
     path = _transcript(tmp_path, TURN)
+    started = []
+    monkeypatch.setattr(learned, "_save_now", lambda what: started.append(what) or True)
     assert _stop(path) == {}                           # nothing unsaved: nothing held
     (copy / "job_search_tracker.csv").write_text(
         "date,company,role,status\n2026-11-03,Kestrel Mutual,Analyst,interviewing\n",
         encoding="utf-8")
+    assert _stop(path) == {} and "job_search_tracker.csv" in ", ".join(started[0])
+    monkeypatch.setattr(learned, "_save_now", lambda what: False)      # could not start it
     held = _stop(path)
     assert held["decision"] == "block" and "python3 tools/land.py" in held["reason"]
     assert "job_search_tracker.csv" in held["reason"]
@@ -285,11 +291,30 @@ def test_a_turn_that_changed_the_persons_files_is_held_until_a_save_starts(copy,
     assert _stop(path) == {}
 
 
-def test_a_reaction_and_unsaved_work_are_held_together(copy, tmp_path):
+def test_a_reaction_and_unsaved_work_are_held_together(copy, tmp_path, monkeypatch):
     (copy / "profile" / "notes.md").write_text("a note\n", encoding="utf-8")
     path = _transcript(tmp_path, TURN[:-1] + [_line("user", text="too formal, all of them")])
+    monkeypatch.setattr(learned, "_save_now", lambda what: False)
     held = _stop(path)
     assert "learned.py record" in held["reason"] and "tools/land.py" in held["reason"]
+    # The save started by the hook itself (D11): only the reaction holds the turn.
+    monkeypatch.setattr(learned, "_save_now", lambda what: True)
+    held = _stop(path)
+    assert "learned.py record" in held["reason"] and "tools/land.py" not in held["reason"]
+
+
+def test_the_hook_starts_the_save_itself_and_says_nothing(copy, monkeypatch, capsys):
+    """D11: the hold spent a whole turn of the chat to run one command. _save_now runs it."""
+    import land
+    asked = []
+    monkeypatch.delenv("LJS_HOOK_NO_SAVE", raising=False)
+    monkeypatch.setattr(land, "detach", lambda root, message: print("land: saving") or
+                        asked.append((root, message)) or 0)
+    assert learned._save_now(["profile/notes.md"]) is True
+    assert asked and "profile/notes.md" in asked[0][1]
+    assert capsys.readouterr().out == "", "a hook's output is read as its answer"
+    monkeypatch.setattr(land, "detach", lambda root, message: 2)
+    assert learned._save_now(["profile/notes.md"]) is False
 
 
 # ------------------------------------------------------------------ X-15, X-28
@@ -368,7 +393,7 @@ def test_a_cloud_chats_proxy_address_is_read_as_the_persons_copy(copy, monkeypat
         "page": {}, "page_current": False, "stale": True, "answers": {}, "set_up": True})
     code, lines = app_setup.start(on="test", tools="none")
     said = "\n".join(lines)
-    assert code == 1 and said.index("sync_app.py --pull") < said.index("Then open a chat")
+    assert code == 1 and said.index("sync_app.py --on") < said.index("Then open a chat")
 
 
 # ------------------------------------------------------------------ the sync

@@ -84,9 +84,14 @@ def test_its_report_asks_it_to_save_once_then_its_card_says_it_was_lost(copy, tm
     out = _close(tmp_path, dump, "2026-11-06T08:05:00Z")
     # First: that chat is asked, once, to save its work; nothing archived, nothing said.
     assert "send_message" in out and JOB in out and "python3 tools/land.py --keep" in out, out
-    assert "[app] Finished search~1, not landed, in chat <your own id>" in out
+    # Nothing comes back by message: a message between chats asks the person's approval each
+    # time, and the reply this asked for made two (the second audit of 2026-11-10, C3). The
+    # next tidy-up looks again; a report that does come is judged as below.
+    assert "[app] Finished" not in out and "never message another chat" in out, out
     assert "archive_session" not in out
-    # Its answer came, and the work is still not on GitHub: the card says it was lost.
+    # Judged again on a later report from that chat (it sends no answer to the ask since C3; a
+    # report it makes all the same is still read), the work still not on GitHub: the card says
+    # it was lost.
     out = _close(tmp_path, dump, "2026-11-06T08:09:00Z")
     batch = _batch(out)
     assert [(e["collection"], e["doc_id"]) for e in batch] == [("work", "search~1")]

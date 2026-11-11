@@ -59,8 +59,8 @@ def test_no_page_waits_on_a_limit_of_the_apps_own(here, monkeypatch):
     for i in range(120):
         _profile_load(f"x{i}", NOW - datetime.timedelta(seconds=i))
     assert reading.gate_state(NOW)["kind"] == "go"                     # a page right after one
-    assert reading.gate_state(NOW, profile=False)["kind"] == "go"
-    assert reading.gate_state(NOW, sends_left=0)["kind"] == "go"       # no requests-left sizing
+    assert reading.gate_state(NOW)["kind"] == "go"
+    assert reading.gate_state(NOW)["kind"] == "go"       # no requests-left sizing
     assert reading.reads_left(NOW) == (None, reading.NO_LIMITS)
     # A setting of a limit the app removed holds nothing.
     monkeypatch.setattr(pace, "_NET", types.SimpleNamespace(
@@ -102,8 +102,7 @@ def test_two_worktrees_share_one_count_one_stop_and_one_list(here, monkeypatch):
     for i in range(3):
         reading.page_read("people", f"https://example.org/p{i}", NOW - datetime.timedelta(minutes=50 - i))
     reading.stop("LinkedIn showed a check: security verification", NOW.date())
-    reading.shortlist(["a1"], NOW.date(), contacts=[{"contact_id": "a1", "location": "Leeds"}],
-                      sends_left=10)
+    reading.shortlist(["a1"], NOW.date(), contacts=[{"contact_id": "a1", "location": "Leeds"}])
     # The second chat's worktree has none of the first's files, only the shared ledger.
     other = here / "chat_b"
     monkeypatch.setattr(reading.person, "state", lambda *p: str(other.joinpath(*p)))
@@ -131,7 +130,7 @@ def test_a_page_that_came_back_empty_is_said_and_a_second_within_the_hour_stops(
     reading.page_read("people", "https://example.org/p", NOW - datetime.timedelta(seconds=70))
     reading.signal("not_rendering", "a page of 40 characters", NOW - datetime.timedelta(seconds=60))
     assert not reading.stopped(NOW.date())
-    assert reading.gate_state(NOW, profile=False)["kind"] == "go"      # no pause doubled
+    assert reading.gate_state(NOW)["kind"] == "go"      # no pause doubled
     reading.signal("not_rendering", "a page of 38 characters", NOW)
     assert reading.stopped(NOW.date())
     assert reading.gate_state(NOW)["kind"] == "tomorrow"
@@ -143,7 +142,7 @@ def test_a_slow_load_stops_nothing(here):
     for secs in (60, 30, 0):
         reading.signal("slow", "the page took 40s", NOW - datetime.timedelta(seconds=secs))
     assert not reading.stopped(NOW.date())
-    assert reading.gate_state(NOW, profile=False)["kind"] == "go"
+    assert reading.gate_state(NOW)["kind"] == "go"
     assert [x["kind"] for x in pace.friction()] == ["slow", "slow", "slow"]
 
 
@@ -158,8 +157,7 @@ def test_a_load_far_slower_than_usual_is_a_soft_signal(here):
 
 def test_a_page_that_did_not_render_is_not_a_read(here, monkeypatch, capsys):
     monkeypatch.setattr(reading, "PROFILE_READS", "browser")
-    reading.shortlist(["c9"], reading.person.today(), contacts=[{"contact_id": "c9", "location": "Leeds"}],
-                      sends_left=10)
+    reading.shortlist(["c9"], reading.person.today(), contacts=[{"contact_id": "c9", "location": "Leeds"}])
     page = here / "blank.txt"
     page.write_text("LinkedIn\n", encoding="utf-8")
     code = reading.main(["read", "c9", str(page), "--source", "browser", "--name", "Wren Allard",
@@ -180,10 +178,10 @@ def test_the_list_drops_people_read_before_or_closed_and_counts_only_who_is_left
         {"kind": "browser", "at": yesterday.isoformat(), "date": yesterday.date().isoformat()}]})
     # A list from earlier today, before the release: six, two of them done with.
     reading._save_shortlist(["p0", "p1", "p2", "p3", "p4", "p5"], NOW.date())
-    got = reading.shortlist(["p6"], NOW.date(), contacts=contacts, sends_left=2)
+    got = reading.shortlist(["p6"], NOW.date(), contacts=contacts)
     assert set(got["pruned"]) == {"p1", "p2"}
     assert got["ids"] == ["p0", "p3", "p4", "p5", "p6"] and got["cap"] is None
-    got = reading.shortlist(["p7"], NOW.date(), contacts=contacts, remove=["p0"], sends_left=2)
+    got = reading.shortlist(["p7"], NOW.date(), contacts=contacts, remove=["p0"])
     assert got["removed"] == ["p0"] and "p7" in got["ids"] and "p0" not in got["ids"]
 
 
@@ -192,8 +190,7 @@ def test_the_list_has_no_cap_of_the_apps_own(here):
     # limit of the app's own, everyone worth writing to goes on it.
     contacts = [{"contact_id": f"q{i}", "location": "Leeds", "company": f"Firm {i}"}
                 for i in range(100)]
-    got = reading.shortlist([c["contact_id"] for c in contacts], NOW.date(), contacts=contacts,
-                            sends_left=1)
+    got = reading.shortlist([c["contact_id"] for c in contacts], NOW.date(), contacts=contacts)
     assert got["cap"] is None and len(got["ids"]) == 100 and not got["full"]
     assert reading.shortlist_cap(today=NOW.date())[0] is None
 
@@ -205,7 +202,7 @@ def test_next_names_who_to_read_and_says_done_at_the_end(here, monkeypatch, caps
     people = [{"contact_id": "r1", "name": "Wren Allard", "company": "Fernhill Freight",
                "location": "Leeds", "linkedin_url": "https://www.linkedin.com/in/wren-allard-example"}]
     monkeypatch.setattr(state, "load_contacts", lambda *a, **k: people)
-    reading.shortlist(["r1"], reading.person.today(), contacts=people, sends_left=10)
+    reading.shortlist(["r1"], reading.person.today(), contacts=people)
     assert reading.main(["next", "--mode", "card"]) == reading.EXIT["ok"]
     out = capsys.readouterr().out
     # Since 2026-10-21 every read scrolls to the very end first: Experience and Education
@@ -259,13 +256,24 @@ def test_reads_already_sent_to_hold_nothing_back(here, monkeypatch):
         _profile_load(f"p{i}", start + datetime.timedelta(minutes=20 * i))
     monkeypatch.setattr(state, "load_contacts", lambda *a, **k: [])
     later = start + datetime.timedelta(hours=8)
-    assert reading.gate_state(later, sends_left=13)["kind"] == "go"
-    assert reading.reads_left(later, sends_left=13)[0] is None
+    assert reading.gate_state(later)["kind"] == "go"
+    assert reading.reads_left(later)[0] is None
 
 
 def test_the_budget_line_says_there_is_no_limit_or_that_linkedin_stopped_the_day(here):
-    line = reading.budget_line(NOW, sends_left=None)
+    line = reading.budget_line(NOW)
     assert line == f"Reads today: {reading.NO_LIMITS}."
-    assert "request(s) left" not in reading.budget_line(NOW, sends_left=2)
+    assert "request(s) left" not in reading.budget_line(NOW)
     reading.stop("LinkedIn showed a check: Let's do a quick security check", NOW.date())
-    assert "stopped for today" in reading.budget_line(NOW, sends_left=None)
+    assert "stopped for today" in reading.budget_line(NOW)
+
+
+def test_the_gate_takes_nothing_it_would_ignore():
+    """The 2026-11-10 audit (NW-33): `sends_left` and `profile` were accepted and ignored by
+    the reading gate, so callers worked out values for nothing. They are gone."""
+    import inspect
+    for fn in (reading.gate_state, reading.browser_gate, reading.reads_left,
+               reading.budget_line, reading.estimate, reading.shortlist_cap,
+               reading.shortlist, reading._wait_gate):
+        names = set(inspect.signature(fn).parameters)
+        assert not names & {"sends_left", "profile"}, fn.__name__

@@ -76,17 +76,21 @@ def test_a_cloud_chat_works_in_the_persons_own_day(tmp_path, monkeypatch):
     import time
     monkeypatch.setattr(time, "tzset", getattr(time, "tzset", lambda: None), raising=False)
     prof = _profile(tmp_path, "Sydney time (Australia/Sydney)")
-    env = {"CLAUDE_CODE_REMOTE": "true"}
+    # A cloud chat: the flag and its container's own marker (place.in_cloud, the review of
+    # 2026-11-11); the flag alone is a session over Remote Control on the person's computer.
+    cloud = {"CLAUDE_CODE_REMOTE": "true", "CLAUDE_CODE_CONTAINER_ID": "container_example"}
+    env = dict(cloud)
     assert person.cloud_day(env, prof) == "Australia/Sydney" and env["TZ"] == "Australia/Sydney"
     # Not in a chat on their own computer, never over a TZ already set, never for the
     # app's own tests (LJS_PROFILE), never a zone this computer has no data for.
     assert person.cloud_day({}, prof) == ""
-    assert person.cloud_day({"CLAUDE_CODE_REMOTE": "true", "TZ": "UTC"}, prof) == ""
-    assert person.cloud_day({"CLAUDE_CODE_REMOTE": "true", "LJS_PROFILE": "x"}, prof) == ""
-    assert person.cloud_day({"CLAUDE_CODE_REMOTE": "true"},
+    assert person.cloud_day({"CLAUDE_CODE_REMOTE": "true"}, prof) == ""
+    assert person.cloud_day(dict(cloud, TZ="UTC"), prof) == ""
+    assert person.cloud_day(dict(cloud, LJS_PROFILE="x"), prof) == ""
+    assert person.cloud_day(dict(cloud),
                             _profile(tmp_path / "b", "Mars/Olympus_Mons", city="")) == ""
     # A zone named that this computer has no data for gives way to the city they live in.
-    assert person.cloud_day({"CLAUDE_CODE_REMOTE": "true"},
+    assert person.cloud_day(dict(cloud),
                             _profile(tmp_path / "c", "Mars/Olympus_Mons")) == "Australia/Sydney"
 
 

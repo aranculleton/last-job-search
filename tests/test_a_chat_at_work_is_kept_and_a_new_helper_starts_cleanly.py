@@ -114,6 +114,8 @@ def test_the_listings_are_given_in_one_heredoc_never_typed_into_files(copy, tmp_
     assert given == by_file and f"archive {DESK}" in given
     for said in (app.TIDY_SAID, app.TIDY_NOW):
         assert "--stdin" in said and "saved to a file" not in said and "--sessions" not in said
+    # After a hand-over only the old helper is read, never the whole listing (H-4).
+    assert "list_sessions" not in app.TIDY_NOW and "tidy.py retire" in app.TIDY_NOW
 
 
 def test_a_helper_still_at_work_is_never_named_for_archiving(copy, tmp_path, monkeypatch):
@@ -256,12 +258,15 @@ def test_a_brief_in_the_chat_that_handed_the_page_on_is_moved_never_nothing_to_t
 
 
 def test_the_refresh_reads_screen_and_view_stops_without_it(copy, tmp_path):
-    """The start sends the refresh to screen, meta, addr and work; and `view` given a dump with
-    no screen documents of a page drawn before writes nothing, saying so in one line."""
+    """The start sends the refresh through `app.py reads --for-view`, which reads screen, meta,
+    addr and work whole on the day's first read and only what changed after (it named the four
+    collections whole, and a start that took an update read them twice: H-6, 2026-11-10); and
+    `view` given a dump with no screen documents of a page drawn before writes nothing, saying
+    so in one line."""
     copy.page()
     said = copy.run("start", "--on", "Sonnet 5.5", "--tools", "none", "--chat", "session_EXAMPLEX")
     step = next((ln for ln in said.splitlines() if "ring the page's data up to date" in ln), "")
-    assert step and "screen, meta, addr and work" in step and "view and meta" not in step, said
+    assert step and "app.py reads" in step and "--for-view" in step and "view and meta" not in step, said
     first = json.loads(copy.run("view", str(tmp_path / "v1"), "--dump", copy.dump("d1"),
                                 "--now", "2026-11-05T09:00:00Z", "--chat", LIVE))
     assert first["batches"] and copy.send("\n".join(first["batches"]))

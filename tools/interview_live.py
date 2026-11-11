@@ -17,7 +17,7 @@ questions and which story each is answered with (`interview_pack.likely_question
 `plan_stories`), the stories as the profile tells them, the questions to ask, the pay, notice
 and place to say, what not to say, the gaps and how to put them, and the questions they are
 known to ask. Claude writes the words to be said (the openings, every answer, the follow-ups,
-the terms), in a copy of the file this prints, and passes it back with `--fill`. Nothing is
+the terms), only those, keyed by part and question (`words_into`), and passes them with `--fill`. Nothing is
 written until every check passes (`problems`): the words can be said in the time, every term
 is explained with a worked example, every known question is answered in an opening, and
 nothing is claimed that the profile does not hold. A draft the person asked for is marked
@@ -54,8 +54,12 @@ WPM = 150
 # recruiter of a screen and a consulting firm's partner.
 PERSONAS = {"recruiter": "Recruiter", "manager": "Hiring manager",
             "technical": "Technical interviewer", "hr": "HR", "peer": "Future peer",
-            "senior": "Senior leader", "partner": "Partner", "test": "The test"}
+            "senior": "Senior leader", "partner": "Partner", "test": "The test",
+            "recorded": "Recorded question"}
 
+# The hello and the close of a day of several interviews, said fresh to each interviewer.
+OPENING_EACH = "Hello, and your story, fresh for each interviewer"
+CLOSE_EACH = "Your questions, a different one for each"
 # Each shape: what it is called, its usual length, who is in the room, and its parts with
 # their share of the time. A part's minutes scale with the round's real length.
 SHAPES = {
@@ -70,6 +74,10 @@ SHAPES = {
     "technical": ("A technical interview", 60, ("technical", "peer"),
                   (("opening", 8, "Warm-up, and your background"), ("technical", 27),
                    ("probes", 13), ("close", 12))),
+    # A technical screen: a shorter technical round, and the basics a screen checks.
+    "tech_screen": ("A technical screen", 45, ("technical", "recruiter"),
+                    (("opening", 6, "Warm-up, and your background"), ("technical", 20),
+                     ("probes", 8), ("basics", 5, "Why them, and the basics"), ("close", 6))),
     "take_home": ("A take-home, presented back", 60, ("technical", "manager"),
                   (("opening", 4), ("presenting", 24), ("technical", 20, "How you did the work"), ("close", 12))),
     # A consulting case: the structure, the maths said aloud and the answer in a minute; most
@@ -90,6 +98,21 @@ SHAPES = {
     # take each kind of item, the pacing, and items to practise on.
     "assessment": ("A timed test or exercise", 60, ("test",),
                    (("format", 6), ("approach", 18), ("pacing", 6), ("practice", 30))),
+    # Stories, one question at a time, and the probes behind each (a behavioural, values or
+    # competency interview).
+    "behavioural": ("A behavioural interview", 45, ("manager", "peer"),
+                    (("opening", 5), ("behaviour", 22), ("experience", 8), ("motivation", 4),
+                     ("close", 6))),
+    # A one-way video interview: questions on the screen, answers recorded, nobody to ask.
+    "recorded": ("A recorded video interview", 30, ("recorded",),
+                 (("format", 4, "How the recording works"), ("opening", 5), ("motivation", 6),
+                  ("behaviour", 10), ("experience", 5))),
+    # Several interviews back to back (a superday, an onsite or virtual onsite, an assessment
+    # centre): each interviewer hears the story fresh, and each gets a question of their own.
+    "superday": ("Several interviews back to back", 180, ("manager", "technical", "peer", "senior"),
+                 (("opening", 15, OPENING_EACH), ("experience", 35), ("behaviour", 40),
+                  ("technical", 40, "How you do the work"), ("motivation", 20),
+                  ("close", 30, CLOSE_EACH))),
     "panel": ("A panel interview", 60, ("manager", "technical", "peer", "senior"),
               (("opening", 5), ("experience", 15), ("behaviour", 15), ("technical", 10, "How you do the work"),
                ("motivation", 5), ("close", 10))),
@@ -137,7 +160,8 @@ PART_WHO = {
     "maths": ("partner", "senior"),
     "synthesis": ("partner", "senior"),
     "personal": ("partner", "senior", "manager"),
-    "format": ("test",), "approach": ("test",), "pacing": ("test",), "practice": ("test",),
+    "format": ("test", "recorded"), "approach": ("test",), "pacing": ("test",),
+    "practice": ("test",),
     "close": ("manager", "recruiter", "partner", "senior"),
 }
 # Where a question goes, by what it asks; a shape without that part takes the next.
@@ -151,14 +175,18 @@ _KIND_OF = (
                          r"calculate|back of the envelope|market siz", re.I)),
     ("synthesis", re.compile(r"\brecommend|what would you tell (?:the|their) (?:ceo|client)|"
                              r"summari[sz]e your|sum up", re.I)),
-    ("motivation", re.compile(r"\bwhy\b|leaving|looking|five years|reservations|motivat|"
+    # What a take-home brings: what was left out, what more time would change.
+    ("presenting", re.compile(r"\bleave out\b|\bleft out\b|with more time|your (?:take-home|"
+                              r"presentation|slides|analysis)\b", re.I)),
+    ("motivation", re.compile(r"\bwhy\b|leaving|looking|five years|reservations|motivat|draws you|"
                               r"interest(?:ed)? in|the moves", re.I)),
     ("case", re.compile(r"\bcase\b|how would you (?:size|price)", re.I)),
     # A skill, a tool or a certificate the posting names is asked where the work is tested,
     # never in the one story told in depth.
     ("skill", re.compile(r"experience (?:with|in|of)\b|certif|qualifi|\blicen[cs]e|proficien|"
                          r"familiar(?:ity)? with|how familiar|have you (?:used|worked with)|"
-                         r"how well do you know", re.I)),
+                         r"how well do you know|\bmember of\b|\bmembership\b|\bdo you hold\b|"
+                         r"\bare you (?:\w+ )?(?:qualified|certified|chartered|licensed)\b", re.I)),
     ("behaviour", re.compile(r"\ba time\b|describe a situation|an example of|went wrong|"
                              r"changed someone|led something", re.I)),
     ("probes", re.compile(r"trade-?off|differently|why not|what if|how would it scale|edge case|"
@@ -167,16 +195,17 @@ _KIND_OF = (
                              r"\bbug\b|\btest|statistic|data quality|python|algorithm", re.I)),
 )
 _FALLBACK = {"basics": ("basics", "motivation", "opening"),
-             "motivation": ("motivation", "opening", "basics"),
+             "motivation": ("motivation", "basics", "opening"),
              "opening": ("opening",),
              "case": ("case", "technical", "experience", "personal", "practice"),
              "maths": ("maths", "case", "technical", "practice", "experience"),
              "synthesis": ("synthesis", "case", "experience", "personal"),
              "behaviour": ("behaviour", "personal", "experience"),
-             "skill": ("technical", "experience", "case", "probes", "practice", "presenting",
-                       "behaviour", "basics", "personal"),
-             "probes": ("probes", "technical", "presenting", "experience", "practice"),
-             "technical": ("technical", "presenting", "experience", "case", "practice"),
+             "skill": ("technical", "experience", "probes", "presenting", "behaviour", "basics",
+                       "personal"),
+             "probes": ("probes", "technical", "presenting", "experience"),
+             "technical": ("technical", "presenting", "experience", "personal"),
+             "presenting": ("presenting", "probes", "technical", "experience"),
              "experience": ("experience", "behaviour", "personal", "technical", "presenting")}
 # A part with no question of its own has nothing to prepare, except where it always speaks.
 _ALWAYS = ("opening", "close", "format", "approach", "pacing")
@@ -185,18 +214,21 @@ _ALWAYS = ("opening", "close", "format", "approach", "pacing")
 # kind of interview the round's own words say; an acronym nobody spelled out is never read as
 # one (the maintainer, 2026-11-10: "never guess what a firm's acronym for a round means").
 _PIECES = (
-    ("personal", re.compile(r"personal[- ]experience|personal stor(?:y|ies)", re.I),
+    # "PEI" is the name every consulting recruiter uses for it, not one firm's private one.
+    ("personal", re.compile(r"personal[- ]experience|personal stor(?:y|ies)|\bPEIs?\b", re.I),
      "a personal experience interview", (("personal", 20),)),
     ("technical", re.compile(r"\b(?:technical|coding|code|sql|python|hackerrank|leetcode|"
-                             r"statistics|machine learning|system design|pairing|live coding)\b",
-                             re.I),
+                             r"codesignal|codility|coderpad|statistics|machine learning|"
+                             r"system design|data structures|algorithms?|pairing|"
+                             r"pair programming|live coding)\b", re.I),
      "a technical interview", (("technical", 22), ("probes", 10))),
     ("case", re.compile(r"\bcase\b(?! study)|market[- ]sizing|guesstimate", re.I),
      "a case", (("case", 12), ("maths", 8), ("synthesis", 6))),
     ("presenting", re.compile(r"take[- ]?home|present(?:ation|ing)? (?:back|your)|case study",
                               re.I),
      "a take-home presented back", (("presenting", 20),)),
-    ("behaviour", re.compile(r"\bbehaviou?ral\b|competenc", re.I),
+    ("behaviour", re.compile(r"\bbehaviou?ral\b|competenc|\bvalues\b|\bculture (?:fit|add)\b|"
+                             r"\bbar raiser\b|\bsituational\b", re.I),
      "behavioural questions", (("behaviour", 12),)),
 )
 _ROOM_OF = {"personal": ("partner", "senior"), "technical": ("technical", "peer"),
@@ -206,11 +238,16 @@ _ROOM_OF = {"personal": ("partner", "senior"), "technical": ("technical", "peer"
 _NO_DETAIL = ("basics",)
 MAX_QUESTIONS = 12
 SIMPLE_SENTENCES = (2, 4)
+# A simple answer is read at a glance mid-interview, each sentence a line of its own on the
+# page: none longer than this many words (the UX review, 2026-11-10, U-5).
+SIMPLE_WORDS = 30
 DETAIL_RATIO = 1.6
 MAX_BEATS = 7
 MAX_DEPTH = 3
-# The follow-ups that come after nearly every story, by who asks them. Their answers are
-# Claude's to write from the story itself.
+# The follow-ups that come after nearly every story, by who asks them: said once in each part a
+# story is told in (the part's `follow`), never under each of its questions, where the same
+# three stood again and again (the screen review, 2026-11-11). Their answers are Claude's to
+# write from the stories told there.
 STORY_FOLLOW = (("manager", "What was your part in it, exactly?"),
                 ("technical", "How did you know it had worked?"),
                 ("senior", "What would you do differently now?"))
@@ -277,14 +314,44 @@ def wpm() -> int:
 # ---------------------------------------------------------------- the shape
 
 _PANEL = re.compile(r"\bpanel\b", re.I)
-_FINAL = re.compile(r"\bfinal\b|last round|\bpartner\b|on-?site|assessment cent(?:re|er)", re.I)
+# "Onsite" says where an interview is held, not what it is.
+_FINAL = re.compile(r"\bfinal\b|last round|\bpartner\b", re.I)
 _SCREEN = re.compile(r"\b(?:phone|recruiter|screen\w*|hr|talent|intro\w*)\b", re.I)
 _TECH = re.compile(r"\b(?:technical|coding|code|sql|deep dive|system design|pairing)\b", re.I)
-_MANAGER = re.compile(r"\b(?:hiring manager|manager|second|competenc\w*|behaviou?ral)\b", re.I)
-# A timed test or exercise, said in so many words; an assessment centre is a final.
+# "Second round" says which round, never what kind: it is not read as the hiring manager's.
+_MANAGER = re.compile(r"\b(?:hiring manager|manager|competenc\w*|behaviou?ral)\b", re.I)
+# A timed test or exercise taken alone, said in so many words ("OA" is the recruiters' own
+# name for an online assessment); an assessment centre is a day of several.
 _ASSESS = re.compile(r"\b(?:online|timed|aptitude|numerical|verbal|logical|psychometric|"
-                     r"reasoning|problem[- ]solving)\s+(?:test|assessment|game|exercise)s?\b|"
-                     r"\baptitude\b|\bpsychometric\b|\bassessment\b(?!\s+cent(?:re|er))", re.I)
+                     r"reasoning|problem[- ]solving|coding|hackerrank|codesignal|codility)\s+"
+                     r"(?:test|assessment|game|exercise|challenge)s?\b|"
+                     r"\baptitude\b|\bpsychometric\b|\bassessment\b(?!\s+(?:cent(?:re|er)|day))|"
+                     r"(?-i:\bOAs?\b)|\bonline test|\bunproctored\b|\bself[- ]paced\b|"
+                     r"\bpymetrics\b|\bSHL\b|\btestgorilla\b", re.I)
+# A test named only by what it tests ("SQL test", "technical test"): usually taken alone, and
+# said to be a guess.
+_TEST = re.compile(r"\b(?:technical|python|sql|coding|code|data|excel|r|numerical)\s+"
+                   r"(?:test|challenge)s?\b", re.I)
+# Somebody is there with them: the words that make a coding round an interview, not a test.
+_LIVE = re.compile(r"\blive\b|\binterview(?:er|ers|s)?\b|\bpair(?:ing| programming)?\b|"
+                   r"\bwith (?:an?|the|two|three|our) (?:\w+ )?(?:interviewer|engineer|scientist|"
+                   r"analyst|manager|partner|panel)s?\b", re.I)
+# A coding site named and nothing else said: usually a test taken alone, and a guess.
+_PLATFORM = re.compile(r"\b(hackerrank|codesignal|codility|coderbyte)\b", re.I)
+_PLATFORM_NAMES = {"hackerrank": "HackerRank", "codesignal": "CodeSignal",
+                   "codility": "Codility", "coderbyte": "Coderbyte"}
+# A one-way video interview: questions on the screen and answers recorded.
+_RECORDED = re.compile(r"\bhirevue\b|\bone[- ]way\b|\bpre[- ]recorded\b|"
+                       r"\brecorded (?:video|interview|answers?)\b|\basynchronous video\b|"
+                       r"\bvideo interview\b.{0,20}\brecorded\b|\brecorded\b.{0,20}\bvideo\b",
+                       re.I)
+# Several interviews back to back in a day; "onsite" alone may only say where one is held.
+_DAY = re.compile(r"\bsuper ?day\b|\bvirtual on-?site\b|\bassessment (?:cent(?:re|er)|day)\b|"
+                  r"\bback[- ]to[- ]back\b|\binterview day\b|\b(?:full|half)[- ]day\b|"
+                  r"\b(?:[2-6]|two|three|four|five|six) (?:\d{2,3}[- ]min(?:ute)?s?[- ])?"
+                  r"(?:interviews|rounds|sessions|conversations)\b|"
+                  r"\b[2-6]\s*[x\u00d7]\s*\d{2,3}\s*(?:minutes?|mins?)\b", re.I)
+_ONSITE = re.compile(r"\bon-?site\b", re.I)
 
 
 def pieces(said) -> list:
@@ -303,12 +370,21 @@ def shape_def(shape) -> tuple:
     and their questions last."""
     if shape in SHAPES:
         return SHAPES[shape]
-    if not str(shape).startswith("combined:"):
+    kind, _sep, rest = str(shape).partition(":")
+    if kind not in ("combined", "day"):
         raise KeyError(shape)
     defs = {n: (label, parts) for n, _rx, label, parts in _PIECES}
-    names = [n for n in shape.split(":", 1)[1].split("+") if n in defs]
+    names = [n for n in rest.split("+") if n in defs]
     label = " and ".join(defs[n][0] for n in names)
     room = tuple(dict.fromkeys(w for n in names for w in _ROOM_OF[n]))
+    if kind == "day":
+        # Several interviews back to back, each named: the story said fresh to each, every
+        # kind named, why them, and a question of their own for each interviewer.
+        parts = ((("opening", 15, OPENING_EACH),) + tuple((k, m * 2) for n in names
+                                                          for k, m in defs[n][1])
+                 + (("motivation", 15), ("close", 25, CLOSE_EACH)))
+        room = tuple(dict.fromkeys(room + ("manager", "senior")))
+        return ("Several interviews back to back: " + label, 180, room, parts)
     parts = (("opening", 5),) + tuple(p for n in names for p in defs[n][1]) + (("close", 8),)
     return (label[:1].upper() + label[1:] + " in one sitting", 60, room, parts)
 
@@ -317,7 +393,9 @@ def shape_of(ctx) -> tuple:
     """(shape, why it was assumed or ""): the round's own words first (its stage, its format as
     the record, the recruiter or the person says it), then the step, the employer and the role.
     None for an offer, which is a negotiation, not an interview. Two or more kinds named for one
-    sitting are one combined prep, in the order they were named."""
+    sitting are one combined prep, in the order they were named; several interviews back to back
+    are a day. A round's number ("Second round", "Stage 2") never says its kind: the kind is then
+    a guess, and said to be one."""
     import interview_pack as P
     said = " ".join(_t(x) for x in (ctx.get("stage"), ctx.get("format")))
     step = ctx.get("step") or "technical"
@@ -325,12 +403,38 @@ def shape_of(ctx) -> tuple:
         return None, ""
     consulting = P.employer_type(ctx) == "consulting"
     names = pieces(said)
+    # Whether anyone is in the room is the format's to say where one is given: "Technical
+    # interview" with "CodeSignal General Coding Assessment" is a test taken alone (the review
+    # of the fixes, 2026-11-10).
+    fmt = _t(ctx.get("format"))
+    live = bool(_LIVE.search(fmt if fmt else said))
+    if _RECORDED.search(said) and not re.search(r"\blive\b", said, re.I):
+        return "recorded", ""
+    if set(names) <= {"technical"} and not live and not _DAY.search(said):
+        if _ASSESS.search(said):
+            return "assessment", ""
+        if _TEST.search(said):
+            return "assessment", ("a test named by what it tests, with nobody named in the room, "
+                                  "is usually taken alone")
+    # "Onsite" alone may say only where one interview is held: a day when nothing says one
+    # length, and then only a guess unless kinds are named.
+    one_length = re.search(r"\b(?:[1-8]\d|90)\s*(?:minutes?|mins?)\b", said, re.I) and not \
+        re.search(r"\beach\b|\binterviews\b", said, re.I)
+    day = _DAY.search(said) or (_ONSITE.search(said) and not one_length)
+    if day:
+        if names:
+            return "day:" + "+".join(names), ""
+        return "superday", ("" if _DAY.search(said) else "an onsite round is usually several "
+                            "interviews back to back")
     if len(names) >= 2:
         if names == ["personal", "case"] or (names == ["case", "personal"] and consulting):
             return "case", ""
         return "combined:" + "+".join(names), ""
-    if _ASSESS.search(said) and not names:
-        return "assessment", ""
+    platform = _PLATFORM.search(said)
+    if names == ["technical"] and platform and not live and not \
+            _TECH.search(_PLATFORM.sub(" ", said)) and not _PIECES[1][1].search(_PLATFORM.sub(" ", said)):
+        return "assessment", ("a %s round with nobody named is usually a timed test you take "
+                              "alone" % _PLATFORM_NAMES[platform.group(1).lower()])
     if _PANEL.search(said):
         return "panel", ""
     if names == ["presenting"]:
@@ -339,6 +443,12 @@ def shape_of(ctx) -> tuple:
         return ("case" if consulting else "case_only"), ""
     if names == ["personal"]:
         return "personal", ""
+    if names == ["behaviour"]:
+        return "behavioural", ""
+    # A technical round said in so many words; a technical screen is a shorter one with the
+    # basics a screen checks.
+    if names == ["technical"] or _TECH.search(said):
+        return ("tech_screen" if _SCREEN.search(said) else "technical"), ""
     if _SCREEN.search(said):
         return "screen", ""
     if consulting and step != "screen":
@@ -346,8 +456,6 @@ def shape_of(ctx) -> tuple:
                         "personal experience interview together")
     if _FINAL.search(said):
         return "final", ""
-    if _TECH.search(said) or names == ["technical"]:
-        return "technical", ""
     if _MANAGER.search(said):
         return "manager", ""
     if step == "screen":
@@ -360,16 +468,40 @@ def shape_of(ctx) -> tuple:
     return "manager", "the round after a screen is usually with the hiring manager"
 
 
+_WORD_NUMBERS = {"a": 1, "an": 1, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+                 "six": 6}
+_HOURS = re.compile(r"\b(\d+(?:\.\d+)?|an?|one|two|three|four|five|six)\s*(?:hours?|hrs?)\b"
+                    r"(?:\s+and\s+a\s+half)?", re.I)
+_EACH = re.compile(r"\b([2-6]|two|three|four|five|six)\s+(?:interviews|rounds|sessions|"
+                   r"conversations)\b[^.;]{0,40}?\b(\d{2,3})\s*(?:minutes?|mins?)\b|"
+                   r"\b([2-6])\s*[x\u00d7]\s*(\d{2,3})\s*(?:minutes?|mins?)\b|"
+                   r"\b([2-6]|two|three|four|five|six)\s+(\d{2,3})[- ]min(?:ute)?s?[- ]"
+                   r"(?:interviews|rounds|sessions|conversations)\b", re.I)
+
+
 def round_minutes(ctx, shape) -> int:
     """The round's length as booked, else the shape's usual length."""
     label = _t(ctx.get("stage")).lower()
     for s in ctx.get("stages") or []:
         if _t(s.get("label")).lower() == label and int(s.get("minutes") or 0) > 0:
             return int(s["minutes"])
-    m = re.search(r"\b(\d{2,3})\s*(?:minutes?|mins?)\b",
-                  "%s %s" % (_t(ctx.get("stage")), _t(ctx.get("format"))), re.I)
+    said = "%s %s" % (_t(ctx.get("stage")), _t(ctx.get("format")))
+    # Several interviews of a length each: the day is all of them.
+    m = _EACH.search(said)
+    if m:
+        n = m.group(1) or m.group(3) or m.group(5)
+        n = int(n) if n.isdigit() else _WORD_NUMBERS[n.lower()]
+        return n * int(m.group(2) or m.group(4) or m.group(6))
+    m = re.search(r"\b(\d{2,3})\s*(?:minutes?|mins?)\b", said, re.I)
     if m and 10 <= int(m.group(1)) <= 240:
         return int(m.group(1))
+    m = _HOURS.search(said)
+    if m:
+        n = m.group(1).lower()
+        hours = float(n) if n[0].isdigit() else _WORD_NUMBERS[n]
+        hours += 0.5 if re.search(r"and a half", m.group(0), re.I) else 0
+        if 0.25 <= hours <= 9:
+            return int(round(hours * 60))
     return shape_def(shape)[1]
 
 
@@ -391,9 +523,38 @@ def kind_of(question) -> str:
     return next((k for k, rx in _KIND_OF if rx.search(q)), "experience")
 
 
-def _place(kind, kinds) -> str:
-    return next((k for k in _FALLBACK.get(kind, (kind,)) if k in kinds), None) or (
-        "experience" if "experience" in kinds else kinds[1] if len(kinds) > 2 else kinds[0])
+def _place(kind, kinds, strict=False) -> str:
+    """The part a question of this kind is asked in. `strict`: None where the round has no
+    part for it (a case interview asks no "What is your experience with SAP?" as its case);
+    otherwise the nearest part, for a question they are known to ask, which is always placed."""
+    hit = next((k for k in _FALLBACK.get(kind, (kind,)) if k in kinds), None)
+    if hit or strict:
+        return hit
+    return "experience" if "experience" in kinds else kinds[1] if len(kinds) > 2 else kinds[0]
+
+
+# What each part usually asks where the records hold nothing for it: the pack's own stock
+# questions, so the answers come from the person's stories and stock answers as any other.
+_POOL_FOR = ("opening", "motivation", "basics", "experience", "behaviour", "personal",
+             "technical", "probes", "presenting")
+
+
+def _pool(kind, ctx) -> list:
+    import interview_pack as P
+    fp, sq = P.FORMAT_PREP, P.STAGE_QUESTIONS
+    company = ctx.get("company") or "us"
+    pools = {
+        "opening": sq["technical"][1:2],
+        "motivation": (sq["final"][0], sq["screen"][1], sq["final"][2]),
+        "basics": (sq["screen"][3], sq["screen"][5]),
+        "experience": sq["technical"][:1],
+        "behaviour": fp["behavioural"]["questions"],
+        "personal": fp["behavioural"]["questions"][:2] + sq["technical"][:1],
+        "technical": fp["coding"]["questions"] + fp["technical"]["questions"][:1],
+        "probes": ("What are the trade-offs in your approach?", "How would it scale to ten times the data?"),
+        "presenting": fp["presentation"]["questions"],
+    }
+    return [q.format(company=company) for q in pools.get(kind, ())]
 
 
 def _who(kind, room) -> str:
@@ -484,7 +645,7 @@ def build(ctx) -> dict:
     parts = [{"id": "p%d" % (i + 1), "kind": d[0],
               "title": d[2] if len(d) > 2 else PART_TITLES[d[0]], "short": PART_SHORT[d[0]],
               "minutes": m,
-              "who": _who(d[0], room), "say": [], "bridge": "", "questions": []}
+              "who": _who(d[0], room), "say": [], "bridge": "", "questions": [], "follow": []}
              for i, (d, m) in enumerate(zip(parts_def, mins))]
     by_kind = {p["kind"]: p for p in parts}
     st_list = list(ctx.get("stories") or [])
@@ -492,19 +653,52 @@ def build(ctx) -> dict:
                 "star": {k: _t(s["star"].get(k)) for k in "STAR" if _t(s["star"].get(k))},
                 "questions": []} for i, s in enumerate(st_list)]
     sid = {s["title"].lower(): stories[i]["id"] for i, s in enumerate(st_list)}
-    items = P.likely_questions(ctx)
+    # A test taken alone asks nothing of the interview's kind: its items to practise are
+    # Claude's to write, from what the test covers.
+    items = [] if shape in ("assessment",) else list(P.likely_questions(ctx))
+    placed = []
+    # A question every story already brings as a follow-up ("What would you do differently
+    # now?") is asked there, once, never also as a question of its own (2026-11-10).
+    follows = {_norm(fq) for _w, fq in STORY_FOLLOW} if ctx.get("stories") else set()
+    for item in items:
+        if _norm(item["question"]) in follows:
+            continue
+        k = _place(kind_of(item["question"]), kinds, strict=True)
+        if k:
+            placed.append((item, k))
+    # A part a person answers in with no question of the records' own takes the questions its
+    # kind of interview usually brings: a manager's "Times you did it" and "Why this role" were
+    # empty while six questions sat in "Your work" (2026-11-10).
+    have = {_norm(i["question"]) for i, _k in placed} | follows
+    for k in kinds:
+        if k in _POOL_FOR and not any(pk == k for _i, pk in placed):
+            for text in _pool(k, ctx):
+                if _norm(text) not in have:
+                    placed.append(({"question": text, "why": "what this kind of interview usually asks",
+                                    "source": "the format"}, k))
+                    have.add(_norm(text))
     ctx = dict(ctx)
-    ctx["plan"] = P.plan_stories(items, ctx)
+    ctx["plan"] = P.plan_stories([i for i, _k in placed], ctx)
     questions = []
     # As many questions as the round has time for: a 20 minute screen is short, an hour long.
+    # Every part with questions keeps its first; the rest in the order they are likeliest.
     cap = max(4, min(MAX_QUESTIONS, int(round(total / 5.0))))
-    for item in items:
-        if len(questions) >= cap:
-            break
-        part = by_kind[_place(kind_of(item["question"]), kinds)]
-        # A timed test asks no "tell me about yourself": only what it tests is practised.
-        if shape == "assessment" and part["kind"] != "practice":
+    # A count the invite gives ("HireVue, 5 questions") is the count prepared.
+    said_n = re.search(r"\b(\d{1,2}|three|four|five|six|seven|eight|nine|ten)\s+questions\b",
+                       "%s %s" % (_t(ctx.get("stage")), _t(ctx.get("format"))), re.I)
+    if said_n:
+        n = said_n.group(1).lower()
+        n = int(n) if n.isdigit() else dict(_WORD_NUMBERS, seven=7, eight=8, nine=9, ten=10)[n]
+        cap = max(1, min(MAX_QUESTIONS, n))
+    first = {}
+    for n, (_i, k) in enumerate(placed):
+        first.setdefault(k, n)
+    keep = sorted(first.values())[:cap]
+    keep += [n for n in range(len(placed)) if n not in keep][:max(0, cap - len(keep))]
+    for n, (item, k) in enumerate(placed):
+        if n not in keep:
             continue
+        part = by_kind[k]
         ans = P.answer_for(item, ctx)
         story = None
         for ln in ans.get("lines") or []:
@@ -517,8 +711,8 @@ def build(ctx) -> dict:
              "simple": _t(prepared.get("answer")) if prepared else "", "detailed": "",
              "story": story, "known": None, "draft": False,
              "from": _from_lines(ans),
-             "follow": ([{"who": w, "q": fq, "also": [], "simple": "", "detailed": "", "follow": []}
-                         for w, fq in STORY_FOLLOW] if story else [])}
+             # Its own follow-ups only: those after any story are the part's (finish).
+             "follow": []}
         questions.append(q)
         part["questions"].append(q["id"])
     # The known questions, each placed as a question of its own, or on the one it already is.
@@ -528,15 +722,18 @@ def build(ctx) -> dict:
         known.append(dict(k, id=kid, question=None))
     _place_known(known, questions, parts, room)
     asks = []
-    for ln in P.ask_lines(ctx):
+    # A test taken alone, or a recorded interview, has nobody to ask.
+    for ln in (P.ask_lines(ctx) if "close" in kinds else []):
         text = P.plain_line(ln)[0]
         q, why = P._last_parens(text)
         q = said_ask(q)
         if q.endswith("?"):
             asks.append({"id": "a%d" % (len(asks) + 1), "q": q, "why": why,
                          "follow": []})
-    asks.append({"id": "a%d" % (len(asks) + 1), "q": P.CLOSE_QUESTION,
-                 "why": "the last word on any doubt, while you are still in the room", "follow": []})
+    if "close" in kinds:
+        asks.append({"id": "a%d" % (len(asks) + 1), "q": P.CLOSE_QUESTION,
+                     "why": "the last word on any doubt, while you are still in the room",
+                     "follow": []})
     doc = {"version": VERSION, "built": ctx.get("today") or dt.date.today().isoformat(),
            "company": ctx["company"], "role": ctx.get("role") or "", "stage": ctx.get("stage") or "",
            "date": ctx.get("date") or "", "with": ctx.get("with") or "", "format": _t(ctx.get("format")),
@@ -618,7 +815,11 @@ def private_notes(ctx) -> dict:
         _q, said = P._form_value(ctx, r"notice")
         notice = _t(said)
     based = told.place(ctx["company"]) or P.home_place(ctx["company"])
-    not_say = [P.plain_line(ln)[0] for ln in P.do_not_say(ctx)]
+    # A gap is said once, as a note of its own with how to put it (below): never also as a
+    # line of what not to say (the review, 2026-11-10).
+    gap_names = [_t(g.get("gap")) for g in (ctx.get("facts") or {}).get("gaps") or [] if _t(g.get("gap"))]
+    not_say = [P.plain_line(ln)[0] for ln in P.do_not_say(ctx)
+               if not any(re.match(r"- Never claim %s\b" % re.escape(n), ln) for n in gap_names)]
     figures = []
     research = ctx.get("research") or {}
     for f in research.get("do_not_claim") or []:
@@ -630,12 +831,27 @@ def private_notes(ctx) -> dict:
         figures.append("Your lowest figure, %s: it stays with you." % "{:,}".format(floor))
     weak = []
     for g in (ctx.get("facts") or {}).get("gaps") or []:
-        weak.append({"what": _t(g.get("gap")),
-                     "frame": _t(g.get("framing")) or "Say plainly you have not done it as such, "
-                                                      "then the nearest true thing."})
+        gap = _t(g.get("gap"))
+        said, clause, note = P._gap_words(gap, ctx.get("posting") or "")
+        what = gap if not said or said.lower() in gap.lower() else "%s (%s)" % (gap, said)
+        # A qualification in the posting's own words ("CIPS membership"), never the label the
+        # profile's map files it under ("Chartered procurement").
+        own = re.sub(r"(?i)\s+(?:is|are|was|will be|would be)\b.*$", "", _t(clause)).strip(" .,;:")
+        if said and P._CREDENTIAL.search(" ".join((gap, clause, note))) and said in own and len(own) <= 40:
+            what = own[:1].upper() + own[1:] if own[:1].islower() else own
+        if _t(g.get("framing")):
+            # The line to say, said to be one: a first-person line alone read as a note.
+            frame = "Say: \u201c%s\u201d" % _t(g.get("framing")).rstrip()
+        elif P._CREDENTIAL.search(" ".join((gap, clause, note))):
+            frame = ("You do not hold it, so never claim it. Say so plainly, then the nearest "
+                     "true thing.")
+        else:
+            frame = ("Never claim it. Say plainly you have not done it as such, then the nearest "
+                     "true thing.")
+        weak.append({"what": what, "frame": frame})
     for m in P.landmines(ctx):
         what = _t(m.get("what"))
-        frame = " ".join(x for x in (P.plain_line(ln)[0] for ln in m.get("framing") or []) if x)
+        frame = _frame(m.get("framing"))
         if what:
             weak.append({"what": what, "frame": frame or "Say it plainly and briefly, then what "
                                                          "you did next."})
@@ -643,6 +859,26 @@ def private_notes(ctx) -> dict:
             "notice": notice, "based": based,
             "not_to_say": [x for x in not_say if x], "figures": figures,
             "weaknesses": weak, "red_flags": list(RED_FLAGS), "confirm": []}
+
+
+_EVIDENCE = re.compile(r"^(?:From your profile|Say|Prepared):", re.I)
+
+
+def _frame(lines) -> str:
+    """How to put a place they may push, as sentences for the person: what to do first, then
+    what the profile holds to say it with, each ending where it ends. The lines were joined as
+    they came, so "...ending a daily two-hour reconciliation Name the work..." ran on (the
+    review, 2026-11-10), and a line clipped for the pack ended on "an estimated..."."""
+    import interview_pack as P
+    said = [x for x in (P.plain_line(ln)[0] for ln in lines or []) if _t(x)]
+    out = []
+    for x in [x for x in said if not _EVIDENCE.match(x)] + [x for x in said if _EVIDENCE.match(x)]:
+        x = _t(x)
+        if x.endswith("..."):
+            # Clipped: back to the last whole clause, never a sentence cut mid-way.
+            x = re.sub(r",[^,]*\.\.\.$", "", x) if "," in x else x[:-3].rstrip()
+        out.append(x if re.search(r"[.!?\u201d\"]$", x) else x.rstrip(",;: ") + ".")
+    return " ".join(out)
 
 
 # ---------------------------------------------------------------- Claude's words onto it
@@ -710,6 +946,8 @@ def merge(fresh, filled) -> dict:
             part["bridge"] = _t(old["bridge"])
         if _t(old.get("title")):
             part["title"] = _t(old["title"])
+        if old.get("follow"):
+            part["follow"] = old["follow"]
     # The known questions: the records' and Claude's, once each.
     have = {_norm(k["text"]) for k in doc["known"]}
     for k in filled.get("known") or []:
@@ -767,6 +1005,172 @@ def merge(fresh, filled) -> dict:
     return finish(doc)
 
 
+def is_copy(filled) -> bool:
+    """Is a --fill file a whole copy of the prep, as older chats wrote it?"""
+    return isinstance(filled, dict) and isinstance(filled.get("parts"), list) \
+        and isinstance(filled.get("questions"), list)
+
+
+# The shape each key of a words file takes (`words_into`).
+_WORDS_SHAPE = {"parts": dict, "questions": dict, "new": list, "known": list, "terms": dict,
+                "ask": dict, "ask_new": list, "confirm": list}
+
+
+def words_shape(words) -> str:
+    """What is wrong with a words file's shape, in plain words, or "" when it is fit."""
+    if not isinstance(words, dict):
+        return ("the words file is not one: write an object with parts, questions and the rest "
+                "(interview.md Step 3b), never a list")
+    for k, want in _WORDS_SHAPE.items():
+        if k in words and not isinstance(words[k], want):
+            return ("the words file's \"%s\" is %s: write it as %s (interview.md Step 3b)"
+                    % (k, "a list" if isinstance(words[k], list) else "the wrong shape",
+                       "an object keyed by id" if want is dict else "a list"))
+    for k in ("parts", "questions"):
+        for key, w in (words.get(k) or {}).items():
+            if not isinstance(w, dict):
+                return ("the words file's \"%s\" entry %r is not an object of words: write it "
+                        "as {\"say\": [...]} or {\"simple\": \"...\"} (interview.md Step 3b)" % (k, key))
+    return ""
+
+
+def words_into(base, words) -> dict:
+    """The prep `base` (as built, with what was written before) with only the words Claude
+    wrote put in, in the form `merge` keeps. Claude writes the words alone, keyed by part and
+    question, and code puts them in their place: re-writing the whole built file to fill it
+    was 37k characters, about 20k of them the engine's own (the efficiency audit, 2026-11-10).
+
+    {"parts": {"<part id or kind>": {"say": [{"t", "prompts", "known"}], "bridge", "title",
+               "follow": [{"who", "q", "simple", ...}]}},
+     "questions": {"<question id or its words>": {"simple", "detailed", "also", "follow",
+                   "who", "story", "draft"}},
+     "new": [{"part": "<part id or kind>", "who", "q", "simple", ...}],
+     "known": [{"text", "from"}], "terms": {...},
+     "ask": {"<ask id or its words>": [{"if", "then"}]}, "ask_new": [{"q", "why", "follow"}],
+     "confirm": ["..."]}
+
+    A part, question or question to ask the words name that is not in the prep is an error,
+    said in plain words: nothing written is dropped without a word."""
+    wrong = words_shape(words or {})
+    if wrong:
+        raise ValueError(wrong)
+    doc = json.loads(json.dumps(base))
+    words = words or {}
+    parts = doc["parts"]
+
+    def part_of(key):
+        hit = next((p for p in parts if p["id"] == key), None) or \
+            next((p for p in parts if p["kind"] == key), None)
+        if hit is None:
+            raise ValueError("the words name a part %r that this prep does not have: its parts "
+                             "are %s" % (key, ", ".join("%s (%s)" % (p["id"], p["kind"]) for p in parts)))
+        return hit
+
+    for key, w in (words.get("parts") or {}).items():
+        part = part_of(key)
+        for f in ("say", "bridge", "title", "follow"):
+            if f in (w or {}):
+                part[f] = w[f]
+    byid = {q["id"]: q for q in doc["questions"]}
+    bytext = {_norm(q["q"]): q for q in doc["questions"]}
+    for key, w in (words.get("questions") or {}).items():
+        q = byid.get(key) or bytext.get(_norm(key))
+        if q is None:
+            raise ValueError("the words answer a question %r that is not in this prep: add it "
+                             "under \"new\" with its part" % key)
+        for f in _Q_WRITTEN + ("story",):
+            if f in (w or {}):
+                q[f] = w[f]
+    taken = {q["id"] for q in doc["questions"]}
+    for i, w in enumerate(words.get("new") or []):
+        if not isinstance(w, dict) or not _t(w.get("q")):
+            continue
+        qid = _t(w.get("id")) or "new%d" % (i + 1)
+        if qid in taken:
+            # Another question's id would repoint every "Likely to prompt" link to it.
+            raise ValueError("the new question %r is given the id %s, which is already a "
+                             "question's: give it an id of its own, like new%d"
+                             % (_t(w["q"]), qid, i + 1))
+        taken.add(qid)
+        q = {"id": qid, "part": part_of(w.get("part"))["id"],
+             "who": w.get("who") or "", "q": _t(w["q"]), "also": w.get("also") or [],
+             "simple": w.get("simple") or "", "detailed": w.get("detailed") or "",
+             "story": w.get("story"), "known": None, "draft": bool(w.get("draft")),
+             "from": [], "follow": w.get("follow") or []}
+        doc["questions"].append(q)
+    if words.get("known"):
+        have = {_norm(k.get("text")) for k in doc.get("known") or []}
+        doc["known"] = list(doc.get("known") or []) + [
+            k for k in words["known"] if _t(k.get("text")) and _norm(k["text"]) not in have]
+    if isinstance(words.get("terms"), dict):
+        doc["terms"] = dict(doc.get("terms") or {}, **words["terms"])
+    asks = doc.get("ask") or []
+    for key, follow in (words.get("ask") or {}).items():
+        a = next((a for a in asks if a["id"] == key or _norm(a["q"]) == _norm(key)), None)
+        if a is None:
+            raise ValueError("the words follow up a question to ask %r that is not in this "
+                             "prep: add it under \"ask_new\"" % key)
+        a["follow"] = follow
+    for w in words.get("ask_new") or []:
+        if _t((w or {}).get("q")):
+            asks.insert(max(0, len(asks) - 1), {"id": "x", "q": _t(w["q"]), "why": _t(w.get("why")),
+                                                "follow": w.get("follow") or []})
+    doc["ask"] = asks
+    for x in words.get("confirm") or []:
+        if _t(x) and _t(x) not in doc["private"]["confirm"]:
+            doc["private"]["confirm"].append(_t(x))
+    return doc
+
+
+# A problem as it is set: a task, never a question about past work.
+_TASK = re.compile(r"^(?:given\b|write\b|build\b|design\b|implement\b|find\b|calculate\b|"
+                   r"estimate\b|code\b|create\b|you have\b|here(?:['\u2019]s| is)\b|"
+                   r"how would you (?:build|design|implement|write|code|model|find|approach)\b)", re.I)
+
+
+def _follow_once(part, mine) -> None:
+    """The follow-ups said once in a part: those after any story, where a story is told there,
+    and any written under two or more of its questions. Each is lifted off its questions onto
+    the part (`follow`), keeping the first words written for it and the story they tell, so a
+    question keeps only follow-ups of its own (the screen review, 2026-11-11: the same three
+    stood under every question of a part)."""
+    own = [f for f in part.get("follow") or [] if isinstance(f, dict) and _t(f.get("q"))]
+    have = {_norm(f["q"]): f for f in own}
+    told = any(q.get("story") for q in mine)
+    under: dict = {}
+    for q in mine:
+        for f in q.get("follow") or []:
+            under.setdefault(_norm(f.get("q")), set()).add(q["id"])
+    story = {_norm(fq) for _w, fq in STORY_FOLLOW} if told else set()
+    lift = {k for k, qs in under.items() if len(qs) > 1 or k in have or k in story}
+    for q in mine:
+        kept = []
+        for f in q.get("follow") or []:
+            k = _norm(f.get("q"))
+            if k not in lift:
+                kept.append(f)
+                continue
+            got = have.get(k)
+            if got is None:
+                got = have[k] = {"who": f.get("who") or "", "q": _t(f.get("q")), "also": [],
+                                 "simple": "", "detailed": "", "follow": []}
+                own.append(got)
+            if not _t(got.get("simple")) and _t(f.get("simple")):
+                for key in ("who", "also", "simple", "detailed", "follow", "draft"):
+                    if f.get(key) not in (None, "", []):
+                        got[key] = f[key]
+                if q.get("story"):
+                    got["story"] = q["story"]
+        q["follow"] = kept
+    if told:
+        for w, fq in STORY_FOLLOW:
+            if _norm(fq) not in have:
+                have[_norm(fq)] = {"who": w, "q": fq, "also": [], "simple": "", "detailed": "",
+                                   "follow": []}
+                own.append(have[_norm(fq)])
+    part["follow"] = own
+
+
 def finish(doc) -> dict:
     """The parts in order with their questions, each story with the questions it answers, and
     the timing: minutes a part and the person's own talk in it, from the words."""
@@ -778,7 +1182,13 @@ def finish(doc) -> dict:
     terms = doc.get("terms") or {}
     parts_t, talk_all = {}, 0
     for p in doc["parts"]:
-        p["questions"] = [q["id"] for q in doc["questions"] if q["part"] == p["id"]]
+        # The problem as set leads "A problem, worked aloud", ahead of questions about past
+        # code (the night-before run, 2026-11-10).
+        mine = [q for q in doc["questions"] if q["part"] == p["id"]]
+        if p["kind"] in ("technical", "practice"):
+            mine.sort(key=lambda q: not _TASK.search(_t(q.get("q"))))
+        p["questions"] = [q["id"] for q in mine]
+        _follow_once(p, mine)
         n = sum(words(b.get("t"), terms) for b in p["say"]) + words(p.get("bridge"), terms)
         n += sum(words(q.get("simple"), terms) for q in doc["questions"] if q["part"] == p["id"])
         talk = minutes(n, speed)
@@ -808,6 +1218,10 @@ def spoken(doc):
         if _t(p.get("bridge")):
             yield ("\"%s\", what to say first (the line to end on)" % p.get("title"),
                    p["bridge"], False, "")
+        for f, _d, here in _nodes(p, where="\"%s\", after any story" % p.get("title")):
+            for key in ("simple", "detailed"):
+                if _t(f.get(key)):
+                    yield ("%s, %s answer" % (here, key), f[key], bool(f.get("draft")), f.get("q") or "")
     for q in qs.values():
         where = "\"%s\"" % _t(q.get("q"))
         for key in ("simple", "detailed"):
@@ -862,6 +1276,11 @@ def _answer_checks(node, where, terms, need_detail) -> list:
                            "it, two to four sentences"))
         return out
     n = sentences(s, terms)
+    longest = max((len(_WORD.findall(x)) for x in _SENTENCE.split(_t(plain(s, terms))) if x.strip()),
+                  default=0)
+    if longest > SIMPLE_WORDS:
+        out.append((where, "a sentence of the simple answer runs to %d words: say it in shorter "
+                           "sentences, %d words at most, each a line to glance at" % (longest, SIMPLE_WORDS)))
     lo, hi = SIMPLE_SENTENCES
     if not lo <= n <= hi:
         out.append((where, "the simple answer is %d sentence%s: make it %d to %d, a real "
@@ -943,6 +1362,15 @@ def problems(doc, ctx=None) -> list:
         if not say:
             out.append(("\"%s\"" % p.get("title"), "nothing to say first yet: write two or three "
                                                    "sentences to say aloud as it starts"))
+        if p.get("kind") == "technical" and not any(_TASK.search(_t(q.get("q"))) for q in
+                                                       doc.get("questions") or [] if q.get("part") == p.get("id")):
+            out.append(("\"%s\"" % p.get("title"), "add the problem they are likely to set, as they "
+                        "would set it (\"Given ..., write a function that ...\"), with how you would "
+                        "say it back, structure it, test it and talk it through"))
+        if p.get("kind") == "practice" and not p.get("questions"):
+            out.append(("\"%s\"" % p.get("title"), "no items to practise yet: add three to five of "
+                        "the kind the test sets, each with how to take it (simple) and the worked "
+                        "answer (detailed)"))
         if len(say) > MAX_BEATS:
             out.append(("\"%s\"" % p.get("title"), "%d things to say first: keep it to %d"
                         % (len(say), MAX_BEATS)))
@@ -984,6 +1412,17 @@ def problems(doc, ctx=None) -> list:
             if f.get("who") not in PERSONAS:
                 out.append((here, "say who is likely to ask it"))
             out += _answer_checks(f, here, terms, False)
+    # The follow-ups said once in a part, after any story told there: written as any other.
+    for p in doc.get("parts") or []:
+        for f, depth, here in _nodes(p, where="\"%s\", after any story" % p.get("title")):
+            if depth > MAX_DEPTH:
+                out.append((here, "follow-ups go three deep at most: fold this one into the one "
+                                  "above"))
+            if f.get("who") not in PERSONAS:
+                out.append((here, "say who is likely to ask it"))
+            out += _answer_checks(f, here, terms, False)
+            if f.get("story") and not any(s["id"] == f["story"] for s in doc.get("stories") or []):
+                out.append((here, "it is answered with a story that is not among yours"))
     # The questions to ask: each with what to say back to their likely answer.
     for a in doc.get("ask") or []:
         if not a.get("follow"):
@@ -1018,6 +1457,31 @@ def problems(doc, ctx=None) -> list:
             out.append((where, "\"%s\" is a phrase you asked never to use" % hit))
     out += grounding(doc, ctx)
     return out
+
+
+_NEGATED = re.compile(r"\b(?:not|never|no|without|neither|nor)\b|n['\u2019]t\b", re.I)
+
+
+def _asked_of_them(value, text) -> bool:
+    """Is a figure said only inside a question for them (a sentence ending "?")?"""
+    sents = [x for x in _SENTENCE.split(_t(text)) if value and value.lower() in x.lower()]
+    return bool(sents) and all(x.rstrip().endswith("?") for x in sents)
+
+
+def _negated(snippet, text) -> bool:
+    """Is every place `snippet` is said in `text` governed by a negation a few words before it
+    ("I'm not a member of CIPS", "I don't hold CIPS membership")? A "no" anywhere else in the
+    sentence ("I hold CIPS membership, and I have no doubt...") is not one (the review of the
+    fixes, 2026-11-10)."""
+    low, s = _t(text).lower(), snippet.lower()
+    at = [m.start() for m in re.finditer(re.escape(s), low)]
+    if not at:
+        return False
+    for i in at:
+        before = re.split(r"[.!?;,]", low[:i])[-1]
+        if not _NEGATED.search(" ".join(before.split()[-5:])):
+            return False
+    return True
 
 
 def _num(x) -> str:
@@ -1057,14 +1521,22 @@ def grounding(doc, ctx=None) -> list:
         about_them = where.startswith("your question")
         if not about_them and not re.search(P._PAY_Q + r"|\bnotice\b|\bstart\b", question or "", re.I):
             for f in check_numbers.check(t, allowed=allowed):
-                if P._PLAN.search(f.get("context") or ""):
+                # A time ahead, or a figure inside a question asked of them, is not a claim
+                # about the person's work (the night-before run, 2026-11-10).
+                ctx_ = f.get("context") or ""
+                if P._PLAN.search(ctx_) or _asked_of_them(_t(f.get("value")), t):
                     continue
                 out.append((where, "\"%s\" is a number your profile does not hold: say the one "
                                    "it holds, or mark the answer a draft for you to confirm"
                             % f.get("value", "")))
-        for sev, _name, snippet, why in check_claims.check_text(t):
-            if sev == "ERROR":
-                out.append((where, "\"%s\": %s" % (snippet, why)))
+        for sev, name, snippet, why in check_claims.check_text(t):
+            if sev != "ERROR":
+                continue
+            # Saying plainly that you do not hold it is the honest answer, never a claim: "No,
+            # I'm not a member of CIPS" was refused as naming a skill not held.
+            if name == "unheld-skill" and _negated(snippet, t):
+                continue
+            out.append((where, "\"%s\": %s" % (snippet, why)))
         if company:
             clash = told.clash(t, company)
             if clash:
@@ -1081,10 +1553,33 @@ def drafts(doc) -> list:
         for f, _d, here in _nodes(q, where="\"%s\"" % _t(q.get("q"))):
             if f.get("draft") and not q.get("draft"):
                 out.append(here)
+    for p in doc.get("parts") or []:
+        for f, _d, here in _nodes(p, where="\"%s\", after any story" % p.get("title")):
+            if f.get("draft"):
+                out.append(here)
     return out
 
 
 # ---------------------------------------------------------------- on disk
+
+def kind_changed(folder, stage="") -> str:
+    """The kind of round the record now says, where the live prep saved for that round was made
+    for another ("" when it was not, or nothing is saved): `book --format` changed what the
+    round is and the saved prep gave no sign of it (the night-before run, 2026-11-10)."""
+    import interview_pack as P
+    doc = load(folder)
+    if not doc:
+        return ""
+    label = _t(stage) or _t(doc.get("stage"))
+    if _t(doc.get("stage")) and label and not P._same_round(doc["stage"], label):
+        return ""
+    try:
+        with open(os.path.join(folder, "outcome.md"), encoding="utf-8") as fh:
+            now = P.stage_format(fh.read(), label)
+    except OSError:
+        return ""
+    return now if now and _norm(now) != _norm(doc.get("format")) else ""
+
 
 def path_for(folder) -> str:
     return os.path.join(folder, LIVE)
@@ -1130,6 +1625,10 @@ def for_page(doc) -> dict | None:
     if not ready(doc):
         return None
     out = json.loads(json.dumps(doc))
+    # A prep saved before the follow-ups after any story were the part's says them once too,
+    # as it is read: nothing needs making again (the screen review, 2026-11-11).
+    for p in out.get("parts") or []:
+        _follow_once(p, [q for qid in p.get("questions") or [] for q in out["questions"] if q["id"] == qid])
     for q in out["questions"]:
         q.pop("from", None)
     out["drafts"] = (out.pop("checked", None) or {}).get("drafts", 0)

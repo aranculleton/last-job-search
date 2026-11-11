@@ -331,3 +331,17 @@ def test_what_was_sent_is_said_even_with_no_file_name(run, tmp_path):
     got = _go(run, tmp_path, [{"hash": "interviews/int-larkspur-supply", "click": "Read your prep for your phone screen with Larkspur Retail",
                                "exact": True, "read": "body"}], model=model)
     assert "Your CV, to Juno, 20 Oct" in got["after"][0]["text"] or "Your CV, to Juno, Tue 20 Oct" in got["after"][0]["text"], got["after"][0]["text"][-800:]
+
+
+@pytest.mark.parametrize("vp", [PHONE, WIDE], ids=["phone", "wide"])
+def test_coming_up_reads_your_prep_with_the_pill_to_do_has(run, tmp_path, vp):
+    # The UX review of 2026-11-10 (U-12): the night before, the key action in Coming up was a
+    # small underlined "Prep ready" while To do called it "Read your prep". It is the row's pill,
+    # in the same words, and Prepare me is a pill too.
+    look = ("[...document.querySelectorAll('#main .up-prep .btn')].map((b) => [b.textContent.trim(), b.classList.contains('link')])")
+    got = _go(run, tmp_path, [{"hash": "interviews", "eval": look}, {"hash": "todo", "eval": (
+        "[...document.querySelectorAll('#main [data-item=\"soon:int-larkspur-supply\"] .card-actions .btn')].map((b) => b.textContent.trim())")}], vp=vp)
+    rows, todo = got["after"][0]["eval"], got["after"][1]["eval"]
+    assert ["Read your prep", False] in rows and ["Prepare me", False] in rows, rows
+    assert "Prep ready" not in [r[0] for r in rows] and not any(link for _t, link in rows), rows
+    assert "Read your prep" in todo, todo

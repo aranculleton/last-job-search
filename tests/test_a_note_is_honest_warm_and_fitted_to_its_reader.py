@@ -83,7 +83,8 @@ def test_stacked_hedges_and_disclaimers_are_warned_and_one_light_hedge_is_not():
 def test_an_exit_that_invites_no_reply_is_warned_in_a_first_message_only():
     text = "Would you have 15 minutes sometime? If not, no worries at all."
     found = [a for a in advice.check(text, "connection") if a.rule == "soft_exit"]
-    assert found and "anything coming up" in found[0].fix
+    # The open ask it offers is for a conversation, never openings (the review, 2026-11-10).
+    assert found and "a short chat about the work" in found[0].fix
     assert "soft_exit" not in rules(advice.check(text, "nudge"))
 
 
@@ -146,7 +147,7 @@ def test_saying_the_role_wanted_is_allowed_to_a_decision_maker_not_asking_for_th
     assert peer and "SAY_THE_ROLE" in peer[0].text
     ask = [v for v in compose.validate("Hi Juno, are you hiring?", "connection",
                                        title="Head of Data") if v.rule == "asks_for_the_job"]
-    assert ask and "anything coming up" in ask[0].text
+    assert ask and "a short chat about the work" in ask[0].text
 
 
 def test_a_second_clause_saying_they_are_looking_is_not_a_job_ask():

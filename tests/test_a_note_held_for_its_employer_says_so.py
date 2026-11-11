@@ -67,3 +67,18 @@ def test_the_card_says_its_own_hold_with_go_ahead_anyway(run, tmp_path):
     assert r, "the held note has its line"
     assert r["text"].startswith("On hold: you already have 2 people") and "by itself" not in r["text"], r
     assert r["hold"] == "own" and r["anyway"] == ["Go ahead anyway"], r
+
+
+def test_a_note_held_on_their_record_says_its_hold_never_a_read_by_itself():
+    """The audit of 2026-11-10 (DW-2): a note waiting on a read and held on the person's record
+    ("Hold until ...") said "Claude reads it on your computer by itself": the read line stood
+    over the hold. The hold says itself; only the employer's own hold comes before it."""
+    read = app_model.READ_HOLD["computer"]
+    mine = {"said": "On hold until 23 Nov: they asked to talk after their busy season", "role": False,
+            "until": "2026-11-23"}
+    hold, why = app_model.note_hold(read, None, mine)
+    assert why == "person_hold" and "by itself" not in hold, hold
+    assert app_model.note_hold(read, None, dict(mine, decided=True))[1] == "decided"
+    full = "On hold: you already have 2 people waiting on a reply at Harbourline Insurance"
+    assert app_model.note_hold(full, "employer_full", mine) == (full, "employer_full")
+    assert app_model.note_hold(read, None, None) == (read, None)

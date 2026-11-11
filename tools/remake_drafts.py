@@ -227,20 +227,24 @@ def way_forward(d: dict, folder: str) -> dict:
     other = [i["said"] for i in verify.get("items") or [] if not i.get("ok")]
     flags = letter_flags(d)
     copies = copied_parts(d)
-    beyond = [f for f in flags if not _COPIES.search(f)]
+    # A close the person's rules would not have (audit_letters.close_flags) is the close
+    # redrafted alone, as a copied part is (the review of NW-25, 2026-11-11).
+    import audit_letters
+    closes = [f for f in flags if f.startswith(audit_letters.CLOSE_FLAG)]
+    beyond = [f for f in flags if not _COPIES.search(f) and f not in closes]
     names = {"summary": "the summary", "p1": "the opening", "p2": "the company paragraph",
              "cl_bullets": "the bullets", "p4": "the close", "lead": "the line before the bullets"}
-    redo = [f for f in copies if f in REDO_ONLY]
-    if copies and not beyond and not _beyond_letters(other) and \
+    redo = list(dict.fromkeys([f for f in copies if f in REDO_ONLY] + (["p4"] if closes else [])))
+    if (copies or closes) and not beyond and not _beyond_letters(other) and \
             all(f in REDO_ONLY or f == "summary" for f in copies):
         # One tweak per document: the letter's parts (L4), the resume's summary (R8).
         tweaks = ([{"output": "letter", "changes": [{"p": "L4", "v": redo}]}] if redo else []) + \
             ([{"output": "resume", "changes": [{"p": "R8", "v": "plainer"}]}]
              if "summary" in copies else [])
-        parts = " and ".join(names[f] for f in copies)
-        return {"way": "redraft", "tweaks": tweaks,
-                "why": f"{parts} copied the posting word for word"}
-    said = other + [f.split(":")[0] for f in beyond] + \
+        why = ([" and ".join(names[f] for f in copies) + " copied the posting word for word"]
+               if copies else []) + [f.split(":")[0] for f in closes]
+        return {"way": "redraft", "tweaks": tweaks, "why": "; ".join(why)}
+    said = other + [f.split(":")[0] for f in beyond + closes] + \
         [f"{names.get(f, f)} copies the posting word for word" for f in copies]
     return {"way": "todo", "why": "; ".join(dict.fromkeys(said)) or "a check did not pass"}
 

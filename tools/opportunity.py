@@ -138,13 +138,35 @@ def _names_in(c: str, names) -> str | None:
     YC-backed startups. Short names are exactly the ones that need the
     boundary, and they are the ones a substring test silently ruins.
     """
-    for name in sorted(names, key=len, reverse=True):
-        if re.search(r"(?<![a-z0-9])" + re.escape(name) + r"(?![a-z0-9])", c):
+    # Only a name the text holds can match on its boundaries, so it alone is looked for, by
+    # an expression made once: one made for every name of the person's lists on every call,
+    # past the few hundred Python keeps, was made again each time, 1.46 million lookups a page
+    # build (the second audit, 2026-11-10, D8). And only those are put in order, longest
+    # first: the whole list of some 500 names was sorted again on every call, 0.6 s a build.
+    for name in sorted((n for n in names if n and n in c), key=len, reverse=True):
+        if _bounded(name).search(c):
             return name
     return None
 
 
+_BOUNDED: dict = {}
+
+
+def _bounded(name: str) -> "re.Pattern":
+    got = _BOUNDED.get(name)
+    if got is None:
+        got = _BOUNDED[name] = re.compile(r"(?<![a-z0-9])" + re.escape(name) + r"(?![a-z0-9])")
+    return got
+
+
 def tier(company: str | None) -> tuple[int, str]:
+    """The employer's tier (`_tier`), worked out once a page build for each employer: a job's
+    employer was read against every list twice a job (the second audit, D8)."""
+    import remembered
+    return remembered.get("tier", company, lambda: _tier(company))
+
+
+def _tier(company: str | None) -> tuple[int, str]:
     """The employer's tier, read through `company_key` as well as the raw name.
 
     The tier sets are written as the names people say: an initialism. The

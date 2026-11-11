@@ -140,7 +140,10 @@ def test_a_computer_chats_save_ends_at_its_push_and_the_helper_brings_it_in(copy
                                                                              monkeypatch):
     origin, chat, helper = copy
     assert land.on_computer({"CLAUDECODE": "1"})
-    assert not land.on_computer({"CLAUDECODE": "1", "CLAUDE_CODE_REMOTE": "true"})
+    # A cloud chat is told by its container's own markers too, never CLAUDE_CODE_REMOTE alone,
+    # which a session over Remote Control on the computer may set (place.in_cloud, CC-18).
+    assert not land.on_computer({"CLAUDECODE": "1", "CLAUDE_CODE_REMOTE": "true",
+                                 "CLAUDE_CODE_CONTAINER_ID": "container_example"})
     assert not land.on_computer({})
     # The computer chat: a draft of its own, saved.
     monkeypatch.setenv("CLAUDECODE", "1")
@@ -165,6 +168,36 @@ def test_a_computer_chats_save_ends_at_its_push_and_the_helper_brings_it_in(copy
     files = git(origin, "ls-tree", "-r", "--name-only", "claude/helper").stdout.split()
     assert "documents/network/c2/draft.md" in files
     assert git(origin, "rev-parse", "master").stdout == master   # only through the PR
+
+
+def test_a_computer_chat_answering_the_page_itself_finishes_its_own_save(copy, capsys,
+                                                                         monkeypatch):
+    """The engine review of 2026-11-11: where the chat that answers the page is itself on the
+    person's computer, no chat in the cloud brings a computer chat's save to master, and with
+    no brief running every save waited on GitHub. That chat's save, and every other computer
+    chat's in that copy, makes its own pull request and merge, checked as any landing on master
+    is; where Claude's own safety check refuses them, the work waits on its branch as before."""
+    import json as _json
+    import app_listen
+    _origin, chat, _helper = copy
+    monkeypatch.setenv("CLAUDECODE", "1")
+    with open(os.path.join(land.git_dir(str(chat)), app_listen.CACHE), "w",
+              encoding="utf-8") as fh:
+        _json.dump({"listener": {"chat": "local-mac-1", "kind": "computer",
+                                 "seen_at": "2026-11-11T09:00:00Z", "confirmed": True}}, fh)
+    assert land.listener_on_computer(str(chat))
+    write(chat, "documents/network/c2/draft.md", "Hi Bexley, hope you're well.\n")
+    code, out = _land(chat, capsys)
+    assert code == 0, out
+    assert "land: ready claude/chat-1" in out and "only the person's own files changed" in out
+    assert "create_pull_request" in out and "merge_pull_request" in out, out
+    assert land.COMPUTER_CALLS in out and land.READY.get("head") == "claude/chat-1"
+    # Code of theirs changed: checked in full, as on master from anywhere.
+    write(chat, "profile/search.py", "X = 1\n")
+    git(chat, "add", "-f", "profile/search.py")
+    git(chat, "commit", "-q", "-m", "theirs")
+    code, out = _land(chat, capsys)
+    assert code == 1 and "not green" in out, out
 
 
 def test_a_detached_save_on_a_computer_never_goes_to_github_for_a_merge(copy, capsys,

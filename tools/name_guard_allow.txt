@@ -723,3 +723,43 @@ Rue Vane                 # invented, tests/test_a_people_run_reaches_the_people_
 Thornbury Games          # invented, tests/test_a_people_run_reaches_the_people_who_answer.py
 Nova Scotia              # a Canadian province, tests/test_a_people_run_reaches_the_people_who_answer.py
 Glowline Cosmetic Clinics  # invented employer, tests/test_the_brief_news_is_one_round.py
+Fernway Insurance       # invented employer, tests/test_a_linkedin_stop_is_seen_everywhere.py
+Fernway Bank            # invented employer, tests/test_computer_work_has_room_of_its_own.py
+Ada Lind                 # invented, tests/test_an_export_matches_by_the_employers_own_name.py
+Ravi Ostrander           # invented, the same test
+Annual Forecasting World # an invented event, the same test
+Supply Summit            # an invented event, the same test
+Tobiah Fenwick           # invented, tests/test_one_message_to_many_is_not_one_person.py
+Tobiah Lisle             # invented, the same test
+Tobiah Ostler            # invented, the same test
+Tobiah Quarrie           # invented, the same test
+Hi Tobiah                # a greeting in the same test
+Sam Tolley               # invented, the same test
+Bryn Okafor              # invented, tests/test_a_closed_thread_owes_nothing.py
+Tamsin Ure               # invented, the same test
+Zephyr Dental            # an invented employer, tests/test_the_owed_list_leads_with_what_is_current.py
+Tove Ostler              # invented, tests/test_an_unreadable_log_holds_the_employer_limit.py
+Hi Tove                  # a greeting in the same test
+Wenna Thackeray     # invented, tests/test_only_their_own_dated_posts_are_their_evidence.py
+Dara Whitlock       # invented, tests/test_only_their_own_dated_posts_are_their_evidence.py
+Ines Halvorsen      # invented, tests/test_a_read_is_linked_to_its_contact.py
+Dayo Okafor         # invented, tests/test_a_read_is_linked_to_its_contact.py
+Petra Lindqvist     # invented, tests/test_one_check_decides_who_is_shown.py
+Orla Vantongeren    # invented, tests/test_a_short_list_says_who_it_left_out.py
+Bram Okonkwo        # invented, tests/test_a_short_list_says_who_it_left_out.py
+Ashgrove Ledger     # invented employer, tests/test_research_files_keep_one_shape.py
+Marlowe Cartage     # invented employer, tests/test_research_files_keep_one_shape.py
+Example Wire        # an invented publisher, tests/test_the_brief_news_finds_each_story_once_in_a_capped_round.py
+Pip Lander               # invented recruiting coordinator, tests/test_an_interview_is_prepared_as_the_round_it_is.py
+CodeSignal General Coding Assessment   # a product (CodeSignal's coding test), tools/interview_live.py
+Wynn Calder              # invented, tests/test_every_hold_says_when_it_ends.py
+Hi Wynn                  # a greeting in the same test
+Expo Communications      # an employer name with an event word, tests/test_an_export_matches_by_the_employers_own_name.py
+Data Expo                # an event's name, the same test
+Sam Corrin               # invented, tests/test_every_hold_says_when_it_ends.py
+Sam Pettifer             # invented, the same test
+Dellow Freight           # invented employer, the same test
+Ormsby Retail            # invented employer, the same test and tests/test_profile_upgrades.py
+Ansel Quill              # invented, tests/test_profile_upgrades.py
+Tamsin Hale              # invented, the same test
+Pennick Haulage             # invented employer, the page sample (tests/fixtures/app_model_sample.json)

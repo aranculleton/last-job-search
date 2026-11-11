@@ -160,7 +160,7 @@ if [ "$DATA_ONLY" = "1" ]; then
   skip "ruff (bugs only, see .ruff.toml)" "only your own files changed; --full runs it"
 else
   run_py_module ruff "ruff (bugs only, see .ruff.toml)" \
-      "$PY" -m ruff check --no-cache tools/ templates/ tests/
+      "$PY" -m ruff check --no-cache tools/ templates/ tests/ salary_lookup.py
 fi
 # The scoring baseline is a person's own (their screened postings, in
 # profile/tests/fixtures), so the app has none to check, and that is not a skip.
@@ -233,10 +233,13 @@ echo "tests"
 # release's step out of time (2026-11-04).
 if { [ "${CLAUDE_CODE_REMOTE:-}" = "true" ] || [ "${GITHUB_ACTIONS:-}" = "true" ]; } \
     && ! "$PY" -c "import xdist" > /dev/null 2>&1; then
-  "$PY" -m pip install --quiet pytest-xdist > /dev/null 2>&1 || true
+  "$PY" -m pip install --quiet pytest-xdist > /dev/null 2>&1 \
+    || echo "  pytest-xdist could not be installed here, so the tests run in one process, more slowly"
 fi
+# At most four test processes: "-n auto" started about 25 on a large computer (CS-1).
 PAR=""
-"$PY" -c "import xdist" > /dev/null 2>&1 && PAR="-n auto --dist loadfile"
+"$PY" -c "import xdist" > /dev/null 2>&1 && \
+  PAR="-n $("$PY" -c 'import os; print(max(1, min(4, os.cpu_count() or 1)))') --dist loadfile"
 if [ "$DATA_ONLY" = "1" ] && [ "${APP_RELEASE:-0}" = "1" ]; then
   echo "  the app's files that changed are exactly its release, which its own checks passed on"
   echo "  Linux, a Mac and Windows before it shipped, so its suites are skipped (--full runs them)"
@@ -286,19 +289,31 @@ fi
 # The person's own tests an update broke, which a landing sets aside (tools/land.py names
 # them in the file LJS_OWN_TESTS_ASIDE points at) while a background step brings them in line:
 # their finished work was held behind them until a chat noticed (the maintainer, 2026-11-06).
-ASIDE=()
+# A test by its id is left out (--deselect); a whole file that no longer imports is left out
+# by its name (--ignore), since a test that cannot be collected cannot be deselected; and
+# "profile/tests/" is all of them, for one save, where which ones could not be told (audit
+# SV-3): an app release never holds a save.
+ASIDE=(); ASIDE_ALL=0
 if [ -n "${LJS_OWN_TESTS_ASIDE:-}" ] && [ -f "$LJS_OWN_TESTS_ASIDE" ]; then
   while IFS= read -r t || [ -n "$t" ]; do
     t="${t%$'\r'}"
-    [ -n "$t" ] && ASIDE+=(--deselect "$t")
+    case "$t" in
+      "") ;;
+      profile/tests|profile/tests/) ASIDE_ALL=1 ;;
+      *::*) ASIDE+=(--deselect "$t") ;;
+      *) ASIDE+=(--ignore "$t") ;;
+    esac
   done < "$LJS_OWN_TESTS_ASIDE"
 fi
 own_tests() {
-  # shellcheck disable=SC2086
-  if [ -n "$PAR" ] && "$PY" -m pytest profile/tests -q $PAR ${ASIDE[@]+"${ASIDE[@]}"} > /dev/null 2>&1; then return 0; fi
-  "$PY" -m pytest profile/tests -q ${ASIDE[@]+"${ASIDE[@]}"}
+  # In parallel on at most four processes, and where some fail only those once more in one
+  # (tools/sync_app.py own_tests_check, CS-1). A file that no longer imports is reported with
+  # the rest; nothing left to run once the rest are set aside (pytest's 5) is a pass.
+  "$PY" tools/sync_app.py --own-tests-check ${ASIDE[@]+"${ASIDE[@]}"}
 }
-if [ -d profile/tests ]; then
+if [ -d profile/tests ] && [ "$ASIDE_ALL" = "1" ]; then
+  skip "pytest (profile/tests, on this person)" "set aside for this save: an update changed what they check, and they are being brought in line"
+elif [ -d profile/tests ]; then
   before=$FAIL
   # No compiled copies in profile/tests/__pycache__ for a forced add to commit.
   if [ "${#ASIDE[@]}" -gt 0 ]; then
@@ -378,6 +393,8 @@ else
     if [ -d profile/tests ] && { [ "$DATA_ONLY" = "0" ] || printf '%s\n' "$CHANGED" | grep -q '^profile/tests/'; }; then
       if [ "$QUICK" = "1" ]; then
         skip "$FLOOR_NAME, profile/tests" "--quick: your own tests ran once above"
+      elif [ "$ASIDE_ALL" = "1" ]; then
+        skip "$FLOOR_NAME, profile/tests" "set aside for this save while an update is brought in line"
       else
         PYTHONDONTWRITEBYTECODE=1 run "$FLOOR_NAME, profile/tests" "$FLOOR_ENV_PY" \
           -m pytest profile/tests -q -p no:cacheprovider ${ASIDE[@]+"${ASIDE[@]}"}

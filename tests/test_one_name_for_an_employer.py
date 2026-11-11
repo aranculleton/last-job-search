@@ -47,7 +47,7 @@ def test_the_name_a_letter_and_a_note_use(company, short):
 
 def test_there_is_one_list():
     assert R.LEGAL_SUFFIX is company_key.LEGAL_FORM
-    assert R.strip_legal("Acme Pty Ltd") == company_key.display_name("Acme Pty Ltd") == "Acme"
+    assert company_key.display_name("Acme Pty Ltd") == "Acme"
     assert not hasattr(D, "_LEGAL_TAIL")
 
 

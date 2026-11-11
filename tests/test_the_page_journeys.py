@@ -547,12 +547,13 @@ def test_the_brief_opens_its_items(run, tmp_path, vp):
         # The late follow-up leads Today, and its button opens its draft (4.8: Today's one thing
         # comes again in Next three only where there is room).
         {"hash": "brief", "click": "See the draft"},
-        # The interview this week, its prep ready, is a step, its prep one tap away; Today is
-        # what has rolled over (2026-11-02: "the most pressing task").
-        {"hash": "brief", "click": "Read the prep for the Larkspur Retail phone screen.", "role": "link"},
+        # The interview this week, its prep ready, is Coming up's row, its prep one tap away
+        # (the screen review, 2026-11-11: a step for its prep took it out of Coming up); Today
+        # is what has rolled over (2026-11-02: "the most pressing task").
+        {"hash": "brief", "click": "Read your prep for Larkspur Retail"},
     ], vp, clock="2026-10-25T07:30:00Z")
     assert got["after"][0]["eval"], "the Brief has its own page, with the next three"
     assert got["after"][1]["hash"] == "#contacts/larkspur_retail_castellan"
     assert got["after"][2]["hash"] == "#contacts/fernhill_freight_halloway", got["after"][2]["hash"]   # Wren's card, her draft on it
-    assert got["after"][3]["hash"].startswith("#interviews"), got["after"][3]["hash"]
-    assert "Larkspur Retail" in got["after"][3]["text"]
+    assert got["after"][3]["hash"].endswith("int-larkspur-supply/open"), got["after"][3]["hash"]
+    assert "Larkspur Retail" in got["after"][3]["dialog"]

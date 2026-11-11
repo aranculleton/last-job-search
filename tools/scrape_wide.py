@@ -101,7 +101,18 @@ PORTAL_LOCATIONS = {str(k): list(v) for k, v in
 # asks for fewer pages, with fewer at once, and at most LOCAL_MAX_REQUESTS of each
 # app portal, unless profile/search.py sets its own (SCRAPE_PAGES, SCRAPE_WORKERS,
 # SCRAPE_MAX_REQUESTS): the person's trade-off to make, never the app's.
-CLOUD = os.environ.get("CLAUDE_CODE_REMOTE", "").lower() == "true"
+def _in_cloud() -> bool:
+    """place.in_cloud: the flag and the cloud container's own markers, never the flag alone.
+    A copy too old to have place.py (this file is brought in first by an update) reads the
+    flag, as before."""
+    try:
+        import place
+        return place.in_cloud()
+    except Exception:  # noqa: BLE001
+        return os.environ.get("CLAUDE_CODE_REMOTE", "").lower() == "true"
+
+
+CLOUD = _in_cloud()
 CLOUD_PAGES, CLOUD_WORKERS = 5, 10
 LOCAL_PAGES, LOCAL_WORKERS, LOCAL_MAX_REQUESTS = 2, 4, 300
 

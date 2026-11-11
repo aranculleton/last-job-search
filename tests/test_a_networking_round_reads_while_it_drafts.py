@@ -82,7 +82,7 @@ def test_the_round_says_how_long_its_reads_take_before_they_start(book):
     # One clock for the whole test: a stop made just before midnight and read just after is
     # yesterday's, rightly, and the test ran across midnight on Windows (2026-10-26).
     now = datetime.datetime.now()
-    got = reading.estimate(20, now=now, sends_left=5)
+    got = reading.estimate(20, now=now)
     # Every one of them today, whatever is left to send: no cap of the app's own, and the
     # time is the browser's own speed, with no pause added (2026-10-22).
     assert got["today"] == 20 and got["later"] == 0
@@ -98,7 +98,7 @@ def test_the_round_says_how_long_its_reads_take_before_they_start(book):
 
 def test_reading_waits_are_spent_on_notes_that_can_be_written_now(book):
     book.put(_row("kestrel_achterberg", "Rosalind Achterberg", "Kestrel Mutual"))
-    reading.shortlist(["kestrel_achterberg"], contacts=book.contacts(), sends_left=10)
+    reading.shortlist(["kestrel_achterberg"], contacts=book.contacts())
     reading.save("kestrel_achterberg", {
         "name": "Rosalind Achterberg", "company": "Kestrel Mutual",
         "read_on": reading.person.today().isoformat(), "headline": "Head of Pricing",
@@ -123,7 +123,7 @@ def test_a_recruiters_card_says_enough_and_is_drafted_card_only_with_no_read(boo
     peer = dict(RECRUITER, headline="Data Scientist at Kestrel Mutual")
     assert not reading.card_enough(peer)
     # Not put on the day's read list: no read is spent on what the card already says.
-    got = reading.shortlist(["kestrel_corrie"], contacts=book.contacts(), sends_left=10)
+    got = reading.shortlist(["kestrel_corrie"], contacts=book.contacts())
     assert got["card_enough"] == ["kestrel_corrie"] and got["ids"] == []
     note = book.path / "note.txt"
     note.write_text("Hi Idris, I'm a supply-chain analyst in Manchester looking for my next "
@@ -166,7 +166,7 @@ def test_a_short_structured_paste_of_a_loaded_page_is_a_page_not_a_render_failur
 def _browser(monkeypatch, book, row):
     monkeypatch.setattr(reading, "PROFILE_READS", "browser")
     book.put(row)
-    reading.shortlist([row["contact_id"]], contacts=book.contacts(), sends_left=10)
+    reading.shortlist([row["contact_id"]], contacts=book.contacts())
 
 
 SHORT = ("Name: Tamsin Oyelaran\nHeadline: Head of Demand Forecasting at Fernhill Freight\n"
@@ -386,7 +386,8 @@ def test_a_nudge_is_logged_by_command_with_its_words(book, capsys):
     c = book.contacts()[0]
     # A nudge is the second unanswered message, the person's limit: nobody at their limit is
     # dated or a To do (state.put_next), so it waits for a reply with no date.
-    assert not c["next_action_due"] and "nothing more unless they reply" in c["next_action"]
+    # The app's line at the limit, in the page's own words since 2026-11-11 (audit DW-5).
+    assert not c["next_action_due"] and c["next_action"] == state.FOLLOW_UP_STOP.format(n=2, s="s")
     # The same words to the same person on the same day: never logged twice.
     assert state.main(["nudge", "fernhill_halloway", "--text-file", str(words),
                        "--today", "2026-10-21"]) == 1
@@ -559,8 +560,7 @@ def test_a_draft_is_held_to_the_same_company_limit_as_the_read_list(book, capsys
     book.put(*waiting, _row("kestrel_achterberg", "Rosalind Achterberg", "Kestrel Mutual"))
     full = reading.employer_full_line("Kestrel Mutual", book.contacts(), today=today)
     assert full.startswith("Kestrel Mutual has 2 waiting on a reply")
-    assert reading.shortlist(["kestrel_achterberg"], today=today, contacts=book.contacts(),
-                             sends_left=10)["employer_full"]["kestrel_achterberg"] == full
+    assert reading.shortlist(["kestrel_achterberg"], today=today, contacts=book.contacts())["employer_full"]["kestrel_achterberg"] == full
     f = book.path / "note.txt"
     f.write_text("Hi Rosalind, we both worked at Oakmere Foods. How is the team set up?",
                  encoding="utf-8")

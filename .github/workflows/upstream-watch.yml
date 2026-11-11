@@ -58,8 +58,10 @@ jobs:
           python-version: "3.12"
 
       - name: Fetch upstream template
+        # Where upstream lives since it moved to an organization (its #776); the old
+        # MadsLorentzen address only redirects here.
         run: |
-          git remote add upstream https://github.com/MadsLorentzen/ai-job-search.git 2>/dev/null || true
+          git remote add upstream https://github.com/ai-job-search-dev/ai-job-search.git 2>/dev/null || true
           git fetch --quiet upstream master
 
       - name: Build triage report

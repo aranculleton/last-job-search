@@ -83,26 +83,51 @@ def agent_file(session: str = "") -> str:
         return ""
 
 
-def _usages(file: str):
+def _at(stamp) -> dt.datetime | None:
+    try:
+        t = dt.datetime.fromisoformat(str(stamp).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    return t if t.tzinfo else t.replace(tzinfo=dt.timezone.utc)
+
+
+def _usages(file: str, since: str = ""):
+    """Each turn's usage once, in order. Claude Code writes one line for each block of a
+    message (its text, each tool call), every one carrying that message's usage: counted per
+    line, a turn was counted several times (audit CS-2, 2026-11-10). By message id, the last
+    line's usage stands. `since`: only the turns from that time."""
+    t0 = _at(since) if since else None
+    by_id: dict = {}
     try:
         with open(file, encoding="utf-8", errors="replace") as fh:
-            for line in fh:
+            for n, line in enumerate(fh):
                 if '"usage"' not in line:
                     continue
                 try:
-                    u = json.loads(line)["message"]["usage"]
+                    ev = json.loads(line)
+                    msg = ev["message"]
+                    u = msg["usage"]
                 except (ValueError, KeyError, TypeError):
                     continue
-                if isinstance(u, dict):
-                    yield u
+                if not isinstance(u, dict):
+                    continue
+                if t0 is not None:
+                    at = _at(ev.get("timestamp"))
+                    if at is None or at < t0:
+                        continue
+                key = msg.get("id") if isinstance(msg, dict) and msg.get("id") else ("line", n)
+                by_id.pop(key, None)                    # kept in the order last written
+                by_id[key] = u
     except OSError:
         return
+    yield from by_id.values()
 
 
-def totals(file: str) -> dict:
-    """{"input", "cache_write", "cache_read", "output", "last_in"} over every turn in `file`."""
+def totals(file: str, since: str = "") -> dict:
+    """{"input", "cache_write", "cache_read", "output", "last_in"} over every turn in `file`
+    (from `since`, when given), each message counted once."""
     t = {"input": 0, "cache_write": 0, "cache_read": 0, "output": 0, "last_in": 0}
-    for u in _usages(file):
+    for u in _usages(file, since):
         i, w, r = (int(u.get(k) or 0) for k in ("input_tokens", "cache_creation_input_tokens",
                                                 "cache_read_input_tokens"))
         t["input"] += i

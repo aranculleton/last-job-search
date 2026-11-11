@@ -281,7 +281,7 @@ def test_the_gate_holds_no_read_back(tmp_path, monkeypatch):
     _browse(tmp_path, monkeypatch, [now - datetime.timedelta(seconds=20 * i + 1)
                                     for i in range(100)])
     assert reading.browser_gate(now) == ""
-    assert reading.browser_gate(now, sends_left=0) == ""
+    assert reading.browser_gate(now) == ""
 
 
 def test_a_warning_from_linkedin_ends_the_days_reads(tmp_path, monkeypatch):

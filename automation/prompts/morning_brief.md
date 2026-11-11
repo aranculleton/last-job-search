@@ -1,18 +1,18 @@
 # The brief (each morning once it is on; schedule: `profile/routines.json`)
 
 One message, built around where this person's search is right now. Code gathers all of it;
-your part is the news and the message. It does not search for jobs: a fresh shortlist is
-one "find me jobs" away whenever they want one. **Never run a search here**, and never read
+your part is the news and the message. "Find me jobs" in any chat searches for jobs.
+**Never run a search here**, and never read
 a state file, a pack or an earlier brief yourself: `tools/brief.py` has read them.
 
 ## 1. Start and gather: one command
 
 ```
 git switch -c claude/ops-<YYYY-MM-DD>-morning_brief origin/master
-python3 tools/brief.py --start --on "<the model this run is on>" --write
+python3 tools/app.py start --scheduled morning_brief --on "<the model this run is on>"
 ```
 
-Each on its own, never chained (`-2` on the branch name if it exists). That is `_common.md` steps 1 to 4 and the whole
+Each on its own, never chained or piped (`-2` on the branch if it exists). That is `_common.md` steps 1 to 4 and the whole
 gather: the app's updates, the Python side, earlier runs' unsaved work, the follow-ups
 drafted by code and checked, the preps rebuilt, the quiet applications closed, and the
 day's record and pack written. It prints the message with `<NEWS>` still to fill, then the
@@ -53,8 +53,9 @@ EOF
 
 `brief.py news` puts the news in the day's record, leaves out any link an earlier brief
 sent, and notes a freeze or layoffs at an employer with a live application on that row.
-With a page, bring it up to date as its FOR CLAUDE line says; where a line says its code is
-older than this version, republish it first: no other chat will.
+With a page, bring it up to date as its FOR CLAUDE lines say (code older: republish it first),
+then stop this chat's watch. This chat never answers the page: a ring from the page here
+gets no reply.
 
 ## 5. The message
 
@@ -76,4 +77,4 @@ With the message ready, first the push a FOR CLAUDE line asks for, as it says; t
 one call before your final reply starts `python3 tools/land.py
 --message "Brief <YYYY-MM-DD>"` in the background (Bash, `run_in_background`), and the
 message follows at once: it goes out before anything lands. When it wakes you, `_common.md`
-"Landing work".
+"Landing work"; write nothing after the message.

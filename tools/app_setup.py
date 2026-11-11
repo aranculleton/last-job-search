@@ -260,6 +260,19 @@ def _take_master() -> str:
             "page was left as it is, so nothing another chat saved is lost from it.")
 
 
+def code_moved(before: str) -> bool:
+    """Did taking master since `before` (the commit this copy was at) bring in code a running
+    command may already have loaded: a .py file changed between it and HEAD. A page update
+    loaded part of the app before taking master and the rest after, so a release another chat
+    took drew the page with two versions at once (audit SV-1, 2026-11-10)."""
+    before = str(before or "").strip()
+    code, now = _git("rev-parse", "HEAD")
+    if not before or code != 0 or now.strip() in ("", before):
+        return False
+    code, names = _git("diff", "--name-only", before, now.strip(), "--", "*.py")
+    return code == 0 and bool(names.strip())
+
+
 def _merging() -> bool:
     return _git("rev-parse", "-q", "--verify", "MERGE_HEAD")[0] == 0
 
@@ -373,10 +386,22 @@ def job_sites() -> dict:
     return _read_json(os.path.join(d, JOB_SITES), {}) if d else {}
 
 
+def job_sites_due(work: str = "") -> bool:
+    """Does this start check which job sites the cloud chat's settings block? In a cloud chat,
+    once a day, and never in a chat started for one job that is not a search: every fresh job
+    chat's container probed some 35 job sites, about 8 seconds, for a draft or a prep that
+    reads none of them (the second audit, 2026-11-10, C8)."""
+    if not _cloud():
+        return False
+    if work and not str(work).split("~", 1)[0].startswith("search"):
+        return False
+    return job_sites().get("checked") != dt.date.today().isoformat()
+
+
 def check_job_sites(today: str = "") -> dict:
     """In a cloud chat, which job sites its settings block, checked now and kept for the
     page (the day's sync runs the same check, env_check.blocked_names)."""
-    if os.environ.get("CLAUDE_CODE_REMOTE", "").lower() != "true":
+    if not _cloud():
         return {}
     import env_check
     got = {"checked": today or dt.date.today().isoformat(), "blocked": env_check.blocked_names()}
@@ -837,7 +862,8 @@ def record_told(key: str, today: dt.date | None = None) -> str:
 
 
 def _cloud() -> bool:
-    return os.environ.get("CLAUDE_CODE_REMOTE", "").lower() == "true"
+    import place
+    return place.in_cloud()
 
 
 def _tex() -> bool:
@@ -1274,6 +1300,15 @@ ASK_IN_CHAT = ("If the update check listed questions under \"These need you\" (f
 ASK_ON_PAGE = ("If the update check listed questions under \"These need you\" (facts to "
                "confirm, a question an improvement needs), ask none of them in this chat: the "
                "page asks each as a To do card, and an answer there counts.")
+# The agent that applies the improvements: in a worktree of its own, so a save made meanwhile
+# never sweeps in half an upgrade, and its end handled, as nothing said what to do when it
+# ended and the page was left as it was (the second audit of 2026-11-10, C5).
+UPGRADE_AGENT = ("one background agent (Agent tool, model sonnet, isolation worktree) that "
+                 "follows .claude/commands/upgrade.md; when it ends with \"Finished the "
+                 "improvements\", merge its branch and bring the page up to date (python3 "
+                 "tools/app.py reads --in <your scratchpad> --for-view, then app.py view), "
+                 "saying "
+                 "nothing about it")
 SHOWN_ON_PAGE = "its progress goes on the page"
 SHOWN_IN_REPLY = "at the end of your reply give one plain line per change it made, never a command"
 
@@ -1314,14 +1349,20 @@ def _said_once(st: dict, no_page: bool, leave: tuple = ()) -> str:
     if page or not _cloud():
         return ""
     import claude_surfaces
+    # Another company's steps are checked against their official page that day before they
+    # are passed on (CLAUDE.md, "Clear steps"): the page and the day it was last checked go
+    # with them, as claude_surfaces.py steps gives them (the review of E-13, 2026-11-11).
     if not told("auto"):
         lines = " ".join(claude_surfaces.steps("cloud-auto"))
-        return (f"Tell the person once, in these words: \"{lines}\" Then python3 tools/app.py "
-                "told auto.")
+        return (f"{claude_surfaces.source('cloud-auto')} Then tell the person once, in these "
+                f"words: \"{lines}\" (where the page cannot be checked today, say \"I could not "
+                "check this today\" and keep it short). Then python3 tools/app.py told auto.")
     if not _tex() and not told("setup-script"):
         lines = " ".join(claude_surfaces.steps("cloud-setup-script"))
-        return (f"Tell the person once, in these words: \"{lines} The line: "
-                f"{setup_script_line()}\" Then python3 tools/app.py told setup-script.")
+        return (f"{claude_surfaces.source('cloud-setup-script')} Then tell the person once, in "
+                f"these words: \"{lines} The line: {setup_script_line()}\" (where the page cannot "
+                "be checked today, say \"I could not check this today\" and keep it short). "
+                "Then python3 tools/app.py told setup-script.")
     return ""
 
 
@@ -1468,18 +1509,8 @@ def carry_on() -> list[str]:
     return out
 
 
-def _week_ago() -> str:
-    """A week before today, by the person's clock, as the page's stamps are written: the
-    taps the start reads (a tap and its receipt are both newer than the tap)."""
-    try:
-        day = person.today()
-    except Exception:  # noqa: BLE001  no profile yet: the computer's day
-        day = dt.date.today()
-    return (day - dt.timedelta(days=7)).isoformat() + "T00:00:00Z"
-
-
 def start(on: str = "", tools: str = "", page_url: str = "", runner=None, work: str = "",
-          data_current: bool = False) -> tuple[int, list[str]]:
+          checked: bool = False) -> tuple[int, list[str]]:
     """(exit code, the lines a chat follows): what this chat does next, whatever the copy's
     state. Exit 0 with steps to follow; 1 when nothing may be written here.
 
@@ -1487,15 +1518,18 @@ def start(on: str = "", tools: str = "", page_url: str = "", runner=None, work: 
     chat that answers the page took the day's already, and a job must not take an update
     part way through. Its own steps bring the page up to date at the end, after it lands
     (app.py job_steps), so start says nothing about it (the drafting child, 2026-11-03: start
-    said a job chat never did, and its prompt then said to). `data_current`: the page's
-    `meta/current` already carries the model this copy makes now, so its data is not
-    written again."""
+    said a job chat never did, and its prompt then said to). Its page step reads through the
+    copy this checkout keeps (app_listen.READ_STEP), so a page already current costs a small
+    read, never a second whole one. `checked`: the day's update check already
+    ran in this command (app.py start runs it first), so it is not a step."""
     st = state(runner)
     kind = st["repo"]["kind"]
-    sync = (["python3 tools/sync_app.py --pull",
-             f"python3 tools/sync_app.py --on \"{on or '<this chat model>'}\" --tools "
-             f"\"{tools or '<the browser tools this chat has>'}\""]
-            if st["stale"] and not work else [])
+    # One command: --if-stale brings in master and then the app's update, in one run. Two
+    # steps, --pull and then a plain run, cost a call that printed nothing whenever master had
+    # nothing new (H-3, D9, 2026-11-10).
+    sync = ([f"python3 tools/sync_app.py --on \"{on or '<this chat model>'}\" --tools "
+             f"\"{tools or '<the browser tools this chat has>'}\" --if-stale"]
+            if st["stale"] and not work and not checked else [])
     if page_url and not st["page"].get("url") and kind == "private":
         try:
             record_page(page_url)
@@ -1601,7 +1635,7 @@ def start(on: str = "", tools: str = "", page_url: str = "", runner=None, work: 
     # A page already published waits for the day's check: the update it takes can change the
     # page, and the check itself says how to bring it up to date (app_listen.after_update),
     # so the page is published once, from the new code, never once before and once after.
-    later = bool(sync) and bool(st["page"].get("url"))
+    later = (bool(sync) or checked) and bool(st["page"].get("url"))
     publishing = (not no_page and not later and not page_conflicted()
                   and (not st["page_current"] or not st["page"].get("url")))
     if publishing:
@@ -1613,8 +1647,7 @@ def start(on: str = "", tools: str = "", page_url: str = "", runner=None, work: 
                      "published_at), and publish nothing until it reads clean. Say nothing about "
                      "it to the person.")
         n += 1
-    if os.environ.get("CLAUDE_CODE_REMOTE", "").lower() == "true" and \
-            job_sites().get("checked") != dt.date.today().isoformat():
+    if job_sites_due(work):
         try:
             check_job_sites()
         except Exception:  # noqa: BLE001  the day's sync checks it too
@@ -1701,15 +1734,13 @@ def start(on: str = "", tools: str = "", page_url: str = "", runner=None, work: 
         since = min(d for _i, d in ups)
         steps.append(f"{n}. {len(ups)} improvement{'s' if len(ups) != 1 else ''} to their "
                      f"search {'have' if len(ups) != 1 else 'has'} waited since {since}: start "
-                     "them now, never asking first: one background agent (model sonnet) that "
-                     f"follows .claude/commands/upgrade.md; {shown}.")
+                     f"them now, never asking first: {UPGRADE_AGENT}; {shown}.")
         n += 1
-    elif sync:
+    elif sync or checked:
         steps.append(f"{n}. If the update check listed improvements Claude applies itself, "
-                     "start them in this turn, never asking first: one background agent (model "
-                     f"sonnet) that follows .claude/commands/upgrade.md; {shown}.")
+                     f"start them in this turn, never asking first: {UPGRADE_AGENT}; {shown}.")
         n += 1
-    if sync:
+    if sync or checked:
         # Questions only the person can answer sat on page cards a chat-only person never
         # opened, and the chat was told to say nothing (X-55): the day's first chat asks.
         steps.append(f"{n}. {ASK_IN_CHAT}")
@@ -1735,19 +1766,17 @@ def start(on: str = "", tools: str = "", page_url: str = "", runner=None, work: 
     if clash:
         steps.append(f"{n}. {clash}")
         n += 1
-    if st["page"].get("url") and not work and not (data_current and not sync):
+    if st["page"].get("url") and not work:
         # The marks the person made on the page (applied, sent, set aside) ring nobody: the
         # next chat to work on the search keeps them first, this one included, so the last
         # week's taps and receipts are read with the screens (app_actions.MARKS).
-        week = _week_ago()
-        steps.append(f"{n}. " + ("Unless the update check above just did it, b" if sync else "B") +
-                     "ring the page's data up to date: read the page's screen, meta, addr and "
-                     "work collections into a fresh folder in your scratchpad (ArtifactData "
-                     f"query, url {st['page'].get('url')}, one for each, out_dir that folder, "
-                     "limit 1000; the page's view is stored as screen, and view is an old name), "
-                     "and into the same folder actions where [[\"at\", \">=\", \"" + week +
-                     "\"]] and receipts where [[\"applied_at\", \">=\", \"" + week + "\"]], "
-                     "then python3 tools/app.py view <your scratchpad>/view --dump <that "
+        # Read through what this copy keeps of the page (app_listen.READ_STEP): a start
+        # after an update read every screen whole a second time (H-6).
+        import app_listen
+        steps.append(f"{n}. " + ("Unless the update check above just did it, b" if sync or checked else "B") +
+                     "ring the page's data up to date: " + app_listen.READ_STEP.format(
+                         url=st['page'].get('url'), dump="<that folder>") +
+                     " Then python3 tools/app.py view <your scratchpad>/view --dump <that "
                      "folder> and send the batch it prints (where it first prints a claim for "
                      "the person's marks, send that, then run it once more). Then carry on with "
                      "what the person asked.")
@@ -1818,9 +1847,12 @@ def start_changed_line() -> str:
     note_start()
     if not changed:
         return ""
-    return ("Claude: this update changed how a chat starts. If python3 tools/app.py start printed "
-            "steps earlier in this chat, they are out of date: run it again now and follow what "
-            "it prints instead, never the steps from before.")
+    return START_CHANGED
+
+
+START_CHANGED = ("Claude: this update changed how a chat starts. If python3 tools/app.py start "
+                 "printed steps earlier in this chat, they are out of date: run it again now and "
+                 "follow what it prints instead, never the steps from before.")
 
 
 def _stranded() -> dict[str, int]:
@@ -1876,6 +1908,71 @@ def record_job_chat(work: str, today: dt.date | None = None) -> bool:
         got[k] = {"work": work, "day": day.isoformat()}
     _write_json(path, got)
     return True
+
+
+# The id each piece of work was claimed under on this computer (`app.py next --computer-only`),
+# so a chat that compacted, and lost its claim's id, finds it again (`computer.py prompt`): a
+# new id got its pins refused and the job finished as stopped (the builder audit, 2026-11-10,
+# CC-25). Kept JOB_CHAT_DAYS, in this checkout's git folder like the job chats.
+CLAIMS = "ljs-claims.json"
+
+
+def record_claim(work: str, chat: str, today: dt.date | None = None,
+                 now_ts: float | None = None) -> bool:
+    """Remember that `work` was claimed here as `chat`, and when (`at`, and `renewed`, which
+    each pin moves on: the claim's lease runs from it)."""
+    if not work or not chat:
+        return False
+    import time
+    ts = time.time() if now_ts is None else now_ts
+    day = today or dt.date.today()
+    since = (day - dt.timedelta(days=JOB_CHAT_DAYS)).isoformat()
+    path = _local_file(CLAIMS)
+    got = _read_json(path, {})
+    got = {k: v for k, v in got.items() if isinstance(v, dict) and str(v.get("day")) >= since}
+    got[str(work)] = {"chat": str(chat), "day": day.isoformat(), "at": ts, "renewed": ts}
+    _write_json(path, got)
+    return True
+
+
+def _claim_mark(work: str, field: str, now_ts: float | None = None) -> bool:
+    import time
+    path = _local_file(CLAIMS)
+    got = _read_json(path, {})
+    rec = got.get(str(work or ""))
+    if not isinstance(rec, dict):
+        return False
+    rec[field] = time.time() if now_ts is None else now_ts
+    _write_json(path, got)
+    return True
+
+
+def renew_claim(work: str, now_ts: float | None = None) -> bool:
+    """A pin of `work` made here: its lease runs from now (reading.claim_gate)."""
+    return _claim_mark(work, "renewed", now_ts)
+
+
+def end_claim(work: str, now_ts: float | None = None) -> bool:
+    """`work` finished here (app.py done): this chat holds it no more."""
+    return _claim_mark(work, "ended", now_ts)
+
+
+def current_claim() -> dict:
+    """The work this checkout's chat holds now: the latest claim made here and not ended,
+    as {"work", "chat", "at", "renewed"}, or {} when it holds none (a finished job's chat)."""
+    got = _read_json(_local_file(CLAIMS), {})
+    live = [(float(v.get("at") or 0), k, v) for k, v in got.items()
+            if isinstance(v, dict) and not v.get("ended")]
+    if not live:
+        return {}
+    _, work, rec = max(live)
+    return dict(rec, work=work)
+
+
+def claimed_as(work: str) -> str:
+    """The id `work` was claimed under on this computer (record_claim), or ""."""
+    v = _read_json(_local_file(CLAIMS), {}).get(str(work or ""))
+    return str(v.get("chat") or "") if isinstance(v, dict) else ""
 
 
 def job_chat(session: str = "") -> str:
@@ -1985,6 +2082,11 @@ def page_line(today: dt.date | None = None, landed: bool = False) -> str:
             return ""
     except Exception:  # noqa: BLE001
         return ""
-    return ("Claude: the person's page is not published yet. Before the rest, run python3 "
-            "tools/app.py start and do what it prints (it publishes the page; nothing to ask "
-            "them).")
+    return PAGE_NOT_YET
+
+
+# Said by the update check before a page is published. Left out where the check ran inside
+# app.py start, which publishes it in its own steps: the chat went round once more (E-15).
+PAGE_NOT_YET = ("Claude: the person's page is not published yet. Before the rest, run python3 "
+                "tools/app.py start and do what it prints (it publishes the page; nothing to ask "
+                "them).")

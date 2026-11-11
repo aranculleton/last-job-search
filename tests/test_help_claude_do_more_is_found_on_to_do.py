@@ -11,6 +11,7 @@ fixtures/app_model_sample.json) is an invented search.
 from __future__ import annotations
 
 import os
+import re
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -40,7 +41,7 @@ HELP = ("(() => { const m = document.querySelector('#main'); const c = m.querySe
         " const all = [...m.querySelectorAll('.band, details.band-more, [data-item=\"help\"]')];"
         " return c ? {title: (c.querySelector('.card-title') || {}).textContent, text: c.textContent, folded: !!c.closest('details:not([open])'),"
         " pills: [...c.querySelectorAll('.card-actions .btn')].map((b) => b.textContent.trim()), soft: c.classList.contains('card'),"
-        " more: [...m.querySelectorAll('.help-band details.band-more > summary')].map((s) => s.textContent.trim()),"
+        " more: [...m.querySelectorAll('.help-band details.band-more > summary')].map((s) => s.textContent.trim()), head: (m.querySelector('.help-band h3') || {}).textContent || null,"
         " before: all.filter((e) => e.matches('details.band-more') && /^Not due yet/.test(e.textContent.trim())).every((e) => c.compareDocumentPosition(e) & 4)} : null; })()")
 
 
@@ -56,7 +57,10 @@ def test_help_is_one_soft_card_after_todays_things_and_above_not_due_yet(run, tm
     assert "built from it" in c["text"] and c["pills"] == ["Finish your profile"], c
     assert all(not f.startswith("Help Claude do more") for f in r["folds"]), r["folds"]
     assert c["before"], c                                     # above Not due yet
-    assert all(m.startswith("and ") and m.endswith(" more") for m in c["more"]), c
+    # Under its own small heading, never under "Needs your answer", and its fold says what it
+    # holds: "and 1 more" said no noun (the screen review, 2026-11-11).
+    assert c["head"] == "When you have a minute", c
+    assert c["more"] and all(re.fullmatch(r"\d+ more ways? to help Claude", m) for m in c["more"]), c
     # Today's five are still today's things only, and the help is no card among them.
     today = [x for x in r["cards"] if not x.startswith(": Help Claude do more") and not x.startswith("Help Claude do more")]
     assert len(today) <= 5, r["cards"]

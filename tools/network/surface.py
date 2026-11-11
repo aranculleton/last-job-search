@@ -36,8 +36,10 @@ location: their profile is read before anything is written to them.
 from __future__ import annotations
 
 import argparse
+import datetime
 import json
 import os
+import re
 import sys
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -207,6 +209,7 @@ def employer_out(company: str, today=None) -> str:
     of no relevant team there."""
     import bar
     import discovery
+    import person
     import sources
     company = str(company or "").strip()
     if not company:
@@ -214,17 +217,17 @@ def employer_out(company: str, today=None) -> str:
     why = sources.ruled_out(company)
     if why:
         return why
-    verdict, why = bar.verdict(company)
+    verdict, why = bar.verdict(company, today=today)
     # Only a bar the person's own profile states turns an employer down or holds it for a
     # judgement: with none, a stranger's every employer was refused until a chat judged it on
     # someone else's words (X-18).
     if verdict == bar.NONE and bar.applies():
-        if bar.listed(company):
+        if bar.listed(company, today):
             return f"clears none of pay, prestige or signal: {why}"
         return (f"not judged against your bar yet: judge it once (python3 tools/bar.py judge "
                 f"\"{company}\" <pay|prestige|signal|none> \"<why>\"), then check again")
     try:
-        if discovery.presence_ruled_out(company, today or state.person.today()):
+        if discovery.presence_ruled_out(company, today or person.today()):
             return "an earlier run found no relevant team there (company_research/)"
     except (OSError, ValueError):            # a research file that cannot be read
         pass
@@ -468,10 +471,11 @@ HELD_WORDS = {
     "employer": "Nothing to send: {company} is an employer you turned down",
     "place": "Nothing to send: they are in {place}, outside where you are looking",
     "request": "Your connection request has not been accepted yet",
+    "recent": "Written to on {last}: nothing more until {until}",
 }
 
 
-def held(contact, msgs, status, replying=False, memo=None) -> dict | None:
+def held(contact, msgs, status, replying=False, memo=None, today=None) -> dict | None:
     """Why nothing may be offered to send to someone already in the contact book, or None:
     {"why": limit|employer|place|request|closed, "said": plain words}.
 
@@ -508,6 +512,9 @@ def held(contact, msgs, status, replying=False, memo=None) -> dict | None:
     place = memo[("place", loc)]
     if place:
         return {"why": "place", "said": HELD_WORDS["place"].format(place=place)}
+    recent = written_lately(msgs, today)
+    if recent:
+        return recent
     import throttle
     # Their limit, the one answer the dates written on a row also read (state.at_limit).
     if state.at_limit(c, msgs, status):
@@ -516,6 +523,85 @@ def held(contact, msgs, status, replying=False, memo=None) -> dict | None:
     if status in throttle.SENT_NO_REPLY and state.request_pending(msgs) is not None:
         return {"why": "request", "said": HELD_WORDS["request"]}
     return None
+
+
+def written_lately(msgs, today=None) -> dict | None:
+    """Held, or None: our last message to them went fewer than the person's quiet days ago
+    (networking.py QUIET_AFTER_SEND_DAYS; unset, nobody is held by it). Their own rule
+    ("nobody written to in the last 10 days") lived in a script of theirs that bypassed this
+    check, so it is read here, where every list and the brief already ask (NW-16)."""
+    days = state.schema.QUIET_AFTER_SEND_DAYS
+    if not days:
+        return None
+    sent = [d for d in (state.as_date(m.get("date")) for m in msgs or ()
+                        if state.direction(m) == "out") if d]
+    if not sent:
+        return None
+    import person
+    last = max(sent)
+    until = last + datetime.timedelta(days=days)
+    if (state.as_date(today) or person.today()) >= until:
+        return None
+    return {"why": "recent", "said": HELD_WORDS["recent"].format(
+        last=last.isoformat(), until=until.isoformat())}
+
+
+# A rule in the person's own instructions that runs a script of theirs before anyone is shown
+# ("Before any person is shown for a message, run `python3 profile/<script>.py`").
+_SHOWN_RULE = re.compile(r"\b(?:shown|show|surface[sd]?|surfacing)\b", re.I)
+# A profile script the rule runs ("python3 profile/<x>.py"), never a file it only names: the
+# app's own data files (profile/networking.py, profile/skills.py) were flagged, and the
+# upgrade then told a chat to rewrite them (the review of NW-16, 2026-11-11).
+_PROFILE_SCRIPT = re.compile(r"\bpy(?:thon)?3?(?:\.exe)?\s+(?:-\S+\s+)*profile/([\w-]+\.py)\b")
+_EXAMPLE = os.path.join(os.path.dirname(os.path.dirname(_HERE)), "profile.example")
+# A call to the one check, as a module's function or imported by name.
+_CALLS = re.compile(r"\bsurface\.(?:check|screen|held)\(")
+_IMPORTS = re.compile(r"^\s*from\s+(?:network\.)?surface\s+import\s+([^\n]+)", re.M)
+
+
+def calls_the_check(code: str) -> bool:
+    """Does this code call surface.check, screen or held, by the module or by the name it
+    imported (`from network.surface import check`)?"""
+    if _CALLS.search(code):
+        return True
+    for m in _IMPORTS.finditer(code):
+        for name in re.findall(r"\b(check|screen|held)\b(?:\s+as\s+(\w+))?", m.group(1)):
+            used = name[1] or name[0]
+            if re.search(r"\b%s\(" % re.escape(used), code[m.end():]):
+                return True
+    return False
+
+
+def bypassing() -> list[tuple[str, str]]:
+    """[(profile/<script>.py, the rule's line)] for each rule in the person's CLAUDE.md that
+    runs a script of their own before a person is shown, where that script never calls this
+    check: a second check that knows less (a name alone, no holds, no do-not-target list, no
+    profile addresses, no per-employer limit) and said "OK" for people already written to
+    (the audit's NW-16, 2026-11-10)."""
+    import person
+    try:
+        with open(person.path("CLAUDE.md"), encoding="utf-8") as fh:
+            text = fh.read()
+    except (OSError, person.NoProfile):
+        return []
+    out = []
+    for line in text.splitlines():
+        if not _SHOWN_RULE.search(line):
+            continue
+        for m in _PROFILE_SCRIPT.finditer(line):
+            rel = "profile/" + m.group(1)
+            if os.path.isfile(os.path.join(_EXAMPLE, m.group(1))):
+                continue            # one of the app's own profile files, read as data
+            try:
+                with open(person.path(m.group(1)), encoding="utf-8") as fh:
+                    code = fh.read()
+            except OSError:
+                continue
+            # A call to it, never the word alone: a script named for the check, or whose
+            # notes say "surface", still checks people its own way.
+            if not calls_the_check(code) and rel not in [r for r, _ in out]:
+                out.append((rel, " ".join(line.split())[:160]))
+    return out
 
 
 # The app's own line on a row whose limit is reached (state.FOLLOW_UP_STOP and the

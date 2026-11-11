@@ -51,15 +51,32 @@ def _fresh_seen():
 # ------------------------------------------------------------------ the fresh helper
 
 
-def test_the_brief_starts_the_fresh_helper_when_its_day_is_up(tmp_path, monkeypatch):
+def test_the_brief_starts_a_fresh_helper_only_for_work_waiting_never_for_a_new_day(
+        tmp_path, monkeypatch):
+    """Decided 2026-11-11 (second audit B5): a new day alone started a fresh helper on a quiet
+    morning, its whole start of several minutes, and left the old one for the tidy-up. The
+    brief starts one only for work that waits unanswered; on a quiet day the person's next
+    tap renews the helper."""
     import app_listen
     _cloud(monkeypatch, tmp_path)
     monkeypatch.setattr(app_listen, "this_chat", lambda c="": "session_brief")
     now = dt.datetime(2026, 11, 10, 8, 12, tzinfo=dt.timezone.utc)
+    # Decided since (review of fix/helpers, item 10): a new day renews it where the page had
+    # taps in the last two days (an active person's first tap would wait on a whole start);
+    # on a quiet stretch it does not.
     rec = {"chat": "session_helper", "kind": "cloud", "helper": True,
-           "since": "2026-11-09T09:00:00Z", "answered_at": "2026-11-09T21:00:00Z"}
-    db = {"meta": {"listener": {"data": rec, "version": 5}}, "work": {}}
+           "since": "2026-11-07T09:00:00Z", "answered_at": "2026-11-07T21:00:00Z"}
+    quiet = {"meta": {"listener": {"data": rec, "version": 5}}, "work": {}}
     _fresh_seen()
+    assert app_listen.view_renewal(quiet, "brief", now) == []
+    active = dict(rec, answered_at="2026-11-09T21:00:00Z")
+    lines = app_listen.view_renewal({"meta": {"listener": {"data": active, "version": 5}},
+                                     "work": {}}, "brief", now)
+    assert len(lines) == 1 and lines[0].startswith("listen: renew:"), lines
+    _fresh_seen()
+    waiting = {"w1": {"data": {"status": "queued", "kind": "draft",
+                               "asked_at": "2026-11-09T22:00:00Z"}, "version": 1}}
+    db = dict(quiet, work=waiting)
     lines = app_listen.view_renewal(db, "brief", now)
     assert len(lines) == 1 and lines[0].startswith("listen: renew:"), lines
     call = renew_call(lines[0])
@@ -72,7 +89,7 @@ def test_the_brief_starts_the_fresh_helper_when_its_day_is_up(tmp_path, monkeypa
     assert app_listen.view_renewal({"meta": {"listener": {"data": today, "version": 5}},
                                     "work": {}}, "brief", now) == []
     # A helper at work on something small right now takes what waits after it.
-    busy = dict(db, work={"w1": {"data": {"status": "running", "kind": "reply",
+    busy = dict(db, work={**waiting, "w2": {"data": {"status": "running", "kind": "reply",
                                           "claimed_by": "session_helper",
                                           "lease_until": "2026-11-10T08:30:00Z"}, "version": 1}})
     assert app_listen.view_renewal(busy, "brief", now) == []

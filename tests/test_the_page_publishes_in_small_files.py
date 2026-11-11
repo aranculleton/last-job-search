@@ -41,11 +41,21 @@ def _app_json(c) -> dict:
     return json.load(open(p, encoding="utf-8")) if os.path.exists(p) else {}
 
 
-def _files_named(said: str) -> dict:
-    """{published path: local path} from every files map the plan prints."""
+def _files_named(said: str, resolve: bool = True) -> dict:
+    """{published path: local path} from every files map the plan prints, each source found
+    from the publish's own `root` (`resolve`), or as the map names it."""
     out = {}
-    for m in re.finditer(r"files (\{.*?\})(?=[,.;]? |$)", said, re.M):
-        out.update(json.loads(m.group(1)))
+    for line in said.splitlines():
+        m = re.search(r"files (\{.*?\}|\[.*?\])(?=[,.;]? |$)", line)
+        if not m:
+            continue
+        root = re.search(r"root (.+?), files ", line)
+        got = json.loads(m.group(1))
+        if isinstance(got, list):              # each at its own path under the root
+            got = {f["path"]: f["path"] for f in got}
+        if resolve and root:
+            got = {k: (os.path.join(root.group(1), v) if v else v) for k, v in got.items()}
+        out.update(got)
     return out
 
 
@@ -177,6 +187,78 @@ def test_a_republish_sends_only_the_files_that_changed(copy, tmp_path, monkeypat
     assert len(got["gone"]) == 1 and got["gone"][0].startswith("code/js/dates-and-words."), got
     assert got["capabilities"] is False
     assert app_setup  # the record read above is the copy's own
+
+
+def _edited(monkeypatch, tmp_path, edit):
+    """app.js with `edit` applied to its lines, as the page's template."""
+    import shutil
+    tpl = tmp_path / f"tpl{len(list(tmp_path.glob('tpl*')))}"
+    shutil.copytree(app_page.TEMPLATE_DIR, tpl)
+    lines = (tpl / "app.js").read_text(encoding="utf-8").split("\n")
+    (tpl / "app.js").write_text("\n".join(edit(lines)), encoding="utf-8")
+    monkeypatch.setattr(app_page, "TEMPLATE_DIR", str(tpl))
+
+
+def _code_files() -> dict:
+    """{published path: its text} for every code file the page in parts loads, as the build
+    makes them (app_page.code_files, which nothing in the app used, was retired: CS-3)."""
+    return dict(app_page.css_parts() + app_page.js_parts())
+
+
+def test_a_small_edit_re_reads_a_small_part_and_the_page_once(copy, tmp_path, monkeypatch):
+    """A release re-read 480 to 706 KB of parts for about 150 KB of changed code: a part was a
+    whole section of up to 60 KB, so 310 characters changed in the capability map re-read 59
+    KB, and a first publish named the page in all nine publishes (the efficiency audit, E-1).
+    Parts now end where a declaration's own name says (never where a size falls, which moved
+    every later boundary), so one edit re-reads one small part; the page is read once, before
+    the first publish, and each publish names its files from the page's own folder."""
+    before = _code_files()
+    biggest = max(before.values(), key=len)
+
+    def one_line_in_a_big_section(lines):
+        start = next(i for i, ln in enumerate(lines) if ln.startswith("  // ") and
+                     "capability map's page halves" in ln)
+        fn = next(i for i in range(start + 1, len(lines))
+                  if lines[i].startswith("  function ") and i > start + 200)
+        return lines[:fn + 1] + ["    void 0;"] + lines[fn + 1:]
+    _edited(monkeypatch, tmp_path, one_line_in_a_big_section)
+    after = _code_files()
+    new = [p for p in after if p not in before]
+    assert len(new) == 1 and len([p for p in before if p not in after]) == 1, new
+    assert len(after[new[0]]) <= app_page.PART_CAP < len(biggest) // 2, len(after[new[0]])
+    # A declaration put first in a section moves no boundary past the next one a name ends.
+    _edited(monkeypatch, tmp_path, lambda ls: [
+        ln + ("\n  const ADDED_FOR_A_TEST = 1;" if "capability map's page halves" in ln
+              and ln.startswith("  // ") else "") for ln in ls])
+    moved = [p for p in _code_files() if p not in before]
+    assert 1 <= len(moved) <= 2 and all(p.startswith("code/js/the-capability-map")
+                                         for p in moved), moved
+    # The plan: every code file named from the page's own folder, the page read once.
+    out = os.path.join(copy.root, "built")
+    said = copy.run("page", "--out-dir", out)
+    publishes = [ln for ln in said.splitlines() if "Artifact, action publish" in ln]
+    assert len(publishes) > 2, said
+    assert all(f"root {out}," in ln for ln in publishes), publishes[0]
+    files = _files_named(said, resolve=False)
+    assert files and all(not os.path.isabs(v) and v == k for k, v in files.items()), files
+    assert said.count("page.html once") == 1 and "read page.html again" not in said.lower()
+
+
+def test_the_page_never_holds_more_files_than_a_version_may(monkeypatch):
+    """A published page may hold 511 files a version, and the parts grow with the page's code
+    (417 KB of app.js on 26 October, about 1.2 MB and 216 files on 11 November): at about 3 MB
+    every republish would be refused (the review of 2026-11-11, E-1). The build keeps the code
+    files under FILES_MAX, making its parts bigger by itself when the code would pass it."""
+    assert len(_code_files()) <= app_page.FILES_MAX <= 300
+    real = app_page._read
+    js = real("app.js").split("\n")
+    start, end = js.index("(function () {"), len(js) - 1 - js[::-1].index("})();")
+    big = "\n".join(js[:start + 1] + js[start + 1:end] * 4 + js[end:])
+    assert len(big) > 3_000_000
+    monkeypatch.setattr(app_page, "_read", lambda name: big if name == "app.js" else real(name))
+    files = _code_files()
+    assert len(files) <= app_page.FILES_MAX, len(files)
+    assert max(len(t) for t in files.values()) <= app_page.PART_MAX + 64 * 1024
 
 
 def test_a_chat_the_app_starts_is_granted_only_what_this_chat_holds(monkeypatch):

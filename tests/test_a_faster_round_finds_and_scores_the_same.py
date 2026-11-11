@@ -235,12 +235,16 @@ def test_a_paced_boards_wait_does_not_hold_the_other_postings(tmp_path, monkeypa
 
 
 def test_a_paced_boards_requests_stay_its_crawl_delay_apart(tmp_path, monkeypatch):
-    hydrate, sent = _paced(tmp_path, monkeypatch, 0.1)
+    # A delay of 0.2s, checked to within 30ms: the start of a request is measured a thread
+    # switch after its turn is given, and on a loaded computer that switch took 15ms, so a 0.1s
+    # delay checked to 10ms failed with every request correctly paced (2026-11-11). Unpaced,
+    # the gaps are the fake request's own 0.05s or none, far under either.
+    hydrate, sent = _paced(tmp_path, monkeypatch, 0.2)
     _hydrate(hydrate, tmp_path, monkeypatch, _rows("cityboard", 5) + _rows("linkedin", 6, 10),
              workers=4)
     board = sorted(t for who, t in sent if who == "cityboard-search")
     gaps = [b - a for a, b in zip(board, board[1:])]
-    assert len(board) == 5 and min(gaps) >= 0.09, gaps
+    assert len(board) == 5 and min(gaps) >= 0.17, gaps
 
 
 def test_a_long_hydrate_says_how_far_it_has_got(tmp_path, monkeypatch, capsys):

@@ -45,7 +45,11 @@ class Search:
 
     def run(self, *args, ok=(0,)):
         env = dict(os.environ, LJS_PROFILE=self.profile, LJS_STATE=self.state, LJS_COPY="private")
-        env.pop("LJS_TODAY", None)
+        # Nothing of the chat running the tests: which chat this is decides a claim, and a
+        # developer's own session id passed a test that failed on GitHub (2026-11-11).
+        for k in ("LJS_TODAY", "LJS_CHAT", "CLAUDE_CODE_REMOTE", "CLAUDE_CODE_REMOTE_SESSION_ID",
+                  "CLAUDE_CODE_BRIDGE_SESSION_ID", "CLAUDE_CODE_SESSION_ID"):
+            env.pop(k, None)
         r = subprocess.run([sys.executable, APP, *args], env=env, capture_output=True,
                            encoding="utf-8", errors="replace", timeout=120)
         assert r.returncode in ok, r.stdout + r.stderr

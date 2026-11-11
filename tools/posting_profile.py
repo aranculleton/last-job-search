@@ -245,9 +245,31 @@ def _sentences(text: str) -> list:
     return text_screen.sentences(text or "")
 
 
-def terms(text: str, title: str = "", today=None) -> dict:
+# The board's own employment type (LinkedIn's "Employment type" line, carried as the row's
+# `employment_type`), read only where the posting's words say nothing of how the job is held:
+# a role listed as a contract whose text never says so was "not stated", and drafted for
+# someone who wants a permanent job without a question. "Full-time" says nothing of terms
+# (a contract can be full-time), so it is no answer. From ai-job-search (#619), which records
+# a posting's employment type.
+LISTED_KIND = {"contract": "contract", "temporary": "fixed-term", "internship": "fixed-term"}
+
+
+def listed_terms(found: dict, listed) -> dict:
+    """`found` with the board's employment type where the text stated no terms."""
+    kind = LISTED_KIND.get(str(listed or "").strip().lower())
+    if found["kind"] != "not stated" or not kind:
+        return found
+    return {**found, "kind": kind, "source": "listing",
+            "quote": "Employment type: %s (the job board's listing)" % str(listed).strip()}
+
+
+def terms(text: str, title: str = "", today=None, listed=None) -> dict:
     """{kind, months, ends, quote}: kind is "permanent", "fixed-term", "contract",
-    "contract to hire" or "not stated"; months and ends only when the posting says."""
+    "contract to hire" or "not stated"; months and ends only when the posting says. Where
+    the text says nothing, the board's own employment type (`listed`) decides, with
+    `source: "listing"`."""
+    if listed:
+        return listed_terms(terms(text, title, today), listed)
     today = today or dt.date.today()
     found = {"kind": "not stated", "months": None, "ends": None, "ends_about": None, "quote": ""}
     if TITLE_TERMS.search(title or "") and not _DENIED.search(title or ""):
@@ -626,7 +648,8 @@ def employer(row: dict, rows=None, today=None, contacts_path=None) -> dict:
 def read(row: dict, text: str, rows=None, today=None, seen_path=None, contacts_path=None) -> dict:
     """The posting's profile: everything above, as data."""
     today = today or dt.date.today()
-    return {"terms": terms(text, row.get("title") or "", today), "pay": pay(text),
+    return {"terms": terms(text, row.get("title") or "", today, row.get("employment_type")),
+            "pay": pay(text),
             "years": years(text), "degree": degree(text), "where": where(row, text),
             "seen": seen(row, today, seen_path),
             "employer": employer(row, rows, today, contacts_path),
@@ -780,9 +803,11 @@ def questions(prof: dict, row: dict) -> list:
         length = _length(t)
         short = (t.get("months") is not None and t["months"] <= SHORT_MONTHS)
         out.append({"id": "contract", "question":
-                    "%s at %s is a %s%s%s, the posting says. Do you still want it drafted?"
+                    "%s at %s is a %s%s%s, %s. Do you still want it drafted?"
                     % (role, company, "short " if short else "", _KIND[t["kind"]],
-                       " (%s)" % length if length else "")})
+                       " (%s)" % length if length else "",
+                       "the job board lists it so, though the posting does not say"
+                       if t.get("source") == "listing" else "the posting says")})
     p = prof["pay"]
     if p["where"].startswith("elsewhere"):
         out.append({"id": "pay_elsewhere", "question":

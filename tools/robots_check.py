@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Decide whether the browser-header curl retry in 09-web-research.md may run.
+"""Decide whether the browser-header retry in 09-web-research.md (tools/fetch_page.py) may run.
 
 The retry exists to get past bot-filtering firewalls on sites whose robots.txt
 permits access. It is never used to override a site that has said no.
@@ -37,7 +37,7 @@ def _fetch(url, ua):
     # scheme://host/robots.txt before calling here, so this is hardening for
     # direct callers rather than a hole in the gate path itself.
     r = subprocess.run(
-        ['curl', '-sS', '-L', '--max-redirs', '5', '--max-time', '12', '-A', ua,
+        ['curl', '-sS', '--globoff', '-L', '--max-redirs', '5', '--max-time', '12', '-A', ua,
          '-H', 'Accept: text/plain,*/*', '-w', '\n%{http_code}', '--', url],
         capture_output=True, text=True, timeout=20, encoding="utf-8", errors="replace")
     if r.returncode != 0:
@@ -49,7 +49,8 @@ def _fetch(url, ua):
 # The parser is openroles' (tools/openroles/robots.py, vendored): the same RFC 9309 rules
 # this file used to carry its own copy of, a tie going to Disallow and blank lines inside
 # a group tolerated. What is this file's own is below: fetching through curl as two agents.
-from openroles.robots import _groups, _match, allowed, is_robots_body  # noqa: E402,F401
+from openroles.robots import (  # noqa: E402,F401
+    _groups, _match, allowed, has_undecodable_rule, is_robots_body)
 
 
 def read_policy(url, fetch=None):
@@ -76,6 +77,11 @@ def read_policy(url, fetch=None):
             if not is_robots_body(text):
                 last = 'HTTP 200 but the body is not a robots.txt'
                 continue
+            # A rule holding a byte that is not UTF-8 matches no path, so it would read as
+            # if it were not there: such a file is not read as a yes. It is the site's own
+            # file, so reading it again as a browser would only spend a request on it.
+            if has_undecodable_rule(text):
+                return None, 'HTTP 200 but a rule in it cannot be read'
             return text, ''
         last = 'HTTP %d' % code
     return None, last

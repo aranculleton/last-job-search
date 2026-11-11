@@ -3,7 +3,8 @@
 Claude runs your job search: it finds and scores postings, writes and checks a resume and
 cover letter for the ones you pick, and helps you reach the right people. It never sends
 anything; you do. You need a GitHub account (free) and a paid Claude plan. No coding, and
-nothing to install first: a phone is enough. Another agent tool? See [AGENTS.md](AGENTS.md).
+nothing to install first: a phone is enough. LinkedIn work also needs the Claude desktop app
+on a computer (below). Another agent tool? See [AGENTS.md](AGENTS.md).
 
 ## 1. Make your own private copy
 
@@ -46,7 +47,8 @@ Claude makes your private page and sends its link: six short questions are there
 time. Then it does the research and brings your first shortlist: up to an hour, and you can put
 it down meanwhile. No resume? Choose "Build one with me".
 
-So Claude carries on while you're away (recommended, once):
+So Claude carries on while you're away (recommended, once). Auto lets Claude carry on
+without asking each time, its safety checks still on:
 
 <!-- claude-surface: cloud-auto -->
 <!-- checked 2026-11-03; https://code.claude.com/docs/en/permission-modes -->
@@ -59,7 +61,8 @@ To let Claude carry on while you're away:
 Screens change: if yours looks different, tell Claude what you see.
 <!-- /claude-surface -->
 
-If it says it can't reach job sites (recommended, once):
+If it says it can't reach job sites (recommended, once). Full lets this chat open any
+website, job sites included:
 
 <!-- claude-surface: cloud-internet -->
 <!-- checked 2026-11-03; https://code.claude.com/docs/en/cloud-environments -->

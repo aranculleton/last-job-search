@@ -104,17 +104,23 @@ def _from_text(raw: str, iso_only: bool, anywhere: bool) -> datetime.date | None
     return None
 
 
+# The day `days_since` counts to when none is given: the person's own, `person.today`, which
+# sets itself here when the app reads it (one clock), else the computer's. A setting, so this
+# module still imports nothing from the app: state imports throttle, which reads dates.
+TODAY = None
+
+
 def days_since(value, today=None, *, iso_only: bool = False,
                anywhere: bool = False) -> int | None:
     """Whole days from `value` to `today`, or None when `value` cannot be read.
 
-    Negative when `value` is after `today`. `today` defaults to the real date
-    and is read like `value`; the flags are `as_date`'s.
+    Negative when `value` is after `today`. `today` defaults to the person's own day (TODAY,
+    which `person` sets) and is read like `value`; the flags are `as_date`'s.
     """
     then = as_date(value, iso_only=iso_only, anywhere=anywhere)
     if then is None:
         return None
-    now = as_date(today) if today else datetime.date.today()
+    now = as_date(today) if today else (TODAY or datetime.date.today)()
     if now is None:
         raise ValueError(f"days_since needs a readable date for today, got {today!r}")
     return (now - then).days

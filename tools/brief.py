@@ -13,6 +13,7 @@ and the news searches to run. The model's part of a run is the news and the mess
     python3 tools/brief.py --start --on "<model>" --write   # a scheduled run's whole start
     python3 tools/brief.py --write --page-applied           # after the page's ticks are applied
     python3 tools/brief.py news < items.txt    # the news reader's items, into today's record
+    python3 tools/brief.py before [--adopt]    # the person's own steps every brief runs first
 
 --write does what the brief has always done to the state: closes the applications gone
 quiet (`followups.py --close-quiet`), rebuilds the call preps gone stale (`prep.py
@@ -33,8 +34,9 @@ they ticked there changes what is owed, so `--start` stops before gathering and 
 steps that apply those ticks first (`app.py apply`, code alone); `--page-applied` then
 gathers. The message links the page's To do rather than a file on GitHub, its questions are
 on the page as To do cards, and the run brings the page up to date (`app.py view`) after it
-lands. It runs in the chat that answers the page (tools/app_listen.py), so it never
-publishes the page again and never starts a watch: `app.py view` is all it sends. A break the person took (`routines.py pause`) holds the brief: a run
+lands. It runs in a chat of its own (routines.own_chat_calls), never the one that answers
+the page: where an update changed the page's own code it publishes it again, then stops the
+watch that publish starts, so the page never rings it. A break the person took (`routines.py pause`) holds the brief: a run
 during it says so in one line, and the run on the day it ends lifts it.
 
 Plain Python, standard library, no network of its own (the sync in --start fetches). The
@@ -128,7 +130,33 @@ WHAT_COUNTS = ("employers the person is in process with or has a live thread at,
 # ---------------------------------------------------------------- reading the state
 
 def _today(value=None) -> dt.date:
-    return dt.date.fromisoformat(value) if value else dt.date.today()
+    """The brief's one day: `--today` where given, else the person's own (person.today()),
+    never the computer's. A test run at 01:10 UTC took the machine's day in some steps and the
+    person's in others, and rewrote the day before's record, which had landed (BT-6)."""
+    if value:
+        return dt.date.fromisoformat(value)
+    try:
+        return person.today()
+    except Exception:  # noqa: BLE001  no profile: the computer's day
+        return dt.date.today()
+
+
+def landed(day: str) -> bool:
+    """Is the record of `day` (documents/briefs/<day>.md) already on the saved copy
+    (origin/master)? A run that would write over it is a second one for a day whose brief
+    already came, and writes nothing (BT-6)."""
+    path = brief_path(day)
+    folder = os.path.dirname(path)
+    if not os.path.isdir(folder):
+        return False
+    try:
+        r = subprocess.run(["git", "-C", folder, "cat-file", "-e",
+                            "origin/master:./" + os.path.basename(path)],
+                           capture_output=True, text=True, encoding="utf-8", errors="replace",
+                           timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return r.returncode == 0
 
 
 def _d(value):
@@ -273,13 +301,6 @@ def _profile_text(name: str) -> str:
         return person.text(name)
     except Exception:
         return ""
-
-
-def _net(attr: str, default=""):
-    try:
-        return getattr(person.module("networking"), attr, default) or default
-    except Exception:
-        return default
 
 
 def _market(code: str) -> dict:
@@ -534,18 +555,33 @@ def due_watch(today: dt.date, watch: list[dict] | None = None,
     return ranked
 
 
+# Short all-capital names that are countries, never a province or a state ("Toronto, ON").
+_COUNTRY_CODES = {"UK", "US", "USA", "UAE", "NZ", "EU", "GB", "KSA", "DRC", "PRC", "ROK", "HK"}
+
+
 def home_place() -> str:
     """Where the person's employer news is placed, in their own words: the last part of their
-    location ("Toronto, ON, Canada" gives "Canada"), so a common name finds its local news."""
+    location ("Toronto, ON, Canada" gives "Canada"), so a common name finds its local news;
+    the city where that last part is a province or a state code ("Toronto, ON" gives
+    "Toronto"): "<employer> ON news" found job boards, not news (BT-5)."""
     loc = str(person.get("identity.location", "") or "")
-    return loc.split(",")[-1].strip()[:40] if "," in loc else ""
+    if "," not in loc:
+        return ""
+    parts = [p.strip() for p in loc.split(",") if p.strip()]
+    if not parts:
+        return ""
+    last = parts[-1]
+    if re.fullmatch(r"[A-Z]{2,3}", last) and last not in _COUNTRY_CODES and len(parts) > 1:
+        last = parts[0]
+    return last[:40]
 
 
 def _dated(what: str, today: dt.date) -> str:
-    """A search with the month on it, to bring this month's news first; none in a month's
-    first week, when "November 2026" on the 2nd found almost nothing and the brief said
-    "Quiet week" (2026-11-01 and 02). The reader's own date check keeps it fresh."""
-    return what if today.day <= 7 else "%s %s" % (what, today.strftime("%B %Y"))
+    """A search with the month on it, to bring this month's news first; "this week" in a
+    month's first week, when "November 2026" on the 2nd found almost nothing and the brief said
+    "Quiet week" (2026-11-01 and 02), and a search with no time words at all found job boards
+    and pages that never change (BT-5). The reader's own date check keeps it fresh."""
+    return "%s this week" % what if today.day <= 7 else "%s %s" % (what, today.strftime("%B %Y"))
 
 
 def queries(today: dt.date, live_employers: list[str], watch: list[dict] | None = None,
@@ -556,9 +592,13 @@ def queries(today: dt.date, live_employers: list[str], watch: list[dict] | None 
     visa is what their own list says (person.json `brief.watch`)."""
     off = set(setting("leave_out"))
     where = home_place()
-    out = [_dated("%s%s news" % (n, " " + where if where else ""), today)
-           for n in live_employers[:2]] if "employers" not in off else []
+    named = live_employers[:2] if "employers" not in off else []
+    out = [_dated("%s%s news" % (n, " " + where if where else ""), today) for n in named]
     for w in due_watch(today, watch, searched):
+        # A watched line naming an employer already searched this morning is not searched again:
+        # the same employer twice found the same pages (second audit B6).
+        if any(n and n.lower() in w["what"].lower() for n in named):
+            continue
         out.append(_dated(w["what"], today))
     return list(dict.fromkeys(out))[:QUERIES_MAX]
 
@@ -582,7 +622,8 @@ def wider(today: dt.date, live_employers: list[str], watch: list[dict] | None = 
     where = home_place()
     out = [w["what"] for w in watch if w["what"] not in due]
     if "employers" not in set(setting("leave_out")):
-        out += ["%s%s news" % (n, " " + where if where else "") for n in live_employers[:2]]
+        # "announces", not "news": the same words as today's search found the same pages.
+        out += ["%s%s announces" % (n, " " + where if where else "") for n in live_employers[:2]]
     # The local job market, which has news every week: widening only by the same employers
     # and watched things found nothing new three mornings running (2026-11-03).
     if where:
@@ -684,7 +725,8 @@ def read_sync(today: dt.date, path: str | None = None) -> dict:
     meta = dict(ln.split(": ", 1) for ln in head.splitlines() if ": " in ln)
     lines = out.splitlines()
     got = {"exit": int(meta.get("exit", "0") or 0), "earlier": [b for b in meta.get("earlier", "").split() if b],
-           "setup": meta.get("setup", ""), "update": "", "blocked": [], "changed": [],
+           "setup": meta.get("setup", ""), "took": meta.get("took", ""), "update": "",
+           "blocked": [], "changed": [],
            "upgrades": [], "questions": [], "first": "", "for_claude": []}
     for i, ln in enumerate(lines):
         s = ln.strip()
@@ -732,16 +774,51 @@ def read_sync(today: dt.date, path: str | None = None) -> dict:
     return got
 
 
+# The brief's own instructions, read by the run before its first command takes the day's
+# update: one the update changes is read again (audit BT-11).
+PROMPT_FILES = ("automation/prompts/morning_brief.md", "automation/prompts/_common.md")
+
+
+def _prompts_seen() -> dict:
+    """{prompt file: a hash of what it holds now} for the brief's own instructions."""
+    out = {}
+    for rel in PROMPT_FILES:
+        try:
+            with open(os.path.join(ROOT, rel), "rb") as fh:
+                out[rel] = hashlib.sha256(fh.read()).hexdigest()
+        except OSError:
+            out[rel] = ""
+    return out
+
+
 def start(argv: list[str], model: str) -> int:
     """The scheduled run's start: the update check, the Python side, the earlier runs' work,
-    all kept in one file; then the brief, gathered by a fresh process."""
-    today = dt.date.today()
+    all kept in one file; then the brief, gathered by a fresh process. The day is chosen once
+    here and passed on as --today, so every step of the run counts the same one (BT-6)."""
+    if "--today" not in argv:
+        argv = list(argv) + ["--today", _today().isoformat()]
+    today = _today(argv[argv.index("--today") + 1])
     py = sys.executable
+    import time
+    took, t0 = [], time.monotonic()
+    before = _prompts_seen()
     r = subprocess.run([py, os.path.join(_HERE, "sync_app.py"), "--if-stale", "--on", model],
                        cwd=ROOT, text=True, capture_output=True, encoding="utf-8",
                        errors="replace")
+    took.append("update %ds" % (time.monotonic() - t0))
+    after = _prompts_seen()
+    changed = [p for p in PROMPT_FILES if before.get(p) != after.get(p)]
+    if changed:
+        sys.stdout.write("FOR CLAUDE, first: this run's update changed the brief's own "
+                         "instructions: read %s again now, and follow the new ones, not the copy "
+                         "read before this command.\n\n" % " and ".join(changed))
+        sys.stdout.flush()
+    # The Python side, after the update check, so a package an update adds is installed; the
+    # script itself asks the package index nothing where everything already imports, from its
+    # one list (efficiency audit E-12; review of fix/helpers, item 13).
     setup = ""
     script = os.path.join(_HERE, "setup_env.sh")
+    t0 = time.monotonic()
     if os.name == "posix" and os.path.isfile(script):
         s = subprocess.run(["bash", script, "--python"], cwd=ROOT, text=True,
                            capture_output=True, encoding="utf-8", errors="replace")
@@ -751,15 +828,20 @@ def start(argv: list[str], model: str) -> int:
     # landing brings in what waits, so only work something keeps out is named, never a branch
     # a landing an hour ago left for the next one to bring in, and the line every morning was
     # never true for long (X-30).
+    took.append("python %ds" % (time.monotonic() - t0))
+    t0 = time.monotonic()
     try:
         import land
         branches = " ".join(land.stranded(ROOT))
     except Exception:  # noqa: BLE001  the brief goes on; the next run looks again
         branches = ""
+    # How long each part took, kept in the log: one start took 5.5 minutes and nothing said
+    # which part (audit BT-8).
+    took.append("earlier %ds" % (time.monotonic() - t0))
     with open(sync_log_path(), "w", encoding="utf-8", newline="\n") as fh:
-        fh.write("date: %s\nexit: %d\nearlier: %s\nsetup: %s\n---\n%s%s"
-                 % (today.isoformat(), r.returncode, branches, setup, r.stdout or "",
-                    r.stderr or ""))
+        fh.write("date: %s\nexit: %d\nearlier: %s\nsetup: %s\ntook: %s\n---\n%s%s"
+                 % (today.isoformat(), r.returncode, branches, setup, ", ".join(took),
+                    r.stdout or "", r.stderr or ""))
     # What the update check printed goes to the log, never to the run: the step that brings
     # the person's own tests in line after an update is said here first, before any work,
     # while they still fail (a person's copy, 2026-11-05).
@@ -810,16 +892,112 @@ def page_first(url: str, argv: list[str]) -> str:
             i = argv.index(flag)
             keep += argv[i:i + (2 if flag == "--today" else 1)]
     rest = " ".join(keep + ["--page-applied"])
+    # Only the taps since two days before the last brief, and their receipts: every one ever
+    # made was read each morning, up to some 130,000 characters, though the last brief and the
+    # chat that answers the page had applied them (efficiency audit E-5).
+    today = _today(argv[argv.index("--today") + 1] if "--today" in argv else None)
+    earlier = earlier_briefs(today)
+    last = (_d(os.path.basename(earlier[-1])) if earlier else None) or \
+        today - dt.timedelta(days=DEFAULT_SINCE_DAYS)
+    since = (last - dt.timedelta(days=2)).isoformat() + "T00:00:00Z"
     return "\n".join([
         "PAGE FIRST, FOR CLAUDE (the person's ticks on their page change what is owed):",
-        "1. ArtifactData query, url %s, collection actions, then collection receipts, each "
-        "with out_dir <D> (a new folder in your scratchpad) and query.limit 1000." % url,
+        ("1. ArtifactData query, url %s, collection actions, then collection receipts, each "
+         "with out_dir <D> (a new folder in your scratchpad): actions with query {\"limit\": "
+         "1000, \"where\": [[\"at\", \">=\", \"%s\"]]}, receipts with query {\"limit\": 1000, "
+         "\"where\": [[\"applied_at\", \">=\", \"%s\"]]}.") % (url, since, since),
         "2. python3 tools/app.py apply <D> --chat brief --claim, then send the batch it names "
         "(ArtifactData batch). Refused: another chat is applying them; go to 4.",
         "3. python3 tools/app.py apply <D> --chat brief, then send every batch it prints.",
         "4. python3 tools/brief.py %s (the brief itself), and carry on with the prompt's "
         "step 1 from what it prints. Keep <D> for the page's refresh in step 4." % rest,
         ""])
+
+
+# ---------------------------------------------------------------- the person's own steps
+
+# A step of the person's own that every brief runs first (person.json `brief.before`): their
+# own script under profile/, run by code, so a rule of theirs that says "every brief runs X" is
+# kept without anyone remembering it. Their rule said every brief cleared the jobs found over a
+# week ago, and nothing ran it: the brief's prompt says to run nothing the command has not
+# (audit BT-4). Run once a --write run, before anything is gathered, on the brief's own day.
+OWN_STEP_S = 300
+_OWN_RULE = re.compile(r"\b(?:every|each)\s+(?:morning\s+)?brief\b", re.I)
+_OWN_CMD = re.compile(r"`python3?\s+(profile/[\w./-]+\.py)`")
+
+
+def _own_path(step) -> str:
+    """`step` as the person's own script, "profile/<name>.py", or "" where it is not one."""
+    if not isinstance(step, str):
+        return ""
+    rel = step.strip().replace("\\", "/")
+    rel = rel[len("python3 "):].strip() if rel.startswith("python3 ") else rel
+    rel = rel if rel.startswith("profile/") else "profile/" + rel
+    if not re.fullmatch(r"profile/[\w-]+(?:/[\w-]+)*\.py", rel) or ".." in rel:
+        return ""
+    try:
+        full = os.path.join(person.directory(), rel[len("profile/"):])
+    except person.NoProfile:
+        return ""
+    return rel if os.path.isfile(full) else ""
+
+
+def own_steps() -> list[str]:
+    """The person's own steps every brief runs first, each "profile/<name>.py" that exists."""
+    got = setting("before") or []
+    return list(dict.fromkeys(p for p in (_own_path(x) for x in
+                                         (got if isinstance(got, list) else [])) if p))
+
+
+def run_own_steps(today: dt.date) -> list[str]:
+    """Run each of own_steps() once, with LJS_TODAY set to the brief's day; a line for each
+    that stopped (its last words), [] when all ran."""
+    out = []
+    env = dict(os.environ, LJS_TODAY=today.isoformat())
+    for rel in own_steps():
+        full = os.path.join(person.directory(), rel[len("profile/"):])
+        try:
+            r = subprocess.run([sys.executable, full], cwd=ROOT, env=env, text=True,
+                               capture_output=True, encoding="utf-8", errors="replace",
+                               timeout=OWN_STEP_S)
+        except subprocess.TimeoutExpired:
+            out.append("%s: still running after %d seconds, so it was stopped" % (rel, OWN_STEP_S))
+            continue
+        except OSError as e:
+            out.append("%s: %s" % (rel, e))
+            continue
+        if r.returncode:
+            last = ((r.stderr or r.stdout or "").strip().splitlines() or ["exit %d" % r.returncode])
+            out.append("%s: %s" % (rel, last[-1][:200]))
+    return out
+
+
+def unadopted_steps() -> list[str]:
+    """The person's own scripts that a rule in profile/CLAUDE.md says every brief runs, and
+    that brief.before does not name yet."""
+    text = _profile_text("CLAUDE.md")
+    have = set(own_steps())
+    out = []
+    for para in re.split(r"\n\s*\n", text or ""):
+        if not _OWN_RULE.search(para):
+            continue
+        for rel in _OWN_CMD.findall(para):
+            p = _own_path(rel)
+            if p and p not in have and p not in out:
+                out.append(p)
+    return out
+
+
+def adopt_steps() -> list[str]:
+    """brief.before with every step unadopted_steps() finds added: what it holds now."""
+    import profile_set
+    add = unadopted_steps()
+    if add:
+        got = setting("before")
+        kept = [x for x in (got if isinstance(got, list) else []) if _own_path(x)]
+        profile_set.set_json("brief.before", kept + add)
+        person.reset()
+    return own_steps()
 
 
 # ---------------------------------------------------------------- the brief
@@ -840,6 +1018,12 @@ def _gather(today: dt.date, write: bool) -> dict:
     from network import state
 
     iso = today.isoformat()
+    # The day's brief already came and its record is saved: this run is a second one (a test,
+    # a catch-up) and writes nothing over it (BT-6).
+    again = bool(write and landed(iso))
+    write = write and not again
+    # The person's own steps first, so everything below reads the state they leave.
+    own_failed = run_own_steps(today) if write else []
     contacts, threads = state.load_contacts(), state.load_threads()
     tracker = open_actions._tracker()
     earlier = earlier_briefs(today)
@@ -880,7 +1064,7 @@ def _gather(today: dt.date, write: bool) -> dict:
     sent_lately = any(_d(throttle.applied_on(r)) and (today - _d(throttle.applied_on(r))).days <= QUIET_DAYS
                       for r in tracker if _status(r) and _status(r) not in throttle.UNSENT
                       and not throttle.is_process(r))
-    warm = _warm_routes(contacts, threads)
+    warm = _warm_routes(contacts, threads, today)
     owned = open_actions.campaigns(tracker)
     lead = _lead(counts, replies, nudges_due, sent_lately, warm, owned, today, set_up_on)
 
@@ -945,6 +1129,8 @@ def _gather(today: dt.date, write: bool) -> dict:
         "paused": brk.get("until", "") if brk and brk.get("until", "") > iso else "",
         # Said in a chat's short message too, where a page holds the rest.
         "back": BACK_SAID if (brk or {}).get("over") else "",
+        "landed": iso if again else "",
+        "own_failed": own_failed,
     }
     if write:
         b["tip"] = _tip(today)
@@ -1053,16 +1239,20 @@ def _preps(iso: str) -> dict:
     return {"line": head, "rebuilt": int(n.group(1)) if n else 0, "research": research}
 
 
-def _warm_routes(contacts, threads) -> list[dict]:
+def _warm_routes(contacts, threads, today=None) -> list[dict]:
+    """Who is a way in at their employer, by the throttle's one rule (throttle.route_rows): a
+    reply that is recent, recorded or a referral or call in flight, and never one marked as no
+    route. The brief kept a reader of its own that counted every reply ever (the audit,
+    2026-11-10)."""
     import throttle
     from network import state
     index = state.by_contact(threads) if threads else {}
-    out = []
-    for c in contacts:
-        st = state.effective_status(c, index.get(str(c.get("contact_id") or "").strip(), ()))
-        if st in throttle.RESPONDED and st not in ("closed", "gone_cold"):
-            out.append({"name": c.get("name") or "", "company": c.get("company") or "", "status": st})
-    return out
+    live = {str(c.get("contact_id") or "").strip():
+            state.effective_status(c, index.get(str(c.get("contact_id") or "").strip(), ()))
+            for c in contacts}
+    return [{"name": c.get("name") or "", "company": c.get("company") or "",
+             "status": live.get(str(c.get("contact_id") or "").strip(), "")}
+            for c in throttle.route_rows(contacts, live, threads, today)]
 
 
 def _live_employers(tracker, contacts, threads, today) -> list[str]:
@@ -1080,7 +1270,7 @@ def _live_employers(tracker, contacts, threads, today) -> list[str]:
     for r in tracker:
         if _status(r) in set(throttle.LIVE_PROCESS):
             add(r.get("company"))
-    for w in _warm_routes(contacts, threads):
+    for w in _warm_routes(contacts, threads, today):
         add(w["company"])
     for r in tracker:
         d = _d(throttle.applied_on(r))
@@ -1474,6 +1664,19 @@ def message_lines(b: dict, owed_max: int = 4) -> list[str]:
     return out
 
 
+TIME_ASKED = "brief-time-asked"     # said_once.json: the day and the clash last asked about
+
+
+def _answers_the_page() -> bool:
+    """Is this run's chat the one that answers the page, as this checkout last saw it?"""
+    try:
+        import app_listen
+        here = app_listen.this_chat()
+        return bool(here) and (app_listen.seen().get("listener") or {}).get("chat") == here
+    except Exception:  # noqa: BLE001  nothing known: a chat of the brief's own
+        return False
+
+
 def _tidy_due() -> str:
     """The day's tidy of the app's own old chats, done in the brief's run when the brief runs
     in the chat that answers the page and nothing has done it yet today: one daily pass, not
@@ -1601,7 +1804,7 @@ def pushed(answer: str, today: dt.date | None = None) -> str:
     the landing that follows), so the person's next message in this chat can say it was not
     sent (unsent_line). A cloud run was answered "Mobile push requested."; anything saying
     "not sent", or an error, is not sent."""
-    today = today or dt.date.today()
+    today = today or _today()
     path = brief_path(today.isoformat())
     if not os.path.exists(path):
         return "brief: no record of today's brief to note the push on"
@@ -1623,7 +1826,7 @@ def unsent_line(chat: str, today: dt.date | None = None) -> str:
     """For the person's next message in the chat a brief ran in, once: where the brief is,
     when its push was not sent (the builder's decision of 3 November). "" otherwise, in any
     other chat, and once said."""
-    today = today or dt.date.today()
+    today = today or _today()
     if not str(chat or "").startswith("session_"):
         return ""
     for back in (0, 1):
@@ -1656,7 +1859,7 @@ def _computer_lines(b: dict) -> list[str]:
         import place
         if place.works_on() not in ("computer", "both") and not place.has_local():
             return []
-        today = _d(b.get("date")) or dt.date.today()
+        today = _d(b.get("date")) or _today()
         trend = computer.trend(today) if today.weekday() == 0 else ""
     except Exception:  # noqa: BLE001  a check never stops the brief
         return []
@@ -1667,6 +1870,12 @@ def _computer_lines(b: dict) -> list[str]:
     return out
 
 
+# The brief's chat keeps every run's history, which each morning pays for again: once it has
+# grown long, the run gives itself a fresh chat of its own (routines.fresh_calls, audit BT-2).
+FRESH_LINE = ("before the landing, saying nothing: get_session; python3 tools/routines.py fresh "
+              "--used <used_tokens> --lineage <depth>/<limit>; do what it prints")
+
+
 def claude_lines(b: dict) -> list[str]:
     """For the model only: what it acts on. Never in the message."""
     s = b["sync"] or {}
@@ -1675,9 +1884,17 @@ def claude_lines(b: dict) -> list[str]:
         return ["paused until %s: the message is the line above, as it is; no news search, no "
                 "drafts, nothing else to do or save" % b["paused"]] + [
                     x for x in [push_step(b)] if x]
+    for x in b.get("own_failed") or []:
+        out.append("your own step %s stopped: %s; the brief went on without it. Say nothing "
+                   "about it unless it stops again tomorrow" % tuple(x.split(": ", 1)))
+    if b.get("landed"):
+        out.append("the brief of %s already came and its record is saved: this run is a second "
+                   "one for that day, so it wrote nothing (no record, no pack, no upkeep) and "
+                   "brief.py news writes nothing either; give the message as printed, land "
+                   "nothing" % b["landed"])
     if not s and b.get("written"):
-        out.append("the start did not run today: run python3 tools/brief.py --start --on "
-                   "\"<model>\" --write")
+        out.append("no start today: python3 tools/app.py start --scheduled morning_brief --on "
+                   "\"<model>\"")
     if s.get("blocked"):
         out.append("job sites are blocked: the message opens with the line above about it")
     if s.get("exit"):
@@ -1725,19 +1942,21 @@ def claude_lines(b: dict) -> list[str]:
                        "; ".join(turned_off_before()) if turned_off_before() else ""))
     if n and b["queries"]:
         searches = b.get("searches") or numbered(b["queries"], b.get("wider") or [], [],
-                                                 _d(b["date"]) or dt.date.today())
+                                                 _d(b["date"]) or _today())
         out.append("news: the news-reader agent, given these searches: %s; at most %d item%s in the "
                    "message%s" % (
                        numbered_text(searches, False), n, "" if n == 1 else "s",
                        "; news in the language %s counts as much as in English" % b["language"]
                        if b.get("language") else ""))
-        today = _d(b["date"]) or dt.date.today()
+        today = _d(b["date"]) or _today()
         week, month = (today - dt.timedelta(days=d) for d in WIDEN_DAYS)
         wide = numbered_text(searches, True)
-        out.append("news, one round: today is %s; every search at once, in parallel, then %d to "
-                   "%d items, newest and most relevant first, each story once, each opening with "
-                   "its search's [n]; the wider back to %s, then %s%s" % (
-                       today.isoformat(), NEWS_MIN, NEWS_MAX, week.isoformat(),
+        # The number to run, given: searches past the cap were run and paid for, only their
+        # items dropped (review of fix/helpers, item 17).
+        out.append("news, one round: today is %s; only these %d searches: every search at once, "
+                   "in parallel, then %d to %d items, newest and most relevant first, each story "
+                   "once, each with its [n]; wider back to %s, then %s%s" % (
+                       today.isoformat(), len(searches), NEWS_MIN, NEWS_MAX, week.isoformat(),
                        month.isoformat(), "; the wider: " + wide if wide else ""))
         if b.get("in_play"):
             out.append("news, in play (for how to use each item, never searched): "
@@ -1772,11 +1991,38 @@ def claude_lines(b: dict) -> list[str]:
                    "--tools \"<this chat's tool names, comma separated>\", and do what it prints "
                    "(it wakes the chat that starts chats on the computer, or makes it once). "
                    "Then the app skill's steps 1 to 3, for work still waiting" % b["page"])
+        # A publish subscribes the chat that makes it to the page's comments: the page rang the
+        # brief's chat twice the day it republished, each ring a paid run that ended "Nothing to
+        # do here" after the brief (audit BT-3, BT-10).
+        if not _answers_the_page():
+            # Never in the chat that answers the page (a copy whose brief is still bound to the
+            # live helper): it would stop the listener's own watch (review of fix/helpers, 6).
+            out.append("last of the page's steps: ArtifactComments, action watch, url %s, on: "
+                       "false (a publish starts a watch): this chat never answers the page, and "
+                       "a ring from it here gets no reply" % b["page"])
     try:
         import routines
         owed = routines.calls(today=b.get("date") or "")
     except Exception:  # noqa: BLE001
         owed = []
+    try:
+        # The brief's time said two ways (audit BT-7): the person is asked once which.
+        clash = routines.time_disagrees(routines.load())
+    except Exception:  # noqa: BLE001  no registry or notes: nothing to ask
+        clash = ""
+    if clash:
+        # Asked once for this disagreement (a said-once record), never in every brief (review of
+        # fix/helpers, item 8).
+        try:
+            import app_setup
+            seen_before = str(app_setup.said_once().get(TIME_ASKED) or "").endswith(" " + clash)
+            if not seen_before:
+                app_setup.save_said(TIME_ASKED, "%s %s" % (b.get("date") or "", clash))
+        except Exception:  # noqa: BLE001  nothing kept: asked this once more
+            seen_before = False
+        if not seen_before:
+            out.append("one question for the person, with the others (on the page as a To do "
+                       "where there is one): " + clash)
     if owed:
         out.append("scheduled-task changes the page asked for: python3 tools/routines.py calls "
                    "lists %d; make each, then routines.py called <n>" % len(owed))
@@ -1798,6 +2044,8 @@ def claude_lines(b: dict) -> list[str]:
     push = push_step(b)
     if push:
         out.append(push)
+    if b.get("written"):
+        out.append(FRESH_LINE)
     return out
 
 
@@ -1903,12 +2151,23 @@ def take_news(text: str, today: dt.date) -> dict:
         if s:
             items.append(s)
             tags.append([int(x) for x in re.findall(r"\d+", m.group(1))] if m else [])
+    # One story once across publishers, before anything is counted (second audit B6).
+    merged = one_story_once(["[%s] %s" % (",".join(map(str, t)), s) if t else s
+                             for s, t in zip(items, tags)])
+    items = [_TAG.sub("", ln).strip() for ln, _t in merged]
+    tags = [t for _ln, t in merged]
     # Earlier briefs only: today's own record is replaced below, and counting it sent every
     # item of a second run that day as already sent (the release review, 2026-11-02).
     seen = set(links_sent(earlier_briefs(today)))
     kept, dropped, ruled, found_by = [], [], [], []
     same: dict = {}
     for s, tag in zip(items, tags):
+        # The round is capped at the searches the brief gave (numbered): an item only a search
+        # beyond them found is left out, so a reader that ran more gains nothing (second audit
+        # B6: 26 searches against eight).
+        if searches and tag and all(t > len(searches) for t in tag):
+            ruled.append(s)
+            continue
         links = [u.rstrip(".,;") for u in _LINK.findall(s)]
         if links and any(u in seen for u in links):
             dropped.append(s)
@@ -1945,6 +2204,10 @@ def take_news(text: str, today: dt.date) -> dict:
                     found[x["what"]] = found.get(x["what"], 0) + 1
         note_found(found, today)
     path = brief_path(today.isoformat())
+    if landed(today.isoformat()):
+        # That day's record is saved already: a second run never writes over it (BT-6).
+        return {"kept": kept, "dropped": dropped, "noted": [], "path": "", "carried": [],
+                "carried_from": "", "ruled_out": ruled, "landed": today.isoformat()}
     body = _read(path)
     carried, day = ([], "") if kept else carry_news(today)
     # Fewer than NEWS_MIN new: the newest earlier items fill it to NEWS_MIN, after a line
@@ -1975,6 +2238,37 @@ def take_news(text: str, today: dt.date) -> dict:
 
 
 _TAG = re.compile(r"^\[(\d+(?:\s*,\s*\d+)*)\]\s*")
+_STORY_WORD = re.compile(r"[a-z0-9]{4,}")
+_STORY_SAME = 0.6
+
+
+def _story_words(line: str) -> set:
+    """The words of what happened, before its source in brackets."""
+    head = _TAG.sub("", line.lstrip("-*• ").strip()).split("(", 1)[0].lower()
+    return set(_STORY_WORD.findall(head))
+
+
+def one_story_once(lines: list[str]) -> list[tuple[str, list[int]]]:
+    """[(line, the searches that found it)], each story once: the same news told by two
+    publishers, or found by two searches, is the first line, every search credited (second
+    audit B6). The same link, or most of the same words, is the same story."""
+    out: list[tuple[str, list[int]]] = []
+    seen: list[tuple[set, set]] = []
+    for ln in lines:
+        s = ln.strip().lstrip("-*• ").strip()
+        m = _TAG.match(s)
+        tag = [int(x) for x in re.findall(r"\d+", m.group(1))] if m else []
+        links = {u.rstrip(".,;") for u in _LINK.findall(s)}
+        words = _story_words(s)
+        for i, (w2, l2) in enumerate(seen):
+            union = words | w2
+            if (links & l2) or (union and len(words & w2) / len(union) >= _STORY_SAME):
+                out[i] = (out[i][0], out[i][1] + [t for t in tag if t not in out[i][1]])
+                break
+        else:
+            out.append((ln, tag))
+            seen.append((words, links))
+    return out
 
 
 def ruled_out(line: str) -> str:
@@ -2000,12 +2294,6 @@ def ruled_out(line: str) -> str:
     if bar.NAMED_PUBLIC.search(what):
         return bar._NAMED_WHY
     return ""
-
-
-def news_items(text: str) -> list[str]:
-    """A brief record's news lines, as written, without their bullets."""
-    return [ln[2:].strip() for ln in _section(text, "News").splitlines()
-            if ln.startswith("- ") and ln[2:].strip()]
 
 
 NEWS_ALSO = "Also from earlier briefs."
@@ -2271,6 +2559,10 @@ def main(argv=None) -> int:
         a = ap.parse_args(argv[1:])
         text = _read(a.file) if a.file else sys.stdin.read()
         got = take_news(text, _today(a.today))
+        if got.get("landed"):
+            print("news: the brief of %s already came and its record is saved; nothing written "
+                  "over it" % got["landed"])
+            return 0
         print("news: %d kept%s%s%s" % (
             len(got["kept"]),
             "; %d left out, already sent in an earlier brief" % len(got["dropped"]) if got["dropped"] else "",
@@ -2294,6 +2586,11 @@ def main(argv=None) -> int:
         return 0
     if argv[:1] == ["watch"]:
         return watch_main(argv[1:])
+    if argv[:1] == ["before"]:
+        # The person's own steps every brief runs first; --adopt takes them from their rules.
+        got = adopt_steps() if "--adopt" in argv[1:] else own_steps()
+        print("before: " + (", ".join(got) if got else "nothing of the person's own"))
+        return 0
     if argv[:1] == ["pushed"]:
         print(pushed(" ".join(argv[1:])))
         return 0

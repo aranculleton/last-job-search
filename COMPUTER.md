@@ -145,8 +145,9 @@ know whether it worked.
    asked once to switch the helper to Auto, and the call is made again; every chat after it
    then starts in Auto (`app_listen.MODE_REFUSED` says each step).
 4. **Signed in to LinkedIn, and staying signed in** (`browser-pane-stay-signed-in`, whose
-   steps include keeping the sign-in). Check: the chat on the computer reads one LinkedIn page and
-   writes its heartbeat (`computer.py beat --linkedin in`). No chat can read whether the
+   steps include keeping the sign-in). Check: a chat already at work on the computer says what
+   its own tab shows in its heartbeat (`computer.py beat --linkedin in`), and opens nothing
+   extra for it; who looks in each case is the table below. No chat can read whether the
    browser keeps sign-ins, so it is judged by its effect: a sign-in seen and then lost by the next look
    marks it off (`computer.cookies_seen`), the card and the brief then say to sign in again
    and keep the sign-in, and a sign-in that holds for a day clears it.
@@ -161,6 +162,17 @@ Nothing about the app's behaviour is written into a chat's own memory: the perso
 live in `profile/`, and the start command removes a note in memory that disagrees with them,
 once, saying one line (`computer.py memory`).
 
+### Who looks at LinkedIn's sign-in (for Claude)
+
+One owner for each case; nothing else opens LinkedIn to look (the builder audit, 2026-11-10,
+CC-20).
+
+| The case | Who looks | The command |
+|---|---|---|
+| The day's look, whether anything waits or not | the page, once a day, when it opens in the Claude desktop app; no chat opens LinkedIn only to check | `python3 tools/network/reading.py linkedin-check` says passed, signed-out or due |
+| How the computer is, while a job runs there | the chat the app started on the computer, from the tab it already has; it opens nothing extra | `python3 tools/computer.py beat --linkedin in`, `out` or `unknown` |
+| A job stopped on a sign-in, seen signed in again | the chat on the computer that waits for it (`computer.py signin-wait`) | `python3 tools/computer.py signed-in --work <id>` |
+
 ### How the work reaches the computer (for Claude)
 
 Work that needs a LinkedIn read is `to: computer` and is refused to any cloud chat
@@ -173,7 +185,9 @@ bridge by the computer starter, woken by its bell, in Auto, titled `Job search Â
 chat that finds LinkedIn signed out opens its sign-in page in Claude's browser, puts the Sign
 in to LinkedIn card on the page and looks again by itself for a quarter of an hour
 (`computer.py signin-wait`), carrying on the moment they are signed in; only after that does
-it ring the bell, its chat is put away, and a fresh one starts once they sign in); the scheduled task; a folder the computer offers (`folder-attach`); a cloud
+it ring the bell, its chat is put away, and a fresh one starts once they sign in; the person
+saying in that chat that they signed in, or asking it to do queued work there, is `app.py resume`,
+which takes the work into that chat so nothing starts it twice); the scheduled task; a folder the computer offers (`folder-attach`); a cloud
 chat lent the computer's browser (`cloud-linked-browser`); and last, the page's one line and
 the paste. On the computer the work runs in the chat itself (`app.py next --kind computer
 --computer-only`), never as a background agent, which has no browser, and it is the whole

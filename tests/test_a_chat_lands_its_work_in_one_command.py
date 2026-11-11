@@ -11,6 +11,7 @@ the branch starts from master with no checkout dance.
 """
 from __future__ import annotations
 
+import json
 import os
 import pathlib
 import subprocess
@@ -701,7 +702,10 @@ def test_a_network_failure_is_retried_with_waits_and_a_refusal_is_not():
 def test_it_never_force_pushes_and_runs_each_git_command_alone():
     with open(os.path.join(ROOT, "tools", "land.py"), encoding="utf-8") as fh:
         text = fh.read()
-    assert "--force" not in text and "+HEAD" not in text and "shell=True" not in text
+    # One --force only, the lease that deletes a merged branch while it still holds what was
+    # merged and refuses otherwise (the review of D14, 2026-11-11): never a plain force.
+    assert text.count("--force") == text.count("--force-with-lease=refs/heads/") == 1
+    assert "+HEAD" not in text and "shell=True" not in text
     assert '"push", "-q", "-u", "origin", "HEAD"' in text
 
 
@@ -817,3 +821,172 @@ def test_a_git_command_refused_for_another_ones_index_lock_is_tried_again(copy, 
     code, out = _run(chat, capsys=capsys)
     assert code == 0 and "land: ready claude/chat-1" in out, out
 
+
+
+# Audit SV-6, D10, D13 (2026-11-10): each landing printed four calls for the chat to make
+# (open, unsubscribe, merge, --after-merge), and opening the pull request with the chat's own
+# GitHub tools subscribed the chat to it, so every save woke it twice more. Where it can, the
+# landing opens and merges the pull request itself, as --detach does, and prints no call.
+
+def _merged_by(origin):
+    """A stand-in for GitHub's merge: the pull request's branch merged into master."""
+    def finish(root, ready):
+        import tempfile
+        tmp = os.path.join(tempfile.mkdtemp(dir=os.path.dirname(str(origin))), "merge")
+        git(os.path.dirname(str(origin)), "clone", "-q", str(origin), tmp)
+        git(tmp, "fetch", "-q", "origin", ready["head"])
+        git(tmp, "-c", "user.name=t", "-c", "user.email=t@example.com", "merge", "-q",
+            "--no-edit", "FETCH_HEAD")
+        git(tmp, "push", "-q", "origin", "HEAD:master")
+        return True, "7"
+    return finish
+
+
+def test_a_landing_opens_and_merges_its_pull_request_itself(copy, capsys):
+    origin, chat, _other = copy
+    write(chat, "profile/notes.md", "landed by itself\n")
+    code = land.main(["--message", "Notes"], root=str(chat), check=GREEN, sleep=lambda s: None,
+                     finish=_merged_by(origin))
+    out = capsys.readouterr().out
+    assert code == 0, out
+    assert "saved to master (pull request 7)" in out, out
+    # The unsubscribe stays: opened through gh api, the pull request still subscribes the
+    # chat (the review of SV-6, 2026-11-11).
+    for call in ("create_pull_request", "merge_pull_request", "--after-merge"):
+        assert call not in out, out
+    assert "landed by itself" in git(origin, "show", "master:profile/notes.md").stdout
+
+
+def test_where_github_cannot_be_reached_the_calls_are_printed_with_why(copy, capsys):
+    _origin, chat, _other = copy
+    write(chat, "profile/notes.md", "waits for the calls\n")
+    code = land.main(["--message", "Notes"], root=str(chat), check=GREEN, sleep=lambda s: None,
+                     finish=lambda root, ready: (False, "gh is not on this computer"))
+    out = capsys.readouterr().out
+    assert code == 0 and "create_pull_request" in out, out
+    assert "could not be done here (gh is not on this computer)" in out, out
+
+
+# Review of SV-6 (2026-11-11): the landing opened and merged its pull request after land() had
+# let go of the landing's lock, and the merge named no commit. A landing started meanwhile (a
+# queued save, the turn-end hook) could push a commit nothing had checked to the same branch,
+# and GitHub merged it. Now the lock is held to the end, and the merge is pinned to the commit
+# this landing pushed and checked.
+
+def test_the_pull_request_is_merged_under_the_lock_and_pinned_to_what_was_checked(copy, capsys):
+    origin, chat, _other = copy
+    write(chat, "profile/notes.md", "checked work\n")
+    seen = {}
+
+    def finish(root, ready):
+        seen["lock_free"] = bool(land._take_lock(root))       # another landing, meanwhile
+        seen["sha"] = ready.get("sha")
+        seen["on_github"] = git(origin, "rev-parse", "refs/heads/" + ready["head"]).stdout.strip()
+        return _merged_by(origin)(root, ready)
+    code = land.main(["--message", "Notes"], root=str(chat), check=GREEN, sleep=lambda s: None,
+                     finish=finish)
+    out = capsys.readouterr().out
+    assert code == 0, out
+    assert seen["lock_free"] is False, "a landing started meanwhile found the lock held"
+    assert seen["sha"] and seen["sha"] == seen["on_github"], seen
+    assert not land.landing(str(chat)), "let go once the landing ends"
+
+
+def test_the_merge_on_github_names_the_commit_it_checked():
+    calls = []
+
+    class R_:
+        def __init__(self, code, out):
+            self.returncode, self.stdout, self.stderr = code, out, ""
+
+    def run(args, **kw):
+        calls.append(args)
+        return R_(0, json.dumps({"number": 9} if "POST" in args else {"merged": True}))
+    ok, _n = land.finish_on_github(".", {"owner": "o", "repo": "r", "head": "claude/x",
+                                         "title": "t", "body": "b", "sha": "abc123"},
+                                   run=run, which=lambda name: "/usr/bin/gh")
+    put = next(c for c in calls if "PUT" in c)
+    assert ok and "sha=abc123" in put, put
+
+
+# Review of D14 (2026-11-11): the branch was deleted on GitHub with no condition, so work
+# another landing pushed between the merge and the delete went with it, and every landing's
+# after-merge then pushed the branch back at master, because this copy still held the old
+# reference. It is deleted only while it still holds the commit that was merged, this copy
+# forgets it, and the after-merge never puts it back.
+
+def test_a_merged_branch_goes_and_stays_gone(copy, capsys):
+    origin, chat, _other = copy
+    write(chat, "profile/notes.md", "merged work\n")
+    code = land.main(["--message", "Notes"], root=str(chat), check=GREEN, sleep=lambda s: None,
+                     finish=_merged_by(origin))
+    out = capsys.readouterr().out
+    assert code == 0, out
+    assert "claude/chat-1" not in _branches(origin), _branches(origin)
+    assert git(chat, "rev-parse", "-q", "--verify", "refs/remotes/origin/claude/chat-1",
+               check=False).returncode != 0
+    assert "merged work" in git(origin, "show", "master:profile/notes.md").stdout
+    # The next save of the same chat pushes its branch again, as any first save does.
+    write(chat, "profile/notes.md", "merged work\nmore\n")
+    code = land.main(["--message", "More"], root=str(chat), check=GREEN, sleep=lambda s: None,
+                     finish=_merged_by(origin))
+    assert code == 0 and "more" in git(origin, "show", "master:profile/notes.md").stdout
+
+
+def test_work_pushed_after_the_merge_is_never_deleted_with_the_branch(copy, capsys):
+    origin, chat, other = copy
+    write(chat, "profile/notes.md", "merged work\n")
+
+    def merged_then_more(root, ready):
+        ok = _merged_by(origin)(root, ready)
+        # Another landing of this branch pushes more work before the delete.
+        later = str(origin) + "-later"
+        git(os.path.dirname(str(origin)), "clone", "-q", "-b", ready["head"], str(origin), later)
+        write(later, "profile/later.md", "pushed after the merge\n")
+        git(later, "add", "-A")
+        git(later, "-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-q",
+            "-m", "later work")
+        git(later, "push", "-q", "origin", "HEAD:" + ready["head"])
+        return ok
+    code = land.main(["--message", "Notes"], root=str(chat), check=GREEN, sleep=lambda s: None,
+                     finish=merged_then_more)
+    capsys.readouterr()
+    assert code == 0
+    assert "claude/chat-1" in _branches(origin), "kept: it holds work nothing has merged"
+    assert "pushed after the merge" in git(origin, "show", "claude/chat-1:profile/later.md").stdout
+
+
+def test_the_github_step_never_deletes_a_branch_on_its_own():
+    """The delete through GitHub's REST interface named no commit: whatever the branch held
+    then went with it. Only the landing's own git push with a lease deletes it now."""
+    calls = []
+
+    class R_:
+        def __init__(self, code, out):
+            self.returncode, self.stdout, self.stderr = code, out, ""
+
+    def run(args, **kw):
+        calls.append(args)
+        return R_(0, json.dumps({"number": 9} if "POST" in args else {"merged": True}))
+    land.finish_on_github(".", {"owner": "o", "repo": "r", "head": "claude/x", "title": "t",
+                                "body": "b", "sha": "abc123"}, run=run,
+                          which=lambda name: "/usr/bin/gh")
+    assert not [c for c in calls if "DELETE" in c], calls
+
+
+# Review of SV-6 (3a, 3c), 2026-11-11: a pull request opened through gh api still subscribed
+# the chat (a person's copy: subscription.created and pull_request.closed for one merged by
+# --detach), so the one call that stops more events stays; and every line after "land: ready"
+# was cut, the line naming work written while the landing ran with them.
+
+def test_a_finished_landing_keeps_what_is_not_a_call_and_the_one_unsubscribe(copy, capsys):
+    origin, chat, _other = copy
+    write(chat, "profile/notes.md", "work\n")
+    late = [sys.executable, "-c", "open('profile/late.md', 'w').write('written meanwhile')"]
+    code = land.main(["--message", "Notes"], root=str(chat), check=late, sleep=lambda s: None,
+                     finish=_merged_by(origin))
+    out = capsys.readouterr().out
+    assert code == 0, out
+    assert "written while this ran" in out and "profile/late.md" in out, out
+    assert "create_pull_request" not in out and "merge_pull_request" not in out, out
+    assert "unsubscribe_pr_activity" in out and "pullNumber 7" in out, out

@@ -140,12 +140,6 @@ def split_sentences(text):
 LEGAL_SUFFIX = company_key.LEGAL_FORM
 
 
-def strip_legal(name):
-    """The name with every trailing legal form removed, one at a time:
-    "Acme Pty Ltd" is Acme, not "Acme Pty"."""
-    return company_key.strip_legal_forms(name)
-
-
 def short_name(company):
     """The name a person would use: "Acme", "Harbour Group", "Northwind".
 

@@ -92,6 +92,9 @@ INVENTED_FIRST_NAMES = frozenset({
     "Ines", "Teo",  # tests/test_a_generated_document_passes_its_own_checker.py
     "Bexley", "Jo", "Person",  # tests/test_a_save_waits_on_nothing_it_does_not_need.py, a people run's test
     "Quill",  # tests/test_contacts_show_only_what_the_persons_rules_allow.py (Quill Orme)
+    "Tove",  # tests/test_an_edited_copy_is_never_a_different_message.py
+    "Wynn",  # tests/test_every_hold_says_when_it_ends.py (Wynn Calder)
+    "Tobiah",  # tests/test_one_message_to_many_is_not_one_person.py
     # "Bea", "Dev" and "Rosa", above, are also
     # tests/test_someone_new_and_an_acceptance_are_recorded_by_command.py's
 })

@@ -130,7 +130,6 @@
    "main": true,
    "files": [
     ".claude/commands/reply.md",
-    ".claude/skills/networking/SKILL.md",
     "RUNBOOK.md"
    ]
   },
@@ -213,9 +212,13 @@
    "main": true,
    "files": [
     ".claude/skills/app/SKILL.md",
+    ".claude/skills/app/wake.md",
+    ".claude/skills/app/work.md",
+    ".claude/skills/app/chat.md",
+    ".claude/skills/app/jobs.md",
     "RUNBOOK.md"
    ],
-   "why": "the page rang this chat"
+   "why": "the page rang this chat; SKILL.md names which of its other files a wake reads"
   },
   "scheduled run": {
    "main": true,
@@ -1058,7 +1061,7 @@
   {
    "id": "finish-master",
    "was": "Master is the trunk. Finish on it, start from it.",
-   "rule": "Finish by getting the work onto master: tools/land.py in the background (save, commit, merge master, ci_local --quick, push), then the PR and its merge.",
+   "rule": "Finish by getting the work onto master: tools/land.py --detach (save, commit, merge master, ci_local --quick, push, the PR and its merge, in a process of its own); plain land.py where the landing must be seen to end.",
    "bold": "Finish by getting the work onto master.",
    "home": "RUNBOOK.md",
    "anchor": "**Finish by getting the work onto master.**",
@@ -2020,7 +2023,6 @@
    "anchor": "**Not a contact store**: `network_contacts.csv` is",
    "needed_by": [
     "/network",
-    "/reply",
     "/threads",
     "/prep"
    ]
@@ -2298,7 +2300,6 @@
    "anchor": "**extension of this system, not a parallel one**",
    "needed_by": [
     "/network",
-    "/reply",
     "/threads",
     "/prep"
    ]
@@ -2312,7 +2313,6 @@
    "anchor": "**Status is derived from the messages wherever the log can know it**",
    "needed_by": [
     "/network",
-    "/reply",
     "/threads",
     "/prep"
    ]
@@ -2348,7 +2348,6 @@
    "anchor": "someone already contacted is never surfaced",
    "needed_by": [
     "/network",
-    "/reply",
     "/threads",
     "/prep"
    ]
@@ -2362,7 +2361,6 @@
    "anchor": "**Nobody is shown as someone to write to without the one check**",
    "needed_by": [
     "/network",
-    "/reply",
     "/threads",
     "/prep"
    ]
@@ -2376,7 +2374,6 @@
    "anchor": "Never join files or check people by hand.",
    "needed_by": [
     "/network",
-    "/reply",
     "/threads",
     "/prep"
    ]
@@ -2390,7 +2387,6 @@
    "anchor": "**Outreach is for referrals, in three stages never compressed into one:**",
    "needed_by": [
     "/network",
-    "/reply",
     "/threads",
     "/prep"
    ]
@@ -2404,7 +2400,6 @@
    "anchor": "**Who reads a first note decides what it says**",
    "needed_by": [
     "/network",
-    "/reply",
     "/threads",
     "/prep"
    ]
@@ -2418,7 +2413,6 @@
    "anchor": "shown with the draft for the person to decide, never in place of the rewrite",
    "needed_by": [
     "/network",
-    "/reply",
     "/threads",
     "/prep"
    ]
@@ -2432,7 +2426,6 @@
    "anchor": "`compose.py` raises, never truncates",
    "needed_by": [
     "/network",
-    "/reply",
     "/threads",
     "/prep"
    ]
@@ -2446,7 +2439,6 @@
    "anchor": "No LinkedIn profile is ever fetched from a session, and LinkedIn's job search **stays on**",
    "needed_by": [
     "/network",
-    "/reply",
     "/threads",
     "/prep"
    ]
@@ -2460,7 +2452,6 @@
    "anchor": "it is read only in the signed-in browser on the person's computer",
    "needed_by": [
     "/network",
-    "/reply",
     "/threads",
     "/prep"
    ]
@@ -2474,7 +2465,6 @@
    "anchor": "Never claim anything not in `profile/01-candidate-profile.md`.",
    "needed_by": [
     "/network",
-    "/reply",
     "/threads",
     "/prep"
    ]
@@ -2499,7 +2489,6 @@
    "anchor": "**A LinkedIn download the person gives is taken first**",
    "needed_by": [
     "/network",
-    "/reply",
     "/threads",
     "/prep"
    ]
@@ -2513,7 +2502,6 @@
    "anchor": "RECONCILE (`python3 tools/network/state.py`) says where the two disagree",
    "needed_by": [
     "/network",
-    "/reply",
     "/threads",
     "/prep"
    ]
@@ -3654,7 +3642,7 @@
    "was": "new in 4.0",
    "rule": "Follow-ups queued together are claimed together and drafted in one run of app.py follow-ups, in code, never one by one with a skill each (the maintainer, 2026-11-05).",
    "bold": "",
-   "home": ".claude/skills/app/SKILL.md",
+   "home": ".claude/skills/app/work.md",
    "anchor": "No skill is loaded and nothing is drafted one by one.",
    "needed_by": [
     "page"

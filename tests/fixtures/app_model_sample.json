@@ -44,10 +44,10 @@
       "rev": "n1"
     },
     {
-      "id": "c-fernhill-ops-applied",
+      "id": "c-pennick-planner-applied",
       "kind": "confirm",
-      "title": "Did you apply to Fernhill Freight?",
-      "body": "The Operations Analyst application was ready on 20 September and is not marked as sent.",
+      "title": "Did you apply to Pennick Haulage?",
+      "body": "The Transport Planner application was ready on 16 October and is not marked as sent.",
       "options": [
         {
           "label": "Yes, I applied",
@@ -63,8 +63,8 @@
         }
       ],
       "about": {
-        "company": "Fernhill Freight",
-        "role": "Operations Analyst"
+        "company": "Pennick Haulage",
+        "role": "Transport Planner"
       },
       "rev": "n2"
     },
@@ -868,8 +868,8 @@
       "employer": "Brackenridge Advisory",
       "channel": "inmail",
       "kind": "first_note",
-      "text": "Hello Noor, I am an analyst in Manchester with four years in retail supply chains, and I saw Brackenridge is growing its analytics practice in the north. Is there anything coming up that a planning analyst could help with? I would be glad to send my CV.",
-      "chars": 253,
+      "text": "Hello Noor, I am an analyst in Manchester with four years in retail supply chains, and I saw Brackenridge is growing its analytics practice in the north. If anything you are working on fits a planning analyst, it would be great to hear about it.",
+      "chars": 245,
       "limit": null,
       "why": "A recruiter for the analytics practice",
       "due": "2026-10-27",
@@ -878,9 +878,9 @@
       "suggest": null,
       "hold": null,
       "subject": "Analytics roles in your Manchester team",
-      "body": "Hello Noor, I am an analyst in Manchester with four years in retail supply chains, and I saw Brackenridge is growing its analytics practice in the north. Is there anything coming up that a planning analyst could help with? I would be glad to send my CV.",
+      "body": "Hello Noor, I am an analyst in Manchester with four years in retail supply chains, and I saw Brackenridge is growing its analytics practice in the north. If anything you are working on fits a planning analyst, it would be great to hear about it.",
       "warnings": [
-        "Claude left this as it is: it mentions your CV before they have asked for it."
+        "Claude left this as it is: the subject names roles, which a first message to someone new usually leaves out."
       ],
       "related": {
         "jobs": [
@@ -1451,7 +1451,7 @@
             "source": null
           },
           {
-            "text": "The basics: you are in Leeds; notice: one month; no sponsorship needed.",
+            "text": "The basics: you are in Manchester; notice: one month; no sponsorship needed.",
             "source": null
           }
         ],
@@ -1532,7 +1532,7 @@
           "say": [
             "Lead with your strongest result: stock-outs on chilled lines down by a third.",
             "Why them: they have just moved to store-level forecasting.",
-            "The basics: you are in Leeds; notice: one month; no sponsorship needed."
+            "The basics: you are in Manchester; notice: one month; no sponsorship needed."
           ],
           "ask": [
             "What are the stages from here?",
@@ -1738,7 +1738,7 @@
   ],
   "done": {
     "counts": {
-      "applied": 24,
+      "applied": 14,
       "interviews": 3,
       "offers": 0,
       "replies": 7
@@ -1746,7 +1746,7 @@
     "funnel": [
       {
         "stage": "applied",
-        "n": 24
+        "n": 14
       },
       {
         "stage": "replied",
@@ -1764,32 +1764,32 @@
     "weeks": [
       {
         "week": "2026-W36",
-        "applied": 2,
-        "replies": 0
-      },
-      {
-        "week": "2026-W37",
-        "applied": 4,
-        "replies": 1
-      },
-      {
-        "week": "2026-W38",
-        "applied": 3,
-        "replies": 1
-      },
-      {
-        "week": "2026-W39",
         "applied": 1,
         "replies": 0
       },
       {
+        "week": "2026-W37",
+        "applied": 1,
+        "replies": 1
+      },
+      {
+        "week": "2026-W38",
+        "applied": 1,
+        "replies": 1
+      },
+      {
+        "week": "2026-W39",
+        "applied": 0,
+        "replies": 0
+      },
+      {
         "week": "2026-W40",
-        "applied": 3,
+        "applied": 1,
         "replies": 2
       },
       {
         "week": "2026-W41",
-        "applied": 4,
+        "applied": 1,
         "replies": 1
       },
       {
@@ -1799,7 +1799,7 @@
       },
       {
         "week": "2026-W43",
-        "applied": 5,
+        "applied": 0,
         "replies": 2
       }
     ],

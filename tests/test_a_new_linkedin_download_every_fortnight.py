@@ -18,23 +18,12 @@ sys.path[:0] = [str(ROOT / "tools"), str(ROOT / "tools" / "network")]
 import export as E  # noqa: E402
 import state  # noqa: E402
 
-TODAY = datetime.date.today()
-
-
-class _Today(datetime.date):
-    @classmethod
-    def today(cls):
-        return TODAY
-
-
-class _Clock:
-    """export.py's datetime with today held at TODAY. TODAY is read once, when the file is
-    loaded, and a run that crossed midnight took the download on the new day and checked it
-    against the old one (Windows, 2026-10-26)."""
-    date = _Today
-
-    def __getattr__(self, name):
-        return getattr(datetime, name)
+# The person's day, held for every test here (LJS_TODAY, the app's one fixed clock, which
+# person.today() reads). Read from the computer once, a run that crossed midnight took the
+# download on the new day and checked it against the old one (Windows, 2026-10-26); and
+# export.py counts the person's day, not the computer's, which in a far time zone is another
+# date for hours of every day (the everywhere check, "behind").
+TODAY = datetime.date(2026, 10, 26)
 
 
 CONN_HEAD = ('Notes:\n"When exporting your connection data, you may notice that some of the '
@@ -55,7 +44,7 @@ def _state(tmp_path, monkeypatch):
     st = tmp_path / "state"
     (st / "documents" / "linkedin").mkdir(parents=True)
     monkeypatch.setenv("LJS_STATE", str(st))
-    monkeypatch.setattr(E, "datetime", _Clock())
+    monkeypatch.setenv("LJS_TODAY", TODAY.isoformat())
     contacts = [
         {"contact_id": "kestrel_achterberg", "name": "Rosalind Achterberg", "company": "Kestrel Mutual",
          "linkedin_url": "https://www.linkedin.com/in/example-rosalind", "status": "awaiting_reply",

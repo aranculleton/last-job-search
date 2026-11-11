@@ -695,7 +695,7 @@ def _robots_fetch(url: str, ua: str):
             if attempt < 2:
                 return robots_check._fetch(url, ua)
             r = subprocess.run(
-                ["curl", "-sS", "-L", "--http1.1", "--max-redirs", "5", "--max-time", "12",
+                ["curl", "-sS", "--globoff", "-L", "--http1.1", "--max-redirs", "5", "--max-time", "12",
                  "-A", ua, "-H", "Accept: text/plain,*/*", "-w", "\n%{http_code}", "--", url],
                 capture_output=True, text=True, timeout=20, encoding="utf-8", errors="replace")
             if r.returncode != 0:
@@ -717,8 +717,8 @@ def _curl(url: str, headers: dict) -> tuple[int, dict, str]:
     import tempfile
     with tempfile.TemporaryDirectory() as d:
         head, body = os.path.join(d, "h"), os.path.join(d, "b")
-        cmd = ["curl", "-sS", "--http1.1", "--max-time", "30", "--compressed", "-D", head,
-               "-o", body, "-w", "%{http_code}"]
+        cmd = ["curl", "-sS", "--globoff", "--http1.1", "--max-time", "30", *cr.compressed(), "-D",
+               head, "-o", body, "-w", "%{http_code}"]
         for k, v in headers.items():
             cmd += ["-H", f"{k}: {v}"]
         try:

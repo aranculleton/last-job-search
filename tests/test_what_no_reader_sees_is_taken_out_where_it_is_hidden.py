@@ -95,6 +95,10 @@ def test_a_reader_that_looks_the_converter_up_as_it_runs_is_cleaned_too(boards_w
         "lists": [{"text": "Requirements", "content": "<li>SQL</li><li hidden>" + HIDDEN + "</li>"}]}]
     [row], _ = ats_boards.lever("Acme Freight", "acme")
     assert "SQL" in row["desc"] and "PhD" not in row["desc"]
+    # Lever joins its description, lists and closing text into one body, and the count of
+    # what was hidden was lost in the join until openroles counted it itself (Job.hidden,
+    # 0.5.0): no Lever, Personio, Recruitee or Rippling posting was ever flagged.
+    assert row["posting_guard"] == "removed from the body: 1 hidden elements"
 
 
 @pytest.mark.timing
@@ -118,3 +122,53 @@ def test_a_posting_staged_from_its_board_goes_through_the_guard(monkeypatch):
     import stage_picks
     monkeypatch.setattr(hydrate, "fetch", lambda row: {**row, "desc": "Strong S​QL needed."})
     assert stage_picks._hydrate({"url": "u"})["desc"] == "Strong SQL needed."
+
+
+# What a word processor pasted into a job board writes on every run of text: the text shows,
+# with its background, underline or border see-through. "color: transparent" was found inside
+# each of those names, so the requirement it styled was taken out of the job as hidden.
+PASTED = ('<p><span style="background-color: transparent; color: rgb(0, 0, 0); '
+          'font-weight: 400;">You have 3+ years of SQL and Python.</span></p>')
+SHOWN = ("background-color: transparent", "border-color: transparent",
+         "text-decoration-color: transparent", "outline-color:transparent",
+         "min-height: 0; overflow: hidden", "border-width: 0px; overflow: hidden",
+         "min-width:0;overflow-x:hidden")
+HIDES = ("color: transparent", "font-weight: 400; color:transparent", "display:none",
+         "opacity: 0", "font-size: 0px", "margin-left: -9999px", "left: -10000px",
+         "position: absolute; margin-top: -10000px", "text-indent:-9999px",
+         "max-height: 0; overflow: hidden", "height:0;overflow:hidden",
+         "clip: rect(0 0 0 0)", "clip-path: inset(100%)")
+
+
+def test_text_a_reader_sees_stays_whatever_its_background(monkeypatch):
+    # The property's own name decides, read as a browser reads a declaration: from the start
+    # of the style or after a ";". From ai-job-search (#717), which anchored the same names.
+    _linkedin(monkeypatch, {"description": "x", "descriptionHtml": PASTED + MARKUP})
+    got = hydrate.fetch({"portal": "linkedin", "id": "1", "url": "u"})
+    assert "You have 3+ years of SQL and Python." in got["desc"] and "PhD" not in got["desc"]
+    assert got["posting_guard"] == "removed from the body: 1 comments and scripts, 1 hidden elements"
+    for style in SHOWN:
+        out, found = hydrate.strip_hidden(f'<p>Kept.</p><div style="{style}">Visible.</div>')
+        assert "Visible." in out and not found, style
+    for style in HIDES:
+        out, found = hydrate.strip_hidden(f'<p>Kept.</p><div style="{style}">{HIDDEN}</div>')
+        assert HIDDEN not in out and found == {"hidden elements": 1}, style
+
+
+def test_an_employer_boards_text_hidden_by_any_style_is_taken_out_and_said(boards_web):
+    """openroles 0.5.0 left out only display:none and visibility:hidden, and the app took its
+    count (Job.hidden): text a board styled at size 0, transparent, off the page, at opacity
+    0 or in a box of nothing stayed in the job, and nothing was said. 0.5.1 reads every style
+    strip_hidden reads, in the same words. One difference: `left` or `top` moves nothing on
+    an element that is not positioned, so openroles keeps that text, which a browser shows."""
+    hides = [s if not s.startswith("left") else "position: absolute; " + s for s in HIDES]
+    boards_web.routes["boards-api.greenhouse.io/v1/boards/acme/jobs"] = {"jobs": [
+        _gh(i + 1, html.escape(f'<p>We need SQL.</p><div style="{style}">{HIDDEN}</div>'))
+        for i, style in enumerate(hides + list(SHOWN))]}
+    rows = ats_boards.greenhouse("Acme Freight", "acme")[0]
+    assert len(rows) == len(hides) + len(SHOWN)
+    for style, row in zip(hides, rows):
+        assert "PhD" not in row["desc"] and "We need SQL." in row["desc"], style
+        assert row.get("posting_guard") == "removed from the body: 1 hidden elements", style
+    for style, row in zip(SHOWN, rows[len(hides):]):
+        assert "PhD" in row["desc"] and "posting_guard" not in row, style

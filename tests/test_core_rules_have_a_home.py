@@ -217,6 +217,11 @@ def test_the_rules_that_moved_point_back_from_the_core():
         ".claude/skills/networking/SKILL.md": "networking skill",
         ".claude/skills/job-scraper/SKILL.md": "job-scraper skill",
         ".claude/skills/app/SKILL.md": "the `app` skill",
+        # The skill's other files are named in its SKILL.md, read only where a wake needs them.
+        ".claude/skills/app/work.md": "the `app` skill",
+        ".claude/skills/app/wake.md": "the `app` skill",
+        ".claude/skills/app/chat.md": "the `app` skill",
+        ".claude/skills/app/jobs.md": "the `app` skill",
         ".claude/skills/job-application-assistant/SKILL.md": "`/apply`",
         ".claude/skills/job-application-assistant/verification-checklist.md": "`/apply`",
         ".claude/commands/apply.md": "`/apply`",

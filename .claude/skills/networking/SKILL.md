@@ -5,8 +5,9 @@ description: >
   composing every outbound message type, managing live conversation threads,
   tracking who is owed what, and preparing for the calls that come out of it.
   Triggers on: network, networking, outreach, connect, connection request,
-  InMail, cold email, referral, warm intro, reply to, draft a reply, follow up,
-  thread, contact, /network, /reply, /threads, /prep
+  InMail, cold email, referral, warm intro, follow up, thread, contact, /network,
+  /threads, /prep. A reply in a live thread is the reply command alone, which
+  loads no skill.
 ---
 
 # Networking and Outreach
@@ -91,6 +92,9 @@ Every rule below is enforced in code; each section further down has the detail.
   tools/network/surface.py` (`surface.check()`; `--file` for a list made any other way). It
   reads the contact book, their whole thread on every channel and the bar, and prints NOT
   with the reason for anyone not to show. Never join files or check people by hand.
+  Nor by a script in the person's own folder: their own rules are settings it reads
+  (`profile/networking.py`, for instance `QUIET_AFTER_SEND_DAYS` for "nobody written to in the
+  last N days"), and a rule that names a script of theirs is the `one-surface-check` upgrade.
 - The search budget is `tools/network/sources.py`; alumni and referral routes come before
   cold; tier 1 only on a quoted live hiring signal; each person is read before anyone writes
   to them (`reading.py`, `/network` step 5); and someone already contacted is never surfaced.
@@ -100,9 +104,11 @@ Every rule below is enforced in code; each section further down has the detail.
 - **Who reads a first note decides what it says** (`compose.READER_TYPES`, each a setting in
   `profile/networking.py`): a recruiter may be told the role wanted and the person's work
   authorization, a decision-maker the role wanted (their work authorization once the
-  messages the person approves say it), and a decision-maker gets the open ask ("anything
-  coming up"); asking whether they are hiring, or for a referral, is a recruiter's alone; a
-  peer is told neither unless that message asks.
+  messages the person approves say it), and a decision-maker gets the open ask (a short chat
+  about the work, or a pointer to the right person); asking what is coming up, whether they
+  are hiring, or for a referral, is a recruiter's alone; a resume is offered once they reply,
+  never in a first note; a peer is told neither unless that message asks. The person's own
+  wording (`TEMPLATES`) wins.
 - Before a draft is shown, `compose.advise()`: the draft is rewritten on its warnings first,
   and a warning the rewrite leaves standing is shown with the draft for the person to decide,
   never in place of the rewrite.
@@ -297,7 +303,9 @@ stops a read (LinkedIn's own signals; the app sets no limit of its own):
   tab opens only at the person's own tap (Open LinkedIn, to sign in). Whether today's look is
   still due is code, never memory: `python3 tools/network/reading.py linkedin-check` prints
   passed, signed-out or due on the person's own day, for every chat and the page alike. A
-  chat opens LinkedIn for none of them (the maintainer, 2026-11-04).
+  chat opens LinkedIn for none of them (the maintainer, 2026-11-04). Who looks in each case,
+  the page, a chat at work on the computer or one waiting on a sign-in, is one table:
+  COMPUTER.md, "Who looks at LinkedIn's sign-in".
 - **Their public work** (a talk, an article, a podcast, code, a quote in the press, their
   posts as a search engine shows them), never a people-search or data-broker site.
 - A headline's "at <phrase>" is never the employer when the card or Experience names another
@@ -345,14 +353,15 @@ the person's settings in `profile/networking.py`:
 | Reader | Work authorization (`ELIGIBILITY`) | The role wanted (`SAY_THE_ROLE`) | The ask | InMail length (`INMAIL_WORDS`) |
 |---|---|---|---|---|
 | recruiter | yes | yes | anything coming up that fits | about 170 words |
-| decision-maker | once the messages the person approves say it | yes | "Would love to hear if you have anything coming up, or know the right person to speak to." | about 170 words |
+| decision-maker | once the messages the person approves say it | yes | "Would love a short chat about the work, or a pointer to the right person to speak to." | about 170 words |
 | peer | no, unless `work_auth=True` for that message | no | a short call, or a pointer | about 130 words |
 
 The decision-maker's row is the message that drew a reply from a senior reader within
 three hours: who the sender is, with the years; one piece of real work with its numbers;
 why this person; a plain statement of eligibility, which a draft carries once the person's
-approved messages to decision-makers do; the open ask. Asking about openings,
-"are you hiring", "refer me" stay a recruiter's alone, at every reader type: a job-ask
+approved messages to decision-makers do; the open ask, for a conversation, never a job.
+Asking about openings or "anything coming up", "are you hiring", "refer me" stay a
+recruiter's alone, at every reader type, and a resume is offered once they reply: a job-ask
 finding names the phrase and what to write instead.
 
 Who to write to first is `tools/network/why.py`: a score and one plain line of why
@@ -602,6 +611,11 @@ explicit "would you be comfortable referring me for it?", and an easy no. Under
 to stop sending, so it is refused in code: `thread=` is their contact_id (or their
 message rows), and nothing composes until a reply or a call of theirs is in it, or
 their row says they replied before the log began.
+
+Written for its reader: read the person's rules first (`python3 tools/learned.py brief
+messages`), and pass `line=`, the sentence about the role from what this person said and does.
+An ask that is another person's waiting draft with the name, the employer, the role and the link
+swapped is refused.
 
 If they have already offered to refer the candidate, in whatever words, the ask
 is answered: do what they said, then thank them.

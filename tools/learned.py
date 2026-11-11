@@ -181,7 +181,7 @@ def _first_write(data: dict, path: str) -> dict:
     rule they give later put away for something the app did before they gave it."""
     if not os.path.exists(path) and "built_in" not in data:
         data["built_in"] = {"checked": [b["id"] for b in BUILT_IN],
-                            "on": dt.date.today().isoformat()}
+                            "on": person.today().isoformat()}
     return data
 
 
@@ -207,9 +207,49 @@ _ABOUT_UPDATES = re.compile(r"\b(?:the app|app'?s|sync\w*|updates|new versions?)
 _UPDATES_WAIT = re.compile(
     r"\b(?:only|never|don'?t|do not|no|stop|not)\b[^.;]{0,60}\bupdat|"
     r"\bupdat\w*\b[^.;]{0,60}\b(?:only|unless|until|when|wait)\b[^.;]{0,30}"
-    r"\b(?:i|he|she|they|you|asked|told|say|says|said)\b", re.I)
+    r"\b(?:i|he|she|they|you|asked|told|say|says|said)\b|"
+    # "App updates: I'll say when", "I decide on app updates" (the review of SV-1).
+    r"\bupdat\w*\b[^.;]{0,30}\b(?:i|he|she|they)(?:'ll| will| shall)?\s+(?:say|decide|tell)\b|"
+    r"\b(?:i|he|she|they)(?:'ll| will| shall)?\s+(?:say|decide|choose)\b[^.;]{0,30}\bupdat",
+    re.I)
 _UPDATES_AUTO = re.compile(r"\bupdat\w*\b[^.;]{0,40}\b(?:by (?:them|it)sel(?:f|ves)|"
-                           r"automatically|on (?:its|their) own)\b", re.I)
+                           r"automatically|on (?:its|their) own|without (?:asking|being asked))\b",
+                           re.I)
+# "never ask him again", "don't ask me", "stop asking": the person is not to be asked, so the
+# updates come by themselves. Read as "never ... update" it wrote the opposite: "App updates
+# come by themselves; never ask him again" became "when_asked" in a person's copy (audit SV-1,
+# 2026-11-10). Only the words that stand for the person between the "not" and the "ask", so
+# "don't update without asking me" still waits.
+_ASK_OFF = re.compile(r"\b(?:never|don'?t|do not|no need to|no more|stop|quit)\s+"
+                      r"(?:(?:ever|even|again|me|him|her|them|you|bother)\s+){0,2}"
+                      r"ask(?:ing|s)?\b", re.I)
+# A reply's own "no" in front of what it says ("No, updates come by themselves").
+_REPLY_NO = re.compile(r"^\s*(?:no|nope|nah)\s*[,!:-]\s*", re.I)
+# One sentence at a time: a full stop inside a file's name (sync_app.py) is not an end.
+_SENTENCE = re.compile(r"[.;!?\n]+(?=\s|$)")
+
+
+def updates_said(text: str) -> str:
+    """"auto", "when_asked" or "" (they say neither, or both): what these words say about how
+    the app's updates arrive. Each sentence is read on its own, and a "not" that belongs to
+    asking ("never ask him again") is about asking, never about updating."""
+    if not (_ABOUT_UPDATES.search(text or "") and re.search(r"\bupdat", text or "", re.I)):
+        return ""
+    found: set[str] = set()
+    asked_off = False
+    for part in _SENTENCE.split(text):
+        part = _REPLY_NO.sub("", part)
+        rest = _ASK_OFF.sub(" ", part)
+        # Only a sentence about updates: "Don't ask me again about LinkedIn. App updates: I'll
+        # say when." was read as updates by themselves (the review of SV-1, 2026-11-11).
+        asked_off = asked_off or (rest != part and re.search(r"\bupdat", part, re.I) is not None)
+        if _UPDATES_WAIT.search(rest):
+            found.add("when_asked")
+        elif _UPDATES_AUTO.search(rest):
+            found.add("auto")
+    if not found and asked_off:
+        found.add("auto")              # "updates should just happen, don't ask me"
+    return found.pop() if len(found) == 1 else ""
 # "only jobs from the last 10 days", "nothing older than a week" -> JOB_AGE_DAYS.
 _WINDOW = re.compile(r"\b(?:last|past|within|under|less than|no older than|not older than|"
                      r"younger than|newer than|up to|at most)\s+(?:(\d{1,3})\s+days?|a\s+(week)|"
@@ -254,11 +294,12 @@ def known_settings(area: str, said: str, rule: str) -> list[tuple[str, object]]:
             out.append(("profile/networking.py PLAIN_NUDGE", True))
         elif _PLAIN_OFF.search(text):
             out.append(("profile/networking.py PLAIN_NUDGE", False))
-    if _ABOUT_UPDATES.search(text) and re.search(r"\bupdat", text, re.I):
-        if _UPDATES_WAIT.search(text):
-            out.append(("profile/person.json app_updates", "when_asked"))
-        elif _UPDATES_AUTO.search(text):
-            out.append(("profile/person.json app_updates", "auto"))
+    # The person's own words decide where they say either; the rule restated from them only
+    # where they do not. Never the two read as one run: the end of one and the start of the
+    # other made a sentence neither said.
+    chosen = updates_said(said) or updates_said(rule)
+    if chosen:
+        out.append(("profile/person.json app_updates", chosen))
     if area in ("search", "jobs", "targets", "other") and _JOBS_WORDS.search(text):
         m = _WINDOW.search(text)
         if m:
@@ -272,13 +313,37 @@ def known_settings(area: str, said: str, rule: str) -> list[tuple[str, object]]:
 
 
 def apply_setting(setting: str, value) -> None:
-    """One known setting written, the way the page's own Settings write it."""
+    """One known setting written, the way the page's own Settings write it, then read back
+    from the file: what is on disk is what the tools follow, so a value that does not read
+    back as the one meant stops here, said, never recorded as done (audit SV-1)."""
     where, _, key = setting.partition(" ")
     if where.endswith("person.json"):
-        person.put([key], value)
+        was = person.put([key], value)
+        try:
+            with open(person.path("person.json"), encoding="utf-8") as fh:
+                got = json.load(fh).get(key)
+        except (OSError, ValueError, AttributeError):
+            got = None
+        if got != value:
+            # What was there before goes back: left as read, the wrong value stood on disk
+            # while the command said nothing was recorded (the review of SV-1, 2026-11-11).
+            person.put([key], person.REMOVE if was is person.MISSING else was)
+        person.reset()
     else:
         import profile_set
-        profile_set.set_line(os.path.basename(where), key, value)
+        name = os.path.basename(where)
+        before = getattr(person.module(name[:-3]), key, person.MISSING)
+        profile_set.set_line(name, key, value)
+        person.reset()
+        got = getattr(person.module(name[:-3]), key, None)
+        if got != value and before is not person.MISSING:
+            profile_set.set_line(name, key, before)
+            person.reset()
+    if got != value:
+        raise SystemExit(f"learned: {setting} was to be {json.dumps(value)} but reads back as "
+                         f"{json.dumps(got)}: it was put back as it was, and nothing was "
+                         "recorded. Write it again with the page's Settings or this command, "
+                         "and check it.")
 
 
 def _app_file(applied: str) -> str:
@@ -337,7 +402,7 @@ def record(area: str, said: str, rule: str, applied_to=(), never_say=(),
         apply_setting(setting, value)
         if setting not in applied_to:
             applied_to.append(setting)
-    entry = {"date": today or dt.date.today().isoformat(), "area": area,
+    entry = {"date": today or person.today().isoformat(), "area": area,
              "said": str(said).strip(), "rule": " ".join(str(rule).split()),
              "applied_to": applied_to,
              "never_say": [str(p) for p in never_say if str(p).strip()],
@@ -480,7 +545,7 @@ def ask(older: int, later: int, today: str | None = None) -> str:
     pair is not two active rules)."""
     data = file_data()
     rows = data.get("entries") or []
-    day = today or dt.date.today().isoformat()
+    day = today or person.today().isoformat()
     cur = data.get("ask") or {}
     if cur and not cur.get("answer"):
         return "one question about the rules is already waiting"
@@ -520,7 +585,7 @@ def settle(answer: str, today: str | None = None) -> str:
     gone = {"later": cur["older"], "older": cur["later"]}.get(answer)
     if gone:
         rows[gone - 1]["status"] = "retired"
-        rows[gone - 1]["retired_for"] = today or dt.date.today().isoformat()
+        rows[gone - 1]["retired_for"] = today or person.today().isoformat()
         rows[gone - 1]["retired_why"] = "you chose the other"
         _save(rows)
     data = file_data()
@@ -542,7 +607,7 @@ def reviewed(mark: bool = False, today: str | None = None) -> str:
     """The day the person's rules were last judged for contradictions; `mark` sets today."""
     data = file_data()
     if mark:
-        data["reviewed_on"] = today or dt.date.today().isoformat()
+        data["reviewed_on"] = today or person.today().isoformat()
         _write_data(data)
     return str(data.get("reviewed_on") or "")
 
@@ -790,7 +855,7 @@ def record_edit(draft: str, sent: str, where: str = "", today: str | None = None
             parts.append(f'cut "{old}"')
         else:
             parts.append(f'added "{new}"')
-    entry = {"date": today or dt.date.today().isoformat(), "area": "messages", "kind": "edit",
+    entry = {"date": today or person.today().isoformat(), "area": "messages", "kind": "edit",
              "said": "edited the draft before sending" + (f" ({where})" if where else ""),
              "rule": "write it the way they edited it: " + "; ".join(parts),
              "applied_to": [], "never_say": [], "status": "active",
@@ -937,7 +1002,7 @@ def retire_built_in(n: int, bid: str, today: str | None = None) -> dict:
     r["status"] = "retired"
     r["retired_why"] = NOW_PART
     r["built_in"] = bid
-    r["retired_on"] = today or dt.date.today().isoformat()
+    r["retired_on"] = today or person.today().isoformat()
     _save(rows)
     return r
 
@@ -954,7 +1019,7 @@ def built_in_done(today: str | None = None) -> tuple[int, str]:
     n = sum(1 for r in (data.get("entries") or []) if isinstance(r, dict)
             and r.get("built_in") in new and r.get("status") == "retired")
     data["built_in"] = {"checked": [b["id"] for b in BUILT_IN],
-                        "on": today or dt.date.today().isoformat()}
+                        "on": today or person.today().isoformat()}
     _write_data(data)
     return n, built_in_line(n)
 
@@ -1045,7 +1110,7 @@ def route_about_app(said: str, today: str | None = None,
     if not said:
         raise SystemExit("learned: --about-app needs what they said")
     mine = _maintainers() if maintainer is None else bool(maintainer)
-    day = today or dt.date.today().isoformat()
+    day = today or person.today().isoformat()
     row = skip(said, ABOUT_APP_BUG if mine else ABOUT_APP_WHY, today=day)
     row["route"] = "maintainer" if mine else "worked_around"
     if mine:
@@ -1077,7 +1142,7 @@ def close_app_bug(n: int, today: str | None = None) -> dict:
     if not 1 <= n <= len(rows):
         raise SystemExit(f"learned: no app bug {n}; there are {len(rows)}")
     rows[n - 1]["status"] = "closed"
-    rows[n - 1]["closed_on"] = today or dt.date.today().isoformat()
+    rows[n - 1]["closed_on"] = today or person.today().isoformat()
     data["app_bugs"] = rows
     _write_data(data)
     return rows[n - 1]
@@ -1520,7 +1585,7 @@ def approve(said: str, text: str, channel: str = "", reader: str = "", contact_i
         raise SystemExit(f"learned: reader {reader!r}; one of {', '.join(READERS)}")
     path = _writable()
     data = _data()
-    row = {"date": today or dt.date.today().isoformat(), "said": str(said).strip(),
+    row = {"date": today or person.today().isoformat(), "said": str(said).strip(),
            "text": str(text).strip(), "channel": channel, "reader": reader,
            "status": "active"}
     if contact_id:
@@ -1643,7 +1708,7 @@ REOFFER_DAYS = 30
 def offers(today: dt.date | None = None) -> list[tuple[int, dict]]:
     """(number, offer) for every app improvement waiting on the person's choice: never
     answered, or kept long enough ago to be worth asking again."""
-    today = today or dt.date.today()
+    today = today or person.today()
     out = []
     for i, o in enumerate(all_offers(), 1):
         if not o.get("decision"):
@@ -1669,7 +1734,7 @@ def offer(setting: str, new: str, why: str, version: str, today: str | None = No
         if o.get("setting") == setting and o.get("version") == version:
             return o
     mine = [r for r in entries() if setting in (r.get("applied_to") or ())]
-    o = {"date": today or dt.date.today().isoformat(), "setting": setting,
+    o = {"date": today or person.today().isoformat(), "setting": setting,
          "version": version, "new": " ".join(str(new).split()),
          "why": " ".join(str(why).split()),
          "theirs": mine[-1]["rule"] if mine else "", "said": mine[-1]["said"] if mine else "",
@@ -1695,7 +1760,7 @@ def decide(n: int, choice: str, today: str | None = None) -> dict:
     if not 1 <= n <= len(rows):
         raise SystemExit(f"learned: no offer {n}; there are {len(rows)}")
     o = rows[n - 1]
-    o["decision"], o["decided"] = choice, today or dt.date.today().isoformat()
+    o["decision"], o["decided"] = choice, today or person.today().isoformat()
     entries_ = load()
     if choice == "switch":
         for r in entries_:
@@ -1830,11 +1895,6 @@ def _own_first_name() -> str:
     return re.sub(r"[^\w'’-]", "", str(name or ""))
 
 
-def _starts_theirs(line: str, greeting) -> bool:
-    s = line.strip()
-    return bool(s) and bool(greeting.match(s) or _OPENS_THEIRS.match(s) or _HEADER.match(s))
-
-
 # A line the person says to Claude, never a label over someone's message: "Draft a reply to
 # Juno's message." read as introducing what followed, and the instruction under it was
 # dropped as Juno's (the release review, 2026-11-03).
@@ -1912,7 +1972,11 @@ def without_pasted(text: str) -> str:
 # one is kept as a rule. Said about a message, never a contact's own words (the same cuts
 # `reaction` makes apply).
 APPROVAL = re.compile("|".join([
-    r"\b(?:almost|nearly|just about|pretty much)?\s*perfect\b",
+    # "Perfect" about what was shown, never what something must be: "it needs to be perfect
+    # and completely comprehensive" was kept as an approval, and the chat had to clear it with
+    # a commit and a pull request of its own (audit D12, 2026-11-10).
+    r"\b(?:(?:almost|nearly|just about|pretty much)\s+)?(?<!\bbe )(?<!\bbeing )(?<!\bnot )"
+    r"(?<!\bmake it )perfect\b",
     r"\bmore (?:of|like) (?:this|these|that|those)\b",
     r"\b(?:great|good|nice|lovely)[,!.]?\s+(?:both|all|they'?re|it'?s|that'?s)?\s*(?:been\s+)?sent\b",
     r"\b(?:sent|sending) (?:it |them |both |all )?as (?:is|written|drafted)\b",
@@ -1939,6 +2003,19 @@ def approval(text: str) -> str:
     return m.group(0).strip() if m else ""
 
 
+# Too long said of the chat, the page or the app, never of something written for the person:
+# "hand over to a fresh helper ..., this chat is too long" and "the page is too long to load"
+# held turns as reactions to a draft (audit D12, 2026-11-10).
+# A list, a screen or the page being too long is a reaction to what was shown ("the list is
+# too long, just give me the top 5"): only the page too slow to load is about the app (the
+# review of D12, 2026-11-11).
+_NOT_A_DRAFT = re.compile(
+    r"\b(?:this|the|my|that)\s+(?:chat|app|conversation|session|context|thread|history|"
+    r"helper)\s+(?:is|was|gets|got|has got|'s)\s+(?:\w+\s+){0,2}?too\s+(?:long|big|slow)\b|"
+    r"\b(?:this|the|my|that)\s+page\s+(?:is|was|gets|got|'s)\s+(?:\w+\s+){0,2}?too\s+"
+    r"(?:long\s+to\s+(?:load|open)|slow)\b", re.I)
+
+
 def reaction(text: str) -> str:
     """The words in `text` that make it a reaction, or "" when it is none."""
     t = str(text or "").replace("\u2019", "'").replace("\u2018", "'")
@@ -1953,6 +2030,7 @@ def reaction(text: str) -> str:
     cut = _THEIR_WORDS.search(t)
     if cut:
         t = t[:cut.start()]
+    t = _NOT_A_DRAFT.sub(" ", t)
     m = REACTION.search(t)
     return m.group(0) if m else ""
 
@@ -2069,7 +2147,7 @@ def skip(said: str, why: str, today: str | None = None, via: str = "",
     if not str(why or "").strip():
         raise SystemExit("learned: skip needs why it sets no rule")
     data = _data()
-    row = {"date": today or dt.date.today().isoformat(), "said": str(said or "").strip(),
+    row = {"date": today or person.today().isoformat(), "said": str(said or "").strip(),
            "why": " ".join(str(why).split())}
     if str(via or "").strip():
         row["via"] = str(via).strip()
@@ -2204,6 +2282,16 @@ GITHUB_EVENT_SAID = ("A GitHub event about a save's pull request: nothing waits 
                      "end the turn with no text.")
 
 
+# A turn the app or the platform makes, never the person typing: a ring from the page, a task's
+# notification, a scheduled run, a GitHub event, a peer chat's message.
+_MACHINE_TURN = re.compile(r"^\s*(?:\[app\]|<\\?task-notification>|Scheduled run:|<wake\b|<event\b"
+                           r"|<webhook-payload>|<child-session-event>|\[SYSTEM)"
+                           r"|Artifact comment sent to Claude", re.I)
+RETIRED_PERSON = ("This chat handed the person's page to a fresh helper, which answers the page "
+                  "now. The person is writing here themself: answer the person as in any chat, "
+                  "and put anything for their page on the page as ever.")
+
+
 def _retired() -> str:
     """The one line for a chat that has handed the page on (app_listen.retired_here), or "".
     Never raises."""
@@ -2231,7 +2319,11 @@ def hook(event: dict) -> dict:
     retired = _retired()
     if retired and name == "UserPromptSubmit":
         # A helper that handed the page on: one line a turn, nothing read (app_listen
-        # RETIRED_LINE). A turn on a nearly full chat can compact it (2026-11-06).
+        # RETIRED_LINE). A turn on a nearly full chat can compact it (2026-11-06). Never to the
+        # person typing: they were answered "archive yourself" mid-conversation (second audit
+        # A8); they are answered as in any chat.
+        if not _MACHINE_TURN.search(str(event.get("prompt") or "")):
+            retired = RETIRED_PERSON
         return {"hookSpecificOutput": {"hookEventName": "UserPromptSubmit",
                                        "additionalContext": retired}}
     if retired and name == "Stop":
@@ -2390,11 +2482,29 @@ def _undone(event: dict, items: list) -> list[str]:
         # (the maintainer, 2026-11-05).
         saving = any(_LANDING.search(t) for t in tools)
         what = [] if saving else land.save_due(person.state(), chat, today.isoformat())
-        if what:
+        if what and not _save_now(what):
             out.append(SAVE_STEPS.format(what=", ".join(what)))
     except Exception:  # noqa: BLE001  a hook must never break the chat it runs in
         return out
     return out
+
+
+def _save_now(what: list[str]) -> bool:
+    """The save the turn would be held for, started here, in a process of its own (land.py
+    --detach), so the turn ends: the hold spent a whole turn of the chat, its history read
+    again, only to run that one command (audit D11, 2026-11-10). True when it started; where it
+    could not, the turn is held with the steps, as before."""
+    import contextlib
+    import io
+    import land
+    if os.environ.get("LJS_HOOK_NO_SAVE"):
+        return False                   # the app's own tests: no landing started in their copies
+    try:
+        with contextlib.redirect_stdout(io.StringIO()):
+            code = land.detach(person.state(), "Saved: " + ", ".join(what)[:60])
+    except Exception:  # noqa: BLE001  the chat is asked to, as before
+        return False
+    return code == 0
 
 
 LATE_STEPS = ("work the person asked for on their page while the last pass ran is still waiting "
@@ -2454,12 +2564,11 @@ PAGE_DUE = ("The person's job search page has never been published. In this turn
 
 
 def _page_today() -> str:
-    """The day in the person's own zone (a cloud computer's clock is UTC)."""
+    """The person's own day (person.today(): their zone, or the day a run was told), never
+    the computer's: a cloud computer's clock is UTC."""
     try:
-        import app_model
-        zone = person.home_zone_named(person.directory()) or "UTC"
-        return app_model.local_day(dt.datetime.now(dt.timezone.utc), zone).isoformat()
-    except Exception:  # noqa: BLE001  no zone known: the computer's day
+        return person.today().isoformat()
+    except Exception:  # noqa: BLE001  no profile to read: the computer's day
         return dt.date.today().isoformat()
 
 
@@ -2615,6 +2724,20 @@ def _page_hold(event: dict) -> dict:
     return _page_hold_form(PAGE_OWED, event.get("transcript_path") or "")
 
 
+def _scheduled_start(event: dict) -> str:
+    """A scheduled run of the brief starts with app.py start --scheduled morning_brief, never
+    the plain start CLAUDE.md names first (it is read before the prompt file, and CLAUDE.md is
+    at its size limit): said beside the run's own first words (review of fix/helpers, item 11)."""
+    if (event.get("hook_event_name") or "") != "UserPromptSubmit":
+        return ""
+    prompt = str(event.get("prompt") or "")
+    if not re.match(r"\s*Scheduled run:\s*morning brief\b", prompt, re.I):
+        return ""
+    return ("This is the morning brief's scheduled run. Start with python3 tools/app.py start "
+            "--scheduled morning_brief --on \"<this chat's model>\" instead of the plain start, "
+            "and follow its prompt file.")
+
+
 def _wake_due(event: dict) -> str:
     """The page's Wake link types plain words into a new chat (app_listen.WAKE_PROMPT, never a
     command a person would see: the stranger audit, X-84); this says what they mean."""
@@ -2725,8 +2848,8 @@ def _cli_hook() -> int:
             import page_db
             page_db.keep_listed_event(event)
             return 0
-        due = "\n\n".join(x for x in (_update_due(event), _wake_due(event) or _page_due(event))
-                          if x)
+        due = "\n\n".join(x for x in (_update_due(event), _scheduled_start(event) or
+                                       _wake_due(event) or _page_due(event)) if x)
         out = _with_update(_with_update(hook(event), _brief_unsent(event)), due)
     except Exception as e:  # noqa: BLE001  a hook must never break the chat it runs in
         print(f"learned.py hook: {type(e).__name__}: {e}", file=sys.stderr)

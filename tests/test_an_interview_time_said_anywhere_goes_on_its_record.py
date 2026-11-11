@@ -133,11 +133,12 @@ def _said(rel):
 def test_every_chat_is_told_to_save_the_time_itself_and_never_to_hand_it_back():
     # The chat told the person to add the time themselves: /interview wrote a booked stage
     # with its day alone, and no instruction said the chat fixes a record it knows better.
+    import app_skill
     core = _said("CLAUDE.md")
     assert "**Records are yours to fix.**" in core and "never them" in core
     interview, outcome, app = (_said(".claude/commands/interview.md"),
                                _said(".claude/commands/outcome.md"),
-                               _said(".claude/skills/app/SKILL.md"))
+                               " ".join(app_skill.text().split()))
     for text in (interview, outcome, app):
         assert "interview_pack.py book" in text and "--time" in text
     assert "(scheduled YYYY-MM-DD HH:MM, with <title or name>)" in interview

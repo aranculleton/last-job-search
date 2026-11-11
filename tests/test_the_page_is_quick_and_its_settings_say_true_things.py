@@ -12,6 +12,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import os
+import re
 import subprocess
 import sys
 import types
@@ -278,7 +279,9 @@ def test_jobs_you_hid_names_them_plainly_and_asks_before_bringing_back_hundreds(
     follow = got["after"][3]
     assert follow["count"] == 12 and "94 more employers" in follow["text"] and "6 employers you ruled out are not followed" in follow["text"], follow
     pay = got["after"][4]["text"]
-    assert "At least CAD 105,000, hoping for CAD 120,000" in pay and "flagged as under what you would take" in pay, pay
+    # With its currency, written as a job's card writes money (the screen review, 2026-11-11:
+    # "At least GBP 38,000" here against "£44,000" on a card).
+    assert re.search(r"At least (CA)?\$105,000, hoping for (CA)?\$120,000", pay) and "flagged as under what you would take" in pay, pay
 
 
 # ------------------------------------------------------------------ 11: the keyboard list
@@ -299,7 +302,8 @@ def test_the_profile_summary_counts_roles_degrees_and_certificates(run, tmp_path
     m["you"] = dict(m["you"], jobs=[dict(m["you"]["jobs"][0], id="you-job-%d" % i) for i in range(4)], skills=["SQL", "Python", "Excel", "R", "dbt"],
                     education=["BSc Mathematics, University of Leeds, UK (2016-2019)"], certificates=["One", "Two", "Three"])
     got = _go(run, tmp_path, [{"hash": "settings", "read": '[data-k="open-profile"]'}], PHONE, model=m)
-    assert "4 roles · 5 skills · 1 degree · 3 certificates" in got["after"][0]["text"], got["after"][0]["text"]
+    # "past jobs", never "roles" beside Your search's Roles (the screen review, 2026-11-11).
+    assert "4 past jobs · 5 skills · 1 degree · 3 certificates" in got["after"][0]["text"], got["after"][0]["text"]
 
 
 def test_what_you_taught_it_opens_on_the_newest_few_of_each_area_with_a_search_and_speaks_to_you(run, tmp_path):

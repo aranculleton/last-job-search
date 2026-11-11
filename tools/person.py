@@ -296,9 +296,10 @@ def cloud_day(env=None, profile_dir: str | None = None) -> str:
     (an explicit TZ wins), only for the person's own profile (the app's own tests point
     LJS_PROFILE at the example person, whose zone is not the computer's), and only for a
     zone this computer has data for. Returns the zone it set, or ""."""
+    import place
+    given = None if env is None or env is os.environ else env
     env = os.environ if env is None else env
-    if str(env.get("CLAUDE_CODE_REMOTE", "")).lower() != "true" or env.get("TZ") \
-            or env.get(ENV):
+    if not place.in_cloud(given) or env.get("TZ") or env.get(ENV):
         return ""
     import time
     if not hasattr(time, "tzset"):
@@ -350,6 +351,18 @@ def today(now=None):
     now = now or dt.datetime.now(dt.timezone.utc)
     z = home_zone()
     return (now.astimezone(z) if z else now.astimezone()).date()
+
+def _one_clock() -> None:
+    """dates.days_since counts to the person's day as well (dates.TODAY). dates imports nothing
+    from the app, so the app tells it here, through `today` as it stands when asked."""
+    try:
+        import dates
+    except ImportError:          # a copy without it: nothing to tell
+        return
+    dates.TODAY = lambda: today()
+
+
+_one_clock()
 
 # Another chat may hold the profile, or be writing it: look before starting again (2026-10-25).
 SETUP_HINT = ("no profile here: run `python3 tools/place.py state` first (another chat may hold "

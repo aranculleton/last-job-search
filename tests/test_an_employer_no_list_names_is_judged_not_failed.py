@@ -8,6 +8,7 @@ judgement once, and every later verdict reads it.
 """
 from __future__ import annotations
 
+import datetime as dt
 import json
 import os
 import sys
@@ -29,7 +30,11 @@ def judged_file(tmp_path, monkeypatch):
     # example person states none, and then no employer is judged at all: X-18).
     monkeypatch.setattr(opportunity, "TIER_1", {"brindlecombe holdings"})
     bar._judged_cache.clear()
-    yield f
+    # A "none" judgement speaks for bar.JUDGED_NONE_DAYS from its day, so these are read
+    # on a day of the test's own, never the machine's.
+    time_machine = pytest.importorskip("time_machine")   # the CI installs it
+    with time_machine.travel(dt.datetime(2026, 11, 10, 12, tzinfo=dt.timezone.utc)):
+        yield f
     bar._judged_cache.clear()
 
 

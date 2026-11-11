@@ -103,7 +103,9 @@ def _quick(checkout, tmp_path, origin_url, **more):
                        capture_output=True, text=True, encoding="utf-8", errors="replace",
                        timeout=600)
     asked = log.read_text(encoding="utf-8").splitlines() if log.exists() else []
-    return r.stdout + r.stderr, [a for a in asked if a.startswith("-m pytest")]
+    # The person's own tests run through sync_app.py --own-tests-check (CS-1).
+    return r.stdout + r.stderr, [a for a in asked if a.startswith("-m pytest")
+                                 or "--own-tests-check" in a]
 
 
 @pytest.fixture
@@ -135,7 +137,7 @@ def test_the_quick_check_in_a_copy_never_runs_the_apps_suite(tmp_path, needs_she
     out, ran = _quick(c, tmp_path, "https://github.com/example-owner/my-search",
                       **{land.ASIDE_ENV: str(aside)})
     assert not any(a.startswith("-m pytest tests") for a in ran), (ran, out)
-    own = [a for a in ran if "profile/tests" in a]
+    own = [a for a in ran if "profile/tests" in a or "--own-tests-check" in a]
     assert own and all("--deselect profile/tests/test_mine.py::test_mine[a b]" in a
                        for a in own), (ran, out)
     assert "1 of your own tests an update changed are set aside" in out, out
@@ -386,6 +388,133 @@ def test_an_update_that_broke_own_tests_never_holds_the_save(chat, tmp_path, cap
     assert code == 0 and got.read_text(encoding="utf-8") == "", out
 
 
+# Audit SV-3 (a person's copy, 2026-11-10): an app release changed what one of the person's
+# own tests used, and every save stopped until the next release. A test file that no longer
+# imports was "could not be run", so nothing was set aside and the check stopped on it.
+
+IMPORTS_A_GONE_NAME = ("import os, sys\n"
+                       "sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),"
+                       " '..', '..', 'tools'))\n"
+                       "from thing import OLD_SHAPE\n\n"
+                       "def test_shape():\n    assert OLD_SHAPE\n")
+
+
+def test_a_release_that_took_away_a_name_their_test_imports_never_holds_the_save(
+        chat, tmp_path, capsys, monkeypatch):
+    import profile_upgrades
+    monkeypatch.setattr(profile_upgrades, "ROOT", str(chat))
+    _update_in_this_landing(chat, IMPORTS_A_GONE_NAME)
+    got = tmp_path / "aside-seen"
+    check = [sys.executable, "-c",
+             "import os, shutil; p = os.environ.get(%r, ''); "
+             "shutil.copy(p, %r) if p else open(%r, 'w').close()"
+             % (land.ASIDE_ENV, str(got), str(got))]
+    code = land.main(["--message", "Notes"], root=str(chat), check=check)
+    out = capsys.readouterr().out
+    assert code == 0 and "land: ready" in out, out
+    # The whole file, by its name: a test that cannot be collected cannot be deselected.
+    assert got.read_text(encoding="utf-8").split() == ["profile/tests/test_mine.py"], out
+    assert "own-tests" in profile_upgrades.listed_ids()
+
+
+OWN_ONLY_UNTIL_ALL_ASIDE = [sys.executable, "-c", (
+    "import os, sys; p = os.environ.get(%r, ''); "
+    "aside = open(p, encoding='utf-8').read().split() if p else []; "
+    "sys.exit(0) if 'profile/tests/' in aside else None; "
+    "print('  pytest (profile/tests, on this person)     FAIL'); "
+    "print('      Claude, not for the person: their own tests, 3 now fail after this update.'); "
+    "print('Not green. Do not push to master.'); sys.exit(1)") % land.ASIDE_ENV]
+
+
+def test_own_tests_an_update_broke_that_cannot_be_named_are_all_set_aside_for_the_save(
+        chat, capsys, monkeypatch):
+    """Only the person's own tests fail, an update is why, and the check's own lines name none
+    of them (a report cut short): the save lands with all of them set aside for it."""
+    import profile_upgrades
+    monkeypatch.setattr(profile_upgrades, "ROOT", str(chat))
+    (chat / "profile" / "notes.md").write_text("today's work\n", encoding="utf-8")
+    code = land.main(["--message", "Notes"], root=str(chat), check=OWN_ONLY_UNTIL_ALL_ASIDE)
+    out = capsys.readouterr().out
+    assert code == 0 and "land: ready" in out, out
+    assert land.OWN_TESTS_DO not in out, out
+
+
+def test_all_of_them_set_aside_unnamed_are_still_recorded_for_the_next_command(
+        chat, capsys, monkeypatch):
+    """The review of SV-3 (2026-11-11): set aside with none named, nothing was recorded, so no
+    command that starts work said they were owed, and the improvement that brings them in line
+    had nothing to read."""
+    import profile_upgrades
+    import sync_app
+    monkeypatch.setattr(profile_upgrades, "ROOT", str(chat))
+    (chat / "profile" / "notes.md").write_text("today's work\n", encoding="utf-8")
+    code = land.main(["--message", "Notes"], root=str(chat), check=OWN_ONLY_UNTIL_ALL_ASIDE)
+    capsys.readouterr()
+    assert code == 0
+    rec = sync_app.own_tests_record(str(chat)) or {}
+    assert [f[0] for f in rec.get("failures") or []] == ["profile/tests"], rec
+    assert sync_app.own_tests_step(str(chat))
+
+
+OWN_FAIL_NO_UPDATE_IN_THIS_CHANGE = [sys.executable, "-c", (
+    "import os, sys; p = os.environ.get(%r, ''); "
+    "aside = open(p, encoding='utf-8').read().split() if p else []; "
+    "sys.exit(0) if 'profile/tests/test_mine.py::test_shape' in aside else None; "
+    "print('  pytest (profile/tests, on this person)     FAIL'); "
+    "print('      FAILED profile/tests/test_mine.py::test_shape - AssertionError'); "
+    "print('      Claude, not for the person: no update of the app is in this change, so these'); "
+    "print('Not green. Do not push to master.'); sys.exit(1)") % land.ASIDE_ENV]
+
+
+def test_own_tests_an_earlier_update_broke_never_hold_a_save_of_the_persons_own_files(
+        chat, capsys, monkeypatch):
+    """The review of SV-3: an update another chat landed broke one of their own tests; this
+    save carries only the person's own files, so the check said "no update of the app is in
+    this change", and the save stopped though the record says the update broke the test."""
+    import profile_upgrades
+    import sync_app
+    monkeypatch.setattr(profile_upgrades, "ROOT", str(chat))
+    (chat / "profile" / "tests").mkdir(exist_ok=True)
+    (chat / "profile" / "tests" / "test_mine.py").write_text(PINNED, encoding="utf-8")
+    _git(chat, "add", "-A")
+    _git(chat, "commit", "-qm", "their test")
+    sync_app.record_own_tests(str(chat), [("profile.tests.test_mine::test_shape",
+                                           "AssertionError")])
+    (chat / "profile" / "notes.md").write_text("today's work\n", encoding="utf-8")
+    monkeypatch.setattr(land, "_own_tests_owed", lambda root: [])   # as a check that missed it
+    code = land.main(["--message", "Notes"], root=str(chat), check=OWN_FAIL_NO_UPDATE_IN_THIS_CHANGE)
+    out = capsys.readouterr().out
+    assert code == 0 and "land: ready" in out, out
+
+
+def test_the_quick_check_sets_aside_a_whole_file_or_all_of_them(tmp_path, needs_shell):
+    c = tmp_path / "copy"
+    _app_files(c, with_person=True)
+    _git(tmp_path, "init", "-q", str(c))
+    _git(c, "add", "-A")
+    _git(c, "commit", "-qm", "a person's copy")
+    _git(c, "update-ref", "refs/remotes/origin/master", "HEAD")
+    (c / "profile" / "notes.md").write_text("today's work\n", encoding="utf-8")
+    aside = tmp_path / "aside.txt"
+    aside.write_text("profile/tests/test_gone.py\nprofile/tests/test_mine.py::test_mine\n",
+                     encoding="utf-8")
+    out, ran = _quick(c, tmp_path, "https://github.com/example-owner/my-search",
+                      **{land.ASIDE_ENV: str(aside)})
+    own = [a for a in ran if "profile/tests" in a or "--own-tests-check" in a]
+    assert own and all("--ignore profile/tests/test_gone.py" in a and
+                       "--deselect profile/tests/test_mine.py::test_mine" in a
+                       for a in own), (ran, out)
+    aside.write_text("profile/tests/\n", encoding="utf-8")
+    _git(c, "remote", "remove", "origin")
+    again = tmp_path / "again"
+    again.mkdir()
+    out, ran = _quick(c, again, "https://github.com/example-owner/my-search",
+                      **{land.ASIDE_ENV: str(aside)})
+    assert not [a for a in ran if "profile/tests" in a or "--own-tests-check" in a], (ran, out)
+    line = next(ln for ln in out.splitlines() if "pytest (profile/tests, on this person)" in ln)
+    assert "SKIP" in line and "set aside for this save" in line, out
+
+
 def test_the_own_tests_improvement_is_owed_again_for_a_second_update_the_same_day(chat,
                                                                                   monkeypatch):
     import profile_upgrades
@@ -543,3 +672,67 @@ def test_a_lock_put_back_never_lands_over_a_third_landings(chat, monkeypatch):
     monkeypatch.setattr(land.os, "link", third_takes_it)
     assert land._take_lock(root) == ""
     assert land._lock_words(p)[2] == "third"
+
+
+# CS-1 (2026-11-10): the person's own tests took "-n auto" (about 25 processes on a large
+# computer), and when any failed the parallel run's output was thrown away and the whole suite
+# run again in one process, about five minutes against 41 seconds, before a failure was shown.
+
+def test_own_tests_run_on_four_processes_and_only_the_failed_run_again(tmp_path, monkeypatch):
+    import sync_app
+    (tmp_path / "profile" / "tests").mkdir(parents=True)
+    (tmp_path / "profile" / "tests" / "test_a.py").write_text("", encoding="utf-8")
+    monkeypatch.setattr(sync_app, "_xdist", lambda: True)
+    monkeypatch.setattr(sync_app.os, "cpu_count", lambda: 64)
+    calls = []
+
+    def run(cmd, cwd=None, **k):
+        calls.append(cmd)
+        report = next((c.split("=", 1)[1] for c in cmd if c.startswith("--junitxml=")), "")
+        if report:
+            with open(report, "w", encoding="utf-8") as fh:
+                fh.write('<testsuites><testsuite><testcase classname="profile.tests.test_a" '
+                         'name="test_ok"/><testcase classname="profile.tests.test_a" '
+                         'name="test_bad"><failure message="boom"/></testcase></testsuite>'
+                         '</testsuites>')
+            return subprocess.CompletedProcess(cmd, 1, "1 failed", "")
+        return subprocess.CompletedProcess(cmd, 1, "", "")
+    code = sync_app.own_tests_check(str(tmp_path), ["--deselect", "profile/tests/test_a.py::x"],
+                                    run=run)
+    assert code == 1 and len(calls) == 2, calls
+    first, again = calls
+    assert first[first.index("-n") + 1] == "4" and "--deselect" in first
+    assert again[-1] == "profile/tests/test_a.py::test_bad" and "profile/tests" not in again[:-1]
+    assert "-n" not in again
+
+
+def test_own_tests_say_so_when_they_cannot_run_in_parallel(tmp_path, monkeypatch, capsys):
+    import sync_app
+    monkeypatch.setattr(sync_app, "_xdist", lambda: False)
+    calls = []
+    code = sync_app.own_tests_check(str(tmp_path), [], run=lambda cmd, **k: calls.append(cmd)
+                                    or subprocess.CompletedProcess(cmd, 0, "", ""))
+    assert code == 0 and len(calls) == 1 and "-n" not in calls[0]
+    assert sync_app.NO_XDIST in capsys.readouterr().out
+
+
+def test_a_lock_caught_between_its_file_and_its_words_is_read_again(chat):
+    # A landing makes its lock in two steps; another reading between them found it empty, aged
+    # it by the disk's clock, and on a moved clock (here: a file a month old) took it over, so
+    # two landings held it (the moved-clock suite, 2026-11-11).
+    root = str(chat)
+    p = os.path.join(land.git_dir(root), land.LOCK_FILE)
+    open(p, "w").close()
+    month = time.time() - 30 * 86400
+    os.utime(p, (month, month))
+
+    def write():
+        time.sleep(0.05)
+        with open(p, "w", encoding="utf-8") as fh:
+            fh.write(land.lock_text(token="theirs"))
+    t = threading.Thread(target=write)
+    t.start()
+    assert land._live(p) is True
+    t.join()
+    assert land._take_lock(root) == ""
+    os.remove(p)

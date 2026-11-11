@@ -104,7 +104,9 @@ def test_contacts_is_one_page_and_each_card_carries_its_draft(run, page, model, 
     assert "People" not in top.split("\n")[:8] and "Messages" not in top, top[:600]
     card, probe = got["after"][1]["text"], got["after"][1]["eval"]
     assert probe["open"] and not probe["tabs"], probe
-    assert "Your reply" in card and "Thanks Rafe." in card and "Copy" in card and "I sent it" in card, card
+    # Its heading says what it is and how it goes, one short line ("Reply · LinkedIn", the
+    # screen review, 2026-11-11).
+    assert "Reply" in card and "Thanks Rafe." in card and "Copy" in card and "I sent it" in card, card
     # The pencil is on the draft itself, beside Copy; More holds no editing (2026-11-04).
     assert probe["pen"], probe
     assert not any(t.startswith(("Edit", "I sent these words")) for t in probe["more"]), probe["more"]
@@ -192,7 +194,7 @@ def test_ten_replies_pasted_in_a_row_each_show_on_their_own_card(run, page, mode
     assert not any(c in later for c in ids[:3]), later
     assert all(c in later for c in ids[3:]), later
     one = got["after"][5]["text"]
-    assert "Your reply" in one and "next week works well for me" in one and "Copy" in one and "I sent it" in one, one
+    assert "Reply" in one and "next week works well for me" in one and "Copy" in one and "I sent it" in one, one
     # With the running one done, the next waits for Claude to look again: said, not guessed.
     assert "Waiting for Claude" in got["after"][6]["text"], got["after"][6]["text"]
 
@@ -247,7 +249,9 @@ def test_a_card_says_the_latest_exchange_and_its_more_how_it_began(run, page):  
     assert "First wrote 1 Oct. 1 message from you, 1 from them." in more, more
     assert "You wrote 15 Oct" in ash and "no reply" not in ash, ash
     assert "days late" not in everyone and "day late" not in everyone, everyone
-    assert "Overdue" in everyone, everyone[:800]
+    # A day the person set is no deadline since the UX review of 2026-11-10 (U-6): past it,
+    # a follow-up is ready, never "Overdue".
+    assert "Overdue" not in everyone and ("Ready to send" in everyone or "Follow-up ready" in everyone), everyone[:800]
 
 
 # ------------------------------------------------------------------ every state of the box's line
@@ -640,3 +644,30 @@ def test_the_resume_made_for_them_is_the_one_that_goes_with_it(run, model, tmp_p
     with_file, without = labels
     assert with_file == ["The %s for Rafe (PDF)" % noun], with_file
     assert without == ["The %s for Rafe" % noun], without
+
+
+@pytest.mark.parametrize("scheme", ["light", "dark"])
+def test_a_drafts_well_stays_distinct_on_a_hovered_card(run, page, scheme):
+    # A hovered person's card turns the page's colour, which in the dark look is the well's
+    # own, so the words to copy lost their box on the very card under the pointer (the screen
+    # review, 2026-11-11). The well keeps a hairline of its own, as a card's answer box does.
+    look = r"""(() => { const t = [...document.querySelectorAll('#main li.person .sendtext')].find((e) => e.getClientRects().length); if (!t) return null;
+      const s = getComputedStyle(t), probe = document.createElement('div'); probe.style.background = 'var(--bg)'; document.body.appendChild(probe);
+      const bg = getComputedStyle(probe).backgroundColor; probe.remove();
+      return {fill: s.backgroundColor, bg, edge: s.borderTopColor, width: parseFloat(s.borderTopWidth)}; })()"""
+    got = run("engine", html=page, viewport=WIDE, scheme=scheme, seed={}, fake={"canSend": "available"},
+              steps=[{"hash": "contacts", "eval": look}])
+    assert not got["errors"], got["errors"]
+    r = got["after"][0]["eval"]
+    assert r and r["width"] >= 1 and r["edge"] != r["bg"], r
+
+
+def test_a_first_notes_heading_names_it_once_and_keeps_to_one_line_on_a_phone(run, page):
+    # "Your note · LinkedIn connection note" said note twice and wrapped to two lines beside
+    # the pencil and Copy (the screen review, 2026-11-11).
+    look = r"""(() => [...document.querySelectorAll('#main li.person .pdraft-sum')].filter((s) => s.getClientRects().length).map((s) => {
+      const g = document.createRange(); g.selectNodeContents(s.firstChild); return [s.firstChild.textContent, new Set([...g.getClientRects()].map((r) => Math.round(r.top))).size]; }))()"""
+    got = run("engine", html=page, viewport=PHONE, seed={}, fake={"canSend": "available"}, steps=[{"hash": "contacts", "eval": look}])
+    assert not got["errors"], got["errors"]
+    heads = got["after"][0]["eval"]
+    assert heads and not [h for h in heads if h[0].count("note") > 1 or h[1] > 1], heads

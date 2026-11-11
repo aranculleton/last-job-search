@@ -87,7 +87,9 @@ def test_a_better_screen_never_lifts_the_persons_own_call(tmp_path, monkeypatch)
     exclude.add(URL, "Morgan: not a fit at 40/100, no more food manufacturers",
                 "Data Analyst", "Oakmere Foods", basis="person", today="2026-01-01", path=path)
     monkeypatch.setattr(throttle, "rescreen_since", lambda: "2026-06-01")   # a re-run screen since
-    assert throttle.ruled_out(json.load(open(path))["seen"])[0]           # still holds
+    # Read within its own end (exclude.set_aside_days() from 1 January): a role the person set
+    # aside now ends by itself, so the day it is read on is the test's own (2026-11-11).
+    assert throttle.ruled_out(json.load(open(path))["seen"], "2026-06-15")[0]   # still holds
 
 
 # ---------------------------------------------------------------- one part at a time

@@ -254,6 +254,19 @@ KIND_LIMITS = {
     "dm": {"chars": schema.LIMITS["message_chars"]},
 }
 
+
+
+def _limits_changed(limits) -> None:
+    """KIND_LIMITS again from the plan's limits as schema.limits_now() reads them: every check
+    (validate) brings them in line, a few assignments, so a plan changed while this process
+    ran is the one the check holds a note to."""
+    KIND_LIMITS["connection"]["chars"] = limits["connection_note_chars"]
+    KIND_LIMITS["inmail"]["words"] = limits["inmail_words"]
+    KIND_LIMITS["nudge"]["chars"] = limits["nudge_chars"]
+    KIND_LIMITS["intro_connection"]["chars"] = limits["connection_note_chars"]
+    KIND_LIMITS["dm"]["chars"] = limits["message_chars"]
+
+
 # There is no default close and no default opener any more, and the reason
 # shows up in any message log. Count the sent messages that carry their text:
 #
@@ -840,6 +853,23 @@ JOB_ASKS = (
      "asks", _LATER_FIX),
 )
 _JOB_ASKS = [(re.compile(rx, re.I), kind, fix) for rx, kind, fix in JOB_ASKS]
+# Asks of a first note to anyone but a recruiter that only the person's own wording may make
+# (TEMPLATES): whether anything is coming up is an ask about openings, and a resume is offered
+# once they reply (the research review, 2026-11-10: the page's sample InMail did both).
+_RESUME_FIX = "offer your resume once they reply, never in a first message"
+FIRST_NOTE_ASKS = (
+    # Whether anything is coming up, as an ask about openings: never "anything exciting coming
+    # up on the roadmap", a question about their plans (the review, 2026-11-11).
+    (r"\b(?:anything|something)\s+(?!(?:exciting|interesting|fun|big|new)\b)(?:\w+\s+)?coming up\b"
+     r"(?!\s+(?:on|in|for)\s+(?:the|your)\s+(?:roadmap|product|calendar|agenda|launch|depot|"
+     r"conference|season|quarter|year|winter|summer|spring|autumn)\b)", _OPEN_FIX),
+    (r"\b(?:glad|happy|pleased|keen)\s+to\s+(?:send|share|forward|pass on)\s+(?:you\s+|over\s+)?"
+     r"(?:a copy of\s+)?my\s+(?:cv|r[eé]sum[eé]|curriculum vitae)\b"
+     r"|\b(?:I(?:'ve| have)\s+)?attach(?:ed|ing)\s+my\s+(?:cv|r[eé]sum[eé])\b", _RESUME_FIX),
+)
+_FIRST_NOTE_ASKS = [(re.compile(rx, re.I), fix) for rx, fix in FIRST_NOTE_ASKS]
+
+
 
 # The blunt "any jobs?" forms, refused to every reader, a recruiter as well: "Any data roles
 # open in Toronto?" passed to a recruiter, and the person reads it as "any jobs?"
@@ -1181,6 +1211,17 @@ def first_note_findings(text, recruiter=False, reader=None, work_auth=None,
             spans.append(m.span())
             out.append(tone.Violation("asks_for_the_job",
                                       f"\"{m.group(0)}\": {advice.with_open_ask(fix)}"))
+    # The person's own wording, wherever they set it (OPENER, ASK, ABOUT_ME, TEMPLATES, a
+    # message they approved): theirs to say. Only TEMPLATES was read, and their own ASK was
+    # refused (the review, 2026-11-11).
+    own = _OwnWords()
+    for rx, fix in _FIRST_NOTE_ASKS:
+        for m in rx.finditer(text):
+            if own.match(m.group(0)):
+                continue
+            spans.append(m.span())
+            out.append(tone.Violation("asks_for_the_job",
+                                      f"\"{m.group(0)}\": {advice.with_open_ask(fix)}"))
     allowed = eligible(reader) if work_auth is None else bool(work_auth)
     if not allowed:
         out += [tone.Violation("work_auth_in_first_note",
@@ -1206,11 +1247,13 @@ BANK = {
         "peer": ("Would you be up for a quick chat in the next few weeks?",
                  "Would you have 15 minutes for a call in the next couple of weeks?",
                  "I'd really appreciate a short call if you're open to it."),
+        # A conversation or a pointer, never openings: a first note asks for a job of a
+        # recruiter alone (the research review, 2026-11-10).
         "decision_maker": (advice.OPEN_ASK,
-                           "If anything's coming up on your team, or there's someone better "
-                           "placed to speak to, I'd love to hear.",
-                           "Would love to hear if anything's coming up, or who'd be the right "
-                           "person to speak to."),
+                           "Would you have 15 minutes for a call in the next few weeks, or know "
+                           "someone better placed to speak to?",
+                           "I'd really appreciate a short call about the work if you're open to "
+                           "it, or a pointer to the right person."),
         "recruiter": ("Would love to hear if you have anything coming up that fits.",
                       "If anything you're working on fits, I'd love to hear about it."),
     },
@@ -1235,8 +1278,7 @@ BANK = {
 # draft its own check refuses.
 BANK_PLAIN = {
     "ask": {
-        "decision_maker": ("If anything's coming up on your team, or there's someone better "
-                           "placed to speak to, it'd be great to hear.",),
+        "decision_maker": (advice.OPEN_ASK_PLAIN,),
         "recruiter": ("If you have anything coming up that fits, it'd be great to hear about it.",),
     },
 }
@@ -1473,6 +1515,9 @@ def length_findings(text, kind: str = "connection", shape: str = "") -> list:
     saving: a 307-character note was saved on a 300-character plan (2026-10-22)."""
     k = _KIND_ALIASES.get(str(kind or "").strip().lower(), "connection")
     sent_text = str(text or "")
+    # The plan as the settings say now, as validate() reads it: alone, this used the limits the
+    # last full check had left, another plan's (2026-11-11).
+    _limits_changed(schema.limits_now())
     limits = dict(KIND_LIMITS[k])
     if k == "connection" and shape:
         limits["chars"] = note_chars(shape)
@@ -1851,7 +1896,6 @@ def thread_findings(text, thread, today=None) -> list:
     message or dates the last contact before it (`ignores_your_last_message`), or announces
     again what that message already said (`repeats_your_last_message`). [] when they spoke
     last, or nothing was sent. `thread` is their contact_id or their message rows."""
-    import datetime
     import learned
     import state
     last = unanswered_ours(thread)
@@ -1859,7 +1903,7 @@ def thread_findings(text, thread, today=None) -> list:
         return []
     t = tone._visible(str(text or ""))
     on = state.as_date(last.get("date"))
-    today = state.as_date(today) if today else datetime.date.today()
+    today = state.as_date(today) if today else person.today()
     month = on.strftime("%B") if on else ""
     when = _said_on(last)
     ours = str(last.get("full_text") or last.get("summary") or "")
@@ -1936,7 +1980,7 @@ def their_words_findings(text, thread, kind) -> list:
 
 
 def referral_ask(name, context, role, link, close=None, work_auth=None,
-                 seniority="peer", thread=None) -> str:
+                 seniority="peer", thread=None, line=None) -> str:
     """The ask the first note exists to earn, sent once they have engaged.
 
     Only inside a live thread: after a reply, a call or an offer of help. Asked
@@ -1946,7 +1990,11 @@ def referral_ask(name, context, role, link, close=None, work_auth=None,
     reluctantly is worth less than none.
 
     `context` is what they already did or said ("thanks again for the chat on
-    Tuesday"), one line, no restating. `role` names the role and employer;
+    Tuesday"), one line, no restating. `line` is the sentence about the role written for this
+    reader, from what they said and what the person's rules ask (learned.py brief messages);
+    without it, the person's own REFERRAL_LINE, else the app's. The ask is refused where it
+    is another person's waiting draft with the name, the employer, the role and the link
+    swapped (followup_drafts.same_but_for_name). `role` names the role and employer;
     `link` is the posting. `thread` is who it goes to: their contact_id, or their
     message rows. Raises ValueError without it, or when nothing in it is theirs
     (`engaged`): the three stages were "never compressed into one" in the skill and
@@ -1971,15 +2019,26 @@ def referral_ask(name, context, role, link, close=None, work_auth=None,
     # forwards this message, and the hiring side's first question is whether
     # the candidate can work there.
     auth = _checked_claim(work_auth, seniority) if work_auth else ""
+    said = str(line).strip() if line and str(line).strip() else REFERRAL_LINE.replace(
+        "{role}", str(role))
     text = " ".join(p for p in (f"{_greeting(name)} {_after_greeting(context)}",
-                                _sentence(REFERRAL_LINE.replace("{role}", str(role))),
-                                auth, _sentence(close)) if p)
+                                _sentence(said), auth, _sentence(close)) if p)
     text = f"{text}\n\n{link.strip()}"
     words = len(text.split())
     high = KIND_LIMITS["referral_ask"]["words"][1]
     if words > high:
         raise TooLong("referral ask", words, high, unit="words")
     _thread_gate(text, thread, "referral ask")
+    cid = (str(thread).strip() if isinstance(thread, str) else
+           next((str(r.get("contact_id") or "").strip() for r in thread or () if isinstance(r, dict)), ""))
+    try:
+        import followup_drafts
+        swapped = followup_drafts.same_but_for_name(text, cid, name=name)
+    except ImportError:
+        swapped = ""
+    if swapped:
+        raise Refused("referral ask: " + swapped + " (pass line=, the sentence about the role "
+                      "written for this reader)")
     return _gate("referral_ask", text, "referral ask", name=name, seniority=seniority)
 
 
@@ -1995,14 +2054,13 @@ def follow_up(name, thread, reason, close=None, today=None, vary: str = "") -> s
     one thing to answer now, never what that message already said. A nudge, held to a
     nudge's length and gate. Raises ValueError when the last word on the thread is not
     theirs: there is nothing to follow up. `thread` is their contact_id or their rows."""
-    import datetime
     import state
     last = unanswered_ours(thread)
     if last is None:
         raise ValueError("nothing of yours on this thread is waiting for an answer, so there "
                          "is nothing to follow up: reply to their last message instead")
     on = state.as_date(last.get("date"))
-    today = state.as_date(today) if today else datetime.date.today()
+    today = state.as_date(today) if today else person.today()
     when = ""
     if on:
         when = on.strftime("%B") + ("" if on.year == today.year else
@@ -2699,6 +2757,7 @@ def validate(message, kind, name=None, seniority="peer", employers=(),
             f"unknown message kind {kind!r}; expected one of "
             f"{sorted(set(_KIND_ALIASES.values()))}. A typo here would skip the "
             f"length check entirely.")
+    _limits_changed(schema.limits_now())    # the plan as the person's settings say now
     text = str(message or "")
     if subject is None and isinstance(message, InMail):
         subject = message.subject

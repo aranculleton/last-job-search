@@ -184,7 +184,11 @@ def test_signed_out_the_chat_opens_the_sign_in_and_waits_never_parking_the_job(
     prompt = computer.session_prompt("network~read~1", "People", URL, "their job search")
     assert computer.LINKEDIN_LOGIN["url"] in prompt and "--signin linkedin" in prompt
     assert "computer.py signin-wait" in prompt and "never parking the job" in prompt
-    assert "reading.py signin --url" in prompt and "computer.py signed-in" in prompt
+    # Each look is one command reading the sign-in tab's address and the work afresh
+    # (`signin-wait --url`), never a separate `reading.py signin --url` on the copy taken before
+    # the wait (the efficiency audit, 2026-11-10, E-10).
+    assert "signin-wait" in prompt and "--url <that address>" in prompt
+    assert "computer.py signed-in" in prompt
     # While it waits, it is at work: nobody puts it away, and no second chat starts.
     waiting = _db(("network~read~1", _stopped(3)))
     w = computer.waiting(waiting, T)
@@ -198,7 +202,11 @@ def test_signed_out_the_chat_opens_the_sign_in_and_waits_never_parking_the_job(
     answered["answered_at"] = app_model.stamp(T)
     assert computer.waiting(_db(("network~read~1", answered)), T)["started"]
     # The wait is over: its chat is put away, and the card stays.
-    late = computer.waiting(_db(("network~read~1", _stopped(16))), T)
+    # Its chat then runs its last steps (the save, its last heartbeat): put away after them,
+    # never during them (the independent review, 2026-11-11; computer.END_WAIT_S).
+    assert computer.waiting(_db(("network~read~1", _stopped(16))), T)["finished"] == []
+    late = computer.waiting(_db(("network~read~1", _stopped(16))),
+                            T + dt.timedelta(seconds=computer.END_WAIT_S))
     assert late["finished"] == [{"work": "network~read~1", "session": "session_mac1"}]
     # Signed in after its chat was put away: a fresh one starts now, never half an hour on.
     gone = _stopped(16, archived=True, status="queued")
@@ -301,7 +309,9 @@ def test_a_chat_the_person_opens_on_their_computer_answers_the_page_and_does_the
     assert "create_session" not in out.split("next:", 1)[1]
     # Its save is a push, merged by the cloud.
     assert land.on_computer({"CLAUDECODE": "1"})
-    assert not land.on_computer({"CLAUDECODE": "1", "CLAUDE_CODE_REMOTE": "true"})
+    # A cloud chat: CLAUDE_CODE_REMOTE and its container's own markers (place.in_cloud, CC-18).
+    assert not land.on_computer({"CLAUDECODE": "1", "CLAUDE_CODE_REMOTE": "true",
+                                 "SSL_CERT_FILE": "/root/.ccr/ca-bundle.crt"})
 
 
 def test_a_chat_on_the_computer_with_the_browser_takes_waiting_work_itself(monkeypatch):

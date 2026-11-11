@@ -667,8 +667,11 @@ def main() -> int:
         if a.contacts or a.threads:
             contacts = a.contacts or throttle.CONTACTS
             rows = throttle._contact_rows(contacts)
+            tp = a.threads or throttle.threads_beside(contacts)
+            import csv_store
+            log = csv_store.read_rows(tp) if tp and os.path.exists(tp) else []
             warm = throttle.warm_routes(contacts, rows=rows, live=throttle._derived_statuses(
-                rows, a.threads or throttle.threads_beside(contacts))) if rows else {}
+                rows, tp), threads=log) if rows else {}
         else:
             warm = throttle.warm_routes()
     except Exception as e:

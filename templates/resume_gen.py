@@ -119,6 +119,15 @@ RESUME_HEAD = r"""%% {noun_title} - {name}
 {after_title}
 """
 
+# The experience section asks for its heading's room and its first role's together (`keep`),
+# or starts on the next page. Each role starts with \needspace, whose page break came right
+# after the heading: with five to eight lines left on the page the heading fitted, its first
+# role did not, and the heading sat alone at the page's foot (design_check.layout's
+# HEADING_AT_FOOT). The other sections start with ordinary text, which TeX sets with its
+# heading, and ask for nothing, so a full page keeps every line it had. HEADING_LINES is the
+# heading with the space moderncv sets around it, in lines.
+HEADING_LINES = 4
+
 # The sections, in the order documents.section_order names (default below).
 # Experience before education is the convention for somebody whose argument is
 # what they did; a recent graduate, whose degree is the strongest thing they
@@ -131,7 +140,8 @@ SUMMARY = r"""\section{{{h_summary}}}
 
 """
 
-EXPERIENCE = r"""\section{{{h_experience}}}
+EXPERIENCE = r"""\needspace{{{keep}\baselineskip}}
+\section{{{h_experience}}}
 \vspace{{0pt}}
 """
 
@@ -298,9 +308,11 @@ def resume(a):
             title=_tex(j["title"]), employer=_tex(j["employer"]), loc=_tex(j["loc"]),
             bullets=bl, item_start="%ITEMSTART%")
     me = _identity()
+    first = a["jobs"][0] if a["jobs"] else None
+    first_ns = (first.get("ns", 5 if first["bullets"] else 2) if first else 1)
     sections = {
         "summary": SUMMARY.format(summary=a["summary"], para_start="%PARASTART%", **me),
-        "experience": EXPERIENCE.format(**me) + jobs,
+        "experience": EXPERIENCE.format(keep=HEADING_LINES + first_ns, **me) + jobs,
         "skills": SKILLS.format(skills=a["skills"], **me),
         "education": EDUCATION.format(edu=a.get("edu", EDU_STD), **me),
         "certifications": me["certifications"],

@@ -367,11 +367,37 @@ def test_a_ring_with_nothing_waiting_only_checks_in_and_another_chat_writes_noth
     assert not sends(other) and "does not answer the page: write nothing else" in other
 
 
+def test_a_small_item_comes_with_its_own_row_of_the_table(ring):
+    """`wake` prints the row of step 4's table for a small item it hands this chat, so the
+    chat reads none of the table (E-3)."""
+    ring.queue("talk~1", kind="talk")
+    item = next_item(ring.wake(ring.read("wake1")))
+    assert item["run"] == "here" and item["do"] == app.work_row("talk") and "chat.md" in item["do"]
+
+
+def test_the_row_of_the_table_is_printed_once_for_each_kind(ring):
+    """Ten tweaks taken in one pass printed the same row of step 4's table ten times, one under
+    each (the review of 2026-11-11, E-3): it is printed with the first item of each kind."""
+    for i in range(3):
+        ring.queue(f"talk~{i}", kind="talk", asked_at=f"2026-10-25T17:0{i}:00Z")
+    ring.queue("tweak~1", kind="tweak", asked_at="2026-10-25T17:05:00Z")
+    said = ring.wake(ring.read("wake1"))
+    items = [next_item(said)] + [json.JSONDecoder().raw_decode(said[m.end():])[0]
+                                 for m in re.finditer(r"\nalso: ", said)]
+    assert len(items) == 4, said
+    rows = [(it["kind"], it.get("do")) for it in items]
+    assert [k for k, do in rows if do] == ["talk", "tweak"], rows
+    assert said.count(json.dumps(app.work_row("talk"))[1:-1]) == 1
+    assert "as the `do` of the first of its kind says" in said
+
+
 def test_a_big_job_is_claimed_and_never_run_here(ring):
     ring.queue("search~1", kind="search")
     said = ring.wake(ring.read("wake1"))
     item = next_item(said)
-    assert item["run"] == "child session" and item["heavy"] is True
+    # Only the call and what names the job: a big job's stages, locks and claim files were
+    # lines the listener read for nothing (E-8); `run` says it is big.
+    assert item["run"] == "child session" and not {"heavy", "stages", "locks"} & set(item)
     assert all(land(ring, said))
     assert ring.stored("work", "search~1")["data"]["status"] == "claimed"
     without = ring.run("next", ring.read("dump2"), "--chat", CHAT, "--kind", "cloud",
@@ -478,14 +504,29 @@ def test_a_chat_for_one_job_takes_no_update_and_is_given_its_commands(monkeypatc
     monkeypatch.setattr(app_setup, "page_record", lambda: {"url": one.PAGE})
     chosen = {"work": "search~1", "kind": "search", "title": "Analyst roles", "heavy": True,
               "stages": page_db.progress("search")["stages"]}
-    prompt = app.where_it_runs(chosen, "listener-1", "cloud")["create_session"]["prompt"]
+    import job_prompt
+    prompt = job_prompt.followed(
+        app.where_it_runs(chosen, "listener-1", "cloud")["create_session"]["prompt"])
     flat = " ".join(prompt.split())
     # Its commands, from the skill's own table, and no reading the skill for them.
     assert "run_round.py --show <args.size>" in flat and "Read only those parts" not in flat
     assert app.work_row("search") in flat and app.work_row("draft") == app.work_row(
         "resume_for_contact")
-    # One read up front, with what step 5 needs; a search says where it is every ten minutes.
-    assert "work, holds, screen, meta and addr" in flat and ("$D/work/search" + "@1.json") in flat
+    # One small read up front, work and holds alone: the screens are read at the finish, where
+    # the page is brought up to date (read up front too, they were read twice or for nothing:
+    # the second audit of 2026-11-10, C4). A search says where it is every ten minutes.
+    assert "collections work and holds, each" in flat and ("$D/work/search" + "@1.json") in flat
+    first = flat.split("2. ", 1)[0]
+    assert "screen" not in first and "addr" not in first, first
+    # Read at the finish through the copy kept (the review of 2026-11-11, 2C-4).
+    assert "app.py reads --in" in flat and "--for-view" in flat and "--dump \"$D/page\"" in flat
+    # The chat started on the computer reads them at the finish alone, too: up front only work,
+    # holds, beats and the meta its route and starter steps need (the builder audit,
+    # 2026-11-10, section 12).
+    import computer
+    mac = " ".join(computer.session_prompt("network~1", "People", one.PAGE, "their search").split())
+    read = mac.split("3. ", 1)[1].split("4. ", 1)[0]
+    assert "work, holds, beats and meta" in read and "screen" not in read.split("(")[0], read
     assert "every ten minutes or so (its lease is thirty)" in flat
     assert "five minutes" not in flat
     # The hook takes no update for it: the chat that answers the page took the day's.
@@ -509,41 +550,44 @@ def test_start_for_a_job_has_no_update_check_and_no_view(ring, monkeypatch):
     said = "\n".join(lines)
     assert "sync_app.py" not in said and "app.py view" not in said
     _, lines = app_setup.start(on="test", tools="none")
-    assert "sync_app.py --pull" in "\n".join(lines)
+    # One command for the day's check, master and the app's update together (H-3): a second
+    # step, --pull, printed nothing whenever master had nothing new.
+    said = "\n".join(lines)
+    assert said.count("tools/sync_app.py") == 1 and "--if-stale" in said, said
+    assert "sync_app.py --pull" not in said
 
 
-def test_start_leaves_the_pages_data_alone_when_it_is_already_current(ring):
+def test_start_brings_the_pages_data_up_to_date_through_the_copy_kept(ring):
+    """It skipped the step when given a read of the page's meta (`start --dump`), which no step
+    ever passed, so the check was dead and a current page was read whole again all the same.
+    Since the second audit of 2026-11-10 (D4) the step reads through the copy this checkout
+    keeps (`app.py reads --for-view`): a page already current costs a small read."""
     said = ring.run("start", "--on", "test", "--tools", "none", "--chat", CHAT)
-    assert "python3 tools/app.py view" in said
-    model = json.loads(ring.run("model"))                # today's, as start builds it
-    d = os.path.join(ring.root, "meta-read")
-    os.makedirs(os.path.join(d, "meta"))
-    with open(os.path.join(d, "meta", "now.json"), "w", encoding="utf-8") as fh:
-        json.dump({"rev": model["rev"], "_v": 4}, fh)
-    said = ring.run("start", "--on", "test", "--tools", "none", "--chat", CHAT, "--dump", d)
-    assert "python3 tools/app.py view" not in said
-    with open(os.path.join(d, "meta", "now.json"), "w", encoding="utf-8") as fh:
-        json.dump({"rev": "an-older-rev", "_v": 4}, fh)
-    said = ring.run("start", "--on", "test", "--tools", "none", "--chat", CHAT, "--dump", d)
-    assert "python3 tools/app.py view" in said
+    assert "python3 tools/app.py view" in said and "app.py reads" in said and "--for-view" in said
 
 
 # ------------------------------------------------------------------ the skill says so
 
 def test_the_skill_reads_once_and_wakes_once():
-    with open(os.path.join(ROOT, ".claude", "skills", "app", "SKILL.md"), encoding="utf-8") as fh:
-        skill = " ".join(fh.read().split())
+    import app_skill
+    skill = " ".join(app_skill.text().split())
     one_to_three = skill[skill.index("## 1. Read, in one go"):skill.index("## 4.")]
     assert "python3 tools/app.py wake \"$D\" --chat <your chat id>" in one_to_three
     # What is read is printed by code (`app.py reads`, tools/page_reads.py): the small
     # collections whole, the rest only what changed, the screens only when another chat drew
     # the page (the maintainer, 2026-11-05). A whole read is every collection a wake reads.
     import page_reads
-    assert "python3 tools/app.py reads \"$D\"" in one_to_three
+    # The folder is the code's to choose: told to name it short, every fresh subagent chose
+    # `w1`, and a second ring read into the first one's finished wake (the review of
+    # 2026-11-11, E-18).
+    assert "python3 tools/app.py reads --in \"<your scratchpad>\"" in one_to_three
+    assert "that is `$D` from here on" in one_to_three
     assert set(page_reads.FULL_READS) == set(app.WAKE_READS)
     for coll in page_reads.WHOLE + page_reads.KEPT:
         assert f"`{coll}`" in one_to_three, coll
-    assert "already loaded on a wake" in one_to_three
+    # Read once each, at the subagent's start: CLAUDE.md comes with it, the skill does not
+    # (E-3: "already loaded on a wake" was not so in the subagent).
+    assert "SKILL.md (the Skill tool) and this file are read once each" in one_to_three
     # What the reads saved is never shown in the chat: each later step re-reads all of it (a
     # helper's history grew by every listing, the maintainer's copy, 2026-11-05).
     assert "Never list, print or open what the reads saved" in one_to_three
@@ -559,6 +603,44 @@ def test_the_wake_ends_by_resolving_the_thread_it_came_on(ring):
     said = ring.wake(ring.read("wake1"))
     assert "ArtifactComments resolve" in said and "the thread this wake came on" in said
     assert "leave no reply" in said
+
+
+def test_a_ring_resolves_its_own_thread_and_watches_only_once(ring):
+    """Every ring made two calls it rarely needed (the efficiency audit, E-9): its check-in
+    asked again for the watch the chat already had ("asking again does no harm"), and its
+    last line had it list every open thread on the page and judge each. The watch is asked
+    when a chat takes the page (Ring's own listen did) and never again while it keeps it, and
+    a ring resolves the one thread it came on, and the other open rings only when no wake has
+    for a few hours: each one left open kept the blue dot on Claude's comments button, which
+    the helper clears (the maintainer, 2026-11-10; the review of 2026-11-11)."""
+    import datetime as dt
+    import fake_db
+
+    def wake(name, at=NOW):
+        said = ring.wake(ring.read(name), "--now", at)
+        assert all(fake_db.apply(ring.db, b) for b, _why in sends(said))
+        return said
+
+    def last(said):
+        return said[said.index("last, once this wake's work is done"):].split("\n")[0]
+
+    def later(hours):
+        t = dt.datetime.fromisoformat(NOW.replace("Z", "+00:00")) + dt.timedelta(hours=hours)
+        return t.strftime("%Y-%m-%dT%H:%M:%SZ")
+    first = wake("wake1")
+    assert "keep this chat's watch" not in first, "the chat asked for its watch when it took the page"
+    assert "the thread this wake came on" in last(first)
+    assert "any other open thread" in last(first), "the first wake sweeps the old rings"
+    soon = wake("wake1b", later(1))
+    assert "the thread this wake came on" in last(soon)
+    assert "any other open thread" not in last(soon), "an hour later nothing is swept again"
+    assert "any other open thread" in last(wake("wake1c", later(4))), "a few hours later it is"
+    # A record from before the app kept who asked: the watch is asked once, then not again.
+    rec = ring.stored("meta", "listen")
+    rec["data"].pop("watch_asked", None)
+    ring.put("meta", "listen", rec["data"], rec["version"])
+    assert wake("wake2").count("keep this chat's watch") == 1
+    assert "keep this chat's watch" not in wake("wake3")
 
 
 def test_old_rings_are_cleared_once_and_the_upgrade_notes_it(tmp_path, monkeypatch, capsys):

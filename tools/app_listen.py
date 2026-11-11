@@ -178,8 +178,10 @@ def this_chat(given: str = "") -> str:
 
 
 def chat_kind() -> str:
-    """"cloud" in a cloud chat (CLAUDE_CODE_REMOTE, documented), else "computer"."""
-    return "cloud" if os.environ.get("CLAUDE_CODE_REMOTE", "").lower() == "true" else "computer"
+    """"cloud" in a cloud chat (CLAUDE_CODE_REMOTE, documented, and the cloud container's own
+    markers: place.in_cloud), else "computer", a session the person drives from their phone included (claude_surfaces: remote-control)."""
+    import place
+    return "cloud" if place.in_cloud() else "computer"
 
 
 # ------------------------------------------------------------------ what this checkout saw
@@ -420,9 +422,33 @@ def _ago(value, now: dt.datetime) -> str:
     return "just now"
 
 
+def read_lineage(text) -> tuple[int, int] | None:
+    """(depth, limit) from what get_session says of a chat's lineage ("8/8", or its JSON
+    {"depth": 8, "limit": 8}), or None where it says nothing readable."""
+    if isinstance(text, dict):
+        got = text
+    else:
+        s = str(text or "").strip()
+        m = re.fullmatch(r"(\d+)\s*/\s*(\d+)", s)
+        if m:
+            return int(m.group(1)), int(m.group(2))
+        try:
+            got = json.loads(s) if s else None
+        except ValueError:
+            return None
+    if not isinstance(got, dict):
+        return None
+    got = got.get("lineage") if isinstance(got.get("lineage"), dict) else got
+    try:
+        return int(got["depth"]), int(got["limit"])
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
 def decide(db: dict, chat: str, out_dir: str, now: dt.datetime | None = None,
            listen: bool = False, helper: bool = False, title: str = "",
-           hand_to: str = "", update: bool = False) -> dict:
+           hand_to: str = "", update: bool = False,
+           lineage: tuple[int, int] | None = None) -> dict:
     """Is this chat the page's listener? {"role": "listener" | "other", "lines": [...],
     "batches": [...], "record": the listener as this chat leaves it}.
 
@@ -495,11 +521,23 @@ def decide(db: dict, chat: str, out_dir: str, now: dt.datetime | None = None,
                           "listen: if this chat watches the page from before (ArtifactComments, "
                           "action watch with no url, lists this chat's watches), stop that "
                           "watch: action watch, url <the page>, on: false."]}
+    # As deep as chats go (get_session's lineage, passed as --lineage): marked nested now, in
+    # this checkout and on the page's record, never learned from a refused create_session on a
+    # long chat (second audit A9).
+    deep = bool(lineage) and lineage[0] >= lineage[1] and chat.startswith("session_")
+    if deep:
+        mark_nested(chat, now)
     if mine:
         renew = renewal(rec, db, chat, now)
         if renew:
             lines.append(renew_line(renew, now))
-        fresh = {"answered_at": at, "watching": True, **({"helper": True} if helper else {})}
+        fresh = {"answered_at": at, "watching": True, **({"helper": True} if helper else {}),
+                 **({"nested_at": at} if deep and not rec.get("nested_at") else {}),
+                 **tidied_field(rec)}
+        # Its watch is asked once, when it is not known to have been (WATCH_LINE): asked at
+        # every check-in, it was a call on every ring that changed nothing (E-9).
+        if rec.get("watch_asked") != chat:
+            fresh["watch_asked"] = chat
         if (rec.get("helper") or helper) and chat.startswith("session_") and \
                 rec.get("title") != HELPER_CHAT_TITLE:
             # A helper from before 4.10 is still "Job search helper", like every old one it
@@ -516,11 +554,13 @@ def decide(db: dict, chat: str, out_dir: str, now: dt.datetime | None = None,
         rec = dict(rec, **fresh)
         lines.append("listen: this chat answers the page. Send the batch below (it says this "
                      "chat answered just now). " + CHECK_IN_REFUSED)
-        lines.append(WATCH_LINE)
+        if fresh.get("watch_asked"):
+            lines.append(WATCH_LINE)
     elif take:
         new = {"chat": chat, "title": title or (HELPER_CHAT_TITLE if helper else "Job search"),
                "kind": chat_kind(), "helper": bool(helper), "since": at, "answered_at": at,
-               "watching": True, "took_from": rec.get("chat") or None,
+               "watching": True, "watch_asked": chat, "took_from": rec.get("chat") or None,
+               **({"nested_at": at} if deep else {}),
                # Whether the chat it took from was one the app started: the tidy-up only ever
                # puts away such a chat, never one the person writes in (X-4).
                "took_from_helper": bool(rec.get("helper")),
@@ -574,7 +614,28 @@ def decide(db: dict, chat: str, out_dir: str, now: dt.datetime | None = None,
             said.append(RETIRED_LINE.format(chat=chat))
         return {"role": "other", "batches": [], "record": rec, "lines": said}
     _remember(rec, now)
+    if deep:
+        lines.append("listen: this chat is as deep as chats go (get_session's lineage): it starts "
+                     "no fresh helper or scheduled task; its big jobs run as background agents, "
+                     "and the brief's next run starts its fresh helper. Say nothing about it.")
     return {"role": "listener", "lines": lines, "batches": w.save("listen"), "record": rec}
+
+
+def tidied_field(rec: dict) -> dict:
+    """{"tidied": this copy's last tidy} where the page's record does not say it yet, else {}:
+    the day's tidy rides in the check-in, so a chat in a fresh container knows it was done
+    (tidy.due reads it; the second audit, 2026-11-10, D5)."""
+    try:
+        import tidy
+        mark = tidy.page_mark()
+    except Exception:  # noqa: BLE001  no copy to read: nothing to say
+        return {}
+    if not mark or (rec or {}).get("tidied") == mark:
+        return {}
+    have = (rec or {}).get("tidied") if isinstance((rec or {}).get("tidied"), dict) else {}
+    if str(have.get("at") or "") > str(mark.get("at") or ""):
+        return {}                       # the page knows of a later one, from another chat
+    return {"tidied": mark}
 
 
 # A refused check-in names the version the store holds. Most often another chat took the page;
@@ -590,7 +651,10 @@ CHECK_IN_REFUSED = ("If it is refused, keep the version the refusal names first:
                     "page shows there.")
 
 
-# What a chat that answers the page asks for at every check-in: its watch, so a tap wakes it.
+# What a chat that answers the page asks for when it takes the page, and once more only where
+# the page's record does not say this chat asked (`watch_asked`): its watch, so a tap wakes
+# it. A watch outlives the turn that asked for it, so asking at every check-in was one call a
+# ring that changed nothing (the efficiency audit, E-9).
 WATCH_LINE = ("listen: keep this chat's watch on the page so a tap wakes it: ArtifactComments, "
               "action watch, url <the page> (asking again when it already watches does no harm).")
 
@@ -634,7 +698,11 @@ def renew_line(renew: dict, now: dt.datetime | None = None) -> str:
             MODE_REFUSED + " Never through a scheduled task: the chat one starts has no copy "
             "of the files and cannot start the helper. Where create_session is not among this chat's "
             "tools, or it is refused because this chat cannot start any more chats: " + NESTED +
-            ". The new chat takes the page as it starts; until then this one still answers.")
+            ". Once it is made, hand the page to it at once, so this chat stops listening and "
+            "no ring or notification wakes it again (second audit A7): ArtifactData query, url "
+            "<the page>, collection meta, out_dir a fresh folder $H, limit 1000; python3 "
+            "tools/app.py listen \"$H\" --chat <this chat's id> --hand <its id>; send the batch "
+            "it prints, then ArtifactComments, action watch, url <the page>, on: false.")
 
 
 def mark_nested(chat: str, now: dt.datetime) -> None:
@@ -780,12 +848,27 @@ def _job_chat() -> str:
         return ""
 
 
+TAPPED_DAYS = 2      # taps on the page this recent keep the brief's new-day renewal
+
+
+def tapped_lately(rec: dict, db: dict, now: dt.datetime) -> bool:
+    """Did the person use the page in the last TAPPED_DAYS: the helper answered a ring, or a
+    piece of work was asked for?"""
+    cut = now - dt.timedelta(days=TAPPED_DAYS)
+    stamps = [_time(rec.get("answered_at"))] + [
+        _time(((doc or {}).get("data") or {}).get("asked_at"))
+        for doc in (db.get("work") or {}).values()]
+    return any(t is not None and t >= cut for t in stamps)
+
+
 def brief_wakes(rec: dict, db: dict, now: dt.datetime, queued: bool = False) -> bool:
-    """Should the brief's run start a fresh helper for the helper `rec` names? Its day is up
-    (a later day than it took the page, past RENEW_MIN_S), or work waits that it has not
-    answered (`queued`: this run queued some), and in either case it is not at work on
-    something small now, nor already handing the page on. A chat on a computer is never
-    renewed: it answers for as long as it runs."""
+    """Should the brief's run start a fresh helper for the helper `rec` names? Only where work
+    waits that it has not answered (`queued`: this run queued some), it is not at work on
+    something small now, and it is not already handing the page on; or a new day where the
+    page had taps in the last two days (tapped_lately). Never for a new day alone on a quiet
+    stretch: it started a fresh helper, its whole start, and left the old one for the tidy-up;
+    the person's next tap renews it (decided, second audit B5; review of fix/helpers, item 10).
+    A chat on a computer is never renewed: it answers for as long as it runs."""
     import page_db
     helper = str(rec.get("chat") or "")
     if not helper or str(rec.get("kind") or "cloud") != "cloud":
@@ -803,8 +886,11 @@ def brief_wakes(rec: dict, db: dict, now: dt.datetime, queued: bool = False) -> 
                 and not page_db.WORK_KINDS.get(str(d.get("kind") or ""), {}).get("heavy"):
             return False                        # awake, and takes what waits after it
     since = _time(rec.get("since"))
+    # A new day renews it where the page had taps in the last two days, so an active person's
+    # first tap does not wait on a whole start; on a quiet stretch the next tap does it
+    # (decided, review of fix/helpers, item 10; second audit B5).
     if since is not None and (now - since).total_seconds() >= RENEW_MIN_S \
-            and new_day(rec, now):
+            and new_day(rec, now) and tapped_lately(rec, db, now):
         return True
     answered = _time(rec.get("answered_at")) or since
     for doc in work.values():
@@ -834,7 +920,8 @@ def view_renewal(db: dict, chat: str, now: dt.datetime, queued: bool = False) ->
     if rec.get("chat") != chat:
         # The brief's own run, in a chat of its own, starts the fresh helper itself: where the
         # helper could start none (nested too deep: `app.py nested` said so on the page's
-        # record), where its day is up, or where work waits that no chat is awake to take.
+        # record), or where work waits that no chat is awake to take; never for a new day
+        # alone (second audit B5).
         # Since the brief left the helper's chat (4.14), a quiet morning woke no helper, so none
         # renewed (one was still answering at 11:00) and work the brief queued at 08:12 sat
         # unstarted for three hours (the maintainer, 2026-11-10).
@@ -931,22 +1018,6 @@ def republish_done(chat: str, now: dt.datetime) -> None:
     added = max(0, context_tokens() - int(was.get("tokens") or 0))
     got["set_aside"] = {"chat": chat, "tokens": int((off or {}).get("tokens") or 0) + added}
     _save_seen(got)
-
-
-def grown_tokens(chat: str, now: dt.datetime) -> int:
-    """How much this chat's history has grown, less what its republishes read (and, for one
-    still going, what it has read so far, for an hour at most)."""
-    got = seen()
-    off = got.get("set_aside") or {}
-    aside = int(off.get("tokens") or 0) if off.get("chat") == chat else 0
-    going = got.get("republish") or {}
-    t = _time(going.get("at"))
-    if going.get("chat") == chat and t is not None and \
-            (now - t).total_seconds() < REPUBLISH_FOR_S:
-        total = int(going.get("tokens") or 0)       # counted up to where the republish began
-    else:
-        total = context_tokens()
-    return max(0, total - aside)
 
 
 def _zone() -> str:
@@ -1060,7 +1131,12 @@ def renewal(rec: dict, db: dict, chat: str, now: dt.datetime, scheduled: bool = 
     # (2026-11-03); its republishes declare no capabilities once the page has them (X-8). The
     # prompt is the person's plain words, and the app's hook says what they mean (X-84); the
     # hand-over follows them, a few lines.
-    note = handover(db)
+    return helper_call(db, owner, name)
+
+
+def helper_call(db: dict, owner: str, name: str) -> dict:
+    """The create_session call that starts a fresh helper from the person's copy."""
+    note = handover(db or {})
     return {"title": HELPER_CHAT_TITLE, "prompt": WAKE_PROMPT + (f"\n\n{note}" if note else ""),
             "source_url": f"https://github.com/{owner}/{name}",
             "extra_allowed_tools": ["ArtifactData", "ArtifactComments"],
@@ -1154,9 +1230,9 @@ def close_republish(db: dict, out_dir: str, now: dt.datetime | None = None) -> d
         if d["data"].get("kind") != "republish" or \
                 str(d["data"].get("status") or "") not in ("queued", "claimed", "running"):
             continue
-        w.add("update", "work", wid, {"status": "done", "finished_at": _stamp(now),
-                                       "result": {"summary": "Your page is up to date.",
-                                                  "links": []}},
+        w.add("update", "work", wid, dict(page_db.ended(d["data"], "done", _stamp(now)),
+                                           result={"summary": "Your page is up to date.",
+                                                   "links": []}),
               if_version=d["version"])
         closed.append(wid)
     return {"closed": closed, "batches": w.save("published") if closed else []}
@@ -1313,7 +1389,8 @@ def _numbered(line: str) -> tuple[str, str] | None:
 
 
 def shape(code: int, lines: list[str], chat: str = "", listen: bool = False,
-          helper: bool = False, on: str = "", work: str = "") -> list[str]:
+          helper: bool = False, on: str = "", work: str = "",
+          link_said: bool = False) -> list[str]:
     """start's lines, with what this chat does about the page: the listener publishes and
     watches, a chat that may become it asks the page first, any other chat does neither.
     `work` is a chat the listener started for one big job (`app.py next`): it does that job
@@ -1398,7 +1475,9 @@ def shape(code: int, lines: list[str], chat: str = "", listen: bool = False,
         keep = [(step, app_setup.ASK_ON_PAGE if step and t == app_setup.ASK_IN_CHAT else
                  t.replace(app_setup.SHOWN_IN_REPLY, app_setup.SHOWN_ON_PAGE) if step else t)
                 for step, t in keep]
-        keep = [(True, helper_first(url))] + keep + [(True, helper_last(chat, url))]
+        # `link_said`: the start printed it already, before the update check ran.
+        keep = ([] if link_said else [(True, helper_first(url))]) + keep + \
+            [(True, helper_last(chat, url))]
     out, n = [], 0
     for step, t in keep:
         if step:
@@ -1604,11 +1683,14 @@ def parts_plan(built: dict, url: str = "", listing: str | None = None,
     got = app_page.plan(built, rec.get("code") if same else None,
                         str(rec.get("caps") or "") if same else "", url, listed=listed, whole=whole)
     new_kb = kb(sum(sizes[p] for p in got["new"])) if got["new"] else 0
+    # Each code file is named from the page's own folder (`root`), so a publish carries its
+    # short path once, not the scratchpad's twice; the page is read once (E-1).
     out = [f"app: the page is built in parts: {built['page']} ({kb(sizes['page.html'])} KB) and "
            f"{len(built['files'])} small code files beside it, {len(got['new'])} of them to "
-           f"put up ({new_kb} KB). Read each file a publish names whole, just before "
-           "that publish; every one is small. A code file the page already holds is left out, "
-           "and the page keeps it."]
+           f"put up ({new_kb} KB). Read page.html once, before the first publish: every publish "
+           "names it, unchanged. Read each code file a publish names whole, just before that "
+           "publish; every one is small. A code file the page already holds is left out, and "
+           "the page keeps it."]
     if got["missing"]:
         out.append(f"app: {len(got['missing'])} code files the page should hold are not on it "
                    "as they were built; they go up again below.")
@@ -1618,20 +1700,33 @@ def parts_plan(built: dict, url: str = "", listing: str | None = None,
     later = f"url {url}" if url else "url <the url the first publish gave>"
     n = 1
     for i, batch in enumerate(got["batches"]):
-        files: dict = {p: built["files"][p] for p in batch}
-        if i == 0:
-            files.update({p: None for p in got["gone"]})
-        tail = f", files {json.dumps(files, ensure_ascii=False)}" if files else ""
+        # Each file sits at its published path under the folder, so a plain list names it
+        # once; a publish that also takes files off needs the map, where null removes one.
+        gone = got["gone"] if i == 0 else []
+        files = ({p: p for p in batch} | {p: None for p in gone} if gone
+                 else [{"path": p} for p in batch])
+        tail = (f", root {folder}, files {json.dumps(files, ensure_ascii=False)}"
+                if files else "")
         out.append(f"{n}. Artifact, action publish, file_path {built['page']}, "
                    f"{first_at + caps if i == 0 else later}{tail}")
         n += 1
     if len(got["batches"]) > 1:
         out.append(f"Where this chat's window holds {SMALL_WINDOW:,} tokens or fewer, give each "
                    "publish after the first to an agent of its own (Agent tool), one after "
-                   "another, each told: \"Read each file this publish names whole, then Artifact, "
+                   "another, each told: \"Read page.html and each file this publish names "
+                   "whole (from its root), then Artifact, "
                    f"action read, {later}, then make exactly this publish: <the step>\". So no "
                    "one chat reads every file.")
     return out
+
+
+# The read before a page update, through what this copy keeps of the page (tools/page_reads.py):
+# whole only for the first read of the day, then only what changed. A start that took an update
+# read the page's every screen and address whole twice, about 4 MB, once after the update and
+# again after the improvements step (a helper chat in the maintainer's copy, 2026-11-10, H-6).
+READ_STEP = ("python3 tools/app.py reads --in \"<your scratchpad>\" --for-view, which makes a "
+             "fresh folder there and names it ({dump} below), and make the reads it prints, all "
+             "in one message (url {url}, out_dir that folder).")
 
 
 def after_update(landed: bool = False, chat: str = "") -> list[str]:
@@ -1652,10 +1747,9 @@ def after_update(landed: bool = False, chat: str = "") -> list[str]:
     who = role(chat, False, url)
     if not behind:
         return [f"Claude: an update just landed. Bring the person's page up to date now. {NO_ASK}",
-                "1. ArtifactData query, once for each of the collections screen, meta and addr "
-                f"(url {url}, out_dir <your scratchpad>/page-data, limit 1000).",
-                "2. python3 tools/app.py view <your scratchpad>/page-writes --dump <your "
-                "scratchpad>/page-data" + (f" --chat {chat}" if chat else ""),
+                "1. " + READ_STEP.format(url=url, dump="<the folder it named>"),
+                "2. python3 tools/app.py view <your scratchpad>/page-writes --dump <the folder "
+                "it named>" + (f" --chat {chat}" if chat else ""),
                 f"3. Send each batch it prints, in order (ArtifactData batch, url {url}). If one "
                 "is refused, do steps 1 to 3 once more; only if it is refused again, tell the "
                 f"person this one line and stop: \"{say(SAY_NOT_UPDATED, url)}\"",
@@ -1664,6 +1758,17 @@ def after_update(landed: bool = False, chat: str = "") -> list[str]:
     head = f"Claude: the update changed the person's page itself. {NO_ASK}"
     if who == "listener":
         return [head + " Republish it:"] + _publish_now(url, 1)
+    if _job_chat():
+        # A chat started for one job never publishes the page, as its own prompt says: told
+        # to republish here, it reloaded every open window of the page from a chat nobody
+        # watches, or spoke to nobody (the final engine review, item 11). It asks the chat
+        # that answers the page, and goes on with its job.
+        return [head + " This chat does a job for the page and never publishes it; the chat "
+                "that answers the page does:",
+                "1. python3 tools/app.py republish <your scratchpad>/republish, then send the "
+                f"batch it prints (ArtifactData batch, url {url}); refused means the request is "
+                "there already.",
+                "2. Go on with the job. Say nothing about the page or the update."]
     # Any other chat checks first: one heard from lately puts it up; a quiet one never holds
     # it, and this chat publishes it itself.
     return [head + " Republish it:",

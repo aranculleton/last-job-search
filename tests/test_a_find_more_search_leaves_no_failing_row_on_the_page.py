@@ -251,3 +251,57 @@ def test_a_remote_role_in_the_neighbouring_country_passes_only_if_it_hires_from_
     # A saved shortlist keeps no posting: its row is left as the gate left it, ranked down.
     assert run_round.place_rule({k: v for k, v in row.items() if k != "desc"}) == ""
     assert run_round.place_rule(_row(61, "Marlpit Software")) == ""
+
+
+def test_a_rule_made_ruling_holds_only_while_its_rule_does(tmp_path, monkeypatch, state):
+    """A search writes each row it leaves out for a rule as a ruling (record_left_out, basis
+    rules). The page read every such ruling as set aside, for good, with no reason: an
+    employer judged to clear none of the bar and looked at again, an employer turned down and
+    then taken off that list, or an employer with no team for you past its review day, all
+    left their jobs under Set aside on every later read. Each is now its rule's while the rule
+    holds, said in its words, and listed again once the rule has ended (run_round.page_rules
+    asks it)."""
+    import throttle
+    day = dt.date.fromisoformat(TODAY)
+    dnt = {"companies": {"Brookvale Grocers": {"reason": "only a sales office here",
+                                               "recorded": "2026-11-03",
+                                               "review_after": "2026-11-20"}}}
+    monkeypatch.setattr(throttle, "_read_do_not_target", lambda path=None: dnt)
+    monkeypatch.setenv("LJS_RESCREEN", "off")
+    seen = state / "job_scraper" / "seen_jobs.json"
+    judged, declined, sales = EARLIER_FAIL[2], EARLIER_FAIL[3], EARLIER_PASS[1]
+    why = {r[2]["url"]: r[3] for r in app_model.left_out(day, NOW)}
+    gone = run_round.record_left_out(
+        [dict(judged, skip_reason=why[judged["url"]]),
+         dict(declined, skip_reason=why[declined["url"]]),
+         dict(sales, skip_reason=throttle.load_do_not_target(today=TODAY)["brookvale grocers"])],
+        str(seen), TODAY)
+    assert len(gone) == 3
+    entries = exclude.load_seen(str(seen))["seen"]
+    assert {e["basis"] for e in entries.values() if e.get("status") == "excluded"} == {"rules"}
+
+    def rows():
+        jobs = app_model._jobs(app_model.Ctx(day, NOW), {})
+        return {r["company"]: r for r in jobs["rows"] if r["company"] in (
+            judged["company"], declined["company"], sales["company"])}
+
+    held = rows()
+    assert {c: r["status"] for c, r in held.items()} == dict.fromkeys(held, "dismissed")
+    assert len(held) == 3
+    assert held["Ivybridge Studio"]["notes"][-1].startswith(
+        "Left out: It does not clear your employer bar: clears none of pay, prestige or signal")
+    assert held["Juniper Gaming Group"]["notes"][-1] == (
+        "Left out: It does not clear your employer bar: you said no more roles from them.")
+    assert held["Brookvale Grocers"]["notes"][-1].startswith(
+        "Left out: No team for you there: only a sales office here")
+    # Never put on a later search's left-out list again: it is on this one's.
+    assert not {r[2]["url"] for r in app_model.left_out(day, NOW)} & {
+        judged["url"], declined["url"], sales["url"]}
+    # Each rule ends: looked at again, taken off the employers turned down, past its review day.
+    bar.unjudge("Ivybridge Studio")
+    monkeypatch.setattr(run_round, "declined_now", lambda: {})
+    dnt["companies"]["Brookvale Grocers"]["review_after"] = "2026-11-04"
+    back = rows()
+    assert {c: r["status"] for c, r in back.items()} == dict.fromkeys(back, "new")
+    assert len(back) == 3
+    assert not any(n.startswith("Left out") for r in back.values() for n in r["notes"])

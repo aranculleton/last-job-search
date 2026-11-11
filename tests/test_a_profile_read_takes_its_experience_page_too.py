@@ -95,7 +95,7 @@ def book(tmp_path, monkeypatch):
                           "company": "Fernhill Freight", "status": "not_contacted",
                           "linkedin_url": PROFILE,
                           "location": "Leeds, England, United Kingdom"}])
-    reading.shortlist(["fernhill_oyelaran"], contacts=state.load_contacts(), sends_left=10)
+    reading.shortlist(["fernhill_oyelaran"], contacts=state.load_contacts())
     return tmp_path
 
 

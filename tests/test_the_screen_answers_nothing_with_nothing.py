@@ -20,7 +20,6 @@ import text_screen as T  # noqa: E402
 
 CALLS = {
     "other_language_cut": (lambda: T.other_language_cut(None), None),
-    "other_language_named": (lambda: T.other_language_named(None), None),
     "resides_abroad": (lambda: T.resides_abroad(None), False),
     "residence_cut": (lambda: T.residence_cut(None), None),
     "designation_cut": (lambda: T.designation_cut(None, None), None),

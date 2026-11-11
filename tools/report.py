@@ -77,7 +77,8 @@ def _version() -> str:
 
 
 def _where() -> str:
-    return "a cloud chat" if os.environ.get("CLAUDE_CODE_REMOTE", "").lower() == "true" \
+    import place
+    return "a cloud chat" if place.in_cloud() \
         else "a chat on a computer"
 
 

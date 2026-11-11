@@ -52,7 +52,10 @@ def test_the_badge_and_the_summary_count_cards_and_a_checklist_says_its_own_done
     # One count, of cards: a card a thing, the checklist of drafted messages one of them. A
     # wave of first notes in the same band asks nothing today and counts nothing.
     assert _today(r["sum"]) == r["badge"] and r["cards"] - 1 <= r["badge"] <= r["cards"], ("one count, of cards", r)
-    assert r["groups"] and all(g and re.fullmatch(r"\d+ of \d+ done", g) for g in r["groups"]), r
+    # Nothing done yet, a checklist's count is its title's, never "0 of 7 done" (the UX review
+    # of 2026-11-10, U-6), and no pill says it again ("7 to send" over "Messages to send (7)",
+    # the screen review of 2026-11-11, row 28); once one is done, how many of how many.
+    assert r["groups"] and all(g is None or re.fullmatch(r"[1-9]\d* of \d+ done", g) for g in r["groups"]), r
 
 
 def test_a_thing_done_is_counted_as_done_today_and_listed_with_its_way_back(run, tmp_path):

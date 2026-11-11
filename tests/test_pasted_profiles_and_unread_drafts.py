@@ -220,3 +220,21 @@ def test_a_note_to_someone_already_talked_to_never_waits_on_a_read(book, monkeyp
     # Someone nobody has written to yet still gets the line on a first note.
     assert reading.draft_text("kestrel_haldane", "Hi Corwin").startswith("WAITS ON A READ")
     assert followup_drafts.keep([("kestrel_haldane", "Hi Corwin, following up.")]) == []
+
+
+def test_a_paste_keeps_each_profiles_own_page_and_links_each_to_its_contact(book, monkeypatch):
+    """The review of NW-11 (2026-11-11): a paste of several profiles is read again from each
+    one's own kept page, never another's, and each read fills its contact's blank employer
+    as a single read does."""
+    linked = []
+    monkeypatch.setattr(reading, "link_contact", lambda cid, got: linked.append(cid) or "")
+    paste = book / "paste.txt"
+    paste.write_text(TAMSIN + "\n---\n" + SHIRIN, encoding="utf-8")
+    assert reading.main(["paste", str(paste)]) == 0
+    tamsin = reading.kept_page("fernhill_oyelaran")
+    shirin = reading.kept_page("kestrel_example")
+    assert "Fernhill Freight" in tamsin and "Kestrel" not in tamsin
+    assert "Kestrel Mutual" in shirin and "Fernhill" not in shirin
+    # LinkedIn's column of other people is no part of their page.
+    assert "Corwin Haldane" not in tamsin
+    assert linked == ["fernhill_oyelaran", "kestrel_example"]

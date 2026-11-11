@@ -129,7 +129,7 @@ def fetch(url: str, timeout: int = 20) -> str:
     for _hop in range(MAX_REDIRECTS + 1):
         pace(url)
         try:
-            out = subprocess.run(["curl", "-sS", "--max-time", str(timeout), "-A", UA,
+            out = subprocess.run(["curl", "-sS", "--globoff", "--max-time", str(timeout), "-A", UA,
                                   "-w", _TRAILER, "--", url],
                                  capture_output=True, text=True, timeout=timeout + 10,
                                  encoding="utf-8", errors="replace")

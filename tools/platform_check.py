@@ -112,12 +112,23 @@ def _shown(detail: str) -> str:
     return detail[:3000] + "\n     ...\n" + detail[-1500:]
 
 
+def _say(text: str) -> None:
+    """Print a line the console can show: a test's output holding a character Windows' console
+    has no letter for (U+FFFD) crashed the report of a failing suite, and the failures it was
+    about were never named (Windows, 2026-11-11)."""
+    try:
+        print(text, flush=True)
+    except UnicodeEncodeError:
+        enc = getattr(sys.stdout, "encoding", None) or "ascii"
+        print(text.encode(enc, "replace").decode(enc, "replace"), flush=True)
+
+
 def check(step: str, ok: bool, detail: str = "", took: float | None = None) -> bool:
     RESULTS.append((step, ok, detail))
     t = f" ({took:.1f} s)" if took is not None else ""
-    print(f"{'PASS' if ok else 'FAIL'} {step}{t}" + (f"\n     {_shown(detail)}" if detail and
-                                                     not ok else f": {detail[:200]}" if detail
-                                                     else ""), flush=True)
+    _say(f"{'PASS' if ok else 'FAIL'} {step}{t}" + (f"\n     {_shown(detail)}" if detail and
+                                                    not ok else f": {detail[:200]}" if detail
+                                                    else ""))
     return ok
 
 

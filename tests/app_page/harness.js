@@ -72,6 +72,8 @@ class Store {
   }
   change(p, data) {
     const version = ++this.v;
+    this.writes = this.writes || {};
+    this.writes[p] = (this.writes[p] || 0) + 1;
     if (data === null) this.docs.delete(p); else this.docs.set(p, {data, version});
     const ch = [{path: p, data, version}];
     for (const page of this.pages) page.evaluate((c) => window.__ljsPush && window.__ljsPush(c), ch).catch(() => {});
@@ -459,6 +461,11 @@ function budgetProbe() {
       const el = t.parentElement;
       if (!el || !t.textContent.trim() || el.closest("script, style, noscript") || !shown(el)) continue;
       if (skipText && el.closest(".sendtext")) continue;
+      // Nor the gauge's words ("9 min of Claude"): the gauge is its own part of a card's budget
+      // (DESIGN.md: one filled pill, two soft pills, the pencil, the trash and the gauge), what
+      // a tap costs rather than what the card says. Its noun, "of Claude", came in 2026-11-10
+      // (the review: a bare "38 min" read as a wait) and is not two more words of card.
+      if (skipText && el.closest(".cost")) continue;
       if (viewOnly && !inView(el)) continue;
       n += t.textContent.split(/\s+/).filter((x) => /[\p{L}\p{N}]/u.test(x)).length;
     }
@@ -774,7 +781,7 @@ async function sheetCheck(page, kind, openIt) {
 S.layout = async (a) => {
   // With the sheets measured, one search is running, so the Work pill is there to open.
   const seed = Object.assign(a.sheets ? {"work/search~1": runningDoc()} : {}, a.seed || {});
-  const o = await open({html: a.html, viewport: a.viewport, scheme: a.scheme, fake: a.fake, seed, clock: a.clock || "2026-10-26T09:00:00Z"});
+  const o = await open({html: a.html, viewport: a.viewport, scheme: a.scheme, fake: a.fake, seed, clock: a.clock || "2026-10-26T09:00:00Z", timezoneId: a.timezoneId});
   const {page} = o;
   const out = {sections: {}, frames: {}, sheets: {}, big: {}};
   for (const id of SECTIONS) {
@@ -798,7 +805,10 @@ S.layout = async (a) => {
     out.sheets.work = await sheetCheck(page, "work-sheet", async () => { const b = page.locator("#pill").first(); if (!(await b.count()) || !(await b.isVisible())) return null; const k = await b.getAttribute("data-k"); await b.click(); return k; });
   }
   if (a.big) {
-    await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
+    // Double text in the widest common sans font, where a computer has it: GitHub's runner
+    // draws the page in DejaVu Sans, a developer's often in a narrower one, and a pill 6px past
+    // a phone's edge was seen only on GitHub (2026-11-11).
+    await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; const st = document.createElement("style"); st.textContent = "* { font-family: \"DejaVu Sans\", system-ui, sans-serif !important; }"; document.head.appendChild(st); });
     for (const id of SECTIONS) {
       await goto(page, id);
       await page.evaluate(() => window.scrollTo(0, 0));
@@ -813,7 +823,12 @@ S.layout = async (a) => {
         const W = document.documentElement.clientWidth;
         const wide = [...document.querySelectorAll("#main *, #top *")].filter((e) => { const r = e.__drawnRect(); return r.width && r.right > W + 1; })
           .filter((e) => ![...e.children].some((c) => c.__drawnRect().right > W + 1)).slice(0, 5).map((e) => e.tagName.toLowerCase() + "." + [...e.classList].join(".") + " " + (e.textContent || "").trim().slice(0, 30));
-        return {overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth, clipped, rows, wide};
+        // Anywhere else on the page too, when nothing in #main or #top is the one: German's run
+        // found the page 205px wide on Coming up with nothing named (2026-11-11).
+        const elsewhere = wide.length ? [] : [...document.querySelectorAll("body *")].filter((e) => { const r = e.getBoundingClientRect(); return r.width && (r.right > W + 1 || (r.left + e.scrollWidth > W + 1 && getComputedStyle(e).overflowX === "visible")); })
+          .filter((e) => ![...e.children].some((c) => { const r = c.getBoundingClientRect(); return r.right > W + 1 || (r.left + c.scrollWidth > W + 1 && getComputedStyle(c).overflowX === "visible"); })).slice(0, 5)
+          .map((e) => e.tagName.toLowerCase() + "." + [...e.classList].join(".") + " " + Math.round(e.getBoundingClientRect().left + e.scrollWidth) + " " + (e.textContent || "").trim().slice(0, 40));
+        return {overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth, clipped, rows, wide, elsewhere};
       });
     }
   }
@@ -897,6 +912,8 @@ S.engine = async (a) => {
     entry.hash = await evalThrough(page, "location.hash");
     entry.work = store.list("work/").map((k) => Object.assign({id: k.split("/")[1]}, store.get(k)));
     if (st.store) entry.store = store.list(st.store).map((k) => Object.assign({path: k}, store.get(k)));
+    // How many times each record was written since the page opened (a double write, 2026-11-11).
+    if (st.writes) entry.writes = Object.assign({}, store.writes || {});
     if (st.rings) entry.rings = (await calls(page)).filter((c) => c.cap === "comments" && c.text).map((c) => ({text: c.text, thread: c.threadId, anchor: c.anchor}));
     out.after.push(entry);
     if (a.shots && st.shot) out.shots.push(await shot(page, a.shots + "-" + st.shot, !!st.full));
@@ -1088,10 +1105,11 @@ S.progress = async (a) => {
   r.over = await bar(page, "search~1");
   r.overSum = await T(page, "dialog.work-sheet .sum-small");
   r.overBanner = await T(page, "dialog .banner");
-  // No check-in for half an hour (its lease ran out): it may have stopped, and only now
-  // is there Try again.
+  // No check-in for half an hour past its lease (the engine's grace, page_db._chat_quiet):
+  // it may have stopped, and only now is there Try again. A lease out a minute ago waits
+  // for its chat since the audit of 2026-11-10 (PE-12).
   const pageNow = await page.evaluate(() => Date.now());
-  store.chat("work/search~1", {lease_until: new Date(pageNow - 60000).toISOString()}, store.version("work/search~1"), "update");
+  store.chat("work/search~1", {lease_until: new Date(pageNow - 31 * 60000).toISOString()}, store.version("work/search~1"), "update");
   await seeIn(page, workSel("search~1"), "May have stopped");
   r.stalled = await bar(page, "search~1");
   await page.locator(workSel("search~1")).getByRole("button", {name: "Try again: Finding jobs"}).click();
@@ -2149,10 +2167,16 @@ S.busy = async (a) => {
   await goto(page, "settings");
   r.settings = await page.evaluate(() => document.getElementById("main").innerText);
   await goto(page, "progress");
-  r.progress = {recent: await page.evaluate(() => document.querySelector("#main .sum").textContent)};
+  // How far applications got is said in its own card since the UX review of 2026-11-10 (U-7):
+  // the screen's line leads with this week's own work.
+  // The period's counts are the funnel's own, said once there (the screen review, 2026-11-11):
+  // the switch changes what it counts, and the line under it says what is usual.
+  const funnel = () => page.evaluate(() => { const f = document.querySelector("#h-funnel"); return f ? f.closest(".chart").textContent : ""; });
+  r.progress = {recent: await funnel(), usual: await page.evaluate(() => document.querySelector("#main .fun-sum").textContent),
+    head: await page.evaluate(() => document.querySelector("#main .sum").textContent)};
   await page.click('[data-k="range:all"]');
   await turn(page, 4);
-  r.progress.all = await page.evaluate(() => document.querySelector("#main .sum").textContent);
+  r.progress.all = await funnel();
   await goto(page, "jobs");
   await clickText(page, "button", "Not for me: Harbourline Bank, Pricing Analyst");
   // Its reasons are buttons, each done in the tap (2026-11-03).
@@ -2434,7 +2458,8 @@ S.iv_cards = async (a) => {
   await interviewCards(o.page);
   const r = {errors: o.errors};
   r.cards = await o.page.$$eval("#main article.card.interview", (cs) => cs.map((c) => ({
-    title: (c.querySelector("h3") || {}).textContent, pill: (c.querySelector(".top-end .state-word") || {}).textContent || "",
+    // Its pill at the top, or leading its line of when on a phone (the screen review, 2026-11-11).
+    title: (c.querySelector("h3") || {}).textContent, pill: (c.querySelector(".top-end .state-word, .iv-when-line > .state-word") || {}).textContent || "",
     when: (c.querySelector(".when") || {}).textContent || "", meta: (c.querySelector(".meta") || {}).textContent || "",
     bin: !!c.querySelector('[data-k^="ivbin:"]'), buttons: [...c.querySelectorAll(".card-actions > button")].map((b) => b.textContent)})));
   await throughNav(o.page, () => o.page.evaluate(() => { location.hash = "brief"; }));

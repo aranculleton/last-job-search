@@ -380,10 +380,13 @@ def _add(root: str, args: tuple, batch: list[str]) -> tuple[list[str], list[str]
 # What follows: one command lands it, in the background, so the chat that answers the page
 # is never held by the check (it was, for minutes, 2026-10-29), and a landing is one step,
 # not fourteen (2026-11-03).
-LAND = ("save_state: landing is one command, python3 tools/land.py --message \"<what changed>\", "
-        "run in the background (Bash run_in_background) once the answer is out: it commits, "
-        "merges master, runs the check, pushes, and prints the calls left. While it runs the "
-        "page says \"Saving your work\" (app.py busy; the app skill, step 5).")
+# Detached, as CLAUDE.md says: run in the background, its end woke the chat for a turn of its
+# whole history (the engine review, 2026-11-11, after audit E-7).
+LAND = ("save_state: landing is one command, python3 tools/land.py --detach --message \"<what "
+        "changed>\", once the answer is out: it returns at once and lands in a process of its "
+        "own (commit, master merged in, the check, push, pull request and merge), and its end "
+        "wakes no chat. \"Saving your work\" on the page is cleared by the page update that "
+        "starts it (app.py busy; the app skill, step 5).")
 
 
 if __name__ == "__main__":

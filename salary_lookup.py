@@ -21,7 +21,6 @@ import json
 import sys
 import re
 import argparse
-import unicodedata
 from pathlib import Path
 
 DATA_FILE = Path(__file__).parent / "salary_data.json"
@@ -149,7 +148,9 @@ def read_raw_data():
         print("step will be skipped during /apply.", file=sys.stderr)
         sys.exit(1)
     try:
-        with open(DATA_FILE, "r", encoding="utf-8") as f:
+        # A byte-order mark first (Notepad, a spreadsheet's UTF-8 export) is read as nothing
+        # rather than refusing the file (from ai-job-search, #602).
+        with open(DATA_FILE, "r", encoding="utf-8-sig") as f:
             data = json.load(f)
     except json.JSONDecodeError as exc:
         fail_data_error(f"invalid JSON at line {exc.lineno}, column {exc.colno}: {exc.msg}")
@@ -341,7 +342,7 @@ def format_entry(entry, metadata):
                     diff_str = ""
                 lines.append(f"  {display_label:<22} {count_str:>6} {index_str:>8}  {diff_str:>10}")
 
-        lines.append(f"\n  * N/A = Too few employees to publish (privacy)")
+        lines.append("\n  * N/A = Too few employees to publish (privacy)")
         if metadata.get("baseline_description"):
             lines.append(f"  {metadata['baseline_description']}")
         else:

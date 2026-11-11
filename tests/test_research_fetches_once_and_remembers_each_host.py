@@ -119,6 +119,19 @@ def test_robots_it_cannot_read_leaves_permission_unconfirmed(tmp_path):
     assert "unconfirmed" in rep["urls"][0]["detail"]
 
 
+def test_a_refusal_after_a_redirect_is_noted_against_the_host_that_refused(tmp_path):
+    """The site redirected to could not have its robots.txt read, and the note went on the
+    site asked for, which was then left alone for a fortnight for another's answer."""
+    web = Web({"https://www.oakmere.example/robots.txt": (200, {}, ALLOW),
+               "https://www.oakmere.example/about": (301, {"location": "https://jobs.oakmere.example/about"}, ""),
+               "https://jobs.oakmere.example/robots.txt": (503, {}, "")})
+    rep = _fetch(web, tmp_path, "https://www.oakmere.example/about")
+    assert rep["urls"][0]["state"] == "refused"
+    notes = C.host_notes(str(tmp_path))
+    assert (notes.get("jobs.oakmere.example") or {}).get("status") == "refused"
+    assert (notes.get("www.oakmere.example") or {}).get("status") != "refused"
+
+
 def test_the_crawl_delay_is_kept_and_browser_headers_carry_no_credentials(tmp_path):
     web = Web({
         "https://www.oakmere.example/robots.txt": (200, {}, "User-agent: *\nCrawl-delay: 7\n"),
