@@ -20,6 +20,10 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Settings and Your rules say what your last search left out.** Roles, Where and Pay said "38,547 left out lately": a month of searches added up, each cutting the same jobs again. Each rule now gives the number Jobs gives for your newest search, and an employer you turned down counts each job once over the last 30 days.
+
 ## [4.15.0] - 2026-11-11
 
 ### Changed

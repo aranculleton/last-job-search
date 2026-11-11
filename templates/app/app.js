@@ -6949,7 +6949,7 @@
       btn("Not now", () => act([{item: "your-rules", action: "rules.seen", rev: txt(r.rev) || null}], "Not shown again this month"), {kind: "link", key: "rules-line:seen"}));
   }
   // Your rules, in Settings: each rule one sentence, the day it was set and the person's own
-  // words, what it left out lately, its pencil and its bin, and a quiet "Still right?" where it
+  // words, what it left out of the newest search, its pencil and its bin, and a quiet "Still right?" where it
   // is old and busy (rules_view.still_right). Nothing here asks to be done.
   // Employers turned down are one row and learned rules one link (the maintainer, 4.12: "every
   // No more from <employer> is its own full-width row and the list is a wall"; 210 learned
@@ -7021,12 +7021,13 @@
     scheduleRender();
   }
   function learnedLive() { return arr(M().learned).filter((x) => !x.retired && !effective(txt(x.id), ["learned.retire"])); }
-  // "Employers you've turned down (N)", with what they left out lately; it opens the names, each
+  // "Employers you've turned down (N)", with what they left out in the last 30 days (each job
+  // once); it opens the names, each
   // with its own small trash, which takes that employer off the list.
   function declinedRow(list) {
     const known = list.some((x) => x.left_out !== null && x.left_out !== undefined);
     const left = list.reduce((t, x) => t + (Number(x.left_out) || 0), 0);
-    const value = known ? (left ? left.toLocaleString(LOC) + " left out lately" : "None left out lately") : null;
+    const value = known ? (left ? left.toLocaleString(LOC) + " left out in the last 30 days" : "None left out in the last 30 days") : null;
     const rows = list.slice().sort((a, b) => txt(a.name).localeCompare(txt(b.name))).map((x) => {
       const id = txt(x.id);
       const who = txt(x.name).replace(/^No more from /, "");
@@ -7072,9 +7073,12 @@
       const id = txt(x.id);
       const n = Number(x.left_out);
       const kept = effective(id, ["rule.keep"]);
-      const value = x.still_right && !kept ? "Still right?" : x.left_out === null || x.left_out === undefined ? null : n ? n.toLocaleString(LOC) + " left out lately" : "None left out lately";
+      // What the rule left out of the newest search, the number Jobs says for it: "lately" summed a
+      // month of searches that each cut the same postings again (38,547 for one search's few
+      // thousand, 2026-11-11).
+      const value = x.still_right && !kept ? "Still right?" : x.left_out === null || x.left_out === undefined ? null : n ? n.toLocaleString(LOC) + " left out by your last search" : "None left out by your last search";
       const facts = [x.set_on ? "Set " + fmtDay(txt(x.set_on)) : null, x.words ? "In your words: “" + txt(x.words) + "”" : null,
-        x.left_out === null || x.left_out === undefined ? null : (n ? "Left out " + plural(n, "job", "jobs") : "Left out none") + " in the last 30 days"].filter(Boolean);
+        x.left_out === null || x.left_out === undefined ? null : (n ? "Left out " + plural(n, "job", "jobs") : "Left out none") + " in your last search"].filter(Boolean);
       const acts = [x.edit ? pencilBtn("Change", () => askChangeRule(obj(x.edit)), "rule-edit:" + id, txt(x.name)) : null,
         x.still_right && !kept ? btn("Keep it", () => act([{item: id, action: "rule.keep", rev: txt(x.rev) || null}], "Kept: " + txt(x.name)), {kind: "quiet", small: true, key: "rule-keep:" + id, aria: "Keep it as it is: " + txt(x.name)}) : null,
         x.drop ? btn("", () => act([{item: id, action: "rule.drop", rev: txt(x.rev) || null}], "Taken off: " + txt(x.name)), {kind: "quiet icon-only", small: true, icon: "bin", key: "rule-bin:" + id, aria: "Take this rule off: " + txt(x.name)}) : null];
@@ -12294,12 +12298,12 @@
     // Pay opened says what the figure does, never the summary's own line again (the 3
     // November audit).
     const body = (what, value) => (what === "pay" && pay.floor ? "A job whose stated pay tops out under " + cash(pay.floor) + " is flagged as under what you would take." : value || "Not set");
-    // What its rule left out lately is said on the row itself: Your rules said it again a
+    // What its rule left out of the newest search is said on the row itself: Your rules said it again a
     // screen below under the same name ("Where", "Pay"), with another meaning (the screen
     // review, 2026-11-11).
     const ruleOf = {roles: "field", places: "place", pay: "pay"};
     const leftOut = (what) => { const r = arr(obj(M().rules).rows).find((x) => txt(x.kind) === ruleOf[what]); return r ? Number(r.left_out) || 0 : 0; };
-    const valueOf = (what, value, items) => { const n = leftOut(what); const v = few(value, items) || "Not set"; return n ? [v, h("span", {class: "set-left"}, " · " + n.toLocaleString(LOC) + " left out lately")] : v; };
+    const valueOf = (what, value, items) => { const n = leftOut(what); const v = few(value, items) || "Not set"; return n ? [v, h("span", {class: "set-left"}, " · " + n.toLocaleString(LOC) + " left out by your last search")] : v; };
     const plain = (what, name, value, items, full) => infoRow("search-" + what, name, valueOf(what, value, items), foldBody([items && items.length > 1 ? chips(items, full) : h("p", {}, body(what, value)),
       what === "avoid" ? h("p", {class: "small muted"}, "Say what to leave out under Something else. Trashing a job in Jobs leaves out ones like it too.") : null],
       ["roles", "places", "pay"].includes(what) ? change(what, name, value) : avoidChange(), [stateLine(sid, "search:" + what), nextSearchBtn(sid, "search:" + what)]));
