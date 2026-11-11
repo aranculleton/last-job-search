@@ -3709,8 +3709,8 @@ def follow_ups(dump: str, chat: str, now, today: str, out_dir: str,
             else:
                 # Advise flagged code's draft, a reply is owed, or the person answered a
                 # question about it: written here, from the thread, in one go with the rest.
-                if d.get("status") == "check":
-                    keep.append(due)
+                # A flagged draft stays off the card until its rewrite passes: kept there, the
+                # page said ready to send while this listed it to rewrite (2026-11-11).
                 out["to_write"].append({"work": wid, "contact": cid,
                                         **({"answers": answered} if answered else {})})
         followup_drafts.keep_drafted(keep)

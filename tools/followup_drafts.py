@@ -1233,10 +1233,14 @@ def keep(pairs) -> list[str]:
 
 def keep_drafted(got) -> list[str]:
     """`keep` for what code drafted: each contact's draft that came out clean. Everyone whose
-    follow-up waits for a role goes on hold on their record in the same step (`hold_for_role`)."""
+    follow-up waits for a role goes on hold on their record in the same step (`hold_for_role`).
+    One flagged for a rewrite (`check`) is not clean: on the card, the page offered it as
+    ready to send while the same run listed it to rewrite, and the next run read it back from
+    the card, unflagged, and finished it as ready (a person's copy, 2026-11-11). It reaches
+    the card only once rewritten and passed (`keep_checked`)."""
     hold_for_role(got)
     return keep((i.get("contact_id"), i["draft"]["text"]) for i in got
-                if i.get("half") == "contact" and i["draft"]["status"] in ("ready", "check"))
+                if i.get("half") == "contact" and i["draft"]["status"] == "ready")
 
 
 def hold_for_role(got) -> list[str]:
