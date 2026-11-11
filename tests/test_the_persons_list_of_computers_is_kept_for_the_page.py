@@ -13,6 +13,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import os
+import re
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -116,7 +117,9 @@ def test_the_brief_keeps_the_list_it_checks_with(tmp_path, monkeypatch, capsys):
     computer.main(["check", str(dump), "--envs", str(envs), "--now", app_model.stamp(T)])
     said = capsys.readouterr().out
     line = next(ln for ln in said.splitlines() if "list of computers" in ln)
-    path = line.rsplit(" ", 1)[-1]
+    # Printed quoted, so a user folder with a space in it ("Zoë Quillfeather") is read whole:
+    # read by words, it was cut at the space (the Windows check, 2026-11-11).
+    path = re.fullmatch(r'.*: "([^"]+)"', line).group(1)
     entry = json.load(open(path, encoding="utf-8"))[0]
     assert (entry["collection"], entry["doc_id"]) == page_db.stored(*computer.ENVS_DOC)
     # The brief reads the page's meta for it, so the write is pinned to the version read.

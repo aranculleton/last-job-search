@@ -133,10 +133,39 @@ def _repo(path: str, origin: str) -> None:
     subprocess.run(["git", "-C", path, "remote", "add", "origin", origin], check=True)
 
 
+def shell_of(name: str) -> str:
+    """The shell a chat on this computer runs the command in: on Windows, Git Bash, which
+    Claude Code there uses, never the bash.exe on PATH that starts Windows Subsystem for Linux
+    ("has no installed distributions", the Windows check, 2026-11-11); elsewhere, by name."""
+    if name != "bash" or sys.platform != "win32":
+        return shutil.which(name) or ""
+    import pathlib
+    found = []
+    try:
+        ex = subprocess.run(["git", "--exec-path"], capture_output=True, text=True,
+                            encoding="utf-8").stdout.strip()
+    except OSError:
+        ex = ""
+    if ex:                                   # <Git>\mingw64\libexec\git-core
+        for up in list(pathlib.Path(ex).parents)[:4]:
+            found += [up / "bin" / "bash.exe", up / "usr" / "bin" / "bash.exe"]
+    for env in ("ProgramW6432", "ProgramFiles", "ProgramFiles(x86)", "LOCALAPPDATA"):
+        base = os.environ.get(env)
+        if base:
+            found += [pathlib.Path(base) / "Git" / "bin" / "bash.exe",
+                      pathlib.Path(base) / "Programs" / "Git" / "bin" / "bash.exe"]
+    on_path = shutil.which("bash") or ""
+    if on_path and not any(w in on_path.lower() for w in ("system32", "windowsapps")):
+        found.append(pathlib.Path(on_path))
+    return next((str(f) for f in found if f.is_file()), "")
+
+
 @pytest.mark.parametrize("shell", ["bash", "zsh"])
 def test_the_copy_is_found_four_folders_down_and_by_its_own_address(tmp_path, shell):
-    if not shutil.which(shell):
-        pytest.skip(f"no {shell} here")
+    sh = shell_of(shell)
+    if not sh:
+        pytest.skip(f"no {shell} here" + (": no Git Bash on this Windows computer"
+                                          if sys.platform == "win32" and shell == "bash" else ""))
     docs = tmp_path / "Documents"
     _repo(str(docs / "GitHub" / "my-job-search"), "@".join(("git", "github.com:morgan-example/my-job-search.git")))
     _repo(str(docs / "GitHub" / "last-job-search"), "https://github.com/aranculleton/last-job-search")
@@ -144,10 +173,10 @@ def test_the_copy_is_found_four_folders_down_and_by_its_own_address(tmp_path, sh
           "https://github.com/morgan-example/my-job-search-2.git")
     cmd = computer.find_copy_command(COPY)
     assert computer.shell_problems(cmd) == []
-    got = subprocess.run([shell, "-c", cmd], cwd=str(docs), capture_output=True, text=True, encoding="utf-8")
+    got = subprocess.run([sh, "-c", cmd], cwd=str(docs), capture_output=True, text=True, encoding="utf-8")
     assert got.stdout.split() == ["./GitHub/my-job-search"], got.stdout + got.stderr
     # Started in the copy itself, it is found where it is.
-    here = subprocess.run([shell, "-c", cmd], cwd=str(docs / "GitHub" / "my-job-search"),
+    here = subprocess.run([sh, "-c", cmd], cwd=str(docs / "GitHub" / "my-job-search"),
                           capture_output=True, text=True, encoding="utf-8")
     assert here.stdout.split() == ["."], here.stdout + here.stderr
 
@@ -156,10 +185,27 @@ def test_the_heartbeat_and_the_setup_say_where_the_copy_is(tmp_path, monkeypatch
     home = tmp_path / "home"
     copy = home / "Documents" / "GitHub" / "my-job-search"
     os.makedirs(copy)
+    # Home as the computer's own: HOME on a Mac or Linux, USERPROFILE on Windows, which is
+    # what Python reads there (and Claude Code's own home on Windows).
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
     assert computer.copy_place(str(copy)) == "Documents/GitHub/my-job-search"
     # A chat's own working folder inside the copy names the copy, not itself.
     assert computer.copy_place(str(copy / ".claude" / "worktrees" / "job-1")) == \
         "Documents/GitHub/my-job-search"
     data = json.loads(json.dumps(computer.beat_fields(LAPTOP, T, copy="Documents/GitHub/x")))
     assert data["copy"] == "Documents/GitHub/x"
+
+
+def test_home_is_the_computers_own_not_a_shells(tmp_path, monkeypatch):
+    """On Windows, Git Bash sets HOME (/c/Users/...) while Python and Claude Code take home from
+    USERPROFILE: the copy's place is read under the home Python gives, whatever HOME says."""
+    home = tmp_path / "Zoë Quillfeather"
+    copy = home / "Documents" / "GitHub" / "my-job-search"
+    os.makedirs(copy)
+    monkeypatch.setenv("HOME", str(tmp_path / "elsewhere"))
+    monkeypatch.setenv("USERPROFILE", str(home))
+    # Windows' own rule (ntpath.expanduser: USERPROFILE first), played on any computer.
+    monkeypatch.setattr(os.path, "expanduser",
+                        lambda p: os.environ["USERPROFILE"] + p[1:] if p.startswith("~") else p)
+    assert computer.copy_place(str(copy)) == "Documents/GitHub/my-job-search"

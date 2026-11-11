@@ -136,7 +136,9 @@ def test_j1_start_it_now_reaches_the_computer_the_page_never_says_off(ring, star
     assert "handback" not in mine, mine
     assert mine["route"] == ("ring starter" if starter else "make starter"), mine
     if starter:
-        bell = re.search(r"file_path (\S+)", mine["then"]).group(1).strip('"')
+        # The path quoted, whole: read up to a space, a user folder with one in it ("Zoë
+        # Quillfeather") lost the bell (the Windows check, 2026-11-11).
+        bell = re.search(r'file_path "([^"]+)"', mine["then"]).group(1)
         assert os.path.isfile(bell) and "Artifact publish" in mine["then"]
     else:
         assert mine["tool"] == "create_session"
@@ -254,7 +256,10 @@ def test_j6_the_copys_folder_is_chosen_and_the_copy_found(tmp_path, monkeypatch)
     mine = docs / "GitHub" / "my-job-search"
     _repo(str(mine), "https://github.com/morgan-example/my-job-search.git")
     _repo(str(docs / "GitHub" / "last-job-search"), "https://github.com/aranculleton/last-job-search")
+    # Home as the computer's own: HOME on a Mac or Linux, USERPROFILE on Windows (Python reads
+    # no other there, and neither does Claude Code).
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
     # The chat on the Mac said where the copy is, under the Mac's own name.
     beat = computer.beat_fields("Morgan's MacBook Air", T - dt.timedelta(minutes=50),
                                 linkedin="in", chat="session_mac0", task=False,
@@ -271,8 +276,12 @@ def test_j6_the_copys_folder_is_chosen_and_the_copy_found(tmp_path, monkeypatch)
     # Found where the chat starts, by its own address, the app's own copy beside it left.
     cmd = computer.find_copy_command(copy)
     assert cmd in got["call"]["prompt"]
+    from test_the_copys_computer_and_folder_are_chosen import shell_of
+    bash = shell_of("bash")
+    if not bash:
+        pytest.skip("no bash here: on Windows, Git Bash, the shell a chat there runs")
     for env, depth in (("env_copy", ["."]), ("env_docs", ["./GitHub/my-job-search"])):
-        r = subprocess.run(["bash", "-c", cmd], cwd=str(started_in[env]), capture_output=True,
+        r = subprocess.run([bash, "-c", cmd], cwd=str(started_in[env]), capture_output=True,
                            text=True, encoding="utf-8")
         assert r.stdout.split() == depth, (env, r.stdout, r.stderr)
     # With only Documents shared, Documents: it holds the copy, four folders down.
