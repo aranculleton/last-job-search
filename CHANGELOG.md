@@ -20,6 +20,16 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Changed
+
+- **The maintainer's releases take one command.** `python3 tools/release.py cut X.Y.Z --headline "..."`
+  names and dates the version on its own pull request, so merging that pull request is the
+  release. The release notes open on that headline, then what is new, changed and fixed. The
+  check that no public name goes unannounced reads the newest release's own files, so the
+  snapshot a release wrote is gone, and with it `public_names.snapshot`, `public_names.stale`,
+  `public_names.SNAPSHOT` and `release.names_kept`. `python3 tools/readme_pictures.py shoot`
+  takes the README's four pictures from the sample page and names them.
+
 ### Fixed
 
 - **"Only update when I say" is understood.** Said without naming the app, it set nothing; an update to your resume or CV is still never taken for the app's.

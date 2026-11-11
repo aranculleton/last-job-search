@@ -14,3 +14,6 @@ openpyxl>=3.1
 # "their time now" and the brief's days had no zone to work in. Elsewhere the computer's own
 # data is used, so it is not installed.
 tzdata; sys_platform == "win32"
+# Never installed, and never needed by a person: Pillow, with which the maintainer's
+# `python3 tools/readme_pictures.py shoot` composes the README's pictures. It says how to
+# install it when it is missing.

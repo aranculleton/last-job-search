@@ -443,7 +443,7 @@ JSON_NAMES = {
     # A dump folder's own note of each record's stamp as read (page_db._keep_read_stamp):
     # written into the chat's scratch folder beside the dump, never into the person's files.
     ".read-stamps.json": "a page dump folder's note of each record's stamp as read, in the chat's scratch folder; never committed",
-    **dict.fromkeys(("claude_surfaces.json", "public_names.json", "removed_names.json",
+    **dict.fromkeys(("claude_surfaces.json", "removed_names.json", "app_model_sample.json",
                      "rule_map.json", "remote.json", "design_draft.json",
                      "tools/leak_scan.py: **.json", "tools/markets.py: *.json",
                      "tools/markets.py: .json", "tools/locale_rules.py: .json",

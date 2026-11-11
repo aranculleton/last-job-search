@@ -877,3 +877,37 @@ def test_a_check_says_so_at_once_and_ends_when_the_app_never_answers(repos):
     assert out.splitlines()[0] == "sync_app: looking at the app; nothing is changed.", out
     assert r.returncode == 2 and "could not be reached" in out, out
     assert took < 60, took
+
+
+def test_the_waiting_line_is_the_headline_the_release_was_cut_with(tmp_path, monkeypatch):
+    """The one line a person who updates when they choose hears is the first CHANGELOG entry
+    the waiting release adds. `release.py cut --headline` writes the headline there, ahead of
+    every other kind, however [Unreleased] was ordered (the release audit, 2026-11-11)."""
+    sys.path.insert(0, os.path.join(ROOT, "tools"))
+    import release
+    import sync_app
+    repo = str(tmp_path / "app")
+    os.makedirs(os.path.join(repo, "docs"))
+    sh(repo, "git", "init", "-q", "-b", "master")
+    # The app's own CHANGELOG as a release leaves it: [Unreleased] empty above the newest.
+    text = read(ROOT, "CHANGELOG.md")
+    top = release.UNRELEASED.search(text)
+    released = (text[:top.start()] + "## [Unreleased]\n\n"
+                + text[text.index("\n## [", top.end()) + 1:])
+    write(repo, "CHANGELOG.md", released)
+    write(repo, "docs/NEXT_BUILDER.md", "Written at the release of 99.0.0.\n")
+    commit(repo, "the last release")
+    old = head(repo)
+    write(repo, "CHANGELOG.md", released.replace(
+        "## [Unreleased]\n", "## [Unreleased]\n\n### Fixed\n\n- **A fix someone notices.** More.\n\n"
+        "### Added\n\n- **A new thing.**\n\n### Changed\n\n- **A change.**\n", 1))
+    commit(repo, "work towards the next")
+    monkeypatch.setattr(release, "tags", lambda root=None: [])
+    headline = "Your page shows what is due first."
+    assert release.cut("99.0.0", headline, root=repo, day="2026-11-11") == 0
+    commit(repo, "99.0.0")
+    monkeypatch.setattr(sync_app, "ROOT", repo)
+    said = sync_app.brings(old, maintainer=False, ref=head(repo))
+    assert said == "Your page shows what is due first, and 3 more changes", said
+    assert sync_app.waiting_line(old, False, head(repo)).startswith(
+        "An update is waiting: Your page shows what is due first, and 3 more")
