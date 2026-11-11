@@ -767,3 +767,4 @@ Morgan's MacBook Air   # an invented computer's own name, tests/test_the_copys_c
 Morgan’s MacBook Air   # the same invented computer, its name typed with a curly apostrophe
 Merchant Services Group     # invented employer's name, tests/test_no_words_are_drawn_over_other_words_or_buttons.py
 Merchant Onboarding Analytics  # an invented role's words, the same test
+Priya Okonkwo-Lund          # invented interviewer, tests/test_a_round_of_two_kinds_is_prepared_as_both.py

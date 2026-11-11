@@ -23,6 +23,19 @@ page waited on every tap (2026-10-29). `next` never hands one to this chat to ru
   publishes, watches or answers the page, and is titled `Job search: <title>`, never the same
   as another job's chat at work; it puts itself away once its work is saved and nothing else
   waits, and the daily tidy puts away one that could not.
+- **A question typed in the page's Chat gets a chat of its own too** (`Job search: Chat`,
+  `page_db.QUESTION_CHAT_TITLE`) while this chat has other work of its own running or waiting
+  (`page_db.busy_here`), so it never waits on that work (issue #226): `next` hands it out
+  first with `run: child session`, made exactly as a big job's call is. With nothing else
+  going on it is answered here, at once, which is quicker than a fresh chat's start. A start
+  refused or failed is never made again for it: `app.py let-go` lets its claim go at once
+  (as the wake's line says), and the wake run again answers it here, first.
+  One such chat answers every Chat question while it is at work: this chat then leaves them to
+  it, and it takes the next one itself (`next --job-chat --questions`) and puts itself away
+  when none is left; it takes one of the cloud's ten places, and the daily tidy puts it away
+  like a job's chat. With no `create_session` here, or every place taken, the question is
+  answered here, before anything else (`run: here`, wake.md step 3); a question asked under a
+  card is always answered here, under its card.
 - `run: background agent` is the fallback where `create_session` is not available: a chat
   on a computer, or a chat without that tool (`wake` with `--no-sessions`). Send the
   claim, then make the Agent call exactly as printed (`run_in_background: true`,

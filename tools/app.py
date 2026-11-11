@@ -21,7 +21,8 @@
     python3 tools/app.py start --paste                           the line for a chat on a computer
     python3 tools/app.py page --out-dir D [--url U]              the page in parts, and the
          [--on-page FILE|-] [--whole]                            publishes that put it up (with
-                                                                 a url: after listing its files)
+                                                                 a url: what changed since the
+                                                                 last publish this copy recorded)
     python3 tools/app.py published <url> [--parts D]|none [--why W]
                                                                  the page's address, once published
     python3 tools/app.py answer <step> [--text T] [--field k=v]  a setup answer given in the chat
@@ -1113,8 +1114,13 @@ def cmd_page(a) -> int:
             else:
                 with open(a.on_page, encoding="utf-8") as fh:
                     listing = fh.read()
-        for line in app_listen.parts_plan(built, a.url or "", listing=listing,
-                                          whole=bool(getattr(a, "whole", False))):
+        try:
+            lines = app_listen.parts_plan(built, a.url or "", listing=listing,
+                                          whole=bool(getattr(a, "whole", False)))
+        except ValueError as e:
+            print(str(e))
+            return 2
+        for line in lines:
             print(line)
         return 0
     if hasattr(app_page, "render"):
@@ -1141,7 +1147,8 @@ def cmd_apply(a) -> int:
 
 def choose(db: dict, chat: str, kind: str, now, on: str = "", no_sessions: bool = False,
            claim_out: str | None = None, job_chat: bool = False,
-           computer_only: bool = False, lent: bool = False, beat: bool = True) -> dict | None:
+           computer_only: bool = False, lent: bool = False, beat: bool = True,
+           questions: bool = False) -> dict | None:
     """The queued work this chat should take (None: nothing is), with the model a chat
     started for it gets (tools/model_guide.py for_work), `run`: where it is done
     (where_it_runs), and with `claim_out` the claim as batch files. Small work done here is
@@ -1149,17 +1156,24 @@ def choose(db: dict, chat: str, kind: str, now, on: str = "", no_sessions: bool 
     computer is always done here, in the chat with the browser (`computer_only`: the chat
     the app started on the computer takes nothing else). `lent`: a cloud chat lent the
     computer's browser or folder, claiming as a computer chat; its heartbeat, like a big job's
-    own chat's, never counts as a chat listening (page_db.heartbeat `watching`)."""
+    own chat's, never counts as a chat listening (page_db.heartbeat `watching`). `questions`:
+    the Chat's own chat (page_db.QUESTION_CHAT_TITLE), which takes only Chat questions."""
     import app_listen
     import model_guide
     import page_db
-    chosen = app_listen.next_republish(db, chat, now)
+    sessions = kind == "cloud" and not no_sessions
+    chosen = None if questions else app_listen.next_republish(db, chat, now)
     if chosen is None:
         # Each big job in a cloud chat of its own runs on its own computer: ten at once there.
-        cap = page_db.HEAVY_CAP_CHATS if kind == "cloud" and not no_sessions else page_db.HEAVY_CAP
+        cap = page_db.HEAVY_CAP_CHATS if sessions else page_db.HEAVY_CAP
+        # While the Chat's own chat is at work, the chat that answers the page leaves Chat
+        # questions to it: it takes the next one as it finishes (issue #226).
         chosen = page_db.next_item(app_listen.without_republish(db), kind, now, cap=cap,
-                                   heavy_only=job_chat and not computer_only,
-                                   to_only="computer" if computer_only else "")
+                                   heavy_only=job_chat and not computer_only and not questions,
+                                   to_only="computer" if computer_only else "",
+                                   questions_only=questions,
+                                   skip_questions=(sessions and not job_chat and not computer_only
+                                                   and page_db.question_chat_live(db, now)))
     if chosen is None:
         return None
     # Sent to the computer: a LinkedIn read. It runs in this chat, which has the browser,
@@ -1181,7 +1195,19 @@ def choose(db: dict, chat: str, kind: str, now, on: str = "", no_sessions: bool 
     taken = {str(d.get("chat_title") or "") for d in
              ((doc.get("data") or {}) for doc in (db.get("work") or {}).values())
              if str(d.get("status") or "") in ("claimed", "running")} - {""}
-    chosen.update(where_it_runs(chosen, chat, kind, no_sessions, taken=taken))
+    item = (((db.get("work") or {}).get(page_db.safe_id(chosen["work"])) or {}).get("data") or {})
+    # A Chat question gets a chat of its own only while this chat has other work of its own,
+    # running or waiting (page_db.busy_here), and the cloud has room for one more chat
+    # (HEAVY_CAP_CHATS, the big jobs' own limit). With nothing else going on, or no room, or
+    # where its chat could not be started (`own_chat: refused`, page_db.let_go), it is
+    # answered first, here: quicker than a fresh chat's full start (issue #226).
+    own = (page_db.chat_question(item) and not job_chat and not computer_only
+           and item.get("own_chat") != "refused"
+           and page_db.busy_here(db, chat, kind, now, but=chosen["work"])
+           and page_db.chats_at_work(db, now) < page_db.HEAVY_CAP_CHATS)
+    chosen.update(where_it_runs(chosen, chat, kind, no_sessions, taken=taken, question=own))
+    if own and chosen.get("run") == "child session":
+        chosen["if_refused"] = QUESTION_REFUSED.format(work=chosen["work"], chat=chat or PARENT)
     if job_chat or sent_here or reads_here:
         # A big job's own chat takes the next big job waiting and does it itself: no chat
         # can tell the one that answers the page that a slot is free, so a queue of drafts
@@ -1189,7 +1215,7 @@ def choose(db: dict, chat: str, kind: str, now, on: str = "", no_sessions: bool 
         chosen.update(run="here")
         chosen.pop("create_session", None)
         chosen.pop("agent", None)
-        if chosen.get("heavy"):
+        if chosen.get("heavy") or questions:
             # Its own steps, for this chat to follow: its id, a fresh folder, its kind's
             # commands and pins. "Do it here from step 3" reused the first job's (the release
             # review, 2026-11-03).
@@ -1263,10 +1289,10 @@ def cmd_next(a) -> int:
                         job_chat=getattr(a, "job_chat", False),
                         computer_only=getattr(a, "computer_only", False),
                         lent=getattr(a, "lent", False),
-                        beat=page_db.read_has(a.dump, "beats"))
+                        beat=page_db.read_has(a.dump, "beats"),
+                        questions=getattr(a, "questions", False))
     except ValueError as e:
-        print(f"app: {e.args[0] if e.args else e}", file=sys.stderr)
-        return 2
+        return _refuse("next", str(e.args[0] if e.args else e))
     if chosen is None:
         if ended["batches"]:
             print(_dump({"work": None, "ended": ended["ended"], "batches": ended["batches"]}),
@@ -1603,6 +1629,17 @@ def job_steps(chosen: dict, claimer: str, url: str, session: bool = True,
                  "(wake with a fresh read), so work queued meanwhile starts now. Never put this "
                  "chat away: it answers the page.")
             return lines
+        if kind == "talk":
+            # A Chat question's own chat: the answer and the page first, the save after, so
+            # the answer never waits on a landing (issue #226).
+            step(f"Finish as step 5 says ({done}), without its heartbeat line. Then bring the "
+                 f"page up to date at once: {_finish_read(url)}; python3 tools/app.py view "
+                 f"\"$D/view\" --dump \"$D/page\" --chat <this chat's id> --work {wid}; and "
+                 f"send every batch it prints (ArtifactData batch). {REFUSED_ONCE} Then "
+                 f"{LAND_AND_WAIT[0].lower()}{LAND_AND_WAIT[1:]} Never message another chat, "
+                 "and never write to the person but in the answer: the page shows it.")
+            step(_next_job(url, kind=chat_kind, questions=True))
+            return lines
         step(f"Finish as step 5 says ({done}), without its heartbeat line.{files} "
              f"{LAND_AND_WAIT} Then, landed or not (a failed check leaves the work for the "
              f"next chat to land, and this step still runs), bring the page up to date yourself: "
@@ -1657,11 +1694,14 @@ LAND_AND_WAIT = ("Save and land your work on master (CLAUDE.md, \"Saving\"): run
 
 
 def _next_job(url: str, first_word: str = "Then", kind: str = "cloud",
-              computer_only: bool = False) -> str:
+              computer_only: bool = False, questions: bool = False) -> str:
     # A chat on the computer takes the next piece of work sent there, as a computer chat:
     # told "--kind cloud --job-chat", it would have taken cloud work and refused its own.
+    # The Chat's own chat takes the next Chat question, and nothing else (issue #226).
     what, flags = (("piece of work for this computer", f"{kind} --computer-only")
-                   if computer_only else ("big job", f"{kind} --job-chat"))
+                   if computer_only else
+                   ("question from the page's Chat", f"{kind} --job-chat --questions")
+                   if questions else ("big job", f"{kind} --job-chat"))
     # A chat the app started on the computer never puts itself away: its prompt's last steps
     # (the heartbeat, the earlier chats, waking the starter, whose land.py brings this chat's
     # saved work to master) come after this one, and the starter archives it. Told to archive
@@ -1710,13 +1750,15 @@ def distinct_title(title: str, taken) -> str:
 
 
 def where_it_runs(chosen: dict, chat: str, kind: str, no_sessions: bool = False,
-                  taken=()) -> dict:
+                  taken=(), question: bool = False) -> dict:
     """`run`: `here` for light work; for a big job, `child session` with the create_session
     call to make (its prompt runs the item, pins its progress, saves, brings the page up to
     date and puts itself away, messaging no chat), or, where a chat cannot start one (a chat on a computer, or no
     create_session tool), `background agent` with the Agent call. A big job is never `here`.
-    `taken`: the names of the job chats still at work."""
-    if not chosen.get("heavy"):
+    `taken`: the names of the job chats still at work. `question`: a Chat question with room
+    for a chat of its own (page_db.QUESTION_CHAT_TITLE), started only where a big job's would
+    be; anywhere else it is answered here, first (page_db.ASKED_FIRST)."""
+    if not chosen.get("heavy") and not question:
         return {"run": "here"}
     import app_listen
     import app_setup
@@ -1725,8 +1767,12 @@ def where_it_runs(chosen: dict, chat: str, kind: str, no_sessions: bool = False,
     # the call carries the placeholder and says to put the id in first (get_session).
     parent = chat or PARENT
     owner, name = app_setup.origin()
-    title = distinct_title(CHILD_TITLE.format(title=" ".join(
-        str(chosen.get("title") or chosen["kind"]).split())[:60]), taken)
+    import page_db
+    title = distinct_title(page_db.QUESTION_CHAT_TITLE if question else CHILD_TITLE.format(
+        title=" ".join(str(chosen.get("title") or chosen["kind"]).split())[:60]), taken)
+    if question and not (kind == "cloud" and not no_sessions and owner and name):
+        # No chat of its own can be started here: never a background agent for a question.
+        return {"run": "here"}
     if kind == "cloud" and not no_sessions and owner and name:
         # The page's own tools, carried into the job's chat as create_session documents
         # (extra_allowed_tools: "pre-approved without a user permission prompt", kept only
@@ -2835,6 +2881,7 @@ def cmd_wake(a) -> int:
                                 "finish it as step 5 says.") + (
                                 " More is waiting: then read again into a new folder and wake "
                                 "once more (step 3 again)." if more else ""))
+                then += asked_first_lines([chosen] + also, a.dump, chat, url)
         else:
             # Only what the call needs: its stages, locks, claim files and model were printed
             # in it, sent above or read by nothing, every one a line of the listener's (E-8).
@@ -2845,8 +2892,11 @@ def cmd_wake(a) -> int:
                         "in `next` below exactly as it is printed" + (
                             f" (first {chosen['first']})" if chosen.get("first") else "") +
                         ", and never wait for it." + (
-                            app_listen.MODE_REFUSED if call == "create_session" else "") + (NESTED_JOB.format(chat=chat, dump=a.dump)
-                                                      if call == "create_session" else "") + (
+                            " " + chosen["if_refused"].replace("$D", a.dump)
+                            if chosen.get("if_refused") else
+                            (app_listen.MODE_REFUSED if call == "create_session" else "") + (
+                                NESTED_JOB.format(chat=chat, dump=a.dump)
+                                if call == "create_session" else "")) + (
                             " More is waiting: then run this again with the same folder (step "
                             "3 again): " + _again(a, chat) if more else ""))
         then.append("next: " + _dump(shown).rstrip("\n"))
@@ -2876,6 +2926,48 @@ def cmd_wake(a) -> int:
             last.append(TIDY_SAID)
     _print_wake(head, notes, _send_as(sends, rd, a.dump), url, then=then + last)
     return 0
+
+
+# A question the person asked goes first (page_db.ASKED_FIRST), so a pass that claims it with
+# other small work does it first, and its answer is on the page before the next item starts:
+# finished first but put on the page only with the last item's view, the page held it behind
+# "Putting the change on your page first" while three message changes were made (issue #226).
+ASKED_SHOWN = ("first: {which} {is_} the person's question{s}: answer {it} before "
+               "anything else in this pass, then, before the next item, bring the page up to "
+               "date (step 5's python3 tools/app.py view \"{dump}/view\" --dump \"{dump}\" --chat "
+               "{chat}, without --end) and send its batch, so the answer and anything it changed "
+               "show together.")
+# Between the other items of a pass, a question asked meanwhile is answered before the next
+# one, never after the whole pass: each item is the step boundary the app has.
+ASKED_BETWEEN = ("between items: after each item but the last is finished, look once for a "
+                 "question asked meanwhile: ArtifactData query, url {url}, collection work, "
+                 "out_dir a fresh folder $E, limit 1000, then python3 tools/app_listen.py "
+                 "waiting \"$E\" --question. Where it names one: python3 tools/app.py next \"$E\" "
+                 "--chat {chat} --claim-out \"$E/claim\" hands it first; send its batch, then, "
+                 "where its `run` is child session, make its create_session call exactly as "
+                 "printed (the question's own chat; refused or failed, do what its `if_refused` "
+                 "says), and otherwise answer it here as step 4's row "
+                 "for a talk says and finish it with step 5's done over \"$E\"; then go on with "
+                 "the next item of this pass. It names none: go on, saying nothing.")
+
+
+def asked_first_lines(items: list, dump: str, chat: str, url: str) -> list[str]:
+    """What a wake that claimed several small items says about the person's questions among
+    them: answered first and shown before the next item (ASKED_SHOWN), and, where two or more
+    other items follow, a look between them for one asked meanwhile (ASKED_BETWEEN)."""
+    import page_db
+    asks = [c for c in items if str(c.get("kind") or "") in page_db.ASKED_FIRST]
+    rest = [c for c in items if c not in asks]
+    out: list[str] = []
+    if asks and rest:
+        n = len(asks)
+        which = "the item under next:" if n == 1 else f"the first {n} items (next:, then also:)"
+        out.append(ASKED_SHOWN.format(which=which, is_="is" if n == 1 else "are",
+                                      s="" if n == 1 else "s", it="it" if n == 1 else "them",
+                                      dump=dump, chat=chat))
+    if len(rest) >= 2:
+        out.append(ASKED_BETWEEN.format(url=url, chat=chat))
+    return out
 
 
 def computer_line(db: dict, chat: str, now, dump: str) -> str:
@@ -2925,6 +3017,20 @@ def talk_words(shown: dict, dump: str, url: str) -> dict:
                 return dict(shown, args=dict(args, text=str(fields["text"])))
     return dict(shown, read_words=(f"ArtifactData get, url {url}, collection talk/{th}/messages, "
                                    f"doc_id {mid}: its `text` is what they said"))
+
+
+# A Chat question's own chat that could not be started never leaves the question waiting: its
+# claim is let go at once (page_db.let_go) and this chat answers it, first, in place. Left to
+# the claim's thirty minutes, as a big job's is, the question sat unanswered (the coordinator,
+# issue #226).
+QUESTION_REFUSED = ("If that create_session is refused or fails, for any reason, never make it "
+                    "again for this question: python3 tools/app.py let-go \"$D\" --work {work} "
+                    "--chat {chat} (the wake's folder), send the batch it prints, then wake again "
+                    "with the same folder: it hands the question back to this chat first, to "
+                    "answer here. Where the refusal says this chat is not in auto mode, also "
+                    "python3 tools/app.py mode-refused --chat {chat}; where it says this chat can "
+                    "start no more chats, also python3 tools/app.py nested \"$D\" --chat {chat}. "
+                    "Say nothing about it to the person.")
 
 
 # A job's chat refused because this chat can start no more (chats nest only so deep): the
@@ -3157,6 +3263,31 @@ def cmd_hand_over(a) -> int:
           "on: false.")
     print(f"3. python3 tools/app.py retired --chat {chat}, and do what it prints: it saves this "
           "chat's work, then puts this chat away.")
+    return 0
+
+
+def cmd_let_go(a) -> int:
+    """A Chat question's own chat could not be started: its claim let go at once, so this chat
+    answers it first, in place (page_db.let_go, QUESTION_REFUSED)."""
+    import app_listen
+    import app_model
+    import app_setup
+    import page_db
+    _, now = app_model.clock(None, a.now)
+    chat = app_listen.this_chat(a.chat)
+    try:
+        batches = page_db.let_go(page_db.load(a.dump), a.work, chat, now,
+                                 a.out or os.path.join(a.dump, "let-go"))
+    except ValueError as e:
+        print(f"app: {e.args[0] if e.args else e}", file=sys.stderr)
+        return 2
+    page_db.keep_landed(a.dump, batches)
+    url = app_setup.page_record().get("url") or "<the page>"
+    print("\n".join([f"let-go: {a.work} goes back to this chat, to answer here, first. Send, as "
+                      f"one ArtifactData batch (url {url}, its entries as writes):"] + batches +
+                     [f"Then wake again with the same folder: python3 tools/app.py wake "
+                      f"\"{a.dump}\" --chat {chat}. Refused: read again into a new folder and "
+                      "wake once more; the question is answered here either way."]))
     return 0
 
 
@@ -3401,6 +3532,21 @@ def _links(given) -> list:
     return out
 
 
+def _refuse(cmd: str, said: str) -> int:
+    """A refusal of `next` or `done` (exit 2), and beneath it, in the maintainer's own copy, the
+    one command that files it the moment a chat works round it instead of doing what it says
+    (app_bug.met_line): refusals recovered from were worked round and never filed (#240)."""
+    print(f"app: {said}", file=sys.stderr)
+    try:
+        import app_bug
+        line = app_bug.met_line(f"tools/app.py:{cmd}", f"app.py {cmd} refused: {said}")
+    except Exception:  # noqa: BLE001  the refusal stands as it was
+        line = ""
+    if line:
+        print(line, file=sys.stderr)
+    return 2
+
+
 def cmd_done(a) -> int:
     """A finished work item as one batch (the app skill, step 5): done with its one-sentence
     summary (or failed, saying why), its locks removed, and with --reply-file the chat's
@@ -3436,9 +3582,8 @@ def cmd_done(a) -> int:
         item = ((db.get("work") or {}).get(page_db.safe_id(a.work)) or {}).get("data") or {}
         args = item.get("args") if isinstance(item.get("args"), dict) else {}
         if not args.get("url"):
-            print("app: not finished: --left-out is for a job's draft, and this one names no "
-                  "posting to take off Jobs", file=sys.stderr)
-            return 2
+            return _refuse("done", "not finished: --left-out is for a job's draft, and this "
+                           "one names no posting to take off Jobs")
         import exclude
         import person
         exclude.add(str(args["url"]), left, title=str(args.get("title") or ""),
@@ -3449,8 +3594,7 @@ def cmd_done(a) -> int:
         a.stopped, a.summary = True, a.summary or f"Not drafted: {left.rstrip('.')}."
     made, noted, links, problem = _made(a, db, reply)
     if problem:
-        print(f"app: not finished: {problem}", file=sys.stderr)
-        return 2
+        return _refuse("done", f"not finished: {problem}")
     try:
         got = page_db.finish(db, a.work, now, a.out or os.path.join(a.dump, "out"),
                              summary=a.summary, status="failed" if a.failed else
@@ -3462,8 +3606,7 @@ def cmd_done(a) -> int:
                              outcome=getattr(a, "outcome", "") or "",
                              signin=getattr(a, "signin", "") or "", go=made, me=_me(a.chat))
     except (KeyError, ValueError) as e:
-        print(f"app: not finished: {e.args[0] if e.args else e}", file=sys.stderr)
-        return 2
+        return _refuse("done", f"not finished: {e.args[0] if e.args else e}")
     if got.get("status") in ("done", "failed", "stopped") and not got.get("again"):
         import touched
         touched.clear(noted)
@@ -4110,7 +4253,7 @@ def main(argv=None) -> int:
     p.add_argument("--url", default="", help="the page's address, when it is published already")
     p.add_argument("--on-page", dest="on_page", default=None,
                    help="what the published page holds, as Artifact list (scope files) printed "
-                        "it: a file, or - for what comes in")
+                        "it: a file, or - for what comes in; only where the plan asks for it")
     p.add_argument("--whole", action="store_true",
                    help="put every code file up again, not only the ones the page lacks")
     p = sub.add_parser("apply", help="apply the page's actions, with receipts")
@@ -4127,6 +4270,9 @@ def main(argv=None) -> int:
     p.add_argument("dump")
     p.add_argument("--job-chat", dest="job_chat", action="store_true",
                    help="this chat is a big job's own: take only big work, and do it here")
+    p.add_argument("--questions", action="store_true",
+                   help="with --job-chat: this chat is the page Chat's own, so take only "
+                        "Chat questions")
     p.add_argument("--computer-only", dest="computer_only", action="store_true",
                    help="this chat was started on the computer for its work: take only work "
                         "sent to the computer, and do it here")
@@ -4239,6 +4385,13 @@ def main(argv=None) -> int:
     p.add_argument("--no-sessions", dest="no_sessions", action="store_true",
                    help="this chat cannot start a chat of its own: a big job runs as a "
                         "background agent")
+    p.add_argument("--now", default=None)
+    p = sub.add_parser("let-go", help="a Chat question whose own chat could not be started: "
+                                      "let its claim go, so this chat answers it first")
+    p.add_argument("dump")
+    p.add_argument("--work", required=True)
+    p.add_argument("--chat", default="")
+    p.add_argument("--out", default="", help="where the batch goes (default <dump>/let-go)")
     p.add_argument("--now", default=None)
     p = sub.add_parser("nested", help="this chat was refused a new chat or scheduled task "
                                       "because chats nest only so deep: keep it, and tell the "
@@ -4412,7 +4565,7 @@ def main(argv=None) -> int:
             "republish": cmd_republish, "pinned": cmd_pinned, "told": cmd_told, "mode-refused": cmd_mode_refused, "doorbells": cmd_doorbells, "done": cmd_done,
             "ask": cmd_ask, "wake": cmd_wake, "version": cmd_version, "versions": cmd_versions,
             "reads": cmd_reads, "search-drafts": cmd_search_drafts,
-            "follow-ups": cmd_follow_ups, "nested": cmd_nested, "retired": cmd_retired, "hand-over": cmd_hand_over,
+            "follow-ups": cmd_follow_ups, "nested": cmd_nested, "let-go": cmd_let_go, "retired": cmd_retired, "hand-over": cmd_hand_over,
             "answer": cmd_answer}[a.cmd](a)
 
 

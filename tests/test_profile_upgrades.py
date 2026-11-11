@@ -1376,9 +1376,10 @@ def test_follow_ups_never_fitted_to_your_rules_come_off_their_cards(profile, mon
         w = csv.DictWriter(fh, fieldnames=list(rows[0].keys()))
         w.writeheader()
         w.writerows(rows)
-    # On its card, code's unfitted follow-up reads as a stored draft with nothing to fit.
-    assert drafted()[flagged]["status"] == "ready", drafted()[flagged]
-    assert up.pending() == "2 follow-up(s) on a card were never fitted to your own rules for messages"
+    # On its card, code's unfitted follow-up is still its stock lines: never ready (issue 223).
+    assert drafted()[flagged]["status"] == "check", drafted()[flagged]
+    assert up.pending() == ("2 follow-up(s) on a card were never written for their reader or "
+                            "fitted to your own rules for messages")
     # As the app runs it (run_instant): "python3" is this Python, which Windows names otherwise.
     r = subprocess.run([sys.executable, *up.command[1:]], cwd=ROOT, capture_output=True, text=True,
                        encoding="utf-8", env=dict(os.environ))

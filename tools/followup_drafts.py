@@ -105,9 +105,77 @@ def gate(text: str, kind: str, name: str = "", title: str = "", company: str = "
                              today=today or None)
     warned = compose.advise(text, kind, name=name or None, title=title,
                             their=(company,) if company else (), company=company)
+    stock = stock_follow_up(text, name=name, company=company)
     return ([f"{v.rule}: {v.text}" for v in found],
             [f"{a.rule}: {a.text}" + (f" ({a.fix})" if getattr(a, "fix", "") else "")
-             for a in warned])
+             for a in warned] + ([f"{STOCK}: {stock} ({STOCK_FIX})"] if stock else []))
+
+
+# ---------------------------------------------------------------- stock follow-ups
+
+# Code's short plain follow-up (plain_nudge) is the same few lines for everyone: an opener on
+# the person's last note and one stock question about the reader's work, with only the first
+# name changed. Most of one pack's follow-ups were one of three such lines, tied to nobody's
+# thread, and the gate passed them as ready to send (issue 223). One is a draft to write again
+# for its reader, never one to send: the gate warns of it, so it is listed to write here and
+# kept off the card, and a draft written by hand that is still one is refused (`check`).
+STOCK = "stock_follow_up"
+STOCK_FIX = ("write it for this person from their thread and their record: what they said, "
+             "their work, something new since; or hold it")
+# Words a stock follow-up may carry besides its stock lines and the reader's name.
+STOCK_SPARE = 2
+_STOCK: list = []
+
+
+def _norm(text) -> str:
+    t = str(text or "").replace("’", "'").lower()
+    return " ".join(re.sub(r"[^a-z0-9'&]+", " ", t).split())
+
+
+def _stock_patterns() -> list:
+    """[(pattern, is a question)]: every opener code's follow-ups start with, and every stock
+    question or ask they end on (the app's lines and the person's own TEMPLATES), with the
+    team left open. Made once a run."""
+    if _STOCK:
+        return _STOCK
+    compose = _compose()
+    lines = set()
+    for intent in ("work_question", "work_question_said", "ask"):
+        for table in (compose.BANK, compose.BANK_PLAIN):
+            for got in (table.get(intent) or {}).values():
+                lines.update(str(g) for g in (got if isinstance(got, (list, tuple)) else [got]))
+        for reader in compose.READER_TYPES:
+            lines.update(str(o) for o in compose.options(intent, reader))
+    for line in sorted(lines):
+        n = _norm(line.replace("{team}", " teamslot "))
+        if len(n.split()) >= 4:
+            _STOCK.append((re.compile(re.escape(n).replace("teamslot", r"[a-z0-9'& ]{1,60}?")),
+                           True))
+    for form in compose.FOLLOW_UP_OPENERS:
+        head = _norm(form.split("{word}")[0])
+        _STOCK.append((re.compile(re.escape(head) + r" (?:note|email|message)"
+                                  r"(?: from [a-z]+(?: last year| \d{4})?)?"), False))
+    return _STOCK
+
+
+def stock_follow_up(text: str, name: str = "", company: str = "") -> str:
+    """Why this draft is code's stock follow-up, or "": once its greeting, the reader's name
+    and employer, the follow-up opener and a stock question are taken out, next to nothing is
+    left (STOCK_SPARE words), so nothing in it is about this reader or their thread."""
+    t = _norm(_GREET.sub("", " ".join(str(text or "").split())))
+    if not t:
+        return ""
+    asked = False
+    for rx, question in _stock_patterns():
+        t, n = rx.subn(" ", t)
+        asked = asked or (question and n > 0)
+    if not asked:
+        return ""
+    drop = {w for w in _norm(" ".join((name or "", company or ""))).split()}
+    left = [w for w in t.split() if w not in drop]
+    if len(left) > STOCK_SPARE:
+        return ""
+    return "the same stock lines every follow-up gets, with only the name changed"
 
 
 # How many words, besides the name and the employer, two drafts may differ by and still be
@@ -231,9 +299,10 @@ def unfitted_on_cards(contacts=None, threads=None, today: str = "") -> list[tupl
     (app.py follow-ups and the brief) put a draft flagged RULES_TO_FIT on the card, where the
     page said ready to send. Only while the person has such rules, as the flag needs today;
     a draft the person, a chat or /network wrote or edited is never the same words, a first
-    note waiting on a read is /network's, and one already logged as sent is left alone."""
-    if not _message_rules():
-        return []
+    note waiting on a read is /network's, and one already logged as sent is left alone.
+    Code's stock follow-up (`stock_follow_up`) on a card is listed whatever rules the person
+    has: the page offered it as ready to send, written for nobody (issue 223)."""
+    rules = bool(_message_rules())
     import reading
     from network import state
     contacts = state.load_contacts() if contacts is None else contacts
@@ -242,7 +311,7 @@ def unfitted_on_cards(contacts=None, threads=None, today: str = "") -> list[tupl
     index = state.by_contact(threads) if threads else {}
     today = today or person.today().isoformat()
     out = []
-    for cid, (body, _name, _company) in sorted(_waiting_drafts().items()):
+    for cid, (body, name, company) in sorted(_waiting_drafts().items()):
         c = book.get(cid)
         msgs = list(index.get(cid, ()))
         if c is None or not msgs or reading.marked(cid):
@@ -251,6 +320,13 @@ def unfitted_on_cards(contacts=None, threads=None, today: str = "") -> list[tupl
         if any(state._direction(r) == "out"
                and " ".join(str(r.get("full_text") or "").split()) == said for r in msgs):
             continue                        # sent already: the card only lags the log
+        if stock_follow_up(body, name=name, company=company):
+            # Code's stock lines, the same for everyone but the name (issue 223), whatever
+            # rules the person has: written again for them before it is offered.
+            out.append((cid, "code's stock follow-up, never written for them"))
+            continue
+        if not rules:
+            continue
         try:
             code = plain_nudge(c, msgs, today=today)
         except ValueError:
@@ -614,6 +690,12 @@ def draft(item: dict, contacts_by_id: dict, threads_index: dict, tracker, earlie
         return _new("none", why="did this go? Ask before anything else is sent")
     msgs = threads_index.get(cid, ())
     their = _their_last(msgs)
+    if item.get("kind") == "nudge":
+        # Nobody at an employer where a process is running is chased, and nobody whose own
+        # record says not to check in (issue 223).
+        leave = leave_alone(contact, contacts_by_id, tracker)
+        if leave:
+            return _new("none", kind=kind, why="held: " + leave)
     stored = (item.get("text") or "").strip()
     card_only = False
     if not stored and item.get("kind") != "reply":
@@ -628,6 +710,15 @@ def draft(item: dict, contacts_by_id: dict, threads_index: dict, tracker, earlie
             return _new("write", kind=kind, who="read", source="stored",
                         why="the note waits on a read of their profile (/network)")
         stored = queued
+    if item.get("kind") == "nudge" and (not stored or stock_follow_up(stored, name, company)):
+        # Their last word pointed elsewhere (or closed it kindly) and ours only answered it:
+        # a nudge would give them nothing to answer. Held, unless something written for them
+        # with a real ask is waiting (issue 223).
+        closed = closed_exchange(msgs)
+        if closed:
+            got = _new("none", kind=kind, why="held: " + closed)
+            got["closed"] = True
+            return got
     old = earlier.get(cid)
     # An earlier pack's draft answers the thread as it stood that day: once anything has
     # been logged since, it answers a conversation that has moved on.
@@ -717,6 +808,102 @@ def draft(item: dict, contacts_by_id: dict, threads_index: dict, tracker, earlie
             got["status"] = "check"
             got["warnings"] = list(got.get("warnings") or []) + [RULES_TO_FIT]
     return got
+
+
+# Their words that point the person somewhere else: the careers site, applying online, someone
+# else to ask, a team they do not know. "I don't know that team, have you looked at the careers
+# site?", answered "Thanks, I've applied to the analyst role there", was followed up 14 days
+# later with "I'm still looking for roles", which gave them nothing to answer (issue 223).
+_POINTED = re.compile(
+    r"\bcareers? (?:site|page|portal|board)\b|\bjobs? (?:site|page|portal|board)\b"
+    r"|\bapply (?:online|directly|through|via|on (?:the|our))\b"
+    r"|\b(?:contact|reach out to|speak to|talk to|ask|email|try) (?:our|the) (?:hr|people|"
+    r"talent(?: acquisition)?|recruiting|recruitment) team\b"
+    r"|\bnot the (?:right|best) (?:person|people|contact)\b"
+    r"|\b(?:don'?t|do not) (?:really )?know (?:that|this) (?:team|area|role)\b"
+    r"|\b(?:don'?t|do not) (?:really )?know (?:anyone|much about)\b"
+    r"|\bnot (?:my|our) (?:team|area|department)\b"
+    r"|\b(?:you could|you might|you'd be better|best to|i'd suggest|i would suggest) "
+    r"(?:try|trying|ask|asking|contact|contacting|reach|reaching|apply|applying)\b", re.I)
+
+
+def closed_exchange(msgs) -> str:
+    """Why the thread's last exchange closed it, in plain words, or "": their last message
+    pointed the person elsewhere (_POINTED) or closed it kindly (reply.closing_exchange), and
+    ours since, the last on the thread, only answered it, asking and offering nothing. A
+    follow-up there gives them nothing to answer."""
+    import reply as reply_mod
+    import state
+    ordered = state._ordered(list(msgs or ()))
+    last_word = max((i for i, r in enumerate(ordered) if state.said_something(r)), default=-1)
+    if last_word < 0:
+        return ""
+    after = [r for r in ordered[last_word + 1:]
+             if state._is_message_out(r) and not state.is_request(r)]
+    if not after:
+        return ""
+    ours = [" ".join(str(r.get("full_text") or r.get("summary") or "").split()) for r in after]
+    if any(not o or reply_mod._ASKS_OR_OFFERS.search(o) for o in ours):
+        return ""
+    theirs = str(ordered[last_word].get("full_text") or ordered[last_word].get("summary") or "")
+    scen = str(ordered[last_word].get("scenario") or "").strip()
+    if not scen:
+        try:
+            scen = reply_mod.classify(theirs, [])["scenario"]
+        except Exception:  # noqa: BLE001  a message the classifier cannot read is read as said
+            scen = ""
+    sc = reply_mod.SCENARIOS.get(scen)
+    if sc is not None and sc.owes_action:
+        return ""                            # they offered something: that is still owed
+    # The last of their pointers is where they sent the person: "I don't know that team...
+    # have you looked at the careers site?"
+    pointed = ([None] + list(_POINTED.finditer(theirs)))[-1]
+    kind = "" if pointed else reply_mod.closing_exchange(theirs, ours[0], scen)
+    if not pointed and not kind:
+        return ""
+    said = ("they pointed you elsewhere (\"%s\")" % pointed.group(0) if pointed
+            else "they said \"%s\"" % kind)
+    return ("the conversation ended there: %s and you answered them, so a follow-up gives "
+            "them nothing to answer. Nothing goes unless they write, or you have a real ask "
+            "for them, such as a referral for a role you applied to" % said)
+
+
+# Their own record saying not to check in: "no check-in, the conversation has moved to their
+# colleague", "don't follow up".
+_NO_CHECK_IN = re.compile(
+    r"\bno (?:more |further )?(?:check[- ]?ins?|follow[- ]?ups?|nudges?|chasing)\b"
+    r"|\b(?:don'?t|do not|never) (?:check in|follow up|chase|nudge)\b", re.I)
+
+
+def leave_alone(contact: dict, book: dict, tracker=()) -> str:
+    """Why nobody follows this contact up, in plain words, or "": their own record says not to
+    check in, or a process is running at their employer (an interview or an offer, a hiring
+    process with no application, or a referral in progress through anyone there), which a
+    check-in to someone else there can only get in the way of (issue 223)."""
+    import throttle
+    for field in ("next_action", "notes"):
+        m = _NO_CHECK_IN.search(str((contact or {}).get(field) or ""))
+        if m:
+            return "their record says \"%s\"" % m.group(0)
+    k = company_key((contact or {}).get("company"))
+    if not k:
+        return ""
+    company = str(contact.get("company") or "").strip()
+    for r in tracker or ():
+        if company_key(r.get("company")) != k:
+            continue
+        status = str(r.get("status") or "").strip().lower()
+        if status in throttle.FINAL:
+            continue
+        if status in throttle.LIVE_PROCESS or throttle.is_process(r):
+            return ("you are in a hiring process at %s, so nobody there is followed up while "
+                    "it runs" % company)
+    for other in (book or {}).values():
+        if (company_key(other.get("company")) == k and str(other.get("status") or "").strip()
+                == throttle.REFERRAL_IN_PROGRESS):
+            return ("a referral is in progress at %s, so nobody there is followed up while it "
+                    "runs" % company)
+    return ""
 
 
 RULES_TO_FIT = ("code's plain follow-up has not been fitted to your own rules for messages "
@@ -1227,6 +1414,12 @@ def check(entries, contacts, threads, today: str, got=None) -> list[dict]:
                                       their_message=_their_last(index.get(iid, ())), today=today)
         except ValueError as err:
             findings, warnings = [_one_line(err)], []
+        # A rewrite that is still code's stock follow-up is no rewrite: refused, never kept on
+        # the card as ready to send (issue 223).
+        stock = [w for w in warnings if w.startswith(STOCK + ":")]
+        if stock:
+            findings = list(findings) + ["not_written_for_its_reader: " + stock[0].split(": ", 1)[1]]
+            warnings = [w for w in warnings if w not in stock]
         # Written for its reader: never the draft waiting for someone else, or one earlier
         # in this batch, with the name and the employer swapped.
         if c and not iid.startswith("app:"):
@@ -1401,15 +1594,17 @@ def _main(argv=None) -> int:
         ap = argparse.ArgumentParser(
             prog="followup_drafts.py unfitted",
             description="Set aside (kept) code's plain follow-ups left on a card before they "
-                        "were fitted to the person's own rules for messages.")
+                        "were written for their reader or fitted to the person's own rules for "
+                        "messages.")
         ap.add_argument("--dry", action="store_true", help="count them, change nothing")
         a = ap.parse_args(argv[1:])
         said = set_aside_unfitted(write=not a.dry)
         if a.dry:
             print(len(said))
             return 0
-        print("set aside, kept: %d follow-up(s) never fitted to your own rules for messages; "
-              "each is written again to fit them before it is offered to send" % len(said))
+        print("set aside, kept: %d follow-up(s) never written for their reader or fitted to "
+              "your own rules for messages; each is written again for its reader before it is "
+              "offered to send" % len(said))
         for line in said[:40]:
             print("  " + line)
         return 0

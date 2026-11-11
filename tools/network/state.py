@@ -2559,6 +2559,15 @@ def waiting_action(sent: int, contact_id: str = "", last=None) -> str:
     return FOLLOW_UP_IF.format(wait=wait, left=word)
 
 
+def request_action() -> str:
+    """The next step a row waiting on a connection request carries: what follows once they
+    accept, and when to withdraw it. One line for every writer (`sent`, and the LinkedIn
+    download's correction of a note logged as a message, export.as_requests)."""
+    then = waiting_action(1)
+    return (f"Once they accept: {then[:1].lower()}{then[1:]}. Withdraw the request if nobody "
+            f"accepts in {REQUEST_WITHDRAW_DAYS} days")
+
+
 def _last_sent(msgs):
     """The day our last message went, each message once (`once_each`), or None."""
     days = [as_date(r.get("date")) for r in once_each(msgs)
@@ -3279,10 +3288,7 @@ def sent(contacts, threads, contact_id, today, date=None, channel="connection", 
     contact["status"] = "awaiting_reply"
     msgs = threads_for(threads, cid)
     if channel == "connection":
-        put_next(contact, msgs, f"Once they accept: {waiting_action(1)[:1].lower()}"
-                                f"{waiting_action(1)[1:]}. Withdraw the request if nobody "
-                                f"accepts in {REQUEST_WITHDRAW_DAYS} days",
-                 follow_up_on(day).isoformat())
+        put_next(contact, msgs, request_action(), follow_up_on(day).isoformat())
     else:
         plan = follow_up_plan(contact, [r for r in msgs if _direction(r)])
         put_next(contact, msgs, *(plan or (waiting_action(1, cid), follow_up_on(day).isoformat())))

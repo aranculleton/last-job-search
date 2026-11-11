@@ -273,6 +273,24 @@ def test_a_feed_back_for_a_moment_is_never_shown_as_connected(run, tmp_path):
     assert s[2]["eval"] == ["reconnecting"], ("the header said another state while the feed kept failing", s[2]["eval"])
 
 
+def test_access_taken_away_says_the_page_stopped_and_a_tap_is_not_saved(run, tmp_path):
+    """The runtime can take this viewer's access away while the page is open (db.d.ts
+    `revoked`: each listener hears it once, and every later call is refused); the fake never did
+    until 4.15. The header says the page stopped updating, a tap after it says Not saved, and
+    the page does not keep trying a store it can no longer use."""
+    html = _page(tmp_path)
+    s = _script(run, html, [
+        {"hash": "todo", "eval": "(window.__ljsRevoke(), 1)"},
+        {"run": 500},
+        {"click": DONE, "run": 500},
+        {"run": 60000},
+    ])
+    assert s[1]["conn"].startswith("stopped"), s[1]["conn"]
+    assert any("Not saved" in t for t in s[2]["badToasts"]), s[2]["toasts"]
+    tries = [c for c in s[-1]["calls"] if c["cap"] == "db" and c["op"] in ("set", "update", "delete")]
+    assert len(tries) <= 2, ("a store taken away is not written to again and again", tries)
+
+
 # ------------------------------------------------------------------ 14. hiding with storage refused
 
 

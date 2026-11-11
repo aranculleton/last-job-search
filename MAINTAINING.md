@@ -186,9 +186,15 @@ again, fixes and releases everything at once, and no Actions workflow runs Claud
    wrong"). It scans the words as the push gate does (the denylist `build_app.py --tokens-out`
    builds from the copy, kept 12 hours in its git folder, then `leak_scan` and `name_guard`
    against the app's own words), keys the issue (`<!-- app-bug: <key> -->`, a hash of the tool
-   and function, else of the title, however spaced or capitalised) and prints the steps: one
-   list of the open `from-copy` issues, then a comment on the one with that key, or a new issue
-   labelled `from-copy`. A cloud chat whose session lacks the app attaches it first (add_repo,
+   and function, else of the title, however spaced or capitalised) and prints the steps: first
+   a look for the same bug filed some other way, by hand or with no key (every open issue and
+   those closed in the last 30 days, whatever their labels: `app_bug.py similar`, issue #221),
+   then a short comment on the one that is the same, or a new issue labelled `from-copy`. A
+   chat that works round an app command runs `app_bug.py met --tool <file:function> --what
+   "..." --did "..."` at that moment, the same check and look from the words alone; the
+   refusals a chat recovers from (`tweak.py`, `app.py next` and `done`, `network/reply.py`)
+   print it ready to run in this copy only (`met_line`), and `met --person` files the
+   maintainer's complaint that something was not filed (issue #240). A cloud chat whose session lacks the app attaches it first (add_repo,
    access push). A chat with no GitHub tools for the app (one on their computer) holds the
    checked issue instead (`--hold`, into `handoff/app_bugs/`, saved like their other files),
    and the next cloud chat's sync says so and files it (`app_bug.py held`, then `filed`). Any

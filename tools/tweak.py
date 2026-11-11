@@ -6,11 +6,14 @@ rev}`, `changes [{p, v}]`, `text`, `keep`); the chat that claims it runs this, a
 decides everything code can:
 
     python3 tools/tweak.py table                      the rows the page builds each panel from
-    python3 tools/tweak.py plan  --work <item.json>   checked, costed and keyed; what will run
-    python3 tools/tweak.py apply --work <item.json>   do it, or say what needs writing
-    python3 tools/tweak.py merge --work <item.json> --round <dir>   a redraft back, audited
-    python3 tools/tweak.py undo  --work <item.json>   the change before it, back
+    python3 tools/tweak.py plan  ["$D"] --work <item>   checked, costed and keyed; what will run
+    python3 tools/tweak.py apply ["$D"] --work <item>   do it, or say what needs writing
+    python3 tools/tweak.py merge ["$D"] --work <item> --round <dir>   a redraft back, audited
+    python3 tools/tweak.py undo  ["$D"] --work <item>   the change before it, back
     python3 tools/tweak.py promote [--add N]          words asked for three times, as a button
+
+<item> is the work item's id, as `app.py wake` prints it (`tweak~...`), found in the read
+folder `$D` where the read saved it (`$D/work/tweak@...json`), or that file itself.
 
 Code only, no model: a resume or letter's look, size, spacing, colour, a bullet swapped for
 another true one, who the letter is addressed to (draft.json changed, then fit_to_page and
@@ -284,14 +287,112 @@ def table(output: str | None = None) -> list[dict]:
 
 
 def read_work(path: str) -> dict:
-    """The work item as the database dump holds it, in any of its shapes."""
+    """The work item as the database dump holds it, in any of its shapes. A claim batch's own
+    record (`<D>/wake/<n>/work/files/work/tweak@...json`, page_db.Writes) holds only the
+    fields the claim changed: the item is the read's record of the same id, with those over
+    it. Given that record, `apply` was refused as "That is not a tweak" (issue #224)."""
     with open(path, encoding="utf-8") as fh:
         got = json.load(fh)
     if isinstance(got, dict) and "data" in got and "kind" not in got:
         got = got["data"]
+    if isinstance(got, dict) and "kind" not in got:
+        full = _read_record(path)
+        if full is not None:
+            got = _over(full, got)
     if not isinstance(got, dict) or got.get("kind") != "tweak":
         raise Refused("That is not a tweak.")
     return got
+
+
+def _over(full: dict, change: dict) -> dict:
+    """A write's fields over the record it changes, as the store applies an update."""
+    out = dict(full)
+    for k, v in change.items():
+        if str(k).startswith("_"):
+            continue
+        if isinstance(v, dict) and v.get("__delete__") is True:
+            out.pop(k, None)
+        else:
+            out[k] = v
+    return out
+
+
+def _read_record(path: str) -> dict | None:
+    """The whole record a write's body was made for: the same name in a `work` folder of a
+    folder holding this one (the read folder `$D` holds `wake/<n>/...`), else in this
+    checkout's copy of the page. None where none holds the whole item."""
+    stem = os.path.splitext(os.path.basename(path))[0]
+    names = list(dict.fromkeys((stem, stem.replace("=", ":"))))
+    places, here = [], os.path.dirname(os.path.abspath(path))
+    for _ in range(8):
+        up = os.path.dirname(here)
+        if up == here:
+            break
+        here = up
+        places.append(os.path.join(here, "work"))
+    try:
+        import page_reads
+        places.append(os.path.join(page_reads.mirror_dir(), "work"))
+    except Exception:  # noqa: BLE001  no copy of the page kept here: the folders above alone
+        pass
+    for where in places:
+        for name in names:
+            cand = os.path.join(where, name + ".json")
+            try:
+                if not os.path.isfile(cand) or os.path.samefile(cand, path):
+                    continue
+                with open(cand, encoding="utf-8") as fh:
+                    rec = json.load(fh)
+            except (OSError, ValueError):
+                continue
+            if isinstance(rec, dict) and "data" in rec and "kind" not in rec:
+                rec = rec["data"]
+            if isinstance(rec, dict) and rec.get("kind"):
+                return rec
+    return None
+
+
+# The `--work` a needs_model step repeats: main() puts what this run was given in its place.
+THIS_ITEM = "--work <this item>"
+
+
+def work_file(given: str, dump: str = "") -> str:
+    """The file of the work item `--work` names: the file itself, or the item's id as
+    `app.py wake` prints it (`tweak~...`), found where a read saves it, `<dump>/work/` with
+    @ for ~ (page_db.load), else this checkout's copy of the page, which each claim fills
+    (page_reads.keep_work). The wake printed the id beside `tweak.py apply --work <item>`,
+    and the id alone was refused as no such file (issue #224)."""
+    given = str(given or "").strip()
+    if os.path.isfile(given):
+        return given
+    import page_db
+    stem = page_db.safe_id(given)
+    names = list(dict.fromkeys((stem.replace("~", "@") + ".json", stem + ".json")))
+    places = [os.path.join(dump, "work"), dump] if dump else []
+    try:
+        import page_reads
+        places.append(os.path.join(page_reads.mirror_dir(), "work"))
+    except Exception:  # noqa: BLE001  no copy of the page kept here: the read folder alone
+        pass
+    for where in places:
+        for name in names:
+            if os.path.isfile(os.path.join(where, name)):
+                return os.path.join(where, name)
+    raise Refused(f"No work item {given} " + (f"in {os.path.join(dump, 'work')}" if dump else
+                  "found") + ": give the read folder before it (tweak.py apply \"$D\" --work "
+                  "<its id>), or the item's own file.")
+
+
+def _again(steps, dump: str, given) -> list:
+    """The needs_model steps with this run's own `--work` (and read folder) where they say
+    `<this item>`, so the merge they print runs as it stands (issue #224)."""
+    said = _said(dump, given)
+    return [s.replace(THIS_ITEM, said) if isinstance(s, str) else s for s in steps]
+
+
+def _said(dump: str, given) -> str:
+    """This run's read folder and `--work` values, as a printed step repeats them."""
+    return (f'"{dump}" ' if dump else "") + " ".join(f'--work "{w}"' for w in given)
 
 
 def _work_id(path: str) -> str:
@@ -1953,7 +2054,7 @@ def _stage_interview(work: dict, where: dict, p: dict) -> dict:
                 f"1. Write the answers {pfile} names into {where['file']}, on this session's "
                 "own model (never a smaller one).",
                 f"2. python3 tools/interview_pack.py check \"{company}\"",
-                f"3. python3 tools/tweak.py merge --work <this item> --round {round_dir}",
+                f"3. python3 tools/tweak.py merge {THIS_ITEM} --round {round_dir}",
             ] + (["The person's words went on the reaction list: record or skip them "
                   "(learned.py record or skip, --via \"page tweak\") before the turn ends."]
                  if p["words"] else [])}
@@ -2024,14 +2125,14 @@ def _stage_message(work: dict, where: dict, p: dict, why: str = "") -> dict:
                        "from the packet, then the message checks run.",
             "steps": [f"1. Write the message from {pfile} into {round_dir}/message.txt, on "
                       "this session's own model, with the networking skill.",
-                      f"2. python3 tools/tweak.py merge --work <this item> --round {round_dir}"]
+                      f"2. python3 tools/tweak.py merge {THIS_ITEM} --round {round_dir}"]
             + (["The person's words went on the reaction list: record or skip them "
                 "(learned.py record or skip, --via \"page tweak\") before the turn ends."]
                if p["words"] else []),
             "words": p["words"]}
 
 
-def _merge_message(work: dict, where: dict, p: dict, round_dir: str) -> dict:
+def _merge_message(work: dict, where: dict, p: dict, round_dir: str, base: str = "") -> dict:
     import state
     try:
         new = open(os.path.join(round_dir, "message.txt"), encoding="utf-8").read().strip()
@@ -2051,7 +2152,8 @@ def _merge_message(work: dict, where: dict, p: dict, round_dir: str) -> dict:
         return {"status": "refused", "summary": "Not fit to show yet: " + "; ".join(found[:3])}
     raw = open(where["file"], encoding="utf-8").read()
     old = item.get("text") or ""
-    if md5_file(where["file"]) != pkt.get("before_md5") or old not in raw:
+    # The draft as the packet saw it, or as this round's own merge left it (merge, base).
+    if md5_file(where["file"]) != (base or pkt.get("before_md5")) or old not in raw:
         return {"status": "refused", "summary": "The draft changed since: look again."}
     with open(where["file"], "w", encoding="utf-8", newline="\n") as fh:
         fh.write(raw.replace(old, (f"Subject: {subject}\n\n" if subject else "") + body, 1))
@@ -2060,7 +2162,7 @@ def _merge_message(work: dict, where: dict, p: dict, round_dir: str) -> dict:
     data = log(where)
     data[p["key"]] = {"at": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
                       "output": "message", "changes": p["changes"], "words": p["words"],
-                      "before_md5": pkt["before_md5"], "result_md5": after,
+                      "before_md5": base or pkt["before_md5"], "result_md5": after,
                       "said": ["the message rewritten"], "kept": kept}
     _save_log(where, data)
     return {"status": "done", "key": p["key"], "summary": "Done: the message rewritten.",
@@ -2158,27 +2260,67 @@ def stage(work: dict, where: dict, p: dict, today: dt.date, why: str = "") -> di
                 f"{round_dir}/model_audit_{slug}.json.",
                 f"3. python3 tools/stage_picks.py audit {round_dir}",
                 f"4. python3 tools/stage_picks.py assemble {round_dir}",
-                f"5. python3 tools/tweak.py merge --work <this item> --round {round_dir}",
+                f"5. python3 tools/tweak.py merge {THIS_ITEM} --round {round_dir}",
             ] + (["The person's words went on the reaction list: record or skip them "
                   "(learned.py record or skip, --via \"page tweak\") before the turn ends."]
                  if p["words"] else []),
             "work": work_id}
 
 
+# What a round's own merges left, so a second pass on that round starts from its own result.
+ROUND_RESULTS = "merged.json"
+
+
+def _round_results(round_dir: str) -> list:
+    try:
+        with open(os.path.join(round_dir, ROUND_RESULTS), encoding="utf-8") as fh:
+            got = json.load(fh)
+    except (OSError, ValueError):
+        return []
+    return [str(m) for m in got if m] if isinstance(got, list) else []
+
+
 def merge(work: dict, round_dir: str, today: dt.date | None = None) -> dict:
+    """The audited redraft back into the kept draft (_merge). A second pass on the round a
+    merge made, to act on a warning its first pass gave, starts from that pass's own result:
+    it was refused as changed since it was seen, and the chat then edited the draft by hand,
+    past every message check (issue #225). A change anyone else made since is still refused:
+    only an output exactly as one of this round's merges left it counts as its own."""
+    try:
+        where = resolve(work)
+    except Refused as e:
+        return {"status": "refused", "summary": str(e)}
+    now = md5_file(where["file"])
+    base = now if now and now in _round_results(round_dir) else ""
+    if base and where["item"].get("rev") not in (None, ""):
+        args = dict(work.get("args") or {})
+        args["target"] = dict(args.get("target") or {}, rev=where["item"]["rev"])
+        work = dict(work, args=args)
+    got = _merge(work, round_dir, today, where, base)
+    if got.get("status") == "done":
+        made = md5_file(where["file"])
+        kept = _round_results(round_dir)
+        if made and made not in kept:
+            with open(os.path.join(round_dir, ROUND_RESULTS), "w", encoding="utf-8",
+                      newline="\n") as fh:
+                json.dump(kept + [made], fh)
+    return got
+
+
+def _merge(work: dict, round_dir: str, today: dt.date | None, where: dict,
+           base: str = "") -> dict:
     """The audited redraft back into the kept draft: only the fields the tweak named may
     have changed; then the note is rebuilt, the documents made and checked, and the result
     kept under the tweak's key, so the same request is never written again."""
     today = today or dt.date.today()
     try:
-        where = resolve(work)
         p = plan(work, where)
     except Refused as e:
         return {"status": "refused", "summary": str(e)}
     if where["output"] == "interview":
         return _merge_interview(work, where, p, round_dir)
     if where["output"] == "message":
-        return _merge_message(work, where, p, round_dir)
+        return _merge_message(work, where, p, round_dir, base)
     try:
         with open(os.path.join(round_dir, "drafts.json"), encoding="utf-8") as fh:
             got = json.load(fh)
@@ -2228,6 +2370,15 @@ def undo(work: dict, where: dict | None = None) -> dict:
     """The output as it was before a tweak, while nothing else has changed it since."""
     where = where or resolve(work)
     key = str((work.get("args") or {}).get("undo") or "")
+    if not key:
+        # `undo --work <the item that made it>`, with no key: the change that left the output
+        # exactly as it stands, newest first. Keyed only by an undo item's `args.undo`, the
+        # undo a merge had just printed was refused as nothing to undo (issue #225).
+        now = md5_file(where["file"])
+        mine = sorted(((str(r.get("at") or ""), k) for k, r in log(where).items()
+                       if isinstance(r, dict) and now and r.get("result_md5") == now),
+                      reverse=True)
+        key = mine[0][1] if mine else ""
     rec = log(where).get(key)
     if not rec:
         return {"status": "refused", "summary": "There is nothing to undo there."}
@@ -2596,13 +2747,18 @@ def main(argv=None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     t = sub.add_parser("table")
     t.add_argument("output", nargs="?")
-    for name in ("plan", "apply", "undo"):
+    for name in ("plan", "apply", "undo", "merge"):
         s = sub.add_parser(name)
+        s.add_argument("dump", nargs="?", default="",
+                       help="the read folder that holds the work item ($D)")
         s.add_argument("--work", required=True, action="append",
-                       help="the work item; give it again for each tweak claimed with it")
-    m = sub.add_parser("merge")
-    m.add_argument("--work", required=True, action="append")
-    m.add_argument("--round", required=True)
+                       help="the work item's id or its file; again for each tweak claimed "
+                       "with it")
+        if name == "merge":
+            s.add_argument("--round", required=True)
+        if name == "undo":
+            s.add_argument("--key", default="", help="the key a done tweak printed; without "
+                           "it, the change that left the output as it stands")
     sub.add_parser("move-record", help="move documents/rounds/tweaks.json, where an older "
                    "version kept the search's tweak record, into documents/rounds/tweaks/")
     pr = sub.add_parser("promote")
@@ -2626,11 +2782,15 @@ def main(argv=None) -> int:
             return 0
         print(json.dumps(offers, indent=1, ensure_ascii=False))
         return 0
+    given = list(a.work)
     try:
+        a.work = [work_file(w, a.dump) for w in given]
         work = _with_buttons(merge_works([read_work(w) for w in a.work]))
     except (OSError, ValueError, Refused) as e:
-        print(json.dumps({"status": "refused", "summary": str(e)}))
+        print(json.dumps(_met({"status": "refused", "summary": str(e)}, a.cmd)))
         return 1
+    if a.cmd == "undo" and a.key:
+        work = dict(work, args=dict(work.get("args") or {}, undo=a.key))
     if a.cmd == "plan":
         try:
             got = plan(work)
@@ -2649,8 +2809,30 @@ def main(argv=None) -> int:
         got = merge(work, a.round)
     else:
         got = undo(work)
-    print(json.dumps(got, indent=1, ensure_ascii=False))
+    if isinstance(got.get("steps"), list):
+        got["steps"] = _again(got["steps"], a.dump, given)
+    if a.cmd in ("apply", "merge") and got.get("status") == "done" and got.get("key") \
+            and got.get("undo"):
+        # The undo a chat runs itself, as printed (issue #225).
+        got["undo_step"] = (f"python3 tools/tweak.py undo {_said(a.dump, given)} "
+                            f"--key {got['key']}")
+    print(json.dumps(_met(got, a.cmd), indent=1, ensure_ascii=False))
     return 0 if got.get("status") not in ("refused", "failed") else 1
+
+
+def _met(got: dict, cmd: str) -> dict:
+    """A refusal, with the one command that files it the moment a chat works round it rather
+    than doing what it says: the id refused and retried as a file was never filed (issue
+    #240). Only in the maintainer's own copy (app_bug.met_line); elsewhere it is as it was."""
+    if got.get("status") not in ("refused", "failed"):
+        return got
+    try:
+        import app_bug
+        line = app_bug.met_line(f"tools/tweak.py:{cmd}",
+                                f"tweak.py {cmd} {got['status']}: {got.get('summary') or ''}")
+    except Exception:  # noqa: BLE001  the refusal stands as it was
+        line = ""
+    return dict(got, if_you_work_round_this=line) if line else got
 
 
 if __name__ == "__main__":

@@ -162,13 +162,13 @@ def test_a_republish_sends_only_the_files_that_changed(copy, tmp_path, monkeypat
     assert "code" not in _app_json(copy)
     copy.run("published", PAGE, "--parts", out)
     said = copy.run("page", "--out-dir", out, "--url", PAGE)
-    # A published page is read and its files listed first; nothing is published before.
-    assert "action list, scope files" in said and "Artifact, action publish" not in said, said
-    assert f"--url {PAGE} --on-page -" in said, said
-    said = _with_list(copy, out, _listing(out))
+    # Planned from the copy's own record of the last publish: no list asked (issue #229).
+    assert "action list, scope files" not in said and "--on-page" not in said, said
     assert _files_named(said) == {}, said              # nothing changed: only the page
     publish = said.split("Artifact, action publish", 1)[-1].split("\n")[0]
     assert "--capabilities" not in publish and "with no capabilities" in publish
+    said = _with_list(copy, out, _listing(out))
+    assert _files_named(said) == {}, said              # the host's own list agrees
     # One section of app.js changed: its one file is new, the old one goes.
     tpl = tmp_path / "tpl"
     import shutil
@@ -494,3 +494,95 @@ def test_a_part_that_throws_is_never_said_to_be_updating(tmp_path, how):
     r = _open_broken(tmp_path, how, MOMENTS_AGO)
     assert r["built"] == MOMENTS_AGO, r
     _asks_for_itself_whole(r, how)
+
+
+# ---------------------------------------------------------------- issue #229: the record first
+
+
+def _published_older(copy, out: str, pick) -> tuple:
+    """The page published in parts from `out`, then the record saying it holds an older
+    build of each file `pick(held)` names: the page as last published, before an update
+    changed those files. The files picked, as the build now names them."""
+    copy.page(current=True)
+    copy.run("page", "--out-dir", out, "--url", PAGE)
+    copy.run("published", PAGE, "--parts", out)
+    rec = _app_json(copy)
+    older = tuple(pick(rec["code"]))
+    swap = {p: re.sub(r"\.[0-9a-f]{6,}\.(js|css)$", r".0a1b2c3d4e.\1", p) for p in older}
+    assert all(swap[p] != p for p in older), swap
+    rec["code"] = sorted(swap.get(p, p) for p in rec["code"])
+    with open(os.path.join(copy.profile, "app.json"), "w", encoding="utf-8") as fh:
+        json.dump(rec, fh)
+    return older
+
+
+def test_two_changed_files_go_up_from_the_record_with_no_list(copy):
+    """After an update that changed two of the page's code files, the copy's record of its
+    last publish says what the page holds: the plan sends those two files and nothing else,
+    with no list of the page's files asked for, and takes nothing off unseen. Copied by hand,
+    that list of 200 lines came back short or with every size "1 bytes", and the whole page
+    went up again, about 1 MB in seven publishes (issue #229)."""
+    out = os.path.join(copy.root, "built")
+
+    def two(held):
+        js = sorted(p for p in held if p.endswith(".js"))
+        return [js[2], js[-3]]
+    changed = _published_older(copy, out, two)
+    said = copy.run("page", "--out-dir", out, "--url", PAGE)
+    assert "action list, scope files" not in said and "--on-page" not in said, said
+    sent = _files_named(said)
+    assert set(sent) == set(changed), said
+    assert all(v and os.path.isfile(v) for v in sent.values()), sent   # nothing taken off
+    assert said.count("Artifact, action publish") == 1, said
+    assert "2 of them to put up" in said, said
+
+
+def test_the_list_is_asked_for_only_where_the_record_cannot_say(copy, tmp_path):
+    """No record of what the page holds, a record of another page, or one older than the
+    page's last publish this copy has read (another chat published it since): then, and only
+    then, the published page's own list is asked for."""
+    out = os.path.join(copy.root, "built")
+    copy.page(current=True)                            # an address, and no record of files
+    said = copy.run("page", "--out-dir", out, "--url", PAGE)
+    assert "action list, scope files" in said and f"--url {PAGE} --on-page -" in said, said
+    assert "Artifact, action publish" not in said, said
+    copy.run("published", PAGE, "--parts", out)
+    other = PAGE + "-other"
+    said = copy.run("page", "--out-dir", out, "--url", other)
+    assert f"action list, scope files, url {other}" in said, said
+    # The page's own meta/now, as this copy last read it, says it went up after the record.
+    mirror = tmp_path / "mirror"
+    (mirror / "meta").mkdir(parents=True)
+    (mirror / ".mirror.json").write_text(json.dumps({"url": PAGE}), encoding="utf-8")
+    later = {"data": {"published_at": "2099-01-01T00:00:00Z"}, "version": 4}
+    (mirror / "meta" / "now.json").write_text(json.dumps(later), encoding="utf-8")
+    said = copy.run("page", "--out-dir", out, "--url", PAGE, LJS_PAGE_MIRROR=str(mirror))
+    assert "action list, scope files" in said, said
+    earlier = dict(later, data={"published_at": "2000-01-01T00:00:00Z"})
+    (mirror / "meta" / "now.json").write_text(json.dumps(earlier), encoding="utf-8")
+    said = copy.run("page", "--out-dir", out, "--url", PAGE, LJS_PAGE_MIRROR=str(mirror))
+    assert "action list, scope files" not in said, said
+
+
+def test_a_list_copied_short_or_with_placeholder_sizes_is_refused(copy):
+    """A list whose sizes are all the same placeholder, or far shorter than the record, was
+    not the host's own: it is refused in plain words, never read as "everything differs"."""
+    out = os.path.join(copy.root, "built")
+    copy.page(current=True)
+    copy.run("page", "--out-dir", out, "--url", PAGE)
+    copy.run("published", PAGE, "--parts", out)
+    ones = re.sub(r"\d+ bytes", "1 bytes", _listing(out))
+    path = os.path.join(copy.root, "listing.txt")
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(ones)
+    said = copy.run("page", "--out-dir", out, "--url", PAGE, "--on-page", path, ok=(2,))
+    assert "does not look like the one the Artifact tool printed" in said, said
+    assert "same size (1 bytes)" in said and "Artifact, action publish" not in said, said
+    short = "\n".join(_listing(out).splitlines()[:6])
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(short)
+    said = copy.run("page", "--out-dir", out, "--url", PAGE, "--on-page", path, ok=(2,))
+    assert "does not look like" in said and "Artifact, action publish" not in said, said
+    # --whole, the way out the refusal names, puts every file up whatever the list says.
+    said = copy.run("page", "--out-dir", out, "--url", PAGE, "--on-page", path, "--whole")
+    assert len(_files_named(said)) == len(_app_json(copy)["code"]), said

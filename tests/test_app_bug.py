@@ -101,8 +101,56 @@ def test_clean_words_print_the_issue_the_steps_and_the_key(copy, capsys):
     assert "add_issue_comment" in out and "method create" in out
     assert "say nothing about it" in out
     assert "version 4.15.1, app commit 0123456789ab, from a cloud chat" in out
-    assert out.index("0. ") < out.index("1. One call") < out.index("2. Each issue") \
+    assert out.index("0. ") < out.index("1. Look first") < out.index("2. The same bug found") \
         < out.index("3. Nothing to wake")
+
+
+def test_the_same_bug_filed_some_other_way_is_looked_for_first_and_gets_a_comment(
+        copy, capsys, monkeypatch):
+    # Issue #221: the app already had the bug, filed by hand with no key line, and a chat
+    # that listed only the open from-copy issues filed it a second time.
+    monkeypatch.setattr(app_bug, "_today", lambda: dt.date(2099, 1, 31))
+    code, out = _check(copy, capsys, title="Sync stops on start when no tag",
+                       key="tools/sync_app.py:follow")
+    assert code == 0
+    look = out.split("1. Look first", 1)[1].split("2. The same bug found", 1)[0]
+    opened = next(ln for ln in look.splitlines() if "state OPEN" in ln)
+    closed = next(ln for ln in look.splitlines() if "state CLOSED" in ln)
+    assert "labels" not in opened.split("fields")[0]          # whatever its labels
+    assert "since 2099-01-01T00:00:00Z" in closed             # closed in the last 30 days
+    key = app_bug.key_of("", "sync_app.follow")
+    assert f"<!-- app-bug: {key} -->" in look and "sync_app follow" in look
+    assert "issue_read" in look and "issue_read" in app_bug.GITHUB_TOOLS
+    same = out.split("2. The same bug found", 1)[1].split("3. Nothing to wake", 1)[0]
+    assert "file nothing new" in same and "add_issue_comment" in same
+    assert "nothing added after this check" in same
+    # The comment it adds is the checked words, under the line saying it was seen again.
+    assert "comment:\nSeen again (version 4.15.1" in out
+
+
+def test_a_word_of_the_copys_stops_the_comment_as_it_stops_a_new_issue(copy, capsys):
+    code, out = _check(copy, capsys, body=BODY + "Seen again on the row for Wexmoor Lending.\n")
+    assert code == 1 and "Wexmoor" not in out and "add_issue_comment" not in out
+
+
+def test_any_copy_may_look_first_and_files_nothing(copy, capsys, monkeypatch):
+    monkeypatch.setattr(sync_app, "maintainers", lambda: False)
+
+    def never(out, tokens):
+        raise AssertionError("looking builds nothing")
+    assert app_bug.main(["similar", "--title", "Sync stops on start",
+                         "--key", "tools/sync_app.py:follow"], build=never) == 0
+    out = capsys.readouterr().out
+    assert "state OPEN" in out and "state CLOSED" in out and "file nothing new" in out
+    assert "issues?q=is%3Aissue+sync+stops+start" in out
+    assert "method create" not in out and not (copy["git"] / app_bug.STATE).exists()
+
+
+def test_a_held_issue_keeps_its_tool_for_the_look(copy, capsys, monkeypatch):
+    monkeypatch.setattr(app_bug, "ROOT", str(copy["tmp"]))
+    _check(copy, capsys, key="tools/sync_app.py:follow", hold=True)
+    assert app_bug.file_held(build=copy["build"], known=KNOWN) == 0
+    assert "these words find it: sync_app follow" in capsys.readouterr().out
 
 
 def test_the_denylist_is_built_once_and_again_when_the_copy_moves_on(copy, capsys, monkeypatch):
@@ -328,6 +376,9 @@ def test_every_place_that_needs_it_names_the_same_task_and_the_flow():
     wrong = chat.split('**"Something looks wrong"**', 1)[1]
     assert "**In the app maintainer's own copy**" in wrong
     assert "python3 tools/app_bug.py check" in wrong and "said to nobody" in wrong
+    # Both ways out look first for the same bug already on the app (issue #221).
+    assert wrong.index("python3 tools/app_bug.py similar") < wrong.index("**In the app maintainer's")
+    assert "it's already reported" in wrong and "never a second issue" in wrong
     runbook = _flat("RUNBOOK.md")
     assert runbook.count("tools/app_bug.py") >= 2 and "said to nobody" in runbook
     maint = _flat("MAINTAINING.md")

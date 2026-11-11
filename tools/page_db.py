@@ -1397,14 +1397,113 @@ def held_locks(db: dict, now: dt.datetime) -> dict:
     return held
 
 
+# A question typed in the page's Chat (a `talk` with its thread and no card it is about) gets a
+# chat of its own where the chat that answers the page can start one, as a big job does: the
+# maintainer, issue #226, "like as if u did a job search or people search etc with the same
+# limits and cleanups". One such chat at a time answers every Chat question: it takes the next
+# one waiting when it finishes (`next --job-chat --questions`), and while it is at work the
+# chat that answers the page leaves Chat questions to it. It counts against the same cap as
+# the big jobs' chats (HEAVY_CAP_CHATS) and is put away as theirs are, when its work has ended
+# (tidy.py finished_jobs). Where none can be started, the question is answered first, here.
+QUESTION_CHAT_TITLE = "Job search: Chat"
+
+
+def chat_question(item: dict) -> bool:
+    """Is this work a question typed in the page's Chat (QUESTION_CHAT_TITLE)?"""
+    args = item.get("args") if isinstance(item.get("args"), dict) else {}
+    return str(item.get("kind") or "") == "talk" and not args.get("about")
+
+
+def in_question_chat(item: dict) -> bool:
+    """Was this work claimed for the Chat's own chat (its claim names that chat's title)?"""
+    return str(item.get("chat_title") or "").startswith(QUESTION_CHAT_TITLE)
+
+
+def question_chat_live(db: dict, now: dt.datetime) -> bool:
+    """Is the Chat's own chat at work: a question claimed for it, its claim not run out?"""
+    work = db.get("work") or {}
+    return any(in_question_chat(d["data"]) and _live_claim(d["data"], now, work)
+               for d in work.values())
+
+
+def busy_here(db: dict, chat: str, chat_kind: str, now: dt.datetime, but: str = "") -> bool:
+    """Has the chat that answers the page other work of its own, running or waiting? Only then
+    does a Chat question get a chat of its own (the coordinator, issue #226): with nothing else
+    going on it is answered in place, which is quicker than a fresh chat's full start. Its own
+    is work it does itself: small work queued that it can take (never a big job, which runs in
+    a chat of its own, nor another Chat question, answered in the same pass), and work it holds
+    a live claim on that runs here (no chat of its own named on it)."""
+    work = db.get("work") or {}
+    for wid, doc in work.items():
+        d = doc["data"]
+        if wid in (but, safe_id(but)) or WORK_KINDS.get(str(d.get("kind") or "")) is None:
+            continue
+        status = str(d.get("status") or "")
+        heavy = WORK_KINDS[str(d["kind"])].get("heavy")
+        if status == "queued" and not d.get("stop_asked") and not heavy \
+                and not chat_question(d) and can_take(d, chat_kind):
+            return True
+        if status in ACTIVE and str(d.get("claimed_by") or "") == chat and not heavy \
+                and not d.get("chat_title") and not d.get("run_by") \
+                and _live_claim(d, now, work):
+            return True
+    return False
+
+
+def let_go(db: dict, work_id: str, chat: str, now: dt.datetime, out_dir: str) -> list[str]:
+    """claimed for the Chat's own chat -> queued again, at once, when that chat could not be
+    started (create_session refused or failed): nobody's claim, no chat named on it, and
+    `own_chat: "refused"`, so the chat that answers the page takes it next and answers it in
+    place (app.choose), never after the claim's thirty minutes ran out (issue #226). The batch
+    files, pinned to the item's version; ValueError where it is not this chat's to let go."""
+    doc = (db.get("work") or {}).get(safe_id(work_id))
+    if doc is None:
+        raise ValueError(f"no work item {work_id} in this read")
+    item = doc["data"]
+    if str(item.get("status") or "") not in ACTIVE or str(item.get("claimed_by") or "") != chat:
+        raise ValueError(f"{work_id} is not claimed by this chat, so it is left as it is")
+    w = Writes(out_dir)
+    w.add("update", "work", safe_id(work_id),
+          {"status": "queued", "claimed_by": None, "claimed_at": None, "lease_until": None,
+           "claimed_as": None, "chat_title": None, "run_by": None, "stage": 0,
+           "stage_at": None, "own_chat": "refused"},
+          if_version=doc["version"])
+    return w.save("let-go")
+
+
+def chats_at_work(db: dict, now: dt.datetime) -> int:
+    """How many cloud chats of their own are at work: each big job (a batch counted once) and
+    the Chat's own chat, against HEAVY_CAP_CHATS."""
+    work = db.get("work") or {}
+    return sum(1 for d in work.values() if _live_claim(d["data"], now, work)
+               and not d["data"].get("with")
+               and (WORK_KINDS.get(str(d["data"].get("kind") or ""), {}).get("heavy")
+                    or in_question_chat(d["data"]))
+               and not (d["data"].get("claimed_as") == "computer"
+                        or computer_only(d["data"], "cloud")))
+
+
+# A question the person asked Claude (a `talk`: the page's Chat, or a card's Ask Claude) goes
+# before every other piece of work of the same urgency: a message change, a redraft, a draft.
+# Taken oldest first like the rest, a question asked behind three message changes waited while
+# each was done, and the page said the answer would follow in a moment (issue #226). An update
+# or a republish is never put behind it (UPDATES_FIRST): it changes the code the answer runs on.
+ASKED_FIRST = ("talk",)
+UPDATES_FIRST = ("update", "republish")
+
+
 def next_item(db: dict, chat_kind: str, now: dt.datetime,
               cap: int = HEAVY_CAP, heavy_only: bool = False,
-              to_only: str = "") -> dict | None:
+              to_only: str = "", questions_only: bool = False,
+              skip_questions: bool = False) -> dict | None:
     """The queued work item this chat should claim, or None.
 
-    A kind of work it can do (can_take), the most urgent first and then the oldest asked, never past the heavy-job cap (urgent
+    A kind of work it can do (can_take), the most urgent first, a question before anything
+    else as urgent (ASKED_FIRST), and then the oldest asked, never past the heavy-job cap (urgent
     may take one more), and never one whose locks another live job holds. `to_only`
-    ("computer"): only work sent there, for the chat the app started on the computer for it."""
+    ("computer"): only work sent there, for the chat the app started on the computer for it.
+    `questions_only`: only a Chat question, for the Chat's own chat; `skip_questions`: none,
+    for the chat that answers the page while the Chat's own chat is at work (chat_question)."""
     work = db.get("work") or {}
     held = held_locks(db, now)
     # A batch is one job: its other postings (`with` its leader) take no place of their own,
@@ -1417,9 +1516,11 @@ def next_item(db: dict, chat_kind: str, now: dt.datetime,
     # audit, 2026-11-10, C7).
     def on_computer(d: dict) -> bool:
         return d.get("claimed_as") == "computer" or bool(computer_only(d, "cloud"))
+    # The Chat's own chat takes a place as a big job's does (QUESTION_CHAT_TITLE).
     heavy = sum(1 for d in work.values() if _live_claim(d["data"], now, work)
                 and not d["data"].get("with")
-                and WORK_KINDS.get(str(d["data"].get("kind") or ""), {}).get("heavy")
+                and (WORK_KINDS.get(str(d["data"].get("kind") or ""), {}).get("heavy")
+                     or in_question_chat(d["data"]))
                 and (on_computer(d["data"]) if to_only == "computer" else
                      not on_computer(d["data"]) if chat_kind == "cloud" else True))
     queued = []
@@ -1427,6 +1528,8 @@ def next_item(db: dict, chat_kind: str, now: dt.datetime,
         item = doc["data"]
         kind = WORK_KINDS.get(str(item.get("kind") or ""))
         if kind is None or item.get("stop_asked") or (heavy_only and not kind.get("heavy")):
+            continue
+        if (questions_only and not chat_question(item)) or (skip_questions and chat_question(item)):
             continue
         # A job whose chat stopped (its claim not moved on for LEASE_S) is started again,
         # once, by the next chat to look: it sat "running" for good, and work for the same
@@ -1446,7 +1549,9 @@ def next_item(db: dict, chat_kind: str, now: dt.datetime,
             continue
         if not can_take(item, chat_kind) or (to_only == "computer" and not computer_only(item, "cloud")):
             continue
-        queued.append((-int(item.get("priority") or 0), str(item.get("asked_at") or ""), wid))
+        queued.append((-int(item.get("priority") or 0),
+                       0 if str(item.get("kind") or "") in ASKED_FIRST + UPDATES_FIRST else 1,
+                       str(item.get("asked_at") or ""), wid))
     # An update that changes how a record file is stored (args.migration) never interrupts
     # running work: it starts once nothing else is running, and work asked for meanwhile
     # waits until it has landed ("Starts after the update"). A code-only update holds
@@ -1454,7 +1559,7 @@ def next_item(db: dict, chat_kind: str, now: dt.datetime,
     migrating = after_update(db)
     others_live = any(_live_claim(d["data"], now, work) for d in work.values()
                       if not _is_migration(d["data"]))
-    for _, _, wid in sorted(queued):
+    for *_, wid in sorted(queued):
         item = work[wid]["data"]
         kind = WORK_KINDS[item["kind"]]
         if migrating and (not _is_migration(item) or others_live):
@@ -2576,7 +2681,7 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
            chat_kind: str = "cloud", dump_dir: str = "", chat: str = "",
            question: str = "", about: str = "", answer: dict | None = None,
            answered=(), left_out: str = "", outcome: str = "", signin: str = "",
-           go=(), me: str = "") -> dict:
+           go=(), me: str = "", add: bool = False, whom=()) -> dict:
     """The batch that finishes one work item (the app skill, step 5): the item `done` (or
     `failed`, with `error` in plain words, or `stopped` after their Stop), its one-sentence
     summary and links, pinned to the version read; each of its locks the dump holds, deleted
@@ -2589,6 +2694,11 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
     draws the control that fits on the card (templates/app/DESIGN.md, "Asking the person").
     `go` ([{label, to}], tools/touched.py `buttons`): where on the page what it changed is, as
     buttons under its answer and on its result, worked out from the records it wrote.
+    Finished already from this folder and given a new answer or new buttons, the finish is made
+    again in place of the one this folder holds, its buttons kept and the new ones added, and
+    `add` keeps its answer too, the new one after it (several replies answered in one item).
+    Made again from the same read, it carries the same version, so a finish that landed already
+    has the new one refused whole by the store: it is never sent twice.
     {work, status, thread, message, locks, batches}. Raises ValueError, in plain words, for a
     summary that will not do or a reply with no thread; KeyError for an item not in the dump
     or already finished."""
@@ -2597,14 +2707,41 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
     if doc is None:
         raise KeyError(f"no work {work_id!r} in the dump; read work again")
     item = dict(doc["data"])
+    keep_mid = ""
     if str(item.get("status") or "") in FINISHED:
         made = finished_here(dump_dir, work_id) if dump_dir else None
-        if made:
+        if not made:
+            raise KeyError(f"work {work_id!r} has already finished; write nothing more to it")
+        kept = kept_finish(dump_dir, work_id)
+        old_go = [b for b in kept.get("go") or [] if isinstance(b, dict)]
+        new_go = [{"label": str(b["label"]), "to": str(b["to"])} for b in go or ()
+                  if isinstance(b, dict) and b.get("label") and b.get("to")]
+        new_go = [b for b in new_go if b not in old_go]
+        said = str(reply or "").strip()
+        fresh = bool(new_go) or (bool(said) and said != str(kept.get("reply") or "").strip()
+                                 and not (add and said in str(kept.get("reply") or "")))
+        if fresh and kept:
+            # One item answering several replies (one message with three people's answers):
+            # each finish after the first, and the answer given at the end, was handed back
+            # the first finish, and the page said only that the first reply was ready
+            # (#228). Made again from the read the first was made from, with every button.
+            _unland(dump_dir, made["batches"])
+            db = load(dump_dir)
+            doc = (db.get("work") or {}).get(safe_id(work_id))
+            item = dict(doc["data"]) if doc else {}
+        if not fresh or not kept or doc is None or str(item.get("status") or "") in FINISHED:
             # Finished by this folder, its batch kept: the same batch again, never refused,
             # so a finish that was never sent is never lost (two finishes in a row wrote one
             # file, and the second refused the first as already finished, 2026-11-09).
             return made
-        raise KeyError(f"work {work_id!r} has already finished; write nothing more to it")
+        go = old_go + new_go
+        if add and said and str(kept.get("reply") or "").strip():
+            reply = str(kept["reply"]).strip() + "\n\n" + said
+        elif not said:
+            reply = str(kept.get("reply") or "")
+        thread = thread or str(kept.get("thread") or "")
+        summary = summary or str(kept.get("summary") or "")
+        keep_mid = str(kept.get("message") or "")
     # Work nobody is doing may be withdrawn by any chat, with its reason on the card: work for
     # the computer nobody has started yet (a repeat of a read already done could only be called
     # off by the person's own Stop, the maintainer, 2026-11-10), a question waiting on the
@@ -2733,7 +2870,11 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
     w = Writes(out_dir)
     mid = ""
     if str(reply or "").strip():
-        mid = message_id(now)
+        # One item, one answer: a finish made again from this folder (its first refused, or
+        # made again with more) keeps the message it wrote, so the thread never holds two.
+        keep_mid = keep_mid or (str(kept_finish(dump_dir, work_id).get("message") or "")
+                                if dump_dir else "")
+        mid = keep_mid or message_id(now)
         w.add("set", f"talk/{safe_id(thread)}/messages", mid,
               {"from": chat_kind if chat_kind in ("cloud", "computer") else "cloud",
                "text": str(reply).strip(), "at": at, "work": work_id,
@@ -2759,7 +2900,10 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
         # it again. Moved on outside that record, the refused finish could never be made again
         # ("already finished"), and the item was one version behind for good (2026-11-09).
         keep_landed(dump_dir, got["batches"])
-        _keep_finished(dump_dir, work_id, got)
+        _keep_finished(dump_dir, work_id, got, {
+            "reply": str(reply or "").strip() if thread else answer_text,
+            "go": go, "thread": thread, "message": mid, "whom": list(whom or ()),
+            "summary": summary})
     return got
 
 
@@ -2770,11 +2914,11 @@ ANSWER_MAX = 4000
 FINISHED_HERE = ".finished.json"    # in a dump folder: each finish made here, with its batches
 
 
-def _keep_finished(dump_dir: str, work_id: str, got: dict) -> None:
+def _keep_finished(dump_dir: str, work_id: str, got: dict, kept: dict | None = None) -> None:
     side = os.path.join(dump_dir, FINISHED_HERE)
     have = _read_json(side)
     have = have if isinstance(have, dict) else {}
-    have[safe_id(work_id)] = got
+    have[safe_id(work_id)] = dict(got, **({_KEPT: kept} if kept else {}))
     try:
         with open(side, "w", encoding="utf-8", newline="\n") as fh:
             json.dump(have, fh, ensure_ascii=False, indent=1)
@@ -2790,7 +2934,53 @@ def finished_here(dump_dir: str, work_id: str) -> dict | None:
     if not isinstance(got, dict) or not got.get("batches") or \
             not all(os.path.isfile(p) for p in got["batches"]):
         return None
-    return dict(got, again=True)
+    return dict({k: v for k, v in got.items() if k != _KEPT}, again=True)
+
+
+_KEPT = "_kept"     # in FINISHED_HERE: the answer, buttons, thread and message a finish wrote
+
+
+def kept_finish(dump_dir: str, work_id: str) -> dict:
+    have = _read_json(os.path.join(dump_dir, FINISHED_HERE))
+    got = have.get(safe_id(work_id)) if isinstance(have, dict) else None
+    kept = got.get(_KEPT) if isinstance(got, dict) else None
+    return kept if isinstance(kept, dict) else {}
+
+
+def _unland(dump_dir: str, batches) -> None:
+    """The folder's copy of every record these batches moved on, put back as it was before
+    the first of them, and they are no longer taken as landed: a finish made again from the
+    read the first was made from. Batches sent after them are left as they are."""
+    sent = _sent(dump_dir)
+    paths = {os.path.abspath(p) for p in batches or ()}
+    mine = [s for s in sent if s.get("batch") in paths]
+    done: set = set()
+    for got in mine:
+        n = str(got.get("n"))
+        for key in got.get("records") or []:
+            if key in done:
+                continue
+            done.add(key)
+            coll, _, doc_id = key.partition("/")
+            kept = _read_json(os.path.join(dump_dir, SENT_DIR, n, coll,
+                                           doc_id.replace("~", "@") + ".json"))
+            if not isinstance(kept, dict):
+                continue
+            where = os.path.join(dump_dir, coll)
+            names = [os.path.join(where, doc_id.replace("~", "@") + ".json"),
+                     os.path.join(where, doc_id + ".json")]
+            for p in dict.fromkeys(names):
+                if os.path.isfile(p):
+                    os.remove(p)
+            if not kept.get("none"):
+                os.makedirs(where, exist_ok=True)
+                with open(names[0], "w", encoding="utf-8", newline="\n") as fh:
+                    json.dump(kept.get("file"), fh, ensure_ascii=False, indent=1)
+                    fh.write("\n")
+    for got in mine:
+        shutil.rmtree(os.path.join(dump_dir, SENT_DIR, str(got.get("n"))), ignore_errors=True)
+    if mine:
+        _keep_sent(dump_dir, [s for s in sent if s not in mine])
 
 
 def _drafted(db: dict, ids, also: dict | None = None) -> tuple[int, bool]:

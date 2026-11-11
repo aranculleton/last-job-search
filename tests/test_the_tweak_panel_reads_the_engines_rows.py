@@ -90,7 +90,7 @@ def test_the_newest_kept_change_is_undone_with_the_engines_own_action(run, tmp_p
             {"key": "tw-k1", "at": "2026-10-23T15:00:00Z", "said": ["Spacing: tighter"], "undo": False}]
     m = _model(done)
     got = _go(run, tmp_path, [{"hash": "drafts-applications", "more": ITEM}, {"click": "Undo it"}], vp, model=m)
-    assert "Last change: Look: classic" in got["after"][0]["text"]
+    assert "Last change: Look: classic, Sat 24 Oct." in got["after"][0]["text"]
     a = _one(got, "tweak.undo")
     assert a["item"] == ITEM and a["value"] == {"key": "tw-k2"} and a["rev_seen"] == _item(m, ITEM)["rev"]
 
@@ -137,3 +137,15 @@ def test_the_general_resumes_pencil_opens_its_bullets_and_sends_the_ones_ticked(
     m["resume"]["bullets"] = []
     got = _go(run, tmp_path, [{"hash": "drafts", "count": '[data-k^="tweak:resume:resume-current"]'}], vp, model=m)
     assert got["after"][0]["count"] == 0, got
+
+
+def test_a_change_made_today_says_its_time(run, tmp_path, vp):
+    """The maintainer, 2026-11-11, of "Last change: the message rewritten, Wed 11 Nov.": "if its
+    the same day can we have the time ... like the time it was rewritten"."""
+    done = [{"key": "tw-k3", "at": "2026-10-24T15:05:00Z", "said": ["Look: classic"], "undo": True}]
+    got = _go(run, tmp_path, [{"hash": "drafts-applications", "more": ITEM}], vp, model=_model(done),
+              clock="2026-10-24T18:00:00Z", zone="UTC")
+    line = got["after"][0]["text"]
+    line = line[line.find("Last change"):].split("Undo it")[0]
+    # Said on the person's own clock, the device's beside it where they differ.
+    assert line.startswith("Last change: Look: classic, today at ") and "15:05" in line, line

@@ -151,7 +151,7 @@ def test_a_change_asked_with_the_pencil_is_said_once_under_the_draft(run, tmp_pa
 def test_new_version_is_said_only_once_the_new_words_are_on_the_card(run, tmp_path):
     waiting = _go(run, tmp_path, [{"hash": "contacts", "eval": PEN}], WIDE,
                   seed=_tweak("done", rev="m1", summary="Her message now asks straight for the call she offered.", finished_at="2026-10-25T08:58:00.000Z"), clock=T)
-    assert "New version" not in waiting["after"][0]["eval"]["done"] and "putting" in waiting["after"][0]["eval"]["done"], waiting["after"][0]["eval"]
+    assert "New version" not in waiting["after"][0]["eval"]["done"] and "on its way" in waiting["after"][0]["eval"]["done"], waiting["after"][0]["eval"]
     there = _go(run, tmp_path, [{"hash": "contacts", "eval": PEN}], WIDE,
                 seed=_tweak("done", rev="m0", summary="Her message now asks straight for the call she offered.", finished_at="2026-10-25T08:58:00.000Z"), clock=T)
     done = there["after"][0]["eval"]["done"]

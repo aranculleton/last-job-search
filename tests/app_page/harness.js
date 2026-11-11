@@ -85,16 +85,24 @@ class Store {
     if (op === "update") {
       const cur = this.docs.get(a.path);
       if (!cur) return {error: "invalid_argument"};
-      return {changes: this.change(a.path, merge(cur.data, a.data))};
+      // A document is at most 256 KiB, merged (db.d.ts).
+      const next = merge(cur.data, a.data);
+      if (Buffer.byteLength(JSON.stringify(next)) > 262144) return {error: "invalid_argument"};
+      return {changes: this.change(a.path, next)};
     }
     if (op === "delete") return {changes: this.change(a.path, null)};
     if (op === "acquire") {
+      // db.d.ts acquire: busy says when the lease in force ends, never who holds it; granted, the
+      // lease's `data` is merged into the document and the result is its version then.
       const t = Date.now();
       const l = this.leases.get(a.path);
       if (l && l.until > t && l.holder !== a.holder) return {acquired: false, expiresAt: new Date(l.until).toISOString()};
-      this.leases.set(a.path, {holder: a.holder, until: t + (a.ttlMs || 30000)});
+      const until = t + (a.ttlMs || 30000);
+      this.leases.set(a.path, {holder: a.holder, until});
+      let changes;
+      if (a.data) { const cur = this.docs.get(a.path); changes = this.change(a.path, cur ? merge(cur.data, a.data) : clone(a.data)); }
       const cur = this.docs.get(a.path);
-      return {acquired: true, version: cur ? cur.version : 0, holder: a.holder};
+      return {acquired: true, version: cur ? cur.version : 0, holder: a.holder, expiresAt: new Date(until).toISOString(), changes};
     }
     return {error: "invalid_argument"};
   }
@@ -2685,7 +2693,8 @@ S.talk = async (a) => {
   await page.getByRole("button", {name: "Send", exact: true}).click();
   await page.waitForTimeout(50);
   await turn(page, 12);
-  r.quick = await T(page, "#main .talk-msg .talk-text");
+  // With the state said under the question (issue #234).
+  r.quick = await T(page, "#main .talk-msg .talk-text, #main .talk-msg .talk-state");
   // Handed on to Claude, the note's one button sends it, from the person's own tap.
   const send = page.locator("#main .talk-msg").getByRole("button", {name: "Send to Claude"});
   if (await send.count()) { await send.first().click(); await turn(page, 6); r.afterSend = await T(page, "#main .talk-msg .talk-text"); }
@@ -2711,7 +2720,7 @@ S.chat_cloud = async (a) => {
   await page.getByRole("button", {name: "Send", exact: true}).click();
   await turn(page, 10);
   const r = {docs: store.list("talk/cloud-1/messages/").map((p) => store.get(p)), work: store.list("work/").map((p) => [p, store.get(p)]),
-    rings: (await calls(page)).filter((c) => c.cap === "comments").map((c) => c.text), waiting: await T(page, "#main .talk-msg.pending")};
+    rings: (await calls(page)).filter((c) => c.cap === "comments").map((c) => c.text), waiting: await T(page, "#main .talk-msg.pending, #main .talk-state")};
   store.chat("talk/cloud-1/messages/m-reply", {from: "cloud", text: "Their careers page lists the Pricing Analyst role and closes on 31 October.", at: new Date().toISOString()});
   await turn(page, 8);
   r.shown = await T(page, "#main .talk-msg .talk-text");
@@ -2737,7 +2746,7 @@ S.chat_computer = async (a) => {
   await page.getByRole("button", {name: "Send", exact: true}).click();
   await turn(page, 10);
   r.work = store.list("work/").map((p) => store.get(p)).filter((w) => w.kind === "talk");
-  r.waiting = await T(page, "#main .talk-msg.pending");
+  r.waiting = await T(page, "#main .talk-msg.pending, #main .talk-state");
   r.rings = (await calls(page)).filter((c) => c.cap === "comments").length;
   r.errors = o.errors;
   await o.ctx.close();
@@ -3735,6 +3744,179 @@ S.silent = async (a) => {
     }
   }
   return out;
+};
+
+// The fake runtime itself, held to the contract it stands in for (tests/app_page/fake_claude.js,
+// the 0.2.91 type definitions): each probe calls window.claude on a page holding nothing else
+// and says what came back. A fake kinder than the runtime let a page bug pass every test.
+S.contract = async (a) => {
+  const o = await open({html: a.html, noSettle: true, fake: a.fake || {},
+    seed: {"notes/a": {n: 1, deep: {x: [1, {y: 2}]}}, "notes/b": {n: 2}, "notes/c": {n: 3, tag: "t"}}});
+  const {page} = o;
+  // A viewer the page is shared with: the owner's store, assets and Claude are not theirs.
+  if (a.guest) {
+    const g = await page.evaluate(async () => {
+      const code = async (f) => { try { await f(); return "ok"; } catch (e) { return (e && e.code) || String(e); } };
+      const c = window.claude;
+      const db = await c.use("db");
+      const cm = await c.use("comments");
+      const user = await c.use("user");
+      return {read: (await db.doc("notes/a").get()).exists, query: (await db.collection("notes").get()).size,
+        write: await code(() => db.doc("notes/a").set({n: 2})), lease: await code(() => db.doc("notes/a").acquire({holder: "x"})),
+        assets: await c.use("assets"), can: await cm.canSendToClaude(), ring: await code(() => cm.sendToClaude({text: "hi", threadId: "t1"})),
+        dataWrite: await user.can("data.write"), browser: await code(async () => (await c.use("mcp")).callTool("host:claude_browser", "navigate", {url: "https://example.com/"}))};
+    });
+    g.errors = o.errors;
+    await o.ctx.close();
+    return g;
+  }
+  const r = await page.evaluate(async () => {
+    const out = {};
+    const code = async (f) => { try { await f(); return "ok"; } catch (e) { return e instanceof TypeError ? "TypeError" : (e && e.code) || String(e); } };
+    const tick = (ms) => new Promise((res) => setTimeout(res, ms || 0));
+    const c = window.claude;
+    out.oneKey = Object.keys(c).join(",");
+    out.samePromise = c.use("db") === c.use("db");
+    out.undeclared = await Promise.all(["room", "files", "artifact", "dictation", "nonsense"].map((n) => c.use(n)));
+    out.permissions = !!(await c.use("permissions"));
+    const db = await c.use("db");
+    if (!db) return Object.assign(out, {noDb: true});
+    out.nsFrozen = Object.isFrozen(db);
+    // Frozen, all the way down, and the same object while it has not changed.
+    const s1 = await db.doc("notes/a").get();
+    const d1 = s1.data();
+    out.frozen = Object.isFrozen(s1) && Object.isFrozen(s1.metadata) && Object.isFrozen(d1) && Object.isFrozen(d1.deep) && Object.isFrozen(d1.deep.x) && Object.isFrozen(d1.deep.x[1]);
+    out.sameDoc = (await db.doc("notes/a").get()) === s1 && s1.data() === d1;
+    out.strictMutation = await code(() => { "use strict"; d1.n = 9; });
+    const q = await db.collection("notes").orderBy("n", "desc").get();
+    out.queryFrozen = Object.isFrozen(q) && Object.isFrozen(q.docs) && Object.isFrozen(q.metadata) && Object.isFrozen(q.docChanges());
+    out.queryOrder = q.docs.map((d) => d.id);
+    out.queryFirstChanges = q.docChanges().map((x) => x.type);
+    // A write shows at once, pending, before the store answers; then confirmed.
+    const seen = [];
+    const un = db.doc("notes/d").onSnapshot((s) => seen.push([s.exists, s.metadata.hasPendingWrites]));
+    await tick(30);
+    const p = db.doc("notes/d").set({v: 1});
+    await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
+    out.echo = seen.slice();
+    await p;
+    await tick(30);
+    out.confirmed = seen.slice();
+    un();
+    // A refused write is taken back.
+    window.__LJS_FAKE.failWrites = true;
+    const seen2 = [];
+    const un2 = db.doc("notes/e").onSnapshot((s) => seen2.push([s.exists, s.metadata.hasPendingWrites]));
+    await tick(30);
+    out.refused = await code(() => db.doc("notes/e").set({v: 1}));
+    await tick(30);
+    out.refusedSeen = seen2.slice();
+    un2();
+    window.__LJS_FAKE.failWrites = false;
+    // A query listener's changes since its last snapshot; an unchanged document keeps its object.
+    const qs = [];
+    const un3 = db.collection("notes").onSnapshot((s) => qs.push(s));
+    await tick(30);
+    await db.doc("notes/b").update({n: 20});
+    await tick(30);
+    un3();
+    const last = qs[qs.length - 1];
+    out.changes = last.docChanges().map((x) => x.type + ":" + x.doc.id);
+    out.keptObject = last.docs.find((d) => d.id === "a") === qs[0].docs.find((d) => d.id === "a");
+    // Unsubscribed before the first delivery: never called.
+    let early = 0;
+    db.doc("notes/a").onSnapshot(() => { early++; })();
+    await tick(30);
+    out.earlyCalls = early;
+    // Bodies, paths and queries the contract refuses.
+    out.arrayBody = await code(() => db.doc("notes/f").set([1]));
+    out.bigBody = await code(() => db.doc("notes/f").set({t: "x".repeat(270000)}));
+    let deep = {}; for (let i = 0; i < 40; i++) deep = {d: deep};
+    out.deepBody = await code(() => db.doc("notes/f").set(deep));
+    out.updateMissing = await code(() => db.doc("notes/none").update({a: 1}));
+    out.longSegment = await code(() => db.doc("notes/" + "x".repeat(201)));
+    out.manySegments = await code(() => db.doc(Array(18).fill("a").join("/")));
+    out.oddDoc = await code(() => db.doc("notes"));
+    out.badChar = await code(() => db.doc("notes/a b"));
+    out.queries = await Promise.all([
+      () => db.collection("notes").limit(0).get(), () => db.collection("notes").limit(1001).get(),
+      () => db.collection("notes").where("n", "in", Array(31).fill(1)).get(),
+      () => db.collection("notes").orderBy("n").orderBy("tag").get(), () => db.collection("notes").where("n", "~", 1).get(),
+      () => { let x = db.collection("notes"); for (let i = 0; i < 11; i++) x = x.where("n", ">", i); return x.get(); },
+    ].map(code));
+    out.badSub = await new Promise((res) => { db.collection("notes").limit(5000).onSnapshot(() => res("delivered"), (e) => res(e.code)); });
+    // At most 64 live subscriptions a view.
+    const live = [];
+    out.cap = await new Promise((res) => {
+      for (let i = 0; i < 70; i++) live.push(db.doc("notes/a").onSnapshot(() => {}, (e) => res([i, e.code])));
+    });
+    live.forEach((u) => u());
+    // A lease: clamped, and busy says when it ends but never who holds it.
+    const l1 = await db.doc("notes/lock").acquire({holder: "one", ttlMs: 1});
+    const l2 = await db.doc("notes/lock").acquire({holder: "two"});
+    out.lease = [l1.acquired, l2.acquired, "holder" in l2, !!l2.expiresAt, Date.parse(l1.expiresAt) - Date.now() > 500];
+    // The other capabilities.
+    const user = await c.use("user");
+    out.can = [await user.can("data.write"), await user.can("something.else")];
+    out.me = (await user.me()).canEdit === (await user.canEdit());
+    const cm = await c.use("comments");
+    out.ring = await Promise.all([
+      () => cm.sendToClaude({text: "", threadId: "t1"}), () => cm.sendToClaude({text: "x".repeat(5000), threadId: "t1"}),
+      () => cm.sendToClaude({text: "a\u0001b", threadId: "t1"}), () => cm.sendToClaude({text: "hi", threadId: "t1", anchor: {path: "body", x: 1, y: 1}}),
+      () => cm.sendToClaude({text: "hi"}),
+    ].map(code));
+    const dl = await c.use("downloads");
+    out.save = await Promise.all([
+      () => dl.save({filename: "event.ics", data: "BEGIN"}), () => dl.save({filename: "a.pdf", data: ""}),
+      () => dl.save({filename: "x".repeat(600) + ".pdf", data: "a"}), () => dl.save({filename: "a.zip", data: new Blob(["z"])}),
+    ].map(code));
+    const buf = new ArrayBuffer(4);
+    await dl.save({filename: "a.zip", data: buf});
+    out.transferred = buf.byteLength === 0;
+    const as = await c.use("assets");
+    out.upload = await Promise.all([
+      () => as.upload(new Blob(["<p>"], {type: "text/html"})), () => as.upload(new Blob(["a"])), () => as.upload(new Blob([], {type: "application/pdf"})),
+      () => as.upload(new Blob(["a"], {type: "text/csv;charset=utf-8"})), () => as.upload(new Blob(["a"]), {type: "text/csv"}), () => as.upload("text"),
+    ].map(code));
+    const up = await as.upload(new Blob(["%PDF"], {type: "application/pdf"}));
+    const listed = await as.list();
+    out.assets = [up.id.length, listed.assets.length, Object.keys(listed.usage).sort().join(","), (await as.delete(up.id)).deleted, (await as.delete(up.id)).deleted];
+    const sm = await c.use("sample");
+    const ab = new AbortController(); ab.abort();
+    const tool = {name: "t", description: "d", execute: () => { throw new Error("no"); }};
+    out.sample = await Promise.all([
+      () => sm(""), () => sm([{role: "user", content: "a"}, {role: "assistant", content: "b"}]), () => sm([{role: "user", content: ""}]),
+      () => sm("hi", {cache: true, tools: [tool]}), () => sm("hi", {signal: ab.signal}), () => sm("hi", {tools: [{name: "a.b", description: "d", execute: () => 1}]}),
+      () => sm("hi", "quick"), () => sm("x".repeat(270000)), () => sm("hi", {tools: [tool]}),
+    ].map(code));
+    out.badJson = await code(() => sm.json("give json"));
+    const mcp = await c.use("mcp");
+    out.mcp = await Promise.all([
+      () => mcp.callTool("host:claude_browser", "computer", {}), () => mcp.callTool("Claude Code Remote", "send_message", {}),
+      () => mcp.callTool("host:claude_browser", "navigate", {url: "https://example.com/"}),
+    ].map(code));
+    out.listed = (await mcp.listTools()).servers.length;
+    return out;
+  });
+  // A host that never answers: null after ten seconds, never a promise left hanging.
+  const hung = await page.evaluate(() => { window.__hung = "waiting"; const p = window.claude.use(window.__LJS_FAKE.hang[0]); p.then((v) => { window.__hung = v; }); return window.__hung; });
+  await page.clock.runFor(10500);
+  r.hung = [hung, await page.evaluate(() => window.__hung)];
+  // Access taken away while the page runs: each listener hears it once, every call rejects.
+  r.revoked = await page.evaluate(async () => {
+    const db = await window.claude.use("db");
+    const got = [];
+    db.doc("notes/a").onSnapshot(() => {}, (e) => got.push(e.code));
+    await new Promise((res) => setTimeout(res, 30));
+    window.__ljsRevoke();
+    let w = "ok";
+    try { await db.doc("notes/a").set({n: 1}); } catch (e) { w = e.code; }
+    const late = await new Promise((res) => db.doc("notes/a").onSnapshot(() => res("delivered"), (e) => res(e.code)));
+    return [got, w, late];
+  });
+  r.errors = o.errors;
+  await o.ctx.close();
+  return r;
 };
 
 // ---------------------------------------------------------------- the loop

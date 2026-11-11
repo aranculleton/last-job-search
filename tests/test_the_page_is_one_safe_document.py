@@ -58,6 +58,18 @@ def test_the_capabilities_are_exactly_these():
     }
 
 
+def test_the_browser_tests_run_the_page_with_exactly_what_it_is_published_with():
+    """The fake runtime the browser tests use (tests/app_page/fake_claude.js) serves the page
+    what this declaration gives it, as the real one does: only these capabilities, the db by
+    these rules, only these connector tools. A capability the fake gave and the page never
+    declared, or a rule it did not keep, is a page that passes its tests and fails a viewer."""
+    with open(os.path.join(ROOT, "tests", "app_page", "fake_claude.js"), encoding="utf-8") as fh:
+        js = fh.read()
+    m = re.search(r"/\*DECLARED\*/(.*?)/\*END\*/", js, re.S)
+    assert m, "the fake names the page's declaration between /*DECLARED*/ and /*END*/"
+    assert json.loads(m.group(1)) == app_page.capabilities()
+
+
 def test_the_page_is_content_with_its_title_first_and_no_skeleton_of_its_own():
     page = app_page.render(_model())
     assert page.startswith("<title>Morgan’s job search</title>")

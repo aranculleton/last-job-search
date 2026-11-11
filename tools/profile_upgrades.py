@@ -1198,8 +1198,8 @@ def _unfitted_follow_ups() -> str:
     (kept) is instant; each is written again to fit those rules before it is offered."""
     found = _probe("import followup_drafts; print(len(followup_drafts.unfitted_on_cards()))")
     n = int(found) if found.isdigit() else 0
-    return ("%d follow-up(s) on a card were never fitted to your own rules for messages" % n
-            if n else "")
+    return ("%d follow-up(s) on a card were never written for their reader or fitted to your "
+            "own rules for messages" % n if n else "")
 
 
 def _old_sweep_cursor() -> str:
@@ -2351,9 +2351,9 @@ REGISTRY: tuple[Upgrade, ...] = (
             command=("python3", "tools/network/state.py", "date-page-drops"),
             paths=("network_contacts.csv",), conditional=True, priority=2),
     Upgrade("follow-ups-fitted", "2026-11-11",
-            "follow-ups Claude drafted but never fitted to your own rules for messages taken "
-            "off their cards (kept), so none is offered as ready to send; each is written "
-            "again to fit your rules first",
+            "follow-ups Claude drafted but never written for their reader or fitted to your "
+            "own rules for messages taken off their cards (kept), so none is offered as ready "
+            "to send; each is written again for its reader first",
             _unfitted_follow_ups, "python3 tools/followup_drafts.py unfitted", "instant",
             command=("python3", "tools/followup_drafts.py", "unfitted"),
             paths=("documents/network/*/draft*",), conditional=True, priority=2),

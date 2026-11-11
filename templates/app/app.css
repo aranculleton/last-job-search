@@ -797,6 +797,7 @@ textarea { width: 100%; resize: vertical; line-height: 1.45; }
 
 
 .talk-msg.pending { opacity: 0.9; }
+.talk-state .spin { width: 11px; height: 11px; border-width: 2px; vertical-align: -1px; }
 .talk-who { font-size: var(--t-sm); font-weight: 600; color: var(--muted); }
 .talk-text { white-space: pre-wrap; }
 .talk-examples { display: grid; gap: 8px; }

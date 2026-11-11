@@ -20,11 +20,14 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
-## [4.15.1] - 2026-11-11
+### Added
+
+- **The app's maker hears of its bugs without anyone passing them on.** A bug met in the maker's own copy is filed for the app by itself and fixed by a scheduled builder; nothing changes for you.
 
 ### Changed
 
-- **Interview preps open in the Mac app, a computer that is on is never called off, and automatic updates stay automatic.**
+- **In the app maker's own copy, a problem Claude works round is reported then, not only one pointed out.** When one of the app's commands refuses something and a chat gets round it another way, the refusal now hands it one command, `python3 tools/app_bug.py met`, which checks the words and reports it for the app (or adds to the same report), and a complaint that something was not reported is reported too (issue 240). Nothing changes in anyone else's copy.
+- **A question you ask Claude on your page is answered first.** A question typed in Chat is answered on its own, so it never waits behind message changes, redrafts or drafts asked for before it, and an answer that changed nothing on your page shows as soon as it is written.
 - **The maintainer's releases take one command.** `python3 tools/release.py cut X.Y.Z --headline "..."`
   names and dates the version on its own pull request, so merging that pull request is the
   release. The release notes open on that headline, then what is new, changed and fixed. The
@@ -33,12 +36,23 @@ make sense to somebody whose repo just received it.
   `public_names.SNAPSHOT` and `release.names_kept`. `python3 tools/readme_pictures.py shoot`
   takes the README's four pictures from the sample page and names them.
 
-### Added
-
-- **The app's maker hears of its bugs without anyone passing them on.** A bug met in the maker's own copy is filed for the app by itself and fixed by a scheduled builder; nothing changes for you.
-
 ### Fixed
 
+- **A change made today says when.** "Last change: the message rewritten, Wed 11 Nov." on the day itself did not say which rewrite was newest; it now reads "today at 21:58", and an older one its day.
+- **A message waiting on its resume no longer says Ready to send.** A reply that goes with a resume Claude was still making said "Ready to send" with "I sent it" on, before the resume existed. Now the card shows the resume being made, with its progress and Stop Claude, and "I sent it" comes back once the resume is ready.
+- **A rewritten message is never copied before its new words arrive.** After you asked for a message to be changed, its card showed the old words with "Finished" under them and Copy still on, so Copy copied the old message. Now the card and Claude's work say the new version is on its way, and Copy and "I sent it" come back as soon as the new words are on the card.
+- **An update to your page sends only what changed.** After an update, Claude copied a list of a couple of hundred of your page's files by hand, and a list that came out short or wrong put the whole page up again, about 1 MB in seven goes. Now it works out what changed from its own note of the last time your page went up, sends just those files, and asks for the list only when that note cannot say, refusing one that was plainly copied wrong (#229).
+- **A question in Chat says where it stands under itself.** A question asked while other work ran got a grey Claude message, "Putting the change on your page first", that read like the answer, one more for each question, and nothing on the question said whether it was waiting or being answered. Now each question shows a little spinner under it, Waiting its turn, Sent to Claude, Claude is answering or Putting the change on your page, gone once its answer shows, and Claude says nothing in the thread until it answers (#234).
+- **The text copy of your resume says "AWS", not "A WS".** The plain-text copy kept beside your general resume, and the short copy to paste beside it, split "AWS" in two in a bullet and a certificate, though the PDF read it whole; a recruiter or a form you pasted into got "A WS". Both now read as the PDF does (issue 236).
+- **A warning on a changed message can be acted on.** Once a change to a message was made, the chat could neither improve its wording again nor undo it, so a warning it was given went unanswered; it can now do either, and a change someone else made in between is still never written over.
+- **Several replies sent in one message are all answered on your page.** Screenshots of three people's replies in one Chat message got three drafts, but the page said only that the first was ready, with one button. Now the answer names every person drafted for, with a button to each card (#228).
+- **An interview with two parts is prepared as both.** A round with live coding and then a personal experience interview was prepared as one personal interview for the whole hour, with nothing for the coding and no words explained. Now each part is prepared on its own, in the order and for the minutes your written prep gives, and a prep that uses words of the work is not finished until they are explained.
+- **A change you ask for to a message is made the first time.** The chat making it was given the request's name where the tool wanted its file, so it was refused and tried again another way; the tool now takes either.
+- **A bug the app's chats report is reported once.** A chat now looks for the same report, open or closed in the last month, before filing; where it finds one it adds what is new to it instead (issue 221).
+- **A follow-up you marked as sent stays sent, and one put on hold goes with the people on hold.** Once a chat had logged "I sent it", the card could go back to "Follow-up ready" with the date of the message before, and a follow-up Claude had put on hold could sit in the main list with its draft open, whenever the list of messages was brought up to date before the person's own record. The card now goes by what was done to the message to them until their record catches up: Message sent, its To do row gone, or On hold in the folded group at the foot of Contacts.
+- **Read your prep and Practise 3 questions open your interview prep on every device.** On a phone, in a browser and in the Claude app they looked pressed and opened nothing: the page tried to write onto the prep as your page's store hands it over, which is read-only, and stopped before the prep was drawn. The page now works on its own copy, and its tests read records the way your page does.
+- **No follow-up is drafted for someone who has not accepted your connection request.** A note sent with a request and logged as an ordinary message stayed a message when your LinkedIn download was taken, so a follow-up was drafted for someone LinkedIn still showed as Pending. Taking the download now logs it as the request it went as, while their name is not among your connections: nothing is owed them until they accept, and the request is listed to withdraw after three weeks as any other. A tidy of messages logged twice keeps the note as a request the same way (issue 220).
+- **A follow-up is written for the person it goes to, or held.** Most of one batch of follow-ups were the same two or three sentences with only the name changed, and each was offered as ready to send. Those are now written again from each person's conversation before they are offered, and any already waiting are set aside (kept). A follow-up is held where the conversation ended (they pointed you to the careers site and you answered), at an employer where you are in interviews or a referral is under way, and where the person's own notes say not to check in.
 - **Read your prep and Practise 3 questions open your interview prep in the Claude app on a Mac.** Both flickered and opened nothing: the app moved the page's address as the prep opened, and any move of the address closed it at once. A prep, a person or an application now stays open until you close it or go Back.
 - **Steps for your computer name its own keys and menus, on a Mac, Windows or Linux.** The steps to show Claude's browser, keep your LinkedIn sign-in and let Claude start chats there named a Mac's keys first and said nothing of Linux; each computer now gets its own, and a computer not known yet gets all three in one line.
 - **A chat with Claude's browser reads profiles itself, whatever its tools are called.** Only the short words counted, so a chat holding the browser by its full tool names left the reading to your page.
@@ -89,6 +103,8 @@ make sense to somebody whose repo just received it.
 - **Small labels read clearly in the dark.** "You" over your own messages in Chat and the labels in an answer's box in your live prep were grey on rose, too faint to read easily; they are now in the main text colour.
 - **Chat opens with its first words in sight.** On a phone it opened scrolled a little, its first words behind the header and its Refresh button; it is now as tall as the room under the header and opens at its top.
 - **Names, dates and your page's address stay whole on a phone.** A file-name example in Settings and your page's address broke in the middle of a word, the File names row cut its example off, and Progress's dates broke over two lines; they now wrap only at underscores, slashes and dots, and a day stays on one line.
+- **A Claude app that does not answer is said as that, never as "This page is private".** When the app showing your page did not answer for ten seconds, the page said it was private, or read only, inside your own app, and a tap said nothing was changed. It now says the page is taking too long to open, and a tap says it was not saved and to open the page again.
+- **Wake Claude works however many taps are waiting.** With a few dozen taps left waiting while no chat answered, Wake Claude named every one in its ring, which Claude's comments refuse past 4 KiB, so nothing was sent, every time. A ring now names what fits, and Claude reads everything waiting from your page as before.
 
 ## [4.15.0] - 2026-11-11
 

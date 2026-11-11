@@ -462,13 +462,15 @@ def _page_plan(reh: Rehearsal, chat: str, root: str, env: dict, scratch: str,
         out_dir = os.path.join(scratch, folder)
         cmd = [py, "tools/app.py", "page", "--out-dir", out_dir] + (["--url", url] if url else [])
         ok, out = reh.check(chat, "the page built as the steps say", cmd, root, env)
-        if ok and url:
-            # The plan asks for the page's own list of files first: here it holds none.
+        if ok and url and "--on-page -" in out:
+            # The plan asks for the page's own list of files where the copy's record of its
+            # last publish cannot say: here it holds none, so every file goes up (--whole; an
+            # empty list against a record of the page's files is refused as copied short).
             empty = os.path.join(scratch, "on-page.txt")
             with open(empty, "w", encoding="utf-8", newline="\n") as fh:
                 fh.write("")
-            ok, out = reh.check(chat, "its plan of publishes", cmd + ["--on-page", empty],
-                                root, env)
+            ok, out = reh.check(chat, "its plan of publishes",
+                                cmd + ["--on-page", empty, "--whole"], root, env)
         planned = ok and "action publish" in out
         reh.note(chat, "the plan names what to publish", planned, out,
                  "" if planned else "no publish in the plan")

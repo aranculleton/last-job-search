@@ -128,7 +128,13 @@ the locks and the heavy-job cap. `run` says where it is done: `here`, `child ses
 Agent call is made only once the claim is accepted. Small work done here (`run: here`) is
 claimed running at its first stage, and no progress pin follows it, unless something else comes first (a page update, a read): then `python3 tools/app.py pin "$D" --work <its id> --line "<what, in a few plain words>"` first, so the page shows it running. It is finished only with the answer itself: a reply saying the answer follows is refused, as the page then showed nothing running while the work went on (2026-11-10). Every small item waiting
 (a talk, a reply, a tweak) is claimed in that same pass: each further one is under `also:`, done
-in order after the one under `next:`, with no new read between. Step 3 again is `wake`
+in order after the one under `next:`, with no new read between. **A question the person asked
+goes first** (a `talk`: `next` hands it out before every message change, redraft or draft as
+urgent, `page_db.ASKED_FIRST`; a Chat question goes to a chat of its own where one can be
+started, `.claude/skills/app/jobs.md`): answered here, first, and put on the page (`view` without `--end`)
+before the next item, as `wake`'s `first:` line says; where two or more other items follow,
+its `between items:` line is the one look for a question asked meanwhile, answered before the
+next item, never after the whole pass (issue #226). Step 3 again is `wake`
 run again: with the same folder after a big job's call, from a new read after small work
 (finishing it writes records the folder does not see); it says when more is waiting.
 

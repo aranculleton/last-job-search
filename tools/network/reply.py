@@ -1945,8 +1945,7 @@ def prepare(argv) -> int:
                                      scenario=scen if last else "", subject=a.subject)
             except ValueError as e:
                 if not str(e).startswith("already logged"):
-                    print(f"prepare: not recorded: {e}")
-                    return 1
+                    return _refused("prepare", f"prepare: not recorded: {e}", 1)
                 continue
             added += 1
             print(f"received: {got['row']['summary']} on {got['row']['date']}, read as "
@@ -1976,8 +1975,7 @@ def prepare(argv) -> int:
                                  subject=a.subject)
         except ValueError as e:
             if not str(e).startswith("already logged"):
-                print(f"prepare: not recorded: {e}")
-                return 1
+                return _refused("prepare", f"prepare: not recorded: {e}", 1)
             print(f"received: {e}; nothing logged twice")
             logged = False
     if logged:
@@ -2040,6 +2038,22 @@ def prepare(argv) -> int:
     print(f"then: python3 tools/network/reply.py finish {cid} --draft-file - with the reply "
           "on its input (for the page's work: --work <id> --dump \"$D\").")
     return 0
+
+
+def _refused(cmd: str, said: str, code: int, what: str = "") -> int:
+    """A refusal a chat may recover from, and beneath it, in the maintainer's own copy, the one
+    command that files it the moment the chat works round it instead (a draft saved by hand, a
+    message logged another way): those were never filed (issue #240, app_bug.met_line)."""
+    print(said)
+    try:
+        import app_bug
+        line = app_bug.met_line(f"tools/network/reply.py:{cmd}",
+                                what or f"reply.py {cmd} refused: {said.split(': ', 1)[-1]}")
+    except Exception:  # noqa: BLE001  the refusal stands as it was
+        line = ""
+    if line:
+        print(line)
+    return code
 
 
 def _first(c) -> str:
@@ -2139,8 +2153,9 @@ def finish(argv) -> int:
         print("finish: REFUSED, nothing saved: the draft check found what must change first.")
         for f in got["findings"]:
             print(f"  fix: {f}")
-        print("Rewrite it and run finish again.")
-        return 1
+        return _refused("finish", "Rewrite it and run finish again.", 1,
+                        what="reply.py finish's draft check refused the draft: "
+                        + "; ".join(got["findings"][:2]))
     print(f"check: passed ({len(draft)} characters)")
     for w in got["warnings"]:
         print(f"  warning: {w}")
@@ -2199,16 +2214,26 @@ def finish(argv) -> int:
     made, noted = touched.gather(a.work, item)
     args = item.get("args") if isinstance(item.get("args"), dict) else {}
     thread = a.thread or str(args.get("thread") or "")
+    # One item answering several people's replies (one message, three screenshots): each
+    # finish adds its person to the item's one finish, their line and their button, and the
+    # summary names them all (#228).
+    before = page_db.finished_here(a.dump, a.work) and page_db.kept_finish(a.dump, a.work)
+    whom = [w for w in (before or {}).get("whom") or []
+            if isinstance(w, list) and len(w) == 2 and w[0] != cid] + [[cid, first]]
+    said = [w[1] for w in whom]
+    names = (", ".join(said[:-1]) + " and " + said[-1]) if len(said) <= 4 \
+        else f"{len(said)} people"
     summary = a.summary or (f"Your {what} to {first} is ready to copy"
-                            + ("." if thread else " in Messages."))
+                            + ("." if thread else " in Messages.") if len(whom) == 1
+                            else f"Your messages to {names} are ready to copy.")
     try:
         done = page_db.finish(db, a.work, now, a.out or os.path.join(a.dump, "out"),
                               summary=summary, reply=answer if thread else "", thread=thread,
                               chat_kind=a.kind or app_listen.chat_kind(), dump_dir=a.dump,
-                              go=touched.buttons(made))
+                              go=touched.buttons(made), add=True, whom=whom)
     except (KeyError, ValueError) as e:
-        print(f"finish: the page's work not finished: {e.args[0] if e.args else e}")
-        return 2
+        return _refused("finish", "finish: the page's work not finished: "
+                        f"{e.args[0] if e.args else e}", 2)
     if not done.get("again"):
         touched.clear(noted)
     if not a.in_thread:

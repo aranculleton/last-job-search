@@ -1429,7 +1429,8 @@ def tidy(contacts_path: str | None = None, threads_path: str | None = None, dry:
          src=None) -> dict:
     """Each message the export logged twice taken out, each day the download on file shows out
     of order put in the order it happened, and the statuses of the people it touched set again
-    from their log (`settle`). {"removed": n, "reordered": n, "settled": [(id, old, new)]}."""
+    from their log (`settle`). {"removed": n, "reordered": n, "settled": [(id, old, new)],
+    "retyped": n}."""
     st = _state()
     cp, tp = contacts_path or st.CONTACTS_CSV, threads_path or st.THREADS_CSV
     threads = st.load_threads(tp)
@@ -1439,8 +1440,15 @@ def tidy(contacts_path: str | None = None, threads_path: str | None = None, dry:
     gone = {id(r) for r in twice}
     kept = [r for r in threads if id(r) not in gone]
     moved = misordered(contacts, kept, src)
+    # The download's request taken out beside the app's own message with its words: the one
+    # send went as a request, and kept as a message it read as one they could answer while
+    # nobody had accepted, so a follow-up fell due for someone the person could not write to
+    # (2026-11-11). An acceptance the import logged after it still follows it.
+    retype = list({id(stays): stays for r, stays in pairs
+                   if st.is_request(r) and could_be_the_note(stays)}.values())
     if dry or not (twice or moved):
-        return {"removed": len(twice), "reordered": len(moved), "settled": []}
+        return {"removed": len(twice), "reordered": len(moved), "settled": [],
+                "retyped": len(retype)}
     # What only the export's copy says went with the message (a resume attached) is kept on the
     # row that stays: a resume sent is never forgotten by a tidy.
     for r, stays in pairs:
@@ -1453,12 +1461,14 @@ def tidy(contacts_path: str | None = None, threads_path: str | None = None, dry:
         slots = sorted(place[id(m)] for m in mine)
         for i, m in zip(slots, ordered):
             kept[i] = m
+    retyped = as_requests(retype, contacts, kept)
     touched = {str(r.get("contact_id") or "").strip() for r in twice} \
-        | {str(m[0].get("contact_id") or "").strip() for m, _ in moved}
+        | {str(m[0].get("contact_id") or "").strip() for m, _ in moved} | retyped
     settled = settle(contacts, kept, touched)
     st.save_threads(kept, tp)
     st.save_contacts(contacts, cp)
-    return {"removed": len(twice), "reordered": len(moved), "settled": settled}
+    return {"removed": len(twice), "reordered": len(moved), "settled": settled,
+            "retyped": len(retype)}
 
 
 def plan_history(contacts, threads, src=None, mine=None) -> dict:
@@ -1466,6 +1476,7 @@ def plan_history(contacts, threads, src=None, mine=None) -> dict:
 
     {"add": [thread rows], "fill": [(an existing row, its words)],
      "redate": [(a request recorded from a Pending page, the day the export says it went)],
+     "retype": [a note logged as a message that the export lists as a request still waiting],
      "joined": {how: n},
      "unmatched": [{name, url, last, last_from, sent, received}], "ambiguous": [{name, url}],
      "groups": n, "drafts": n, "tables": [...], "problem": ""}
@@ -1487,7 +1498,7 @@ def plan_history(contacts, threads, src=None, mine=None) -> dict:
         mine = (next((st.profile_handle(r.get("SENDER PROFILE URL")) for r in msgs["rows"]
                       if name_key(r.get("FROM")) == mine[1]
                       and st.profile_handle(r.get("SENDER PROFILE URL"))), ""), mine[1])
-    out = {"add": [], "fill": [], "redate": [], "mark": [], "who": [], "resay": [],
+    out = {"add": [], "fill": [], "redate": [], "mark": [], "who": [], "resay": [], "retype": [],
            "joined": {"profile address": 0, "name": 0},
            "unmatched": [], "ambiguous": [], "groups": 0, "drafts": 0, "tables": tables,
            "problem": ""}
@@ -1723,6 +1734,7 @@ def plan_history(contacts, threads, src=None, mine=None) -> dict:
                             summary, attached=note, at=clock(r.get("DATE")))
 
     # Invitations: the person's requests, and requests to them from people in the book.
+    linked = connected_to(conns)
     if invs["usable"]:
         for r in invs["rows"]:
             way = str(r.get("Direction") or "").strip().lower()
@@ -1740,9 +1752,21 @@ def plan_history(contacts, threads, src=None, mine=None) -> dict:
                         and _near(st.as_date(x.get("date")), when, REQUEST_SLACK_DAYS)]
                 # The same note logged as a message (a first message, by hand): one send, never
                 # a request beside it (the audit, 2026-11-10).
-                same = same or [x for x in rows if note and st._direction(x) == "out"
-                                and _near(st.as_date(x.get("date")), when, REQUEST_SLACK_DAYS)
-                                and same_text(x.get("full_text"), note)]
+                hand = [] if same else [
+                    x for x in rows if note and st._direction(x) == "out"
+                    and _near(st.as_date(x.get("date")), when, REQUEST_SLACK_DAYS)
+                    and same_text(x.get("full_text"), note)]
+                same = same or hand
+                # And typed as the request it was while nobody has accepted it: logged as a
+                # message, it read as one they could answer, and a follow-up fell due for
+                # someone the person could not write to (2026-11-11). Only where this
+                # download's connections are there to say so; an acceptance on the log or
+                # among them leaves it as it is.
+                if hand and could_be_the_note(hand[0]) and conns["usable"] \
+                        and not linked(r.get("To"), r.get("inviteeProfileUrl")) \
+                        and not any(st.is_acceptance(x) or st.is_withdrawal(x) for x in rows) \
+                        and not any(x is hand[0] for x in out["retype"]):
+                    out["retype"].append(hand[0])
                 # A request recorded from a Pending page is logged the day it was seen, or the
                 # latest day "Sent 1 month ago" can mean: the export's request on or before
                 # that day is the same one, and its day is the true one. Seven days apart, it
@@ -1833,6 +1857,7 @@ def plan_history(contacts, threads, src=None, mine=None) -> dict:
 
     touched = ({r["contact_id"] for r in out["add"]}
                | {r.get("contact_id") for r, _ in out["fill"] + out["redate"]}
+               | {r.get("contact_id") for r in out["retype"]}
                | {r.get("contact_id") for r, _t, _d in out["resay"]})
     for cid in touched:
         how = joined_ids.get(cid)
@@ -1919,13 +1944,64 @@ def apply_history(threads, plan, contacts=None) -> int:
             st.set_aside_older_draft(cid, st.threads_for(threads, cid), r)
         except OSError:
             pass
+    retype = plan.get("retype") or []
+    retyped = as_requests(retype, contacts, threads)
     if contacts is not None:
         settle(contacts, threads, {r["contact_id"] for r in plan["add"]}
                | {str(r.get("contact_id") or "") for r, _ in plan["fill"]}
                | {str(r.get("contact_id") or "") for r, _ in redate}
-               | {str(r.get("contact_id") or "") for r, _t, _d in resay})
+               | {str(r.get("contact_id") or "") for r, _t, _d in resay} | retyped)
     return (len(plan["add"]) + len(plan["fill"]) + len(redate) + len(plan.get("mark") or ())
-            + len(resay))
+            + len(resay) + len(retype))
+
+
+# What a note logged as a message says once the download shows it went as a request.
+AS_REQUEST = "a connection request, as your LinkedIn download shows"
+# The ways a request's note can have been logged as a message: on LinkedIn, by message or with
+# no way named. An InMail, an email or an Open Profile message reaches someone with no
+# connection, so the same words sent that way are left as they were.
+NOTE_LOGGED_AS = frozenset({"", "message", "connection"})
+
+
+def could_be_the_note(row) -> bool:
+    """Is this row a message of ours, on LinkedIn, that a request's note may have been logged
+    as by hand? Never a request already, a call or a withdrawal."""
+    st = _state()
+    return (st._direction(row) == "out" and st.channel_of(row) in NOTE_LOGGED_AS
+            and not st.is_request(row) and not st.is_call(row) and not st.is_withdrawal(row))
+
+
+def as_requests(rows, contacts, threads) -> set:
+    """Each row, a note logged as a message that LinkedIn's download lists as a connection
+    request, typed as that request (`connection_note`), so `state.request_pending` sees it:
+    nothing is owed them while nobody has accepted, and the request's withdraw clock runs
+    instead of a follow-up's. Where the request still waits, the contact's next step becomes
+    the request's (`state.request_action`) if it was the app's own line for a message. The
+    contact ids changed; the lists change in place and the caller saves."""
+    st = _state()
+    ids: set = set()
+    for row in rows:
+        was = st.channel_of(row)
+        row["channel"], row["scenario"] = "connection", "connection_note"
+        summary = str(row.get("summary") or "").strip()
+        if AS_REQUEST not in summary:
+            row["summary"] = "; ".join(x for x in (summary, AS_REQUEST) if x)
+        cid = str(row.get("contact_id") or "").strip()
+        ids.add(cid)
+        msgs = [r for r in st.threads_for(threads, cid) if st._direction(r)]
+        waiting = st.request_pending(msgs)
+        for c in contacts or ():
+            if str(c.get("contact_id") or "").strip() != cid:
+                continue
+            if st.channel_of(c) in ("", was):
+                c["channel"] = "connection"
+            action = " ".join(str(c.get("next_action") or "").split())
+            due = str(c.get("next_action_due") or "").strip()
+            if waiting is not None and (not action or (
+                    st._APP_ACTION.fullmatch(action)
+                    and (not due or due in st._app_dates(msgs, action)))):
+                st.put_next(c, msgs, st.request_action(), st.follow_up_on(waiting).isoformat())
+    return ids
 
 
 # An event, not an employer: "6th Annual ... Summit | ..." was taken from the download as one
@@ -2263,6 +2339,31 @@ def _pending_days() -> int:
 PENDING_SHOWN = 10
 
 
+def connected_to(conns):
+    """A test of whether someone is among the connections `conns` (the read Connections.csv)
+    lists: (name, profile address) -> bool. Joined the way the import joins (match_contact):
+    by address, and by name wherever one side has no address. Each fallback looked only at
+    its own side, so an invitation with no address against a connection that had one, or the
+    other way round, was listed as never accepted, and `withdrawn --oldest` would have closed
+    someone already connected."""
+    st = _state()
+    linked_h, linked_n, linked_bare = set(), set(), set()
+    for r in conns["rows"] if conns.get("usable") else ():
+        h = st.profile_handle(r.get("URL"))
+        k = name_key(" ".join(x for x in (r.get("First Name"), r.get("Last Name")) if x))
+        if h:
+            linked_h.add(h)
+        if k:
+            linked_n.add(k)
+            if not h:
+                linked_bare.add(k)
+
+    def linked(name, url) -> bool:
+        h, k = st.profile_handle(url), name_key(name)
+        return bool((h and h in linked_h) or (k and k in (linked_bare if h else linked_n)))
+    return linked
+
+
 def pending(contacts, threads, today, src=None, days: int | None = None) -> dict:
     """Invitations the person sent that nobody has accepted, older than `days`, oldest first.
 
@@ -2281,20 +2382,7 @@ def pending(contacts, threads, today, src=None, days: int | None = None) -> dict
            "connections": conns["usable"], "tables": [inv, conns]}
     if not inv["usable"]:
         return out
-    # Joined the way the import joins (match_contact): by address, and by name wherever one
-    # side has no address. Each fallback looked only at its own side, so an invitation with
-    # no address against a connection that had one, or the other way round, was listed as
-    # never accepted, and `withdrawn --oldest` would have closed someone already connected.
-    linked_h, linked_n, linked_bare = set(), set(), set()
-    for r in conns["rows"]:
-        h = st.profile_handle(r.get("URL"))
-        k = name_key(" ".join(x for x in (r.get("First Name"), r.get("Last Name")) if x))
-        if h:
-            linked_h.add(h)
-        if k:
-            linked_n.add(k)
-            if not h:
-                linked_bare.add(k)
+    linked = connected_to(conns)
     owed_ids = {i["contact_id"] for i in st.owed(contacts, threads, today)
                 if i["kind"] == "request_pending"}
     index, by_cid = contact_index(contacts), st.by_contact(threads)
@@ -2307,10 +2395,9 @@ def pending(contacts, threads, today, src=None, days: int | None = None) -> dict
         if when is None:
             continue
         out["total_sent"] += 1
-        h, k = st.profile_handle(url), name_key(name)
-        if (h and h in linked_h) or (k and k in (linked_bare if h else linked_n)):
+        if linked(name, url):
             continue
-        key = h or name_key(name) or name
+        key = st.profile_handle(url) or name_key(name) or name
         if key in seen:
             continue
         seen.add(key)
@@ -2506,6 +2593,11 @@ def _cli_history(a) -> int:
         n_ = len(plan["redate"])
         print(f"  {n_} request{'s' if n_ != 1 else ''} recorded from a Pending page, given the "
               "earlier day the export says it went")
+    if plan.get("retype"):
+        n_ = len(plan["retype"])
+        print(f"  {n_} note{'s' if n_ != 1 else ''} logged as a message that went as a connection "
+              "request nobody has accepted yet, logged as that request: no follow-up is due "
+              "until they accept")
     if plan.get("resay"):
         n_ = len(plan["resay"])
         print(f"  {n_} message{'s' if n_ != 1 else ''} logged from a draft given the words "
@@ -2663,7 +2755,9 @@ def _cli_tidy(a) -> int:
     n = got["removed"]
     print(f"tidy: {n} message{'s' if n != 1 else ''} your LinkedIn download had logged twice"
           + (" (nothing changed)" if a.dry else " taken out")
-          + (f"; {got['reordered']} day{'s' if got['reordered'] != 1 else ''} put in the order sent" if got.get("reordered") else "") + (
+          + (f"; {got['reordered']} day{'s' if got['reordered'] != 1 else ''} put in the order sent" if got.get("reordered") else "")
+          + (f"; {got['retyped']} note{'s' if got['retyped'] != 1 else ''} kept as the connection "
+             "request each went as" if got.get("retyped") else "") + (
           f"; {len(got['settled'])} contact{'s' if len(got['settled']) != 1 else ''} "
           "set again from their messages" if got["settled"] else ""))
     return 0

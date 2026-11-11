@@ -342,7 +342,9 @@ def tex_plain(text):
     s = str(text or "")
     s = re.sub(r"\\blockline\{([^{}]*)\}\{", r"\1: {", s)
     s = re.sub(r"\\href\{[^{}]*\}\{([^{}]*)\}", r"\1", s)
-    s = re.sub(r"\\kern\s*-?[\d.]*\s*(?:pt|em|ex|mu)?", "", s)
+    # TeX reads one space after a dimension's unit as part of it: "A\kern0pt WS" prints
+    # "AWS", and a plain-text copy built from these fields said "A WS" (issue 236).
+    s = re.sub(r"\\kern\s*-?[\d.]*\s*(?:(?:pt|em|ex|mu)\s?)?", "", s)
     # A backslash or a brace the text printed (tools/tex_escape.py) is held apart until
     # every command and group is gone, so it never starts one or ends one.
     s = re.sub(r"\\textbackslash(?![a-zA-Z])(?:\{\})?", "\x00", s)

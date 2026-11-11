@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """An app bug met in the maintainer's own copy, filed on the app by itself, checked first.
 
+    python3 tools/app_bug.py similar --title "<what breaks>" [--key "<tool:function>"]   look first
     python3 tools/app_bug.py check <body file> --title "<what breaks>" [--key "<tool:function>"]
     python3 tools/app_bug.py check ... --hold           # this chat cannot reach the app's issues
+    python3 tools/app_bug.py met --tool <file:function> --what "<plain words>" --did "<the workaround>"
     python3 tools/app_bug.py held                       # a cloud chat files what others held
     python3 tools/app_bug.py filed <key>...             # those now filed leave the folder
     python3 tools/app_bug.py wake                       # only for a bug that stops their search
@@ -25,15 +27,28 @@ tools/build_app.py --tokens-out, kept 12 hours and while this copy's newest comm
 same, then name_guard against the words the app carries), and only words that pass are
 printed. Each issue carries a key (a short hash of its tool and function where given, else
 of its title, the same however it is spaced or capitalised), so a bug met twice is one issue
-with a comment, never two. The tool makes no network call: the chat makes one list call,
-then one create or comment. A chat that cannot reach the app's issues (one on the
+with a comment, never two. Before anything is filed the chat looks for the same bug filed
+some other way, by hand or with no key, open or closed in the last RECENT_DAYS days
+(`similar`, which is also the first of check's steps; issue #221): one that is the same gets
+a short comment, never a second issue. The tool makes no network call: the chat makes two
+list calls, then one create or comment. A chat that cannot reach the app's issues (one on the
 maintainer's computer) holds the checked issue in handoff/app_bugs/, saved like their other
 files, and the next cloud chat's sync says so; it files them. The morning after the builder
 runs, the maintainer's own brief says what it did (brief_line), and nothing else tells them.
 
+A chat met the bug itself far more often than the person pointed one out, and those were
+worked round and never filed (issue #240). So `met` is the one command a chat runs the moment
+it works round an app command (a refusal retried another way, a step done by hand, a file
+edited because a tool refused): the same check and the same look as `check`, from the words
+alone, with no file to write first. The refusals a chat recovers from print it ready to run
+(met_line, in tweak.py, app.py next and done, and network/reply.py), so filing at that moment
+does not rest on a rule remembered. `met --person` files the person's own complaint that a
+chat should have filed something by itself.
+
 A copy that is not the maintainer's never files one: its chats give the person the link the
 app skill describes (.claude/skills/app/chat.md, "Something looks wrong"), which they choose
-to press. This says so, and exits 2.
+to press. This says so, and exits 2. There `met` exits 2 too and the person hears nothing (a
+chat's own workaround is never theirs to hear of), and no refusal prints its line.
 
 Exit 0 checked (the steps and the issue printed), 1 refused (what to reword is named, never
 a private word), 2 not the maintainer's copy, 3 a usage error or a check that could not run.
@@ -72,7 +87,13 @@ TOKENS = "ljs-app-bug-tokens"
 APP_REF = "refs/remotes/app/master"
 HELD = os.path.join("handoff", "app_bugs")   # checked issues a chat could not file itself
 MARK = re.compile(r"<!-- app-bug: ([0-9a-f]{6,40}) -->")
-GITHUB_TOOLS = "select:mcp__github__list_issues,mcp__github__issue_write,mcp__github__add_issue_comment"
+GITHUB_TOOLS = ("select:mcp__github__list_issues,mcp__github__issue_read,mcp__github__issue_write,"
+                "mcp__github__add_issue_comment")
+RECENT_DAYS = 30                      # a bug closed this recently may be the same one, back
+# Words that say nothing about which bug it is, left out of the words to look for.
+_PLAIN = frozenset("when with from that this into then than they them there what which "
+                   "after before does doesnt dont never always every still again only "
+                   "page chat tool runs said says shows".split())
 
 
 # ------------------------------------------------------------------ where its records live
@@ -129,6 +150,50 @@ def key_of(title: str, key: str = "") -> str:
     the title."""
     seed = ("tool:" + normal(key, tool=True)) if normal(key, tool=True) else ("title:" + normal(title))
     return hashlib.sha1(seed.encode("utf-8")).hexdigest()[:10]
+
+
+# ------------------------------------------------------------------ looking first
+
+def look_words(title: str, key: str = "") -> list[str]:
+    """The words that find this bug among the app's issues: its tool and function, then the
+    title's own words that say which bug it is."""
+    tool = normal(key, tool=True)
+    words = [w for w in normal(title).split() if len(w) > 3 and w not in _PLAIN]
+    return list(dict.fromkeys(([tool] if tool else []) + words))[:8]
+
+
+def _today() -> dt.date:
+    try:
+        import person
+        return person.today()
+    except Exception:  # noqa: BLE001  no profile here: the computer's day is near enough
+        return dt.date.today()
+
+
+def similar(title: str, key: str = "", today: dt.date | None = None, k: str = "") -> list[str]:
+    """The look a chat makes before anything is filed: every open issue on the app, whatever
+    its labels, and those closed in the last RECENT_DAYS days, for the same bug. A chat filed
+    one the app already had, filed by hand with no key line, because it listed only the open
+    `from-copy` issues and matched the key alone (issue #221)."""
+    import urllib.parse
+    import app_setup
+    o, r = app_setup.APP_REPO.rstrip("/").split("/")[-2:]
+    since = (today or _today()) - dt.timedelta(days=RECENT_DAYS)
+    words = look_words(title, key)
+    fields = '["number", "title", "body", "state", "labels", "updated_at"]'
+    q = urllib.parse.quote_plus("is:issue " + " ".join([w for w in words if " " not in w][:4]))
+    return [
+        f"a. list_issues (owner {o}, repo {r}, state OPEN, orderBy UPDATED_AT, direction DESC, "
+        f"perPage 100, fields {fields}): every open issue, whatever its labels.",
+        f"b. list_issues (owner {o}, repo {r}, state CLOSED, since {since.isoformat()}T00:00:00Z, "
+        f"orderBy UPDATED_AT, direction DESC, perPage 100, fields {fields}).",
+        f"   No GitHub tools for the app: fetch https://github.com/{o}/{r}/issues?q={q} instead "
+        "(open and closed).",
+        f"c. The same bug is one whose body holds <!-- app-bug: {k or key_of(title, key)} -->, or "
+        "that names the same tool and function, or that says the same thing breaks in other "
+        f"words; these words find it: {', '.join(words) or '(the title)'}. Read a likely one in "
+        "full (issue_read) before deciding.",
+    ]
 
 
 # ------------------------------------------------------------------ the checks
@@ -361,7 +426,7 @@ def hold(got: dict) -> str:
     os.makedirs(_held_dir(), exist_ok=True)
     path = os.path.join(_held_dir(), f"{got['key']}.json")
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
-        json.dump({k: got[k] for k in ("title", "body", "key")}, fh, indent=1)
+        json.dump({k: got[k] for k in ("title", "body", "key", "tool") if k in got}, fh, indent=1)
     return path
 
 
@@ -414,10 +479,12 @@ def held_line() -> str:
 
 # ------------------------------------------------------------------ the command
 
-def vet(title: str, body: str, key: str = "", build=None, known: set | None = None) -> dict | None:
+def vet(title: str, body: str, key: str = "", build=None, known: set | None = None,
+        k: str = "") -> dict | None:
     """The issue, checked; None (with what to reword printed) when it may not be filed."""
-    k = key_of(title, key)
+    k = k or key_of(title, key)
     got = issue(title, body, k, _version(), _app_commit(), _where())
+    got["tool"] = str(key or "")
     # Everything that would be posted but the key, a hash of words checked here; the comment
     # is the body again under a line the footer already holds.
     found = findings(got["title"] + "\n\n" + MARK.sub("", got["body"]), denylist(build), known)
@@ -431,10 +498,14 @@ def vet(title: str, body: str, key: str = "", build=None, known: set | None = No
     return got
 
 
-def steps(issues: list[dict], keys_done: bool = False) -> str:
-    """What the chat does to file `issues`: one list call, then a comment or a new issue each."""
+def steps(issues: list[dict], keys_done: bool = False, again: str = "") -> str:
+    """What the chat does to file `issues`: a look for the same bug filed some other way (two
+    list calls), then a comment on it or a new issue each. `again` is the same command with
+    --hold, for a chat that cannot reach the app's issues."""
     import app_setup
     o, r = app_setup.APP_REPO.split("/")
+    again = again or ("python3 tools/app_bug.py check <the same file> --title <the same> "
+                      "--key <the same> --hold")
     lines = [
         "File it now and say nothing about it: the maintainer asked never to hear of app bugs "
         "in a chat. Then carry on round the bug.",
@@ -442,15 +513,22 @@ def steps(issues: list[dict], keys_done: bool = False) -> str:
         f"(add_repo, owner {o}, repo {r}, access push); deferred, load them in one call "
         f"(ToolSearch \"{GITHUB_TOOLS}\"). No GitHub tools at all (a chat on a computer), or "
         + ("still refused: leave them held and stop here." if keys_done else
-           "still refused: python3 tools/app_bug.py check <the same file> --title <the same> "
-           "--key <the same> --hold, and stop here: the next cloud chat files it."),
-        f"1. One call: GitHub's list_issues (owner {o}, repo {r}, state OPEN, labels "
-        f"[\"{LABEL}\"]).",
-        f"2. Each issue below: an open one whose body holds its <!-- app-bug: <key> --> line is "
-        f"the same bug, so add its comment to that one (add_issue_comment), and where that one "
-        f"is labelled {FIXED} also set its labels to [\"{LABEL}\"] (issue_write, method "
-        "update), since it came back. Otherwise create it (issue_write, method create) with its "
-        "title, labels and body. Exactly as printed: nothing added after this check.",
+           f"still refused: {again}, and stop here: the next cloud chat files it."),
+        "1. Look first: the app may already have this bug, filed by hand or by another chat, "
+        f"open or closed in the last {RECENT_DAYS} days.",
+    ]
+    for i in issues:
+        if len(issues) > 1:
+            lines.append(f"   For \"{i['title']}\":")
+        lines += ["   " + x for x in similar(i["title"], i.get("tool", ""), k=i["key"])]
+    lines += [
+        "2. The same bug found, open or closed: file nothing new. Add its comment below to that "
+        "one (add_issue_comment), cut to what that issue does not already say (cut only: nothing "
+        f"added after this check). Where that one is labelled {FIXED}, or closed and this was "
+        "met on its fixed version or later, it came back: also set its labels to "
+        f"[\"{LABEL}\"] and reopen a closed one (issue_write, method update, state open). None "
+        "the same: create it (issue_write, method create) with its title, labels and body. "
+        "Exactly as printed: nothing added after this check.",
         "3. Nothing to wake: it waits, with the week's other bugs, for the builder's run on "
         "Wednesday night. Only where the person has said this bug stops their search: python3 "
         "tools/app_bug.py wake, and do what it prints.",
@@ -492,6 +570,93 @@ def check(body_file: str, title: str, key: str = "", build=None, known: set | No
     return 0
 
 
+# ------------------------------------------------------------------ met: a workaround, filed then
+
+PLACEHOLDER = re.compile(r"^\s*<[^<>]*>\s*$")   # "<what you did instead>", left as printed
+MET_SAID = "the moment a chat works round an app command, by itself, with no word from the person"
+
+
+def _filled(text: str) -> str:
+    """`text` on one line, or "" when it is empty or still the printed placeholder."""
+    said = " ".join(str(text or "").split())
+    return "" if not said or PLACEHOLDER.match(said) else said
+
+
+def met_title(what: str) -> str:
+    """What breaks, from the first words of `what`: its first sentence, at most 90 characters,
+    cut at a word."""
+    said = " ".join(str(what or "").split())
+    first = re.split(r"(?<=[.!?])\s", said, maxsplit=1)[0].rstrip(".")
+    if len(first) <= 90:
+        return first
+    return first[:90].rsplit(" ", 1)[0].rstrip(",;:") + "..."
+
+
+def met_body(tool: str, what: str, did: str, person: bool = False) -> str:
+    how = ("The person said a chat should have filed this by itself, and none had: their "
+           "complaint is filed with it." if person else
+           "A chat met this itself and worked round it; nobody asked for it to be filed.")
+    return (f"What happened: {what}\n\nWorked round it: {did}\n\nWhere: {tool}\n\n"
+            f"How it was met: {how}\n")
+
+
+def met_key(tool: str, title: str) -> str:
+    """A workaround's key: its tool and what broke, so two refusals of one command are two
+    issues and the same one met again is one (a file alone would make every bug in it one)."""
+    return key_of(title, f"{tool} {normal(title)}")
+
+
+def met(tool: str, what: str, did: str, title: str = "", person: bool = False, build=None,
+        known: set | None = None, keep: bool = False) -> int:
+    """`check` for a workaround, from its words alone: scanned as check scans, keyed, looked
+    for first, then filed or commented, or held for a chat that can reach the app's issues."""
+    tool, what, did = " ".join(str(tool or "").split()), _filled(what), _filled(did)
+    if not tool or not what or not did:
+        print("app_bug: nothing filed: say the app's file (--tool tools/x.py:function), what it "
+              "refused or got wrong (--what) and what you did instead (--did), in plain words, "
+              "never the placeholder as printed.")
+        return 3
+    title = " ".join(str(title or "").split()) or met_title(what)
+    k = met_key(tool, title)
+    try:
+        got = vet(title, met_body(tool, what, did, person), tool, build, known, k=k)
+    except Exception as e:  # noqa: BLE001  a check that could not run files nothing
+        print(f"app_bug: nothing filed: {e}")
+        return 3
+    if got is None:
+        return 1
+    if keep:
+        hold(got)
+        print("app_bug: checked and held for the next cloud chat in this copy, which files it. "
+              "Say nothing about it, save as usual, and carry on round the bug.")
+        return 0
+    print(f"app_bug: checked (key {got['key']}). "
+          + steps([got], again="python3 tools/app_bug.py met <the same words> --hold"))
+    return 0
+
+
+def met_line(tool: str, what: str = "") -> str:
+    """The line a refusal a chat may recover from prints beneath itself: the `met` command,
+    ready to run but for what the chat did instead. Only in the maintainer's own copy, which
+    files (sync_app.maintainers); "" anywhere else, the app itself included, where nothing is
+    filed and a chat's own workaround is never the person's to hear of."""
+    try:
+        import sync_app
+        if not sync_app.maintainers():
+            return ""
+    except Exception:  # noqa: BLE001  no git, no copy: nothing files here
+        return ""
+    import shlex
+    said = " ".join(str(what or "").split())
+    if len(said) > 240:
+        said = said[:240].rsplit(" ", 1)[0] + "..."
+    return ("if you work round this (by hand, another command or other arguments, rather than "
+            "the fix it names), file it in the same turn, said to nobody: python3 "
+            f"tools/app_bug.py met --tool {shlex.quote(tool)} --what "
+            f"{shlex.quote(said or '<what it refused, in plain words>')} "
+            "--did \"<what you did instead>\", and do the steps it prints")
+
+
 def file_held(build=None, known: set | None = None) -> int:
     """The issues another chat checked and held, checked again here (this copy's list of
     private words may have grown since) and printed with the steps that file them."""
@@ -499,7 +664,7 @@ def file_held(build=None, known: set | None = None) -> int:
     for h in held():
         body = h["body"].split("\n\n---\nFiled by itself", 1)[0]
         try:
-            got = vet(h["title"], body, "", build, known)
+            got = vet(h["title"], body, h.get("tool", ""), build, known)
         except Exception as e:  # noqa: BLE001  a check that could not run files nothing
             print(f"app_bug: nothing filed: {e}")
             return 3
@@ -528,6 +693,22 @@ def main(argv=None, build=None) -> int:
                                              "which keys the issue where known")
     c.add_argument("--hold", action="store_true", help="this chat cannot reach the app's issues: "
                                                        "keep it for the next cloud chat")
+    mt = sub.add_parser("met", help="the moment a chat works round an app command: check it and "
+                                    "print the steps that file it (or comment), said to nobody")
+    mt.add_argument("--tool", required=True, help="the app's file worked round, with its function "
+                                                  "where known (tools/tweak.py:apply)")
+    mt.add_argument("--what", required=True, help="what it refused or got wrong, in plain words")
+    mt.add_argument("--did", required=True, help="what the chat did instead")
+    mt.add_argument("--title", default="", help="what breaks, in a few words (default: the first "
+                                                "words of --what)")
+    mt.add_argument("--person", action="store_true", help="the person said a chat should have "
+                                                          "filed this by itself")
+    mt.add_argument("--hold", action="store_true", help="this chat cannot reach the app's issues: "
+                                                        "keep it for the next cloud chat")
+    s = sub.add_parser("similar", help="before filing: where to look for the same bug, open or "
+                                        "closed lately, filed some other way")
+    s.add_argument("--title", required=True, help="what breaks, in a few words")
+    s.add_argument("--key", default="", help="the failing tool and function (tools/x.py:f)")
     sub.add_parser("held", help="the issues other chats held, checked again, with the steps")
     f = sub.add_parser("filed", help="held issues now filed: take them out")
     f.add_argument("keys", nargs="+")
@@ -545,6 +726,16 @@ def main(argv=None, build=None) -> int:
         print(f"app_bug: wait {wait} minutes: the maintainer's {which} takes master; merge then."
               if wait else "app_bug: clear of the maintainer's tasks: merge now.")
         return 1 if wait else 0
+    if a.cmd == "similar":
+        # Any copy may look: it reads the app's public page and files nothing.
+        print("app_bug: before anything is filed, look for this bug on the app's page, filed by "
+              f"hand or by another chat, open or closed in the last {RECENT_DAYS} days:\n"
+              + "\n".join(similar(a.title, a.key)) + "\n"
+              "d. One is the same: file nothing new. In the maintainer's own copy, python3 "
+              "tools/app_bug.py check prints the short comment for it, scanned like a new issue; "
+              "in anyone else's, there is no link to a new issue (the app skill's \"Something "
+              "looks wrong\").")
+        return 0
     if a.cmd == "task":
         try:
             print(json.dumps(task(a.copy), indent=1))
@@ -553,6 +744,10 @@ def main(argv=None, build=None) -> int:
             return 3
         return 0
     import sync_app
+    if a.cmd == "met" and not sync_app.maintainers():
+        print("app_bug: this copy is not the app maintainer's, so nothing is filed and the "
+              "person hears nothing of it: carry on round it.")
+        return 2
     if not sync_app.maintainers():
         print("app_bug: this copy is not the app maintainer's, so it files nothing itself. Give "
               "the person the link the app skill describes (.claude/skills/app/chat.md, "
@@ -577,6 +772,8 @@ def main(argv=None, build=None) -> int:
         gone = filed(a.keys)
         print(f"app_bug: {len(gone)} held issue(s) taken out as filed; save as usual.")
         return 0
+    if a.cmd == "met":
+        return met(a.tool, a.what, a.did, a.title, a.person, build=build, keep=a.hold)
     return check(a.body, a.title, a.key, build=build, keep=a.hold)
 
 

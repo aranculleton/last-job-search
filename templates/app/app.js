@@ -444,7 +444,7 @@
     chatNotes: [],
     conv: null,
     viewConv: null,
-    flags: {readOnly: false, live: false, limit: false, dbError: null},
+    flags: {readOnly: false, live: false, limit: false, dbError: null, late: false},
     look: "auto",
     keysOn: true,
     connOpen: false,
@@ -815,6 +815,14 @@
     if (t === null) return "";
     return fmtDay(s) + ", " + clockWords(t);
   }
+  // A change made today says when ("today at 21:58"), an older one its day: "Wed 11 Nov" on the
+  // day it was made did not say which rewrite was the latest (the maintainer, 2026-11-11: "if
+  // its the same day can we have the time ... like the time it was rewritten").
+  function dayOrTime(s) {
+    if (!txt(s) || isDateOnly(s)) return fmtDay(s);
+    const t = tms(s);
+    return t !== null && dayDiff(s) === 0 ? "today at " + clockWords(t) : fmtDay(s);
+  }
   // The interview has passed: for a calendar day, once the day is over; with a time, three
   // hours after it.
   function isPast(s) {
@@ -965,9 +973,16 @@
       return Promise.resolve(c.use(name)).then((v) => v || null, () => null);
     } catch (e) { return Promise.resolve(null); }
   }
+  // When the page asked. A capability that answers null only at the end of the runtime's ten
+  // seconds is a Claude app that did not answer (claude.d.ts: "Framed by a host that never
+  // answers, it resolves null after 10 s"), never a view without it: the owner was told "This
+  // page is private" and "Read only here" in their own app, and the page's "taking too long"
+  // and "Not saved" lines could never show (the contract check, 2026-11-11).
+  const ASKED_AT = now();
+  const LATE_NULL_MS = 8000;
   const CAP = {};
   for (const n of ["user", "db", "downloads", "comments", "sample", "assets"]) {
-    CAP[n] = use(n).then((v) => { S.caps[n] = v; return v; });
+    CAP[n] = use(n).then((v) => { S.caps[n] = v; if (!v && now() - ASKED_AT >= LATE_NULL_MS) S.flags.late = true; return v; });
   }
   const capsSettled = {};
   // What a capability settling late changes (the downloads, the assets, "cannot reach Claude")
@@ -1582,8 +1597,13 @@
   // rung. Every control used to act, then fail after it (the 3 November audit).
   function readOnlyTap() {
     if (!(S.flags.readOnly && capsSettled.db)) return false;
-    toast({text: "Read only here: open this page in the Claude app to change anything.", ids: [], bad: true});
-    shout("Read only here. Nothing was changed.");
+    if (S.flags.late) {
+      toast({text: "Not saved: the page could not reach your search. Close it and open it again in the Claude app.", ids: [], bad: true});
+      shout("Not saved. Close the page and open it again.");
+    } else {
+      toast({text: "Read only here: open this page in the Claude app to change anything.", ids: [], bad: true});
+      shout("Read only here. Nothing was changed.");
+    }
     // A choice moved on the screen goes back to what is saved.
     const m = $("main");
     if (m) for (const el of m.querySelectorAll("input[type=radio], input[type=checkbox]")) el.checked = el.defaultChecked;
@@ -1652,7 +1672,7 @@
     if (!db) {
       for (const r of recs) r.state = "unsaved";
       S.flags.readOnly = true;
-      toast({text: "Not saved: this page cannot keep answers here. Open it in the Claude app.", ids: [], bad: true});
+      toast({text: S.flags.late ? "Not saved: the page could not reach your search. Close it and open it again in the Claude app." : "Not saved: this page cannot keep answers here. Open it in the Claude app.", ids: [], bad: true});
       shout("Not saved. This page cannot keep answers here.");
       scheduleRender();
       return recs;
@@ -1978,6 +1998,21 @@
   // What it needs (may it ring, where, which thread) is read before any tap: refreshCanSend
   // and the meta/doorbell subscription.
   function canRing() { return !!S.caps.comments && S.can.comments === "available"; }
+  // A ring is a comment, at most 4 KiB (comments.d.ts: longer is refused `invalid` and nothing
+  // is sent), so it names as much of its work as fits: Wake Claude over a few dozen taps left
+  // waiting rang nobody, every time. The chat reads everything waiting from the store, never
+  // from the ring (the app skill), so a ring that names part of it still brings all of it.
+  const RING_BYTES = 4000;
+  function ringText(tag, ids) {
+    const head = "[app] [" + (tag || "work") + ":";
+    const enc = new TextEncoder();
+    const out = [];
+    for (const id of ids) {
+      if (out.length && enc.encode(head + out.concat([id]).join(",") + "]").length > RING_BYTES) break;
+      out.push(id);
+    }
+    return head + out.join(",") + "]";
+  }
   function ringNow(ids, tag, force) {
     const c = S.caps.comments;
     if (!c) return Promise.resolve("none");
@@ -1989,7 +2024,7 @@
     if (!force && tag !== "act" && bell && now() - (tms(bell.rung_at) || 0) < RING_COALESCE_MS && arr(bell.ids).length &&
         ids.every((id) => arr(bell.ids).includes(id)) &&
         arr(bell.ids).every((id) => { const w = workDoc(id); return w && w.status === "queued"; })) return Promise.resolve("coalesced");
-    const text = "[app] [" + (tag || "work") + ":" + ids.join(",") + "]";
+    const text = ringText(tag, ids);
     // The thread is the chat's that answered when it was made: a new chat that took the page
     // sat idle while seven taps went to the thread the one before it had resolved (the
     // maintainer's copy, 2026-11-05). Once another chat answers, a ring starts a fresh thread.
@@ -5224,7 +5259,7 @@
     const k = txt(obj(d).kind), sub = txt(obj(d).sub);
     return !(k === "interview" && (sub === "test" || sub === "choose")) && k !== "offer" && sub !== "reply_by" && !txt(obj(d).reply_by);
   }
-  function readyWords(d) { return dueDraft(d) ? "Ready to send" : "Ready to do"; }
+  function readyWords(d) { return dueDraft(d) ? (sendsMaking(dueDraft(d)) ? cap1(noun()) + " not ready" : "Ready to send") : "Ready to do"; }
   function dueRow(d, ctx) {
     ctx = ctx || {};
     const n = dayDiff(d.due);
@@ -7446,8 +7481,33 @@
   // person and their due row are done on the page, as a job marked applied is (jobPending).
   // A sent message leaves the engine's list, so one still in it is the page ahead of Claude.
   const sentHere = (m) => !!m && msgStatus(m) === "sent";
-  const dueSentHere = (d) => sentHere(dueMessage(d));
-  const personSentHere = (p) => sentHere(personMessage(p.id));
+  // "I sent it" on the message to them, kept on their card until their record catches up. The
+  // message leaves the engine's list once a chat applies the tap, and the list can be drawn
+  // before their record is (a section another chat drew is kept a while: app.py view), so the
+  // tap was read against nothing: the card went back to "Follow-up ready", "You wrote" the day
+  // of the message before (the maintainer, 2026-11-11). A tap with no message left in the list
+  // counts while it is newer than the latest exchange their record knows.
+  function personSentTap(p) {
+    const pm = personMessage(p.id);
+    if (pm) return sentHere(pm) ? effective(pm.id, ["msg.sent"]) : null;
+    let best = null;
+    for (const id of new Set([txt(obj(p.owed).message)].concat(arr(obj(p.related).messages).map(txt)))) {
+      const e = id && !messageById(id) ? effective(id, ["msg.sent"]) : null;
+      if (e && (!best || txt(e.doc.at) > txt(best.doc.at))) best = e;
+    }
+    if (!best) return null;
+    const on = txt(obj(best.doc.value).on) || txt(best.doc.at).slice(0, 10);
+    const known = [txt(obj(p.exchange).last_on), txt(p.last)].filter(Boolean).sort().pop() || "";
+    return on > known ? best : null;
+  }
+  const personSentHere = (p) => !!personSentTap(p);
+  // A follow-up's or reply's row is done once the message to its person went, in the list or not.
+  const dueSentHere = (d) => {
+    const m = dueMessage(d);
+    if (m || !MSG_WORK.has(txt(obj(d.work).kind) || txt(d.action).replace(/^work:/, ""))) return sentHere(m);
+    const p = personById(dueContact(d));
+    return !!p && personSentHere(p);
+  };
   // Where a draft is read and sent: its person's card in Contacts, the draft open.
   function seeDraft(m) {
     if (detailDlg) closeDetail(true);
@@ -7679,6 +7739,16 @@
   // them where there is one, else the current one, saved in a tap to attach; where it is not
   // on the page yet, the way to it (the maintainer, 2026-11-05: "it would be great if the
   // actual document was linked there").
+  // A resume Claude is making for them now, to go with the message, [id, work], or null: until
+  // it is ready the message is not ready to send, and its I sent it waits (#231).
+  function sendsMaking(m) {
+    if (!m || txt(m.sends) !== "resume") return null;
+    const made = readyItems().find((a) => readyLive(a) && txt(obj(a.for_contact).id || a.for_contact) === txt(m.contact));
+    const madeFile = made ? arr(made.files).find((f) => f.kind === "resume") || null : null;
+    if (madeFile ? !!madeFile.asset : !!txt(obj(obj(personById(txt(m.contact))).resume_for_them).asset)) return null;
+    return [...allWork()].find(([, w]) => txt(w.kind) === "resume_for_contact" &&
+      txt(obj(w.args).contact) === txt(m.contact) && ACTIVE.has(txt(w.status) || "queued")) || null;
+  }
   function sendsLine(m) {
     if (txt(m.sends) !== "resume") return null;
     const made = readyItems().find((a) => readyLive(a) && txt(obj(a.for_contact).id || a.for_contact) === txt(m.contact));
@@ -7697,9 +7767,12 @@
     const who = txt(m.first_name);
     // A resume Claude is making for them now is the one that goes with it: offering the
     // general one while theirs was being made sent the wrong file (the maintainer, 2026-11-09).
-    const making = !theirs && [...allWork()].some(([, w]) => txt(w.kind) === "resume_for_contact" &&
-      txt(obj(w.args).contact) === txt(m.contact) && ACTIVE.has(txt(w.status) || "queued"));
-    if (making) return h("div", {class: "sends-line"}, h("span", {class: "small muted"}, "Goes with it: the " + noun() + " for " + who + ", which Claude is making now"));
+    // Its work is said under the line as a change to a message is (spinner, step, clock, Stop
+    // Claude), and the message is not ready to send until it is done (#231).
+    const making = theirs ? null : sendsMaking(m);
+    if (making) return h("div", {class: "sends-making", "data-sends-making": making[0]},
+      h("div", {class: "sends-line"}, h("span", {class: "small muted"}, "Goes with it: the " + noun() + " for " + who + ", which Claude is making now. Send them together once it is ready.")),
+      workInline(making[0], making[1], {key: "sends:" + m.id}));
     // Theirs, made but not yet in the page's store: the way to it, never the general file
     // under their name.
     const f = theirs || (hasTheirs ? null : cur.asset ? {kind: "resume", name: txt(cur.name), asset: cur.asset} : null);
@@ -7804,8 +7877,11 @@
     const copyName = "Copy " + (parts.subject ? "message" : what + " to " + name);
     const fixing = fixState(m);
     const held = txt(m.hold) && !S.unheld.has(m.id);
-    // Not ready: written before their profile was read (X-53), or a fix still to come.
-    const ready = !held && !fixing;
+    // Not ready: written before their profile was read (X-53), a fix still to come, or a change
+    // finished whose new words are on their way: the old ones are never offered to copy or
+    // mark as sent, and the line under the draft says why (tweakResult, #230).
+    const td = tweakDone(m);
+    const ready = !held && !fixing && !(td && tweakComing(td[1], m.rev));
     const copyBtn = h("button", {type: "button", class: "btn small copy bubble-copy" + (copied ? "" : " primary"), "data-k": "copy:" + tid, "data-primary": copied ? null : "1",
       "aria-label": copied ? null : copyName, onclick: () => { S.copied.add(m.id); useLast(m.id); copyText(txt(draftGet(penKey)) || parts.body, (parts.subject ? "message" : what) + " to " + name, "copy:" + tid, tid); }},
       icon("copy"), copied ? (fresh ? "Copied" : "Copy again") : "Copy");
@@ -7818,7 +7894,8 @@
     // Copied or their profile opened, I sent it is filled; on the one pressed last it is the
     // screen's filled pill (lead), so coming back from LinkedIn it is the one to press.
     const last = S.lastUsed === m.id;
-    const sentBtn = ready ? btn("I sent it", () => { const t = txt(draftGet(penKey)).trim(); draftSet(penKey, null); S.penOpen.delete(m.id); if (S.lastUsed === m.id) { useLast(null); unmark(); } sentNow(t || parts.body); },
+    // A resume still being made to go with it: I sent it waits for it (sendsLine says so, #231).
+    const sentBtn = ready && !sendsMaking(m) ? btn("I sent it", () => { const t = txt(draftGet(penKey)).trim(); draftSet(penKey, null); S.penOpen.delete(m.id); if (S.lastUsed === m.id) { useLast(null); unmark(); } sentNow(t || parts.body); },
       {kind: copied || last || S.opened.has(m.id) ? "primary" : "secondary", lead: last, small: true, key: "sent:" + m.id, aria: "I sent it: the " + what + " to " + name}) : null;
     const sid = "msgs-" + seg(m.id);
     // What it is and how it goes, short enough for one line beside Copy and the pencil on a
@@ -8029,7 +8106,7 @@
     return card("li", {class: "card msg person" + edgeOf(alertsOf(m)), "aria-labelledby": hid, "data-item": m.id},
       h("div", {class: "person-main"},
         h("div", {class: "job-top"}, h("h3", {id: hid}, toWho(m)),
-          h("span", {class: "top-end"}, d.blocked ? stateWord("Breaks your rules", "bad") : m.due && dayDiff(m.due) !== null && dayDiff(m.due) < 0 ? stateWord("Ready to send", "info") : null,
+          h("span", {class: "top-end"}, d.blocked ? stateWord("Breaks your rules", "bad") : m.due && dayDiff(m.due) !== null && dayDiff(m.due) < 0 ? stateWord(sendsMaking(m) ? cap1(noun()) + " not ready" : "Ready to send", "info") : null,
             txt(m.contact) && !txt(m.application) ? btn("", () => askRemovePerson(txt(m.contact), txt(m.first_name), txt(m.employer), revOf(txt(m.contact)),
               Object.assign({talk: ["message", m.id]}, txt(m.kind) === "first_note" ? {skip: () => act([{item: m.id, action: "msg.skip", rev: m.rev}], "Set aside: the note to " + txt(m.first_name))} : {})),
             {kind: "quiet icon-only", small: true, icon: "bin", key: "mbin:" + m.id, aria: "Trash it: not now, or not " + txt(m.first_name) + "?"}) : null)),
@@ -8076,6 +8153,8 @@
     if (personSentHere(p)) return "waiting";
     if (personClosedHere(p)) return "done";
     if (personGotHere(p)) return "now";
+    // On hold by the draft to them before their record says so (heldSaid).
+    if (heldSaid(p)) return "held";
     const g = txt(p.group);
     if (GROUP_RANK[g] !== undefined) return g;
     // A list written before the engine said where each person stands: their status alone.
@@ -8108,7 +8187,7 @@
   // corner says "Ready to send" over it, whatever its kind, a first note included: Wren's said
   // it while Ash's, with a note just as ready, said "Not written to", two scales in one corner
   // (the screen review, 2026-11-11). The corner says what is next for you (U-6).
-  function sendable(m) { return !!m && !fixState(m) && !(txt(m.hold) && !S.unheld.has(m.id)); }
+  function sendable(m) { return !!m && !fixState(m) && !(txt(m.hold) && !S.unheld.has(m.id)) && !sendsMaking(m); }
   // Messages with nobody on the list to carry them (an application's follow-up): their own cards.
   function loneMessages(items) {
     const ids = new Set(items.map((p) => txt(p.id)));
@@ -8119,10 +8198,15 @@
   // decision on the draft to them): why and until when, or "" once a tap here moved them on
   // (their reply logged, the draft sent anyway, closed). They are a group of their own at the
   // foot of Contacts, never among who needs you (the maintainer, 2026-11-10).
+  // The draft to them carries the same hold (HELD_SENDABLE: their record's, or Claude's
+  // decision), and counts where their record has not caught up with it yet: a follow-up put on
+  // hold sat in the main list with its draft open, "Waiting for a reply" (the maintainer,
+  // 2026-11-11), the list's messages drawn after the hold and their record before it.
   function heldSaid(p) {
-    const said = p.__msg ? "" : txt(obj(p.on_hold).said);
-    if (!said || personGotHere(p) || personSentHere(p) || personClosedHere(p)) return "";
+    if (p.__msg) return "";
     const m = personMessage(p.id);
+    const said = txt(obj(p.on_hold).said) || (m && msgLive(m) && HELD_SENDABLE.has(txt(m.hold_why)) ? txt(m.hold) : "");
+    if (!said || personGotHere(p) || personSentHere(p) || personClosedHere(p)) return "";
     return m && S.unheld.has(m.id) ? "" : said;
   }
   // What is up front in Contacts, the rest one tap below: someone with a message drafted, who
@@ -8542,7 +8626,10 @@
   // An answer Claude wrote with its work is shown once the page holds what that work changed:
   // it said "see the updated message" while the card still showed the old one (reported from
   // a person's copy, 2026-11-05). Until a view made after it arrives, and for five minutes at
-  // most, it says it is putting the change on the page first.
+  // most, it says it is putting the change on the page first. Only an answer whose work changed
+  // something on the page (its buttons, `go`) waits so: a plain answer shows at once, and the
+  // chat puts a change on the page before its next item (tools/app.py ASKED_SHOWN), so the line
+  // never promised an order the chat did not keep (issue #226).
   const HELD_SAID = "Putting the change on your page first. The answer follows in a moment.";
   function pageMadeAt() {
     let at = txt(obj(S.model).made_at);
@@ -8550,7 +8637,7 @@
     return at;
   }
   function heldAnswer(m) {
-    if (!m || m.from === "you" || m.from === "note" || m.node || !txt(m.work) || !txt(m.at)) return false;
+    if (!m || m.from === "you" || m.from === "note" || m.node || !txt(m.work) || !txt(m.at) || !arr(m.go).length) return false;
     return txt(m.at) > pageMadeAt() && (tms(m.at) || 0) > now() - 5 * 60000;
   }
   function cardTalk(kind, id, label, o) {
@@ -8803,7 +8890,7 @@
   // The maintainer, 2026-11-04: when you first reached out helps, without overloading the card.
   function exchangeWords(p) {
     const ex = obj(p.exchange);
-    const sentTap = personMessage(p.id) && sentHere(personMessage(p.id)) ? effective(personMessage(p.id).id, ["msg.sent"]) : null;
+    const sentTap = personSentTap(p);
     const gotTap = effective(p.id, ["msg.received"]);
     const here = [sentTap ? [txt(obj(sentTap.doc.value).on) || todayIso(), "you"] : null, gotTap ? [txt(obj(gotTap.doc.value).on) || todayIso(), "them"] : null]
       .filter(Boolean).sort((a, b) => a[0].localeCompare(b[0])).pop();
@@ -8833,8 +8920,10 @@
     // The message drafted to them, shown under their name until "I sent it" (2026-11-04).
     const draft = personDraft(p);
     const d = draft ? draftParts(draft) : null;
-    // Marked sent here: done on the row at once, never "Replied: your turn" until Claude catches up.
-    const sent = !draft && sentHere(pm);
+    // Marked sent here: done on the row at once, never "Replied: your turn" until Claude catches
+    // up, and still after the message has left the list while their record lags (personSentTap).
+    const sentTap = draft ? null : personSentTap(p);
+    const sent = !!sentTap;
     // A message sent or set aside here: its Undo on its own line once the toast has gone.
     const done1 = draft ? null : messagesTo(p.id).find((m) => msgStatus(m) !== "to_send") || null;
     const got = !sent && personGotHere(p);
@@ -8865,7 +8954,7 @@
     // over work Claude has in hand (the review, 2026-11-05). "Claude is drafting it" only once
     // Claude has begun (DESIGN.md, Moving parts).
     const drafting = going && !going.stopped && going.tone !== "bad" && !going.retry && txt(obj(workDoc(txt(going.work))).kind) !== "tweak" && !d;
-    const [w, tone] = d && d.blocked ? ["Breaks your rules", "bad"] : drafting ? [going.words === "Finished" ? "Reply written" : going.spin ? "Claude is drafting it" : "Reply asked for", "info"] : d && !onHold && sendable(draft) ? ["Ready to send", "info"] : lateFollow ? [d ? "Ready to send" : "Follow-up ready", "info"] : sent ? [txt(pm.kind) === "first_note" ? "Note sent" : "Message sent", "ok"] : got ? ["Replied: your turn", "warn"] : offTill ? ["Put off", "plain"] : onHold ? ["On hold", "held"] : statusWord(p);
+    const [w, tone] = d && d.blocked ? ["Breaks your rules", "bad"] : drafting ? [going.words === "Finished" ? "Reply written" : going.spin ? "Claude is drafting it" : "Reply asked for", "info"] : d && !onHold && sendsMaking(draft) ? [cap1(noun()) + " not ready", "info"] : d && !onHold && sendable(draft) ? ["Ready to send", "info"] : lateFollow ? [d ? "Ready to send" : "Follow-up ready", "info"] : sent ? [txt(pm ? pm.kind : obj(sentTap.doc.value).kind) === "first_note" ? "Note sent" : "Message sent", "ok"] : got ? ["Replied: your turn", "warn"] : offTill ? ["Put off", "plain"] : onHold ? ["On hold", "held"] : statusWord(p);
     const name = txt(p.first_name);
     const asked = g === "now" ? personAsk(p) : null;
     const pw = personWhen(p);
@@ -10190,6 +10279,27 @@
   function tweakPending(item) {
     return [...allWork()].some(([id, w]) => id.startsWith("tweak~") && txt(obj(obj(w.args).target).id) === txt(item.id) && ACTIVE.has(txt(w.status) || "queued"));
   }
+  // The newest finished change to an item, [id, work], or null.
+  function tweakDone(item) {
+    const done = [...allWork()].filter(([id, w]) => id.startsWith("tweak~") && txt(obj(obj(w.args).target).id) === txt(item.id) && w.status === "done")
+      .sort((a, b) => txt(b[1].done_at || b[1].asked_at).localeCompare(txt(a[1].done_at || a[1].asked_at)));
+    return done.length ? done[0] : null;
+  }
+  // A change finished whose new words are not on the page yet: the work says done before the
+  // page has the rewritten draft (the item's rev has not moved). For FINISHING_MS it is on its
+  // way: the card said "Finished · putting the new version on your page" over the old words,
+  // and Copy copied the old message (#230). `rev`: the item's own; else the page's.
+  function tweakComing(w, rev) {
+    if (!w || txt(w.kind) !== "tweak" || txt(w.status) !== "done" || obj(w.args).back || unchangedWork(w)) return false;
+    const t = obj(obj(w.args).target);
+    const was = txt(t.rev);
+    const is = rev === undefined ? txt(revOf(txt(t.id))) : txt(rev);
+    return !!was && is === was && now() - (tms(w.finished_at || w.done_at) || 0) < FINISHING_MS;
+  }
+  // "Rewritten · the new version is on its way", on the card and in Claude's work alike.
+  function comingWords(w) {
+    return (txt(obj(obj(w.args).target).output) === "message" ? "Rewritten" : "Changed") + " · the new version is on its way";
+  }
   function tweakResult(item) {
     // Being changed: the card says so, with its place in Claude's work. After Apply the note
     // showed nothing at all (the maintainer, 2026-11-04: "after i send a job is there an
@@ -10215,16 +10325,15 @@
     const last = arr(item.tweaks_done)[0];
     const said = last ? arr(last.said).map(txt).filter(Boolean).join(", ") : "";
     if (last && last.undo && !effective(txt(item.id), ["tweak.undo"])) {
-      return h("p", {class: "small tweak-done"}, "Last change: " + (said || "a tweak") + (last.at ? ", " + fmtDay(last.at) : "") + ". ",
+      return h("p", {class: "small tweak-done"}, "Last change: " + (said || "a tweak") + (last.at ? ", " + dayOrTime(last.at) : "") + ". ",
         btn("Undo it", () => act([{item: txt(item.id), action: "tweak.undo", value: {key: txt(last.key)}, rev: item.rev}], "Undoing: " + (said || "the last change")),
           {kind: "link", key: "tweak-undo:" + item.id}), stateLine(txt(item.id), "tweak-undo:" + item.id));
     }
     // On hold: its one line says why and when (holdLine), never a second "Finished: held".
     if (txt(item.hold) && HELD_SENDABLE.has(txt(item.hold_why)) && !S.unheld.has(txt(item.id))) return null;
-    const done = [...allWork()].filter(([id, w]) => id.startsWith("tweak~") && txt(obj(obj(w.args).target).id) === txt(item.id) && w.status === "done")
-      .sort((a, b) => txt(b[1].done_at || b[1].asked_at).localeCompare(txt(a[1].done_at || a[1].asked_at)));
-    if (!done.length) return null;
-    const [id, w] = done[0];
+    const done = tweakDone(item);
+    if (!done) return null;
+    const [id, w] = done;
     if (obj(w.args).back) return null;
     // Claude's own answer to the change, where it wrote one (`done --reply-file` on work with no
     // conversation of its own), under the line that says how it ended.
@@ -10254,8 +10363,9 @@
     // A summary ending in a full stop is not given a second (the maintainer, 2026-11-05).
     const what = txt(obj(w.result).summary).replace(/[.\s]+$/, "") || "your changes";
     if (was && txt(item.rev) === was) {
-      if (now() - (tms(w.finished_at || w.done_at) || 0) < FINISHING_MS)
-        return h("p", {class: "small tweak-done", role: "status"}, h("span", {class: "spin", "aria-hidden": "true"}), " Finished · putting the new version on your page");
+      // Never "Finished" over the old words, and its Copy and I sent it wait (draftParts, #230).
+      if (tweakComing(w, item.rev))
+        return h("p", {class: "small tweak-done", role: "status", "data-tweak-coming": id}, h("span", {class: "spin", "aria-hidden": "true"}), " " + comingWords(w));
       return h("div", {class: "tweak-done", "data-tweak-done": id}, h("p", {class: "small"}, "Finished: " + lc1(what) + "."), answer);
     }
     return h("p", {class: "small tweak-done"}, "New version: " + what + ". The earlier one is kept. ",
@@ -11492,9 +11602,12 @@
   // Every id in the view carries its interview's, so two never meet.
   function lpId(lv, kind, x) { return "lp-" + seg(txt(lv.__iv)) + "-" + kind + "-" + seg(txt(x)); }
   const LP_TERM = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g;
-  // The phrases each term goes by, longest first, read once a prep.
+  // The phrases each term goes by, longest first, read once a prep. Kept beside the prep,
+  // never on it: the store hands the page its records frozen (db.d.ts), and a property set on
+  // one threw.
+  const lpPhrasesOf = new WeakMap();
   function lpPhrases(lv) {
-    if (lv.__phrases) return lv.__phrases;
+    if (lpPhrasesOf.has(lv)) return lpPhrasesOf.get(lv);
     const terms = obj(lv.terms);
     const out = [];
     for (const k of Object.keys(terms)) {
@@ -11503,7 +11616,7 @@
       for (const p of list) if (p.length > 1) out.push([p, k, new RegExp("(^|[^A-Za-z0-9])(" + p.replace(/[.*+?^$()|[\]\\{}]/g, "\\$&") + ")(?![A-Za-z0-9])", /^[A-Z0-9]+$/.test(p) ? "" : "i")]);
     }
     out.sort((a, b) => b[0].length - a[0].length);
-    Object.defineProperty(lv, "__phrases", {value: out, enumerable: false});
+    lpPhrasesOf.set(lv, out);
     return out;
   }
   // The words to say, with each term the prep explains as a dotted word that opens it. A term
@@ -11811,6 +11924,13 @@
         txt(lv.assumed) ? row("A best guess", [h("p", {}, cap1(txt(lv.assumed)) + "."), btn("Not this kind of interview?", () => askKind(iv), {kind: "secondary", small: true, key: "lp-kind:" + iv.id})]) : null));
   }
   function liveView(iv, lv, acts) {
+    // A copy of the prep carries its interview's id: the prep itself is the store's record,
+    // handed to the page frozen (db.d.ts, "Delivered snapshots and their data() are frozen"),
+    // and setting the id on it threw before the sheet was made, so Read your prep and Practise
+    // 3 questions looked pressed and opened nothing on every device (the maintainer,
+    // 2026-11-11, the night before an interview). The tests' store handed out copies anyone
+    // could change, so none of them saw it; it freezes them now as the real one does.
+    lv = Object.assign({}, lv);
     Object.defineProperty(lv, "__iv", {value: txt(iv.id), enumerable: false, configurable: true});
     const qs = arr(lv.questions);
     // Only the stories a question here is answered with: a test taken alone showed all four
@@ -11954,10 +12074,13 @@
   function personDetail(p) {
     const pm = personMessage(p.id);
     const draft = draftReady(pm);
-    const sent = !draft && sentHere(pm);
+    // Sent as their card counts it: the message in the list, or the tap on it once the list
+    // has moved on before their record (the detail read only the list, so it said "Next: Your
+    // follow-up is written: send it" after I sent it: the maintainer, 2026-11-11).
+    const sent = !draft && (sentHere(pm) || personSentHere(p));
     const got = !sent && personGotHere(p);
     // Their corner as their card's: a draft that can go now is "Ready to send" (sendable).
-    const [w, tone] = sent ? [txt(pm.kind) === "first_note" ? "Note sent" : "Message sent", "ok"] : draft && !msgStopped(draft) && !heldSaid(p) && sendable(draft) ? ["Ready to send", "info"] : got ? ["Replied: your turn", "warn"] : statusWord(p);
+    const [w, tone] = sent ? [txt(obj(pm).kind) === "first_note" ? "Note sent" : "Message sent", "ok"] : draft && !msgStopped(draft) && !heldSaid(p) && sendsMaking(draft) ? [cap1(noun()) + " not ready", "info"] : draft && !msgStopped(draft) && !heldSaid(p) && sendable(draft) ? ["Ready to send", "info"] : got ? ["Replied: your turn", "warn"] : statusWord(p);
     const st = txt(p.status);
     const g = personGroup(p);
     const asked = g === "now" ? personAsk(p) : null;
@@ -14487,7 +14610,7 @@
     // Its own chat stopped on a question to the person (tools/page_db.py mark_blocked): said
     // as that, never as a job that may have stopped (the stranger audit, X-7 and X-8).
     const blocked = (st === "running" || st === "claimed") && !!txt(w.blocked_at);
-    const label = p.stopping ? "Stopping after this step" : picked ? "Starting" : st === "queued" ? (unsent ? "Not sent yet" : late ? "No answer yet" : inLine ? (place.pos === 1 ? "Next" : "Waiting its turn") : ahead ? (ahead.pos === 1 ? "Next" : "Waiting its turn") : waking ? (freshHeartbeat() ? "Sent" : "Waking Claude") : toComputer ? "Waiting for your computer" : "Waiting for Claude") : st === "running" || st === "claimed" ? (blocked ? "Waiting for you" : grace ? "Waiting for its chat" : slow ? "May have stopped" : null) : st === "done" && notOnPageYet(w) ? "Putting on page" : st === "stopped" && leftOut(w) ? "Not drafted" : WORK_WORDS[st] || cap1(st);
+    const label = p.stopping ? "Stopping after this step" : picked ? "Starting" : st === "queued" ? (unsent ? "Not sent yet" : late ? "No answer yet" : inLine ? (place.pos === 1 ? "Next" : "Waiting its turn") : ahead ? (ahead.pos === 1 ? "Next" : "Waiting its turn") : waking ? (freshHeartbeat() ? "Sent" : "Waking Claude") : toComputer ? "Waiting for your computer" : "Waiting for Claude") : st === "running" || st === "claimed" ? (blocked ? "Waiting for you" : grace ? "Waiting for its chat" : slow ? "May have stopped" : null) : st === "done" && tweakComing(w) ? "On its way" : st === "done" && notOnPageYet(w) ? "Putting on page" : st === "stopped" && leftOut(w) ? "Not drafted" : WORK_WORDS[st] || cap1(st);
     const tone = p.stopping ? "held" : {done: "ok", failed: "bad", stopped: "held", needs_you: "warn"}[st] || (blocked || slow || late || unsent ? "warn" : null);
     const cur = p.stages[Math.min(p.i, p.n - 1)];
     // The newest line Claude wrote on it, from after it was asked (or answered).
@@ -14567,7 +14690,9 @@
   }
   function workCard(id, w) {
     const ws = workSay(id, w);
-    if (ws.st === "done" && !notOnPageYet(w)) return doneRow(id, w);
+    // A change whose new words are not on the page yet says so, never "Finished" (#230).
+    const coming = ws.st === "done" && tweakComing(w);
+    if (ws.st === "done" && !coming && !notOnPageYet(w)) return doneRow(id, w);
     const {p, lead, st, toComputer, slow, grace, over, picked, late, unsent, waking, label, tone} = ws;
     const titleId = "w-" + seg(id);
     const spinning = (ACTIVE.has(st) && st !== "needs_you" && st !== "queued" && !slow) || picked;
@@ -14579,6 +14704,7 @@
     else if (st === "stopped") now1 = "Stopped. Anything already saved is kept.";
     else if (st === "failed") now1 = (typeof w.error === "string" ? w.error : txt(obj(w.error).plain)) || "It stopped part way. Anything already saved is kept.";
     else if (st === "needs_you") now1 = txt(obj(obj(w.needs).answer).kind) && txt(obj(obj(w.needs).answer).kind) !== "text" ? "" : txt(w.note) || "It has a question for you.";
+    else if (coming) now1 = comingWords(w) + ".";
     else if (st === "done") now1 = firstSentence(txt(obj(w.result).summary)) || firstSentence(txt(obj(w.result).answer));
     // An update to the app is never stopped half way (the 3 November audit).
     // A batch is stopped, and tried again, from its first item, whose Stop names them all.
@@ -14695,7 +14821,7 @@
     return p.leftS < 60 ? "under a minute left" : "about " + dur(p.leftS).replace(/^about /, "") + " left";
   }
   function timeText(w, p, same) {
-    if (p.status === "done") return "Finished " + ago(w.finished_at || w.asked_at);
+    if (p.status === "done") return tweakComing(w) ? "" : "Finished " + ago(w.finished_at || w.asked_at);
     // Work that stopped has no time left: "under a minute left" stood on a job that had not
     // finished, its chat already closed (2026-10-30).
     if (TERMINAL.has(p.status)) return "Stopped " + ago(w.finished_at || w.stage_at || w.asked_at);
@@ -15151,15 +15277,34 @@
     }
     return list.sort((a, b) => txt(a.at).localeCompare(txt(b.at)));
   }
-  function talkMsg(m, unanswered) {
+  // Where a question of yours stands, said under it: a little spinner and a word or two, gone
+  // once its answer is drawn. A held answer, waiting for its change to reach the page, said
+  // this as a grey Claude message that read as the answer, one more for each question, and
+  // nothing on the question said whether it waited or was being answered (issue #234). What
+  // needs a button or a sentence (not sent, no answer yet, the computer off, stopped) stays
+  // the line at the thread's end.
+  function askState(m, msgs) {
+    if (m.from !== "you" || !txt(m.work)) return "";
+    const mine = msgs.filter((x) => x.from !== "you" && x.from !== "note" && !x.node && txt(x.work) === txt(m.work));
+    if (mine.some(heldAnswer)) return "Putting the change on your page";
+    if (mine.length) return "";
+    const w = workDoc(txt(m.work));
+    if (!w || !["queued", "claimed", "running"].includes(txt(w.status)) || txt(w.blocked_at)) return "";
+    const ws = workSay(txt(m.work), w);
+    if (ws.unsent || ws.late || ws.away || ws.p.stopping) return "";
+    // Handed on from a quick answer, it says so (the maintainer, 2026-11-05).
+    return ws.st === "queued" && !ws.picked ? (S.handedOn === txt(m.work) ? "Sent to Claude" : "Waiting its turn") : "Claude is answering";
+  }
+  function talkMsg(m, unanswered, state) {
     if (m.node) return h("li", {class: "talk-msg from-claude offer"}, m.node());
     const imgs = arr(m.images).map((x) => txt(obj(x).id)).filter((id) => PIC_ID.test(id));
     return h("li", {class: "talk-msg from-" + seg(m.from === "you" ? "you" : m.from === "note" ? "note" : "claude")},
       m.from === "note" ? null : h("p", {class: "talk-who"}, m.from === "you" ? "You" : "Claude", h("span", {class: "muted small"}, " " + ago(m.at))),
       imgs.length ? h("div", {class: "talk-pics"}, imgs.map((id, i) => threadPic(id, i, imgs.length))) : null,
-      heldAnswer(m) ? h("p", {class: "talk-text muted", role: "status"}, HELD_SAID) : txt(m.text) || !imgs.length ? h("p", {class: "talk-text"}, pageText(m.text)) : null,
+      txt(m.text) || !imgs.length ? h("p", {class: "talk-text"}, pageText(m.text)) : null,
       // Where what it changed is, each a button opening that card (tools/touched.py).
-      m.from !== "you" && !heldAnswer(m) ? pageButtons(m.go, "talk:" + txt(m.id)) : null,
+      m.from !== "you" ? pageButtons(m.go, "talk:" + txt(m.id)) : null,
+      state ? h("p", {class: "small muted talk-state", role: "status"}, h("span", {class: "spin", "aria-hidden": "true"}), " " + state) :
       // A message of yours that got no answer before your next one says so, so it never reads
       // the same as one Claude answered (2026-11-03: one asked again three days later).
       unanswered ? h("p", {class: "small muted talk-unanswered"}, "No answer to this one") : null);
@@ -15210,8 +15355,10 @@
     let from = all.findIndex((m) => txt(m.at) >= dayAgo);
     if (from < 0) from = all.length;
     from = Math.max(0, Math.min(from, all.length - 6) - (S.chatBack || 0));
-    const msgs = all.slice(from);
-    const items = msgs.map((m, i) => talkMsg(m, m.from === "you" && !!msgs[i + 1] && msgs[i + 1].from === "you"));
+    // A held answer is not drawn: its question says it is being put on the page (askState).
+    const msgs = all.slice(from).filter((m) => !heldAnswer(m));
+    const states = new Map(msgs.map((m) => [m, askState(m, all)]));
+    const items = msgs.map((m, i) => talkMsg(m, m.from === "you" && !!msgs[i + 1] && msgs[i + 1].from === "you", states.get(m)));
     if (from > 0) {
       const more = () => { const before = sc ? sc.scrollHeight : 0; const top = sc ? sc.scrollTop : 0; S.chatBack = (S.chatBack || 0) + 20; S.chatStick = false; renderChat();
         if (sc) sc.scrollTop = top + (sc.scrollHeight - before); };
@@ -15233,7 +15380,9 @@
         // Handed on from a quick answer: one short state, "Sent to Claude · waking Claude"
         // (the maintainer, 2026-11-05: the old two sentences said it at length).
         const handed = S.handedOn === wid ? "Sent to Claude · " : "";
-        const answered = msgs.some((m) => m.from !== "you" && m.from !== "note" && !m.node && txt(m.at) > txt(last.at));
+        const answered = all.some((m) => m.from !== "you" && m.from !== "note" && !m.node && txt(m.at) > txt(last.at));
+        // Said under the question itself (askState), never again as a line of its own.
+        if (askState(last, all)) continue;
         // Called off or not finished: said in the conversation, with the reason and the one
         // way on; it was only in a toast and the work sheet (the audit, 2026-11-03).
         if (TERMINAL.has(txt(w.status)) && w.status !== "done" && !answered) {
@@ -16759,7 +16908,7 @@
   function connState() {
     // Kept while this page stays open, and saved by itself once the page is back (retryTaps).
     if (!S.online) return ["offline", "Offline. What you tap now is saved when you are back, if this page stays open."];
-    if (S.flags.readOnly && capsSettled.db) return ["readonly", "Read only here: this page cannot keep answers. Open it in the Claude app."];
+    if (S.flags.readOnly && capsSettled.db) return ["readonly", S.flags.late ? "Your search could not be reached. Close the page and open it again in the Claude app." : "Read only here: this page cannot keep answers. Open it in the Claude app."];
     if (S.flags.dbError === "revoked") return ["stopped", "This page has stopped updating."];
     if (S.flags.dbError) return ["reconnecting", "Reconnecting…"];
     // Connected, and nobody to hear it: said in the header too, on every screen, and only while
@@ -17381,12 +17530,15 @@
     if (!c || typeof c.use !== "function") { showPrivate(true); return; }
     // Who is looking never answered: "Opening your job search…" stayed for ever (robustness
     // audit 9). After the wait the opening line says what to do.
-    capReady("user").then((u) => {
-      if (u !== "timeout" || S.owner !== null) return;
+    const tooLong = () => {
       const op = $("opening");
       if (op && !op.hidden) op.textContent = "This is taking too long to open. Close the page and open it again in the Claude app.";
-    });
+    };
+    capReady("user").then((u) => { if (u === "timeout" && S.owner === null) tooLong(); });
     CAP.user.then(async (u) => {
+      // No answer for ten seconds is the app not answering: the opening line says what to do,
+      // and nothing personal shows, as before the owner check answers.
+      if (!u && S.flags.late) { tooLong(); return; }
       if (!u) { showPrivate(true); return; }
       let own = false;
       try { own = !!(await u.isOwner()); } catch (e) { own = false; }

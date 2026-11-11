@@ -113,6 +113,16 @@ def ring(tmp_path):
     sys.path.remove(r.root)
 
 
+
+def card_question(ring, wid, asked_at="2026-10-25T17:00:00Z"):
+    """A question asked under a card (Ask Claude on it): small work done here. A question typed
+    in Chat gets a chat of its own where one can be started (issue #226,
+    tests/test_the_chat_has_a_chat_of_its_own.py)."""
+    ring.put("work", wid, {"kind": "talk", "status": "queued", "asked_at": asked_at,
+                           "title": "A question", "to": "cloud",
+                           "args": {"thread": "card-job-1", "message": "m-" + wid,
+                                    "about": {"kind": "job", "id": "job-1", "label": "A job"}}})
+
 def sends(said):
     """[(batch file, why)] in the order printed."""
     return [m.groups() for m in map(SEND.match, said.splitlines()) if m]
@@ -191,7 +201,7 @@ def test_a_chat_refused_a_new_chat_for_nesting_runs_big_jobs_as_background_agent
 
 def test_a_tap_that_changes_the_copy_is_applied_only_once_its_claim_is_accepted(ring):
     aid = ring.act("ready.applied", KESTREL)
-    ring.queue("talk~1", kind="talk")
+    card_question(ring, "talk~1")
     before = ring.tracker()
     d = ring.read("wake1")
     said = ring.wake(d)
@@ -420,7 +430,7 @@ def test_every_small_question_waiting_is_taken_in_one_wake(ring):
     some 30 reads (the maintainer's copy, 2026-11-05). Every small item waiting is claimed in
     the same pass, each its own claim, and named under next: and also:."""
     for i in range(3):
-        ring.queue(f"talk~{i}", kind="talk", asked_at=f"2026-10-25T17:0{i}:00Z")
+        card_question(ring, f"talk~{i}", f"2026-10-25T17:0{i}:00Z")
     said = ring.wake(ring.read("wake1"))
     assert all(land(ring, said)), said
     took = [next_item(said)["work"]] + [
@@ -447,7 +457,7 @@ def test_a_ring_with_nothing_waiting_only_checks_in_and_another_chat_writes_noth
 def test_a_small_item_comes_with_its_own_row_of_the_table(ring):
     """`wake` prints the row of step 4's table for a small item it hands this chat, so the
     chat reads none of the table (E-3)."""
-    ring.queue("talk~1", kind="talk")
+    card_question(ring, "talk~1")
     item = next_item(ring.wake(ring.read("wake1")))
     assert item["run"] == "here" and item["do"] == app.work_row("talk") and "chat.md" in item["do"]
 
@@ -456,7 +466,7 @@ def test_the_row_of_the_table_is_printed_once_for_each_kind(ring):
     """Ten tweaks taken in one pass printed the same row of step 4's table ten times, one under
     each (the review of 2026-11-11, E-3): it is printed with the first item of each kind."""
     for i in range(3):
-        ring.queue(f"talk~{i}", kind="talk", asked_at=f"2026-10-25T17:0{i}:00Z")
+        card_question(ring, f"talk~{i}", f"2026-10-25T17:0{i}:00Z")
     ring.queue("tweak~1", kind="tweak", asked_at="2026-10-25T17:05:00Z")
     said = ring.wake(ring.read("wake1"))
     items = [next_item(said)] + [json.JSONDecoder().raw_decode(said[m.end():])[0]

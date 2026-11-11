@@ -614,6 +614,48 @@ def test_a_resume_being_made_for_them_is_the_one_that_goes_with_it(run, model, t
     assert got["after"][0]["eval"] == 0
 
 
+def test_a_message_waiting_on_its_resume_is_not_ready_to_send(run, model, tmp_path):
+    """A reply that goes with a resume Claude was still making said "Ready to send" with I sent
+    it live (#231). While the resume is made, its work is said under the message as a change
+    to it is (spinner, step, clock, Stop Claude), the card never says "Ready to send", and I
+    sent it waits; once the work is done, I sent it is back."""
+    import copy
+    from test_the_page_works_in_a_browser import _write
+    rafe = "kestrel_foods_thorne"
+    m2 = copy.deepcopy(model)
+    msg = next(x for x in m2["messages"] if x["contact"] == rafe)
+    msg["text"] = msg["body"] = "Thanks Rafe, resume attached. Happy to talk whenever suits."
+    msg["sends"] = "resume"
+    html = _write(tmp_path, "making-hold", m2)
+    wid = "contact_resume~" + rafe + "~general"
+    running = {"kind": "resume_for_contact", "status": "running", "title": "Resume for Rafe",
+               "args": {"contact": rafe, "job": None}, "asked_at": "2026-10-25T18:25:00Z",
+               "created_at": "2026-10-25T18:25:00Z", "_v": 2}
+    seed = dict(fixed(m2))
+    seed["work/" + wid] = running
+    look = ("(() => { const c = document.querySelector('%s'); if (!c) return null;"
+            " const vis = (e) => !!e && e.getClientRects().length > 0;"
+            " const g = c.querySelector('.sends-making [data-work-inline]');"
+            " return {text: c.textContent.replace(/\\s+/g, ' '), inline: !!g,"
+            " stop: [...c.querySelectorAll('.sends-making button')].some((b) => /Stop Claude|Cancel/.test(b.textContent + (b.getAttribute('aria-label') || ''))),"
+            " sent: vis(c.querySelector('[data-k=\"sent:%s\"]'))}; })()" % (_card(rafe), msg["id"]))
+    done = dict(running, status="done", finished_at="2026-10-25T18:29:00Z",
+                result={"summary": "Made the resume for Rafe.", "links": []}, _v=3)
+    got = run("engine", html=html, viewport=WIDE, clock=CLOCK, seed=seed, steps=[
+        {"hash": "contacts", "eval": look},
+        {"write": {"work/" + wid: done}, "eval": look},
+    ])
+    assert not got["errors"], got["errors"]
+    making, ready = got["after"][0]["eval"], got["after"][1]["eval"]
+    assert making is not None, "Rafe's card is on Contacts"
+    assert "which Claude is making now" in making["text"], making
+    assert "Ready to send" not in making["text"], making
+    assert making["inline"] and making["stop"], making
+    assert not making["sent"], making
+    assert ready["sent"], ready
+    assert "which Claude is making now" not in ready["text"], ready
+
+
 def test_the_resume_made_for_them_is_the_one_that_goes_with_it(run, model, tmp_path):
     """A reply saying "My resume is attached" offered "Your resume", the general one, although
     one had been made for that person (the maintainer, 2026-11-10): the one made with no job

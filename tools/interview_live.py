@@ -217,10 +217,13 @@ _PIECES = (
     # "PEI" is the name every consulting recruiter uses for it, not one firm's private one.
     ("personal", re.compile(r"personal[- ]experience|personal stor(?:y|ies)|\bPEIs?\b", re.I),
      "a personal experience interview", (("personal", 20),)),
+    # "Practical skills" and a code review are a problem worked in front of them, as a coding
+    # round is (an invented round, 2026-11-11: "Practical Skills and Personal Experience").
     ("technical", re.compile(r"\b(?:technical|coding|code|sql|python|hackerrank|leetcode|"
                              r"codesignal|codility|coderpad|statistics|machine learning|"
                              r"system design|data structures|algorithms?|pairing|"
-                             r"pair programming|live coding)\b", re.I),
+                             r"pair[- ]programming|live coding|practical(?: skills?)?|"
+                             r"code review|problem[- ]solving)\b", re.I),
      "a technical interview", (("technical", 22), ("probes", 10))),
     ("case", re.compile(r"\bcase\b(?! study)|market[- ]sizing|guesstimate", re.I),
      "a case", (("case", 12), ("maths", 8), ("synthesis", 6))),
@@ -228,7 +231,8 @@ _PIECES = (
                               re.I),
      "a take-home presented back", (("presenting", 20),)),
     ("behaviour", re.compile(r"\bbehaviou?ral\b|competenc|\bvalues\b|\bculture (?:fit|add)\b|"
-                             r"\bbar raiser\b|\bsituational\b", re.I),
+                             r"\bbar raiser\b|\bsituational\b|\b(?:cultural|team) fit\b|"
+                             r"\bfit (?:interview|questions?|round|conversation)\b", re.I),
      "behavioural questions", (("behaviour", 12),)),
 )
 _ROOM_OF = {"personal": ("partner", "senior"), "technical": ("technical", "peer"),
@@ -373,14 +377,100 @@ _DAY = re.compile(r"\bsuper ?day\b|\bvirtual on-?site\b|\bassessment (?:cent(?:r
 _ONSITE = re.compile(r"\bon-?site\b", re.I)
 
 
-def pieces(said) -> list:
-    """The kinds of interview a round's own words name, in the order they name them."""
+_PROBLEM_SOLVING = re.compile(r"\bproblem[- ]solving\b", re.I)
+
+
+def pieces(said, consulting=False) -> list:
+    """The kinds of interview a round's own words name, in the order they name them. At a
+    consulting firm a problem-solving interview is its case."""
     found = []
     for name, rx, _label, _parts in _PIECES:
-        m = rx.search(said or "")
-        if m:
-            found.append((m.start(), name))
+        hits = [m for m in rx.finditer(said or "")
+                if not (consulting and name == "technical" and _PROBLEM_SOLVING.fullmatch(m.group(0)))]
+        if hits:
+            found.append((hits[0].start(), name))
+    if consulting and "case" not in [n for _a, n in found]:
+        m = _PROBLEM_SOLVING.search(said or "")
+        # A problem-solving test is taken alone, never a case.
+        if m and not re.match(r"\s+(?:test|assessment|game|exercise|challenge)", said[m.end():], re.I):
+            found.append((m.start(), "case"))
     return [n for _at, n in sorted(found)]
+
+
+# A part the written prep states with its length: "Practical Skills, about 30 to 45 minutes",
+# "Then Personal Experience: Connection, about 15 minutes". The kind is the last one named
+# before the minutes, in the same sentence.
+_STATED_KIND = re.compile(
+    r"\b(?:practical(?: skills?)?|technical|live coding|coding|code review|pair[- ]programming|"
+    r"problem[- ]solving|case(?! stud)|market[- ]sizing|personal experience|PEIs?|"
+    r"behaviou?ral|competenc\w*|(?:culture|cultural|team) fit|fit (?=interview|questions?|round)|"
+    r"take[- ]?home)\b", re.I)
+_STATED_MINUTES = re.compile(r"(?:\b(?:about|around|roughly|approximately|up to)\s+|~\s*)?"
+                             r"\b(\d{1,3})(?:\s*(?:to|-|\u2013|or)\s*(\d{1,3}))?\s*(?:minutes?|mins?)\b",
+                             re.I)
+# Stated parts further apart than this are not one round's split.
+_STATED_SPAN = 700
+
+
+def _stated_piece(word, consulting) -> str:
+    w = word.lower()
+    if re.match(r"personal|pei", w):
+        return "personal"
+    if re.match(r"case|market", w) or (consulting and _PROBLEM_SOLVING.match(w)):
+        return "case"
+    if re.match(r"behav|competenc|culture|cultural|team|fit", w):
+        return "behaviour"
+    if re.match(r"take", w):
+        return "presenting"
+    return "technical"
+
+
+def stated_split(ctx, consulting=None) -> list:
+    """[(kind, low, high)] as the round's own written words state its parts, each with its
+    minutes, in their order: the format first, then the written prep beside it
+    (`interview_prep.md`). Only a split of two kinds or more counts, close together and no
+    longer in all than the round. The prep is one for the whole hiring process, so a split
+    in it is this round's only after the round's name, or where it shares a kind the round's
+    own name says: another round's split is never this one's. Empty where nothing states one."""
+    if consulting is None:
+        import interview_pack as P
+        consulting = P.employer_type(ctx) == "consulting"
+    label = _t(ctx.get("stage")).lower()
+    own = set(pieces(" ".join(_t(x) for x in (ctx.get("stage"), ctx.get("format"))), consulting))
+    for source, text in (("format", _t(ctx.get("format"))), ("prep", str(ctx.get("living") or ""))):
+        found = []
+        for m in _STATED_MINUTES.finditer(text):
+            before = re.split(r"[.!?;]\s|\n", text[max(0, m.start() - 90):m.start()])[-1]
+            kinds = list(_STATED_KIND.finditer(before))
+            if not kinds:
+                continue
+            lo = int(m.group(1))
+            hi = int(m.group(2)) if m.group(2) and int(m.group(2)) >= lo else lo
+            if not 2 <= lo <= 240:
+                continue
+            found.append((m.start(), _stated_piece(kinds[-1].group(0), consulting), lo, hi))
+        runs, run = [], []
+        for item in found:
+            if run and item[0] - run[-1][0] > _STATED_SPAN:
+                runs.append(run)
+                run = []
+            run.append(item)
+        if run:
+            runs.append(run)
+        named = text.lower().find(label) if label else -1
+        if named >= 0:
+            runs.sort(key=lambda r: r[0][0] < named)
+        for r in runs:
+            split = {}
+            for _at, kind, lo, hi in r:
+                was = split.get(kind, (0, 0))
+                split[kind] = (was[0] + lo, was[1] + hi)
+            if len(split) < 2 or sum(lo for lo, _hi in split.values()) > 240:
+                continue
+            if source == "prep" and not (0 <= named < r[0][0]) and not own & set(split):
+                continue
+            return [(k, lo, hi) for k, (lo, hi) in split.items()]
+    return []
 
 
 def shape_def(shape) -> tuple:
@@ -421,7 +511,14 @@ def shape_of(ctx) -> tuple:
     if step == "offer":
         return None, ""
     consulting = P.employer_type(ctx) == "consulting"
-    names = pieces(said)
+    names = pieces(said, consulting)
+    # The parts the round's own written words state, each with its minutes, are what it is,
+    # whatever one kind its name says: "Practical Skills, about 30 to 45 minutes ... Then
+    # Personal Experience, about 15 minutes" is both, in that order (an invented round,
+    # 2026-11-11: the hour was all personal questions and nothing for the coding).
+    stated = stated_split(ctx, consulting)
+    if stated and sum(lo for _k, lo, _hi in stated) <= (_booked_minutes(ctx) or 180):
+        names = [k for k, _lo, _hi in stated]
     # Whether anyone is in the room is the format's to say where one is given: "Technical
     # interview" with "CodeSignal General Coding Assessment" is a test taken alone (the review
     # of the fixes, 2026-11-10).
@@ -498,8 +595,15 @@ _EACH = re.compile(r"\b([2-6]|two|three|four|five|six)\s+(?:interviews|rounds|se
                    r"(?:interviews|rounds|sessions|conversations)\b", re.I)
 
 
-def round_minutes(ctx, shape) -> int:
-    """The round's length as booked, else the shape's usual length."""
+def round_minutes(ctx, shape, stated=None) -> int:
+    """The round's length as booked, else the shape's usual length, or the parts the written
+    prep states where they take longer."""
+    return _booked_minutes(ctx) or max(shape_def(shape)[1],
+                                       sum(hi for _k, _lo, hi in stated or ()))
+
+
+def _booked_minutes(ctx) -> int:
+    """The round's length as booked or said, 0 where nothing says it."""
     label = _t(ctx.get("stage")).lower()
     for s in ctx.get("stages") or []:
         if _t(s.get("label")).lower() == label and int(s.get("minutes") or 0) > 0:
@@ -521,11 +625,69 @@ def round_minutes(ctx, shape) -> int:
         hours += 0.5 if re.search(r"and a half", m.group(0), re.I) else 0
         if 0.25 <= hours <= 9:
             return int(round(hours * 60))
-    return shape_def(shape)[1]
+    return 0
 
 
-def _part_minutes(shape, total) -> list:
+def _piece_of(kind) -> str:
+    """The kind of interview a part belongs to ("probes" is the technical interview's)."""
+    return next((n for n, _rx, _label, pp in _PIECES if any(k == kind for k, _m in pp)), "")
+
+
+def stated_for(ctx, shape) -> list:
+    """The written split (`stated_split`) where it is the one this shape was built from: a
+    sitting of several kinds whose parts are exactly the kinds stated."""
+    stated = stated_split(ctx)
+    if not stated:
+        return []
+    have = {_piece_of(p[0]) for p in shape_def(shape)[3]} - {""}
+    return stated if have == {k for k, _lo, _hi in stated} else []
+
+
+def _stated_minutes(parts, total, stated):
+    """Each stated kind's minutes as the prep gives them (a range is its middle), shared among
+    its own parts as they usually are; the hello and their questions take what is left, never
+    under two minutes each. None where the parts are not the kinds stated."""
+    want = {k: int(round((lo + hi) / 2.0)) for k, lo, hi in stated}
+    groups, edges = {}, []
+    for i, p in enumerate(parts):
+        n = _piece_of(p[0])
+        if n in want:
+            groups.setdefault(n, []).append(i)
+        else:
+            edges.append(i)
+    if set(groups) != set(want) or not edges:
+        return None
+    room = total - 2 * len(edges)
+    if room < 2 * sum(len(ix) for ix in groups.values()):
+        return None
+    if sum(want.values()) > room:
+        # Longer in all than the round: each kind keeps its share of what there is.
+        scale = room / float(sum(want.values()))
+        want = {k: max(2 * len(groups[k]), int(v * scale)) for k, v in want.items()}
+    got = [0] * len(parts)
+    for n, ix in groups.items():
+        usual = sum(parts[i][1] for i in ix)
+        share = [max(2, int(round(parts[i][1] * want[n] / float(usual)))) for i in ix]
+        share[share.index(max(share))] += want[n] - sum(share)
+        for i, m in zip(ix, share):
+            got[i] = m
+    rest = total - sum(got)
+    usual = sum(parts[i][1] for i in edges)
+    for i in edges:
+        got[i] = max(2, int(round(parts[i][1] * rest / float(usual))))
+    while sum(got) != total:
+        step = 1 if sum(got) < total else -1
+        pool = [i for i in edges if step > 0 or got[i] > 2] or \
+            [i for i in range(len(got)) if step > 0 or got[i] > 2]
+        got[max(pool, key=lambda i: got[i])] += step
+    return got
+
+
+def _part_minutes(shape, total, stated=None) -> list:
     parts = shape_def(shape)[3]
+    got = _stated_minutes(parts, total, stated) if stated else None
+    if got:
+        return got
     usual = sum(p[1] for p in parts)
     got = [max(2, int(round(p[1] * total / usual))) for p in parts]
     # Rounding never takes the parts past the round itself.
@@ -658,9 +820,10 @@ def build(ctx) -> dict:
     # A partner asks at a consulting firm; anywhere else the same seat is the hiring manager's.
     if P.employer_type(ctx) != "consulting":
         room = tuple(dict.fromkeys("manager" if w == "partner" else w for w in room))
-    total = round_minutes(ctx, shape)
+    stated = stated_for(ctx, shape)
+    total = round_minutes(ctx, shape, stated)
     kinds = [d[0] for d in parts_def]
-    mins = _part_minutes(shape, total)
+    mins = _part_minutes(shape, total, stated)
     parts = [{"id": "p%d" % (i + 1), "kind": d[0],
               "title": d[2] if len(d) > 2 else PART_TITLES[d[0]], "short": PART_SHORT[d[0]],
               "minutes": m,
@@ -1335,6 +1498,43 @@ def _answer_checks(node, where, terms, need_detail) -> list:
     return out
 
 
+# The words of the work a prep's questions and answers use that a listener may need explained:
+# a prep that uses any of them with no terms at all is not finished (an invented round,
+# 2026-11-11: a live coding hour was shown with an empty glossary).
+_TECH_WORDS = re.compile(
+    r"\b(?:python|sql|pandas|numpy|scikit-learn|sklearn|pyspark|spark|dbt|airflow|snowflake|"
+    r"databricks|tableau|power bi|sap|apis?|etl|elt|pipelines?|data warehouse|schemas?|"
+    r"quer(?:y|ies)|joins?|window functions?|regressions?|classifi(?:er|ers|cation)|clustering|"
+    r"forecast(?:s|ing)?|time series|machine learning|deep learning|neural networks?|"
+    r"models?|modell?ing|statistic(?:s|al)?|p-values?|hypothesis tests?|a/b tests?|"
+    r"confidence intervals?|algorithms?|complexity|big o|data structures?|hash ?maps?|"
+    r"recursion|unit tests?|edge cases?|dataframes?|hackerrank|pair[- ]programming|"
+    r"live coding|starter code)\b", re.I)
+
+
+def technical_words(doc) -> list:
+    """The technical words a prep's questions and answers use, first seen first, lower case."""
+    texts = [_t(q.get("q")) for q in doc.get("questions") or []]
+    texts += [_t(t) for w, t, _d, _q in spoken(doc) if not w.startswith("your question")]
+    seen = []
+    for t in texts:
+        for m in _TECH_WORDS.finditer(t):
+            w = m.group(0).lower()
+            if w not in seen:
+                seen.append(w)
+    return seen
+
+
+# What the first words of a part that works a problem are for, said with what to write there.
+_SAY_FIRST = {
+    "technical": (" (how you open a problem: say it back in your own words, say what you will "
+                  "check first in any starter code and data, and that you will think aloud as "
+                  "you go)"),
+    "probes": (" (the trade-offs you chose on purpose, and what you would change with more time "
+               "or more data)"),
+}
+
+
 def problems(doc, ctx=None) -> list:
     """[(where, what to fix)] for a live prep not yet fit to show, in plain words. Empty when
     it is ready. Drafts the person asked for are not problems: `drafts` lists them."""
@@ -1384,6 +1584,15 @@ def problems(doc, ctx=None) -> list:
                             "\"%s\" already opens \"%s\": one phrase for one term"
                             % (_t(ph), _t(terms[owner[low]].get("name")) or owner[low])))
             owner.setdefault(low, k)
+    # Words of the work used and none explained: the glossary is still to write, and a prep
+    # with an empty one is never shown as finished.
+    if not terms:
+        used = technical_words(doc)
+        if used:
+            out.append(("the terms", "none are explained yet, and the questions and answers use "
+                        "%s: add each word a listener may not know to the terms, with what it "
+                        "means at %s, a small worked example and plain words"
+                        % (", ".join("\"%s\"" % w for w in used[:4]), company or "the employer")))
     # No dashes of the kind the app never writes, anywhere.
     for s in _all_strings(doc):
         if _DASH.search(s):
@@ -1395,7 +1604,8 @@ def problems(doc, ctx=None) -> list:
         say = p.get("say") or []
         if not say:
             out.append(("\"%s\"" % p.get("title"), "nothing to say first yet: write two or three "
-                                                   "sentences to say aloud as it starts"))
+                                                   "sentences to say aloud as it starts"
+                        + _SAY_FIRST.get(p.get("kind"), "")))
         if p.get("kind") == "technical" and not any(_TASK.search(_t(q.get("q"))) for q in
                                                        doc.get("questions") or [] if q.get("part") == p.get("id")):
             out.append(("\"%s\"" % p.get("title"), "add the problem they are likely to set, as they "
