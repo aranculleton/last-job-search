@@ -692,6 +692,13 @@ REQUESTED_SAY = ("I've asked LinkedIn for a copy of your data. It takes a while 
                  "and I'll pick it up when it's ready.")
 
 
+def has_browser(tools) -> bool:
+    """Has this chat a browser to fetch the download in, any of the three (place.browser_of):
+    by the words the start command takes or by its tools' own names."""
+    import place
+    return place.browser_of(tools) != "none"
+
+
 def _found_since(taken, found=None) -> str:
     """The newest download on this computer made after the last one was taken, or ""."""
     paths = find_exports() if found is None else list(found)
@@ -718,7 +725,7 @@ def status(today=None, tools=(), found=None, threads=None) -> dict:
     `found` stands for the downloads find_exports() would see."""
     st = _state()
     today = st._need_date(today or person.today().isoformat(), "today")
-    have = {str(t).strip().lower() for t in tools or ()} & set(BROWSERS)
+    have = has_browser(tools)
     taken, _how = last_taken(threads)
     rec = load_record()
     asked = st.as_date(rec.get("requested_on"))

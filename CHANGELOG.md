@@ -36,6 +36,8 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **Steps for your computer name its own keys and menus, on a Mac, Windows or Linux.** Showing Claude's browser, keeping your LinkedIn sign-in and letting Claude start chats there named a Mac's keys first and said nothing of Linux; each computer now gets its own, and a computer not known yet gets all three in one line.
+- **A chat with Claude's browser reads profiles itself, whatever its tools are called.** Only the short words counted, so a chat holding the browser by its full tool names left the reading to your page.
 - **"Only update when I say" is understood.** Said without naming the app, it set nothing; an update to your resume or CV is still never taken for the app's.
 - **A note on your computer that agrees with your update choice is kept.** Where your choice was not yet saved in that copy, the note was taken for one that disagreed and removed.
 - **Your page never says your computer is off while it is on.** A Mac connected that day read as off on a check-in from the day before, so Start it now did nothing; the computer's own connection now counts, and the chat that can start Claude there is woken.

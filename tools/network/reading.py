@@ -1373,12 +1373,15 @@ SIGNED_OUT_LESS = ("You're not signed in to LinkedIn in this browser, so it show
                    "both know.")
 
 
-def signed_out_say(browser: str = "pane") -> str:
+def signed_out_say(browser: str = "pane", system: str = "") -> str:
     """The prompt, two short lines: what signing in gives, and how. `browser` is "pane" (the
-    desktop app's own) or anything else (their own browser, through Claude in Chrome)."""
+    desktop app's own) or anything else (their own browser, through Claude in Chrome).
+    `system`: the computer's (darwin, win32, linux) for its own keys, "" for all three; a
+    command run in the chat on the computer passes its own (here_system)."""
     if str(browser or "pane").lower() in ("pane", "browser", "enable"):
         import claude_surfaces
-        how = claude_surfaces.entry("browser-pane-stay-signed-in")["how"]
+        how = claude_surfaces.entry(claude_surfaces.for_system(
+            "browser-pane-stay-signed-in", system))["how"]
         return f"{SIGNED_OUT_LESS}\nSign in there once ({how}), then say done."
     return f"{SIGNED_OUT_LESS}\nSign in there once, in the tab I opened, then say done."
 
@@ -1513,6 +1516,16 @@ def _signin_say() -> str:
 SIGNIN_SAY = _signin_say()
 
 
+def here_system() -> str:
+    """This computer's system where this chat runs on it (darwin, win32, linux), else "": the
+    sign-in line then names this computer's own keys (claude_surfaces.here_system)."""
+    try:
+        import claude_surfaces
+        return claude_surfaces.here_system()
+    except Exception:  # noqa: BLE001  not known: the line names all three
+        return ""
+
+
 def app_job_here() -> str:
     """The work item a chat the app started on the person's computer was started for (app.py
     start --work), or "": nobody watches such a chat, so it never asks there, and its
@@ -1584,7 +1597,8 @@ def signin_steps() -> list:
         "them `python3 tools/claude_surfaces.py steps browser-pane-show` first (the pane keeps "
         "its sign-ins when hidden; it only goes out of view)",
         f"tell the person, once (in their own browser through Claude in Chrome, the second "
-        f"line names the tab instead: `reading.py signin --browser chrome`): {SIGNIN_SAY}",
+        f"line names the tab instead: `reading.py signin --browser chrome`): "
+        f"{signed_out_say('pane', here_system())}",
         "never type in it, read it, look at it or keep anything from it while they sign in",
         f"every {SIGNIN_POLL_SECONDS}s, look only at the pane's address and title and run "
         "`reading.py signin --url <address>`: signed-in means carry on with the first "
@@ -2005,7 +2019,8 @@ def what_to_send(where: str) -> str:
 
 
 # The tools that are Claude's own browser pane on the person's computer (place.BROWSERS less
-# Chrome, whose tabs are the person's own): a chat holding one reads profiles itself.
+# Chrome, whose tabs are the person's own): a chat holding one reads profiles itself. Its tool
+# names count as well as these words (place.browser_of).
 READS_HERE = {"browser", "enable"}
 
 
@@ -2033,7 +2048,8 @@ def route(tools=(), consent: str | None = None, env=None, signed_in: bool | None
     if consent == "off":
         return {"route": "public", "browser": "", "usable": False, "do": "public work only",
                 "say": "", "signin": False}
-    if consent == "browser" and READS_HERE & {str(t).strip().lower() for t in tools or ()}:
+    import place
+    if consent == "browser" and place.browser_of(tools, place.in_cloud(env)) in ("pane", "linked"):
         return {"route": "here", "browser": "Claude's browser on the person's computer",
                 "usable": True,
                 "do": ("read the short list in this chat's own browser now, in this run: "
@@ -2047,7 +2063,6 @@ def route(tools=(), consent: str | None = None, env=None, signed_in: bool | None
                        "it is read only in the signed-in browser on the person's computer"),
                 "say": "", "signin": True}
     if consent == "browser":
-        import place
         return {"route": "page", "browser": "your page in the Claude desktop app",
                 "usable": True,
                 "do": ("put the best on today's short list (`reading.py shortlist`), queue them "
@@ -6208,7 +6223,8 @@ def main(argv: list | None = None) -> int:
                 print("signed-out: they said not today, so read on signed out")
                 return EXIT["ok"]
             mark_asked()
-            print("signed-out. Tell the person, as it is:\n" + signed_out_say(a.browser)
+            print("signed-out. Tell the person, as it is:\n"
+                  + signed_out_say(a.browser, here_system())
                   + "\nWhen they say done, load the page again and run this again. If they would "
                   "rather not: `reading.py signin --not-today`, and read on signed out.")
             return EXIT["signin"]
@@ -6629,7 +6645,8 @@ def main(argv: list | None = None) -> int:
                     mark_asked()
                     print("reading: LinkedIn is not signed in in this browser, so it shows only "
                           "part of each profile. Not a read, and nothing counted. Tell the "
-                          f"person, as it is:\n{signed_out_say(a.browser)}\nWhen they say done, "
+                          f"person, as it is:\n{signed_out_say(a.browser, here_system())}\nWhen "
+                          "they say done, "
                           "load the page again and read it; if they would rather not, run "
                           "`reading.py signin --not-today` and read on signed out. (The steps: "
                           "run `reading.py signin`.)")

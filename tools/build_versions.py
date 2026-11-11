@@ -670,7 +670,7 @@ METHODS: dict[str, dict] = {
             (121, "2026-11-11", False, "the person's follow-up rule (FOLLOW_UP_DAYS, MAX_UNANSWERED and the follow-ups it leaves) is read again with the plan whenever their networking settings change"),
             (122, "2026-11-11", False, "a lint finding taken out of schema.limits_now; nothing changes"),
         ),
-        "fingerprint": "24f3451b6e86f794",
+        "fingerprint": "e06e72e500814985",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
@@ -745,7 +745,7 @@ METHODS: dict[str, dict] = {
             (57, "2026-11-10", False, "an HTTP error page (999, 429) is judged on the page's head alone, so an error number in someone's About is no stop"),
             (58, "2026-11-10", False, "a profile read in a chat of a person whom work waiting on the page reads is refused until that work is taken into the chat, so nobody is read twice; the chat that claimed or took the work, and work that has ended, refuse nothing; a number the person gave for one employer (more-at --up-to) is obeyed, a lower one included, and only Open it now's room is never below their usual number"),
         ),
-        "fingerprint": "1b04cb5fe13ae193",
+        "fingerprint": "28a037666b3bbb27",
     },
     "screening": {
         "by": "round", "priority": 2,

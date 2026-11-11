@@ -125,7 +125,11 @@ it for a new person who works on a computer (`--section computer`), and an exist
 it as one card (the `computer-linkedin` profile upgrade). Each step below is one plain line
 to the person from `python3 tools/claude_surfaces.py steps <id>`, checked against its
 official page that day, and each is checked by Claude after it, so the person never has to
-know whether it worked.
+know whether it worked. The keys and menus differ between a Mac, Windows and Linux, so the
+steps are that computer's own: run on the computer, the command reads it itself; in a cloud
+chat, `python3 tools/computer.py steps <id> "$D" --envs <list_environments saved> --folders
+<list_computer_folders saved>` reads it from the computer's heartbeat or the lists, and with
+neither the steps say all three in one line. Never pass on a Mac's keys to anyone else.
 
 1. **Let Claude start its chats there** (`remote-control-settings`). Check: in a cloud chat,
    `list_environments` lists this computer as an active environment of kind `bridge`

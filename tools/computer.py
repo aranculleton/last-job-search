@@ -55,6 +55,8 @@ whose trend the brief reports (`trend`).
     python3 tools/computer.py memory                           # chat memory that disagrees with profile/, removed
     python3 tools/computer.py archivable <saved list>           # the app's earlier chats here to archive
     python3 tools/computer.py shell "<command>"                # does it run the same in zsh and bash?
+    python3 tools/computer.py steps <id> [<dump>] [--envs FILE] [--folders FILE] [--page]
+        # a screen's steps for the person's own computer: a Mac's, Windows' or Linux's
 
 Standard library only.
 """
@@ -642,13 +644,20 @@ def _day(t: dt.datetime) -> str:
 
 def beat_fields(name: str, now: dt.datetime, browser: str = "none", linkedin: str = "unknown",
                 cookies: str = "unknown", read: str = "none", version: str = "",
-                task: bool | None = None, chat: str = "", stop: dict | None = None) -> dict:
+                task: bool | None = None, chat: str = "", stop: dict | None = None,
+                system: str | None = None) -> dict:
     """The heartbeat a computer writes: what it is, as it measured it, never a guess. `stop`:
-    today's LinkedIn stop on this computer (stop_here), carried so the cloud sees it."""
+    today's LinkedIn stop on this computer (stop_here), carried so the cloud sees it.
+    `system`: the computer's own (claude_surfaces.this_system: darwin, win32 or linux), so
+    the cloud and the page give the steps for its own keys and menus."""
+    import claude_surfaces
     for value, allowed in ((browser, BROWSER), (linkedin, LINKEDIN), (cookies, COOKIES),
                            (read, READS)):
         if value not in allowed:
             raise ValueError(f"{value!r} is not one of {', '.join(allowed)}")
+    system = claude_surfaces.this_system() if system is None else system
+    if system and claude_surfaces.system_of(system) != system:
+        raise ValueError(f"{system!r} is not one of {', '.join(claude_surfaces.SYSTEMS)}")
     return {"kind": "computer", "title": f"Your computer ({_plain_name(name)})",
             "computer": _plain_name(name), "seen_at": _stamp(now),
             # Not a chat listening for the page's rings: the page's computerListening counts
@@ -659,6 +668,7 @@ def beat_fields(name: str, now: dt.datetime, browser: str = "none", linkedin: st
             "version": version or app_version(),
             "task": bool(task_present() if task is None else task),
             "stop": dict(stop) if stop else None,
+            "system": system,
             **({"chat": chat} if chat else {})}
 
 
@@ -735,27 +745,88 @@ def heartbeat(db: dict) -> dict:
 
 def bridges(envs) -> list[dict]:
     """The person's computers a cloud chat can start a chat on: list_environments' active
-    bridge environments, as [{id, computer, folder}] (claude_surfaces: computer-bridge)."""
+    bridge environments, as [{id, computer, folder}], with `system` where the list says it
+    (claude_surfaces: computer-bridge)."""
     # The tool's answer as it came: {"environments": [...]}, a page wrapped as {"ccr": {...}}
-    # or {"data": [...]}, or a plain list. Wrapped, it read as no computer at all, and work
-    # for the computer waited while the Mac was on (a person's copy, 2026-11-10).
+    # or {"data": [...]}, or a plain list (_bridge_rows). Wrapped, it read as no computer at
+    # all, and work for the computer waited while the Mac was on (a person's copy, 2026-11-10).
+    # `system` only where the list says it (reported_system).
+    out = []
+    for e in _bridge_rows(envs, active=True):
+        name = str(e.get("name") or "")
+        m = re.search(r"\(([^)]+)\)", str(e.get("description") or ""))
+        parts = name.split(":")
+        b = {"id": str(e.get("environment_id") or e.get("id") or ""),
+             "computer": _plain_name(m.group(1) if m else parts[0]),
+             "folder": _bridge_folder(parts)}
+        system = reported_system(e, b["folder"])
+        if system:
+            b["system"] = system
+        out.append(b)
+    return [b for b in out if b["id"]]
+
+
+def _bridge_rows(envs, active: bool = True) -> list[dict]:
+    """The bridge environments in list_environments' answer, however it arrived; only the
+    active ones where `active`."""
     for _ in range(3):
         if isinstance(envs, dict) and isinstance(envs.get("ccr"), (dict, list)):
             envs = envs["ccr"]
         if isinstance(envs, dict):
             envs = envs.get("environments") or envs.get("data") or []
-    out = []
-    for e in envs or []:
-        if not isinstance(e, dict) or str(e.get("kind") or "") != "bridge" \
-                or str(e.get("state") or "") != "active":
-            continue
-        name = str(e.get("name") or "")
-        m = re.search(r"\(([^)]+)\)", str(e.get("description") or ""))
-        parts = name.split(":")
-        out.append({"id": str(e.get("environment_id") or e.get("id") or ""),
-                    "computer": _plain_name(m.group(1) if m else parts[0]),
-                    "folder": parts[1] if len(parts) > 1 else ""})
-    return [b for b in out if b["id"]]
+    return [e for e in envs or [] if isinstance(e, dict) and str(e.get("kind") or "") == "bridge"
+            and (not active or str(e.get("state") or "") == "active")]
+
+
+def _bridge_folder(parts: list[str]) -> str:
+    """The folder in a bridge's name, <computer>:<folder>:<code>. A Windows folder named in
+    full has a colon of its own (C:\\Users\\...), so everything between the computer and the
+    code is the folder: split at every colon, it read as "C"."""
+    if len(parts) < 2:
+        return ""
+    if len(parts) == 2:
+        return parts[1]
+    # The code at the end is short letters and digits ("4ba6"); a Windows path's tail never is.
+    code = re.fullmatch(r"[0-9A-Za-z]{2,16}", parts[-1]) and not re.search(r"[\\/]", parts[-1])
+    return ":".join(parts[1:-1] if code else parts[1:])
+
+
+# A Windows path: a drive letter and a slash, or a share (\\server\\folder).
+_WINDOWS_PATH = re.compile(r"^(?:[A-Za-z]:[\\/]|\\\\)")
+
+
+def reported_system(row: dict, folder: str = "") -> str:
+    """The system a list of computers says a computer is (darwin, win32 or linux), or "":
+    a field of its own where the list carries one (system, platform, os), else a folder named
+    the way only Windows names one (a drive letter). Never guessed from the computer's name."""
+    import claude_surfaces
+    for k in ("system", "platform", "os", "os_type", "operating_system"):
+        got = claude_surfaces.system_of(row.get(k))
+        if got:
+            return got
+    for k in ("folder", "path", "cwd", "directory"):
+        v = folder if k == "folder" and folder else str(row.get(k) or "")
+        if _WINDOWS_PATH.match(v):
+            return "win32"
+    return ""
+
+
+def system_seen(db: dict, envs=None, folders=None) -> str:
+    """The person's computer's system, from what it reported: its heartbeat's own (sys.platform
+    there), else what the cloud's lists of computers say of it (list_environments' bridges,
+    list_computer_folders' folders), else "" and the steps say all three. Lists naming two
+    systems (a Mac and a Windows computer) give "": which one the steps are for is not known."""
+    import claude_surfaces
+    got = claude_surfaces.system_of((heartbeat(db) or {}).get("system"))
+    if got:
+        return got
+    seen = {reported_system(e, _bridge_folder(str(e.get("name") or "").split(":")))
+            for e in _bridge_rows(envs, active=False)}
+    if isinstance(folders, dict):
+        seen |= {reported_system(f) for f in list(folders.get("folders") or [])
+                 + list(folders.get("cannot_be_used") or []) if isinstance(f, dict)}
+    seen.discard("")
+    return seen.pop() if len(seen) == 1 else ""
 
 
 def pick_bridge(found: list[dict], db: dict, now: dt.datetime) -> list[dict]:
@@ -934,11 +1005,13 @@ SIGNING_IN = "your LinkedIn sign-in on the page"
 
 
 def state(db: dict, now: dt.datetime, envs=None, version: str = "",
-          works_on: str = "", page_signin: str = "") -> dict:
+          works_on: str = "", page_signin: str = "", folders=None) -> dict:
     """The computer as the page shows it: {state, line, action, card, computer, seen_at,
     waiting}. `action` is {label, steps} or None; `card` is True only while computer work
     waits past CARD_AFTER_S and only the person can move it. `envs`: list_environments' answer
-    where the chat asked (None: not known). `works_on`: profile/place.json's answer."""
+    where the chat asked (None: not known). `works_on`: profile/place.json's answer.
+    `folders`: list_computer_folders' answer, where the chat asked. The action's steps are for
+    the computer's own system (system_seen), or say all three where it is not known."""
     beat_ = heartbeat(db)
     w = waiting(db, now)
     seen = _time(beat_.get("seen_at"))
@@ -992,16 +1065,20 @@ def state(db: dict, now: dt.datetime, envs=None, version: str = "",
     say = "signed_out_lost" if key == "signed_out" and beat_.get("signin_lost") else key
     act = ACTION.get(say)
     action = None
+    system = system_seen(db, envs, folders)
     if act:
         import claude_surfaces
-        action = {"label": act[1], "id": act[0],
-                  "steps": [ln for ln in claude_surfaces.steps(act[0], page=True)
+        eid = claude_surfaces.for_system(act[0], system)
+        action = {"label": act[1], "id": eid,
+                  "steps": [ln for ln in claude_surfaces.steps(eid, page=True)
                             if ln[:1].isdigit()]}
     needs_them = key in ("off", "gone", "signed_out", "forgets", "no_bridge", "not_set_up",
                          "starter_waits", "starter_silent")
     return {"state": key, "line": SAY[say], "action": action, "say": say,
             "card": bool(w["queued"]) and needs_them and waited >= CARD_AFTER_S,
             "computer": beat_.get("computer") or "", "seen_at": beat_.get("seen_at"),
+            # The computer's system, as it reported it (system_seen): "" where not known.
+            "system": system,
             # Today's LinkedIn stop on the computer: the page's reading row and the reads the
             # cloud queues for the computer both follow it (app_model, app.computer_reads).
             "stopped": stopped_today(beat_, now),
@@ -1331,8 +1408,10 @@ def route(db: dict, now: dt.datetime, chat: str = "", envs=None, folders=None,
     # This chat is on the computer, with Claude's browser: it takes the work itself. A chat the
     # person opened there, with no list of computers to ask and no heartbeat yet, was routed
     # to "paste", and its page said the computer was off while it sat open on it.
-    here = app_listen.chat_kind() == "computer" and any(
-        t in ("browser", "enable") or t.startswith("mcp__Claude_Browser") for t in tools)
+    import place
+    cloud = app_listen.chat_kind() == "cloud"
+    browser = place.browser_of(tools, cloud)
+    here = not cloud and browser == "pane"
     if live or here:
         out = {"route": "computer chat", "work": wid,
                "line": "Your computer's chat takes it.", "waiting": w}
@@ -1417,8 +1496,7 @@ def route(db: dict, now: dt.datetime, chat: str = "", envs=None, folders=None,
                          "python3 tools/app.py next <dump> --chat <id> --kind computer "
                          "--computer-only --lent and do it here, with --kind computer on every "
                          "app.py done."), "waiting": w}
-    if any(t.startswith("mcp__remote-devices__Claude_Browser") or
-           t == "enable__mcp__remote-devices__Claude_Browser" for t in tools):
+    if browser == "linked":
         return {"route": "linked browser", "work": wid,
                 "line": "Reading it with your computer's browser.",
                 "then": ("this chat has the computer's browser: claim it with python3 "
@@ -2009,8 +2087,8 @@ def check(db: dict, now: dt.datetime, envs=None, version: str = "", triggers=Non
     if beat_ and st["state"] == "gone":
         out.append("computer: not seen for a week; its chat, folder or scheduled task may have "
                    "been deleted. The one way back: python3 tools/claude_surfaces.py steps "
-                   "remote-control-settings, then the next work for the computer starts a "
-                   "new chat there by itself.")
+                   "remote-control-settings --system " + (st.get("system") or "all")
+                   + ", then the next work for the computer starts a new chat there by itself.")
     # No scheduled task is made or asked for: one started a Claude run every hour the app was
     # open, waiting work or not, for what the cloud already starts on the computer when work
     # waits (the maintainer, 2026-11-09: "this sounds like it could be incredibly expensive").
@@ -2023,16 +2101,20 @@ def check(db: dict, now: dt.datetime, envs=None, version: str = "", triggers=Non
 # ------------------------------------------------------------------ memory and shells
 
 
-def memory_files(root: str, home: str | None = None) -> list[str]:
+def memory_files(root: str, home: str | None = None, pathmod=None, env=None) -> list[str]:
     """The auto memory a chat in this copy may load (code.claude.com/docs/en/memory: each
     project's at ~/.claude/projects/<project>/memory/), for this folder and the folders above
-    it a chat may have been started in."""
-    base = os.environ.get("CLAUDE_CONFIG_DIR") or os.path.join(home or os.path.expanduser("~"), ".claude")
+    it a chat may have been started in. `pathmod` is the computer's own path rules (ntpath
+    for a Windows folder, C:\\Users\\... named C--Users-...), `env` its environment: both
+    this computer's by default."""
+    pathmod = pathmod or os.path
+    env = os.environ if env is None else env
+    base = env.get("CLAUDE_CONFIG_DIR") or os.path.join(home or os.path.expanduser("~"), ".claude")
     names = set()
-    path = os.path.abspath(root)
+    path = pathmod.abspath(root) if pathmod is os.path else pathmod.normpath(root)
     while True:
         names.add(re.sub(r"[^A-Za-z0-9]", "-", path))
-        parent = os.path.dirname(path)
+        parent = pathmod.dirname(path)
         if parent == path:
             break
         path = parent
@@ -2233,6 +2315,7 @@ def main(argv=None) -> int:
         p = sub.add_parser(name)
         p.add_argument("dump")
         p.add_argument("--envs", default="", help="list_environments' answer, saved to a file")
+        p.add_argument("--folders", default="", help="list_computer_folders' answer, saved")
         p.add_argument("--triggers", default="", help="list_triggers' answer, saved to a file")
         p.add_argument("--now", default=None)
     p = sub.add_parser("route")
@@ -2319,6 +2402,12 @@ def main(argv=None) -> int:
     p.add_argument("listing", help="the desktop app's list of its other chats, saved to a file")
     p = sub.add_parser("shell")
     p.add_argument("command")
+    p = sub.add_parser("steps", help="a screen's steps for the person's own computer")
+    p.add_argument("id", help="the claude_surfaces entry, e.g. remote-control-settings")
+    p.add_argument("dump", nargs="?", default="", help="the page's chats, for the heartbeat")
+    p.add_argument("--envs", default="", help="list_environments' answer, saved to a file")
+    p.add_argument("--folders", default="", help="list_computer_folders' answer, saved")
+    p.add_argument("--page", action="store_true", help="worded for a card on the page")
     sub.add_parser("task", help="is the scheduled task on this computer, and how to make it")
     sub.add_parser("task-check", help="what a run of the scheduled task does")
     p = sub.add_parser("prompt", help="the whole prompt of a chat on the computer for one item")
@@ -2388,6 +2477,18 @@ def main(argv=None) -> int:
         got = shell_problems(a.command)
         print("\n".join(got) or "shell: runs the same in zsh and bash")
         return 1 if got else 0
+    if a.cmd == "steps":
+        # The person's computer's own steps, from what it reported (system_seen): its
+        # heartbeat in the page's chats, else the cloud's lists of computers, else all three.
+        import claude_surfaces
+        db = page_db.load(a.dump) if a.dump and os.path.isdir(a.dump) else {}
+        eid = claude_surfaces.for_system(a.id, system_seen(db, _load_json(a.envs),
+                                                           _load_json(a.folders)))
+        print("\n".join(claude_surfaces.steps(eid, page=a.page)))
+        print(claude_surfaces.source(eid), file=sys.stderr)    # for Claude: never said
+        for w in claude_surfaces.notes(eid):
+            print(w, file=sys.stderr)
+        return 0
     if a.cmd == "tidy-folders":
         root = os.path.dirname(_HERE)
         _git(root, "fetch", "-q", "origin")
@@ -2475,7 +2576,8 @@ def main(argv=None) -> int:
         return 0
     if a.cmd == "state":
         print(json.dumps(state(db, now, envs=_load_json(a.envs), version=app_version(),
-                               works_on=_works_on()), ensure_ascii=False))
+                               works_on=_works_on(), folders=_load_json(a.folders)),
+                         ensure_ascii=False))
         return 0
     if a.cmd == "waiting":
         w = waiting(db, now)

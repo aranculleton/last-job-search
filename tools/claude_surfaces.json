@@ -156,23 +156,25 @@
     },
     {
       "id": "linux-computer",
-      "claim": "The Claude desktop app on Linux is in beta, for Ubuntu 22.04 or later and Debian 12 or later. On other distributions, such as Fedora or Arch, the terminal version of Claude Code is used instead (curl -fsSL https://claude.ai/install.sh | bash), and claude --chrome gives it the person's own Chrome. Claude in Chrome does not work inside WSL; on Windows with WSL, the Windows desktop app is used. The Linux page does not say whether the desktop app there has its Browser pane: not verified.",
+      "claim": "The Claude desktop app on Linux is in beta, for Ubuntu 22.04 or later and Debian 12 or later. On other distributions, such as Fedora or Arch, the terminal version of Claude Code is used instead (curl -fsSL https://claude.ai/install.sh | bash), and claude --chrome gives it the person's own Chrome. Claude in Chrome does not work inside WSL; on Windows with WSL, the Windows desktop app is used, so its keys and menus are Windows'. The Linux page gives the same Claude Code experience as on a Mac and Windows and does not list the Browser pane among what the beta lacks (Computer Use, dictation), but it does not name the pane either: not verified. Its key there would be Ctrl+Shift+B, as on Windows (the desktop page: on Windows and Linux, Cmd becomes Ctrl). Without the desktop app, claude remote-control run in a terminal in the folder takes the chats started from claude.ai (remote-control-settings-linux).",
       "goal": "use Claude on a Linux computer",
       "how": "on Ubuntu or Debian, the Claude desktop app; elsewhere, in a terminal, curl -fsSL https://claude.ai/install.sh | bash, then claude --chrome in the folder {name}",
       "sources": [
         {"url": "https://code.claude.com/docs/en/desktop-linux", "quote": "A Debian-based distribution: Ubuntu 22.04 or later, or Debian 12 or later"},
         {"url": "https://code.claude.com/docs/en/desktop-linux", "quote": "On distributions that aren't Debian-based, such as Fedora or Arch, run the CLI instead."},
         {"url": "https://code.claude.com/docs/en/setup", "quote": "curl -fsSL https://claude.ai/install.sh | bash"},
-        {"url": "https://code.claude.com/docs/en/chrome", "quote": "Chrome integration isn't supported in Windows Subsystem for Linux (WSL)."}
+        {"url": "https://code.claude.com/docs/en/chrome", "quote": "Chrome integration isn't supported in Windows Subsystem for Linux (WSL)."},
+        {"url": "https://code.claude.com/docs/en/desktop-linux", "quote": "The desktop app on Linux gives you the same Chat, Cowork, and Claude Code experience as on macOS and Windows"},
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "Cmd: press Ctrl"}
       ],
       "status": "documented",
-      "verified_on": "2026-10-25",
-      "verified_against": "code.claude.com/docs/en/desktop-linux, /setup and /chrome read 2026-10-25",
+      "verified_on": "2026-11-11",
+      "verified_against": "code.claude.com/docs/en/desktop-linux and /desktop read 2026-11-11; /setup and /chrome read 2026-10-25",
       "ui_sensitive": true
     },
     {
       "id": "browser-pane",
-      "claim": "A chat in the desktop app can read web pages in the app's own Browser pane, a browser of its own, separate from the person's, with none of their sign-ins until they sign in there, and needing no particular browser of theirs: Safari, Firefox or any other default is fine. It opens from the Browser button in the session's title bar (browser-pane-show). Keep cookies in the pane's menu keeps sign-ins after the app quits; Anthropic's built-in-browser skill says the pane keeps its profile across the app's chats. It is the default way to read people's profiles on a computer. Whether the Linux desktop app has it is not stated on the Linux page (not verified).",
+      "claim": "A chat in the desktop app can read web pages in the app's own Browser pane, a browser of its own, separate from the person's, with none of their sign-ins until they sign in there, and needing no particular browser of theirs: Safari, Firefox or any other default is fine. It opens from the Browser button in the session's title bar (browser-pane-show). Keep cookies in the pane's menu keeps sign-ins after the app quits; Anthropic's built-in-browser skill says the pane keeps its profile across the app's chats. It is the default way to read people's profiles on a computer. The Linux page does not name it, but gives the same Claude Code experience as on a Mac and Windows and does not list it among what the beta lacks (read 2026-11-11).",
       "sources": [
         {"url": "https://code.claude.com/docs/en/desktop", "quote": "The Browser pane uses a clean browser profile, separate from your personal browser, with none of your saved logins or history."},
         {"url": "https://code.claude.com/docs/en/desktop", "quote": "keeps cookies after you quit the app with Keep cookies in the Browser pane's"}
@@ -658,36 +660,97 @@
     },
     {
       "id": "browser-pane-show",
-      "claim": "In the desktop app a hidden Browser pane comes back from the Browser button in the session's title bar, or Cmd+Shift+B on a Mac and Ctrl+Shift+B on Windows. Hiding the pane does not close the browser: it keeps its own profile and its sign-ins across the app's chats (Anthropic's built-in-browser skill; the docs page says only that cookies can be kept after quitting).",
+      "claim": "In the desktop app a hidden Browser pane comes back from the Browser button in the session's title bar, or Cmd+Shift+B on a Mac and Ctrl+Shift+B on Windows and on Linux (the docs: on Windows and Linux, Cmd becomes Ctrl). Each system has its own variant (browser-pane-show-mac, -windows, -linux); this one says all three, for when the computer is not known. Hiding the pane does not close the browser: it keeps its own profile and its sign-ins across the app's chats (Anthropic's built-in-browser skill; the docs page says only that cookies can be kept after quitting).",
       "goal": "bring the browser back into view",
-      "how": "in the Claude desktop app, the Browser button in the session's title bar, or Cmd+Shift+B on a Mac and Ctrl+Shift+B on Windows",
+      "how": "in the Claude desktop app, the Browser button in the session's title bar, or Cmd+Shift+B on a Mac and Ctrl+Shift+B on Windows or Linux",
       "steps": [
-        "In the Claude desktop app, the Browser button in this chat's title bar shows the browser again; Cmd+Shift+B on a Mac, or Ctrl+Shift+B on Windows, does the same.",
+        "In the Claude desktop app, the Browser button in this chat's title bar shows the browser again; Cmd+Shift+B on a Mac, or Ctrl+Shift+B on Windows or Linux, does the same.",
         "You stay signed in: hiding the browser does not sign you out of anything."
       ],
       "sources": [
         {"url": "https://code.claude.com/docs/en/desktop", "quote": "To open the Browser, press Cmd+Shift+B on macOS or Ctrl+Shift+B on Windows, or click Browser in the session's title bar."},
-        {"url": "skill:anthropic-skills:built-in-browser", "quote": "The built-in browser keeps its own persistent profile, shared across the desktop app's sessions."}
+        {"url": "skill:anthropic-skills:built-in-browser", "quote": "The built-in browser keeps its own persistent profile, shared across the desktop app's sessions."},
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "The table in this section shows the macOS keys. On Windows and Linux, change these keys:"}
       ],
       "status": "documented",
-      "verified_on": "2026-10-19",
-      "verified_against": "code.claude.com/docs/en/desktop read word for word 2026-10-19, and the built-in-browser skill as installed that day",
+      "verified_on": "2026-11-11",
+      "verified_against": "code.claude.com/docs/en/desktop read 2026-11-11 (Browse external sites; Keyboard shortcuts, where Cmd becomes Ctrl on Windows and Linux), and the built-in-browser skill as installed 2026-10-19",
+      "ui_sensitive": true
+    },
+    {
+      "id": "browser-pane-show-mac",
+      "variant_of": "browser-pane-show",
+      "system": "darwin",
+      "claim": "On a Mac, a hidden Browser pane comes back from the Browser button in the session's title bar, or Cmd+Shift+B. Hiding it signs nobody out (browser-pane-show).",
+      "goal": "bring the browser back into view",
+      "how": "in the Claude desktop app, the Browser button in the session's title bar, or Cmd+Shift+B",
+      "steps": [
+        "In the Claude desktop app, the Browser button in this chat's title bar shows the browser again; Cmd+Shift+B does the same.",
+        "You stay signed in: hiding the browser does not sign you out of anything."
+      ],
+      "sources": [
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "To open the Browser, press Cmd+Shift+B on macOS or Ctrl+Shift+B on Windows, or click Browser in the session's title bar."}
+      ],
+      "status": "documented",
+      "verified_on": "2026-11-11",
+      "verified_against": "code.claude.com/docs/en/desktop read 2026-11-11 (Browse external sites, Keyboard shortcuts)",
+      "ui_sensitive": true
+    },
+    {
+      "id": "browser-pane-show-windows",
+      "variant_of": "browser-pane-show",
+      "system": "win32",
+      "claim": "On Windows, a hidden Browser pane comes back from the Browser button in the session's title bar, or Ctrl+Shift+B. Hiding it signs nobody out (browser-pane-show).",
+      "goal": "bring the browser back into view",
+      "how": "in the Claude desktop app, the Browser button in the session's title bar, or Ctrl+Shift+B",
+      "steps": [
+        "In the Claude desktop app, the Browser button in this chat's title bar shows the browser again; Ctrl+Shift+B does the same.",
+        "You stay signed in: hiding the browser does not sign you out of anything."
+      ],
+      "sources": [
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "To open the Browser, press Cmd+Shift+B on macOS or Ctrl+Shift+B on Windows, or click Browser in the session's title bar."}
+      ],
+      "status": "documented",
+      "verified_on": "2026-11-11",
+      "verified_against": "code.claude.com/docs/en/desktop read 2026-11-11 (Browse external sites, Keyboard shortcuts)",
+      "ui_sensitive": true
+    },
+    {
+      "id": "browser-pane-show-linux",
+      "variant_of": "browser-pane-show",
+      "system": "linux",
+      "claim": "On Linux, a hidden Browser pane comes back from the Browser button in the session's title bar, or Ctrl+Shift+B. Hiding it signs nobody out (browser-pane-show). The docs give the Mac's keys and say Cmd becomes Ctrl on Windows and Linux; the Linux page gives the same Claude Code experience as on a Mac and Windows and does not list the Browser pane among what the beta lacks (Computer Use, dictation).",
+      "goal": "bring the browser back into view",
+      "how": "in the Claude desktop app, the Browser button in the session's title bar, or Ctrl+Shift+B",
+      "steps": [
+        "In the Claude desktop app, the Browser button in this chat's title bar shows the browser again; Ctrl+Shift+B does the same.",
+        "You stay signed in: hiding the browser does not sign you out of anything."
+      ],
+      "sources": [
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "To open the Browser, press Cmd+Shift+B on macOS or Ctrl+Shift+B on Windows, or click Browser in the session's title bar."},
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "The table in this section shows the macOS keys. On Windows and Linux, change these keys:"},
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "Cmd: press Ctrl"},
+        {"url": "https://code.claude.com/docs/en/desktop-linux", "quote": "The desktop app on Linux gives you the same Chat, Cowork, and Claude Code experience as on macOS and Windows"}
+      ],
+      "status": "documented",
+      "verified_on": "2026-11-11",
+      "verified_against": "code.claude.com/docs/en/desktop read 2026-11-11 (Browse external sites, Keyboard shortcuts), and /desktop-linux read that day",
       "ui_sensitive": true
     },
     {
       "id": "browser-pane-stay-signed-in",
-      "claim": "The desktop app's Browser pane starts with a clean profile of its own, separate from the person's own browser, with none of their saved logins. It shows from the Browser button in the session's title bar, or Cmd+Shift+B on a Mac and Ctrl+Shift+B on Windows, and its menu has Keep cookies, which keeps sign-ins after the app is quit (the docs do not say whether it is on to begin with).",
+      "claim": "The desktop app's Browser pane starts with a clean profile of its own, separate from the person's own browser, with none of their saved logins. It shows from the Browser button in the session's title bar, or Cmd+Shift+B on a Mac and Ctrl+Shift+B on Windows and Linux, and its menu has Keep cookies, which keeps sign-ins after the app is quit (the docs do not say whether it is on to begin with).",
       "goal": "sign in to LinkedIn once in the app's browser and stay signed in",
-      "how": "Cmd+Shift+B on a Mac or Ctrl+Shift+B on Windows shows the app's browser; choose Keep cookies in its \u22ee menu so you stay signed in",
+      "how": "Cmd+Shift+B on a Mac, or Ctrl+Shift+B on Windows or Linux, shows the app's browser; choose Keep cookies in its \u22ee menu so you stay signed in",
       "steps": [
-        "Show the app's browser: Open on the LinkedIn card just above in this chat, or Browser in this chat's title bar (Cmd+Shift+B on a Mac, Ctrl+Shift+B on Windows).",
+        "Show the app's browser: Open on the LinkedIn card just above in this chat, or Browser in this chat's title bar (Cmd+Shift+B on a Mac, Ctrl+Shift+B on Windows or Linux).",
         "Sign in to LinkedIn there yourself.",
         "In the browser's \u22ee menu, choose Keep cookies, so you stay signed in after you quit the app.",
         "Say done here."
       ],
       "page_goal": "sign in to LinkedIn once in the app's browser and stay signed in",
       "page_steps": [
-        "In the Claude desktop app, show the app's browser: Cmd+Shift+B on a Mac, or Ctrl+Shift+B on Windows.",
+        "In the Claude desktop app, show the app's browser: Cmd+Shift+B on a Mac, or Ctrl+Shift+B on Windows or Linux.",
         "Sign in to LinkedIn there yourself.",
         "In the browser's ⋮ menu, choose Keep cookies, so you stay signed in after you quit the app.",
         "Come back to this page and tap Done."
@@ -699,6 +762,94 @@
       "status": "documented",
       "verified_on": "2026-11-09",
       "verified_against": "code.claude.com/docs/en/desktop read again 2026-11-09: whether Keep cookies is on to begin with, how long a LinkedIn sign-in lasts in the pane and how a chat can tell the pane is hidden are not on it (a chat looks: tabs_context, and a LinkedIn page showing the sign-in page)",
+      "ui_sensitive": true
+    },
+    {
+      "id": "browser-pane-stay-signed-in-mac",
+      "variant_of": "browser-pane-stay-signed-in",
+      "system": "darwin",
+      "claim": "On a Mac, the desktop app's Browser pane shows from the Browser button in the session's title bar, or Cmd+Shift+B, and its ⋮ menu has Keep cookies, which keeps sign-ins after the app is quit (browser-pane-stay-signed-in; the docs do not say whether it is on to begin with).",
+      "goal": "sign in to LinkedIn once in the app's browser and stay signed in",
+      "how": "Cmd+Shift+B shows the app's browser; choose Keep cookies in its ⋮ menu so you stay signed in",
+      "steps": [
+        "Show the app's browser: Open on the LinkedIn card just above in this chat, or Browser in this chat's title bar (Cmd+Shift+B).",
+        "Sign in to LinkedIn there yourself.",
+        "In the browser's ⋮ menu, choose Keep cookies, so you stay signed in after you quit the app.",
+        "Say done here."
+      ],
+      "page_goal": "sign in to LinkedIn once in the app's browser and stay signed in",
+      "page_steps": [
+        "In the Claude desktop app, show the app's browser: Cmd+Shift+B.",
+        "Sign in to LinkedIn there yourself.",
+        "In the browser's ⋮ menu, choose Keep cookies, so you stay signed in after you quit the app.",
+        "Come back to this page and tap Done."
+      ],
+      "sources": [
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "To open the Browser, press Cmd+Shift+B on macOS or Ctrl+Shift+B on Windows, or click Browser in the session's title bar."},
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "Choose whether the Browser keeps cookies after you quit the app with Keep cookies in the Browser pane's ⋮ menu, so you don't have to sign in again"}
+      ],
+      "status": "documented",
+      "verified_on": "2026-11-11",
+      "verified_against": "code.claude.com/docs/en/desktop read 2026-11-11: the key (on Windows and Linux Cmd becomes Ctrl) and Keep cookies in the pane's ⋮ menu; the menu is not described per system",
+      "ui_sensitive": true
+    },
+    {
+      "id": "browser-pane-stay-signed-in-windows",
+      "variant_of": "browser-pane-stay-signed-in",
+      "system": "win32",
+      "claim": "On Windows, the desktop app's Browser pane shows from the Browser button in the session's title bar, or Ctrl+Shift+B, and its ⋮ menu has Keep cookies, which keeps sign-ins after the app is quit (browser-pane-stay-signed-in; the docs do not say whether it is on to begin with).",
+      "goal": "sign in to LinkedIn once in the app's browser and stay signed in",
+      "how": "Ctrl+Shift+B shows the app's browser; choose Keep cookies in its ⋮ menu so you stay signed in",
+      "steps": [
+        "Show the app's browser: Open on the LinkedIn card just above in this chat, or Browser in this chat's title bar (Ctrl+Shift+B).",
+        "Sign in to LinkedIn there yourself.",
+        "In the browser's ⋮ menu, choose Keep cookies, so you stay signed in after you quit the app.",
+        "Say done here."
+      ],
+      "page_goal": "sign in to LinkedIn once in the app's browser and stay signed in",
+      "page_steps": [
+        "In the Claude desktop app, show the app's browser: Ctrl+Shift+B.",
+        "Sign in to LinkedIn there yourself.",
+        "In the browser's ⋮ menu, choose Keep cookies, so you stay signed in after you quit the app.",
+        "Come back to this page and tap Done."
+      ],
+      "sources": [
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "To open the Browser, press Cmd+Shift+B on macOS or Ctrl+Shift+B on Windows, or click Browser in the session's title bar."},
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "Choose whether the Browser keeps cookies after you quit the app with Keep cookies in the Browser pane's ⋮ menu, so you don't have to sign in again"}
+      ],
+      "status": "documented",
+      "verified_on": "2026-11-11",
+      "verified_against": "code.claude.com/docs/en/desktop read 2026-11-11: the key (on Windows and Linux Cmd becomes Ctrl) and Keep cookies in the pane's ⋮ menu; the menu is not described per system",
+      "ui_sensitive": true
+    },
+    {
+      "id": "browser-pane-stay-signed-in-linux",
+      "variant_of": "browser-pane-stay-signed-in",
+      "system": "linux",
+      "claim": "On Linux, the desktop app's Browser pane shows from the Browser button in the session's title bar, or Ctrl+Shift+B, and its ⋮ menu has Keep cookies, which keeps sign-ins after the app is quit (browser-pane-stay-signed-in; the docs do not say whether it is on to begin with).",
+      "goal": "sign in to LinkedIn once in the app's browser and stay signed in",
+      "how": "Ctrl+Shift+B shows the app's browser; choose Keep cookies in its ⋮ menu so you stay signed in",
+      "steps": [
+        "Show the app's browser: Open on the LinkedIn card just above in this chat, or Browser in this chat's title bar (Ctrl+Shift+B).",
+        "Sign in to LinkedIn there yourself.",
+        "In the browser's ⋮ menu, choose Keep cookies, so you stay signed in after you quit the app.",
+        "Say done here."
+      ],
+      "page_goal": "sign in to LinkedIn once in the app's browser and stay signed in",
+      "page_steps": [
+        "In the Claude desktop app, show the app's browser: Ctrl+Shift+B.",
+        "Sign in to LinkedIn there yourself.",
+        "In the browser's ⋮ menu, choose Keep cookies, so you stay signed in after you quit the app.",
+        "Come back to this page and tap Done."
+      ],
+      "sources": [
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "To open the Browser, press Cmd+Shift+B on macOS or Ctrl+Shift+B on Windows, or click Browser in the session's title bar."},
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "Choose whether the Browser keeps cookies after you quit the app with Keep cookies in the Browser pane's ⋮ menu, so you don't have to sign in again"},
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "Cmd: press Ctrl"}
+      ],
+      "status": "documented",
+      "verified_on": "2026-11-11",
+      "verified_against": "code.claude.com/docs/en/desktop read 2026-11-11: the key (on Windows and Linux Cmd becomes Ctrl) and Keep cookies in the pane's ⋮ menu; the menu is not described per system",
       "ui_sensitive": true
     },
     {
@@ -785,7 +936,7 @@
     },
     {
       "id": "remote-control-settings",
-      "claim": "On the computer, the desktop app's settings for this are under Settings, then Claude Code, then Remote Control. The docs name one switch there, Connect new sessions to Remote Control. The screen seen on 2026-11-09 also had Let your phone and claude.ai start sessions here, which is what lets a cloud chat start a chat on the computer (the computer then shows in list_environments as a bridge environment); Keep this computer awake for Remote Control, marked Recommended; and a Folders list, with Add folder and Show folders, where a folder can be pinned. The docs do not name the second and third switches, the Folders list or pinning (not verified beyond what was seen).",
+      "claim": "On the computer, the desktop app's settings for this are under Settings, then Claude Code, then Remote Control. The docs name one switch there, Connect new sessions to Remote Control. The screen seen on 2026-11-09 also had Let your phone and claude.ai start sessions here, which is what lets a cloud chat start a chat on the computer (the computer then shows in list_environments as a bridge environment); Keep this computer awake for Remote Control, marked Recommended; and a Folders list, with Add folder and Show folders, where a folder can be pinned. The docs do not name the second and third switches, the Folders list or pinning (not verified beyond what was seen). Each system has its own variant (remote-control-settings-mac, -windows, -linux): the update menu differs, and Linux has a way without the desktop app; this one says all three, for when the computer is not known.",
       "goal": "let Claude start its chats on your computer",
       "how": "in the Claude desktop app on your computer, Settings, then Claude Code, then Remote Control",
       "steps": [
@@ -794,6 +945,7 @@
         "Turn on Let your phone and claude.ai start sessions here.",
         "Turn on Keep this computer awake for Remote Control.",
         "Under Folders, choose Add folder and pick the folder your job search is in, then pin it.",
+        "If a switch or Folders is not there, update the Claude app first (on a Mac: Claude, then Check for Updates; on Windows: Help, then Check for Updates; on Linux: your system's software updates), then look again.",
         "Say done here."
       ],
       "page_goal": "let Claude start its chats on your computer",
@@ -803,6 +955,7 @@
         "Turn on Let your phone and claude.ai start sessions here.",
         "Turn on Keep this computer awake for Remote Control.",
         "Under Folders, choose Add folder and pick the folder your job search is in, then pin it.",
+        "If a switch or Folders is not there, update the Claude app first (on a Mac: Claude, then Check for Updates; on Windows: Help, then Check for Updates; on Linux: your system's software updates), then look again.",
         "Come back to this page and tap Done."
       ],
       "sources": [
@@ -820,9 +973,123 @@
         }
       ],
       "status": "observed",
-      "verified_against": "code.claude.com/docs/en/desktop (Control which sessions appear on your other devices) read 2026-11-09; the other switches, Folders and pinning observed on a Mac in the desktop app on 2026-11-09, where the computer then appeared in list_environments as kind bridge, state active, named <computer>:<folder>:<code>; the docs are silent on them, and on Windows (not verified there)",
+      "verified_against": "code.claude.com/docs/en/desktop (Control which sessions appear on your other devices; Check your version) read 2026-11-11; the other switches, Folders and pinning observed on a Mac in the desktop app on 2026-11-09, where the computer then appeared in list_environments as kind bridge, state active, named <computer>:<folder>:<code>; the docs are silent on them, and on Windows and Linux (not verified there)",
       "ui_sensitive": true,
-      "verified_on": "2026-11-09"
+      "verified_on": "2026-11-11"
+    },
+    {
+      "id": "remote-control-settings-mac",
+      "variant_of": "remote-control-settings",
+      "system": "darwin",
+      "claim": "On a Mac, the desktop app's settings for letting Claude start its chats on the computer are under Settings, then Claude Code, then Remote Control (remote-control-settings). An older app is updated from Claude, then Check for Updates, in the menu bar.",
+      "goal": "let Claude start its chats on your computer",
+      "how": "in the Claude desktop app on your computer, Settings, then Claude Code, then Remote Control",
+      "steps": [
+        "On your computer, open the Claude desktop app, then Settings, then Claude Code, then Remote Control.",
+        "Turn on Connect new sessions to Remote Control.",
+        "Turn on Let your phone and claude.ai start sessions here.",
+        "Turn on Keep this computer awake for Remote Control.",
+        "Under Folders, choose Add folder and pick the folder your job search is in, then pin it.",
+        "If a switch or Folders is not there, update the Claude app first: Claude, then Check for Updates, in the menu bar. Then look again.",
+        "Say done here."
+      ],
+      "page_goal": "let Claude start its chats on your computer",
+      "page_steps": [
+        "On your computer, open the Claude desktop app, then Settings, then Claude Code, then Remote Control.",
+        "Turn on Connect new sessions to Remote Control.",
+        "Turn on Let your phone and claude.ai start sessions here.",
+        "Turn on Keep this computer awake for Remote Control.",
+        "Under Folders, choose Add folder and pick the folder your job search is in, then pin it.",
+        "If a switch or Folders is not there, update the Claude app first: Claude, then Check for Updates, in the menu bar. Then look again.",
+        "Come back to this page and tap Done."
+      ],
+      "sources": [
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "new sessions connect automatically while Connect new sessions to Remote Control is on in Settings > Code or Settings > Claude Code"},
+        {"url": "observed:desktop-app-settings", "quote": "Let your phone and claude.ai start sessions here"},
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "Claude > Check for Updates"}
+      ],
+      "status": "observed",
+      "verified_on": "2026-11-11",
+      "verified_against": "the switches, Folders and pinning observed on a Mac in the desktop app on 2026-11-09; code.claude.com/docs/en/desktop read 2026-11-11 for Connect new sessions to Remote Control and Claude > Check for Updates",
+      "ui_sensitive": true
+    },
+    {
+      "id": "remote-control-settings-windows",
+      "variant_of": "remote-control-settings",
+      "system": "win32",
+      "claim": "On Windows, the desktop app's settings for letting Claude start its chats on the computer are under Settings, then Claude Code, then Remote Control (remote-control-settings). An older app is updated from Help, then Check for Updates; only some versions on Windows can share a folder with a cloud chat (list_computer_folders).",
+      "goal": "let Claude start its chats on your computer",
+      "how": "in the Claude desktop app on your computer, Settings, then Claude Code, then Remote Control",
+      "steps": [
+        "On your computer, open the Claude desktop app, then Settings, then Claude Code, then Remote Control.",
+        "Turn on Connect new sessions to Remote Control.",
+        "Turn on Let your phone and claude.ai start sessions here.",
+        "Turn on Keep this computer awake for Remote Control.",
+        "Under Folders, choose Add folder and pick the folder your job search is in, then pin it.",
+        "If a switch or Folders is not there, update the Claude app first: Help, then Check for Updates. Not every version on Windows can share a folder. Then look again.",
+        "Say done here."
+      ],
+      "page_goal": "let Claude start its chats on your computer",
+      "page_steps": [
+        "On your computer, open the Claude desktop app, then Settings, then Claude Code, then Remote Control.",
+        "Turn on Connect new sessions to Remote Control.",
+        "Turn on Let your phone and claude.ai start sessions here.",
+        "Turn on Keep this computer awake for Remote Control.",
+        "Under Folders, choose Add folder and pick the folder your job search is in, then pin it.",
+        "If a switch or Folders is not there, update the Claude app first: Help, then Check for Updates. Not every version on Windows can share a folder. Then look again.",
+        "Come back to this page and tap Done."
+      ],
+      "sources": [
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "new sessions connect automatically while Connect new sessions to Remote Control is on in Settings > Code or Settings > Claude Code"},
+        {"url": "observed:desktop-app-settings", "quote": "Let your phone and claude.ai start sessions here"},
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "Help > Check for Updates"},
+        {"url": "tool:list_computer_folders", "quote": "on Windows, not every version can"}
+      ],
+      "status": "observed",
+      "verified_on": "2026-11-11",
+      "verified_against": "code.claude.com/docs/en/desktop read 2026-11-11 for Connect new sessions to Remote Control and Help > Check for Updates; the list_computer_folders tool's description that day for Windows versions; the other switches, Folders and pinning were seen on a Mac only and are not verified on Windows",
+      "ui_sensitive": true
+    },
+    {
+      "id": "remote-control-settings-linux",
+      "variant_of": "remote-control-settings",
+      "system": "linux",
+      "claim": "On Linux, the desktop app's settings for letting Claude start its chats on the computer are under Settings, then Claude Code, then Remote Control (remote-control-settings). The Linux app is in beta for Ubuntu and Debian and updates with the system's own software updates; elsewhere there is no desktop app, and claude remote-control, run in a terminal in the folder and left running, takes the chats started from claude.ai there (with --chrome they have Chrome on). Whether such a computer shows in list_environments as a bridge is not verified.",
+      "goal": "let Claude start its chats on your computer",
+      "how": "in the Claude desktop app on your computer, Settings, then Claude Code, then Remote Control",
+      "steps": [
+        "On your computer, open the Claude desktop app, then Settings, then Claude Code, then Remote Control.",
+        "Turn on Connect new sessions to Remote Control.",
+        "Turn on Let your phone and claude.ai start sessions here.",
+        "Turn on Keep this computer awake for Remote Control.",
+        "Under Folders, choose Add folder and pick the folder your job search is in, then pin it.",
+        "If a switch or Folders is not there, update the Claude app first with your system's software updates, then look again.",
+        "No Claude desktop app on this computer (it runs on Ubuntu and Debian): instead, in a terminal in the folder your job search is in, run claude remote-control --chrome and leave it running.",
+        "Say done here."
+      ],
+      "page_goal": "let Claude start its chats on your computer",
+      "page_steps": [
+        "On your computer, open the Claude desktop app, then Settings, then Claude Code, then Remote Control.",
+        "Turn on Connect new sessions to Remote Control.",
+        "Turn on Let your phone and claude.ai start sessions here.",
+        "Turn on Keep this computer awake for Remote Control.",
+        "Under Folders, choose Add folder and pick the folder your job search is in, then pin it.",
+        "If a switch or Folders is not there, update the Claude app first with your system's software updates, then look again.",
+        "No Claude desktop app on this computer (it runs on Ubuntu and Debian): instead, in a terminal in the folder your job search is in, run claude remote-control --chrome and leave it running.",
+        "Come back to this page and tap Done."
+      ],
+      "sources": [
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "new sessions connect automatically while Connect new sessions to Remote Control is on in Settings > Code or Settings > Claude Code"},
+        {"url": "observed:desktop-app-settings", "quote": "Let your phone and claude.ai start sessions here"},
+        {"url": "https://code.claude.com/docs/en/desktop-linux", "quote": "The desktop app doesn't update itself on Linux."},
+        {"url": "https://code.claude.com/docs/en/desktop-linux", "quote": "On distributions that aren't Debian-based, such as Fedora or Arch, run the CLI instead."},
+        {"url": "https://code.claude.com/docs/en/remote-control", "quote": "The process stays running in your terminal in server mode, waiting for remote connections."},
+        {"url": "https://code.claude.com/docs/en/remote-control", "quote": "any session you start yourself from claude.ai/code or the Claude app"}
+      ],
+      "status": "observed",
+      "verified_on": "2026-11-11",
+      "verified_against": "code.claude.com/docs/en/desktop-linux and /remote-control read 2026-11-11: the Linux app updates with the system's own updates, other distributions run the terminal version, and claude remote-control keeps running and takes chats started from claude.ai; the switches, Folders and pinning were seen on a Mac only and are not verified on Linux, nor whether a claude remote-control computer shows in list_environments as a bridge",
+      "ui_sensitive": true
     },
     {
       "id": "computer-bridge",
@@ -852,7 +1119,7 @@
     },
     {
       "id": "folder-attach",
-      "claim": "A cloud chat can ask to work in a folder the computer shares (list_computer_folders, then request_computer_folder), but only where that computer offers it to cloud chats. A folder listed under cannot_be_used with the reason not_available is in the person's list but not offered, and the tool says using a folder from a cloud chat is not available to everyone yet. So it is tried only when a folder is listed as usable, and never relied on.",
+      "claim": "A cloud chat can ask to work in a folder the computer shares (list_computer_folders, then request_computer_folder), but only where that computer offers it to cloud chats. A folder listed under cannot_be_used with the reason not_available is in the person's list but not offered, and the tool says using a folder from a cloud chat is not available to everyone yet. So it is tried only when a folder is listed as usable, and never relied on. Which computers can serve one depends on the app's version there: on Windows not every version can (the tool's own words), and a folder listed under cannot_be_used comes with its explanation, which is what the person is told. The tool also says not to send anyone to claude remote-control to add a folder, which for most accounts offers a cloud chat nothing.",
       "sources": [
         {
           "url": "tool:list_computer_folders",
@@ -861,12 +1128,16 @@
         {
           "url": "tool:request_computer_folder",
           "quote": "A session is attached to at most one folder at a time"
+        },
+        {
+          "url": "tool:list_computer_folders",
+          "quote": "on Windows, not every version can"
         }
       ],
       "status": "observed",
-      "verified_against": "the tool descriptions as offered on 2026-11-09, and list_computer_folders that day returning no usable folder and one not_available with no cause given; code.claude.com is silent on it",
+      "verified_against": "the tool descriptions as offered on 2026-11-09 and read again 2026-11-11 (Windows versions, claude remote-control), and list_computer_folders on 2026-11-09 returning no usable folder and one not_available with no cause given; code.claude.com is silent on it",
       "ui_sensitive": false,
-      "verified_on": "2026-11-09"
+      "verified_on": "2026-11-11"
     },
     {
       "id": "computer-chat-browser",
