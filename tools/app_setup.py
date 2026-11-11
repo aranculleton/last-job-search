@@ -889,12 +889,15 @@ def setup_script_line() -> str:
         return ""
 
 
-def outside_item(key: str, owner: str = "", name: str = "") -> dict:
+def outside_item(key: str, owner: str = "", name: str = "", system: str = "") -> dict:
     """A card for something only the person can do: the numbered steps the registry prints
-    (never typed by hand), the official page, and the day the steps were checked."""
+    (never typed by hand), the official page, and the day the steps were checked. `system`:
+    the person's computer's (darwin, win32, linux; computer.system_seen), for a screen on it
+    whose keys and menus differ (claude_surfaces.for_system); "" says all three."""
     import app_model
     import claude_surfaces
     eid, why = OUTSIDE[key]
+    eid = claude_surfaces.for_system(eid, system)
     lines = claude_surfaces.steps(eid, name=name or "your copy", owner=owner, page=True)
     entry = claude_surfaces.entry(eid)
     options = [{"label": "Done", "action": "setup.done"}]

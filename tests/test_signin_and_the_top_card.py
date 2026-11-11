@@ -91,7 +91,8 @@ def test_the_first_sign_in_page_is_a_wait_and_counts_nothing(tmp_path, monkeypat
 def test_the_sign_in_wait_opens_the_sign_in_page_and_watches_only_the_address():
     steps = " ".join(reading.signin_steps())
     assert reading.SIGNIN_URL in steps and "not a profile" in steps
-    assert reading.SIGNIN_SAY in steps and "never type" in steps
+    # The sign-in line, in this computer's own keys (a Mac's, Windows' or Linux's).
+    assert reading.signed_out_say("pane", reading.here_system()) in steps and "never type" in steps
     assert "address" in steps and "ask once more" in steps
     assert "—" not in steps and "press" not in steps.lower()
     assert reading.url_kind("https://www.linkedin.com/login") == "waiting"

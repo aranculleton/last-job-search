@@ -269,7 +269,8 @@ Then the state files (setup-sections.md, the last section), and commit and push.
   prints.
 - **Their computer, for LinkedIn** (`--section computer` runs this alone): where they work on
   a computer (`profile/place.json` `works_on` computer or both), COMPUTER.md section 6, "Use
-  your computer for LinkedIn", once: each step one plain line from `claude_surfaces.py steps`,
+  your computer for LinkedIn", once: each step one plain line from `claude_surfaces.py steps`
+  (in a cloud chat, `computer.py steps <id> "$D" --envs <file>`, for that computer's own keys),
   checked after it, ending with `python3 tools/computer.py ready --name <the computer>`. On a
   phone only, skip it: the page offers the paste. Never write a rule about the app into the
   chat's own memory.

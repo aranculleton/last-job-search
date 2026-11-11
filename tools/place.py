@@ -50,6 +50,37 @@ TOLD_FILE = "ljs-place.json"        # in .git/: the chats already told, never co
 ANSWERS = ("computer", "phone", "both")
 BROWSERS = {"browser", "chrome", "enable"}
 
+
+def browser_of(tools, cloud: bool | None = None) -> str:
+    """Which browser this chat has, from its tools: "pane" (the Claude desktop app's own
+    browser, a chat on the computer: mcp__Claude_Browser__*), "linked" (that browser on the
+    person's computer lent to a cloud chat: mcp__remote-devices__Claude_Browser__*, or
+    enable__mcp__remote-devices__Claude_Browser before it is on), "chrome" (Claude in Chrome,
+    the person's own browser: mcp__claude-in-chrome__*, or enable__mcp__claude-in-chrome) or
+    "none". `tools` is the tool names, or the words the start command takes (browser, chrome,
+    enable, none), as a list or comma separated: "browser" is the pane on the computer and the
+    lent one in a cloud chat (`cloud`, place.in_cloud by default), and "enable" the same before
+    it is on. A tool's own name says which it is wherever the chat runs. Claude's own browser
+    comes first where a chat has both (claude_surfaces: chrome). Decided by the tools a chat
+    has, never by where it was started (MAINTAINING.md)."""
+    if isinstance(tools, str):
+        tools = tools.split(",")
+    names = [str(t).strip() for t in tools or () if str(t).strip()]
+    words = {n.lower() for n in names}
+    if cloud is None:
+        cloud = in_cloud()
+    own = bool(words & {"browser", "enable"})
+    if any(n.startswith("mcp__Claude_Browser") for n in names) or (own and not cloud):
+        return "pane"
+    if any(n.startswith(("mcp__remote-devices__Claude_Browser",
+                         "enable__mcp__remote-devices__Claude_Browser")) for n in names) \
+            or (own and cloud):
+        return "linked"
+    if any(n.startswith(("mcp__claude-in-chrome", "enable__mcp__claude-in-chrome"))
+           for n in names) or "chrome" in words:
+        return "chrome"
+    return "none"
+
 # The set-up that works for nearly everyone with a computer, said where a person decides
 # where to work (/setup's question, its next step) and in the check a cloud chat on a
 # computer gives. Told only "a computer does more", people kept every chat in the cloud and
