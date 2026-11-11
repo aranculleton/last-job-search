@@ -33,6 +33,7 @@ make sense to somebody whose repo just received it.
 ### Fixed
 
 - **A time from another zone stays in its own column on Coming up.** "15:00 Toronto time (20:00 here)" ran under the title, over the row's line of facts and into its pill on a laptop or tablet; it now wraps in a wider time column, the same on every row so they still line up, and the page's checks fail on any words drawn over other words or over a button, on every screen, at a phone's, a tablet's and a laptop's width.
+- **An interview's More holds only what is rare.** It opened eleven lines deep, with when the prep was made, the employer's other people, a tip about the pencil and Edit the prep among its buttons; when the prep was made is now on the card's line of facts with the pencil beside it, and More keeps Practise with Claude, Update my prep, New day, the calendar on a practice day and Something else, on To do as on Coming up.
 - **"Only update when I say" is understood.** Said without naming the app, it set nothing; an update to your resume or CV is still never taken for the app's.
 - **A note on your computer that agrees with your update choice is kept.** Where your choice was not yet saved in that copy, the note was taken for one that disagreed and removed.
 - **Your page never says your computer is off while it is on.** A Mac connected that day read as off on a check-in from the day before, so Start it now did nothing; the computer's own connection now counts, and the chat that can start Claude there is woken.

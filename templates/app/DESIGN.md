@@ -56,8 +56,12 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   opened with the answers hidden, at the first likely question) beside Read your prep, with
   a line saying so ("Today: practise 3 questions, about 10 minutes"), or Practise with Claude
   where there is no live prep (the UX review, 2026-11-10, U-4). Coming up's row leads with the
-  same step on those days (`ivPractiseDay`, one answer for every place).
-  (one-card tests)
+  same step on those days (`ivPractiseDay`, one answer for every place). On those days Add to
+  calendar waits under More after the three, then Something else, and nothing else is in it:
+  when the prep was made is on the card's line of facts ("Prep ready, updated 29 min ago"),
+  with the pencil that changes it beside it, and "Also at" is on the application's own page.
+  Why: More opened eleven lines deep, the prep's time, "Also at", a tip about the pencil and
+  "Edit the prep" among its buttons (the maintainer, 2026-11-11). (one-card tests, More test)
 - To do holds only what there is to do. Someone who has not answered the person's limit of
   messages is never a card there, nor counted. In Contacts they wait below the fold with the
   others who need nothing, their row saying to leave it unless they write back, with Close.

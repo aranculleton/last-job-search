@@ -1098,8 +1098,9 @@ METHODS: dict[str, dict] = {
             (158, "2026-11-10", False, "the person's own dates are told from someone else's as the engine writes them (an interview's test or day to choose, an offer's reply-by), and no row, card or Brief line of their own says days late or Follow-up due"),
             (159, "2026-11-10", False, "the Brief's tiles lead with this week's applications and messages sent; Progress's counts in words sit under the funnel; the next step reads plainly; a question after the Jobs line is its own sentence"),
             (160, "2026-11-11", False, "a time from another zone wraps in its own wider column on Coming up, never over the row's words"),
+            (161, "2026-11-11", False, "an interview's More holds only its rare actions; when its prep was made and the pencil that changes it are on the card's line of facts"),
         ),
-        "fingerprint": "66bf9e5e62987d1c",
+        "fingerprint": "c08902ea1e20c4b5",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

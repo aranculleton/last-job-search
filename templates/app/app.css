@@ -1095,12 +1095,13 @@ p.count.tone-warn { color: var(--st-overdue); }
 /* The pencil carries a line of text of its own (an empty one), so it lines up with "Why" by the
    same baseline in any font: with none, a button's baseline is its box's bottom, and in a wider
    font the two were 5px apart (GitHub's runner, 2026-11-11). */
-.facts .btn.icon-only::before { content: "\200b"; width: 0; }
+.facts .btn.icon-only::before, .meta .btn.icon-only::before { content: "\200b"; width: 0; }
 /* A document's words and its pencil keep together: a pencil alone on a line named nothing. */
 .checks .doc-part { white-space: nowrap; }
 @media (min-width: 760px) and (pointer: fine), (min-width: 760px) and (pointer: none) {
   .facts .info-toggle { display: inline; min-height: 0; padding: 0 2px; }
-  .facts .btn.icon-only, .checks .btn.icon-only { min-height: 0; padding: 2px 8px; margin-block: -4px; vertical-align: middle; }
+  /* An interview's pencil beside its prep's word, on its line of facts, the same (2026-11-11). */
+  .facts .btn.icon-only, .checks .btn.icon-only, .meta .btn.icon-only { min-height: 0; padding: 2px 8px; margin-block: -4px; vertical-align: middle; }
 }
 .pen-tell .pen-ask { width: 100%; }
 .wave { display: grid; gap: 12px; }
@@ -1190,9 +1191,6 @@ dialog.tweak-sheet > .tweak-panel { height: auto; flex: 1 1 auto; }
 .tweak-actions { display: flex; gap: 12px; align-items: center; }
 .tweak-actions .btn.primary[disabled] { background: var(--raised); color: var(--muted); border-color: var(--raised); cursor: not-allowed; }
 .tweak-when { display: flex; gap: 8px; }
-/* One small line, never a box (the maintainer, 2026-10-29: "huge and out of place"). */
-.tweak-tip { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: var(--t-sm); color: var(--muted); }
-.tweak-tip p { margin: 0; }
 .tweak-done { margin: 0; }
 .near-line { margin: 0; color: var(--muted); }
 
@@ -1373,7 +1371,7 @@ label.pick { display: flex; align-items: flex-start; justify-content: center; wi
    links and taps"), and on a computer one drawn to the tip's own line, so the line the
    Brief's foot fits on keeps its height (the review, 2026-11-10). */
 @media (min-width: 760px) and (pointer: fine), (min-width: 760px) and (pointer: none) {
-  :is(.bp-tip, .tip, .tweak-tip) > .btn.secondary.small { min-height: 0; padding: 2px 12px; }
+  :is(.bp-tip, .tip) > .btn.secondary.small { min-height: 0; padding: 2px 12px; }
 }
 
 
