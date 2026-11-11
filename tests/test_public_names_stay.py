@@ -164,3 +164,26 @@ def test_a_release_that_ships_without_its_snapshot_says_so_after_tagging(monkeyp
     assert "tools/public_names.py snapshot" in capsys.readouterr().out
     monkeypatch.setattr(P, "stale", lambda root=P.ROOT: False)
     assert release.publish() == 0
+
+
+def test_asking_for_help_never_writes_anything(tmp_path, monkeypatch, capsys):
+    """The engine review of 2026-11-11: hand-rolled commands took `--help` as the command.
+    `public_names.py snapshot --help` rewrote the tracked snapshot, `routines.py reminded --help`
+    recorded a reminder made today with no task, and `upkeep-record --help` an upkeep with
+    none, in the person's registry."""
+    wrote = []
+    monkeypatch.setattr(P, "snapshot", lambda *a, **k: wrote.append(a) or {})
+    for argv in (["snapshot", "--help"], ["snapshot", "-h"], ["--help"]):
+        assert P.main(argv) == 0 and not wrote, argv
+    assert "snapshot" in capsys.readouterr().out
+    prof = tmp_path / "profile"
+    shutil.copytree(os.path.join(ROOT, "profile.example"), prof,
+                    ignore=shutil.ignore_patterns("state"))
+    reg = prof / "routines.json"
+    before = reg.read_bytes() if reg.exists() else None
+    env = dict(os.environ, LJS_PROFILE=str(prof), LJS_STATE=str(tmp_path / "state"))
+    for cmd in ("reminded", "upkeep-record", "upkeep-forget", "mended", "record", "adopt"):
+        r = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "routines.py"), cmd,
+                            "--help"], env=env, capture_output=True, text=True, encoding="utf-8")
+        assert r.returncode == 0 and "usage" in r.stdout, (cmd, r.stdout, r.stderr)
+        assert (reg.read_bytes() if reg.exists() else None) == before, cmd

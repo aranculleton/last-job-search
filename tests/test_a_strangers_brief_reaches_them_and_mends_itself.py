@@ -20,6 +20,8 @@ import shutil
 import subprocess
 import sys
 
+import pytest
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [os.path.join(ROOT, "tools"), os.path.join(ROOT, "tools", "network"),
                 os.path.join(ROOT, "tests")]
@@ -423,7 +425,17 @@ def test_a_shortlist_in_a_helper_the_page_no_longer_uses_moves_with_the_brief():
 # ------------------------------------------------------------------ the bar is the person's (X-18)
 
 
-def test_no_bar_the_person_never_set_hides_anyone_or_anything(tmp_path, monkeypatch):
+@pytest.fixture
+def on_a_day_of_its_own():
+    """A "none" judgement speaks for bar.JUDGED_NONE_DAYS from its day: read on a day of the
+    test's own. The CI installs time-machine; a computer without it skips the test."""
+    time_machine = pytest.importorskip("time_machine")
+    with time_machine.travel(dt.datetime(2026, 11, 10, 12, tzinfo=dt.timezone.utc)):
+        yield
+
+
+def test_no_bar_the_person_never_set_hides_anyone_or_anything(tmp_path, monkeypatch,
+                                                             on_a_day_of_its_own):
     """X-18: 'pay, prestige or signal' was one person's bar, applied to every stranger:
     unjudged employers refused, judged 'none' ones turned down and their follow-ups hidden,
     and the brief had a chat judge every employer each morning."""
@@ -602,8 +614,11 @@ def test_only_work_that_waited_a_day_is_named_as_not_saved(tmp_path, monkeypatch
         "origin/claude/three-days-ago": 3}, raising=False)
     log = str(tmp_path / "sync.txt")
     monkeypatch.setenv("LJS_BRIEF_SYNC", log)
-    brief.start(["--on", "a model"], "a model")
-    got = brief.read_sync(dt.date.today(), log)
+    # The run's one day, told: the start records the person's day (brief._today), and read
+    # back on the computer's it was another day in a far time zone (the everywhere check,
+    # "behind"), so nothing was read.
+    brief.start(["--on", "a model", "--today", "2026-11-11"], "a model")
+    got = brief.read_sync(dt.date(2026, 11, 11), log)
     assert got["earlier"] == ["origin/claude/three-days-ago"]
     lines = brief.claude_lines({"sync": got, "paused": "", "written": False, "write_here": [],
                                 "profile_line": "", "queries": [], "since": "2026-11-01",

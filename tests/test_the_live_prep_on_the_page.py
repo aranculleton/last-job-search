@@ -144,9 +144,10 @@ def test_the_parts_are_in_the_order_the_interview_runs(run, tmp_path, vp):
     text = got["after"][0]["text"]
     # Labels are drawn in small capitals, so they are read without their case.
     low = text.lower()
-    assert "A personal experience interview and a technical interview in one sitting for the Demand Planning Analyst role" in text and "what they are known to ask" in low
+    assert "A personal experience interview and a technical interview in one sitting for the Demand Planning Analyst role" in text and "known to ask" in low
     assert "your notes, not for saying" in low and "Your stories" in text and "Every word, A to Z" in text
-    assert "timing" in low and "60 minutes in all, in 5 parts" in text
+    # The timing is one line on its fold, the rest of it inside (the UX review, 2026-11-10, U-5).
+    assert "Timing: 60 minutes in 5 parts" in text
     assert "One month" in text, "the notice period from the profile is in the notes"
     assert text.count("Draft") >= 2, "the draft is marked where it is, and said once at the top"
 
@@ -240,6 +241,7 @@ def test_search_finds_what_to_say_answers_and_follow_ups(run, tmp_path, vp):
                "return {found: d.querySelector('.lp-found').textContent,"
                " beats: [...d.querySelectorAll('.lp-beat')].filter(vis).length,"
                " cards: [...d.querySelectorAll('.lp-q')].filter(vis).map((x) => x.dataset.lpq || x.dataset.lpa || 'story'),"
+               " once: [...d.querySelectorAll('.lp-part-follow > .lp-kids > .lp-f')].filter(vis).map((x) => x.closest('.lp-part').dataset.lpp),"
                " parts: [...d.querySelectorAll('.lp-part')].filter(vis).length, open: [...d.querySelectorAll('.lp-part details[open]')].length};")
     fill = lambda q: {"eval": "(() => { const f = document.querySelector('.lp-search input'); f.value = %r; f.dispatchEvent(new Event('input')); return 1; })()" % q}  # noqa: E731
     got = _go(run, tmp_path, _model(_ctx()), [
@@ -256,42 +258,124 @@ def test_search_finds_what_to_say_answers_and_follow_ups(run, tmp_path, vp):
     assert narr["beats"] == 1 and narr["cards"] and narr["found"].endswith("found"), narr
     # A detailed answer, hidden behind Simple, is still found.
     assert detailed["cards"] and detailed["beats"] == 0, detailed
-    # A follow-up two deep is found and its folds open.
-    assert follow["cards"] == ["q1"] and follow["open"] >= 2, follow
+    # A follow-up two deep is found and its folds open. It is one said once for its part, after
+    # any story there, since the screen review of 2026-11-11 (row 35): it stood under q1.
+    q1_part = next(q["part"] for q in _live()["questions"] if q["id"] == "q1")
+    assert follow["cards"] == [] and follow["once"] == [q1_part] and follow["open"] >= 2, follow
     assert none["found"] == "Nothing found: try fewer words" and none["parts"] == 0
     assert cleared["parts"] == before["parts"] and cleared["beats"] == before["beats"] and not cleared["found"]
+
+
+# Search, Open all and Close all are folded under Tools, beside the answers switch (the UX
+# review, 2026-11-10, U-5: the first phone screen was controls before anything to say).
+TOOLS = {"open": "lp-tools"}
 
 
 def test_open_all_and_close_all(run, tmp_path, vp):
     n = "[...document.querySelectorAll('.lp-part details')].filter((d) => d.open).length + '/' + document.querySelectorAll('.lp-part details').length"
     got = _go(run, tmp_path, _model(_ctx()), [
-        dict(OPEN, eval=n),
+        OPEN, dict(TOOLS, eval=n),
         {"click": "Open all", "exact": True, "within": "dialog.detail .lp-tools", "eval": n},
         {"click": "Close all", "exact": True, "within": "dialog.detail .lp-tools", "eval": n},
     ], vp)
-    before, opened, shut = (a["eval"] for a in got["after"])
+    before, opened, shut = (a["eval"] for a in got["after"][1:])
     total = before.split("/")[1]
     assert before == "0/" + total and opened == total + "/" + total and shut == "0/" + total and int(total) > 1
 
 
-def test_practice_is_one_way_practise_with_claude(run, tmp_path, vp):
-    # The maintainer called the last one cluttered (2026-11-10): Hide the answers and a Start
-    # on every card were a second way to practise beside Practise with Claude.
-    look = ("[...document.querySelectorAll('dialog.detail button')].map((b) => b.textContent.trim())"
-            ".filter((t) => /^(Practise|Practise with Claude|Hide the answers|Start|Show the answer)$/.test(t))")
-    got = _go(run, tmp_path, _model(_ctx()), [dict(OPEN, eval=look)], vp)
-    assert got["after"][0]["eval"] == ["Practise with Claude"]
+def test_practice_is_trying_an_answer_first_then_looking(run, tmp_path, vp):
+    # The maintainer called a Start on every card and a second button to hide the answers
+    # cluttered (2026-11-10); the UX review the same day (U-4) found trying an answer and then
+    # checking it beats rereading. So it is one more side of the one switch, Hidden, and only
+    # then does each answer show "Show the answer"; the one pill is still Practise with Claude.
+    look = _ev("const d = document.querySelector('dialog.detail');"
+               "return {pills: [...d.querySelectorAll('.lp-head .card-actions .btn')].map((b) => b.textContent.trim()),"
+               " shown: [...d.querySelectorAll('.lp-reveal')].filter(vis).length,"
+               " all: [...d.querySelectorAll('.lp-ans')].filter((a) => !a.closest('details:not([open])')).length,"
+               " simple: [...d.querySelectorAll('.lp-simple')].filter(vis).length, detailed: [...d.querySelectorAll('.lp-detailed')].filter(vis).length,"
+               " first: vis(d.querySelector('%s > .lp-ans > .lp-simple')), sides: [...d.querySelectorAll('.lp-all .seg-opt')].map((b) => b.textContent),"
+               " inTop: [...d.querySelectorAll('.lp-reveal')].every((b) => b.parentElement.classList.contains('lp-ans-top')),"
+               " beats: [...d.querySelectorAll('.lp-beat')].filter(vis).length, sayShow: [...d.querySelectorAll('.lp-narr-show')].filter(vis).length,"
+               " open: vis(d.querySelector('.lp-glance-open'))};" % Q1)
+    got = _go(run, tmp_path, _model(_ctx()), [
+        dict(OPEN, eval=look),
+        {"click": "Hidden", "role": "radio", "within": "dialog.detail .lp-all", "eval": look},
+        {"click": "Show the answer", "exact": True, "within": Q1 + " > .lp-ans", "eval": look},
+        {"click": "Simple", "role": "radio", "within": "dialog.detail .lp-all", "eval": look},
+    ], vp)
+    before, hidden, one, back = (a["eval"] for a in got["after"])
+    assert before["pills"] == ["Practise with Claude"] and before["shown"] == 0
+    assert before["sides"] == ["Simple", "Detailed", "Hidden"], before["sides"]
+    assert hidden["simple"] == 0 and hidden["detailed"] == 0 and hidden["shown"] == hidden["all"] > 1, hidden
+    # Show the answer sits beside Say, never as a bar across the answer (d48b3379), and what
+    # to say first, at a glance and in each part, waits behind its own Show too (the review of
+    # the fixes, 2026-11-10: Part 1's lines still gave the opening answer away).
+    assert hidden["inTop"] and before["beats"] > 0 and before["open"], (hidden, before)
+    assert hidden["beats"] == 0 and hidden["sayShow"] > 0 and not hidden["open"], hidden
+    assert one["first"] and one["simple"] == 1 and one["shown"] == hidden["all"] - 1, one
+    assert back["shown"] == 0 and back["simple"] == back["all"] and back["beats"] == before["beats"], back
+
+
+def _soon(days):
+    """The sample page, its interview with the live prep `days` days away (the page's day is
+    Sunday 25 October)."""
+    m = _model(_ctx())
+    for iv in m["interviews"]:
+        if iv["id"] == IV:
+            iv["when"] = "2026-10-%02dT13:00:00Z" % (25 + days)
+    return m
+
+
+def test_in_the_days_before_practice_is_on_the_interviews_card(run, tmp_path, vp):
+    # The UX review of 2026-11-10 (U-4): Practise with Claude was under More, and nothing said
+    # to practise. Two days before and the day before, the card says to practise three
+    # questions today and its first pill opens the prep with the answers hidden, at the first
+    # question likely to come up; three days before and on the day itself, reading leads and
+    # the calendar is beside it.
+    card = ("(() => { const c = [...document.querySelectorAll('#main [data-item]')].find((x) => x.dataset.item === 'soon:%s');"
+            " return c ? {pills: [...c.querySelectorAll(':scope > .card-actions > .btn')].map((b) => b.textContent.trim()),"
+            " text: c.textContent} : null; })()" % IV)
+    opened = _ev("const d = document.querySelector('dialog.detail'); const a = document.activeElement;"
+                 " return {simple: [...d.querySelectorAll('.lp-simple')].filter(vis).length, shown: [...d.querySelectorAll('.lp-reveal')].filter(vis).length,"
+                 " at: a && a.dataset ? a.dataset.lpq || '' : ''};")
+    seen = {}
+    for days in (0, 1, 2, 3):
+        steps = [{"hash": "todo", "eval": card}]
+        if days == 1:
+            steps.append({"click": "Practise 3 questions", "within": "#main", "read": "dialog.detail",
+                          "ready": "!!document.querySelector('.lp-flash')", "eval": opened})
+        got = _go(run, tmp_path, _soon(days), steps, vp)
+        seen[days] = [a["eval"] for a in got["after"]]
+    assert seen[0][0]["pills"][0] == "Read your prep" and "Practise with Claude" not in seen[0][0]["pills"], seen[0]
+    for days in (1, 2):
+        at = seen[days][0]
+        assert at["pills"] == ["Practise 3 questions", "Read your prep"], (days, at["pills"])
+        assert "Today: practise 3 questions, about 10 minutes." in at["text"], at["text"]
+    assert seen[3][0]["pills"] == ["Read your prep", "Add to calendar"], seen[3][0]["pills"]
+    assert "practise 3 questions" not in seen[3][0]["text"]
+    drill = seen[1][1]
+    assert drill["simple"] == 0 and drill["shown"] > 0 and drill["at"], drill
+    # Hidden is for that practice only: Read your prep afterwards, the interview morning
+    # included, opens with every answer showing (the review of the fixes, 2026-11-10).
+    again = _go(run, tmp_path, _soon(1), [
+        {"hash": "todo"},
+        {"click": "Practise 3 questions", "within": "#main", "read": "dialog.detail"},
+        {"eval": "(() => { document.querySelector('[data-k=detail-back]').click(); return 1; })()"},
+        {"click": "Read your prep", "within": "#main", "read": "dialog.detail", "eval": opened}], vp)
+    assert again["after"][3]["eval"]["simple"] > 0 and again["after"][3]["eval"]["shown"] == 0, again["after"][3]["eval"]
 
 
 def test_nothing_is_wider_than_a_phone_and_the_dark_look_draws(run, tmp_path):
     wide = ("(() => { const d = document.querySelector('dialog.detail'); const b = d.querySelector('.detail-body');"
-            " const over = [...d.querySelectorAll('.lp *')].filter((e) => e.getClientRects().length && !e.closest('[hidden]') && e.__drawnRect().right > innerWidth + 1).map((e) => e.className).slice(0, 5);"
+            # The chips scroll sideways inside their own row on a phone (the screen review,
+            # 2026-11-11): one past its edge is inside the row, never wider than the screen.
+            " const over = [...d.querySelectorAll('.lp *')].filter((e) => e.getClientRects().length && !e.closest('[hidden]') && !e.parentElement.closest('.lp-chips') && e.__drawnRect().right > innerWidth + 1).map((e) => e.className).slice(0, 5);"
             " const bg = getComputedStyle(d).backgroundColor.match(/\\d+/g).slice(0, 3).map(Number);"
             " return {sideways: b.scrollWidth > b.clientWidth + 1, over, light: (bg[0] + bg[1] + bg[2]) / 3}; })()")
-    steps = [dict(OPEN), {"click": "Open all", "exact": True, "within": "dialog.detail .lp-tools", "eval": wide}]
-    light = _go(run, tmp_path, _model(_ctx()), steps, PHONE)["after"][1]["eval"]
+    steps = [dict(OPEN), TOOLS, {"click": "Open all", "exact": True, "within": "dialog.detail .lp-tools", "eval": wide}]
+    light = _go(run, tmp_path, _model(_ctx()), steps, PHONE)["after"][2]["eval"]
     assert not light["sideways"] and light["over"] == [], light
-    dark = _go(run, tmp_path, _model(_ctx()), steps, PHONE, scheme="dark")["after"][1]["eval"]
+    dark = _go(run, tmp_path, _model(_ctx()), steps, PHONE, scheme="dark")["after"][2]["eval"]
     assert not dark["sideways"] and dark["over"] == [], dark
     assert dark["light"] < 100 < light["light"], "the dark look is dark and the light look light"
 
@@ -354,9 +438,10 @@ def test_the_top_is_the_head_the_timing_and_what_they_ask(run, tmp_path, vp):
             " search: lp.querySelector('.lp-search input').placeholder}; })()")
     got = _go(run, tmp_path, _model(_ctx()), [dict(OPEN, eval=look)], vp)
     at = got["after"][0]["eval"]
-    # As the call-prep page: the head, then the timing and the known questions, then part 1.
-    assert at["before"] == ["lp-head", "lp-box lp-timing", "lp-box lp-known"], at["before"]
-    assert "Practise with Claude" in at["head"] and "Open all" in at["head"] and "Close all" in at["head"]
+    # The head, with what to say at a glance in it, then the timing folded to a line, then part 1
+    # (the UX review, 2026-11-10, U-5).
+    assert at["before"] == ["lp-head", "lp-f lp-timing"], at["before"]
+    assert "Practise with Claude" in at["head"] and "At a glance" in at["head"] and "Open all" in at["head"]
     # One pill on the prep: Update my prep and the calendar stay on the card in Coming up.
     assert at["pills"] == ["Practise with Claude"], at["pills"]
     assert at["search"] == "Search questions and answers"
@@ -417,13 +502,30 @@ def test_a_personal_story_and_live_coding_open_as_one_sitting(run, tmp_path, vp)
 
 
 def test_a_guessed_kind_says_so_and_is_one_tap_from_the_right_one(run, tmp_path, vp):
+    # The review of 2026-11-10 (R1-2): a guessed kind opened a box to type in. Each kind is one
+    # tap, and the prep is made again as that kind; Something else is for words of your own
+    # ("a personal experience interview, then live coding").
     model = _model(_ctx())
     lv = next(iv for iv in model["interviews"] if iv["id"] == IV)["live"]
     lv["assumed"] = "a consulting firm's rounds after the screen are usually a case and a personal experience interview together"
     got = _go(run, tmp_path, model, [OPEN,
-        {"click": "Not this kind of interview?", "exact": True, "within": "dialog.detail .lp-timing", "read": "dialog.sheet"}], vp)
-    assert "The parts are a best guess" in got["after"][0]["text"]
-    assert "Anything you know about this interview?" in got["after"][1]["text"], got["after"][1]["text"][:300]
+        {"click": "Not this kind of interview?", "exact": True, "within": "dialog.detail .lp-glance", "read": "dialog.sheet"},
+        {"click": "A technical or coding interview", "exact": True, "within": "dialog.sheet"}], vp)
+    assert "a best guess" in got["after"][0]["text"].lower()
+    assert "a consulting firm's rounds after the screen are usually" in got["after"][0]["text"].lower()
+    sheet = got["after"][1]["text"]
+    for kind in ("A recruiter or HR screen", "A hiring manager interview", "A technical or coding interview",
+                 "A test you take alone", "A case interview", "A personal experience interview", "Something else"):
+        assert kind in sheet, (kind, sheet[:400])
+    work = [w for w in got["after"][2]["work"] if w.get("kind") == "prep"]
+    assert work and work[-1]["args"]["format"] == "a technical interview with live coding", work
+    assert work[-1]["args"]["interview"] == IV and "technical interview" in work[-1]["args"]["note"]
+    # Something else is the box to say it in your own words.
+    other = _go(run, tmp_path, model, [OPEN,
+        {"click": "Not this kind of interview?", "exact": True, "within": "dialog.detail .lp-glance"},
+        {"click": "Something else", "exact": True, "within": "dialog.sheet", "read": "dialog.sheet"}], vp)
+    assert "Anything you know about this interview?" in other["after"][2]["text"]
+
 
 def test_the_brief_reads_likely_to_come_up_from_the_live_prep(run, tmp_path, vp):
     model = _model(_ctx())
@@ -448,3 +550,128 @@ def test_an_interview_with_no_live_prep_reads_as_before(run, tmp_path, vp):
     got = _go(run, tmp_path, copy.deepcopy(m), [dict(OPEN, eval="document.querySelectorAll('dialog.detail .lp').length")], vp)
     assert got["after"][0]["eval"] == 0 and "Before you go in" in got["after"][0]["text"]
     assert json.dumps(m)  # the sample itself carries no live prep
+
+
+def test_it_opens_on_what_to_say_at_a_glance_with_the_controls_folded(run, tmp_path, vp):
+    # The UX review of 2026-11-10 (U-5): the first phone screen was a 43-word introduction,
+    # search, Open all, Close all, the switch, eight chips and a Timing box before Part 1.
+    # It opens on the line to open with, what they are known to ask and two questions to ask
+    # them; search and the folds wait under Tools; a simple answer is a sentence a line.
+    look = _ev("const d = document.querySelector('dialog.detail'); const g = d.querySelector('.lp-glance');"
+               " const top = (x) => Math.round(x.__drawnRect().top);"
+               " return {glance: g && g.textContent, glanceIn: !!g && g.__drawnRect().bottom <= innerHeight + 1,"
+               " beforePart: !!g && top(g) < top(d.querySelector('.lp-part')),"
+               " search: vis(d.querySelector('.lp-search input')), openAll: [...d.querySelectorAll('.lp-tools .btn')].some(vis),"
+               " lede: d.querySelector('.lp-lede').textContent.split(/\\s+/).length,"
+               " lines: d.querySelectorAll('%s > .lp-ans > .lp-simple > p').length,"
+               " detailedLines: d.querySelectorAll('%s > .lp-ans > .lp-detailed').length,"
+               " timingOpen: d.querySelector('.lp-timing').open,"
+               " left: Math.round(d.querySelector('.detail-title').__drawnRect().left)};" % (Q1, Q1))
+    got = _go(run, tmp_path, _model(_ctx()), [dict(OPEN, eval=look), dict(TOOLS, eval=look)], vp)
+    at, tools = (a["eval"] for a in got["after"])
+    assert "Open with" in at["glance"] and "I'm an operations analyst" in at["glance"], at["glance"]
+    assert "Known to ask" in at["glance"] and "How do you get depot managers to trust a forecast?" in at["glance"]
+    assert "Ask them" in at["glance"] and "cross-dock in Warrington" in at["glance"]
+    assert at["beforePart"] and (at["glanceIn"] or vp is not PHONE), "the glance is on the first screen"
+    # On a phone the words start 16px from its edge, as everywhere on the page: the full-screen
+    # body's empty side columns once added their gap as more padding (2026-11-11).
+    assert vp is not PHONE or at["left"] == 16, at["left"]
+    assert not at["search"] and not at["openAll"] and not at["timingOpen"], at
+    assert tools["search"] and tools["openAll"], "Tools opens search, Open all and Close all"
+    assert at["lede"] <= 30, at["lede"]
+    assert at["lines"] >= 2 and at["detailedLines"] == 1
+
+
+def test_on_a_phone_who_asks_sits_over_the_question_and_the_tools_keep_one_row(run, tmp_path, vp):
+    # The review of 2026-11-10 (R1-11): at 390 pixels the who-asks pill sat inline, so a title
+    # broke after a word or two ("Walk me / through a project end to end."), and Close all fell
+    # onto a row of its own under the search box.
+    look = ("(() => { const out = []; for (const h4 of document.querySelectorAll('dialog.detail .lp-q[data-lpq] .lp-q-q')) {"
+            " const pill = h4.querySelector('.lp-who'); const tn = [...h4.childNodes].filter((n) => n.nodeType === 3 && n.textContent.trim()).pop();"
+            " if (!pill || !tn) continue; const at = tn.textContent.search(/\\S/); const r = document.createRange(); r.setStart(tn, at); r.setEnd(tn, at + 1);"
+            " out.push({below: r.getBoundingClientRect().top >= pill.getBoundingClientRect().bottom - 1}); }"
+            " const b = [...document.querySelectorAll('dialog.detail .lp-tools .btn')].map((x) => Math.round(x.getBoundingClientRect().top));"
+            " return {below: out.map((x) => x.below), tools: b}; })()")
+    got = _go(run, tmp_path, _model(_ctx()), [OPEN, dict(TOOLS, eval=look)], vp)
+    at = got["after"][1]["eval"]
+    assert at["below"] and len(set(at["tools"])) == 1, at
+    if vp is PHONE:
+        assert all(at["below"]), "on a phone who asks sits on its own line, over the question"
+    else:
+        assert not any(at["below"]), "on a wide screen who asks stays inline, before the question"
+
+
+def test_a_test_taken_alone_reads_as_a_test_and_a_day_in_hours(run, tmp_path, vp):
+    # A test with nobody in the room has nothing to say first and no talk to time; a day of
+    # interviews is said in hours (2026-11-10).
+    model, doc = _shaped_model(dict(_ctx(), stage="Online assessment"), "HackerRank, 90 minutes")
+    look = _ev("const d = document.querySelector('dialog.detail');"
+               "return {labels: [...d.querySelectorAll('.lp-narr > .lp-lbl')].map((x) => x.textContent),"
+               " eyebrows: [...d.querySelectorAll('.lp-eyebrow')].map((x) => x.textContent).join(' | '),"
+               " lede: d.querySelector('.lp-lede').textContent, glance: d.querySelector('.lp-glance').textContent};")
+    at = _go(run, tmp_path, model, [dict(OPEN, eval=look)], vp)["after"][0]["eval"]
+    assert at["labels"] and "Say first" not in at["labels"] and set(at["labels"]) == {"Keep in mind"}, at["labels"]
+    assert "you talk" not in at["eyebrows"].lower(), at["eyebrows"]
+    assert "90 minutes" in at["lede"] and "Before you start" in at["glance"] and "Ask them" not in at["glance"]
+    day, _doc = _shaped_model(dict(_ctx(), stage="Superday"), "")
+    lede = _go(run, tmp_path, day, [dict(OPEN, eval=_ev("return document.querySelector('.lp-lede').textContent;"))], vp)["after"][0]["eval"]
+    assert "3 hours in 6 parts" in lede, lede
+
+
+def test_only_the_stories_a_question_is_answered_with_are_shown(run, tmp_path, vp):
+    # The night-before run (2026-11-10): a test taken alone and a superday showed all four
+    # stories under "Each told once, from the questions it answers", with no question in them.
+    look = _ev("const d = document.querySelector('dialog.detail');"
+               "return {stories: [...d.querySelectorAll('.lp-story')].map((s) => s.querySelectorAll('.lp-hook').length),"
+               " chip: [...d.querySelectorAll('.lp-chips .btn')].some((b) => b.textContent === 'Stories')};")
+    alone, _doc = _shaped_model(dict(_ctx(), stage="Online assessment"), "HackerRank, 90 minutes")
+    at = _go(run, tmp_path, alone, [dict(OPEN, eval=look)], vp)["after"][0]["eval"]
+    assert at == {"stories": [], "chip": False}, at
+    real = _go(run, tmp_path, _model(_ctx()), [dict(OPEN, eval=look)], vp)["after"][0]["eval"]
+    assert real["stories"] and all(n > 0 for n in real["stories"]) and real["chip"], real
+
+
+def test_on_a_practice_day_coming_up_and_to_do_lead_with_the_same_step(run, tmp_path, vp):
+    # The review of the fixes (2026-11-10): on practice days To do led with Practise 3
+    # questions while Coming up's row led with Read your prep.
+    todo = ("(() => { const c = [...document.querySelectorAll('#main [data-item]')].find((x) => x.dataset.item === 'soon:%s');"
+            " return c ? c.querySelector('.card-actions > .btn').textContent.trim() : null; })()" % IV)
+    row = "(() => { const b = document.querySelector('#main .up-prep .btn'); return b ? b.textContent.trim() : null; })()"
+    for days, lead in ((1, "Practise 3 questions"), (3, "Read your prep")):
+        got = _go(run, tmp_path, _soon(days), [{"hash": "todo", "eval": todo}, {"hash": "interviews", "eval": row}], vp)
+        assert [a["eval"] for a in got["after"]] == [lead, lead], (days, [a["eval"] for a in got["after"]])
+
+
+def test_a_term_is_a_quiet_dotted_word_that_wraps_with_its_sentence(run, tmp_path, vp):
+    # A red dotted line under "demand forecast", "SKUs" and "dbt" read as a spelling mistake,
+    # and a term drawn as a button never broke across lines, so a long one left its line short
+    # (the screen review, 2026-11-11). The line is the words' own muted tone, and the term is
+    # inline, kept a control for a keyboard and a screen reader.
+    look = _ev("const t = [...document.querySelectorAll('dialog.detail .lp-part .lp-term')].filter(vis);"
+               " const probe = document.createElement('span'); probe.style.color = 'var(--mark)'; document.body.appendChild(probe);"
+               " const mark = getComputedStyle(probe).color; probe.remove();"
+               " return {n: t.length, mark, colours: [...new Set(t.map((e) => getComputedStyle(e).textDecorationColor))],"
+               " display: [...new Set(t.map((e) => getComputedStyle(e).display))], roles: [...new Set(t.map((e) => e.getAttribute('role') || e.tagName))],"
+               " tab: t.every((e) => e.tabIndex === 0)};")
+    got = _go(run, tmp_path, _model(_ctx()), [dict(OPEN, eval=look),
+        {"eval": "(() => { const t = document.querySelector('dialog.detail .lp-part .lp-term'); t.focus(); t.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', bubbles: true})); return !document.querySelector('.lp-panel').hidden; })()"}], vp)
+    seen, opened = got["after"][0]["eval"], got["after"][1]["eval"]
+    assert seen["n"] > 0 and seen["mark"] not in seen["colours"], seen
+    assert seen["display"] == ["inline"] and seen["roles"] == ["button"] and seen["tab"], seen
+    assert opened is True, "Enter opens a term, as a button's does"
+
+
+def test_on_a_phone_the_chips_are_one_row_and_tools_sit_beside_the_answers_switch(run, tmp_path):
+    # Eight chips over three rows, then All answers, then Tools on a row of its own: more than
+    # a screen before Part 1 on a phone (the screen review, 2026-11-11). The chips are one row
+    # that scrolls sideways inside itself, and Tools shares the switch's row.
+    look = _ev("const d = document.querySelector('dialog.detail');"
+               " const chips = [...d.querySelectorAll('.lp-chips .btn')].filter(vis).map((b) => Math.round(b.__drawnRect().top));"
+               " const sw = d.querySelector('.lp-global .segctl, .lp-global [role=radiogroup]'), tools = d.querySelector('.lp-toolfold-sum');"
+               " const mid = (e) => { const r = e.__drawnRect(); return (r.top + r.bottom) / 2; };"
+               " return {rows: new Set(chips).size, n: chips.length, sideways: document.documentElement.scrollWidth > innerWidth || d.scrollWidth > d.clientWidth,"
+               " tools: Math.round(Math.abs(mid(sw) - mid(tools)))};")
+    got = _go(run, tmp_path, _model(_ctx()), [dict(OPEN, eval=look)], PHONE)
+    seen = got["after"][0]["eval"]
+    assert seen["n"] >= 6 and seen["rows"] == 1 and not seen["sideways"], seen
+    assert seen["tools"] <= 4, seen

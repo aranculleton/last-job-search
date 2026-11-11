@@ -1863,7 +1863,6 @@ def pasted_thread(text, their_name, today) -> list[dict] | None:
 
 def prepare(argv) -> int:
     import argparse
-    import datetime
     ap = argparse.ArgumentParser(
         prog="reply.py prepare",
         description="Everything before a reply is drafted, in one go: who wrote, their "
@@ -1881,7 +1880,7 @@ def prepare(argv) -> int:
     ap.add_argument("--subject", default="")
     ap.add_argument("--contacts", default=state.CONTACTS_CSV)
     ap.add_argument("--threads", default=state.THREADS_CSV)
-    ap.add_argument("--today", default=datetime.date.today().isoformat())
+    ap.add_argument("--today", default=person.today().isoformat())
     a = ap.parse_args(argv)
     text = _words(a.text_file, "prepare") if a.text_file else ""
     if text is None:
@@ -1902,7 +1901,7 @@ def prepare(argv) -> int:
         return 2
     c = found["row"]
     cid = str(c.get("contact_id") or "").strip()
-    day = state.as_date(a.date or a.today) or datetime.date.today()
+    day = state.as_date(a.date or a.today) or person.today()
     before = [r for r in state.threads_for(threads, cid) if _direction(r)]
     theirs = [r for r in before if _direction(r) == "in" and _inbound(r)]
     reader = _reader(c)
@@ -2075,7 +2074,6 @@ def save_draft(contact_id: str, text: str, msgs=None) -> str:
 
 def finish(argv) -> int:
     import argparse
-    import datetime
     import json
     ap = argparse.ArgumentParser(
         prog="reply.py finish",
@@ -2096,7 +2094,7 @@ def finish(argv) -> int:
     ap.add_argument("--out", default="", help="where the batch goes (default <dump>/out)")
     ap.add_argument("--contacts", default=state.CONTACTS_CSV)
     ap.add_argument("--threads", default=state.THREADS_CSV)
-    ap.add_argument("--today", default=datetime.date.today().isoformat())
+    ap.add_argument("--today", default=person.today().isoformat())
     ap.add_argument("--now", default=None)
     a = ap.parse_args(argv)
     if a.work and not a.dump:

@@ -207,7 +207,10 @@ def test_fit_reads_the_tracker_and_contact_book_it_was_given(tmp_path, monkeypat
     tracker = tmp_path / "tracker.csv"
     tracker.write_text("date,company,role,status,fit_rating\n"
                        "2026-08-01,Kestrel Mutual,Supply Chain Analyst,interview,80\n")
-    (tmp_path / "network_contacts.csv").write_text(_BOOK.format(status="awaiting_reply"))
+    # A reply with its next step recorded: a way in whatever its age. An old reply with
+    # nothing recorded is not one (tests/test_an_old_reply_is_no_warm_route.py, 2026-11-10).
+    (tmp_path / "network_contacts.csv").write_text(
+        _BOOK.format(status="awaiting_reply").rstrip("\n") + "Ask Robin about the team\n")
     (tmp_path / "network_threads.csv").write_text(_LOG)
     src, out = tmp_path / "in.json", tmp_path / "out.json"
     src.write_text(json.dumps([{"title": "Data Analyst", "company": "Kestrel Mutual",

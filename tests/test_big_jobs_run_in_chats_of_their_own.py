@@ -59,7 +59,9 @@ def test_next_sends_a_big_job_to_a_chat_of_its_own_and_keeps_light_work_here(sea
     # here, whichever it is.
     assert got["run"] in ("child session", "background agent")
     call = got.get("create_session") or got.get("agent")
-    assert "--work network~acme" in call["prompt"] and "app.py pin" in call["prompt"]
+    import job_prompt
+    assert "--work network~acme" in call["prompt"] and "app.py pin" in job_prompt.followed(
+        call["prompt"])
     alone = json.loads(search.run("next", search.dump, "--chat", "cloud-1", "--kind", "cloud",
                                   "--no-sessions", "--now", NOW))
     assert alone["run"] == "background agent" and "create_session" not in alone
@@ -71,7 +73,8 @@ def test_next_sends_a_big_job_to_a_chat_of_its_own_and_keeps_light_work_here(sea
 
 
 def test_the_chat_that_answers_the_page_never_runs_or_waits_on_a_big_job():
-    skill = " ".join(_read(".claude/skills/app/SKILL.md").split())
+    import app_skill
+    skill = " ".join(app_skill.text().split())
     assert "A big job runs in a chat of its own" in skill
     assert "make the `create_session` call exactly as `next` printed it" in skill
     assert "It never publishes, watches or answers the page" in skill
@@ -188,9 +191,99 @@ def test_a_jobs_own_chat_takes_the_next_big_job_and_does_it_itself(monkeypatch):
     monkeypatch.setattr(app_setup, "page_record", lambda: {"url": "https://claude.ai/code/artifact/example-page"})
     got = app.choose(db, "job-chat-1", "cloud", now, job_chat=True)
     assert got["work"] == "draft~a" and got["run"] == "here" and "create_session" not in got
-    said = app.child_prompt({"work": "draft~a", "kind": "draft", "title": "x", "stages": []}, "listener-1",
-                            "https://claude.ai/code/artifact/example-page")
+    import job_prompt
+    said = job_prompt.followed(app.child_prompt(
+        {"work": "draft~a", "kind": "draft", "title": "x", "stages": []}, "listener-1",
+        "https://claude.ai/code/artifact/example-page"))
     assert "--job-chat" in said and "At most three jobs in this chat" in said
+
+
+def test_a_big_jobs_prompt_is_a_few_lines_and_its_chat_prints_the_same_steps(monkeypatch):
+    """The chat answering the page typed each big job's whole prompt into create_session, 4,500
+    to 9,400 characters, and wake printed it again inside the call with stages and locks
+    nothing reads (the efficiency audit, E-8). The prompt is a few lines; `app.py job`, run in
+    the job's own chat, prints the very steps the long prompt held."""
+    import app
+    import app_setup
+    import job_prompt
+    page = "https://claude.ai/code/artifact/example-page"
+    monkeypatch.setattr(app_setup, "origin", lambda: ("example-owner", "example-copy"))
+    monkeypatch.setattr(app_setup, "page_record", lambda: {"url": page})
+    for kind, extra in (("draft", {"with": [{"work": "draft~b", "version": 2},
+                                            {"work": "draft~c", "version": 3}]}),
+                        ("search", {"draft_all": 10}), ("prep", {}), ("network", {})):
+        args = {"draft": True} if extra.get("draft_all") else {}
+        chosen = dict({"work": f"{kind}~a", "kind": kind, "title": "Example work", "heavy": True,
+                       "stages": page_db.item_stages({"kind": kind, "args": args})}, **extra)
+        for where in ("cloud", "computer"):
+            got = app.where_it_runs(chosen, "session_listener", where)
+            call = got.get("create_session") or got["agent"]
+            assert len(call["prompt"]) < 1000, (kind, len(call["prompt"]))
+            session = "create_session" in got
+            steps = app.job_steps(chosen, "session_listener", page, session=session, first=3,
+                                  report_to="session_listener" if session else "")
+            assert job_prompt.followed(call["prompt"]).endswith("\n".join(steps) + "\n")
+    # Wake's next: block names the call and the job, and nothing the call does not need.
+    assert set(app.SHOWN_BIG) == {"work", "kind", "title", "run", "first", "create_session",
+                                  "agent"}
+
+
+def test_a_jobs_chat_on_a_copy_older_than_its_job_takes_the_update_first(monkeypatch):
+    """The job's chat is started on the person's copy as it is saved, which can be older than
+    the chat that started it, which took the day's update and had not saved it yet: there
+    `app.py job` does not exist, and the prompt's one step for its steps fails (the review of
+    2026-11-11, E-8). The prompt says to take the update first, then run it again.
+
+    With the plain sync, never `--update`: a person who said "only update when I say"
+    (`app_updates: when_asked`) has no tool tell a chat to force one, and `--update` here
+    took the update over their setting. Where the sync holds it, it says an update is
+    waiting, and the job stops there and says, plainly, that it waits for them."""
+    import app
+    import app_setup
+    import sync_app
+    page = "https://claude.ai/code/artifact/example-page"
+    monkeypatch.setattr(app_setup, "page_record", lambda: {"url": page})
+    chosen = {"work": "draft~a", "kind": "draft", "title": "Example work", "heavy": True,
+              "stages": page_db.item_stages({"kind": "draft", "args": {}})}
+    prompt = " ".join(app.child_prompt(chosen, "session_listener", page).split())
+    assert "--update" not in prompt
+    assert "no `job`" in prompt and "python3 tools/sync_app.py, then this step again" in prompt
+    assert prompt.index("tools/sync_app.py,") > prompt.index("tools/app.py job")
+    # The stop names the line the sync prints where it holds the update.
+    monkeypatch.setattr(sync_app, "brings", lambda *a, **k: "small fixes and improvements")
+    held = sync_app.waiting_line(None, False)
+    assert "update is waiting" in held and "if it says an update is waiting" in prompt
+    assert "stop, and say in plain words that this work waits until they choose to update" in prompt
+    assert len(prompt) < 1000
+
+
+def test_a_jobs_chat_that_takes_an_update_never_republishes_the_page(monkeypatch):
+    """A job's chat on an older copy takes the update first (above), and an update that
+    changed the page's own code printed the steps to republish it, "done at once", for any
+    chat not answering the page: against the job's own prompt ("Never publish, watch or
+    answer the page"), reloading every open window from a chat nobody watches (the final
+    engine review, item 11). A job's chat asks the chat that answers the page instead."""
+    import app_listen
+    import app_setup
+    page = "https://claude.ai/code/artifact/example-page"
+    monkeypatch.setattr(app_setup, "page_record", lambda: {"url": page})
+    monkeypatch.setattr(app_setup, "set_up", lambda: True)
+    monkeypatch.setattr(app_setup, "_page_current", lambda: False)      # the page's code changed
+    monkeypatch.setattr(app_listen, "role", lambda *a, **k: "other")
+    monkeypatch.setattr(app_setup, "job_chat", lambda session="": "draft~a")
+    said = "\n".join(app_listen.after_update(landed=True, chat="session_jobchat"))
+    assert "app.py republish" in said and "never publishes it" in said, said
+    assert "app.py page" not in said and "Artifact, action" not in said, said
+    assert "Tell the person" not in said, said
+    # The chat that answers the page still republishes it itself.
+    monkeypatch.setattr(app_listen, "role", lambda *a, **k: "listener")
+    said = "\n".join(app_listen.after_update(landed=True, chat="session_listener"))
+    assert "app.py page --out-dir" in said, said
+    # Any other chat that runs no job checks who answers, and publishes where nobody does.
+    monkeypatch.setattr(app_listen, "role", lambda *a, **k: "other")
+    monkeypatch.setattr(app_setup, "job_chat", lambda session="": "")
+    said = "\n".join(app_listen.after_update(landed=True, chat="session_other"))
+    assert "app.py page --out-dir" in said and "app.py listen" in said, said
 
 
 def test_a_jobs_chat_is_given_the_next_jobs_own_steps(monkeypatch):
@@ -216,7 +309,8 @@ def test_a_jobs_chat_is_given_the_next_jobs_own_steps(monkeypatch):
     assert "--work search~b --chat job-chat-1 --stage scrape --log" in steps
     assert app.work_row("search") in steps and "app.py done with --work search~b" in steps
     # The first job's prompt sends the chat to those steps, never back to its own step 3.
-    said = app.child_prompt(first, "listener-1", page)
+    import job_prompt
+    said = job_prompt.followed(app.child_prompt(first, "listener-1", page))
     assert "from step 3" not in said and "follow the `steps` it printed" in said
     assert "--work draft~a --chat listener-1 --stage" in said
 

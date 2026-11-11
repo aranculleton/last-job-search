@@ -125,14 +125,18 @@ def built(tmp_path_factory):
     with open(rp, "w", encoding="utf-8") as fh:
         json.dump(rows, fh)
     # A chat stopped a draft because the role is not one they can take, and ruled it out by
-    # the rules (2026-10-30): it leaves the list like one the person binned.
+    # the rules (2026-10-30): it leaves the list, said as that rule's, while the rule holds
+    # (run_round.page_rules asks throttle.ruled_out, as a search does). Moved with the rule
+    # (the rules review, 2026-11-11): every ruling by the rules was read as set aside for good,
+    # one with no place kept and one a better screen re-judges among them; this one keeps the
+    # place it rules on, and a better screen is test_build_versions' question (LJS_RESCREEN).
     sp = os.path.join(st, "job_scraper", "seen_jobs.json")
     with open(sp, encoding="utf-8") as fh:
         seen = json.load(fh)
     book = seen.get("seen", seen) if isinstance(seen, dict) else {}
     book[rows[1]["url"]] = {"url": rows[1]["url"], "title": rows[1]["title"], "company": rows[1]["company"],
                             "status": "excluded", "basis": "rules", "exclusion_reason": "location: US only",
-                            "excluded_date": "2026-10-24"}
+                            "excluded_date": "2026-10-24", "location": "Austin, Texas, United States"}
     with open(sp, "w", encoding="utf-8") as fh:
         json.dump(seen, fh)
     out["ruled"] = (rows[1]["title"], rows[1]["company"])
@@ -166,6 +170,7 @@ def built(tmp_path_factory):
         for k, v in _env(prof, st, "private").items():
             mp.setenv(k, v)
         mp.delenv("LJS_TODAY", raising=False)
+        mp.setenv("LJS_RESCREEN", "off")
         # A newer app is there to take: the stand-in for a fetch of the public app, on the
         # ref this copy's channel takes (sync_app.channel_target reads what the last check
         # fetched, which this test folder never did).
@@ -223,7 +228,9 @@ def _go(run, built, name, **kw):
 
 def test_every_section_shows_the_engines_items_in_plain_words(run, built):
     got = _go(run, built, "small", hashes=["todo", "jobs", "drafts", "contacts", "interviews", "progress"])
-    t = got["texts"]
+    # Read as words: a facts dot keeps to what follows it with a no-break space (the screen
+    # review, 2026-11-11).
+    t = {k: v.replace("\u00a0", " ") for k, v in got["texts"].items()}
     assert "Panel interview with Thornbury Bank" in t["todo"] and "Did you apply to Dovecote Freight?" in t["todo"]
     # What Juno asked for leads, with its button, and the one day it is about (the walk-through,
     # 2026-11-03: "Reply to Juno" with "Draft a reply" over a request for the CV).
@@ -252,6 +259,7 @@ def test_every_section_shows_the_engines_items_in_plain_words(run, built):
     assert "Made, right length" not in t["drafts"], t["drafts"]
     fern = t["drafts"].split("Operations Analyst", 1)[1].split("Claims Forecasting Analyst", 1)[0]
     assert "Get the files" not in fern and "Get my files ready" not in fern, "a file not made yet is not offered"
+    # Still to make where nothing is making it (the review of 2026-11-11).
     assert "Needs a fix" not in fern and "still to make" in t["drafts"], "a draft never made is still to make, never a fix"
     kestrel = t["drafts"].split("Claims Forecasting Analyst", 1)[1]
     # Files not on the page yet are Claude's to put there by itself (the view queues them,
@@ -259,7 +267,8 @@ def test_every_section_shows_the_engines_items_in_plain_words(run, built):
     assert "Get my files ready" not in kestrel and "files are not on this page yet" not in t["drafts"], "nothing to tap for what Claude does"
     # Every status the contact book holds has words; a reply that is late says Overdue in its
     # corner, by the engine's one late, as To do does (the review, 2026-11-05).
-    assert ("Replied: your turn" in t["contacts"] or "Overdue" in t["contacts"]) and "replied_needs_response" not in t["contacts"], \
+    # Ready, never Overdue, for a day the person set (the UX review of 2026-11-10, U-6).
+    assert ("Replied: your turn" in t["contacts"] or "Ready to send" in t["contacts"] or "Follow-up ready" in t["contacts"]) and "replied_needs_response" not in t["contacts"], \
         "every status the contact book holds has words"
     assert "Panel interview: Thornbury Bank" in t["interviews"]    # Coming up, by day (4.6)
     assert "1 earlier, finished: Show" in t["progress"]
@@ -440,3 +449,4 @@ def test_a_job_a_chat_ruled_out_leaves_the_list(built):
     title, company = built["ruled"]
     rows = [r for r in built["models"]["rich"]["jobs"]["rows"] if r["title"] == title and r["company"] == company]
     assert rows and all(r["status"] == "dismissed" for r in rows), rows
+    assert all(r["notes"][-1] == "Left out: Not where you can work: US only." for r in rows), rows

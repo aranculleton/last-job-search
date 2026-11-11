@@ -60,10 +60,15 @@ For each `needs: "nobody"` entry, until the budget is spent:
    change and nothing else.
 6. **On the page.** Where the person has a page (`profile/app.json` holds its address) and
    this chat can write its database (ArtifactData), the run is one work item of kind `update`,
-   `update~upgrades-<YYYYMMDD>`: `status: running` and one plain line in `steps` at each
-   upgrade boundary, in the same message as the next upgrade's first command, `done` with
-   `result.summary` at the end (the `app` skill). Never ask the person anything from here:
-   the questions go to the page as cards by themselves (Step 5).
+   made, moved and finished by the app's own commands, never written by hand: read the page's
+   work and holds into a fresh folder `$D` (ArtifactData query, limit 1000), then `python3
+   tools/app.py ask "$D" --kind update --title "Improvements to your search" --id
+   update~upgrades-<YYYYMMDD> --here --chat <this chat's id>`; at each upgrade boundary, in
+   the same message as the next upgrade's first command, `python3 tools/app.py pin "$D" --work
+   update~upgrades-<YYYYMMDD> --chat <this chat's id> --line "<one plain line>"`; at the end
+   `python3 tools/app.py done "$D" --work update~upgrades-<YYYYMMDD> --chat <this chat's id>
+   --summary "<one plain sentence>"`. Send each batch they print (ArtifactData batch). Never
+   ask the person anything from here (Step 5).
    Profile files take a plain `git add`; `python3 tools/save_state.py` stages the rest
    (RUNBOOK.md step 4), and nothing else is forced in.
 
@@ -103,10 +108,14 @@ Return, in this order and nothing else:
    unconfirmed-facts` lists them), as plain questions. Never their `steps` or `why_ask`:
    the session gives a question's steps only after a yes and its reason only after "why?".
 4. The branch these commits are on, if it is not the session's own.
+5. Last, on a line of its own: `Finished the improvements: bring the page up to date.` Say
+   nothing about what the page will show: the chat that started this brings it up to date
+   and the page shows what it holds.
 
 With a page, the session merges the branch and brings the page's data up to date
-(`python3 tools/app.py view`): the page shows each change with its undo, and asks the
-questions from 3 itself, one card each (Yes, or Not now). The page is not the only place they
+(`python3 tools/app.py reads --in <your scratchpad> --for-view`, the reads it prints into the
+folder it names, then `python3 tools/app.py view`): the page shows each change with its undo, and asks the questions from 3
+itself, one card each (Yes, or Not now). The page is not the only place they
 are asked: a person who works only in the chat never opened those cards, and the facts stayed
 unconfirmed for good (the stranger audit, X-55). So the day's first chat (`app.py start`, after
 the update check) also asks at most three of them at the end of its reply, as below; an answer

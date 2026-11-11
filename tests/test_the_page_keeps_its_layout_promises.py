@@ -297,3 +297,14 @@ def test_16_a_jobs_cards_facts_are_one_line_on_a_wide_screen(layouts, vp):
 
 def test_15_is_settled_by_people_not_a_test():
     pytest.skip("Five-second and first-click results are recorded in NOTES.md by people before a release (LAYOUT_SPEC 6).")
+
+
+@pytest.mark.parametrize("zone", ["Pacific/Kiritimati", "Pacific/Honolulu"])
+def test_14_coming_up_from_a_far_zone_at_double_text_stays_on_a_phone(run, pages, zone):
+    # Read from another zone, a time says both ("13:00 London time (3:00 here)"), and held to
+    # one line it ran 205px past a phone at double text (Everywhere's far zones, 4.15.0).
+    got = run("layout", html=pages["sample"], viewport=SIZES["phone"], scheme="light", fake={"canSend": "available"},
+              clock=CLOCK, big=True, timezoneId=zone)
+    assert not got["errors"], got["errors"]
+    b = got["big"]["interviews"]
+    assert b["overflow"] <= 0 and not b["clipped"], b

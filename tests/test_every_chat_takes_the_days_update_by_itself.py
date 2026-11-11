@@ -74,7 +74,7 @@ def test_in_the_app_itself_and_before_setup_nothing_is_said(monkeypatch):
 
 
 def test_the_chat_that_answers_the_page_checks_on_every_wake():
-    with open(os.path.join(ROOT, ".claude", "skills", "app", "SKILL.md"), encoding="utf-8") as fh:
-        skill = fh.read()
+    import app_skill
+    skill = app_skill.text()
     step1 = skill[skill.index("## 1. Read, in one go"):skill.index("## 2.")]
     assert "python3 tools/sync_app.py --if-stale" in step1 and "on every wake" in step1

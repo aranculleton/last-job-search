@@ -69,8 +69,43 @@ def test_the_denylist_comes_from_the_newest_saved_work_not_a_stale_folder():
     the copy itself is never changed."""
     import re
     s = SRC
-    assert 'remote get-url origin' in s and '"$WORK/maint"' in s
+    # In this user's own cache folder since SP-1, never a fixed folder in the shared temp one.
+    assert 'remote get-url origin' in s and '"$CACHE/maint"' in s
     assert 'tokens.head' in s and 'SRC_HEAD' in s
     assert 'cd "$SRC" && "$PY" tools/build_app.py' in s
     assert not re.search(r'git -C "\$MAINT" (fetch|pull|reset|checkout)', s), \
         "the maintainer's own copy is read, never changed"
+
+
+# Audit SP-1 (2026-11-10): the gate's step log, denylist and cached clone sat at one fixed path
+# in the shared temp folder, which another user on the machine could make or point elsewhere,
+# and two gates at once wrote over each other's files. Each run now has a folder of its own,
+# gone when it ends; the denylist and clone are in this user's own folder, under a lock.
+
+@pytest.mark.skipif(os.name == "nt", reason="a maintainer's tool, run on Linux or a Mac")
+def test_two_gates_at_once_work_in_folders_of_their_own(tmp_path):
+    import re
+    maint = tmp_path / "maint"
+    (maint / "profile").mkdir(parents=True)
+    repo = tmp_path / "repo"
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    (repo / "tools").mkdir()
+    for name in ("push_gate.sh",):
+        (repo / "tools" / name).write_text(SRC, encoding="utf-8")
+    temp, home = tmp_path / "temp", tmp_path / "home"
+    temp.mkdir()
+    home.mkdir()
+    env = dict(os.environ, TMPDIR=str(temp), HOME=str(home))
+    env.pop("XDG_CACHE_HOME", None)
+    runs = [subprocess.Popen(["bash", "-x", str(repo / "tools" / "push_gate.sh"), str(maint)],
+                             cwd=repo, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                             text=True, encoding="utf-8", errors="replace") for _ in range(2)]
+    said = [r.communicate(timeout=120) for r in runs]
+    work = [re.search(r"^\+ WORK=(\S+)$", err, re.M).group(1) for _out, err in said]
+    assert work[0] != work[1] and all(w.startswith(str(temp)) for w in work), work
+    # Each run's folder is gone, nothing is left at a fixed path, and the lock is let go.
+    assert os.listdir(temp) == []
+    cache = home / ".cache" / "ljs-push-gate"
+    assert cache.is_dir() and (cache.stat().st_mode & 0o077) == 0
+    assert not (cache / "lock").exists()
+    assert all("could not fetch origin master" in out for out, _err in said), said

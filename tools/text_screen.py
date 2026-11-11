@@ -675,12 +675,6 @@ def _title_language(title: str) -> str:
     return ""
 
 
-def other_language_named(sentence: str):
-    """The first language the candidate does not hold that `sentence` names as a language,
-    as a match, or None. Its text is what a cut names ("Spanish", "fluent in German")."""
-    return next(_languages_named(sentence), None)
-
-
 def _language_asked(sentence: str, lost_start: bool = False, lost_end: bool = False):
     """The first language `sentence` names as a language and not as a preference in its
     own clause, as a match, or None."""
@@ -1343,6 +1337,13 @@ def _bands(s: str, loose: bool) -> list:
 
 
 def salary_range(text: str) -> tuple[int | None, int | None, str]:
+    """`_salary_range`, read once a page build for each posting: the bar and the screen
+    each read every job's pay, 3.5 s of a build on a long search (the second audit, D8)."""
+    import remembered
+    return remembered.get("pay", text, lambda: _salary_range(text))
+
+
+def _salary_range(text: str) -> tuple[int | None, int | None, str]:
     """(low, high, quote) of the stated pay range, in the market's currency: the band for
     the person's own place where the posting gives one per place, otherwise the one
     with the highest top.

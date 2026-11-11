@@ -446,7 +446,11 @@ def _match_text(question) -> str:
 def _story_score(question, st, bank_rows=()) -> float:
     """How well one story's `Use for:` tags fit the question, moved by what the bank says
     it did for a like question before."""
-    score = max((similar(question, tag) for tag in st["use_for"]), default=0.0)
+    # What the question means, scored on its own as well: added to the question's own words it
+    # was diluted, and "took something on without being asked" missed the story tagged "a time
+    # you took initiative" (the night-before run, 2026-11-10).
+    texts = [question] + [extra for rx, extra in _MEANS if rx.search(_text(question))]
+    score = max((similar(x, tag) for x in texts for tag in st["use_for"]), default=0.0)
     for row in bank_rows:
         if _text(row.get("story")).lower() != st["title"].lower():
             continue
@@ -960,7 +964,7 @@ def write_posting(folder, company, role, posting="", source="", today="") -> str
     if url:
         lines.append("- **Source:** %s" % url)
     lines += ["- **Retrieved:** %s, for a hiring process with no application"
-              % (_text(today) or dt.date.today().isoformat()), ""]
+              % (_text(today) or person.today().isoformat()), ""]
     if text.strip():
         lines.append(untrusted.fence(text, label="job posting"))
     else:
@@ -1003,12 +1007,14 @@ def process_channel(contact) -> str:
 
 
 def register_process(company, contact_id, role, stage="", date="", with_="", today=None,
-                     contacts=None, posting="", time="", zone="", minutes=0, due=False) -> tuple:
+                     contacts=None, posting="", time="", zone="", minutes=0, due=False,
+                     format_="") -> tuple:
     """Make a hiring process with no application something every reader can see: a
     tracker row (PROCESS_NOTE) and its folder with an outcome.md, the booked stage on it
-    when given. Returns (row, folder, added). Run twice, it changes nothing."""
+    when given, with what kind of round it is (`format_`) under it. Returns (row, folder,
+    added). Run twice, it changes nothing."""
     import record_drafts
-    today = _text(today) or dt.date.today().isoformat()
+    today = _text(today) or person.today().isoformat()
     # Read where gather() reads, at call time: the state root, not a path fixed at import.
     contacts = state.load_contacts(person.state("network_contacts.csv")) if contacts is None \
         else contacts
@@ -1074,7 +1080,7 @@ def register_process(company, contact_id, role, stage="", date="", with_="", tod
                 "by %s.\n" % (company, role, "" if screen_first else "- [ ] Phone screen\n",
                               today, name))
     if _text(stage):
-        text = _with_stage(text, stage, date, with_, time, zone, minutes, due)
+        text = _with_stage(text, stage, date, with_, time, zone, minutes, due, format_=format_)
     with open(out, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(text)
     return have, folder, added
@@ -1117,15 +1123,92 @@ def _round_key(label) -> str:
     return "final" if re.search(r"\bfinal\b", t) else ""
 
 
+# What kind of round it is, as the invite, the recruiter or the person said it, kept on the
+# round's own record on a line under its stage: `  - Format: personal experience interview,
+# live Python coding exercise`. Every prep built for that round reads it there; given when a
+# process was registered and kept nowhere, the live prep was built for the wrong kind of
+# interview and said nothing was guessed (the review, 2026-11-10). Indented and with no box,
+# no reader of the stages takes it for a stage.
+_FORMAT_LINE = re.compile(r"^[ \t]+[-*][ \t]+Format:[ \t]*(.*?)[ \t]*$", re.I)
+_SUB_LINES = re.compile(r"(?:\n[ \t]+[-*][ \t]+[^\n]*)*")
+
+
+def _end_with_subs(text, end) -> int:
+    """Where a stage line ends once the indented lines under it (its format) are counted."""
+    return end + _SUB_LINES.match(text, end).end() - end
+
+
+def _stage_at(text, stage):
+    """The match of the stage's own line on the checklist, by its name or the same round
+    under another name, or None."""
+    for m in re.finditer(r"^[ \t]*[-*][ \t]*\[[ xX]\][ \t]*([^(\n]+?)(?:[ \t]*\(.*\))?[ \t]*$",
+                         text, re.M):
+        if _text(m.group(1)).lower() == _text(stage).lower():
+            return m
+    for m in re.finditer(r"^[ \t]*[-*][ \t]*\[[ xX]\][ \t]*([^(\n]+?)(?:[ \t]*\(.*\))?[ \t]*$",
+                         text, re.M):
+        if _same_round(m.group(1), stage) or (_round_key(stage) and
+                                              _round_key(m.group(1)) == _round_key(stage)):
+            return m
+    return None
+
+
+def stage_format(outcome, stage) -> str:
+    """The format kept on a round's record (the `Format:` line under its stage), or ""."""
+    text = str(outcome or "")
+    m = _stage_at(text, stage) if _text(stage) else None
+    if not m:
+        return ""
+    for ln in text[m.end():_end_with_subs(text, m.end())].splitlines():
+        f = _FORMAT_LINE.match(ln)
+        if f:
+            return _text(f.group(1))
+    return ""
+
+
+def _put_format(text, stage, format_) -> str:
+    """outcome.md's text with `format_` as its round's format, under its stage's line:
+    replacing the one there, or added. Nothing changes when the stage is not on record."""
+    format_ = " ".join(_text(format_).split())
+    m = _stage_at(text, stage) if format_ else None
+    if not m:
+        return text
+    end = _end_with_subs(text, m.end())
+    subs = [ln for ln in text[m.end():end].split("\n") if ln and not _FORMAT_LINE.match(ln)]
+    block = "\n".join(["  - Format: %s" % format_] + subs)
+    return text[:m.end()] + "\n" + block + text[end:]
+
+
+def keep_format(folder, stage, format_) -> bool:
+    """Keep what kind of round it is on its record (outcome.md), under its stage. False when
+    the stage is not on record, or nothing was given."""
+    path = os.path.join(folder, "outcome.md")
+    text = _read(path)
+    new = _put_format(text, stage, format_)
+    if new == text:
+        return False
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(new)
+    return True
+
+
 def _with_stage(text, stage, date="", with_="", time="", zone="", minutes=0, due=False,
-                offered=(), reply_by="", place="", tentative=None) -> str:
+                offered=(), reply_by="", place="", tentative=None, format_="") -> str:
     """outcome.md's text with this stage booked on its checklist: `- [ ] <stage> (scheduled
     <date> [<HH:MM> [<zone>]], with <who>)`, the line the brief, /outcome, every pack and the
     page read. `zone` is one an invite gives beside the time (EST), when not the person's.
     With no day and `offered` days, the invitation's choice: `(offered <day>, <day>; reply by
     <day>, with <who>)`, until the day chosen is booked over it. `tentative`: asked for and not
     confirmed by them yet, written ", not confirmed yet" before who it is with; None keeps what
-    the line said (a time added to it), False clears it (confirmed)."""
+    the line said (a time added to it), False clears it (confirmed). `format_`: what kind of
+    round it is, kept under its line (`stage_format`); none given keeps the one there."""
+    return _put_format(_booked(text, stage, date, with_, time, zone, minutes, due, offered,
+                               reply_by, place, tentative), stage, format_)
+
+
+def _booked(text, stage, date="", with_="", time="", zone="", minutes=0, due=False,
+            offered=(), reply_by="", place="", tentative=None) -> str:
+    """`_with_stage` before the round's format is kept under its line."""
     # [ \t], never \s: in a multi-line match \s ate the newline and the blank line after a
     # rebooked stage, so booking it twice ran the next heading into it.
     same = re.compile(r"^- \[ \] %s(?:[ \t]*\(.*\))?[ \t]*$" % re.escape(stage), re.M | re.I)
@@ -1187,7 +1270,8 @@ def _with_stage(text, stage, date="", with_="", time="", zone="", minutes=0, due
     if hits:
         # The first keeps its place with the new date; any later copies go, line and all.
         for m in reversed(hits[1:]):
-            end = m.end() + 1 if text[m.end():m.end() + 1] == "\n" else m.end()
+            end = _end_with_subs(text, m.end())
+            end = end + 1 if text[end:end + 1] == "\n" else end
             text = text[:m.start()] + text[end:]
         return text[:hits[0].start()] + line + text[hits[0].end():]
     # A new stage goes in the order the rounds run: after the last one held or booked for a
@@ -1197,7 +1281,9 @@ def _with_stage(text, stage, date="", with_="", time="", zone="", minutes=0, due
     before = [m for m in re.finditer(r"^- \[[ xX]\] .*$", text, re.M)
               if m.group(0)[3] in "xX" or (_text(date) and when_of(m) and when_of(m) <= date)]
     if before:
-        return text[:before[-1].end()] + "\n" + line + text[before[-1].end():]
+        # After the lines under it too: a round's format stays with its own round.
+        at = _end_with_subs(text, before[-1].end())
+        return text[:at] + "\n" + line + text[at:]
     if "## Interview stages reached\n" in text:
         return text.replace("## Interview stages reached\n",
                             "## Interview stages reached\n%s\n" % line, 1)
@@ -1220,7 +1306,7 @@ def tick_stage(path, stage) -> bool:
 
 def record_stage(folder, company, role, stage, date, with_="", today=None, time="",
                  zone="", minutes=0, due=False, offered=(), reply_by="", place="",
-                 tentative=None) -> str:
+                 tentative=None, format_="") -> str:
     """Book a stage given to `pack --write` in the process's outcome.md, the record the
     brief reminds from and every later pack reads: given there with a date, it was used
     for that one pack and recorded nowhere (interview audit, 2026-10-25). An outcome.md not
@@ -1230,10 +1316,10 @@ def record_stage(folder, company, role, stage, date, with_="", today=None, time=
     if not text:
         text = ("# Outcome: %s - %s\n\n**Status:** in_progress\n\n## Interview stages "
                 "reached\n\n## Notes\n- %s: %s booked %s.\n"
-                % (company, role, _text(today) or dt.date.today().isoformat(), stage,
+                % (company, role, _text(today) or person.today().isoformat(), stage,
                    "for " + date if _text(date) else "with the day still to choose"))
     text = _with_stage(text, stage, date, with_, time, zone, minutes, due, offered, reply_by,
-                       place, tentative)
+                       place, tentative, format_)
     os.makedirs(folder, exist_ok=True)
     with open(out, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(text)
@@ -1311,7 +1397,7 @@ def take_times(today=None, company="", tracker=None, contacts=None, threads=None
     nothing is written. `company` limits it to one employer. Returns what was written, as
     [{company, role, stage, date, time, zone}]."""
     import open_actions
-    today = _text(today) or dt.date.today().isoformat()
+    today = _text(today) or person.today().isoformat()
     if tracker is None:
         tracker = what_works._csv(person.state("job_search_tracker.csv"))
     if contacts is None:
@@ -1378,7 +1464,7 @@ def record_result(folder, company, role, status, date, today=None) -> str:
     out = os.path.join(folder, "outcome.md")
     text = _read(out) or ("# Outcome: %s - %s\n\n**Status:** in_progress\n\n## Interview "
                           "stages reached\n\n## Notes\n" % (company, role))
-    day = _text(date) or _text(today) or dt.date.today().isoformat()
+    day = _text(date) or _text(today) or person.today().isoformat()
     if status == "offer":
         line = "- [x] Offer received (%s)" % day
         hit = re.search(r"^- \[[ xX]\] Offer received.*$", text, re.M)
@@ -1415,7 +1501,7 @@ def gather(company, role="", stage="", date="", with_="", today=None, story_map=
            tracker=None, contacts=None, threads=None, format_="") -> dict:
     """Everything the pack is built from, read once."""
     root = person.state()
-    today = _text(today) or dt.date.today().isoformat()
+    today = _text(today) or person.today().isoformat()
     tracker = what_works._csv(os.path.join(root, "job_search_tracker.csv")) if tracker is None \
         else tracker
     contacts = state.load_contacts(os.path.join(root, "network_contacts.csv")) \
@@ -1496,7 +1582,8 @@ def gather(company, role="", stage="", date="", with_="", today=None, story_map=
         "rework": _rework_lines(_read(os.path.join(folder, LIVING))
                                 or _read(os.path.join(folder, pack_name(stage)))),
         "living": _read(os.path.join(folder, LIVING)),
-        "format": _text(format_),
+        # Said now, else what the round's record keeps (`stage_format`).
+        "format": _text(format_) or stage_format(outcome, stage),
         "process": is_process(row),
         "elsewhere": len({company_key(r.get("company")) for r in tracker
                           if company_key(r.get("company")) != company_key(company)
@@ -1513,15 +1600,26 @@ def _listdir(folder) -> list:
 
 # ---------------------------------------------------------------- questions
 
-# Ordinary words that open a posting's requirement line ("Demand forecasting for our network").
+# Ordinary words that open a posting's requirement line ("Demand forecasting for our network",
+# "Inventory optimization"): written small inside a question. A word not here keeps its
+# capital, since it may be a name.
 _ORDINARY_OPENERS = frozenset("""
-ability advanced analysis analytical analytics attention background building business
-commercial communication credit customer data deep delivering demand design developing
-excellent experience familiarity financial forecasting good great hands knowledge leadership
-leading machine management managing modeling modelling operational people pricing problem
-process product project proven quantitative reporting research risk solid stakeholder
-statistical statistics strategic strong supply team technical track understanding working
-written""".split())
+ability accounting advanced agile analysis analytical analytics application applied attention
+audit automation background budgeting building business category change chartered cloud
+coding collaboration commercial communication compliance computer contract cost credit
+cross customer dashboard dashboards data database databases deep delivering demand
+deployment descriptive design developing digital distribution documentation econometric
+econometrics economic economics engineering excellent experience experimentation
+familiarity finance financial forecasting fraud good governance great hands inventory
+knowledge language leadership leading learning logistics machine management managing
+market marketing mathematical mathematics modeling modelling negotiation network
+numerical operational operations optimisation optimization people performance planning
+portfolio predictive presentation pricing problem procurement process product programme
+programming project proven quality quantitative regulatory reporting research revenue risk
+safety sales scheduling scripting software solid sourcing stakeholder statistical
+statistics stock strategic strong supplier supply team technical testing time track
+transport understanding vendor visualisation visualization warehouse warehousing working
+workforce written""".split())
 
 
 def mid_sentence(phrase, seen="") -> str:
@@ -1538,6 +1636,129 @@ def mid_sentence(phrase, seen="") -> str:
     if word in _ORDINARY_OPENERS or re.search(r"\b%s\b" % re.escape(word), seen or ""):
         return t[:1].lower() + t[1:]
     return t
+
+
+# What opens a posting's requirement line before the thing itself: "Proven", "Strong",
+# "5+ years of" and the like, then "experience with", "familiarity with", "proficiency in".
+_REQ_ADJ = re.compile(r"^(?:(?:a|an|the)\s+)?(?:(?:proven|strong|solid|demonstrable|demonstrated|"
+                      r"excellent|good|great|deep|hands-on|working|advanced|expert|extensive|"
+                      r"some|basic|sound|outstanding|exceptional|effective|clear|practical|"
+                      r"relevant|prior|previous|professional|commercial|thorough|in-depth|"
+                      r"\d+\+?\s*(?:years?|yrs?)(?:['\u2019])?(?:\s+of)?)\s*,?\s*(?:and\s+)?)+", re.I)
+_REQ_NOUN = re.compile(r"^(?:experience|familiarity|proficiency|knowledge|understanding|expertise|"
+                       r"fluency|competence|competency|exposure|background|track record|"
+                       r"skills?|capability)\b(?:\s+(?:with|in|of|using|across|on|of using)\b)?\s*",
+                       re.I)
+_ABLE = re.compile(r"^(?:the\s+)?(?:ability|able|capability)\s+to\s+", re.I)
+_DEGREE = re.compile(r"^(?:(?:a|an)\s+)?(?:(?:undergraduate|postgraduate|university|relevant)\s+)?"
+                     r"(?:(?:bachelor|master)['\u2019]?s?\b|doctorate\b|degree\b|phd\b|"
+                     r"(?:bsc|msc|ba|ma)(?=\s+(?:in|or)\b))", re.I)
+# What a posting says of a requirement after it: never part of the question.
+_QUALIFIER = re.compile(r"\s*[,(]?\s*(?:(?:is|are|would be|will be)\s+)?(?:an?\s+)?(?:big\s+|strong\s+)?"
+                        r"(?:plus|bonus|desirable|preferred|advantage(?:ous)?|beneficial|nice to have|"
+                        r"essential|required|mandatory|highly regarded|a must)\)?\s*$", re.I)
+# A trait the posting wants: asked as what draws you, or a time you showed it; one word
+# ("Self-starter") or a language is not a question an interviewer asks.
+_DRAWN = re.compile(r"^(?:an?\s+)?(?:genuine\s+)?(?:passion|enthusiasm|curiosity|appetite|interest)\s+"
+                    r"(?:for|in|about)\s+", re.I)
+_DEALT = re.compile(r"^(?:comfortable|at ease|happy|thrives?|thriving)\s+(?:with|in|under)\s+", re.I)
+_YOU_HAVE = re.compile(r"^you(?:['\u2019]ve| have)\s+", re.I)
+_DUTY = re.compile(r"^(?:you(?:['\u2019]ll| will| are| would)|we\b|our\b)", re.I)
+_LANGUAGE = re.compile(r"^(?:fluent|fluency|native|proficient|bilingual)\b.*\b(?:english|french|"
+                       r"german|spanish|italian|dutch|polish|portuguese|mandarin|arabic|languages?)\b",
+                       re.I)
+
+
+_TRAITS = frozenset("""self-starter proactive motivated curious organised organized adaptable
+detail-oriented driven resilient collaborative flexible reliable personable team-player
+hard-working hardworking enthusiastic passionate""".split())
+
+
+def requirement_question(req, seen="") -> str:
+    """A posting's requirement line as an interviewer asks about it: "Familiarity with dbt" is
+    "Tell me about your experience with dbt.", "Excellent communication skills" is "Give me an
+    example of your communication skills at work.", "Ability to work under pressure" is "Tell
+    me about a time you had to work under pressure." The line itself was put after "your
+    experience with", and read "your experience with familiarity with dbt" (the review,
+    2026-11-10)."""
+    t = _QUALIFIER.sub("", _text(req).rstrip(" .;:")).rstrip(" .;:,")
+    if _DUTY.match(t) or _LANGUAGE.match(t):
+        return ""
+    m = _YOU_HAVE.match(t)
+    if m:
+        return "When have you %s?" % t[m.end():]
+    t = _REQ_ADJ.sub("", t)
+    if _DEGREE.match(t):
+        return "How has what you studied helped in your work?"
+    m = _DRAWN.match(t)
+    if m:
+        return "What draws you to %s?" % mid_sentence(t[m.end():], seen)
+    m = _DEALT.match(t)
+    if m:
+        return "Tell me about a time you dealt with %s." % mid_sentence(t[m.end():], seen)
+    if not re.search(r"\s", t):
+        # One word on its own ("Self-starter", "Proactive"): a trait nobody asks about as such.
+        if not re.match(r"[A-Z]{2,}|[A-Z][a-z]+[A-Z]", t) and t.lower() in _TRAITS:
+            return ""
+    m = _ABLE.match(t)
+    if m:
+        return "Tell me about a time you had to %s." % mid_sentence(t[m.end():], seen)
+    m = _REQ_NOUN.match(t)
+    if m and t[m.end():]:
+        rest = t[m.end():]
+        if re.match(r"[a-z]+ing\b", rest):
+            return "Tell me about your experience %s." % rest
+        t = _REQ_ADJ.sub("", rest)
+    # "SQL experience", "Python knowledge": the thing, once.
+    t = re.sub(r"(?i)\s+(?:experience|knowledge|expertise|proficiency|familiarity)$", "", t) or t
+    if re.search(r"(?i)\bskills?$", t):
+        return "Give me an example of your %s at work." % mid_sentence(t, seen)
+    return "Tell me about your experience with %s." % mid_sentence(t, seen)
+
+
+# A credential is held or not: asked as whether you hold it, never as your experience with it.
+_CREDENTIAL = re.compile(r"\bcredential|\bcertif\w*|\bchartered\b|\bmembership\b|\bmember\b|"
+                         r"\blicen[cs]\w*|\bqualifi\w*|\baccredit\w*|\bdesignation\b", re.I)
+
+
+def _gap_words(gap, posting) -> tuple:
+    """(the posting's own words for a mapped gap, the sentence they are in, the map's note)."""
+    for rx, e in bridges._COMPILED:
+        if e.get("asked") != gap:
+            continue
+        for part in re.split(r"(?<=[.;!?])\s+|\n+", posting or ""):
+            m = rx.search(part)
+            if m:
+                # Its own clause only: "SAP experience is essential, and CIPS membership is
+                # required" says nothing about SAP being a membership.
+                cut = r",|;|\band\b|\bor\b|\bplus\b"
+                clause = (re.split(cut, part[:m.start()])[-1] + m.group(0)
+                          + re.split(cut, part[m.end():])[0])
+                return m.group(0), clause, _text(e.get("note"))
+        return "", "", _text(e.get("note"))
+    return "", "", ""
+
+
+def gap_question(gap, posting="") -> str:
+    """The question a gap brings, as an interviewer asks it: a credential the posting names
+    ("CIPS membership is required") is "Are you a member of CIPS?"; anything else is "What is
+    your experience with <it, as written>?". "What is your experience with Chartered
+    procurement?" was asked in a live coding part (the review, 2026-11-10)."""
+    said, sentence, note = _gap_words(gap, posting)
+    if not _CREDENTIAL.search(" ".join((gap, sentence, note))):
+        return "What is your experience with %s?" % mid_sentence(gap, posting)
+    name = said or gap
+    if re.search(r"(?i)\bmember", sentence):
+        return "Are you a member of %s?" % name
+    if re.search(r"(?i)\bcertif", sentence + " " + name):
+        bare = re.sub(r"(?i)\s*\bcertif\w*\b", "", name).strip() or name
+        return "Do you hold the %s certification?" % bare
+    if re.search(r"(?i)\blicen[cs]", sentence):
+        return "Do you hold a %s %s?" % (name, "license" if "license" in sentence.lower()
+                                          else "licence")
+    if re.search(r"(?i)\bqualified\b", sentence):
+        return "Are you %s qualified?" % name
+    return "Do you hold %s %s qualification?" % (_a_or_an(name), name)
 
 
 def likely_questions(ctx) -> list:
@@ -1590,15 +1811,13 @@ def likely_questions(ctx) -> list:
                      or similar(g["gap"], req) >= 0.5), None)
         if same is not None:
             same.setdefault("evidence", evidence)
-        elif len(group["reqs"]) < MAX_REQUIREMENTS:
-            group["reqs"].append(("Tell me about your experience with %s." % mid_sentence(re.sub(
-                                      r"^(?:(?:proven|strong|solid|demonstrable)\s+)?"
-                                      r"experience (?:with|in|of)\s+", "", req, flags=re.I),
-                                      " ".join([ctx.get("posting") or "", evidence])),
+        elif len(group["reqs"]) < MAX_REQUIREMENTS and requirement_question(req):
+            group["reqs"].append((requirement_question(
+                                      req, " ".join([ctx.get("posting") or "", evidence])),
                                   "a stated requirement", _text(draft.get("_path")),
                                   {"evidence": evidence, "req": True,
                                    "evidence_source": _text(draft.get("_path"))}))
-    group["gaps"] = [("What is your experience with %s?" % mid_sentence(g["gap"], ctx.get("posting") or ""),
+    group["gaps"] = [(gap_question(g["gap"], ctx.get("posting") or ""),
                       "the posting asks for it and the profile does not hold it as such",
                       g["source"], {"framing": g["framing"], "gap": True,
                                     "evidence": g.get("evidence", ""),
@@ -1658,7 +1877,7 @@ def call_ctx(contact, role="", facts=None, research=None, application=None, toda
     contact, application = contact or {}, application or {}
     return {"company": _text(application.get("company")) or _text(contact.get("company")),
             "role": _text(role), "row": application, "folder": person.state(),
-            "today": _text(today) or dt.date.today().isoformat(), "facts": facts or {},
+            "today": _text(today) or person.today().isoformat(), "facts": facts or {},
             "map": {}, "stories": stories(), "answers": hard_answers(), "bank": [], "form": [],
             "draft": None, "research": research or {}, "posting": "", "outcome": "",
             "contacts": [contact] if contact else [], "elsewhere": 0}
@@ -1969,10 +2188,19 @@ def do_not_say(ctx, never_say=None) -> list:
     # The default advice, worded so it never forbids what the person asks for: a draft of
     # an example is written when asked, marked for them to confirm (interview.md rule 2).
     for g in ctx["gaps_hard"]:
-        head = "Never claim %s" % g.asked + (": " + _text(g.note).rstrip(" .") if _text(g.note)
-                                             else "")
-        out.append("- %s. Ask Claude for an example and it drafts one for you to check "
-                   "(source: your profile)" % head)
+        # Said once: a note that says "Do not claim it." again is not repeated after "Never
+        # claim", and a credential is held or not, so no example is offered for it (the review,
+        # 2026-11-10: "Never claim Chartered procurement: A credential, not a skill. Do not
+        # claim it. Ask Claude for an example and it drafts one for you to check.").
+        note = re.sub(r"\s*\b(?:do not|don'?t|never) claim it\b\.?", "", _text(g.note),
+                      flags=re.I).strip().rstrip(" .")
+        head = "Never claim %s" % g.asked + (": " + note if note else "")
+        _said, clause, _note = _gap_words(g.asked, ctx.get("posting") or "")
+        if _CREDENTIAL.search(" ".join((g.asked, clause, _text(g.note)))):
+            out.append("- %s. (source: your profile)" % head)
+        else:
+            out.append("- %s. Ask Claude for an example and it drafts one for you to check "
+                       "(source: your profile)" % head)
     phrases = [p for p, _rx in (never_say if never_say is not None else learned.never_say())]
     if phrases:
         out.append("- Words you have said never to use: %s (source: %s)" % (
@@ -2894,7 +3122,7 @@ def newcomer(ctx) -> str:
     moved = _person("identity.moved")
     m = _MOVED.fullmatch(moved)
     when = state.as_date(m.group(2) + ("-01" if len(m.group(2)) == 7 else "")) if m else None
-    today = state.as_date(ctx["today"]) or dt.date.today()
+    today = state.as_date(ctx["today"]) or person.today()
     if when is None or (today - when).days > MOVED_MONTHS * 31 or when > today:
         return ""
     return JUST_ARRIVED if _just_arrived_rule() else _since(moved, today)
@@ -3649,7 +3877,8 @@ FORMATS = (
                                 r"case study|assignment)\b", re.I)),
     ("case", re.compile(r"\b(?:case|market[- ]sizing|guesstimate)\b", re.I)),
     ("coding", re.compile(r"\b(?:cod(?:e|ing)|live programming|pair(?:ing)? programming|"
-                          r"algorithms?|data structures?|leetcode|whiteboard)\b", re.I)),
+                          r"algorithms?|data structures?|leetcode|whiteboard|hackerrank|"
+                          r"codesignal|codility|coderpad)\b", re.I)),
     ("behavioural", re.compile(r"\b(?:behaviou?ral|pei|personal experience|competenc\w*|"
                                r"values|(?:culture|team) fit|fit interview|motivational)\b", re.I)),
     ("technical", re.compile(r"\b(?:technical|sql|statistic\w*|system design|ml design|"
@@ -4237,8 +4466,12 @@ def _ungrounded_numbers(text, said) -> list:
     return out
 
 
+# A time ahead ("in my first six months", "the first 90 days"), however the number is written,
+# or a plan: never a claim about work done.
 _PLAN = re.compile(r"\b(?:I(?:['’]d|['’]ll| would| will| could| plan| hope)|"
-                   r"(?:first|next|within)\s+(?:\w+\s+)?\d+\s+(?:days|weeks|months))\b", re.I)
+                   r"(?:first|next|within)\s+(?:\w+\s+)?(?:\d+|one|two|three|four|five|six|seven|"
+                   r"eight|nine|ten|twelve|eighteen|thirty|sixty|ninety|hundred)\s+(?:days|weeks|"
+                   r"months|years))\b", re.I)
 
 
 def _company_of(path) -> str:
@@ -4383,7 +4616,7 @@ def record_campaign(company, role, chat="", declined=False, today=None) -> str:
     an employer with a campaign chat to that chat."""
     folder = docpaths.app_folder(company, role)
     os.makedirs(folder, exist_ok=True)
-    day = _text(today) or dt.date.today().isoformat()
+    day = _text(today) or person.today().isoformat()
     body = {"declined": day} if declined else {"chat": _text(chat), "started": day}
     path = os.path.join(folder, CAMPAIGN_FILE)
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
@@ -5144,7 +5377,7 @@ def add_asked(company, role, stage, question, story="", landed="", note="", date
     # Saved in place (tools/csv_store.py): a bank written before `source` existed gains
     # the column only when a row has one, and its other rows keep their lines.
     rows = csv_store.read_rows(path, what_works.BANK_COLUMNS)
-    rows.append({"date": _text(date) or dt.date.today().isoformat(), "company": _text(company),
+    rows.append({"date": _text(date) or person.today().isoformat(), "company": _text(company),
                  "role": _text(role), "stage": _text(stage), "question": _text(question),
                  "story": _text(story), "landed": landed, "note": _text(note), "source": source})
     csv_store.write_rows(path, rows, what_works.BANK_COLUMNS)
@@ -5153,7 +5386,7 @@ def add_asked(company, role, stage, question, story="", landed="", note="", date
 
 def rework_entry(question, note, date=None, where="mock") -> str:
     """The line To rework keeps for one answer to work on."""
-    return '- %s, %s: "%s": %s' % (_text(date) or dt.date.today().isoformat(), where,
+    return '- %s, %s: "%s": %s' % (_text(date) or person.today().isoformat(), where,
                                    _text(question), _text(note))
 
 
@@ -5833,6 +6066,10 @@ def main(argv=None) -> int:
                                                "(America/Toronto), else the invite's word (EST), "
                                                "when it is not the person's own")
     bk.add_argument("--with", dest="with_", default="")
+    bk.add_argument("--format", dest="format_", default="",
+                    help="what kind of round it is, as the invite or the recruiter says it "
+                         "(\"personal experience interview and a live Python exercise\"): "
+                         "kept on its record, and every prep for it is built as that")
     bk.add_argument("--today", type=_day)
     for s_ in (p, pr, bk):
         s_.add_argument("--minutes", type=int, default=0,
@@ -5886,7 +6123,8 @@ def main(argv=None) -> int:
     lv.add_argument("--stage", default="", help="as outcome.md names it; default the next booked")
     lv.add_argument("--format", dest="format_", default="")
     lv.add_argument("--out", default="", help="write the prep as built, for Claude to fill")
-    lv.add_argument("--fill", default="", help="the copy Claude filled: its words are kept")
+    lv.add_argument("--fill", default="", help="the words Claude wrote, keyed by part and "
+                    "question (interview_live.words_into); a whole filled copy is taken too")
     lv.add_argument("--write", action="store_true", help="save it, once every check passes")
     lv.add_argument("--today", type=_day)
     lc = sub.add_parser("live-check", help="is the saved live prep still fit to show")
@@ -5932,7 +6170,7 @@ def main(argv=None) -> int:
             row = _row(a.company, a.role, tracker,
                        state.load_contacts(person.state("network_contacts.csv")))
             company, role = _text(row.get("company")) or a.company, _text(row.get("role"))
-            today = a.today or dt.date.today().isoformat()
+            today = a.today or person.today().isoformat()
             _folder, _files, stages = open_actions.stages(row)
             named = [s for s in stages if s["label"].lower() == _text(a.stage).lower()]
             stage = named[0] if named else ({} if _text(a.stage) else next_stage(stages, today))
@@ -5946,7 +6184,8 @@ def main(argv=None) -> int:
                                  "America/Toronto or Europe/London" % a.zone)
             folder = docpaths.app_folder(company, role)
             line = record_stage(folder, company, role, label, date, a.with_, today=today,
-                                time=a.time, zone=a.zone, minutes=a.minutes, due=a.due)
+                                time=a.time, zone=a.zone, minutes=a.minutes, due=a.due,
+                                format_=a.format_)
             print("saved in %s/outcome.md: %s" % (_rel(folder), line))
             _touched(company, role)
             print("The page shows it once it is brought up to date (python3 tools/app.py view).")
@@ -5962,7 +6201,7 @@ def main(argv=None) -> int:
             row, folder, added = register_process(a.company, a.contact, a.role, a.stage, a.date,
                                                   a.with_, today=a.today, posting=a.posting,
                                                   time=a.time, zone=a.zone, minutes=a.minutes,
-                                                  due=a.due)
+                                                  due=a.due, format_=a.format_)
             print("%s: %s at %s, led by %s; its folder is %s.\n"
                   % ("registered" if added else "already registered", row["role"], row["company"],
                      row["contact_person"], _rel(folder)))
@@ -6065,13 +6304,15 @@ def main(argv=None) -> int:
             if os.path.isdir(folder):
                 booked = record_stage(folder, company, role, a.stage, a.date, a.with_,
                                       today=a.today, time=a.time, zone=a.zone,
-                                      minutes=a.minutes, due=a.due)
+                                      minutes=a.minutes, due=a.due, format_=a.format_)
                 if booked:
                     print("booked in %s/outcome.md: %s" % (_rel(folder), booked))
         ctx = gather(a.company, a.role, a.stage, a.date, a.with_, a.today, story_map,
                      format_=a.format_)
         if not _show(ctx, write=a.write):
             return 1
+        if a.write and _text(a.format_):
+            keep_format(ctx["folder"], ctx["stage"], a.format_)
     except (LookupError, ValueError, OSError) as exc:
         print("interview_pack: %s" % exc, file=sys.stderr)
         return 1
@@ -6085,8 +6326,9 @@ def _live(a) -> int:
     ctx = gather(a.company, a.role, getattr(a, "stage", ""), today=a.today,
                  format_=getattr(a, "format_", ""))
     # The format a chat set once (--format "personal experience, technical coding") holds for
-    # every rebuild of this interview's prep, until another is said.
-    if not _text(getattr(a, "format_", "")):
+    # every rebuild of this interview's prep, until another is said: kept on the round's record
+    # once the prep is written, and read from an older prep's own copy where the record has none.
+    if not _text(ctx.get("format")):
         saved = interview_live.load(ctx["folder"]) or {}
         if _text(saved.get("format")) and (not _text(saved.get("stage")) or not _text(ctx.get("stage"))
                                            or _same_round(saved["stage"], ctx["stage"])):
@@ -6099,19 +6341,31 @@ def _live(a) -> int:
                   % ctx["company"])
             return 1
         found = interview_live.problems(interview_live.merge(interview_live.build(ctx), doc), ctx)
+        now = interview_live.kind_changed(ctx["folder"], ctx["stage"])
+        if now:
+            found.insert(0, ("the round", "its record now says it is %s, and this prep was made for "
+                             "another kind of round (%s): build it again" % (now, doc.get("format") or "no format said")))
         for where, why in found:
             print("- %s: %s" % (where, why))
         print("%d thing(s) to fix before it is shown." % len(found) if found
               else "The live prep is fit to show.")
         return 1 if found else 0
     filled = None
-    if a.fill:
-        with open(a.fill, encoding="utf-8") as fh:
-            filled = json.load(fh)
-    elif os.path.exists(interview_live.path_for(ctx["folder"])):
+    if os.path.exists(interview_live.path_for(ctx["folder"])):
         # What was written before is kept on every rebuild: Claude's words are never lost.
         with open(interview_live.path_for(ctx["folder"]), encoding="utf-8") as fh:
             filled = json.load(fh)
+    if a.fill:
+        with open(a.fill, encoding="utf-8") as fh:
+            given = json.load(fh)
+        # Only the words, keyed by part and question, put into the prep as built with what was
+        # written before; a whole copy of the prep, as older chats wrote it, is taken as it is.
+        if interview_live.is_copy(given):
+            filled = given
+        else:
+            # Anything else is read as the words, and a wrong shape is refused in plain words.
+            filled = interview_live.words_into(interview_live.merge(interview_live.build(ctx), filled),
+                                               given)
     doc = interview_live.merge(interview_live.build(ctx), filled)
     found = interview_live.problems(doc, ctx)
     if a.out:
@@ -6120,10 +6374,17 @@ def _live(a) -> int:
             fh.write("\n")
         print("built: %s (%s, %d minutes, %d parts, %d questions)" % (
             a.out, doc["shape_name"], doc["minutes"], len(doc["parts"]), len(doc["questions"])))
+    if _text(doc.get("assumed")):
+        # A guess is said, and how to put it right: the round's own words, once.
+        print("the kind of interview is a guess (%s): where the invite, the recruiter or the "
+              "person says what the round is, build again with --format \"<what they said>\", "
+              "and it is kept on the round's record" % doc["assumed"])
     if a.write:
         path, found = interview_live.write(ctx, filled)
         if path:
             print("written: %s" % _rel(path))
+            if _text(getattr(a, "format_", "")):
+                keep_format(ctx["folder"], ctx["stage"], a.format_)
             drafts = interview_live.drafts(interview_live.load(ctx["folder"]) or {})
             if drafts:
                 print("drafts they asked for, shown to them as drafts: %s" % "; ".join(drafts))

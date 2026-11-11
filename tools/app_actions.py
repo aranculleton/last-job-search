@@ -438,6 +438,11 @@ def _sections_for(item_id: str) -> tuple:
         return ("learned",)
     if item_id.startswith("tip-"):
         return ("help",)
+    # Your rules' own rows ("rule~declined~<key>", "rule~learned~3") and the row itself: a tap
+    # on one was looked for in Contacts and Jobs, so every bin and Keep it there was refused as
+    # no longer on the page (the rules review, 2026-11-11).
+    if item_id.startswith("rule~") or item_id == "your-rules":
+        return ("rules",)
     if item_id.startswith(("rule-", "search-", "site-")):
         return ("search",)
     if item_id == "schedule":
@@ -810,8 +815,13 @@ def _job_dismiss(r: Run) -> dict:
                            today=r.day.isoformat(), answers=False)
         except SystemExit:
             pass                        # no profile to learn in: the ruling still stands
+    # The true end, never "will not be shown again": a role set aside holds about six months
+    # from today, or for good where their own words say so (exclude.set_aside_until).
+    until = exclude.set_aside_until({"exclusion_reason": why or "not for me",
+                                     "excluded_date": r.day.isoformat()})
+    end = "for good" if until is None else f"until {until.day} {until.strftime('%b %Y')}"
     note = (f"No more roles from {declined}." if declined
-            else f"{t.get('title')} at {t.get('company')} will not be shown again.")
+            else f"{t.get('title')} at {t.get('company')} is set aside {end}.")
     return {"note": note,
             "undo": {"action": "job.bring_back", "target": dict(t, kind="job", declined=declined)},
             "why": why}
@@ -949,8 +959,8 @@ def _job_draft(r: Run) -> dict:
                     **({"resume_only": True} if alone else {})},
            "answers": answers, "asked_at": app_model.stamp(r.at),
            "asked_from": {"tab": r.act.get("tab") or ""}, "priority": 0, "status": "queued",
-           "stages": [{"name": s["name"], "est_s": s["est_s"]}
-                      for s in page_db.progress("draft")["stages"]], "stage": 0}
+           "stages": [{"name": s["name"], "est_s": s["est_s"]} for s in page_db.progress(
+               page_db.RESUME_ONLY_KIND if alone else "draft")["stages"]], "stage": 0}
     r.w.add("set", "work", wid, doc, if_version=have["version"] if have else None)
     return {"note": "Queued: Claude drafts it next.",
             "undo": {"action": "work.stop", "target": {"kind": "work", "id": wid}}}
@@ -1821,12 +1831,21 @@ def _msg_unsent(r: Run) -> dict:
 
 
 def _msg_skip(r: Run) -> dict:
+    """A first note set aside: for now, offered again after as many days as a role set aside
+    (exclude.set_aside_days), unless the person's own words say never (exclude.for_good). "For
+    now" held them for good, with nothing on the page saying so (the rules review, 2026-11-11)."""
+    import exclude
     cid = r.target.get("contact") or ""
-    code, out = _cli(_state(), ["drop", cid, "--reason", r.words() or "not now, said on the page",
-                                "--today", r.day.isoformat()])
+    _st = _state()
+    words = r.words() or _st.PAGE_DROP_WORDS
+    until = None if exclude.for_good(words) else r.day + dt.timedelta(days=exclude.set_aside_days())
+    code, out = _cli(_st, ["drop", cid, "--reason", words, "--today", r.day.isoformat()]
+                     + (["--until", until.isoformat()] if until else []))
     if code:
         raise Refused(_said(out))
-    return {"note": f"Set aside: no note to {_first(cid)} for now.",
+    end = (f"until {until.day} {until.strftime('%b %Y')}, then offered again" if until
+           else "for good, as you said")
+    return {"note": f"Set aside: no note to {_first(cid)} {end}.",
             "undo": {"action": "msg.unskip", "target": {"kind": "message", "contact": cid}}}
 
 
@@ -2507,6 +2526,29 @@ def _rule_drop(r: Run) -> dict:
         _set_list("BAR_EXCLUDED_OFF", off + [why])
         undo = {"kind": "sector", "why": why}
         said = "Those employers are shown again from now on."
+    elif kind == "set_aside":
+        import exclude
+        url = str(drop.get("url") or "")
+        seen_path = person.state("job_scraper", "seen_jobs.json")
+        gone = exclude.lift(why="taken off in Your rules", today=r.day.isoformat(),
+                            path=seen_path, urls=[url]) if url else []
+        if not gone:
+            raise Refused("That role is not set aside any more.")
+        e = gone[0]
+        undo = {"kind": "set_aside", "url": url, "reason": e.get("exclusion_reason") or "",
+                "title": e.get("title") or "", "company": e.get("company") or "",
+                "location": e.get("location") or "", "day": e.get("excluded_date") or ""}
+        said = "It can be shown again from the next search."
+    elif kind == "more_at":
+        import reading
+        from company_key import key as company_key
+        who = str(drop.get("employer") or "")
+        row = reading.more_at().get(company_key(who))
+        if not row or not reading.more_at_holds(row, r.day):
+            raise Refused("That employer is back to your usual number already.")
+        reading.set_more_at(who, "", remove=True)
+        undo = {"kind": "more_at", "row": dict(row)}
+        said = "Back to your usual number of people there."
     elif kind == "learned":
         import learned
         try:
@@ -2536,6 +2578,21 @@ def _rule_undrop(r: Run) -> dict:
     elif v.get("kind") == "sector":
         _set_list("BAR_EXCLUDED_OFF", [x for x in _got_list("BAR_EXCLUDED_OFF")
                                        if x != v.get("why")])
+    elif v.get("kind") == "more_at":
+        import reading
+        row = v.get("row") if isinstance(v.get("row"), dict) else {}
+        until = str(row.get("until") or "")[:10]
+        reading.set_more_at(str(row.get("employer") or ""), str(row.get("said") or "undone"),
+                            row.get("limit"), dt.date.fromisoformat(str(row["date"])[:10])
+                            if row.get("date") else None,
+                            until=dt.date.fromisoformat(until) if until else None)
+    elif v.get("kind") == "set_aside":
+        import exclude
+        exclude.add(str(v["url"]), str(v.get("reason") or "not for me (said on the page)"),
+                    title=str(v.get("title") or ""), company=str(v.get("company") or ""),
+                    basis="person", today=str(v.get("day") or r.day.isoformat()),
+                    location=str(v.get("location") or ""),
+                    path=person.state("job_scraper", "seen_jobs.json"))
     elif v.get("kind") == "learned":
         import learned
         rows = learned.load()

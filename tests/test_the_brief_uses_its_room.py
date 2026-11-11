@@ -86,7 +86,11 @@ def test_the_jobs_panel_lists_more_where_it_has_room(run, tmp_path):
             " font: getComputedStyle(document.documentElement).fontSize}; })()")
     got = _go(run, tmp_path, [{"hash": "brief", "eval": look}], WIDE, model=m, clock=T, zone=PERSON_ZONE)
     r = got["after"][0]["eval"]
-    assert r["shown"] > 5, r
+    # More than it starts with (three), and no row's worth of room left under it: a count of
+    # six was what this window held beside the sample's other panels, and moved with them
+    # (a booked interview kept in Coming up, the screen review, 2026-11-11).
+    room = next(p[3] for p in r["panels"] if p[0] == "bp:jobs")
+    assert r["shown"] > 3 and room is not None and room < min(r["rows"]), r
     assert any(t.startswith("All ") for t in r["all"]), r
 
 

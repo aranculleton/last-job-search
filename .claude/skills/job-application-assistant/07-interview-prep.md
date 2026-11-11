@@ -1,5 +1,5 @@
 ---
-framework_version: 1.1.5
+framework_version: 1.1.6
 ---
 
 # Interview Preparation Guide
@@ -109,19 +109,19 @@ Not for: consulting
 
 ### About the Team
 - "How big is the team, and how do you divide work?"
-- "What does the development/project lifecycle look like, from idea to production?"
+- "How does a piece of work go here, from idea to production?"
 - "How do you onboard new team members?"
 
 ### About Tech & Growth
 - "What's your current tech stack for [relevant area]?"
-- "Is there room to grow into more architectural or strategic decisions?"
+- "Is there room to grow into bigger, more strategic decisions?"
 - "How does the team stay current with new tools and methods?"
 
 ### About Culture (use these to prevent disappointment)
 - "How would you describe the team culture?"
 - "What does professional development look like here?"
-- "Is there flexibility for remote/hybrid work?"
-- "What's the balance between development/new projects and maintenance work?"
+- "Is there flexibility to work from home some of the week?"
+- "What's the balance between new work and keeping things running?"
 - "How would you describe the leadership style in this team?"
 - "What do people who thrive here have in common?"
 

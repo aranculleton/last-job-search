@@ -167,19 +167,89 @@ LIMITS = {
     "nudge_chars": 280,
 }
 
+# What LIMITS holds before any plan or setting of the person's: the base `limits_now` starts from.
+_FIXED = {k: v for k, v in LIMITS.items() if k not in PLANS["premium"]}
+
 # The person's own limits for their plan (more InMail credits than Premium's, say). A
 # connection cap written there is ignored: the app sets none, and one written to escape the
 # old cap would only print a number LinkedIn never gave.
+# Keys of LINKEDIN_LIMITS the app reads nothing from (`ignored_limits` names them).
+IGNORED_LIMITS = ("connections_per_week", "connections_per_day")
 LIMITS.update({k: v for k, v in dict(getattr(_NETWORKING, "LINKEDIN_LIMITS", {}) or {}).items()
-               if k not in ("connections_per_week", "connections_per_day")})
+               if k not in IGNORED_LIMITS})
+
+
+def ignored_limits(limits=None) -> list:
+    """The keys of the person's LINKEDIN_LIMITS (or `limits`) the app drops, sorted: written
+    there, they read as a cap the app keeps and it keeps none (the audit, 2026-11-10)."""
+    if limits is None:
+        limits = getattr(_NETWORKING, "LINKEDIN_LIMITS", {}) or {}
+    return sorted(k for k in dict(limits or {}) if k in IGNORED_LIMITS)
 
 # Below the note it chases, whatever the plan allows the note.
 LIMITS["nudge_chars"] = min(LIMITS["nudge_chars"], LIMITS["connection_note_chars"] - 20)
+_READ_AT: list = [None]
+
+
+def _settings_mark():
+    """(path, time, size) of the person's networking settings, or None: what LIMITS was read
+    from, so a change shows."""
+    try:
+        path = person.path("networking.py")
+        st = os.stat(path)
+        return (path, st.st_mtime_ns, st.st_size)
+    except Exception:  # noqa: BLE001  no profile, or no networking settings
+        return None
+
+
+_READ_AT[0] = _settings_mark()
+
+
+def limits_now() -> dict:
+    """LIMITS as the person's settings say now: the plan (`plan(fresh=True)`) and their own
+    LINKEDIN_LIMITS read again whenever profile/networking.py has changed since LIMITS was
+    last read, and updated in place, so every module holding LIMITS sees it. A process that
+    ran on kept the old plan's limits after the person changed theirs on the page (the
+    audit, 2026-11-10). Returns LIMITS; compose brings its copies (KIND_LIMITS) in line from
+    it at every check."""
+    global FOLLOW_UP_DAYS, MAX_UNANSWERED, CONTACT_NUDGES, MAX_NUDGES, GONE_COLD_DAYS
+    mark = _settings_mark()
+    if mark == _READ_AT[0]:
+        return LIMITS
+    _READ_AT[0] = mark
+    theirs: dict = {}
+    try:
+        import profile_set
+        got = profile_set.get("networking.py", "LINKEDIN_LIMITS")
+        theirs = got if isinstance(got, dict) else {}
+    except Exception:  # noqa: BLE001  no settings: the plan's own
+        profile_set = None
+        theirs = {}
+
+    def days(name):
+        try:
+            v = profile_set.get("networking.py", name) if profile_set else 0
+            v = 0 if v is getattr(profile_set, "MISSING", object()) else v
+            return max(int(v or 0), 0)
+        except Exception:  # noqa: BLE001  unset or not a number: the app's own
+            return 0
+    # The person's follow-up rule too, read again with the plan: their limit of unanswered
+    # messages stayed as first read after they changed it (the review, 2026-11-11).
+    FOLLOW_UP_DAYS = days("FOLLOW_UP_DAYS")
+    MAX_UNANSWERED = days("MAX_UNANSWERED") or 2
+    CONTACT_NUDGES = max(MAX_UNANSWERED - 1, 0)
+    MAX_NUDGES = CONTACT_NUDGES
+    GONE_COLD_DAYS = days("GONE_COLD_DAYS") or 90
+    new = {**_FIXED, **PLANS[plan(fresh=True)],
+           **{k: v for k, v in theirs.items() if k not in IGNORED_LIMITS}}
+    new["nudge_chars"] = min(new["nudge_chars"], new["connection_note_chars"] - 20)
+    LIMITS.clear()
+    LIMITS.update(new)
+    return LIMITS
 
 # Follow-up cadence, in business days. The brief is explicit that 24-48 hours
 # reads as impatient and 5-7 business days is the correct window.
 FOLLOWUP_BUSINESS_DAYS = 6
-MAX_NUDGES = 1
 # The person's own rule outranks the app's (profile/networking.py, 2026-10-23):
 # FOLLOW_UP_DAYS calendar days of silence before a follow-up, counted from our last
 # message or from the day they accepted, and MAX_UNANSWERED messages in a row with no
@@ -197,10 +267,18 @@ def _days_setting(name: str) -> int:
 
 
 FOLLOW_UP_DAYS = _days_setting("FOLLOW_UP_DAYS")
-MAX_UNANSWERED = _days_setting("MAX_UNANSWERED") or MAX_NUDGES + 1
-MAX_NUDGES = max(MAX_UNANSWERED - 1, 0)
+# Unset, two messages in a row with no reply: the first, and one nudge.
+MAX_UNANSWERED = _days_setting("MAX_UNANSWERED") or 2
+# Follow-ups to a contact after the first message: a name of its own, apart from an
+# application's (followups.APPLICATION_NUDGES). MAX_NUDGES is the name callers already read.
+CONTACT_NUDGES = max(MAX_UNANSWERED - 1, 0)
+MAX_NUDGES = CONTACT_NUDGES
 # Days with no answer before a conversation is closed as gone cold (state.close_gone_cold).
 GONE_COLD_DAYS = _days_setting("GONE_COLD_DAYS") or 90
+# Days after any message of ours before the same person is offered another (surface.held):
+# the person's own "nobody written to in the last N days" rule, which lived in a script of
+# their own that bypassed the one check (the audit's NW-16, 2026-11-10). 0, unset: none.
+QUIET_AFTER_SEND_DAYS = _days_setting("QUIET_AFTER_SEND_DAYS")
 
 
 def follow_up_rule() -> str:

@@ -137,7 +137,7 @@ def test_a_third_degree_profile_with_no_experience_shown_is_read_as_it_is(book, 
                                                                           monkeypatch):
     monkeypatch.setattr(reading, "PROFILE_READS", "browser")
     book.put(_row("larkspur_pell", "Corwin Pell", "Larkspur"))
-    reading.shortlist(["larkspur_pell"], contacts=book.contacts(), sends_left=10)
+    reading.shortlist(["larkspur_pell"], contacts=book.contacts())
     page = book.path / "page.txt"
     page.write_text("Corwin Pell\n3rd\nHead of Pricing at Larkspur\n"
                     "Manchester, England, United Kingdom\nContact info\nLarkspur\nFollow\n"
@@ -177,7 +177,7 @@ def test_every_id_given_to_remove_is_removed(book, capsys, monkeypatch):
     monkeypatch.setattr(reading, "shortlist_cap", lambda *a, **k: (10, "the test's cap"))
     book.put(*[_row(f"larkspur_{n}", n.title(), f"Larkspur {n}") for n in ("rook", "venn", "mire")])
     reading.shortlist(["larkspur_rook", "larkspur_venn", "larkspur_mire"],
-                      contacts=book.contacts(), sends_left=10)
+                      contacts=book.contacts())
     assert reading.main(["shortlist", "--remove", "larkspur_rook", "--remove",
                          "larkspur_venn"]) == 0
     assert reading._shortlist_file(reading.person.today()) == ["larkspur_mire"]
@@ -194,11 +194,10 @@ RECRUITER = {"name": "Idris Corrie", "company": "Kestrel Mutual", "read_on": "",
 def test_a_recruiter_whose_card_says_enough_leaves_the_read_list(book, capsys):
     book.put(_row("kestrel_corrie", "Idris Corrie", "Kestrel Mutual"))
     # On the list before their card was read; the card then says enough.
-    assert reading.shortlist(["kestrel_corrie"], contacts=book.contacts(),
-                             sends_left=10)["ids"] == ["kestrel_corrie"]
+    assert reading.shortlist(["kestrel_corrie"], contacts=book.contacts())["ids"] == ["kestrel_corrie"]
     reading.save("kestrel_corrie", dict(RECRUITER))
     assert reading.next_up(contacts=book.contacts()) is None
-    got = reading.shortlist([], contacts=book.contacts(), sends_left=10)
+    got = reading.shortlist([], contacts=book.contacts())
     assert got["ids"] == [] and "card says enough" in got["pruned"]["kestrel_corrie"]
 
 

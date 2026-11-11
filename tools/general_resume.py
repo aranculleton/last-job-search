@@ -329,20 +329,6 @@ def bullets_on(a: dict) -> list[dict]:
     return out
 
 
-def for_contact_word(contact_id: str) -> str:
-    """"For_<First>" from the contact's name in the book, else from their id."""
-    name = ""
-    try:
-        import state
-        row = next((c for c in state.load_contacts()
-                    if str(c.get("contact_id") or "").strip() == contact_id), {})
-        name = state.person_name(row.get("name")) or str(row.get("name") or "")
-    except Exception:  # noqa: BLE001  no book here: the id says enough
-        name = ""
-    first = re.sub(r"[^A-Za-z0-9]", "", (name.split() or [contact_id.split("_")[-1]])[0].title())
-    return "For_" + (first or "Contact")
-
-
 def keep_for_contact(contact_id: str, pdf: str, today: str = "") -> str:
     """Record on the contact who asked that this resume was made for them: their card shows
     it, and it is found by their name. Returns the record's path."""

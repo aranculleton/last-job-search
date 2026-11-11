@@ -179,8 +179,7 @@ def test_more_at_one_employer_on_the_persons_word(book, capsys):
     (area, kept_said, rule), _ = book.learned[0]
     assert area == "people" and kept_said == said and "Up to 4" in rule
     assert reading.employer_full_line("Kestrel Mutual", book.contacts(), today=TODAY) == ""
-    got = reading.shortlist(["kestrel_achterberg"], today=TODAY, contacts=book.contacts(),
-                            sends_left=10)
+    got = reading.shortlist(["kestrel_achterberg"], today=TODAY, contacts=book.contacts())
     assert got["ids"] == ["kestrel_achterberg"] and not got["employer_full"]
     # Two more there is the person's number: a fifth is still refused, saying so.
     more = [_row(f"kestrel_n{i}", n, "Kestrel Mutual") for i, n in

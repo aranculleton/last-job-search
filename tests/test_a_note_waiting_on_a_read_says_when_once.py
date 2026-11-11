@@ -138,8 +138,8 @@ def test_with_their_computer_ready_the_read_is_sent_there_by_itself():
     assert app.computer_reads(_reads_model(computer=False), {}, now) is None
     assert app.computer_reads(_reads_model(setting="paste"), {}, now) is None
     # The computer's chat is told how to do it.
-    with open(os.path.join(os.path.dirname(HERE), ".claude", "skills", "app", "SKILL.md"), encoding="utf-8") as fh:
-        assert "`args.read_first`" in fh.read()
+    import app_skill
+    assert "`args.read_first`" in app_skill.text()
 
 
 # ------------------------------------------------------------------ the page
@@ -320,3 +320,28 @@ def test_the_automatic_read_skips_anyone_already_read_written_to_or_held(monkeyp
     held = _reads_model()
     held.setdefault("messages", []).append({"contact": "ash_b", "hold_why": "employer_full"})
     assert app.computer_reads(held, {}, now)[1]["args"]["contacts"] == ["kit_a"]
+
+
+def test_the_automatic_read_names_who_it_leaves_out_and_judges_on_the_persons_day(monkeypatch):
+    """The independent review of NW-8 (2026-11-11): the automatic read dropped people without
+    a word, and judged a reading fresh on the computer's day, not the person's."""
+    import datetime as dt
+    import app
+    import reading
+    from network import state
+    now = dt.datetime(2026, 10, 25, 9, tzinfo=dt.timezone.utc)
+    rows = [{"contact_id": "kit_a", "status": "not_contacted"},
+            {"contact_id": "ash_b", "status": "awaiting_reply"}]
+    monkeypatch.setattr(state, "load_contacts", lambda path=None: rows)
+    monkeypatch.setattr(state, "load_threads", lambda path=None: [])
+    monkeypatch.setattr(os.path, "exists", lambda p: True)
+    monkeypatch.setattr(reading, "load", lambda cid: None)
+    got = app.computer_reads(_reads_model(), {}, now)[1]["args"]
+    assert got["contacts"] == ["kit_a"]
+    assert got["left_out"] == [{"contact": "ash_b", "why": "written to already"}]
+    # A read on the edge of fresh: fresh on the computer's day, no longer on the person's.
+    edge = (now.date() - dt.timedelta(days=reading.FRESH_DAYS)).isoformat()
+    monkeypatch.setattr(reading, "load", lambda cid: {"read_on": edge, "sources": [
+        {"kind": "browser"}]} if cid == "kit_a" else None)
+    monkeypatch.setattr(app.person, "today", lambda: now.date() + dt.timedelta(days=1))
+    assert app.computer_reads(_reads_model(), {}, now)[1]["args"]["contacts"] == ["kit_a"]

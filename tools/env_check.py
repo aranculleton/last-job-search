@@ -115,8 +115,8 @@ def probe(url: str) -> tuple[str, str]:
         return "unreachable", "curl is not installed"
     # os.devnull, not /dev/null: Windows' own curl.exe cannot open /dev/null, so every job
     # site was reported unreachable there (it is "nul" on Windows).
-    p = subprocess.run(["curl", "-sS", "-o", os.devnull, "--max-time", "8",
-                        "-w", "%{http_connect} %{http_code}", url],
+    p = subprocess.run(["curl", "-sS", "--globoff", "-o", os.devnull, "--max-time", "8",
+                        "-w", "%{http_connect} %{http_code}", "--", url],
                        capture_output=True, text=True, encoding="utf-8", errors="replace")
     connect, _, code = (p.stdout.strip() + "  ").partition(" ")
     code = code.strip()
@@ -196,6 +196,22 @@ def blocked_names() -> list[str]:
     return [name for (name, _), v in zip(found, verdicts) if v == "blocked"]
 
 
+def blocked_today() -> list[str]:
+    """blocked_names, probed once a day in a container: the start probed every job site and
+    then the update check probed them all again in a process of its own (audit E-17). Read
+    from the record the start keeps (app_setup.job_sites) when it was made today, and made
+    here, for the start to read, when it was not."""
+    try:
+        import datetime as _dt
+        import app_setup
+        rec = app_setup.job_sites()
+        if rec.get("checked") == _dt.date.today().isoformat():
+            return [str(n) for n in rec.get("blocked") or []]
+        return list(app_setup.check_job_sites().get("blocked") or [])
+    except Exception:  # noqa: BLE001  no record here: probed as before
+        return blocked_names()
+
+
 def allowlist() -> list[str]:
     """Every domain a custom network policy has to allow for this person's search."""
     from urllib.parse import urlsplit
@@ -237,7 +253,18 @@ def pypdf_state() -> str:
 # A cloud session sets CLAUDE_CODE_REMOTE. Its fixes are the environment's Setup
 # script and network allowlist; on the person's own computer they are a one-time
 # install and there is no network policy at all.
-CLOUD = os.environ.get("CLAUDE_CODE_REMOTE", "").lower() == "true"
+def _in_cloud() -> bool:
+    """place.in_cloud: the flag and the cloud container's own markers, never the flag alone.
+    A copy too old to have place.py (this file is brought in first by an update) reads the
+    flag, as before."""
+    try:
+        import place
+        return place.in_cloud()
+    except Exception:  # noqa: BLE001
+        return os.environ.get("CLAUDE_CODE_REMOTE", "").lower() == "true"
+
+
+CLOUD = _in_cloud()
 
 
 def _install(what: str) -> str:
@@ -370,9 +397,19 @@ def main(argv: list[str] | None = None) -> int:
               f"HTTPS to {url}: {verdict}, {detail}")
         return 1 if verdict == "certificates" else 0
     if argv[:1] == ["--say"]:
-        names = blocked_names()
+        # Live by hand and from the job-scraper skill; the day's record only for the update
+        # check's own look (--today), so a block that appears or is fixed mid-day is never
+        # misreported (the review of E-17, 2026-11-11).
+        names = blocked_today() if "--today" in argv[1:] else blocked_names()
         if names:
             print(blocked_say(names))
+            # For Claude: the official page to check today before passing the steps on, as
+            # claude_surfaces.py steps gives it (the review of E-13, 2026-11-11).
+            try:
+                import claude_surfaces
+                print(claude_surfaces.source("cloud-internet"), file=sys.stderr)
+            except Exception:  # noqa: BLE001  the steps go without it
+                pass
             for note in blocked_notes():
                 print(note, file=sys.stderr)
         return 0

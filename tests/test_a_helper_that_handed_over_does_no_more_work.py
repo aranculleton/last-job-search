@@ -90,11 +90,18 @@ def test_after_the_hand_over_every_turn_is_one_line_and_it_goes_once_saved(copy)
     said = _run(copy, "listen", copy.dump("d3"), "--chat", OLD)
     assert "another chat answers the page" in said
     assert f"python3 tools/app.py retired --chat {OLD}" in said, said
-    # Any turn now, a ring, a notification or a message: the hook says one line, read nothing.
-    for prompt in (ring, "<task-notification>done</task-notification>", "hello?"):
+    # Any turn the app makes now, a ring, a notification or a scheduled run: the hook says one
+    # line, read nothing.
+    for prompt in (ring, "<task-notification>done</task-notification>",
+                   "Scheduled run: a check-in."):
         ctx = _context(_hook(copy, prompt))
         assert f"python3 tools/app.py retired --chat {OLD}" in ctx, ctx
         assert "read nothing" in ctx
+    # The person typing here is answered, never told to put the chat away (second audit A8: a
+    # person holding a real conversation in an old helper was answered "archive yourself").
+    ctx = _context(_hook(copy, "hello? can you look at my notes from the call"))
+    assert "app.py retired" not in ctx and "archive" not in ctx.lower()
+    assert "answer the person" in ctx
     # Its own work not saved yet: the save is started, with a wait that wakes it once.
     with open(os.path.join(copy.profile, "notes.md"), "w", encoding="utf-8") as fh:
         fh.write("the last thing it wrote\n")

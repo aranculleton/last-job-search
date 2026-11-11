@@ -242,6 +242,30 @@ def _run3(args):
     return p.returncode, p.stdout or "", p.stderr or ""
 
 
+def _entry(batch, abbr) -> dict:
+    return next((x for x in batch if x.get("abbr") == abbr), {})
+
+
+# What the fit left on a draft whose short last page nothing could take back
+# (fit_to_page.THIN_KEPT), or that the person left as space (THIN_SPACE), and how it is said.
+THIN_NOTES = {
+    "kept": "its last page is short: every job is already at its fewest lines, so it cannot "
+            "go onto one page fewer, and nothing true is left to fill it",
+    "space": "its last page is short, which is the space you asked to leave",
+}
+
+
+def _thin_kept(entry: dict, found: str) -> str:
+    """The note for a layout finding that is only a short last page the fit has already
+    settled, or "" when it is to fail: a heading left at the foot, or a short last page the
+    fit never tried."""
+    lines = [x.strip() for x in found.splitlines() if x.strip().startswith(
+        ("THIN_LAST_PAGE", "HEADING_AT_FOOT"))]
+    if not lines or any(not x.startswith("THIN_LAST_PAGE") for x in lines):
+        return ""
+    return THIN_NOTES.get(str(entry.get("thin_end") or ""), "")
+
+
 def _run(args):
     """(exit code, stdout and stderr together) of one of the app's tools."""
     code, out, err = _run3(args)
@@ -389,13 +413,22 @@ def main(argv=None) -> int:
         # The design's rules, read off each PDF: its page size, one page, no text too small,
         # nothing at the page's edge where parsers drop headers and footers, one column
         # (tools/design_check.py).
+        layout_note = ""
         for pdf, flag in ((r_pdf, "DESIGN_RESUME"), (c_pdf, "DESIGN_LETTER")):
             if not pdf:
                 continue
-            st = _run([os.path.join(TOOLS, "design_check.py"), pdf, "--for", drafts,
-                       "--abbr", a])[0]
+            st, found = _run([os.path.join(TOOLS, "design_check.py"), pdf, "--for", drafts,
+                              "--abbr", a])
             if st == 3:
                 design_skipped = 1          # no pypdf: not checked, which is not a pass
+            elif st == 4 and flag == "DESIGN_RESUME":
+                # The parser's rules pass; a page of two ends badly (design_check.layout).
+                # A short last page the fit tried to take back, with every role at its floor,
+                # or one the person left as space, is said, never failed: nothing is left
+                # for anyone to do about it.
+                layout_note = _thin_kept(_entry(batch, a), found)
+                if not layout_note:
+                    p += " LAYOUT_RESUME"
             elif st != 0:
                 p += " " + flag
         # Every contact line the resume prints, not the email and the phone alone: a bare
@@ -470,6 +503,8 @@ def main(argv=None) -> int:
         n += 1
         records[a] = (entry, p.split(), rp, cp, bool(c_pdf))
         _say("%-9s %s/%s  %-4s %-14s %s" % (a, rp_s, cp_s, b, cnt, p))
+        if layout_note:
+            _say("          " + layout_note)
         if lost:
             _say("          contact lines not on the page: " + "; ".join(lost))
         for line in split:

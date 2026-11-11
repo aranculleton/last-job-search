@@ -136,8 +136,8 @@ worked: RUNBOOK.md, "Learning the person".
 
 Nothing persists unless it is committed, so **whenever something changes, write it down
 before replying** (where: RUNBOOK.md, "What changes, and where it goes"). With the answer
-out, once a turn, land it on master before the chat ends: `python3 tools/land.py` in the
-background, then the calls it prints. There `python3 tools/save_state.py` stages the
+out, once a turn, land it on master before the chat ends: `python3 tools/land.py --detach`,
+which ends by itself, waking nobody. There `python3 tools/save_state.py` stages the
 person's files (never edit `.gitignore`, never force in build noise), and never onto master
 without CI green (in a person's copy, `./tools/ci_local.sh --quick`, or a data check if only
 theirs changed).
@@ -157,11 +157,11 @@ brings it in.
 |---|---|
 | What the start command prints: the day's update check, profile upgrades, the model check | RUNBOOK.md, "Start of a session" |
 | The page rang this chat (`[app]`, a work item) | the `app` skill |
-| A screenshot, message or link pasted in any chat (a reply, a job someone sent, a call) | the `app` skill, "A message in the chat": done end to end, never asked which command |
+| A screenshot, message or link pasted in any chat (a reply, a job someone sent, a call) | `.claude/skills/app/chat.md`: done end to end, never asked which command |
 | Which command or skill does what (`/prep` is a networking call; `/interview` a real interview, a recruiter screen included) | RUNBOOK.md, "Commands and skills: what routes where" |
 | A job search: run it end to end, rank down, the hard cuts, stop at the shortlist and ask | the job-scraper skill (`/scrape`), RUNBOOK.md step 1 |
 | An application: fit first, then the drafting pipeline, both audits and the checklist | `/apply`, RUNBOOK.md steps 2 to 4 |
-| Networking: load the networking skill before any outreach; no LinkedIn page is ever fetched | the networking skill, `/network`, `/reply`, `/threads`, `/prep` |
+| Networking: load the networking skill before any outreach; no LinkedIn page is ever fetched | the networking skill, `/network`, `/threads`, `/prep` |
 | An interview in a live hiring process | `/interview` |
 | Setting a person up, and the research Claude does for them | `/setup` |
 | The brief and other scheduled tasks | automation/README.md |

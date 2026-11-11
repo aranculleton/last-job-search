@@ -180,3 +180,58 @@ def test_a_finding_the_person_reviewed_and_kept_is_not_raised_again(profile, cap
     clean.write_text(clean.read_text(encoding="utf-8").replace(
         "- Walk-away floor is 45,000.", "- Walk-away floor is now 45,000."), encoding="utf-8")
     assert [f["fact"] for f in C.findings()] == ["walk-away floor"]
+
+
+def test_a_notice_the_profile_scopes_on_purpose_is_not_a_contradiction(profile):
+    """A helper chat's report of 2026-11-10 (H-7): the contract's three months, written beside
+    the line saying it applies with one employer only and every other employer hears the
+    shorter notice, became a To do card calling it a contradiction. The explaining line is
+    read; a second notice nothing explains is still named. The employer is invented."""
+    _add(profile, "01-candidate-profile.md",
+         "- Contract: notice of three months, and a restricted period after it.\n"
+         "  That applies only with Ashgrove Ledger, the current employer; every other employer "
+         "hears one month.")
+    assert C.findings() == []
+    _add(profile, "CLAUDE.md", "\n- Notice period: two months.")
+    assert [(f["fact"], f["said"]) for f in C.findings()] == [("notice period", "two months")]
+
+
+def test_a_file_outside_the_grounding_sources_ranked_above_the_profile_is_named(profile):
+    """The 2026-11-10 audit (PD-4): one person's candidate profile called an old hand-made
+    resume the "primary source for facts" and ranked it first, against the rule that the
+    profile wins and an older resume is never a source. The file name is invented."""
+    _add(profile, "01-candidate-profile.md",
+         "Primary source for facts: documents/cv/Morgan_Ellis_Resume_2025.pdf, then this file.")
+    got = [(f["fact"], f["said"]) for f in C.findings()]
+    assert got == [("where facts come from", "documents/cv/Morgan_Ellis_Resume_2025.pdf")]
+    # Naming the profile's own sources that way is the rule, never a finding.
+    _add(profile, "CLAUDE.md", "\n01-candidate-profile.md is the source of truth for every fact.")
+    assert [f["fact"] for f in C.findings()] == ["where facts come from"]
+
+
+def test_only_the_notices_own_sentence_or_list_item_can_explain_it(profile):
+    """The independent review of H-7 (2026-11-11): any scoping word within two lines, a
+    heading included, hid a real second notice period. Only the sentence itself, or its own
+    list item, explains it."""
+    _add(profile, "CLAUDE.md", "\n## Applies only with recruiters\n- Notice period: two months.")
+    assert [f["said"] for f in C.findings()] == ["two months"]
+
+
+def test_a_neighbouring_list_item_does_not_explain_a_notice(profile):
+    _add(profile, "CLAUDE.md", "\n- Notice period: two months.\n"
+         "- Every other employer hears about the team only once they ask.")
+    assert [f["said"] for f in C.findings()] == ["two months"]
+
+
+def test_only_a_line_making_a_file_the_source_of_facts_is_named_never_a_negated_one(profile):
+    """The independent review of PD-4 (2026-11-11): a bare "overrides", "takes precedence" or
+    "outranks", and a line saying a file is never a source, were named as ranking a file
+    above the profile."""
+    _add(profile, "CLAUDE.md", "\n- The posting's own wording takes precedence over notes.md.\n"
+         "- This rule overrides the one in setup.md.\n"
+         "- documents/cv/Morgan_Ellis_Resume_2025.pdf is never a source of facts.\n"
+         "- An older resume (old_resume.pdf) is not the source of truth.")
+    assert C.findings() == []
+    _add(profile, "01-candidate-profile.md",
+         "Facts come from documents/cv/Morgan_Ellis_Resume_2025.pdf first.")
+    assert [f["said"] for f in C.findings()] == ["documents/cv/Morgan_Ellis_Resume_2025.pdf"]

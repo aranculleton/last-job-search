@@ -80,8 +80,21 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from personal_paths import _regex  # noqa: E402
 from personal_paths import is_personal as _personal_here  # noqa: E402
 
-# A cloud session sets CLAUDE_CODE_REMOTE; anything else is a person's own computer.
-CLOUD = os.environ.get("CLAUDE_CODE_REMOTE", "").lower() == "true"
+# A cloud session: CLAUDE_CODE_REMOTE and the cloud container's own markers (place.in_cloud);
+# anything else is a person's own computer, a session driven from the phone included
+# (claude_surfaces: remote-control).
+def _in_cloud() -> bool:
+    """place.in_cloud: the flag and the cloud container's own markers, never the flag alone.
+    A copy too old to have place.py (this file is brought in first by an update) reads the
+    flag, as before."""
+    try:
+        import place
+        return place.in_cloud()
+    except Exception:  # noqa: BLE001
+        return os.environ.get("CLAUDE_CODE_REMOTE", "").lower() == "true"
+
+
+CLOUD = _in_cloud()
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 APP_URL = "https://github.com/aranculleton/last-job-search"
@@ -139,6 +152,18 @@ def app_portals() -> list[str]:
 # that hangs (a sign-in window nobody sees, a network that never answers) must not hold the
 # chat for ever; ten minutes is far beyond any fetch this repo has made.
 GIT_TIMEOUT = 600
+# How long a look that changes nothing (--check) waits on the network for one step: it ran
+# for over two minutes with no output on a computer and was stopped (audit SV-8). A report
+# that cannot reach the app says so and ends.
+CHECK_NET_TIMEOUT = 60
+_NET = {"timeout": GIT_TIMEOUT}
+
+
+def _net_timeout() -> float:
+    try:
+        return float(os.environ.get("LJS_NET_TIMEOUT") or _NET["timeout"])
+    except ValueError:
+        return _NET["timeout"]
 NO_GIT = ("sync_app: git is not installed on this computer, so nothing was changed. "
           "python3 tools/env_check.py says how to put it on.")
 
@@ -155,6 +180,18 @@ def _git_env() -> dict:
     return env
 
 
+_GIT_ON: dict = {}
+
+
+def _has_git(path) -> bool:
+    """Is there a git on this PATH? Asked once for each PATH a process runs with."""
+    key = str(path or "")
+    if key not in _GIT_ON:
+        import shutil
+        _GIT_ON[key] = bool(shutil.which("git", path=path))
+    return _GIT_ON[key]
+
+
 def run_git(root: str, *args: str, check: bool = False,
             timeout: float = GIT_TIMEOUT) -> subprocess.CompletedProcess:
     """git -C root <args>, its output read as UTF-8 whatever the computer's own encoding
@@ -164,14 +201,36 @@ def run_git(root: str, *args: str, check: bool = False,
     the helpers other tools call (stale(), behind_sync()) never stop them; a timeout is one
     too (exit 124)."""
     cmd = ["git", "-C", root, *args]
-    try:
-        r = subprocess.run(cmd, text=True, capture_output=True, encoding="utf-8",
-                           errors="replace", env=_git_env(), timeout=timeout)
-    except OSError:
+    env = _git_env()
+    # Looked up first, by the PATH git would be run with: a Mac with no git on that PATH ran
+    # something all the same and the sync said nothing at all (the suite on the Mac,
+    # 2026-11-11), where it should say in one line that git is missing.
+    if not _has_git(env.get("PATH")):
         r = subprocess.CompletedProcess(cmd, 127, "", NO_GIT)
-    except subprocess.TimeoutExpired:
-        r = subprocess.CompletedProcess(cmd, 124, "", f"git {args[0] if args else ''} took "
-                                        f"longer than {int(timeout)} seconds and was stopped")
+        if check:
+            raise subprocess.CalledProcessError(r.returncode, cmd, r.stdout, r.stderr)
+        return r
+    # Its output goes to files, never pipes: on Windows a fetch's network helper
+    # (git-remote-https) outlived the git a timeout stopped and held the pipes open, and the
+    # wait for them ran past every timeout with nothing said (the suite on Windows,
+    # 2026-11-11). A file needs no reader, so the stop is the end.
+    import tempfile
+    with tempfile.TemporaryFile("w+", encoding="utf-8", errors="replace") as so, \
+            tempfile.TemporaryFile("w+", encoding="utf-8", errors="replace") as se:
+        try:
+            r = subprocess.run(cmd, stdout=so, stderr=se, stdin=subprocess.DEVNULL,
+                               env=env, timeout=timeout)
+        except OSError:
+            r = subprocess.CompletedProcess(cmd, 127, "", NO_GIT)
+        except subprocess.TimeoutExpired:
+            r = subprocess.CompletedProcess(cmd, 124, "", f"git {args[0] if args else ''} "
+                                            f"took longer than {int(timeout)} seconds and was "
+                                            "stopped")
+        else:
+            if r.stdout is None and r.stderr is None:      # the real run: read what it wrote
+                so.seek(0)
+                se.seek(0)
+                r = subprocess.CompletedProcess(cmd, r.returncode, so.read(), se.read())
     if check and r.returncode:
         raise subprocess.CalledProcessError(r.returncode, cmd, r.stdout, r.stderr)
     return r
@@ -217,7 +276,7 @@ def fetch() -> str | None:
         git("remote", "add", REMOTE, url)
     elif have.stdout.strip() != url:
         git("remote", "set-url", REMOTE, url)
-    r = git("fetch", "--quiet", "--no-tags", REMOTE, BRANCH, check=False)
+    r = run_git(ROOT, "fetch", "--quiet", "--no-tags", REMOTE, BRANCH, timeout=_net_timeout())
     if r.returncode != 0:
         last = (r.stderr.strip().splitlines() or ["no error text"])[-1]
         return f"the app could not be reached at {url}: {last}"
@@ -296,7 +355,7 @@ def maintainers() -> bool:
 
 def newest_release() -> str | None:
     """The app's newest vX.Y.Z tag, by version number, or None if it has none."""
-    r = git("ls-remote", "--tags", "--refs", REMOTE, "v*", check=False)
+    r = run_git(ROOT, "ls-remote", "--tags", "--refs", REMOTE, "v*", timeout=_net_timeout())
     tags = []
     for line in r.stdout.splitlines() if r.returncode == 0 else []:
         name = line.split("refs/tags/", 1)[-1].strip()
@@ -324,8 +383,8 @@ def follow() -> str:
         return "following the app's master: it has no release yet"
     if merge_base() is None:
         return "following the app's master for this first sync; releases after this"
-    r = git("fetch", "--quiet", "--no-tags", REMOTE,
-            f"+refs/tags/{tag}:refs/remotes/{REMOTE}/release-tag", check=False)
+    r = run_git(ROOT, "fetch", "--quiet", "--no-tags", REMOTE,
+                f"+refs/tags/{tag}:refs/remotes/{REMOTE}/release-tag", timeout=_net_timeout())
     sha = git("rev-parse", f"refs/remotes/{REMOTE}/release-tag^{{commit}}", check=False)
     if r.returncode != 0 or sha.returncode != 0:
         return f"following the app's master: release {tag} could not be fetched"
@@ -519,9 +578,46 @@ def _stop_dirty(dirty: list[str]) -> int:
     return 1
 
 
+# A landing in progress in this copy (tools/land.py, its lock in the git folder) merges master
+# itself and tests the tree it pushes. app_setup.take_master steps aside from it; the day's
+# check merged master and the app's update under it, from every wake's --if-stale, so the
+# landing tested one tree and pushed another, or two merges fought over git's index (the
+# engine review, 2026-11-11). Each merge here now holds the landing's own lock the same way.
+SAVE_RUNNING = ("sync_app: a save is running in this copy, so nothing was brought in now; the "
+                "next check brings it in.")
+_STEPPED_ASIDE: list = []
+
+
+def _apart_from_a_landing(step):
+    """`step()` under the landing's lock (land._holding), as take_master runs its merge: while
+    another landing holds it, nothing is merged, SAVE_RUNNING is said, and the day's check is
+    left to run again (`_STEPPED_ASIDE`)."""
+    try:
+        import land
+        held = land._holding(ROOT)
+        mine = held.__enter__()
+    except Exception:  # noqa: BLE001  an older or half-made copy with no landing: as before
+        held, mine = None, True
+    try:
+        if not mine:
+            if not _STEPPED_ASIDE:
+                print(SAVE_RUNNING)
+            _STEPPED_ASIDE.append(True)
+            return 0
+        return step()
+    finally:
+        if held is not None:
+            held.__exit__(None, None, None)
+
+
 def sync() -> int:
     """The update: the app's waiting commits merged in. Every run takes it by default; where
-    the person's profile says updates wait for their word, only --update does."""
+    the person's profile says updates wait for their word, only --update does. Never while a
+    landing runs in this copy (_apart_from_a_landing)."""
+    return _apart_from_a_landing(_sync)
+
+
+def _sync() -> int:
     dirty = _unsaved()
     if dirty:
         return _stop_dirty(dirty)
@@ -1069,7 +1165,12 @@ def _identity() -> None:
 
 
 def pull_master() -> int:
-    """A session's first step: bring in what other chats merged to master."""
+    """A session's first step: bring in what other chats merged to master. Never while a
+    landing runs in this copy (_apart_from_a_landing)."""
+    return _apart_from_a_landing(_pull_master)
+
+
+def _pull_master() -> int:
     _driver()
     before = git("rev-parse", "-q", "--verify", "refs/remotes/origin/master", check=False).stdout.strip()
     if git("fetch", "-q", "origin", "master", check=False).returncode:
@@ -1108,8 +1209,9 @@ def pull_master() -> int:
     if app_before and app_tree(ROOT) != app_before:
         # Another chat's sync brought the update to master: the person's own tests are checked
         # against it here too, never only in the chat that took it (a person's copy, 2026-11-05:
-        # five failed after an update another run took, and nothing here said so).
-        own_tests()
+        # five failed after an update another run took, and nothing here said so). In the
+        # background: nothing waits on the whole suite (D2).
+        own_tests_later()
     return 0
 
 
@@ -1304,7 +1406,9 @@ def _utf8_stdio() -> None:
 
 
 # The runs that are the day's check: a plain run, --if-stale and --update.
-_NOT_THE_CHECK = ("--check", "--adopt", "--own-tests", "--own-test-risks", "--pull",
+_NOT_THE_CHECK = ("--check", "--adopt", "--own-tests", "--own-test-risks", "--own-tests-record",
+                  "--own-tests-check",
+                  "--pull",
                   "--worktree", "--app-watch-run", "-h", "--help")
 
 
@@ -1339,6 +1443,9 @@ def _main(argv: list[str]) -> int:
     mode.add_argument("--worktree", metavar="NAME",
                       help="a folder of this chat's own, inside this one, on a new branch from "
                            "master: for a second chat on the same computer")
+    # The own tests' run in the background, started by a sync (own_tests_later): never by hand.
+    mode.add_argument("--own-tests-record", dest="own_tests_record", action="store_true",
+                      help=argparse.SUPPRESS)
     # The app watch's own process, started by a sync (app_watch): never run by hand.
     mode.add_argument("--app-watch-run", dest="app_watch_run", action="store_true",
                       help=argparse.SUPPRESS)
@@ -1347,6 +1454,9 @@ def _main(argv: list[str]) -> int:
     ap.add_argument("--tools", default=None, metavar="LIST",
                     help="the browser tools this chat has (browser, chrome, chrome-off, enable, "
                          "none): the place check says what to do, once in a chat")
+    if argv[:1] == ["--own-tests-check"]:
+        # The check's own run (tools/ci_local.sh): what follows is the landing's set-aside list.
+        return own_tests_check(ROOT, argv[1:])
     a = ap.parse_args(argv)
     if run_git(ROOT, "--version").returncode == 127:
         print(NO_GIT)
@@ -1361,6 +1471,9 @@ def _main(argv: list[str]) -> int:
         if risk:
             print(risk)
         return 1 if failures else 0
+    if a.own_tests_record:
+        own_tests(ROOT)
+        return 0
     if a.own_test_risks:
         risk = own_test_risks_report(own_test_risks())
         if risk:
@@ -1398,6 +1511,10 @@ def _main(argv: list[str]) -> int:
         rc = pull_master()
         if rc:
             return rc
+    if a.check:
+        # Said at once: the look reaches the app over the network, and said nothing for minutes.
+        print("sync_app: looking at the app; nothing is changed.", flush=True)
+        _NET["timeout"] = CHECK_NET_TIMEOUT
     err = fetch()
     if err:
         print(f"sync_app: {err}")
@@ -1416,10 +1533,11 @@ def _main(argv: list[str]) -> int:
     # word: then only --update takes one and every other run looks and changes nothing.
     rc = sync() if a.update or updates() == "auto" else look()
     if rc == 0:
-        _record_check()
+        if not _STEPPED_ASIDE:
+            _record_check()
         landed = git("rev-parse", "HEAD", check=False).stdout.strip() != before
         if landed:
-            own_tests()
+            own_tests_later()
         app_watch(landed)
         said = plain_state_endings()
         if said:
@@ -1509,21 +1627,35 @@ def _gone(root: str, message: str) -> str:
     return ""
 
 
-def own_test_failures(root: str | None = None) -> list[tuple[str, str]] | None:
+def own_test_failures(root: str | None = None, only: list[str] | None = None
+                      ) -> list[tuple[str, str]] | None:
     """[(test, failure message)] for the person's own tests (profile/tests) that fail on
-    this tree, or None when there are none to run or they could not be run."""
+    this tree, or None when there are none to run or they could not be run. `only`: just
+    these tests (as a record names them), the others not run."""
     import tempfile
     import xml.etree.ElementTree as ET
     root = root or ROOT
     tests = os.path.join(root, "profile", "tests")
     if not os.path.isdir(tests):
         return None
+    if only is not None:
+        import land
+        ids = [i for i in (land._node_id(root, n) for n in only) if i]
+        if not ids:
+            return None
+        tests_args = ids
+    else:
+        tests_args = [tests]
     with tempfile.TemporaryDirectory() as tmp:
         report = os.path.join(tmp, "report.xml")
         try:
             # No compiled copies left in profile/tests/__pycache__ to be committed.
+            # A test file that no longer imports (an update took away a name it uses) is
+            # named with the rest, never "could not be run": stopped there, the save that sets
+            # them aside had nothing to set aside, and every save stopped (audit SV-3).
             r = subprocess.run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider",
-                                "--tb=no", f"--junitxml={report}", tests], cwd=root, text=True,
+                                "--tb=no", "--continue-on-collection-errors",
+                                f"--junitxml={report}", *tests_args], cwd=root, text=True,
                                capture_output=True, timeout=300,
                                env=dict(os.environ, PYTHONDONTWRITEBYTECODE="1"),
                                encoding="utf-8", errors="replace")
@@ -1778,15 +1910,124 @@ def own_tests_owed(root: str | None = None, clean_too: bool = False) -> list[str
     rec = own_tests_record(root)
     if not rec:
         return []
+    app_now = app_tree(root)
     if not rec.get("failures"):
-        if not (clean_too and rec.get("app") and rec["app"] != app_tree(root)):
-            return []
-    if rec.get("tree") != tests_tree(root) or rec.get("app", app_tree(root)) != app_tree(root) \
-            or _tests_edited(root):
-        failures = own_test_failures(root)
-        record_own_tests(root, failures)
+        if clean_too and rec.get("app") and rec["app"] != app_now:
+            # Made on other app code: checked again in the background, never here, where a
+            # command that starts work or the update check waited 71 seconds on it (D2).
+            own_tests_later(root)
+        return []
+    if rec.get("app", app_now) != app_now:
+        own_tests_later(root)          # the whole suite, on the new code, in the background
+    elif rec.get("tree") != tests_tree(root) or _tests_edited(root):
+        # Their tests changed (being brought in line): only the ones that failed are run again,
+        # in seconds, never the whole suite.
+        again = own_test_failures(root, only=[str(f[0]) for f in rec["failures"] if f])
+        # Could not run (None): the record is stamped with this tree all the same, its
+        # failures kept, so the next look does not run them again (the review of D2).
+        record_own_tests(root, again)
         rec = own_tests_record(root) or {}
     return [str(f[0]) for f in rec.get("failures") or [] if f]
+
+
+# The most test processes the person's own tests take: "-n auto" started about 25 on a large
+# computer for a suite that takes 41 seconds in four (CS-1, 2026-11-10).
+OWN_WORKERS = 4
+NO_XDIST = ("  pytest-xdist is not installed for this Python, so your own tests run in one "
+            "process, more slowly")
+
+
+def _xdist() -> bool:
+    import importlib.util
+    return importlib.util.find_spec("xdist") is not None
+
+
+def failed_ids(root: str, report: str) -> list[str]:
+    """The pytest ids of the tests a junit report says failed or could not be collected."""
+    import xml.etree.ElementTree as ET
+    import land
+    out = []
+    try:
+        cases = list(ET.parse(report).iter("testcase"))
+    except (OSError, ET.ParseError):
+        return []
+    for case in cases:
+        if case.find("failure") is not None or case.find("error") is not None:
+            name = f"{case.get('classname', '')}::{case.get('name', '')}".strip(":")
+            got = land._node_id(root, name)
+            if got:
+                out.append(got)
+    return list(dict.fromkeys(out))
+
+
+def own_tests_check(root: str, aside: list[str], run=subprocess.run, workers: int = 0) -> int:
+    """The check's run of the person's own tests (tools/ci_local.sh): in parallel on at most
+    OWN_WORKERS processes, and where some fail, only those once more in one process, so a test
+    that fails only beside another never holds a save. The whole suite again in one process
+    took about five minutes against 41 seconds, and its output was thrown away (CS-1). `aside`:
+    the --deselect and --ignore arguments the landing gave. Prints what the last run printed."""
+    import tempfile
+    base = [sys.executable, "-m", "pytest", "profile/tests", "-q", "-p", "no:cacheprovider",
+            "--continue-on-collection-errors", *aside]
+    workers = workers or max(1, min(OWN_WORKERS, os.cpu_count() or 1))
+    if _xdist() and workers > 1:
+        with tempfile.TemporaryDirectory() as tmp:
+            report = os.path.join(tmp, "own.xml")
+            r = run(base + ["-n", str(workers), "--dist", "loadfile", f"--junitxml={report}"],
+                    cwd=root, capture_output=True, text=True, encoding="utf-8",
+                    errors="replace")
+            if r.returncode in (0, 5):
+                said = (r.stdout or "").rstrip().splitlines()
+                print(said[-1] if said else "")
+                return 0
+            ids = failed_ids(root, report)
+        if ids:
+            r = run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider",
+                     "--continue-on-collection-errors", *ids], cwd=root)
+            return 0 if r.returncode in (0, 5) else r.returncode
+    elif not _xdist():
+        print(NO_XDIST)
+    r = run(base, cwd=root)
+    return 0 if r.returncode in (0, 5) else r.returncode
+
+
+def own_tests_later(root: str | None = None) -> bool:
+    """own_tests in a process of its own, so nothing waits on the person's whole suite (71
+    seconds in one copy, run inside the update check and the start: D2, 2026-11-10). What it
+    finds is recorded and the own-tests improvement queued, as own_tests does, and the next
+    command that starts work says it (own_tests_step). True when it started."""
+    root = root or ROOT
+    if not os.path.isdir(os.path.join(root, "profile", "tests")):
+        return False
+    mark = _mark_path(root)
+    head = _git_out(root, "rev-parse", "HEAD")
+    if mark and head:
+        try:
+            with open(mark, encoding="utf-8") as fh:
+                if fh.read().strip() == "later " + head:
+                    return False       # started for this commit already
+        except OSError:
+            pass
+        try:
+            with open(mark, "w", encoding="utf-8", newline="\n") as fh:
+                fh.write("later " + head)
+        except OSError:
+            pass
+    kw = {"start_new_session": True} if os.name == "posix" else \
+        {"creationflags": getattr(subprocess, "DETACHED_PROCESS", 0)
+         | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)}
+    try:
+        _spawn([sys.executable, os.path.abspath(__file__), "--own-tests-record"], cwd=root,
+               stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+               close_fds=True, **kw)
+    except OSError:
+        return False
+    return True
+
+
+def _spawn(cmd: list[str], **kw):
+    """A process of its own, not waited for (tests stand in for it)."""
+    return subprocess.Popen(cmd, **kw)
 
 
 # Said first by every command that starts work (app.py start, wake and view, the brief's run)
@@ -1801,8 +2042,10 @@ OWN_TESTS_STEP = ("Claude: {n} of the person's own tests fail after an update ({
                   "Nothing waits on them: saves set them aside, and bringing them in line is "
                   "queued as a background improvement (own-tests) that needs nobody. Go on with "
                   "the work; where this chat is not on one big job and nothing has started it, "
-                  "start one background agent (model sonnet) that follows "
-                  ".claude/commands/upgrade.md for own-tests. Tell the person at most: \"{said}\"")
+                  "start one background agent (Agent tool, model sonnet, isolation worktree, so "
+                  "a save made meanwhile never takes half of it) that follows "
+                  ".claude/commands/upgrade.md for own-tests, and when it ends with \"Finished "
+                  "the improvements\", merge its branch. Tell the person at most: \"{said}\"")
 
 
 def own_tests_step(root: str | None = None) -> str:
@@ -1862,7 +2105,7 @@ def own_tests_after_sync(root: str | None = None) -> None:
                 return
     except OSError:
         pass
-    own_tests(root)
+    own_tests_later(root)
 
 
 WATCHED = "ljs-app-watch-day"       # in the git folder: the day the app watch last finished
@@ -2004,7 +2247,7 @@ def network_check() -> None:
     if not os.path.isfile(script) or not os.path.isdir(os.path.join(ROOT, "profile")):
         return
     try:
-        r = subprocess.run([sys.executable, script, "--say"], cwd=ROOT, text=True,
+        r = subprocess.run([sys.executable, script, "--say", "--today"], cwd=ROOT, text=True,
                            capture_output=True, timeout=120, encoding="utf-8", errors="replace")
     except (OSError, subprocess.TimeoutExpired):
         return

@@ -717,7 +717,7 @@ def status(today=None, tools=(), found=None, threads=None) -> dict:
     Claude does the step in that browser; without, the person is given the steps once.
     `found` stands for the downloads find_exports() would see."""
     st = _state()
-    today = st._need_date(today or datetime.date.today().isoformat(), "today")
+    today = st._need_date(today or person.today().isoformat(), "today")
     have = {str(t).strip().lower() for t in tools or ()} & set(BROWSERS)
     taken, _how = last_taken(threads)
     rec = load_record()
@@ -780,7 +780,7 @@ def status(today=None, tools=(), found=None, threads=None) -> dict:
 def requested(today=None) -> dict:
     """Record that the download was asked for on LinkedIn, and when."""
     st = _state()
-    day = st._need_date(today or datetime.date.today().isoformat(), "date")
+    day = st._need_date(today or person.today().isoformat(), "date")
     return save_record({"requested_on": day.isoformat()})
 
 
@@ -871,7 +871,7 @@ def take(srcs, contacts_path: str | None = None, threads_path: str | None = None
     reply gets its follow-up date (state.write_follow_ups), and the day it was taken is
     recorded for the brief's fortnightly ask (`due`)."""
     st = _state()
-    today = datetime.date.today()
+    today = person.today()
     cp, tp = contacts_path or st.CONTACTS_CSV, threads_path or st.THREADS_CSV
     held = read("connections", default_folder())
     taken, _how = last_taken(st.load_threads(tp) if os.path.exists(tp) else [])
@@ -1181,8 +1181,9 @@ def match_more(contacts, threads, name, url, said=(), employer: str = "") -> tup
         mine = st.person_name(c.get("name")).split()
         if len(mine) != 1 or st._slug(mine[0]) != first:
             continue
-        ck = str(c.get("company_key") or "").strip() or (
-            st.company_key(c.get("company")) if str(c.get("company") or "").strip() else "")
+        # The employer's own name decides (company_key.row_key), never a stored key written
+        # before an alias was added (the audit, 2026-11-10: 39 rows in one book).
+        ck = st.row_company_key(c)
         if ck and ck != key:
             continue
         theirs = profile_handle_of(c)
@@ -1214,6 +1215,8 @@ REQUEST_SLACK_DAYS = 7
 # which is in UTC, can be a day apart.
 MESSAGE_SLACK_DAYS = 1
 EXPORT_NOTE = "from LinkedIn's export"
+# What a row logged from its draft says once the download has given it the words as they went.
+RESAID = "the words as sent, from your LinkedIn download"
 
 
 def _clean(text) -> str:
@@ -1363,6 +1366,7 @@ def _twice(threads) -> list:
         # Each row the app logged stands for one message: a message sent twice in a day, logged
         # once and listed twice by the export, keeps its second.
         used: set = set()
+        gone: set = set()
         for r in rows:
             if note not in str(r.get("summary") or "").lower() or not str(r.get("full_text") or "").strip():
                 continue
@@ -1370,8 +1374,18 @@ def _twice(threads) -> list:
             match = next((o for o in own if id(o) not in used and kind(o) == kind(r)
                           and _near(st.as_date(o.get("date")), when, MESSAGE_SLACK_DAYS)
                           and same_text(o.get("full_text"), r.get("full_text"))), None)
+            if match is None and st._direction(r) == "out":
+                # The note a request carried, listed again as a message: the export's message
+                # beside any request, or the export's request beside the app's own message.
+                # One send logged twice read as two unanswered messages (the audit, 2026-11-10).
+                pool = rows if not st.is_request(r) else own
+                match = next((o for o in pool if o is not r and id(o) not in gone
+                              and st._direction(o) == "out" and st.is_request(o) != st.is_request(r)
+                              and _near(st.as_date(o.get("date")), when, REQUEST_SLACK_DAYS)
+                              and same_text(o.get("full_text"), r.get("full_text"))), None)
             if match is not None:
                 used.add(id(match))
+                gone.add(id(r))
                 out.append((r, match))
     return out
 
@@ -1466,7 +1480,7 @@ def plan_history(contacts, threads, src=None, mine=None) -> dict:
         mine = (next((st.profile_handle(r.get("SENDER PROFILE URL")) for r in msgs["rows"]
                       if name_key(r.get("FROM")) == mine[1]
                       and st.profile_handle(r.get("SENDER PROFILE URL"))), ""), mine[1])
-    out = {"add": [], "fill": [], "redate": [], "mark": [], "who": [],
+    out = {"add": [], "fill": [], "redate": [], "mark": [], "who": [], "resay": [],
            "joined": {"profile address": 0, "name": 0},
            "unmatched": [], "ambiguous": [], "groups": 0, "drafts": 0, "tables": tables,
            "problem": ""}
@@ -1564,7 +1578,44 @@ def plan_history(contacts, threads, src=None, mine=None) -> dict:
                     and same_text(r.get("full_text"), text):
                 if at and st.as_date(r.get("date")) == when:
                     seen_at.setdefault(id(r), at)
+                # Its own copy found: no other message of the download is ever taken for it.
+                claimed.add(id(r))
                 return
+        if text and direction == "out":
+            # The note a request carried, which the download lists again among the messages
+            # on the day they accepted: one message, already logged (the audit, 2026-11-10:
+            # a person written to once read as two unanswered messages).
+            if any(st.is_request(r) and _near(st.as_date(r.get("date")), when, REQUEST_SLACK_DAYS)
+                   and same_text(r.get("full_text"), text) for r in rows):
+                return
+            # A message the app logged from its draft, which went edited: the download's copy
+            # is the words as sent, and their day, on the row already logged (state._one_send).
+            probe = {"date": when.isoformat(), "direction": "out", "channel": "message",
+                     "summary": summary, "full_text": text}
+            took = {id(o) for o, _t, _d in out["resay"]}
+            ordered = st._ordered(rows)
+
+            def between(r):
+                """A message of theirs between the logged row and the download's: then the two
+                answer different things (a reply to "could we do Friday instead?")."""
+                i = next((n for n, x in enumerate(ordered) if x is r), None)
+                day = st.as_date(r.get("date"))
+                if i is None or day is None:
+                    return True
+                if when >= day:
+                    return any(st.said_something(x) and (st.as_date(x.get("date")) or day) <= when
+                               for x in ordered[i + 1:])
+                return any(st.said_something(x) and (st.as_date(x.get("date")) or day) >= when
+                           for x in ordered[:i])
+            for r in rows:
+                if (st._direction(r) == "out" and id(r) not in took and id(r) not in claimed
+                        and not st.is_request(r)
+                        and EXPORT_NOTE.lower() not in str(r.get("summary") or "").lower()
+                        and st._one_send(r, probe) and not between(r)):
+                    out["resay"].append((r, text, when.isoformat()))
+                    if at:
+                        seen_at.setdefault(id(r), at)
+                    return
         files = _file_names(attached)
         if not text and files:
             # A resume sent alone on LinkedIn, which the app logged with words: it needs
@@ -1680,6 +1731,11 @@ def plan_history(contacts, threads, src=None, mine=None) -> dict:
                 rows = mine_for(cid)
                 same = [x for x in rows if st.is_request(x)
                         and _near(st.as_date(x.get("date")), when, REQUEST_SLACK_DAYS)]
+                # The same note logged as a message (a first message, by hand): one send, never
+                # a request beside it (the audit, 2026-11-10).
+                same = same or [x for x in rows if note and st._direction(x) == "out"
+                                and _near(st.as_date(x.get("date")), when, REQUEST_SLACK_DAYS)
+                                and same_text(x.get("full_text"), note)]
                 # A request recorded from a Pending page is logged the day it was seen, or the
                 # latest day "Sent 1 month ago" can mean: the export's request on or before
                 # that day is the same one, and its day is the true one. Seven days apart, it
@@ -1769,7 +1825,8 @@ def plan_history(contacts, threads, src=None, mine=None) -> dict:
             logged(row)
 
     touched = ({r["contact_id"] for r in out["add"]}
-               | {r.get("contact_id") for r, _ in out["fill"] + out["redate"]})
+               | {r.get("contact_id") for r, _ in out["fill"] + out["redate"]}
+               | {r.get("contact_id") for r, _t, _d in out["resay"]})
     for cid in touched:
         how = joined_ids.get(cid)
         if how in out["joined"] or how in ("logged message", "first name"):
@@ -1812,6 +1869,12 @@ def apply_history(threads, plan, contacts=None) -> int:
     behind put every imported thread in front of the person as a contradiction."""
     for row, text in plan["fill"]:
         row["full_text"] = text
+    resay = plan.get("resay") or []
+    for row, text, day_ in resay:
+        # The words as they went, and their day, from the download (RESAID).
+        row["full_text"], row["date"] = text, day_
+        if RESAID not in str(row.get("summary") or ""):
+            row["summary"] = "; ".join(x for x in (str(row.get("summary") or "").strip(), RESAID) if x)
     plan["filled"] = fill_who(plan.get("who") or ())
     for row, summary in plan.get("mark") or ():
         row["summary"] = summary
@@ -1852,8 +1915,22 @@ def apply_history(threads, plan, contacts=None) -> int:
     if contacts is not None:
         settle(contacts, threads, {r["contact_id"] for r in plan["add"]}
                | {str(r.get("contact_id") or "") for r, _ in plan["fill"]}
-               | {str(r.get("contact_id") or "") for r, _ in redate})
-    return len(plan["add"]) + len(plan["fill"]) + len(redate) + len(plan.get("mark") or ())
+               | {str(r.get("contact_id") or "") for r, _ in redate}
+               | {str(r.get("contact_id") or "") for r, _t, _d in resay})
+    return (len(plan["add"]) + len(plan["fill"]) + len(redate) + len(plan.get("mark") or ())
+            + len(resay))
+
+
+# An event, not an employer: "6th Annual ... Summit | ..." was taken from the download as one
+# person's employer (the audit, 2026-11-10).
+# Only an event's own shape: "Nth annual", a " | " between names, or an event word beside a
+# year or a number. An event word alone is a firm as often as not ("Summit Partners", "The
+# Conference Board"), and those were left blank (the review, 2026-11-11).
+_EVENT_WORD = (r"(?:summit|conference|expo|meetup|hackathon|webinar|symposium|congress|"
+               r"forum|festival)")
+EVENT_SHAPED = re.compile(r"\b\d+(?:st|nd|rd|th)\s+annual\b|\s\|\s"
+                          r"|\b" + _EVENT_WORD + r"\b\W*(?:'?\d{2,4})\b"
+                          r"|\b(?:19|20)\d{2}\b\W*(?:\w+\W+){0,3}" + _EVENT_WORD + r"\b", re.I)
 
 
 def fill_who(who) -> list:
@@ -1868,6 +1945,7 @@ def fill_who(who) -> list:
         url = rest[1] if len(rest) > 1 else ""
         got = []
         had = st.person_name(c.get("name")).split()
+        co = "" if EVENT_SHAPED.search(str(co or "")) else co
         for field, value in (("name", nm), ("company", co), ("title", ti),
                              ("linkedin_url", url if st.profile_handle(url) else "")):
             # A first name alone gives way to the whole name that starts with it.
@@ -1942,10 +2020,7 @@ def _could_be_one(a, b) -> bool:
     if ha and hb and ha != hb:
         return False
 
-    def firm(c):
-        return str(c.get("company_key") or "").strip() or (
-            st.company_key(c.get("company")) if str(c.get("company") or "").strip() else "")
-    fa, fb = firm(a), firm(b)
+    fa, fb = st.row_company_key(a), st.row_company_key(b)
     if fa and fb and fa != fb:
         return False
     return not _not_same(a, b)
@@ -2424,6 +2499,10 @@ def _cli_history(a) -> int:
         n_ = len(plan["redate"])
         print(f"  {n_} request{'s' if n_ != 1 else ''} recorded from a Pending page, given the "
               "earlier day the export says it went")
+    if plan.get("resay"):
+        n_ = len(plan["resay"])
+        print(f"  {n_} message{'s' if n_ != 1 else ''} logged from a draft given the words "
+              "and the day they went with, never added again beside it")
     if plan.get("mark"):
         n_ = len(plan["mark"])
         print(f"  {n_} repeat{'s' if n_ != 1 else ''} already logged (the same words to one "
@@ -2513,14 +2592,14 @@ def main(argv=None) -> int:
     t.add_argument("--contacts", default=st.CONTACTS_CSV)
     t.add_argument("--threads", default=st.THREADS_CSV)
     d = sub.add_parser("due", help="one line once the last download is due again (every_days)")
-    d.add_argument("--today", default=datetime.date.today().isoformat())
+    d.add_argument("--today", default=person.today().isoformat())
     stt = sub.add_parser("status", help="the next step for the download: request, waiting, "
                                         "take or fresh")
     stt.add_argument("--tools", default="", help="this chat's browser tools: browser, chrome, "
                                                  "enable, or none")
-    stt.add_argument("--today", default=datetime.date.today().isoformat())
+    stt.add_argument("--today", default=person.today().isoformat())
     rq = sub.add_parser("requested", help="record that it was asked for on LinkedIn")
-    rq.add_argument("--date", default=datetime.date.today().isoformat())
+    rq.add_argument("--date", default=person.today().isoformat())
     f = sub.add_parser("files", help="what the export holds, and what is missing")
     f.add_argument("src", nargs="?", default=None)
     s = sub.add_parser("save", help="copy the named files into documents/linkedin/")
@@ -2533,7 +2612,7 @@ def main(argv=None) -> int:
         p.add_argument("--from", dest="src", default=None)
         p.add_argument("--contacts", default=st.CONTACTS_CSV)
         p.add_argument("--threads", default=st.THREADS_CSV)
-        p.add_argument("--today", default=datetime.date.today().isoformat())
+        p.add_argument("--today", default=person.today().isoformat())
         if name == "history":
             p.add_argument("--apply", action="store_true")
         if name == "pending":

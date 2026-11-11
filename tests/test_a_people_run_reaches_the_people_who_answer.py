@@ -375,10 +375,11 @@ def test_a_batch_is_shown_only_what_involves_its_own_notes(here, monkeypatch, ca
     reading.write_draft("p3", "Hi Person, congratulations on the new depot. I work on routing "
                         "for van fleets. What changed most since it opened?", "Person 3")
     # This run's notes are p2 and p3, on today's short list: the older likeness is not theirs.
-    reading.shortlist(["p2", "p3"], today=reading.person.today(), contacts=here)
+    listed = reading.shortlist(["p2", "p3"], today=reading.person.today(), contacts=here)
     capsys.readouterr()
-    assert reading.main(["batch"]) == 0
+    code = reading.main(["batch"])
     out = capsys.readouterr().out
+    assert code == 0, (listed, out)
     assert "2 queued note(s) checked, against 2 older one(s)" in out
     assert "p0" not in out and "p1" not in out
     # Named ids, the same: only what involves them.

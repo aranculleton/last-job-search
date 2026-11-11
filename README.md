@@ -8,7 +8,7 @@ private page. It never sends anything for you.
 [![CI](https://github.com/aranculleton/last-job-search/actions/workflows/ci.yml/badge.svg)](https://github.com/aranculleton/last-job-search/actions/workflows/ci.yml)
 
 <p align="center">
-  <img src="docs/images/page-brief-light-dark-c4315f6c.png" width="720"
+  <img src="docs/images/page-brief-light-dark-deab7c36.png" width="720"
        alt="The Brief, light on one side of a diagonal cut and dark on the other: today's most pressing thing, the next three things to do, who is waiting on you, the best new jobs, news with what to do with each item, and your numbers by week">
   <br>
   <sub><b>The Brief</b>: your day at a glance, in light or dark</sub>
@@ -36,17 +36,17 @@ No resume yet? Say "build one with me". [START_HERE.md](START_HERE.md) has each 
 ## What it looks like
 
 <p align="center">
-  <img src="docs/images/page-demo-6642b2cc.gif" width="720"
+  <img src="docs/images/page-demo-e21026de.gif" width="720"
        alt="A walk through the page: the Brief, To do, Jobs, Contacts, Coming up, Chat and Settings">
   <br>
   <sub>A walk through the page. Every name is made up.</sub>
 </p>
 
 <p align="center">
-  <img src="docs/images/page-contacts-3208bb25.png" width="62%"
+  <img src="docs/images/page-contacts-a3edc3d8.png" width="62%"
        alt="Contacts on a computer: who needs you first, each person's latest draft on their card">
   &nbsp;
-  <img src="docs/images/page-coming-up-phone-5637e739.png" width="18%" alt="Coming up on a phone">
+  <img src="docs/images/page-coming-up-phone-2e0f1fd5.png" width="18%" alt="Coming up on a phone">
   <br>
   <sub>Contacts on a computer, and Coming up on a phone</sub>
 </p>

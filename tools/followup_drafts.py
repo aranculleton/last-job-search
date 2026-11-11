@@ -109,28 +109,42 @@ def gate(text: str, kind: str, name: str = "", title: str = "", company: str = "
              for a in warned])
 
 
-# How much of two drafts, the name and the employer taken out of each, must be the same
-# words for the second to be the first with those swapped.
-SAME_SHARE = 0.9
+# How many words, besides the name and the employer, two drafts may differ by and still be
+# one message with those swapped: "a" for "an", "are" for "'re", a day. A share of the words
+# was the test, nine in ten, and a person's own recipe keeps three of a first note's four
+# lines the same for everyone, so two notes whose one tailored line differed were refused
+# (the review, 2026-11-10).
+SWAP_WORDS = 3
 _GREET = re.compile(r"^\s*(?:hi|hello|hey|dear)\b[^,.!?\n]{0,40}[,.!]\s*", re.I)
 
 
+# A link, and a run of capitalised words that is not a sentence's first (a name, an employer, a
+# role's title: "Senior Pricing Analyst", "Data Scientist, Forecasting").
+_LINK = re.compile(r"https?://\S+|www\.\S+", re.I)
+_PROPER = re.compile(r"(?<=[\w,;:)] )(?:[A-Z][\w&'.-]*(?:,? (?:of |and |& )?[A-Z][\w&'.-]*)*)")
+
+
 def _bare(text: str, name: str = "", company: str = "") -> str:
-    """A draft with its greeting, the reader's name and their employer taken out, in small
-    letters: what is left is what was written, whoever it is to."""
+    """A draft with its greeting, the reader's name, their employer, every other name or title
+    (a capitalised run) and every link taken out, in small letters: what is left is what was
+    written, whoever it is to. Two referral asks from one template, the same but for the role
+    and its link, passed as two messages (the review, 2026-11-11)."""
     t = _GREET.sub("", " ".join(str(text or "").split()))
+    t = _LINK.sub("*", t)
     words = [w for w in re.split(r"\s+", str(name or "").strip()) if len(w) > 1]
     for w in sorted(set(words + ([company.strip()] if company.strip() else [])),
                     key=len, reverse=True):
         t = re.sub(r"(?<!\w)" + re.escape(w) + r"(?:'s)?(?!\w)", "*", t, flags=re.I)
-    return re.sub(r"[^a-z0-9* ]+", "", t.lower()).strip()
+    t = _PROPER.sub("*", t)
+    t = re.sub(r"[^a-z0-9* ]+", " ", t.lower())
+    return re.sub(r"\*(?:\s*\*)+", "*", " ".join(t.split())).strip()
 
 
 def same_but_for_name(text: str, contact: str, name: str = "", company: str = "",
                       others: dict | None = None) -> str:
     """Why this draft is not written for its reader, or "": it is the draft waiting for
-    someone else, with the name and the employer swapped (SAME_SHARE of the words the same
-    once both are taken out). `others` is {contact id: (their draft, name, employer)}; None
+    someone else, with the name and the employer swapped (once both are taken out, the two
+    differ by SWAP_WORDS words at most; a line written for this reader differs by more). `others` is {contact id: (their draft, name, employer)}; None
     reads every draft waiting on a card (documents/network/<id>/draft.md) with the contact
     book. Two cards carried one referral follow-up, word for word but for those (the
     maintainer, 2026-11-10): every message is built for its reader."""
@@ -144,8 +158,13 @@ def same_but_for_name(text: str, contact: str, name: str = "", company: str = ""
         if cid == contact:
             continue
         other = _bare(theirs, their_name, their_company)
-        if other and difflib.SequenceMatcher(None, mine.split(), other.split()).ratio() \
-                >= SAME_SHARE:
+        if not other:
+            continue
+        a, b = mine.split(), other.split()
+        apart = sum(max(i2 - i1, j2 - j1) for op, i1, i2, j1, j2
+                    in difflib.SequenceMatcher(None, a, b, autojunk=False).get_opcodes()
+                    if op != "equal")
+        if apart <= SWAP_WORDS:
             first = (str(their_name or "").split() or ["someone else"])[0]
             return ("the same words as your draft to %s, with the name and the employer "
                     "swapped: write it from what this person said and does" % first)
@@ -322,8 +341,33 @@ def earlier_drafts(today: str) -> dict:
 
 # ---------------------------------------------------------------- a new reason, from a round
 
-def newest_round_rows() -> list[dict]:
-    """The rows of the newest saved round (documents/rounds/<round>.json), or []."""
+def newest_round_rows(today=None) -> list[dict]:
+    """The postings Jobs holds now: the newest saved round's (documents/rounds/<round>.json),
+    then those it carries from earlier searches (app_model.carried: found in the last
+    CARRY_DAYS days, or kept for later), or []. Read from the newest round alone, a hold that
+    lifted for a role went back on as soon as a newer search was saved without it (the review,
+    2026-11-10), though the role was still on the person's list. `today` is the page's day
+    (default the person's own)."""
+    try:
+        import app_model
+        newest = app_model.newest_round()
+    except Exception:  # noqa: BLE001  no page model here: the newest round's own rows
+        return _newest_file_rows()
+    if not newest:
+        return []
+    rows = app_model.read_json(newest, [])
+    rows = [r for r in rows if isinstance(r, dict)] if isinstance(rows, list) else []
+    try:
+        day = today if isinstance(today, dt.date) else (
+            dt.date.fromisoformat(str(today)[:10]) if today else person.today())
+        rows += [r for _name, _rank, r in app_model.carried(day, newest)]
+    except Exception:  # noqa: BLE001  an earlier round that cannot be read carries nothing
+        pass
+    return rows
+
+
+def _newest_file_rows() -> list[dict]:
+    """The rows of the newest saved round file, by its number and then its time."""
     files = glob.glob(person.state(*ROUNDS, "*.json"))
     if not files:
         return []
@@ -369,6 +413,63 @@ def posting_reason(contact: dict, since: str, rows: list[dict], tracker=()) -> d
         if not best or float(fit) > float(best.get("fit") or best.get("priority") or 0):
             best = r
     return best
+
+
+def live_application(contact: dict, tracker=(), since: str = "", held_on: str = "") -> dict:
+    """The person's own application or hiring process at their employer that is still open
+    (applied, an interview, an offer; a draft only when made after `since`, the last message,
+    as a posting counts only once found since), the newest, as a posting: {"title", "company",
+    "url", "status", "from": "tracker"}, or {}. A role they are already in for is a role
+    posted: a hold that waited for one said none was posted at an employer where an interview
+    was booked (the review, 2026-11-10)."""
+    import throttle
+    k = company_key(contact.get("company"))
+    if not k:
+        return {}
+
+    def open_(r):
+        status = str(r.get("status") or "").strip().lower()
+        if status in throttle.FINAL:
+            return False
+        began = str(r.get("date") or "")[:10]
+        # There when the hold was made (`held_on`): the hold was made knowing it, so it lifts
+        # nothing; a draft from before held a person on hold as soon as it was made (the
+        # review, 2026-11-11). One begun since lifts it.
+        if held_on and began <= held_on:
+            return False
+        return status != "drafted" or not since or began > since
+    live = [r for r in tracker or () if company_key(r.get("company")) == k
+            and str(r.get("role") or "").strip() and open_(r)]
+    if not live:
+        return {}
+    r = max(live, key=lambda x: str(x.get("date") or ""))
+    return {"title": _clean_title(r.get("role")), "company": str(r.get("company") or "").strip(),
+            "url": str(r.get("source") or r.get("apply_url") or "").strip(),
+            "status": str(r.get("status") or "").strip().lower(), "from": "tracker"}
+
+
+def role_for_offer(contact: dict, since: str, rows: list[dict], tracker=()) -> dict:
+    """The role a referral offer waits for: a posting at their employer the search found since
+    the last message (posting_reason), else the person's own open application or process there
+    (live_application), or {}."""
+    from network import state
+    return (posting_reason(contact, since, rows, tracker)
+            or live_application(contact, tracker, since,
+                                held_on=state.hold_made(contact.get("next_action"))))
+
+
+def role_said(role: dict, company: str) -> str:
+    """The role a referral ask is for, in the words the page and the draft step say it."""
+    import throttle
+    title = " ".join(str(role.get("title") or "a role").split())
+    status = str(role.get("status") or "")
+    if role.get("from") == "tracker" and "offer" in status:
+        return f"You have an offer for {title} at {company}"
+    if role.get("from") == "tracker" and status in throttle.LIVE_PROCESS:
+        return f"You have an interview for {title} at {company}"
+    if role.get("from") == "tracker" and status not in ("", "drafted"):
+        return f"You have applied for {title} at {company}"
+    return f"{company} has posted {title}"
 
 
 # What every contact's look at the postings shares: the roles applied to and the postings by
@@ -506,15 +607,14 @@ def draft(item: dict, contacts_by_id: dict, threads_index: dict, tracker, earlie
         # employer swapped, on two cards at once (the maintainer, 2026-11-10). They wait on
         # hold until a role is posted (`hold_for_role`, state.ROLE_HOLD), and come back by
         # themselves.
-        role = posting_reason(contact, since, rows, tracker)
+        role = role_for_offer(contact, since, rows, tracker)
         if role:
             return refused or _new(
                 "write", kind=kind, who="here",
-                why="%s has posted %s since their offer of %s: write the referral ask for that "
-                    "one role, in what they offered, with the posting's link "
-                    "(compose.referral_ask)" % (company or "their employer",
-                                               _clean_title(role.get("title")),
-                                               offer.get("date") or "an earlier day"))
+                why="%s, since their offer of %s: write the referral ask for that one role, in "
+                    "what they offered, with the posting's link (compose.referral_ask)"
+                    % (role_said(role, company or "their employer"),
+                       offer.get("date") or "an earlier day"))
         got = _new("none", kind=kind, why=ROLE_WAIT_WHY % (company or "their employer"))
         got["hold_role"] = True
         return got
@@ -867,7 +967,30 @@ def write_pack(today: str, got: list[dict], contacts) -> str:
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(text)
+    shelve_packs(today)
     return path
+
+
+PACKS_KEPT = 2          # earlier_drafts reads the newest two; the rest go to old/
+
+
+def shelve_packs(today: str) -> list[str]:
+    """Move every pack up to `today` but the newest PACKS_KEPT into documents/network/old/,
+    kept, never deleted: only those two are read again, and 14 piled up (audit HC-4). The
+    paths moved to."""
+    folder = person.state(*PACK_DIR)
+    packs = sorted(p for p in glob.glob(os.path.join(folder, PACK_NAME % "*"))
+                   if os.path.basename(p)[len("followup_pack_"):-3] <= today)
+    out = []
+    for p in packs[:-PACKS_KEPT]:
+        dest = os.path.join(folder, "old", os.path.basename(p))
+        try:
+            os.makedirs(os.path.dirname(dest), exist_ok=True)
+            os.replace(p, dest)
+        except OSError:
+            continue
+        out.append(dest)
+    return out
 
 
 # ---------------------------------------------------------------- for a writer
@@ -1175,7 +1298,7 @@ def main(argv=None) -> int:
 
 def _main(argv=None) -> int:
     argv = sys.argv[1:] if argv is None else list(argv)
-    today = dt.date.today().isoformat()
+    today = person.today().isoformat()
     if argv[:1] == ["context"]:
         ap = argparse.ArgumentParser(prog="followup_drafts.py context")
         ap.add_argument("ids", nargs="*")

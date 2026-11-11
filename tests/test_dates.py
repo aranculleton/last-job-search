@@ -195,11 +195,18 @@ def test_a_reading_stamped_with_a_time_is_still_fresh():
     assert not reading.fresh({**r, "read_on": "2026-08-01T08:15:00"}, TODAY)
 
 
-def test_days_since():
+def test_days_since(monkeypatch):
     assert dates.days_since("2026-10-10", TODAY) == 7
     assert dates.days_since("2026-10-20", TODAY) == -3
     assert dates.days_since("2026-10-10", "2026-10-17") == 7
     assert dates.days_since(dt.datetime(2026, 10, 10, 23, 59), TODAY) == 7
+    # With no day given it counts to the person's own day (dates.TODAY, which person.py sets),
+    # never the computer's: in a far time zone the two differ for hours of every day, and
+    # comparing with the computer's failed there (the everywhere check, "behind").
+    monkeypatch.setattr(dates, "TODAY", lambda: dt.date(2026, 10, 17))
+    assert dates.days_since("2026-10-17") == 0 and dates.days_since("2026-10-10") == 7
+    # With no person's day set at all (dates alone), the computer's.
+    monkeypatch.setattr(dates, "TODAY", None)
     assert dates.days_since(dt.date.today()) == 0
     assert dates.days_since("October 2026", TODAY) == 16
     assert dates.days_since("October 2026", TODAY, iso_only=True) is None

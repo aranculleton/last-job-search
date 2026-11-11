@@ -396,6 +396,7 @@ JSON_NAMES = {
     # run_round reads every round's summary to find a job set aside while a search ran; the
     # files themselves are wired as "documents/rounds/*.json" above.
     "tools/app.py: *.json": "a page dump's screen documents, read only to tell whether the dump holds the page's screens (app.py no_screen), in the chat's scratch folder; never committed",
+    "tools/holds.py: *.json": "each employer's research file, read only for a people search's finding of no team there (holds._no_team_found); merged as company_research/*.json",
     "tools/rules_view.py: *.json": "each search's left-out list, read only for how many each rule left out (rules_view.left_counts); merged as documents/rounds/filtered/*.json",
     "tools/run_round.py: *.json": "every round summary, read only, to hold a set-aside made during a search; written by write_summary, merged as documents/rounds/*.json",
     "tools/network/candidates.py: *.json": "every round summary, read only, for the employers a short people search widens to (candidates.employers); written by run_round.write_summary, merged as documents/rounds/*.json",
@@ -421,7 +422,7 @@ JSON_NAMES = {
                      "tools/stage_picks.py: outreach_{}.json",
                      "tools/stage_picks.py: research_{}.json",
                      "tools/tweak.py: draft_*.json", "tools/tweak.py: research_*.json",
-                     ".wake.json"),
+                     ".wake.json", ".job.json"),
                     _SCRATCH),
     **dict.fromkeys(("ljs-app-watch.json", "ljs-job-sites.json", "ljs-listener.json",
                      "ljs-applied.json", "ljs-place.json", "ljs-tidy.json",
@@ -429,7 +430,8 @@ JSON_NAMES = {
                      ".reactions.json", "ljs-no-page.json", "ljs-page-held.json",
                      "ljs-job-chats.json", "ljs-tidy-planned.json", "ljs-versions.json",
                      "ljs-save-held.json", "ljs-land-result.json", ".mirror.json",
-                     "ljs-touched.json"), _GITDIR),
+                     "ljs-touched.json", "ljs-pdf-pages.json", "ljs-claims.json",
+                     "ljs-retired-saves.json"), _GITDIR),
     # The page's records as this checkout last read them (page_reads, the mirror in its git
     # folder), each under its own record's name: the meta records read by name, and every file
     # of a collection copied whole.
@@ -924,37 +926,6 @@ def _further(base, ours, theirs) -> tuple[str, str]:
 
 
 PICKERS = {"higher_version": _higher_version, "further": _further}
-
-
-# Kept for a person's own tests that call it (tools/public_names.py): the page record now
-# merges by `newest_written`, the newer whole record winning (2026-11-04).
-def first_written(base, ours, theirs, rule: dict, settled: list | None = None) -> tuple:
-    """JSON_FILES `first`: where each side holds a different `key` that neither held in the
-    copy both began from, the side stamped first keeps its record, every field `with` names
-    copied onto the other side, so the merge that follows takes them whole and never mixes
-    one page's address with what the other page holds. (ours, theirs), changed or not."""
-    if not (isinstance(ours, dict) and isinstance(theirs, dict)):
-        return ours, theirs
-    base = base if isinstance(base, dict) else {}
-    key = rule["key"]
-    a, b = ours.get(key), theirs.get(key)
-    if not a or not b or a == b or base.get(key) in (a, b):
-        return ours, theirs
-    side = _later_of(ours.get(rule["stamp"]), theirs.get(rule["stamp"]))
-    if not side:
-        return ours, theirs
-    first, second = (theirs, ours) if side == "a" else (ours, theirs)
-    kept = dict(second)
-    for f in rule["with"]:
-        if f in first:
-            kept[f] = first[f]
-        else:
-            kept.pop(f, None)
-    if settled is not None:
-        settled.append(f"{key}: both sides wrote one: kept {_show(first[key])}, the first "
-                       f"(dated {first.get(rule['stamp'])}); the other side had "
-                       f"{_show(second[key])}")
-    return (kept, theirs) if side == "a" else (ours, kept)
 
 
 def newest_written(base, ours, theirs, rule: dict, settled: list | None = None) -> tuple:
@@ -1710,6 +1681,33 @@ def _still_asked(beside: str, copy_name: str) -> bool:
     return any("[CONFIRM" in ln and copy_name in ln for ln in text.splitlines())
 
 
+def _drop_question(beside: str, copy_name: str) -> None:
+    """Take out of the file beside a copy the [CONFIRM: ...] line that names the copy, and the
+    line under it that says where the other version is. Never raises."""
+    try:
+        with open(beside, encoding="utf-8", newline="") as fh:
+            lines = fh.read().splitlines(keepends=True)
+    except (OSError, UnicodeDecodeError):
+        return
+    keep: list[str] = []
+    dropped = False
+    for ln in lines:
+        if "[CONFIRM" in ln and copy_name in ln and ln.lstrip().startswith("#"):
+            dropped = True
+            continue
+        # The line under it that says where the other version is goes with it.
+        if dropped and ln.lstrip().startswith(SHOW_OTHER.split("{", 1)[0].strip()):
+            continue
+        dropped = False
+        keep.append(ln)
+    if keep != lines:
+        try:
+            with open(beside, "w", encoding="utf-8", newline="") as fh:
+                fh.write("".join(keep))
+        except OSError:
+            pass
+
+
 def clear_old_copies(root: str) -> tuple[list[str], list[str]]:
     """Clear the *.from-another-chat copies an older version left beside the person's files
     (documents, their own tests, and since 2026-11-04 anywhere in their folders, as a settle
@@ -1738,13 +1736,28 @@ def clear_old_copies(root: str) -> tuple[list[str], list[str]]:
                 if not os.path.isfile(beside):
                     undecided.append(rel)
                     continue
-                if _still_asked(beside, n):
+                own_test = base_rel.startswith(_OWN_TESTS)
+                if not own_test and _still_asked(beside, n):
                     continue
                 with open(full, "rb") as a, open(beside, "rb") as b:
                     same = a.read() == b.read()
                 def last(path, disk):
                     got = _g(root, "log", "-1", "--format=%ct", "--", path).stdout.strip()
                     return int(got) if got.isdigit() else int(os.path.getmtime(disk))
+                if own_test:
+                    # Their own test: the later version stays, the copy goes, and so does the
+                    # question about it. Nobody answers a question about a developer's test
+                    # file, and fifteen copies piled up behind them (audit SV-7, 2026-11-10).
+                    if not same and last(rel, full) > last(base_rel, beside):
+                        with open(full, "rb") as a, open(beside, "wb") as b:
+                            b.write(a.read())
+                    _drop_question(beside, n)
+                    if _g(root, "ls-files", "--error-unmatch", "--", rel).returncode == 0:
+                        _g(root, "rm", "-f", "-q", "--", rel)
+                    if os.path.exists(full):
+                        os.remove(full)
+                    cleared.append(rel)
+                    continue
                 if same or last(base_rel, beside) >= last(rel, full):
                     if _g(root, "ls-files", "--error-unmatch", "--", rel).returncode == 0:
                         _g(root, "rm", "-f", "-q", "--", rel)

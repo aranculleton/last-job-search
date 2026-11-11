@@ -99,19 +99,26 @@ BEFORE = [
     ("tips.py brief", "cmd", ["python3", "tools/tips.py", "brief"]),
     ("the message", "out", "reply"),
 ]
+# The run as automation/prompts/morning_brief.md asks for it, a row for each command it runs
+# (tests/test_the_brief_is_cheap.py holds them together: the meter measured a run nobody made
+# any more, efficiency audit E-14). --start keeps the update check's and the Python side's
+# output in a file, so what reaches the chat is the gather's, with --write.
 AFTER = [
     ("stub: git fetch", "size", "git"),
     ("read _common.md", "file", "automation/prompts/_common.md"),
     ("read morning_brief.md", "file", "automation/prompts/morning_brief.md"),
-    ("git switch && brief.py --start --write", "cmd", ["python3", "tools/brief.py", "--today", TODAY]),
+    ("git switch -c", "size", "git"),
+    ("app.py start --scheduled morning_brief (brief.py --start --write)", "cmd",
+     ["python3", "tools/brief.py", "--today", TODAY, "--write"]),
     ("followup_drafts.py context --due", "cmd", ["python3", "tools/followup_drafts.py", "context",
                                                  "--due", "--today", TODAY]),
     ("news-reader (haiku, no CLAUDE.md)", "agent", "news_lines"),
     ("followup_drafts.py check - --pack", "out", "drafts_written"),
-    ("brief.py news, save, commit, ci tail, push", "out", "news_in"),
-    ("open the PR", "size", "git"),
-    ("merge it", "size", "git"),
+    ("brief.py news", "out", "news_in"),
+    ("land.py, in the background", "size", "git"),
     ("the message", "out", "reply"),
+    ("land.py wakes the run: open the PR", "size", "git"),
+    ("merge it", "size", "git"),
 ]
 
 

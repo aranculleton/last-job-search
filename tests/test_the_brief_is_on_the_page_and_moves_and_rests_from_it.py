@@ -282,3 +282,19 @@ def test_the_brief_on_the_day_the_break_ends_lifts_it(tmp_path):
     assert "Welcome back: your break is over" in out
     assert "pause" not in s.registry()
     assert "routines.py calls" in out.split("FOR CLAUDE", 1)[1]
+
+
+def test_the_ticks_are_read_from_the_last_brief_on_never_all_of_them(monkeypatch, tmp_path):
+    """The page-first step read every tap and receipt ever made, every morning, up to some
+    130,000 characters, though each was applied long before (efficiency audit E-5). It reads
+    from two days before the last brief now, or a week back where there is none."""
+    s = Search(tmp_path)
+    monkeypatch.setenv("LJS_PROFILE", s.profile)
+    monkeypatch.setattr(brief, "earlier_briefs", lambda today: [])
+    first = brief.page_first(PAGE, ["--write", "--today", "2026-11-10"])
+    assert '["at", ">=", "2026-11-01T00:00:00Z"]' in first
+    assert '["applied_at", ">=", "2026-11-01T00:00:00Z"]' in first
+    monkeypatch.setattr(brief, "earlier_briefs",
+                        lambda today: ["/x/documents/briefs/2026-11-09.md"])
+    first = brief.page_first(PAGE, ["--write", "--today", "2026-11-10"])
+    assert '["at", ">=", "2026-11-07T00:00:00Z"]' in first

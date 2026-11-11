@@ -77,7 +77,11 @@ def test_everything_is_inline_and_nothing_comes_from_outside():
     assert not re.search(r"@import|@font-face|url\(\s*['\"]?https?:", page, re.I), "no font or image fetched by a stylesheet"
     assert "fonts.googleapis" not in page and "fonts.gstatic" not in page
     assert not re.search(r"\bimport\s*\(|\bfetch\(\s*['\"]https?:", page), "nothing fetched from another site"
-    assert len(page.encode("utf-8")) < 1024 * 1024
+    # 1 MiB was the cost of publishing the page whole (4.0). It is published in parts now, each
+    # read alone (app_page.render_parts; tests/test_the_page_publishes_in_small_files.py holds
+    # their sizes and count), so here the cap catches a font or an image embedded by mistake,
+    # with room for the code itself, which passed 1 MiB as one document in 4.15.0.
+    assert len(page.encode("utf-8")) < 1536 * 1024
 
 
 def test_the_model_round_trips_and_cannot_end_its_script_tag():

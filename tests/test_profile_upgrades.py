@@ -321,6 +321,18 @@ def test_the_comment_written_over_a_removed_limit_goes_with_it(profile):
     assert reading.free_break().startswith("nothing to change")
 
 
+def test_a_request_cap_the_app_never_reads_is_taken_out_of_linkedin_limits(profile):
+    """connections_per_week and connections_per_day in LINKEDIN_LIMITS do nothing (the audit,
+    2026-11-10, PD-10): pending while written, and the rest of the setting is kept."""
+    assert U.by_id("linkedin-limits-ignored").pending() == ""        # none written
+    path = profile / "networking.py"
+    path.write_text(path.read_text(encoding="utf-8") + '\nLINKEDIN_LIMITS = {'
+                    '"connections_per_week": 20, "inmail_credits_per_month": 15}\n',
+                    encoding="utf-8")
+    person._modules.clear()
+    assert "1 request cap" in U.by_id("linkedin-limits-ignored").pending()
+
+
 def test_a_contact_waiting_with_no_follow_up_date_gets_one(profile):
     # The example's one thread waiting on a reply carries its date already.
     assert U.by_id("follow-up-dates").pending() == ""
@@ -467,6 +479,10 @@ def test_only_what_truly_needs_the_person_waits_for_them():
                                                                  # setting the brief up asks
                                                                  # (2026-11-04).
                                                                  "brief-push",
+                                                                 # Their own setting, which a
+                                                                 # test of theirs may read: asked,
+                                                                 # never deleted (2026-11-11).
+                                                                 "linkedin-limits-ignored",
                                                                  # Only they can give their own
                                                                  # profile (2026-10-21).
                                                                  "own-profile-review",
@@ -478,7 +494,13 @@ def test_only_what_truly_needs_the_person_waits_for_them():
                                                                  # Only they can switch it on
                                                                  # in the Claude app on their
                                                                  # computer (2026-11-09).
-                                                                 "computer-linkedin"}
+                                                                 "computer-linkedin",
+                                                                 # Their own setting, which an
+                                                                 # older version may have written
+                                                                 # the wrong way round: asked,
+                                                                 # never changed unasked
+                                                                 # (2026-11-11).
+                                                                 "updates-choice"}
     # Nothing asks for their email: anything like an alert reaches them inside Claude
     # (the maintainer's instruction, 2026-10-22).
     assert not [u.id for u in U.REGISTRY
@@ -951,7 +973,8 @@ def test_own_tests_reading_the_apps_code_or_pinning_changed_behaviour_are_kept_i
     subprocess.run(["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@example.com",
                     "commit", "-qam", "broken"], check=True)
     ran = []
-    monkeypatch.setattr(sync_app, "own_test_failures", lambda root: ran.append(1))   # None
+    monkeypatch.setattr(sync_app, "own_test_failures",
+                        lambda root, only=None: ran.append(1))            # None: could not run
     for _ in range(3):
         U.by_id("own-tests").pending()
     assert len(ran) == 1 and sync_app.own_tests_record(str(repo))["could_not_run"]
@@ -1153,3 +1176,111 @@ def test_a_person_with_a_computer_is_offered_its_linkedin_stage_once(profile):
     assert "not set up" in u.pending()
     path.write_text(json.dumps({"works_on": "phone"}), encoding="utf-8")
     assert u.pending() == ""                       # a career changer with no laptop
+
+
+def test_the_records_upgrades_wait_only_on_what_they_put_right(profile):
+    """readings-linked and records-agree (the review of NW-23, NW-28 and NW-32, 2026-11-11)
+    are pending only for a person whose records hold what they put right: the example's do
+    not. tests/test_the_records_are_checked_by_themselves.py makes each pending and done."""
+    assert U.by_id("readings-linked").pending() == ""
+    assert U.by_id("records-agree").pending() == ""
+
+
+def test_a_rule_about_updates_written_the_wrong_way_round_is_asked_about_once(profile):
+    """Audit SV-1 and PD-5's app side (2026-11-11): "App updates come by themselves; never ask
+    him again" was written as when_asked. The upgrade reads the newest such rule again with
+    today's reader and asks where the setting says otherwise; never where they agree."""
+    import learned
+    person.reset()
+    said = "App updates come by themselves; never ask him again"
+    learned.record("other", said, said, today="2026-11-10")
+    assert U.by_id("updates-choice").pending() == ""
+    person.put(["app_updates"], "when_asked")             # as the old reader wrote it
+    person.reset()
+    got = U.by_id("updates-choice").pending()
+    assert "by themselves" in got and "only when you say" in got, got
+    person.put(["app_updates"], "auto")                   # answered
+    person.reset()
+    assert U.by_id("updates-choice").pending() == ""
+
+
+def test_roles_set_aside_with_no_day_are_dated_from_the_update(profile, tmp_path):
+    """A role the person set aside held for good before set-asides had an end; one with no day
+    of its own would come back on the first search after the update, with every other, or be
+    counted from a day long gone. set-asides-dated gives each its months from the update day,
+    and leaves one dated, one in words that say for good, and a rule's own, alone."""
+    st = os.environ[person.STATE_ENV]
+    seen = os.path.join(st, "job_scraper", "seen_jobs.json")
+    data = json.load(open(seen, encoding="utf-8")) if os.path.exists(seen) else {"seen": {}}
+    base = {"basis": "person", "status": "excluded", "title": "Analyst",
+            "company": "Quillfield Foods"}
+    data.setdefault("seen", {}).update({
+        "jobs.example.com/a": dict(base, url="https://jobs.example.com/a",
+                                   exclusion_reason="not for me", first_seen="2025-12-01"),
+        "jobs.example.com/b": dict(base, url="https://jobs.example.com/b",
+                                   exclusion_reason="not this team"),
+        "jobs.example.com/c": dict(base, url="https://jobs.example.com/c",
+                                   exclusion_reason="never", first_seen="2025-12-01"),
+        "jobs.example.com/d": dict(base, url="https://jobs.example.com/d",
+                                   exclusion_reason="the pay", excluded_date="2026-10-01"),
+        "jobs.example.com/e": dict(base, url="https://jobs.example.com/e", basis="rules",
+                                   exclusion_reason="place: outside your places"),
+    })
+    with open(seen, "w", encoding="utf-8") as fh:
+        json.dump(data, fh)
+    up = U.by_id("set-asides-dated")
+    assert up.cost == "instant" and up.needs == "nobody"
+    assert up.pending() == "2 role(s) you set aside have no day to count from"
+    # As the app runs it (run_instant): "python3" is this Python, which Windows names otherwise.
+    r = subprocess.run([sys.executable, *up.command[1:]], cwd=ROOT, capture_output=True, text=True,
+                       encoding="utf-8", env=dict(os.environ))
+    assert r.returncode == 0, r.stderr[-600:]
+    assert up.pending() == ""
+    got = json.load(open(seen, encoding="utf-8"))["seen"]
+    import exclude
+    today = person.today()
+    for k in ("jobs.example.com/a", "jobs.example.com/b"):
+        assert got[k]["held_from"] == today.isoformat(), got[k]
+        assert exclude.set_aside_until(got[k]) == today + dt.timedelta(
+            days=exclude.set_aside_days())
+        assert exclude.set_aside_on(got[k]) is None          # never said as the day set aside
+    for k in ("jobs.example.com/c", "jobs.example.com/d", "jobs.example.com/e"):
+        assert "held_from" not in got[k], got[k]
+
+
+def test_notes_set_aside_on_the_page_before_they_had_an_end_are_dated_from_the_update(profile):
+    """A first note set aside on the page "for now" set its person aside for good. Those set
+    aside before the update are each offered again about six months from it (notes-aside-dated);
+    one the person said never to, or one set aside in a chat, is left as it was."""
+    import csv
+    sys.path.insert(0, os.path.join(ROOT, "tools", "network"))
+    import exclude
+    import schema
+    import state
+    book = os.path.join(os.environ[person.STATE_ENV], "network_contacts.csv")
+    rows = list(csv.DictReader(open(book, encoding="utf-8")))
+    base = {k: "" for k in schema.CONTACT_COLUMNS}
+    rows += [dict(base, contact_id="ormsby_varga", name="Ottilie Varga", company="Ormsby Retail",
+                  status="dropped", outcome="dropped 2026-05-01: not now, said on the page"),
+             dict(base, contact_id="ormsby_quill", name="Ansel Quill", company="Ormsby Retail",
+                  status="dropped", outcome="dropped 2026-05-01: never"),
+             dict(base, contact_id="ormsby_hale", name="Tamsin Hale", company="Ormsby Retail",
+                  status="dropped", outcome="dropped 2026-05-01: she moved to a competitor")]
+    with open(book, "w", encoding="utf-8", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=schema.CONTACT_COLUMNS, extrasaction="ignore")
+        w.writeheader()
+        w.writerows(rows)
+    up = U.by_id("notes-aside-dated")
+    assert up.cost == "instant" and up.needs == "nobody"
+    assert up.pending() == "1 note(s) you set aside for now have no day to come back"
+    # As the app runs it (run_instant): "python3" is this Python, which Windows names otherwise.
+    r = subprocess.run([sys.executable, *up.command[1:]], cwd=ROOT, capture_output=True, text=True,
+                       encoding="utf-8", env=dict(os.environ))
+    assert r.returncode == 0, r.stderr[-600:]
+    assert up.pending() == ""
+    got = {c["contact_id"]: c for c in state.load_contacts(book)}
+    until = person.today() + dt.timedelta(days=exclude.set_aside_days())
+    assert state.dropped_until(got["ormsby_varga"]) == until, got["ormsby_varga"]["outcome"]
+    assert got["ormsby_varga"]["outcome"].endswith("not now, said on the page")
+    assert state.dropped_until(got["ormsby_quill"]) is None
+    assert state.dropped_until(got["ormsby_hale"]) is None

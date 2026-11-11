@@ -196,16 +196,20 @@ The brief is never moved to a task that starts a new chat each run: such a run g
 your files and no way to fetch one, so it could only say it could not start.
 
 **Old chats tidy themselves away.** Before 4.3 the brief had a chat of its own, long work could
-start a child chat, and a replaced helper stayed in the list. A big job's chat tells the chat
-that answers the page when its work is on master, and that chat archives it at once
-(`tidy.py close`). Once a day, and at once after a hand-over to a fresh helper, the chat that
+start a child chat, and a replaced helper stayed in the list. A big job's chat puts itself away
+once its work is saved and nothing else waits (it messages no other chat); one that could not is
+put away by the chat that answers the page (`tidy.py close`, for an older one that still
+reports) or by the daily tidy-up. Once a day, and at once after a hand-over to a fresh helper, the chat that
 answers the page archives the app's own chats it no longer uses: never one the person named,
 one a scheduled task that is on still uses, a live campaign's chat, one used in the last two
 days (an old helper excepted: only the live one, "Job search page", is ever kept), or one
 whose work is not on master yet. A shortlist that works where it is stays there; one whose
 chat no longer works (deleted, or a helper the page no longer uses) moves into the chat that
 answers the page. The brief moves only into a new chat of its own (a new task on the same
-days and time, the old one turned off and kept). An archived chat is kept, read-only, and comes back on request (`python3
+days and time, the old one turned off, and deleted once it has been off a week). Old tasks
+that can no longer run are cleaned away by the same tidy-up: a one-off a day past its time is
+turned off, and so is a task bound to the chat that approved computer access whose last run
+failed (`routines.cleanup`). An archived chat is kept, read-only, and comes back on request (`python3
 tools/tidy.py undo`).
 
 ### (b) A routine, a new chat each run
@@ -251,8 +255,10 @@ a new one with no repo, which fails, so a manual test cannot show the bound run
 > now and the same prompt as this chat's scheduled task. Do not use fire_trigger.
 
 It disables itself after it fires. Then check that the reply arrived in the chat; the chat
-checks for itself that the run's work was saved (its pull request merged into master), and
-says so in one plain line. A Routines-screen task runs once with **Run now** on its page.
+checks for itself that the run's work was saved (its pull request merged into master), says so
+in one plain line, and takes the test task away (`delete_trigger`). Make it in the task's own
+chat only, never in the chat that answers your page or one that approved computer access,
+where no scheduled run can start; the daily tidy-up turns off one left a day past its time. A Routines-screen task runs once with **Run now** on its page.
 
 ### A long-lived chat keeps its whole window
 
@@ -264,7 +270,9 @@ cap made a chat forget what it was doing every few steps. Nothing to set up.
 
 `python3 tools/routines.py check` reads `profile/routines.json` and fails on a prompt file
 that does not exist, a malformed or repeated trigger or chat id, or a cron without
-`CRON_TZ=<your time zone>` (which would fire in UTC). `./tools/ci_local.sh` runs it whenever
+`CRON_TZ=<your time zone>` (which would fire in UTC). Given the task listing too
+(`--triggers <what list_triggers returned>`), it also fails a brief whose task fires in a chat
+the registry names neither as its own nor as the older ops chat. `./tools/ci_local.sh` runs it whenever
 the registry exists, and `tests/test_automation.py` runs it on the example in the app's CI,
 so a broken set-up fails a check rather than a morning.
 
@@ -300,6 +308,10 @@ can still make it.
 Each run is one turn on the chat's model. News gathering is done by the news-reader subagent
 on the smallest model, with at most six searches built and eight run: the employers in play,
 then what the person's own list watches (person.json `brief.watch`), each only as often as
-it changes. An empty run in a fresh chat cost $0.82 in a
-test, most of it loading the repo's instructions; a chat that is bound to its task reuses
-that context from cache on later runs, and is compacted automatically as it grows.
+it changes. A run in a fresh chat costs about $1 to $2, most of it loading the repo's
+instructions. A chat bound to its task keeps every run's history, about 100,000 tokens a day,
+and the cache does not last the night, so each morning's run pays for the whole history again:
+measured at about $6.8 a run on its second day (2026-11-10). So once its chat holds more than
+250,000 tokens, the run gives the brief a fresh chat of its own (`routines.py fresh`), and the
+daily tidy-up puts the old one away. The brief's chat never answers the page, so taps there
+wake nothing.

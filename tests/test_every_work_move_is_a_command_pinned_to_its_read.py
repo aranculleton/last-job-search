@@ -140,8 +140,9 @@ def test_the_jobs_own_steps_name_every_posting_of_the_batch(monkeypatch):
     chosen = {"work": "draft~lead", "kind": "draft", "title": "Three drafts", "heavy": True,
               "with": [{"work": "draft~two", "version": 2}, {"work": "draft~three", "version": 2}],
               "stages": page_db.progress("draft")["stages"]}
-    flat = " ".join(app.where_it_runs(chosen, "session_listener", "cloud")["create_session"]
-                    ["prompt"].split())
+    import job_prompt
+    prompt = app.where_it_runs(chosen, "session_listener", "cloud")["create_session"]["prompt"]
+    flat = " ".join(job_prompt.followed(prompt).split())
     assert "draft~two" in flat and "draft~three" in flat and "Pin draft~lead alone" in flat
     assert "--stopped" in flat and "--question" in flat and "app.py version" in flat
     # One read of the queue, all of it, and no step that forbids the page's own tool.
@@ -280,13 +281,17 @@ def test_a_write_is_pinned_to_the_version_read_even_when_its_maker_named_none(tm
 def test_a_refused_writes_named_version_is_kept_and_the_command_pins_to_it(tmp_path):
     """Engine 2.2: a record a hand write left at the wrong `_v` (store 6, `_v` 5) was refused
     however often it was read again. The version the refusal names goes back into the folder
-    (`app.py version`), and the command run again pins to it."""
+    (`app.py version`), and the command run again pins to it. The refused command is the
+    claim, so the claim is what runs again: a pin on work the folder holds as unclaimed is
+    refused since the audit of 2026-11-10 (PE-1), where this ran a pin."""
     d = claimed_batch(tmp_path)
     r = subprocess.run([sys.executable, APP, "version", d, "work/draft~lead", "9"],
                        capture_output=True, text=True, encoding="utf-8")
     assert r.returncode == 0, r.stderr
-    got = page_db.pin(page_db.load(d), "draft~lead", T("17:20"), str(tmp_path / "p"),
-                      stage="research", chat="session_job")
+    db = page_db.load(d)
+    chosen = page_db.next_item(db, "cloud", T("17:20"), cap=page_db.HEAVY_CAP_CHATS)
+    got = {"batches": page_db.claim(db, chosen, "session_job", "cloud", T("17:20"),
+                                    str(tmp_path / "p"))}
     lead = next(e for e in entries(got["batches"]) if e["doc_id"] == "draft~lead")
     assert lead["if_version"] == 9 and lead["body"]["_v"] == 10
     bad = subprocess.run([sys.executable, APP, "version", d, "work/nothing~here", "3"],
@@ -295,8 +300,8 @@ def test_a_refused_writes_named_version_is_kept_and_the_command_pins_to_it(tmp_p
 
 
 def test_every_move_of_an_item_has_its_command_and_the_skill_writes_none_by_hand():
-    skill = " ".join(open(os.path.join(ROOT, ".claude", "skills", "app", "SKILL.md"),
-                          encoding="utf-8").read().split())
+    import app_skill
+    skill = " ".join(app_skill.text().split())
     for said in ("--stopped", "--question", "app.py version"):
         assert said in skill, said
     assert "write `status: stopped`" not in skill and "as `status: needs_you` with the question" \

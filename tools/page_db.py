@@ -244,17 +244,36 @@ def hook_keeps_versions() -> bool:
 
 
 def versions_step(dump: str) -> str:
-    """The step that keeps the read's versions, always: a chat's hooks are the ones its
-    settings held when it started, so a helper started before the update added the hook
-    kept none, was told the hook did it, and pinned every write to a stale number (a
-    person's copy, 2026-11-10). The hook doing it too changes nothing: the same versions."""
+    """The step that keeps the read's versions by hand. Asked for only where the hook did not
+    keep them (`after_read`, `wake`'s own check): a chat's hooks are the ones its settings
+    held when it started, so a helper started before the update added the hook kept none, was
+    told the hook did it, and pinned every write to a stale number (a person's copy,
+    2026-11-10). Asked after every read all the same, the chat retyped each record's version,
+    3,837 to some 36,000 characters a whole read, for nothing (the efficiency audit, E-6)."""
     return VERSIONS_STEP.format(dump=dump)
 
 
-def keep_listed(text: str, out_dir: str) -> int:
+def kept_by_hook(dump_dir: str) -> bool:
+    """Did the app's hook keep a read's versions in this folder (keep_listed_event)? Then it
+    runs in this chat, and keeps every later read's too."""
+    got = _read_json(os.path.join(dump_dir, LISTED_MARK))
+    return isinstance(got, dict) and bool(got.get("hook"))
+
+
+def after_read(dump: str, fresh_chat: bool = False) -> str:
+    """The versions step for a read into `dump` that this chat makes next: "" where the hook
+    keeps them (it kept this folder's first read, or, for a chat that starts now, `fresh_chat`,
+    its settings register it), else the step."""
+    if kept_by_hook(dump) or (fresh_chat and hook_keeps_versions()):
+        return ""
+    return versions_step(dump)
+
+
+def keep_listed(text: str, out_dir: str, hook: bool = False) -> int:
     """Each record the read's lines name under `out_dir`, given the version the store listed
     it at. Returns how many files took one. A file outside `out_dir`, or not a record the read
-    saved, is left alone."""
+    saved, is left alone. The folder's mark says the versions were kept, and by the hook
+    (`hook`) or by hand (`app.py versions`)."""
     if not text or not out_dir:
         return 0
     root = os.path.realpath(out_dir)
@@ -267,12 +286,21 @@ def keep_listed(text: str, out_dir: str) -> int:
             coll, doc_id, version = got.group(1), got.group(2), got.group(3)
             found.append((version, os.path.join(root, *coll.split("/"),
                                                 doc_id.replace("~", "@") + ".json")))
+    # Kept in one index beside the files (LISTED_MARK), which `load` reads: every saved file
+    # rewritten with its version was about 4 MB and 600 files on each start (the second audit
+    # of 2026-11-10, D15). A file is rewritten only where its own stamp says another number,
+    # so the copy this checkout keeps of the page (page_reads.absorb) still carries it.
+    index: dict = {}
     for version, path in found:
         real = os.path.realpath(path if os.path.isabs(path) else os.path.join(root, path))
         if not real.startswith(root + os.sep) or not os.path.isfile(real):
             continue
         got = _read_json(real)
         if not isinstance(got, dict):
+            continue
+        index[_index_key(root, real)] = int(version)
+        n += 1
+        if _version_of(got)[1] == int(version):
             continue
         got[STORE_VERSION] = int(version)
         try:
@@ -281,19 +309,74 @@ def keep_listed(text: str, out_dir: str) -> int:
                 json.dump(got, fh, ensure_ascii=False, indent=2)
                 fh.write("\n")
             os.replace(tmp, real)
-            n += 1
         except OSError:
             continue
     if n:
-        mark = os.path.join(root, LISTED_MARK)
-        had = _read_json(mark)
-        had = had if isinstance(had, dict) else {}
-        try:
-            with open(mark, "w", encoding="utf-8", newline="\n") as fh:
-                json.dump({"records": int(had.get("records") or 0) + n}, fh)
-        except OSError:
-            pass
+        mark_listed(root, n, hook, index)
     return n
+
+
+def mark_listed(dump_dir: str, n: int = 0, hook: bool = False,
+                versions: dict | None = None) -> None:
+    """The folder's mark that its read's versions were kept: how many, whether by the hook,
+    and each record's version as the read listed it (the index `load` reads, listed_versions)."""
+    mark = os.path.join(dump_dir, LISTED_MARK)
+    had = _read_json(mark)
+    had = had if isinstance(had, dict) else {}
+    kept = dict(had.get("versions") or {}) if isinstance(had.get("versions"), dict) else {}
+    kept.update(versions or {})
+    try:
+        os.makedirs(dump_dir, exist_ok=True)
+        with open(mark, "w", encoding="utf-8", newline="\n") as fh:
+            json.dump({"records": int(had.get("records") or 0) + n, "versions": kept,
+                       "hook": bool(had.get("hook")) or hook}, fh)
+    except OSError:
+        pass
+
+
+def unkept(dump_dir: str) -> int:
+    """How many records a read saved in this folder with no version kept, where neither the
+    hook nor `app.py versions` marked it: the records `wake` asks the versions of first."""
+    if listed_here(dump_dir):
+        return 0
+    n = 0
+    for coll in COLLECTIONS:
+        for where in dict.fromkeys((coll, STORE.get(coll, coll))):
+            n += len(glob.glob(os.path.join(dump_dir, where, "*.json")))
+    return n
+
+
+def _index_key(root: str, path: str) -> str:
+    """A saved file's name in the versions index: `<collection folder>/<file name>`."""
+    import local_path
+    rel = local_path.rel(path, root)
+    return rel[:-5] if rel.endswith(".json") else rel
+
+
+def index_versions(dump_dir: str, versions: dict, drop=()) -> None:
+    """Add `versions` ({"<collection folder>/<file name>": n}) to the folder's index, after
+    dropping every key in `drop`."""
+    if not dump_dir or not os.path.isdir(dump_dir):
+        return
+    mark = os.path.join(dump_dir, LISTED_MARK)
+    had = _read_json(mark)
+    had = had if isinstance(had, dict) else {}
+    kept = dict(had.get("versions") or {}) if isinstance(had.get("versions"), dict) else {}
+    for k in drop:
+        kept.pop(k, None)
+    kept.update(versions)
+    try:
+        with open(mark, "w", encoding="utf-8", newline="\n") as fh:
+            json.dump(dict(had, versions=kept, records=int(had.get("records") or 0)), fh)
+    except OSError:
+        pass
+
+
+def listed_versions(dump_dir: str) -> dict:
+    """{"<collection folder>/<file name>": the store's own version} the read listed (keep_listed)."""
+    got = _read_json(os.path.join(dump_dir, LISTED_MARK)) if dump_dir else None
+    v = got.get("versions") if isinstance(got, dict) else None
+    return v if isinstance(v, dict) else {}
 
 
 def _strings(obj, out: list) -> None:
@@ -321,7 +404,7 @@ def keep_listed_event(event: dict) -> int:
         out = os.path.join(str(event.get("cwd") or os.getcwd()), out)
     said: list = []
     _strings(event.get("tool_response"), said)
-    return keep_listed("\n".join(said), out)
+    return keep_listed("\n".join(said), out, hook=True)
 
 
 def listed_here(dump_dir: str) -> bool:
@@ -339,6 +422,7 @@ def load(dump_dir: str) -> dict:
     refused (2026-10-29). The first write makes the new record, and `move()` makes them all."""
     out: dict = {c: {} for c in COLLECTIONS}
     known = None
+    listed = listed_versions(dump_dir)
     for coll in COLLECTIONS:
         new = STORE.get(coll, coll)
         # The old name first, so a record under its new name always wins.
@@ -348,6 +432,11 @@ def load(dump_dir: str) -> dict:
                 if got is None:
                     continue
                 fields, version, real = _version_of(got)
+                stem_key = f"{where}/{os.path.splitext(os.path.basename(path))[0]}"
+                if not real and listed.get(stem_key) == version:
+                    # Its stamp is the number the read listed (keep_listed): the store's own.
+                    # One moved on since by this folder's own write is a stamp again.
+                    real = True
                 if not real:
                     # Its own stamp only: a wrong one the store has corrected is read as the
                     # store's number (KNOWN_VERSIONS).
@@ -508,21 +597,109 @@ def _pieces(text: str, limit: int) -> list[str]:
     return out or [""]
 
 
+# Where a section in parts is cut. A part was the next 200 KB of the section's text, so one
+# person's note grown by a line moved every later cut, and each part also carried the page's
+# rev: an update rewrote every part of a section that changed at all, 1.59 MB when 8 of 395
+# people had changed (the second audit, 2026-11-10, D6). A section is now cut between its own
+# items (each element of a big list, each value of a big object), after an item whose own text
+# says so (about one in PART_CUT, by its hash) once the part holds PART_MIN_BYTES; each part's
+# rev is a hash of what it holds, and the head lists them (`part_revs`), so a part that holds
+# what it held is never written again and still joins.
+PART_MIN_BYTES = 48_000
+PART_CUT = 16
+_ITEM_MIN = 64                   # a piece this short (a comma, a bracket) never ends a part
+_OPEN_PAST = 4_096               # a list or object longer than this is cut between its items
+
+
+def _items(value) -> list[str]:
+    """`value`'s JSON text (compact, keys sorted) in pieces that join to exactly that text."""
+    out: list[str] = []
+
+    def emit(v) -> None:
+        text = json.dumps(v, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+        if len(text) <= _OPEN_PAST or not isinstance(v, (list, dict)) or not v:
+            out.append(text)
+            return
+        if isinstance(v, list):
+            out.append("[")
+            for i, e in enumerate(v):
+                if i:
+                    out.append(",")
+                emit(e)
+            out.append("]")
+            return
+        out.append("{")
+        for i, k in enumerate(sorted(v)):
+            out.append(("," if i else "") + json.dumps(k, ensure_ascii=False) + ":")
+            emit(v[k])
+        out.append("}")
+    emit(value)
+    return out
+
+
+def _ends_part(piece: str) -> bool:
+    import hashlib
+    return len(piece) >= _ITEM_MIN and \
+        int(hashlib.sha1(piece.encode("utf-8")).hexdigest()[:8], 16) % PART_CUT == 0
+
+
+def _part_texts(value, limit: int) -> list[str]:
+    """`value`'s text cut into parts, each under `limit` bytes as a stored JSON string, ending
+    where its items say (_ends_part); an item bigger than a part is cut by its text alone."""
+    texts, cur, size = [], [], 0
+
+    def close():
+        nonlocal cur, size
+        if cur:
+            texts.append("".join(cur))
+        cur, size = [], 0
+    for piece in _items(value):
+        n = len(json.dumps(piece, ensure_ascii=False)) + 200
+        if n > limit:
+            close()
+            texts.extend(_pieces(piece, limit))
+            continue
+        if cur and size + n > limit:
+            close()
+        cur.append(piece)
+        size += n - 200
+        if size >= PART_MIN_BYTES and _ends_part(piece):
+            close()
+    close()
+    return texts or [""]
+
+
+def part_rev(text: str) -> str:
+    """What a part holds, as a short hash of its text."""
+    import hashlib
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]
+
+
 def split(doc_id: str, doc: dict, field: str = "data",
-          limit: int = PART_BYTES) -> list[tuple[str, dict]]:
+          limit: int = PART_BYTES, by_hold: bool = True) -> list[tuple[str, dict]]:
     """[(doc id, document)] to write for `doc`: itself when it fits in one document, else its
-    parts first and the head last, so a reader that sees the head finds its parts there."""
+    parts first and the head last, so a reader that sees the head finds its parts there.
+    `by_hold` False: for a published page whose code is from before parts were joined by what
+    each holds (app_page.joins_by_hold): every part under the head's own rev, as it joins them."""
     if stored_size(doc) <= DOC_MAX or field not in doc:
         return [(doc_id, doc)]
-    text = json.dumps(doc[field], ensure_ascii=False, separators=(",", ":"), sort_keys=True)
-    pieces = _pieces(text, limit)
+    pieces = _part_texts(doc[field], limit)
     head = {k: v for k, v in doc.items() if k != field}
     head["in_parts"] = len(pieces)
-    rev = doc.get("rev")
-    parts = [(part_id(doc_id, n), {"of": doc_id, "part": n, "rev": rev,
+    revs = [part_rev(p) for p in pieces] if by_hold else [doc.get("rev")] * len(pieces)
+    if by_hold:
+        head["part_revs"] = revs
+    parts = [(part_id(doc_id, n), {"of": doc_id, "part": n, "rev": revs[n - 1],
                                    "made_at": doc.get("made_at"), "text": piece})
              for n, piece in enumerate(pieces, 1)]
     return parts + [(doc_id, head)]
+
+
+def same_part(old, doc: dict) -> bool:
+    """Does the store already hold this part (`old`, as load() gives it) as `doc` would write it?"""
+    data = (old or {}).get("data") if isinstance(old, dict) else None
+    return isinstance(data, dict) and "part" in doc and data.get("rev") == doc.get("rev") \
+        and data.get("text") == doc.get("text")
 
 
 def joined(docs: dict, doc_id: str, field: str = "data"):
@@ -539,10 +716,14 @@ def joined(docs: dict, doc_id: str, field: str = "data"):
     n = head.get("in_parts")
     if not isinstance(n, int) or n < 1:
         return None
+    # Each part as the head says it holds it (`part_revs`), whenever it was written; a head
+    # from before lists none, and its parts carry its own rev.
+    want = head.get("part_revs")
+    want = want if isinstance(want, list) and len(want) == n else [head.get("rev")] * n
     text = ""
     for i in range(1, n + 1):
         part = fields(part_id(doc_id, i))
-        if part.get("rev") != head.get("rev") or not isinstance(part.get("text"), str):
+        if part.get("rev") != want[i - 1] or not isinstance(part.get("text"), str):
             return None
         text += part["text"]
     try:
@@ -593,6 +774,15 @@ def sent_size(entry: dict) -> int:
         return head + 3 * os.path.getsize(path) if os.path.isfile(path) else head
     return head + max(os.path.getsize(path),
                       len(json.dumps(json.dumps(body, separators=(",", ":")))))
+
+
+def _unit(entry: dict) -> tuple:
+    """What a write belongs to, to keep together in one batch: a section, its head and its
+    parts (`part~<section>~<n>`), or the record itself."""
+    doc = str(entry.get("doc_id") or "")
+    if doc.startswith(PART_PREFIX):
+        doc = doc[len(PART_PREFIX):].rpartition("~")[0] or doc
+    return (str(entry.get("collection") or ""), doc)
 
 
 class Writes:
@@ -660,15 +850,29 @@ class Writes:
         os.makedirs(self.out_dir, exist_ok=True)
         # At most 50 entries a batch, and at most BATCH_BYTES of bodies: one view went as a
         # 1.5 MB batch the tool refused (2026-10-26 and again 2026-10-29).
+        # A section and its parts go in one batch wherever they fit in one, starting a new batch
+        # rather than splitting them, and the page's `meta/now` goes last: cut by size alone, a
+        # section's first parts went in a batch that was refused and its last parts and head in
+        # one that landed, and the page mixed two versions of People (the audit of 2026-11-10,
+        # PE-9). A section bigger than a batch is cut, parts first and its head last, as before.
+        units: dict = {}
+        for e in self.entries:
+            units.setdefault(_unit(e), []).append(e)
+        order = sorted(units, key=lambda u: u == ("meta", "now"))
         parts: list[list[dict]] = [[]]
         size = 0
-        for e in self.entries:
-            n = sent_size(e)
-            if parts[-1] and (len(parts[-1]) >= BATCH_MAX or size + n > BATCH_BYTES):
+        for u in order:
+            sizes = [sent_size(e) for e in units[u]]
+            whole = sum(sizes)
+            if parts[-1] and (len(parts[-1]) + len(sizes) > BATCH_MAX or size + whole > BATCH_BYTES):
                 parts.append([])
                 size = 0
-            parts[-1].append(e)
-            size += n
+            for e, n in zip(units[u], sizes):
+                if parts[-1] and (len(parts[-1]) >= BATCH_MAX or size + n > BATCH_BYTES):
+                    parts.append([])
+                    size = 0
+                parts[-1].append(e)
+                size += n
         parts = [p for p in parts if p]
         paths = []
         for i, part in enumerate(parts):
@@ -797,10 +1001,108 @@ ACTIVE = ("claimed", "running")
 # included); after that it waits for the person's "Ask Claude again".
 AUTO_TRIES = 2
 FINISHED = ("done", "failed", "stopped")
+# A job stopped on the same sign-in more than this many times is asked in words the page never
+# answers by itself (SIGNIN_ON_COMPUTER; CC-11). Never "signed out": the page takes those words
+# for a sign-in it makes itself (app.js signinNeeded).
+SIGNIN_STOPS_MAX = 2
+SIGNIN_ON_COMPUTER = ("LinkedIn keeps asking Claude's browser on your computer to sign in. Sign "
+                      "in there, in the Claude app on your computer, then answer this so Claude "
+                      "carries on.")
 # The sign-ins a question can be (finish, `signin`): the page has its own way to make each.
 SIGNINS = ("linkedin",)
 # A claim not moved on in this long is not believed: a lock it holds is free again.
 LEASE_S = 30 * 60
+
+
+# ------------------------------------------------------------------ status changes
+
+# Every change of a work item's status is made by one of the functions here, so each sets and
+# clears the same fields every time, whoever writes it: an answer on the page left the question
+# (`needs`, `asked_you_at`) on work back in the queue, a claim kept it, a pin made work running
+# with nobody's claim, and a sign-in seen on the computer had its own list again (the audit of
+# 2026-11-10, PE-1, PE-11 and CC-3). The page's own answer (templates/app/app.js answerWork)
+# writes what `answered` writes, and a test holds the two together.
+ASKED = ("note", "needs", "asked_you_at", "choices")    # a question put to the person
+HELD = ("claimed_by", "claimed_at", "lease_until")      # a chat's hold on the work
+
+
+def answered(item: dict, answer: str, at: str) -> dict:
+    """needs_you -> queued: the person's answer kept in `args.answers` under the question it
+    answers, the question cleared, nobody's claim, and back in the queue as a job of its own
+    (the batch it was drafted `with` may have finished long since). When the question was
+    asked is kept as `last_asked_at`: a chat on the computer still waiting for a sign-in is at
+    work until SIGNIN_WAIT_S from it (tools/computer.py waiting)."""
+    args = dict(item.get("args")) if isinstance(item.get("args"), dict) else {}
+    answers = dict(args.get("answers")) if isinstance(args.get("answers"), dict) else {}
+    answers[str(item.get("note") or "question")[:200]] = answer
+    args["answers"] = answers
+    return {"args": args, "status": "queued", "answered_at": at,
+            "last_asked_at": item.get("asked_you_at") or None, "with": None,
+            **{k: None for k in ASKED + HELD}}
+
+
+def taken(item: dict, chat: str, kind: str, at: str, until: str, running: bool = False) -> dict:
+    """queued (or answered, or a claim gone quiet) -> claimed, or running at its first stage:
+    this chat's claim, as the kind of chat it claimed as, and nothing of the last try left
+    (its batch, stage, waiting line, error, and the question its answer replied to). A
+    question answered on the page put the item back with the last try's batch, stage, steps
+    and a waiting line, and it was then counted as part of a job that had ended (engine
+    audit, 2026-11-03)."""
+    out: dict = {"status": "running" if running else "claimed", "claimed_by": chat,
+                 "claimed_at": at, "lease_until": until, "claimed_as": kind,
+                 "stage": 0, "stage_at": at if running else None}
+    for k in ("with", "stage_line", "error", "in_chat", "blocked_at", "last_asked_at",
+              "run_by") + ASKED:
+        if item.get(k) not in (None, "", [], {}):
+            out[k] = {"__delete__": True}
+    if item.get("answered_at"):
+        out["steps"] = [{"at": at, "text": "Carrying on with your answer."}]
+    return out
+
+
+def asked(question: str, needs: dict, choices, at: str) -> dict:
+    """claimed or running -> needs_you: the question on the card, nobody's claim, so their
+    answer puts it back in the queue (`answered`)."""
+    return {"status": "needs_you", "note": question[:600], "needs": needs, "asked_you_at": at,
+            "choices": choices, "lease_until": None, "claimed_by": None}
+
+
+def retried(item: dict, at: str, tab: str = "") -> dict:
+    """failed, stopped or gone quiet -> queued, from the top, by the person's Try again (the
+    page's retryWork writes this, field for field): nobody's claim or chat, no question, no
+    error, its next attempt."""
+    return {"status": "queued", "stop_asked": False, "asked_at": at, "asked_from": {"tab": tab},
+            "stage": 0, "stage_at": None, "steps": [], "error": None, "finished_at": None,
+            "with": None, "attempt": int(item.get("attempt") or 1) + 1, "claimed_as": None,
+            "run_by": None, "in_chat": None, "blocked_at": None, "withdrawn": None,
+            **{k: None for k in ASKED + HELD}}
+
+
+def stop_tapped(item: dict, at: str) -> dict:
+    """The person's Stop (the page's stopWork writes this): work nobody has taken stops at once,
+    ended as any work ends; work a chat holds is asked to stop, and that chat ends it."""
+    if str(item.get("status") or "queued") == "queued":
+        return dict(ended(item, "stopped", at), stop_asked=True)
+    return {"stop_asked": True}
+
+
+def applied(item: dict, fields: dict) -> dict:
+    """`item` as the store holds it once `fields` are written: None and a delete clear a field.
+    For a folder kept as the write will leave it (_keep_dump)."""
+    out = dict(item)
+    for k, v in fields.items():
+        if v is None or (isinstance(v, dict) and v.get("__delete__")):
+            out.pop(k, None)
+        else:
+            out[k] = v
+    return out
+
+
+def ended(item: dict, status: str, at: str) -> dict:
+    """-> done, failed or stopped: finished, its lease gone, and no question left on it (a
+    question withdrawn kept its Answer box under "Stopped")."""
+    return {"status": status, "finished_at": at, "lease_until": None,
+            **{k: None for k in ASKED if item.get(k) not in (None, "", [], {})}}
 
 
 def work_times(db: dict, now: dt.datetime, days: int = 30, least: int = 3) -> dict:
@@ -824,10 +1126,12 @@ def work_times(db: dict, now: dt.datetime, days: int = 30, least: int = 3) -> di
         took = (end - start).total_seconds()
         if 5 <= took <= 4 * 3600 and str(w.get("kind") or "") in STAGES:
             # A note rewritten on a profile read is `network` work, but one note, not a run:
-            # counted apart, so neither's minutes are the other's (REWRITE_STAGES).
+            # counted apart, so neither's minutes are the other's (REWRITE_STAGES). The CV
+            # drafted alone likewise (RESUME_ONLY_STAGES).
             rewrite = w["kind"] == "network" and isinstance(w.get("args"), dict) \
                 and w["args"].get("rewrite")
-            by.setdefault(REWRITE_KIND if rewrite else str(w["kind"]), []).append(took)
+            by.setdefault(REWRITE_KIND if rewrite else RESUME_ONLY_KIND if resume_only(w)
+                          else str(w["kind"]), []).append(took)
     out = {}
     for kind, xs in sorted(by.items()):
         if len(xs) >= least:
@@ -847,6 +1151,23 @@ REWRITE_STAGES = [("start", "Getting started", 30), ("write", "Rewriting the not
                   ("check", "Checking", 45)]
 
 
+# The resume drafted alone (`draft` work with args.resume_only, the page's "Draft the resume
+# only"): the draft's own stages without the employer research, which the drafting workflow never
+# runs for it, the research being only for the letter (.claude/workflows/draft-applications.js,
+# NO_RESEARCH). The other stages are the draft's as they are: nothing measures how much of each
+# the letter takes. Its gauge says this copy's own CV-only drafts' time once it has three
+# (work_times, under RESUME_ONLY_KIND), else these: it said a full draft's minutes, and the
+# cheaper choice read as no cheaper (the screen review, 2026-11-11).
+RESUME_ONLY_KIND = "draft_resume_only"
+RESUME_ONLY_STAGES = [s for s in STAGES["draft"] if s[0] != "research"]
+
+
+def resume_only(item: dict) -> bool:
+    """Whether this work drafts the resume alone."""
+    return str(item.get("kind") or "") == "draft" and isinstance(item.get("args"), dict) \
+        and item["args"].get("resume_only") is True
+
+
 def rewrite_seconds(work_time: dict | None = None) -> int:
     """How long one note's rewrite takes this copy's Claude: its own median, else the default."""
     got = (work_time or {}).get(REWRITE_KIND)
@@ -856,10 +1177,12 @@ def rewrite_seconds(work_time: dict | None = None) -> int:
 
 
 def progress(kind: str) -> dict:
-    """The default stages of a kind of work, with their usual seconds."""
-    if kind not in STAGES:
+    """The default stages of a kind of work, with their usual seconds (the resume drafted alone
+    by its own name, RESUME_ONLY_KIND)."""
+    rows = RESUME_ONLY_STAGES if kind == RESUME_ONLY_KIND else STAGES.get(kind)
+    if rows is None:
         raise KeyError(f"no kind of work {kind!r}; one of {', '.join(sorted(STAGES))}")
-    stages = [{"key": k, "name": n, "est_s": s} for k, n, s in STAGES[kind]]
+    stages = [{"key": k, "name": n, "est_s": s} for k, n, s in rows]
     return {"kind": kind, "stages": stages, "total_s": sum(s["est_s"] for s in stages)}
 
 
@@ -973,7 +1296,19 @@ def locks_for(item: dict) -> list[str]:
     if kind == "search":
         out.append("search")
     if kind == "network":
-        out.append(f"net~{_key(company)}" if company else "network")
+        # A read of named people (args.contacts, read_first or rewrite, as a read for the
+        # computer is queued) holds each person's lock: held by the whole run's "network", it
+        # waited behind any networking run in the cloud (the builder audit, 2026-11-10, CC-7).
+        named = [str(c) for c in (args.get("contacts") or [])
+                 if str(c or "").strip()] if isinstance(args.get("contacts"), list) else []
+        if not named and contact and args.get("rewrite"):
+            named = [str(contact)]
+        if company:
+            out.append(f"net~{_key(company)}")
+        elif named and (args.get("read_first") or args.get("rewrite")):
+            out.extend(f"contact~{safe_id(c)}" for c in dict.fromkeys(named))
+        else:
+            out.append("network")
     if kind in ("reply", "follow_up", "resume_for_contact", "tweak", "prep") and contact:
         out.append(f"contact~{safe_id(contact)}")
     if kind == "update":
@@ -1044,9 +1379,19 @@ def next_item(db: dict, chat_kind: str, now: dt.datetime,
     held = held_locks(db, now)
     # A batch is one job: its other postings (`with` its leader) take no place of their own,
     # or one batch of three filled the cap (engine audit, 2026-11-03).
+    # The computer's room is its own: a chat the app started there counts only the jobs on the
+    # computer (claimed as a computer chat's, or sent there). Counting the cloud's too, three
+    # cloud searches or drafts left it nothing to take, and another chat was started there half
+    # an hour on (the builder audit, 2026-11-10, CC-7).
+    # And the cloud's room is the cloud's: reads on the computer never fill it (the second
+    # audit, 2026-11-10, C7).
+    def on_computer(d: dict) -> bool:
+        return d.get("claimed_as") == "computer" or bool(computer_only(d, "cloud"))
     heavy = sum(1 for d in work.values() if _live_claim(d["data"], now, work)
                 and not d["data"].get("with")
-                and WORK_KINDS.get(str(d["data"].get("kind") or ""), {}).get("heavy"))
+                and WORK_KINDS.get(str(d["data"].get("kind") or ""), {}).get("heavy")
+                and (on_computer(d["data"]) if to_only == "computer" else
+                     not on_computer(d["data"]) if chat_kind == "cloud" else True))
     queued = []
     for wid, doc in work.items():
         item = doc["data"]
@@ -1059,8 +1404,14 @@ def next_item(db: dict, chat_kind: str, now: dt.datetime,
         # "Ask Claude again".
         # Never one a chat began for the person in that chat (`in_chat`): they are there, and
         # a second run elsewhere would do it twice; it is ended instead (stranded).
+        # A job whose own chat is known (`run_by`) waits a lease more first: the chat that
+        # started it asks that chat how it is (get_session) on its wakes and keeps the job
+        # going while it works or waits on the person (app.py pin --alive or --blocked).
+        # Started again at once, a job paused on an approval ran twice (the second audit of
+        # 2026-11-10, C1).
         again = (str(item.get("status") or "") in ACTIVE and not _live_claim(item, now, work)
-                 and int(item.get("attempt") or 1) < AUTO_TRIES and not item.get("in_chat"))
+                 and int(item.get("attempt") or 1) < AUTO_TRIES and not item.get("in_chat")
+                 and (not item.get("run_by") or _chat_quiet(item, now)))
         if str(item.get("status") or "") != "queued" and not again:
             continue
         if not can_take(item, chat_kind) or (to_only == "computer" and not computer_only(item, "cloud")):
@@ -1176,12 +1527,31 @@ STRANDED_SAID = "It stopped part way twice. Tap Try again to start it once more.
 # Work a chat began for the person in that chat, gone quiet: never started again elsewhere,
 # ended after a lease and as long again with no word, so a long step it forgot to pin keeps it.
 CHAT_STRANDED_SAID = "It stopped before it finished. Tap Try again to start it once more."
+# The page offers Try again only while a job's attempt is below this (templates/app/app.js,
+# `tries < 3`): a card past it said "Tap Try again" with no button to tap (the engine review,
+# 2026-11-11). There, the same words send them to the page's own Ask Claude.
+TRY_AGAIN_BELOW = 3
+NO_TRY_AGAIN = "Ask Claude"
+
+
+def try_again_said(said: str, item: dict) -> str:
+    """`said` as a card shows it: "Tap Try again" only where the page offers Try again."""
+    if int((item or {}).get("attempt") or 1) < TRY_AGAIN_BELOW:
+        return said
+    return said.replace("Tap Try again", NO_TRY_AGAIN)
 
 
 def _chat_quiet(item: dict, now: dt.datetime) -> bool:
-    """Has work a chat runs itself had no word for a lease past its lease?"""
-    until = _time(item.get("lease_until")) or _time(item.get("stage_at")) or \
-        _time(item.get("claimed_at"))
+    """Has work a chat runs itself had no word for a lease past its lease? One rule, with a
+    lease or without: the claim stops being live when its lease ends (`lease_until`, or a lease
+    after its last word, as _live_claim reads it), and it is quiet a lease after that. Without
+    a lease it was quiet the moment it stopped being live, a lease sooner than with one, and
+    from its stage's start even where its claim came later (the audit of 2026-11-10, PE-12)."""
+    until = _time(item.get("lease_until"))
+    if until is None:
+        last = max([t for t in (_time(item.get("stage_at")), _time(item.get("claimed_at"))) if t],
+                   default=None)
+        until = last + dt.timedelta(seconds=LEASE_S) if last is not None else None
     return until is not None and (now - until).total_seconds() >= LEASE_S
 
 
@@ -1218,9 +1588,10 @@ def fail_stranded(db: dict, now: dt.datetime, out_dir: str) -> dict:
         stop = bool(work[wid]["data"].get("stop_asked"))
         said = STOPPED_SAID if stop else CHAT_STRANDED_SAID if work[wid]["data"].get("in_chat") \
             else STRANDED_SAID
-        w.add("update", "work", wid, {
-            "status": "stopped" if stop else "failed", "finished_at": at, "lease_until": None,
-            "error": None if stop else said, "result": {"summary": said, "links": []}},
+        said = try_again_said(said, work[wid]["data"])
+        w.add("update", "work", wid, dict(
+            ended(work[wid]["data"], "stopped" if stop else "failed", at),
+            error=None if stop else said, result={"summary": said, "links": []}),
             if_version=work[wid]["version"])
     for lid, lock in sorted((db.get("locks") or {}).items()):
         if str((lock.get("data") or {}).get("work") or "") in ids and not lock.get("old"):
@@ -1247,9 +1618,13 @@ def lose(db: dict, ids, now: dt.datetime, out_dir: str) -> list[str]:
         if str((doc.get("data") or {}).get("status") or "") != "done" \
                 or doc.get("version") is None:
             continue
-        w.add("update", "work", wid, {
-            "status": "failed", "error": LOST_SAID, "lost_at": app_model.stamp(now),
-            "result": {"summary": LOST_SAID, "links": []}}, if_version=doc["version"])
+        d = doc.get("data") or {}
+        # Ended again, failed, at the time it first finished: its card offers Try again.
+        said = try_again_said(LOST_SAID, d)
+        w.add("update", "work", wid, dict(
+            ended(d, "failed", str(d.get("finished_at") or app_model.stamp(now))),
+            error=said, lost_at=app_model.stamp(now),
+            result={"summary": said, "links": []}), if_version=doc["version"])
     return w.save("lost") if w.entries else []
 
 
@@ -1277,7 +1652,7 @@ def heartbeat(chat_id: str, chat_kind: str, now: dt.datetime, busy: str | None =
 
 def claim(db: dict, chosen: dict, chat_id: str, chat_kind: str, now: dt.datetime,
           out_dir: str, running: bool = False, watching: bool = True,
-          beat: bool = True) -> list[str]:
+          beat: bool = True, extra: dict | None = None) -> list[str]:
     """The claim for `chosen` (next_item's answer) as batch files: the item pinned to the
     version read, each lock created (a lock left by a finished job is replaced, pinned to
     its version), and the chat's heartbeat. A refused batch means another chat has it.
@@ -1293,27 +1668,15 @@ def claim(db: dict, chosen: dict, chat_id: str, chat_kind: str, now: dt.datetime
     w = Writes(out_dir)
     at = app_model.stamp(now)
     until = app_model.stamp(now + dt.timedelta(seconds=LEASE_S))
-    status = "running" if running else "claimed"
 
     def fresh(wid: str) -> dict:
-        """What a claim clears on an item taken from the queue. A question answered on the
-        page put the item back with the last try's batch (`with` a finished job), stage,
-        steps and a waiting line, and it was then counted as part of a job that had ended
-        (engine audit, 2026-11-03)."""
-        item = (work.get(wid) or {}).get("data") or {}
-        out: dict = {"stage": 0, "stage_at": at if running else None}
-        for k in ("with", "stage_line", "note", "error", "in_chat"):
-            if item.get(k) not in (None, "", [], {}):
-                out[k] = {"__delete__": True}
-        if item.get("answered_at"):
-            out["steps"] = [{"at": at, "text": "Carrying on with your answer."}]
-        return out
+        return taken((work.get(wid) or {}).get("data") or {}, chat_id, chat_kind, at, until,
+                     running=running)
 
     # The kind it was claimed as, kept on the item: a cloud chat lent the computer's browser
     # claims as a computer chat, and its finish, run without `--kind computer`, was refused as
     # a cloud chat's (the release review, 2026-11-09). `finish` believes it for the claimer.
-    fields = {"status": status, "claimed_by": chat_id, "claimed_at": at, "lease_until": until,
-              "claimed_as": chat_kind, **fresh(chosen["work"])}
+    fields = {**fresh(chosen["work"]), **(extra or {})}
     named = str((chosen.get("create_session") or {}).get("title") or "")
     if named:
         # The name of the chat started for it, so the next one started beside it is never
@@ -1326,9 +1689,7 @@ def claim(db: dict, chosen: dict, chat_id: str, chat_kind: str, now: dt.datetime
                                                 "Anything it saved is kept."}])
     w.add("update", "work", chosen["work"], fields, if_version=chosen.get("version"))
     for other in chosen.get("with") or []:
-        w.add("update", "work", other["work"],
-              dict(fresh(other["work"]), status=status, claimed_by=chat_id, claimed_at=at,
-                   lease_until=until, claimed_as=chat_kind, **{"with": chosen["work"]}),
+        w.add("update", "work", other["work"], dict(fresh(other["work"]), **{"with": chosen["work"]}),
               if_version=other.get("version"))
     # Each lock names the item that needs it, so finishing one posting of a batch (or
     # stopping it for a question) frees its own employer and nothing else.
@@ -1424,8 +1785,14 @@ def stage_index(kind: str, stage, given: list | None = None) -> int:
         [SEARCH_DRAFT_STAGE[0]] if kind == "search" else [])
     n = len(given) if given else len(keys) - (1 if kind == "search" else 0)
     text = str(stage).strip()
+    # Stages of its own (the resume drafted alone has no research): a key finds its stage by
+    # name there, so "write" is Writing whichever number it is.
+    names = [str((g or {}).get("name") or "") for g in given or [] if isinstance(g, dict)]
+    named = dict((k, nm) for k, nm, _ in STAGES.get(kind, []))
     if text.isdigit():
         at = int(text)
+    elif text in keys and named.get(text) in names and names.index(named[text]) != keys.index(text):
+        at = names.index(named[text])
     elif text in keys:
         at = keys.index(text)
     else:
@@ -1443,11 +1810,18 @@ def _keep_dump(dump_dir: str, collection: str, doc_id: str, fields: dict, versio
     plain = os.path.join(where, safe_id(doc_id) + ".json")
     path = os.path.join(where, safe_id(doc_id).replace("~", "@") + ".json")
     _keep_read_stamp(dump_dir, os.path.basename(where), safe_id(doc_id), (path, plain))
+    known = version_known(dump_dir, f"{os.path.basename(where)}/{safe_id(doc_id)}")
     if plain != path and os.path.exists(plain):
         os.remove(plain)
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(dict(fields, **{VERSION_FIELD: version}), fh, ensure_ascii=False, indent=1)
         fh.write("\n")
+    if known:
+        # Moved on from a number the store gave, by this folder's own write: still the store's
+        # own once it lands (a refused one is put back, page_db.put_back). Kept in the index, so
+        # the copy this checkout keeps of the page carries it too (page_reads.absorb), and the
+        # next read laid from it is not taken for stamps alone (the review, 2026-11-11).
+        index_versions(dump_dir, {_index_key(dump_dir, path): int(version)})
 
 
 READ_STAMPS = ".read-stamps.json"     # in a dump folder: each record's own stamp as read
@@ -1467,6 +1841,9 @@ def _keep_read_stamp(dump_dir: str, coll: str, doc_id: str, paths) -> None:
         raw = _read_json(p) if os.path.isfile(p) else None
         if isinstance(raw, dict):
             _f, v, real = _version_of(raw)
+            # Its stamp the number the read listed (the versions index) is the store's own.
+            stem = os.path.splitext(os.path.basename(p))[0]
+            real = real or listed_versions(dump_dir).get(f"{coll}/{stem}") == v
             got[key] = None if real else v
             break
     else:
@@ -1692,11 +2069,40 @@ def version_known(dump_dir: str, key: str) -> bool:
     side = _read_json(os.path.join(dump_dir, READ_STAMPS))
     if isinstance(side, dict) and key in side:
         return side[key] is None
+    listed = listed_versions(dump_dir)
     for name in (doc_id.replace("~", "@"), doc_id):
         raw = _read_json(os.path.join(dump_dir, coll, name + ".json"))
         if isinstance(raw, dict):
-            return _version_of(raw)[2]
+            _f, v, real = _version_of(raw)
+            return real or listed.get(f"{coll}/{name}") == v
     return False
+
+
+def stamped_only(dump_dir: str, batches) -> list[str]:
+    """The records these batches pin to a version this folder knows only by the stamp its last
+    writer put on it (`_v`): no read kept the store's own number for it (keep_listed), and no
+    write from this folder moved it on. A chat started outside the copy's folder runs no hook,
+    and its whole page update was refused for a screen pinned to 4 where the store had 56 (the
+    audit of 2026-11-10, PE-2)."""
+    out = []
+    for path in batches or ():
+        entries = _read_json(path)
+        for e in entries if isinstance(entries, list) else ():
+            if not isinstance(e, dict) or e.get("if_version") is None:
+                continue
+            key = f"{e.get('collection')}/{e.get('doc_id')}"
+            if key not in out and not version_known(dump_dir, key):
+                out.append(key)
+    return out
+
+
+STAMPED_ONLY = ("view: {n} of the records this update writes over are known here only by the "
+                "number their last writer stamped, as the read's own versions were not kept "
+                "({some}). Send these batches as they are, in order (a refusal is put right by "
+                "python3 tools/app.py version, which reads again what moved on); and after every "
+                "read from now on, give the lines it printed (`- \"<id>\"  N bytes  version V  "
+                "\"<file>\"`) to python3 tools/app.py versions <that folder> before anything else, "
+                "so each write is pinned to the page's own number.")
 
 
 # Stored collections every chat and the page itself write while a save is on its way.
@@ -1737,19 +2143,111 @@ def refusals(dump_dir: str, ref: str) -> int:
     return int(got.get(ref) or 0) if isinstance(got, dict) else 0
 
 
-def not_its_claim(item: dict, chat: str) -> str:
+def not_its_claim(item: dict, chat: str, me: str = "") -> str:
     """Why a chat may not write to this item, or "": another chat claims it now. The pinned
     version is no guard, since a chat whose lease ran out reads the item afresh, re-claimed,
-    and its write then lands on the other chat's claim (the release review, 2026-11-03)."""
+    and its write then lands on the other chat's claim (the release review, 2026-11-03).
+    `me`: the writing chat's own id. A job's chat writes under the id of the chat that claimed
+    it for it (`chat`), so two job chats started for one job, after the first went quiet,
+    both passed: the job chat that runs it is kept as `run_by` (its first pin), and another
+    is refused (the second audit of 2026-11-10, C1)."""
     who = str(item.get("claimed_by") or "").strip()
     chat = str(chat or "").strip()
     if chat and who and who != chat:
         return ("another chat took this job on after this one went quiet, and it is that "
                 f"chat's now ({who}): write nothing more to it, and stop")
+    runs = str(item.get("run_by") or "").strip()
+    me = str(me or "").strip()
+    if runs and me and me != runs and me != who:
+        return ("another chat runs this job now, started for it after this one went quiet "
+                f"({runs}): write nothing more to it, and stop")
     return ""
 
 
+def run_by(item: dict, me: str) -> dict:
+    """The field that keeps which chat runs a job, written by that chat's own writes: {} when
+    it is known already, or the chat is the one that claimed it (it runs its own work)."""
+    me = str(me or "").strip()
+    if not me or me == str(item.get("claimed_by") or "") or me == str(item.get("run_by") or ""):
+        return {}
+    return {"run_by": me}
+
+
 BLOCKED_LINE = "Waiting for you: Claude asked to go ahead with a step, in the Claude app."
+
+
+def resume(db: dict, work_id: str, chat: str, chat_kind: str, now: dt.datetime, out_dir: str,
+           answer: str = "", dump_dir: str = "") -> dict:
+    """The batch that takes work into this chat because the person said so here: a question
+    it put to them answered in this chat ("logged in"), or work waiting in the queue they
+    asked this chat to do now ("just read them here"). Answered as the page answers it
+    (`answered`), then claimed by this chat and running (`taken`), marked `in_chat`, so no
+    other chat starts it and the page shows it going. A chat that saw the sign-in could not
+    take its own question back, and the job stayed parked until the person found the card and
+    tapped Done; and reads done in the chat ran twice, as the queued job was started too (the
+    audit of 2026-11-10, CC-3 and CC-19). {work, batches}. KeyError for work not in the dump,
+    finished, or held by another chat that is still at it; ValueError, in plain words, for a
+    question with no answer given or work only the computer may do."""
+    import app_model
+    doc = (db.get("work") or {}).get(safe_id(work_id))
+    if doc is None:
+        raise KeyError(f"no work {work_id!r} in the dump; read work again")
+    item = dict(doc["data"])
+    status = str(item.get("status") or "queued")
+    if status in FINISHED:
+        raise KeyError(f"work {work_id!r} has finished; there is nothing to take back")
+    if item.get("stop_asked"):
+        raise KeyError(f"they asked for {work_id!r} to stop: leave it stopped")
+    work = db.get("work") or {}
+    who = str(item.get("claimed_by") or "")
+    if status in ACTIVE and who and who != chat and _live_claim(item, now, work):
+        raise KeyError(f"another chat is doing {work_id!r} now ({who}): leave it to that chat")
+    refused = computer_only(item, chat_kind)
+    if refused:
+        raise ValueError(f"not taken: {refused}")
+    answer = " ".join(str(answer or "").split())
+    if status == "needs_you" and not answer:
+        raise ValueError("say what they answered, in their words (--answer)")
+    at = app_model.stamp(now)
+    until = app_model.stamp(now + dt.timedelta(seconds=LEASE_S))
+    base = dict(item)
+    fields: dict = {}
+    if status == "needs_you":
+        fields = answered(item, answer[:2000], at)
+        base = {k: v for k, v in dict(item, **fields).items() if v is not None}
+    claim_fields = taken(base, chat, chat_kind, at, until, running=True)
+    claim_fields.pop("in_chat", None)
+    fields.update(claim_fields)
+    for k, v in claim_fields.items():
+        if isinstance(v, dict) and v.get("__delete__"):
+            fields[k] = None
+    fields.update(in_chat=True, last_asked_at=None)
+    if not answer:
+        fields["steps"] = (list(item.get("steps") or []) +
+                           [{"at": at, "text": "Doing it in the chat you asked in."}])[-50:]
+    w = Writes(out_dir)
+    w.add("update", "work", work_id, fields, if_version=doc["version"])
+    batches = w.save("resume")
+    if dump_dir:
+        keep_landed(dump_dir, batches)
+    return {"work": work_id, "batches": batches}
+
+
+def mark_alive(db: dict, work_id: str, now: dt.datetime, out_dir: str) -> dict:
+    """A job running in a chat of its own whose chat is still at work (get_session says so)
+    though it has not pinned for a while: its lease renewed, and nothing else, so it is never
+    started a second time while it runs (the second audit of 2026-11-10, C1). {work, batches}."""
+    import app_model
+    doc = (db.get("work") or {}).get(safe_id(work_id))
+    if doc is None:
+        raise KeyError(f"no work {work_id!r} in the dump; read work again")
+    if str(doc["data"].get("status") or "") not in ACTIVE:
+        raise KeyError(f"work {work_id!r} is not running; write nothing to it")
+    w = Writes(out_dir)
+    w.add("update", "work", work_id,
+          {"lease_until": app_model.stamp(now + dt.timedelta(seconds=LEASE_S))},
+          if_version=doc["version"])
+    return {"work": work_id, "batches": w.save("alive")}
 
 
 def mark_blocked(db: dict, work_id: str, now: dt.datetime, out_dir: str) -> dict:
@@ -1777,13 +2275,14 @@ def mark_blocked(db: dict, work_id: str, now: dt.datetime, out_dir: str) -> dict
 
 def pin(db: dict, work_id: str, now: dt.datetime, out_dir: str, stage=None, line: str = "",
         count: dict | None = None, left_s: int | None = None, dump_dir: str = "",
-        chat: str = "") -> dict:
+        chat: str = "", me: str = "") -> dict:
     """One pinned update of a running item: its stage (stage_at only when the stage moves
     on), one plain line in its steps, how many of how many are done, how long is left
     (`left_s`, as of `left_at`), and its lease, renewed, so long work is never taken for
     stopped. The page reads `left_s` as the stage's own estimate: a search that says
     "15 min left" is not shown as late at ten. {work, stage, count, left_s, batches}.
-    `chat`: the id the job was claimed under; another chat's claim is a KeyError."""
+    `chat`: the id the job was claimed under; another chat's claim is a KeyError. `me`: the
+    pinning chat's own id, kept as `run_by` (not_its_claim)."""
     import app_model
     doc = (db.get("work") or {}).get(safe_id(work_id))
     if doc is None:
@@ -1791,15 +2290,30 @@ def pin(db: dict, work_id: str, now: dt.datetime, out_dir: str, stage=None, line
     item = dict(doc["data"])
     if str(item.get("status") or "") in ("done", "failed", "stopped"):
         raise KeyError(f"work {work_id!r} has finished; write nothing more to it")
-    taken = not_its_claim(item, chat)
+    taken = not_its_claim(item, chat, me)
     if taken:
         raise KeyError(taken)
     if item.get("stop_asked"):
         # They tapped Stop: no stage is pinned, the work is stopped (the app skill, step 4).
         return {"work": work_id, "stop_asked": True, "batches": []}
+    # Only work some chat holds is pinned: a pin on work waiting for the person, or in the
+    # queue, made it running with nobody's claim, so any chat could pin or finish it, the tidy
+    # passed it by, and once its lease ran out it was handed to another chat (the audit of
+    # 2026-11-10, PE-1). Its claim comes first (app.py next, or app.py resume).
+    if str(item.get("status") or "queued") not in ACTIVE or not str(item.get("claimed_by") or ""):
+        raise KeyError(f"work {work_id!r} is not claimed by any chat ({item.get('status') or 'queued'}): "
+                       "claim it first (python3 tools/app.py resume, or next), then pin it")
+    if not str(chat or "").strip() and _live_claim(item, now, db.get("work") or {}) and \
+            (not str(me or "") or str(me) not in (str(item.get("claimed_by") or ""),
+                                                   str(item.get("run_by") or ""))):
+        # Named by no chat, a pin wrote over a claim another chat holds now (the review of
+        # 2026-11-11, PE-1).
+        raise KeyError(f"say which chat {work_id!r} was claimed under (--chat <its id>): another "
+                       f"chat holds it now ({item.get('claimed_by')})")
     at = app_model.stamp(now)
     fields: dict = {"status": "running",
-                    "lease_until": app_model.stamp(now + dt.timedelta(seconds=LEASE_S))}
+                    "lease_until": app_model.stamp(now + dt.timedelta(seconds=LEASE_S)),
+                    **run_by(item, me)}
     if item.get("blocked_at"):
         fields["blocked_at"] = None          # it moved on: no longer waiting on the person
     if stage is not None:
@@ -2028,7 +2542,7 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
            chat_kind: str = "cloud", dump_dir: str = "", chat: str = "",
            question: str = "", about: str = "", answer: dict | None = None,
            answered=(), left_out: str = "", outcome: str = "", signin: str = "",
-           go=()) -> dict:
+           go=(), me: str = "") -> dict:
     """The batch that finishes one work item (the app skill, step 5): the item `done` (or
     `failed`, with `error` in plain words, or `stopped` after their Stop), its one-sentence
     summary and links, pinned to the version read; each of its locks the dump holds, deleted
@@ -2057,18 +2571,26 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
             # file, and the second refused the first as already finished, 2026-11-09).
             return made
         raise KeyError(f"work {work_id!r} has already finished; write nothing more to it")
-    taken = not_its_claim(item, chat)        # `chat`: the id the job was claimed under
+    # Work nobody is doing may be withdrawn by any chat, with its reason on the card: work for
+    # the computer nobody has started yet (a repeat of a read already done could only be called
+    # off by the person's own Stop, the maintainer, 2026-11-10), a question waiting on the
+    # person (a sign-in), and work another chat claimed and went quiet on. A cloud chat could
+    # end none of these but the first, and only the person's Stop worked (the audit of
+    # 2026-11-10, PE-6). Another chat's claim still moving on is that chat's.
+    cur = str(item.get("status") or "queued")
+    unstarted = cur == "queued" and not item.get("claimed_by")
+    quiet = cur in ACTIVE and str(item.get("claimed_by") or "") != str(chat or "") and \
+        not _live_claim(item, now, db.get("work") or {})
+    withdrawn = status == "stopped" and not item.get("stop_asked") and not question and \
+        (unstarted or cur == "needs_you" or quiet)
+    # `chat`: the id it was claimed under; `me`: this chat's own (not_its_claim).
+    taken = "" if withdrawn else not_its_claim(item, chat, me)
     if taken:
         raise KeyError(taken)
     refused = computer_only(item, claimed_kind(item, chat_kind, chat))
-    # Work for the computer nobody has started yet may be withdrawn by any chat, with its
-    # reason on the card: a repeat of a read already done could only be called off by the
-    # person's own Stop (the maintainer, 2026-11-10).
-    unstarted = str(item.get("status") or "queued") == "queued" and not item.get("claimed_by")
-    withdrawn = status == "stopped" and not item.get("stop_asked") and unstarted
     if withdrawn and not " ".join(str(summary or "").split()):
         raise ValueError("say why it is called off, in one short sentence (--summary)")
-    if refused and not (status == "stopped" and (item.get("stop_asked") or unstarted)):
+    if refused and not (status == "stopped" and (item.get("stop_asked") or withdrawn)):
         raise ValueError(f"not finished: {refused}")
     if chat and str(item.get("status") or "queued") == "queued" and not item.get("claimed_by") \
             and status != "stopped":
@@ -2118,6 +2640,14 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
         answer_text = str(reply).strip()[:ANSWER_MAX]
         reply = ""
     at = app_model.stamp(now)
+    stops = int(item.get("signin_stops") or 0) + (1 if signin in SIGNINS else 0)
+    if status == "needs_you" and signin in SIGNINS and stops > SIGNIN_STOPS_MAX:
+        # The same sign-in, a third time: the page answered it by itself from its own reader,
+        # which may not be the browser on the computer (a phone, another window), or "I've
+        # signed in" was tapped with nothing signed in, and each answer started a chat that met
+        # the sign-in page again. Asked once more in words the page never answers by itself
+        # (the builder audit, 2026-11-10, CC-11).
+        question, signin = SIGNIN_ON_COMPUTER, ""
     if status == "needs_you":
         import app_actions
         kind = clean = None
@@ -2134,15 +2664,15 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
         # on their computer to find the sign-in (the maintainer, 2026-11-10).
         if signin in SIGNINS:
             needs["signin"] = signin
-        fields = {"status": status, "note": question[:600], "lease_until": None,
-                  "claimed_by": None, "asked_you_at": at, "needs": needs,
-                  # The choices as pages before 4.10 read them: their words alone.
-                  "choices": [c["label"] for c in (clean or {}).get("choices") or []]
-                  if kind in ("choice", "yesno") else None}
+        # The choices as pages before 4.10 read them: their words alone.
+        fields = asked(question, needs, [c["label"] for c in (clean or {}).get("choices") or []]
+                       if kind in ("choice", "yesno") else None, at)
+        if stops:
+            fields["signin_stops"] = stops
     else:
-        fields = {"status": status, "finished_at": at, "lease_until": None,
-                  "result": {"summary": summary, "links": [dict(x) for x in links or ()]},
-                  "error": error or None}
+        fields = dict(ended(item, status, at),
+                      result={"summary": summary, "links": [dict(x) for x in links or ()]},
+                      error=error or None)
         if withdrawn:
             fields["withdrawn"] = True          # its card says why (the page, workBox)
         # A form's questions answered, as the form asked them: the card that asked says Done
@@ -2301,9 +2831,9 @@ def search_drafts(db: dict, work_id: str, rows: list[dict], now: dt.datetime, ou
     item = dict(doc["data"])
     if str(item.get("status") or "") in FINISHED:
         raise KeyError(f"work {work_id!r} has finished; write nothing more to it")
-    taken = not_its_claim(item, chat)
-    if taken:
-        raise KeyError(taken)
+    other = not_its_claim(item, chat)
+    if other:
+        raise KeyError(other)
     if not drafts_all(item):
         raise ValueError("this search was not asked to draft what it finds")
     if item.get("stop_asked"):
@@ -2364,8 +2894,7 @@ def search_drafts(db: dict, work_id: str, rows: list[dict], now: dt.datetime, ou
         if busy:
             d["status"] = "queued"
         else:
-            d.update(status="claimed", claimed_by=chat, claimed_at=at, lease_until=until,
-                     **{"with": work_id})
+            d.update(taken({}, chat, str(item.get("claimed_as") or "cloud"), at, until), **{"with": work_id})
             for lock in locks_for(mine):
                 lold = (db.get("locks") or {}).get(safe_id(lock))
                 w.add("set", "locks", lock, {"work": wid, "chat": chat, "since": at, "until": until},

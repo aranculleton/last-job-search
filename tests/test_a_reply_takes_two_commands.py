@@ -398,7 +398,8 @@ def test_the_instructions_name_the_commands():
     def said(rel):
         with open(os.path.join(ROOT, rel), encoding="utf-8") as fh:
             return " ".join(fh.read().split())
-    app, reply, net = (said(".claude/skills/app/SKILL.md"), said(".claude/commands/reply.md"),
+    import app_skill
+    app, reply, net = (" ".join(app_skill.text().split()), said(".claude/commands/reply.md"),
                        said(".claude/skills/networking/SKILL.md"))
     for text in (app, reply, net):
         assert "reply.py prepare" in text and "reply.py finish" in text

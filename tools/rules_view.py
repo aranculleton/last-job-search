@@ -28,6 +28,7 @@ documents/rules/set.json, written by the page's own writers as a rule changes (`
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 import json
 import os
 import re
@@ -349,7 +350,7 @@ def note_set(rule_id: str, words: str = "", today: str = "", review_on: str = ""
              **extra) -> dict:
     """Keep the day a rule was set, the person's words for it and, for one they set "for
     now", the day to ask about it again. The page's own writers call this as a rule changes."""
-    day = today or dt.date.today().isoformat()
+    day = today or person.today().isoformat()
     words = " ".join(str(words or "").split())[:300]
     if not review_on and words and _FOR_NOW.search(words):
         review_on = (dt.date.fromisoformat(day) + dt.timedelta(days=FOR_NOW_DAYS)).isoformat()
@@ -413,17 +414,33 @@ def _plain(why: str) -> str:
 # Each rule's short name in Your rules, by its kind.
 NAMES = {"place": "Where", "field": "Your field", "age": "How recent", "pay": "Pay",
          "language": "Languages", "sector": "Kinds of employer", "bar": "Employer bar",
-         "agency": "Staffing agencies", "learned": "Learned from you"}
+         "agency": "Staffing agencies", "learned": "Learned from you",
+         "set_aside": "Roles you set aside", "more_at": "More people at one employer"}
 
 
 def _row(rid: str, kind: str, sentence: str, effect: int | None, rec: dict, edit=None,
-         drop=None, words: str = "", set_on: str = "", name: str = "", **more) -> dict:
+         drop=None, words: str = "", set_on: str = "", name: str = "", review_on: str = "",
+         **more) -> dict:
     mine = rec.get(rid) or {}
     return {"id": rid, "kind": kind, "name": name or NAMES.get(kind, "A rule"), **more,
             "sentence": sentence.rstrip(".") + ".",
             "set_on": mine.get("set_on") or set_on or None,
-            "words": mine.get("words") or words or None, "review_on": mine.get("review_on"),
+            "words": mine.get("words") or words or None,
+            "review_on": mine.get("review_on") or review_on or None,
             "left_out": effect, "edit": edit, "drop": drop}
+
+
+def for_now_review(words: str, set_on: str, kept_on: str | None = None) -> str:
+    """The day to ask again about a rule the person gave "for now" (_FOR_NOW in their words):
+    FOR_NOW_DAYS after the day it was set, as note_set dates one, or "" where their words do not
+    say so, or they kept it on or after that day. A learned rule never had one: one said "for
+    now" was never asked about again (the rules review, 2026-11-11)."""
+    day = _day(set_on)
+    if not (day and words and _FOR_NOW.search(str(words))):
+        return ""
+    due = day + dt.timedelta(days=FOR_NOW_DAYS)
+    kept = _day(kept_on)
+    return "" if kept and kept >= due else due.isoformat()
 
 
 def your_rules(today: dt.date, seen: dict | None = None, learned_rows=None) -> list[dict]:
@@ -491,15 +508,21 @@ def your_rules(today: dt.date, seen: dict | None = None, learned_rows=None) -> l
                              "names no employer", n("agency"), rec))
     except Exception:  # noqa: BLE001
         pass
+    rows.extend(set_aside_rows(seen, today, rec))
+    rows.extend(more_at_rows(today, rec))
+    kept = review_record().get("kept") or {}
     for i, e in enumerate(learned_rows if learned_rows is not None else _learned(), 1):
         if str(e.get("status") or "active") != "active":
             continue
         said = str(e.get("rule") or "").strip()
         if not said:
             continue
-        rows.append(_row(f"rule~learned~{i}", "learned", said, None, rec,
+        rid = f"rule~learned~{i}"
+        day = str(e.get("date") or e.get("on") or "")[:10]
+        rows.append(_row(rid, "learned", said, None, rec,
                          drop={"kind": "learned", "n": i}, words=str(e.get("said") or ""),
-                         set_on=str(e.get("date") or e.get("on") or "")[:10]))
+                         set_on=day, review_on=for_now_review(
+                             f"{e.get('said') or ''} {said}", day, kept.get(rid))))
     # Every kind of cut that left a job out has its row, so Your rules adds up to what Jobs
     # says was left out: the qualification cut had none, and Your rules summed fewer than Jobs
     # (the review, 2026-11-05).
@@ -509,7 +532,6 @@ def your_rules(today: dt.date, seen: dict | None = None, learned_rows=None) -> l
             continue
         rows.append(_row(f"rule~{k}", k, ALSO[k], got["n"], rec, name=KINDS[k][0]))
         have.add(k)
-    kept = review_record().get("kept") or {}
     for r in rows:
         r["still_right"] = still_right(r, today, kept.get(r["id"]))
     return rows
@@ -611,6 +633,79 @@ def _learned() -> list[dict]:
         return learned.load()
     except Exception:  # noqa: BLE001  nothing learned yet
         return []
+
+
+def set_aside_rows(seen: dict | None, today: dt.date, rec: dict | None = None) -> list[dict]:
+    """Each role the person set aside that still holds, newest first: its end (about six
+    months from the day, or for good where their own words said so: exclude.set_aside_until)
+    and the bin that brings it back (rule.drop, kind set_aside). The page groups them under one
+    row, "Roles you set aside"."""
+    import exclude
+    rec = set_record() if rec is None else rec
+    out = []
+    for k, e in (seen or {}).items():
+        # One with no `url` of its own is kept under its address as the key (throttle.ruled_out
+        # holds it by the key): skipped here, it was held and listed nowhere.
+        url = str((e or {}).get("url") or k or "") if isinstance(e, dict) else ""
+        if not (isinstance(e, dict) and e.get("basis") == "person"
+                and str(e.get("status") or "").lower() == "excluded" and url
+                and exclude.set_aside_holds(e, today)):
+            continue
+        if e.get("by") == exclude.CHAT:
+            continue        # a draft a chat stopped: under Held back for now (holds.py)
+        until = exclude.set_aside_until(e)
+        day = exclude.set_aside_on(e)
+        title = str(e.get("title") or "A role").strip()
+        company = str(e.get("company") or "").strip()
+        what = f"{title} at {company}" if company else title
+        end = "for good, as you said" if until is None else \
+            f"until {until.day} {until.strftime('%b %Y')}, then shown once more"
+        rid = "rule~setaside~" + hashlib.sha1(held_key(url).encode()).hexdigest()[:12]
+        out.append(_row(rid, "set_aside", f"{what} is set aside {end}", None, rec,
+                        drop={"kind": "set_aside", "url": url},
+                        words=str(e.get("exclusion_reason") or ""),
+                        set_on=day.isoformat() if day else "", name=what,
+                        until=until.isoformat() if until else None))
+    return sorted(out, key=lambda r: r.get("set_on") or "", reverse=True)
+
+
+def more_at_rows(today: dt.date, rec: dict | None = None) -> list[dict]:
+    """Each employer where the person let more people be written to than their usual number
+    (profile/more_at.json: Open it now under Held back for now, or their word in a chat), while
+    it holds: how many, until when (Open it now's room ends once the waiting it was made beside
+    has cleared), their words, and the bin that takes it back (rule.drop, kind more_at). The
+    number was kept and read with nothing on the page saying so (the rules review,
+    2026-11-11)."""
+    net = os.path.join(os.path.dirname(os.path.abspath(__file__)), "network")
+    if net not in sys.path:
+        sys.path.insert(0, net)
+    try:
+        import reading
+        rows = [r for r in reading.more_at().values() if reading.more_at_holds(r, today)]
+        usual = reading.PER_EMPLOYER
+    except Exception:  # noqa: BLE001  no profile or no networking: nothing kept
+        return []
+    rec = set_record() if rec is None else rec
+    out = []
+    for r in sorted(rows, key=lambda r: str(r.get("employer") or "").lower()):
+        who = str(r.get("employer") or "").strip()
+        if not who:
+            continue
+        n = reading.more_at_number(r) if isinstance(r.get("limit"), int) else None
+        how = (f"up to {n} {'person' if n == 1 else 'people'}" if n else "any number of people")
+        # A number of their own for one employer may be below their usual (more_at_number).
+        than = "fewer than" if n and n < usual else "the same as" if n == usual else "past"
+        until = _day(r.get("until"))
+        end = (f", until {until.day} {until.strftime('%b %Y')}, when the people waiting there "
+               "then have had their wait" if until else ", until you take it back")
+        said = re.sub(r"\s*\(Held back for now\)\s*$", "", str(r.get("said") or ""))
+        out.append(_row(f"rule~more_at~{_slug(who)}", "more_at",
+                        f"At {who}, {how} may be written to while nobody there has answered, "
+                        f"{than} your usual {usual}{end}", None, rec,
+                        drop={"kind": "more_at", "employer": who}, words=said,
+                        set_on=str(r.get("date") or "")[:10], name=f"More at {who}",
+                        until=until.isoformat() if until else None))
+    return out
 
 
 def held_key(url) -> str:

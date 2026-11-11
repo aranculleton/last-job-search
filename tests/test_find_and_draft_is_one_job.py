@@ -233,9 +233,13 @@ def test_a_draft_that_stops_on_a_hard_rule_takes_its_job_off_jobs(tmp_path, monk
     assert w[wid]["result"]["left_out"] == "the posting says the role is only open in Dublin", w[wid]
     found, _drafts = _lists()
     assert "Netherby Grocers" not in found
+    # Held as a role the person set aside, made by the chat (moved with the rule, the engine
+    # review of 2026-11-11): written as a ruling by the rules it was judged again on every
+    # page build, and a stop on a place, a degree or pay came back on Jobs.
     seen = exclude.load_seen(str(st / "job_scraper" / "seen_jobs.json"))["seen"]
-    assert any(e.get("company") == "Netherby Grocers" and e.get("basis") == "rules"
-               and e.get("status") == "excluded" for e in seen.values())
+    assert any(e.get("company") == "Netherby Grocers" and e.get("basis") == "person"
+               and e.get("by") == exclude.CHAT and e.get("status") == "excluded"
+               for e in seen.values())
     assert w[SID]["count"] == {"done": 0, "total": 5, "word": "drafted"}
 
 

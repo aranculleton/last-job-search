@@ -62,8 +62,9 @@ steps linkedin-withdraw-invitation`); the app never does. Record the ones they n
 `python3 tools/network/export.py withdrawn <name>...` (or `--oldest <n>`).
 
 **Gone cold** third, only when the person asks: the threads whose limit of unanswered
-messages is reached. Their row carries the app's own line ("Nudged: nothing more unless they
-reply", or "No more follow-ups: ...") and no date, since nothing is owed them, so no due list
+messages is reached. Their row carries the app's own line ("No reply to 2 messages: leave it
+unless they write back"; older rows say "Nudged: nothing more unless they reply" or "No more
+follow-ups: ...") and no date, since nothing is owed them, so no due list
 names them (`state.at_limit` says which they are). Close the ones the person names with
 `python3 tools/network/state.py set <contact_id> --status gone_cold`; a reply that comes later
 reopens the thread by itself.

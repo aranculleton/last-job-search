@@ -8,7 +8,7 @@ After `_common.md`'s "Before anything else" (the update check there is this run'
 the page steps it prints, at once, never asked):
 
 1. **The page's inbox.** Where the person has a page (`profile/app.json` `url`), do the app
-   skill's steps 1 to 3 (`.claude/skills/app/SKILL.md`): what they ticked, and any work still
+   skill's steps 1 to 3 (`.claude/skills/app/wake.md`): what they ticked, and any work still
    waiting, a job whose chat stopped included. Then its step 5's `app.py view`, and send
    every batch it prints. Never republish the page here unless the update check said to.
 2. **Land** anything that changed, as `_common.md` "Landing work" says. Nothing changed,

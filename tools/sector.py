@@ -85,8 +85,16 @@ def _norm(x: str) -> str:
     return re.sub(r"\s+", " ", x).strip()
 
 
+_NORMED: dict = {}
+
+
 def _in(c: str, names) -> str | None:
-    return _names_in(c, {_norm(n) for n in names})
+    # The list normalised once, not for every name asked about (D8).
+    key = frozenset(names)
+    got = _NORMED.get(key)
+    if got is None:
+        got = _NORMED[key] = {_norm(n) for n in names}
+    return _names_in(c, got)
 
 
 def tech_name(company: str | None) -> str | None:

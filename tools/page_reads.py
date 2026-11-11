@@ -25,6 +25,7 @@ with the first wake of each day, every FULL_EVERY_S, on a new page address, and 
 The page may say its own revision with its ring (`[rev:<n>]`, a number it raises with each
 write it makes): a ring whose revision this checkout already read needs no read at all.
 
+    python3 tools/app.py reads --in <a folder> [--full] [--rev N]   (makes and names w<n> there)
     python3 tools/app.py reads <dump> [--full] [--rev N]
 
 Standard library only.
@@ -34,6 +35,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -201,7 +203,16 @@ def absorb(dump: str) -> None:
     if not isinstance(plan, dict) or not plan.get("assembled"):
         return
     root = mirror_dir()
-    for coll in MIRRORED + ("view", "chats", "locks"):
+    # The store's own numbers this folder knows go with its files (page_db's versions index):
+    # laid back from the copy kept, a screen known by its stamp alone was taken for one no read
+    # confirmed, every time (the review, 2026-11-11).
+    import page_db
+    known = page_db.listed_versions(dump)
+    colls = MIRRORED + ("view", "chats", "locks")
+    os.makedirs(root, exist_ok=True)
+    page_db.index_versions(root, {k: v for k, v in known.items() if k.split("/")[0] in colls},
+                           drop=[k for k in page_db.listed_versions(root) if k.split("/")[0] in colls])
+    for coll in colls:
         src = os.path.join(dump, coll)
         dst = os.path.join(root, coll)
         if not os.path.isdir(src):
@@ -219,11 +230,123 @@ def absorb(dump: str) -> None:
             shutil.rmtree(tmp, ignore_errors=True)
 
 
+def keep_work(dump: str, ids) -> None:
+    """The mirror takes `dump`'s own record of each work item in `ids`, unless it holds a newer
+    one: a claim or a resume just made from that folder (as page_db.keep_landed left it), or
+    the item as the chat just read it. A read of someone queued work reads is refused by what
+    the mirror says (reading.queued_on_page), and only a planned read moved it on: the chat that
+    claimed the work, or took it with `resume`, was refused its own read, and one finished
+    since the mirror was read refused every later read of that person for good (the engine
+    review, 2026-11-11). Nothing where this checkout keeps no copy of the page's work."""
+    import page_db
+    where = os.path.join(mirror_dir(), "work")
+    if not dump or not os.path.isdir(where):
+        return
+    listed = page_db.listed_versions(dump)
+    for wid in dict.fromkeys(str(w or "") for w in ids or ()):
+        if not wid:
+            continue
+        stem = page_db.safe_id(wid)
+        names = (stem.replace("~", "@") + ".json", stem + ".json")
+        src = next((os.path.join(dump, "work", n) for n in names
+                    if os.path.isfile(os.path.join(dump, "work", n))), "")
+        got = _read(src) if src else None
+        if not isinstance(got, dict):
+            continue
+        new = page_db._version_of(got)[1]
+        olds = [os.path.join(where, n) for n in dict.fromkeys(names)
+                if os.path.isfile(os.path.join(where, n))]
+        had = [page_db._version_of(_read(p))[1] for p in olds]
+        if isinstance(new, int) and any(isinstance(v, int) and v > new for v in had):
+            continue
+        try:
+            for p in olds:
+                os.remove(p)
+            _write(os.path.join(where, names[0]), got)
+        except OSError:
+            continue
+        key = "work/" + names[0][:-5]
+        if isinstance(listed.get(key), int):
+            page_db.index_versions(mirror_dir(), {key: listed[key]})
+        else:
+            page_db.index_versions(mirror_dir(), {}, drop=[key, "work/" + stem])
+
+
+# A wake's folder is the code's to choose. Asked to name it short (`w1`), each fresh subagent
+# chose `w1`: a second ring read into a folder holding the first one's finished wake
+# (`.wake.json` saying done), so `wake` sent nothing and never applied the tap, and the first
+# read's versions mark (`.versions.json`) stood for the new read (the review of 2026-11-11,
+# E-18 and E-6). So `reads --in <a folder>` makes the next free `w<n>` there and names it, and
+# a read is never planned into a folder that holds anything: it goes into a fresh one beside
+# it, named the same way.
+FRESH_STEM = "w"
+
+
+def fresh(parent: str, stem: str = FRESH_STEM, start: int = 1) -> str:
+    """A new, empty folder `<parent>/<stem><n>`, the lowest n from `start` that is free, made
+    now (two chats at once never get the same one)."""
+    os.makedirs(parent, exist_ok=True)
+    n = max(1, int(start))
+    while True:
+        path = os.path.join(parent, f"{stem}{n}")
+        try:
+            os.mkdir(path)
+            return path
+        except FileExistsError:
+            n += 1
+
+
+def used(folder: str) -> bool:
+    """Does `folder` hold anything (an earlier read, wake or job)?"""
+    try:
+        return bool(os.listdir(folder))
+    except OSError:
+        return False
+
+
+def fresh_beside(folder: str) -> str:
+    """A new folder beside `folder`, which is in use: a short name the code made with the next
+    free number (`w1` to `w2`), any other name with `.2`, `.3`... after it (`page-data` to
+    `page-data.2`, a job's `j-draft-r9-3` to `j-draft-r9-3.2`, never another job's name)."""
+    folder = os.path.abspath(folder.rstrip("/\\") or folder)
+    name = os.path.basename(folder) or FRESH_STEM
+    m = re.fullmatch(rf"({re.escape(FRESH_STEM)})(\d+)", name) or re.fullmatch(r"(.+\.)(\d+)", name)
+    if m:
+        return fresh(os.path.dirname(folder), m.group(1), int(m.group(2)) + 1)
+    return fresh(os.path.dirname(folder), name + ".", 2)
+
+
+JOB_MARK = ".job.json"                # in a job's folder: the run its first command began
+
+
+def job_folder(work: str) -> str:
+    """The name of a job's own folder, after its work id: each job of a chat its own, so a job
+    chat's second job never reads into the first one's (the release review, 2026-11-03)."""
+    return "j-" + (re.sub(r"[^A-Za-z0-9_-]+", "-", str(work or "")).strip("-")[:60] or "job")
+
+
+def job_begun(folder: str, work: str, chat: str, now: dt.datetime | None = None) -> str:
+    """A job's first command over its folder: "" when the folder is this run's own (its mark
+    written now), else a fresh folder beside it, made now, for the read again: the folder holds
+    an earlier run's read, whose state and versions would stand for this one."""
+    mark = os.path.join(folder, JOB_MARK)
+    if os.path.exists(mark):
+        return fresh_beside(folder)
+    _write(mark, {"work": str(work), "chat": str(chat or ""), "at": _stamp(now or _now())})
+    return ""
+
+
 def plan(dump: str, now: dt.datetime | None = None, full: bool = False,
          rev: int | None = None) -> dict:
     """{"nothing": True} when the ring's revision was read already; else {"full": why or "",
-    "cursor": stamp or None, "queries": [{collection, query}]}, kept in `dump` for assemble."""
+    "cursor": stamp or None, "queries": [{collection, query}], "dump": the folder it goes
+    into}, kept in that folder for assemble. A `dump` that holds anything is never read into
+    (an earlier wake's state and versions would stand for this one): the read goes into a
+    fresh folder beside it, and "moved_from" names the one asked for."""
     now = now or _now()
+    moved = ""
+    if used(dump):
+        moved, dump = dump, fresh_beside(dump)
     meta = _meta()
     last = meta.get("last_dump")
     if last and os.path.abspath(str(last)) != os.path.abspath(dump):
@@ -261,7 +384,8 @@ def plan(dump: str, now: dt.datetime | None = None, full: bool = False,
     if rev is not None:
         meta["rev"] = max(int(meta.get("rev") or 0), int(rev))
         _save_meta(meta)
-    return {"full": why, "cursor": cursor, "queries": queries}
+    return {"full": why, "cursor": cursor, "queries": queries, "dump": dump,
+            **({"moved_from": moved} if moved else {})}
 
 
 def seen_rev(rev: int) -> bool:
@@ -335,9 +459,12 @@ def assemble(dump: str, now: dt.datetime | None = None) -> dict:
         return {"full": bool(p.get("full")), "read": p.get("read", read),
                 "kept": p.get("kept", 0)}
     kept = 0
+    import page_db
+    laid_known: dict = {}
     if not p.get("full"):
         cursor = str(p.get("cursor") or "")
         root = mirror_dir()
+        mirror_known = page_db.listed_versions(root)
         colls = ("actions", "receipts", "work")
         # The screens as this checkout last read or drew them stand only while nobody else
         # drew since: `meta/now` (read whole every time) names who drew last. Another chat's
@@ -361,6 +488,11 @@ def assemble(dump: str, now: dt.datetime | None = None) -> dict:
                 os.makedirs(dst, exist_ok=True)
                 shutil.copy(os.path.join(src, name), os.path.join(dst, name))
                 kept += 1
+                stem = f"{coll}/{name[:-5]}"
+                if stem in mirror_known:
+                    laid_known[stem] = mirror_known[stem]
+    if laid_known:
+        page_db.index_versions(dump, laid_known)
     p.update({"assembled": True, "read": read, "kept": kept})
     _write(path, p)
     meta = _meta()
@@ -388,9 +520,10 @@ LATE = ("view: before this batch ends, read what came in while the work ran (tap
 
 
 def keep_step(dump: str) -> str:
-    """"<keep the read's versions>, " where the app's hook does not, else ""."""
+    """"<keep the read's versions>, " for a read into a folder already read, where the app's
+    hook did not keep that first read's versions (page_db.after_read), else ""."""
     import page_db
-    keep = page_db.versions_step(dump)
+    keep = page_db.after_read(dump)
     return keep[len("then "):] + ", " if keep else ""
 
 
@@ -506,19 +639,41 @@ def partial(dump: str) -> bool:
     return isinstance(p, dict) and not p.get("full")
 
 
-def say_plan(got: dict, dump: str, url: str) -> str:
-    """The reads, in a few lines: one ArtifactData query each, all in one message."""
+# What follows the reads in a step that brings the page up to date (`app.py reads --for-view`),
+# in place of a wake: the step that asked for them names its own view.
+FOR_VIEW = ("then go on with the step that asked for this read, with the folder these reads go "
+            "into as --dump")
+
+
+def say_plan(got: dict, dump: str, url: str, then: str = "") -> str:
+    """The reads, in a few lines: one ArtifactData query each, all in one message. `then`:
+    what follows them, when it is not a wake (FOR_VIEW)."""
     if got.get("nothing"):
         return ("reads: nothing new since this revision was read: no read and no wake; "
                 "resolve the ring and end.")
+    # No versions step before a wake: whether this chat's hook keeps them shows only once the
+    # read is in, and `wake` asks for them then, where it did not (page_db.unkept; E-6). A read
+    # for a page update (`then`) is followed by `app.py view`, which only says so after it has
+    # pinned its writes (PE-2): there the step is named where this copy registers no hook.
     import page_db
-    keep = page_db.versions_step(dump)
+    dump = got.get("dump") or dump
+    keep = page_db.after_read(dump, fresh_chat=True) if then else ""
+    if got.get("moved_from"):
+        where = [f"reads: {got['moved_from']} holds an earlier read, so this one goes into a "
+                 f"fresh folder: $D is {dump} from here on, wherever a step names the other."]
+    elif got.get("chosen"):
+        where = [f"reads: this read's own folder: $D is {dump} from here on."]
+    else:
+        where = []
+    wake = (f"then python3 tools/app.py wake \"{dump}\"" if where
+            else "then python3 tools/app.py wake with the same folder")
     head = ("reads: " + (f"a whole read ({got['full']})" if got.get("full")
                          else f"what changed since {got['cursor']}") +
             f". ArtifactData query, each of these in one message, url {url}, out_dir \"{dump}\" "
             "(never list or open what they save), " + (keep + ", " if keep else "") +
-            "then python3 tools/app.py wake with the same folder:")
-    return "\n".join([head] + [json.dumps(q, separators=(",", ":")) for q in got["queries"]])
+            (then or wake) + ":")
+    return "\n".join(where + [head] + [json.dumps(q, separators=(",", ":"))
+                                       for q in got["queries"]])
 
 
 def summary(db: dict, chat: str, got: dict) -> str:

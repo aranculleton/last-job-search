@@ -72,13 +72,20 @@ def test_the_step_comes_first_until_the_tests_pass_and_then_never(tmp_path):
     assert sync_app.own_tests_step(root) == ""
 
 
-def test_a_record_made_on_other_app_code_is_checked_again_by_the_upgrade(tmp_path):
+def test_a_record_made_on_other_app_code_is_checked_again_by_the_upgrade(tmp_path, monkeypatch):
     """The record was keyed on the tests' own tree alone: made before an update ("all pass"),
-    it stayed true after it, so the own-tests upgrade never saw the five."""
+    it stayed true after it, so the own-tests upgrade never saw the five. Since D2 (2026-11-10)
+    the check again runs in the background: the upgrade's look waited 71 seconds on it."""
     root = _repo(tmp_path)
     sync_app.own_tests(root)
     _update(root, 4)                               # arrived with no own-tests run here
+    started = []
+    monkeypatch.setattr(sync_app, "_spawn", lambda cmd, **k: started.append(cmd))
     assert sync_app.own_tests_owed(root) == []     # an entry point reads, and runs nothing
+    assert started == []
+    assert sync_app.own_tests_owed(root, clean_too=True) == []
+    assert len(started) == 1 and started[0][-1] == "--own-tests-record"
+    sync_app.own_tests(root)                       # what the background run does
     assert sync_app.own_tests_owed(root, clean_too=True)[0].endswith("test_mine::test_limit")
     assert sync_app.own_tests_step(root) != ""
 
@@ -116,7 +123,8 @@ def test_master_bringing_in_an_update_checks_them_here_too(tmp_path, monkeypatch
     root = _repo(tmp_path)
     ran = []
     monkeypatch.setattr(sync_app, "ROOT", root)
-    monkeypatch.setattr(sync_app, "own_tests", lambda r=None: ran.append(r))
+    # In the background since D2: nothing waits on the person's whole suite.
+    monkeypatch.setattr(sync_app, "own_tests_later", lambda r=None: ran.append(r))
     monkeypatch.setattr(sync_app, "_driver", lambda: None)
     origin = str(tmp_path / "origin.git")
     # The bare origin names master as its own HEAD. Left to the machine's default, a newer
@@ -142,6 +150,8 @@ def test_start_and_the_briefs_run_say_it_first(monkeypatch, capsys):
     import app_setup
     monkeypatch.setattr(sync_app, "is_the_app", lambda root=None: False)
     monkeypatch.setattr(sync_app, "own_tests_step", lambda root=None: "Claude, first, before any other work: X")
+    # The start runs the day's update check itself (D1): never the real one, on this checkout.
+    monkeypatch.setattr(app, "days_check", lambda on, chat, tools="": {"ran": False})
     monkeypatch.setattr(app_setup, "start", lambda **kw: (0, ["app start: ready", "Claude, do this:", "1. the work"]))
     monkeypatch.setattr(app_listen, "shape", lambda code, lines, **kw: lines)
     a = types.SimpleNamespace(paste=False, work="", on="", tools="", page="", dump="", chat="",
@@ -153,3 +163,35 @@ def test_start_and_the_briefs_run_say_it_first(monkeypatch, capsys):
     src = open(os.path.join(ROOT, "tools", "brief.py"), encoding="utf-8").read()
     start = src[src.index("def start("):src.index("def setup_waiting(")]
     assert start.index("own_tests_first") < start.index("page_first(url, argv)")
+
+
+# D2 (2026-11-10): the person's own tests, 71 seconds in one copy, ran inside the update check
+# and could run inside the start. The update check starts them in the background now, once a
+# commit, and a command that starts work runs again only the ones that failed.
+
+def test_the_update_check_starts_them_in_the_background_once(tmp_path, monkeypatch):
+    root = _repo(tmp_path)
+    started = []
+    monkeypatch.setattr(sync_app, "_spawn", lambda cmd, **k: started.append(cmd))
+    assert sync_app.own_tests_later(root) is True
+    assert started and started[0][-1] == "--own-tests-record"
+    assert sync_app.own_tests_later(root) is False and len(started) == 1
+    _update(root, 7)
+    assert sync_app.own_tests_later(root) is True and len(started) == 2
+
+
+def test_only_the_tests_that_failed_are_run_again_when_theirs_change(tmp_path):
+    root = _repo(tmp_path)
+    ran = os.path.join(str(tmp_path), "slow-ran")
+    write(root, "profile/tests/test_slow.py",
+          "def test_slow():\n    open(%r, 'a').write('x')\n" % ran)
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "-m", "a slow one")
+    _update(root, 3)
+    sync_app.own_tests(root)
+    os.remove(ran)
+    assert sync_app.own_tests_step(root)
+    write(root, "profile/tests/test_mine.py", open(os.path.join(root, "profile/tests/test_mine.py"))
+          .read().replace("== 2", "== 3"))
+    assert sync_app.own_tests_step(root) == ""
+    assert not os.path.exists(ran), "only the test that failed was run again"

@@ -63,7 +63,6 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
-import html
 import json
 import os
 import re
@@ -105,43 +104,30 @@ openroles.configure(user_agent=UA, robots_agents=ROBOTS_AGENTS)
 # ------------------------------------------------------------ what no reader sees
 #
 # openroles leaves out of a board's text what a browser never shows (a hidden element, a
-# comment, a script) since 0.4.0, so the words come from its rule alone. What it took out
-# is still worth saying: a posting that hides text from its readers may be talking to a
-# machine, and the shortlist warns about it (row["posting_guard"], tools/hydrate.py's
-# words). So the converter each reader calls is wrapped to note what hydrate finds hidden
-# in the markup, and nothing else: openroles is never edited here, and each reader looks
-# the converter up by name when it runs.
-import openroles.models as _or_models  # noqa: E402
+# comment, a script, tag characters; since 0.5.1 an element hidden by any inline style
+# hydrate.strip_hidden reads: a size of 0, a transparent colour, a place off the page, an
+# opacity of 0, a box of nothing), and since 0.5.0 counts what it left out on each job,
+# for every reader and every part of a description (Job.hidden). What it took out is worth
+# saying: a posting that hides text from its readers may be talking to a machine, and the
+# shortlist warns about it (row["posting_guard"], in tools/hydrate.py's words). Until 0.5.0
+# the app wrapped openroles' converter to count it, and the count was lost wherever a reader
+# joined the parts of a description, so a Lever, Personio, Recruitee or Rippling posting was
+# never flagged (2026-11-11).
 import hydrate as _hydrate  # noqa: E402
 
-_TO_TEXT = _or_models.html_to_text
 
+def _guard(job) -> dict:
+    """What openroles left out of a posting's body, in hydrate.strip_hidden's words."""
+    hid = getattr(job, "hidden", None) or {}
+    out = {}
+    scripts = hid.get("comments", 0) + hid.get("scripts and styles", 0)
+    if scripts:
+        out["comments and scripts"] = scripts
+    for kind in ("hidden elements", "tag characters"):
+        if hid.get(kind):
+            out[kind] = hid[kind]
+    return out
 
-class _Cleaned(str):
-    """A board's text that had something hidden taken out of its markup, and what."""
-    found: dict = {}
-
-
-def shown_text(content) -> str:
-    """openroles' text of a board's HTML, noting what was hidden in it."""
-    s = content if isinstance(content, str) else ""
-    for _ in range(3):                     # as html_to_text reads it: some boards encode twice
-        un = html.unescape(s)
-        if un == s:
-            break
-        s = un
-    found = _hydrate.strip_hidden(s)[1] if "<" in s else {}
-    if not found:
-        return _TO_TEXT(content)
-    text = _Cleaned(_TO_TEXT(content))
-    text.found = found
-    return text
-
-
-for _name, _mod in list(sys.modules.items()):
-    if ((_name == "openroles.models" or _name.startswith("openroles.providers."))
-            and getattr(_mod, "html_to_text", None) is _TO_TEXT):
-        _mod.html_to_text = shown_text
 
 # The map is the person's: profile/boards.py names the employers, the token
 # each one's careers page reads, and the boards checked and refused. Every
@@ -347,29 +333,24 @@ def _row(employer: str, job, location: str, desc: str | None) -> dict:
         "desc": desc,
         "deadline": job.deadline or None,
     }
-    found = getattr(job.description, "found", None)
+    found = _guard(job)
     if found and desc:
         row["posting_guard"] = _hydrate.said(found)
     return row
 
 
-# A posting's own location that names no place: the job is wherever its offices are.
-_NOT_A_PLACE = re.compile(r"^\s*(?:hybrid|remote|anywhere|flexible|multiple locations|various"
-                          r"(?: locations)?|(?:[a-z]+\s+)*time\s*zones?|(?:utc|gmt)\s*[+-]?\s*\d*)\s*$",
-                          re.I)
-# Systems whose extra places are internal office tags, not sites the job is open at.
+# Systems whose extra places are internal office tags, not sites the job is open at. Kept as a
+# public name; openroles applies the rule itself since 0.5.0 (models.own_place_first).
 OFFICE_TAGS = frozenset({"greenhouse", "gem"})
 
 
 def _labels(job) -> list[str]:
-    """Where a posting can be done. A Greenhouse posting's offices are the employer's own
-    tags: Figma filed a role open in San Francisco, New York or remote in the United States
-    under "Canada" and "US", and the office tag passed it as a Canada role (2026-10-30). So a
-    posting that names its own place is judged by that place, and its offices only where it
-    names none ("Hybrid", a time zone, nothing)."""
+    """Where a posting can be done: openroles' locations. A Greenhouse or Gem posting's
+    offices are the employer's own tags (Figma filed a role open in San Francisco, New York
+    or remote in the United States under "Canada" and "US", 2026-10-30), so openroles gives a
+    posting that names its own place that place alone, and its offices only where it names
+    none ("Hybrid", a time zone, nothing)."""
     own = str(job.location or "").strip()
-    if getattr(job, "ats", "") in OFFICE_TAGS and own and not _NOT_A_PLACE.match(own):
-        return [own]
     return list(job.locations) or ([own] if own else [])
 
 
@@ -717,13 +698,10 @@ def find(target: str) -> list[dict]:
     were presented as the employers' own. `titles` is a few of its roles, for that check.
     """
     from openroles import detect
-    from openroles.discover import parse
     target = target.strip()
-    how = ("named" if parse(target) else
-           "linked" if re.match(r"^(https?://|www\.)|^[a-z0-9-]+(\.[a-z0-9-]+)+/", target, re.I)
-           else "guessed")
     out = []
     for board in detect(target):
+        how = getattr(board, "found", "") or "guessed"   # a Board made by hand is trusted least
         if board.ats in ("workday", "careersite") or board.ats in DETAILED:
             rows, err = FETCH[board.ats](target, board.token)
             total, titles = len(rows), [r["title"] for r in rows[:4]]

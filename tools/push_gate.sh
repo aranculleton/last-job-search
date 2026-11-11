@@ -35,8 +35,28 @@ while [ $# -gt 0 ]; do
 done
 
 PY="${PYTHON:-python3}"
-WORK="${TMPDIR:-/tmp}/ljs-push-gate"
-mkdir -p "$WORK"
+# This run's own files (the step log, the tree, the patches) in a fresh folder of its own,
+# gone when it ends; the denylist and the copy of the maintainer's repo it is built from in a
+# folder only this user can read, under one lock. All of it sat at one fixed path in the shared
+# temp folder, which another user could make or point elsewhere, and two gates at once wrote
+# over each other's files (audit SP-1, 2026-11-10).
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/ljs-push-gate.XXXXXXXX")" || { echo "push_gate: no folder for this run"; exit 1; }
+CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/ljs-push-gate"
+mkdir -p "$CACHE" && chmod 700 "$CACHE" 2>/dev/null
+if [ ! -O "$CACHE" ] || [ -L "$CACHE" ]; then
+  echo "push_gate: $CACHE is not this user's own folder; nothing pushed"; rm -rf "$WORK"; exit 1
+fi
+LOCK="$CACHE/lock"
+HELD=0
+release() { [ "$HELD" = "1" ] && rmdir "$LOCK" 2>/dev/null; rm -rf "$WORK"; }
+trap release EXIT
+for _ in $(seq 1 600); do
+  if mkdir "$LOCK" 2>/dev/null; then HELD=1; break; fi
+  # A lock older than an hour is a gate that died.
+  [ -n "$(find "$LOCK" -maxdepth 0 -mmin +60 2>/dev/null)" ] && rmdir "$LOCK" 2>/dev/null
+  sleep 1
+done
+[ "$HELD" = "1" ] || { echo "push_gate: another gate has held the denylist for ten minutes; nothing pushed"; exit 1; }
 step() {               # step <name> <command...>: run it, say PASS, or FAIL and stop there
   local name="$1"; shift
   if "$@" > "$WORK/step.log" 2>&1; then
@@ -57,16 +77,16 @@ BASE="$(git merge-base origin/master HEAD)"
 # copy here was a day behind GitHub, and an employer named since then reached the public app
 # in a code comment (4.9.0, 2026-11-04). Their copy is never changed: its GitHub copy is
 # fetched into this gate's own folder, and built again whenever it moves.
-TOKENS="$WORK/tokens"
+TOKENS="$CACHE/tokens"
 SRC="$MAINT"
 URL="$(git -C "$MAINT" remote get-url origin 2>/dev/null || true)"
 if [ -n "$URL" ]; then
-  if [ -d "$WORK/maint/.git" ]; then
-    git -C "$WORK/maint" fetch -q origin 2>/dev/null \
-      && git -C "$WORK/maint" reset -q --hard origin/HEAD 2>/dev/null && SRC="$WORK/maint"
+  if [ -d "$CACHE/maint/.git" ]; then
+    git -C "$CACHE/maint" fetch -q origin 2>/dev/null \
+      && git -C "$CACHE/maint" reset -q --hard origin/HEAD 2>/dev/null && SRC="$CACHE/maint"
   else
-    rm -rf "$WORK/maint"
-    git clone -q "$URL" "$WORK/maint" 2>/dev/null && SRC="$WORK/maint"
+    rm -rf "$CACHE/maint"
+    git clone -q "$URL" "$CACHE/maint" 2>/dev/null && SRC="$CACHE/maint"
   fi
   [ "$SRC" = "$MAINT" ] && echo "push_gate: could not fetch $URL; the denylist is built from $MAINT as it is"
   # The app's history beside it, as a person's sync keeps it: build_app sets aside only a
@@ -77,11 +97,11 @@ if [ -n "$URL" ]; then
 fi
 SRC_HEAD="$(git -C "$SRC" rev-parse HEAD 2>/dev/null || echo none)"
 if [ ! -s "$TOKENS" ] || [ -n "$(find "$TOKENS" -mmin +720 2>/dev/null)" ] \
-    || [ "$(cat "$WORK/tokens.head" 2>/dev/null)" != "$SRC_HEAD" ]; then
-  rm -rf "$WORK/app"
-  (cd "$SRC" && "$PY" tools/build_app.py "$WORK/app" --tokens-out "$TOKENS") > "$WORK/build.log" 2>&1 \
-    || { echo "push_gate: could not build the denylist from $SRC"; tail -5 "$WORK/build.log"; exit 1; }
-  echo "$SRC_HEAD" > "$WORK/tokens.head"
+    || [ "$(cat "$CACHE/tokens.head" 2>/dev/null)" != "$SRC_HEAD" ]; then
+  rm -rf "$CACHE/app"
+  (cd "$SRC" && "$PY" tools/build_app.py "$CACHE/app" --tokens-out "$TOKENS") > "$CACHE/build.log" 2>&1 \
+    || { echo "push_gate: could not build the denylist from $SRC"; tail -5 "$CACHE/build.log"; exit 1; }
+  echo "$SRC_HEAD" > "$CACHE/tokens.head"
 fi
 
 echo "private data first (nothing is pushed unless all of these pass)"
@@ -111,7 +131,7 @@ step "version notes (test_build_versions)" "$PY" -m pytest -q -p no:cacheprovide
 
 echo "quick checks"
 if "$PY" -m ruff --version > /dev/null 2>&1; then
-  step "ruff (bugs only)" "$PY" -m ruff check --no-cache tools/ templates/ tests/
+  step "ruff (bugs only)" "$PY" -m ruff check --no-cache tools/ templates/ tests/ salary_lookup.py
 else
   printf '  %-44s SKIP (ruff not installed; CI runs it)\n' "ruff (bugs only)"
 fi

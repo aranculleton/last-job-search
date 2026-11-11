@@ -144,3 +144,14 @@ def test_the_menu_foot_is_one_rule_with_equal_space_round_it_and_settings_last(r
         assert abs(r["above"] - r["below"]) <= 1 and any(abs(r["above"] - g) <= 1 for g in (8, 12, 16)), ("the same space above and below the rule, on the scale", r)
         # Icons only is the menu's first section, under its own rule with the same space round it.
         assert r["first"] == 0 and abs(r["headAbove"] - r["headBelow"]) <= 1 and abs(r["headAbove"] - r["above"]) <= 1, ("Icons only, its own section", r)
+
+
+def test_a_more_panels_pills_have_the_soft_pills_edge(run, tmp_path):
+    # The pills inside a card's More had no edge, unlike every other soft pill (the screen
+    # review, 2026-11-11; DESIGN.md: the raised fill with its 3:1 edge).
+    import test_the_page_journeys as J
+    look = ("(() => { const b = [...document.querySelectorAll('#main .m-rows .more-acts .btn.secondary')].find((x) => x.getClientRects().length); if (!b) return null;"
+            " const s = getComputedStyle(b), card = getComputedStyle(b.closest('.card')); return {edge: s.borderTopColor, width: parseFloat(s.borderTopWidth), card: card.backgroundColor, fill: s.backgroundColor}; })()")
+    got = J._go(run, tmp_path, [{"hash": "jobs", "more": "r12-1", "eval": look}], J.WIDE, clock="2026-10-25T09:00:00Z")
+    seen = got["after"][0]["eval"]
+    assert seen and seen["width"] >= 1 and seen["edge"] not in (seen["card"], seen["fill"], "rgba(0, 0, 0, 0)"), seen

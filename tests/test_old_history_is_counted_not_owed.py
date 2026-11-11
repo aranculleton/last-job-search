@@ -112,8 +112,15 @@ def test_threads_still_lists_an_old_one_and_says_why_the_brief_does_not(tmp_path
     c, t = str(tmp_path / "c.csv"), str(tmp_path / "t.csv")
     state.save_contacts(contacts, c)
     state.save_threads(threads, t)
+    # The old ones are one line under what is owed now, and listed on asking (--all): 141
+    # lines of them stood above four current items in one book (the audit, 2026-11-10, DW-4).
     state.main(["--contacts", c, "--threads", t, "--tracker", str(tmp_path / "none.csv"),
                 "--today", TODAY.isoformat()])
+    out = capsys.readouterr().out
+    assert "Rosalind Achterberg" not in out.split("OWED", 1)[1].split("\n\n", 1)[0]
+    assert f"more owed over {state.OLD_OWED_DAYS} days" in out
+    state.main(["--contacts", c, "--threads", t, "--tracker", str(tmp_path / "none.csv"),
+                "--today", TODAY.isoformat(), "--all"])
     line = next(ln for ln in capsys.readouterr().out.splitlines() if "Rosalind Achterberg" in ln)
     assert f"owed over {state.OLD_OWED_DAYS} days" in line
 

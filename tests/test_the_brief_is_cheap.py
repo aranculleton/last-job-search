@@ -31,7 +31,9 @@ def test_the_prompt_files_a_brief_reads_stay_small():
 
 def test_the_brief_is_gathered_by_code_and_the_news_by_the_small_agent():
     brief = _read("morning_brief.md")
-    for must in ("python3 tools/brief.py --start", "--write", "news-reader",
+    # The one start command every chat runs, which runs the brief's own start (second audit
+    # B11); it gathers with --write (tools/app.py SCHEDULED_STARTS).
+    for must in ("python3 tools/app.py start --scheduled morning_brief", "news-reader",
                  "python3 tools/brief.py news", "followup_drafts.py context --due",
                  "followup_drafts.py check - --pack", "Never run a search here",
                  "even when nothing is owed"):
@@ -67,3 +69,23 @@ def test_the_meter_counts_fewer_calls_and_fewer_tokens_after(tmp_path):
     text = cost_meter.report(before, after, "the working tree")
     assert "ESTIMATED tokens (characters / 4; no tokenizer)" in text
     assert cost_meter.tokens(5) == 2 and cost_meter.tokens(0) == 0
+
+
+def test_the_meter_models_the_run_the_prompt_asks_for():
+    """The meter measured a brief run nobody made any more: its start row ran the gather
+    without --write and its saving rows were from before the landing changed (efficiency
+    audit E-14). Every command the brief's prompt runs has a row of its own, and the start's
+    row prints what --start --write prints."""
+    import re
+    prompt = _read("morning_brief.md")
+    labels = " | ".join(label for label, _kind, _what in cost_meter.AFTER)
+    # An answer the person gives in the chat later is not part of the run.
+    later = {"tools/confirm.py"}
+    for script, sub in set(re.findall(r"python3 (tools/[\w/.-]+\.py)(?: (news|context|check))?",
+                                      prompt)):
+        if script in later:
+            continue
+        name = os.path.basename(script) + (" " + sub if sub else "")
+        assert name in labels, name
+    start = next(what for label, kind, what in cost_meter.AFTER if "app.py start" in label)
+    assert "--write" in start

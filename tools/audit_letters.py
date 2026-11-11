@@ -353,7 +353,71 @@ def draft_flags(a, batch=()):
     for where, run in posting_copies(a):
         flags.append(f"{where} copies the posting word for word: \"{run}\"; say it in your "
                      f"own words, using the posting's term once")
+    flags += close_flags(a)
     return flags
+
+
+# A close that says the right to work, however it puts it.
+_WORK_RIGHTS = re.compile(r"\b(?:right to work|work(?:ing)? rights?|entitled to work|"
+                          r"authori[sz](?:ed|ation) to work|eligib\w* to work|work permit|"
+                          r"permit|visa|sponsor\w*|citizen\w*|permanent resident\w*|"
+                          r"settled status)\b", re.I)
+# The close the person's letter rule names as never to end on.
+_STOCK_CLOSE = re.compile(r"\bwelcome the (?:chance|opportunity) to discuss\b", re.I)
+_COUNTRY = re.compile(r"^(?:[A-Z]{2,3}|united kingdom|united states|great britain|england|"
+                      r"scotland|wales|northern ireland|ireland|canada|australia|new zealand)$",
+                      re.I)
+# How every close flag starts, so a rerun hands it to a redraft of the close alone
+# (tools/remake_drafts.py way_forward).
+CLOSE_FLAG = "the close "
+
+
+def _place_names(place: str) -> list[str]:
+    """The names a close may give for a place: each of its parts but a country ("Chorlton" and
+    "Manchester" of "Chorlton, Manchester"; "Manchester" of "Manchester, UK"), or [] when the
+    field holds a sentence rather than a place."""
+    parts = [p.strip() for p in str(place or "").split(",") if p.strip()]
+    if not parts or "[CONFIRM" in str(place) or any(len(p.split()) > 4 for p in parts):
+        return []
+    return [p for p in parts if not _COUNTRY.match(p)] or parts[:1]
+
+
+def close_flags(a) -> list[str]:
+    """The letter's close (p4) as the person's rules require it: where they are (the place
+    this employer heard, tools/told.py, else their own), their right to work where their
+    status needs saying unasked (profile_facts.status_needs_saying), and never "I would
+    welcome the chance to discuss". The drafting contract asked for it (draft_pack P4) and
+    nothing checked it: 28 of one person's 133 letters never said where they were or that
+    they could work there (the audit's NW-25, 2026-11-10). Here, in the letters check, so
+    the drafting audit and the rerun of unsent applications both run it (its review,
+    2026-11-11)."""
+    p4 = _plain(a.get("p4", ""))
+    if not p4:
+        return []
+    import told
+    company = str(a.get("company") or "")
+    out = []
+    heard = told.place(company) if company else ""
+    places = [x for x in ([heard] if heard and told.differs(company)
+                          else (told._homes() or [heard])) if _place_names(x)]
+    names = [n for x in places for n in _place_names(x)]
+    if names and not any(re.search(r"(?<![\w-])%s(?![\w-])" % re.escape(n), p4, re.I)
+                         for n in names):
+        out.append(CLOSE_FLAG + "does not say where you are, as %s heard it: %s" % (
+            company or "the employer", places[0]))
+    try:
+        import draft_pack
+        import profile_facts
+        needs = profile_facts.status_needs_saying(draft_pack.auth_line())
+    except Exception:  # noqa: BLE001  no profile to read: nothing to require
+        needs = False
+    if needs and not _WORK_RIGHTS.search(p4):
+        out.append(CLOSE_FLAG + "does not state your right to work, worded as your profile "
+                   "states it: your status needs saying before they ask")
+    if _STOCK_CLOSE.search(p4):
+        out.append(CLOSE_FLAG + "ends on \"I would welcome the chance to discuss\": end on one "
+                   "sentence about this role")
+    return out
 
 
 # What only the drafter's own notes say. A field's name is written in lower case ("in p2",

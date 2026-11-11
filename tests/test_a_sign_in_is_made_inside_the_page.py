@@ -138,3 +138,41 @@ def test_a_question_asked_while_claude_is_busy_says_next_after_it(run, tmp_path)
     text = got["after"][0]["eval"]
     assert text and "Next, after" in text and "Answering your message about a reply" in text, text
     assert "Starting in a moment" not in text, text
+
+
+START = r"""(() => {
+  const out = {};
+  for (const id of ['network~read~late', 'network~read~fresh']) {
+    const c = document.querySelector('[data-work="' + id + '"]');
+    out[id] = c ? {text: c.textContent.replace(/\s+/g, ' '),
+                   buttons: [...c.querySelectorAll('button')].map((b) => b.textContent.trim())} : null;
+  }
+  return out;
+})()"""
+
+
+def test_computer_work_past_its_window_offers_one_tap_and_promises_nothing(run, tmp_path):
+    """Queued work for the computer whose start never came said "Claude starts it there when
+    your computer is on", with no button, for hours: nothing re-checks it without a tap (the
+    independent review, 2026-11-11, CC-5)."""
+    from test_the_page_journeys import WIDE
+    seed = dict(SEED)
+    for wid, asked in (("network~read~late", "2026-10-25T08:30:00.000Z"),
+                       ("network~read~fresh", "2026-10-25T08:58:00.000Z")):
+        seed["work/" + wid] = {"args": {}, "asked_at": asked, "_v": 2, "kind": "network",
+                               "status": "queued", "to": "computer", "asked_from": "t1",
+                               "title": "Reading profiles on your computer"}
+    steps = [{"hash": "todo", "eval": START},
+             {"click": "Start it now: Reading profiles on your computer", "wait": 300,
+              "calls": "comments"}]
+    got = run("engine", html=_page(tmp_path), viewport=WIDE, steps=steps, seed=seed,
+              fake={"canSend": "available"}, clock=T)
+    assert not got["errors"], got["errors"]
+    seen = got["after"][0]["eval"]
+    late, fresh = seen["network~read~late"], seen["network~read~fresh"]
+    assert late and "Start it now" in late["buttons"], late
+    assert "has not started on your computer yet" in late["text"], late
+    assert "when your computer is on" not in late["text"], late
+    assert fresh and "Start it now" not in fresh["buttons"], fresh
+    rings = [c for c in got["after"][1]["calls"] if c.get("cap") == "comments"]
+    assert rings and any("network~read~late" in str(c) for c in rings), got["after"][1]["calls"]

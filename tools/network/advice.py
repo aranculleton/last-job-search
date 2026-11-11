@@ -126,12 +126,14 @@ EXITS = re.compile(
     r"|\bif (?:now|it|this)(?:'s| is)?(?:n'?t| not) (?:a good|the right) time\b"
     r"|\bif you(?:'re| are)(?:n'?t| not) (?:able|around|free|interested)\b"
     r"|\bif you(?:'d| would) rather not\b|\bno hard feelings\b", re.I)
-OPEN_ASK = ("Would love to hear if you have anything coming up, or know the right person to "
-            "speak to.")
+# A first note asks for a conversation, never a job, to a decision-maker as to anyone: the
+# open ask is a short chat or a pointer. "Would love to hear if you have anything coming up"
+# was the default, an ask about openings in other words (the research review, 2026-11-10).
+OPEN_ASK = "Would love a short chat about the work, or a pointer to the right person to speak to."
 # The same ask for a person whose own voice check refuses "would love to" (OWN_VOICE): the
 # fix offered must be one the check that follows passes.
-OPEN_ASK_PLAIN = ("If you have anything coming up, or know the right person to speak to, "
-                  "it'd be great to hear.")
+OPEN_ASK_PLAIN = ("If you'd be open to a short chat about the work, or know the right person to "
+                  "speak to, it'd be great to hear.")
 
 
 def open_ask() -> str:

@@ -72,7 +72,11 @@ def test_a_degree_never_stands():
         assert not blocks(reason), reason
 
 
-def test_the_persons_own_call_stands_whatever_it_says():
+def test_the_persons_own_call_stands_whatever_it_says(monkeypatch):
+    # The person's own call holds for about six months from the day they made it
+    # (exclude.set_aside_holds, on the person's day): their day is held at the ruling's,
+    # which a clock a year on is past (the everywhere check, "400-days").
+    monkeypatch.setenv("LJS_TODAY", "2026-09-01")
     assert blocks("not a degree-heavy employer I want", basis="person")
 
 

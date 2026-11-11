@@ -39,7 +39,7 @@ def test_a_send_the_store_never_answers_is_said_on_its_card(run, tmp_path):
         {"hash": "todo", "read": '#main [data-item="grp:send"]'},
     ])
     assert not got["errors"], got["errors"]
-    draft = "Your reply"
+    draft = "Reply · "                  # its heading (the screen review, 2026-11-11)
     assert draft in got["after"][0]["text"], got["after"][0]["text"]
     # Taken off at once, as a send is, then said to be saving while the store says nothing.
     assert draft not in got["after"][1]["text"], got["after"][1]["text"]

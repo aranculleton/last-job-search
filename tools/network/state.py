@@ -792,6 +792,11 @@ def possible_match(contacts, name, company, linkedin_url=None) -> dict | None:
 # whose notes say it is *not* the same person.
 _DUPLICATE_OF = re.compile(r"(?<!not )(?<!not the )\b(?:duplicate of|(?:the )?same (?:person|one) as)\s+"
                            r"([a-z0-9][\w.-]*)", re.I)
+# A negation just before "duplicate of" / "same person as": "not a", "isn't the", "never".
+_NOT_BEFORE = re.compile(r"(?:\bnot|n't|\bnever|\bno)\s+(?:(?:a|an|the|really|actually)\s+)?$",
+                         re.I)
+# What `same_person` writes on the row it closes: the only word that pools two rows' threads.
+_CLOSED_AS = re.compile(r"(?:^|;\s*)duplicate of ([a-z0-9][\w.-]*)\s*(?:;|$)", re.I)
 # What a kept row takes from its closed duplicate where it has none (`carry_over`).
 CARRIED = ("company", "company_key", "title", "linkedin_url", "location", "email")
 
@@ -808,9 +813,16 @@ def duplicate_of(contacts) -> dict:
         if str(c.get("status") or "").strip() not in schema.TERMINAL:
             continue
         for k in ("outcome", "notes"):
-            m = _DUPLICATE_OF.search(str(c.get(k) or ""))
-            if m and m.group(1).strip(".") in ids and m.group(1).strip(".") != cid:
-                out[cid] = m.group(1).strip(".")
+            text = str(c.get(k) or "")
+            for m in _DUPLICATE_OF.finditer(text):
+                # "not a duplicate of", "isn't the same person as": two people, never one
+                # (the review, 2026-11-11).
+                if _NOT_BEFORE.search(text[:m.start()]):
+                    continue
+                if m.group(1).strip(".") in ids and m.group(1).strip(".") != cid:
+                    out[cid] = m.group(1).strip(".")
+                    break
+            if cid in out:
                 break
     # A chain (a closed as b, b closed as c) ends at the row still open.
     for cid in list(out):
@@ -1280,7 +1292,7 @@ def _back_on(text: str, sent_on) -> datetime.date | None:
         day = m.group("d1") or m.group("d2")
         if month and day:
             year = int(m.group("y")) if m.group("y") else (sent_on.year if sent_on
-                                                             else datetime.date.today().year)
+                                                             else person.today().year)
             try:
                 got = datetime.date(year, _MONTHS[month], int(day))
             except ValueError:
@@ -1482,6 +1494,37 @@ def by_contact(threads) -> dict[str, list[dict]]:
     return {cid: _ordered(rows) for cid, rows in grouped.items()}
 
 
+def pooled(index, contacts) -> dict:
+    """`index` (by_contact's) with the messages of each row closed as the same person as
+    another (`duplicate_of`) added to the row kept, in the order they happened: one person, one
+    thread, whichever row each message was logged under. Every limit reads it: a note under one
+    row and a follow-up under the other read as one unanswered message each (the audit,
+    2026-11-10). The index given is left as it is, and pooling twice adds nothing."""
+    # Only the outcome `same_person` writes ("duplicate of <id>"), never a free note: a note's
+    # words can say two people as easily as one, and the pooled thread feeds every limit (the
+    # review, 2026-11-11).
+    ids = {str(c.get("contact_id") or "").strip() for c in contacts or ()}
+    closed_as = {}
+    for c in contacts or ():
+        cid = str(c.get("contact_id") or "").strip()
+        m = _CLOSED_AS.search(str(c.get("outcome") or ""))
+        if (m and str(c.get("status") or "").strip() in schema.TERMINAL
+                and m.group(1).strip(".") in ids and m.group(1).strip(".") != cid):
+            closed_as[cid] = m.group(1).strip(".")
+    if not closed_as:
+        return index
+    out = dict(index)
+    for gone, kept in closed_as.items():
+        theirs = index.get(gone) or ()
+        if not theirs:
+            continue
+        have = {id(r) for r in out.get(kept, ())}
+        more = [r for r in theirs if id(r) not in have]
+        if more:
+            out[kept] = _ordered(list(out.get(kept, ())) + more)
+    return out
+
+
 def _rows_of(index, cid) -> list[dict]:
     return list(index.get(str(cid or "").strip(), ()))
 
@@ -1489,17 +1532,22 @@ def _rows_of(index, cid) -> list[dict]:
 def _ordered(rows) -> list[dict]:
     """Message rows oldest first.
 
-    Ties break on file order, which is the only tiebreak available: THREAD_COLUMNS
-    carries a date and no time, and a same-day send-and-reply is common. A row
-    whose date will not parse sorts as the oldest rather than the newest, so a
-    typo cannot decide a contact's status on its own; `reconcile` reports it.
+    THREAD_COLUMNS carries a date and no time, and a same-day send-and-reply is common, so a
+    day's rows keep their file order, but for one thing: a connection request goes first.
+    Nothing can come before the request that day (it is how the thread starts), and an
+    import that appended the day's request at the foot of the log sorted it after the reply
+    to it, where it counted as a fresh unanswered message (the audit, 2026-11-10: 98
+    contacts counted differently in file order and in date order). A row whose date will
+    not parse sorts as the oldest rather than the newest, so a typo cannot decide a
+    contact's status on its own; `reconcile` reports it.
     """
     rows = list(rows)
-    days = [as_date(r.get("date")) or datetime.date.min for r in rows]
+    keys = [(as_date(r.get("date")) or datetime.date.min, 0 if is_request(r) else 1)
+            for r in rows]
     # Most often in order already (by_contact leaves every thread so): then as they are.
-    if all(a <= b for a, b in zip(days, days[1:])):
+    if all(a <= b for a, b in zip(keys, keys[1:])):
         return rows
-    return [rows[i] for i in sorted(range(len(rows)), key=days.__getitem__)]
+    return [rows[i] for i in sorted(range(len(rows)), key=keys.__getitem__)]
 
 
 def derive_status(threads_for_contact) -> str:
@@ -1754,6 +1802,11 @@ def _closed_after_last_reply(contact, rows) -> bool:
     return bool(closed and last_in and last_in <= closed)
 
 
+# A contact's notes past this many characters hold more than notes.
+NOTES_MAX = 1500
+_DRAFT_IN_NOTES = re.compile(r"\b(?:superseded|unsent|old|earlier|previous) draft\b", re.I)
+
+
 def reconcile(contacts, threads, tracker=None) -> list[dict]:
     """Every place the stored state and the message log disagree.
 
@@ -1864,14 +1917,33 @@ def reconcile(contacts, threads, tracker=None) -> list[dict]:
             said.setdefault((str(row.get("date") or "")[:10], words), set()).add(cid)
     closed_as = duplicate_of(contacts)
     told = set()
-    for (day, _w), cids in said.items():
+    rows_by_id = {str(c.get("contact_id") or "").strip(): c for c in contacts}
+
+    def could_be_one(a, b):
+        # One person only where nothing on the two rows says two: the same surname, or one
+        # row with a first name only, and the same employer, or one row with none. One
+        # template to four Andrews at four employers was raised as one person (the audit,
+        # 2026-11-10: 53 such prompts in one book).
+        ra, rb = rows_by_id.get(a) or {}, rows_by_id.get(b) or {}
+        na, nb = person_name(ra.get("name")).split(), person_name(rb.get("name")).split()
+        if na and nb and _slug(na[0]) != _slug(nb[0]):
+            return False
+        if len(na) > 1 and len(nb) > 1 and _slug(na[-1]) != _slug(nb[-1]):
+            return False
+        ka, kb = row_company_key(ra), row_company_key(rb)
+        return not (ka and kb and ka != kb)
+
+    for (day, _w), cids in sorted(said.items()):
         live = sorted(c for c in cids if c not in closed_as)
-        if len(live) > 1 and tuple(live) not in told:
-            told.add(tuple(live))
-            flag(live[-1], _name_of(contacts, live[-1]), "", "", "shared_message",
+        pairs = [(a, b) for i, a in enumerate(live) for b in live[i + 1:] if could_be_one(a, b)]
+        for pair in pairs:
+            if pair in told:
+                continue
+            told.add(pair)
+            flag(pair[-1], _name_of(contacts, pair[-1]), "", "", "shared_message",
                  "the same message on %s is logged under %s: one person in two rows? Keep the "
                  "one with the employer and close the other (state.py same-person <its id> "
-                 "<the one kept>)" % (day, " and ".join(live)))
+                 "<the one kept>)" % (day, " and ".join(pair)))
     # A kept row lacking what the row closed as its duplicate holds (an employer, a title).
     by = {str(c.get("contact_id") or "").strip(): c for c in contacts}
     for closed, kept in closed_as.items():
@@ -1882,6 +1954,83 @@ def reconcile(contacts, threads, tracker=None) -> list[dict]:
                  "%s, closed as the same person, holds what this row lacks (%s): python3 "
                  "tools/network/state.py same-person %s %s carries it over"
                  % (closed, ", ".join(lacks), closed, kept))
+
+    # A stored employer key the name no longer gives: the column is written once, and an
+    # alias added since makes it stale; every reader recomputes it (company_key.row_key), and
+    # a stale one kept a person from their own messages in the download (the audit, 2026-11-10).
+    for contact in contacts:
+        stored_key = str(contact.get("company_key") or "").strip().lower()
+        named = company_key(contact.get("company")) if str(contact.get("company") or "").strip() else ""
+        if stored_key and named and stored_key != named:
+            cid = str(contact.get("contact_id") or "").strip()
+            flag(cid, contact.get("name", ""), "", "", "stale_company_key",
+                 "the employer key on file, \"%s\", is not what \"%s\" gives now (\"%s\"): "
+                 "the name decides everywhere; python3 tools/network/state.py rekey --apply "
+                 "writes the column again" % (stored_key, contact.get("company"), named))
+
+    # A notes cell holding past drafts, or grown past NOTES_MAX: drafts live in the contact's
+    # folder (draft.md, draft.older.md), and chats pasted them into notes by hand (the audit,
+    # 2026-11-10: 30 rows with "superseded draft", one cell 4,681 characters).
+    for contact in contacts:
+        notes = str(contact.get("notes") or "")
+        if len(notes) > NOTES_MAX or _DRAFT_IN_NOTES.search(notes):
+            cid = str(contact.get("contact_id") or "").strip()
+            flag(cid, contact.get("name", ""), "", "", "notes_hold_drafts",
+                 "the notes hold %s (%d characters): a draft belongs in documents/network/%s/ "
+                 "(draft.older.md for one set aside), and the notes keep only what is worth "
+                 "knowing about them" % ("a past draft" if _DRAFT_IN_NOTES.search(notes)
+                                         else "more than a note", len(notes), cid))
+
+    # A follow-up logged over a follow-up's length: nothing checked it when it was logged, and
+    # twelve such rows were Open Profile messages counted as chases (the audit, 2026-11-10).
+    over: dict = {}
+    for row in threads:
+        if _direction(row) == "out" and _scenario(row) == "nudge" \
+                and len(str(row.get("full_text") or "")) > schema.LIMITS["nudge_chars"]:
+            over.setdefault(str(row.get("contact_id") or "").strip(), []).append(row)
+    for cid, rows_ in over.items():
+        flag(cid, _name_of(contacts, cid), "", "", "nudge_over_limit",
+             "%d follow-up(s) logged over the %d characters a follow-up keeps to (%s): an Open "
+             "Profile message is logged with --channel open_profile"
+             % (len(rows_), schema.LIMITS["nudge_chars"],
+                ", ".join(str(r.get("date") or "?") for r in rows_[:3])))
+
+    # The line at the limit with a date, or the old "close it" (undate_stop_lines takes both off).
+    for contact in contacts:
+        if stop_line_dated(contact):
+            cid = str(contact.get("contact_id") or "").strip()
+            flag(cid, contact.get("name", ""), str(contact.get("status") or ""), "",
+                 "stop_line_dated",
+                 "no more follow-ups go to them, but the row still carries a date or \"close "
+                 "it\": python3 tools/network/state.py stop-lines --apply takes them off")
+
+    # Dropped, a note set aside before anything went, with words in the thread: dropped is on
+    # no list, so a reply offering a time for a call was owed by nobody (the audit, 2026-11-10).
+    for contact in contacts:
+        cid = str(contact.get("contact_id") or "").strip()
+        if str(contact.get("status") or "").strip() != "dropped":
+            continue
+        rows = _rows_of(index, cid)
+        out_n = sum(1 for r in rows if _direction(r) == "out")
+        in_n = sum(1 for r in rows if said_something(r))
+        if out_n or in_n:
+            flag(cid, contact.get("name", ""), "dropped", derive_status(rows),
+                 "dropped_but_written",
+                 "set aside as never written to, but the log holds %d message(s) to them and %d "
+                 "from them: ask the person, then python3 tools/network/state.py set %s --status "
+                 "<closed, or where it stands> --note \"<why>\"" % (out_n, in_n, cid))
+
+    # A closed row that still carries a date: nothing is owed them, and a list that reads the
+    # date says they are due (the audit, 2026-11-10: 21 such rows in one book).
+    for contact in contacts:
+        cid = str(contact.get("contact_id") or "").strip()
+        stored = str(contact.get("status") or "").strip()
+        if stored in schema.TERMINAL and str(contact.get("next_action_due") or "").strip() \
+                and not reopened(contact, _rows_of(index, cid)):
+            flag(cid, contact.get("name", ""), stored, "", "closed_with_a_date",
+                 "the conversation is %s but its row is still due %s: python3 "
+                 "tools/network/state.py set %s --due \"\" takes the date off"
+                 % (stored.replace("_", " "), contact.get("next_action_due"), cid))
 
     # Two rows that may be one person, from a nickname, an initial or a typo: the
     # warning `already_contacted` cannot give, raised on the newer row. Never merged.
@@ -1900,13 +2049,91 @@ def _name_of(contacts, cid):
     return ""
 
 
+# ---------------------------------------------------------------- each message once
+
+# One message logged twice is one message to every limit. The note a connection request
+# carried is listed again in LinkedIn's download among the messages, a day or two later (the
+# day they accepted), and a person written to once read as two unanswered messages: their
+# one follow-up was withheld and their row said "No more follow-ups" (the audit, 2026-11-10:
+# about 60 people in one book). Within ONE_SEND_DAYS, with no word from them between.
+ONE_SEND_DAYS = 3
+# A message logged from its draft and the download's copy of it as it went, edited first:
+# a day or two apart (the download's day is UTC), most of the words the same.
+EDITED_COPY_DAYS = 2
+EDITED_SHARE = 0.5
+# The words the download's own rows carry in their summary (export.EXPORT_NOTE).
+_FROM_EXPORT = "from linkedin's export"
+_MARKS = str.maketrans({"\u2018": "'", "\u2019": "'", "\u201c": '"', "\u201d": '"',
+                        "\u2013": "-", "\u2014": "-", "\u2026": "..."})
+
+
+def _said_words(row) -> str:
+    return " ".join(str(row.get("full_text") or "").translate(_MARKS).split()).lower() \
+        .rstrip(".\u2026 ")
+
+
+def _one_send(a, b, same_only: bool = False) -> bool:
+    """Are rows `a` and `b`, both of ours, one message logged twice: the same words (one cut
+    short where a page folds it: the longer starts with the shorter, 40 characters at least)
+    within ONE_SEND_DAYS, or one the download's copy of the other as it went, edited, within
+    EDITED_COPY_DAYS with EDITED_SHARE of the words the same (never with `same_only`)? Two
+    rows that are both the download's are two messages it listed, unless one is a request and
+    the other its note."""
+    da, db = as_date(a.get("date")), as_date(b.get("date"))
+    if da is None or db is None:
+        return False
+    days = abs((da - db).days)
+    wa, wb = _said_words(a), _said_words(b)
+    if not wa or not wb or days > ONE_SEND_DAYS:
+        return False
+    exp_a = _FROM_EXPORT in str(a.get("summary") or "").lower()
+    exp_b = _FROM_EXPORT in str(b.get("summary") or "").lower()
+    request_and_note = is_request(a) != is_request(b)
+    if exp_a and exp_b and not request_and_note:
+        return False
+    short, longer = sorted((wa, wb), key=len)
+    if wa == wb or (len(short) >= 40 and longer.startswith(short)):
+        return True
+    # A note goes word for word: a request is never an edited copy, and a different first
+    # message after they accepted repeats the recipe's who-line, most of its words alike (the
+    # review, 2026-11-11: it was counted as the note, and a third message fell due).
+    if same_only or exp_a == exp_b or days > EDITED_COPY_DAYS or is_request(a) or is_request(b):
+        return False
+    import difflib
+    words_a, words_b = re.findall(r"[a-z0-9']+", wa), re.findall(r"[a-z0-9']+", wb)
+    return min(len(words_a), len(words_b)) >= 6 and difflib.SequenceMatcher(
+        None, words_a, words_b, autojunk=False).ratio() >= EDITED_SHARE
+
+
+def once_each(msgs) -> list[dict]:
+    """A contact's message rows, in order, as every limit counts them: each message of ours
+    once (`_one_send`: the request and its note, a message and the download's copy of it), the
+    first row kept. The same words are one message even with a word from them between: a
+    day's rows have no time, and the note's copy sat after the reply to it in the log. An
+    edited copy is one only with nothing from them between. The one view of what went to
+    them that `_chases`, `_trailing_outbound` and `follow_up_due` read, so no count reads the
+    raw rows."""
+    out, ours = [], []
+    for row in msgs or ():
+        way = _direction(row)
+        if way == "in" and said_something(row):
+            ours = [(k, True) for k, _ in ours]
+        elif way == "out" and not is_withdrawal(row) and not is_call(row) \
+                and str(row.get("full_text") or "").strip():
+            if any(_one_send(k, row, same_only=apart) for k, apart in ours):
+                continue
+            ours.append((row, False))
+        out.append(row)
+    return out
+
+
 def _trailing_outbound(msgs) -> int:
-    """Our messages since they last wrote. An acceptance answers nothing, so the
-    run carries on through it: a DM sat after the acceptance, and
+    """Our messages since they last wrote, each once (`once_each`). An acceptance answers
+    nothing, so the run carries on through it: a DM sat after the acceptance, and
     stopping there counted it as the first message after a reply and offered a
     second nudge."""
     n = 0
-    for row in reversed(msgs):
+    for row in reversed(once_each(msgs)):
         if is_acceptance(row) or is_bare_request(row) or is_withdrawal(row) \
                 or is_auto_reply(row) or (is_call(row) and not call_held(row)):
             continue
@@ -1926,9 +2153,10 @@ def _chases(msgs) -> int:
     message once, however many messages it took (a reply, then a new day for the call they
     offered, then the resume they asked for, are one answer). The reschedule sent to someone
     who had offered the day was counted as a second unanswered message, and they were marked
-    "no more follow-ups" (the maintainer, 2026-11-05)."""
+    "no more follow-ups" (the maintainer, 2026-11-05). Each message once (`once_each`): a note
+    logged as a request and as a message is one."""
     chased, answered = 0, False
-    for row in reversed(msgs):
+    for row in reversed(once_each(msgs)):
         if is_acceptance(row) or is_bare_request(row) or is_withdrawal(row) \
                 or is_auto_reply(row) or (is_call(row) and not call_held(row)):
             continue
@@ -2060,12 +2288,15 @@ def owed(contacts, threads, today, index=None, live=None) -> list[dict]:
     today = _need_date(today, "today")
     items = []
     own_dated = set()
-    index = by_contact(threads) if index is None else index
+    index = pooled(by_contact(threads) if index is None else index, contacts)
     twins = namesakes(contacts)
     once: set = set()
     if live is not None:
         ids = Counter(str(c.get("contact_id") or "").strip() for c in contacts)
-        once = {cid for cid, n in ids.items() if n == 1 and cid in live}
+        # A row kept for a person whose other row was closed as the same one reads both rows'
+        # messages here (pooled), so its status is read here too.
+        kept = set(duplicate_of(contacts).values())
+        once = {cid for cid, n in ids.items() if n == 1 and cid in live and cid not in kept}
     for contact in contacts:
         cid = str(contact.get("contact_id") or "").strip()
         rows = _rows_of(index, cid)
@@ -2249,7 +2480,8 @@ def follow_up_due(contact, msgs) -> tuple:
     acceptance when that is the last thing that happened, never from an automatic reply,
     and an away message's return date holds it. None when the person's cap on unanswered
     messages is reached (`schema.MAX_UNANSWERED`), or nothing has a date."""
-    real = [r for r in msgs if not is_auto_reply(r)]
+    schema.limits_now()                       # the person's rule as it is now
+    real = [r for r in once_each(msgs) if not is_auto_reply(r)]
     sent = (as_date(real[-1].get("date")) if real
             else as_date((contact or {}).get("first_contacted")))
     # Counted from what chases them (_chases): a message answering them is no follow-up.
@@ -2264,13 +2496,27 @@ def follow_up_due(contact, msgs) -> tuple:
 
 
 # What the app writes in next_action for a thread's follow-up; a row saying anything
-# else is the person's own, and nothing is ever written over it.
+# else is the person's own, and nothing is ever written over it. Short and plain, counted from
+# the engine's own count (`_chases`): "Follow up if no reply (1 of 2 sent; your rule: 14 days,
+# at most 2 with no reply)" was hard to read and stayed on a row whose count was 2 (the audit,
+# 2026-11-10). The line at the limit is the page's own words.
+# The wait is in the words ("after 14 days"), which is how a later run tells a date the app
+# wrote under a rule since changed from one the person set (_RULE_DAYS, _app_dates).
+FOLLOW_UP_LEFT = "Sent {day}, no reply yet: follow up after {wait} ({left} left), then stop"
+FOLLOW_UP_IF = "Follow up after {wait} if no reply ({left} left), then stop"
+FOLLOW_UP_STOP = "No reply to {n} message{s}: leave it unless they write back"
+# The wordings before 2026-11-11, still read as the app's own (_APP_ACTION, STOP_LINE), so the
+# next run rewrites them.
 FOLLOW_UP_ACTION = "Follow up if no reply ({n} of {cap} sent; your rule: {rule})"
-FOLLOW_UP_STOP = "No more follow-ups: {n} messages with no reply, your rule's limit ({rule})"
 NUDGED_STOP = "Nudged: nothing more unless they reply"
+_NUMBER_WORDS = ("no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine")
 # What the line at the limit added before 2026-11-04, when it carried a day to close the
 # thread: still read as the app's own, so the next run takes that day off.
 CLOSE_IT = "If still silent by the date, close it: state.py set {cid} --status gone_cold"
+_NEW_LINES = (r"sent \d{1,2} [a-z]{3}(?: \d{4})?, no reply yet: follow up after \d+ (?:working )?"
+              r"days \(\w+ left\), then stop"
+              r"|follow up after \d+ (?:working )?days if no reply \(\w+ left\), then stop"
+              r"|no reply to \d+ messages?: leave it unless they write back")
 _APP_ACTION = re.compile(
     r"one nudge if no reply"
     r"|once they accept: .+\. withdraw the request if nobody accepts in \d+ days"
@@ -2280,27 +2526,45 @@ _APP_ACTION = re.compile(
     r"|follow up if no reply \(\d+ of \d+ sent; your rule: [^)]*\)"
     r"|no more follow-ups: \d+ messages with no reply, your rule's limit \([^)]*\)"
     r"(?:\. if still silent by the date, close it: state\.py set \S+ --status gone_cold)?"
+    r"|" + _NEW_LINES +
     r"|\S+ sent \d{4}-\d{2}-\d{2} \([^)]*\): (?:one nudge if no reply|follow up if no reply "
-    r"\(\d+ of \d+ sent; your rule: [^)]*\)|no more follow-ups: .+)", re.I)
+    r"\(\d+ of \d+ sent; your rule: [^)]*\)|no more follow-ups: .+|" + _NEW_LINES + r")", re.I)
 
 
-def waiting_action(sent: int, contact_id: str = "") -> str:
-    """What a row waiting on a reply says after `sent` messages in a row with none back:
-    "One nudge if no reply" under the app's own rule, the person's rule where they set
-    one, and, once their limit is reached, that no more go. That line has no day: nothing
-    is owed them, and a day to close the thread made them owed again (the maintainer,
-    2026-11-04). `contact_id` is kept for callers written before."""
-    rule = schema.follow_up_rule()
-    # The app's own words under its own rule; under the person's, the words name their
-    # rule, which is how a later run tells a date the app wrote from one they set.
-    own = not schema.FOLLOW_UP_DAYS and schema.MAX_UNANSWERED == 2
+def _day_said(day) -> str:
+    """A day as the line says it: "22 Oct", with the year only when it is not this one."""
+    day = as_date(day)
+    if day is None:
+        return ""
+    said = f"{day.day} {day.strftime('%b')}"
+    return said if day.year == person.today().year else f"{said} {day.year}"
+
+
+def waiting_action(sent: int, contact_id: str = "", last=None) -> str:
+    """What a row waiting on a reply says after `sent` messages in a row with none back
+    (the engine's own count): when the last one went (`last`), and how many follow-ups the
+    person's rule (MAX_UNANSWERED) leaves; once their limit is reached, that no more go. That
+    line has no day: nothing is owed them, and a day to close the thread made them owed
+    again (the maintainer, 2026-11-04). `contact_id` is kept for callers written before."""
+    schema.limits_now()                       # the person's rule as it is now
     if sent >= schema.MAX_UNANSWERED:
-        if own and sent == 2:
-            return NUDGED_STOP
-        return FOLLOW_UP_STOP.format(n=sent, rule=rule)
-    if own and sent == 1:
-        return "One nudge if no reply"
-    return FOLLOW_UP_ACTION.format(n=sent, cap=schema.MAX_UNANSWERED, rule=rule)
+        return FOLLOW_UP_STOP.format(n=sent, s="" if sent == 1 else "s")
+    left = schema.MAX_UNANSWERED - max(sent, 1)
+    word = _NUMBER_WORDS[left] if left < len(_NUMBER_WORDS) else str(left)
+    wait = (f"{schema.FOLLOW_UP_DAYS} days" if schema.FOLLOW_UP_DAYS
+            else f"{schema.FOLLOWUP_BUSINESS_DAYS} working days")
+    day = _day_said(last) if last else ""
+    if day:
+        return FOLLOW_UP_LEFT.format(day=day, wait=wait, left=word)
+    return FOLLOW_UP_IF.format(wait=wait, left=word)
+
+
+def _last_sent(msgs):
+    """The day our last message went, each message once (`once_each`), or None."""
+    days = [as_date(r.get("date")) for r in once_each(msgs)
+            if _direction(r) == "out" and not is_withdrawal(r) and not is_call(r)]
+    days = [d for d in days if d]
+    return max(days) if days else None
 
 
 def follow_up_plan(contact, msgs) -> tuple | None:
@@ -2312,7 +2576,8 @@ def follow_up_plan(contact, msgs) -> tuple | None:
     if sent is None:
         return None
     cid = str((contact or {}).get("contact_id") or "").strip()
-    return waiting_action(nudges + 1, cid), due_on.isoformat() if due_on else ""
+    return (waiting_action(nudges + 1, cid, last=_last_sent(msgs)),
+            due_on.isoformat() if due_on else "")
 
 
 # A thread nothing more goes to, by the person's own hand: closed, set aside, gone cold.
@@ -2323,7 +2588,7 @@ _LIMIT_STATUSES = frozenset(_THROTTLE_SENT_NO_REPLY | {"in_conversation"})
 # The app's own line on a row whose limit is reached (FOLLOW_UP_STOP, NUDGED_STOP), however
 # a page or a chat has said it since.
 STOP_LINE = re.compile(r"\s*(?:no more follow-ups: \d+ messages with no reply\b|nudged: nothing "
-                       r"more unless they reply\b|no reply to \d+ messages: leave it\b)", re.I)
+                       r"more unless they reply\b|no reply to \d+ messages?: leave it\b)", re.I)
 # Why `state.py set` left a date off, in plain words.
 UNDATED_WORDS = {
     "closed": "no date: the conversation is closed, and a reply from them opens it again",
@@ -2341,6 +2606,7 @@ def at_limit(contact, msgs, status=None) -> bool:
     status = effective_status(contact or {}, msgs) if status is None else status
     if status not in _LIMIT_STATUSES:
         return False
+    schema.limits_now()                       # the person's rule as it is now
     return (_chases(msgs) >= schema.MAX_UNANSWERED
             or bool(STOP_LINE.match(str((contact or {}).get("next_action") or ""))))
 
@@ -2375,7 +2641,8 @@ def put_next(contact, msgs, action=None, due=None) -> str:
     return why
 
 
-_RULE_DAYS = re.compile(r"your rule(?:'s limit)?:? \(?(\d+) days\b", re.I)
+_RULE_DAYS = re.compile(r"your rule(?:'s limit)?:? \(?(\d+) days\b|\bfollow up after (\d+) days\b",
+                        re.I)
 
 
 def _app_dates(msgs, action: str = "") -> set:
@@ -2391,7 +2658,8 @@ def _app_dates(msgs, action: str = "") -> set:
             out |= {follow_up_on(d).isoformat(),
                     add_business_days(d, schema.FOLLOWUP_BUSINESS_DAYS).isoformat()}
             if named:
-                out.add((d + datetime.timedelta(days=int(named.group(1)))).isoformat())
+                out.add((d + datetime.timedelta(days=int(named.group(1) or named.group(2))))
+                        .isoformat())
     back = away_until(msgs)
     if back is not None:
         out.add(add_business_days(back, AWAY_GRACE_BUSINESS_DAYS).isoformat())
@@ -2411,7 +2679,7 @@ def close_gone_cold(contacts, threads, today, days: int | None = None) -> list[s
     days = GONE_COLD_DAYS if days is None else days
     if not days or days < 1:
         return []
-    index = by_contact(threads)
+    index = pooled(by_contact(threads), contacts)
     said = []
     for contact in contacts:
         cid = str(contact.get("contact_id") or "").strip()
@@ -2441,6 +2709,39 @@ def close_gone_cold(contacts, threads, today, days: int | None = None) -> list[s
     return said
 
 
+# The old tail CLOSE_IT added to the line at the limit, in any contact's words.
+_CLOSE_IT_TAIL = re.compile(r"\.?\s*if still silent by the date, close it: state\.py set \S+ "
+                            r"--status gone_cold\.?\s*$", re.I)
+
+
+def stop_line_dated(contact) -> bool:
+    """Does this row carry the app's line at the limit (STOP_LINE) with a date beside it, or
+    the old "If still silent by the date, close it" (CLOSE_IT)? The line has no date since
+    2026-11-04: nothing is owed them. Only the app's own line, whole (_APP_ACTION): a line the
+    person wrote on from the same words, with a plan and a day of their own, is theirs (the
+    review, 2026-11-11)."""
+    action = " ".join(str(contact.get("next_action") or "").split())
+    return bool(STOP_LINE.match(action)) and bool(_APP_ACTION.fullmatch(action)) and (
+        bool(_CLOSE_IT_TAIL.search(action)) or bool(str(contact.get("next_action_due") or "").strip()))
+
+
+def undate_stop_lines(contacts) -> list[str]:
+    """The line at the limit with neither CLOSE_IT nor a date, on every row, whatever its
+    status or age: the follow-up run left closed rows and threads owed more than OLD_OWED_DAYS
+    as they were, and 19 rows in one book still said "close it" with a date (the audit,
+    2026-11-10). A line each; the list changes in place."""
+    said = []
+    for contact in contacts:
+        if not stop_line_dated(contact):
+            continue
+        action = " ".join(str(contact.get("next_action") or "").split())
+        put_next(contact, (), _CLOSE_IT_TAIL.sub("", action).rstrip(" ."), "")
+        cid = str(contact.get("contact_id") or "").strip()
+        said.append(f"{contact.get('name') or cid} ({cid}): no more follow-ups and no date: "
+                    "leave it unless they write back")
+    return said
+
+
 def write_follow_ups(contacts, threads, today, only_undated: bool = False) -> list[str]:
     """Write onto every contact waiting on a reply what follows by the person's rule
     (`follow_up_plan`): the day a follow-up falls due, or, once their limit is reached,
@@ -2458,7 +2759,9 @@ def write_follow_ups(contacts, threads, today, only_undated: bool = False) -> li
     _need_date(today, "today")
     # A thread silent past GONE_COLD_DAYS is closed first, and recorded: it is owed nothing.
     said = [] if only_undated else close_gone_cold(contacts, threads, today)
-    index = by_contact(threads)
+    # The line at the limit carries no date, whatever the row's status or age.
+    said += [] if only_undated else undate_stop_lines(contacts)
+    index = pooled(by_contact(threads), contacts)
     for contact in contacts:
         cid = str(contact.get("contact_id") or "").strip()
         action = str(contact.get("next_action") or "").strip()
@@ -2496,7 +2799,66 @@ def write_follow_ups(contacts, threads, today, only_undated: bool = False) -> li
                     + (f"follow up on {contact['next_action_due']}"
                        if contact["next_action_due"] else
                        "no more follow-ups and no date: leave it unless they write back"))
+    # One line a row: an old line at the limit undated above and then said in today's words
+    # is one change to the person.
+    return list(dict.fromkeys(said))
+
+
+def recount(contacts, threads, today) -> list[str]:
+    """Rows whose next action is the app's own line at the limit (FOLLOW_UP_STOP,
+    NUDGED_STOP) though their log, each message once (`once_each`), is below the person's
+    limit: it was written while a note logged as a request and again as a message counted
+    twice, and the line itself held them at the limit (`at_limit` reads it). Each takes the
+    follow-up and its day by the person's rule instead (`follow_up_plan`). A line in the
+    person's own words is theirs, and a thread that ended more than OLD_OWED_DAYS ago is left
+    as it is, as `write_follow_ups` leaves it. A line each; the list changes in place."""
+    today = _need_date(today, "today")
+    index = pooled(by_contact(threads), contacts)
+    said = []
+    for contact in contacts:
+        action = " ".join(str(contact.get("next_action") or "").split())
+        if not (action and _APP_ACTION.fullmatch(action) and STOP_LINE.match(action)):
+            continue
+        cid = str(contact.get("contact_id") or "").strip()
+        msgs = [r for r in _rows_of(index, cid) if _direction(r)]
+        if effective_status(contact, msgs) not in _LIMIT_STATUSES \
+                or _chases(msgs) >= schema.MAX_UNANSWERED:
+            continue
+        new = follow_up_plan(contact, msgs)
+        if new is None or owed_too_long(new[1] or follow_up_on(follow_up_due(contact, msgs)[0]),
+                                        today):
+            continue
+        put_next(contact, msgs, *new)
+        said.append(f"{contact.get('name') or cid} ({cid}): {_chases(msgs)} message(s) with no "
+                    f"reply, not {schema.MAX_UNANSWERED}: "
+                    + (f"follow up on {contact['next_action_due']}" if contact["next_action_due"]
+                       else contact["next_action"]))
     return said
+
+
+def _cli_recount(argv) -> int:
+    """`state.py recount [--apply]`: the rows the app marked at the limit whose log, each
+    message once, is below it, given their follow-up again."""
+    ap = argparse.ArgumentParser(prog="state.py recount",
+                                 description="Give back the follow-up a message counted twice took.")
+    ap.add_argument("--apply", action="store_true", help="write them (default: show them)")
+    ap.add_argument("--dry", action="store_true", help="print how many, change nothing")
+    ap.add_argument("--today", default=person.today().isoformat())
+    a = ap.parse_args(argv)
+    contacts, threads = load_contacts(), load_threads()
+    said = recount(contacts, threads, a.today)
+    if a.dry:
+        print(len(said))
+        return 0
+    print(f"recount: {len(said)} contact(s) " + ("given their follow-up again" if a.apply
+                                                  else "to give their follow-up again; --apply"))
+    for line in said[:40]:
+        print("  " + line)
+    if len(said) > 40:
+        print(f"  ... and {len(said) - 40} more")
+    if a.apply and said:
+        save_contacts(contacts)
+    return 0
 
 
 # ---------------------------------------------------------------- withdrawing a request
@@ -2552,7 +2914,7 @@ def _cli_withdraw(argv) -> int:
     ap.add_argument("--reason", default="")
     ap.add_argument("--contacts", default=CONTACTS_CSV)
     ap.add_argument("--threads", default=THREADS_CSV)
-    ap.add_argument("--today", default=datetime.date.today().isoformat())
+    ap.add_argument("--today", default=person.today().isoformat())
     a = ap.parse_args(argv)
     contacts, threads = load_contacts(a.contacts), load_threads(a.threads)
     ids = list(a.contact_ids)
@@ -2597,7 +2959,7 @@ def add_contact(contacts, name, company="", today=None, new=False, **fields) -> 
     nickname, an initial), or the same name with no employer given, is refused with who it
     may be, unless `new` says it is someone else. Raises ValueError for a name with no
     surname-like part to make an id from. The list changes in place; the caller saves."""
-    day = _need_date(today or datetime.date.today(), "today")
+    day = _need_date(today or person.today(), "today")
     name = " ".join(str(name or "").split())
     company = " ".join(str(company or "").split())
     url = str(fields.get("linkedin_url") or "").strip()
@@ -2691,7 +3053,7 @@ def _cli_add(argv) -> int:
     ap.add_argument("--new", action="store_true",
                     help="someone else with a name like one already in the book")
     ap.add_argument("--contacts", default=CONTACTS_CSV)
-    ap.add_argument("--today", default=datetime.date.today().isoformat())
+    ap.add_argument("--today", default=person.today().isoformat())
     a = ap.parse_args(argv)
     contacts = load_contacts(a.contacts)
     fields = {k: getattr(a, k) for k in ("title", "linkedin_url", "email", "location", "route",
@@ -2783,7 +3145,7 @@ def _cli_accepted(argv) -> int:
     ap.add_argument("--date", default="", help="the day they accepted (default today)")
     ap.add_argument("--contacts", default=CONTACTS_CSV)
     ap.add_argument("--threads", default=THREADS_CSV)
-    ap.add_argument("--today", default=datetime.date.today().isoformat())
+    ap.add_argument("--today", default=person.today().isoformat())
     a = ap.parse_args(argv)
     contacts, threads = load_contacts(a.contacts), load_threads(a.threads)
     done = 0
@@ -2933,6 +3295,11 @@ def _same_words_sent(a: str, b: str) -> bool:
 
 
 FOLLOW_UP_KINDS = ("nudge", "message")
+# A later message to an Open Profile (free, by Message, no connection): its own scenario.
+OPEN_PROFILE_SCENARIO = "open_profile"
+NUDGE_OVER = ("logged as a follow-up of {n} characters, over the {most} a follow-up keeps to: a "
+              "follow-up is shorter than the note it chases; if it went to an Open Profile, log it "
+              "with --channel open_profile")
 
 
 def followed_up(contacts, threads, contact_id, today, text="", date=None, channel="",
@@ -3034,18 +3401,33 @@ def followed_up(contacts, threads, contact_id, today, text="", date=None, channe
         chan = channel_of(outs[-1]) or channel_of(contact) or "message"
         if chan == "connection" and (accepted or scenario != "first_message"):
             chan = "message"             # once connected, a message, never another request
+    if scenario == "nudge" and chan == "open_profile":
+        # A message to an Open Profile, by another way than the note: a message of its own,
+        # never a follow-up held to a follow-up's length. Twelve were logged as nudges of 600 to
+        # 700 characters (the audit, 2026-11-10). It counts as a message with no reply all the
+        # same, toward the person's limit of unanswered messages, as any other follow-up does
+        # (the maintainer's decision, 2026-11-11): only its length and its name are its own.
+        scenario = OPEN_PROFILE_SCENARIO
     note = ""
-    if scenario == "nudge":
+    if scenario in ("nudge", OPEN_PROFILE_SCENARIO):
+        # An Open Profile message counts as a message with no reply like any follow-up, so the
+        # count is said for it too (the review, 2026-11-11); its length is its own.
         before = max(_chases(rows), 1) - 1
         if before >= schema.MAX_NUDGES:
             note = (f"that is nudge {before + 1} to {name}; the rule is {schema.MAX_NUDGES}. "
                     "Logged because it went; nothing more goes until they reply")
+    if scenario == "nudge":
+        if len(body) > schema.LIMITS["nudge_chars"]:
+            note = "; ".join(x for x in (note, NUDGE_OVER.format(n=len(body),
+                                                                 most=schema.LIMITS["nudge_chars"]))
+                             if x)
     resume = bool(attached) and is_resume_file(attached)
     owed_one = resume and kind == "message" and any(
         o["contact_id"] == cid for o in resumes_owed([contact], threads))
     if owed_one:
         scenario, note = "send_resume", ""
     summary = {"nudge": f"Nudge sent ({chan})", "reply": f"Reply sent ({chan})",
+               OPEN_PROFILE_SCENARIO: "Open Profile message sent",
                "first_message": f"First {chan} sent, after they accepted",
                "send_resume": f"{noun()[:1].upper() + noun()[1:]} sent ({chan}), as asked"
                }[scenario]
@@ -3250,7 +3632,7 @@ def _cli_received(argv) -> int:
     ap.add_argument("--subject", default="")
     ap.add_argument("--contacts", default=CONTACTS_CSV)
     ap.add_argument("--threads", default=THREADS_CSV)
-    ap.add_argument("--today", default=datetime.date.today().isoformat())
+    ap.add_argument("--today", default=person.today().isoformat())
     a = ap.parse_args(argv)
     text = _words_from(a.text_file, "received")
     if text is None:
@@ -3427,7 +3809,7 @@ def _cli_hold(argv) -> int:
                                                 "email\", \"after the interview on Friday\"")
     ap.add_argument("--release", action="store_true", help="put the held draft back")
     ap.add_argument("--contacts", default=CONTACTS_CSV)
-    ap.add_argument("--today", default=datetime.date.today().isoformat())
+    ap.add_argument("--today", default=person.today().isoformat())
     a = ap.parse_args(argv)
     contacts = load_contacts(a.contacts)
     try:
@@ -3656,24 +4038,122 @@ def never_messaged(contact, threads) -> bool:
     return not str(contact.get("first_contacted") or "").strip()
 
 
+def nothing_said(contact, threads) -> bool:
+    """Nothing went either way: never messaged, and no message from them in the log. Only
+    such a contact may be `dropped`, a note set aside before it went: dropped contacts with
+    replies in their thread, one offering a time for a call, sat on no list at all (the
+    audit, 2026-11-10)."""
+    cid = str(contact.get("contact_id") or "").strip()
+    return never_messaged(contact, threads) and not any(
+        said_something(r) for r in threads_for(threads, cid))
+
+
+DROP_REFUSED = ("{who} has been written to, or wrote: \"dropped\" is a note set aside before "
+                "anything went. Close the conversation with its outcome instead (state.py set "
+                "{cid} --status closed --note \"<why>\")")
+
+
 def _note(contact, field, text):
     contact[field] = "; ".join(x for x in (str(contact.get(field) or "").strip(), text) if x)
 
 
-def drop(contacts, threads, contact_id, today, reason) -> dict:
-    """Set a never-messaged contact aside: status `dropped`, reversible with `reopen`."""
+# A note set aside "for now" (the page's Set aside, app_actions._msg_skip) ends on its own day:
+# "dropped <day> until <day>: <why>" in the outcome. Kept with no end, "for now" was for good,
+# with nothing on the page saying so (the rules review, 2026-11-11). One with no "until" is the
+# person's own "never", or one set aside in a chat.
+_DROPPED = re.compile(r"\bdropped (\d{4}-\d{2}-\d{2})(?: until (\d{4}-\d{2}-\d{2}))?: ")
+PAGE_DROP_WORDS = "not now, said on the page"
+
+
+def dropped_until(contact) -> datetime.date | None:
+    """The day a contact set aside for now is offered again (their latest `dropped` entry's
+    "until"), or None where it has no end: their own "never", or one set aside in a chat."""
+    got = _DROPPED.findall(str((contact or {}).get("outcome") or ""))
+    if not got or not got[-1][1]:
+        return None
+    try:
+        return datetime.date.fromisoformat(got[-1][1])
+    except ValueError:
+        return None
+
+
+def dropped_on(contact) -> datetime.date | None:
+    """The day of their latest `dropped` entry, or None."""
+    got = _DROPPED.findall(str((contact or {}).get("outcome") or ""))
+    try:
+        return datetime.date.fromisoformat(got[-1][0]) if got else None
+    except ValueError:
+        return None
+
+
+def drop(contacts, threads, contact_id, today, reason, until=None) -> dict:
+    """Set a never-messaged contact aside: status `dropped`, reversible with `reopen`. With
+    `until`, for now: offered again on that day (`reopen_set_aside`)."""
     today = _need_date(today, "today")
+    until = _need_date(until, "until") if until else None
     contact = already_contacted(contacts, contact_id=str(contact_id or "").strip())
     if contact is None:
         raise ValueError(f"no contact {contact_id!r} in the contact book")
-    if not never_messaged(contact, threads):
-        raise ValueError(f"{contact.get('name') or contact_id} has been written to: close the "
-                         "thread with its outcome instead, it is not a draft set aside")
+    if not nothing_said(contact, threads):
+        raise ValueError(DROP_REFUSED.format(who=contact.get("name") or contact_id,
+                                             cid=contact.get("contact_id") or contact_id))
     why = " ".join(str(reason or "").split()) or "set aside by the person"
     contact["status"] = "dropped"
     put_next(contact, (), "", "")
-    _note(contact, "outcome", f"dropped {today.isoformat()}: {why}")
+    when = f" until {until.isoformat()}" if until else ""
+    _note(contact, "outcome", f"dropped {today.isoformat()}{when}: {why}")
     return contact
+
+
+def set_aside_for_now(contacts) -> list[dict]:
+    """The contacts set aside for now (status dropped, with a day they are offered again)."""
+    return [c for c in contacts if str(c.get("status") or "").strip() == "dropped"
+            and dropped_until(c) is not None]
+
+
+def reopen_set_aside(today, path=None, threads_path=None) -> list[str]:
+    """Each contact set aside for now whose day has come, offered again (`reopen`, status
+    not_contacted, their draft as it was); saved only when someone came back. Run on every
+    wake of the chat that answers the page, as `advance_past_calls` is."""
+    today = _need_date(today, "today")
+    path = path or person.state("network_contacts.csv")
+    if not os.path.exists(path):
+        return []
+    contacts = load_contacts(path)
+    tp = threads_path or os.path.join(os.path.dirname(path), "network_threads.csv")
+    threads = load_threads(tp) if os.path.exists(tp) else []
+    said = []
+    for c in set_aside_for_now(contacts):
+        if dropped_until(c) > today or not never_messaged(c, threads):
+            continue
+        day = dropped_on(c)
+        reopen(contacts, threads, c["contact_id"], today,
+               f"set aside for now on {day.isoformat() if day else 'an earlier day'}: offered again")
+        said.append(f"{c.get('name') or c['contact_id']} ({c['contact_id']})")
+    if said:
+        save_contacts(contacts, path)
+    return said
+
+
+def date_page_drops(contacts, today, days: int) -> list[str]:
+    """Each note set aside on the page before a set-aside had an end (its latest `dropped` entry
+    the page's own words, PAGE_DROP_WORDS, with no "until"), given `days` from `today`, so they
+    are offered again one by one, never all at once (profile upgrade notes-aside-dated). The
+    list changes in place; a line each."""
+    today = _need_date(today, "today")
+    until = (today + datetime.timedelta(days=days)).isoformat()
+    said = []
+    for c in contacts:
+        if str(c.get("status") or "").strip() != "dropped" or dropped_until(c) is not None:
+            continue
+        out = str(c.get("outcome") or "")
+        last = list(_DROPPED.finditer(out))
+        if not last or not out[last[-1].end():].startswith(PAGE_DROP_WORDS):
+            continue
+        m = last[-1]
+        c["outcome"] = out[:m.end() - 2] + f" until {until}: " + out[m.end():]
+        said.append(f"{c.get('name') or c.get('contact_id')}: offered again on {until}")
+    return said
 
 
 def reopen(contacts, threads, contact_id, today, reason) -> dict:
@@ -3845,9 +4325,10 @@ _DROPPED_WORDS = re.compile(r"\b(?:never sent|not sent|queue dropped|dropped by 
 
 
 def closed_but_dropped(contacts, threads) -> list:
-    """Closed contacts nothing went to whose outcome says the note was never sent."""
+    """Closed contacts nothing went to, and nothing came from, whose outcome says the note
+    was never sent."""
     return [c for c in contacts if str(c.get("status") or "").strip() == "closed"
-            and never_messaged(c, threads)
+            and nothing_said(c, threads)
             and _DROPPED_WORDS.search(" ".join(str(c.get(k) or "") for k in ("outcome", "notes")))]
 
 
@@ -3929,7 +4410,7 @@ def _cli_sent(argv) -> int:
                          "cv/<name>.pdf or documents/cv/<name>.pdf)")
     ap.add_argument("--contacts", default=CONTACTS_CSV)
     ap.add_argument("--threads", default=THREADS_CSV)
-    ap.add_argument("--today", default=datetime.date.today().isoformat())
+    ap.add_argument("--today", default=person.today().isoformat())
     a = ap.parse_args(argv)
     if a.text_file and len(a.contact_ids) > 1:
         print("sent: --text-file is one person's message; name one contact")
@@ -4035,7 +4516,7 @@ def _cli_followed_up(argv, kind) -> int:
                          "never counted as a follow-up")
     ap.add_argument("--contacts", default=CONTACTS_CSV)
     ap.add_argument("--threads", default=THREADS_CSV)
-    ap.add_argument("--today", default=datetime.date.today().isoformat())
+    ap.add_argument("--today", default=person.today().isoformat())
     a = ap.parse_args(argv)
     if a.text_file and len(a.contact_ids) > 1:
         print(f"{kind}: --text-file is one person's message; name one contact, or use --texts")
@@ -4112,7 +4593,7 @@ def _cli_inmail_credits(argv) -> int:
                     help="the InMail credits LinkedIn shows now")
     ap.add_argument("--contacts", default=CONTACTS_CSV)
     ap.add_argument("--threads", default=THREADS_CSV)
-    ap.add_argument("--today", default=datetime.date.today().isoformat())
+    ap.add_argument("--today", default=person.today().isoformat())
     a = ap.parse_args(argv)
     contacts, threads = load_contacts(a.contacts), load_threads(a.threads)
     if a.balance is not None:
@@ -4175,7 +4656,7 @@ def _cli_resent(argv) -> int:
     ap.add_argument("--subject", default="")
     ap.add_argument("--contacts", default=CONTACTS_CSV)
     ap.add_argument("--threads", default=THREADS_CSV)
-    ap.add_argument("--today", default=datetime.date.today().isoformat())
+    ap.add_argument("--today", default=person.today().isoformat())
     a = ap.parse_args(argv)
     text = _words_from(a.text_file, "resent") if a.text_file else ""
     if text is None:
@@ -4202,7 +4683,7 @@ def _cli_unsend(argv) -> int:
     ap.add_argument("contact_id")
     ap.add_argument("--contacts", default=CONTACTS_CSV)
     ap.add_argument("--threads", default=THREADS_CSV)
-    ap.add_argument("--today", default=datetime.date.today().isoformat())
+    ap.add_argument("--today", default=person.today().isoformat())
     a = ap.parse_args(argv)
     contacts, threads = load_contacts(a.contacts), load_threads(a.threads)
     try:
@@ -4227,10 +4708,13 @@ def _cli_reopen_or_drop(argv, verb) -> int:
                     help="FIELD=VALUE or FIELD~WORDS, as many as needed (company=<employer>, "
                          "outcome~never sent, status=dropped)")
     ap.add_argument("--reason", default="")
+    if verb == "drop":
+        ap.add_argument("--until", default="", help="YYYY-MM-DD: set aside for now, offered "
+                                                    "again on that day; none: until reopened")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--contacts", default=CONTACTS_CSV)
     ap.add_argument("--threads", default=THREADS_CSV)
-    ap.add_argument("--today", default=datetime.date.today().isoformat())
+    ap.add_argument("--today", default=person.today().isoformat())
     a = ap.parse_args(argv)
     contacts, threads = load_contacts(a.contacts), load_threads(a.threads)
     ids = list(a.contact_ids)
@@ -4244,10 +4728,11 @@ def _cli_reopen_or_drop(argv, verb) -> int:
         print(f"{verb}: name the contact ids, or --where FIELD=VALUE")
         return 1
     fn = reopen if verb == "reopen" else drop
+    more = {"until": a.until} if verb == "drop" and a.until else {}
     done, failed = 0, 0
     for cid in ids:
         try:
-            c = fn(contacts, threads, cid, a.today, a.reason)
+            c = fn(contacts, threads, cid, a.today, a.reason, **more)
         except ValueError as e:
             print(f"  not {verb}ed: {e}" if verb == "reopen" else f"  not dropped: {e}")
             failed += 1
@@ -4281,7 +4766,7 @@ def set_contact(contacts, threads, who, status=None, next_action=None, due=None,
     if not row:
         raise ValueError(f"no contact matching {who!r}")
     said = []
-    if status is None and due is not None and call_is_past(row, today or datetime.date.today()):
+    if status is None and due is not None and call_is_past(row, today or person.today()):
         # A date set on a contact whose call has happened is not the call's: it moves on.
         status = "in_conversation"
     if status is not None:
@@ -4289,11 +4774,18 @@ def set_contact(contacts, threads, who, status=None, next_action=None, due=None,
         if status not in schema.THREAD_STATUSES:
             raise ValueError(f"{status!r} is not a status; one of: "
                              f"{', '.join(schema.THREAD_STATUSES)}")
+        if status == "dropped" and not nothing_said(row, threads):
+            raise ValueError(DROP_REFUSED.format(who=row.get("name") or who,
+                                                 cid=row.get("contact_id") or who))
         row["status"] = status
         mine = threads_for(threads, row.get("contact_id", ""))
+        if status in schema.TERMINAL and next_action is None:
+            # Closed: nothing is owed them, so what was owed goes, and its date with it. Kept,
+            # a closed row was listed as due in open_actions (the audit, 2026-11-10).
+            put_next(row, mine, "", "")
         if unheard(row, mine):
             # The person's own word that they are talking, which the log cannot show.
-            _note(row, "notes", f"{today or datetime.date.today().isoformat()}: {status} {SAID_BY_HAND}")
+            _note(row, "notes", f"{today or person.today().isoformat()}: {status} {SAID_BY_HAND}")
         shown = effective_status(row, mine)
         said.append(f"status {status}" + ("" if shown == status else
                                           f" (the message log still shows {shown}: a reply "
@@ -4308,7 +4800,7 @@ def set_contact(contacts, threads, who, status=None, next_action=None, due=None,
         why = put_next(row, threads_for(threads, row.get("contact_id", "")), due=due)
         said.append(UNDATED_WORDS[why] if why else f"due {due or '(none)'}")
     if note.strip():
-        line = f"{today or datetime.date.today().isoformat()}: {' '.join(note.split())}"
+        line = f"{today or person.today().isoformat()}: {' '.join(note.split())}"
         _note(row, "notes", line)
         said.append(f"note added: {line}")
     if not said:
@@ -4394,7 +4886,7 @@ def _cli_set(argv) -> int:
     ap.add_argument("--note", default="", help="added to their notes with today's date")
     ap.add_argument("--contacts", default=CONTACTS_CSV)
     ap.add_argument("--threads", default=THREADS_CSV)
-    ap.add_argument("--today", default=datetime.date.today().isoformat())
+    ap.add_argument("--today", default=person.today().isoformat())
     a = ap.parse_args(argv)
     contacts = load_contacts(a.contacts)
     threads = load_threads(a.threads) if os.path.exists(a.threads) else []
@@ -4440,7 +4932,7 @@ def _cli_no_reply(argv) -> int:
                     help="YYYY-MM-DD (default: the person's own follow-up rule)")
     ap.add_argument("--contacts", default=CONTACTS_CSV)
     ap.add_argument("--threads", default=THREADS_CSV)
-    ap.add_argument("--today", default=datetime.date.today().isoformat())
+    ap.add_argument("--today", default=person.today().isoformat())
     a = ap.parse_args(argv)
     contacts, threads = load_contacts(a.contacts), load_threads(a.threads)
     try:
@@ -5230,6 +5722,12 @@ def role_hold(next_action) -> bool:
 _HOLD_SINCE = re.compile(r"\s*\(since (\d{4}-\d{2}-\d{2})(?:, after (\d+) from them)?\)")
 
 
+def hold_made(next_action) -> str:
+    """The day a hold was made ("... (since 2026-11-10)"), as YYYY-MM-DD, or ""."""
+    m = _HOLD_SINCE.search(str(next_action or ""))
+    return m.group(1) if m and _HOLD.match(str(next_action or "").strip()) else ""
+
+
 def _theirs(msgs) -> int:
     return sum(1 for r in msgs or () if said_something(r))
 
@@ -5239,7 +5737,7 @@ def hold_since(next_action, today=None, msgs=None) -> str:
     their messages it was made on, so a message of theirs after it is known to be news the
     hold never saw (hold_stands), even one sent the same day."""
     text = _HOLD_SINCE.sub("", " ".join(str(next_action or "").split()))
-    day = as_date(today) or datetime.date.today()
+    day = as_date(today) or person.today()
     seen = "" if msgs is None else ", after %d from them" % _theirs(msgs)
     return f"{text} (since {day.isoformat()}{seen})"
 
@@ -5655,7 +6153,7 @@ def _cli_follow_ups(argv) -> int:
     ap = argparse.ArgumentParser(prog="state.py follow-ups",
                                  description="Write each follow-up's due date onto its contact.")
     ap.add_argument("--write", action="store_true", help="write the dates (default: show them)")
-    ap.add_argument("--today", default=datetime.date.today().isoformat())
+    ap.add_argument("--today", default=person.today().isoformat())
     a = ap.parse_args(argv)
     contacts, threads = load_contacts(), load_threads()
     said = write_follow_ups(contacts, threads, a.today)
@@ -5676,7 +6174,7 @@ def _cli_gone_cold(argv) -> int:
     ap = argparse.ArgumentParser(prog="state.py gone-cold",
                                  description="Close conversations with no answer in months.")
     ap.add_argument("--dry", action="store_true", help="count them, change nothing")
-    ap.add_argument("--today", default=datetime.date.today().isoformat())
+    ap.add_argument("--today", default=person.today().isoformat())
     a = ap.parse_args(argv)
     contacts, threads = load_contacts(), load_threads()
     said = close_gone_cold(contacts, threads, a.today)
@@ -5712,6 +6210,45 @@ def _cli_same_person(argv) -> int:
     return 0
 
 
+def _cli_linkedin_limits(argv) -> int:
+    """`state.py linkedin-limits [--dry]`: the keys of LINKEDIN_LIMITS in profile/networking.py
+    the app reads nothing from (schema.ignored_limits), said in plain words. Nothing is taken
+    out here: the setting is the person's, and a test of theirs may read it (the review,
+    2026-11-11); the linkedin-limits-ignored question asks them first."""
+    import profile_set
+    try:
+        got = profile_set.get("networking.py", "LINKEDIN_LIMITS")
+    except Exception:  # noqa: BLE001  no profile, or no networking settings: nothing to say
+        got = None
+    dropped = schema.ignored_limits(got if isinstance(got, dict) else {})
+    if "--dry" in argv:
+        print(len(dropped))
+        return 0
+    if not dropped:
+        print("linkedin-limits: nothing to say")
+        return 0
+    print("linkedin-limits: " + " and ".join(dropped) + " in your LinkedIn settings "
+          + ("does" if len(dropped) == 1 else "do") + " nothing: the app keeps no cap on "
+          "connection requests, and LinkedIn says when its own is reached. Nothing was changed")
+    return 0
+
+
+def _cli_rekey(argv) -> int:
+    """`state.py rekey [--apply]`: the employer key column written again from each row's
+    employer name (company_key), where it differs."""
+    contacts = load_contacts()
+    moved = [c for c in contacts if str(c.get("company") or "").strip()
+             and str(c.get("company_key") or "").strip().lower() != company_key(c.get("company"))]
+    if "--apply" in argv and moved:
+        for c in moved:
+            c["company_key"] = company_key(c.get("company"))
+        save_contacts(contacts)
+    print(f"rekey: {len(moved)} employer key(s) " + ("written again from the name"
+                                                     if "--apply" in argv else
+                                                     "differ from the name; --apply"))
+    return 0
+
+
 def main(argv=None) -> int:
     argv = sys.argv[1:] if argv is None else list(argv)
     if argv[:1] == ["withdraw"]:
@@ -5738,6 +6275,16 @@ def main(argv=None) -> int:
         return _cli_unsend(argv[1:])
     if argv[:1] in (["reopen"], ["drop"]):
         return _cli_reopen_or_drop(argv[1:], argv[0])
+    if argv[:1] == ["date-page-drops"]:
+        import exclude
+        contacts = load_contacts()
+        said = date_page_drops(contacts, person.today(), exclude.set_aside_days())
+        if said and "--dry" not in argv:
+            save_contacts(contacts)
+        print(f"date-page-drops: {len(said)} note(s) set aside on the page given a day")
+        for line in said[:40]:
+            print("  " + line)
+        return 0
     if argv[:1] == ["dropped-rows"]:
         return _cli_dropped_rows(argv[1:])
     if argv[:1] == ["inmail-credits"]:
@@ -5748,7 +6295,7 @@ def main(argv=None) -> int:
         return _cli_same_person(argv[1:])
     if argv[:1] == ["advance-calls"]:
         moved = advance_past_calls(datetime.date.fromisoformat(argv[1]) if argv[1:]
-                                   else datetime.date.today())
+                                   else person.today())
         print(f"advance-calls: {len(moved)} call(s) over, moved on")
         return 0
     if argv[:1] == ["no-reply"]:
@@ -5757,6 +6304,25 @@ def main(argv=None) -> int:
         return _cli_follow_ups(argv[1:])
     if argv[:1] == ["gone-cold"]:
         return _cli_gone_cold(argv[1:])
+    if argv[:1] == ["recount"]:
+        return _cli_recount(argv[1:])
+    if argv[:1] == ["linkedin-limits"]:
+        return _cli_linkedin_limits(argv[1:])
+    if argv[:1] == ["rekey"]:
+        return _cli_rekey(argv[1:])
+    if argv[:1] == ["stop-lines"]:
+        contacts = load_contacts()
+        said = undate_stop_lines(contacts)
+        if "--dry" in argv:
+            print(len(said))
+            return 0
+        if "--apply" in argv and said:
+            save_contacts(contacts)
+        print(f"stop-lines: {len(said)} row(s) at the limit " + ("undated" if "--apply" in argv
+                                                                else "to undate; --apply"))
+        for line in said[:40]:
+            print("  " + line)
+        return 0
     try:  # a chat that carried on into a new day has not checked the app since
         import sync_app
         sync_app.nudge()
@@ -5766,7 +6332,9 @@ def main(argv=None) -> int:
     ap.add_argument("--contacts", default=CONTACTS_CSV)
     ap.add_argument("--threads", default=THREADS_CSV)
     ap.add_argument("--tracker", default=TRACKER_CSV)
-    ap.add_argument("--today", default=datetime.date.today().isoformat())
+    ap.add_argument("--today", default=person.today().isoformat())
+    ap.add_argument("--all", action="store_true",
+                    help="list every item owed, the ones owed over OLD_OWED_DAYS days too")
     a = ap.parse_args(argv)
 
     contacts = load_contacts(a.contacts)
@@ -5776,12 +6344,28 @@ def main(argv=None) -> int:
     items = owed(contacts, threads, a.today)
     tracked = load_tracker(a.tracker) if os.path.exists(a.tracker) else None
     resumes = {r["contact_id"]: r for r in resumes_owed(contacts, threads, tracked)}
-    print("OWED" if items or resumes else "OWED: nothing due")
+    if tracked is not None:
+        # Employer names that may be one, said once at the start: at the foot of a long dump
+        # nobody reached them (the audit, 2026-11-10).
+        import company_key as _ck
+        misses = _ck.near_misses({c.get("company") for c in contacts if c.get("company")},
+                                 {r.get("company") for r in tracked if r.get("company")})
+        if misses:
+            print(f"JOINS  {len(misses)} contact employer(s) may be an application's under "
+                  "another name; if so, add the pair to COMPANY_ALIASES in profile/employers.py")
+            for contact_side, tracker_side in misses[:15]:
+                print(f"  {contact_side}  /  {tracker_side}")
+            print()
+    # What is owed now first, the ones owed over OLD_OWED_DAYS in one line (--all lists
+    # them): 141 lines of old replies stood above the four current ones (the audit, 2026-11-10).
+    old = [i for i in items if i.get("old")] if not a.all else []
+    items = [i for i in items if not i.get("old")] if not a.all else items
+    print("OWED" if items or resumes or old else "OWED: nothing due")
     for i in items:
         where = f" ({i['company']})" if i["company"] else ""
         owed_cv = resumes.pop(i["contact_id"], None)
         print(f"  [{i['kind']:5}] {i['name'] or i['contact_id']}{where} "
-              f"{i['business_days']}bd since {i['since'] or 'unknown'}"
+              f"{i['business_days']} working days since {i['since'] or 'unknown'}"
               + {"request_pending": "; not accepted, so nothing can be sent: withdraw it, "
                                     f"then record it: state.py withdraw {i['contact_id']}",
                  "first_message": "; accepted, nothing said yet: a first message, not a nudge",
@@ -5791,6 +6375,9 @@ def main(argv=None) -> int:
               + (f"; {resume_owed_line(owed_cv)}" if owed_cv else ""))
     for r in resumes.values():
         print(f"  [{noun()}] {resume_owed_line(r)}")
+    if old:
+        print(f"  and {len(old)} more owed over {OLD_OWED_DAYS} days, threads that have ended: "
+              "the due list counts them rather than listing them (--all lists them here)")
     import zipfile
     import export
     if any(i["kind"] == "request_pending" for i in items):
@@ -5819,14 +6406,6 @@ def main(argv=None) -> int:
                 for s in link.get("resumes_sent") or [])
             print(f"  {link['name'] or link['contact_id']} -> {', '.join(link['roles'])}"
                   + (f"; {sent_line}" if sent_line else ""))
-        import company_key
-        misses = company_key.near_misses({c.get("company") for c in contacts if c.get("company")},
-                                         {r.get("company") for r in tracked if r.get("company")})
-        if misses:
-            print(f"\nJOINS  {len(misses)} contact employer(s) may be an application's under "
-                  "another name; if so, add the pair to COMPANY_ALIASES in profile/employers.py")
-            for contact_side, tracker_side in misses[:15]:
-                print(f"  {contact_side}  /  {tracker_side}")
 
     # `reconcile` already separates a contradiction from a note, and a printer
     # that threw that away would put every finding in one flat list, most of them

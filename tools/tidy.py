@@ -32,7 +32,8 @@ attached (routines.own_chat_calls, 2026-11-10), and is never carried from helper
 brief in a chat not made for it (the chat that answers the page, an old helper, a fresh chat
 each run) moves into one, and so does one whose own chat is gone, archived or approved
 computer access: a new chat, a task bound to it on the same days and time, the old task
-turned off (kept, never deleted), and then the old chat archived where it is the app's. The
+turned off (kept a week, then deleted by a later tidy-up: routines.cleanup), and then the old
+chat archived where it is the app's. The
 shortlist moves into the chat that answers the page. A brief in the older ops chat moves only
 once that chat is gone (not listed, and the task now names the empty chat it woke instead).
 Not while the brief is off or resting, never for a routine the person made (each run its
@@ -43,10 +44,11 @@ remembered (profile/tidy.json `runs`) until it is old enough to tidy.
     python3 tools/tidy.py due                        exit 0 when today's tidy-up is due
     python3 tools/tidy.py plan --dump <dir> --sessions <file>... --triggers <file>...
                                [--details <file>...] [--chat <id>] [--today YYYY-MM-DD]
-    python3 tools/tidy.py done [<session id>...] [--titles <json>]
+    python3 tools/tidy.py done [<session id>...] [--titles <json>] [--dump <dir>]
     python3 tools/tidy.py close <session id> --work <id> --dump <dir> --details <file>
                                [--now <time>]
     python3 tools/tidy.py closed <session id>...     once archive_session has taken it
+    python3 tools/tidy.py retire --dump <dir> --stdin  the helper just taken over from, from one get_session
     python3 tools/tidy.py undo                       the calls that bring them all back
 
 `--sessions` takes what list_sessions returned (mine: true), every page; `--triggers` what
@@ -201,11 +203,20 @@ def finished_jobs(db: dict, skip: str = "") -> dict:
     held: dict = {}
     for doc in (db.get("work") or {}).values():
         d = doc.get("data") or {}
-        who = str(d.get("claimed_by") or "")
+        # The job's own chat (`run_by`, page_db.run_by): it works under the id of the chat that
+        # started it, so its job was counted to that chat (the second audit, C2).
+        who = str(d.get("run_by") or d.get("claimed_by") or "")
         if not who.startswith("session_") or who == skip:
             continue
-        ended = str(d.get("status") or "") in page_db.FINISHED
+        status = str(d.get("status") or "")
+        ended = status in page_db.FINISHED
         at = str(d.get("finished_at") or "") if ended else ""
+        if status in ("needs_you", "queued"):
+            # Its chat stopped on a question to the person (or the answer put it back in the
+            # queue): that chat is done with it, and a fresh one takes it up. Counted as holding,
+            # a job chat that asked was never finished (the review of 2026-11-11, item 3).
+            ended = True
+            at = str(d.get("answered_at") or d.get("asked_you_at") or d.get("claimed_at") or "")
         was = held.get(who, "")
         if not ended or was is None:
             held[who] = None
@@ -261,9 +272,25 @@ def due(today: str = "", db: dict | None = None, skip: str = "",
         with open(path, encoding="utf-8") as fh:
             got = json.load(fh) or {}
     except (OSError, ValueError, AttributeError):
-        return True
+        got = {}
+    if not isinstance(got, dict):
+        got = {}
+    # The day's tidy as the page says it (page_mark, kept on its record of who answers it):
+    # a fresh container's own git folder holds no mark, and ran the whole tidy again though
+    # another chat had tidied that day (the second audit, 2026-11-10, D5).
+    on_page = (listener or {}).get("tidied") if isinstance(listener, dict) else None
+    if isinstance(on_page, dict) and on_page.get("on") == today and \
+            on_page.get("sweep") == SWEEP and (got.get("checked") != today
+                                                or str(on_page.get("at") or "") > str(got.get("at") or "")):
+        got = {"checked": today, "at": on_page.get("at"), "sweep": SWEEP}
     if got.get("checked") != today or got.get("sweep") != SWEEP:
-        return True
+        # The day's mark on the page (meta/tidy): another chat, in another container, may have
+        # run it today; kept only in this git folder, every fresh container ran it again
+        # (second audit D5, E4).
+        mark = meta_mark(db)
+        if mark.get("checked") != today or mark.get("sweep") != SWEEP:
+            return True
+        got = mark
     if db is None:
         return False
     import app_model
@@ -276,6 +303,10 @@ def due(today: str = "", db: dict | None = None, skip: str = "",
     # its work not on master yet: asked again at a check-in half an hour on.
     mine = listener or {}
     since = app_model.parse_time(mine.get("since"))
+    asked = app_model.parse_time(got.get("retire_at")) if "retire_at" in got else \
+        app_model.parse_time(_checked().get("retire_at"))
+    if asked is not None and asked > last:
+        last = asked              # retire asked about it then: half an hour on, again
     if retiring(mine, now) and since is not None and (
             since > last or (now is not None and (now - last).total_seconds() >= RETIRE_AGAIN_S)):
         return True
@@ -286,15 +317,47 @@ def due(today: str = "", db: dict | None = None, skip: str = "",
     return False
 
 
+PAGE_MARK = "tidy"          # meta/tidy on the page: the day the tidy-up last ran, any chat
+
+
+def meta_mark(db: dict | None) -> dict:
+    """The day's tidy-up mark the page holds (meta/tidy), or {}. This copy's own, as the page's
+    record of who answers it carries it, is `page_mark`."""
+    rec = ((db or {}).get("meta") or {}).get(PAGE_MARK) or {}
+    data = rec.get("data") if isinstance(rec, dict) else None
+    return data if isinstance(data, dict) else {}
+
+
+def page_mark_batch(dump: str, today: str, now: str = "") -> list[str]:
+    """The batch that keeps the day's mark on the page (meta/tidy), pinned to the version read."""
+    import page_db
+    at = now or dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    try:
+        db = page_db.load(dump)
+    except Exception:  # noqa: BLE001  nothing read: the mark is made fresh
+        db = {}
+    w = page_db.Writes(os.path.join(dump, "tidy-done"), db)
+    w.add("set", "meta", PAGE_MARK, {"checked": today, "at": at, "sweep": SWEEP})
+    return w.save("tidy-done")
+
+
 def _mark_checked(today: str, now: str = "") -> None:
     path = _checked_path()
     if not path:
         return
     at = now or dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    keep = {k: v for k, v in _checked().items() if k == "recheck"}
+    keep = {k: v for k, v in _checked().items() if k in ("recheck", "completed", "retire_at")}
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
         json.dump({"checked": today, "at": at, "sweep": SWEEP, **keep}, fh)
         fh.write("\n")
+
+
+def page_mark() -> dict:
+    """This copy's own last tidy, as the page keeps it ({on, at, sweep}), or {} when none."""
+    got = _checked()
+    if not got.get("checked"):
+        return {}
+    return {"on": got["checked"], "at": got.get("at"), "sweep": got.get("sweep")}
 
 
 def _checked() -> dict:
@@ -305,6 +368,32 @@ def _checked() -> dict:
         return got if isinstance(got, dict) else {}
     except (OSError, ValueError, TypeError):
         return {}
+
+
+COMPLETED_EVERY_DAYS = 7     # the tasks that have fired, asked for once a week
+
+
+def completed_due(today: str, last: str | None = None) -> bool:
+    """Is it the week's sweep that also asks list_triggers for the tasks that have fired
+    (include_completed)? Every day added every fired one-off to the listing typed back by hand
+    (review of fix/helpers, item 1)."""
+    last = _checked().get("completed", "") if last is None else last
+    try:
+        return not last or (dt.date.fromisoformat(today) - dt.date.fromisoformat(last)).days \
+            >= COMPLETED_EVERY_DAYS
+    except ValueError:
+        return True
+
+
+def mark_completed(today: str) -> None:
+    path = _checked_path()
+    if not path:
+        return
+    got = _checked()
+    got["completed"] = today
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
+        json.dump(got, fh)
+        fh.write("\n")
 
 
 def recheck_due(now: dt.datetime) -> bool:
@@ -337,11 +426,14 @@ def _record_path() -> str:
 # own card says it was lost, with Try again (page_db.lose), once, and the chat is put away.
 SAVE_WAIT_S = 30 * 60
 SAVE_ANSWER_S = 60
+# One message to the job chat, the only way to reach a chat that has finished; nothing comes
+# back by message: the next tidy-up sees the work on GitHub, or says it was lost. A message
+# between chats asks the person's approval each time, and the answer that was asked for here
+# made two (the second audit of 2026-11-10, C3).
 SAVE_ASK = ("[app] Save {work}: your work for it is not on GitHub yet, so the page cannot show "
             "it. Run python3 tools/land.py --keep (it saves your work to GitHub in a minute, "
-            "with no check), then tell the chat that answers the page in one message: "
-            "send_message, session_id {listener}, message \"[app] Finished {work}, not landed, "
-            "in chat <your own id>: saved.\" Do nothing else, and never write to the person.")
+            "with no check), and do nothing else: never message another chat, and never write "
+            "to the person. The page's helper finds it saved by itself.")
 
 
 def saves() -> dict:
@@ -385,16 +477,33 @@ def unsaved(sid: str, now: dt.datetime, record: dict, answered: bool = False) ->
     return "lost" if age >= SAVE_WAIT_S or (answered and age >= SAVE_ANSWER_S) else "wait"
 
 
+# Work done on the person's computer: its save is pushed from there and brought to master by
+# the computer starter's land.py, so a branch GitHub does not hold yet is never its work lost.
+# Said lost, a read finished on the Mac became "results lost, Try again" while the work was
+# still on the Mac (the builder audit, 2026-11-10, CC-1).
+ON_COMPUTER_KEPT = ("its work was saved on the person's computer; the chat that starts chats "
+                    "there brings it to master")
+
+
+def on_computer(d: dict) -> bool:
+    """Was this work item done on the person's computer?"""
+    return str(d.get("claimed_as") or "") == "computer" or isinstance(
+        d.get("computer_session"), dict) and bool(d["computer_session"].get("id"))
+
+
 def job_items(db: dict) -> dict:
-    """{chat id: {"all": [work ids], "done": [the ids done]}}, by the chat each was claimed by."""
+    """{chat id: {"all": [work ids], "done": [the ids done], "computer": bool}}, by the chat
+    that ran each: its own (`run_by`), else the one it was claimed by; `computer` when any was
+    done on the person's computer."""
     out: dict = {}
     for wid, doc in sorted((db.get("work") or {}).items()):
         d = doc.get("data") or {}
-        who = str(d.get("claimed_by") or "")
+        who = str(d.get("run_by") or d.get("claimed_by") or "")
         if not who.startswith("session_"):
             continue
-        got = out.setdefault(who, {"all": [], "done": []})
+        got = out.setdefault(who, {"all": [], "done": [], "computer": False})
         got["all"].append(wid)
+        got["computer"] = got["computer"] or on_computer(d)
         if str(d.get("status") or "") == "done":
             got["done"].append(wid)
     return out
@@ -645,6 +754,20 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
     import routines
     now = now or dt.datetime.combine(today, dt.time(12), tzinfo=dt.timezone.utc)
     live_ids = {listener.get("chat") or "", this_chat} - {""}
+    # The helper this chat just took the page over from is judged whatever list was passed: a
+    # list cut down by hand lacked it, and the tidy-up said "nothing to tidy" with it still open
+    # (H-1). Not in the list: read with get_session, then judged from that record.
+    ret = retiring(listener, now)
+    pending_ask = []
+    if ret and ret not in {c.get("id") for c in chats} and ret not in done_before:
+        d = info.get(ret)
+        if d is None:
+            pending_ask.append(ret)
+        else:
+            chats = list(chats) + [{k: v for k, v in dict(d, id=ret).items()
+                                    if k in ("id", "title", "status", "session_status",
+                                             "status_bucket", "updated_at", "created_at",
+                                             "last_activity_at")}]
     # The chat the page was taken from is put away only where the app started it: one the
     # person writes in, whatever its title, is theirs (the stranger audit, X-4).
     known = ({listener.get("took_from") or ""} - {""}) if listener.get("took_from_helper") else set()
@@ -667,7 +790,8 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
     ops = str((reg.get("ops_session") or {}).get("id") or "")
     brief = next((r for r in reg.get("routines") or [] if routines._is_brief(r)), None) or {}
     brief_chat = str((brief.get("chat") or {}).get("session_id") or "")
-    out: dict = {"ask": [], "archive": [], "keep": [], "brief": [], "save": [], "lost": []}
+    out: dict = {"ask": pending_ask, "archive": [], "keep": [], "brief": [], "save": [],
+                 "lost": [], "retiring": ret, "gone": []}
 
     # The brief runs in a chat of its own, made with create_session and the copy attached
     # (routines.own_chat_calls; the maintainer, 2026-11-10). Bound to the chat that answers the
@@ -700,9 +824,14 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
     # still firing in it has not moved, whatever its title (the maintainer's copy, 2026-11-05).
     handed = {str(listener.get("handed_by") or "")} - {"", helper}
 
+    def gone(sid: str) -> bool:
+        """Gone by get_session's word, never by a listing that lacks it: a listing cut down by
+        hand moved the brief to a new chat (second audit B1)."""
+        return sid not in listed_ids and bool((info.get(sid) or {}).get("gone"))
+
     def retired(sid: str) -> bool:
         return bool(sid) and sid != helper and (
-            sid not in listed_ids or sid in helped or sid in old_helpers or sid in handed
+            gone(sid) or sid in helped or sid in old_helpers or sid in handed
             or bool(re.search(r"\bhelper\b", titles.get(sid, ""), re.I)))
 
     def old_helper(sid: str) -> bool:
@@ -732,6 +861,31 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
             and not reg.get("pause") and tid and brief.get("cron")):
         trusted = routines.trusted_chat()
         why = routines.needs_own_chat(reg, brief, live_brief, trusted)
+        where = fired_in or home
+        if why and where and where not in listed_ids and where not in info:
+            out["ask"].append(where)                 # read before it is judged gone
+            why = ""
+        if why and not routines.owns_chat(brief) and fired_in \
+                and fired_in not in (helper, ops, trusted) and not retired(fired_in):
+            # Its task already fires in a chat made for it (create_session named it so), which
+            # the registry never recorded: that chat is recorded as its own, never a new one
+            # made every day (audit BT-1; second audit B1).
+            d = info.get(fired_in) or {}
+            name = titles.get(fired_in) or str(d.get("title") or "")
+            # Any "Job search: ... brief ..." title, not only the exact one (review of
+            # fix/helpers, item 19: "Job search: brief (daily)" was given yet another chat).
+            made_for_it = bool(routines._BRIEF_TITLE.match(name.strip()))
+            if made_for_it and fired_in not in info:
+                out["ask"].append(fired_in)          # its copy is read before it is recorded
+                why = ""
+            elif made_for_it and routines.adoptable(dict(d, title=name), repo) and \
+                    "archived" not in _status(
+                        next((c for c in chats if c.get("id") == fired_in), None), d):
+                out["brief"] = [{"run": f"python3 tools/routines.py record --session {fired_in} "
+                                        f"--trigger {tid} --cron \"{brief.get('cron')}\" --own-chat",
+                                 "why": "the chat made for the brief, where its task already "
+                                        "fires, is recorded as its own"}]
+                why = ""
         if why and not routines.owns_chat(brief) and setup != "routines_screen" \
                 and not ((fired_in or home) and (retired(fired_in or home)
                                                  or (fired_in or home) == trusted)):
@@ -742,7 +896,9 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
             why = ""
         if not why and routines.owns_chat(brief) and home:
             chat_rec = next((c for c in chats if c.get("id") == home), None)
-            if chat_rec is None:
+            if chat_rec is None and home not in info:
+                out["ask"].append(home)              # missing from the listing: asked, not gone
+            elif gone(home):
                 why = "its own chat is gone"
             elif "archived" in _status(chat_rec, info.get(home)):
                 why = "its own chat was archived"
@@ -851,12 +1007,34 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
             continue
         d = info.get(sid)
         status = _status(s, d)
+        if "archived" in status:
+            # Put away already (by another chat, or by itself): archiving it again hung a chat
+            # for nearly two minutes (H-8). Recorded as put away, so the tidy-up rests and Undo
+            # knows it: only the tidy-up's own archives were (second audit A2, A5).
+            keep("it is archived already")
+            # Only this copy's own: the helper taken over from, the page's job chats and
+            # helpers, or a chat of this copy used within the week. Another copy's chats and ones
+            # archived months ago were recorded, and Undo would bring them back (review of
+            # fix/helpers, item 3).
+            ours = sid == ret or sid in jobs or sid in helped or (
+                d is not None and _repo_of(d) == repo.lower()
+                and _days_since(_last_used(s, d), today) <= 7)
+            if ours:
+                out["gone"].append({"id": sid,
+                                    "title": title or str((d or {}).get("title") or "")})
+            continue
         if _running(status):
             keep("it is running")
             continue
         last = _last_used(s, d)
         quiet = _days_since(last, today)
         waits = "requires_action" in status or "blocked" in status
+        if sid == ret and _ago_s(last, now) < RETIRE_QUIET_S:
+            # The helper just taken over from owns its own archive (decided, review of
+            # fix/helpers item 2): only it can see whether its work reached GitHub (app.py
+            # retired). Put away here only after a day of quiet.
+            keep("it puts itself away once its work is saved")
+            continue
         if sid in old_helpers and waits:
             keep("it is waiting on the person")
             continue
@@ -898,6 +1076,9 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
         # on the person's computer). Merged branches stay on GitHub (land.py never deletes
         # them), so lately it is kept; one quiet for days is put away as before.
         local = [b for b in own if on_github is not None and b not in on_github]
+        if local and job_items is not None and (job_items.get(sid) or {}).get("computer"):
+            keep(ON_COMPUTER_KEPT)
+            continue
         if local and sid in jobs and job_items is not None:
             # Finished, not landed, nothing pushed: asked once, then said (unsaved).
             items = job_items.get(sid) or {}
@@ -958,8 +1139,16 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
     # Every other task of the app's that is on gets the same line (the job round, a welcome-back
     # brief), unless it is moving or the day's listing is still being read (X-43).
     skip = {brief.get("trigger_id")} | ({rnd.get("trigger_id")} if out["moves"] else set())
+    # Old tasks that can no longer run: turned-off briefs another replaced, a one-off long past
+    # its time, a check-in bound to the chat that approved computer access (BT-9, H-5). Never
+    # mended as well: a test check-in carries the brief's prompt.
+    out["clean"] = [] if out["ask"] else [
+        c for c in routines.cleanup(reg, triggers, now, routines.trusted_chat(), repo=repo)
+        if c["args"]["trigger_id"] not in moving | skip]
+    cleaned = {c["args"]["trigger_id"] for c in out["clean"]}
     out["mend"] = [] if out["ask"] else [
-        c for c in routines.mend(triggers, repo) if c["args"]["trigger_id"] not in skip]
+        c for c in routines.mend(triggers, repo, named=routines.named_ids(reg))
+        if c["args"]["trigger_id"] not in skip | cleaned]
     return out
 
 
@@ -1172,9 +1361,16 @@ def run_plan(a) -> int:
     if got["ask"]:
         print("tidy: read these chats first, each with get_session, and run this again with "
               "what each returned under \"details\" in the same standard input (or --details "
-              "<each file>): " + " ".join(got["ask"]))
+              "<each file>); for one get_session cannot find, {\"id\": \"<its id>\", \"gone\": "
+              "true}: " + " ".join(got["ask"]))
         return 0
     at = now or dt.datetime.combine(today, dt.time(12), tzinfo=dt.timezone.utc)
+    # The day's mark goes onto the page too, so a chat in a fresh container skips it (E4).
+    mark = f" --dump \"{a.dump}\", and send the batch it prints" if a.dump else ""
+    if got.get("gone"):
+        # Archived elsewhere (by itself, another chat or by hand): recorded here, said to nobody.
+        _record([c["id"] for c in got["gone"]], {c["id"]: c["title"] for c in got["gone"]},
+                today.isoformat())
     import app_model
     for c in got.get("save") or []:
         ask = SAVE_ASK.format(work=c["work"] or "its job",
@@ -1227,6 +1423,11 @@ def run_plan(a) -> int:
         print(f"mend {i}: {c['tool']} {json.dumps(c['args'], ensure_ascii=False)} ({c['why']})")
     if got.get("mend"):
         print("mend: make these, then python3 tools/routines.py mended; say nothing about it")
+    for i, c in enumerate(got.get("clean") or [], 1):
+        print(f"clean {i}: {c['tool']} {json.dumps(c['args'], ensure_ascii=False)} ({c['why']})")
+    if got.get("clean"):
+        print("clean: make these, asking nobody and saying nothing about it; one refused is left "
+              "for the next tidy-up")
     if got.get("upkeep"):
         print("upkeep: make these in order and stop at the first that fails; say nothing about it")
     if len(got["brief"]) > 1:
@@ -1266,6 +1467,7 @@ def run_plan(a) -> int:
         kept = _plan_titles(titles)
         more = "" if kept else f" --titles '{json.dumps(titles, ensure_ascii=False)}'"
         print(f"then: archive_session each, and python3 tools/tidy.py done <each one archived>"
+              f"{mark}"
               f"{more} (all of them: {ids}); commit it")
         # One refused (still finishing its last turn, most often) is tried again by a check-in,
         # never handed to the person: the live helper told them "you can archive it yourself"
@@ -1274,12 +1476,21 @@ def run_plan(a) -> int:
               "never asked of the person; the next tidy-up tries again (it is due again by "
               "itself, at the page's next check-in or the brief's next run). Set no reminder "
               "or check-in for it")
-    elif got["brief"] or got.get("moves") or got.get("upkeep") or got.get("mend") or rings:
+    elif got["brief"] or got.get("moves") or got.get("upkeep") or got.get("mend") \
+            or got.get("clean") or rings:
         # Never "nothing to tidy" over calls still to make: the helper took it as the brief
         # already moved (the maintainer's copy, 2026-11-05).
-        print("tidy: no chat to archive; make the calls above, then python3 tools/tidy.py done")
+        print("tidy: no chat to archive; make the calls above, then python3 tools/tidy.py done"
+              + mark)
     else:
-        print("tidy: nothing to tidy. python3 tools/tidy.py done")
+        print("tidy: nothing to tidy. python3 tools/tidy.py done" + mark)
+    # The helper this chat took over from, kept only for now: said, so a run never reads as
+    # "nothing to tidy" with it still open (H-1). The tidy-up is due again by itself (due()).
+    for k in got["keep"]:
+        if k["id"] == got.get("retiring"):
+            print(f"tidy: the helper this chat took the page from, {k['id']}, is kept for now "
+                  f"({k['why']}); the tidy-up is due again by itself and puts it away then. "
+                  "Say nothing about it.")
     stamp = now or dt.datetime.combine(today, dt.time(12), tzinfo=dt.timezone.utc)
     if got.get("recheck") and recheck_due(stamp):
         # No send_later: a reminder this chat sets for itself never runs once it has approved
@@ -1308,7 +1519,7 @@ def _mark_restored(ids: list[str]) -> None:
         fh.write("\n")
 
 
-def _record(ids: list[str], titles: dict, today: str) -> None:
+def _record(ids: list[str], titles: dict, today: str, gone: bool = False) -> None:
     """Write the archived chats into profile/tidy.json, each with its real title: the one
     given, else the one `plan` or `close` kept. One brought back by mistake before is put
     away again under its old entry, its title filled in."""
@@ -1325,7 +1536,7 @@ def _record(ids: list[str], titles: dict, today: str) -> None:
         title = str(titles.get(i) or planned.get(i) or "")
         row = by_id.get(i)
         if row is None:
-            rows.append({"id": i, "title": title, "on": today})
+            rows.append({"id": i, "title": title, "on": today, **({"gone": True} if gone else {})})
             by_id[i] = rows[-1]
             continue
         if row.get("restored"):
@@ -1354,7 +1565,7 @@ def run_done(ids: list[str], titles: dict, today: str) -> str:
 def close(sid: str, work: str, db: dict, info: dict, listener: dict, this_chat: str,
           repo: str, branches: set[str] | None,
           github: set[str] | None = None, now: dt.datetime | None = None,
-          record: dict | None = None) -> tuple[str, str]:
+          record: dict | None = None, fresh: bool = False) -> tuple[str, str]:
     """A big job's chat that reported back: ("archive", its title) when it is one of the app's
     own job chats on this copy, its job (and every item claimed with it) has ended and its
     work is on master; else ("keep", why). `info` is get_session's record of that chat, so the
@@ -1370,17 +1581,39 @@ def close(sid: str, work: str, db: dict, info: dict, listener: dict, this_chat: 
         return "keep", "get_session has not said what that chat is"
     if sid in {listener.get("chat") or "", this_chat} - {""}:
         return "keep", "it answers the page"
+    if "archived" in _status(None, d):
+        # Put away already: never archived again, which hung a chat for 1m 45s (H-8).
+        return "archived", title
     if not _is_apps(title):
         return "keep", "it is not one of the app's own chats"
     where = _repo_of(d)
     if not where or where != repo.lower():
         return "keep", "it works on another copy" if where else "its copy is not known"
+    # A chat still running, or holding any other item it claimed that has not ended, is kept,
+    # whatever --work says: a wrong id with --fresh archived a chat at work (review of
+    # fix/helpers, item 4).
+    # One waiting on an approval or a question is at work too, as `stale` reads it.
+    status = _status(None, d)
+    if _running(status) or "requires_action" in status or "blocked" in status:
+        return "keep", "it is running"
+    # The chat that ran it (`run_by`) as well as its claim, as finished_jobs reads both: a job's
+    # chat runs its jobs under the id of the chat that started it, so one that reported a
+    # first job while blocked part way through a second was put away at work (the engine
+    # review, 2026-11-11).
+    holding = sorted(k for k, v in (db.get("work") or {}).items()
+                     if str((v.get("data") or {}).get("run_by")
+                            or (v.get("data") or {}).get("claimed_by") or "") == sid
+                     and str((v.get("data") or {}).get("status") or "") not in page_db.FINISHED)
+    if holding:
+        return "keep", "it still holds work (" + ", ".join(holding) + ")"
     items = {k: (v.get("data") or {}) for k, v in (db.get("work") or {}).items()
              if k == work or str((v.get("data") or {}).get("with") or "") == work}
-    if work not in items:
+    if work not in items and not fresh:
         # Never judged from an old read: a folder that holds only what changed since an earlier
         # read lacks a job finished before it, and a finished chat stayed in the sidebar for a
-        # day (the maintainer, 2026-11-10). The page itself is read for it, then judged again.
+        # day (the maintainer, 2026-11-10). The page itself is read for it, then judged again;
+        # a fresh read (`fresh`) that still lacks it means the page holds it no more: its job
+        # has ended, never "read" again for good (audit HC-1).
         return "read", f"this folder does not hold the work item {work}"
     going = [k for k, v in items.items() if str(v.get("status") or "") not in page_db.FINISHED]
     if going:
@@ -1392,6 +1625,8 @@ def close(sid: str, work: str, db: dict, info: dict, listener: dict, this_chat: 
     if left:
         return "keep", "its work is not on master yet (" + ", ".join(left) + ")"
     local = [b for b in own if github is not None and b not in github]
+    if local and any(on_computer(v) for v in items.values()):
+        return "keep", ON_COMPUTER_KEPT
     if local and now is not None:
         # It reported, finished, with its work on no branch GitHub holds: asked once to save
         # it, and once it has answered with the work still not there, said lost (unsaved).
@@ -1404,6 +1639,90 @@ def close(sid: str, work: str, db: dict, info: dict, listener: dict, this_chat: 
     if local:
         return "keep", "its work is not on GitHub yet (" + ", ".join(local) + ")"
     return "archive", title
+
+
+def retire(old: str, d: dict | None, repo: str, branches: set[str] | None,
+           now: dt.datetime) -> tuple[str, str]:
+    """The helper this chat took the page over from, judged from one get_session of it (`d`),
+    never a listing typed back by hand (H-4; second audit A6, R3): ("read", why) without it,
+    ("gone", title) where get_session cannot find it, ("archived", title) when put away
+    already, ("archive", title) only after a day of quiet, else ("keep", why). The old helper
+    owns its own archive (decided, review of fix/helpers item 2): only it can see whether its
+    work reached GitHub (app.py retired), and this chat archived one whose save GitHub never
+    held, its work lost with its container."""
+    if d is None:
+        return "read", "its state is not known here yet"
+    title = str(d.get("title") or "")
+    if d.get("gone"):
+        return "gone", title
+    status = _status(None, d)
+    if "archived" in status:
+        return "archived", title
+    if _running(status) or "requires_action" in status or "blocked" in status:
+        return "keep", "it is still at work"
+    where = _repo_of(d)
+    if where and where != repo.lower():
+        return "keep", "it works on another copy"
+    if _ago_s(_last_used({}, d), now) < RETIRE_QUIET_S:
+        return "keep", "it puts itself away once its work is saved"
+    return "archive", title
+
+
+RETIRE_QUIET_S = 24 * 3600     # an old helper quiet this long is put away by the new one
+
+
+def retire_due(now: dt.datetime) -> bool:
+    """Was the helper taken over from asked about over RETIRE_AGAIN_S ago (or never)?"""
+    import app_model
+    last = app_model.parse_time(_checked().get("retire_at"))
+    return last is None or (now - last).total_seconds() >= RETIRE_AGAIN_S - 60
+
+
+def mark_retire(now: dt.datetime) -> None:
+    path = _checked_path()
+    if not path:
+        return
+    got = _checked()
+    got["retire_at"] = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
+        json.dump(got, fh)
+        fh.write("\n")
+
+
+def run_retire(a) -> int:
+    import app_model
+    now = (app_model.parse_time(a.now) if a.now else None) or dt.datetime.now(dt.timezone.utc)
+    listener = _listener(a.dump)
+    old = retiring(listener, now)
+    if not old:
+        print("retire: no helper is waiting to be put away. Say nothing about it.")
+        return 0
+    got = details(_pages(a.details) + _as_pages(_given(a).get("details")))
+    what, said = retire(old, got.get(old), _repo(), unmerged(), now)
+    if what != "read":
+        mark_retire(now)          # asked about again only RETIRE_AGAIN_S on (due)
+    if what == "read":
+        print(f"retire: get_session (session_id {old}), then python3 tools/tidy.py retire "
+              f"--dump \"{a.dump}\" --stdin with {{\"details\": <what get_session returned>}} in "
+              "a quoted heredoc (for a chat it cannot find, {\"details\": {\"id\": "
+              f"\"{old}\", \"gone\": true}}}}). Say nothing about it.")
+        return 0
+    if what in ("archived", "gone"):
+        # Gone (deleted): recorded as such, so the tidy-up rests and Undo never tries it.
+        _record([old], {old: said}, now.date().isoformat(), gone=(what == "gone"))
+        print(f"retire: {old} is put away already, and recorded. Nothing more; say nothing "
+              "about it.")
+        return 0
+    if what == "keep":
+        print(f"retire: the helper this chat took the page from, {old}, is kept for now "
+              f"({said}); the next check-in tries again; archive nothing by hand, and say "
+              "nothing about it.")
+        return 0
+    _plan_titles({old: said})
+    print(f"retire: archive_session {json.dumps({'session_id': old})}, then python3 "
+          f"tools/tidy.py closed {old}; commit it with this turn's work. Refused: leave it, the "
+          "next check-in tries again. Say nothing about it.")
+    return 0
 
 
 def run_close(a) -> int:
@@ -1420,11 +1739,13 @@ def run_close(a) -> int:
     me = app_listen.this_chat(a.chat)
     record = saves()
     what, said = close(a.id, a.work, db, details(_pages(a.details)), listener, me, _repo(),
-                       unmerged(), on_github(), now=now, record=record)
+                       unmerged(), on_github(), now=now, record=record,
+                       fresh=bool(getattr(a, "fresh", False)))
     if what == "save":
         print(f"save {a.id}: {said}, and its job has finished: it is asked once to save it. "
               f"send_message {json.dumps({'session_id': a.id, 'message': SAVE_ASK.format(work=a.work, listener=listener.get('chat') or me or '<your chat id>')}, ensure_ascii=False)}. "
-              "Keep the chat; its answer comes back here. Say nothing about it.")
+              "Keep the chat; nothing comes back by message: the next tidy-up (tidy.py plan) "
+              "finds the work saved, or says it was lost. Say nothing about it.")
         _note_save(a.id, work=a.work, asked=app_model.stamp(now))
         return 0
     if what == "lost":
@@ -1448,7 +1769,11 @@ def run_close(a) -> int:
             url = "<the page's url>"
         print(f"read {a.id}: {said}. Read the page's work as it is now: ArtifactData query, url "
               f"{url}, collection work, out_dir {a.dump}, limit 1000; then run this same "
-              "command again. Say nothing about it.")
+              "command again with --fresh. Say nothing about it.")
+        return 0
+    if what == "archived":
+        print(f"archived {a.id}: it is put away already, so nothing to archive: python3 "
+              f"tools/tidy.py closed {a.id}. Say nothing about it.")
         return 0
     if what != "archive":
         print(f"keep {a.id}: {said}. Leave it: the daily tidy-up puts it away once it can. "
@@ -1483,6 +1808,14 @@ def main(argv: list[str]) -> int:
     o.add_argument("ids", nargs="*")
     o.add_argument("--titles", default="{}")
     o.add_argument("--today", default="")
+    o.add_argument("--dump", default="", help="the folder the plan read: the day's mark goes "
+                                              "onto the page too")
+    r = sub.add_parser("retire", help="the helper this chat took the page over from, judged "
+                                      "from one get_session of it")
+    r.add_argument("--dump", default="")
+    r.add_argument("--details", action="append", default=[])
+    r.add_argument("--stdin", action="store_true")
+    r.add_argument("--now", default="")
     c = sub.add_parser("close")
     c.add_argument("id")
     c.add_argument("--work", required=True)
@@ -1490,11 +1823,15 @@ def main(argv: list[str]) -> int:
     c.add_argument("--details", action="append", default=[])
     c.add_argument("--chat", default="")
     c.add_argument("--now", default="")
+    c.add_argument("--fresh", action="store_true",
+                   help="the folder is a fresh read of the page's work, as `read` asked")
     k = sub.add_parser("closed")
     k.add_argument("ids", nargs="+")
     k.add_argument("--today", default="")
     sub.add_parser("undo")
     a = ap.parse_args(argv)
+    if a.cmd == "retire":
+        return run_retire(a)
     if a.cmd == "close":
         return run_close(a)
     if a.cmd == "closed":
@@ -1516,10 +1853,17 @@ def main(argv: list[str]) -> int:
             titles = json.loads(a.titles or "{}")
         except ValueError:
             titles = {}
-        print(run_done(a.ids, titles if isinstance(titles, dict) else {},
-                       a.today or dt.date.today().isoformat()))
+        day = a.today or dt.date.today().isoformat()
+        print(run_done(a.ids, titles if isinstance(titles, dict) else {}, day))
+        if a.dump:
+            paths = page_mark_batch(a.dump, day)
+            if paths:
+                print("then: send this batch (ArtifactData batch), asking nobody: it marks the "
+                      "day's tidy-up on the page, so no other chat runs it again today")
+                for p in paths:
+                    print(p)
         return 0
-    gone = archived()
+    gone = [x for x in archived() if not x.get("gone")]      # a deleted chat cannot come back
     if not gone:
         print("tidy: nothing was tidied away")
         return 0

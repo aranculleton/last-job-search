@@ -444,7 +444,12 @@ def test_the_prep_on_a_phone_is_the_minutes_before_then_folded(run, built):
     assert r["when"].startswith("Tomorrow · Wed 4 Nov, 14:00") and "with the recruiter" in r["when"]
     assert r["glanceH"] == "Before you go in"
     labels = [p["label"] for p in r["parts"]]
-    assert labels[:2] == ["Say these", "Ask them"] and labels[-1] == "Careful"
+    # "Careful" over "Calling the last employer's data a mess" read as an instruction to do it
+    # (the screen review, 2026-11-11).
+    assert labels[:2] == ["Say these", "Ask them"] and labels[-1] == "Watch out for"
+    # And what the prep is for, said plainly: "Claude never joins, helps during or records one"
+    # was hard to parse.
+    assert "never joins, helps during" not in r["text"], r["text"][-300:]
     assert 2 <= r["parts"][0]["n"] <= 5 and 2 <= r["parts"][1]["n"] <= 3
     assert r["parts"][-1]["n"] <= 2
     # Big type for the minutes before; the rest folded, one tap each.

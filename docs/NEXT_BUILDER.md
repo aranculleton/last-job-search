@@ -30,9 +30,9 @@ maintainer's notes (MAINTAINING.md, "How a builder works").
   saving. It removes a memory note that contradicts the person's settings. It cannot remove
   itself from the desktop sidebar, and archiving from the cloud does not either; the job's card
   says up front that it runs in a chat there, which the person can delete.
-- **Page versions:** every read records the page's own versions (`app.py versions`, always
-  printed; the PostToolUse hook on ArtifactData does it too in a chat started after the hook
-  was added). A `view` while the page's own code is behind says to republish.
+- **Page versions:** every read records the page's own versions: the PostToolUse hook on
+  ArtifactData keeps them, and only where it did not (a chat started before the hook was
+  added) does `wake` ask for `app.py versions` once the read is in. A `view` while the page's own code is behind says to republish.
 - **People runs:** an employer frees after one follow-up wait from the last contact; an
   unaccepted request after 21 days; a thread with no answer in 90 days goes cold by itself
   (`threads-gone-cold`). Recruiters and founders before peers, by the person's reply rates; a

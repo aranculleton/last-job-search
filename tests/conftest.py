@@ -31,9 +31,25 @@ os.environ.pop("LJS_LEDGER", None)
 # a cloud copy shows (choosing Auto, the PDF tools' line) to every model the tests build. A
 # test of a cloud chat sets it itself.
 os.environ.pop("CLAUDE_CODE_REMOTE", None)
+# And a test that does set it is a cloud chat on every computer: a cloud chat is told by its
+# container's own markers as well (place.in_cloud), which CI's runners do not have and a cloud
+# container does. A test of a session over Remote Control clears them itself.
+os.environ["CLAUDE_CODE_CONTAINER_ID"] = "container_tests"
 # Nor a chat's on a computer: Claude Code's CLAUDECODE makes a save end at its push there
 # (land.on_computer). A test of a computer chat sets it itself.
 os.environ.pop("CLAUDECODE", None)
+# Nor which chat runs the tests: a claim is decided by this chat's own id (app_listen.this_chat),
+# and a developer's session id passed a test locally that failed on GitHub (2026-11-11). A test
+# of one chat says which with LJS_CHAT or --chat.
+for _k in ("LJS_CHAT", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_REMOTE_SESSION_ID",
+           "CLAUDE_CODE_BRIDGE_SESSION_ID"):
+    os.environ.pop(_k, None)
+# A landing in a test never opens or merges a pull request on GitHub (tools/land.py
+# _github_here): a test that checks that step hands the landing a stand-in.
+os.environ["LJS_LAND_NO_GITHUB"] = "1"
+# Nor does the app's hook start a landing in a test's copy (learned._save_now): it asks for one,
+# as it did before it started them itself. A test of that step unsets this.
+os.environ["LJS_HOOK_NO_SAVE"] = "1"
 atexit.register(shutil.rmtree, _state, ignore_errors=True)
 # The checkout the suite runs in is read as the app's own, wherever it is. In a person's copy
 # (ci_local.sh runs this suite there; the computer check runs it in one cloned from a folder)
@@ -66,6 +82,14 @@ for _p in (os.path.join(ROOT, "tools", "network"), os.path.join(ROOT, "tools")):
         sys.path.insert(0, _p)
 import schema as _schema  # noqa: E402,F401
 from network import schema as _network_schema  # noqa: E402,F401
+# The message log's module is reached by two names as well (`state`, and `network.state` from
+# followup_drafts and the page's model), and each fixes its file paths when first imported.
+# Imported here, under the tests' own state, so a test that points LJS_STATE at a folder of its
+# own for a moment cannot leave one name reading that folder, deleted, for every test after it
+# in the same worker (the review, 2026-11-10: the referral-ask tests failed after the interview
+# pack's, which first imported network.state inside a fixture of its own).
+import state as _state_module  # noqa: E402,F401
+from network import state as _network_state  # noqa: E402,F401
 
 
 def _reload_limits():
@@ -122,6 +146,39 @@ def pytest_sessionfinish(session, exitstatus):
 
 
 @pytest.fixture(autouse=True)
+def _each_test_starts_clean():
+    """Every test starts with the suite's own profile and state, and none of the checkout's own
+    records another test left. Each worker keeps one state folder for its whole run, and a
+    checkout's records live there when it is not a git checkout (app_listen.checkout_file: the
+    listener it last saw, when it last asked for a fresh helper, the chats marked nested):
+    one test's renewal made a later one find none, and a test that set LJS_PROFILE by hand and
+    popped it left the next with no profile at all. Both passed alone and failed beside others
+    under load."""
+    clean_start()
+    yield
+    os.environ["LJS_PROFILE"] = EXAMPLE
+    os.environ["LJS_STATE"] = _state
+    try:
+        import person
+        person.reset()
+    except Exception:  # noqa: BLE001  not imported by this test
+        pass
+
+
+def clean_start() -> None:
+    """What every test starts with (_each_test_starts_clean): the checkout's own records in
+    the worker's state folder cleared, and the suite's profile and state set again."""
+    for name in os.listdir(_state):
+        if name.startswith(".ljs-"):
+            try:
+                os.remove(os.path.join(_state, name))
+            except OSError:
+                pass
+    os.environ["LJS_PROFILE"] = EXAMPLE
+    os.environ["LJS_STATE"] = _state
+
+
+@pytest.fixture(autouse=True)
 def _no_skill_answered_yet():
     """Every test starts with no skill answered. The person's one answer per skill
     (tools/skill_answers.py) lives in the suite's one state folder, so a yes one test recorded
@@ -130,6 +187,22 @@ def _no_skill_answered_yet():
         os.remove(os.path.join(_state, "documents", "skill_answers.json"))
     except OSError:
         pass
+    yield
+
+
+@pytest.fixture(autouse=True)
+def _limits_as_the_profile_says():
+    """Every test starts with the networking limits and the follow-up rule as the profile in
+    use says them (schema.limits_now reads them again when the settings change): a test that
+    pointed LJS_PROFILE at a copy of its own left them read from it, and a later test's own
+    rule (monkeypatched) was read over from the example mid-test."""
+    for name in ("schema", "network.schema"):
+        mod = sys.modules.get(name)
+        if mod is not None and hasattr(mod, "limits_now"):
+            try:
+                mod.limits_now()
+            except Exception:  # noqa: BLE001  a test of a profile with no settings: as it was
+                pass
     yield
 
 
@@ -229,7 +302,7 @@ def sync_steps(monkeypatch):
 
     def step(name, value=None):
         return lambda *a, **k: steps.append(name) or value
-    for name in ("_record_check", "own_tests", "app_watch", "network_check", "model_check",
+    for name in ("_record_check", "own_tests", "own_tests_later", "app_watch", "network_check", "model_check",
                  "place_check", "upgrades"):
         monkeypatch.setattr(sync_app, name, step(name))
     monkeypatch.setattr(sync_app, "is_the_app", lambda: False)
@@ -238,6 +311,10 @@ def sync_steps(monkeypatch):
     monkeypatch.setattr(sync_app, "_record_tried", lambda *a, **k: None)
     monkeypatch.setattr(sync_app, "own_folder", lambda: "")
     monkeypatch.setattr(sync_app, "stale", lambda: state["stale"])
+    # The app's default, never the checkout's own profile: in a person's copy whose person
+    # waits for their word, the day's run was a look and a test of the sync failed (audit
+    # SV-4). A test of the other choice sets it itself.
+    monkeypatch.setattr(sync_app, "updates", lambda: "auto")
     monkeypatch.setattr(sync_app, "_dirty", lambda: False)
     monkeypatch.setattr(sync_app, "pull_master", step("pull_master", 0))
     monkeypatch.setattr(sync_app, "fetch", step("fetch", None))

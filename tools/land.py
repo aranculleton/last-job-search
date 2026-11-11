@@ -9,6 +9,7 @@ once a turn, after its answer is out, and makes only the GitHub calls it prints:
 
     python3 tools/land.py [--message "<what changed>"]
     python3 tools/land.py --detach [--message "<what changed>"]
+    python3 tools/land.py --wait-saved [--timeout S]   # a chat on the computer, before its end
     python3 tools/land.py --after-merge
     python3 tools/land.py --waiting
     python3 tools/land.py --keep [--message "<what changed>"]
@@ -303,8 +304,16 @@ def _live(p: str) -> bool:
     """Is the lock at `p` a landing running now: its process alive and its stamp younger than
     LOCK_STALE_S (a landing killed part way leaves one behind)?"""
     try:
-        with open(p, encoding="utf-8") as fh:
-            words = fh.read().split()
+        # A lock is made in two steps, the file and then its words: one read between them is
+        # empty, and aged by the disk's clock on a moved one it read as a month stale, so two
+        # landings both took it (the moved-clock suite, 2026-11-11). Empty, it is read again
+        # for a moment before it is judged.
+        for _ in range(20):
+            with open(p, encoding="utf-8") as fh:
+                words = fh.read().split()
+            if words:
+                break
+            time.sleep(0.01)
         pid = int((words or ["0"])[0])
         # Its age on the clock that wrote it: the stamp the landing put in it. The file's own
         # time is the disk's clock, which a Python whose clock was moved never agrees with:
@@ -602,17 +611,45 @@ DATA_CHECKED = ("Checked here: only the person's own files changed (%d), so the 
 
 # A chat on the person's own computer: Claude Code sets CLAUDECODE in the commands it runs, and
 # CLAUDE_CODE_REMOTE ("true") only in a cloud chat (as place.surface reads them). Its save ends
-# at the push (_land): the chat that answers the page in the cloud does the merge.
+# at the push (_land): the chat that answers the page in the cloud does the merge, unless that
+# chat is on the computer too (listener_on_computer).
 COMPUTER_PUSHED = ("land: saved to GitHub on %s; the chat that answers the page in the cloud "
                    "brings it to master with its next save. Nothing to do, and nothing to say "
                    "about saving")
 
 
+# Said after the calls where the chat on the computer makes them itself: no chat in the cloud
+# answers the page, so none would ever bring its save to master.
+COMPUTER_CALLS = ("  The chat that answers the page is on this computer, so this one finishes "
+                  "the save. Where Claude's own safety check refuses either call, leave it: the "
+                  "work waits on its branch for the next save made in the cloud, and nothing is "
+                  "said about it")
+
+
+def listener_on_computer(root: str = ROOT) -> bool:
+    """Is the chat that answers the page, as this checkout last saw it, one on the person's
+    computer (app_listen's record of it, in this checkout's git folder)? Then no chat in the
+    cloud answers it, and a computer chat's save that only pushed waited on GitHub for good
+    whenever no brief ran in the cloud (the engine review, 2026-11-11)."""
+    d = git_dir(root)
+    try:
+        import app_listen
+        with open(os.path.join(d, app_listen.CACHE), encoding="utf-8") as fh:
+            got = (json.load(fh) or {}).get("listener") or {}
+    except (OSError, ValueError, AttributeError, TypeError, ImportError):
+        return False
+    return isinstance(got, dict) and (got.get("kind") == "computer"
+                                      or str(got.get("chat") or "").startswith("local-"))
+
+
 def on_computer(env=None) -> bool:
     """Is this a chat on the person's computer (not a cloud chat, not a script)?"""
+    import place
+    given = env
     env = os.environ if env is None else env
-    return bool(env.get("CLAUDECODE")) and \
-        str(env.get("CLAUDE_CODE_REMOTE", "")).lower() != "true"
+    # Not by CLAUDE_CODE_REMOTE alone: a session on the computer driven from the phone (claude_surfaces: remote-control) may set it
+    # (place.in_cloud, CC-18).
+    return bool(env.get("CLAUDECODE")) and not place.in_cloud(given)
 
 
 def data_only(root: str) -> list[str] | None:
@@ -694,11 +731,23 @@ ASIDE_ENV = "LJS_OWN_TESTS_ASIDE"     # ci_local.sh: a file of the person's test
 ASIDE_FILE = "ljs-own-tests-aside.txt"
 
 
+# Every one of the person's own tests set aside for one save: what an update broke could not
+# be told test by test, and the save is never held for them (audit SV-3).
+ALL_OWN_TESTS = "profile/tests/"
+
+
 def _node_id(root: str, name: str) -> str:
     """pytest's id of a test from the name its junit report gives ("profile.tests.test_x.
-    TestA::test_b[1]" is "profile/tests/test_x.py::TestA::test_b[1]"), or ""."""
-    if ".py::" in name:
-        return name.replace("\\", "/")       # a check's own FAILED line gives the id itself
+    TestA::test_b[1]" is "profile/tests/test_x.py::TestA::test_b[1]"; "profile.tests.test_x",
+    a file that could not be imported, is "profile/tests/test_x.py"), or ""."""
+    if ".py::" in name or name.endswith(".py"):
+        return name.replace("\\", "/")       # a check's own FAILED or ERROR line gives the id
+    if os.path.isdir(os.path.join(root, name.replace("\\", "/").rstrip("/"))):
+        return name.replace("\\", "/").rstrip("/")         # the whole folder, as recorded
+    if "::" not in name:
+        parts = name.split(".")
+        return "/".join(parts) + ".py" if parts and all(parts) and \
+            os.path.isfile(os.path.join(root, *parts) + ".py") else ""
     dotted, _, test = name.rpartition("::")
     parts = dotted.split(".") if dotted else []
     for i in range(len(parts), 0, -1):
@@ -710,7 +759,8 @@ def _node_id(root: str, name: str) -> str:
 
 def _set_aside(root: str, names: list[str]) -> str:
     """The file the check reads to set these of the person's own tests aside, or ""."""
-    ids = [n for n in (_node_id(root, x) for x in names) if n.startswith("profile/tests/")]
+    ids = [ALL_OWN_TESTS] if {ALL_OWN_TESTS, ALL_OWN_TESTS.rstrip("/")} & set(names) else \
+        [n for n in (_node_id(root, x) for x in names) if n.startswith("profile/tests/")]
     d = git_dir(root)
     if not ids or not d:
         return ""
@@ -862,18 +912,35 @@ OWN_TESTS_DO = ("land: Claude, do this now, before any other work: bring their o
                 "person. Every command that starts work says this first until they pass.")
 _OWN_CHECK = re.compile(r"^\s+(?:pytest \(profile/tests, on this person\)|\S.*, profile/tests)"
                         r"\s+FAIL\s*$")
-_FAILED = re.compile(r"^\s*FAILED (profile/tests/\S+?)(?: - (.*))?$", re.M)
+_FAILED = re.compile(r"^\s*(?:FAILED|ERROR) (profile/tests/\S+?)(?: - (.*))?$", re.M)
 
 
-def own_tests_only(out: str) -> list | None:
+def own_tests_only(out: str, update_known: bool = False) -> list | None:
     """[(test, message)] when the check failed only on the person's own tests (profile/tests)
-    and an update is what they fail on (the check's own-tests report says so); else None."""
+    and an update is what they fail on: the check's own-tests report says so, or
+    `update_known` (the record says an update another chat took broke them, and this save
+    carries none: the check then said "no update of the app is in this change" and the save
+    stopped, the review of SV-3, 2026-11-11); else None."""
     fails = [ln for ln in out.splitlines() if ln.rstrip().endswith("FAIL")]
     if not fails or not all(_OWN_CHECK.match(ln) for ln in fails):
         return None
-    if "their own tests," not in out or "now fail after this update" not in out:
+    if not update_known and ("their own tests," not in out or
+                             "now fail after this update" not in out):
         return None
     return [(m.group(1), (m.group(2) or "").strip()) for m in _FAILED.finditer(out)]
+
+
+def _update_broke_them(root: str) -> bool:
+    """Does the record of the person's own tests say an update broke some, or was it made on
+    other app code than this? Then a failure of theirs alone is the update's, whatever this
+    save carries. False where it cannot be told."""
+    try:
+        import sync_app
+        rec = sync_app.own_tests_record(root) or {}
+        return bool(rec.get("failures")) or bool(rec.get("app")) and \
+            rec["app"] != sync_app.app_tree(root)
+    except Exception:  # noqa: BLE001
+        return False
 
 
 def _record_own(root: str, failures) -> None:
@@ -1003,23 +1070,30 @@ def _wait_on_branch(root: str, head: str, sleep) -> None:
 
 def _app_side(root: str, ref: str) -> list[str]:
     """The app commits a branch's own update merges brought in: the other parent of each
-    "Sync from the app" merge on it that master lacks."""
+    "Sync from the app" merge on it that master lacks. One git call, however many merges the
+    branch made: each of a chat's page updates merges master, and a call for every merge made
+    the start take minutes in a copy with many chats' branches (H-2, 2026-11-10)."""
     out = []
-    for m in _git(root, "rev-list", "--merges", "origin/master.." + ref).stdout.split():
-        if _git(root, "log", "-1", "--format=%s", m).stdout.startswith("Sync from the app"):
-            out += _git(root, "rev-parse", m + "^@").stdout.split()[1:]
+    r = _git(root, "log", "--merges", "--format=%P%x09%s", "origin/master.." + ref)
+    for line in r.stdout.splitlines():
+        parents, _, subject = line.partition("\t")
+        if subject.startswith("Sync from the app"):
+            out += parents.split()[1:]
     return out
 
 
-def _own(root: str, ref: str) -> tuple[list[str], int] | None:
+def _own(root: str, ref: str, app_known: bool | None = None) -> tuple[list[str], int] | None:
     """(the files a branch's own commits changed, when the newest of them was made, in
     seconds): not master's, and not the app's that its update brought in (a chat that took an
     update and then could not land was never listed, and its work was lost: the stranger
-    audit, 2026-11-03, X-31). None when git cannot say."""
+    audit, 2026-11-03, X-31). None when git cannot say. `app_known`: whether this copy has
+    the app's master, when the caller looked already."""
+    if app_known is None:
+        app_known = _git(root, "rev-parse", "-q", "--verify",
+                         "refs/remotes/app/master").returncode == 0
     r = _git(root, "log", "--no-merges", "--format=%x01%ct %s", "--name-only", "-z",
              "origin/master.." + ref, "--not", *_app_side(root, ref),
-             *(["--remotes=app"] if _git(root, "rev-parse", "-q", "--verify",
-                                         "refs/remotes/app/master").returncode == 0 else []))
+             *(["--remotes=app"] if app_known else []))
     if r.returncode != 0:
         return None
     files, skip, newest = [], False, 0
@@ -1034,11 +1108,6 @@ def _own(root: str, ref: str) -> tuple[list[str], int] | None:
         if part and not skip:
             files.append(part)
     return list(dict.fromkeys(files)), newest
-
-
-def _own_files(root: str, ref: str) -> list[str] | None:
-    got = _own(root, ref)
-    return None if got is None else got[0]
 
 
 # A branch left behind: master has changed, since the branch last met it, files of the
@@ -1087,23 +1156,39 @@ def _left_behind(root: str, ref: str, own: tuple[list[str], int]) -> tuple[int, 
     return int((max(newest[f] for f in late) - mine) // 86400), late
 
 
+# What each chat's branch was found to hold, by what it was read from: {(root, ref, its
+# commit, master's, the app's): (own, left behind)}. A start looked at every branch twice, and
+# the page's model a third time, with nothing moved between (H-2, 2026-11-10).
+_BRANCH_READS: dict[tuple, tuple] = {}
+
+
 def _chat_branches(root: str) -> tuple[list[str], dict[str, tuple[int, list[str]]]]:
     """(waiting, left behind): every chat's branch on GitHub off master whose own commits
     change only the person's files, each either waiting for the next landing or left behind
     ({ref: (days, files)})."""
     import personal_paths
     here = branch(root)
-    r = _git(root, "for-each-ref", "--format=%(refname:short)", "--no-merged", "origin/master",
-             *("refs/remotes/origin/" + (p if p.endswith("/") else p + "*")
-               for p in CHAT_BRANCHES))
+    r = _git(root, "for-each-ref", "--format=%(objectname) %(refname:short)", "--no-merged",
+             "origin/master", *("refs/remotes/origin/" + (p if p.endswith("/") else p + "*")
+                                for p in CHAT_BRANCHES))
+    tips = dict(reversed(x.split(" ", 1)) for x in _git(
+        root, "for-each-ref", "--format=%(objectname) %(refname)", "refs/remotes/origin/master",
+        "refs/remotes/app/master").stdout.splitlines() if " " in x)
+    master = tips.get("refs/remotes/origin/master", "")
+    app_known = "refs/remotes/app/master" in tips
     out, left = [], {}
-    for ref in (x.strip() for x in r.stdout.splitlines() if x.strip()):
+    for line in (x.strip() for x in r.stdout.splitlines() if x.strip()):
+        tip, _, ref = line.partition(" ")
         if ref in ("origin/" + here, "origin/" + _remote_name(here)):
             continue
-        own = _own(root, ref)
+        key = (os.path.abspath(root), ref, tip, master, tips.get("refs/remotes/app/master", ""))
+        if key not in _BRANCH_READS:
+            got = _own(root, ref, app_known)
+            mine = bool(got and got[0] and all(personal_paths.is_personal(p) for p in got[0]))
+            _BRANCH_READS[key] = (got, _left_behind(root, ref, got) if mine else (0, []))
+        own, (days, files) = _BRANCH_READS[key]
         if not own or not own[0] or not all(personal_paths.is_personal(p) for p in own[0]):
             continue
-        days, files = _left_behind(root, ref, own)
         if not files and own[1] and time.time() - own[1] > OLD_DAYS * 86400:
             days, files = int((time.time() - own[1]) // 86400), []
             left[ref] = (days, files)
@@ -1239,8 +1324,10 @@ def fetch_waiting(root: str = ROOT) -> bool:
     clone, and a long-kept chat never saw a branch pushed after it started (the stranger
     audit, 2026-11-03, X-34). Best effort; False where it could not be fetched."""
     spec = ["+refs/heads/%s*:refs/remotes/origin/%s*" % (p, p) for p in CHAT_BRANCHES]
-    return _git(root, "fetch", "-q", "origin", "+refs/heads/master:refs/remotes/origin/master",
-                *spec).returncode == 0
+    # --prune: a branch gone from GitHub (merged and deleted) leaves this copy's list too, and
+    # is never looked at again (D14).
+    return _git(root, "fetch", "-q", "--prune", "origin",
+                "+refs/heads/master:refs/remotes/origin/master", *spec).returncode == 0
 
 
 def ages(root: str, refs: list[str]) -> dict[str, int]:
@@ -1853,11 +1940,14 @@ def _land(root: str, message: str, check, sleep) -> int:
     mine_only = None if check or os.environ.get("LJS_LAND_CHECK", "").strip() else \
         data_only(root)
     computer = on_computer()
+    # No chat in the cloud answers the page: this computer chat finishes its own save, checked
+    # as any landing on master is (listener_on_computer).
+    alone = computer and listener_on_computer(root)
     if head and head == pushed(root):
         # Exactly what the last landing checked green and pushed: never checked again (a save
         # queued behind another, with nothing new, ran a second ten-minute check).
         rc, out = 0, CHECKED_ALREADY
-    elif computer and not check:
+    elif computer and not alone and not check:
         # A chat on the person's computer checks nothing but its data: the chat that answers
         # the page in the cloud brings the branch in and checks it as it lands (on_computer).
         bad = data_check(root, mine_only) if mine_only else []
@@ -1875,25 +1965,43 @@ def _land(root: str, message: str, check, sleep) -> int:
         if _taken_meanwhile(root, sleep):
             return _after_merge(root, sleep)
     if rc != 0:
-        own = own_tests_only(out)
-        if own:
+        own = own_tests_only(out, _update_broke_them(root))
+        if own is not None:
             # More of their own tests the update broke than the record knew (a run on another
             # computer, a test that fails only beside another): set aside with the rest, the
             # bringing in line queued, and checked once more, never held for them.
             known = _recorded_failures(root)
             names = [n for n, _m in own if n not in {k for k, _ in known}]
             _record_own(root, known + [(n, m) for n, m in own if n in names])
-            aside = _set_aside(root, [k for k, _ in known] + names)
             try:
                 import profile_upgrades
                 profile_upgrades.queue_own_tests(root)
             except Exception:  # noqa: BLE001
                 pass
-            rc, out = _run_check(root, _check_command(root, check), aside)
-            own = own_tests_only(out) if rc != 0 else None
-            if rc == 0:
-                print("land: %d more of the person's own tests an update changed are set aside "
-                      "for this save; nothing to say about it" % len(names))
+            if names:
+                aside = _set_aside(root, [k for k, _ in known] + names)
+                rc, out = _run_check(root, _check_command(root, check), aside)
+                own = own_tests_only(out, _update_broke_them(root)) if rc != 0 else None
+                if rc == 0:
+                    print("land: %d more of the person's own tests an update changed are set "
+                          "aside for this save; nothing to say about it" % len(names))
+            if own is not None:
+                # Still only their own tests, and which ones cannot be told (a file that no
+                # longer imports, a report cut short): all of them set aside for this one
+                # save, never the save held for an app release (audit SV-3). The rest of the
+                # check, their data included, still runs.
+                aside = _set_aside(root, [ALL_OWN_TESTS])
+                if not known and not names:
+                    # Named nowhere, still owed: recorded as the whole folder, so every command
+                    # that starts work says it and the improvement has something to bring in
+                    # line (the review of SV-3, 2026-11-11).
+                    _record_own(root, [("profile/tests", "an update changed what they check; "
+                                        "which ones could not be told")])
+                rc, out = _run_check(root, _check_command(root, check), aside)
+                own = own_tests_only(out, _update_broke_them(root)) if rc != 0 else None
+                if rc == 0:
+                    print("land: the person's own tests an update changed are set aside for this "
+                          "save while they are brought in line; nothing to say about it")
     if rc != 0:
         if own is not None:
             # Only the person's own tests, which an update changed what they check: said as
@@ -1923,13 +2031,14 @@ def _land(root: str, message: str, check, sleep) -> int:
         _told(_trouble(r))
         return 2
     _record_pushed(root, name)
-    if computer:
+    if computer and not alone:
         # Never a pull request from the person's computer: Claude's own safety check there
         # refused the merge ("merge without review") at the last step of a save, twice in one
         # evening (the maintainer's computer, 2026-11-10). The work waits on its branch, and
         # the chat that answers the page in the cloud brings it to master with its next save
         # (every landing brings in what waits: waiting()).
         READY.clear()
+        _push_left_behind(root, sleep)
         print(COMPUTER_PUSHED % there)
         return 0
 
@@ -1940,7 +2049,9 @@ def _land(root: str, message: str, check, sleep) -> int:
             "Checked here with ./tools/ci_local.sh --quick: green" +
             ("; skipped: " + ", ".join(skipped) if skipped else "")) + "."
     READY.clear()
-    READY.update({"owner": owner, "repo": repo, "head": there, "title": title, "body": body})
+    # The commit pushed and checked: the merge on GitHub is pinned to it (finish_on_github).
+    READY.update({"owner": owner, "repo": repo, "head": there, "title": title, "body": body,
+                  "sha": _git(root, "rev-parse", "HEAD").stdout.strip()})
     print("land: ready %s (%s commit(s) ahead of master)" % (there, ahead))
     print("land: next, each its own call, and nothing said to the person:")
     print('  1. create_pull_request: owner "%s", repo "%s", head "%s", base "master", '
@@ -1953,6 +2064,8 @@ def _land(root: str, message: str, check, sleep) -> int:
     print('  2. merge_pull_request: owner "%s", repo "%s", pullNumber <the number 1 gave>, '
           'merge_method "merge"' % (owner, repo))
     print("  3. python3 tools/land.py --after-merge")
+    if alone:
+        print(COMPUTER_CALLS)
     print("  " + MERGE_REFUSED)
     # Plain REST calls: `gh pr create` and `gh pr merge` are refused in a cloud chat, and
     # these went through (2026-11-05).
@@ -2108,9 +2221,12 @@ def _level(root: str, name: str, sleep) -> None:
     a check for unpushed work held the chat for it until it was pushed by hand (a live
     session, 2026-11-05). Never forced; where it cannot be moved, one line says so."""
     there = _remote_name(name)
-    if _git(root, "rev-parse", "-q", "--verify", "refs/remotes/origin/" + there).stdout.strip() \
-            == _git(root, "rev-parse", "HEAD").stdout.strip():
+    theirs = _git(root, "rev-parse", "-q", "--verify", "refs/remotes/origin/" + there).stdout.strip()
+    head = _git(root, "rev-parse", "HEAD").stdout.strip()
+    if theirs == head:
         return
+    if not theirs and head == _git(root, "rev-parse", "origin/master").stdout.strip():
+        return          # deleted once merged (_delete_merged): never pushed back at master
     _where, r = _push(root, name, sleep)
     if r.returncode != 0:
         print("land: GitHub's copy of %s stays where the landing pushed it (%s); nothing is "
@@ -2213,6 +2329,124 @@ def detach(root: str = ROOT, message: str = "", popen=subprocess.Popen) -> int:
     return 0
 
 
+# A chat on the person's computer saves in the background (--detach) and is put away at its
+# end. Put away before its push left the computer (asleep, offline, the app closed), its work
+# stayed on a branch there and nothing said so (the builder audit, 2026-11-10, CC-1): its last
+# step waits for the save (--wait-saved). A save still running is on its way, never lost; a
+# change never saved is saved now; and work that cannot leave yet is kept on the computer,
+# said on its cards as saved there and not yet in the copy (computer.py saved-here), and sent
+# by the next save on that computer (_push_left_behind). Never "lost": Try again would read the
+# same LinkedIn profiles again while the work sat on the Mac (the independent review,
+# 2026-11-11).
+SAVE_WAIT_S = 8 * 60
+SAVED_SAY = {
+    "pushed": "saved: on GitHub, on %s; the chat that starts chats on this computer brings it "
+              "to master. Carry on.",
+    "nothing": "saved: nothing of this chat's own is left to save. Carry on.",
+    "saving": "saving: %s; it goes on after this chat ends, and the chat that starts chats on "
+              "this computer brings it in. Carry on.",
+    "unsaved": "not sent yet: %s. The work is kept on this computer, and the next save here "
+               "sends it: read the page's work into \"$D\" again, then python3 "
+               "tools/computer.py saved-here \"$D\" --chat <your id> and send its batch, so "
+               "each card says it is saved on this computer, not yet in the copy. Carry on.",
+}
+
+
+def _peek_result(root: str) -> list[str]:
+    """What the last detached landing could not do, read without forgetting it."""
+    d = git_dir(root)
+    try:
+        with open(os.path.join(d, RESULT_FILE), encoding="utf-8") as fh:
+            got = json.load(fh)
+    except (OSError, ValueError, TypeError):
+        return []
+    return [str(x) for x in (got.get("lines") if isinstance(got, dict) else None) or []]
+
+
+def _changed_personal(root: str) -> list[str]:
+    st = _git(root, "status", "--porcelain", "--untracked-files=all")
+    try:
+        import personal_paths
+        out = []
+        for ln in (st.stdout or "").splitlines():
+            path = ln[3:].strip().strip('"').split(" -> ")[-1]
+            if path and personal_paths.is_personal(path):
+                out.append(path)
+        return out
+    except Exception:  # noqa: BLE001  unsure: anything changed counts
+        return [ln for ln in (st.stdout or "").splitlines() if ln.strip()]
+
+
+def saved_state(root: str = ROOT) -> tuple[str, str]:
+    """("saving" | "pushed" | "nothing" | "unsaved" | "changed", what to say): has this
+    checkout's work left the computer? Saving while a landing runs or is asked for; pushed
+    when what is checked out is on GitHub (the commit the last landing pushed, or this
+    branch's own copy there: a save held back by a check pushes its branch without the
+    record) and nothing of the person's is left uncommitted; nothing when there is nothing of
+    its own; changed when something of theirs was never saved; unsaved otherwise."""
+    if landing(root) or wanted(root):
+        return "saving", ""
+    changed = _changed_personal(root)
+    head = _git(root, "rev-parse", "HEAD").stdout.strip()
+    name = branch(root)
+    there = _git(root, "rev-parse", "-q", "--verify",
+                 "refs/remotes/origin/" + _remote_name(name)).stdout.strip() if name else ""
+    if changed:
+        return "changed", f"{len(changed)} changed file(s) not saved yet"
+    if head and (head == pushed(root) or head == there):
+        return "pushed", _remote_name(name) if name else head[:12]
+    if _git(root, "merge-base", "--is-ancestor", "HEAD", "origin/master").returncode == 0:
+        return "nothing", ""
+    left = [ln for ln in _peek_result(root) if ln.strip()]
+    return "unsaved", (left[0][:200] if left else "its last commit has not reached GitHub")
+
+
+def wait_saved(root: str = ROOT, timeout: float = SAVE_WAIT_S, sleep=time.sleep,
+               clock=time.time, start=None) -> tuple[str, str]:
+    """saved_state, once the save running in the background has ended. A change never saved
+    is saved now (once), and waited for; still saving when `timeout` has passed is said as on
+    its way, never as lost."""
+    start = start or (lambda: detach(root, "the last of this chat's work"))
+    end = clock() + max(0.0, float(timeout))
+    asked = False
+    while True:
+        state, why = saved_state(root)
+        if state == "changed" and not asked:
+            asked = True
+            with contextlib.redirect_stdout(io.StringIO()):
+                start()
+            continue
+        if state == "changed":
+            state = "unsaved"
+        if state != "saving":
+            return state, why
+        if clock() >= end:
+            return "saving", "still on its way after %d minutes" % max(1, int(timeout // 60))
+        sleep(5)
+
+
+def _push_left_behind(root: str, sleep=time.sleep) -> list[str]:
+    """Push every chat branch on this computer with work GitHub does not have yet, never
+    forced: a save that could not leave when its chat ended (asleep, offline) is sent by the
+    next save here, which no later chat did before (its folder was another's). What was sent."""
+    sent = []
+    heads = _git(root, "for-each-ref", "--format=%(refname:short)", "refs/heads").stdout
+    for b in (heads or "").split():
+        if not b.startswith(CHAT_BRANCHES) or b == branch(root):
+            continue
+        if _git(root, "merge-base", "--is-ancestor", b, "origin/master").returncode == 0:
+            continue
+        there = _remote_name(b)
+        theirs = _git(root, "rev-parse", "-q", "--verify",
+                      "refs/remotes/origin/" + there).stdout.strip()
+        if theirs and theirs == _git(root, "rev-parse", b).stdout.strip():
+            continue
+        r = _retried(root, "push", "-q", "origin", f"{b}:refs/heads/{there}", sleep=sleep)
+        if r.returncode == 0:
+            sent.append(there)
+    return sent
+
+
 def _gh_api(root: str, args: list[str], run=subprocess.run) -> tuple[int, dict | list | None, str]:
     """gh api, its JSON answer: (exit code, the answer or None, what it said)."""
     try:
@@ -2245,11 +2479,33 @@ def finish_on_github(root: str, ready: dict, run=subprocess.run, which=None) -> 
         number = got[0].get("number") if isinstance(got, list) and got and             isinstance(got[0], dict) else None
         if not number:
             return False, "the pull request could not be opened: " + (said or said2)
+    # Pinned to the commit this landing pushed and checked: GitHub refuses the merge where the
+    # branch has moved since ("sha: SHA that pull request head must match to allow merge",
+    # docs.github.com, Merge a pull request), so nothing pushed meanwhile is merged unchecked.
     code, got, said = _gh_api(root, ["-X", "PUT", f"repos/{o}/{r}/pulls/{number}/merge", "-f",
-                                     "merge_method=merge"], run)
+                                     "merge_method=merge"]
+                              + (["-f", f"sha={ready['sha']}"] if ready.get("sha") else []), run)
     if code != 0 or not (isinstance(got, dict) and got.get("merged")):
         return False, f"pull request {number} could not be merged: {said}"
     return True, str(number)
+
+
+def _delete_merged(root: str, ready: dict) -> bool:
+    """The pull request's branch deleted on GitHub once it is merged, only while it still holds
+    the commit that was merged (a push with a lease), and forgotten here. 169 merged chat
+    branches stayed, and every page update fetched them all (audit D14); deleted with no such
+    condition, work another landing pushed between the merge and the delete went with it, and
+    this copy's old reference had every after-merge push the branch back (the review,
+    2026-11-11). True when it went."""
+    head, sha = str(ready.get("head") or ""), str(ready.get("sha") or "")
+    if not head or not sha:
+        return False
+    r = _git(root, "push", "-q", "--force-with-lease=refs/heads/%s:%s" % (head, sha), "origin",
+             ":refs/heads/" + head)
+    if r.returncode != 0:
+        return False                       # it moved (or is gone): left as it is
+    _git(root, "update-ref", "-d", "refs/remotes/origin/" + head)
+    return True
 
 
 def _keep_result(root: str, lines: list[str]) -> None:
@@ -2396,6 +2652,7 @@ def _rounds(root: str, message: str, check, sleep, land_fn, finish) -> int:
             ok, why = finish(root, dict(READY))
             if ok:
                 _mark_landed(root)
+                _delete_merged(root, READY)
                 with contextlib.redirect_stdout(io.StringIO()):
                     after_merge(root, sleep=sleep)
             else:
@@ -2421,7 +2678,8 @@ def _utf8_stdio() -> None:
         pass
 
 
-def main(argv: list[str] | None = None, root: str = ROOT, check=None, sleep=time.sleep) -> int:
+def main(argv: list[str] | None = None, root: str = ROOT, check=None, sleep=time.sleep,
+         finish=None) -> int:
     _utf8_stdio()
     argv = sys.argv[1:] if argv is None else argv
     if argv[:1] in (["-h"], ["--help"]):
@@ -2429,6 +2687,16 @@ def main(argv: list[str] | None = None, root: str = ROOT, check=None, sleep=time
         return 0
     if "--after-merge" in argv:
         return after_merge(root, sleep=sleep)
+    if "--wait-saved" in argv:
+        timeout = SAVE_WAIT_S
+        if "--timeout" in argv and argv.index("--timeout") + 1 < len(argv):
+            try:
+                timeout = float(argv[argv.index("--timeout") + 1])
+            except ValueError:
+                pass
+        state, why = wait_saved(root, timeout, sleep=sleep)
+        print(SAVED_SAY[state] % why if "%s" in SAVED_SAY[state] else SAVED_SAY[state])
+        return 1 if state == "unsaved" else 0
     if "--keep" in argv:
         msg = argv[argv.index("--message") + 1] if "--message" in argv and \
             argv.index("--message") + 1 < len(argv) else ""
@@ -2469,7 +2737,96 @@ def main(argv: list[str] | None = None, root: str = ROOT, check=None, sleep=time
         message = argv[i + 1]
     elif any(a.startswith("--message=") for a in argv):
         message = next(a for a in argv if a.startswith("--message="))[len("--message="):]
-    return land(root, message, check=check, sleep=sleep)
+    if not finish and not _github_here(root):
+        return land(root, message, check=check, sleep=sleep)
+    return _land_and_finish(root, message, check, sleep, finish or finish_on_github)
+
+
+def _land_and_finish(root: str, message: str, check, sleep, finish) -> int:
+    """The landing, then its pull request opened and merged here through GitHub's REST
+    interface, as --detach does, and the branch moved to master: all under the landing's
+    lock, start to end. Done after land() had let go of it, a landing started meanwhile (a
+    queued save, the turn-end hook) could push to the same branch, and the merge took what it
+    pushed unchecked (the review of SV-6, 2026-11-11). The calls are printed only where this
+    could not do it."""
+    with _holding(root) as mine:
+        if not mine:
+            _ask(root, message)
+            print("land: another landing is running in this checkout; it saves this work too "
+                  "when it ends. Nothing to do or say")
+            return 0
+        d = git_dir(root)
+        key = _lock_key(d) if d else None
+        ours = key is not None and key not in _RUN
+        if ours:
+            _RUN.add(key)                 # land() and after_merge() run under this hold
+        try:
+            READY.clear()
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                code = land(root, message, check=check, sleep=sleep)
+            said = buf.getvalue()
+            if code != 0 or not READY:
+                sys.stdout.write(said)
+                return code
+            ok, why = finish(root, dict(READY))
+            if not ok:
+                sys.stdout.write(said)
+                print("land: GitHub's part could not be done here (%s); make the calls above"
+                      % why)
+                return code
+            sys.stdout.write(_without_calls(said))
+            _mark_landed(root)
+            ready = dict(READY)
+            _delete_merged(root, ready)
+            with contextlib.redirect_stdout(io.StringIO()):
+                after_merge(root, sleep=sleep)
+            print("land: saved to master (pull request %s); nothing to say" % why)
+            # Opened through gh api, the pull request still subscribed this chat (a person's
+            # copy, 2026-11-10: subscription.created and pull_request.closed for one --detach
+            # merged), and each event is a turn. What stops it is not known; this call ends
+            # it for this one (the review of SV-6, 2026-11-11).
+            print('land: one call, where this chat has the tool: unsubscribe_pr_activity: owner '
+                  '"%s", repo "%s", pullNumber %s' % (ready.get("owner"), ready.get("repo"), why))
+            return 0
+        finally:
+            if ours:
+                _RUN.discard(key)
+
+
+def _without_calls(said: str) -> str:
+    """What a landing printed, less the calls for the chat that the landing has made itself:
+    "land: ready", "land: next ..." and the indented calls under them. Every other line stays
+    (work written while it ran, a branch left behind)."""
+    out, calls = [], False
+    for ln in said.splitlines(keepends=True):
+        if ln.startswith("land: ready"):
+            calls = True
+            continue
+        if calls and (ln.startswith("land: next") or ln[:1].isspace() or not ln.strip()):
+            continue
+        calls = False
+        out.append(ln)
+    return "".join(out)
+
+
+# Set in the app's own tests: a landing there never reaches GitHub unless a test hands it the
+# GitHub step itself.
+NO_GITHUB_ENV = "LJS_LAND_NO_GITHUB"
+
+
+def _github_here(root: str) -> bool:
+    """Can this landing open and merge its pull request itself: origin is on GitHub, gh is
+    here, and this is not a test run."""
+    import shutil as _shutil
+    if os.environ.get(NO_GITHUB_ENV) or not _shutil.which("gh") or on_computer():
+        return False
+    try:
+        import sync_app
+        owner, _name = sync_app.repo_of(_git(root, "remote", "get-url", "origin").stdout)
+    except Exception:  # noqa: BLE001  unsure: the calls are printed, as before
+        return False
+    return bool(owner)
 
 
 if __name__ == "__main__":

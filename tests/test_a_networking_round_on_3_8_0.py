@@ -174,14 +174,13 @@ def test_a_draft_for_someone_only_read_puts_them_in_the_book(book, capsys):
 # ------------------------------------------------------------ 13. an id that names nobody
 
 def test_the_short_list_refuses_an_id_that_names_nobody(book, capsys):
-    got = reading.shortlist(["kestrel_ghost"], TODAY, contacts=[], sends_left=10)
+    got = reading.shortlist(["kestrel_ghost"], TODAY, contacts=[])
     assert got["unknown"] == ["kestrel_ghost"] and got["ids"] == []
     assert reading.main(["shortlist", "kestrel_ghost"]) == reading.EXIT["ok"]
     assert "nobody by these ids is in the contact book or read about yet" in capsys.readouterr().out
     # Someone read about (a name and an employer) is on it, and `next` says who and where.
     _read_about("fernhill_oyelaran")
-    got = reading.shortlist(["fernhill_oyelaran"], reading.person.today(), contacts=[],
-                            sends_left=10)          # the day a read is kept under
+    got = reading.shortlist(["fernhill_oyelaran"], reading.person.today(), contacts=[])          # the day a read is kept under
     assert got["added"] == ["fernhill_oyelaran"]
 
 
@@ -190,7 +189,7 @@ def test_next_names_someone_read_but_not_in_the_book(book):
                                        "sources": [{"kind": "public", "url":
                                                     "https://www.linkedin.com/in/tamsin-example"}],
                                        "location": "Manchester", "items": []})
-    reading.shortlist(["fernhill_oyelaran"], TODAY, contacts=[], sends_left=10)
+    reading.shortlist(["fernhill_oyelaran"], TODAY, contacts=[])
     nxt = reading.next_up(TODAY, contacts=[])
     assert nxt["name"] == "Tamsin Oyelaran" and nxt["linkedin_url"].endswith("tamsin-example")
 
@@ -435,7 +434,7 @@ def test_people_waiting_on_a_reply_count_against_two_a_company(book, capsys):
            _row("fernhill_c", "Cy Marlow", "Fernhill Freight", location="Manchester")]
     contacts = waiting + new
     got = reading.shortlist(["kestrel_allard", "fernhill_a", "fernhill_b", "fernhill_c"], TODAY,
-                            contacts=contacts, sends_left=10)
+                            contacts=contacts)
     assert got["ids"] == ["fernhill_a", "fernhill_b"]
     assert "3 waiting on a reply (Rosalind Achterberg" in got["employer_full"]["kestrel_allard"]
     assert "2 on today's list" in got["employer_full"]["fernhill_c"]
@@ -450,7 +449,7 @@ def test_a_note_unanswered_for_months_no_longer_holds_the_employer():
                          location="Manchester"), first_contacted=old)
                for i, n in enumerate(("Rosalind Achterberg", "Corwin Haldane"))]
     new = _row("kestrel_allard", "Wren Allard", "Kestrel Mutual", location="Manchester")
-    got = reading.shortlist(["kestrel_allard"], TODAY, contacts=waiting + [new], sends_left=10)
+    got = reading.shortlist(["kestrel_allard"], TODAY, contacts=waiting + [new])
     assert got["ids"] == ["kestrel_allard"]
 
 

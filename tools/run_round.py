@@ -280,8 +280,9 @@ SUMMARY_FIELDS = ("priority", "fit", "fit_why", "opportunity", "title", "company
                   "date", "first_seen", "age_days", "url", "portal", "bar", "bar_reason",
                   "warm_route_note", "referral_note", "outreach_pending_note",
                   "throttle_override_note",
-                  "drafted_note", "silent_application_note", "apply_url", "link_kind",
-                  "link_status", "link_check", "near", "salary")
+                  "drafted_note", "silent_application_note", "set_aside_note", "apply_url",
+                  "link_kind", "link_status", "link_check", "near", "salary", "aimed_at_ai",
+                  "employment_type")
 LINK_FIELDS = ("apply_url", "link_kind", "link_status", "link_check")
 
 
@@ -529,7 +530,7 @@ def already_had(name: str = "", today=None, tracker: str | None = None, own=(),
             note(url, k.get("company"), k.get("title"), "already on your list: kept for later")
         records = set(by_url)
         day = datetime.date.fromisoformat(today) if isinstance(today, str) else today
-        for rname, _rank, r in (app_model.carried(day or datetime.date.today(),
+        for rname, _rank, r in (app_model.carried(day or person.today(),
                                                   but=family(name)) if listed else ()):
             note(r.get("url"), r.get("company"), r.get("title"),
                  f"already on your list, from search {rname}")
@@ -590,15 +591,17 @@ def place_rule(row) -> str:
     return ""
 
 
-def judged_none(company) -> str:
+def judged_none(company, today=None) -> str:
     """The bar's reason when a chat or the person judged this employer to clear none of pay,
     prestige or signal (bar.py judge ... none), where the person's own profile states that bar,
     or "". An employer nobody has judged is flagged, never cut: it is judged before drafting
-    (stage_picks), and once judged none it is cut here like any other hard rule."""
+    (stage_picks), and once judged none it is cut here like any other hard rule, until the
+    judgement's own day passes (bar.JUDGED_NONE_DAYS, read on `today`, the round's day) and it
+    is judged again."""
     import bar
     if not bar.applies():
         return ""
-    j = bar.judgement(company)
+    j = bar.judgement(company, today)
     if not j or j.get("verdict") != bar.NONE:
         return ""
     said = str(j.get("why") or "").strip().rstrip(".")
@@ -669,7 +672,7 @@ def hard_rules(jobage, today, seen=None, keep_ruled_out=False, dump=None, name="
         if verdict == bar.EXCLUDED:
             return f"candidate's bar: {why}"
         if verdict == bar.NONE:
-            none = judged_none(row.get("company"))
+            none = judged_none(row.get("company"), day)
             if none:
                 return none
         k = company_key(str(row.get("company") or "")) if declined else ""
@@ -690,7 +693,7 @@ def hard_rules(jobage, today, seen=None, keep_ruled_out=False, dump=None, name="
     return check
 
 
-def page_rules(today, seen=None, tracker=None):
+def page_rules(today, seen=None, tracker=None, rulings=None):
     """The one function deciding what reaches the page's Found list (app_model._jobs), the
     shortlist's own (hard_rules) read row by row down the list the page builds: the jobs the
     person added, the newest search, then the earlier ones it carries. `check(row)` is the hard
@@ -700,14 +703,43 @@ def page_rules(today, seen=None, tracker=None):
     applied for), so a copy of it is caught too. The search window is the page's own
     (app_model._jobs), and its rulings it reads itself. A "find 20 more" left 18 of 37 rows on
     the page that its own drafting then refused: US-based, an employer failing the bar, a copy
-    of a role already drafted or applied for (the maintainer, 2026-11-05)."""
+    of a role already drafted or applied for (the maintainer, 2026-11-05).
+
+    `rulings`, the seen list's entries as the page read them: a ruling a search's own rules
+    made on a row (record_left_out, basis rules) is asked here, and only here, whether its
+    rule still holds today (`standing`), and cuts the row by that rule's words while it does.
+    It was read as set aside for good: a judgement's 90 days, a review day or a bin on an
+    employer turned down ended the rule and its jobs stayed set aside (the rules review,
+    2026-11-11)."""
+    import prefilter
     import throttle
     from company_key import key as company_key
     from lookup_score import norm
     rules = hard_rules(_job_age_days(), today, seen=seen, tracker=tracker,
                        window=False, listed=False, drafts=False)
+    day = datetime.date.fromisoformat(today) if isinstance(today, str) else today
+    made = {k: e for k, e in (rulings or {}).items()
+            if isinstance(e, dict) and e.get("basis") == "rules"
+            and str(e.get("status") or "").lower() == "excluded"}
+    made_by_url = {norm(str(e.get("url") or k)) or k: e for k, e in made.items()}
+    stands: list = []
     by_url: dict = {}
     by_role: dict = {}
+
+    def standing(row) -> str:
+        """Why the ruling the search's rules made on this row still holds, or "": the rule as
+        it stands today (the hard rules above, or an employer with no team for you until its
+        review day), else the ruling itself while its reason still stands (throttle.ruled_out,
+        through the filter before scoring, which reads both)."""
+        e = made_by_url.get(norm(str(row.get("url") or "")))
+        if e is None:
+            return ""
+        if not stands:
+            stands.append(prefilter.already_ruled_out("", False, day, entries=made))
+        why = stands[0](row)
+        if why.startswith(("excluded in seen_jobs.json", "skipped in seen_jobs.json")):
+            why = " ".join(str(e.get("exclusion_reason") or e.get("reason") or "").split())
+        return why
 
     def listed(row) -> str:
         u = norm(str(row.get("url") or ""))
@@ -732,8 +764,9 @@ def page_rules(today, seen=None, tracker=None):
             # The job itself, under its own link: the page shows where it stands (drafted,
             # applied), never a copy of it to leave out.
             why = ""
-        return why or listed(row)
+        return why or standing(row) or listed(row)
     check.note = note
+    check.standing = standing
     check.had = rules.had
     return check
 
@@ -1427,7 +1460,8 @@ VERDICTS = ((75, "Strong fit"), (60, "Good fit"), (45, "Moderate fit"), (30, "We
 # The notes a row carries, in the order Check gives them: who to ask first, then what is
 # already running at the employer. Each as throttle.py wrote it.
 CHECK_NOTES = ("warm_route_note", "referral_note", "outreach_pending_note",
-               "silent_application_note", "drafted_note", "throttle_override_note")
+               "silent_application_note", "drafted_note", "throttle_override_note",
+               "set_aside_note")
 # A screen's note about its own reading, not something the person checks.
 THIN_BODY = "posting body too short"
 
@@ -1623,7 +1657,7 @@ def main():
     ap.add_argument("--top", type=int, default=40, help="shortlist length shown")
     ap.add_argument("--show", type=int, default=None,
                     help="how many of the strongest the search brings back to the page (0: all, up to 60)")
-    ap.add_argument("--today", default=datetime.date.today().isoformat())
+    ap.add_argument("--today", default=person.today().isoformat())
     ap.add_argument("--require", default="0.9",
                     help="hydrate: fail below this fraction with a description")
     ap.add_argument("--from-scraped", dest="from_scraped",

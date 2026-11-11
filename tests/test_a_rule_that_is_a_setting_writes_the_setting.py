@@ -94,3 +94,116 @@ def test_the_command_says_what_it_set(profile):
     assert r.returncode == 0, r.stderr
     assert "set: profile/person.json app_updates = \"when_asked\"" in r.stdout
     assert _person_json(profile)["app_updates"] == "when_asked"
+
+
+# ------------------------------------------- SV-1, SV-2: the words are read the way they mean
+#
+# The person's copy, 2026-11-10 (audit SV-1, critical): the rule "App updates come by
+# themselves; never ask him again" wrote `"app_updates": "when_asked"`, the opposite of what it
+# says. Its words were read as one run with the restated rule after them, so "never ask him
+# again App updates" read as "never ... update". The same reader decides which notes in a chat's
+# memory disagree with the setting (computer.memory_conflicts), and the start step removes those,
+# so a correct note was removed with it.
+
+BY_THEMSELVES = [
+    "App updates come by themselves; never ask him again",
+    "updates should just happen, dont ask me",
+    "stop asking me about updates, just do them",
+    "never ask about app updates again, they come by themselves",
+    "No, updates come by themselves",
+    "Take the app's updates without asking me",
+]
+WAIT_FOR_ME = [
+    "only update when I say. never take the app's update by itself",
+    "Never take the app's update (sync_app.py in any form that merges) unless he says to update.",
+    "no more automatic updates",
+    "The app updates only when he asks.",
+    "don't ask me, only take the app's update when I say",
+    "Don't take updates without asking me",
+]
+
+
+@pytest.mark.parametrize("words", BY_THEMSELVES)
+def test_words_that_say_updates_come_by_themselves_are_read_as_auto(words):
+    assert learned.known_settings("other", words, words) == [
+        ("profile/person.json app_updates", "auto")], words
+
+
+@pytest.mark.parametrize("words", WAIT_FOR_ME)
+def test_words_that_say_updates_wait_are_read_as_when_asked(words):
+    assert learned.known_settings("other", words, words) == [
+        ("profile/person.json app_updates", "when_asked")], words
+
+
+def test_the_rule_that_was_written_inverted_now_writes_auto_and_reads_it_back(profile):
+    person.put(["app_updates"], "when_asked")
+    person._data.clear()
+    said = "App updates come by themselves; never ask him again"
+    got = learned.record("other", said, said, today="2026-11-10")
+    assert _person_json(profile)["app_updates"] == "auto"
+    assert got["set"] == [("profile/person.json app_updates", "auto")]
+
+
+def test_a_setting_that_does_not_read_back_as_written_stops_the_record(profile, monkeypatch):
+    """Whatever writes the file, what is on disk afterwards is what counts: a write that leaves
+    another value there is said at once, never recorded as done."""
+    real = person.put
+    monkeypatch.setattr(person, "put", lambda key, value: real(key, "when asked"))
+    with pytest.raises(SystemExit) as no:
+        learned.record("other", "updates come by themselves", "Updates arrive automatically.",
+                       today="2026-11-10")
+    assert "app_updates" in str(no.value) and "auto" in str(no.value)
+    assert not [e for e in learned.load() if e.get("said") == "updates come by themselves"]
+
+
+def test_a_memory_note_that_agrees_with_the_setting_is_kept(tmp_path):
+    """The note says what the setting says: nothing disagrees, so the start step removes
+    nothing. Read the old way it was a when_asked note, and with the setting auto it was
+    taken out of the chat's memory."""
+    import re as _re
+    import computer
+    home = tmp_path / "home"
+    copy = tmp_path / "search"
+    copy.mkdir()
+    mem = home / ".claude" / "projects" / _re.sub(r"[^A-Za-z0-9]", "-", str(copy)) / "memory"
+    mem.mkdir(parents=True)
+    note = mem / "feedback_updates.md"
+    note.write_text("Stop asking me about updates, just take them.\n", encoding="utf-8")
+    os.environ.pop("CLAUDE_CONFIG_DIR", None)
+    auto = {"profile/person.json app_updates": "auto"}
+    assert computer.memory_conflicts(str(copy), home=str(home), settings=auto) == []
+    wait = {"profile/person.json app_updates": "when_asked"}
+    got = computer.memory_conflicts(str(copy), home=str(home), settings=wait)
+    assert [(c["memory_says"], c["setting_says"]) for c in got] == [("auto", "when_asked")]
+
+
+# The review of SV-1 (2026-11-11): the "don't ask" reading counted in any sentence, "no more
+# asking" and "don't bother asking" still read as waiting, and a value that did not read back
+# was left on disk while the command said nothing was recorded.
+
+@pytest.mark.parametrize("words,meant", [
+    ("Don't ask me again about LinkedIn. App updates: I'll say when.", "when_asked"),
+    ("Never ask me which jobs to apply to. I decide on app updates.", "when_asked"),
+    ("No more asking about updates", "auto"),
+    ("Don't bother asking about updates, just take them", "auto"),
+])
+def test_not_asking_counts_only_where_it_is_about_updates(words, meant):
+    assert learned.known_settings("other", words, words) == [
+        ("profile/person.json app_updates", meant)], words
+
+
+def test_a_value_that_does_not_read_back_is_put_back_as_it_was(profile, monkeypatch):
+    person.put(["app_updates"], "when_asked")
+    person._data.clear()
+    real = person.put
+    calls = []
+
+    def wrong_once(key, value):
+        calls.append(value)
+        return real(key, "when asked" if len(calls) == 1 else value)
+    monkeypatch.setattr(person, "put", wrong_once)
+    with pytest.raises(SystemExit):
+        learned.record("other", "updates come by themselves", "Updates arrive automatically.",
+                       today="2026-11-11")
+    assert _person_json(profile)["app_updates"] == "when_asked"
+

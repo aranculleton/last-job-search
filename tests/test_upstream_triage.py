@@ -10,6 +10,8 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = REPO_ROOT / "tools" / "upstream_triage.py"
 WORKFLOW = REPO_ROOT / ".github" / "workflows" / "upstream-watch.yml"
 UPSTREAM_SLUG = "MadsLorentzen/ai-job-search"
+# Where upstream lives since it moved to an organization (ai-job-search #776).
+UPSTREAM_HOME = "ai-job-search-dev/ai-job-search"
 
 
 def git(root: Path, *args: str) -> str:
@@ -71,13 +73,17 @@ class UpToDateTests(TriageRepoFixture):
 
 class RelevanceFilterTests(TriageRepoFixture):
     def test_commit_touching_only_removed_files_is_skipped(self):
-        # Upstream edits a file this fork never had -> not relevant.
+        # Upstream edits a file both sides had, which this fork then deleted -> not
+        # relevant. This used to be a file upstream added and the fork never had, which
+        # is the opposite case: a new upstream file is new work (NewUpstreamFileTests).
         self.write("portals/removed_portal.py", "x = 1\n")
-        self.commit("upstream: add removed_portal")
+        self.commit("shared: add removed_portal")
+        self.write("portals/removed_portal.py", "x = 2\n")
+        self.commit("upstream: fix removed_portal")
         self.set_upstream_to_head()
-        # Fork drops back to before that commit and deletes nothing extra;
-        # the file simply is not in fork HEAD.
         git(self.root, "reset", "--hard", "HEAD~1")
+        (self.root / "portals" / "removed_portal.py").unlink()
+        self.commit("fork: remove the portal")
 
         result = self.run_triage()
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -98,18 +104,99 @@ class RelevanceFilterTests(TriageRepoFixture):
         self.assertIn("git cherry-pick", result.stdout)
 
     def test_changelog_only_footprint_is_skipped(self):
+        # The removed area is one both sides had: a file upstream adds and the fork never
+        # had is new work, not a removal (NewUpstreamFileTests).
+        self.write("portals/gone.py", "y = 1\n")
+        self.commit("shared: the portal")
         self.write("portals/gone.py", "y = 2\n")
         self.write("CHANGELOG.md", "- did a thing\n")
         self.commit("upstream: feature living in removed area + changelog")
         self.set_upstream_to_head()
         # Fork ships CHANGELOG.md but not the removed portal file.
         git(self.root, "reset", "--hard", "HEAD~1")
+        shutil.rmtree(self.root / "portals")
         self.write("CHANGELOG.md", "- fork changelog\n")
         self.commit("fork changelog")
 
         result = self.run_triage()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("changelog-only footprint in this fork", result.stdout)
+
+
+class NewUpstreamFileTests(TriageRepoFixture):
+    """A file upstream added is new work, not one this fork removed.
+
+    Every touched path missing from HEAD read as removed here, so a commit adding a new
+    tool and its test, and nothing else, was filed under "probably skip". Only a path the
+    shared base had, or one inside a folder the base had and the fork deleted, is the
+    fork's removal. From ai-job-search (#585, #656).
+    """
+
+    def test_a_new_upstream_tool_is_worth_reviewing(self):
+        self.write("tools/new_guard.py", "x = 1\n")
+        self.write("tests/test_new_guard.py", "y = 1\n")
+        self.commit("upstream: add a new guard")
+        self.set_upstream_to_head()
+        git(self.root, "reset", "--hard", "HEAD~1")
+
+        result = self.run_triage()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("**1** worth reviewing", result.stdout)
+        self.assertIn("tools/new_guard.py", result.stdout)
+
+    def test_a_new_file_in_a_folder_the_fork_removed_is_skipped(self):
+        self.write("portals/oldboard/cli.ts", "x = 1\n")
+        self.commit("shared: oldboard")
+        self.write("portals/oldboard/tests/new.test.ts", "y = 1\n")
+        self.commit("upstream: a test for oldboard")
+        self.set_upstream_to_head()
+        git(self.root, "reset", "--hard", "HEAD~1")
+        shutil.rmtree(self.root / "portals")
+        self.commit("fork: remove oldboard")
+
+        result = self.run_triage()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("touches only files not in this fork", result.stdout)
+        self.assertIn("**0** worth reviewing", result.stdout)
+
+
+class NoSharedHistoryTests(TriageRepoFixture):
+    """This app's history starts afresh at 3.0.0 and shares no commit with upstream.
+
+    So git finds no merge base, "behind" was every commit upstream ever made, and no
+    path could be told new from removed. The upstream commit the app was made from is
+    recorded (FORK_POINT) and counted from instead.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.write("kept.py", "print('fork point')\n")
+        self.fork_point = self.commit("upstream: the commit the fork was made from")
+        self.write("kept.py", "print('after the fork')\n")
+        self.after = self.commit("upstream: a fix after the fork")
+        self.set_upstream_to_head()
+        # The fork: a new history with no parent, holding the files as they were.
+        git(self.root, "checkout", "-q", "--orphan", "fork", self.fork_point)
+        self.commit("fork 3.0.0: a fresh history")
+
+    def test_only_commits_after_the_fork_point_are_counted(self):
+        result = self.run_triage("--base", self.fork_point)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("**1** commit(s)", result.stdout)
+        self.assertIn("a fix after the fork", result.stdout)
+        self.assertNotIn("the commit the fork was made from", result.stdout)
+        self.assertNotIn("init", result.stdout.split("### Probably skip")[0])
+
+    def test_the_recorded_fork_point_is_upstreams_commit(self):
+        sys.path.insert(0, str(REPO_ROOT / "tools"))
+        import upstream_triage
+        self.assertRegex(upstream_triage.FORK_POINT, r"^[0-9a-f]{40}$")
+        self.assertIn("PR #413", (REPO_ROOT / "CHANGELOG-upstream.md").read_text(encoding="utf-8"))
+
+    def test_without_a_base_it_says_the_count_is_the_whole_history(self):
+        result = self.run_triage()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("share no history", result.stdout)
 
 
 class AlreadyAppliedTests(TriageRepoFixture):
@@ -173,6 +260,13 @@ class WorkflowGuardTests(unittest.TestCase):
         # Every private copy pays per billed minute; the public app does not.
         text = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("github.repository == 'aranculleton/last-job-search'", text)
+
+    def test_workflow_fetches_upstream_where_it_lives_now(self):
+        # Upstream moved to an organization (its #776); the old address only redirects,
+        # and a redirect stops the day someone makes a new repository under the old name.
+        text = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn(f"https://github.com/{UPSTREAM_HOME}.git", text)
+        self.assertNotIn(f"https://github.com/{UPSTREAM_SLUG}.git", text)
 
     def test_workflow_uses_builtin_token_only(self):
         text = WORKFLOW.read_text(encoding="utf-8")

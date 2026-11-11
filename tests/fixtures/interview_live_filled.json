@@ -99,7 +99,7 @@
     {
      "t": "Before I write anything I'll say back what I think the problem is and ask what the data looks like, so that we agree on the inputs and the output.",
      "prompts": [
-      "q12"
+      "q13"
      ]
     },
     {
@@ -115,12 +115,12 @@
    ],
    "bridge": "That is how I'd like to work through it, if that suits you.",
    "questions": [
+    "q13",
     "q1",
     "q2",
     "q3",
     "q4",
-    "q5",
-    "q12"
+    "q5"
    ]
   },
   {
@@ -134,7 +134,7 @@
     {
      "t": "When you push on my solution I'll take each trade-off out loud, what it costs in speed or in how easy it is to read, and what I'd choose for a weekly job.",
      "prompts": [
-      "q13"
+      "q12"
      ]
     },
     {
@@ -144,7 +144,7 @@
    ],
    "bridge": "",
    "questions": [
-    "q13",
+    "q12",
     "q14"
    ]
   },
@@ -173,7 +173,7 @@
   {
    "id": "q1",
    "part": "p3",
-   "who": "senior",
+   "who": "technical",
    "q": "Tell me about your experience with demand forecasting.",
    "also": [
     "How have you forecast demand before?"
@@ -227,7 +227,7 @@
   {
    "id": "q2",
    "part": "p3",
-   "who": "senior",
+   "who": "technical",
    "q": "What is your experience with SAP?",
    "also": [
     "How well do you know SAP?"
@@ -246,13 +246,13 @@
   {
    "id": "q3",
    "part": "p3",
-   "who": "senior",
-   "q": "What is your experience with Chartered procurement?",
+   "who": "technical",
+   "q": "Are you a member of CIPS?",
    "also": [
-    "Are you a member of CIPS?"
+    "Do you hold a procurement qualification?"
    ],
-   "simple": "I am not a member of the chartered procurement institute, and I would not want that to be unclear. My route into planning has been through the data, seven years of forecasting, stock and service-level work, rather than through procurement. If membership matters for this role, I'd like to understand what it is needed for, and I'm open to working towards it.",
-   "detailed": "I am not a member of the chartered procurement institute, and I would not want that to be unclear. My route into planning has been through the data, seven years of forecasting, stock and service-level work, rather than through procurement. Where I have worked closest to it is at Oakmere Foods, giving the buyers specific order changes for the chilled lines, which cut write-offs 18% over two quarters. If membership matters for this role, I'd like to understand what it is needed for, and I'm open to working towards it.",
+   "simple": "No, I'm not a member of CIPS, and I'd rather say that plainly. My route into planning has been through the data, seven years of forecasting, stock and service-level work, rather than through procurement. If membership matters for this role, I'd like to understand what it is needed for.",
+   "detailed": "No, I'm not a member of CIPS, and I'd rather say that plainly. My route into planning has been through the data, rather than through procurement. Where I have worked closest to it is with the buyers at Oakmere Foods, whose order changes cut write-offs 18% over two quarters. If membership matters for this role, I'd like to understand what it is needed for.",
    "story": null,
    "known": null,
    "draft": false,
@@ -287,7 +287,7 @@
    "also": [
     "How do you debug?"
    ],
-   "simple": "The hardest was a forecast that looked right in total and wrong by site, and it took me a while to see that two distribution centres were being counted under one code after a system change. I found it by checking the inputs site by site against the warehouse records, rather than staring at the model. Since then I test the joins before I trust any number built on them.",
+   "simple": "The hardest was a forecast that looked right in total and wrong by site. It took me a while to see that two distribution centres were counted under one code after a system change. I found it by checking the inputs site by site against the warehouse records, rather than staring at the model. Since then I test the joins before I trust any number built on them.",
    "detailed": "The hardest was a forecast that looked right in total and wrong by site, and it took me a while to see that two distribution centres were being counted under one code after a system change. I had spent a day looking at the model before I thought to doubt the data going into it. I found it by checking the inputs site by site against the warehouse records, and the fix was a test that every site appears once and only once. Since then I test the joins before I trust any number built on them.",
    "story": null,
    "known": null,
@@ -355,7 +355,7 @@
    "known": null,
    "draft": false,
    "from": [
-    "No story or prepared answer covers this yet: Claude writes one from your profile, and asked for an example you cannot recall, drafts one for you to check."
+    "Your story: Ending a daily reconciliation (matched by its Use for tags)"
    ],
    "follow": [
     {
@@ -446,8 +446,8 @@
     "Tell me about the work you are proudest of.",
     "What has been your biggest impact?"
    ],
-   "simple": "The one I'd choose is the forecast I rebuilt at Brindle & Hart Logistics. Error was at 22% across 2,400 SKUs and the planners were covering it with extra safety stock, so I rebuilt the weekly forecast in Python and SQL and tracked the error by distribution centre. It came down to 14%, and about £1.1M of safety stock was released.",
-   "detailed": "The one I'd choose is the forecast I rebuilt at Brindle & Hart Logistics. Error was at 22% across 2,400 SKUs and six distribution centres, and the planners were covering the gap with safety stock, so the task was a forecast they would trust. I rebuilt it in Python and SQL, with promotions and seasonality as features, and tracked the error by distribution centre so they could see where it held. It came down to 14%, about £1.1M of safety stock was released, and my lesson was to show the evidence every week, not ask for trust.",
+   "simple": "The one I'd choose is the forecast I rebuilt at Brindle & Hart Logistics. Error was at 22% across 2,400 SKUs, and the planners were covering it with extra safety stock. I rebuilt the weekly forecast in Python and SQL and tracked the error by distribution centre. It came down to 14%, and about £1.1M of safety stock was released.",
+   "detailed": "The one I'd choose is the forecast I rebuilt at Brindle & Hart Logistics. Error was at 22% across 2,400 SKUs, and the planners were covering the gap with safety stock, so the task was a forecast they would trust. I rebuilt it in Python and SQL, with promotions and seasonality as features, and tracked the error by distribution centre so they could see where it held. It came down to 14%, about £1.1M of safety stock was released, and my lesson was to show the evidence every week, not ask for trust.",
    "story": "s1",
    "known": null,
    "draft": false,
@@ -502,13 +502,31 @@
   },
   {
    "id": "q12",
+   "part": "p4",
+   "who": "technical",
+   "q": "What are the trade-offs in your approach?",
+   "also": [
+    "Why did you write it that way?"
+   ],
+   "simple": "The plain loop is the easiest to read and to check, and it is slower than working on whole columns. For a weekly job that matters very little, so I'd keep it readable. I'd change my mind if the same code had to run across every SKU every hour.",
+   "detailed": "The plain loop is the easiest to read and to check, and it is slower than working on whole columns. For a weekly job that matters very little, so I'd keep it readable and spend the time on tests instead. Working on whole columns is faster and shorter, and harder to step through when a number looks wrong. I'd change my mind if the same code had to run across every SKU every hour.",
+   "story": null,
+   "known": null,
+   "draft": false,
+   "from": [
+    "No story or prepared answer covers this yet: Claude writes one from your profile, and asked for an example you cannot recall, drafts one for you to check."
+   ],
+   "follow": []
+  },
+  {
+   "id": "q13",
    "part": "p3",
    "who": "technical",
    "q": "Given weekly demand and forecasts by SKU, write a function that returns the SKUs whose forecast error is above a threshold.",
    "also": [
     "Flag the lines where the forecast was furthest out."
    ],
-   "simple": "I'd start by saying it back: for each [[sku|SKU]] I need the gap between forecast and actual as a share of actual, and I return the ones above the threshold. I'd write it plainly first, as a loop that skips any SKU with no actual demand so that I never divide by zero, and check it by hand on a few rows. Then I'd ask how big the data is before deciding whether it needs pandas.",
+   "simple": "I'd start by saying it back: for each [[sku|SKU]] I need the gap between forecast and actual as a share of actual, and I return the ones above the threshold. I'd write it plainly first, as a loop that skips any SKU with no actual demand, so I never divide by zero. Then I'd check it by hand on a few rows, and ask how big the data is before deciding whether it needs pandas.",
    "detailed": "I'd start by saying it back: for each [[sku|SKU]] I need the gap between forecast and actual as a share of actual, and I return the ones above the threshold. Before writing anything I'd ask what the data looks like, whether a SKU can be missing a week, and whether the threshold is a share or a number of units. I'd write it plainly first, as a loop that skips any SKU with no actual demand so that I never divide by zero, and check it by hand on a few rows. Then I'd ask how big the data is before deciding whether it needs pandas, and I'd say each of those choices out loud as I make it.",
    "story": null,
    "known": null,
@@ -519,7 +537,7 @@
      "who": "technical",
      "q": "How would you test it?",
      "also": [],
-     "simple": "I'd write a few small cases I can work out by hand, one SKU well under the threshold, one well over, one exactly on it and one with no demand at all. If those pass, I'd run it on a real week and compare the number it flags with what I'd expect from the overall error.",
+     "simple": "I'd write a few small cases I can work out by hand: one SKU well under the threshold, one well over, one exactly on it, and one with no demand. If those pass, I'd run it on a real week and compare the number it flags with what I'd expect from the overall error.",
      "detailed": "",
      "follow": [
       {
@@ -543,22 +561,6 @@
    ]
   },
   {
-   "id": "q13",
-   "part": "p4",
-   "who": "technical",
-   "q": "What are the trade-offs in your solution?",
-   "also": [
-    "Why did you write it that way?"
-   ],
-   "simple": "The plain loop is the easiest to read and to check, and it is slower than working on whole columns. For a weekly job that matters very little, so I'd keep it readable. I'd change my mind if the same code had to run across every SKU every hour.",
-   "detailed": "The plain loop is the easiest to read and to check, and it is slower than working on whole columns. For a weekly job that matters very little, so I'd keep it readable and spend the time on tests instead. Working on whole columns is faster and shorter, and harder to step through when a number looks wrong. I'd change my mind if the same code had to run across every SKU every hour.",
-   "story": null,
-   "known": null,
-   "draft": false,
-   "from": [],
-   "follow": []
-  },
-  {
    "id": "q14",
    "part": "p4",
    "who": "peer",
@@ -580,7 +582,7 @@
    "also": [
     "Why would a site manager believe your numbers?"
    ],
-   "simple": "I show them the evidence rather than ask for their trust. At Brindle & Hart Logistics I tracked forecast error by distribution centre every week, so each planner could see where the forecast held for their own site and where it did not. Once they could check it for themselves they used it, and the safety stock came down.",
+   "simple": "I show them the evidence rather than ask for their trust. At Brindle & Hart Logistics I tracked forecast error by distribution centre every week. Each planner could see where the forecast held for their own site, and where it did not. Once they could check it for themselves they used it, and the safety stock came down.",
    "detailed": "I show them the evidence rather than ask for their trust. At Brindle & Hart Logistics I tracked forecast error by distribution centre every week, so each planner could see where the forecast held for their own site and where it did not. I never argued for the model in a meeting, I put the weekly error in front of the people who would live with it. Once they could check it for themselves they used it, error came down from 22% to 14%, and about £1.1M of safety stock was released.",
    "story": null,
    "known": "k1",
@@ -708,7 +710,7 @@
   },
   {
    "id": "a4",
-   "q": "Is there room to grow into more architectural or strategic decisions?",
+   "q": "Is there room to grow into bigger, more strategic decisions?",
    "why": "a common one about tech and growth: skip it if their own pages answer it",
    "follow": [
     {
@@ -839,8 +841,7 @@
   "notice": "One month.",
   "based": "Chorlton, Manchester",
   "not_to_say": [
-   "Do not call it a parcel carrier: it moves pallets.",
-   "Never claim Chartered procurement: A credential, not a skill. Do not claim it. Ask Claude for an example and it drafts one for you to check"
+   "Do not call it a parcel carrier: it moves pallets."
   ],
   "figures": [
    "Your lowest figure, 42,000: it stays with you."
@@ -848,11 +849,11 @@
   "weaknesses": [
    {
     "what": "SAP",
-    "frame": "I have reported from SAP extracts and the warehouse system behind them."
+    "frame": "Say: “I have reported from SAP extracts and the warehouse system behind them.”"
    },
    {
-    "what": "Chartered procurement",
-    "frame": "Say plainly you have not done it as such, then the nearest true thing."
+    "what": "CIPS membership",
+    "frame": "You do not hold it, so never claim it. Say so plainly, then the nearest true thing."
    }
   ],
   "red_flags": [
@@ -878,12 +879,12 @@
    "p2": {
     "minutes": 18,
     "talk": 3.0,
-    "words": 467
+    "words": 465
    },
    "p3": {
     "minutes": 21,
     "talk": 3.5,
-    "words": 505
+    "words": 489
    },
    "p4": {
     "minutes": 9,

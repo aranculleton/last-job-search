@@ -24,6 +24,32 @@ import local_path  # noqa: E402  the repo's .venv, where env_check --fix puts py
 local_path.extend()
 from pathlib import Path
 
+import person  # noqa: E402
+
+# `.claude/settings.json` lets a chat run this tool with any arguments without asking, so
+# where `--dump-text` may write is part of that permission. It wrote to any path, making the
+# folders on the way: a shell's start-up file, or a script the allow list runs, overwritten
+# with nobody asked. A text layer is dumped beside its document (apply.md Step 5d writes
+# cv/<Prefix>_<ABBR>_Resume.txt), so these folders are the only place it goes. From
+# ai-job-search (bc2c583), which found it.
+DUMP_DIRS = ("cv", "cover_letters")
+
+
+def dump_refused(path) -> str:
+    """Why `--dump-text` may not write to `path`, or "" when it may: a .txt file, not a link,
+    in the repo's or the state's cv/ or cover_letters/."""
+    path = Path(path)
+    if path.suffix.lower() != ".txt":
+        return "must name a .txt file"
+    if path.is_symlink():
+        return "must not be a link to another file"
+    parent = path.resolve().parent
+    roots = {Path(base, d).resolve() for d in DUMP_DIRS
+             for base in (person.ROOT, person.state())}
+    if not any(parent == r or r in parent.parents for r in roots):
+        return "must be inside cv/ or cover_letters/"
+    return ""
+
 
 class VerificationError(Exception):
     """Raised when a generated PDF does not satisfy its checks."""
@@ -246,6 +272,10 @@ def verify_pdf(pdf_path, expected_pages=None, min_chars=1, required_text=(), dum
     pdf_path = Path(pdf_path)
     if not pdf_path.is_file():
         raise VerificationError(f"PDF does not exist: {pdf_path}")
+    if dump_text is not None:
+        refused = dump_refused(dump_text)
+        if refused:
+            raise VerificationError(f"--dump-text {dump_text}: {refused}")
 
     extracted_text, actual_pages, extractor = extract_text_layer(pdf_path, require)
 
@@ -575,7 +605,7 @@ def build_parser():
     parser.add_argument(
         "--dump-text",
         type=Path,
-        help="write the extracted text layer to this path (UTF-8)",
+        help="write the extracted text layer to this .txt file in cv/ or cover_letters/ (UTF-8)",
     )
     parser.add_argument(
         "--roundtrip",

@@ -524,12 +524,14 @@ master cannot see work sitting on another chat's branch, and builds it a second 
    more, and what to do about it.
 2. **Finish by getting the work onto master.** Not "pushed to the branch": on master. Once
    the answer is out (the reply, the page brought up to date), and at most once a turn,
-   start `python3 tools/land.py --message "<what changed>"` in the background (Bash,
-   `run_in_background`), so the chat stays free for the person and the page while it runs
-   (in the foreground the check held the chat that answers the page for minutes,
-   2026-10-29). A chat whose next step needs the landing done (a job's own chat) runs it in
-   the foreground instead, so the command itself ends when the landing has; never a `pgrep`
-   loop to wait on it, which matches its own command line and never ends (2026-11-10). It does every step on this side, each git command on its own: saves and
+   run `python3 tools/land.py --detach --message "<what changed>"`: it returns at once and
+   lands in a process of its own, pull request and merge included, and its end wakes
+   nobody (a background run's end woke the chat, a whole turn, 2026-11-11). What it could
+   not do is said once by the next read (`land.github_waiting`). A chat whose next step
+   needs the landing done (a job's own chat), or a scheduled run that must see it end, runs
+   plain `python3 tools/land.py --message "<what changed>"` instead, in the foreground or
+   the background; never a `pgrep` loop to wait on it, which matches its own command line
+   and never ends (2026-11-10). It does every step on this side, each git command on its own: saves and
    commits, `git fetch origin master` and `git merge --no-edit origin/master`, runs
    `./tools/ci_local.sh --quick`, and only when that is green `git push -u origin HEAD`
    (a network failure is retried; nothing is ever forced). **When every file it changes
@@ -540,9 +542,15 @@ master cannot see work sitting on another chat's branch, and builds it a second 
    lands at once (`land.data_only`). **In a chat on the person's computer** it ends at the
    push (`land: saved to GitHub on <branch>`): no pull request and no merge there, where
    Claude's own safety check refused the merge; the chat that answers the page in the cloud
-   brings it to master with its next save, and the computer chat says nothing about it. In
-   the turn its ending wakes:
-   - `land: ready <branch>`: make the calls it prints, each its own step:
+   brings it to master with its next save, and the computer chat says nothing about it. Where
+   the chat that answers the page is itself on the computer, no cloud chat would, so the save
+   is checked as any landing is and prints the calls below; a call Claude's safety check
+   refuses is left, and the work waits on its branch. In the turn its ending wakes:
+   - `land: saved to master (pull request N)`: it opened and merged the pull request itself
+     (through `gh api`) and started this branch from master; make the one call it gives,
+     `unsubscribe_pr_activity`, where this chat has the tool, and nothing else.
+   - `land: ready <branch>` (GitHub's part could not be done here, and it says why): make
+     the calls it prints, each its own step:
      `create_pull_request` (head that branch, base master); at once `unsubscribe_pr_activity`
      for it (a cloud chat is subscribed to a pull request it opens by itself, 2026-10-30, and
      each save then woke it twice more, 2026-11-06); then `merge_pull_request`; then `python3
@@ -872,27 +880,28 @@ slash. A command and a skill can share a stem; they are not alternatives to each
 |---|---|
 | `job-application-assistant` | `/apply` `/rank` `/expand` `/outcome` `/interview` `/setup` `/reset` `/add-template` |
 | `job-scraper` (declared name: **`scrape`**) | `/add-portal` |
-| `networking` | `/network` `/reply` `/threads` `/prep` |
+| `networking` | `/network` `/threads` `/prep` |
 | `upskill` | (none) |
 | `app` | (none: it loads when the person's page rings a chat) |
 
 Also `/html-report` and `/upgrade` (which a session starts itself, "Start of a session"
-step 5), which belong to no skill.
+step 5), which belong to no skill, and `/reply`: a reply loads no skill, as `reply.py prepare`
+prints the guidance, the thread and the person's own rules, and `reply.py finish` holds the
+checks.
 
 **Two things are typed with a slash.** A file in `.claude/commands/` is one. A skill's
 own declared `name:` is the other, which is why **`/scrape` and `/upskill` work with no
 command file behind them**: `job-scraper/SKILL.md` declares `name: scrape` and
 `upskill/SKILL.md` declares `name: upskill`. This is the whole source of the confusion
 the map exists to settle. `networking` does not do that, so `/networking` is not a
-command; its four actions are the command files `/network`, `/reply`, `/threads` and
-`/prep`.
+command; its three actions are the command files `/network`, `/threads` and `/prep`.
 
 **The pairs that get confused:**
 
 - **`networking` (skill) vs `/network` (command).** The skill is the rules: tiers, tone,
   limits, playbooks. The command is one action, a discovery run. Typing `/network` runs a
-  discovery; asking anything about outreach loads the skill. `/reply`, `/threads` and
-  `/prep` are its other three actions.
+  discovery; asking anything about outreach loads the skill. `/threads` and `/prep` are
+  its other two actions; `/reply` loads no skill.
 - **`/prep` vs `/interview`.** `/prep` prepares a **networking call** that came out of a
   thread, and takes a contact name. `/interview` prepares a **real interview**, and takes a
   company: on a tracked application, or on a process with no application at all (a referral

@@ -11,7 +11,10 @@ is fine after all. So every exclusion records what it rests on:
                     posting is screened again the next time a round finds it
                     (tools/throttle.py ruled_out). Nothing is fetched before then.
     basis "person"  the person's own words ("not this kind of company"). It holds until
-                    they change their mind, and then `lift` takes it off.
+                    they change their mind, and then `lift` takes it off. Written with
+                    by "chat", it is a chat's judgement on that one posting (a draft it
+                    stopped, `app.py done --left-out`): it holds as theirs does, for that
+                    posting alone and never for good, shown under Held back for now.
 
 What a rules ruling rests on is as narrow as it can say. The rules come in parts
 (`parts` lists them): each blocker row on the triage card, the evaluation framework,
@@ -78,6 +81,143 @@ GATE_NAMES = ("DEGREE_FLAGS", "DESIGNATED_TITLE", "DESIGNATION", "ELIGIBILITY",
               "WORKDAY_INTERNAL_SITES", "YEARS_HELD")
 BASES = ("rules", "person")
 ALL = "all"
+# Who made a ruling with basis "person" when it was not the person: a chat that stopped a draft
+# because the job is not one they can take (app.py done --left-out). Written as a ruling by the
+# rules, it was judged again against today's rules on every page build, and a stop on a degree,
+# a place or pay was back on Jobs at the next one (the engine review, 2026-11-11).
+CHAT = "chat"
+
+# A role the person set aside holds for this long from the day they did, then it is shown
+# once more, marked, in case things changed: kept for good, one "not for me" in January held
+# every later opening of that title at the employer, wherever it was posted, with nothing
+# saying so (the rules review, 2026-11-11). It holds for good only where their own words say
+# so (FOR_GOOD). Their own number of days: profile/search.py SET_ASIDE_DAYS (set_aside_days).
+SET_ASIDE_DEFAULT = 182
+
+
+def set_aside_days() -> int:
+    """How many days a role the person set aside holds: their own number (search.py
+    SET_ASIDE_DAYS), read each time it is asked, else SET_ASIDE_DEFAULT. Read once when this
+    file was imported, a process kept the old end after the person changed it, and a profile
+    with no search.py could not import this file at all (the rules review, 2026-11-11)."""
+    try:
+        _s = person.module("search") if person.exists("search.py") else None
+        n = int(getattr(_s, "SET_ASIDE_DAYS", SET_ASIDE_DEFAULT) or SET_ASIDE_DEFAULT)
+    except (TypeError, ValueError, person.NoProfile):
+        n = SET_ASIDE_DEFAULT
+    return n if n >= 1 else SET_ASIDE_DEFAULT
+
+
+# Only words that say "never show me this" hold a set-aside for good: "for good", "forever",
+# "never" said of the role or the employer, "not at all" said of wanting it ("not interested at
+# all"). "never" or "at all" anywhere held a reason that only described the role for good: "they
+# never replied", "does not use Python at all" (the rules review, 2026-11-11).
+FOR_GOOD = re.compile(
+    r"\bfor\s+good\b|\bfor\s*ever\b|\bpermanently\b|\bnot\s+ever\b|\bnever\s+(?:again|ever)\b"
+    r"|\bno\s+more\b[^.;]*\bever\b|\bnever\b"
+    r"|\bnot\s+(?:at\s+all|(?:interested|keen|for\s+me|a\s+fit|my\s+thing)\s+at\s+all)\b", re.I)
+# "never" describing what someone else did, or what happened: a subject before it in its clause
+# (they, it, the team ...), or a verb in the past after it.
+_NEVER_SAID_OF = re.compile(
+    r"\b(?:they|it|he|she|who|which|the\s+\w+|we|nobody|no\s+one)(?:'ve|'d)?\s+(?:\w+\s+)?never\b"
+    r"|\bnever\s+(?:(?!interested\b)\w+ed|heard|got|had|did|was|were|said|made|gave|came|knew|saw|been|seen|"
+    r"wrote|met|went|sent|paid|told|took)\b", re.I)
+
+
+def for_good(words) -> bool:
+    """Whether the person's words for a set-aside say it holds for good (FOR_GOOD), read
+    clause by clause, a "never" that only describes something not counting."""
+    for clause in re.split(r"[.;,:!?()]+", str(words or "")):
+        for m in FOR_GOOD.finditer(clause):
+            if m.group(0).lower() != "never" or not _NEVER_SAID_OF.search(clause):
+                return True
+    return False
+# The day a ruling of theirs was made, in the order each writer stamps one; then, for one
+# written by hand with none, the earliest day the posting was seen, which it is no older than.
+# Never the latest: a search seeing the posting again (--keep-ruled-out) moved its last_seen
+# on, and with it the start of the six months, so it never ended (the rules review, 2026-11-11).
+# `held_from` is no day it was made: the day an update gave an undated one its six months
+# (date_set_asides), said nowhere as the day it was set aside.
+_RULED_ON = ("excluded_date", "excluded_on", "date", "reviewed_date", "restamped_date",
+             "held_from")
+_SEEN_ON = ("last_seen", "skipped_date", "rank_date", "first_seen")
+
+
+def _day_of(value) -> dt.date | None:
+    try:
+        return dt.date.fromisoformat(str(value or "")[:10])
+    except ValueError:
+        return None
+
+
+def ruled_on(entry) -> dt.date | None:
+    """The day a ruling was made, or None when nothing on it is dated."""
+    for k in _RULED_ON:
+        day = _day_of((entry or {}).get(k))
+        if day:
+            return day
+    days = [d for d in (_day_of((entry or {}).get(k)) for k in _SEEN_ON) if d]
+    return min(days) if days else None
+
+
+def set_aside_until(entry) -> dt.date | None:
+    """The first day a role the person set aside no longer holds: set_aside_days() after the day
+    they did; None while it holds for good, their own words saying so (for_good); and
+    date.min for one nothing dates, which holds nothing. Only for their own rulings (basis
+    "person"): the rules' own lapse when the rule they rest on changes. A chat's judgement
+    (`by` "chat") is never for good: its words are the chat's, not theirs."""
+    if (entry or {}).get("by") != CHAT and for_good((entry or {}).get("exclusion_reason")):
+        return None
+    day = ruled_on(entry)
+    return day + dt.timedelta(days=set_aside_days()) if day else dt.date.min
+
+
+def set_aside_on(entry) -> dt.date | None:
+    """The day the person set it aside, as the page says it, or None where none is known: never
+    the day an update dated it (`held_from`)."""
+    if not any(_day_of((entry or {}).get(k)) for k in _RULED_ON if k != "held_from") \
+            and _day_of((entry or {}).get("held_from")):
+        return None
+    return ruled_on(entry)
+
+
+def _undated_set_aside(entry) -> bool:
+    return (isinstance(entry, dict) and entry.get("basis") == "person"
+            and str(entry.get("status") or "").lower() == "excluded"
+            and not any(_day_of(entry.get(k)) for k in _RULED_ON)
+            and not for_good(entry.get("exclusion_reason")))
+
+
+def undated_set_asides(path=None) -> list[str]:
+    """The keys of the roles the person set aside with no day of their own, kept from before a
+    set-aside had an end: each would end on its posting's first seen day's six months, or hold
+    nothing, all on the next search."""
+    data = _load(path or SEEN)
+    return [k for k, e in (data.get("seen") or {}).items() if _undated_set_aside(e)]
+
+
+def date_set_asides(today: str = "", path=None) -> int:
+    """Give each role the person set aside with no day of its own (`undated_set_asides`) its
+    set_aside_days() from `today` (`held_from`), so the ones set aside before an update come
+    back one by one from then, never all at once (profile upgrade set-asides-dated). Words
+    that say for good keep it for good. How many were dated."""
+    path = path or SEEN
+    data = _load(path)
+    day = today or person.today().isoformat()
+    n = 0
+    for e in (data.get("seen") or {}).values():
+        if _undated_set_aside(e):
+            e["held_from"] = day
+            n += 1
+    if n:
+        _save(data, path)
+    return n
+
+
+def set_aside_holds(entry, today: dt.date) -> bool:
+    """Does this ruling of the person's still hold on `today`?"""
+    until = set_aside_until(entry)
+    return until is None or until > today
 # seen_jobs.json as every writer of it writes it: tools/throttle.py and the row-wise
 # merge (tools/merge_state.py) both use this. A different indent rewrote every line of
 # the file on a one-ruling change, a diff of the whole file that two chats then had to
@@ -275,7 +415,8 @@ def _stamp_rules(entry: dict, names=(), fp: str = "", parts: dict | None = None)
 
 def _rule(data: dict, url: str, reason: str, title: str = "", company: str = "",
           basis: str = "rules", today: str = "", rests_on=(), location: str = "",
-          fp: str = "", parts: dict | None = None, index: dict | None = None) -> dict:
+          fp: str = "", parts: dict | None = None, index: dict | None = None,
+          by: str = "") -> dict:
     """Write one ruling into loaded seen data; `add` and `add_many` share it.
 
     `index` is {normalised URL: entry key}, for a caller writing many at once.
@@ -286,13 +427,15 @@ def _rule(data: dict, url: str, reason: str, title: str = "", company: str = "",
         raise ValueError("a ruling needs its reason: one that cannot say why blocks nothing")
     if rests_on and basis != "rules":
         raise ValueError("only a ruling on the rules rests on a part of them")
+    if by and basis != "person":
+        raise ValueError("only a set-aside is made by a chat for the person (basis person)")
     n = norm(url) or url
     # An entry a round already recorded under the raw URL is the same posting.
     if index is None:
         index = {norm(u) or u: u for u in data["seen"]}
     k = index.setdefault(n, n)
     entry = data["seen"].get(k) or {}
-    day = today or dt.date.today().isoformat()
+    day = today or person.today().isoformat()
     entry.update({"url": entry.get("url") or url, "title": title or entry.get("title", ""),
                   "company": company or entry.get("company", ""), "status": "excluded",
                   "exclusion_reason": reason.strip(), "basis": basis, "excluded_date": day})
@@ -300,6 +443,10 @@ def _rule(data: dict, url: str, reason: str, title: str = "", company: str = "",
     # not for the same title in another city (tools/throttle.py ruled_out).
     if location and not entry.get("location"):
         entry["location"] = location
+    if by:
+        entry["by"] = by
+    else:
+        entry.pop("by", None)
     entry.setdefault("first_seen", day)
     if basis == "rules":
         _stamp_rules(entry, rests_on, fp, parts)
@@ -311,9 +458,9 @@ def _rule(data: dict, url: str, reason: str, title: str = "", company: str = "",
 
 
 def add(url: str, reason: str, title: str = "", company: str = "", basis: str = "rules",
-        today: str = "", path=SEEN, rests_on=(), location: str = "") -> dict:
+        today: str = "", path=SEEN, rests_on=(), location: str = "", by: str = "") -> dict:
     data = _load(path)
-    entry = _rule(data, url, reason, title, company, basis, today, rests_on, location)
+    entry = _rule(data, url, reason, title, company, basis, today, rests_on, location, by=by)
     _save(data, path)
     return entry
 
@@ -361,7 +508,7 @@ def _matcher(words: str = "", urls=(), postings=()):
             return False
         if not keys and not postings:
             return True
-        return bool({key, norm(entry.get("url") or "")} & keys) or covers(entry)
+        return bool({key, norm(key), norm(entry.get("url") or "")} & keys) or covers(entry)
     return match
 
 
@@ -376,7 +523,7 @@ def lift(words: str = "", why: str = "", today: str = "", path=SEEN, urls=(),
         if not isinstance(entry, dict) or (entry.get("status") or "").lower() != "excluded":
             continue
         if match(key, entry):
-            entry.update({"status": "lifted", "lifted_date": today or dt.date.today().isoformat(),
+            entry.update({"status": "lifted", "lifted_date": today or person.today().isoformat(),
                           "lifted_because": why or "the person changed their mind"})
             out.append(entry)
     if out:
@@ -440,7 +587,7 @@ def stamp(words: str = "", basis: str = "rules", today: str = "", path=SEEN, url
         if not _needs_review(entry) or not match(key, entry):
             continue
         entry["basis"] = basis
-        entry["reviewed_date"] = today or dt.date.today().isoformat()
+        entry["reviewed_date"] = today or person.today().isoformat()
         if basis == "rules":
             _stamp_rules(entry, rests_on, fp, parts)
         n += 1
@@ -507,7 +654,7 @@ def restamp(words: str = "", rests_on=(), today: str = "", path=SEEN, urls=()) -
             continue
         entry["rules"] = fp
         entry["rests_on"] = ALL if whole else {p: parts[p] for p in names}
-        entry["restamped_date"] = today or dt.date.today().isoformat()
+        entry["restamped_date"] = today or person.today().isoformat()
         n += 1
     if n:
         _save(data, path)
@@ -570,6 +717,9 @@ def main(argv=None) -> int:
     sub.add_parser("cite")
     sub.add_parser("unnamed")
     sub.add_parser("lapsed")
+    d_ = sub.add_parser("date-set-asides", help="give each role set aside with no day its "
+                                               "months from today")
+    d_.add_argument("--dry", action="store_true", help="count them, change nothing")
     r_ = sub.add_parser("review")
     r_.add_argument("--full", action="store_true", help="list each ruling, with its address")
     s_ = sub.add_parser("stamp")
@@ -590,6 +740,11 @@ def main(argv=None) -> int:
 
 
 def _run(a) -> int:
+    if a.cmd == "date-set-asides":
+        n = len(undated_set_asides()) if a.dry else date_set_asides()
+        print(f"exclude: {n} role(s) set aside with no day " + ("to date" if a.dry else
+              f"given {set_aside_days()} days from today"))
+        return 0
     if a.cmd == "review":
         groups = _grouped(unreviewed())
         print(f"exclude: {sum(len(es) for _, es in groups)} older ruling(s) with no basis, "

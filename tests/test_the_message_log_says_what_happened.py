@@ -77,7 +77,7 @@ def test_a_nudge_after_our_answer_to_their_reply_is_the_one_nudge():
     got = state.followed_up(contacts, threads, cid, "2026-09-21", kind="nudge",
                             text="Hi Ana, is a call next week still good for you?")
     assert got["row"]["scenario"] == "nudge"
-    assert contacts[0]["next_action"].startswith("Nudged: nothing more unless they reply")
+    assert contacts[0]["next_action"] == state.FOLLOW_UP_STOP.format(n=2, s="s")     # audit DW-5
     # /reply and the log read who spoke last the same way, on every shape of thread.
     for rows in (threads[:1], threads[:2], threads[:3], threads):
         assert state.they_spoke_last(rows) == reply._they_spoke_last(rows)
@@ -238,7 +238,11 @@ def test_an_answer_to_someone_who_wrote_first_is_a_reply_whichever_command_logs_
                 if i["kind"] == "request_pending"]
 
 
-def test_a_first_message_after_a_bare_request_is_accepted_drops_the_request_line():
+def test_a_first_message_after_a_bare_request_is_accepted_drops_the_request_line(monkeypatch):
+    # The line names a day's year only when it is not the person's own year (state._day_said):
+    # this story is in 2026, so their day is held there whatever the computer's clock says
+    # (the everywhere check, "400-days").
+    monkeypatch.setenv("LJS_TODAY", "2026-10-06")
     cid = "kes_rook"
     contacts, threads = [_c(cid, "Ana Rook")], []
     state.sent(contacts, threads, cid, "2026-10-01", note=False)
@@ -246,7 +250,8 @@ def test_a_first_message_after_a_bare_request_is_accepted_drops_the_request_line
     contacts[0]["status"] = "connected_no_reply"
     state.followed_up(contacts, threads, cid, "2026-10-06", kind="message",
                       text="Hi Ana, thanks for connecting. How did you find the move?")
-    assert contacts[0]["next_action"] == "One nudge if no reply"
+    # The line reads plainly since 2026-11-11, from the engine's own count (audit DW-5).
+    assert contacts[0]["next_action"] == "Sent 6 Oct, no reply yet: follow up after 6 working days (one left), then stop"
 
 
 # ------------------------------------------------------------ the per-employer limit

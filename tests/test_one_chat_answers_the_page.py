@@ -318,7 +318,10 @@ def test_a_new_helper_gives_the_link_at_once_shows_it_is_busy_and_ends_with_one_
     said = copy.run("start", "--on", "Opus 5.5", "--tools", "none", "--chat",
                     "session_EXAMPLEHELPER", "--listen", "--helper")
     steps = [ln for ln in said.splitlines() if re.match(r"\d+\. ", ln)]
-    assert f'"Your job search helper is starting: {PAGE}"' in steps[0]
+    # The very first line, printed before the day's update check runs (the review of D3,
+    # 2026-11-11), and once.
+    assert f'"Your job search helper is starting: {PAGE}"' in said.splitlines()[0]
+    assert said.count("Your job search helper is starting") == 1
     assert "Your job search has its own page now" not in said     # the link is said once
     busy = [ln for ln in steps if "tools/app.py busy" in ln]
     assert busy and steps.index(busy[0]) < len(steps) - 1
@@ -1103,8 +1106,11 @@ def test_a_tidy_up_from_a_folder_read_before_the_take_over_reads_the_new_helper(
                      now=dt.datetime(2026, 11, 5, 17, 5, tzinfo=dt.timezone.utc))
     assert plan["ask"] == []
     # The brief leaves the old helper for a chat of its own, never for the new helper
-    # (the maintainer, 2026-11-10), and the old helper goes.
+    # (the maintainer, 2026-11-10), and the old helper puts itself away (review of fix/helpers,
+    # item 2: only it can see whether its work reached GitHub).
     assert plan["brief"][0]["tool"] == "create_session"
     made = plan["brief"][1]
     assert made["tool"] == "create_trigger" and made["args"]["persistent_session_id"] == routines.NEW_CHAT
-    assert [a["id"] for a in plan["archive"]] == [old]
+    assert plan["archive"] == []
+    assert {k["id"]: k["why"] for k in plan["keep"]}[old] == \
+        "it puts itself away once its work is saved"

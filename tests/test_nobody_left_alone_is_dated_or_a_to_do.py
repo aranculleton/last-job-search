@@ -107,7 +107,8 @@ def test_the_updates_follow_up_run_dates_nobody_at_their_limit_or_closed(search,
     said, _ = updated
     for cid in ("ashby_mills_haldane", "ashby_mills_oyelaran"):
         row = search.contact(cid)
-        assert row["next_action"] == "Nudged: nothing more unless they reply", row
+        # The app's line at the limit, in the page's own words since 2026-11-11 (audit DW-5).
+        assert row["next_action"] == "No reply to 2 messages: leave it unless they write back", row
         assert row["next_action_due"] == "", (cid, row["next_action_due"], said)
     assert search.contact("brindle_co_quarrie")["next_action_due"] == ""
     assert search.contact("brindle_co_quarrie")["status"] == "gone_cold"

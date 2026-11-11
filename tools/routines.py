@@ -60,6 +60,7 @@ import datetime
 import json
 import os
 import re
+import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -139,9 +140,23 @@ def at_most_daily(cron: str) -> bool:
 _at_most_daily = at_most_daily  # the module's own name for it; other modules call at_most_daily
 
 
-def check(reg: dict, root: str = ROOT) -> list[str]:
-    """Every problem with the registry, as one line each; [] when it is clean."""
+def check(reg: dict, root: str = ROOT, triggers=None) -> list[str]:
+    """Every problem with the registry, as one line each; [] when it is clean. Given the task
+    listing (`triggers`, routines.listing's rows), also a brief whose task fires in a chat the
+    registry names neither as its own nor as the older ops chat (audit BT-1)."""
     out = []
+    if triggers is not None:
+        brief = next((r for r in work(reg) if _is_brief(r)), None) or {}
+        live = next((t for t in triggers if brief.get("trigger_id")
+                     and t.get("id") == brief.get("trigger_id")), None) or {}
+        fires = str(live.get("session") or live.get("persistent_session_id") or "")
+        named = {str((brief.get("chat") or {}).get("session_id") or ""),
+                 str((reg.get("ops_session") or {}).get("id") or "")} - {""}
+        if fires and fires not in named:
+            out.append(f"morning_brief: its task fires in {fires}, a chat the registry names "
+                       f"neither as its own nor as the ops chat: record it with routines.py "
+                       f"record --session {fires} --trigger {brief.get('trigger_id')} --cron "
+                       f"\"{brief.get('cron')}\" --own-chat where that chat was made for it")
     if not reg.get("routines") and "ops_session" not in reg:
         # Nothing scheduled yet is a state, not a fault: a registry written before the brief
         # was made failed every local check until it was (2026-10-25).
@@ -215,6 +230,59 @@ def check(reg: dict, root: str = ROOT) -> list[str]:
     return out
 
 
+# The brief's time, said one way (audit BT-7): the registry's cron is when it comes. Where the
+# person's own notes on their automation (profile/CLAUDE.md, "This search's automation") name
+# another time for the brief, `check` notes it and the brief asks them which they want. Never a
+# failed check: only the person can say, and a failed check stops every save.
+_AUTOMATION_HEAD = re.compile(r"^#+\s*This search's automation\b.*$", re.I | re.M)
+# A clock time only: "07:56", or one with am or pm ("8am", "8.30 pm"); never "4.14" (a release)
+# or "$1.50" (review of fix/helpers, item 8).
+_CLOCK = re.compile(r"(?<![\d.$])\b([01]?\d|2[0-3]):([0-5]\d)\b"
+                    r"|(?<![\d.$])\b(1[0-2]|0?[1-9])(?:[:.]([0-5]\d))?\s*([ap])\.?m\b", re.I)
+
+
+def _profile_notes() -> str:
+    try:
+        import person
+        with open(person.path("CLAUDE.md"), encoding="utf-8") as fh:
+            return fh.read()
+    except Exception:  # noqa: BLE001  no profile notes
+        return ""
+
+
+def time_disagrees(reg: dict, notes: str | None = None) -> str:
+    """One plain line where the person's notes on their automation name a time for the brief
+    that is not the time its task runs, else ""."""
+    notes = _profile_notes() if notes is None else notes
+    m = _AUTOMATION_HEAD.search(notes or "")
+    brief = next((r for r in work(reg) if _is_brief(r)), None)
+    got = read_cron((brief or {}).get("cron") or "") if brief else {}
+    if not m or not got or brief.get("off"):
+        return ""
+    level = len(m.group(0)) - len(m.group(0).lstrip("#"))
+    rest = notes[m.end():]
+    end = re.search(r"^#{1,%d}\s" % level, rest, re.M)
+    section = rest[:end.start()] if end else rest
+    said = []
+    for line in section.splitlines():
+        if not _BRIEFISH.search(line):
+            continue
+        for h24, m24, h12, m12, half in _CLOCK.findall(line):
+            if h24:
+                h, mi = int(h24), int(m24)
+            else:
+                h, mi = int(h12) % 12 + (12 if half.lower() == "p" else 0), int(m12 or 0)
+            t = "%02d:%02d" % (h, mi)
+            if t not in said:
+                said.append(t)
+    if not said or got["time"] in said:
+        return ""
+    return ("the person's notes on their automation say the brief comes at %s, but its task "
+            "runs at %s (%s); the task's time is when it comes: ask them once which they want, "
+            "then move it (routines.py move) or correct their notes" % (
+                " and ".join(said), got["time"], got.get("zone") or reg.get("timezone") or ""))
+
+
 BRIEF_FILE = "automation/prompts/morning_brief.md"
 _BRIEFISH = re.compile(r"\bbrief", re.I)
 
@@ -239,11 +307,77 @@ def listing(got) -> tuple[list, bool]:
             continue
         prompt = t.get("prompt") or (t.get("derived_state") or {}).get("prompt") or ""
         out.append({"id": t.get("id", ""), "name": t.get("name", ""), "prompt": prompt,
-                    "enabled": t.get("enabled", True), "last_run": t.get("last_run") or {},
+                    # Unknown where the listing does not say (one typed back by hand and cut
+                    # short): never read as on (review of fix/helpers, item 18).
+                    "enabled": t.get("enabled"), "last_run": t.get("last_run") or {},
                     "cron": t.get("cron_expression", ""),
                     "next_run_at": t.get("next_run_at") or "",
-                    "session": t.get("persistent_session_id") or ""})
+                    "session": t.get("persistent_session_id") or "",
+                    "run_once_at": t.get("run_once_at") or "",
+                    "created_at": t.get("created_at") or "",
+                    "ended_reason": t.get("ended_reason") or ""})
     return out, more
+
+
+# Old tasks the tidy-up cleans away (audit BT-9, H-5): a person's account held a dozen turned-off
+# briefs, one left at each move, and test check-ins that failed every run or never fired.
+CLEAN_OFF_DAYS = 7          # a brief task the registry no longer names, off this long: deleted
+CLEAN_LATE_H = 24           # a one-off task still on this long past its time: turned off
+
+
+def this_copys(t: dict, repo: str) -> bool:
+    """Is this scheduled task one of this copy's own app tasks: its prompt the app's, naming
+    this copy (with_copy puts the copy's address in every prompt it stores)? list_triggers
+    covers the whole account: the person's own reminders, other projects' tasks and another
+    copy's app tasks are never this copy's to change (review of fix/helpers, items 1 and 20)."""
+    prompt = str(t.get("prompt") or "")
+    return bool(re.fullmatch(r"[\w.-]+/[\w.-]+", repo or "")) and \
+        (_is_app_prompt(prompt) or _is_brief_prompt(prompt)) and (COPY_MARK + repo + " ") in prompt
+
+
+def cleanup(reg: dict, triggers, now: datetime.datetime, trusted: str = "",
+            repo: str | None = None) -> list[dict]:
+    """The calls that clean away this copy's own tasks that can no longer run (this_copys): a
+    brief task the registry no longer names, off for CLEAN_OFF_DAYS and bound to a chat (one
+    that starts a fresh chat each run is never deleted: that deletes the chats it started); a
+    one-off still on CLEAN_LATE_H after its time; a task bound to the chat that approved
+    computer access (`trusted`) whose last run failed, which no run can open. Never a task the
+    registry names, never one whose state the listing does not give, and nothing else."""
+    repo = _repo() if repo is None else repo
+    named = {str(r.get("trigger_id") or "") for r in reg.get("routines") or []} - {""}
+    out = []
+    for t in triggers or []:
+        tid = str(t.get("id") or "")
+        if not tid or tid in named or not this_copys(t, repo) or t.get("enabled") is None:
+            continue
+        last = t.get("last_run") or {}
+        stamps = [_at(x) for x in (t.get("created_at"), last.get("fired_at"),
+                                   last.get("finished_at"))]
+        newest = max((x for x in stamps if x is not None), default=None)
+        name = str(t.get("name") or "")
+        brief = name == BRIEF_NAME or _is_brief_prompt(str(t.get("prompt") or ""))
+        if t.get("enabled") is False:
+            fired = bool(t.get("run_once_at")) and newest is not None
+            if t.get("session") and newest is not None and \
+                    (now - newest).days >= CLEAN_OFF_DAYS and (brief or fired):
+                # A one-off of the app's that fired (a test check-in), found now that the
+                # listing asks for completed ones (include_completed; second audit B9).
+                out.append({"tool": "delete_trigger", "args": {"trigger_id": tid},
+                            "why": "a one-off check-in of the app's, fired over a week ago"
+                                   if fired and not (brief and not t.get("run_once_at")) else
+                                   "an old brief task, off for over a week, that another "
+                                   "replaced"})
+            continue
+        once = _at(t.get("run_once_at"))
+        if once is not None and (now - once).total_seconds() >= CLEAN_LATE_H * 3600:
+            out.append({"tool": "update_trigger", "args": {"trigger_id": tid, "enabled": False},
+                        "why": "a one-off task a day past its time that never ran"})
+        elif trusted and t.get("session") == trusted and \
+                str(last.get("status") or "").upper() in ("FAILED", "ERROR", "ERRORED"):
+            out.append({"tool": "update_trigger", "args": {"trigger_id": tid, "enabled": False},
+                        "why": "it is bound to the chat that approved computer access, where no "
+                               "scheduled run can start"})
+    return out
 
 
 def _is_brief_prompt(prompt: str) -> bool:
@@ -258,7 +392,13 @@ def _is_app_prompt(prompt: str) -> bool:
     return p.startswith("Scheduled run:") and "automation/prompts/" in p
 
 
-def mend(triggers, repo: str) -> list[dict]:
+def named_ids(reg: dict | None) -> set:
+    """The scheduled tasks this copy's registry names: the only ones mend may touch, since a
+    prompt lacking the copy line cannot say whose it is (review of fix/helpers, item 20)."""
+    return {str(r.get("trigger_id") or "") for r in (reg or {}).get("routines") or []} - {""}
+
+
+def mend(triggers, repo: str, named: set | None = None) -> list[dict]:
     """The update_trigger calls that give each of the app's tasks that is on the line that
     gets the copy where its chat has none (the brief, the job round, a welcome-back brief):
     a task whose chat was deleted wakes a new, empty one, and without the line every run
@@ -268,7 +408,9 @@ def mend(triggers, repo: str) -> list[dict]:
     for t in triggers or []:
         prompt = str(t.get("prompt") or "")
         fixed = with_copy(prompt, repo)
-        if t.get("id") and t.get("enabled") is not False and _is_app_prompt(prompt) \
+        if named is not None and t.get("id") not in named:
+            continue
+        if t.get("id") and t.get("enabled") is True and _is_app_prompt(prompt) \
                 and fixed != prompt:
             out.append({"tool": "update_trigger", "args": {"trigger_id": t["id"], "prompt": fixed},
                         "why": f"{t.get('name') or 'a scheduled task'} gets its files in any chat "
@@ -453,7 +595,7 @@ def needs_own_chat(reg: dict, r: dict | None, live: dict | None = None,
     setup = setup_of(reg)
     bound = str((r.get("chat") or {}).get("session_id") or "")
     fires = str((live or {}).get("session") or (live or {}).get("persistent_session_id") or "")
-    if setup == "routines_screen":
+    if setup == "routines_screen" and not owns_chat(r):
         return "it starts a fresh chat each run, with no copy of the files" \
             if fresh_each_run(reg, r) else ""
     ops = str((reg.get("ops_session") or {}).get("id") or "")
@@ -466,6 +608,38 @@ def needs_own_chat(reg: dict, r: dict | None, live: dict | None = None,
     if trusted and trusted in (bound, fires):
         return "its chat approved computer access, so no scheduled run can open it"
     return ""
+
+
+_BRIEF_TITLE = re.compile(r"^(?:[^\w\s]{1,3}\s*)?Job search:.*\bbrief\b", re.I)
+
+
+def _copy_of(detail: dict) -> str:
+    """The copy a chat works on, "owner/name" in small letters, from get_session's sources."""
+    for src in (((detail or {}).get("session_context") or {}).get("sources") or []):
+        url = str(((src or {}).get("git_repository") or {}).get("url") or "")
+        m = re.search(r"github\.com[/:]([^/]+/[^/.]+)", url)
+        if m:
+            return m.group(1).lower()
+    return ""
+
+
+def old_ops_shape(reg: dict) -> bool:
+    """The older ops set-up with the brief naming no chat of its own, never read against a
+    listing (no `ops_checked`): it may run in a chat made for it that the registry never
+    recorded, and only a listing says (audit PD-7)."""
+    b = _brief(reg) or {}
+    return setup_of(reg) == "ops_relay" and bool(reg.get("ops_session")) and \
+        bool(b.get("trigger_id")) and not b.get("chat") and not reg.get("ops_checked")
+
+
+def adoptable(detail: dict | None, repo: str) -> bool:
+    """Was this chat (get_session's record) made for the brief, and on this copy: a "Job
+    search: ... brief ..." title, whatever its exact words ("Job search: brief (daily)"), never
+    the page's helper, and this copy's files? Then the brief's task that fires in it is recorded
+    as its own, never moved to yet another chat (audit PD-7; review of fix/helpers, item 19)."""
+    d = detail or {}
+    return bool(_BRIEF_TITLE.match(str(d.get("title") or "").strip())) and \
+        bool(repo) and _copy_of(d) == repo.lower()
 
 
 def own_chat_calls(reg: dict, r: dict, old_id: str, repo: str,
@@ -490,6 +664,33 @@ def own_chat_calls(reg: dict, r: dict, old_id: str, repo: str,
         out.append({"tool": "update_trigger", "args": {"trigger_id": old_id, "enabled": False},
                     "why": "the old task is turned off, never deleted"})
     return out
+
+
+# The brief's chat keeps every morning's run, about 100,000 tokens a day, and the cache does not
+# last the night, so each run paid for the whole history again: about $6.8 a run, against $1 to
+# $2 in a fresh chat (audit BT-2). Past this, the run gives itself a fresh chat of its own.
+BRIEF_CHAT_MAX = 250_000
+
+
+# Each fresh brief chat is started by the one before, one level deeper, and chats nest only so
+# deep (get_session's lineage): near the limit the brief keeps its chat, so it can still start
+# the page's fresh helper (review of fix/helpers, item 9).
+BRIEF_DEPTH_ROOM = 3
+
+
+def fresh_calls(reg: dict, used: int, repo: str = "",
+                lineage: tuple[int, int] | None = None) -> list[dict]:
+    """The calls that give the brief a fresh chat of its own once its chat holds more than
+    BRIEF_CHAT_MAX tokens (own_chat_calls); [] under it, with no brief on a schedule, or with
+    its chat within BRIEF_DEPTH_ROOM of how deep chats go (`lineage`: depth, limit)."""
+    r = _brief(reg) or {}
+    if used <= BRIEF_CHAT_MAX or not r.get("cron") or not r.get("trigger_id") or r.get("off"):
+        return []
+    if lineage and lineage[0] + BRIEF_DEPTH_ROOM > lineage[1]:
+        return []
+    return own_chat_calls(reg, r, r["trigger_id"], repo or _repo(),
+                          "its chat has grown long, and each morning's run pays for all of it "
+                          "again: a fresh chat of its own costs a fraction")
 
 
 def person_today() -> datetime.date:
@@ -546,6 +747,24 @@ def existing_brief(reg: dict | None, triggers=None, now: datetime.datetime | Non
         # carried from helper to helper as the page renewed was reported moved when it had not
         # (the maintainer's copy, 2026-11-05 and 2026-11-10). It moves into a chat of its own.
         why = needs_own_chat(reg or {}, r, live, trusted_chat()) if live else ""
+        fires = str((live or {}).get("session") or (live or {}).get("persistent_session_id") or "")
+        if why == "it runs in a chat that was not made for it" and fires.startswith("session_") \
+                and not r.get("chat") \
+                and fires != str((reg or {}).get("ops_session", {}).get("id") or ""):
+            # It may be the chat made for it, never recorded as such: read it, then adopt it or
+            # move (routines.py adopt decides), never a new chat at once (PD-7, review item 19).
+            adopt = (f"python3 tools/routines.py adopt --session {fires} --trigger "
+                     f"{live.get('id') or r.get('trigger_id')} --cron \"{r.get('cron')}\" --stdin "
+                     "with {\"details\": <what get_session returned>} in a quoted heredoc")
+            return {"state": "elsewhere", "id": live.get("id", ""), "name": r.get("name", ""),
+                    "calls": [{"tool": "get_session", "args": {"session_id": fires},
+                               "why": "the chat its task fires in, to see if it was made for it"},
+                              {"run": adopt, "why": "recorded as its own where it was made for "
+                                                    "it, else the calls that move it"}],
+                    "then": "do what adopt prints", "tell": "",
+                    "say": f"the brief {r.get('name')!r} ({live.get('id')}) runs in a chat the "
+                           "registry does not name as its own: read that chat, then adopt it or "
+                           "move the brief, as the calls below say"}
         if why:
             return {"state": "elsewhere", "id": live.get("id", ""), "name": r.get("name", ""),
                     "calls": move_calls(reg or {}, r, live, "", repo_),
@@ -908,18 +1127,26 @@ def record(session: str, trigger: str, cron: str = "", path: str | None = None,
     entry["copy"] = True
     reg["told_where"] = reg.get("told_where") or entry["made"]   # its maker said where it comes
     ops = (reg.get("ops_session") or {}).get("id", "")
-    # Out of a fresh chat each run into a chat of its own: a chat set-up from then on, unless
-    # another task still runs as a routine (each of those needs no chat).
-    if own_chat and session and reg["setup"] == "routines_screen" and all(
-            (r.get("chat") or {}).get("session_id") for r in keep if r.get("mode") != "fresh_session"):
-        reg["setup"] = "chat_per_briefing"
-    if reg["setup"] == "chat_per_briefing" or (
-            reg["setup"] == "ops_relay" and own_chat and session and session != ops):
+    was_chat = was.get("chat") if isinstance(was.get("chat"), dict) else {}
+    if own_chat and session and session != ops:
+        # Made for the brief alone (create_session, the copy attached), named so in every
+        # set-up: written only in a field the app does not read, it was moved to a new chat
+        # about once a day (audit BT-1). The daily tidy-up makes it again where it is gone,
+        # archived or approved computer access.
+        entry["chat"] = {"session_id": session, "title": title or BRIEF_NAME, "own": True}
+    elif was_chat.get("own") and str(was_chat.get("session_id") or "") in (session, ""):
+        entry["chat"] = dict(was_chat)          # a later record never drops its own chat
+    elif reg["setup"] == "chat_per_briefing":
         entry["chat"] = {"session_id": session, **({"title": title} if title else {})}
-        if own_chat:
-            # Made for the brief alone (create_session, the copy attached): the daily tidy-up
-            # makes it again where it is gone, archived or approved computer access.
-            entry["chat"].update(title=title or BRIEF_NAME, own=True)
+    others = [r for r in keep if r.get("mode") != "fresh_session"]
+    if owns_chat(entry) and reg["setup"] in ("routines_screen", "ops_relay") and all(
+            (r.get("chat") or {}).get("session_id") for r in others):
+        # Out of a fresh chat each run, or the older ops chat, into a chat of its own, with no
+        # other task left there: a chat set-up from then on, and the old relay and ops chat,
+        # which nothing uses any more, leave the registry (audit BT-1, BT-9).
+        reg["setup"] = "chat_per_briefing"
+        reg.pop("ops_session", None)
+        keep = others
     reg["routines"] = [entry] + keep
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(reg, fh, indent=2, ensure_ascii=False)
@@ -1321,11 +1548,30 @@ LATE_GRACE_H = 2        # a run may start late; past this, the brief has not com
 
 
 def _brief_days_on_file() -> set[str]:
+    """The days whose brief record is on the saved copy (any branch on GitHub, so a save still
+    waiting to land counts), or, with no saved copy to read, in the folder. A record written
+    and never saved passed as a brief that came (audit BT-12)."""
     try:
         import person
         folder = person.state("documents", "briefs")
+    except Exception:  # noqa: BLE001  no profile
+        return set()
+    name = re.compile(r"(?:^|/)(\d{4}-\d{2}-\d{2})\.md$")
+    try:
+        root = person.state()
+        if subprocess.run(["git", "-C", root, "rev-parse", "--verify", "--quiet", "origin/master"],
+                          capture_output=True, timeout=30).returncode == 0:
+            r = subprocess.run(["git", "-C", root, "log", "--remotes=origin", "--name-only",
+                                "--format=", "--", "documents/briefs/"], capture_output=True,
+                               text=True, encoding="utf-8", errors="replace", timeout=60)
+            if r.returncode == 0:
+                return {m.group(1) for ln in r.stdout.splitlines() for m in [name.search(ln.strip())]
+                        if m}
+    except (OSError, subprocess.SubprocessError):
+        pass
+    try:
         return {f[:10] for f in os.listdir(folder) if re.fullmatch(r"\d{4}-\d{2}-\d{2}\.md", f)}
-    except Exception:  # noqa: BLE001  no folder yet
+    except OSError:  # no folder yet
         return set()
 
 
@@ -1800,12 +2046,16 @@ def load(path: str | None = None) -> dict:
 
 
 def main(argv: list[str]) -> int:
-    if argv[:1] in (["-h"], ["--help"]):
+    # Help anywhere asked for is help: `reminded --help` recorded a reminder made today with no
+    # task, and `upkeep-record --help` an upkeep with none, from a chat checking the usage (the
+    # engine review, 2026-11-11).
+    if "-h" in argv or "--help" in argv:
         print("usage: python3 tools/routines.py check [<registry>] | stub <id> | brief | "
               "default | record\n\n"
               + __doc__.split("\n\n")[1])
         return 0
-    if not argv or argv[0] not in ("check", "stub", "brief", "default", "record", "move",
+    if not argv or argv[0] not in ("check", "stub", "brief", "default", "record", "move", "fresh",
+                                   "adopt",
                                    "pause", "resume", "off", "on", "calls", "called",
                                    "upkeep-record", "upkeep-forget", "remind", "reminded",
                                    "mended", "rebind"):
@@ -1847,6 +2097,59 @@ def main(argv: list[str]) -> int:
     if argv[0] == "upkeep-forget":
         print(forget_upkeep())
         return 0
+    if argv[0] == "adopt":
+        opt = {argv[i]: argv[i + 1] for i in range(1, len(argv) - 1) if argv[i].startswith("--")}
+        sid, tid, cron = opt.get("--session", ""), opt.get("--trigger", ""), opt.get("--cron", "")
+        got: list = []
+        if "--stdin" in argv:
+            try:
+                raw = json.loads(sys.stdin.read() or "{}")
+            except ValueError:
+                raw = {}
+            got = [raw.get("details") if isinstance(raw, dict) else None]
+        elif opt.get("--details"):
+            with open(opt["--details"], encoding="utf-8") as fh:
+                got = [json.load(fh)]
+        d = got[0] if got else None
+        d = (d.get("ccr") or d) if isinstance(d, dict) else None
+        path = opt.get("--path")
+        reg = load(path)
+        brief = _brief(reg) or {}
+        if adoptable(d, _repo()):
+            record(sid, tid, cron or brief.get("cron", ""), path=path, own_chat=True,
+                   title=str(d.get("title") or ""))
+            print(f"adopt: {sid} is the brief's own chat, and the registry says so now; commit "
+                  "it with this turn's work. Say nothing about it.")
+            return 0
+        print("adopt: that chat was not made for the brief: move it, with these calls in order, "
+              "stopping at the first that fails; say nothing about it")
+        for i, c in enumerate(own_chat_calls(reg, brief, tid, _repo()), 1):
+            print(f"adopt {i}: {c['tool']} {json.dumps(c['args'], ensure_ascii=False)}"
+                  if c.get("tool") else f"adopt {i}: {c['run']}")
+        return 0
+    if argv[0] == "fresh":
+        try:
+            used = int(argv[argv.index("--used") + 1])
+        except (ValueError, IndexError):
+            print("usage: routines.py fresh --used <the used_tokens get_session gave>",
+                  file=sys.stderr)
+            return 2
+        lineage = None
+        if "--lineage" in argv:
+            import app_listen
+            lineage = app_listen.read_lineage(argv[argv.index("--lineage") + 1]
+                                              if argv.index("--lineage") + 1 < len(argv) else "")
+        got = fresh_calls(load(), used, lineage=lineage)
+        if not got:
+            print(f"fresh: not now ({used:,} of {BRIEF_CHAT_MAX:,} tokens, or too deep a chat to "
+                  "start another); nothing to do")
+            return 0
+        for i, c in enumerate(got, 1):
+            print(f"fresh {i}: {c['tool']} {json.dumps(c['args'], ensure_ascii=False)} ({c['why']})"
+                  if c.get("tool") else f"fresh {i}: {c['run']} ({c['why']})")
+        print("fresh: make these in order, stopping at the first that fails, asking nobody and "
+              "saying nothing; this chat is put away by the daily tidy-up")
+        return 0
     if argv[0] == "rebind":
         got = {argv[i][2:]: argv[i + 1] for i in range(2, len(argv) - 1, 2) if argv[i].startswith("--")}
         try:
@@ -1881,6 +2184,19 @@ def main(argv: list[str]) -> int:
         found = existing_brief(reg, triggers, here=here,
                                page=page_chat if str(page_chat).startswith("session_") else "")
         print(f"{found['state']}: {found['say']}")
+        # The older ops set-up, read against the listing: a brief still firing in its ops chat
+        # is noted as checked, so the upgrade that rewrites an old registry rests (PD-7).
+        if triggers is not None and reg and old_ops_shape(reg) and found["state"] == "registered":
+            ops = str((reg.get("ops_session") or {}).get("id") or "")
+            b = _brief(reg) or {}
+            live = next((t for t in triggers if t.get("id") == b.get("trigger_id")), None) or {}
+            if ops and str(live.get("session") or "") == ops:
+                try:
+                    import person
+                    reg["ops_checked"] = person_today().isoformat()
+                    _save(reg, person.path("routines.json"))
+                except Exception:  # noqa: BLE001  noted at the next look
+                    pass
         # What the scheduler reports of its time (next_run_at, the last run's fired_at), kept
         # so the page shows when the brief really comes, never only the time it is set for.
         if found["state"] == "registered" and triggers:
@@ -1918,7 +2234,8 @@ def main(argv: list[str]) -> int:
             print("more: the listing has another page (has_more); list it too and pass every "
                   "page with --triggers before deciding")
         import place
-        mends = mend(triggers, _repo()) if triggers is not None and not more else []
+        mends = mend(triggers, _repo(), named=named_ids(reg)) \
+            if triggers is not None and not more else []
         for i, c in enumerate(mends, 1):
             print(f"mend {i}: update_trigger {json.dumps(c['args'], ensure_ascii=False)} ({c['why']})")
         if mends:
@@ -1990,10 +2307,21 @@ def main(argv: list[str]) -> int:
             return 2
         print(with_copy(stub(load(), argv[1]), _repo()))
         return 0
-    path = argv[1] if len(argv) > 1 else None
-    problems = check(load(path))
+    rest = argv[1:]
+    triggers = None
+    while "--triggers" in rest:
+        i = rest.index("--triggers")
+        with open(rest[i + 1], encoding="utf-8") as fh:
+            triggers = (triggers or []) + listing(json.load(fh))[0]
+        rest = rest[:i] + rest[i + 2:]
+    path = rest[0] if rest else None
+    reg = load(path)
+    problems = check(reg, triggers=triggers)
     for p in problems:
         print(f"routines.json: {p}")
+    note = time_disagrees(reg)
+    if note:
+        print(f"routines.json: note: {note}")
     if not problems:
         print("routines.json: clean")
     return 1 if problems else 0

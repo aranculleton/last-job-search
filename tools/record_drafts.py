@@ -2,6 +2,7 @@
 """Record a rendered batch in the tracker, the way /apply Step 6b says to.
 
     python3 tools/record_drafts.py <drafts.json> <apps_in.json> [--today YYYY-MM-DD] [--round r1]
+    python3 tools/record_drafts.py check     # the tracker against the documents on disk
 
 Run after `tools/fit_to_page.py` (which fixes each draft's `abbr`) and
 `tools/outreach.py` (which archives the posting). For every draft it writes one
@@ -313,14 +314,82 @@ def screening(draft: dict) -> str:
     return slug if out.returncode == 0 else f"{slug}: FAILED {out.stderr.strip()[-200:]}"
 
 
-def main() -> int:
+def unrecorded(path: str | None = None) -> dict:
+    """What the tracker and the documents on disk disagree about, said and never changed:
+    {"letters": a row's letter on disk that its row does not name, "files": a resume or
+    letter no row names (its path without the extension), "missing": a row naming a
+    document that is not there}, each "<employer> | <role>: <file>" where a row is meant.
+    Eight rows drafted one day named a resume and no letter, though each letter was on
+    disk, and dozens of documents had no row (the audit's NW-23, 2026-11-10)."""
+    rows = csv_store.read_rows(path or person.state("job_search_tracker.csv"), HEADER)
+
+    def stem(rel):
+        return os.path.splitext(str(rel or "").strip().replace("\\", "/"))[0]
+
+    named = {stem(r.get(col)) for r in rows for col in FILE_COLUMNS if str(r.get(col) or "").strip()}
+    letters, missing = [], []
+    for r in rows:
+        who = f"{r.get('company')} | {r.get('role')}"
+        for col in FILE_COLUMNS:
+            rel = str(r.get(col) or "").strip()
+            if rel and not docpaths.made(rel):
+                missing.append(f"{who}: {rel}")
+        cv = str(r.get("cv_file") or "").strip()
+        if cv and not str(r.get("cover_letter_file") or "").strip():
+            abbr = docpaths.doc_abbr(cv)
+            rel = docpaths.letter_rel(abbr) if abbr else ""
+            if rel and docpaths.made(rel) and stem(rel) not in named:
+                letters.append(f"{who}: {rel}")
+                named.add(stem(rel))
+    import personal_paths
+    files = set()
+    for folder in ("cv", "cover_letters"):
+        try:
+            names = os.listdir(person.state(folder))
+        except OSError:
+            continue
+        for name in names:
+            base, ext = os.path.splitext(name)
+            # The resume for no posting (general_resume.py) is made under cv/ with no row.
+            # The app's own templates (cv/main_example.tex) sit in every person's copy and
+            # are no document of theirs: listed, the check failed in every copy (the review
+            # of NW-23, 2026-11-11).
+            if ext.lower() in (".tex", ".pdf") and f"{folder}/{base}" not in named \
+                    and docpaths.doc_abbr(base) != "General" \
+                    and personal_paths.is_personal(f"{folder}/{base}.tex") \
+                    and personal_paths.is_personal(f"{folder}/{name}"):
+                files.add(f"{folder}/{base}")
+    return {"letters": letters, "files": sorted(files), "missing": missing}
+
+
+def check_main(argv=()) -> int:
+    """`record_drafts.py check`: what the tracker and the documents disagree about. Exit 1
+    when anything does; nothing is moved or deleted."""
+    got = unrecorded()
+    for line in got["letters"]:
+        print(f"a letter on disk its row does not name: {line}. Record the batch again "
+              "(record_drafts.py <drafts.json> <apps_in.json>) or name it on the row")
+    for line in got["files"]:
+        print(f"no row in the tracker names {line}: kept as it is")
+    for line in got["missing"]:
+        print(f"the tracker names a document that is not there: {line}")
+    if not any(got.values()):
+        print("the tracker and the documents agree")
+        return 0
+    return 1
+
+
+def main(argv=None) -> int:
+    args = sys.argv[1:] if argv is None else list(argv)
+    if args[:1] == ["check"]:
+        return check_main(args[1:])
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("drafts")
     ap.add_argument("apps_in")
     ap.add_argument("--today", default=dt.date.today().isoformat())
     ap.add_argument("--round", default="", help="round name for the notes, e.g. r1")
     ap.add_argument("--no-screening", action="store_true")
-    a = ap.parse_args()
+    a = ap.parse_args(args)
     drafts = json.load(open(a.drafts, encoding="utf-8"))
     raw = json.load(open(a.apps_in, encoding="utf-8"))
     metas = {m["abbr"].upper(): m for m in (raw if isinstance(raw, list) else raw.values())

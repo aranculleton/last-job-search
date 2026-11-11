@@ -255,6 +255,24 @@ class ValidateDataTests(unittest.TestCase):
         self.assertIn("invalid JSON at line", stderr.getvalue())
         self.assertIn("tools/README_SALARY_TOOL.md", stderr.getvalue())
 
+    def test_load_data_reads_a_file_saved_with_a_byte_order_mark(self):
+        # Notepad on Windows (before 2019) and a spreadsheet's "UTF-8" export put a byte-order
+        # mark first, and json.load refused the whole file with "Unexpected UTF-8 BOM", so
+        # /apply skipped the salary step. From ai-job-search (#602).
+        with tempfile.TemporaryDirectory() as tmpdir:
+            data_file = Path(tmpdir) / "salary_data.json"
+            data_file.write_text('{"companies": [{"company": "Acme Freight"}]}',
+                                 encoding="utf-8-sig")
+
+            original_data_file = salary_lookup.DATA_FILE
+            salary_lookup.DATA_FILE = data_file
+            try:
+                data = salary_lookup.load_data()
+            finally:
+                salary_lookup.DATA_FILE = original_data_file
+
+        self.assertEqual(data["companies"][0]["company"], "Acme Freight")
+
     def test_company_entry_must_be_object(self):
         self.assert_invalid_data({"companies": ["Example Corp"]}, "companies[1] must be an object")
 

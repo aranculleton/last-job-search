@@ -131,7 +131,11 @@ def test_a_relist_under_a_tag_or_a_shortened_title_is_the_same_posting():
     assert of(posting("https://boards.example.com/2", title="Senior Data Analyst, Fraud")) == ""
 
 
-def test_a_ruling_holds_for_the_same_role_under_a_tag_or_a_shortened_title():
+def test_a_ruling_holds_for_the_same_role_under_a_tag_or_a_shortened_title(monkeypatch):
+    # The person's own call holds for about six months from the day they made it
+    # (exclude.set_aside_holds, on the person's day): their day is held at the ruling's,
+    # which a clock a year on is past (the everywhere check, "400-days").
+    monkeypatch.setenv("LJS_TODAY", ISO)
     seen = {"https://boards.example.com/1": {
         "url": "https://boards.example.com/1", "title": "Senior Data Analyst",
         "company": "Kestrel Mutual", "location": LOC, "status": "excluded",

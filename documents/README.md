@@ -111,7 +111,10 @@ Each folder holds:
 
   Below it, `## Interview stages reached` holds one checkbox per stage: `- [x] Phone screen
   (YYYY-MM-DD)` once held, and `- [ ] Technical interview (scheduled YYYY-MM-DD, with
-  <title or name>)` while booked. `tools/open_actions.py --due` reads the booked line (a
+  <title or name>)` while booked, with what kind of round it is on a line under it when the
+  invite or the recruiter said (`  - Format: personal experience interview, live coding`,
+  written by `tools/interview_pack.py book --format`), which every prep for that round is
+  built from. `tools/open_actions.py --due` reads the booked line (a
   stage close with no pack, a thank-you not yet on file after it) and `what_works.py brief
   interviews` the ticked ones (how far applications get).
 

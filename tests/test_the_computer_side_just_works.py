@@ -332,11 +332,9 @@ def test_an_old_chat_memory_never_outranks_the_persons_setting(tmp_path):
                                     settings={"profile/person.json app_updates": "auto"})
     assert [(os.path.basename(c["file"]), c["memory_says"], c["setting_says"]) for c in got] == [
         ("feedback_updates.md", "when_asked", "auto")]
-    line = computer.memory_line(got)
-    assert "settings win" in line and "Leave the note" in line
     agree = computer.memory_conflicts(str(copy), home=str(home),
                                       settings={"profile/person.json app_updates": "when_asked"})
-    assert agree == [] and computer.memory_line(agree) == ""
+    assert agree == []
 
 
 def test_every_command_the_app_prints_runs_the_same_in_zsh_and_bash():
@@ -381,6 +379,26 @@ def _line(t, content=None, usage=None, **kw):
     if usage:
         msg["usage"] = usage
     return json.dumps(dict(timestamp=t, message=msg, **kw))
+
+
+def test_a_runs_cost_counts_its_own_turns_and_each_message_once(tmp_path):
+    """Audit CS-2 (a computer, 2026-11-10): "Took 2 min ... about $23.49". The cost counted
+    the whole transcript, never only since the work's claim, and Claude Code writes one line
+    for each block of a message, each carrying the same usage, so a turn counted several
+    times."""
+    f = tmp_path / "s.jsonl"
+    big = {"input_tokens": 5000, "output_tokens": 9000, "cache_read_input_tokens": 900000,
+           "cache_creation_input_tokens": 50000}
+    one = {"input_tokens": 1000, "output_tokens": 2000, "cache_read_input_tokens": 100000,
+           "cache_creation_input_tokens": 0}
+    msg = {"id": "msg_turn", "content": [], "usage": one}
+    lines = [_line("2026-10-25T16:00:00Z", usage=big),                  # an earlier job's turn
+             *(json.dumps({"timestamp": "2026-10-25T17:0%d:00Z" % i, "message": dict(msg)})
+               for i in range(3))]                                       # one turn, three blocks
+    f.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    u = computer.measure(str(f), since="2026-10-25T16:30:00Z")
+    assert u["tokens"] == {"input": 1000, "cache_write": 0, "cache_read": 100000,
+                           "output": 2000}, u["tokens"]
 
 
 def test_a_run_is_measured_from_its_own_transcript(tmp_path, monkeypatch):
@@ -580,13 +598,16 @@ def test_a_chat_lent_the_computers_browser_finishes_what_it_claimed_and_is_not_i
     with pytest.raises((ValueError, KeyError)):
         page_db.finish(running, "network~people", T, str(tmp_path / "g"), chat_kind="cloud",
                        chat="cloud-8", summary="Ten people found and drafted.")
-    # The chat started on the computer itself still counts as one there.
+    # The chat the app started on the computer for its work is a chat there, but one that does
+    # that work and nothing else: never counted as listening either. Counted so, `route` said
+    # "Your computer's chat takes it" for twenty minutes after it had stopped (the builder
+    # audit, 2026-11-10, CC-16); its own heartbeat says it is a computer chat.
     s.put("work", "n3", _w("network", "Fernhill Freight", to="computer"), version=1)
     own = json.loads(s.run("next", s.dump, "--chat", "mac-1", "--kind", "computer",
                            "--computer-only", "--now", NOW,
                            "--claim-out", os.path.join(s.dump, "claim2")))
     own_beat = _body(next(e for e in _entries(own["batches"]) if e["collection"] in ("chats", "beats")))
-    assert own_beat.get("watching") is not False
+    assert own_beat["kind"] == "computer" and own_beat.get("watching") is False
     folders = {"folders": [{"environment_id": "env_f", "computer_name": "Studio Laptop",
                             "folder": "search", "online": True}]}
     for route_, tools in (("linked browser", ["enable__mcp__remote-devices__Claude_Browser"]),
@@ -622,9 +643,11 @@ def test_the_apps_hook_keeps_each_reads_versions_so_no_step_is_asked():
     ArtifactData, the maintainer's own edit of 2026-11-09), so no read asks for `app.py
     versions`; a copy without it is asked, and the step is there for it."""
     assert page_db.hook_keeps_versions() is True
-    # Asked for all the same: a chat started before the hook was added runs without it, and
+    # A job's own chat, started now, runs it: no step (E-6). A read into a folder the hook did
+    # not mark still asks: a chat started before the hook was added runs without it, and
     # pinned every write to a stale number when told the hook did it (2026-11-10).
-    assert "app.py versions" in page_db.versions_step("$D")
+    assert page_db.after_read("$D", fresh_chat=True) == ""
+    assert "app.py versions" in page_db.after_read("$D")
 
 
 # ------------------------------------------------------------------ on the page
@@ -764,19 +787,23 @@ def test_the_computer_chat_puts_away_the_apps_earlier_chats_by_name():
         {"title": "Job search · Find 10 people at Larkspur · Studio Laptop", "status": "idle"},
         {"title": "Job search · Rewrite a note · Studio Laptop", "status": "running"},
         {"title": "Open my job search on this computer", "status": "idle"},
-        {"title": "Open job search on this Mac"},
-        {"title": "Job search tips for nurses"},
-        {"title": "Holiday plans"},
+        {"title": "Open job search on this Mac", "status": "idle"},
+        {"title": "Job search tips for nurses", "status": "idle"},
+        {"title": "Holiday plans", "status": "idle"},
     ])
     names = [r["title"] for r in computer.archivable(listing, set_up=True)]
+    # The setup chat only by its exact title, the first words pasted into it: a pattern also
+    # took a chat the person had named (review of fix/helpers, item 7).
     assert names == ["Job search · Find 10 people at Larkspur · Studio Laptop",
-                     "Open my job search on this computer", "Open job search on this Mac"]
+                     "Open my job search on this computer"]
     # Before the computer is set up, its setup chat is still at work.
     assert [r["title"] for r in computer.archivable(listing, set_up=False)] == [names[0]]
-    # Titles saved one a line work as well.
-    assert len(computer.archivable("- Job search · A · B\n- Holiday plans\n", True)) == 1
+    # Titles alone say nothing of a chat's state, so none is put away (audit HC-2: a chat
+    # waiting on the person was archived from a list with no states).
+    assert computer.archivable("- Job search · A · B\n- Holiday plans\n", True) == []
     title = computer.session_title("Find people", "Studio Laptop")
-    assert computer.archivable([title], set_up=False)[0]["title"] == title
+    assert computer.archivable([{"title": title, "status": "idle"}],
+                               set_up=False)[0]["title"] == title
     prompt = computer.session_prompt("w~1", "t", "https://claude.ai/artifact/x", "c")
     assert "computer.py archivable" in prompt and "cannot list them, skip it" in prompt
 

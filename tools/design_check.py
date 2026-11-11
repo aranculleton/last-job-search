@@ -24,7 +24,8 @@ DESIGNS) in a scratch copy of the app, fits it, runs tools/verify_batch.sh and t
 both documents, and exits 1 on any finding. CI runs it on Linux, macOS and Windows.
 
 Exit 0 all pass, 1 a finding, 2 usage, 3 not checked because nothing here reads a PDF's
-positions (the Python package pypdf), which is never a pass.
+positions (the Python package pypdf), which is never a pass, 4 the rules pass and a document
+allowed two pages ends one badly: a near-empty last page, or a heading alone at a page's foot.
 """
 from __future__ import annotations
 
@@ -47,6 +48,7 @@ MIN_EDGE_MM = 10.0     # every word this far from every edge
 PAGES = {"letter": (612.0, 792.0), "a4": (595.28, 841.89)}
 MM = 72 / 25.4
 EXIT_NO_READER = 3     # as tools/verify_pdf.py: the check could not run, which is not a pass
+EXIT_LAYOUT = 4        # the parser's rules pass, and the pages end badly (`layout`)
 
 
 def _mul(m, n):
@@ -187,6 +189,77 @@ def check(pdf, page=None, pages=1):
                          "read after text below it: a parser reads this page out of order")
             break
         low = y if low is None else min(low, y)
+    return found
+
+
+# --- across the pages ----------------------------------------------------------------------
+#
+# Read only where a resume may run to two pages or more (documents.resume_pages): a one-page
+# document has neither failure, and its page count is checked above. Both passed every rule
+# above and the page count. Adapted from ai-job-search's tools/verify_layout.py (#378), which
+# reads Poppler's word boxes; these are pypdf's positions, as everything above is.
+
+THIN_SHARE = 0.35      # a last page with fewer lines than this share of the first's
+HEADING_RATIO = 1.25   # a line set this much larger than the body is a heading
+FOOT_BAND_PT = 45.0    # a page number sits below this, in the bottom margin, not the body
+SAME_LINE_PT = 3.0     # runs this close in height are one printed line
+
+
+def printed_lines(rs) -> dict:
+    """{page: [(height on the page, its largest size)]}, one entry per printed line from the
+    top down, the page number in the bottom margin left out.
+
+    The page number is what sits under FOOT_BAND_PT at the same height on every page. Not
+    everything under it: the template lets page 1 run three lines lower than the rest
+    (\\enlargethispage), and its last lines were dropped as if they were the page number, so
+    a heading above them read as alone at the foot and page 1 counted short."""
+    rs = [(p, y, size) for p, text, _x, y, size in rs if str(text).strip()]
+    pages = {p for p, _y, _s in rs}
+    low = [(p, y) for p, y, _s in rs if y < FOOT_BAND_PT]
+
+    def footer(y):
+        return len(pages) < 2 or all(any(q == p and abs(y - z) <= 1.0 for q, z in low)
+                                     for p in pages)
+    by: dict = {}
+    for p, y, size in rs:
+        if y >= FOOT_BAND_PT or not footer(y):
+            by.setdefault(p, []).append((y, size))
+    out = {}
+    for p, items in by.items():
+        lines = []
+        for y, size in sorted(items, key=lambda t: -t[0]):
+            if lines and lines[-1][0] - y <= SAME_LINE_PT:
+                lines[-1] = (lines[-1][0], max(lines[-1][1], size))
+            else:
+                lines.append((y, size))
+        out[p] = lines
+    return out
+
+
+def layout(pdf, pages=1, rs=None, body=None) -> list:
+    """[finding] for how a document of two pages or more ends its pages: a page that ends on
+    a heading whose section starts overleaf (HEADING_AT_FOOT), and a last page holding under
+    THIN_SHARE of the first page's lines (THIN_LAST_PAGE)."""
+    if int(pages or 1) < 2:
+        return []
+    by = printed_lines(runs(pdf) if rs is None else rs)
+    order = sorted(by)
+    if len(order) < 2:
+        return []
+    if body is None:
+        body, _ = sizes(_texts(pdf))
+    found = []
+    for p in order[:-1]:
+        _y, size = by[p][-1]
+        if body and size >= body * HEADING_RATIO:
+            found.append(f"HEADING_AT_FOOT: page {p + 1} ends on a heading whose section "
+                         f"starts on page {p + 2}: move the heading over, or shorten what "
+                         "comes before it")
+    first, last = len(by[order[0]]), len(by[order[-1]])
+    if last < THIN_SHARE * first:
+        found.append(f"THIN_LAST_PAGE: page {order[-1] + 1} holds {last} lines against "
+                     f"{first} on page 1, which reads as unfinished: fit it on "
+                     f"{len(order) - 1} page{'s' if len(order) > 2 else ''}, or fill the last")
     return found
 
 
@@ -393,13 +466,17 @@ def main(argv):
         # The page the draft's design asked for: verify_batch passes the batch and the name.
         page = page_for(argv[argv.index("--for") + 1], argv[argv.index("--abbr") + 1],
                         "letter" if letter else "resume")
-    found = check(pdf, page, pages=1 if letter else resume_pages())
+    allowed = 1 if letter else resume_pages()
+    found = check(pdf, page, pages=allowed)
     body, small = sizes(_texts(pdf))
+    ends = layout(pdf, allowed, body=body)
     print(f"{os.path.basename(pdf)}: body {body}pt, smallest {small}pt"
-          + ("" if found else "; all rules pass"))
-    for x in found:
+          + ("" if found or ends else "; all rules pass"))
+    for x in found + ends:
         print("  " + x)
-    return 1 if found else 0
+    # Apart from the parser's rules: a page that ends badly reads poorly to a person, and
+    # verify_batch says it in its own words (LAYOUT_RESUME).
+    return 1 if found else EXIT_LAYOUT if ends else 0
 
 
 if __name__ == "__main__":

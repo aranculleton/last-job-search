@@ -51,11 +51,16 @@ def ring(tmp_path, monkeypatch):
     sys.path.remove(r.root)
 
 
-def query(r, out, q):
-    """The store answering one query: `where` with >= and not-in, as ArtifactData does."""
+def query(r, out, q, hook=True):
+    """The store answering one query: `where` with >= and not-in, as ArtifactData does. The
+    lines it lists (one a record, with its version) go to the app's hook as Claude Code hands
+    them over after the call (`learned.py hook`, PostToolUse on ArtifactData), unless `hook`
+    is False: a chat started before its settings registered the hook. [listed lines]"""
+    import page_db
     src = os.path.join(r.db, q["collection"])
     if not os.path.isdir(src):
-        return
+        return []
+    listed = []
     for f in os.listdir(src):
         with open(os.path.join(src, f), encoding="utf-8") as fh:
             doc = json.load(fh)
@@ -65,18 +70,24 @@ def query(r, out, q):
             ok = ok and v is not None and (str(v) >= str(val) if op == ">=" else v not in val)
         if ok:
             os.makedirs(os.path.join(out, q["collection"]), exist_ok=True)
-            with open(os.path.join(out, q["collection"], f.replace("~", "@")), "w",
-                      encoding="utf-8") as fh:
+            path = os.path.join(out, q["collection"], f.replace("~", "@"))
+            with open(path, "w", encoding="utf-8") as fh:
                 json.dump(dict(doc["data"], _v=doc["version"]), fh)
+            listed.append(f'- "{f[:-5]}"  {os.path.getsize(path)} bytes  version '
+                          f'{doc["version"]}  "{path}"')
+    if hook:
+        page_db.keep_listed_event({"tool_name": "ArtifactData", "tool_response": listed,
+                                   "tool_input": dict(q, action="query", out_dir=out)})
+    return listed
 
 
-def read(r, name, *args, now=R.NOW):
+def read(r, name, *args, now=R.NOW, hook=True):
     """`app.py reads` and the queries it prints: (the folder, what reads printed)."""
     out = os.path.join(r.root, name)
     said = r.run("reads", out, "--now", now, *args, LJS_PAGE_MIRROR=r.mirror)
     for line in said.splitlines()[1:]:
         if line.startswith("{"):
-            query(r, out, json.loads(line))
+            query(r, out, json.loads(line), hook=hook)
     return out, said
 
 
@@ -134,6 +145,89 @@ def test_a_wake_reads_only_what_changed_and_the_rest_is_laid_from_the_last_read(
     line = next(ln for ln in said.splitlines() if ln.startswith("read: "))
     assert "kept from the last read" in line and aid in line and "talk~new" in line, line
     assert len(line) < 400
+
+
+def test_a_read_the_hook_kept_is_never_retyped_and_one_it_did_not_is_asked_for_once(ring):
+    """After every read the chat retyped each record's version into `app.py versions`, though
+    the app's hook keeps them (the efficiency audit, E-6: 3,837 to some 36,000 characters of
+    output a whole read). The step is asked for only where the hook did not run, which only the
+    read itself shows: a chat started before its settings held the hook kept none, and pinned
+    every write to a stale number when told the hook did it (2026-11-10)."""
+    import page_db
+    used_page(ring)
+    d, said = read(ring, "r1")
+    assert "app.py versions" not in said, "asked before anyone knows whether the hook runs"
+    assert page_db.kept_by_hook(d)
+    woke = wake(ring, d)
+    assert "app.py versions" not in woke and "\nnext: " in woke or "nothing else" in woke, woke
+    assert "app.py versions" not in page_db_keep(d)
+    # A chat whose hook does not run: the wake stops before writing anything and asks for the
+    # read's lines once; given them, the same wake goes on.
+    ring.queue("talk~new", kind="talk", asked_at=LATER)
+    e, said = read(ring, "r2", now=LATER, hook=False)
+    assert "app.py versions" not in said
+    stopped = wake(ring, e, now=LATER)
+    assert "app.py versions" in stopped and ".json" not in stopped.split("app.py versions")[0], \
+        stopped
+    assert not os.path.isdir(os.path.join(e, "wake")), "it wrote nothing"
+    listed = []
+    for line in said.splitlines()[1:]:
+        if line.startswith("{"):
+            listed += query(ring, e, json.loads(line), hook=False)
+    out = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "app.py"), "versions", e],
+                         input="\n".join(listed), capture_output=True, encoding="utf-8",
+                         env=ring.env(LJS_PAGE_MIRROR=ring.mirror), timeout=120)
+    assert out.returncode == 0, out.stdout + out.stderr
+    again = wake(ring, e, now=LATER)
+    assert "app.py versions" not in again.split("\n")[0] and "talk~new" in again, again
+    # Every later read into that folder (taps made meanwhile, screens) asks for it again.
+    assert "app.py versions" in page_db_keep(e)
+
+
+def read_in(r, parent, *args, now=R.NOW, hook=True, folder=None):
+    """`app.py reads` as the skill has it now (`--in <the scratchpad>`, or a folder given) and
+    the queries it prints, into the folder it names: (that folder, what reads printed)."""
+    said = r.run("reads", *([folder] if folder else ["--in", parent]), "--now", now, *args,
+                 LJS_PAGE_MIRROR=r.mirror)
+    out = re.search(r'out_dir "([^"]+)"', said).group(1)
+    for line in said.splitlines():
+        if line.startswith("{"):
+            query(r, out, json.loads(line), hook=hook)
+    return out, said
+
+
+def test_a_second_ring_never_reads_into_the_first_ones_folder(ring):
+    """Told to give $D a short name (`w1`, `w2`), each fresh subagent chose `w1`: the second
+    ring read into a folder holding the first one's finished wake, so `wake` sent nothing and
+    never applied the tap, and the listener then looked lapsed; the first read's versions mark
+    stood for a read the hook never kept, so no versions were asked for (the review of
+    2026-11-11, E-18 and E-6). `reads --in` makes a fresh short folder each read and names it,
+    and a read is never planned into a folder holding anything: it goes into a fresh one."""
+    import fake_db
+    scratch = os.path.join(ring.root, "scratch")
+    first, said = read_in(ring, scratch)
+    assert first == os.path.join(scratch, "w1") and f"$D is {first}" in said, said
+    woke = wake(ring, first)
+    assert all(fake_db.apply(ring.db, b) for b, _why in R.sends(woke))
+    # The second ring: its own folder, never the first one's.
+    aid = ring.act("job.draft", "r9-3", value={"answers": {"already_applied": "no"}})
+    second, said = read_in(ring, scratch, now=LATER)
+    assert second == os.path.join(scratch, "w2"), said
+    woke = wake(ring, second, now=LATER)
+    assert R.sends(woke) and all(fake_db.apply(ring.db, b) for b, _why in R.sends(woke)), woke
+    assert ring.stored("receipts", aid)["data"]["result"] == "ok", "the tap was applied"
+    # A folder named by the chat that holds an earlier wake is never read into, and a read the
+    # hook did not keep is asked for its versions, whatever the earlier read's mark said.
+    ring.queue("talk~new", kind="talk", asked_at=LATER)
+    third, said = read_in(ring, scratch, now=LATER, hook=False, folder=first)
+    assert third != first and os.path.dirname(third) == scratch, said
+    assert f"{first} holds an earlier read" in said and f"$D is {third}" in said, said
+    assert "app.py versions" in wake(ring, third, now=LATER)
+
+
+def page_db_keep(dump):
+    import page_reads
+    return page_reads.keep_step(dump)
 
 
 def test_a_refused_write_makes_the_next_read_whole(ring):
@@ -274,6 +368,9 @@ def test_a_detached_save_opens_and_merges_its_pull_request_itself(landing_copy, 
     assert ok and number == "41"
     assert calls[0][:4] == ["gh", "api", "-X", "POST"] and "head=claude/chat-1" in calls[0]
     assert calls[1][:5] == ["gh", "api", "-X", "PUT", "repos/someone/my-job-search/pulls/41/merge"]
+    # Never deleted here: only the landing's own push with a lease deletes the branch, once
+    # merged and only while it holds what was merged (the review of D14, 2026-11-11).
+    assert len(calls) == 2, calls
     # Where GitHub's part cannot be done here, the calls are kept and said once, by the next
     # read, never again.
     write(chat, "profile/notes.md", "changed\n")

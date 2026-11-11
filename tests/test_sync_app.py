@@ -384,6 +384,40 @@ def test_if_stale_with_uncommitted_work_stops_and_records_nothing(repos, tmp_pat
     assert _stamp(me) == ""
 
 
+def test_nothing_is_merged_under_a_landing_and_the_check_runs_again(repos, tmp_path):
+    """The engine review of 2026-11-11: app_setup.take_master steps aside from a landing in
+    progress (its lock in the git folder), but the day's check merged master and the app's
+    update under it from every wake, so the landing tested one tree and pushed another."""
+    sys.path.insert(0, os.path.join(ROOT, "tools"))
+    import land
+    app, me = repos
+    for repo in (app, me):
+        write(repo, "tools/land.py", read(ROOT, "tools/land.py"))
+        commit(repo, "the landing")
+    origin = _with_local_origin(me, tmp_path)
+    other = str(tmp_path / "other-chat")
+    sh(str(tmp_path), "git", "clone", "-q", origin, other)
+    write(other, "job_search_tracker.csv", "date,company\n2026-11-11,Quenby Freight\n")
+    commit(other, "another chat applied somewhere")
+    sh(other, "git", "push", "-q", "origin", "master")
+    write(app, "README.md", "v2\n")
+    commit(app, "app v2")
+    lock = os.path.join(me, ".git", land.LOCK_FILE)
+    with open(lock, "w", encoding="utf-8") as fh:
+        fh.write(land.lock_text())                     # this process: a landing alive
+    before = head(me)
+    for args in (("--pull",), ("--if-stale",), ("--update",)):
+        rc, out = run(me, app, *args)
+        assert rc == 0 and "a save is running" in out, (args, out)
+        assert head(me) == before, args
+    assert _stamp(me) == "", "left for the next check"
+    os.remove(lock)
+    rc, out = run(me, app, "--if-stale")
+    assert rc == 0 and "brought in master" in out, out
+    assert "Quenby Freight" in read(me, "job_search_tracker.csv")
+    assert read(me, "README.md") == "v2\n" and _stamp(me) != ""
+
+
 def test_the_reminder_shows_only_when_todays_check_has_not_run(repos, tmp_path):
     app, me = repos
     _with_local_origin(me, tmp_path)
@@ -799,3 +833,47 @@ def test_the_app_watch_never_holds_the_days_check(tmp_path, monkeypatch, capsys,
     assert os.path.exists(tmp_path / sync_app.WATCHED)
     sync_app.app_watch_said()
     assert capsys.readouterr().out.strip() == "App watch: clean (nothing new)."
+
+
+# Audit SV-8 (a person's computer, 2026-11-10): `sync_app.py --check` ran for over two minutes
+# with nothing printed and was stopped. It says at once what it does, and an app that never
+# answers ends the look with a plain line.
+
+@pytest.mark.timing
+def test_a_check_says_so_at_once_and_ends_when_the_app_never_answers(repos):
+    import socket
+    import threading
+    import time
+    app, me = repos
+    server = socket.socket()
+    server.bind(("127.0.0.1", 0))
+    server.listen(5)
+    held = []
+    stop = threading.Event()
+
+    def accept():
+        server.settimeout(0.5)
+        while not stop.is_set():
+            try:
+                held.append(server.accept()[0])        # accepted, never answered
+            except OSError:
+                pass
+    t = threading.Thread(target=accept, daemon=True)
+    t.start()
+    url = "http://127.0.0.1:%d/the-app.git" % server.getsockname()[1]
+    try:
+        began = time.time()
+        r = subprocess.run([sys.executable, os.path.join(me, "tools", "sync_app.py"), "--check"],
+                           cwd=me, env=dict(ENV, LJS_APP_URL=url, LJS_NET_TIMEOUT="2"),
+                           text=True, encoding="utf-8", errors="replace", capture_output=True,
+                           timeout=120)
+        took = time.time() - began
+    finally:
+        stop.set()
+        for c in held:
+            c.close()
+        server.close()
+    out = r.stdout + r.stderr
+    assert out.splitlines()[0] == "sync_app: looking at the app; nothing is changed.", out
+    assert r.returncode == 2 and "could not be reached" in out, out
+    assert took < 60, took

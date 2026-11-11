@@ -97,12 +97,19 @@ def test_a_working_brief_in_a_chat_of_its_own_stays_where_it_works():
     made again. Only one whose chat no longer works moves (below: deleted, or a helper the
     page no longer uses)."""
     got = _plan()
-    assert got["brief"] == [] and got["moves"] == []
+    # Never moved: the chat made for it is recorded as its own (audit BT-1).
+    assert [c.get("run", "") for c in got["brief"]] == [
+        "python3 tools/routines.py record --session session_EXAMPLEBRIEFCHAT --trigger "
+        "trig_EXAMPLEBRIEF --cron \"CRON_TZ=Europe/London 38 7 * * 1,4\" --own-chat"]
+    assert got["moves"] == []
     assert all(c["id"] != "session_EXAMPLEBRIEFCHAT" for c in got["archive"])
 
 
 def test_a_brief_whose_chat_no_longer_works_moves_into_a_chat_of_its_own():
-    got = _plan(chats=[c for c in CHATS if c["id"] != "session_EXAMPLEBRIEFCHAT"])
+    # No longer there by get_session's word, never by a listing that lacks it (second audit B1).
+    got = _plan(chats=[c for c in CHATS if c["id"] != "session_EXAMPLEBRIEFCHAT"],
+                info=dict(INFO, session_EXAMPLEBRIEFCHAT={"id": "session_EXAMPLEBRIEFCHAT",
+                                                          "gone": True}))
     calls = got["brief"]
     assert [c.get("tool") or "run" for c in calls] == ["create_session", "create_trigger", "run", "update_trigger"]
     assert calls[0]["args"]["source_url"] == "https://github.com/" + REPO
@@ -190,8 +197,10 @@ def test_done_records_what_went_and_undo_brings_it_all_back(tmp_path, monkeypatc
 
 
 def test_a_brief_whose_chat_was_deleted_moves_to_a_chat_of_its_own():
+    # Deleted by get_session's word, never by a listing that lacks it (second audit B1).
     gone = [c for c in CHATS if c["id"] != "session_EXAMPLEBRIEFCHAT"]
-    got = _plan(chats=gone)
+    info = dict(INFO, session_EXAMPLEBRIEFCHAT={"id": "session_EXAMPLEBRIEFCHAT", "gone": True})
+    got = _plan(chats=gone, info=info)
     assert [c.get("tool") or "run" for c in got["brief"]] == ["create_session", "create_trigger", "run", "update_trigger"]
     assert got["brief"][1]["args"]["persistent_session_id"] == routines.NEW_CHAT
     assert all(c["id"] != "session_EXAMPLEBRIEFCHAT" for c in got["archive"])
@@ -216,9 +225,15 @@ OPS = {"timezone": "Europe/London",
             "prompt_file": "automation/prompts/job_round.md"}]}
 
 
+# The empty chat the task woke instead, as get_session reads it: no copy of the files.
+EMPTY_INFO = dict(INFO, session_EXAMPLEEMPTY={"id": "session_EXAMPLEEMPTY"})
+
+
 def test_an_ops_brief_whose_chat_is_gone_moves_to_a_chat_of_its_own():
     woke = [{"id": "trig_EXAMPLEB", "session": "session_EXAMPLEEMPTY", "enabled": True}]
-    got = _plan(reg=OPS, triggers=woke)
+    # Read first, never judged from a listing that lacks it (second audit B1).
+    assert "session_EXAMPLEEMPTY" in _plan(reg=OPS, triggers=woke)["ask"]
+    got = _plan(reg=OPS, triggers=woke, info=EMPTY_INFO)
     assert [c.get("tool") or "run" for c in got["brief"]] == ["create_session", "create_trigger", "run", "update_trigger"]
     got["brief"] = got["brief"][1:]
     new = got["brief"][0]["args"]
@@ -265,7 +280,7 @@ def test_the_moved_ops_brief_is_recorded_and_the_registry_stays_an_ops_one(tmp_p
     assert routines.setup_of(reg) == "ops_relay" and reg["setup"] == "ops_relay"
     # The move out of a lost ops chat (tidy's run line carries --own-chat).
     move = _plan(reg=OPS, triggers=[{"id": "trig_EXAMPLEB", "session": "session_EXAMPLEEMPTY",
-                                     "enabled": True}])["brief"][2]["run"]
+                                     "enabled": True}], info=EMPTY_INFO)["brief"][2]["run"]
     assert move.endswith(" --own-chat")
     routines.record(HELPER, "trig_EXAMPLENEW", "CRON_TZ=Europe/London 56 7 * * *", path=str(path),
                     own_chat=True)
@@ -494,6 +509,31 @@ def test_a_job_still_going_or_a_chat_that_is_not_safe_to_put_away_stays():
     ids = {c["id"] for c in _plan(chats=chats, info=info, jobs=jobs)["archive"]}
     assert not ids & {"session_EXAMPLEUNSAVED", "session_EXAMPLEOWN", "session_EXAMPLEOTHERCOPY",
                       HELPER, "session_EXAMPLEROUNDCHAT", "session_EXAMPLERUNNING"}
+
+
+def test_a_fresh_container_knows_the_days_tidy_from_the_page(tmp_path, monkeypatch):
+    """A fresh container always ran the whole tidy (list_sessions, list_triggers, the plan and
+    its calls), its own day's mark being in a git folder made that morning, though another
+    chat had tidied that day (the second audit, 2026-11-10, D5). The day's tidy is said on the
+    page's own record of who answers it, which every chat reads at its check-in."""
+    import app_listen
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    monkeypatch.setattr(tidy, "_git_dir", lambda: str(tmp_path / ".git"))
+    monkeypatch.setattr(tidy, "archived", lambda: [])
+    tidy._mark_checked("2026-10-29", "2026-10-29T08:00:00Z")
+    said = tidy.page_mark()
+    assert said == {"on": "2026-10-29", "at": "2026-10-29T08:00:00Z", "sweep": tidy.SWEEP}
+    # The chat that tidied puts it on the page with its check-in.
+    assert app_listen.tidied_field({"chat": HELPER}) == {"tidied": said}
+    assert app_listen.tidied_field({"chat": HELPER, "tidied": said}) == {}
+    # Another container, its git folder fresh: due only where the page does not say it.
+    (tmp_path / ".git" / tidy.CHECKED).unlink()
+    assert tidy.due("2026-10-29", db={"work": {}}, listener={"chat": HELPER}) is True
+    assert tidy.due("2026-10-29", db={"work": {}}, listener={"chat": HELPER, "tidied": said}) is False
+    assert tidy.due("2026-10-30", db={"work": {}}, listener={"chat": HELPER, "tidied": said}) is True
+    # A job that ended since that tidy still makes it due.
+    assert tidy.due("2026-10-29", db={"work": {"p": _item(JOB, "done", "2026-10-29T09:00:00Z")}},
+                    skip=HELPER, listener={"chat": HELPER, "tidied": said}) is True
 
 
 def test_the_tidy_is_due_again_only_when_a_job_chat_has_finished_since_the_last(tmp_path, monkeypatch):

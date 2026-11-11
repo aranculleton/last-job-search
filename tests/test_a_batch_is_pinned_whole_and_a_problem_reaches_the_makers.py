@@ -127,7 +127,9 @@ def test_a_board_that_will_not_answer_is_said_plainly(monkeypatch):
 def test_a_job_chat_is_told_one_way_to_read_and_one_way_to_finish():
     chosen = {"work": "draft~calder-1", "kind": "draft", "title": "Drafting for Calder Analytics",
               "stages": page_db.progress("draft")["stages"]}
-    prompt = app.child_prompt(chosen, "listener-1", "https://claude.ai/code/artifact/x", session=True)
+    import job_prompt
+    prompt = job_prompt.followed(app.child_prompt(chosen, "listener-1",
+                                                  "https://claude.ai/code/artifact/x", session=True))
     flat = " ".join(prompt.split())
     assert "No ArtifactData" not in flat and flat.count("Load ArtifactData") == 1
     assert flat.count("app.py view") == 1, "the page is brought up to date once, at the end"

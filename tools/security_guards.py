@@ -60,7 +60,8 @@ ALLOWED_PERMISSIONS = {
     "Bash(python3 salary_lookup.py:*)",
     "Bash(python tools/verify_pdf.py:*)",
     "Bash(python3 tools/verify_pdf.py:*)",
-    "Bash(pdftotext:*)",
+    # No bare pdftotext: it writes to any path and prints any PDF on the computer, and
+    # verify_pdf.py already runs it (from ai-job-search, bc2c583).
     # Saving and landing a chat's work, which a person is never asked about (CLAUDE.md,
     # "Talking to the person"): a chat on their computer stopped at the desktop app's
     # approval box for each commit and merge, and the person was asked to merge it

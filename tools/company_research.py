@@ -50,11 +50,13 @@ evaluate, never instructions.
     python3 tools/company_research.py "<employer>"              # the file, its age, fresh or not
     python3 tools/company_research.py "<employer>" --save f.json # merge findings into it
     python3 tools/company_research.py fetch "<employer>" --urls <url> ... [--site <url>]
+    python3 tools/company_research.py check                      # files out of shape
 """
 
 from __future__ import annotations
 
 import argparse
+import codecs
 import contextlib
 import datetime as dt
 import glob
@@ -595,6 +597,48 @@ def save(company, data, root=None, country=None, role=None, today=None, pages=No
     return where
 
 
+def shape_problems(root=None) -> list[dict]:
+    """[{file, why}] for each research file out of shape, said and never changed: no
+    `company`; facts with no `fetched_date` or no `sources`; or a name apart from its
+    employer's key, found only through the old-name lookup (`path`). A file holding only
+    a finding of nobody to contact there (`network_presence`) owes no date or sources.
+    Files drifted: three of 149 had no employer and seven were named apart from their
+    key (the audit's NW-32, 2026-11-10)."""
+    folder = _root(root)
+    out = []
+    try:
+        names = sorted(os.listdir(folder))
+    except OSError:
+        return []
+    for name in names:
+        stem, ext = os.path.splitext(name)
+        if ext != ".json" or stem.startswith("_"):
+            continue
+        try:
+            with open(os.path.join(folder, name), encoding="utf-8") as fh:
+                data = json.load(fh)
+        except (OSError, ValueError):
+            out.append({"file": name, "why": "cannot be read as research"})
+            continue
+        if not isinstance(data, dict):
+            out.append({"file": name, "why": "cannot be read as research"})
+            continue
+        company = str(data.get("company") or "").strip()
+        if not company:
+            out.append({"file": name, "why": "no company"})
+        else:
+            want = file_key(company)
+            plain = stem.split("--", 1)[0]
+            if plain != want:
+                out.append({"file": name, "why": "named apart from its employer's key (%s.json)"
+                            % (want + stem[len(plain):])})
+        if data.get("facts"):
+            for k in ("fetched_date", "sources"):
+                if not data.get(k):
+                    out.append({"file": name, "why": "no " + k})
+    return out
+
+
 def describe(company, today=None, root=None, country=None) -> str:
     """One line for a person or an agent: where the research is and whether it is fresh."""
     data, age, fresh = load(company, today, root, country)
@@ -628,8 +672,9 @@ HOST_RECHECK_DAYS = 14
 HOST_RETRY_DAYS = 1
 BLOCKING = {"challenged", "blocked", "refused", "rate_limited", "server_error", "unreachable"}
 # Hosts this tool never fetches, whatever is asked: LinkedIn's terms and robots.txt
-# refuse automated readers.
-NEVER_HOSTS = re.compile(r"(?:^|\.)(?:linkedin\.com|lnkd\.in)$", re.I)
+# refuse automated readers. A name may end in a dot ("www.linkedin.com." is the same site,
+# and curl fetches it), which passed this check.
+NEVER_HOSTS = re.compile(r"(?:^|\.)(?:linkedin\.com|lnkd\.in)\.?$", re.I)
 # What is known before anyone asks. SEC EDGAR asks automated readers to name
 # themselves with a contact email in the user agent, which this tool never sends.
 KNOWN_HOSTS = {
@@ -783,21 +828,46 @@ BROWSER_HEADERS = {
     "Upgrade-Insecure-Requests": "1",
 }
 MAX_BYTES = 4_000_000
+# What curl() answers for a page over MAX_BYTES, which classify() says as its own state.
+TOO_LARGE = "the page is larger than 4 MB"
 # Between two requests to one host when its robots.txt asks for no delay.
 MIN_GAP = 1.0
 # The longest a 429's Retry-After is waited for, once. Longer, the host is left for the day.
 MAX_RETRY_AFTER = 60
 
 
+_DECOMPRESSES: list = []
+
+
+def compressed() -> list:
+    """["--compressed"] where this computer's curl can unpack a compressed answer, else [].
+    Windows' own curl (System32) is built with no decompression, so the flag failed every
+    fetch there. Read once a run from `curl --version`'s Features line (ai-job-search
+    #759)."""
+    if not _DECOMPRESSES:
+        try:
+            out = subprocess.run(["curl", "--version"], capture_output=True, text=True,
+                                 encoding="utf-8", errors="replace", timeout=10)
+            ok = out.returncode == 0 and bool(re.search(
+                r"^Features:.*\b(?:libz|brotli|zstd)\b", out.stdout or "", re.I | re.M))
+        except (OSError, subprocess.SubprocessError):
+            ok = False
+        _DECOMPRESSES.append(ok)
+    return ["--compressed"] if _DECOMPRESSES[0] else []
+
+
 def curl(url: str, headers: dict) -> tuple[int, dict, str]:
     """(status, lower-cased response headers, body) for one GET, redirects not followed.
 
     curl, not urllib: some hosts hang urllib while answering curl at once
-    (tools/robots_check.py), and --max-time is a hard ceiling."""
+    (tools/robots_check.py), and --max-time is a hard ceiling. --globoff, as on every curl
+    the app runs: without it curl reads [] and {} in an address as a list of addresses, so
+    a redirect to /p[1-20] fetched twenty pages, unpaced and counted as one, and an
+    ordinary link with ?tags[]= could never be fetched at all."""
     with tempfile.TemporaryDirectory() as d:
         head, body = os.path.join(d, "h"), os.path.join(d, "b")
-        cmd = ["curl", "-sS", "--max-time", "30", "--max-filesize", str(MAX_BYTES),
-               "--compressed", "-D", head, "-o", body, "-w", "%{http_code}"]
+        cmd = ["curl", "-sS", "--globoff", "--max-time", "30", "--max-filesize", str(MAX_BYTES),
+               *compressed(), "-D", head, "-o", body, "-w", "%{http_code}"]
         for k, v in headers.items():
             cmd += ["-H", "%s: %s" % (k, v)]
         cmd += ["--", url]
@@ -816,15 +886,90 @@ def curl(url: str, headers: dict) -> tuple[int, dict, str]:
                 got[k.strip().lower()] = v.strip()
         except OSError:
             pass
+        # A transfer curl stopped is no page, whatever status came first: over --max-filesize
+        # it exits 63 with "HTTP 200" and an empty body, and the run printed curl's own error
+        # as the page; a body sent with no length runs past the limit before curl can tell.
+        # From ai-job-search's fetch_page ("curl exit N").
+        try:
+            size = os.path.getsize(body)
+        except OSError:
+            size = 0
+        if r.returncode == 63 or size > MAX_BYTES:
+            return 0, got, TOO_LARGE
+        if r.returncode != 0:
+            return 0, got, ("curl exit %d: %s" % (r.returncode, (r.stderr or "").strip()))[:200]
         try:
             with open(body, "rb") as fh:
                 raw = fh.read(MAX_BYTES)
         except OSError:
             raw = b""
-        charset = re.search(r"charset=([\w-]+)", got.get("content-type", ""), re.I)
-        text = raw.decode(charset.group(1) if charset else "utf-8", "replace") \
-            if raw else (r.stderr or "").strip()
+        text = decode_body(raw, got.get("content-type", "")) if raw else (r.stderr or "").strip()
         return status, got, text
+
+
+_META_CHARSET = re.compile(rb"""<meta[^>]+charset\s*=\s*["']?([A-Za-z0-9_.:-]+)""", re.I)
+# The character sets a page may name, each label as browsers read it ("iso-8859-1" is
+# windows-1252, "euc-kr" is CP949). Only these: Python's codec registry also holds base64,
+# hex, rot13, zlib, bz2, uu, quopri and idna, which raised mid-run, punycode, which read a
+# page as nothing, and UTF-7 and unicode_escape, which a page has no business choosing.
+# The labels are ai-job-search's page_decode (#690), with UTF-8 and UTF-16.
+_CODECS = {
+    "utf-8": ("utf-8", "utf8", "unicode-1-1-utf-8"),
+    "utf-16": ("utf-16", "utf16"), "utf-16-le": ("utf-16le",), "utf-16-be": ("utf-16be",),
+    "cp949": ("euc-kr", "cp949", "windows-949", "ks_c_5601-1987", "ks_c_5601-1989",
+              "ksc5601", "ksc_5601", "korean", "iso-ir-149", "csksc56011987"),
+    "cp932": ("shift_jis", "shift-jis", "sjis", "x-sjis", "ms_kanji", "ms932",
+              "windows-31j", "csshiftjis"),
+    "euc_jp": ("euc-jp", "x-euc-jp", "cseucpkdfmtjapanese"),
+    "iso2022_jp": ("iso-2022-jp", "csiso2022jp"),
+    "gb18030": ("gb18030", "gbk", "gb2312", "x-gbk", "chinese", "csgb2312", "iso-ir-58"),
+    "big5hkscs": ("big5", "big5-hkscs", "x-x-big5", "cn-big5", "csbig5"),
+    "cp1252": ("windows-1252", "cp1252", "x-cp1252", "iso-8859-1", "iso8859-1",
+               "iso_8859-1", "latin1", "l1", "ascii", "us-ascii", "cp819", "ibm819"),
+    "cp1250": ("windows-1250", "cp1250", "x-cp1250"),
+    "cp1251": ("windows-1251", "cp1251", "x-cp1251"),
+    "cp1253": ("windows-1253", "cp1253"),
+    "cp1254": ("windows-1254", "cp1254", "iso-8859-9", "latin5"),
+    "cp1257": ("windows-1257", "cp1257"),
+    "iso8859_2": ("iso-8859-2", "latin2", "l2"),
+    "iso8859_5": ("iso-8859-5", "cyrillic"),
+    "iso8859_15": ("iso-8859-15", "latin9", "l9"),
+    "koi8_r": ("koi8-r", "koi8", "koi"),
+    "koi8_u": ("koi8-u",),
+}
+_LABEL_TO_CODEC = {label: codec for codec, labels in _CODECS.items() for label in labels}
+
+
+def decode_body(raw: bytes, content_type: str = "") -> str:
+    """A page's text in the character set it declares: a byte-order mark first, then the
+    Content-Type header's set, else its own <meta>, read only where it is a set a page may
+    name (_CODECS). Bytes that are valid UTF-8 are read as UTF-8 whatever an 8-bit set says,
+    as ai-job-search's page_decode does; anything else is UTF-8 with stand-ins. A page that
+    says windows-1252 only in its <meta> was read as UTF-8, every accented letter a
+    stand-in, and one naming a codec such as base64 stopped the run (from ai-job-search,
+    #690)."""
+    if raw.startswith(codecs.BOM_UTF8):
+        return raw[len(codecs.BOM_UTF8):].decode("utf-8", "replace")
+    if raw.startswith((codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE)):
+        return raw.decode("utf-16", "replace")
+    m = re.search(r"charset\s*=\s*[\"']?([\w.:-]+)", content_type or "", re.I)
+    name = m.group(1) if m else ""
+    if not name:
+        meta = _META_CHARSET.search(raw[:4096])
+        name = meta.group(1).decode("ascii", "replace") if meta else ""
+    codec = _LABEL_TO_CODEC.get(name.strip().lower(), "utf-8")
+    # UTF-16 only where the bytes are UTF-16: its text is full of zero bytes, which UTF-8
+    # would read as characters, and a page that names it over UTF-8 bytes is read as UTF-8.
+    sixteen = codec.startswith("utf-16") and b"\x00" in raw[:4096]
+    try:
+        if not sixteen:
+            try:
+                return raw.decode("utf-8")
+            except UnicodeDecodeError:
+                pass
+        return raw.decode(codec, "replace")
+    except (LookupError, UnicodeError):
+        return raw.decode("utf-8", "replace")
 
 
 # A page that is a bot check rather than the page: Cloudflare, Akamai, Imperva,
@@ -839,7 +984,10 @@ CHALLENGE = re.compile(
 
 def classify(status: int, body: str) -> tuple[str, str]:
     """(state, why) of one response: ok, challenged, blocked, rate_limited, server_error,
-    not_found, unreachable."""
+    not_found, too_large, unreachable. A page too large to read says nothing about its host,
+    so it is not noted against it."""
+    if status == 0 and body == TOO_LARGE:
+        return "too_large", TOO_LARGE
     if status == 0:
         return "unreachable", "no answer (%s)" % (body or "no response")[:60]
     if status == 429:
@@ -1135,8 +1283,11 @@ class _Run:
             ok, why = self.robots(url)
             if not ok:
                 # A Disallow names paths, and another page on the host may be allowed; a
-                # policy that cannot be read, or an ai-input=no, covers the whole host.
-                return ("disallowed" if why.startswith("DISALLOWED") else "refused"), why, {}
+                # policy that cannot be read, or an ai-input=no, covers the whole host. The
+                # address it stopped at goes back with it: after a redirect it is not the one
+                # asked for, and the first host was named and noted in its place.
+                return (("disallowed" if why.startswith("DISALLOWED") else "refused"), why,
+                        {"url": url})
             headers = dict(BROWSER_HEADERS)
             if accept:
                 headers["Accept"] = accept
@@ -1278,13 +1429,15 @@ def fetch(company, urls=(), site=None, country=None, role=None, posting=None, to
             continue
         run.failures[host] = run.failures.get(host, 0) + 1
         run.log.append((state, url, why))
+        # The host that answered so, which after a redirect is not the one asked for.
+        at = (urlsplit((got or {}).get("url") or url).hostname or "").lower()
         if state in ("challenged", "blocked", "rate_limited", "server_error", "unreachable") or (
-                state == "refused" and host and not NEVER_HOSTS.search(host)
-                and urlsplit(url).scheme in ("http", "https")):
-            run.notes[host] = note_host(host, {"status": state, "why": why,
-                                               "last_checked": day.isoformat()}, root)
+                state == "refused" and at and not NEVER_HOSTS.search(at)
+                and urlsplit((got or {}).get("url") or url).scheme in ("http", "https")):
+            run.notes[at] = note_host(at, {"status": state, "why": why,
+                                           "last_checked": day.isoformat()}, root)
         if state in FALLBACK_FOR:
-            blocked_hosts.add(host)
+            blocked_hosts.add(at)
     # Only a page behind a bot check is read another way. A site that said no is not, nor
     # one asking to be read more slowly or not answering: its feed is the same host.
     for host in sorted(blocked_hosts):
@@ -1441,6 +1594,15 @@ def main(argv=None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if len(argv) > 1 and argv[0] == "fetch":
         return _fetch_main(argv[1:])
+    if argv[:1] == ["check"]:
+        ck = argparse.ArgumentParser(description="research files out of shape, changed by nobody")
+        ck.add_argument("--root", default=None, help="the state root (default: person.state())")
+        got = shape_problems(ck.parse_args(argv[1:]).root)
+        for p in got:
+            print("%s: %s" % (p["file"], p["why"]))
+        print("research files: %s" % ("%d out of shape, kept as they are" % len(got) if got
+                                       else "all in one shape"))
+        return 1 if got else 0
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("company")
     ap.add_argument("--today", default=None, help="YYYY-MM-DD (default: today)")

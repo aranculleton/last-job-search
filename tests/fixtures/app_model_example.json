@@ -1,7 +1,7 @@
 {
  "model": 1,
  "made_at": "2026-10-25T18:00:00Z",
- "rev": "b25a92af0c66",
+ "rev": "bde5f96ed96a",
  "app": {
   "version": "4.14.0",
   "url": null,
@@ -13,7 +13,7 @@
   ],
   "privacy": "Only you can open this page unless you share it. It holds first names, employers, your drafts and your setup answers, so keep it unshared.",
   "repo": "https://github.com/aranculleton/last-job-search",
-  "page": 102,
+  "page": 159,
   "not_saved": 0,
   "app_bugs": []
  },
@@ -77,7 +77,7 @@
  ],
  "jobs": {
   "round": "r9",
-  "made_at": "2026-11-10T22:47:09Z",
+  "made_at": "2026-11-11T10:31:39Z",
   "met": false,
   "summary": "3 roles from the last search to look at, 1 of them scoring 75 or more. 3 left out, each with its reason.",
   "rows": [
@@ -1012,7 +1012,7 @@
    "when": "2026-10-28",
    "prep": {
     "path": "documents/applications/thornbury_bank_risk_analyst_thornbury/interview_prep.md",
-    "updated": "2026-11-10T22:47:09Z"
+    "updated": "2026-11-11T10:31:39Z"
    },
    "questions": 2,
    "all_day": true,
@@ -2228,7 +2228,7 @@
     },
     "drop": null,
     "still_right": false,
-    "rev": "ee1bc076e630"
+    "rev": "3b31051cb52e"
    },
    {
     "id": "rule~roles",
@@ -2244,7 +2244,7 @@
     },
     "drop": null,
     "still_right": false,
-    "rev": "f823125c6a4c"
+    "rev": "5c7fbecbe39e"
    },
    {
     "id": "rule~window",
@@ -2260,7 +2260,7 @@
     },
     "drop": null,
     "still_right": false,
-    "rev": "68f8d5cece4d"
+    "rev": "07eed6eaeacd"
    },
    {
     "id": "rule~pay",
@@ -2276,7 +2276,7 @@
     },
     "drop": null,
     "still_right": false,
-    "rev": "c16429553eff"
+    "rev": "c83662d289c6"
    },
    {
     "id": "rule~languages",
@@ -2295,7 +2295,7 @@
     },
     "drop": null,
     "still_right": false,
-    "rev": "1043766b8ee2"
+    "rev": "b38b32c2616d"
    },
    {
     "id": "rule~sector~a-sector-the-candidate-will-not-work-in-",
@@ -2312,7 +2312,7 @@
      "why": "a sector the candidate will not work in (gambling and tobacco)"
     },
     "still_right": false,
-    "rev": "8254c94cfb38"
+    "rev": "0d54905ee96f"
    },
    {
     "id": "rule~credential",
@@ -2326,7 +2326,7 @@
     "edit": null,
     "drop": null,
     "still_right": false,
-    "rev": "e25614d68d45"
+    "rev": "5800ca6b941d"
    }
   ],
   "brief_line": null,
@@ -2339,7 +2339,7 @@
     "until": null,
     "line": "Thornbury Bank: no new jobs there while your interviews run",
     "say": "it's over at Thornbury Bank",
-    "lift": "It's over"
+    "lift": "My interviews there are over"
    }
   ],
   "every_hold": [
@@ -2366,12 +2366,17 @@
    {
     "id": "dismissed",
     "area": "jobs",
-    "line": "Jobs you set aside: your choice for that one job; another role at the employer still shows. Tap Bring back under Set aside in Jobs."
+    "line": "Jobs you set aside: 182 days after you set it aside, then it is shown once more; for good only where your own words said so (never, not at all, for good). Tap Bring back under Set aside in Jobs, or the bin beside it in Your rules."
    },
    {
     "id": "ruled_out",
     "area": "jobs",
     "line": "Jobs a search already ruled out: a reason that was only a score, a pay band or a preference is read again on every search. Tap Bring back under What a search left out in Jobs."
+   },
+   {
+    "id": "job_left_out",
+    "area": "jobs",
+    "line": "A job Claude stopped drafting: 182 days after Claude stopped its draft, then it is shown once more. Tap Look again now under Held back for now."
    },
    {
     "id": "duplicates",
@@ -2381,7 +2386,7 @@
    {
     "id": "no_team",
     "area": "jobs",
-    "line": "Employers with no team for you where you look: on its own review day, or 90 days after it was found where it names none. Ask Claude to look at the employer again."
+    "line": "Employers with no team for you where you look: on its own review day, or 90 days after it was found where it names none; an employer a people search found nobody who fits at is searched again after 30 days. Ask Claude to look at the employer again."
    },
    {
     "id": "application_open",
@@ -2466,7 +2471,7 @@
    {
     "id": "note_aside",
     "area": "messages",
-    "line": "A first note you set aside: your choice for that person. Tap Undo, or ask Claude to write to them again."
+    "line": "A first note you set aside: 182 days after you set it aside, then they are offered again; for good only where your own words said so (never). Tap Look again now under Held back for now, or Undo."
    },
    {
     "id": "interview_quiet",

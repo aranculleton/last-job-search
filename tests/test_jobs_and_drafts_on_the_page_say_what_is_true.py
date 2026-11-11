@@ -72,8 +72,11 @@ def test_a_jobs_line_of_facts_says_where_when_posted_and_when_found(run, tmp_pat
     _row(m, "r12-4").update(found_days=8, found_on="2026-10-17")
     got = _go(run, tmp_path, [{"hash": "jobs", "read": '[data-item="r12-1"] .facts'},
                               {"read": '[data-item="app-ellerwick-insight"] .facts'}], WIDE, model=m, clock=T)
-    assert got["after"][0]["text"] == "Harbourline Bank · Calgary (Remote) · Posted 5 days ago · found today · £46,000 to £52,000 · Why", got["after"][0]["text"]
-    assert got["after"][1]["text"].startswith("Ellerwick Trust · Salford · Found 17 Oct · "), got["after"][1]["text"]
+    # Read as words: each dot keeps to the fact after it with a no-break space (the screen
+    # review, 2026-11-11).
+    line = [a["text"].replace("\u00a0", " ") for a in got["after"][:2]]
+    assert line[0] == "Harbourline Bank · Calgary (Remote) · Posted 5 days ago · found today · £46,000 to £52,000 · Why", line[0]
+    assert line[1].startswith("Ellerwick Trust · Salford · Found 17 Oct · "), line[1]
 
 
 def test_each_pencil_stands_beside_its_own_documents_words(run, tmp_path):
@@ -306,7 +309,9 @@ def test_applied_says_what_it_counts_and_flags_a_late_follow_up(run, tmp_path):
     text = got["after"][0]["text"]
     assert " still open" in text and " applied," not in text.split("\n")[0], text[:300]
     assert "1 interview with no day yet" in text, text[:300]
-    assert "Next: follow up, 2 days late" in text and "Follow-up due" in text
+    # A follow-up the person set is ready, never late (the UX review of 2026-11-10, U-6, and the
+    # review of 2026-11-11): it said "Follow-up due" and "Next: follow up, 2 days late".
+    assert "Next: follow up, ready now" in text and "Follow-up ready" in text and "days late" not in text
 
 
 def test_the_weeks_say_their_average_and_progress_says_applied_once(run, tmp_path):
@@ -394,11 +399,26 @@ def test_the_briefs_jobs_tile_leads_with_the_drafts_ready_to_apply(run, tmp_path
     got = _go(run, tmp_path, [{"hash": "brief", "read": "#main .bp-jobs"},
                               {"hash": "drafts", "read": "#main .summary"}], WIDE, model=m, clock=T)
     tile, drafts = got["after"][0]["text"], got["after"][1]["text"]
-    assert "3 drafts ready to apply" in tile and "Nothing new to look at." not in tile, tile
-    assert drafts.startswith("3 to send."), "the same count as Jobs' one list"
-    got = _go(run, tmp_path, [{"hash": "brief", "click": "3 drafts ready to apply", "role": "link",
+    # Counted as Jobs counts them: the draft with a question waits on you (the screen
+    # review, 2026-11-11).
+    assert "2 drafts ready to apply, 1 waiting on you" in tile and "Nothing new to look at." not in tile, tile
+    # One sentence whose total is the tab's since the UX review of 2026-11-10 (U-9).
+    # The tab's total first (U-9); what makes it up is test_the_jobs_line_adds_up_to_its_tab's.
+    assert drafts.startswith("3 to apply to: "), ("the same count as Jobs' one list", drafts[:120])
+    got = _go(run, tmp_path, [{"hash": "brief", "click": "2 drafts ready to apply, 1 waiting on you", "role": "link",
                                "until": "location.hash.startsWith('#drafts')"}], WIDE, model=m, clock=T)
     assert got["after"][0]["hash"].startswith("#drafts"), got["after"][0]["hash"]
     m["ready"] = []
     got = _go(run, tmp_path, [{"hash": "brief", "read": "#main .bp-jobs"}], WIDE, model=m, clock=T)
     assert "Nothing new to look at." in got["after"][0]["text"], got["after"][0]["text"]
+
+
+def test_a_draft_made_for_someone_links_their_name_and_has_no_pill_to_see_them(run, tmp_path):
+    # "See Tamsin" stood as a pill row of its own between two lines that named her (the screen
+    # review, 2026-11-11). Her name in "Made for Tamsin" opens her card.
+    look = """(() => { const c = [...document.querySelectorAll('#main .card.app')].find((x) => /Made for Tamsin/.test(x.textContent)); if (!c) return null;
+      return {pill: [...c.querySelectorAll('button, a.btn')].filter((b) => /^See /.test(b.textContent.trim())).length,
+              link: (c.querySelector('.meta a') || {}).textContent || null}; })()"""
+    got = _go(run, tmp_path, [{"hash": "jobs", "eval": look}], PHONE, clock=T)
+    seen = got["after"][0]["eval"]
+    assert seen and seen["pill"] == 0 and seen["link"] == "Tamsin", seen

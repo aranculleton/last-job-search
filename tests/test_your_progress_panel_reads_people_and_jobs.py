@@ -35,9 +35,16 @@ def run():
     yield from journeys.browser()
 
 
+def _this_week(m, n=5):
+    # Five sent this week: the sample's own newest week holds none since the screen review of
+    # 2026-11-11 (row 40), its weeks counted from the applications it lists, not 24 over 14.
+    m["done"]["weeks"][-1]["applied"] = n
+    return m
+
+
 def _networker():
     """Someone writing to many people and applying a little: four tiles, a line, two series."""
-    m = _full()
+    m = _this_week(_full())
     d = m["done"]
     for i, w in enumerate(d["weeks"]):
         w["sent"] = [0, 3, 8, 12, 6, 14, 9, 11][i % 8]
@@ -54,7 +61,7 @@ def _networker():
 
 def _applier():
     """Someone applying a lot and writing to nobody: the chart is applications alone."""
-    m = _full()
+    m = _this_week(_full())
     d = m["done"]
     for w in d["weeks"]:
         w["sent"] = 0
@@ -106,7 +113,9 @@ def _look(run, tmp_path, model, size, scheme="light", name="m"):
 def test_the_panel_draws_the_engines_tiles_line_and_two_series(run, tmp_path, size, scheme):
     r, _fit = _look(run, tmp_path, _networker(), size, scheme)
     assert [t[0] for t in r["tiles"]] == ["bp-stat:applied", "bp-stat:sent", "bp-stat:replies", "bp-stat:calls"], r["tiles"]
-    assert [t[1:] for t in r["tiles"]] == [["2", "applied"], ["40", "messages sent"], ["9", "people replied"], ["1", "call"]]
+    # This week's own work leads the engine's tiles since the review of 2026-11-11 (U-7): the
+    # same two kinds (applied, messages sent), counted for this week, then how it went.
+    assert [t[1:] for t in r["tiles"]] == [["5", "applied this week"], ["11", "messages sent this week"], ["9", "people replied"], ["1", "call"]], [t[1:] for t in r["tiles"]]
     assert r["working"] == WORKING
     # Applications and messages sent each week, side by side, said in the line with a swatch each.
     assert r["applied"] == 8 and r["sent"] == 8, r
@@ -122,7 +131,9 @@ def test_the_panel_draws_the_engines_tiles_line_and_two_series(run, tmp_path, si
 
 def test_someone_who_only_applies_sees_one_series_and_no_nought(run, tmp_path):
     r, _fit = _look(run, tmp_path, _applier(), {"width": 1440, "height": 900})
-    assert [t[1:] for t in r["tiles"]] == [["30", "applied"], ["2", "interviews"]], r["tiles"]
+    # This week's applications lead since the review of 2026-11-11 (U-7); a week with none
+    # would leave the engine's own tile, never a nought.
+    assert [t[1:] for t in r["tiles"]] == [["5", "applied this week"], ["2", "interviews"]], r["tiles"]
     assert r["sent"] == 0 and r["applied"] == 8, r
     assert r["cap"].startswith("Applications each week"), r["cap"]
     assert r["working"] is None
@@ -139,7 +150,8 @@ def test_a_short_window_says_the_glance_in_one_line(run, tmp_path):
     got = run("engine", html=html, viewport={"width": 1000, "height": 560}, clock=T, timezoneId=PERSON_ZONE, fake={"canSend": "available"},
               steps=[{"hash": "brief", "ready": READY, "eval": "(() => { const e = document.querySelector('#main .bp-head-numbers'); return e ? e.textContent : null; })()"}])
     assert not got["errors"], got["errors"]
-    assert got["after"][0]["eval"] == "2 applied · 40 messages sent · 9 replied · 1 call"
+    # This week's own work first since the review of 2026-11-11 (U-7).
+    assert got["after"][0]["eval"].startswith("5 this week · 11 sent · 9 replied · 1 call"), got["after"][0]["eval"]
 
 
 def test_progress_says_the_same_as_the_panel(run, tmp_path):
@@ -155,9 +167,10 @@ def test_progress_says_the_same_as_the_panel(run, tmp_path):
 
 
 def test_a_model_from_before_the_glance_draws_its_four_numbers(run, tmp_path):
-    m = _full()
+    m = _this_week(_full())
     m["done"].pop("glance", None)
     r, _fit = _look(run, tmp_path, m, {"width": 1440, "height": 900}, name="old")
-    assert [t[2] for t in r["tiles"]][:1] == ["applied"] and len(r["tiles"]) == 4, r["tiles"]
+    # This week's applications first since the review of 2026-11-11 (U-7), then the rest.
+    assert [t[2] for t in r["tiles"]][:1] == ["applied this week"] and len(r["tiles"]) == 4, r["tiles"]
 
 

@@ -367,7 +367,9 @@ this chat does none of it but what `then` says. Otherwise it is this chat's, as 
       first>`, then `reading.py next` and what it prints, one person at a time (their profile
       and its Experience page, `reading.py read <id> - --source browser`, the verdict in 3),
       until it says done; then write each note from its reading (step 7, `reading.py draft
-      <id> -`, never `--wait-for-read`). LinkedIn's sign-in page instead of a profile is a
+      <id> -`, never `--wait-for-read`). A reading that came out wrong (an employer that is a
+      job title, a role in the wrong place) is read again from the page it was made from,
+      `reading.py reparse <id>`, never edited by hand and never opened twice. LinkedIn's sign-in page instead of a profile is a
       wait, never a stop: `reading.py signin` prints its steps (the sign-in page opened in
       this browser), and in a chat the app started on the computer its own prompt's sign-in
       step puts the Sign in to LinkedIn card on their page too; the run carries on by itself
@@ -651,7 +653,8 @@ day are never logged twice. `state.py sent` does the three steps below at once:
    never the draft.
 2. **The contact row** (`state.load_contacts()`, then `state.save_contacts()`):
    `first_contacted` that day when it is empty, `channel`, `status` `awaiting_reply`,
-   `next_action` (one nudge if no reply; for a connection request, a nudge once they accept,
+   `next_action` (`state.follow_up_plan`: when it went and the follow-ups left by the person's
+   rule; for a connection request, a follow-up once they accept,
    and withdraw it if nobody has accepted in `state.REQUEST_WITHDRAW_DAYS` days, recorded
    with `python3 tools/network/state.py withdraw <contact_id>` once they have), and
    `next_action_due` `state.follow_up_on(<the day it went>)` (the person's FOLLOW_UP_DAYS, else six

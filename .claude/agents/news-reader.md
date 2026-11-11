@@ -37,7 +37,9 @@ anecdote or a question for an interview, a reason to write to someone. A brief t
 widen to find them, never stop.
 
 1. Run every search once with WebSearch, today's and the wider ones, all at once: every
-   WebSearch call in one message, so they run in parallel. Never one round and then another.
+   WebSearch call in one message, so they run in parallel: exactly as many calls as there are
+   numbered searches. Never one round and then another, and a search beyond them is never
+   run: an item tagged with no number the brief gave is left out.
 2. Keep a result only when all of these hold:
    - you can tell its day from the result itself: a date in its title or text, a date in its
      link (a path like `/2026/11/03/` or `2026-11-03`), or an age it states ("2 days ago")

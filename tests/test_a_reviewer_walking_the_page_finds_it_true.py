@@ -74,7 +74,12 @@ def test_a_job_being_drafted_says_where_its_draft_stands_with_cancel_and_stays_c
     assert "Stop Claude" in queued and "Drafting" not in queued, queued
     assert any(w.lower() in queued.lower() for w in ("Waiting for Claude", "Waiting its turn", "Next", "Sent", "Waking Claude")), queued
     assert tab == before and tab2 == before, (before, tab, tab2)
-    assert "3 to send, 2 still to make" in summary, summary
+    # One sentence whose total is the tab's since the UX review of 2026-11-10 (U-9): it said
+    # "3 to send, 2 still to make".
+    # Being made only while its work goes, still to make where nothing makes it (the review of
+    # 2026-11-11): the job just asked for is being made; the draft never made is still to make.
+    # A job still to look at that asks a question is waiting on you, counted there once (2026-11-11).
+    assert "to apply to: 1 ready, 1 waiting on you, 1 being made, 1 still to make" in summary, summary
     assert ("Claude is on it" in going or "Draft" in going) and "Stop Claude" in going, going
     assert "Finished: putting it on your page" in finished, finished
     assert "Draft ready" not in finished and "See the draft" not in finished, finished
@@ -97,7 +102,10 @@ def test_a_question_about_a_job_is_asked_on_that_jobs_card_and_holds_draft_this(
     assert card["count"] == 0, "the question is never a card of its own above the job"
     assert "Did you apply to Dovecote Freight?" in card["text"], card["text"]
     assert "Draft this" not in card["text"], card["text"]
-    assert "1 needs your answer" in got["after"][1]["text"], got["after"][1]["text"]
+    # Counted with what waits on the person, once (2026-11-11): "One needs your answer." after
+    # "1 waiting on you" said one thing twice. Moved with the rule.
+    assert "waiting on you" in got["after"][1]["text"], got["after"][1]["text"]
+    assert "needs your answer" not in got["after"][1]["text"], got["after"][1]["text"]
 
 
 # ------------------------------------------------------------------ 7: the Brief and a draft not made
@@ -112,7 +120,9 @@ def test_the_brief_counts_drafts_ready_apart_from_those_being_made_and_apply_wai
         {"hash": "jobs", "read": '#main [data-item="app-fernhill_freight_operations_analyst"]'},
     ], WIDE, model=m)
     brief, card = got["after"][0]["text"], got["after"][1]["text"]
-    assert "1 draft ready to apply, 1 being made" in brief, brief
+    # In Jobs' own words, from its one tally: a draft nothing is making is "still to make"
+    # there, and the Brief called it "being made" (the screen review, 2026-11-11).
+    assert "1 draft ready to apply, 1 still to make" in brief, brief
     assert "Apply on" not in card, card
     assert "Not made yet" in card or "Claude" in card, card
 
@@ -374,7 +384,9 @@ def test_a_reply_late_is_overdue_in_contacts_and_while_drafted_says_so(run, tmp_
         {"click": "Draft my reply", "within": wren, "read": wren + " .top-end"},
         {"write": {"work/reply~fernhill_freight_halloway": running}, "tick": 4000, "read": wren + " .top-end"},
     ], PHONE, model=m)
-    assert "Overdue" in got["after"][0]["text"], got["after"][0]["text"]
+    # A day the person set is no deadline since the UX review of 2026-11-10 (U-6): her drafted
+    # reply past its day is ready to send, never "Overdue".
+    assert ("Ready to send" in got["after"][0]["text"] or "Follow-up ready" in got["after"][0]["text"]) and "Overdue" not in got["after"][0]["text"], got["after"][0]["text"]
     asked, going = got["after"][2]["text"], got["after"][3]["text"]
     assert "Replied: your turn" not in asked and "Reply asked for" in asked, asked
     assert "Claude is drafting it" in going, going

@@ -232,3 +232,62 @@ def test_a_rule_the_app_now_keeps_is_folded_under_now_part_of_the_app_and_not_co
     ], WIDE, model=m)
     assert got["after"][0]["count"] == 6 and "Now part of the app (1)" in got["after"][0]["text"], got["after"][0]["text"][:400]
     assert "Every resume file carries your name." in got["after"][1]["text"]
+
+
+RULES = r"""(() => {
+  const group = (name) => [...document.querySelectorAll('#main .set-group, #main section')].find((g) => { const h = g.querySelector('h3, .group'); return h && h.textContent.trim() === name; });
+  const rows = (g) => g ? [...g.querySelectorAll('.set-sum')].filter((r) => r.getClientRects().length).map((r) => [r.querySelector('.set-name').textContent.trim(), (r.querySelector('.set-value') || {}).textContent || '']) : null;
+  const yours = group('Your rules'), more = yours && yours.querySelector('.few-more .btn');
+  const first = yours && yours.querySelector('.setting-row');
+  return {search: rows(group('Your search')), rules: rows(yours), more: more ? more.textContent.trim() : null,
+          inset: more && first ? Math.round(more.getBoundingClientRect().left - first.getBoundingClientRect().left) : null,
+          rowInset: first ? Math.round(first.querySelector('.set-name').getBoundingClientRect().left - first.getBoundingClientRect().left) : null};
+})()"""
+
+
+@pytest.mark.parametrize("vp", [PHONE, WIDE], ids=["phone", "wide"])
+def test_your_rules_lists_what_left_something_out_and_your_search_carries_its_own(run, tmp_path, vp):
+    # "Where" and "Pay" each twice a screen apart, one saying the places and one "2 left out
+    # lately", and four rows of "None left out lately" (the screen review, 2026-11-11). What a
+    # search row's rule left out is said on that row; Your rules lists the rules that left
+    # something out, the rest behind Show all, at the rows' own inset.
+    m = _sample()
+    with open(os.path.join(ROOT, "tests", "fixtures", "app_model_example.json"), encoding="utf-8") as fh:
+        m["rules"] = __import__("json").load(fh)["rules"]
+    got = _go(run, tmp_path, [{"hash": "settings", "eval": RULES}], vp, model=m)["after"][0]["eval"]
+    where = dict(got["search"])["Where"]
+    assert "2 left out lately" in where, got["search"]
+    names = [n for n, _ in got["rules"]]
+    assert not {"Where", "Pay", "Your field"} & set(names), got["rules"]
+    assert not [v for _, v in got["rules"] if "None left out" in v], got["rules"]
+    assert "Needs a qualification you do not hold" in names, got["rules"]
+    assert got["more"] and got["inset"] is not None and got["inset"] >= got["rowInset"] - 1, got
+
+
+MONEY = r"""(() => { const t = (s) => (document.querySelector(s) || {}).textContent || ''; return {pay: t('[data-k="info-sum:search-pay"]'), prep: t('dialog.detail')}; })()"""
+
+
+def test_money_is_written_one_way_everywhere(run, tmp_path):
+    # "At least GBP 38,000" in Settings and "Say GBP 44,000" in the prep, against "£44,000" on
+    # the job's card: the same money written two ways (the screen review, 2026-11-11).
+    got = _go(run, tmp_path, [{"hash": "settings", "eval": MONEY}, {"hash": "interviews/int-larkspur-supply/open", "wait": 200, "eval": MONEY}], WIDE)
+    pay, prep = got["after"][0]["eval"]["pay"], got["after"][1]["eval"]["prep"]
+    assert "£38,000" in pay and "GBP" not in pay, pay
+    assert "£44,000" in prep and "GBP" not in prep, prep[:600]
+
+
+def test_whats_new_leaves_a_waiting_update_to_the_row_that_offers_it(run, tmp_path):
+    # "What's new: 4.0.0 · An update is waiting" repeated the update's own row at the top of
+    # Settings, with its Update now (the screen review, 2026-11-11). The version stays.
+    got = _go(run, tmp_path, [{"hash": "settings", "eval": "[(document.querySelector('[data-k=\"info-sum:news\"]') || {}).textContent || '', document.querySelectorAll('#main .update-row').length]"}], WIDE)
+    news, banner = got["after"][0]["eval"]
+    assert banner == 1 and "An update is waiting" not in news and news.startswith("What's new"), (news, banner)
+
+
+def test_your_profile_says_past_jobs_and_an_empty_list_is_added_to(run, tmp_path):
+    # Settings summed the profile as "2 roles", beside Your search's Roles (the roles wanted),
+    # and an empty Certificates offered "Change" (the screen review, 2026-11-11).
+    got = _go(run, tmp_path, [{"hash": "settings", "read": '[data-k="open-profile"]'},
+                              {"hash": "profile", "eval": "(document.querySelector('[data-k=\"you-certs\"]') || {}).textContent"}], PHONE)
+    assert "2 past jobs" in got["after"][0]["text"] and "roles" not in got["after"][0]["text"], got["after"][0]["text"]
+    assert got["after"][1]["eval"] == "Add", got["after"][1]["eval"]

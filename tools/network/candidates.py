@@ -656,6 +656,28 @@ def record_seen(seen: dict, place: str = "", today: datetime.date | None = None)
         pass                                # a record missed costs a search, nothing more
 
 
+def look_again(employer: str) -> int:
+    """Forget each check at `employer` that found nobody who fits, in every place, so `order`
+    searches it again now (Look again now under Held back for now). What a check found who
+    fit is kept. How many were forgotten."""
+    k = company_key(employer)
+    data = _where()
+    places = data.get(k) if k else None
+    if not isinstance(places, dict):
+        return 0
+    gone = [pk for pk, rec in places.items() if isinstance(rec, dict) and not rec.get("fit")]
+    for pk in gone:
+        del places[pk]
+    if not places:
+        data.pop(k, None)
+    if gone:
+        path = _where_file()
+        with open(path, "w", encoding="utf-8", newline="\n") as fh:
+            json.dump(data, fh, indent=1, sort_keys=True)
+            fh.write("\n")
+    return len(gone)
+
+
 def _in_place(location: str, place: str) -> bool:
     loc = " ".join(str(location or "").lower().split())
     pl = _place_key(place)
@@ -943,7 +965,8 @@ def main(argv=None) -> int:
                                today=today, contacts=contacts)
         added.append(f"  on today's short list: {len(sl['ids'])}"
                      + (f"; drafted from the card, no read needed: {', '.join(sl['card_enough'])}"
-                        if sl.get("card_enough") else ""))
+                        if sl.get("card_enough") else "")
+                     + "".join(f"\n  not added: {i}, {w}" for i, w in (sl.get("gone") or {}).items()))
     if a.json:
         print(json.dumps({k: v for k, v in got.items() if k != "out"}
                          | {"out": [{"name": p["name"], "company": p["company"], "why": w}

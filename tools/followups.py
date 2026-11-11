@@ -65,7 +65,10 @@ DOCS = person.state("documents", "applications")
 
 FIRST_NUDGE_DAYS = 7      # after the application went
 NUDGE_GAP_DAYS = 7        # after the first nudge actually went
-MAX_NUDGES = 2
+# Follow-ups to an application: a name of its own, apart from a contact's
+# (schema.CONTACT_NUDGES). MAX_NUDGES is the name callers already read.
+APPLICATION_NUDGES = 2
+MAX_NUDGES = APPLICATION_NUDGES
 
 # Where the chase ends, and the same number at which the throttle stops counting
 # an application at all. Imported rather than restated: two copies of one
@@ -598,7 +601,7 @@ def close_quiet(path: str = TRACKER, today: datetime.date | None = None,
     DO NOT CHASE note in force. Returns the review entries it closed (or would close).
     """
     import csv_store  # the tracker's shared reader and writer: columns and line endings kept
-    today = today or datetime.date.today()
+    today = today or person.today()
     rows = csv_store.read_rows(path)
     if not rows:
         return []
@@ -748,7 +751,7 @@ def main() -> int:
     except Exception:
         pass
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--today", default=datetime.date.today().isoformat())
+    ap.add_argument("--today", default=person.today().isoformat())
     ap.add_argument("--close-quiet", action="store_true",
                     help="close every application gone quiet as no_response, with a dated note")
     ap.add_argument("--dry-run", action="store_true", help="with --close-quiet: list, write nothing")

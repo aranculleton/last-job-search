@@ -37,6 +37,7 @@ ABSOLUTE = re.compile(r"""["'](/(?:home|Users|root|mnt|opt)/[^"']*)["']""")
 # Paths that are genuinely absolute and genuinely not this repo.
 ALLOWED = (
     "/opt/pw-browsers",      # the preinstalled browser, an environment fact
+    "/root/.ccr",            # a cloud container's agent proxy folder, a marker of the cloud (place.py)
     "/opt/homebrew/",        # where Homebrew installs on an Apple-silicon Mac (local_path.py)
     "/usr/",
     "/etc/",

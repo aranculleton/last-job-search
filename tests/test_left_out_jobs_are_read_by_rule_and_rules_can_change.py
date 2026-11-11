@@ -254,6 +254,48 @@ def test_an_old_busy_rule_asks_still_right_quietly_once_a_month(state, profile):
     assert "rule" not in json.dumps(m["needs_you"]).lower()
 
 
+def test_a_learned_rule_said_for_now_is_asked_about_again(state, profile):
+    """A rule the person taught Claude "for now" was never asked about again: learned rows had
+    no review day (note_set, which dates one, is never called for them), and the age rule needs
+    a count of jobs left out that a learned rule never has. One said for now is asked about
+    FOR_NOW_DAYS after it was said, drawn in Your rules with Keep it, and kept, not again."""
+    learned = [{"date": "2026-09-20", "area": "messages", "status": "active",
+                "said": "keep notes short for now", "rule": "Keep first notes to two lines"},
+               {"date": "2026-09-20", "area": "messages", "status": "active",
+                "said": "always sign off with my first name", "rule": "Sign off with Wren"}]
+    rows = {r["id"]: r for r in rules_view.your_rules(TODAY, {}, learned_rows=learned)}
+    assert rows["rule~learned~1"]["review_on"] == "2026-10-20"
+    assert rows["rule~learned~1"]["still_right"]
+    assert not rows["rule~learned~2"]["still_right"] and not rows["rule~learned~2"]["review_on"]
+    assert rules_view.review_line(list(rows.values()), TODAY) is not None
+    # On the page: drawn in Your rules while it asks, where learned rules are otherwise not.
+    data = json.loads((profile / "learned.json").read_text(encoding="utf-8"))
+    (profile / "learned.json").write_text(json.dumps({"entries": learned + [
+        e for e in data["entries"] if e.get("status") != "active"]}), encoding="utf-8")
+    m, _ = app_model.build(TODAY, NOW, only=("rules",))
+    drawn = [r for r in m["rules"]["rows"] if r["kind"] == "learned"]
+    assert [(r["id"], r["review_on"]) for r in drawn] == [("rule~learned~1", "2026-10-20")]
+    rules_view.keep_rule("rule~learned~1", TODAY.isoformat())
+    for day in (TODAY, TODAY + dt.timedelta(days=200)):
+        again = {r["id"]: r for r in rules_view.your_rules(day, {}, learned_rows=learned)}
+        assert not again["rule~learned~1"]["still_right"], day
+
+
+def test_a_rule_set_again_is_a_new_row_for_the_page(state, profile, monkeypatch):
+    """An employer turned down again in the same words, after a bin on it, was the same row to
+    the page (its rev), which hid it while the old bin stood. Its day is in the row's rev."""
+    import run_round
+    from company_key import key as company_key
+
+    def rev(day):
+        monkeypatch.setattr(run_round, "declined_now", lambda: {
+            company_key("Saltmere Logistics"): f"turned down on the page, {day}: not for me"})
+        m, _ = app_model.build(TODAY, NOW, only=("rules",))
+        return next(r["rev"] for r in m["rules"]["rows"]
+                    if r["id"] == "rule~declined~" + company_key("Saltmere Logistics"))
+    assert rev("2026-07-01") != rev("2026-11-04")
+
+
 class _W:
     def add(self, *a, **k):
         pass

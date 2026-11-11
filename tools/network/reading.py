@@ -90,6 +90,8 @@ Exit codes, one meaning each, so `read; verdict` can be chained (EXIT):
     14 scroll: the page's text has no Experience yet: on LinkedIn's newer layout it is on the
        profile's own Experience page (the extractor names it), read together with the profile;
        the page's reads open that page themselves and never meet this
+    15 claim: a page job's chat was away longer than its hold on the work lasts; read
+       nobody until the work's record says this chat still holds it (`next --dump`)
 """
 
 from __future__ import annotations
@@ -117,7 +119,7 @@ _NET = person.module("networking") if person.exists("networking.py") else None
 
 EXIT = {"ok": 0, "error": 1, "skip": 3, "signin": 4, "check": 5, "unknown": 6, "wait": 7,
         "later": 8, "tomorrow": 9, "not_read": 10, "alike": 11, "done": 12, "new_day": 13,
-        "scroll": 14}
+        "scroll": 14, "claim": 15}
 
 # "browser", "paste" or "off". Unset, it is "browser": in a chat with a browser of the
 # person's, the profiles of the people a run writes to are read there, with no question
@@ -342,6 +344,16 @@ _NOISE = re.compile(
     r"^[•·]?\s*(?:1st|2nd|3rd\+?)(?:\s+degree connection)?$", re.I)
 _POST_HEAD = re.compile(r"\b(posted this|reposted this|shared this|commented on (?:this|a post))\b",
                         re.I)
+# A reaction to someone else's post, as its header writes it: a whole line, a name and the
+# verb ("<Name> likes this", "<NAME> FINDS THIS INSIGHTFUL"), never a reaction word inside a
+# sentence ("We found this surprising"), which dropped three of four of one person's own
+# posts (the audit's NW-10 and its review, 2026-11-10 and 11). Never theirs, and never glued
+# onto the item above it.
+_REACTION_HEAD = re.compile(
+    r"^(?P<by>.{1,80}?)\s+(?:liked|likes|loves|celebrated|celebrates|supports|supported|"
+    r"reacted to|finds|found) this(?:\s+(?:insightful|funny|interesting|curious))?"
+    r"\s*(?:[•·].*)?$", re.I)
+_OWN_KINDS = ("post", "repost")
 _AGE = re.compile(r"(?<![\w-])(\d{1,3})\s*(mo|mos|yr|yrs|y|w|d|h|hr|hrs|m|minutes?|hours?|days?|"
                   r"weeks?|months?|years?)\b(?!\w)(?:\s+ago)?", re.I)
 # A line that is only a post's age, or ends with one: "2w", "2w • Edited", "3 weeks ago".
@@ -590,12 +602,23 @@ def _posts(lines: list, today: datetime.date, name: str = "") -> list:
     own = fold(name).strip()
     for i, line in enumerate(lines):
         head = _POST_HEAD.search(line)
+        if not head and _reaction(line, own):
+            if cur and cur["text"] and cur["kind"] in _OWN_KINDS:
+                items.append(cur)
+            cur = {"kind": "reaction", "date": "", "url": "", "text": ""}
+            continue
         if head:
-            if cur and cur["text"] and cur["kind"] != "comment":
+            if cur and cur["text"] and cur["kind"] in _OWN_KINDS:
                 items.append(cur)
             verb = head.group(1).lower()
             kind = ("repost" if verb.startswith("repost") or verb.startswith("shared")
-                    else "comment" if verb.startswith("comment") else "post")
+                    else "comment" if verb.startswith("comment")
+                    else "post" if verb.startswith("posted") else "reaction")
+            # A header naming somebody else ("<a colleague> posted this") heads their post,
+            # not this person's: a colleague's hiring post was kept as the contact's (NW-10).
+            by = fold(line[:head.start()]).strip(" •·-:")
+            if own and by and not _same_person(by, own):
+                kind = "someone else's"
             age = _AGE.search(line[head.end():]) or next(
                 (m for m in (_AGE.search(x) for x in lines[i + 1:i + 3]) if m), None)
             cur = {"kind": kind, "date": _age_date(int(age.group(1)), age.group(2), today)
@@ -613,13 +636,36 @@ def _posts(lines: list, today: datetime.date, name: str = "") -> list:
                 continue
         if cur is None or _NOISE.match(line) or _AGE_ONLY.match(line):
             continue
-        if own and fold(line).strip() == own:
+        if own and fold(line).strip().lower() == own.lower():
             continue
         if len(cur["text"]) < EXCERPT:
             cur["text"] = (cur["text"] + " " + line).strip()[:EXCERPT]
-    if cur and cur["text"] and cur["kind"] != "comment":
+    if cur and cur["text"] and cur["kind"] in _OWN_KINDS:
         items.append(cur)
     return items
+
+
+def _same_person(by: str, own: str) -> bool:
+    """Does a post's header ("Wenna Thackeray", "Wenna", "WENNA THACKERAY") name the person
+    whose page it is? Their surname or their first name, in any case."""
+    words = [w for w in own.lower().split() if len(w) > 1]
+    by = by.lower()
+    return any(re.search(r"(?<!\w)" + re.escape(w) + r"(?!\w)", by) for w in words[:1] + words[-1:])
+
+
+def _reaction(line: str, own: str) -> bool:
+    """Is this line a reaction's header: the whole line a name and a reaction verb, the name
+    theirs where it is known, else written as a name (each word capitalised)?"""
+    m = _REACTION_HEAD.match(" ".join(str(line or "").split()))
+    if not m:
+        return False
+    by = fold(m.group("by")).strip(" •·-:")
+    words = by.split()
+    if not 1 <= len(words) <= 5:
+        return False
+    if own:
+        return _same_person(by, own)
+    return all(w[:1].isupper() for w in words)
 
 
 def _titled(lines: list, kind: str, limit: int = 3) -> list:
@@ -781,13 +827,38 @@ _GROUP_KIND = re.compile(r"^" + _KINDS + r"(?:\s+" + _KINDS + r")?(?:\s*·\s*(?:
                          r"(?:,?\s+\d+\s+(?:mos?|months?))?|\d+\s+(?:mos?|months?)))?$", re.I)
 
 
-def _group_meta(line: str) -> bool:
+# A work mode on a line of its own, the whole line: "Hybrid", "On-site", "Remote".
+_BARE_MODE = re.compile(r"^(?:on-?site|hybrid|remote)$", re.I)
+
+
+def _group_meta(line: str, titles_a_role: bool = False) -> bool:
+    """Is this a line heading the roles grouped under an employer (the time there, the kind of
+    work, where), never a role's title? `titles_a_role`: the line sits straight above a role's
+    dates (_titles_role), where only a title sits, so its commas are a title's ("Director,
+    Data, AI and Analytics" was dropped as a place and the role read with no title, the
+    audit's NW-1, 2026-11-10)."""
     x = " ".join(str(line or "").split())
     if not x or _DATES.search(x) or len(x) > 90:
         return False
     if _TENURE.match(x) or _GROUP_KIND.match(x):
         return True
-    return bool(_WORK_MODE.search(x)) or fold(x).strip().lower() == "remote" or x.count(",") >= 2
+    if titles_a_role:
+        return False
+    # A bare "Hybrid" or "On-site" under the employer's name was taken for the first role's
+    # title, and that title for the employer (NW-1).
+    return (bool(_WORK_MODE.search(x)) or bool(_BARE_MODE.match(fold(x).strip()))
+            or x.count(",") >= 2)
+
+
+def _titles_role(lines: list, k: int) -> bool:
+    """Does `lines[k]` sit straight above a role's dates (a kind of work alone may sit between
+    them), where a page puts the role's title?"""
+    if k + 1 >= len(lines):
+        return False
+    if _DATES.search(lines[k + 1]):
+        return True
+    return bool(_TYPE_ONLY.match(lines[k + 1])) and k + 2 < len(lines) \
+        and bool(_DATES.search(lines[k + 2]))
 
 
 def _group_at(lines: list, i: int) -> int | None:
@@ -797,7 +868,7 @@ def _group_at(lines: list, i: int) -> int | None:
     if i >= len(lines) or _DATES.search(lines[i]) or _group_meta(lines[i]):
         return None
     k = i + 1
-    while k < len(lines) and k - i <= 3 and _group_meta(lines[k]):
+    while k < len(lines) and k - i <= 3 and _group_meta(lines[k], _titles_role(lines, k)):
         k += 1
     if k == i + 1 or k + 1 >= len(lines) or _DATES.search(lines[k]):
         return None
@@ -842,15 +913,17 @@ def _entries(exp: list, most: int = 6) -> list:
     dates, its place just below. Only what they wrote under Experience; nothing inferred."""
     lines = _exp_lines(exp)
     out = []
-    group = ""
+    group, group_where = "", ("", "")
     for i, line in enumerate(lines):
         if i + 1 < len(lines) and not _DATES.search(line) and (
                 _TENURE.match(lines[i + 1]) or _group_at(lines, i) is not None):
             group = line                           # several roles under one employer
+            group_where = _group_place(lines, i)
         if not _DATES.search(line) or len(line) > 90:
             continue
-        above = [x for x in lines[max(0, i - 2):i] if not _TENURE.match(x)
-                 and not (group and (_group_meta(x) or _TYPE_ONLY.match(x)) and x != group)]
+        above = [lines[j] for j in range(max(0, i - 2), i) if not _TENURE.match(lines[j])
+                 and not (group and (_group_meta(lines[j], _titles_role(lines, j))
+                                     or _TYPE_ONLY.match(lines[j])) and lines[j] != group)]
         employer, title = "", ""
         for x in reversed(above):
             m = _EMPLOYMENT.match(x)
@@ -870,13 +943,11 @@ def _entries(exp: list, most: int = 6) -> list:
                 _TYPE_ONLY.match(lines[i + 2]) and i + 3 < len(lines)
                 and _DATES.search(lines[i + 3]))):
             nxt = ""
-        place, mode = "", ""
-        if nxt and len(nxt) < 80 and not _DATES.search(nxt) and (
-                "," in nxt or _WORK_MODE.search(nxt) or fold(nxt).strip() in ("remote",)):
-            place = _WORK_MODE.sub("", nxt).strip()
-            m = _WORK_MODE.search(nxt)
-            mode = (m.group(0).strip(" ·•").lower() if m
-                    else "remote" if fold(nxt).strip() == "remote" else "")
+        place, mode = _place_of(nxt)
+        if group and employer == group and not (place or mode):
+            # Where the whole group is, written once under the employer's name: each of its
+            # roles is there. Lost, a top card elsewhere was never compared with it (NW-1).
+            place, mode = group_where
         entry = {"employer": employer[:120], "title": title[:120],
                  "dates": line[:60], "place": place[:80]}
         if mode:
@@ -885,6 +956,64 @@ def _entries(exp: list, most: int = 6) -> list:
         if len(out) >= most:
             break
     return out
+
+
+_PLACE_LINKS = {"of", "and", "the", "de", "du", "des", "la", "le", "upon", "on", "am", "im",
+                "sur", "del", "di", "da", "do", "van", "von"}
+
+
+def _place_shaped(text: str) -> bool:
+    """Is this written like a place: one to four names split by commas, each a few words
+    that start with a capital ("Leeds, England, United Kingdom", "Greater Toronto Area")?
+    A line describing the role ("Led pricing, risk and claims models") is not."""
+    parts = [p.strip() for p in str(text or "").split(",")]
+    if not 1 <= len(parts) <= 4:
+        return False
+    for p in parts:
+        words = p.split()
+        if not 1 <= len(words) <= 4 or any(ch.isdigit() for ch in p):
+            return False
+        if not all(w[:1].isupper() or w.lower() in _PLACE_LINKS for w in words):
+            return False
+    return True
+
+
+def _place_of(line: str) -> tuple[str, str]:
+    """(place, mode) a place line says: "Leeds, England, United Kingdom · Hybrid" is
+    ("Leeds, England, United Kingdom", "hybrid"), "Remote" is ("Remote", "remote"), and
+    anything else ("", ""), a line describing the role with a comma in it included (the
+    review of NW-1, 2026-11-11)."""
+    nxt = " ".join(str(line or "").split())
+    if not nxt or len(nxt) >= 80 or _DATES.search(nxt):
+        return "", ""
+    if fold(nxt).strip().lower() == "remote":      # as LinkedIn writes it, with its capital
+        return nxt, "remote"
+    m = _WORK_MODE.search(nxt)
+    place = _WORK_MODE.sub("", nxt).strip()
+    if m:
+        return (place if _place_shaped(place) else ""), m.group(0).strip(" ·•").lower()
+    return (place, "") if "," in place and _place_shaped(place) else ("", "")
+
+
+def _group_place(lines: list, i: int) -> tuple[str, str]:
+    """(place, mode) written once for the roles grouped under the employer at `lines[i]`:
+    the group line that says where ("Toronto, Ontario, Canada · Hybrid") or how ("Hybrid"),
+    or ("", "")."""
+    place, mode = "", ""
+    k = i + 1
+    while k < len(lines) and k - i <= 3 and _group_meta(lines[k], _titles_role(lines, k)):
+        x = lines[k]
+        k += 1
+        if _TENURE.match(x) or _GROUP_KIND.match(x):
+            continue
+        bare = _BARE_MODE.match(fold(x).strip()) and fold(x).strip().lower() != "remote"
+        if bare and not mode:
+            mode = fold(x).strip().lower().replace("onsite", "on-site")
+            continue
+        got = _place_of(x)
+        if got[0] and not place:
+            place, mode = got[0], got[1] or mode
+    return place, mode
 
 
 def _city(place: str) -> str:
@@ -1115,15 +1244,21 @@ _CHECK = re.compile(
     r"confirm (?:it's|that it's) you|captcha|are you a (?:human|robot)|press and hold|"
     r"unusual activity|suspicious activity|automated (?:activity|behaviou?r|software)|"
     r"account (?:has been |is )?(?:temporarily )?restricted|temporarily (?:limited|restricted)|"
-    r"we've (?:detected|noticed)|too many (?:requests|profile views)|"
-    # Chrome's own page for LinkedIn's refusal, which a browser shows as "HTTP ERROR 999"
-    r"http error 999|\berror 999\b", re.I)
+    r"we've (?:detected|noticed)|too many (?:requests|profile views)", re.I)
+# Chrome's own page for LinkedIn's refusal, which a browser shows as "HTTP ERROR 999", and its
+# "HTTP ERROR 429" for too many requests, which went unseen (the builder audit, 2026-11-10,
+# CC-12). Judged on the page's head alone (_signin_parts), as signed-out is: an About that
+# says "HTTP error 429" stopped the whole day (the independent review, 2026-11-11).
+_HTTP_REFUSED = re.compile(r"http error (?:999|429)|\berror (?:999|429)\b", re.I)
 # Signed out: LinkedIn's sign-in or join page, or a public profile view behind its
 # authwall. Before the person has signed in today this is a wait, never a stop.
+# "Join now" and "Email or phone" only as lines of their own, as the sign-in page and the bar
+# show them: anywhere in the text, a post saying "join now and bring a friend" was a sign-in
+# page (the builder audit, 2026-11-10, CC-27).
 _SIGNIN = re.compile(
-    r"\bauthwall\b|^join linkedin$|^sign in$|join now|sign in to view|join to view|"
+    r"\bauthwall\b|^join linkedin$|^sign in$|^join now$|sign in to view|join to view|"
     r"new to linkedin\?|forgot password\?|agree & join|^welcome back$|"
-    r"sign in with (?:email|apple|google)|email or phone|keep me logged in|"
+    r"sign in with (?:email|apple|google)|^email or phone$|keep me logged in|"
     r"to see (?:more|their full profile), sign in", re.I | re.M)
 # What only the signed-in view of a profile prints.
 _SIGNED_IN = re.compile(r"^[\u00b7\u2022]?\s*contact info$|^(?:1st|2nd|3rd\+?)$|"
@@ -1138,7 +1273,7 @@ def page_kind(text: str) -> tuple[str, str]:
     showed, its sign-in or join page, or a signed-in profile.
     """
     body = "\n".join(_clean_lines(text)[:120])
-    m = _CHECK.search(body)
+    m = _CHECK.search(body) or _HTTP_REFUSED.search(_signin_parts(text)[0])
     if m:
         return "check", m.group(0)
     signed = len(_SIGNED_IN.findall(body))
@@ -1188,9 +1323,10 @@ _IN_BAR = re.compile(r"^(?:my network|messaging|notifications|me|for business|"
                      r"try premium[^\n]*|start a post)$", re.I | re.M)
 
 
-def _signin_text(text: str) -> str:
-    """The text to judge: the page as read, or the extractor's bar, card, sections and
-    address where it handed back its JSON."""
+def _signin_parts(text: str) -> tuple[str, str]:
+    """(the page's head, its sections): the address, bar and top card, where LinkedIn says
+    signed out, and the rest, which is the person's own words. As read off the page, the head
+    is everything before the first section's heading (About, Experience...)."""
     raw = extract_json(text)
     if raw:
         try:
@@ -1201,16 +1337,24 @@ def _signin_text(text: str) -> str:
         if isinstance(got, dict):
             secs = "\n".join(str(x.get("text") or "") for x in got.get("sections") or ()
                              if isinstance(x, dict))
-            return "\n".join(str(got.get(k) or "") for k in ("url", "nav", "top")) + "\n" + secs
-    return text
+            return "\n".join(str(got.get(k) or "") for k in ("url", "nav", "top")), secs
+    lines = str(text or "").splitlines()
+    cut = next((i for i, ln in enumerate(lines) if _SECTION_LINE.match(ln.strip())), len(lines))
+    return "\n".join(lines[:cut]), "\n".join(lines[cut:])
 
 
 def signed_in(text: str):
     """Was the page read signed in to LinkedIn? True, False, or None when the text cannot
     tell. Signed out, a profile is only part of itself, so a read is worse; and the person
-    was never told, so they did not know signing in was there to do (2026-10-25)."""
-    body = _signin_text(str(text or ""))
-    if _OUT_SURE.search(body) or _SIGNED_OUT_URL.search(body):
+    was never told, so they did not know signing in was there to do (2026-10-25).
+
+    Signed out is judged on the address, the bar and the top card alone, where LinkedIn
+    puts it: over the sections too, a signed-in profile whose About or posts said "sign in to
+    view" was judged signed out, and a needless sign-in asked for (the builder audit,
+    2026-11-10, CC-27)."""
+    head, secs = _signin_parts(str(text or ""))
+    body = head + "\n" + secs
+    if _OUT_SURE.search(head) or _SIGNED_OUT_URL.search(head):
         return False
     lines = "\n".join(_clean_lines(body)[:200])
     if len(_IN_BAR.findall(lines)) >= 2 or len(_SIGNED_IN.findall(lines)) >= 2:
@@ -1369,9 +1513,70 @@ def _signin_say() -> str:
 SIGNIN_SAY = _signin_say()
 
 
+def app_job_here() -> str:
+    """The work item a chat the app started on the person's computer was started for (app.py
+    start --work), or "": nobody watches such a chat, so it never asks there, and its
+    sign-in goes on the person's page (computer_signin_steps)."""
+    try:
+        import app_listen
+        import app_setup
+        if app_listen.chat_kind() != "computer":
+            return ""
+        # The work this chat holds now (its latest claim made here, not finished): a job chat
+        # whose work is over, typed into later, asks the person in the chat again (the
+        # independent review, 2026-11-11).
+        return str(app_setup.current_claim().get("work") or "")
+    except Exception:  # noqa: BLE001  not known: an ordinary chat, which asks in its chat
+        return ""
+
+
+def computer_signin_steps(wid: str) -> list:
+    """LinkedIn signed out in a chat the app started on the computer for `wid`: the sign-in
+    goes on the person's page, and the chat looks for it by itself (tools/computer.py
+    signin-wait), never asking in the chat. Told to "say done" and ask again after five
+    minutes, it waited on a chat nobody watched until its lease ran out and a second chat
+    started on the same job (the builder audit, 2026-11-10, CC-10)."""
+    return [
+        f"open {SIGNIN_URL} in Claude's browser, in a tab of its own, so the sign-in is there "
+        "when they look",
+        f"put it on their page, never in this chat: python3 tools/app.py done \"$D\" --work {wid} "
+        "--chat <your id> --kind computer --signin linkedin --question \"LinkedIn is signed out "
+        "in Claude's browser.\" and send its batch",
+        "wait for it one look at a time, each look: tabs_context for the sign-in tab's "
+        "address, ArtifactData query of the page's work into \"$D\" (as it is now), then "
+        f"python3 tools/computer.py signin-wait \"$D\" --work {wid} --url <that address> (a Bash "
+        "call with timeout 240000), and do what it prints, until it says stop, then step 7 of "
+        "your prompt. Never ask the person anything in this chat",
+    ]
+
+
+def _signed_in_step() -> str:
+    """For a chat the app started on the computer, the step after a sign-in is seen: its job
+    parked on the sign-in goes back to work (computer.py signed-in), which only signin-wait
+    --url said, so a sign-in seen by --page, --done or --url left it parked (the independent
+    review, 2026-11-11, CC-3). "" for any other chat."""
+    wid = app_job_here()
+    if not wid:
+        return ""
+    return (f"then: python3 tools/computer.py signed-in \"$D\" --work {wid} and send its batch "
+            "(it says when nothing waits on the sign-in), write the heartbeat with --linkedin "
+            "in, and carry on")
+
+
+def _job_signin_said(wid: str, why: str = "") -> str:
+    head = (f"reading: {why}. " if why else "reading: ") + (
+        "LinkedIn is signed out in Claude's browser. This chat was started on the person's "
+        "computer for their page, and nobody reads it: the sign-in goes on their page.")
+    return head + "\n" + "\n".join(f"  {i}. {x}" for i, x in
+                                    enumerate(computer_signin_steps(wid), 1))
+
+
 def signin_steps() -> list:
     """What the session does when LinkedIn is not signed in yet: open its sign-in page
     in the pane, say one sentence, and wait, looking only at the pane's address."""
+    wid = app_job_here()
+    if wid:
+        return computer_signin_steps(wid)
     return [
         f"open {SIGNIN_URL} in the browser pane (the sign-in page, not a profile)",
         "look at whether the pane is showing: the browser tool's tabs_context says displayed, "
@@ -1501,8 +1706,12 @@ def verdict(reading: dict, company: str = "") -> tuple[bool, str]:
     import discovery
     company = company or reading.get("company", "")
     headline = reading.get("headline", "")
+    # Their own posts of the last 90 days: never a repost, which is its author's words, and
+    # never an undated one, whose age nobody knows (the audit's NW-10, 2026-11-10).
     posts = " ".join(i.get("text", "") for i in reading.get("items", [])
-                     if i.get("kind") in ("post", "repost") and (_item_days(i.get("date", ""), person.today()) or 0) <= 90)
+                     if i.get("kind") == "post"
+                     and (_item_days(i.get("date", ""), person.today()) is not None)
+                     and _item_days(i.get("date", ""), person.today()) <= 90)
     person_ = {"title": headline, "headline": headline,
                "about": _clip(reading.get("about", ""), ABOUT_CHARS),
                "activity": posts, "company": company, "location": reading.get("location", "")}
@@ -1517,10 +1726,24 @@ def verdict(reading: dict, company: str = "") -> tuple[bool, str]:
     # The employer under another of its names ("<Name> Ratings", "<Brand>, AI by
     # <Parent>") or written short ("<Name>" for "<Name> Asset Management") is where they
     # were found, not somewhere they moved to.
+    unsure = ""
     if company and current and not discovery.same_employer(current, company) \
             and not discovery.written_short(current, company) \
             and not _has(company, headline) and not _has(company, current):
-        return False, f"has moved on: their current employer is {current}, not {company}"
+        if _still_there(reading, company):
+            pass              # a current role at the employer, whichever entry was read first
+        elif looks_like_title(current):
+            # A role's title read as the employer (a grouped layout the reader did not know,
+            # or a reading saved before it did): unsure, so kept with a caution, never skipped
+            # for having moved on (the audit's NW-1, 2026-11-10).
+            unsure = (f"caution: the employer read from their page reads like a job title "
+                      f"({current}), so whether they are still at {company} is not known: "
+                      "check their current role before writing")
+        else:
+            return False, f"has moved on: their current employer is {current}, not {company}"
+
+    def kept(why: str = "") -> tuple[bool, str]:
+        return True, "; ".join(x for x in (unsure, why) if x)
     loc = reading.get("location", "")
     if loc and not works_anywhere(reading):
         # Where a contact sits is never a reason to skip them: the location gate is for where
@@ -1531,18 +1754,48 @@ def verdict(reading: dict, company: str = "") -> tuple[bool, str]:
         import prefilter
         v, why_loc = prefilter.location_verdict(loc, headline)
         if discovery._abroad(loc) or v == "FAIL":
-            return True, (f"caution: based in {loc}, outside {discovery.HOME_CITY or 'your city'}: "
-                          "kept, since they can still refer you or point you to the team; say "
-                          "why them in the note")
+            return kept(f"caution: based in {loc}, outside {discovery.HOME_CITY or 'your city'}: "
+                        "kept, since they can still refer you or point you to the team; say "
+                        "why them in the note")
         if "not recognized" in why_loc and not discovery._same_market(loc, discovery.HOME_CITY):
-            return True, (f"caution: based in {loc}, a place your search does not name; check "
-                          f"they work in {discovery.HOME_CITY} before writing")
+            return kept(f"caution: based in {loc}, a place your search does not name; check "
+                        f"they work in {discovery.HOME_CITY} before writing")
     # Two places on one page matter only for someone whose place bounds their work: a
     # recruiter hiring nationally was cautioned for a top card and a role in two cities.
     note = "" if works_anywhere(reading) else place_note(reading)
     if note:
-        return True, "caution: " + note
-    return True, ""
+        return kept("caution: " + note)
+    return kept()
+
+
+# Words only a job title holds, never an employer's name: what tells a title read as the
+# employer from an employer the person moved to.
+_TITLE_WORD = re.compile(
+    r"\b(?:director|manager|head of|lead|leader|vp|svp|avp|vice president|president|chief|"
+    r"officer|analyst|scientist|engineer|developer|consultant|specialist|recruiter|"
+    r"architect|adviser|advisor|coordinator|administrator|strategist|researcher|designer|"
+    r"supervisor|technician|intern|principal|founder|co-founder|ceo|cto|cfo|coo|cio|cdo|"
+    r"senior|junior|sr\.?|jr\.?)\b", re.I)
+
+
+def looks_like_title(text: str) -> bool:
+    """Does an "employer" read off a page look like a role's title: "Director, Global
+    Customer AI Solutions", "Senior Data Scientist"? Coarse on purpose: it only turns a skip
+    into a caution."""
+    return bool(_TITLE_WORD.search(fold(str(text or ""))))
+
+
+def _still_there(reading: dict, company: str) -> bool:
+    """Does any current role (dates to the present) in their Experience name the employer they
+    were found at, whichever entry the page listed first?"""
+    import discovery
+    for e in reading.get("experience") or []:
+        if "present" not in str(e.get("dates") or "").lower():
+            continue
+        emp = str(e.get("employer") or "")
+        if emp and (discovery.same_employer(emp, company) or _has(company, emp)):
+            return True
+    return False
 
 
 # --------------------------------------------------------------------- hooks
@@ -1606,6 +1859,8 @@ def hooks(reading: dict, today: datetime.date | None = None) -> list:
         kind = i.get("kind", "")
         if kind in _DATED and (age is None or age > POST_DAYS):
             continue
+        if kind == "repost":
+            continue          # its author's words: grounded() refuses it, so no hook offers it
         base = {"post": 8, "repost": 6, "comment": 5, "news": 4, "featured": 5}.get(kind, 7)
         if kind in _DATED and age is not None and age > 90:
             base -= 3
@@ -1671,8 +1926,13 @@ def grounded(common_ground: str, reading: dict | None, today=None) -> tuple[bool
     today = today or person.today()
     # A dated item older than POST_DAYS is history, as hooks() treats it: a 2018
     # appointment is evidence of who was appointed, not of what they do now.
+    # A repost is its author's words, not theirs, and an undated post or comment has no age to
+    # call it recent by (NW-10): neither is something read about them.
     sources = [(i.get("kind", "item"), i.get("text", "")) for i in reading.get("items", [])
-               if not (i.get("kind") in _DATED and (_item_days(i.get("date", ""), today) or 0) > POST_DAYS)]
+               if i.get("kind") != "repost"
+               and not (i.get("kind") in _DATED
+                        and (_item_days(i.get("date", ""), today) is None
+                             or _item_days(i.get("date", ""), today) > POST_DAYS))]
     sources += [("about", reading.get("about", ""))]
     # Their headline and current role count when they were read on their own page:
     # what they call their work is a fair thing to write about, and the page, not a
@@ -1885,6 +2145,187 @@ def save(contact_id: str, reading: dict) -> str:
         json.dump(reading, fh, ensure_ascii=False, indent=1)
         fh.write("\n")
     return p
+
+
+# The page text a read was made from, kept beside its reading so a misread is read again
+# from it (`reparse`), never fixed by hand and never by opening their profile twice: the
+# text was thrown away and a grouped Experience read wrong could only be edited in
+# reading.json (the audit's NW-11, 2026-11-10).
+PAGE_FILE = "page.txt"
+PAGE_KEEP_CHARS = 20000
+# The fields a page read gives, rewritten whole when the page is read again.
+PAGE_FIELDS = ("headline", "location", "about", "current", "degree", "reach", "connect",
+               "experience", "mutuals", "parallels", "shared")
+
+
+def page_path(contact_id: str) -> str:
+    return os.path.join(os.path.dirname(path(contact_id)), PAGE_FILE)
+
+
+# The parts of a page kept to read it again: the top card and the sections the page fields
+# come from. Never Activity: a feed carries other people's posts, and the person's copy is no
+# place for them (the review of NW-11, 2026-11-11). What was read from it stays in the reading.
+KEPT_SECTIONS = (("about", "About"), ("experience", "Experience"), ("education", "Education"))
+KEPT_TOP_LINES = 40
+
+
+def page_lines(raw: str) -> list[str]:
+    """The cleaned lines of a page a read keeps: its top card, then About, Experience and
+    Education under their headings, from text, a structured paste or the extractor's JSON."""
+    text, _ids = _page_text(str(raw or ""))
+    if is_structured(text):
+        text = from_structured(text)
+    pre, secs, _b = _sections([x for x in _clean_lines(text) if not _PAGE_ONE.match(x)])
+    out = list(pre[:KEPT_TOP_LINES])
+    for name, heading in KEPT_SECTIONS:
+        if secs.get(name):
+            out += [heading] + secs[name]
+    return out
+
+
+def keep_page(contact_id: str, text: str) -> str:
+    p = page_path(contact_id)
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    with open(p, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write("\n".join(page_lines(text))[:PAGE_KEEP_CHARS] + "\n")
+    return p
+
+
+def kept_page(contact_id: str) -> str | None:
+    try:
+        with open(page_path(contact_id), encoding="utf-8") as fh:
+            return fh.read()
+    except OSError:
+        return None
+
+
+def _page_text(raw: str) -> tuple[str, dict]:
+    """(text to parse, company ids) from what a read was given: the extractor's JSON, one
+    result or several, or a page's text as it came."""
+    extract = extract_json(raw)
+    if not extract:
+        return raw, {}
+    return from_extract(extract), companies_from_extract(extract)
+
+
+def reparse(contact_id: str) -> dict:
+    """Read their kept page again with today's reader and save it: the page's own fields
+    rewritten, what was found elsewhere (a talk, an article), the day it was read and how
+    it was read kept. Raises FileNotFoundError when no page was kept (read before pages
+    were), ValueError when the page is not theirs."""
+    old = load(contact_id)
+    raw = kept_page(contact_id)
+    if not old or raw is None:
+        raise FileNotFoundError(page_path(contact_id))
+    page = next((x for x in reversed(old.get("sources") or []) if x.get("kind") in PAGE_SOURCES),
+                {})
+    day = as_day(page.get("date") or old.get("read_on")) or person.today()
+    text, company_ids = _page_text(raw)
+    new = parse(text, name=old.get("name", ""), company=old.get("company", ""),
+                source=page.get("kind") or "paste", url=page.get("url") or "", today=day)
+    out = dict(old)
+    # What the page says now, and what it does not say kept from before: set whole, a field
+    # the kept page is silent on was wiped (the review of NW-11, 2026-11-11). Its items stay
+    # as read: the kept page holds no feed to read them from.
+    for k in PAGE_FIELDS:
+        out[k] = new.get(k) or old.get(k) or ({} if k == "shared" else [] if k in (
+            "experience", "mutuals", "parallels") else "")
+    if company_ids:
+        out["company_ids"] = {**(old.get("company_ids") or {}), **company_ids}
+    out["reparsed_on"] = person.today().isoformat()
+    save(contact_id, out)
+    return out
+
+
+def link_contact(contact_id: str, reading: dict) -> str:
+    """The employer written onto their contact row, or "": a row with no employer takes the
+    one their page names as current (never one that reads like a job title or a count). A
+    third of a contact book had no employer, and every check per employer passed them by
+    (the audit's NW-6 and NW-28, 2026-11-10)."""
+    import state
+    current = " ".join(str((reading or {}).get("current") or "").split())
+    if not current or looks_like_title(current) or is_count(current):
+        return ""
+    try:
+        rows = state.load_contacts()
+    except (OSError, ValueError):
+        return ""
+    row = next((r for r in rows if str(r.get("contact_id") or "").strip() == contact_id), None)
+    if row is None or str(row.get("company") or "").strip():
+        return ""
+    row["company"] = current
+    if not str(row.get("company_key") or "").strip():
+        row["company_key"] = state.company_key(current)
+    state.save_contacts(rows)
+    return current
+
+
+def _usable_current(reading: dict | None) -> str:
+    current = " ".join(str((reading or {}).get("current") or "").split())
+    return "" if (not current or looks_like_title(current) or is_count(current)) else current
+
+
+def linkable(contacts) -> list[str]:
+    """The contacts with no employer whose saved reading names one they work at now: what
+    `link-all` fills. A contact read before reads filled it kept a blank employer for good
+    (the review of NW-28, 2026-11-11)."""
+    return [cid for c in contacts or ()
+            for cid in [str(c.get("contact_id") or "").strip()]
+            if cid and not str(c.get("company") or "").strip()
+            and re.match(r"^[\w.-]+$", cid) and _usable_current(load(cid))]
+
+
+def link_all() -> list[tuple[str, str]]:
+    """Fill each blank employer a saved reading names (`linkable`), in one write of the
+    contact book. [(contact_id, employer)]."""
+    import state
+    rows = state.load_contacts()
+    done = []
+    for c in rows:
+        cid = str(c.get("contact_id") or "").strip()
+        if cid in set(linkable([c])):
+            current = _usable_current(load(cid))
+            c["company"] = current
+            if not str(c.get("company_key") or "").strip():
+                c["company_key"] = state.company_key(current)
+            done.append((cid, current))
+    if done:
+        state.save_contacts(rows)
+    return done
+
+
+def unlinked(contacts) -> list[dict]:
+    """[{id, name, company, maybe}] for each reading no contact row holds: a read made for an
+    interview, or kept under a folder its contact's id does not match (`maybe`: the one row
+    with the reading's name, or ""). Said, never moved or deleted (NW-28)."""
+    import state
+    root = person.state(*DIR)
+    ids = {str(c.get("contact_id") or "").strip() for c in contacts or ()}
+    by_name: dict = {}
+    for c in contacts or ():
+        k = state._match_name(c.get("name"))
+        if k:
+            by_name.setdefault(k, []).append(str(c.get("contact_id") or "").strip())
+    out = []
+    try:
+        folders = sorted(os.listdir(root))
+    except OSError:
+        return []
+    for cid in folders:
+        if cid in ids or not os.path.isfile(os.path.join(root, cid, "reading.json")):
+            continue
+        got = load(cid) or {}
+        hits = by_name.get(state._match_name(got.get("name")) or "\0", [])
+        out.append({"id": cid, "name": got.get("name", ""), "company": got.get("company", ""),
+                    "maybe": hits[0] if len(hits) == 1 else ""})
+    return out
+
+
+def as_day(value) -> datetime.date | None:
+    try:
+        return datetime.date.fromisoformat(str(value or "")[:10])
+    except ValueError:
+        return None
 
 
 def fresh(reading: dict | None, today: datetime.date | None = None,
@@ -2297,6 +2738,11 @@ def _said_signout(got: dict) -> int:
         if _way_back():
             print(f"  {_way_back()}")
         return EXIT["check"]
+    wid = app_job_here()
+    if wid:
+        print(_job_signin_said(wid, f"{got['why']}. Not a stop and not a signal; nothing is "
+                                    "counted"))
+        return EXIT["signin"]
     print(f"reading: {got['why']}. Not a stop and not a signal: run `reading.py signin` and wait "
           "for the person to sign in; nothing is counted")
     return EXIT["signin"]
@@ -2324,13 +2770,13 @@ def resume(reason: str, now: datetime.datetime | None = None) -> dict:
     return rec
 
 
-def gate_state(now: datetime.datetime | None = None, sends_left: int | None = -1,
-               profile: bool = True) -> dict:
+def gate_state(now: datetime.datetime | None = None) -> dict:
     """May a browser read go now? {"kind", "why", "at"}: "go", or "tomorrow" when LinkedIn
     has stopped the day's reads (a security check, a sign-out out of turn, an unusual-activity
     notice, an HTTP 999 page, or a second page that came back nearly empty within the hour).
-    The app holds no read back of its own (pace.py): no pause, no cap and no ramp.
-    `sends_left` and `profile` are kept for callers that pass them; neither holds anything."""
+    The app holds no read back of its own (pace.py): no pause, no cap and no ramp, so it takes
+    nothing about what is left to send or the kind of page (the audit's NW-33, 2026-11-10:
+    callers worked out values it ignored)."""
     now = now or datetime.datetime.now()
     why = stopped(now.date())
     if why:
@@ -2341,10 +2787,9 @@ def gate_state(now: datetime.datetime | None = None, sends_left: int | None = -1
     return {"kind": "go", "at": None, "why": ""}
 
 
-def browser_gate(now: datetime.datetime | None = None, sends_left: int | None = -1,
-                 profile: bool = True) -> str:
+def browser_gate(now: datetime.datetime | None = None) -> str:
     """"" when a browser read may go now, otherwise why not."""
-    return gate_state(now, sends_left, profile)["why"]
+    return gate_state(now)["why"]
 
 
 def _book() -> list:
@@ -2369,14 +2814,14 @@ NO_LIMITS = ("no limit of the app's own: one page at a time, as fast as the brow
              "until LinkedIn shows a check, a sign-out or an unusual-activity notice")
 
 
-def reads_left(now: datetime.datetime | None = None, sends_left: int | None = -1) -> tuple:
+def reads_left(now: datetime.datetime | None = None) -> tuple:
     """(profiles that may still be read today, why): None (no limit) and NO_LIMITS, or 0
     and why when LinkedIn has stopped the day."""
     why = stopped((now or datetime.datetime.now()).date())
     return (0, f"stopped for today: {why}") if why else (None, NO_LIMITS)
 
 
-def budget_line(now: datetime.datetime | None = None, sends_left: int | None = -1) -> str:
+def budget_line(now: datetime.datetime | None = None) -> str:
     """One line before a round: whether reads can go today."""
     stopped_why = stopped((now or datetime.datetime.now()).date())
     if stopped_why:
@@ -2396,8 +2841,7 @@ def _say_minutes(seconds: float) -> str:
 SECONDS_A_READ = 40
 
 
-def estimate(n: int, now: datetime.datetime | None = None, mode: str = "card",
-             sends_left: int | None = -1) -> dict:
+def estimate(n: int, now: datetime.datetime | None = None, mode: str = "card") -> dict:
     """How long reading `n` profiles takes, said before the reads start. {"today", "later",
     "seconds", "line"}."""
     now = now or datetime.datetime.now()
@@ -2508,7 +2952,7 @@ def _card_says_enough(contact_id: str, contacts, today: datetime.date) -> str:
     return ""
 
 
-def shortlist_cap(sends_left: int | None = -1, today: datetime.date | None = None) -> tuple:
+def shortlist_cap(today: datetime.date | None = None) -> tuple:
     """(how many may be on today's list, why): no cap of the app's own (pace.py), so as many
     as the run found worth writing to. Kept for callers that ask."""
     return None, "no cap of the app's own"
@@ -2656,6 +3100,15 @@ def _threads_index(threads) -> dict:
     return _INDEX[2]
 
 
+class LogUnreadable(ValueError):
+    """The message log could not be read, so who is waiting on a reply at an employer is not
+    known: nothing that limit guards is let through on a guess."""
+
+
+LOG_UNREADABLE = ("your message log could not be read ({why}), so who is waiting on a reply "
+                  "at {company} is not known")
+
+
 def at_employer(company: str, contacts, also=(), today: datetime.date | None = None,
                 threads=None, until: dict | None = None) -> tuple:
     """(who at this employer is waiting on a reply, who of `also` is there too), by
@@ -2665,7 +3118,9 @@ def at_employer(company: str, contacts, also=(), today: datetime.date | None = N
     each waiting person's day by contact id, for the line that says when it opens.
     Waiting is what the message log says (state.effective_status), never the stored status
     alone: someone who had replied was counted, and named, as waiting (2026-10-21).
-    `threads` is the message log; None reads it."""
+    `threads` is the message log; None reads it. A log that cannot be read raises
+    LogUnreadable, in plain words: read as empty, it said nobody was waiting, and every
+    note at the employer went through (the audit, 2026-11-10)."""
     from company_key import key as company_key
     import state
     k = company_key(company)
@@ -2676,8 +3131,10 @@ def at_employer(company: str, contacts, also=(), today: datetime.date | None = N
         try:
             threads = (state.load_threads(state.THREADS_CSV)
                        if os.path.exists(state.THREADS_CSV) else [])
-        except Exception:  # noqa: BLE001  a count must never break a save
-            threads = []
+        except Exception as e:  # noqa: BLE001  any reason it cannot be read: said, never guessed
+            raise LogUnreadable(LOG_UNREADABLE.format(
+                why=" ".join(str(e).split())[:160] or type(e).__name__,
+                company=company)) from None
 
     index = _threads_index(threads)
 
@@ -2728,11 +3185,14 @@ def more_at() -> dict:
 
 
 def set_more_at(employer: str, said: str, up_to: int | None = None,
-                today: datetime.date | None = None, remove: bool = False) -> dict:
+                today: datetime.date | None = None, remove: bool = False,
+                until: datetime.date | None = None) -> dict:
     """Keep the person's word that more people may be written to at `employer`: up to
     `up_to` while nobody there has answered, or with no number of the app's when they named
     none. Their words are kept with it and said whenever it lets a note through. `remove`
-    takes it back to PER_EMPLOYER. Returns the row kept (or removed)."""
+    takes it back to PER_EMPLOYER. `until`, where given, is its last day (Open it now's room,
+    which ends once the waiting it made room beside has cleared: `more_at_holds`). Returns
+    the row kept (or removed)."""
     from company_key import key as company_key
     k = company_key(employer)
     if not k:
@@ -2752,6 +3212,8 @@ def set_more_at(employer: str, said: str, up_to: int | None = None,
     row = {"employer": " ".join(employer.split()), "limit": up_to,
            "said": " ".join(str(said or "").split()),
            "date": (today or person.today()).isoformat()}
+    if until is not None:
+        row["until"] = until.isoformat()
     if not remove:
         rows.append(row)
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
@@ -2761,16 +3223,63 @@ def set_more_at(employer: str, said: str, up_to: int | None = None,
     return row
 
 
-def employer_limit(company: str) -> tuple[int | None, dict]:
+def more_at_holds(row: dict, today: datetime.date | None = None) -> bool:
+    """Whether a more_at row still speaks for its employer: one with an `until` (Open it now's
+    room) ends after that day, by itself; one the person gave with no day holds until they
+    take it back, in Your rules or in their words."""
+    until = str((row or {}).get("until") or "")[:10]
+    if not until:
+        return True
+    try:
+        return datetime.date.fromisoformat(until) >= (today or person.today())
+    except ValueError:
+        return False
+
+
+def more_at_number(row: dict) -> int | None:
+    """How many people a more_at row lets be written to at its employer while nobody there has
+    answered; None for no number of the app's. Open it now's room (a row with an end day,
+    `until`) never lowers the person's own number for everyone (PER_EMPLOYER): the room one tap
+    made (3) capped that employer below a number raised to 5 since (the rules review,
+    2026-11-11). A number the person gave for that employer themselves (`more-at --up-to`) is
+    theirs, a lower one included: confirmed to them as kept and then floored, it was ignored,
+    and a second note there was drafted (the engine review, 2026-11-11)."""
+    limit = (row or {}).get("limit")
+    if limit is None:
+        return None
+    n = _people_per_employer(limit)
+    return max(n, PER_EMPLOYER) if (row or {}).get("until") else n
+
+
+def employer_limit(company: str, today: datetime.date | None = None) -> tuple[int | None, dict]:
     """(how many people at this employer may be written to while nobody there has answered,
-    None for no number of the app's; the person's word for it, or {} for PER_EMPLOYER)."""
+    None for no number of the app's; the person's word for it, or {} for PER_EMPLOYER), as
+    `more_at_number` reads their word. A row past its own end speaks for nothing
+    (`more_at_holds`)."""
     from company_key import key as company_key
     k = company_key(company)
     theirs = more_at().get(k) if k else None
-    if theirs:
-        limit = theirs.get("limit")
-        return (_people_per_employer(limit) if limit is not None else None), theirs
+    if theirs and more_at_holds(theirs, today):
+        return more_at_number(theirs), theirs
     return PER_EMPLOYER, {}
+
+
+def _people(n: int) -> str:
+    return f"{n} {'person' if n == 1 else 'people'}"
+
+
+def beyond_usual_line(company: str, n: int) -> str:
+    """What a note says when it is the `n`th at `company` and goes past PER_EMPLOYER on the
+    person's word (more_at): how many with this one, the usual number, and their own number
+    there. "" at or below the usual number, or with no word of theirs. It said "more than 2"
+    with the usual number, at the usual number (the audit, 2026-11-10)."""
+    limit, theirs = employer_limit(company)
+    if not theirs or n <= PER_EMPLOYER:
+        return ""
+    own = f"up to {limit} there" if limit is not None else "no number of the app's there"
+    return (f"{n} people at {company} with this one, past the usual {PER_EMPLOYER} a company, on "
+            f"your word ({theirs.get('date', '')}, {own}): "
+            f"\"{_clip(theirs.get('said', ''), 120)}\"")
 
 
 def more_at_hint(company: str) -> str:
@@ -2807,10 +3316,10 @@ def employer_full_line(company: str, contacts, also=(), today: datetime.date | N
     return f"{company} has {' and '.join(said)}, against {limit} a company"
 
 
-def shortlist(ids, today: datetime.date | None = None, contacts=None, remove=(),
-              sends_left: int | None = -1) -> dict:
+def shortlist(ids, today: datetime.date | None = None, contacts=None, remove=()) -> dict:
     """Add to today's short list for deep reads, best first. {"ids", "added", "full",
-    "unplaced", "pruned", "removed", "cap", "why", "unknown", "employer_full"}.
+    "unplaced", "pruned", "removed", "cap", "why", "unknown", "employer_full", "gone"}
+    (`gone`: {id: why} for each one named who no longer belongs on a list, `_gone`).
 
     An id nothing names (not in the contact book, nothing read about them) is refused, never
     kept: `read <id>` could not say who it was. At most PER_EMPLOYER people at one employer,
@@ -2841,9 +3350,11 @@ def shortlist(ids, today: datetime.date | None = None, contacts=None, remove=(),
     pruned = {i: why for i in had if i not in removed
               for why in [_gone(i, contacts, today) or _card_says_enough(i, contacts, today)] if why}
     have = [i for i in had if i not in removed and i not in pruned]
-    cap, why = shortlist_cap(sends_left, today)
+    cap, why = shortlist_cap(today)
     unplaced_on = sum(1 for i in have if not placed(i, contacts))
     added, full, unplaced, unknown, employer_full, card = [], [], [], [], {}, []
+    unreadable: dict = {}
+    gone: dict = {}
     for i in dict.fromkeys(x for x in ids if x):
         if i in have or i in removed:
             continue
@@ -2851,7 +3362,11 @@ def shortlist(ids, today: datetime.date | None = None, contacts=None, remove=(),
         if who is None:
             unknown.append(i)
             continue
-        if _gone(i, contacts, today):
+        why_gone = _gone(i, contacts, today)
+        if why_gone:
+            # Said, never dropped silently: a chat that asked for ten got eight and no word
+            # about the other two (the audit's NW-12, 2026-11-10).
+            gone[i] = why_gone
             continue
         if card_enough(load(i), who.get("company", "")):
             card.append(i)               # drafted from the card: no read spent on them
@@ -2859,9 +3374,13 @@ def shortlist(ids, today: datetime.date | None = None, contacts=None, remove=(),
         if cap is not None and len(have) >= cap:
             full.append(i)
             continue
-        full_ = employer_full_line(who.get("company", ""), contacts,
-                                   [_who(x, contacts) for x in have], today=today,
-                                   also_is="on today's list")
+        try:
+            full_ = employer_full_line(who.get("company", ""), contacts,
+                                       [_who(x, contacts) for x in have], today=today,
+                                       also_is="on today's list")
+        except LogUnreadable as e:
+            unreadable[i] = str(e)
+            continue
         if full_:
             employer_full[i] = full_
             continue
@@ -2876,7 +3395,8 @@ def shortlist(ids, today: datetime.date | None = None, contacts=None, remove=(),
         _save_shortlist(have, today)
     return {"ids": have, "added": added, "full": full, "unplaced": unplaced,
             "pruned": pruned, "removed": removed, "cap": cap, "why": why,
-            "unknown": unknown, "employer_full": employer_full, "card_enough": card}
+            "unknown": unknown, "employer_full": employer_full, "card_enough": card,
+            "unreadable": unreadable, "gone": gone}
 
 
 def on_shortlist(contact_id: str, today: datetime.date | None = None) -> bool:
@@ -4738,6 +5258,8 @@ def _paste(text: str, source: str = "paste", today: datetime.date | None = None)
             print(f"  {i}. not read (\"{head}\"): {e}")
             continue
         save(c["contact_id"], merge(load(c["contact_id"]), new))
+        keep_page(c["contact_id"], piece)          # read again from it if it reads wrong
+        link_contact(c["contact_id"], load(c["contact_id"]) or {})
         keep, why_ = verdict(load(c["contact_id"]), c.get("company", ""))
         print(f"  {i}. {c.get('name')} ({c['contact_id']}): read; "
               + ("KEEP" + (f" ({why_})" if why_ else "") if keep else f"SKIP: {why_}"))
@@ -4899,7 +5421,7 @@ def _gate_line(g: dict, now: datetime.datetime) -> str:
     return f"{g['kind']}: {g['why']}{when}"
 
 
-def _wait_gate(timeout: float, profile: bool = True, sleep=None, clock=None) -> dict:
+def _wait_gate(timeout: float, sleep=None, clock=None) -> dict:
     """Hold until a browser page may load, up to `timeout` seconds. A Claude session
     cannot sleep in the foreground (the harness refuses it), so `gate --wait` is run
     in the background and exits when the gate opens, or with the reason at the
@@ -4910,7 +5432,7 @@ def _wait_gate(timeout: float, profile: bool = True, sleep=None, clock=None) -> 
     end = clock() + datetime.timedelta(seconds=max(0.0, timeout))
     while True:
         now = clock()
-        g = gate_state(now, profile=profile)
+        g = gate_state(now)
         if g["kind"] in ("go", "tomorrow") or not g.get("at") or g["at"] > end:
             return g
         sleep(max(1.0, min(30.0, (g["at"] - now).total_seconds() + 1)))
@@ -5011,7 +5533,15 @@ def save_drafts(batch: dict, own_facts_why: dict | None = None) -> int:
     import state
     import tone
     contacts = state.load_contacts()
-    log_by = state.by_contact(state.load_threads())   # every channel, read once
+    try:
+        log_rows = state.load_threads()
+    except Exception as e:  # noqa: BLE001  any reason it cannot be read: said, nothing saved
+        print("reading: nothing saved: your message log could not be read ("
+              + (" ".join(str(e).split())[:160] or type(e).__name__) + "), so who has been "
+              "written to, and who is waiting at each employer, is not known. Put the log right "
+              "first, then save the notes again")
+        return EXIT["error"]
+    log_by = state.by_contact(log_rows)               # every channel, read once
     own_facts_why = own_facts_why or {}
     ready, added_lines, refused = {}, [], 0
     ctx_ = None                          # the one check's context, built once if needed
@@ -5150,7 +5680,7 @@ def save_drafts(batch: dict, own_facts_why: dict | None = None) -> int:
                   and (c.get("status") or "not_contacted") == "not_contacted"
                   and (os.path.isfile(draft_path(c.get("contact_id", "")))
                        or c.get("contact_id") in ready)]
-        full_ = employer_full_line(company, contacts, others) if company else ""
+        full_ = employer_full_line(company, contacts, others, threads=log_rows) if company else ""
         if full_:
             print(f"reading: not saved. {full_}: no more notes there until someone answers. "
                   "Send the ones waiting, or set this one aside (python3 tools/network/state.py "
@@ -5159,10 +5689,10 @@ def save_drafts(batch: dict, own_facts_why: dict | None = None) -> int:
             continue
         theirs = employer_limit(company)[1] if company else {}
         if theirs:
-            waiting_, there_ = at_employer(company, contacts, others)
-            if len(waiting_) + len(there_) >= PER_EMPLOYER:
-                print(f"reading: {cid}: more than {PER_EMPLOYER} at {company}, on your word "
-                      f"({theirs.get('date', '')}): \"{_clip(theirs.get('said', ''), 120)}\"")
+            waiting_, there_ = at_employer(company, contacts, others, threads=log_rows)
+            past = beyond_usual_line(company, len(waiting_) + len(there_) + 1)
+            if past:
+                print(f"reading: {cid}: {past}")
         # A note by Message to someone not connected goes only to someone who will get it:
         # 14 InMails were drafted on a guess and 2 went through (2026-10-24).
         if str(row.get("channel") or "").strip().lower() == "inmail":
@@ -5248,6 +5778,15 @@ def main(argv: list | None = None) -> int:
                    help="how long the page took to load, where the session timed it")
     r.add_argument("--no-experience", action="store_true",
                    help="their page has no Experience section, even scrolled to the end")
+    r.add_argument("--fix", action="store_true",
+                   help="read again a profile whose reading is wrong and kept no page to "
+                        "`reparse`, while they are not closed")
+    rp = sub.add_parser("reparse", help="read a misread profile again from the page it was "
+                                        "read from, kept beside its reading")
+    rp.add_argument("contact_id")
+    sub.add_parser("unlinked", help="readings no contact row holds, each with the row it may be")
+    sub.add_parser("link-all", help="fill each blank employer in the contact book that a saved "
+                                    "reading names")
     v = sub.add_parser("verdict", help="after the read: KEEP, SKIP (exit 3), or not read yet (10)")
     v.add_argument("contact_id")
     v.add_argument("--company", default="")
@@ -5310,6 +5849,8 @@ def main(argv: list | None = None) -> int:
     nx.add_argument("--mode", choices=READ_MODES, default="card",
                     help="card: the top card and About, nothing scrolled; deep: scrolled to "
                          "the end, for Experience and Activity")
+    nx.add_argument("--dump", default="", help="the page's work read afresh, where `next` "
+                                               "asked for it after a long gap (claim_gate)")
     sub.add_parser("limits", help="every reading limit, its value, where it came from, and why")
     sub.add_parser("budget", help="one line before a round: the reads and list pages left today, "
                                   "the limit that binds and the line that changes it")
@@ -5360,7 +5901,8 @@ def main(argv: list | None = None) -> int:
     ga.add_argument("--wait", action="store_true",
                     help="kept for older instructions; nothing is waited for")
     ga.add_argument("--timeout", type=float, default=900.0)
-    ga.add_argument("--page", action="store_true", help="for a one-page read (invitations, people)")
+    ga.add_argument("--page", action="store_true", help="kept for older instructions; a one-page "
+                    "read is gated as any other")
     ga.add_argument("--mode", choices=READ_MODES, default="deep")
     pg = sub.add_parser("page", help="what LinkedIn showed: a profile, its sign-in page, or a check")
     pg.add_argument("file", help="the page text, or - for stdin")
@@ -5609,7 +6151,7 @@ def main(argv: list | None = None) -> int:
         return EXIT["ok"]
     if a.cmd == "gate":
         now = datetime.datetime.now()
-        g = _wait_gate(a.timeout, profile=not a.page) if a.wait else gate_state(now, profile=not a.page)
+        g = _wait_gate(a.timeout) if a.wait else gate_state(now)
         if g["kind"] != "go":
             print(_gate_line(g, datetime.datetime.now()))
             return EXIT[g["kind"]]
@@ -5622,6 +6164,16 @@ def main(argv: list | None = None) -> int:
         text = sys.stdin.read() if a.file == "-" else open(a.file, encoding="utf-8").read()
         kind, words = page_kind(text)
         print(kind + (f": {words}" if words else ""))
+        # What it saw is recorded, so the next load is refused (`next`, `gate`) and the
+        # computer's heartbeat carries it to the cloud and the page: it only classified, and a
+        # sign-in wall or a check seen here stopped nothing (the builder audit, 2026-11-10,
+        # CC-12).
+        if kind == "check":
+            stop(f"LinkedIn showed a check: {words}")
+            print("reading: browser reads stopped for today; nothing more is loaded")
+        elif kind == "signin" and (signed_in_today() or signouts()):
+            return _said_signout(signout(seen=f"LinkedIn's sign-in page ({words})"
+                                         if words else "LinkedIn's sign-in page"))
         return {"profile": EXIT["ok"], "signin": EXIT["signin"],
                 "check": EXIT["check"]}.get(kind, EXIT["unknown"])
     if a.cmd == "signin":
@@ -5636,6 +6188,8 @@ def main(argv: list | None = None) -> int:
             if got:
                 mark_signed_in()
                 print("signed-in: carry on")
+                if _signed_in_step():
+                    print(_signed_in_step())
                 return EXIT["ok"]
             if got is None:
                 if linkedin_check()["state"] == "passed":
@@ -5647,6 +6201,9 @@ def main(argv: list | None = None) -> int:
                 return EXIT["unknown"]
             if not never_signed_in_today():
                 return _said_signout(signout())
+            if app_job_here():
+                print(_job_signin_said(app_job_here()))
+                return EXIT["signin"]
             if declined_sign_in():
                 print("signed-out: they said not today, so read on signed out")
                 return EXIT["ok"]
@@ -5658,12 +6215,16 @@ def main(argv: list | None = None) -> int:
         if a.done:
             mark_signed_in()
             print("reading: signed in; carry on with the first profile")
+            if _signed_in_step():
+                print(_signed_in_step())
             return EXIT["ok"]
         if a.url:
             state_ = url_kind(a.url)
             if state_ == "signed-in":
                 mark_signed_in()
             print(state_)
+            if state_ == "signed-in" and _signed_in_step():
+                print(_signed_in_step())
             return EXIT["ok"] if state_ == "signed-in" else EXIT["signin"]
         if signed_in_today() or signouts():
             # A sign-in page where a page was expected: expired, or friction, by the time
@@ -5737,16 +6298,37 @@ def main(argv: list | None = None) -> int:
         try:
             import learned
             learned.record("people", row["said"],
-                           f"Up to {row['limit']} people at {row['employer']} while nobody there "
-                           "has answered" if row["limit"] else
+                           f"Up to {_people(row['limit'])} at {row['employer']} while nobody "
+                           "there has answered" if row["limit"] else
                            f"No limit of the app's on people written to at {row['employer']}",
                            applied_to=[f"profile/{MORE_AT_FILE} {row['employer']}"])
         except SystemExit:
             pass                        # kept in the profile; the learned record is a copy
         print(f"more-at: kept. {row['employer']}: "
-              + (f"up to {row['limit']} people" if row["limit"] else "no number of the app's")
+              + (f"up to {_people(row['limit'])}" if row["limit"] else "no number of the app's")
+              + (f", fewer than the usual {PER_EMPLOYER}" if row["limit"]
+                 and row["limit"] < PER_EMPLOYER else "")
               + f" while nobody there has answered, on your word: \"{row['said']}\"")
         return EXIT["ok"]
+    if a.cmd == "link-all":
+        done = link_all()
+        print(f"reading: {len(done)} contact(s) with no employer took the one their read "
+              "profile names" + (": " + ", ".join(f"{c} ({e})" for c, e in done[:10])
+                                 if done else ""))
+        return EXIT["ok"]
+    if a.cmd == "unlinked":
+        import state
+        got = unlinked(state.load_contacts())
+        if not got:
+            print("reading: every reading belongs to a contact")
+            return EXIT["ok"]
+        print(f"reading: {len(got)} reading(s) no contact row holds:")
+        for u in got:
+            print(f"  {u['id']}: {u['name'] or '?'} ({u['company'] or 'no employer'})"
+                  + (f"; the contact {u['maybe']} has that name: the same person?" if u["maybe"]
+                     else "; nobody in the contact book by that name (a read for an "
+                          "interview, or someone not added yet)"))
+        return EXIT["error"]
     if a.cmd == "shortlist":
         if not a.ids and not a.remove:
             got = shortlist([])
@@ -5756,6 +6338,8 @@ def main(argv: list | None = None) -> int:
               f"({got['why']}): " + (", ".join(got["ids"]) or "nobody yet"))
         for i, why_ in got["pruned"].items():
             print(f"  taken off: {i}, {why_}")
+        for i, why_ in got["gone"].items():
+            print(f"  not added: {i}, {why_}")
         if got["removed"]:
             print(f"  removed: {', '.join(got['removed'])}")
         if got["full"]:
@@ -5768,6 +6352,9 @@ def main(argv: list | None = None) -> int:
                   "state.unique_contact_id), or keep a public finding about them with "
                   "`reading.py add <id> ... --name \"<name>\" --company \"<employer>\"`, "
                   "then add them again")
+        for i, why_ in got["unreadable"].items():
+            print(f"  not added: {i}: {why_}. Nobody is added at an employer until the log can "
+                  "be read again")
         for i, why_ in got["employer_full"].items():
             company_ = (_who(i, None) or {}).get("company", "")
             print(f"  not added: {i}, {why_}. Wait for a reply there, or take someone off "
@@ -5866,7 +6453,12 @@ def main(argv: list | None = None) -> int:
             if c.get("contact_id") in notes and c.get("company"):
                 by_co.setdefault(company_key(c["company"]), []).append(c)
         for _k, there in by_co.items():
-            waiting, _t = at_employer(there[0]["company"], contacts)
+            try:
+                waiting, _t = at_employer(there[0]["company"], contacts)
+            except LogUnreadable as e:
+                found.append(("the company limit not checked", str(e),
+                              [c["contact_id"] for c in there]))
+                continue
             limit, _theirs = employer_limit(there[0]["company"])
             if limit is not None and len(waiting) + len(there) > limit:
                 found.append(("over the company limit",
@@ -5942,6 +6534,27 @@ def main(argv: list | None = None) -> int:
     known = old or {}
     contact = _contact(a.contact_id, getattr(a, "name", "") or known.get("name", ""),
                        getattr(a, "company", "") or known.get("company", ""))
+    if a.cmd == "reparse":
+        try:
+            reading = reparse(a.contact_id)
+        except FileNotFoundError:
+            print(f"reading: no page kept for {a.contact_id}: it was read before pages were "
+                  "kept. Read it once more, which is allowed while they are not closed: "
+                  f"reading.py read {a.contact_id} <page> --source <how> --fix")
+            return EXIT["error"]
+        except ValueError as e:
+            raise SystemExit(f"reading: {e}") from None
+        print(f"reading: read again from its page, "
+              f"{local_path.rel(path(a.contact_id), person.state())}")
+        filled = link_contact(a.contact_id, reading)
+        if filled:
+            print(f"reading: {contact.get('name') or a.contact_id} had no employer in the "
+                  f"contact book; {filled}, as their page says, is written there now")
+        _show(reading)
+        keep, why = verdict(reading, contact.get("company", ""))
+        print(("verdict: KEEP" + (f" ({why})" if why else "")) if keep
+              else f"verdict: SKIP: {why} (read the next person instead)")
+        return EXIT["ok"]
     if a.cmd == "add":
         new = {"name": contact.get("name", ""), "company": contact.get("company", ""),
                "read_on": (old or {}).get("read_on", "") or person.today().isoformat(),
@@ -5953,13 +6566,26 @@ def main(argv: list | None = None) -> int:
     else:
         source = a.source or ("pdf" if a.file.lower().endswith(".pdf") else "paste")
         if source == "browser":
+            refused = queued_read_refusal(a.contact_id)
+            if refused:
+                raise SystemExit(refused)
             if PROFILE_READS != "browser":
                 raise SystemExit("reading: profile reads in the browser are off "
                                  "(profile/networking.py PROFILE_READS); ask the person to paste "
                                  "the page instead")
-            if fresh(old):
+            if fresh(old) and not getattr(a, "fix", False):
                 raise SystemExit(f"reading: {a.contact_id} was read on {old.get('read_on')}; "
-                                 "a profile is opened once, and that reading stands")
+                                 "a profile is opened once, and that reading stands. A reading "
+                                 f"that is wrong is read again from its page: reading.py "
+                                 f"reparse {a.contact_id}")
+        if getattr(a, "fix", False):
+            import schema
+            if (contact.get("status") or "") in schema.TERMINAL:
+                raise SystemExit(f"reading: {a.contact_id} is closed "
+                                 f"({contact.get('status')}); a closed reading stays as it is")
+            # Read again on purpose: the page's own items are read anew, never added twice.
+            old = {**old, "items": [i for i in old.get("items") or [] if i.get("url")]} \
+                if old else old
         # The gate is asked when the page is already open and its text taken. One that says
         # not yet is a breach of the person's own pace, kept and logged below, never a refusal:
         # refused, the same page had to be loaded again once the gate opened (2026-10-20).
@@ -5996,6 +6622,9 @@ def main(argv: list | None = None) -> int:
                     # A sign-in page after they signed in today: an expired session waits,
                     # one within the hour of the last page stops the day (`signout`).
                     return _said_signout(signout())
+                if app_job_here():
+                    print(_job_signin_said(app_job_here(), "not a read, and nothing counted"))
+                    return EXIT["signin"]
                 if not declined_sign_in():
                     mark_asked()
                     print("reading: LinkedIn is not signed in in this browser, so it shows only "
@@ -6085,8 +6714,14 @@ def main(argv: list | None = None) -> int:
             slow_ = note_load("profile", at, 0, False, a.contact_id, a.load_seconds)
             if breach:
                 breach_line = keep_breach(breach, now, a.contact_id)
-        reading = merge(old, new)
+        reading = merge(old, new)          # what the page says, over what it does not
     print(f"reading: saved {local_path.rel(save(a.contact_id, reading), person.state())}")
+    if a.cmd == "read":
+        keep_page(a.contact_id, raw_text)
+    filled = link_contact(a.contact_id, reading)
+    if filled:
+        print(f"reading: {contact.get('name') or a.contact_id} had no employer in the contact "
+              f"book; {filled}, as their page says, is written there now")
     _show(reading)
     if a.cmd == "read":
         keep, why = verdict(reading, contact.get("company", ""))
@@ -6163,6 +6798,109 @@ def _go_line(mode: str = "deep", url: str = "") -> str:
     return "go: open the page, scroll it to the very end (nothing clicked), " + both
 
 
+# A chat the app started on the computer for one job holds a claim on it that lapses after
+# page_db.LEASE_S with no word from it, when another chat may take the job. A lapse is only
+# possible after such a gap, counted from the claim or its last pin as this computer kept them
+# (app_setup.record_claim, renew_claim), on the work the chat holds now (current_claim): after
+# a gap of more than CLAIM_GAP_S (the lease less a margin: the Mac slept, the chat stalled, or
+# it read on without pinning) `next` hands out nobody until the claim is read again. Without a gap it never checks:
+# a waking Mac went on reading until its next pin was refused, and every profile load is
+# automated activity on the person's LinkedIn account (the builder audit, 2026-11-10, CC-13).
+CLAIM_GAP_S = 25 * 60
+
+
+def _now_ts() -> float:
+    return datetime.datetime.now(datetime.timezone.utc).timestamp()
+
+
+def claim_gate(wid: str, dump: str = "", now_ts: float | None = None) -> tuple[str, str]:
+    """("go", "") or ("claim", what to say): may this job's chat hand out the next person?"""
+    import app_setup
+    now_ts = _now_ts() if now_ts is None else now_ts
+    rec = app_setup.current_claim()
+    if str(rec.get("work") or "") != wid:
+        return "go", ""                      # no claim of this chat's on it: nothing to lapse
+    last = float(rec.get("renewed") or rec.get("at") or 0)
+    if not last or now_ts - last <= CLAIM_GAP_S:
+        return "go", ""
+    away = int((now_ts - last) // 60)
+    if not dump or not os.path.isdir(dump):
+        return "claim", (
+            f"check: this chat was away {away} minutes, longer than its hold on the work lasts, "
+            "so another chat may have taken it. Before anyone else is read: ArtifactData query "
+            "of the page's collection work into a fresh folder $D, then python3 "
+            "tools/network/reading.py next --dump \"$D\". Nobody is read meanwhile.")
+    import page_db
+    import app_setup
+    db = page_db.load(dump)
+    doc = (db.get("work") or {}).get(page_db.safe_id(wid))
+    if doc is None:
+        return "claim", f"check: {wid} is not in that folder; read the page's work into it again"
+    item = doc.get("data") or {}
+    mine = app_setup.claimed_as(wid)
+    if item.get("stop_asked") or str(item.get("status") or "") in page_db.FINISHED:
+        return "claim", ("stopped: this work ended on the page while this chat was away "
+                         "(finished, stopped or called off). Read nobody more: go to step 7 of "
+                         "your prompt.")
+    if mine and str(item.get("claimed_by") or "") != mine:
+        return "claim", ("stopped: another chat took this work while this chat was away. Read "
+                         "nobody more, and finish nothing of it: go to step 7 of your prompt.")
+    if not page_db._live_claim(item, datetime.datetime.fromtimestamp(now_ts,
+                                                                       datetime.timezone.utc),
+                               db.get("work")):
+        return "go", ("note: its hold on the work ran out while it was away, and nobody took "
+                      "it: pin it now (app.py pin), then carry on.")
+    # Still this chat's and live: a pin made elsewhere renewed it; kept so.
+    until = page_db._time(item.get("lease_until"))
+    if until is not None:
+        app_setup.renew_claim(wid, until.timestamp() - page_db.LEASE_S)
+    return "go", ""
+
+
+def queued_on_page(cid: str) -> str:
+    """The id of work queued on the page for a chat on the computer that names this contact
+    (its `args.contacts` or `args.contact`), as this checkout last read the page (the copy
+    page_reads keeps, which a claim and a `resume` move on: page_reads.keep_work); "" for none,
+    or where no read of the page is kept here. Work claimed on this computer is never it: the
+    chat that holds it is never refused its own job, and one finished here refuses nothing (the
+    engine review, 2026-11-11)."""
+    try:
+        import app_setup
+        import page_db
+        import page_reads
+        db = page_db.load(page_reads.mirror_dir())
+    except Exception:  # noqa: BLE001  no page read here: nothing to say
+        return ""
+    for wid, doc in sorted((db.get("work") or {}).items()):
+        d = (doc or {}).get("data") or {}
+        if str(d.get("status") or "") != "queued" or d.get("claimed_by") or \
+                d.get("stop_asked") or not page_db.computer_only(d, "cloud"):
+            continue
+        try:
+            if app_setup.claimed_as(wid):
+                continue
+        except Exception:  # noqa: BLE001  no claims kept here: the page's copy says
+            pass
+        args = d.get("args") if isinstance(d.get("args"), dict) else {}
+        named = [str(x) for x in args.get("contacts") or []] + [str(args.get("contact") or "")]
+        if cid and cid in named:
+            return wid
+    return ""
+
+
+def queued_read_refusal(cid: str) -> str:
+    """Why this chat may not read `cid` now, or "": the page holds a job for the computer that
+    reads them, nobody has started it, and a read made here besides it ran twice (the review of
+    2026-11-11, CC-19). The job is taken into this chat first, or left to run."""
+    wid = queued_on_page(cid)
+    if not wid:
+        return ""
+    return (f"reading: {cid} is to be read by work waiting on the page ({wid}). Take it into this "
+            f"chat first: python3 tools/app.py resume \"$D\" --work {wid} --chat <your id> --kind "
+            "computer, send its batch, then read; or leave it to that work. If resume says it "
+            "has finished, nothing waits for it now: read again")
+
+
 def _cli_next(a) -> int:
     """The next person on today's list, unless LinkedIn has stopped the day's reads."""
     import state
@@ -6192,6 +6930,18 @@ def _cli_next(a) -> int:
     if g["kind"] != "go":
         print(_gate_line(g, datetime.datetime.now()))
         return EXIT[g["kind"]]
+    job = app_job_here()
+    if job:
+        said, line = claim_gate(job, getattr(a, "dump", "") or "", _now_ts())
+        if said != "go":
+            print(line)
+            return EXIT["claim"]
+        if line:
+            print(line)
+    refused = queued_read_refusal(str(nxt.get("contact_id") or ""))
+    if refused:
+        print(refused)
+        return EXIT["error"]
     url = nxt.get("linkedin_url") or ""
     print(f"next: {nxt.get('name') or nxt['contact_id']} ({nxt.get('company') or '?'}) "
           f"[{nxt['contact_id']}] {url or '(no address on file: find their page first)'}")
@@ -6453,7 +7203,7 @@ def _page_breach(now: datetime.datetime) -> dict | None:
     logged as a breach of the person's own pace (keep_breach), never a refusal."""
     if PROFILE_READS != "browser":
         return None
-    g = gate_state(now, profile=False)
+    g = gate_state(now)
     return g if g["kind"] != "go" else None
 
 

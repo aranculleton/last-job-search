@@ -59,7 +59,9 @@ def test_a_thread_at_its_limit_offers_only_to_close_and_close_closes_it(book):
     # The nudge was their second unanswered message: the row says so, with no day on it, and
     # nothing about them is owed, so To do has no row for them (the maintainer, 2026-11-04).
     row = book.contact("copperleaf_pay_raman")
-    assert row["next_action"] == "Nudged: nothing more unless they reply", row["next_action"]
+    # In the page's own words since 2026-11-11 (audit DW-5).
+    assert row["next_action"] == "No reply to 2 messages: leave it unless they write back", \
+        row["next_action"]
     assert row["next_action_due"] == ""
     m = book.model()
     dev = next(p for p in m["people"] if p["id"] == "copperleaf_pay_raman")
@@ -79,7 +81,7 @@ def test_a_thread_at_its_limit_offers_only_to_close_and_close_closes_it(book):
     u = s.act("undo", undoes=a)
     assert u in s.apply()["ok"]
     row = book.contact("copperleaf_pay_raman")
-    assert row["status"] == "connected_no_reply" and row["next_action"].startswith("Nudged")
+    assert row["status"] == "connected_no_reply" and row["next_action"].startswith("No reply to 2")
     assert row["next_action_due"] == ""
 
 
@@ -155,7 +157,9 @@ def test_contacts_says_what_to_do_once_and_agrees_with_to_do(run, page, vp, sche
     # The step without their name, and its one date in the form every card uses (2026-11-03).
     assert "Next: reply · " in contacts and "reply to Sam" not in contacts
     # The summary counts what To do lists, and the fold never says nothing is owed when it is.
-    group = todo.split("Follow up with 2 people", 1)[1].split("Draft all", 1)[0]
+    # Read as words: on a phone a row's name is one line and where they work the next (the
+    # screen review, 2026-11-11).
+    group = " ".join(todo.split("Follow up with 2 people", 1)[1].split("Draft all", 1)[0].split())
     assert "Wren at Fernhill Freight" in group and "Rhian at Northwind Analytics" in group, todo
     # The header is one short line since 2026-11-04 (the maintainer: "quite cluttered"): the
     # follow-ups are counted by their cards, the same two To do lists.

@@ -209,3 +209,44 @@ def test_a_letter_bullet_that_repeats_the_resume_is_found_before_the_render():
                "I owned the Power BI service-level reporting used by 30+ operations managers.")
     m = audit(d)
     assert any(f["rule"] == "letter" and "repeats the resume" in f["text"] for f in m["findings"])
+
+
+# ---------------------------------------------------------------- the letter's close (NW-25)
+
+def closes(m):
+    """The close's own flags, as the letters check raises them (audit_letters.close_flags):
+    since the review of NW-25 (2026-11-11) the check is one of the letters check's, which the
+    drafting audit and the rerun of unsent applications both run, so its findings are the
+    letters check's "letter" findings."""
+    return [f for f in m["findings"] if f["rule"] == "letter"
+            and f["text"].startswith("the close")]
+
+
+def test_a_letter_whose_close_misses_where_they_are_or_their_right_to_work_is_held():
+    """The 2026-11-10 audit (NW-25): 28 of one person's 133 letters never said where they were
+    or that they could work there, and one ended "I would welcome the chance to discuss the
+    role", though the person's rule is a close giving both. The drafting contract asked for
+    it (draft_pack P4) and nothing checked it, so a letter without it passed and could be
+    sent again. The example person is in Manchester with settled status, which needs saying."""
+    assert closes(audit(GOOD)) == []
+    no_place = edited("p4", "I am based in Manchester with settled status and full right to work "
+                      "in the UK, so no sponsorship is needed.",
+                      "I have settled status and full right to work in the UK, so no "
+                      "sponsorship is needed.")
+    got = closes(audit(no_place))
+    assert len(got) == 1 and "Manchester" in got[0]["text"]
+    no_rights = edited("p4", "I am based in Manchester with settled status and full right to work "
+                       "in the UK, so no sponsorship is needed.", "I am based in Manchester.")
+    got = closes(audit(no_rights))
+    assert len(got) == 1 and "right to work" in got[0]["text"]
+    stock = edited("p4", "Which kinds of claim move most with the weather is the first thing I "
+                   "would want to look at in your data.",
+                   "I would welcome the chance to discuss the role.")
+    assert closes(audit(stock))
+
+
+def test_an_employer_told_another_place_is_held_to_the_place_it_heard(monkeypatch):
+    import told
+    monkeypatch.setattr(told, "places", lambda: {FIXTURE["company"]: "Leeds, UK"})
+    got = closes(audit(GOOD))
+    assert len(got) == 1 and "Leeds" in got[0]["text"]

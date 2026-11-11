@@ -104,7 +104,43 @@ def _node_env():
     env["NODE_PATH"] = os.pathsep.join(paths)
     if SHOTS:
         env["LJS_SHOTS"] = SHOTS
+    elif not env.get("FONTCONFIG_FILE"):
+        fonts = _fonts_as_ci()
+        if fonts:
+            env["FONTCONFIG_FILE"] = fonts
     return env
+
+
+_FONTS_AS_CI: list = []
+
+
+def _fonts_as_ci() -> str:
+    """A fontconfig file that draws the page's system font as GitHub's runner does (DejaVu
+    Sans), on a Linux computer that has it: five layout promises held in the narrower font a
+    developer's container drew and broke on GitHub (2026-11-11). "" elsewhere, and never over
+    a font a run chose itself (tools/everywhere.sh's Mac and Windows type, the README's
+    pictures)."""
+    if _FONTS_AS_CI:
+        return _FONTS_AS_CI[0]
+    path = ""
+    try:
+        if sys.platform.startswith("linux") and shutil.which("fc-list"):
+            have = subprocess.run(["fc-list", ":family=DejaVu Sans", "family"], capture_output=True,
+                                  text=True, encoding="utf-8", errors="replace", timeout=30).stdout
+            if "DejaVu Sans" in have:
+                import tempfile
+                path = os.path.join(tempfile.mkdtemp(prefix="ljs-fonts-"), "fonts.conf")
+                with open(path, "w", encoding="utf-8", newline="\n") as fh:
+                    fh.write('<?xml version="1.0"?><!DOCTYPE fontconfig SYSTEM "fonts.dtd"><fontconfig>'
+                             '<include ignore_missing="yes">/etc/fonts/fonts.conf</include>'
+                             + "".join('<alias binding="strong"><family>%s</family><prefer><family>'
+                                       'DejaVu Sans</family></prefer></alias>' % f
+                                       for f in ("system-ui", "sans-serif"))
+                             + "</fontconfig>\n")
+    except (OSError, subprocess.SubprocessError):
+        path = ""
+    _FONTS_AS_CI.append(path)
+    return path
 
 
 @pytest.fixture(scope="module")
@@ -359,7 +395,9 @@ def test_every_section_full_shows_its_items_in_plain_words(run, pages):
         assert not JARGON.search(got["text"]), (sid, JARGON.search(got["text"]).group(0))
         # A version number only on Settings' What's new row, where the maintainer asked for it
         # ("4.11.0 · Up to date", 4.12); nowhere else.
-        said = re.sub(r"What's new\n\d+\.\d+\.\d+ · ", "What's new\n", got["text"]) if sid == "settings" else got["text"]
+        # Alone there while an update waits: its own row at the top says so (the screen review,
+        # 2026-11-11).
+        said = re.sub(r"What's new\n\d+\.\d+\.\d+( · )?", "What's new\n", got["text"]) if sid == "settings" else got["text"]
         assert not re.search(r"\b\d+\.\d+\.\d+\b", said), (sid, "a version number")
         assert "—" not in got["text"] and "–" not in got["text"], sid
         heads = re.findall(r"^(?:To do here|Needs your answer|Due or late|Next 7 days|Later)$", got["text"], re.M)
@@ -494,7 +532,9 @@ def test_a_newer_view_document_replaces_its_section_without_a_republish(run, pag
     _clean(r)
     assert r["titles"] == ["Senior Research Analyst"]
     # The one list counts the drafts to send beside the new view's one find (2026-11-05).
-    assert r["lede"].startswith("3 to send, 1 to look at"), r["lede"]
+    # One sentence whose total is the tab's since the UX review of 2026-11-10 (U-9).
+    # Ready only when nothing waits on it (the review of 2026-11-11).
+    assert r["lede"].startswith("4 to apply to: 2 ready, 1 waiting on you, 1 to look at."), r["lede"]
 
 
 # ------------------------------------------------------------------ To do, alerts and suggestions
@@ -511,7 +551,9 @@ def test_to_do_groups_by_when_then_by_employer_in_the_order_things_are_done(run,
     # Five show first; a band split by the fold heads its rest again inside it (4.3). What is
     # late or due today comes before the questions (2026-11-02: a thank-you two days late
     # waited behind four small questions).
-    assert list(dict.fromkeys(b["band"] for b in r["bands"])) == ["Due or late", "Needs your answer", "Next 7 days", "Later"]
+    # Help Claude do more under its own small heading after today's things (the screen
+    # review, 2026-11-11: under "Needs your answer" it read as one more question).
+    assert list(dict.fromkeys(b["band"] for b in r["bands"])) == ["Due or late", "Needs your answer", "When you have a minute", "Next 7 days", "Later"]
     for b in r["bands"]:
         for g in b["groups"]:
             assert g["employer"] is None or len(g["titles"]) >= 2, ("an employer heads only two or more", b["band"], g)
@@ -538,7 +580,9 @@ def test_to_do_groups_by_when_then_by_employer_in_the_order_things_are_done(run,
     assert r["filled"] == 0 and r["answers"] >= 2, "a question never fills one of its answers"
     assert r["jobsQuestion"] and "Have you used Looker?" in r["jobsQuestion"], "Jobs asks its question on the role's own card"
     # Her reply is on her card in Contacts (2026-11-04): Copy, then I sent it, never drafted again.
-    assert r["juno"]["state"] in ("Replied: your turn", "Overdue") and "I sent it" in r["juno"]["buttons"], r["juno"]
+    # Its corner says "Ready to send" over a ready draft, as every card does since the screen
+    # review of 2026-11-11 (row 23); it said "Replied: your turn" beside one already written.
+    assert r["juno"]["state"] == "Ready to send" and "I sent it" in r["juno"]["buttons"], r["juno"]
     assert "Draft a reply" not in r["juno"]["buttons"], r["juno"]
 
 
@@ -1106,7 +1150,10 @@ def test_keyboard_alone_reaches_and_works_everything_and_the_shortcuts_can_be_sw
     assert r["afterGT"] == "To do" and r["afterGJ"] == "Jobs"
     # j moves to the first card: in Jobs' one list, what needs your answer heads it, then the
     # drafts, then the finds by fit (2026-11-05).
-    assert r["cardFocus"] == "c-fernhill-ops-applied", r["cardFocus"]
+    # The sample's application question is about Pennick Haulage since the screen review of
+    # 2026-11-11 (row 40): it asked about the Fernhill Freight application, which Applied
+    # listed as sent.
+    assert r["cardFocus"] == "c-pennick-planner-applied", r["cardFocus"]
     assert r["moreClosed"], "Esc closes a card's More"
     assert r["typed"] == ["gj", "Chat"], "typing in a box is never a shortcut"
     assert r["offStays"] == "Settings" and r["stored"] == "off"
@@ -1126,7 +1173,8 @@ def test_times_are_the_persons_own_with_the_zone_named_and_a_date_is_a_day(run, 
     # A date with no time is a calendar day, said as the day alone: ", time not set" offered no
     # way to set it (the walk-through, 2026-11-03); Coming up's row has "Add the time".
     assert not any("time not set" in w.lower() for w in away["whens"]), away["whens"]
-    assert any(re.fullmatch(r"\w{3},? \d{1,2} \w{3,4}\.?", w.split(" · ")[0].strip()) for w in away["whens"]), away["whens"]
+    # A dot keeps to what follows it with a no-break space (the screen review, 2026-11-11).
+    assert any(re.fullmatch(r"\w{3},? \d{1,2} \w{3,4}\.?", w.replace("\u00a0", " ").split(" · ")[0].strip()) for w in away["whens"]), away["whens"]
     home = run("zones", html=pages["sample"], timezoneId="Europe/London")
     assert not any("London time" in w for w in home["whens"])
     assert not any("Passed" in c for c in home["chips"])
@@ -1377,7 +1425,10 @@ def test_a_busy_week_is_a_few_checklists_not_a_card_each(run, pages):
     # is that many things to do in To do's count.
     assert not any("Not now" in row["buttons"] for g in r["groups"].values() for row in g["rows"]), r["groups"]
     # Its first chip says how many are overdue, or, with none, how many are done.
-    assert all(g["chip"] == "" or g["chip"].endswith(" overdue") or re.fullmatch(r"\d+ of \d+ done", g["chip"]) for g in r["groups"].values()), [g["chip"] for g in r["groups"].values()]
+    # Nothing done yet, a checklist's count is its title's alone, never "0 of 7 done" nor "7 to
+    # send" again over it (the screen review of 2026-11-11, row 28), and a day the person set is
+    # never "overdue" (the UX review of 2026-11-10, U-6).
+    assert all(g["chip"] == "" or g["chip"].endswith(" overdue") or re.fullmatch(r"[1-9]\d* of \d+ done", g["chip"]) for g in r["groups"].values()), [g["chip"] for g in r["groups"].values()]
     reply = r["groups"]["grp:work~reply:now"]
     n = int(re.match(r"Reply to (\d+) people$", reply["title"]).group(1))      # the sample's own, and eight
     assert n >= 8 and len(reply["rows"]) == 5, reply
@@ -1404,8 +1455,11 @@ def test_a_busy_week_is_a_few_checklists_not_a_card_each(run, pages):
     assert "Turn on the new reading pace?" in r["settings"]
     # Drafts are inside Jobs (4.3): the quiet counts are on Jobs and Interviews.
     assert r["counts"].get("jobs") and r["counts"].get("interviews"), r["counts"]
-    assert r["progress"]["recent"].startswith("In the last 30 days: 1 applied, 2 replies")
-    assert r["progress"]["all"].startswith("Since you started:")
+    # The switch changes what the funnel counts; its numbers are said once, in it, and the
+    # line under it says what is usual (the screen review, 2026-11-11).
+    assert r["progress"]["recent"].startswith("How far applications got") and r["progress"]["recent"] != r["progress"]["all"], r["progress"]
+    assert r["progress"]["head"].startswith("This week:"), r["progress"]    # U-7, 2026-11-10
+    assert "Most applications get no reply" in r["progress"]["usual"] and not re.search(r"\d+ applied", r["progress"]["usual"]), r["progress"]
     assert r["bin"]["title"] == "Not for you?" and "No more from Harbourline Bank" in r["bin"]["options"]
     assert r["gauge"] >= 1, "a cost is a gauge of bars, its words on hover"
 
@@ -1489,8 +1543,10 @@ def test_how_far_applications_went_is_said_on_the_brief_with_no_page_of_its_own(
     the panel, "How far they got", was opened by nobody and stretched the page."""
     r = run("paint", html=pages["sample"], hash="brief", clock="2026-10-25T09:00:00Z")
     _clean(r)
-    assert re.search(r"\b\d+% of applied\b", r["bodyText"]) and "See your progress" not in r["bodyText"]
-    assert not re.search(r"\b0% of applied", r["bodyText"])    # nothing to share is not a share
+    # Said as counts: "13% of applied" beside "5 applied this week" made the eye divide one by
+    # the other, and the 24 it was of was nowhere on the panel (the screen review, 2026-11-11).
+    assert re.search(r"\bfrom \d+ applied\b", r["bodyText"]) and "See your progress" not in r["bodyText"]
+    assert "% of applied" not in r["bodyText"]
 
 
 def test_the_brief_opens_on_short_points_and_reads_its_news_whole(run, pages):
@@ -1694,7 +1750,8 @@ def test_everything_booked_is_one_tap_from_any_calendar_and_the_brief_shows_the_
     assert "Time not set" not in r["when"], r["when"]
     # Each interview says whether its prep is ready, on its own row only (never on a test
     # due in the same process): read it from there, or ask for it.
-    assert r["prep"] == ["up-read:up-app-larkspur-supply-phone-screen-2026-10-28=Prep ready",
+    # Read your prep is the row's pill, in To do's words (the UX review, 2026-11-10, U-12).
+    assert r["prep"] == ["up-read:up-app-larkspur-supply-phone-screen-2026-10-28=Read your prep",
                          "up-prep:up-app-copperleaf-payments-recruiter-call-2026-10-30=Prepare me",
                          "up-prep:up-app-harbourline-risk-second-interview-2026-11-04=Prepare me"], r["prep"]
     # One count in the nav, the screen and the Brief.
@@ -1748,11 +1805,14 @@ def test_everything_booked_is_one_tap_from_any_calendar_and_the_brief_shows_the_
     # it; Juno, a step, is not also a row under Waiting on you.
     p = r["panels"]
     # Said "Overdue", its one day in its facts, never "Rolled over · 2 days late" (2026-11-03).
-    assert "Overdue" in p["bp:today"] and "Rolled over" not in p["bp:today"] and "Fernhill Freight" in p["bp:today"], p["bp:today"]
+    # Ready, never "Overdue", for a day the person set (the UX review of 2026-11-10, U-6).
+    assert ("Ready to send" in p["bp:today"] or "Ready to do" in p["bp:today"]) and "Overdue" not in p["bp:today"] and "Rolled over" not in p["bp:today"] and "Fernhill Freight" in p["bp:today"], p["bp:today"]
     shown = [k for k, t in p.items() if "Larkspur" in t and "screen" in t]
     assert len(shown) == 1 and shown != ["bp:today"], shown
     assert "Reply to Juno" in p["bp:next"] and "Juno" not in p["bp:people"], (p["bp:next"], p["bp:people"])
-    assert r["cards"] and not any("Larkspur" in c for c in r["cards"]), r["cards"]
+    # Coming up's, in its rows: Next three's "Read the prep" took it out of them while the
+    # week strip marked its day (the screen review, 2026-11-11).
+    assert r["cards"] and any("Larkspur" in c for c in r["cards"]), r["cards"]
     assert r["phoneWide"] <= 0 and r["phoneStrip"] is True
 
 

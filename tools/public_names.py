@@ -180,6 +180,11 @@ def check(root: str = ROOT) -> list[str]:
 
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
+    if "-h" in argv or "--help" in argv:
+        # Never a command: `snapshot --help` rewrote the tracked snapshot (the engine review,
+        # 2026-11-11).
+        print("usage:\n" + __doc__.split("\n\n")[2])
+        return 0
     if argv[:1] == ["snapshot"]:
         got = snapshot()
         print(f"public_names: wrote {sum(map(len, got.values()))} names from {len(got)} files "

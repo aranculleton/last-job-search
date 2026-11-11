@@ -285,3 +285,22 @@ def test_a_compile_that_makes_nothing_leaves_the_earlier_pdf_in_place(tmp_path):
         fit_to_page._compile("no-such-latex-engine", "r.tex", str(tmp_path), str(pdf))
     assert pdf.read_bytes() == b"%PDF-1.4 the earlier one\n"
     assert sorted(p.name for p in tmp_path.iterdir()) == ["r.pdf", "r.tex"]
+
+
+# The independent review of NW-25 (2026-11-11): the letter's close was checked only while
+# drafting, so the rerun of unsent applications (version 91) never checked it. It is one of the
+# letters check's own flags now, which drafting and the rerun both run, and a close that
+# fails is the close redrafted alone ("Redo only" the close), never a To do card.
+NO_CLOSE = "I would welcome the chance to discuss the role."
+
+
+def test_the_rerun_checks_the_close_and_redrafts_it_alone(tmp_path):
+    import remake_drafts
+    d = json.loads(json.dumps(FIXTURE["draft"]))
+    d["p4"] = NO_CLOSE
+    flags = remake_drafts.letter_flags(d)
+    assert [f for f in flags if f.startswith("the close")], flags
+    got = remake_drafts.way_forward(d, str(tmp_path))
+    assert got["way"] == "redraft", got
+    assert got["tweaks"] == [{"output": "letter", "changes": [{"p": "L4", "v": ["p4"]}]}]
+    assert "the close" in got["why"]

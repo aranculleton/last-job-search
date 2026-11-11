@@ -152,15 +152,23 @@ _BLOCK = {"p", "div", "li", "ul", "ol", "h1", "h2", "h3", "h4", "h5", "h6", "tr"
           "dt", "dl", "nav", "main", "aside", "figure", "form", "fieldset", "legend",
           "address", "hr", "td", "th", "option"}
 _IMPLIED_END = {"p", "li", "dd", "dt", "tr", "td", "th", "option"}
+# Each rule is a declaration's whole property name, read from the start of the style or after
+# a ";", as a browser reads one. Found anywhere, "color: transparent" matched inside
+# "background-color: transparent", which a word processor pasted into a job board writes on
+# every run of text, and the requirement it styled was taken out of the job as hidden; and
+# "min-height: 0" or "border-width: 0" beside "overflow: hidden" read as a box collapsed to
+# nothing. The off-screen margins are named,
+# since they were caught only as the end of "left" and "top". From ai-job-search (#717).
+_DECL = r"(?:^|;)\s*"
 _HIDDEN_STYLE = re.compile(
-    r"display\s*:\s*none|visibility\s*:\s*hidden|opacity\s*:\s*0(?![.\d]*[1-9])"
+    _DECL + r"(?:display\s*:\s*none|visibility\s*:\s*hidden|opacity\s*:\s*0(?![.\d]*[1-9])"
     r"|font-size\s*:\s*0(?:\.0+)?(?:px|pt|em|rem|%)?(?![\d.])|color\s*:\s*transparent"
     r"|clip\s*:\s*rect\(\s*0|clip-path\s*:\s*inset\(\s*100%"
-    r"|(?:left|top|text-indent)\s*:\s*-\d{4,}px", re.I)
+    r"|(?:(?:margin-)?(?:left|top)|text-indent)\s*:\s*-\d{4,}px)", re.I)
 _CSS_COMMENT = re.compile(r"/\*.*?\*/", re.S)
-_COLLAPSED = re.compile(r"\b(?:max-)?(?:height|width)\s*:\s*0(?:\.0+)?(?:px|em|rem|%|pt)?(?![\d.])",
+_COLLAPSED = re.compile(_DECL + r"(?:max-)?(?:height|width)\s*:\s*0(?:\.0+)?(?:px|em|rem|%|pt)?(?![\d.])",
                         re.I)
-_CLIPPED = re.compile(r"\boverflow(?:-[xy])?\s*:\s*hidden\b", re.I)
+_CLIPPED = re.compile(_DECL + r"overflow(?:-[xy])?\s*:\s*hidden\b", re.I)
 
 
 def _is_hidden(raw_attrs: str) -> bool:
@@ -241,9 +249,12 @@ def strip_hidden(markup: str) -> tuple[str, dict]:
     """(the markup without what a browser never shows, {what was taken out: how much}).
 
     Comments, script and style blocks, and hidden elements; everything a reader sees is
-    left exactly as it was. The one rule for hidden markup, wherever a posting's markup
-    still exists: clean_body here, a LinkedIn detail page (`_fetch`) and an employer
-    board's body before openroles turns it into text (tools/ats_boards.py)."""
+    left exactly as it was. The rule for hidden markup wherever the app still holds a
+    posting's markup: clean_body here, a LinkedIn detail page (`_fetch`) and a page
+    tools/fetch_page.py reads. An employer board's body is made text by openroles, which
+    leaves out the same hidden styles itself and counts them (Job.hidden, 0.5.1;
+    tools/ats_boards.py `_guard` says them in these words). openroles keeps the text of an
+    element moved by `left` or `top` without a position, which a browser shows."""
     found: dict[str, int] = {}
     out, n = _COMMENT.subn("", markup)
     out, k = _drop_blocks(out)
@@ -270,11 +281,12 @@ def clean_body(text: str | None) -> tuple[str | None, dict]:
     Unicode tag characters other than a whole England, Scotland or Wales flag. A body
     with none of them is returned as it came.
 
-    Most bodies arrive as text, not markup: the LinkedIn CLI and openroles flatten the
-    page first, keeping the words of every element, a hidden one's too. So hidden markup
-    is taken out where the markup still exists (`strip_hidden`, called by `_fetch` and
-    tools/ats_boards.py), and here only what a text body can still carry: invisible
-    characters, and the markup of a source that sends it as it is."""
+    Most bodies arrive as text, not markup: the LinkedIn CLI flattens the page first,
+    keeping the words of every element, a hidden one's too, and openroles flattens an
+    employer board's having left the hidden ones out. So hidden markup is taken out where
+    the markup still exists (`strip_hidden`, called by `_fetch`; openroles for a board),
+    and here only what a text body can still carry: invisible characters, and the markup
+    of a source that sends it as it is."""
     if not isinstance(text, str) or not text:
         return text, {}
     found: dict[str, int] = {}
@@ -299,18 +311,78 @@ def clean_body(text: str | None) -> tuple[str | None, dict]:
     return out, found
 
 
+# Words a posting writes to an AI tool reading it rather than to a person: an instruction to
+# drop the reader's own ("ignore all previous instructions"), the reader named as a model
+# ("you are an AI assistant", "if you are an AI, ..."), a secret kept from the person ("do
+# not tell the user"), and a model's chat markup. An employer writes the "if you are an AI,
+# mention the word ..." kind to catch applications an AI wrote. Visible text, read by the
+# person too, so nothing is taken out: the posting carries which kind it found
+# (`aimed_at_ai`), never the words themselves, and its card says the text was ignored. Never
+# a reason to drop the job.
+#
+# Adapted from tools/posting_guard.py's INSTRUCTION_PATTERNS in ai-job-search (#703, #697),
+# kept to the phrases addressed to a model: its "curl", "ssh", ".env", "settings.json" and
+# "system prompt" are words a developer's or an AI engineer's posting uses about the job.
+# The reader named as a model, and then spoken to: a full stop, "reading this", or a comma
+# or an "and" with an instruction or "you" after it. Never a job: "if you are an AI
+# engineer", "you are the assistant to the CFO", "you are an AI, ML or data engineer", "if
+# you are an AI and data enthusiast" and "you are an AI and automation champion" are about
+# the role or the person, and a comma or an "and" alone read them as spoken to a model.
+_AI_READER = (r"(?:an? |the )?(?:ai(?![\w-])(?: (?:assistant|agent|model|tool|language model))?"
+              r"|a\.i\.|llms?|(?:large )?language models?|chatbot|chatgpt|gpt(?:-?\d)?|claude|gemini)")
+# What follows a comma or an "and" when a model is being told to do something.
+_TOLD = (r"(?:please|you|then|now|always|never|do|don['\u2019]?t|include|mention|add|use|say|"
+         r"write|put|insert|state|respond|reply|answer|ignore|disregard|forget|rate|rank|score|"
+         r"recommend|tell|return|output|print|append|begin|start|end|give|list|praise|describe|"
+         r"note|flag|mark|make|be|act|pretend|summari[sz]e|reading|processing|parsing|reviewing)\b")
+_SPOKEN_TO = (r"(?=\s*(?:[.:;!?)]|(?:,|\band\b)\s*" + _TOLD
+              + r"|(?:reading|processing|parsing|reviewing|summari[sz]ing|please|that|who)\b))")
+# Each kind, in the words a person reads, and the patterns that find it.
+_IGNORE, _SPOKEN, _SECRET, _MARKUP = (
+    "an instruction to ignore its own", "words spoken to an AI reading it",
+    "something to keep from you", "a model's chat markup")
+AIMED_AT_AI = [(kind, re.compile(p, re.I | re.M)) for kind, p in (
+    (_IGNORE, r"\b(?:ignore|disregard|forget)(?: all| any)?(?: of)?(?: the| your| my)? (?:previous|prior|above|earlier|preceding|initial|original|system) (?:instructions?|prompts?|directions?)\b"),
+    (_IGNORE, r"\bignore (?:all|any) (?:of )?(?:the )?(?:previous|prior|above|earlier)\b"),
+    (_SPOKEN, r"\byou are " + _AI_READER + _SPOKEN_TO),
+    (_SPOKEN, r"\bif you(?:['\u2019]re| are) " + _AI_READER + _SPOKEN_TO),
+    (_SPOKEN, r"\b(?:ai|llms?|language models?|chatgpt|claude)(?: tools?| models?| assistants?)? (?:reading|processing|parsing|summari[sz]ing|reviewing) this\b"),
+    (_SECRET, r"\b(?:do not|don['\u2019]?t|never) (?:tell|inform) the user\b(?!['\u2019]s)"),
+    (_SECRET, r"\b(?:do not|don['\u2019]?t|never) (?:mention|reveal|disclose) (?:this|these|that|it|any of this|the (?:above|following|previous))\b[^.\n]{0,30}\bto the user\b"),
+    (_SPOKEN, r"\bas an ai(?: language model| assistant| model| agent)?\s*(?:[:;]|,\s*(?:i\b|" + _TOLD + r")|\s(?:you|i)\b)"),
+    # A chat format's own markup; "### System:" only as a line of its own, never a heading
+    # such as "### System Design".
+    (_MARKUP, r"<\|[a-z_]+\|>|\[/?INST\]|^[ \t]*###[ \t]*(?:system|instructions?)[ \t]*:"),
+)]
+
+
+def aimed_at_ai(text) -> str:
+    """Which kind of words a posting writes to an AI tool reading it, in plain words, or ""
+    when there are none. Never the posting's own words: those would travel, outside any
+    fence, into every record that keeps the posting's summary."""
+    if not isinstance(text, str) or not text:
+        return ""
+    for kind, pat in AIMED_AT_AI:
+        if pat.search(text):
+            return kind
+    return ""
+
+
 def guarded(job: dict) -> dict:
     """The posting with clean_body applied to its body, and what was taken out said
-    in `posting_guard`, so a body that changed can be told from one that did not."""
+    in `posting_guard`, so a body that changed can be told from one that did not; and the
+    words it writes to an AI tool, if any, in `aimed_at_ai` (never a reason to drop it)."""
     if not isinstance(job, dict):
         return job
     body, found = clean_body(job.get("desc"))
+    aimed = aimed_at_ai(body)
+    out = {**job, "aimed_at_ai": aimed} if aimed else job
     if not found:
-        return job
+        return out
     note = said(found)
     if job.get("posting_guard"):            # the source's markup was cleaned already
         note = f"{job['posting_guard']}, {note.split(': ', 1)[1]}"
-    return {**job, "desc": body, "posting_guard": note}
+    return {**out, "desc": body, "posting_guard": note}
 
 
 # The whole stage's time, for every fetch, not only a paced board's (PACE_BUDGET): LinkedIn's
@@ -433,6 +505,11 @@ def _fetch(job: dict, timeout: int) -> dict:
         # kept, a hidden one's included, so a sentence styled display:none read as part
         # of the job. What is hidden is found in the markup, and the text made again
         # from what is left.
+        # The board's own "Employment type" (Contract, Temporary, Full-time), which the
+        # posting's text may never state (posting_profile.listed_terms).
+        listed = d.get("employmentType")
+        if isinstance(listed, str) and listed.strip():
+            job = {**job, "employment_type": listed.strip()}
         markup = d.get("descriptionHtml")
         if isinstance(markup, str) and markup.strip():
             shown, found = strip_hidden(markup)

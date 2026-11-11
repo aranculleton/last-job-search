@@ -206,3 +206,36 @@ def test_a_phone_keeps_its_brief_as_it_was(run, tmp_path):
     assert not got["errors"], got["errors"]
     scroll, marks = got["after"][0]["eval"]
     assert scroll > 200 and marks == 0, (scroll, marks)
+
+
+WEEK = r"""(() => [...document.querySelectorAll('#main .bp-week > .bp-day')].filter((d) => d.getClientRects().length)
+  .map((d) => Math.round(d.getBoundingClientRect().width)))()"""
+
+
+@pytest.mark.parametrize("size", [{"width": 960, "height": 600}, {"width": 1000, "height": 560}, {"width": 1100, "height": 620},
+                                  {"width": 1280, "height": 800}, {"width": 1440, "height": 900}], ids=_ids)
+def test_coming_ups_week_gives_each_day_its_room(run, tmp_path, size):
+    # At 960 wide the strip drew five days in five of fourteen columns, 13px each, their letters
+    # and numbers run together ("SuMoTuWeTh"): the rules that show fewer days in a narrow panel
+    # came before the strip's own fourteen columns in the stylesheet, and lost to them.
+    html = _write(tmp_path, "sample", MODELS["sample"]())
+    got = run("engine", html=html, viewport=size, clock=T, timezoneId=PERSON_ZONE, fake={"canSend": "available"},
+              steps=[{"hash": "brief", "ready": READY, "eval": WEEK}])
+    days = got["after"][0]["eval"]
+    assert len(days) >= 5 and min(days) >= 26, (size, days)
+
+
+NAMES = r"""(() => [...document.querySelectorAll('#main .bp-people .bp-who strong, #main .bp-people .bp-at')].filter((e) => e.getClientRects().length)
+  .map((e) => [e.textContent, e.scrollWidth - e.clientWidth]))()"""
+
+
+@pytest.mark.parametrize("size", [{"width": 960, "height": 600}, {"width": 1000, "height": 560}, {"width": 1100, "height": 620},
+                                  {"width": 1280, "height": 800}, {"width": 1440, "height": 900}], ids=_ids)
+def test_waiting_on_you_says_each_name_whole(run, tmp_path, size):
+    # At 960 wide "Mari..." and "Ellerw..." stood beside "Thank-you note": the step kept its
+    # width and the name gave way. In a narrow panel the step goes under the name.
+    html = _write(tmp_path, "sample", MODELS["sample"]())
+    got = run("engine", html=html, viewport=size, clock=T, timezoneId=PERSON_ZONE, fake={"canSend": "available"},
+              steps=[{"hash": "brief", "ready": READY, "eval": NAMES}])
+    names = got["after"][0]["eval"]
+    assert names and all(cut <= 1 for _t, cut in names), (size, names)

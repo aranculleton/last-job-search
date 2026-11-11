@@ -587,6 +587,155 @@ def _too_close(abbr) -> bool:
         return False
 
 
+def _thin_end(abbr) -> bool:
+    """A last page design_check reads as nearly empty (THIN_LAST_PAGE), where the profile
+    allows the resume two pages or more. False where the check cannot run (no pypdf)."""
+    if PAGES < 2:
+        return False
+    try:
+        import design_check
+        return any(str(f).startswith("THIN_LAST_PAGE")
+                   for f in design_check.layout(resume_pdf(abbr), pages=PAGES))
+    except Exception:  # noqa: BLE001  no pypdf, or no PDF yet: nothing to say
+        return False
+
+
+# What the fit leaves on a draft whose short last page it tried to take back and could not
+# (verify_batch reads it): every role at its floor and still a page more. The check then says
+# it as a note, not a failure the person has no way to act on.
+THIN_KEPT = "kept"
+# And where the person asked to leave some space: a short last page is that space.
+THIN_SPACE = "space"
+
+
+def _thin_lines(abbr) -> tuple[int, int]:
+    """(printed lines on the resume's last page, characters in its longest printed line),
+    read off the PDF on disk; (0, 0) where it cannot be read."""
+    try:
+        import design_check
+        pdf = resume_pdf(abbr)
+        by = design_check.printed_lines(design_check.runs(pdf))
+        width = max((len(x.strip()) for x in pdftext.text(pdf).splitlines()), default=0)
+        return (len(by[max(by)]) if by else 0), width
+    except Exception:  # noqa: BLE001  no pypdf, or no PDF yet: no estimate, one step at a time
+        return 0, 0
+
+
+def _bullet_lines(b, width) -> int:
+    """About how many printed lines bullet `b` takes on a page `width` characters wide."""
+    words = re.sub(r"\\[A-Za-z]+\*?|[{}~$]", " ", str(LIB.TEXT.get(b, "")))
+    return max(1, -(-len(" ".join(words.split())) // width)) if width else 1
+
+
+def _trim_steps(a, width) -> list:
+    """What the trim would take, step by step, worked out on a copy without a compile:
+    [(each role's bullets, the tools line, about how many lines freed so far)] after 1, 2,
+    ... trims, on a page `width` characters wide."""
+    import copy
+    sim, steps = copy.deepcopy(a), []
+    freed = 0
+    for _ in range(12):
+        before = {b for j in sim["jobs"] for b in j["bullets"]}
+        took = trim_resume(sim)
+        if not took:
+            break
+        after = {b for j in sim["jobs"] for b in j["bullets"]}
+        freed += (sum(_bullet_lines(b, width) for b in before - after)
+                  - sum(_bullet_lines(b, width) for b in after - before)
+                  if took != "tools" else 1)
+        steps.append(([list(j["bullets"]) for j in sim["jobs"]], sim.get("tools"), freed))
+    return steps
+
+
+def settle_thin_end(a, pages, trimmed=None):
+    """The resume on one page fewer where its last page holds a few lines and filling it
+    found nothing more to add: a second page of a few lines reads as unfinished
+    (design_check.layout, from ai-job-search's verify_layout.py, #378). Bullets come off as
+    the trim takes them, never past a role's floor, and the fewest that reach a page fewer
+    are the ones taken; where none can, the resume is as it was and the draft says so
+    (`thin_end`: THIN_KEPT). Returns the page count on disk.
+
+    A compile is the cost (seconds here, much longer on a Windows computer), and this
+    compiled after every bullet: twelve and a restore where the floors kept the page. The
+    trim's steps are worked out on a copy first, and the first compile is at the step whose
+    bullets add up to the last page's lines; then, only if that missed, the most the floors
+    allow, and a halving search between."""
+    abbr = a["abbr"]
+    a.pop("thin_end", None)
+    if pages < 2 or not _thin_end(abbr):
+        return pages
+    lines, width = _thin_lines(abbr)
+    steps = _trim_steps(a, width)
+    start = ([list(j["bullets"]) for j in a["jobs"]], a.get("tools"))
+    pdf = resume_pdf(abbr)
+    try:
+        with open(pdf, "rb") as fh:
+            found = {0: (pages, fh.read())}     # step -> (pages, the PDF's bytes) kept
+    except OSError:
+        found = {0: (pages, None)}
+
+    def at(k):
+        bullets, tools = steps[k - 1][:2] if k else start
+        if len(bullets) != len(a["jobs"]):
+            raise ValueError("fit_to_page: the bullet snapshot lost a job")
+        for j, b in zip(a["jobs"], bullets):  # noqa: B905  checked just above
+            j["bullets"] = list(b)
+        if tools is not None:
+            a["tools"] = tools
+
+    def reaches(k):
+        at(k)
+        now = _render_resume(a)
+        if now < pages and not _too_close(abbr):
+            try:
+                with open(pdf, "rb") as fh:
+                    found[k] = (now, fh.read())
+            except OSError:
+                found[k] = (now, None)
+            return True
+        return False
+
+    m = len(steps)
+    guess = next((k for k, (_b, _t, freed) in enumerate(steps, 1) if freed >= lines), m)
+    lo, hi = 0, None                            # lo never reaches a page fewer; hi does
+    if m and reaches(guess):
+        hi = guess
+    elif m and guess < m and reaches(m):
+        lo, hi = guess, m
+    elif m:
+        lo = guess
+    if hi is None:
+        a["thin_end"] = THIN_KEPT
+        return _back_to(a, at, 0, found, pdf)
+    # The fewest steps that reach a page fewer: from a good guess, one compile below it.
+    while hi - lo > 1:
+        mid = hi - 1 if hi == guess else (lo + hi) // 2
+        if reaches(mid):
+            hi = mid
+        else:
+            lo = mid
+    now = _back_to(a, at, hi, found, pdf)
+    if trimmed is not None:
+        trimmed |= {b for js in start[0] for b in js} - {b for j in a["jobs"] for b in j["bullets"]}
+    return now
+
+
+def _back_to(a, at, k, found, pdf) -> int:
+    """The draft at trim step `k`, with its PDF on disk: the copy kept when that step was
+    compiled (and its source written again, which costs no compile), else a compile."""
+    at(k)
+    now, data = found.get(k, (None, None))
+    if data is not None:
+        try:
+            with open(pdf, "wb") as fh:
+                fh.write(data)
+            R.resume(R.build(a))
+            return now
+        except OSError:
+            pass
+    return _render_resume(a)
+
+
 def fit(a):
     """Returns ((resume_pages, resume_lines), letter_pages), each the last
     measurement of the document that is on disk when this returns."""
@@ -646,6 +795,12 @@ def fit(a):
             pages = _render_resume(a)   # the PDF on disk must match the draft
             break
         pages = grown
+    if fill != "space":
+        pages = settle_thin_end(a, pages, trimmed)
+    elif pages >= 2 and _thin_end(abbr):
+        a["thin_end"] = THIN_SPACE
+    else:
+        a.pop("thin_end", None)
     if not docpaths.has_letter(a):
         # A resume for no posting in particular has no letter (tools/general_resume.py), and
         # neither has one the person asked for alone (docpaths.has_letter).

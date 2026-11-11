@@ -74,3 +74,46 @@ def test_every_control_that_wakes_claude_has_the_gauge_and_its_minutes_follow_hi
     g2 = [g for k, _, g in got2["after"][0]["eval"]["wakers"] if k == kind][0]
     assert g2.startswith("25 min") and "About 25 minutes of Claude's time, from your Claude allowance" in g2, g2
     assert g2 != r["wakers"][0][2], "the minutes are this copy's own once it has a history"
+
+
+WAKERS = r"""(() => {
+  const names = /^(Prepare me|Update my prep|Update it|Practise with Claude|Draft the follow-up)$/;
+  const roots = [document.getElementById('main'), ...document.querySelectorAll('dialog[open]')].filter(Boolean);
+  return roots.flatMap((r) => [...r.querySelectorAll('button')]).filter((b) => b.getClientRects().length && names.test(b.textContent.trim()))
+    .map((b) => [b.textContent.trim(), !!(b.nextElementSibling && b.nextElementSibling.classList.contains('cost'))]);
+})()"""
+
+
+def test_preparing_practising_and_a_follow_up_carry_the_gauge_everywhere_and_in_the_prep(run, tmp_path):
+    # Prepare me, Update my prep and Practise with Claude showed no gauge anywhere, nor Draft
+    # the follow-up on an Applied card, while To do's showed "2 min of Claude": the costliest
+    # work looked free (the screen review, 2026-11-11). The prep reader is a dialog, which the
+    # gauge's sweep never looked in.
+    got = _go(run, tmp_path, [{"hash": "interviews", "eval": WAKERS}, {"open": "up-view:interviews", "eval": WAKERS},
+                              {"hash": "todo", "eval": WAKERS}, {"hash": "jobs", "open": "jobsw:applied", "eval": WAKERS},
+                              {"hash": "interviews/int-larkspur-supply/open", "wait": 200, "eval": WAKERS}], WIDE, clock=T)
+    seen = [x for a in got["after"] for x in a["eval"]]
+    assert {n for n, _ in seen} >= {"Prepare me", "Update my prep", "Practise with Claude", "Draft the follow-up"}, seen
+    assert [x for x in seen if not x[1]] == [], seen
+
+
+ROOM = ("[...document.querySelectorAll('#main .up-prep')].filter((p) => p.querySelector('.btn:not(.link)')).map((p) => {"
+        " const b = p.querySelector('.btn:not(.link)').getBoundingClientRect();"
+        " const r = document.createRange(); const t = [...p.childNodes].find((c) => c.nodeType === 3 && c.textContent.trim());"
+        " const before = t ? (r.selectNodeContents(t), [...r.getClientRects()].pop()) : null;"
+        " const g = p.querySelector('.cost'); const after = g ? g.getBoundingClientRect() : null;"
+        " const same = (a) => a && Math.abs((a.top + a.bottom) / 2 - (b.top + b.bottom) / 2) < b.height / 2;"
+        " return {text: p.textContent.trim().slice(0, 40), left: same(before) ? b.left - before.right : null,"
+        " right: same(after) ? after.left - b.right : null}; })")
+
+
+@pytest.mark.parametrize("vp", [journeys.PHONE, WIDE], ids=["phone", "wide"])
+def test_a_prep_lines_pill_has_room_from_the_words_and_the_gauge_beside_it(run, tmp_path, vp):
+    # The README picture of 4.15.0: on a phone "No prep yet" ran into the Prepare me pill and the
+    # pill into its gauge, a line written inline with nothing between them but a space.
+    got = _go(run, tmp_path, [{"hash": "interviews", "eval": ROOM}], vp, clock=T)
+    rows = got["after"][0]["eval"]
+    assert rows, "a prep line with a pill on Coming up"
+    for row in rows:
+        for side in ("left", "right"):
+            assert row[side] is None or row[side] >= 6, (side, row)

@@ -88,6 +88,40 @@ def test_a_search_going_takes_find_jobs_off_jobs_and_says_it_is_searching(run, t
     assert [w["kind"] for w in got["work"]] == ["search"]
 
 
+# A search two minutes in, and a draft asked after it waiting its turn.
+GOING = {"work/search~1": _work("search", "Finding jobs", asked_at="2026-10-25T08:58:00Z", claimed_at="2026-10-25T08:58:00Z",
+                                stage_at="2026-10-25T08:59:00Z"),
+         "work/draft~r12-2": _work("draft", "CV and letter: Larkspur Retail, Senior Supply Chain Analyst", status="queued",
+                                   asked_at="2026-10-25T08:59:20Z")}
+LEFT = """(() => { const b = document.querySelector('#main .sec-head [data-k="head-find-jobs:going"]');
+  const card = document.querySelector('[data-work="search~1"]'), rail = document.querySelector('#rail .workp, dialog[open] .workp');
+  const left = (t) => ((t || '').match(/(under a minute|about [0-9]+ min) left/i) || [null, null])[1];
+  return {btn: b ? b.textContent.replace(/\\s+/g, ' ').trim() : null, soft: !!b && b.classList.contains('secondary') && !b.classList.contains('link'),
+          gauge: !!b && !!b.nextElementSibling && b.nextElementSibling.classList.contains('cost'),
+          gap: b && b.querySelector('.run-left') ? (() => { const t = [...b.querySelectorAll('*')].flatMap((e) => [...e.childNodes]).concat([...b.childNodes]).find((n) => n.nodeType === 3 && /Finding jobs/.test(n.textContent));
+            const g = document.createRange(); g.selectNodeContents(t); return Math.round(b.querySelector('.run-left').getBoundingClientRect().left - g.getBoundingClientRect().right); })() : null,
+          card: card ? left(card.textContent) : null, rail: rail && rail.querySelector('.sum-small') ? left(rail.querySelector('.sum-small').textContent) : null}; })()"""
+
+
+def test_a_search_going_says_its_time_left_as_its_card_does_with_no_gauge(run, tmp_path):
+    # "Finding jobs" as underlined words among pills, "38 min of Claude" beside it, "about 5
+    # min left" on its card and "About 8 minutes left" over the card: one search, three
+    # durations, and the gauge read as the wait (the screen review, 2026-11-11). While it runs
+    # it is a soft pill saying what its card says is left, with no gauge; the panel's line says
+    # the same.
+    got = _go(run, tmp_path, [{"hash": "jobs", "eval": LEFT}], WIDE, seed=GOING, clock=T)["after"][0]["eval"]
+    assert got["btn"] and got["btn"].startswith("Finding jobs · "), got
+    assert got["soft"] and not got["gauge"], got
+    assert got["card"] and got["btn"].endswith(got["card"] + " left"), got
+    assert got["rail"] and got["rail"].lower() == got["card"].lower(), got
+    # Its words read as one line: the pill's gap stood between "Finding jobs" and " · about 7
+    # min left" as well as their own space (README picture, 4.15.0).
+    assert got["gap"] is not None and got["gap"] <= 6, got
+    # A phone leaves its time to its card, so the header's pills keep to their rows.
+    phone = _go(run, tmp_path, [{"hash": "jobs", "eval": LEFT}], PHONE, seed=GOING, clock=T)["after"][0]["eval"]
+    assert phone["btn"] and phone["soft"] and not phone["gauge"], phone
+
+
 # Jobs and Coming up left this list on 2026-11-05: their headers say nothing of Claude's
 # work (below).
 @pytest.mark.parametrize("screen,kind,title", [
@@ -181,6 +215,18 @@ def _sent_first(model):
     return model
 
 
+def _fernhill_asked(model):
+    # The sample's application question is about another employer since the screen review of
+    # 2026-11-11 (row 40: it asked about Fernhill's application Applied listed as sent), so
+    # here it asks about a Fernhill role not yet sent, at Wren's employer, as this test needs.
+    for n in model["needs_you"]:
+        if n["id"] == "c-pennick-planner-applied":
+            n.update(title="Did you apply to Fernhill Freight?",
+                     body="The Planning Analyst application was ready on 16 October and is not marked as sent.",
+                     about={"company": "Fernhill Freight", "role": "Planning Analyst"})
+    return model
+
+
 def test_the_bin_for_one_person_leaves_the_rest_of_their_employer(run, tmp_path):
     row = "document.querySelector('#main [data-q=\"q-sent-fernhill_freight_halloway\"]')"
     title = "(document.querySelector('#main [data-item=\"quick\"] .card-title') || {}).textContent || ''"
@@ -190,7 +236,7 @@ def test_the_bin_for_one_person_leaves_the_rest_of_their_employer(run, tmp_path)
         # The choice is the tap that does it (2026-11-03); the next step only reads.
         {"click": "Don't contact Wren", "within": "dialog"},
         {"ready": "!" + row, "eval": title},
-    ], PHONE, model=_sent_first(_sample()), clock=T)
+    ], PHONE, model=_fernhill_asked(_sent_first(_sample())), clock=T)
     a = _one(got, "person.stop")
     assert a["value"]["scope"] == "person", a["value"]
     # The application question about the same employer is not the person's, so it stays: three

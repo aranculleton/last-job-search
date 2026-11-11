@@ -581,13 +581,38 @@ def undismiss(sid: str, before=None) -> None:
     app_setup.write_json(_app_json(), data)
 
 
-def paused(today: dt.date, no: dict | None = None) -> dict:
+# The day the person asked for ideas again (Held back for now, Show ideas now): a No thanks on
+# or before it no longer counts towards a pause.
+RESUMED_KEY = "suggest_resumed"
+
+
+def unpause(today: dt.date) -> None:
+    """Offer ideas again from `today`, whatever pause the No thanks before it made: the
+    lift for Held back for now (tools/holds.py lift). Each No thanks stays, so that one idea
+    is still never offered again."""
+    import app_setup
+    data = app_setup.read_json(_app_json(), {})
+    data[RESUMED_KEY] = today.isoformat()
+    app_setup.write_json(_app_json(), data)
+
+
+def resumed() -> dt.date | None:
+    import app_setup
+    return _day(app_setup.read_json(_app_json(), {}).get(RESUMED_KEY))
+
+
+def paused(today: dt.date, no: dict | None = None, since: dt.date | None = None) -> dict:
     """{kind: the day it is offered again}: three No thanks of one kind within 30 days pause
-    it for 30 days from the third."""
-    no = dismissed() if no is None else no
+    it for 30 days from the third. A No thanks on or before `since` (the day the person asked
+    for ideas again, `resumed`, when `no` is read here) counts towards none."""
+    if no is None:
+        no = dismissed()
+        since = resumed() if since is None else since
     by: dict = {}
     for e in no.values():
         d = _day((e or {}).get("on"))
+        if d and since and d <= since:
+            continue
         if d and (today - d).days < PAUSE_DAYS * 2:
             by.setdefault(str(e.get("kind") or ""), []).append(d)
     out = {}
@@ -625,7 +650,7 @@ def offer(model: dict, today: dt.date, shown: dict | None = None) -> None:
     shown = shown or {}
     on = setting() == "on"
     no = dismissed()
-    stop = paused(today, no)
+    stop = paused(today, no, resumed())
     waiting = []
     for _name, rows in CARDS:
         for item in rows(model):

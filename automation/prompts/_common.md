@@ -47,8 +47,9 @@ With the message ready, the one call before the final reply starts `python3 tool
 --message "<task> <YYYY-MM-DD>"` in the background (Bash, `run_in_background`; RUNBOOK.md
 step 4), so the message goes out before anything lands. It stages the person's files (the
 tip line's too), commits, merges master, and pushes only once `./tools/ci_local.sh --quick`
-is green. When it ends `land: ready`, make the calls it prints (open the PR, merge it) and
-write nothing after: the message has gone. GitHub's checks show as skipped on this private
+is green. When it ends `land: saved to master`, it opened and merged the PR itself: make
+the one unsubscribe call it gives, if any. When it ends `land: ready`, make the calls it
+prints (open the PR, merge it). Write nothing after either: the message has gone. GitHub's checks show as skipped on this private
 repo by design; never wait for them or dispatch them. Never push to master directly. Not
 green or a conflict: its branch waits, pushed; open no PR and say nothing (step 3 brings it
 in). Merge refused: run `python3 tools/land.py` again, then merge the same PR.

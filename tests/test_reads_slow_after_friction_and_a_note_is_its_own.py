@@ -62,7 +62,7 @@ def test_a_check_on_a_day_with_no_page_recorded_stops_that_day_and_holds_back_no
 def test_a_page_that_came_back_nearly_empty_is_counted_and_holds_nothing_back(here, monkeypatch):
     monkeypatch.setattr(reading, "PROFILE_READS", "browser")
     reading.shortlist(["c9"], datetime.date.today(),
-                      contacts=[{"contact_id": "c9", "location": "Leeds"}], sends_left=10)
+                      contacts=[{"contact_id": "c9", "location": "Leeds"}])
     page = here / "blank.txt"
     page.write_text("LinkedIn\n", encoding="utf-8")
     assert not reading._loads()
@@ -72,7 +72,7 @@ def test_a_page_that_came_back_nearly_empty_is_counted_and_holds_nothing_back(he
     loads = reading._loads()
     assert len(loads) == 1
     # No pause after it: one alone is said, and only a second within the hour stops the day.
-    g = reading.gate_state(loads[0]["when"] + datetime.timedelta(seconds=1), sends_left=None)
+    g = reading.gate_state(loads[0]["when"] + datetime.timedelta(seconds=1))
     assert g["kind"] == "go"
     assert [x["kind"] for x in pace.friction()] == ["not_rendering"]
 

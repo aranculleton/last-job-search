@@ -156,6 +156,46 @@ def test_a_save_clears_copies_older_versions_left_and_names_the_rest(copy, capsy
     assert save_state.main([], root=str(chat)) == 0
     out = capsys.readouterr().out
     left = _files_like(chat, "from-another-chat")
-    assert sorted(left) == ["Orphan.md.from-another-chat", "test_c.py.from-another-chat"], left
-    assert "cleared 2 extra copy" in out and "2 extra copy(ies)" in out and "tell the person" in out
+    # The person's own test takes the newer copy and the copy goes: nobody is asked about a
+    # developer's test file (audit SV-7). Only the document with nothing beside it is named.
+    assert sorted(left) == ["Orphan.md.from-another-chat"], left
+    assert (chat / "profile" / "tests" / "test_c.py").read_text(encoding="utf-8") == "# a newer copy\n"
+    assert "cleared 3 extra copy" in out and "1 extra copy(ies)" in out and "tell the person" in out
     assert repo_files.tracked("documents/cv", root=chat, app_only=False) == ["documents/cv/Resume_A.tex"]
+
+
+def test_copies_of_their_own_tests_and_the_questions_about_them_are_cleared(copy, capsys):
+    """Audit SV-7 (a person's copy, 2026-11-10): fifteen *.from-another-chat copies under
+    profile/tests, each kept because the test beside it still carried a [CONFIRM: ...] line
+    naming it, three stacked on one file. Nobody answers a question about a developer's test
+    file, so they never cleared. The later version stays; the copies and the lines go."""
+    origin, chat, other = copy
+    banner = ("# [CONFIRM: two of your chats changed this file at the same time; the later "
+              "version is kept here and the other is saved beside it as {}: which one stays]\n")
+    names = ["test_followups.py.from-another-chat", "test_followups.py.from-another-chat-2",
+             "test_followups.py.from-another-chat-3"]
+    write(chat, "profile/tests/test_followups.py",
+          "".join(banner.format(n) for n in names) + "def test_due():\n    assert True\n")
+    for n in names:
+        write(chat, "profile/tests/" + n, "def test_due():\n    assert 1\n")
+    git(chat, "add", "-A", "-f")
+    _commit_days_ago(chat, "an older version left copies", 2)
+    assert save_state.main([], root=str(chat)) == 0
+    capsys.readouterr()
+    assert _files_like(chat, "from-another-chat") == []
+    text = (chat / "profile" / "tests" / "test_followups.py").read_text(encoding="utf-8")
+    assert "[CONFIRM" not in text and "def test_due" in text
+
+
+
+def test_the_line_saying_where_the_other_version_is_goes_with_its_question(tmp_path):
+    """The review of SV-7 (2026-11-11): the docstring said the line under the question goes
+    too, and the code left it."""
+    beside = tmp_path / "test_x.py"
+    beside.write_text("# [CONFIRM: two of your chats changed this file at the same time; the "
+                      "later version is kept here and the other is saved beside it as "
+                      "test_x.py.from-another-chat: which one stays]\n"
+                      + merge_state.SHOW_OTHER.format(ref="abc123", path="profile/tests/test_x.py")
+                      + "\ndef test_x():\n    assert True\n", encoding="utf-8")
+    merge_state._drop_question(str(beside), "test_x.py.from-another-chat")
+    assert beside.read_text(encoding="utf-8") == "def test_x():\n    assert True\n"

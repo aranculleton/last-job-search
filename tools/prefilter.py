@@ -407,7 +407,7 @@ def stamp_copies(rows: list, today: _dt.date | None = None) -> list:
     except ImportError:
         return rows
     from dates import as_date
-    index = oldest_copies(rows, (today or _dt.date.today()).isoformat())
+    index = oldest_copies(rows, (today or person.today()).isoformat())
     out = []
     for job in rows:
         d = copy_date(index, job) if isinstance(job, dict) else ""
@@ -536,7 +536,7 @@ def seen_on(seen_path: str, today: _dt.date | None = None, entries: dict | None 
         from throttle import first_seen
     except ImportError:
         return lambda job: ""
-    return first_seen(entries, (today or _dt.date.today()).isoformat())
+    return first_seen(entries, (today or person.today()).isoformat())
 
 
 def _ruled_on(ruled_out, entries: dict, today: _dt.date | None):
@@ -603,7 +603,7 @@ def already_ruled_out(seen_path: str, keep_ruled_out: bool = False,
                 rows, threads or throttle.threads_beside(book))) if rows else {}
         else:
             holds = referral_holds()
-        day = (today or _dt.date.today()).isoformat()
+        day = (today or person.today()).isoformat()
         # The paths only when they were given, so a caller (or a test) that stands in its
         # own reader with the file already bound still reads that one.
         blocked = (load_do_not_target(do_not_target, today=day) if do_not_target
@@ -672,7 +672,7 @@ def main() -> int:
     ap.add_argument("--do-not-target", dest="do_not_target", default=None,
                     help="with --seen: do_not_target.json (default: the repo's)")
     a = ap.parse_args()
-    today = _dt.date.fromisoformat(a.today) if a.today else _dt.date.today()
+    today = _dt.date.fromisoformat(a.today) if a.today else person.today()
 
     rows, was_dict = load_jobs(a.infile)
     rows = stamp_copies(rows, today)

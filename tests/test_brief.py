@@ -506,9 +506,12 @@ def test_the_start_keeps_the_syncs_output_and_gathers_in_a_fresh_process(tmp_pat
     assert brief.start(["--on", "a model", "--write"], "a model") == 0
     sync = next(c for c in calls if "sync_app.py" in " ".join(c))
     assert sync[-3:] == ["--if-stale", "--on", "a model"]
-    # The gather is a new process, so an update the sync just took is the code that runs.
-    assert calls[-1][1].endswith("brief.py") and calls[-1][2:] == ["--on", "a model", "--write"]
-    got = brief.read_sync(dt.date.today(), log)
+    # The gather is a new process, so an update the sync just took is the code that runs. The
+    # run's one day goes with it (BT-6: the person's day, chosen once at the start).
+    day = brief._today().isoformat()
+    assert calls[-1][1].endswith("brief.py") and calls[-1][2:] == ["--on", "a model", "--write",
+                                                                    "--today", day]
+    got = brief.read_sync(brief._today(), log)
     assert got["update"].startswith("An update is waiting") and got["earlier"]
 
 

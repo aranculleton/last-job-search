@@ -137,6 +137,56 @@ class TestSoftTwoHundred(unittest.TestCase):
         self.assertEqual(rc, 1)
         self.assertIn("not a robots.txt", msg)
 
+    def test_a_rule_that_cannot_be_read_is_unconfirmed_not_ignored(self):
+        """A robots.txt saved in another encoding, with a byte that is not UTF-8 in a
+        Disallow line: read as UTF-8, the rule matches no path and the site read as open
+        (openroles 0.5.0, has_undecodable_rule; ai-job-search #509)."""
+        import robots_check
+
+        original = robots_check._fetch
+        robots_check._fetch = lambda url, ua: ("User-agent: *\nDisallow: /caf\ufffd/\n", 200)
+        try:
+            rc, msg = robots_check.gate("https://x.example/caf\u00e9/jobs")
+        finally:
+            robots_check._fetch = original
+        self.assertEqual(rc, 1)
+        self.assertIn("cannot be read", msg)
+
+    def test_an_unreadable_rule_is_not_asked_for_again_as_a_browser(self):
+        """The site's own file, read: asking for it again as a browser spent one more of
+        the employer's requests on an answer that cannot change."""
+        import robots_check
+
+        asked = []
+        original = robots_check._fetch
+        robots_check._fetch = lambda url, ua: asked.append(ua) or ("User-agent: *\nDisallow: /caf\ufffd/\n", 200)
+        try:
+            body, why = robots_check.read_policy("https://x.example/jobs")
+        finally:
+            robots_check._fetch = original
+        self.assertIsNone(body)
+        self.assertIn("cannot be read", why)
+        self.assertEqual(asked, ["Claude-User"])
+
+    def test_an_unreadable_allow_line_does_not_close_the_site(self):
+        """An Allow that matches no path only makes the file read stricter: refusing the
+        whole site for it lost every job there. A garbled User-agent line still refuses,
+        since the rules under it would go to nobody."""
+        import robots_check
+
+        original = robots_check._fetch
+        try:
+            robots_check._fetch = lambda url, ua: (
+                "User-agent: *\nDisallow: /private/\nAllow: /private/caf\ufffd\n", 200)
+            self.assertEqual(robots_check.gate("https://x.example/jobs")[0], 0)
+            self.assertEqual(robots_check.gate("https://x.example/private/x")[0], 1)
+            robots_check._fetch = lambda url, ua: ("User-agent: Claude\ufffdUser\nDisallow: /\n", 200)
+            rc, msg = robots_check.gate("https://x.example/jobs")
+            self.assertEqual(rc, 1)
+            self.assertIn("cannot be read", msg)
+        finally:
+            robots_check._fetch = original
+
     def test_gate_reads_policy_as_browser_when_honest_request_is_refused(self):
         """09-web-research.md's Barclays-class recovery: the policy file itself
         returns 403 to Claude-User and 200 to a browser, and the checker must

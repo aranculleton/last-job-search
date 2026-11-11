@@ -66,7 +66,7 @@ def test_every_design_reads_kerned_words_whole(tmp_path, monkeypatch, design):
     import fit_to_page as F
     import render_application as R
     import doc_design
-    from pypdf import PdfReader
+    PdfReader = pytest.importorskip("pypdf").PdfReader
     assert design is None or design in doc_design.DESIGNS
     (tmp_path / "cv").mkdir()
     a = _draft()
@@ -114,7 +114,7 @@ def test_the_letter_reads_kerned_words_whole(tmp_path, monkeypatch, design):
     import docpaths
     import fit_to_page as F
     import render_application as R
-    from pypdf import PdfReader
+    PdfReader = pytest.importorskip("pypdf").PdfReader
     for d in ("cv", "cover_letters"):
         (tmp_path / d).mkdir()
     for f in ("OpenFonts", "cover.cls"):

@@ -104,6 +104,10 @@ def test_a_round_reads_its_own_rulings_once_for_every_careers_site(boards_web, m
     # The skip was built for each careers-site employer from the repo's seen file, so a
     # round's own --seen was never read and its --no-seen-read ("judge everything again")
     # still skipped every page it had once ruled out.
+    # The person's own call holds for about six months from the day they made it
+    # (exclude.set_aside_holds, on the person's day): their day is held at the ruling's,
+    # which a clock a year on is past (the everywhere check, "400-days").
+    monkeypatch.setenv("LJS_TODAY", "2026-10-01")
     import json
     import prefilter
     boards = _two_careers_sites(boards_web)

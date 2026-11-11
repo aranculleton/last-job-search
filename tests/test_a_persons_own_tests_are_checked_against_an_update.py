@@ -68,12 +68,17 @@ def _repo(tmp_path, subject):
                     "commit", "-q", "-m", subject], check=True)
 
 
-def test_the_check_runs_once_for_each_sync_whichever_copy_ran_it(tmp_path, capsys):
+def test_the_check_runs_once_for_each_sync_whichever_copy_ran_it(tmp_path, capsys, monkeypatch):
+    # In the background since D2 (2026-11-10): the update check waited 71 seconds on it.
+    started = []
+    monkeypatch.setattr(sync_app, "_spawn", lambda cmd, **k: started.append(cmd))
     _repo(tmp_path, "Sync from the app: 3 new commit(s)")
     sync_app.own_tests_after_sync(str(tmp_path))
-    assert "their own tests, 1 now fail" in capsys.readouterr().out
+    assert len(started) == 1 and started[0][-1] == "--own-tests-record"
     sync_app.own_tests_after_sync(str(tmp_path))          # the same sync: not again
-    assert capsys.readouterr().out == ""
+    assert len(started) == 1 and capsys.readouterr().out == ""
+    sync_app.own_tests(str(tmp_path))                     # what that run does
+    assert "their own tests, 1 now fail" in capsys.readouterr().out
 
 
 def test_a_commit_that_is_not_a_sync_runs_nothing(tmp_path, capsys):

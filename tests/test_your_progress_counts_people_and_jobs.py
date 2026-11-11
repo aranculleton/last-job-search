@@ -107,8 +107,10 @@ def test_a_nurse_who_applies_a_lot_sees_her_applications_and_her_one_note():
     t = _tiles(g)
     assert len(g["tiles"]) <= 4
     assert t["applied"]["n"] == 30 and t["interviews"]["n"] == 2
-    # The rate from applied to interview, said only past five applications.
-    assert t["interviews"]["share"] == "7% of applied"
+    # How many applications the interviews came from, said only past five applications, as a
+    # count: "7% of applied" beside "applied this week" read as a share of the week (the screen
+    # review, 2026-11-11).
+    assert t["interviews"]["share"] == "from 30 applied"
     # People too, though she wrote to one person: her side of it is real work.
     assert t["sent"]["n"] == 1 and t["sent"]["label"] == "message sent"
     # Nothing is a nought beside real work, and nothing claims a pattern from one note.
