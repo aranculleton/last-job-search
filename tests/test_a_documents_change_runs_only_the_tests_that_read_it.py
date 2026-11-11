@@ -95,13 +95,13 @@ def test_a_documents_pull_request_runs_the_tests_that_read_them(repo):
     base = _git(repo, "rev-parse", "HEAD")
     (repo / "CHANGELOG.md").write_text("# Changelog\n\n- A line\n", encoding="utf-8")
     _git(repo, "commit", "-qam", "notes")
-    got = ci_plan.lane("pull_request", base, str(repo))
+    got = ci_plan.lane("pull_request", base, root=str(repo))
     assert got["docs_only"] == "true"
     # One that reads code naming the file, one that lists files; never the unrelated one.
     assert got["tests"].split() == ["tests/test_every_file.py", "tests/test_release.py"]
     (repo / "docs" / "NEXT_BUILDER.md").write_text("more\n", encoding="utf-8")
     _git(repo, "commit", "-qam", "handover")
-    got = ci_plan.lane("pull_request", base, str(repo))
+    got = ci_plan.lane("pull_request", base, root=str(repo))
     assert "tests/test_handover.py" in got["tests"].split()
 
 
@@ -109,15 +109,15 @@ def test_masters_own_run_and_a_run_by_hand_are_always_the_whole_suite(repo):
     base = _git(repo, "rev-parse", "HEAD")
     (repo / "CHANGELOG.md").write_text("# Changelog\n\n- A line\n", encoding="utf-8")
     _git(repo, "commit", "-qam", "notes")
-    assert ci_plan.lane("push", base, str(repo))["docs_only"] == "false"
-    assert ci_plan.lane("workflow_dispatch", "", str(repo))["docs_only"] == "false"
+    assert ci_plan.lane("push", base, root=str(repo))["docs_only"] == "false"
+    assert ci_plan.lane("workflow_dispatch", "", root=str(repo))["docs_only"] == "false"
 
 
 @pytest.mark.parametrize("base", ["", "0" * 40, "f" * 40, "not-a-commit"])
 def test_with_no_usable_base_everything_runs(repo, base):
     (repo / "CHANGELOG.md").write_text("# Changelog\n\n- A line\n", encoding="utf-8")
     _git(repo, "commit", "-qam", "notes")
-    assert ci_plan.lane("pull_request", base, str(repo))["docs_only"] == "false"
+    assert ci_plan.lane("pull_request", base, root=str(repo))["docs_only"] == "false"
 
 
 def test_a_tool_moved_under_docs_is_still_a_tool_changed(repo):
@@ -128,7 +128,7 @@ def test_a_tool_moved_under_docs_is_still_a_tool_changed(repo):
     _git(repo, "mv", "tools/x.py", "docs/images/x.png")
     _git(repo, "commit", "-qm", "moved")
     assert ci_plan.changed(base, str(repo)) == ["docs/images/x.png", "tools/x.py"]
-    assert ci_plan.lane("pull_request", base, str(repo))["docs_only"] == "false"
+    assert ci_plan.lane("pull_request", base, root=str(repo))["docs_only"] == "false"
 
 
 def test_a_name_with_an_accent_is_read_whole(repo):
@@ -158,7 +158,7 @@ def test_a_pull_requests_merge_is_also_measured_against_the_base_as_it_is_now(re
     _git(repo, "merge", "-q", "--no-ff", "-m", "merge", "work")
     assert ci_plan.changed(old, str(repo)) == ["CHANGELOG.md"]
     assert ci_plan.changed(old, str(repo), merge=True) == ["CHANGELOG.md", "tools/x.py"]
-    assert ci_plan.lane("pull_request", old, str(repo))["docs_only"] == "false"
+    assert ci_plan.lane("pull_request", old, root=str(repo))["docs_only"] == "false"
 
 
 def test_the_real_documents_reach_the_tests_that_read_them():
@@ -183,8 +183,7 @@ def test_the_real_documents_reach_the_tests_that_read_them():
 
 def _needs_ok(docs: str, tex: str = "false", fails=(), private=False, event=None):
     gh = event or W.pull_request(private=private)
-    out = {"plan": {"docs_only": docs, "tests": "tests/test_release.py"},
-           "checks": {"latex": tex}}
+    out = {"plan": {"docs_only": docs, "latex": tex, "tests": "tests/test_release.py"}}
     results = W.run("ci.yml", gh, outputs=out, fails=fails)
     if results["fast"] == "skipped":
         return results, None
@@ -218,15 +217,14 @@ def test_any_failure_fails_fast_checks(docs, failing):
 
 def test_a_job_skipped_that_the_change_needed_fails_fast_checks():
     needs = {j: {"result": "success", "outputs": {}} for j in ci_plan.FAST_NEEDS}
-    needs["plan"]["outputs"] = {"docs_only": "false"}
-    needs["checks"]["outputs"] = {"latex": "true"}
+    needs["plan"]["outputs"] = {"docs_only": "false", "latex": "true"}
     for job in ("suite", "python-floor", "page", "latex-smoke"):
         broken = {k: dict(v) for k, v in needs.items()}
         broken[job] = {"result": "skipped", "outputs": {}}
         assert ci_plan.verdict(broken)[0] is False, job
     needs["plan"]["outputs"] = {}                   # a plan with no answer
     assert ci_plan.verdict(needs)[0] is False
-    needs["plan"]["outputs"] = {"docs_only": "true"}
+    needs["plan"]["outputs"] = {"docs_only": "true", "latex": "false"}
     needs["docs"] = {"result": "skipped", "outputs": {}}
     assert ci_plan.verdict(needs)[0] is False
 
@@ -254,5 +252,5 @@ def test_the_plan_compares_with_the_base_and_hands_its_answer_on():
     assert step["env"]["BASE"] == "${{ github.event.pull_request.base.sha || github.event.before }}"
     assert 'tools/ci_plan.py lane --out "$GITHUB_OUTPUT"' in step["run"]
     assert plan["steps"][0]["with"]["fetch-depth"] == 0
-    for key in ("docs_only", "tests"):
+    for key in ("docs_only", "latex", "tests"):
         assert plan["outputs"][key] == "${{ steps.plan.outputs.%s }}" % key

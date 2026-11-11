@@ -14,7 +14,7 @@
 # CHANGELOG pull request ran it four times (#206), and retitling a pull request started
 # nothing. The run starts as the label goes on, and again on each push while it is on.
 #
-# No paths filter, unlike Platforms: any change to the app can break any of these.
+# No list of paths, unlike Platforms' plan: any change to the app can break any of these.
 
 name: Everywhere
 

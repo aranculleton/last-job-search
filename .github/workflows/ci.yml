@@ -121,12 +121,19 @@ jobs:
     # ran 8,273 tests twice and the browser for two changed documents (2026-11-11). Anything
     # in doubt runs everything: a file not on the list, no usable base, a run by hand, and
     # every push to master, so a merged documents change still meets the whole suite there.
+    #
+    # It also says whether LaTeX compiles (ci_plan.LATEX), so the compile starts at once
+    # rather than after the checks: the example documents, their classes and fonts, the three
+    # modules that write a real resume and letter, the tools that fit and check a PDF, and
+    # this file. The page's own code under templates/app/ compiles nothing. It fails open: a
+    # compile that should have run and did not is worse than one that ran needlessly.
     name: What this change needs
     if: ${{ !github.event.repository.private || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
       docs_only: ${{ steps.plan.outputs.docs_only }}
+      latex: ${{ steps.plan.outputs.latex }}
       tests: ${{ steps.plan.outputs.tests }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -134,10 +141,11 @@ jobs:
           fetch-depth: 0             # the base it compares with
       # The runner's own python3: the plan reads git and files, and needs no package.
       - id: plan
-        name: Documents only, and the tests that read them
+        name: Documents only and the tests that read them, and LaTeX
         env:
           EVENT: ${{ github.event_name }}
           BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          LATEX: ${{ inputs.latex }}         # a run by hand: its tick box
         run: python3 tools/ci_plan.py lane --out "$GITHUB_OUTPUT"
 
   checks:
@@ -155,8 +163,6 @@ jobs:
     runs-on: ubuntu-24.04
     # About a minute of work; the cap is for a hung bun install.
     timeout-minutes: 10
-    outputs:
-      latex: ${{ steps.changed.outputs.latex }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
@@ -166,31 +172,6 @@ jobs:
           python-version: "3.13"
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
       - run: pip install pyyaml ruff pytest pytest-xdist time-machine
-
-      # The two LaTeX legs are the only slow jobs left, ~3 billed minutes
-      # each, and most pushes are Python and Markdown. This job already
-      # fetches full history for the framework-version guard, so the check
-      # costs no job and no minute. It fails OPEN: a compile that should have
-      # run and did not is worse than one that ran needlessly.
-      - id: changed
-        name: Does this change touch LaTeX
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "manual run; latex=${{ inputs.latex }}"
-            echo "latex=${{ inputs.latex }}" >> "$GITHUB_OUTPUT"; exit 0
-          fi
-          base="${{ github.event.pull_request.base.sha || github.event.before }}"
-          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ] \
-             || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
-            echo "no usable base ref; compiling to be safe"
-            echo "latex=true" >> "$GITHUB_OUTPUT"; exit 0
-          fi
-          if git diff --name-only "$base" HEAD \
-             | grep -qE '^(cv/|cover_letters/|templates/|texmf/|tools/(fit_to_page|render_application|verify_pdf)\.py|\.github/workflows/)'; then
-            echo "latex=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "latex=false" >> "$GITHUB_OUTPUT"
-          fi
 
       - name: Lint skills, commands, settings
         run: python tools/lint_skills.py
@@ -502,11 +483,12 @@ jobs:
     # README's Linux setup path is apt, so both ends of the moderncv range
     # users actually have stay compiled.
     #
-    # Gated on `checks`: these are ~3 billed minutes each and most pushes do
-    # not touch LaTeX at all.
+    # Gated on the plan's `latex`: these are ~3 billed minutes each on a private copy run by
+    # hand, and most pushes do not touch LaTeX at all. They wait for the plan alone, never
+    # for the suite: they took two minutes and waited nine for Checks (2026-11-11).
     name: Compile example CV and cover letter (${{ matrix.leg.name }})
-    needs: checks
-    if: ${{ needs.checks.outputs.latex == 'true' && (!github.event.repository.private || github.event_name == 'workflow_dispatch') }}
+    needs: plan
+    if: ${{ needs.plan.outputs.latex == 'true' && (!github.event.repository.private || github.event_name == 'workflow_dispatch') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     container: ${{ matrix.leg.container }}

@@ -1,23 +1,25 @@
 #!/usr/bin/env python3
 """What a CI run needs to run, decided once, in one place a test can hold.
 
-.github/workflows/ci.yml starts with a quick job that runs this and hands its answer to the
-jobs after it:
+.github/workflows/ci.yml and platforms.yml each start with a quick job that runs this and
+hands its answer to the jobs after it:
 
-    python3 tools/ci_plan.py lane [--out FILE]        ci.yml: docs_only, tests
+    python3 tools/ci_plan.py lane [--out FILE]        ci.yml: docs_only, latex, tests
+    python3 tools/ci_plan.py platforms [--out FILE]   platforms.yml: person, windows
     python3 tools/ci_plan.py part 2/3 [file ...]      the test files the second of three
                                                       runners takes (every tests/test_*.py
                                                       when none are named)
     python3 tools/ci_plan.py verdict                  ci.yml's Fast checks: every job this
                                                       change needed ran and passed
 
-`lane` reads the event from the environment, as the workflow sets it: EVENT
-(github.event_name) and BASE (the commit the change is measured from). It prints key=value
-lines and, with --out, appends them to that file ($GITHUB_OUTPUT). `verdict` reads NEEDS,
-the workflow's toJSON(needs).
+`lane` and `platforms` read the event from the environment, as the workflow sets it: EVENT
+(github.event_name), BASE (the commit the change is measured from), and for `lane` LATEX
+(the manual run's tick box), for `platforms` ACTION, LABEL and LABELS (the pull request's
+labels, as JSON). Each prints key=value lines and, with --out, appends them to that file
+($GITHUB_OUTPUT). `verdict` reads NEEDS, the workflow's toJSON(needs).
 
 Every doubt runs more, never less: no usable base, a git error or a file this does not know
-runs the whole suite. A wrong "docs only" is worse than a slow run.
+runs the whole suite and compiles LaTeX. A wrong "docs only" is worse than a slow run.
 Standard library only, and Python 3.9 (tools/python_floor.py), like every tool here.
 """
 from __future__ import annotations
@@ -34,8 +36,8 @@ ROOT = os.path.dirname(TOOLS)
 
 # ------------------------------------------------------------------ the docs-only lane
 
-# A change made only of these files skips the suite, the Python 3.9 leg and the page's
-# browser tests, and runs the tests that read them instead (`tests_for`). Each is read by
+# A change made only of these files skips the suite, the Python 3.9 leg, the page's browser
+# tests and LaTeX, and runs the tests that read them instead (`tests_for`). Each is read by
 # people or by a builder, never by a person's chat or a tool while it works. An allowlist,
 # on purpose: a file nobody has placed here runs everything.
 DOCS_ONLY = {
@@ -55,6 +57,15 @@ DOCS_ONLY = {
 NEVER_DOCS = (".claude/", ".agents/", "templates/", "tools/", "tests/", "profile.example/",
               "automation/", "plugin/", ".github/workflows/", "RUNBOOK.md", "CLAUDE.md",
               "SETUP.md", "COMPUTER.md", "START_HERE.md", "HELP.md", "AGENTS.md")
+
+# The two example documents compile when a change touches them, the classes and fonts they
+# use, the three modules that write a real resume and letter, the tools that fit and check
+# a PDF, or the workflow that compiles them. The page's own code (templates/app/) is not
+# among them.
+LATEX = re.compile(r"^(?:cv/|cover_letters/|texmf/"
+                   r"|templates/(?:doc_design|doc_style|resume_gen)\.py$"
+                   r"|tools/(?:fit_to_page|render_application|verify_pdf)\.py$"
+                   r"|\.github/workflows/ci\.yml$)")
 
 # A test that lists files (the whole tree, a folder, every Markdown file) may read a changed
 # document without naming it, so every such test runs in the docs-only lane.
@@ -197,20 +208,23 @@ def changed(base: str, root: str = ROOT, merge: bool = False) -> list[str] | Non
     return sorted(files)
 
 
-def lane(event: str, base: str, root: str = ROOT) -> dict:
+def lane(event: str, base: str, latex_asked: str = "", root: str = ROOT) -> dict:
     """ci.yml's plan. The docs-only lane is for pull requests alone: master's own run after
     a merge is always the whole suite, so a test the lane did not pick is still run within
     minutes of the merge, before anything is released."""
     if event == "workflow_dispatch":
-        return {"docs_only": "false", "tests": "", "why": "a run by hand runs everything"}
+        return {"docs_only": "false", "latex": "true" if latex_asked == "true" else "false",
+                "tests": "", "why": "a run by hand runs everything"}
     files = changed(base, root, merge=event == "pull_request")
     if files is None:
-        return {"docs_only": "false", "tests": "",
-                "why": "no usable base to compare with, so everything runs"}
+        return {"docs_only": "false", "latex": "true", "tests": "",
+                "why": "no usable base to compare with, so everything runs and LaTeX compiles"}
+    tex = "true" if any(LATEX.match(f) for f in files) else "false"
     if event == "pull_request" and docs_only(files):
-        return {"docs_only": "true", "tests": " ".join(tests_for(files, root)),
+        return {"docs_only": "true", "latex": tex, "tests": " ".join(tests_for(files, root)),
                 "why": f"{len(files)} documents changed and nothing else"}
-    return {"docs_only": "false", "tests": "", "why": f"{len(files)} files changed"}
+    return {"docs_only": "false", "latex": tex, "tests": "",
+            "why": f"{len(files)} files changed"}
 
 
 # ------------------------------------------------------------------ a split suite
@@ -242,6 +256,92 @@ def part(shard: str, files: list[str] | None = None, root: str = ROOT) -> list[s
     return sorted(mine)
 
 
+# ------------------------------------------------------------------ Platforms
+
+# What a person's set-up on Linux or a Mac runs in the Platforms `person` job's own steps
+# (tools/platform_check.py: install, python, documents, general, designs, seed, round), and
+# behaves differently from one system to another. An ordinary pull request touching one of
+# these runs that job on Linux and the Mac; one touching none of them runs nothing there,
+# since Windows never runs on an ordinary change and Checks already runs the suite on Linux.
+#
+# Not here, though they once were: templates/** (the page's own code, which the page's
+# browser tests and Everywhere check in every engine), and what only a computer chat or
+# Windows runs, which the person job never runs on Linux or the Mac: tools/app.py,
+# app_listen.py, find_copy.py, sync_app.py, merge_state.py, hydrate.py, py.sh,
+# computer_setup.ps1, .claude/settings.json, COMPUTER.md and .gitattributes (windows-chat
+# and windows-shell run them on every release), setup_env.sh (a cloud container's), and
+# cv/*.cls, which named no file (the resume's class comes with TeX Live).
+# With them, Platforms had run 124 times on pull requests, 80 of the runs cancelled
+# (the audit of 2026-11-11).
+PLATFORM_PATHS = {
+    # The install route: what --fix installs on each system, with no Homebrew and no sudo.
+    "tools/installs.py": "what env_check --fix installs, system by system",
+    "tools/env_check.py": "the check and --fix themselves",
+    "requirements.txt": "the packages --fix installs",
+    # The Python an app command runs under: Apple's own 3.9 on a Mac, a current one in .venv.
+    "tools/local_path.*": "where the app finds its .venv, Python and Git on each system",
+    "tools/python_floor.py": "the oldest Python, and the one a command started by it runs",
+    # The documents: TinyTeX, the fonts and the PDF reader are each system's own.
+    "tools/pdftext.py": "reading a PDF's text with what the system has",
+    "tools/verify_batch.*": "checking a batch of documents",
+    "tools/fit_to_page.py": "compiling a document and fitting it to its pages",
+    "tools/render_application.py": "writing the .tex of a resume and a letter",
+    "tools/audit_letters.py": "the letter checks the documents step runs",
+    "tools/design_check.py": "the design checks the designs step runs",
+    "tools/doc_name.py": "a document's file name, accents included",
+    "templates/doc_design.py": "the designs every document is drawn in",
+    "templates/doc_style.py": "the colours and type the designs use",
+    "templates/resume_gen.py": "the resume the general step writes with no posting",
+    "cover_letters/*.cls": "the letter's LaTeX class",
+    "texmf/**": "the fonts and packages every compile loads",
+    # Their own files: a LinkedIn download with a byte-order mark, accents and Windows line
+    # ends, read into a profile seed, and the general resume staged from it.
+    "tools/network/export.py": "reading a LinkedIn download",
+    "tools/network/own_profile.py": "their own profile from that download",
+    "tools/stage_picks.py": "staging the general resume",
+    # The offline round: the portals' runtime (Node or Bun) is found the system's way.
+    "tools/portals.py": "finding Node or Bun to run a portal",
+    "tools/scrape_wide.py": "the round the person job runs offline",
+    # The check itself.
+    "tools/platform_check.py": "the steps the person job runs",
+    ".github/workflows/platforms.yml": "this workflow",
+}
+RELEASE_LABEL = "release"
+
+
+def release_run(event: str, action: str = "", label: str = "", labels=()) -> bool:
+    """True for a run that checks everywhere: the weekly one, one by hand, and a pull
+    request labelled `release` (as the label goes on, and on every push while it is on).
+    Never the title: retitling a pull request starts nothing."""
+    if event in ("schedule", "workflow_dispatch"):
+        return True
+    if event != "pull_request":
+        return False
+    if action == "labeled":
+        return label == RELEASE_LABEL
+    return action in ("opened", "synchronize", "reopened") and RELEASE_LABEL in (labels or ())
+
+
+def touches_platforms(paths: list[str]) -> bool:
+    """True when any of `paths` is one PLATFORM_PATHS names."""
+    return any(_glob(p).match(f) for f in paths for p in PLATFORM_PATHS)
+
+
+def platforms(event: str, action: str, label: str, labels, base: str,
+              root: str = ROOT) -> dict:
+    """platforms.yml's plan: whether the person job runs, and whether Windows runs (the
+    person job's three Windows parts and the two Windows jobs)."""
+    if release_run(event, action, label, labels):
+        return {"person": "true", "windows": "true", "why": "a release run: every system"}
+    if event != "pull_request" or action == "labeled":
+        return {"person": "false", "windows": "false", "why": "nothing for this event"}
+    files = changed(base, root, merge=True)
+    run = files is None or touches_platforms(files)
+    return {"person": "true" if run else "false", "windows": "false",
+            "why": ("Linux and the Mac: the change touches what a person's set-up runs"
+                    if run else "the change touches nothing a person's set-up runs")}
+
+
 # ------------------------------------------------------------------ Fast checks
 
 # ci.yml's jobs that Fast checks waits for, each by its id.
@@ -255,13 +355,10 @@ def verdict(needs: dict) -> tuple[bool, list[str]]:
     said, ok = [], True
     result = {j: (needs.get(j) or {}).get("result", "missing") for j in FAST_NEEDS}
     plan = (needs.get("plan") or {}).get("outputs") or {}
-    docs = plan.get("docs_only")
-    tex = ((needs.get("checks") or {}).get("outputs") or {}).get("latex")
-    if result["plan"] != "success" or docs not in ("true", "false"):
-        return False, [f"plan: {result['plan']}, docs_only={docs!r}: "
+    docs, tex = plan.get("docs_only"), plan.get("latex")
+    if result["plan"] != "success" or docs not in ("true", "false") or tex not in ("true", "false"):
+        return False, [f"plan: {result['plan']}, docs_only={docs!r}, latex={tex!r}: "
                        "no answer on what this change needs"]
-    if result["checks"] == "success" and tex not in ("true", "false"):
-        return False, [f"checks: latex={tex!r}: no answer on whether LaTeX compiles"]
     wanted = {"plan", "checks"} | ({"docs"} if docs == "true" else {"suite", "python-floor", "page"})
     if tex == "true":
         wanted.add("latex-smoke")
@@ -297,7 +394,15 @@ def main(argv: list[str] | None = None) -> int:
     cmd = argv[0] if argv else ""
     env = os.environ
     if cmd == "lane":
-        _emit(lane(env.get("EVENT", ""), env.get("BASE", "")), out)
+        _emit(lane(env.get("EVENT", ""), env.get("BASE", ""), env.get("LATEX", "")), out)
+        return 0
+    if cmd == "platforms":
+        try:
+            labels = json.loads(env.get("LABELS") or "[]") or []
+        except ValueError:
+            labels = []
+        _emit(platforms(env.get("EVENT", ""), env.get("ACTION", ""), env.get("LABEL", ""),
+                        labels, env.get("BASE", "")), out)
         return 0
     if cmd == "part" and len(argv) >= 2:
         mine = part(argv[1], argv[2:] or None)
@@ -312,8 +417,8 @@ def main(argv: list[str] | None = None) -> int:
         print("Fast checks green" if ok else "Fast checks red: a job this change needed did "
               "not pass")
         return 0 if ok else 1
-    print("usage: python3 tools/ci_plan.py lane [--out FILE] | part K/N [file ...] | verdict",
-          file=sys.stderr)
+    print("usage: python3 tools/ci_plan.py lane|platforms [--out FILE] | part K/N [file ...] "
+          "| verdict", file=sys.stderr)
     return 2
 
 

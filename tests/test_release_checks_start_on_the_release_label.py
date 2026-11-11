@@ -1,5 +1,5 @@
-"""Everywhere and Platforms' Windows jobs start on the `release` label, by hand and weekly,
-never on a pull request's title.
+"""The Everywhere workflow and the Windows jobs of Platforms start on the `release` label, by
+hand and weekly, never on a pull request's title.
 
 A "Release " title started them on every push: the release's CHANGELOG pull request ran
 Everywhere four times for one documents change (#206, 2026-11-11), and retitling a pull
@@ -23,13 +23,28 @@ sys.path.insert(0, os.path.join(ROOT, "tests"))
 yaml = pytest.importorskip("yaml")              # the 3.9 leg installs pytest and no more
 import workflow_runs as W  # noqa: E402
 
+sys.path.insert(0, os.path.join(ROOT, "tools"))
+import ci_plan  # noqa: E402
+
 TITLE = "Release 4.15.1: a release"
 EVERYWHERE = ("page", "suite")
 WINDOWS = ("windows-shell", "windows-chat")
 
 
+def _plan(github: dict) -> dict:
+    """Platforms' plan job's answer for this event; with no base to compare, as here, a pull
+    request counts as touching what a person's set-up runs."""
+    ev = github.get("event") or {}
+    labels = [lb["name"] for lb in (ev.get("pull_request") or {}).get("labels", [])]
+    got = ci_plan.platforms(github["event_name"], ev.get("action", ""),
+                            (ev.get("label") or {}).get("name", ""), labels, "")
+    return {"plan": got}
+
+
 def _ran(workflow: str, github: dict, inputs=None) -> set:
-    return {j for j, r in W.run(workflow, github, inputs=inputs).items() if r == "success"}
+    out = _plan(github) if workflow == "platforms.yml" else {}
+    results = W.run(workflow, github, inputs=inputs, outputs=out)
+    return {j for j, r in results.items() if r == "success"}
 
 
 @pytest.mark.parametrize("github, runs", [
@@ -101,8 +116,13 @@ def test_the_suite_runs_every_variant_side_by_side_one_a_job():
 
 def test_a_release_takes_windows_in_three_parts_and_an_ordinary_change_linux_and_the_mac():
     expr = W.load("platforms.yml")["jobs"]["person"]["strategy"]["matrix"]["target"]
-    release = W.evaluate(expr, {"github": W.pull_request("labeled", ["release"], "release")})
-    plain = W.evaluate(expr, {"github": W.pull_request("synchronize", title=TITLE)})
+
+    def systems(github):
+        plan = {"result": "success", "outputs": _plan(github)["plan"]}
+        return W.evaluate(expr, {"github": github, "needs": {"plan": plan}})
+
+    release = systems(W.pull_request("labeled", ["release"], "release"))
+    plain = systems(W.pull_request("synchronize", title=TITLE))
     assert [t["os"] for t in release].count("windows-latest") == 3
     assert [t["os"] for t in plain] == ["ubuntu-24.04", "macos-latest"]
 
