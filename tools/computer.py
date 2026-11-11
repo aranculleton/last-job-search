@@ -745,7 +745,8 @@ def heartbeat(db: dict) -> dict:
 
 def bridges(envs) -> list[dict]:
     """The person's computers a cloud chat can start a chat on: list_environments' active
-    bridge environments, as [{id, computer, folder}] (claude_surfaces: computer-bridge)."""
+    bridge environments, as [{id, computer, folder}], with `system` where the list says it
+    (claude_surfaces: computer-bridge)."""
     # The tool's answer as it came: {"environments": [...]}, a page wrapped as {"ccr": {...}}
     # or {"data": [...]}, or a plain list (_bridge_rows). Wrapped, it read as no computer at
     # all, and work for the computer waited while the Mac was on (a person's copy, 2026-11-10).
@@ -813,21 +814,19 @@ def reported_system(row: dict, folder: str = "") -> str:
 def system_seen(db: dict, envs=None, folders=None) -> str:
     """The person's computer's system, from what it reported: its heartbeat's own (sys.platform
     there), else what the cloud's lists of computers say of it (list_environments' bridges,
-    list_computer_folders' folders), else "" and the steps say all three."""
+    list_computer_folders' folders), else "" and the steps say all three. Lists naming two
+    systems (a Mac and a Windows computer) give "": which one the steps are for is not known."""
     import claude_surfaces
     got = claude_surfaces.system_of((heartbeat(db) or {}).get("system"))
     if got:
         return got
-    for e in _bridge_rows(envs, active=False):
-        got = reported_system(e, _bridge_folder(str(e.get("name") or "").split(":")))
-        if got:
-            return got
+    seen = {reported_system(e, _bridge_folder(str(e.get("name") or "").split(":")))
+            for e in _bridge_rows(envs, active=False)}
     if isinstance(folders, dict):
-        for f in list(folders.get("folders") or []) + list(folders.get("cannot_be_used") or []):
-            got = reported_system(f) if isinstance(f, dict) else ""
-            if got:
-                return got
-    return ""
+        seen |= {reported_system(f) for f in list(folders.get("folders") or [])
+                 + list(folders.get("cannot_be_used") or []) if isinstance(f, dict)}
+    seen.discard("")
+    return seen.pop() if len(seen) == 1 else ""
 
 
 def pick_bridge(found: list[dict], db: dict, now: dt.datetime) -> list[dict]:

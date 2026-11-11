@@ -64,6 +64,9 @@ def test_the_system_is_what_the_computer_reports():
     assert C.this_system("linux", "5.15.153.1-microsoft-standard-WSL2") == WIN
     # A cloud chat's own system is its container's, never the person's computer.
     assert C.here_system(CLOUD) == ""
+    # A chat the cloud started on the computer runs there: the computer's own.
+    assert C.here_system({"CLAUDE_CODE_REMOTE": "true",
+                          "CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE": "bridge"}) == C.this_system()
 
 
 def test_every_system_has_its_own_variant_and_the_entry_says_all_three():
@@ -192,6 +195,11 @@ def test_the_settings_card_before_any_heartbeat_reads_the_cloud_list():
          "description": "Bridge environment (DESKTOP-4F2K9QZ)", "kind": "bridge",
          "state": "inactive"}]}
     assert computer.system_seen({}, envs=envs) == WIN
+    # Two computers on two systems: which one is not known, so all three.
+    both = {"environments": envs["environments"] + [
+        {"environment_id": "env_l", "name": "kestrel-box:job-search:ef56", "platform": "linux",
+         "kind": "bridge", "state": "active"}]}
+    assert computer.system_seen({}, envs=both) == ""
     st = computer.state(_waiting(), T, envs={"environments": []}, works_on="computer")
     assert st["state"] == "not_set_up"
     st = computer.state(_waiting(), T, envs={"environments": []}, works_on="computer",
