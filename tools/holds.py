@@ -89,8 +89,8 @@ RULES = (
              "only where your own words said so (never, not at all, for good)",
      "why": "", "override": "tap Bring back under Set aside in Jobs, or the bin beside it in "
                             "Your rules",
-     "missing": "a job set aside with no day holds nothing, and only that job is held, never "
-                "its employer",
+     "missing": "a job set aside with no day is counted from the day Claude first finds it "
+                "so, and only that job is held, never its employer",
      "shown": "Settings, Your rules, Roles you set aside"},
     {"id": "ruled_out", "area": "jobs", "name": "Jobs a search already ruled out",
      "where": ("tools/throttle.py:is_stale_exclusion", "tools/throttle.py:RE_EVALUATED"),
@@ -103,8 +103,9 @@ RULES = (
      "where": ("tools/app.py:cmd_done", "tools/exclude.py:set_aside_until"),
      "ends": "{set_aside} days after Claude stopped its draft, then it is shown once more",
      "why": "", "override": "tap Look again now under Held back for now",
-     "missing": "one stopped with no day holds nothing, and only that job is held, never "
-                "its employer or the same role posted elsewhere",
+     "missing": "one stopped with no day is counted from the day Claude first finds it so, "
+                "and only that job is held, never its employer or the same role posted "
+                "elsewhere",
      "shown": "Settings, Your rules, Held back for now"},
     {"id": "duplicates", "area": "jobs", "name": "The same job posted again",
      "where": ("tools/throttle.py:RELIST_WINDOW",),

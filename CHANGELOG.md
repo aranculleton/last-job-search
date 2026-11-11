@@ -22,6 +22,7 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **A role set aside with no day is held again.** Since 4.15.0 one written without a day, as a check of your own or an older tool might write it, was not held at all until something dated it, and your own checks that set one aside failed on the update. It now holds as if set aside the day it is first read, and the next save writes that day on it, so it still comes back about six months on and nothing is held for ever.
 - **A chat on an older version starts once when it takes this update.** The update check its start asked for changed how a chat starts and said to start again, so the chat went through the whole start twice. The update now carries the start on itself, on the new version, and the chat follows those steps once.
 - **"Only update when I say" is understood.** Said without naming the app, it set nothing; an update to your resume or CV is still never taken for the app's.
 - **A note on your computer that agrees with your update choice is kept.** Where your choice was not yet saved in that copy, the note was taken for one that disagreed and removed.
