@@ -3803,8 +3803,12 @@ def _setup_done(r: Run) -> dict:
             return {"note": "Thank you: now sign in to LinkedIn once more, and Claude carries on.",
                     "undo": None}
         return {"note": "Thank you: Claude tries your computer again now.", "undo": None}
+    refused = key == "auto" and bool(app_setup.auto_refused())
     if app_setup.set_up() or key in app_setup.TOLD:
         app_setup.save_said(key, app_model.stamp(r.at))
+    if refused:
+        # The chat that was refused tries again by itself at a later wake, in Auto now.
+        return {"note": "Thank you: Claude starts it again by itself.", "undo": None}
     return {"note": "Noted, thank you.", "undo": None}
 
 

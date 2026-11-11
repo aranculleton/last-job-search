@@ -822,6 +822,27 @@ def said_once() -> dict:
     return {**(old if isinstance(old, dict) else {}), **(got if isinstance(got, dict) else {})}
 
 
+# A chat the app could not start because the chat starting it is not in Auto (create_session
+# refused its permission_mode): "<when> <that chat's id>", kept with the things said once so
+# the page asks the person on a card (outside_items, "auto"), never the chat that was refused,
+# which nobody reads (the local review, 2026-11-11, 6). Their Done there (told "auto") is later.
+AUTO_REFUSED = "auto-refused"
+
+
+def record_auto_refused(chat: str, at: str) -> str:
+    """Keep that `chat` was refused a chat in Auto at `at` (app.py mode-refused)."""
+    return save_said(AUTO_REFUSED, f"{at} {chat}".strip())
+
+
+def auto_refused() -> dict:
+    """{"at", "chat"} of the newest Auto refusal not yet answered on the page, or {}."""
+    got = str(said_once().get(AUTO_REFUSED) or "").split()
+    if not got:
+        return {}
+    at, chat = got[0], (got[1] if len(got) > 1 else "")
+    return {} if told("auto") >= at else {"at": at, "chat": chat}
+
+
 DOORBELLS = "doorbells-cleared"
 
 
@@ -947,8 +968,21 @@ def outside_items(targets: dict, kind: dict | None = None) -> list:
                         "copy": setup_script_line(),
                         "checked": claude_surfaces.entry("cloud-setup-script").get("verified_on", "")}
         out.append(item)
+    refused = auto_refused() if k not in ("app", "public", "fork", "none") else {}
+    if refused:
+        # Refused a chat because the one starting it is not in Auto: the page says so and
+        # links that chat, whichever chat draws the page; its Done is their word.
+        item = outside_item("auto")
+        item["body"] = ("Claude couldn't start a chat for your work, because the chat that "
+                        "starts it is not in Auto. Switch that chat to Auto once, and Claude "
+                        "starts it by itself.")
+        item["rev"] = app_model_rev("auto", refused["at"], item["rev"])
+        if refused["chat"].startswith("session_"):
+            item["open"] = {"label": "Open that chat",
+                            "url": "https://claude.ai/code/" + refused["chat"]}
+        out.append(item)
     if _cloud() and k not in ("app", "public", "fork", "none"):
-        if not told("auto"):
+        if not told("auto") and not refused:
             out.append(outside_item("auto"))
         # The line in its own card, whenever a cloud chat starts without the PDF tools: it
         # was offered only beside blocked job sites, so it went with them (X-59). A chat that
@@ -967,6 +1001,11 @@ def outside_items(targets: dict, kind: dict | None = None) -> list:
     for item in out:
         targets[item["id"]] = {"kind": "outside", "key": item["about"]["step"], "rev": item["rev"]}
     return out
+
+
+def app_model_rev(*parts) -> str:
+    import app_model
+    return app_model.rev_of(*parts)
 
 
 def report_items(today: dt.date | None = None) -> list:

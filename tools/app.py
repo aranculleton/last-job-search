@@ -3190,6 +3190,23 @@ def cmd_told(a) -> int:
     return 0
 
 
+def cmd_mode_refused(a) -> int:
+    """create_session refused a chat its Auto because this chat is not in Auto: one card on the
+    person's page (app_setup.auto_refused), with this chat's link and the registry's steps to
+    switch it, never a word in this chat, which nobody may be reading (the wake's agent, the
+    brief, the starter: the local review, 2026-11-11, 6)."""
+    import app_model
+    import app_listen
+    import app_setup
+    _, now = app_model.clock(None, a.now)
+    chat = app_listen.this_chat(a.chat)
+    app_setup.record_auto_refused(chat, app_model.stamp(now))
+    print("mode-refused: their page asks them on one card to switch this chat to Auto, with its "
+          "link. Say nothing about it here and wait for nothing; save it with the rest "
+          "(python3 tools/save_state.py) and bring the page up to date as this run does anyway.")
+    return 0
+
+
 def cmd_doorbells(a) -> int:
     """The page's old rings, cleared once: each tap leaves a comment sent to Claude that nothing
     resolved, and the Claude app counts them as unread. The chat resolves them, then notes it."""
@@ -4138,6 +4155,10 @@ def main(argv=None) -> int:
     p.add_argument("answer", choices=("yes", "no"))
     p = sub.add_parser("told", help="something said to the person once, never again")
     p.add_argument("key")
+    p = sub.add_parser("mode-refused", help="a chat could not be started in Auto: asked on the "
+                                            "page, never in this chat")
+    p.add_argument("--chat", default="")
+    p.add_argument("--now", default=None)
     p = sub.add_parser("doorbells", help="the page's old rings, cleared once")
     p.add_argument("--done", action="store_true", help="note they are cleared")
     p = sub.add_parser("resume-saved", help="the resume the page held, saved in the copy")
@@ -4274,7 +4295,7 @@ def main(argv=None) -> int:
             "progress": cmd_progress, "check": cmd_check,
             "start": cmd_start, "published": cmd_published, "resume-saved": cmd_resume_saved,
             "files-saved": cmd_files_saved, "propose": cmd_propose, "listen": cmd_listen,
-            "republish": cmd_republish, "pinned": cmd_pinned, "told": cmd_told, "doorbells": cmd_doorbells, "done": cmd_done,
+            "republish": cmd_republish, "pinned": cmd_pinned, "told": cmd_told, "mode-refused": cmd_mode_refused, "doorbells": cmd_doorbells, "done": cmd_done,
             "ask": cmd_ask, "wake": cmd_wake, "version": cmd_version, "versions": cmd_versions,
             "reads": cmd_reads, "search-drafts": cmd_search_drafts,
             "follow-ups": cmd_follow_ups, "nested": cmd_nested, "retired": cmd_retired, "hand-over": cmd_hand_over,
