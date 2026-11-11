@@ -2102,14 +2102,12 @@ _NOTE_TAKES = re.compile(
 
 def _about_updates(text: str) -> bool:
     """Are these words about the app's updates? Read the way learned reads a rule, and never
-    where the update is the person's own (their resume's, a status update)."""
+    where the update is the person's own (their resume's, a status update, one a recruiter
+    sends)."""
     import learned
     if _NOTE_APP.search(text or ""):
         return True
-    if _NOTE_THEIRS.search(text or ""):
-        return False
-    return bool((learned._ABOUT_UPDATES.search(text or "") or learned._BARE_UPDATE.search(text or ""))
-                and re.search(r"\bupdat", text or "", re.I))
+    return not _NOTE_THEIRS.search(text or "") and learned.about_app_updates(text or "")
 
 
 def note_says(text: str, about: bool = False) -> set:
@@ -2133,7 +2131,7 @@ def note_says(text: str, about: bool = False) -> set:
         off = learned._WAIT_OFF.sub(" ", learned._ASK_OFF.sub(" ", rest))
         if _NOTE_HOLDS.search(off):
             got.add("when_asked")
-        elif (off != rest or _NOTE_TAKES.search(off)) and not _NOTE_ON_WORD.search(off):
+        elif (learned.not_asked(rest) or _NOTE_TAKES.search(off)) and not _NOTE_ON_WORD.search(off):
             got.add("auto")
     return got
 

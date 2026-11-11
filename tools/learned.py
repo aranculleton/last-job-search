@@ -231,31 +231,69 @@ _ASK_OFF = re.compile(r"\b(?:never|don'?t|do not|no need to|no more|stop|quit)\s
 _WAIT_OFF = re.compile(r"\b(?:never|don'?t|do not|no need to|no more|no|stop|quit|not)\s+"
                        r"(?:(?:ever|even|again|bother|to|be)\s+){0,2}"
                        r"(?:wait(?:ing|s)?\b|hold(?:ing|s)?\s+(?:\w+\s+){0,2}back\b)", re.I)
-# "Only update when I say", the app's own words for the choice (CLAUDE.md), names no app: an
-# update with no object of its own is the app's; "update my resume" is not (2026-11-11).
-_BARE_UPDATE = re.compile(r"\bupdat(?:e|es|ing)\b(?!\s+(?:my|the|his|her|their|your|this|that|"
-                          r"these|those|it|them|a|an|me|him)\b)", re.I)
+# "Only update when I say", the app's own words for the choice (CLAUDE.md), names no app. The
+# bare word counts only where the sentence is that choice itself: any "update" with no object
+# of its own read "Don't ask recruiters for an update" as updates by themselves and "Don't
+# chase for an update until two weeks have passed" as waiting, wrote the setting from either,
+# and the start step took "Never ask recruiters for an update; wait two weeks." out of a chat's
+# memory (the review of 2026-11-11).
+_BARE_CHOICE = re.compile(r"^\s*(?:(?:only|never|don'?t|do not|please)\s+)?update\s+(?:only\s+)?"
+                          r"(?:(?:when|unless|until|once|if|after)\s+(?:i|he|she|they|you|asked|"
+                          r"told)\b|without\b)", re.I)
+# The app named outright, which no other update is.
+_APP_NAMED = re.compile(r"\b(?:the app|app'?s|sync_app\w*|app[ _]updates?)\b", re.I)
+# Someone's news, never the app's: a status update, an update from a recruiter or on LinkedIn.
+_THEIR_UPDATE = re.compile(r"\b(?:status|progress|weekly|daily|quick|job|application|interview|"
+                           r"resume|cv|profile|contact|linkedin|tracker|recruiter|hiring|email)\s+"
+                           r"updates?\b", re.I)
+# A "not" before asking or waiting is about the person only where the asking or the waiting is
+# theirs: "never ask him", "stop waiting for my word", "don't wait:". "Never ask recruiters for
+# updates" is about recruiters, and gave updates by themselves.
+_TO_THEM = re.compile(r"\s*(?:$|[,;:.!?)]|(?:(?:for|on|until|to\s+be)\s+)?(?:me|him|her|them|"
+                      r"you|my|his|their|the person|asked|told)\b|(?:about|again|before|first|"
+                      r"whether|if)\b)", re.I)
 # A reply's own "no" in front of what it says ("No, updates come by themselves").
 _REPLY_NO = re.compile(r"^\s*(?:no|nope|nah)\s*[,!:-]\s*", re.I)
 # One sentence at a time: a full stop inside a file's name (sync_app.py) is not an end.
 _SENTENCE = re.compile(r"[.;!?\n]+(?=\s|$)")
 
 
+def about_app_updates(part: str) -> bool:
+    """Is this one sentence about how the app's updates arrive? The app named, or updates in
+    general ("updates come by themselves"), or the bare choice ("Only update when I say");
+    never an update that is someone's news (a status update, one from a recruiter)."""
+    if not re.search(r"\bupdat", part or "", re.I):
+        return False
+    if _APP_NAMED.search(part):
+        return True
+    if _THEIR_UPDATE.search(part):
+        return False
+    return bool(_ABOUT_UPDATES.search(part) or _BARE_CHOICE.match(part))
+
+
+def not_asked(part: str) -> bool:
+    """Does this sentence tell Claude not to ask or not to wait for the person ("never ask
+    him", "stop waiting for my word", "don't hold updates back")?"""
+    return any(_TO_THEM.match(part, m.end()) for rx in (_ASK_OFF, _WAIT_OFF)
+               for m in rx.finditer(part or ""))
+
+
 def updates_said(text: str) -> str:
     """"auto", "when_asked" or "" (they say neither, or both): what these words say about how
-    the app's updates arrive. Each sentence is read on its own, and a "not" that belongs to
-    asking ("never ask him again") is about asking, never about updating."""
-    if not ((_ABOUT_UPDATES.search(text or "") or _BARE_UPDATE.search(text or ""))
-            and re.search(r"\bupdat", text or "", re.I)):
-        return ""
+    the app's updates arrive. Each sentence is read on its own, only where it is about them
+    (about_app_updates), and a "not" that belongs to asking or waiting ("never ask him
+    again") is about asking, never about updating."""
     found: set[str] = set()
     asked_off = False
-    for part in _SENTENCE.split(text):
+    for part in _SENTENCE.split(text or ""):
         part = _REPLY_NO.sub("", part)
-        rest = _WAIT_OFF.sub(" ", _ASK_OFF.sub(" ", part))
         # Only a sentence about updates: "Don't ask me again about LinkedIn. App updates: I'll
         # say when." was read as updates by themselves (the review of SV-1, 2026-11-11).
-        asked_off = asked_off or (rest != part and re.search(r"\bupdat", part, re.I) is not None)
+        if not about_app_updates(part):
+            continue
+        rest = _WAIT_OFF.sub(" ", _ASK_OFF.sub(" ", part))
+        # Never from the bare choice alone: only where updates or the app are named.
+        asked_off = asked_off or (not_asked(part) and bool(_ABOUT_UPDATES.search(part)))
         if _UPDATES_WAIT.search(rest):
             found.add("when_asked")
         elif _UPDATES_AUTO.search(rest):

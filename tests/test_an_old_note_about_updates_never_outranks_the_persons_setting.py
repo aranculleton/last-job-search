@@ -50,6 +50,14 @@ THEIRS = [
     "Update my CV only when I say",
     "Send a status update to the recruiter and wait for a reply",
     "Apply the update to the tracker, then wait for him",
+    # The review of 2026-11-11: the start step took the first out of a chat's memory.
+    "Never ask recruiters for an update; wait two weeks.",
+    "Don't ask recruiters for an update",
+    "Stop asking hiring managers for an update",
+    "Don't chase for an update until two weeks have passed",
+    "No status update emails",
+    "Don't update LinkedIn without checking with me",
+    "only follow up when there is an update to share",
 ]
 
 
@@ -103,6 +111,21 @@ def test_only_the_notes_about_the_apps_updates_leave_a_list_of_rules(chat):
         assert w in kept, w
     with open(local, encoding="utf-8") as fh:
         assert fh.read() == "Notes for this computer.\n"
+
+
+@pytest.mark.parametrize("settings", [AUTO, WAIT])
+def test_an_update_that_is_someone_elses_news_stays_whatever_the_setting(chat, settings):
+    copy, _home, mem = chat
+    index = mem / "MEMORY.md"
+    text = "".join(f"- {w}\n" for w in THEIRS)
+    index.write_text(text, encoding="utf-8")
+    local = os.path.join(copy, "CLAUDE.local.md")
+    with open(local, "w", encoding="utf-8") as fh:
+        fh.write(THEIRS[4] + "\n")
+    assert _remove(chat, settings) == []
+    assert index.read_text(encoding="utf-8") == text
+    with open(local, encoding="utf-8") as fh:
+        assert fh.read() == THEIRS[4] + "\n"
 
 
 def test_a_memory_file_named_for_app_updates_goes_whole_with_its_index_line(chat):

@@ -114,7 +114,6 @@ BY_THEMSELVES = [
     "Take the app's updates without asking me",
     # A "not" that belongs to waiting is about waiting: each of these wrote when_asked, from a
     # person asking for full automatic updates (2026-11-11).
-    "STOP WAITING FOR ME TO SAY UPDATE",
     "stop waiting for my word on updates",
     "Never wait for his word on app updates",
     "dont hold updates back",
@@ -133,7 +132,20 @@ WAIT_FOR_ME = [
 ]
 
 
-@pytest.mark.parametrize("words", ["Don't update my resume until I say", "Update my CV only when I say"])
+@pytest.mark.parametrize("words", ["Don't update my resume until I say", "Update my CV only when I say",
+                                   # The review of 2026-11-11: an update with no object of its
+                                   # own was taken for the app's, and each of these wrote the
+                                   # setting one way or the other.
+                                   "Don't ask recruiters for an update",
+                                   "Stop asking hiring managers for an update",
+                                   "Don't chase for an update until two weeks have passed",
+                                   "No status update emails",
+                                   "Don't update LinkedIn without checking with me",
+                                   "only follow up when there is an update to share",
+                                   "Never ask recruiters for updates",
+                                   "Send him status updates only when he asks",
+                                   # Bare and loud, but no choice said: never the opposite.
+                                   "STOP WAITING FOR ME TO SAY UPDATE"])
 def test_an_update_to_something_of_theirs_is_never_the_apps_updates(words):
     assert learned.known_settings("other", words, words) == [], words
 

@@ -500,7 +500,11 @@ def test_only_what_truly_needs_the_person_waits_for_them():
                                                                  # the wrong way round: asked,
                                                                  # never changed unasked
                                                                  # (2026-11-11).
-                                                                 "updates-choice"}
+                                                                 "updates-choice",
+                                                                 # The same, for words an older
+                                                                 # version saved no setting from
+                                                                 # (2026-11-11).
+                                                                 "updates-said"}
     # Nothing asks for their email: anything like an alert reaches them inside Claude
     # (the maintainer's instruction, 2026-10-22).
     assert not [u.id for u in U.REGISTRY
@@ -1203,6 +1207,36 @@ def test_a_rule_about_updates_written_the_wrong_way_round_is_asked_about_once(pr
     person.put(["app_updates"], "auto")                   # answered
     person.reset()
     assert U.by_id("updates-choice").pending() == ""
+
+
+def test_words_an_older_version_saved_no_setting_from_are_asked_about_once(profile):
+    """The review of 2026-11-11: "Only update when I say", said under 4.15.0, set nothing, and
+    updates-choice re-reads only the rules that set it. Read again with today's reader, it
+    says otherwise than the setting: asked once, never written unasked; their answer, recorded
+    as a rule of its own, ends the question. A rule older than the last one that set it is
+    history, and words about someone else's update are never asked about."""
+    import learned
+    person.reset()
+    rows = learned.load()
+    rows.append({"date": "2026-11-05", "area": "other", "said": "Only update when I say",
+                 "rule": "Only update when I say.", "applied_to": [], "never_say": [],
+                 "status": "active"})                   # as 4.15.0 kept it: no setting
+    learned.save_entries(rows)
+    got = U.by_id("updates-said").pending()
+    assert "only when you say" in got and "by themselves" in got, got
+    assert "app_updates" not in json.load(open(person.path("person.json"), encoding="utf-8"))
+    assert U.by_id("updates-said") in [u for u, _w in U.pending()]
+    learned.record("other", "only when I say", "The app's updates come only when he says.",
+                   today="2026-11-11")                  # their answer, on the card
+    person.reset()
+    assert U.by_id("updates-said").pending() == ""
+    assert U.by_id("updates-choice").pending() == ""
+    rows = learned.load()
+    rows.append({"date": "2026-11-11", "area": "messages", "said": "Don't ask recruiters for an update",
+                 "rule": "Never ask recruiters for an update; wait two weeks.", "applied_to": [],
+                 "never_say": [], "status": "active"})
+    learned.save_entries(rows)
+    assert U.by_id("updates-said").pending() == ""
 
 
 def test_roles_set_aside_with_no_day_are_dated_from_the_update(profile, tmp_path):
