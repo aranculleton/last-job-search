@@ -250,7 +250,8 @@ def strip(expr) -> str:
 
 def evaluate(expr, ctx: dict, status: dict | None = None):
     """The value of one expression (`${{ }}` optional) in `ctx`: github, inputs, needs..."""
-    return _Parser(strip(expr), ctx, status or {}).parse()
+    status = status or {"always": True, "success": True, "failure": False, "cancelled": False}
+    return _Parser(strip(expr), ctx, status).parse()
 
 
 def _needs(job: dict) -> list[str]:

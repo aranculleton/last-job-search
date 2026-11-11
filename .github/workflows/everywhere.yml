@@ -6,9 +6,13 @@
 #   suite   the rest of the suite with the clock 30, 90 and 400 days on, in the far time
 #           zones, from a folder with spaces, an accent and an apostrophe, on the newest Python
 #
-# On a release pull request (titled "Release X.Y.Z"), weekly and by hand: free on the public
-# app, skipped on every private copy, never on an ordinary change. The page in four jobs side
-# by side and the rest in one, each ending in one short summary to read (2026-10-29).
+# On a pull request labelled `release`, weekly and by hand: free on the public app, skipped on
+# every private copy, never on an ordinary change. The page in four jobs side by side and the
+# suite in seven, one variant each, every job ending in one short summary to read.
+#
+# The label, never the title: a "Release " title started this on every push, so a release's
+# CHANGELOG pull request ran it four times (#206), and retitling a pull request started
+# nothing. The run starts as the label goes on, and again on each push while it is on.
 #
 # No paths filter, unlike Platforms: any change to the app can break any of these.
 
@@ -16,7 +20,9 @@ name: Everywhere
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    # Each job runs only with the `release` label on (its `if:`); every other pull request
+    # event starts a run whose jobs are all skipped, which costs nothing.
+    types: [labeled, synchronize]
   schedule:
     - cron: "41 5 * * 1"
   workflow_dispatch:
@@ -41,8 +47,10 @@ on:
 permissions:
   contents: read
 
+# Another label going on a release pull request starts a run that does nothing: its own group
+# keeps it from cancelling the run that is checking the release.
 concurrency:
-  group: everywhere-${{ github.ref }}
+  group: everywhere-${{ github.ref }}-${{ github.event.action == 'labeled' && github.event.label.name != 'release' && 'other-label' || 'run' }}
   cancel-in-progress: true
 
 jobs:
@@ -50,7 +58,7 @@ jobs:
     # Four jobs side by side, not eight variants one after another: the release waited about
     # 50 minutes on this job alone (2026-10-29). Each installs only the engine it needs.
     name: page everywhere (${{ matrix.name }})
-    if: ${{ github.event_name == 'workflow_dispatch' || (!github.event.repository.private && (github.event_name == 'schedule' || startsWith(github.event.pull_request.title, 'Release '))) }}
+    if: ${{ github.event_name == 'workflow_dispatch' || (!github.event.repository.private && (github.event_name == 'schedule' || (github.event.action == 'labeled' && github.event.label.name == 'release') || (github.event.action == 'synchronize' && contains(github.event.pull_request.labels.*.name, 'release')))) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     strategy:
@@ -104,10 +112,18 @@ jobs:
         run: tools/everywhere.sh page $VARIANTS
 
   suite:
-    name: suite everywhere (the clock moved on, far time zones, an odd folder, the newest Python)
-    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.suite != false) || (!github.event.repository.private && (github.event_name == 'schedule' || startsWith(github.event.pull_request.title, 'Release '))) }}
+    # Seven jobs side by side, one variant each: one after another they took 53 to 58 minutes
+    # and one run stopped at the 60-minute limit (2026-11-11). The variants are
+    # tools/everywhere.sh's own, and a test holds the two lists alike.
+    name: suite everywhere (${{ matrix.variant }})
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.suite != false) || (!github.event.repository.private && (github.event_name == 'schedule' || (github.event.action == 'labeled' && github.event.label.name == 'release') || (github.event.action == 'synchronize' && contains(github.event.pull_request.labels.*.name, 'release')))) }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    # One variant is the whole suite once, about eight minutes.
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [30-days, 90-days, 400-days, ahead, behind, odd-folder, newest-python]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
@@ -119,10 +135,11 @@ jobs:
       - run: |
           python -m pip install pyyaml pytest pytest-xdist time-machine
           python3.14 -m pip install pyyaml pytest pytest-xdist
-      - name: The suite in each
+      - name: The suite, ${{ matrix.variant }}
         env:
           EVERYWHERE_STRICT: "1"
           PY: python
           PY_NEWEST: python3.14
           EVERYWHERE_TESTS: ${{ inputs.tests }}
-        run: tools/everywhere.sh suite
+          VARIANT: ${{ matrix.variant }}
+        run: tools/everywhere.sh suite "$VARIANT"
