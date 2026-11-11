@@ -1042,7 +1042,7 @@ def message_gate(text: str, mtype: str, cid: str) -> tuple[list, list]:
     c = state.already_contacted(state.load_contacts(person.state("network_contacts.csv")),
                                 contact_id=cid) or {}
     found, _warned = followup_drafts.gate(text, app_model.COMPOSE_KIND.get(mtype, "reply"),
-                                          name=app_model.first_name(c.get("name")),
+                                          name=str(c.get("name") or ""),
                                           title=str(c.get("title") or ""),
                                           company=str(c.get("company") or ""), contact=cid)
     return found, app_model.message_warnings(text, mtype, c)

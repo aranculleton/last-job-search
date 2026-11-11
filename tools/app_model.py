@@ -2674,7 +2674,7 @@ def message_warnings(text: str, mtype: str, contact: dict) -> list[dict]:
     try:
         import compose
         found = compose.advise(text, COMPOSE_KIND.get(mtype, "reply"),
-                               name=first_name(contact.get("name")) or None,
+                               name=str(contact.get("name") or "") or None,
                                title=str(contact.get("title") or ""),
                                their=(str(contact.get("company") or ""),)
                                if contact.get("company") else (),
@@ -2806,8 +2806,11 @@ def message_blocks(text: str, mtype: str, contact: dict, today=None) -> list[dic
     person recorded since, a message of theirs logged since, a limit for what it now is)."""
     try:
         import compose
+        # Their whole name, never the one name a greeting would pick: the check passes a
+        # greeting by any name they go by, and "Odile (Lee) Smith" read as "Lee" alone
+        # refused "Hi Odile" (a person's copy, 2026-11-11).
         found = compose.validate(text, COMPOSE_KIND.get(mtype, "reply"),
-                                 name=first_name(contact.get("name")) or None,
+                                 name=str(contact.get("name") or "") or None,
                                  title=str(contact.get("title") or ""),
                                  employers=(str(contact.get("company") or ""),)
                                  if contact.get("company") else (),
