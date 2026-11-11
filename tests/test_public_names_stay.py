@@ -198,7 +198,7 @@ def test_the_names_read_are_the_ones_an_import_gives_and_a_new_one_needs_nothing
     assert P.check(root) == []
 
 
-def test_a_shallow_clone_compares_only_what_it_can_tell_and_a_copy_without_releases_passes(tmp_path):
+def test_a_shallow_clone_compares_what_it_can_tell_and_a_copy_without_releases_passes(tmp_path):
     """CI's 3.9 leg checks out one commit with no tags; a person's copy has its own remote,
     with no app releases on it. A shallow clone compares with a release it can show it holds
     and otherwise passes, plainly, fetching nothing; the second says there is nothing to
