@@ -204,10 +204,10 @@ again, fixes and releases everything at once, and no Actions workflow runs Claud
    with one comment why; one that is the maintainer's to decide, or no bug, gets one comment and
    `needs-maintainer`. With nothing open it ends in a few calls. Only a bug the person says
    stops their search pokes the same task at once (`app_bug.py wake`, once an hour at most).
-3. **The maintainer hears it in their brief.** The run ends by rewriting its report issue
-   (`builder-report`) to one dated line; the next morning the maintainer's own brief says it,
-   with each `needs-maintainer` issue by link (`app_bug.brief_line`, two reads of public pages,
-   their copy only).
+3. **What it did stays on GitHub.** The run ends by rewriting its report issue
+   (`builder-report`) to one dated line; the release notes and the issues say the rest. The
+   maintainer reads them there: their brief is about their search, like everyone's, and never
+   says what the app's builder did (the maintainer, 2026-11-11).
 4. **A fix made elsewhere closes with the next release.** A `from-copy` issue fixed on master
    by hand is labelled `fixed-unreleased`; `tools/release.py publish` (`release.yml`, with
    `issues: write`) closes each with "Fixed in vX.Y.Z" and takes the label off. A version's own

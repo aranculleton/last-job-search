@@ -219,47 +219,17 @@ def test_a_held_issue_that_now_names_someone_stays_held(copy, capsys, monkeypatc
     assert len(app_bug.held()) == 1
 
 
-# ------------------------------------------------------------------ the brief says what it did
+# ------------------------------------------------------------------ the brief stays about the search
 
 
-def test_the_maintainers_brief_says_once_what_the_weekly_run_did(copy):
-    pages = {"builder-report": [{"body": "2026-11-18: released v4.15.2 with 3 fixes.\nmore"}],
-             "needs-maintainer": [{"number": 219, "html_url": "https://github.com/a/b/issues/219"},
-                                  {"number": 220, "html_url": "https://github.com/a/b/pull/220",
-                                   "pull_request": {}}]}
-
-    def get(url):
-        return pages[url.split("labels=", 1)[1].split("&", 1)[0]]
-    thursday = dt.date(2026, 11, 19)
-    line = app_bug.brief_line(thursday, get=get)
-    assert line == ("The app's weekly builder: released v4.15.2 with 3 fixes. Needs your "
-                    "decision: #219 https://github.com/a/b/issues/219.")
-    assert app_bug.brief_line(thursday, get=get) == ""                 # said once
-    pages["builder-report"] = [{"body": "2026-11-11: nothing released: Platforms red."}]
-    assert app_bug.brief_line(thursday, get=get) == ""                 # a week old
-
-
-def test_anyone_elses_brief_reads_nothing(copy, monkeypatch):
-    monkeypatch.setattr(sync_app, "maintainers", lambda: False)
-
-    def never(url):
-        raise AssertionError("no page is read in anyone else's copy")
-    assert app_bug.brief_line(dt.date(2026, 11, 19), get=never) == ""
-
-
-def test_the_briefs_line_reaches_the_message_through_its_lines_for_claude(monkeypatch):
+def test_the_maintainers_brief_never_says_what_the_apps_builder_did():
+    """The maintainer, 2026-11-11: their Thursday brief is about the search, like everyone's;
+    what the weekly builder did is read on GitHub (its report issue, the release notes)."""
     import brief
-    for name, value in (("page_behind", lambda: ""), ("_tidy_due", lambda: ""),
-                        ("_computer_lines", lambda b: []), ("push_step", lambda b: "")):
-        monkeypatch.setattr(brief, name, value)
-    b = {"sync": {}, "page": "", "write_here": [], "profile_line": "", "queries": [],
-         "since": "2026-11-18", "skip_links": [], "what_counts": "x", "pack": "",
-         "date": "2026-11-19", "builder": "The app's weekly builder: released v4.15.2 with 3 "
-         "fixes."}
-    assert not any("weekly builder" in x for x in brief.claude_lines({**b, "builder": ""}))
-    lines = brief.claude_lines(b)
-    assert any(x.startswith("end the message with this line, as it is: The app's weekly builder")
-               for x in lines)
+    with open(brief.__file__, encoding="utf-8") as fh:
+        source = fh.read()
+    assert "app_bug" not in source and "builder" not in brief.claude_lines.__code__.co_names
+    assert not hasattr(app_bug, "brief_line")
 
 
 # ------------------------------------------------------------------ anyone else's copy

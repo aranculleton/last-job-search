@@ -97,8 +97,8 @@ same reason in a later week.
 1. **One call**: rewrite the body of your report, the open issue labelled `builder-report`
    (issue_write, method update; none yet: create it, titled "Weekly builder report", with that
    label), to one line: "<today, YYYY-MM-DD>: released vX.Y.Z with N fixes." or "<today>:
-   nothing released: <why, in a few words>." The maintainer's own brief reads it the next
-   morning, with the issues labelled `needs-maintainer`; nothing else reaches them.
+   nothing released: <why, in a few words>." The maintainer reads it on GitHub, with the
+   issues labelled `needs-maintainer` and the release notes; their brief never says it.
 2. **One call**: list the open issues again, as in step 1. One opened while you worked is taken
    now, the same way, into a patch release of its own, and the report rewritten; this last
    look is made once.

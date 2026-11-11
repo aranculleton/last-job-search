@@ -347,53 +347,6 @@ def task(copy: str) -> dict:
             "notifications": {}, "prompt": prompt}
 
 
-# ------------------------------------------------------------------ what the builder did, in the brief
-
-REPORT_LABEL = "builder-report"       # the one issue whose body the builder rewrites each run
-ISSUES_API = "https://api.github.com/repos/{repo}/issues?state=open&labels={label}&per_page=30"
-
-
-def _get(url: str):
-    import urllib.request
-    req = urllib.request.Request(url, headers={"User-Agent": "last-job-search-brief/1",
-                                               "Accept": "application/vnd.github+json"})
-    with urllib.request.urlopen(req, timeout=15) as r:      # a public page: no token
-        return json.loads(r.read().decode("utf-8"))
-
-
-def brief_line(today: dt.date, get=None) -> str:
-    """For the maintainer's own brief, once, the morning after the weekly builder ran: what it
-    did in one line (the dated first line of its report issue, which it rewrites each run),
-    with each issue that needs their decision by its link. "" in anyone else's copy, on any
-    other day, once said, or where GitHub cannot be read. Two reads of public pages; no issue's
-    own words are ever carried, only its number and address."""
-    import sync_app
-    if not sync_app.maintainers():
-        return ""
-    import app_setup
-    get = get or _get
-    try:
-        reports = get(ISSUES_API.format(repo=app_setup.APP_REPO, label=REPORT_LABEL))
-        first = (str((reports[0] if reports else {}).get("body") or "").strip().splitlines()
-                 or [""])[0].strip()
-        m = re.fullmatch(r"(\d{4}-\d{2}-\d{2}): (.{3,200})", first)
-        if not m or not 0 <= (today - dt.date.fromisoformat(m.group(1))).days <= 1:
-            return ""
-        state = _load()
-        if state.get("brief_said") == first:
-            return ""
-        needs = get(ISSUES_API.format(repo=app_setup.APP_REPO, label=NEEDS))
-    except Exception:  # noqa: BLE001  GitHub not reached: the next brief says it
-        return ""
-    links = [f"#{i['number']} {i['html_url']}" for i in needs or []
-             if isinstance(i, dict) and i.get("number") and i.get("html_url")
-             and "pull_request" not in i][:8]
-    state["brief_said"] = first
-    _save(state)
-    return ("The app's weekly builder: " + m.group(2).rstrip(".") + "."
-            + (" Needs your decision: " + ", ".join(links) + "." if links else ""))
-
-
 # ------------------------------------------------------------------ held for a chat that can file
 
 def _held_dir() -> str:
