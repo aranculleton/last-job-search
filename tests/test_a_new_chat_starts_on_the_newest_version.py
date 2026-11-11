@@ -18,6 +18,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 
 import pytest
 
@@ -125,3 +126,14 @@ def test_where_updates_wait_a_version_already_seen_is_no_news(copies):
 def test_an_app_that_cannot_be_reached_never_holds_the_start(copies, tmp_path):
     _app, me = copies
     assert _days_check(me, str(tmp_path / "no-such-app"), True) == {"ran": False}
+
+
+def test_a_check_that_just_failed_is_not_tried_again_by_every_new_chat(copies):
+    app, me = copies
+    write(app, "README.md", "v2\n")
+    commit(app, "app v2")
+    write(me, ".git/ljs-last-sync-tried", "%d\n" % int(time.time()))   # failed a minute ago
+    assert _days_check(me, app, True) == {"ran": False}
+    write(me, ".git/ljs-last-sync-tried", "%d\n" % int(time.time() - 4 * 3600))
+    assert _days_check(me, app, True)["ran"]
+    assert read(me, "README.md") == "v2\n"

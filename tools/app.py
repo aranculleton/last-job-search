@@ -2373,7 +2373,9 @@ def days_check(on: str, chat: str, tools: str = "", new_chat: bool = False) -> d
     try:
         import sync_app
         stale = sync_app.stale()
-        moved = not stale and new_chat and sync_app.moved()
+        # Not where a check failed in the last few hours: a merge that cannot be made would
+        # be tried again by every new chat (sync_app.retry_due, as the hook waits).
+        moved = not stale and new_chat and sync_app.retry_due() and sync_app.moved()
     except Exception:  # noqa: BLE001  never a reason not to answer the page
         stale = moved = False
     if not stale and not moved:
