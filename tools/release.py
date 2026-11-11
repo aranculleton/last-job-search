@@ -12,6 +12,10 @@ CHANGELOG.md, so merging the release PR is the release.
     python3 tools/release.py notes X.Y.Z --full    # the whole CHANGELOG section
     python3 tools/release.py publish           # tag and publish the newest, if it has no tag yet
 
+Publishing a release also closes every open issue labelled `fixed-unreleased` (a bug from the
+maintainer's copy, fixed on master since the last release: tools/app_bug.py) with a comment
+"Fixed in vX.Y.Z", and takes the label off.
+
 The notes are short on purpose: one line per change, its headline from the CHANGELOG, a
 few plain words where a change needs the person, and one closing line on what to do. The
 CHANGELOG keeps the detail, for the sessions that work on the app; the release page held
@@ -29,6 +33,7 @@ says when the release went out without one, and fails, after tagging, never befo
 """
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
@@ -178,7 +183,48 @@ def publish(sha: str | None = None) -> int:
              "--target", sha or os.environ.get("GITHUB_SHA") or "master"])
     os.unlink(notes)
     print(f"release: published {tag}" if r.returncode == 0 else (r.stderr or r.stdout))
+    if r.returncode == 0:
+        close_fixed(tag)
     return r.returncode or names_kept(tag)
+
+
+FIXED_LABEL = "fixed-unreleased"
+
+
+def close_fixed(tag: str, gh=None) -> list[int]:
+    """Every open issue labelled FIXED_LABEL (a bug from the maintainer's copy the builder
+    fixed on master, tools/app_bug.py) closed with a comment naming the release that carries
+    the fix, and the label taken off. Only when a release is first published, never when its
+    notes are rewritten: an issue fixed after it would be called fixed in it. One that could
+    not be closed is said and keeps its label, so the next release closes it; the release is
+    out either way. The numbers closed."""
+    gh = gh or _gh
+    got = gh(["issue", "list", "--label", FIXED_LABEL, "--state", "open", "--json", "number",
+              "--limit", "200"])
+    try:
+        numbers = [int(i["number"]) for i in json.loads(got.stdout or "[]")] \
+            if got.returncode == 0 else None
+    except (ValueError, TypeError, KeyError):
+        numbers = None
+    if numbers is None:
+        print(f"release: the issues fixed in {tag} could not be listed: "
+              f"{(got.stderr or got.stdout or '').strip()[:200]}")
+        return []
+    closed = []
+    for n in numbers:
+        # Closed first, the label taken off after: a label gone from an issue still open
+        # would leave it open for good.
+        shut = gh(["issue", "close", str(n), "--reason", "completed",
+                   "--comment", f"Fixed in {tag}"])
+        if shut.returncode != 0:
+            print(f"release: issue #{n} could not be closed: "
+                  f"{(shut.stderr or shut.stdout or '').strip()[:200]}")
+            continue
+        gh(["issue", "edit", str(n), "--remove-label", FIXED_LABEL])
+        closed.append(n)
+    if numbers:
+        print(f"release: closed {len(closed)} of {len(numbers)} issue(s) fixed in {tag}")
+    return closed
 
 
 def names_kept(tag: str) -> int:

@@ -160,7 +160,8 @@ def test_a_release_that_ships_without_its_snapshot_says_so_after_tagging(monkeyp
     monkeypatch.setattr(release, "sections", lambda text=None: sample)
     monkeypatch.setattr(P, "stale", lambda root=P.ROOT: True)
     assert release.publish() == 1
-    assert [c[:2] for c in calls] == [["release", "create"]]       # the tag went out first
+    # The tag went out first; then the bugs fixed since the last release are looked up to close.
+    assert [c[:2] for c in calls] == [["release", "create"], ["issue", "list"]]
     assert "tools/public_names.py snapshot" in capsys.readouterr().out
     monkeypatch.setattr(P, "stale", lambda root=P.ROOT: False)
     assert release.publish() == 0

@@ -20,6 +20,10 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Added
+
+- **The app's maker hears of its bugs without anyone passing them on.** A bug met in the maker's own copy is filed for the app by itself and fixed by a scheduled builder; nothing changes for you.
+
 ### Fixed
 
 - **Your page never says your computer is off while it is on.** A Mac connected that day read as off on a check-in from the day before, so Start it now did nothing; the computer's own connection now counts, and the chat that can start Claude there is woken.

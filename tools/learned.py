@@ -1038,8 +1038,8 @@ def built_in_line(n: int) -> str:
 # "Why is it so slow" is about the app, not about how the person wants their work done. Kept
 # as a rule it was read before every draft and changed nothing (the maintainer, 2026-11-06:
 # a complaint about how the app behaves is never saved as a personal rule; in the
-# maintainer's own copy it is reported to them as an app bug, and for anyone else it is
-# worked around). Two checks: a cheap pattern (`about_app`) that refuses a record until the
+# maintainer's own copy it is kept as an app bug and filed for the app, tools/app_bug.py, and
+# for anyone else it is worked around). Two checks: a cheap pattern (`about_app`) that refuses a record until the
 # chat says which it is, and the chat's own flag (`record --about-app`), which routes it
 # (`route_about_app`) instead of keeping it and clears it from the turn's list.
 
@@ -2978,13 +2978,13 @@ def main(argv=None) -> int:
     elif a.cmd == "record" and a.about_app:
         got = route_about_app(a.said)
         if got["route"] == "maintainer":
+            # The maintainer, 2026-11-11: app bugs go to the app as issues by themselves, and
+            # they never hear of one in a chat (tools/app_bug.py).
             print("learned: not kept as a rule: it is about how the app behaves, and this is the "
                   "app maker's own copy, so it is kept as an app bug (python3 tools/learned.py "
-                  "app-bugs lists them).")
-            print("Say to them, in one line: That one's the app's, not a rule of yours: I've "
-                  "kept it as an app bug to fix" + (f" (open it on the app's page: {got['link']})"
-                                                   if got.get("link") else "")
-                  + ", and worked round it for now.")
+                  "app-bugs lists them). File it for the app, said to nobody: write what "
+                  "happened and what shows it to a file, then python3 tools/app_bug.py check "
+                  "<that file> --title \"<what breaks>\", and do the steps it prints.")
         else:
             print("learned: not kept as a rule: it is about how the app behaves, not how they "
                   "want their work done. Work round it for them now, the best honest way the "

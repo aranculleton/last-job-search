@@ -4,6 +4,7 @@ published once, and no tag is ever moved, replaced or deleted.
 3.3.0 sat merged and unpublished because publishing was a step on the GitHub website
 that nothing reminded anyone of, and a session cannot push a tag.
 """
+import json
 import pathlib
 import sys
 
@@ -66,7 +67,8 @@ def test_the_workflow_runs_only_in_the_app_and_never_moves_a_tag():
     doc = yaml.safe_load(wf)
     job = doc["jobs"]["release"]
     assert job["if"] == "github.repository == 'aranculleton/last-job-search'"
-    assert doc["permissions"] == {"contents": "write"}
+    # Issues too: a release closes the bugs from the maintainer's copy it fixed.
+    assert doc["permissions"] == {"contents": "write", "issues": "write"}
     assert "tools/release.py publish" in wf
     src = (ROOT / "tools/release.py").read_text(encoding="utf-8")
     for never in ("--force", "tag -d", "release delete", "push --delete", "--clobber",
@@ -111,3 +113,59 @@ def test_a_released_versions_notes_are_rewritten_and_its_tag_never_touched(monke
     assert release.publish() == 0
     assert [c[:2] for c in calls] == [["release", "view"], ["release", "edit"]]
     assert not any(c[:2] == ["release", "create"] for c in calls)
+
+
+# ------------------------------------------------------------------ the copy's bugs it fixed
+
+
+class _GitHub:
+    """A fake `gh`: the open issues labelled fixed-unreleased, and every call made. No network."""
+
+    def __init__(self, fixed=(), refuse=()):
+        self.fixed, self.refuse, self.calls = list(fixed), set(refuse), []
+
+    def __call__(self, args):
+        self.calls.append(args)
+        out, code = "", 0
+        if args[:2] == ["issue", "list"]:
+            out = json.dumps([{"number": n} for n in self.fixed])
+        elif args[:2] == ["issue", "close"] and int(args[2]) in self.refuse:
+            code = 1
+        elif args[:2] == ["release", "view"]:
+            out = "the old wall of text"
+        return type("Done", (), {"returncode": code, "stdout": out, "stderr": ""})()
+
+
+def test_a_release_closes_every_bug_fixed_since_the_last_one_and_takes_its_label_off(monkeypatch):
+    gh = _GitHub(fixed=[211, 212])
+    monkeypatch.setattr(release, "_gh", gh)
+    monkeypatch.setattr(release, "tags", lambda: ["v3.2.5"])
+    sample = release.sections(TEXT)
+    monkeypatch.setattr(release, "sections", lambda text=None: sample)
+    monkeypatch.setattr(release, "names_kept", lambda tag: 0)
+    assert release.publish() == 0
+    asked = gh.calls[1]
+    assert asked[:2] == ["issue", "list"] and asked[asked.index("--label") + 1] == "fixed-unreleased"
+    assert asked[asked.index("--state") + 1] == "open"
+    for n in (211, 212):
+        close = ["issue", "close", str(n), "--reason", "completed", "--comment", "Fixed in v3.3.0"]
+        edit = ["issue", "edit", str(n), "--remove-label", "fixed-unreleased"]
+        assert gh.calls.index(close) < gh.calls.index(edit)      # closed before its label goes
+
+
+def test_an_issue_that_cannot_be_closed_keeps_its_label_and_the_release_still_stands(capsys):
+    gh = _GitHub(fixed=[213, 214], refuse=[213])
+    assert release.close_fixed("v3.3.0", gh=gh) == [214]
+    assert ["issue", "edit", "213", "--remove-label", "fixed-unreleased"] not in gh.calls
+    assert "#213 could not be closed" in capsys.readouterr().out
+
+
+def test_notes_rewritten_for_a_release_already_out_close_nothing(monkeypatch):
+    # An issue fixed after v3.3.0 went out must never be called fixed in it.
+    gh = _GitHub(fixed=[215])
+    monkeypatch.setattr(release, "_gh", gh)
+    monkeypatch.setattr(release, "tags", lambda: ["v3.3.0", "v3.2.5"])
+    sample = release.sections(TEXT)
+    monkeypatch.setattr(release, "sections", lambda text=None: sample)
+    assert release.publish() == 0
+    assert not any(c[0] == "issue" for c in gh.calls)

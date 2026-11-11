@@ -104,6 +104,13 @@ page (`app_setup.APP_REPO` + `/issues/new?title=...&body=...`) with what happene
 page's version only, never a name, an employer or anything else of theirs (`tools/name_guard.py
 text` on it first). Never ask them to report it, and never chase it (2026-10-30).
 
+**In the app maintainer's own copy** (`sync_app.maintainers()`) there is no link and no line
+about it, for this or any app bug a chat there meets (a tool that errors, a state the app
+should not reach, two instructions that disagree, the person sent to a chat where the page
+should act): write what happened, the input that shows it, the tool and function and the
+evidence to a file, run `python3 tools/app_bug.py check <that file> --title "<what breaks>"
+--key "<tool>:<function>"`, do the steps it prints, said to nobody, and carry on round it.
+
 **"Pin my job search page to my sidebar."** (the page's Pin it): Artifact, action `pin`, the
 page's url, then `python3 tools/app.py pinned yes`, and one line: "Pinned: it's in your sidebar
 now." Never offer it again in a chat; the page asks by itself, now and then.

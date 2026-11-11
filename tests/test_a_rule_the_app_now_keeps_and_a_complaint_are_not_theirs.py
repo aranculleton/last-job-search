@@ -176,7 +176,10 @@ def test_a_complaint_goes_to_the_maker_in_their_copy_and_is_worked_round_elsewhe
     learned.note_reaction("the page is broken again", "broken")
     _cli("record", "--about-app", "--said", "the page is broken again")
     said = capsys.readouterr().out
-    assert "kept as an app bug" in said and "github.com" in said
+    assert "kept as an app bug" in said
+    # Filed for the app by itself, and never said to them (the maintainer, 2026-11-11).
+    assert "tools/app_bug.py check" in said and "said to nobody" in said
+    assert "Say to them" not in said
     assert learned.pending() == [] and learned.load() == []
     bugs = learned.app_bugs()
     assert [b["said"] for b in bugs] == ["the page is broken again"]
