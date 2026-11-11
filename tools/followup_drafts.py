@@ -43,6 +43,7 @@ passed by `check --pack` went only into the pack, and Messages never showed one 
     python3 tools/followup_drafts.py context <id>...
     python3 tools/followup_drafts.py check <drafts.json> [--pack]   # the gate, for drafts written by hand
     python3 tools/followup_drafts.py role-holds [--dry]  # set aside drafts written before the role they wait for
+    python3 tools/followup_drafts.py unfitted [--dry]    # set aside code's follow-ups never fitted to your rules
 
 `check` reads a JSON list of {"id": <contact id or app:...>, "text": "<the draft>"} (and
 "kind" where it is not the usual one), runs validate, the restatement check against their
@@ -216,6 +217,62 @@ def set_aside_before_a_role(write: bool = True) -> list[str]:
             state.park_draft(cid)
     if changed:
         state.save_contacts(contacts)
+    return said
+
+
+# Code's plain follow-up kept on a card before it was fitted to the person's own rules for
+# messages, set aside beside the card's draft, kept, never deleted.
+UNFITTED = "draft.unfitted.md"
+
+
+def unfitted_on_cards(contacts=None, threads=None, today: str = "") -> list[tuple[str, str]]:
+    """[(contact id, why)] for each card holding code's plain follow-up word for word, kept
+    there before it was fitted to the person's own rules for messages: runs before 2026-11-11
+    (app.py follow-ups and the brief) put a draft flagged RULES_TO_FIT on the card, where the
+    page said ready to send. Only while the person has such rules, as the flag needs today;
+    a draft the person, a chat or /network wrote or edited is never the same words, a first
+    note waiting on a read is /network's, and one already logged as sent is left alone."""
+    if not _message_rules():
+        return []
+    import reading
+    from network import state
+    contacts = state.load_contacts() if contacts is None else contacts
+    threads = state.load_threads() if threads is None else threads
+    book = {str(c.get("contact_id") or "").strip(): c for c in contacts}
+    index = state.by_contact(threads) if threads else {}
+    today = today or person.today().isoformat()
+    out = []
+    for cid, (body, _name, _company) in sorted(_waiting_drafts().items()):
+        c = book.get(cid)
+        msgs = list(index.get(cid, ()))
+        if c is None or not msgs or reading.marked(cid):
+            continue
+        said = " ".join(body.split())
+        if any(state._direction(r) == "out"
+               and " ".join(str(r.get("full_text") or "").split()) == said for r in msgs):
+            continue                        # sent already: the card only lags the log
+        try:
+            code = plain_nudge(c, msgs, today=today)
+        except ValueError:
+            continue
+        if " ".join(str(code or "").split()) == said:
+            out.append((cid, "code's plain follow-up, never fitted to your own rules for messages"))
+    return out
+
+
+def set_aside_unfitted(write: bool = True) -> list[str]:
+    """Set each of `unfitted_on_cards` aside, kept (UNFITTED, never over another file), so
+    the card offers nothing to send and the follow-up is owed again: the next run drafts it,
+    flagged, for Claude to fit to the person's rules (`check`), and only a rewrite that
+    passes reaches the card. A line each."""
+    from network import state
+    said = []
+    for cid, why in unfitted_on_cards():
+        said.append("%s: %s" % (cid, why))
+        if write:
+            folder = state._draft_folder(cid)
+            if folder:
+                state.park_draft(cid, as_name=state._free_name(folder, UNFITTED))
     return said
 
 
@@ -1337,6 +1394,22 @@ def _main(argv=None) -> int:
             return 0
         print("set aside, kept: %d draft(s) written before the role they wait for; each is "
               "written for that role once it is posted" % len(said))
+        for line in said[:40]:
+            print("  " + line)
+        return 0
+    if argv[:1] == ["unfitted"]:
+        ap = argparse.ArgumentParser(
+            prog="followup_drafts.py unfitted",
+            description="Set aside (kept) code's plain follow-ups left on a card before they "
+                        "were fitted to the person's own rules for messages.")
+        ap.add_argument("--dry", action="store_true", help="count them, change nothing")
+        a = ap.parse_args(argv[1:])
+        said = set_aside_unfitted(write=not a.dry)
+        if a.dry:
+            print(len(said))
+            return 0
+        print("set aside, kept: %d follow-up(s) never fitted to your own rules for messages; "
+              "each is written again to fit them before it is offered to send" % len(said))
         for line in said[:40]:
             print("  " + line)
         return 0
