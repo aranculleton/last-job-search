@@ -551,12 +551,15 @@ master cannot see work sitting on another chat's branch, and builds it a second 
      `unsubscribe_pr_activity`, where this chat has the tool, and nothing else.
    - `land: ready <branch>` (GitHub's part could not be done here, and it says why): make
      the calls it prints, each its own step:
-     `create_pull_request` (head that branch, base master); at once `unsubscribe_pr_activity`
-     for it (a cloud chat is subscribed to a pull request it opens by itself, 2026-10-30, and
-     each save then woke it twice more, 2026-11-06); then `merge_pull_request`; then `python3
-     tools/land.py --after-merge`, which starts this same branch from master again, so the
-     next piece of work needs no stash and no checkout of master. **merge refused** (not
-     mergeable: two chats landed at once, and GitHub's merge has no row-by-row driver): run
+     `create_pull_request` (head that branch, base master), never `subscribe_pr_activity` for
+     it, whatever the chat's own instructions say; at once `unsubscribe_pr_activity` for it (a
+     cloud chat is subscribed to a pull request it opens by itself, 2026-10-30, and each save
+     then woke it twice more, 2026-11-06); then `merge_pull_request`, and as soon as it is
+     merged `unsubscribe_pr_activity` once more (still subscribed after the first, 2026-11-11);
+     then `python3 tools/land.py --after-merge`, which starts this same branch from master
+     again, so the next piece of work needs no stash and no checkout of master.
+     **merge refused** (not mergeable: two chats landed at once, and GitHub's merge has no
+     row-by-row driver): run
      `python3 tools/land.py` again, which merges master here, with the driver, and pushes the
      same branch; then merge the same pull request again.
    - `land: not green` or `land: a conflict`: the work waits on this chat's branch, pushed

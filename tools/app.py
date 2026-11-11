@@ -1606,11 +1606,17 @@ REFUSED_ONCE = ("A refused batch: python3 tools/app.py version \"$D\" <the recor
 # How a job's chat saves and waits for the save before its next step: land.py in the
 # foreground, which ends when the landing has. A chat told only to "wait until the landing has
 # ended" waited with `until ! pgrep -f tools/land.py`, which matched its own command line and
-# never ended (2026-11-10).
+# never ended (2026-11-10). A job's chat, or a page helper's background agent, may never see
+# CLAUDE.md's "Landing is silent", and a cloud chat's own instructions say to subscribe to a
+# pull request it opens: the chat that answers the page was subscribed on every landing
+# (2026-11-11). The rule goes with the step, as land.py prints it beside the call.
+import land as _land  # noqa: E402
+
 LAND_AND_WAIT = ("Save and land your work on master (CLAUDE.md, \"Saving\"): run python3 "
                  "tools/land.py in the foreground (never --detach, never in the background), so the "
                  "command itself ends when the landing has, then make the calls it prints. Never "
-                 "wait on it with a pgrep loop: it matches its own command line and never ends.")
+                 "wait on it with a pgrep loop: it matches its own command line and never ends. "
+                 "For a pull request it opens or names, " + _land.NO_SUBSCRIBE + ".")
 
 
 def _next_job(url: str, first_word: str = "Then", kind: str = "cloud",

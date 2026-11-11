@@ -23,6 +23,7 @@ make sense to somebody whose repo just received it.
 ### Fixed
 
 - **Your page never says your computer is off while it is on.** A Mac connected that day read as off on a check-in from the day before, so Start it now did nothing; the computer's own connection now counts, and the chat that can start Claude there is woken.
+- **Saving your work no longer wakes Claude for nothing.** Each save could leave Claude following its own updates, every one a turn on your page's chat; the save steps now say never to follow them, and to stop at once if it was started anyway.
 - **A LinkedIn download you add on your page is taken straight away.** Its tap could wait through several rings, as Claude was told to stop before reading the files; reading them is now the first thing it does, with every file named.
 - **Settings and Your rules say what your last search left out.** Roles, Where and Pay said "38,547 left out lately": a month of searches added up, each cutting the same jobs again. Each rule now gives the number Jobs gives for your newest search, and an employer you turned down counts each job once over the last 30 days.
 

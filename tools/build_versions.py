@@ -407,8 +407,9 @@ METHODS: dict[str, dict] = {
             (98, "2026-11-11", False, "RUNBOOK's map says /reply belongs to no skill, and the networking skill owns /network, /threads and /prep"),
             (99, "2026-11-11", False, "the experience section's heading moves to the next page with its first role rather than staying alone at the foot of a page; a resume whose heading never sat there comes out the same; RUNBOOK.md says a computer chat's save finishes there where the chat that answers the page is on the computer too"),
             (100, "2026-11-11", False, "files a tap names (a LinkedIn download) are the wake's first step, every one named, and the end of a batch names them too; nothing made changes"),
+            (101, "2026-11-11", False, "the save steps a chat, a job's chat or a background agent follows say beside the pull request never to subscribe to it, and to unsubscribe once it is merged; nothing made changes"),
         ),
-        "fingerprint": "880242e9dc4178ca",
+        "fingerprint": "5b2195ef44a19bf0",
     },
     "interview": {
         # Only a process with a round still to come is prepared again: a prep for a round
