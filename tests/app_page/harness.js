@@ -740,6 +740,10 @@ function layoutMeasure() {
 // each named with why where the test passes it.
 function overlapProbe(allow) {
   allow = allow || [];
+  // Read at the top of the page, in the same moment: a screen that scrolls itself (the Chat
+  // opening at its end) between a scroll and the read slid its words under the header, which
+  // stays put (Firefox, 2026-11-11). That the Chat opens with its words in sight is its own test.
+  window.scrollTo(0, 0);
   const SKIP = "script, style, template, noscript, select, option, textarea, svg, .sr-only, dialog:not([open])";
   const CTL = "button, a[href], a.btn, summary, input:not([type=hidden]), select, textarea, [role=button], [role=switch], [role=tab], [role=link]";
   const shown = (e) => e.checkVisibility({visibilityProperty: true, opacityProperty: true, contentVisibilityAuto: true}) && e.getClientRects().length > 0;
@@ -827,6 +831,303 @@ function overlapProbe(allow) {
   }
   return found;
 }
+// What else a screen can draw wrong, short of words over words, each named with where it is:
+//   crushed   words squeezed into a box narrower than three letters, a letter or two a line,
+//             or a word broken between its letters (a work card's "38 messages ready to send."
+//             stood a letter a line in a column the card's buttons left it, 2026-11-11);
+//   clipped   words cut off by a box they do not fit, with no ellipsis, no fade and nothing
+//             folding them (Your rules drawn 2250px wide in a 356px card; the Brief's "Next
+//             three" cut through its third step);
+//   separator a separator dot that starts a line or ends one ("· Applied 3 Nov" with nothing
+//             before it, a row's "· role" wrapped under its name);
+//   small     a control smaller than 24px each way where nothing is touched (WCAG 2.2, 2.5.8),
+//             its reach counted; a text link inside a sentence is let pass, as WCAG lets it;
+//   alone     More, or a row's bin, alone on a line of its own where its row has other pills
+//             (DESIGN.md: More stays in its row beside the card's other pills; a checklist
+//             row's action sits beside its bin);
+//   faint     words below 4.5:1 against what they are drawn on (3:1 at a large size);
+//   piled     a chart's numbers drawn over one another (a week of 400 drew 42 lines on its axis);
+//   date      a day written as a machine writes it, 2026-10-20, where the page says days in words.
+// `allow` names exceptions by kind, {kind: [selector, ...]}, each with why where it is passed.
+function drawnProbe(allow) {
+  allow = allow || {};
+  window.scrollTo(0, 0);
+  const out = [], seen = new Set();
+  const SKIP = "script, style, template, noscript, select, option, textarea, input, svg, .sr-only, dialog:not([open])";
+  const touch = matchMedia("(max-width: 759px), (pointer: coarse)").matches;
+  const csOf = new Map();
+  const cs = (e, p) => { if (p) return getComputedStyle(e, p); if (!csOf.has(e)) csOf.set(e, getComputedStyle(e)); return csOf.get(e); };
+  // Hidden on purpose: a screen reader's words (clipped to a pixel), a closed fold.
+  const hidCache = new Map();
+  const hiddenUp = (el) => {
+    if (hidCache.has(el)) return hidCache.get(el);
+    let h = false;
+    const s = cs(el);
+    if ((s.clip && s.clip !== "auto" && /rect\(0(px)?,? 0(px)?/.test(s.clip)) || /inset\(50%/.test(s.clipPath || "")) h = true;
+    else if (s.position === "absolute" && el.offsetWidth <= 1 && el.offsetHeight <= 1) h = true;
+    else if (el.parentElement && el.parentElement !== document.documentElement) {
+      const p = el.parentElement;
+      // Inside a closed <details> only its summary is shown.
+      if (p.tagName === "DETAILS" && !p.open && !(el.tagName === "SUMMARY" && el === p.querySelector(":scope > summary"))) h = true;
+      else h = hiddenUp(p);
+    }
+    hidCache.set(el, h);
+    return h;
+  };
+  const shown = (e) => e.checkVisibility({visibilityProperty: true, opacityProperty: true, contentVisibilityAuto: true}) && e.getClientRects().length > 0 && !hiddenUp(e);
+  const name = (e) => (e.tagName.toLowerCase() + (e.id ? "#" + e.id : "") + ([...e.classList].length ? "." + [...e.classList].join(".") : "")).slice(0, 60);
+  const path = (e) => { const p = []; for (let a = e; a && a !== document.body && p.length < 3; a = a.parentElement) p.unshift(name(a)); return p.join(" > "); };
+  const words = (e) => (e.nodeType === 3 ? e.textContent : (e.getAttribute("aria-label") || e.textContent || "")).replace(/\s+/g, " ").trim().slice(0, 50);
+  const allowed = (kind, e) => (allow[kind] || []).some((s) => e.closest(s));
+  const say = (kind, e, detail, text) => {
+    if (allowed(kind, e)) return;
+    const k = kind + "|" + path(e) + "|" + detail.replace(/\d+/g, "#");
+    if (seen.has(k)) return;
+    seen.add(k);
+    out.push({kind, el: path(e), words: text !== undefined ? text : words(e), detail});
+  };
+  const lineRects = (n) => { const r = document.createRange(); r.selectNodeContents(n); return [...r.getClientRects()].filter((q) => q.width > 0.5 && q.height > 0.5); };
+  const charRect = (n, i) => { const r = document.createRange(); r.setStart(n, i); r.setEnd(n, i + 1); return [...r.getClientRects()].find((q) => q.width > 0.2) || null; };
+  // The box an element's words can be seen in, and which ancestor cut each side.
+  const clipCache = new Map();
+  const clipOf = (el) => {
+    if (clipCache.has(el)) return clipCache.get(el);
+    let r = {l: -1e9, t: -1e9, r: 1e9, b: 1e9, by: {}};
+    const s = cs(el);
+    if (s.position !== "fixed" && el.parentElement && el.parentElement !== document.documentElement) { const up = clipOf(el.parentElement); r = Object.assign({}, up, {by: Object.assign({}, up.by)}); }
+    if (s.overflowX !== "visible" || s.overflowY !== "visible") {
+      const b = el.getBoundingClientRect();
+      if (s.overflowX !== "visible") { if (b.left > r.l) { r.l = b.left; r.by.l = el; } if (b.right < r.r) { r.r = b.right; r.by.r = el; } }
+      if (s.overflowY !== "visible") { if (b.top > r.t) { r.t = b.top; r.by.t = el; } if (b.bottom < r.b) { r.b = b.bottom; r.by.b = el; } }
+    }
+    clipCache.set(el, r);
+    return r;
+  };
+  // A box that scrolls lets its words be scrolled to; one that fades its edge, or cuts its
+  // line with an ellipsis or a line clamp, says there is more.
+  const says = (cut, side, text) => {
+    const s = cs(cut);
+    const ax = side === "l" || side === "r" ? "overflowX" : "overflowY";
+    if (s[ax] === "auto" || s[ax] === "scroll") return true;
+    for (let a = text; a; a = a.parentElement) {
+      const q = cs(a);
+      if ((q.maskImage && q.maskImage !== "none") || (q.webkitMaskImage && q.webkitMaskImage !== "none")) return true;
+      if (a === cut) break;
+    }
+    if (ax === "overflowX" && s.textOverflow === "ellipsis") return true;
+    if (ax === "overflowY" && s.webkitLineClamp && s.webkitLineClamp !== "none") return true;
+    return false;
+  };
+  // With a sheet open over the page, the sheet is what is read: the page under it is shut off.
+  const root = [...document.querySelectorAll("dialog[open]")].find((d) => d.matches(":modal")) || document.body;
+  const texts = [];
+  const walk = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+    const el = n.parentElement;
+    if (!el || !n.textContent.trim() || el.closest(SKIP) || !shown(el)) continue;
+    // Words in no colour at all are not drawn (a dot kept out of sight at a line's end).
+    if (/^(transparent|rgba\(.*,\s*0\))$/.test(cs(el).color)) continue;
+    texts.push({n, el, rects: lineRects(n)});
+  }
+  // (a) crushed, and words broken between letters.
+  const BREAK_OK = /[-\/._@:?&=,;)\u00ad\u200b\u2013\u2014\u00b7\u2026+#]/;
+  for (const {n, el, rects} of texts) {
+    const tops = [...new Set(rects.map((q) => Math.round(q.top)))];
+    if (tops.length < 2) continue;
+    const t = n.textContent.trim();
+    const fs = parseFloat(cs(el).fontSize) || 16;
+    const widest = Math.max(...rects.map((q) => q.width));
+    if (t.length > 3 && widest < 1.8 * fs) { say("crushed", el, tops.length + " lines, the widest " + Math.round(widest) + "px"); continue; }
+    const re = /[\p{L}\p{N}][^\s\u00a0\u200b]*[\p{L}\p{N}]/gu;
+    for (let m = re.exec(n.textContent); m; m = re.exec(n.textContent)) {
+      const a = charRect(n, m.index), z = charRect(n, m.index + m[0].length - 1);
+      if (!a || !z || Math.abs(a.top - z.top) < a.height / 2) continue;
+      // Where it breaks: the first letter on a line below the first.
+      let at = -1;
+      for (let i = 1; i < m[0].length; i++) { const c = charRect(n, m.index + i); if (c && c.top - a.top > a.height / 2) { at = i; break; } }
+      // An address breaks only at its slashes and dots: "artifact/0000-4000" broken at a hyphen
+      // inside its last part read as two addresses (2026-11-11).
+      const ok = /^(https?:|www\.)|\/\//.test(m[0]) ? /[\/.?&=#]/ : BREAK_OK;
+      if (at > 0 && (ok.test(m[0][at - 1]) || ok.test(m[0][at]))) continue;
+      say("crushed", el, "\"" + m[0].slice(0, 40) + "\" broken after letter " + at, m[0].slice(0, 40));
+      break;
+    }
+  }
+  // A day written as the machine writes it ("Paused 2026-10-20 with ..." as an interview's
+  // title, 2026-11-11): every day on the page is said in words.
+  for (const {n, el} of texts) {
+    const m = /\b\d{4}-\d{2}-\d{2}\b/.exec(n.textContent);
+    if (m) say("date", el, "a day written " + m[0]);
+  }
+  // Numbers on a chart drawn over one another: a week of 400 messages put 42 lines on an axis
+  // 150px tall (2026-11-11).
+  const marks = [...root.querySelectorAll("svg text")].filter((t) => shown(t) && t.textContent.trim()).map((t) => ({t, r: t.getBoundingClientRect()}));
+  for (let i = 0; i < marks.length; i++) for (let j = i + 1; j < marks.length; j++) {
+    const a = marks[i], b = marks[j];
+    if (a.t.ownerSVGElement !== b.t.ownerSVGElement) continue;
+    const w = Math.min(a.r.right, b.r.right) - Math.max(a.r.left, b.r.left), h = Math.min(a.r.bottom, b.r.bottom) - Math.max(a.r.top, b.r.top);
+    if (w > 1 && h > 0.25 * Math.min(a.r.height, b.r.height)) say("piled", a.t.ownerSVGElement, "\"" + a.t.textContent + "\" and \"" + b.t.textContent + "\" drawn over each other", "");
+  }
+  // A day said in words is read whole: "Sun 20" at a line's end and "Sept" under it in a
+  // table's column (2026-11-11).
+  const DAY = /\b(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun) )?\d{1,2} (?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sept?|Oct|Nov|Dec)\b/g;
+  for (const {n, el, rects} of texts) {
+    if (new Set(rects.map((q) => Math.round(q.top))).size < 2) continue;
+    for (let m = DAY.exec(n.textContent); m; m = DAY.exec(n.textContent)) {
+      const a = charRect(n, m.index), z = charRect(n, m.index + m[0].length - 1);
+      if (a && z && z.top - a.top > a.height / 2) { say("crushed", el, "the day \"" + m[0] + "\" broken over two lines", m[0]); break; }
+    }
+    DAY.lastIndex = 0;
+  }
+  // (b) clipped.
+  for (const {el, rects} of texts) {
+    const c = clipOf(el);
+    for (const q of rects) {
+      const tolY = 2;
+      const sides = {l: c.l - q.left, r: q.right - c.r, t: c.t - q.top, b: q.bottom - c.b};
+      // Wholly out of sight is not cut: a fold, a list that gives way, a scroller's far end.
+      if (q.right <= c.l || q.left >= c.r || q.bottom <= c.t || q.top >= c.b) continue;
+      for (const side of ["l", "r", "t", "b"]) {
+        if (sides[side] <= (side === "l" || side === "r" ? 2 : tolY)) continue;
+        const cut = c.by[side];
+        if (!cut || says(cut, side, el)) continue;
+        say("clipped", el, "cut " + Math.round(sides[side]) + "px at its " + {l: "left", r: "right", t: "top", b: "foot"}[side] + " by " + name(cut));
+      }
+    }
+  }
+  // (c) a separator dot at the start or the end of a line. Its line is read across the box its
+  // words flow in: up through inline boxes and through a row of boxes laid side by side.
+  const lineBox = (el) => {
+    let e = el;
+    for (;;) {
+      const p = e.parentElement;
+      if (!p || p === document.body) return e;
+      const d = cs(e).display, pd = cs(p);
+      if (/^inline|contents/.test(d) || (/flex/.test(pd.display) && !/column/.test(pd.flexDirection))) { e = p; continue; }
+      return e;
+    }
+  };
+  const inkIn = new Map();
+  const ink = (box) => {
+    if (inkIn.has(box)) return inkIn.get(box);
+    const list = [];
+    for (const t of texts) if (box.contains(t.el)) for (const q of t.rects) list.push({q, el: t.el, n: t.n});
+    for (const e of box.querySelectorAll("button, a, summary, img, svg, .badge, .chip, .state-word")) if (shown(e)) for (const q of e.getClientRects()) if (q.width > 1 && q.height > 1) list.push({q, el: e});
+    inkIn.set(box, list);
+    return list;
+  };
+  const sameLine = (a, b) => Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 0.5 * Math.min(a.height, b.height);
+  const dotCheck = (el, D, own) => {
+    const box = lineBox(el);
+    const list = ink(box).filter((x) => x.n !== own && !(own && x.el === el && !x.n) && sameLine(x.q, D));
+    // The dot's own line of words: what of it lies before the dot, and after.
+    const left = list.some((x) => x.q.left < D.left - 1) || (own && lineRects(own).some((q) => sameLine(q, D) && q.left < D.left - 1));
+    const right = list.some((x) => x.q.right > D.right + 1) || (own && lineRects(own).some((q) => sameLine(q, D) && q.right > D.right + 1));
+    if (!left) say("separator", el, "a line starts with its separator dot");
+    else if (!right) say("separator", el, "a line ends with its separator dot");
+  };
+  for (const {n, el} of texts) {
+    const s = n.textContent;
+    for (let i = s.indexOf("·"); i >= 0; i = s.indexOf("·", i + 1)) {
+      const D = charRect(n, i);
+      if (D && clipOf(el).l <= D.left && D.right <= clipOf(el).r) dotCheck(el, D, n);
+    }
+  }
+  for (const el of root.querySelectorAll("*")) {
+    if (el.closest(SKIP)) continue;
+    for (const p of ["::before", "::after"]) {
+      const ct = cs(el, p).content;
+      // A dot held out of sight, keeping its width, is not drawn.
+      if (!ct || ct.indexOf("\u00b7") < 0 || cs(el, p).visibility === "hidden" || !shown(el)) continue;
+      const rs = lineRects(el);
+      if (!rs.length) continue;
+      const fs = parseFloat(cs(el).fontSize) || 16;
+      const R = p === "::before" ? rs[0] : rs[rs.length - 1];
+      const D = p === "::before" ? new DOMRect(R.left - 0.6 * fs, R.top, 0.6 * fs, R.height) : new DOMRect(R.right, R.top, 0.6 * fs, R.height);
+      dotCheck(el, D, null);
+    }
+  }
+  // (d) a control under 24px where nothing is touched.
+  if (!touch) {
+    const CTL = "button, a[href], summary, [role=button], [role=switch], [role=tab], label";
+    const painted = (s) => !/^(transparent|rgba\(.*,\s*0\))$/.test(s.backgroundColor) || s.backgroundImage !== "none"
+      || ["Top", "Right", "Bottom", "Left"].some((k) => parseFloat(s["border" + k + "Width"]) > 0 && s["border" + k + "Style"] !== "none");
+    // A target's reach drawn by its ::before or ::after, laid in the box it is placed in (the
+    // control itself, or the pill around a setting's label), in the screen's px.
+    const z = parseFloat(document.body.style.zoom) || 1;
+    const reach = (el, p) => {
+      const a = cs(el, p);
+      if (!a.content || a.content === "none" || a.position !== "absolute") return null;
+      let cb = el;
+      while (cb && cb !== document.body && cs(cb).position === "static" && cs(cb).transform === "none") cb = cb.parentElement;
+      if (!cb) return null;
+      const b = cb.getBoundingClientRect(), v = (x) => (/px$/.test(x) ? parseFloat(x) * z : null);
+      const L = v(a.left), T = v(a.top), R = v(a.right), B = v(a.bottom);
+      if (L === null || T === null || R === null || B === null) return null;
+      return {left: b.left + L, top: b.top + T, right: b.right - R, bottom: b.bottom - B};
+    };
+    for (const el of root.querySelectorAll(CTL)) {
+      if (el.closest(SKIP) || !shown(el)) continue;
+      // A label is a target only for the box it ticks; a label holding a pill is measured as
+      // that pill's target.
+      if (el.tagName === "LABEL" && !el.querySelector("input[type=checkbox], input[type=radio]") && !(el.htmlFor && document.getElementById(el.htmlFor))) continue;
+      if (el.parentElement && el.parentElement.closest(CTL.replace(", label", ""))) continue;
+      const s = cs(el);
+      // A text link in a sentence keeps its line (WCAG 2.5.8, "Inline").
+      if (/^inline/.test(s.display) && !painted(s) && !el.querySelector("svg, img")) {
+        const blk = lineBox(el);
+        if ((blk.textContent || "").replace(/\s+/g, "").length > (el.textContent || "").replace(/\s+/g, "").length) continue;
+      }
+      const b = el.getBoundingClientRect();
+      const box = [reach(el, "::after"), reach(el, "::before")].filter(Boolean).reduce((u, q) => ({left: Math.min(u.left, q.left), top: Math.min(u.top, q.top), right: Math.max(u.right, q.right), bottom: Math.max(u.bottom, q.bottom)}), b);
+      let w = box.right - box.left, h = box.bottom - box.top;
+      // A box ticked through its label: the label and the box together.
+      if (el.tagName === "LABEL") { const i = el.querySelector("input") || document.getElementById(el.htmlFor); if (i && shown(i)) { const ib = i.getBoundingClientRect(); w = Math.max(w, ib.width); h = Math.max(h, ib.height, Math.max(b.bottom, ib.bottom) - Math.min(b.top, ib.top)); } }
+      if (w < 23.5 || h < 23.5) say("small", el, Math.round(w) + "x" + Math.round(h) + "px");
+    }
+  }
+  // (e) More, or a row's bin, alone on its line: each stays beside the row's other pills.
+  const ROWS = ".card-actions, .wc-actions, .g-acts, .suggest-acts, .g-row";
+  for (const c of root.querySelectorAll("details.more > summary.more-btn, :is(" + ROWS + ") > [data-bin]")) {
+    const own = c.matches("summary") ? c.parentElement : c, row = own.parentElement;
+    if (!row || c.closest(SKIP) || !shown(c)) continue;
+    const q = c.getBoundingClientRect();
+    const sibs = [...row.children].filter((k) => k !== own && !k.matches(".more-panel, .more-body") && shown(k) && k.getBoundingClientRect().width > 0);
+    if (!sibs.length) continue;
+    if (!sibs.some((k) => sameLine(k.getBoundingClientRect(), q))) say("alone", c, (c.matches("summary") ? "More" : "the bin") + " alone on its line beside " + sibs.length + " other" + (sibs.length > 1 ? "s" : ""));
+  }
+  // (f) faint words.
+  const rgba = (s) => { const m = /rgba?\(([^)]+)\)/.exec(s || ""); if (!m) return null; const p = m[1].split(/[ ,/]+/).filter(Boolean).map(Number); return [p[0], p[1], p[2], p.length > 3 ? p[3] : 1]; };
+  const lum = (c) => { const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]); };
+  const blend = (fg, bg, a) => [0, 1, 2].map((i) => fg[i] * a + bg[i] * (1 - a));
+  const bgOf = (el) => {
+    const layers = [];
+    for (let e = el; e; e = e.parentElement) {
+      const s = cs(e);
+      if (s.backgroundImage && s.backgroundImage !== "none") return null;
+      const c = rgba(s.backgroundColor);
+      if (c && c[3] > 0) { layers.push(c); if (c[3] >= 1) break; }
+    }
+    let bg = rgba(cs(document.documentElement).backgroundColor) || [255, 255, 255, 1];
+    if (bg[3] < 1) bg = [255, 255, 255, 1];
+    for (const c of layers.reverse()) bg = blend(c, bg, c[3]);
+    return bg;
+  };
+  const opacityOf = (el) => { let o = 1; for (let e = el; e; e = e.parentElement) o *= Number(cs(e).opacity); return o; };
+  const faintSeen = new Set();
+  for (const {el} of texts) {
+    if (faintSeen.has(el)) continue;
+    faintSeen.add(el);
+    if (el.closest("[disabled], :disabled, [aria-disabled=true]")) continue;
+    const s = cs(el), fg = rgba(s.color), bg = bgOf(el);
+    if (!fg || !bg) continue;
+    const c = blend(fg, bg, fg[3] * opacityOf(el));
+    const r = (Math.max(lum(c), lum(bg)) + 0.05) / (Math.min(lum(c), lum(bg)) + 0.05);
+    const size = parseFloat(s.fontSize), need = size >= 24 || (size >= 18.66 && Number(s.fontWeight) >= 700) ? 3 : 4.5;
+    if (r < need) say("faint", el, r.toFixed(2) + ":1 at " + Math.round(size) + "px (" + s.color + " on rgb(" + bg.map(Math.round).join(", ") + "))");
+  }
+  return out;
+}
 function frameMeasure() {
   const vis = (e) => !!e && e.checkVisibility({visibilityProperty: true, contentVisibilityAuto: true}) && e.getClientRects().length > 0;
   const top = document.getElementById("top");
@@ -875,11 +1176,11 @@ async function sheetCheck(page, kind, openIt) {
   }
   return m;
 }
-// A screen's overlaps, and each of its other views (Coming up's Interviews, Jobs' Applied):
-// every switch on the screen tried in turn, then put back as it was.
-async function overlapsOf(page, id, allow, into) {
-  await page.evaluate(() => window.scrollTo(0, 0));
-  into[id] = await throughNav(page, () => page.evaluate(overlapProbe, allow || []));
+// A screen's overlaps and drawing, and each of its other views (Coming up's Interviews, Jobs'
+// Applied): every switch on the screen tried in turn, then put back as it was. `probe` reads
+// the screen as it stands under a name.
+async function viewsOf(page, id, probe) {
+  await probe(id);
   const views = await page.$$eval("#main .segctl .seg-opt[aria-pressed=false]", (bs) => bs.map((b) => b.getAttribute("data-k")).filter(Boolean));
   const was = await page.$$eval("#main .segctl .seg-opt[aria-pressed=true]", (bs) => bs.map((b) => b.getAttribute("data-k")).filter(Boolean));
   for (const k of views) {
@@ -887,15 +1188,23 @@ async function overlapsOf(page, id, allow, into) {
     if (!(await b.count()) || !(await b.isVisible())) continue;
     await b.click();
     await turn(page, 4);
-    await page.evaluate(() => window.scrollTo(0, 0));
-    into[id + "/" + k] = await throughNav(page, () => page.evaluate(overlapProbe, allow || []));
+    await probe(id + "/" + k);
   }
   for (const k of was) {
     const b = page.locator('#main [data-k="' + k + '"]').first();
     if (views.length && (await b.count()) && (await b.isVisible())) { await b.click(); await turn(page, 4); }
   }
 }
-// The overlap probe finds what it is meant to: a line of words laid over a row's title.
+// The drawing probe on a page as it stands, after a few changes made to it (`spoil`): each
+// change is one defect of the kind the probe names, so each kind is shown to be seen.
+S.drawn_selftest = async (a) => {
+  const o = await open({html: a.html, viewport: a.viewport, clock: a.clock, hash: a.hash || "todo"});
+  await o.page.evaluate((code) => eval(code), a.spoil || "");
+  await turn(o.page, 2);
+  const r = {found: await o.page.evaluate(drawnProbe, a.allow || {}), errors: o.errors};
+  await o.ctx.close();
+  return r;
+};
 S.overlap_selftest = async (a) => {
   const o = await open({html: a.html, viewport: a.viewport, clock: a.clock, hash: "interviews"});
   await o.page.evaluate(() => {
@@ -915,13 +1224,38 @@ S.layout = async (a) => {
   const seed = Object.assign(a.sheets ? {"work/search~1": runningDoc()} : {}, a.seed || {});
   const o = await open({html: a.html, viewport: a.viewport, scheme: a.scheme, fake: a.fake, seed, clock: a.clock || "2026-10-26T09:00:00Z", timezoneId: a.timezoneId});
   const {page} = o;
-  const out = {sections: {}, frames: {}, sheets: {}, big: {}, overlaps: {}};
+  const out = {sections: {}, frames: {}, sheets: {}, big: {}, overlaps: {}, drawn: {}};
+  const probe = async (key) => {
+    await page.evaluate(() => window.scrollTo(0, 0));
+    if (a.overlaps) out.overlaps[key] = await throughNav(page, () => page.evaluate(overlapProbe, a.allow || []));
+    if (a.drawn) out.drawn[key] = await throughNav(page, () => page.evaluate(drawnProbe, a.drawnAllow || {}));
+  };
   for (const id of SECTIONS) {
     await goto(page, id);
     await page.evaluate(() => window.scrollTo(0, 0));
     out.sections[id] = await page.evaluate(layoutMeasure);
     out.frames[id] = await page.evaluate(frameMeasure);
-    if (a.overlaps) await overlapsOf(page, id, a.allow, out.overlaps);
+    if (a.overlaps || a.drawn) await viewsOf(page, id, probe);
+  }
+  // What opens over a screen or inside it, each read as it stands open: {key, hash, eval (code
+  // run in the page), click (a selector, tapped where it shows), unless (a selector: nothing is
+  // done where it shows), optional (nothing to open is no fault)}. Each is closed again by going
+// to the next.
+  for (const st of a.opened || []) {
+    if (st.hash) await goto(page, st.hash);
+    await page.waitForFunction(() => !!document.querySelector("#main [data-card], #main section, #main .empty"), null, {timeout: 5000}).catch(() => {});
+    if (st.unless && (await page.locator(st.unless).first().isVisible().catch(() => false))) { await probe(st.key); continue; }
+    if (st.eval) { await evalThrough(page, st.eval); await turn(page, 4); }
+    if (st.click) {
+      const b = page.locator(st.click).first();
+      if (!(await b.count()) || !(await b.isVisible())) { if (!st.optional) out.drawn[st.key] = [{kind: "missing", el: st.click, words: "", detail: "nothing to open"}]; continue; }
+      await b.click();
+      await turn(page, 6);
+    }
+    if (st.wait) await page.waitForSelector(st.wait, {timeout: 5000}).catch(() => {});
+    await probe(st.key);
+    await page.keyboard.press("Escape").catch(() => {});
+    await turn(page, 3);
   }
   if (a.sheets) {
     for (const id of SECTIONS) {

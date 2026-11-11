@@ -108,7 +108,9 @@ def test_a_coming_up_row_says_what_it_is_on_one_line_and_its_icons_line_up(run, 
     assert [r for r in rows if r["oneLine"] is False] == [], rows
     if vp is WIDE:
         assert any(r["oneLine"] for r in rows), rows
-    assert all(r["lead"] in ("none", "normal") for r in rows), rows
+    # The dot between them leads the prep only where the two share a line (2026-11-11: as the
+    # first's end, it ended its line over the pill on a tablet).
+    assert all(r["lead"] in ("none", "normal") or r["oneLine"] for r in rows), rows
     # The calendar is in the same place on every row, a trash beside it or not.
     assert len({r["cal"] for r in rows if r["cal"] is not None}) == 1, rows
     # A title is drawn its own height, never a 44px line of air round its words on a phone. A
@@ -474,12 +476,16 @@ DOTS = r"""((sel) => { const out = [];
     for (let n = walk.nextNode(); n; n = walk.nextNode()) {
       const i = n.data.indexOf('·'); if (i < 0) continue;
       const g = document.createRange(); g.setStart(n, i); g.setEnd(n, i + 1); const dot = g.getClientRects()[0]; if (!dot) continue;
-      let next = n.nextSibling; while (next && next.nodeType === 3 && !next.data.trim()) next = next.nextSibling;
-      // The first letter after the dot, in its own words or in what follows them.
-      const j = n.data.slice(i + 1).search(/[^\s\u00a0\u2060]/);
-      // A button's own words, never its box, which is taller than the line on a phone.
-      const words = (e) => { const r = document.createRange(); r.selectNodeContents(e); return r.getClientRects()[0]; };
-      const after = j >= 0 ? (() => { const r = document.createRange(); r.setStart(n, i + 1 + j); r.setEnd(n, i + 2 + j); return r.getClientRects()[0]; })() : next && next.nodeType === 1 ? words(next) : null;
+      // The first letter after the dot, in its own words or in what follows them (a dot is its
+      // own small part since 2026-11-11, app.js wordsAdd). A dot put out of sight is not drawn.
+      if (dot.width < 0.5 || /^(transparent|rgba\(.*,\s*0\))$/.test(getComputedStyle(n.parentElement).color)) continue;
+      let after = null;
+      const on = document.createTreeWalker(box, NodeFilter.SHOW_TEXT);
+      on.currentNode = n;
+      for (let m = n, k = i + 1; m && !after; m = on.nextNode(), k = 0) {
+        const j = m.data.slice(k).search(/[^\s\u00a0\u2060]/);
+        if (j >= 0) { const r = document.createRange(); r.setStart(m, k + j); r.setEnd(m, k + j + 1); after = r.getClientRects()[0] || null; }
+      }
       if (after) out.push({text: n.data, alone: Math.abs(after.top - dot.top) > 4});
     }
   }

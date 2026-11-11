@@ -4221,8 +4221,10 @@ def _interviews(ctx: Ctx, targets: dict) -> list:
                 # a title: "Initial round" where the employer's whole paragraph was stored,
                 # the paragraph kept as its details (the maintainer, 2026-11-07).
                 "next_stage": upcoming.label(stage.get("label")) or None,
-                "stage_title": upcoming.short_label(stage.get("label")) or None,
-                "stage_details": upcoming.label_details(stage.get("label")) or None,
+                # A day in the name said in words ("Paused 2026-10-20" was a title as it
+                # stood, the screen review, 2026-11-11); the name as written stays above.
+                "stage_title": _ISO_DAY.sub(_day_words, upcoming.short_label(stage.get("label"))) or None,
+                "stage_details": _ISO_DAY.sub(_day_words, upcoming.label_details(stage.get("label"))) or None,
                 "offered": offered or None,
                 "reply_by": (stage.get("reply_by") or None) if offered else None,
                 "when": interview_when(stage.get("date"), clock, stage.get("zone"), ctx.zone),
