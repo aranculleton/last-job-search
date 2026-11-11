@@ -421,7 +421,7 @@ def test_the_tagged_commits_time_is_read_from_the_checkout_that_holds_it(tmp_pat
     for args in (["init", "-q", "-b", "master"], ["commit", "-q", "--allow-empty", "-m", "x"]):
         subprocess.run(["git", "-C", str(tmp_path), *args], env=env, check=True)
     sha = subprocess.run(["git", "-C", str(tmp_path), "rev-parse", "HEAD"], env=env, check=True,
-                         capture_output=True, text=True).stdout.strip()
+                         capture_output=True, text=True, encoding="utf-8").stdout.strip()
     gh = _GitHub(fixed=[240, 241], labelled={240: "2026-11-11T11:00:00Z",
                                               241: "2026-11-11T12:05:00Z"}, committed="")
     assert release.close_fixed("v3.3.0", sha, gh=gh, root=str(tmp_path)) == [240]

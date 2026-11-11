@@ -70,9 +70,9 @@ def _run(cmd, cwd, env=None, timeout=1800):
     return code, out, time.time() - t
 
 
-def _git(*args, cwd):
+def _git(*args, cwd, env=None):
     return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True,
-                          encoding="utf-8", errors="replace")
+                          encoding="utf-8", errors="replace", env=env)
 
 
 class Rehearsal:
@@ -414,7 +414,8 @@ def _seed_fresh(tag: str, tmp: str, env: dict) -> str:
         return f"{tag} has no example person to set up"
     for cmd in (["init", "-q", "-b", "master"], ["add", "-A"],
                 ["commit", "-q", "-m", "Initial commit"]):
-        r = _git(*cmd, cwd=seed)
+        # The rehearsal's own name on the commit: a machine with no git identity (CI) refused it.
+        r = _git(*cmd, cwd=seed, env=env)
         if r.returncode:
             return f"git {cmd[0]}: {(r.stderr or r.stdout).strip()[:300]}"
     shutil.copytree(example, os.path.join(seed, "profile"),
@@ -432,7 +433,8 @@ def _seed_fresh(tag: str, tmp: str, env: dict) -> str:
               encoding="utf-8", newline="\n") as fh:
         fh.write(OWN_TEST)
     for cmd in (["add", "-A", "-f", "profile", *names], ["commit", "-q", "-m", "set me up"]):
-        r = _git(*cmd, cwd=seed)
+        # The rehearsal's own name on the commit: a machine with no git identity (CI) refused it.
+        r = _git(*cmd, cwd=seed, env=env)
         if r.returncode:
             return f"git {cmd[0]}: {(r.stderr or r.stdout).strip()[:300]}"
     return ""
@@ -463,7 +465,7 @@ def _page_plan(reh: Rehearsal, chat: str, root: str, env: dict, scratch: str,
         if ok and url:
             # The plan asks for the page's own list of files first: here it holds none.
             empty = os.path.join(scratch, "on-page.txt")
-            with open(empty, "w", encoding="utf-8") as fh:
+            with open(empty, "w", encoding="utf-8", newline="\n") as fh:
                 fh.write("")
             ok, out = reh.check(chat, "its plan of publishes", cmd + ["--on-page", empty],
                                 root, env)

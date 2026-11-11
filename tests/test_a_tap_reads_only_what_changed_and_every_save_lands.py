@@ -21,7 +21,6 @@ page and chat id is invented.
 """
 from __future__ import annotations
 
-import glob
 import json
 import os
 import re
@@ -34,6 +33,7 @@ sys.path[:0] = [os.path.join(ROOT, "tools"), os.path.join(ROOT, "tests")]
 
 import pytest  # noqa: E402
 
+import repo_files  # noqa: E402
 import test_a_ring_is_answered_in_one_command as R  # noqa: E402
 import test_the_page_helper_stays_thin as T  # noqa: E402
 
@@ -230,7 +230,7 @@ def test_a_page_update_from_a_fresh_checkout_leaves_interviews_as_they_are(ring)
     assert view(ring, d, R.NOW)[1] == "landed"
     assert ring.stored("screen", "interviews"), "the example has an interview with a prep"
     before = ring.stored("screen", "interviews")["version"]
-    preps = glob.glob(os.path.join(ring.state, "**", "interview_prep.md"), recursive=True)
+    preps = [str(f) for f in repo_files.files("**/interview_prep.md", root=ring.state)]
     assert preps
     for p in preps:
         os.utime(p, (time.time() - 5000, time.time() - 5000))

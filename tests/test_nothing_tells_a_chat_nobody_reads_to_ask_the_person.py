@@ -89,11 +89,11 @@ def test_a_refused_auto_is_one_card_on_the_page_that_links_the_chat(tmp_path, mo
     aid = c.act("setup.done", "q-setup-auto")
     assert c.apply()["ok"] == [aid]
     assert not [q for q in c.model()["needs_you"] if q["id"] == "q-setup-auto"]
-    said = c.run("mode-refused", "--chat", "session_helper1", "--now", "2026-10-25T17:01:30Z")
+    said = c.run("mode-refused", "--chat", "session_EXAMPLEhelper1", "--now", "2026-10-25T17:01:30Z")
     assert not _offenders(said) and "Say nothing" in said
     card = next(q for q in c.model()["needs_you"] if q["id"] == "q-setup-auto")
     assert card["open"] == {"label": "Open that chat",
-                            "url": "https://claude.ai/code/session_helper1"}
+                            "url": "https://claude.ai/code/session_EXAMPLEhelper1"}
     assert card["steps"] == claude_surfaces.steps("cloud-auto", page=True)[1:]
     assert "not in Auto" in card["body"]
     aid = c.act("setup.done", "q-setup-auto")

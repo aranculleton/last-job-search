@@ -101,10 +101,8 @@ the app's address in full (`aranculleton/last-job-search`). A touched portal CLI
   (`"app_updates": "when_asked"`) is told; they take it when they say "update"
   (`sync_app.py --update`), and a security fix is offered the same way, never forced.
 
-**Under 15 minutes from "release it"**: the review, the rehearsals and Everywhere ran while
-the version was built.
-
-1. Write the hand-over (below).
+1. Write the hand-over (below). The review, the rehearsals and Everywhere ran while the version
+   was built, so the rest takes minutes.
 2. On the version's pull request (with everything merged, a new one from `origin/master`),
    before its last push: `python3 tools/release.py cut X.Y.Z --headline "<the line a person
    reads>"`. It renames `[Unreleased]` to `## [X.Y.Z] - <date>` under a fresh one, puts the

@@ -77,7 +77,10 @@ def test_a_new_persons_copy_is_the_release_tree_set_up_as_the_example_person(tmp
     (app / "tools" / "x.py").write_text("a = 2\n", encoding="utf-8")
     _git(app, "commit", "-qam", "after the release")
     monkeypatch.setattr(rehearse_sync, "HERE", str(app))
-    assert rehearse_sync._seed_fresh("v1.0.0", str(tmp_path), dict(os.environ)) == ""
+    # The rehearsal's own environment, in a home with no git identity, as on CI's machines.
+    env = rehearse_sync._env(False, "file:///none", str(tmp_path / "home"))
+    env.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM="1")
+    assert rehearse_sync._seed_fresh("v1.0.0", str(tmp_path), env) == ""
     seed = tmp_path / "seed"
     # The release's tree, one commit as the template makes it, then their setup.
     assert (seed / "tools" / "x.py").read_text(encoding="utf-8") == "a = 1\n"
