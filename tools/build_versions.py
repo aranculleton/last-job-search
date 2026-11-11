@@ -1138,8 +1138,9 @@ METHODS: dict[str, dict] = {
             (185, "2026-11-11", True, "a message that goes with a resume Claude is still making never says Ready to send: the resume's progress is shown under it with Stop Claude, and I sent it waits until the resume is ready"),
             (186, "2026-11-11", False, "a change made today says its time, \"today at 21:58\", an older one its day"),
             (187, "2026-11-11", True, "a question in Chat says where it stands under itself, a little spinner and Waiting its turn, Sent to Claude, Claude is answering or Putting the change on your page, gone once its answer shows; no grey Claude message that is not the answer"),
+            (188, "2026-11-11", False, "the header's height has a value of its own before the page has measured it; nothing changes on screen"),
         ),
-        "fingerprint": "2d13b1d4637aba73",
+        "fingerprint": "717dca25c8bd0ce1",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

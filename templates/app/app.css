@@ -19,6 +19,9 @@
   --r: 14px;
   --r-sm: 10px;
   --tabs-h: 64px;
+  /* The header's height as drawn: the script sets it from the header itself (Chat's first words
+     under the header, never behind it); this is its value before the script has measured. */
+  --top-real: 56px;
   --top-h: 60px;
   /* A finger's 44px, drawn larger by --tz where the page is drawn smaller (applySize). */
   --tz: 1;
