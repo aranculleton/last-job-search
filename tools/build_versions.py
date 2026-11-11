@@ -1099,7 +1099,7 @@ METHODS: dict[str, dict] = {
             (160, "2026-11-11", True, "an interview's prep, a person and an application open full screen in the Claude app on a Mac and stay open: a move the app's frame made to the sheet's address closed it the instant it opened, so Read your prep and Practise 3 questions did nothing"),
             (161, "2026-11-11", False, "a live prep's line to say first with no words is never drawn, as an empty bullet under Say first or as Open with; nothing to make again"),
         ),
-        "fingerprint": "aaad9ba731dbdd7b",
+        "fingerprint": "10cad71e2650c30e",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",
