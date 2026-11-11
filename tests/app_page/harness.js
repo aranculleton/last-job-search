@@ -730,6 +730,103 @@ function layoutMeasure() {
     controls, primary, qPrimary, cards, dupNames: [...new Set(dupNames)], dupItems: [...new Set(dupItems)],
     pairs: [...pairs], pairWhere, weights: [...weights], tones: [...tones], empties, overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth};
 }
+// Words drawn over words, or over a button: every line of visible text and every visible
+// control on the page, as drawn and cut by whatever clips it, and each pair that intersects.
+// A two-zone time on Coming up ran under the title column, over the row's line of facts and
+// into its pill, on a laptop in dark (2026-11-11), and no check saw it: `big` finds only what
+// spills past the width. What floats by design (the tab bar, the Chat button, a toast) is
+// its own layer, laid over the page as it scrolls: its parts are checked against each other,
+// never against the page under them. `allow`: selectors for an overlap meant to be there,
+// each named with why where the test passes it.
+function overlapProbe(allow) {
+  allow = allow || [];
+  const SKIP = "script, style, template, noscript, select, option, textarea, svg, .sr-only, dialog:not([open])";
+  const CTL = "button, a[href], a.btn, summary, input:not([type=hidden]), select, textarea, [role=button], [role=switch], [role=tab], [role=link]";
+  const shown = (e) => e.checkVisibility({visibilityProperty: true, opacityProperty: true, contentVisibilityAuto: true}) && e.getClientRects().length > 0;
+  const clipCache = new Map();
+  // The box an element's contents can be seen in: every ancestor that clips what overflows it
+  // (a row that scrolls sideways, a line cut with an ellipsis, a clamped title).
+  const clipOf = (el) => {
+    if (clipCache.has(el)) return clipCache.get(el);
+    let r = {l: -1e9, t: -1e9, r: 1e9, b: 1e9};
+    const cs = getComputedStyle(el);
+    if (cs.position !== "fixed" && el.parentElement && el.parentElement !== document.documentElement) r = Object.assign({}, clipOf(el.parentElement));
+    if (cs.overflowX !== "visible" || cs.overflowY !== "visible" || /paint|strict|content/.test(cs.contain)) {
+      const b = el.getBoundingClientRect();
+      if (cs.overflowX !== "visible") { r.l = Math.max(r.l, b.left); r.r = Math.min(r.r, b.right); }
+      if (cs.overflowY !== "visible") { r.t = Math.max(r.t, b.top); r.b = Math.min(r.b, b.bottom); }
+    }
+    clipCache.set(el, r);
+    return r;
+  };
+  const cut = (b, c) => ({l: Math.max(b.left, c.l), t: Math.max(b.top, c.t), r: Math.min(b.right, c.r), b: Math.min(b.bottom, c.b)});
+  // The layer an element is drawn in: the page, or the nearest thing fixed over it.
+  const layerOf = (el) => { for (let a = el; a; a = a.parentElement) if (getComputedStyle(a).position === "fixed") return a; return null; };
+  const name = (e) => (e.tagName.toLowerCase() + (e.id ? "#" + e.id : "") + ([...e.classList].length ? "." + [...e.classList].join(".") : "")).slice(0, 60);
+  const words = (e, n) => (e.nodeType === 3 ? e.textContent : (e.getAttribute("aria-label") || e.textContent || e.value || "")).replace(/\s+/g, " ").trim().slice(0, n || 40);
+  // A selector lets an element pass whole; a pair [a, b] lets only those two meet.
+  const allowed = (e) => allow.some((s) => typeof s === "string" && e.closest(s));
+  // {sel, drawn}: a control drawn smaller than its target (a circle in a 44px tap area) is
+  // measured as the square it is drawn in, at its centre.
+  const drawnOf = (e) => {
+    const d = allow.find((s) => s && typeof s === "object" && !Array.isArray(s) && e.matches(s.sel));
+    if (!d) return null;
+    const b = e.getBoundingClientRect(), z = Math.min(d.drawn, b.width, b.height) / 2, x = (b.left + b.right) / 2, y = (b.top + b.bottom) / 2;
+    return {left: x - z, right: x + z, top: y - z, bottom: y + z};
+  };
+  const pairOk = (x, y) => allow.some((s) => Array.isArray(s) && ((x.closest(s[0]) && y.closest(s[1])) || (y.closest(s[0]) && x.closest(s[1]))));
+  const boxes = [];
+  const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  const range = document.createRange();
+  for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+    const el = n.parentElement;
+    if (!el || !n.textContent.trim() || el.closest(SKIP) || !shown(el) || allowed(el)) continue;
+    range.selectNodeContents(n);
+    const c = clipOf(el), layer = layerOf(el);
+    for (const b of range.getClientRects()) {
+      const r = cut(b, c);
+      if (r.r - r.l > 1 && r.b - r.t > 1) boxes.push({kind: "text", el, node: n, layer, r});
+    }
+  }
+  // A control as drawn: its fill, its edge or its shadow, a line at a time for a link that
+  // wraps. One with none of them (a link in a sentence, a fold's heading row, a name) is its
+  // words alone, checked above: its reach for a finger is not drawn over anything.
+  const clear = (c) => !c || c === "transparent" || /rgba\(.*,\s*0\)$/.test(c);
+  const painted = (cs) => !clear(cs.backgroundColor) || cs.backgroundImage !== "none" || cs.boxShadow !== "none"
+    || ["Top", "Right", "Bottom", "Left"].some((s) => parseFloat(cs["border" + s + "Width"]) > 0 && cs["border" + s + "Style"] !== "none" && !clear(cs["border" + s + "Color"]));
+  for (const el of document.body.querySelectorAll(CTL)) {
+    if (el.closest(SKIP) || !shown(el) || allowed(el) || !painted(getComputedStyle(el))) continue;
+    const c = el.parentElement ? clipOf(el.parentElement) : {l: -1e9, t: -1e9, r: 1e9, b: 1e9}, layer = layerOf(el);
+    const d = drawnOf(el);
+    for (const b of d ? [d] : el.getClientRects()) {
+      const r = cut(b, c);
+      if (r.r - r.l > 1 && r.b - r.t > 1) boxes.push({kind: "control", el, layer, r});
+    }
+  }
+  boxes.sort((x, y) => x.r.t - y.r.t);
+  const found = [], seen = new Set();
+  for (let i = 0; i < boxes.length; i++) {
+    const a = boxes[i];
+    for (let j = i + 1; j < boxes.length && boxes[j].r.t < a.r.b; j++) {
+      const b = boxes[j];
+      if (a.layer !== b.layer || a.node && a.node === b.node) continue;
+      // A control's own words, and a control inside another (a switch in its row's label).
+      if (a.el === b.el || (a.kind === "control" && a.el.contains(b.el)) || (b.kind === "control" && b.el.contains(a.el))) continue;
+      const w = Math.min(a.r.r, b.r.r) - Math.max(a.r.l, b.r.l), h = Math.min(a.r.b, b.r.b) - Math.max(a.r.t, b.r.t);
+      // Two lines of one paragraph whose letters' boxes meet under a tight line height are not
+      // one drawn over the other: a quarter of the smaller line, or 2px, is let pass.
+      const lim = a.kind === "text" && b.kind === "text" ? Math.max(2, 0.25 * Math.min(a.r.b - a.r.t, b.r.b - b.r.t)) : 2;
+      if (w <= 1 || h <= lim || pairOk(a.el, b.el)) continue;
+      const k = name(a.el) + "|" + words(a.node || a.el) + "|" + name(b.el) + "|" + words(b.node || b.el);
+      if (seen.has(k)) continue;
+      seen.add(k);
+      found.push({a: a.kind + " " + name(a.el) + " \"" + words(a.node || a.el) + "\"", b: b.kind + " " + name(b.el) + " \"" + words(b.node || b.el) + "\"",
+        w: Math.round(w), h: Math.round(h), at: [Math.round(Math.max(a.r.l, b.r.l)), Math.round(Math.max(a.r.t, b.r.t))]});
+      if (found.length >= 25) return found;
+    }
+  }
+  return found;
+}
 function frameMeasure() {
   const vis = (e) => !!e && e.checkVisibility({visibilityProperty: true, contentVisibilityAuto: true}) && e.getClientRects().length > 0;
   const top = document.getElementById("top");
@@ -778,17 +875,53 @@ async function sheetCheck(page, kind, openIt) {
   }
   return m;
 }
+// A screen's overlaps, and each of its other views (Coming up's Interviews, Jobs' Applied):
+// every switch on the screen tried in turn, then put back as it was.
+async function overlapsOf(page, id, allow, into) {
+  await page.evaluate(() => window.scrollTo(0, 0));
+  into[id] = await throughNav(page, () => page.evaluate(overlapProbe, allow || []));
+  const views = await page.$$eval("#main .segctl .seg-opt[aria-pressed=false]", (bs) => bs.map((b) => b.getAttribute("data-k")).filter(Boolean));
+  const was = await page.$$eval("#main .segctl .seg-opt[aria-pressed=true]", (bs) => bs.map((b) => b.getAttribute("data-k")).filter(Boolean));
+  for (const k of views) {
+    const b = page.locator('#main [data-k="' + k + '"]').first();
+    if (!(await b.count()) || !(await b.isVisible())) continue;
+    await b.click();
+    await turn(page, 4);
+    await page.evaluate(() => window.scrollTo(0, 0));
+    into[id + "/" + k] = await throughNav(page, () => page.evaluate(overlapProbe, allow || []));
+  }
+  for (const k of was) {
+    const b = page.locator('#main [data-k="' + k + '"]').first();
+    if (views.length && (await b.count()) && (await b.isVisible())) { await b.click(); await turn(page, 4); }
+  }
+}
+// The overlap probe finds what it is meant to: a line of words laid over a row's title.
+S.overlap_selftest = async (a) => {
+  const o = await open({html: a.html, viewport: a.viewport, clock: a.clock, hash: "interviews"});
+  await o.page.evaluate(() => {
+    const t = document.querySelector("#main .up-row .up-title");
+    const s = document.createElement("span");
+    s.textContent = "Drawn over the title";
+    s.style.cssText = "position: absolute; left: 0; top: 0;";
+    t.style.position = "relative";
+    t.appendChild(s);
+  });
+  const r = {found: await o.page.evaluate(overlapProbe, a.allow || []), errors: o.errors};
+  await o.ctx.close();
+  return r;
+};
 S.layout = async (a) => {
   // With the sheets measured, one search is running, so the Work pill is there to open.
   const seed = Object.assign(a.sheets ? {"work/search~1": runningDoc()} : {}, a.seed || {});
   const o = await open({html: a.html, viewport: a.viewport, scheme: a.scheme, fake: a.fake, seed, clock: a.clock || "2026-10-26T09:00:00Z", timezoneId: a.timezoneId});
   const {page} = o;
-  const out = {sections: {}, frames: {}, sheets: {}, big: {}};
+  const out = {sections: {}, frames: {}, sheets: {}, big: {}, overlaps: {}};
   for (const id of SECTIONS) {
     await goto(page, id);
     await page.evaluate(() => window.scrollTo(0, 0));
     out.sections[id] = await page.evaluate(layoutMeasure);
     out.frames[id] = await page.evaluate(frameMeasure);
+    if (a.overlaps) await overlapsOf(page, id, a.allow, out.overlaps);
   }
   if (a.sheets) {
     for (const id of SECTIONS) {

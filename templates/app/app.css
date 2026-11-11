@@ -2087,6 +2087,13 @@ ul.bp-news { gap: 12px; }
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); }
 .up-when { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .up-when > .btn { padding-inline: 12px; }
+/* A time read from another zone says both ("15:00 Toronto time (20:00 here)"): it wraps in its
+   own column, the time here kept whole under the person's clock, and the column is wider on
+   every row of the list alike, so the rows still line up. Held to one line in 7rem it ran under
+   the title, over the row's line of facts and into its pill on a laptop (2026-11-11). */
+.up-when:has(> .up-here) { white-space: normal; overflow-wrap: anywhere; }
+.up-here { white-space: nowrap; }
+@media (min-width: 760px) { .up-days:has(.up-here) .up-row { grid-template-columns: 10rem minmax(0, 1fr) auto; } }
 .up-main { display: grid; gap: 2px; min-width: 0; }
 .up-title { overflow-wrap: anywhere; }
 /* What it is and whether its prep is ready are one line under its title ("Interview · Supply

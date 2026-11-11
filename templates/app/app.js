@@ -598,11 +598,14 @@
   // "18:00 (13:00 here)", the card "10:00 London time, 5:00 here"): in the person's own zone,
   // and on a device in another one, the zone named and the time here beside it.
   function clockWords(t) {
+    const p = clockParts(t);
+    return p.here ? p.main + " (" + p.here + " here)" : p.main;
+  }
+  // Its two parts: the person's clock with its zone named, and the time here where that differs.
+  function clockParts(t) {
     const main = clock(t, zone());
-    if (DEVICE_TZ && zone() && zone() !== DEVICE_TZ && clock(t, DEVICE_TZ) !== main) {
-      return main + " " + city(zone()) + " time (" + clock(t, DEVICE_TZ) + " here)";
-    }
-    return main;
+    if (DEVICE_TZ && zone() && zone() !== DEVICE_TZ && clock(t, DEVICE_TZ) !== main) return {main: main + " " + city(zone()) + " time", here: clock(t, DEVICE_TZ)};
+    return {main, here: ""};
   }
   function fmtWhen(s) {
     if (!txt(s)) return "";
@@ -8772,6 +8775,15 @@
     const n = dayDiff(day);
     return n === 0 ? "Today" : n === 1 ? "Tomorrow" : fmtDay(day);
   }
+  // Coming up's own row: from another zone, the time here is one piece the column wraps before,
+  // never through, so "15:00 Toronto time" sits over "(20:00 here)" in the time's own column.
+  // Held to one line, it ran under the title and over the row's line of facts and its pill on a
+  // laptop (the maintainer, 2026-11-11).
+  function upWhenRow(u) {
+    const p = u.start ? clockParts(tms(u.start)) : null;
+    if (!p || !p.here) return upWhen(u);
+    return [p.main, " ", h("span", {class: "up-here"}, "(" + p.here + " here)")];
+  }
   function upWhen(u) {
     // On a device somewhere else, the time here as well, as every other time on the page.
     if (u.start) return clockWords(tms(u.start));
@@ -8894,7 +8906,7 @@
       h("span", {class: "up-main"}, h("span", {class: "up-when"}, [upDayLabel(u.day), upWhen(u)].filter(Boolean).join(" · ")), h("span", {class: "up-title"}, upGo(u)), maybe, prep), add);
     const sub = [UP_WORDS[txt(u.kind)] || "", txt(u.note), txt(u.place)].filter(Boolean).join(" \u00b7\u00a0");
     return h("li", {class: "up-row", "data-item": u.id, "data-card": "1", tabindex: "-1"},
-      h("span", {class: "up-when"}, upWhen(u) || (u.own || u.pending ? "" : addTimeBtn(u))),
+      h("span", {class: "up-when"}, upWhen(u) ? upWhenRow(u) : (u.own || u.pending ? "" : addTimeBtn(u))),
       h("span", {class: "up-main"}, h("span", {class: "up-title"}, upGo(u)), maybe, sub ? h("span", {class: "up-note small muted"}, sub) : null, prep,
         upTimeForm(u), upDayForm(u), upTimed.has(u.id) ? stateLine(txt(obj(upTimeTarget(u)).item), "up:" + u.id) : null),
       h("span", {class: "up-acts"}, upDayBtn(u), add, rm || callOff(u)));

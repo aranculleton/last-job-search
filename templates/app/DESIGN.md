@@ -183,6 +183,11 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   own link is drawn over the reach. Why: a line each, each its own 44px, made a row of three
   short lines 190px tall, and the calendar moved a place on every row with a trash (the
   maintainer, 2026-11-10: "inline and things are good"). (room test)
+  A time from another zone ("15:00 Toronto time (20:00 here)") wraps inside its own column,
+  the time here kept whole under the person's clock, and the column is wider on every row of
+  the list alike, so the rows still line up. Why: held to one line it ran under the title, over
+  the row's line of facts and into its pill on a laptop (the maintainer, 2026-11-11).
+  (overlap test)
 - Every message drafted and waiting is one card, "Messages to send (N)": the drafted
   replies and follow-ups, the week's first notes and the ones to check first together, a row a
   person, each opening their draft in Contacts, and one button opening Contacts. A row Claude
@@ -623,3 +628,8 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
 
 Run the browser tests, then look at the screen you changed on a phone and on a laptop, in
 light and dark. A rule here that a change needs to break is changed here first, with its test.
+No words are drawn over other words or over a button, on any screen or view, at a phone's, a
+tablet's or a laptop's width: the harness measures every line and every drawn control, and an
+overlap meant to be there is named in the test with why (overlap test, on the sample and on its
+extremes: two zones, long names). Why: a two-zone time ran over a row's words for a release and
+only a person saw it (2026-11-11).
