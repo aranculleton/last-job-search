@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -27,9 +28,6 @@ sys.path.insert(0, os.path.join(ROOT, "tests"))
 
 from test_sync_app import ENV, commit, read, run, sh, write  # noqa: E402
 
-# What `import app` needs, and the sync it runs.
-TOOLS = ("app.py", "person.py", "python_floor.py", "local_path.py", "place.py", "sync_app.py",
-         "personal_paths.py")
 
 
 @pytest.fixture
@@ -37,8 +35,10 @@ def copies(tmp_path):
     app = str(tmp_path / "app")
     os.makedirs(app)
     sh(app, "git", "init", "-q", "-b", "master")
-    for tool in TOOLS:
-        write(app, f"tools/{tool}", read(ROOT, f"tools/{tool}"))
+    # The whole of tools/, as a person's copy has it: `import app` and its day's check reach
+    # far into the app (the start's own marker lives in app_setup).
+    shutil.copytree(os.path.join(ROOT, "tools"), os.path.join(app, "tools"),
+                    ignore=shutil.ignore_patterns("__pycache__", "openroles"))
     write(app, ".gitignore", "__pycache__/\n")
     write(app, "README.md", "v1\n")
     write(app, "CHANGELOG.md", "# Changelog\n")
