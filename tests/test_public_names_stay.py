@@ -277,4 +277,5 @@ def test_a_release_publishes_with_no_step_for_its_names(monkeypatch):
     sample = [{"version": "3.3.0", "date": "2026-10-19", "notes": "### Fixed\n\n- **A fix.**"}]
     monkeypatch.setattr(release, "sections", lambda text=None: sample)
     assert release.publish() == 0
-    assert [c[:2] for c in calls] == [["release", "create"]]
+    # The tag goes out, then the bugs fixed since the last release are looked up to close.
+    assert [c[:2] for c in calls] == [["release", "create"], ["issue", "list"]]

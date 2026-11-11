@@ -2125,7 +2125,15 @@ def _watch_file(name: str) -> str | None:
 
 def app_watch_said() -> None:
     """What the last look in the background printed (a finding, or that it could not reach
-    the app), said once, where the look itself used to say it."""
+    the app), said once, where the look itself used to say it. And, in the maintainer's own
+    copy, app bugs a chat checked but could not file (tools/app_bug.py held_line)."""
+    try:
+        import app_bug
+        held = app_bug.held_line()
+    except Exception:  # noqa: BLE001  never a reason for the sync to stop
+        held = ""
+    if held:
+        print(held)
     path = _watch_file(WATCH_SAID)
     try:
         with open(path, encoding="utf-8") as fh:

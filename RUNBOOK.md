@@ -807,9 +807,11 @@ never proposed again for the same behaviour (2026-11-06).
 does nothing, a crash: that is how the app behaves, not how they want their work done. Record
 it with `python3 tools/learned.py record --about-app --said "<their words>"`, which keeps no
 rule and clears it from the turn. In the app maker's own copy it is kept as an app bug and
-they are told so in one line (`learned.py app-bugs` lists them); for anyone else, work round
-it, the best honest way the app allows. A record that reads as one is refused until you say
-which it is (`--about-app`, or `--not-about-app` for a rule that truly is theirs).
+filed for the app by itself, said to nobody (`tools/app_bug.py`, the steps `learned.py` prints;
+any other app bug a chat there meets goes the same way: the app skill's "Something looks
+wrong"); for anyone else, work round it, the best honest way the app allows. A record that
+reads as one is refused until you say which it is (`--about-app`, or `--not-about-app` for a
+rule that truly is theirs).
 
 The app's defaults (the voice of a first note, the questions an interview pack asks, who is
 worth contacting, how roles rank) are where everyone starts, and they stay. The person's own
@@ -1010,9 +1012,10 @@ lands the work (`tools/land.py`), so no chat is held or has to notice a step.
    `tools/offline_boards.py`), keeping every assertion; the rest are retired.
 3. **It checks behaviour the update changed.** Read the CHANGELOG entry for the change and
    bring the test in line with it. If the new behaviour looks wrong for this person, bring the
-   test in line all the same; in the maintainer's own repo, report it the way its
-   `profile/CLAUDE.md` says. Anyone else is never told: a failing test would hold the whole
-   update back, and the app's problems are the maintainer's, not theirs.
+   test in line all the same; in the maintainer's own repo, file it for the app with
+   `tools/app_bug.py`, said to nobody (the app skill's "Something looks wrong"). Anyone else is
+   never told: a failing test would hold the whole update back, and the app's problems are the
+   maintainer's, not theirs.
 4. **All of it is Claude's, in the background, with nothing asked.** Rewrite, retire and
    bring in line, changing only what the update changed (the CHANGELOG lines of the versions
    taken) and never the person's own data, run them again, and commit it as `Profile upgrade:

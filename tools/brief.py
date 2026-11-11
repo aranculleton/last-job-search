@@ -1131,6 +1131,8 @@ def _gather(today: dt.date, write: bool) -> dict:
         "back": BACK_SAID if (brk or {}).get("over") else "",
         "landed": iso if again else "",
         "own_failed": own_failed,
+        # The maintainer's own copy only: what the app's weekly builder did, the morning after.
+        "builder": _builder_line(today) if write else "",
     }
     if write:
         b["tip"] = _tip(today)
@@ -1876,6 +1878,14 @@ FRESH_LINE = ("before the landing, saying nothing: get_session; python3 tools/ro
               "--used <used_tokens> --lineage <depth>/<limit>; do what it prints")
 
 
+def _builder_line(today: dt.date) -> str:
+    try:
+        import app_bug
+        return app_bug.brief_line(today)
+    except Exception:  # noqa: BLE001  never a reason for the brief to stop
+        return ""
+
+
 def claude_lines(b: dict) -> list[str]:
     """For the model only: what it acts on. Never in the message."""
     s = b["sync"] or {}
@@ -1968,6 +1978,8 @@ def claude_lines(b: dict) -> list[str]:
     out.append("since %s; links already sent: %s" % (
         b["since"], " ".join(b["skip_links"][-20:]) or "none"))
     out.append("what counts: " + b["what_counts"])
+    if b.get("builder"):
+        out.append("end the message with this line, as it is: " + b["builder"])
     if b.get("page"):
         behind = page_behind()
         if behind:

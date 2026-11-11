@@ -408,8 +408,9 @@ METHODS: dict[str, dict] = {
             (99, "2026-11-11", False, "the experience section's heading moves to the next page with its first role rather than staying alone at the foot of a page; a resume whose heading never sat there comes out the same; RUNBOOK.md says a computer chat's save finishes there where the chat that answers the page is on the computer too"),
             (100, "2026-11-11", False, "files a tap names (a LinkedIn download) are the wake's first step, every one named, and the end of a batch names them too; nothing made changes"),
             (101, "2026-11-11", False, "the save steps a chat, a job's chat or a background agent follows say beside the pull request never to subscribe to it, and to unsubscribe once it is merged; nothing made changes"),
+            (102, "2026-11-11", False, "in the app maker's own copy an app bug a chat meets is filed for the app by itself, said to nobody (tools/app_bug.py); the full local check is said to take as long as CI"),
         ),
-        "fingerprint": "5b2195ef44a19bf0",
+        "fingerprint": "5cef8a4164fffe53",
     },
     "interview": {
         # Only a process with a round still to come is prepared again: a prep for a round
@@ -910,8 +911,9 @@ METHODS: dict[str, dict] = {
             (83, "2026-11-10", False, "the tidy-up counts a job to the job chat that ran it, so a finished job chat is put away and its unsaved work looked for"),
             (84, "2026-11-10", False, "a finished job chat asked to save its work is asked by one message and answers by none: the next tidy-up finds the work saved or says it was lost"),
             (85, "2026-11-10", False, "a job chat that stopped on a question to you counts as finished for the tidy-up while the question waits and after your answer; a job chat that reports one job while blocked part way through another it runs is kept, never put away at work; asking routines.py for help never changes the registry"),
+            (86, "2026-11-11", False, "the app maker's own builder task is listed (it fixes the bugs their copy files); nothing changes for anyone else"),
         ),
-        "fingerprint": "edd785189717635f",
+        "fingerprint": "d61e74624798f30f",
     },
     "expand": {
         "by": "upgrade", "priority": 4, "time": "~15 min",
@@ -1260,6 +1262,8 @@ KEEPS_NOTHING: dict[str, str] = {
     "tools/name_guard.py": "development tooling: checks what the app carries, keeps nothing",
     "tools/app_watch.py": "checks the public app from the maintainer's repo; keeps only a "
                           "note in .git of what it has read",
+    "tools/app_bug.py": "files an app bug from the maintainer's own copy as an issue on the "
+                        "app; keeps only its denylist and the builder's wake in .git",
     "tools/csv_store.py": "reads and writes a state CSV in place; keeps nothing",
     "tools/release.py": "publishes the app's releases from its own CI; keeps nothing in a repo",
     "tools/remembered.py": "keeps each answer for one page build only, in memory; keeps nothing",

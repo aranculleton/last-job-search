@@ -22,6 +22,10 @@ brings()). It refuses when [Unreleased] is empty, when X.Y.Z is not newer than t
 release, when the headline is longer than 140 characters or is not one plain sentence, and
 when docs/NEXT_BUILDER.md does not name X.Y.Z yet. It never commits.
 
+Publishing a release also closes every open issue labelled `fixed-unreleased` (a bug from the
+maintainer's copy, fixed on master since the last release: tools/app_bug.py) with a comment
+"Fixed in vX.Y.Z", and takes the label off.
+
 The notes are short on purpose: the version's headline (the section's first entry), then
 one line per change by kind, new things first, then changed, fixed and removed, each with
 its headline from the CHANGELOG, a few plain words where a change needs the person, and one
@@ -40,6 +44,7 @@ about them is written at a release.
 from __future__ import annotations
 
 import datetime as dt
+import json
 import os
 import re
 import subprocess
@@ -342,7 +347,49 @@ def publish(sha: str | None = None) -> int:
              "--target", sha or os.environ.get("GITHUB_SHA") or "master"])
     os.unlink(notes)
     print(f"release: published {tag}" if r.returncode == 0 else (r.stderr or r.stdout))
+    if r.returncode == 0:
+        close_fixed(tag)
     return r.returncode
+
+
+FIXED_LABEL = "fixed-unreleased"
+
+
+def close_fixed(tag: str, gh=None) -> list[int]:
+    """Every open issue labelled FIXED_LABEL (a bug from the maintainer's copy the builder
+    fixed on master, tools/app_bug.py) closed with a comment naming the release that carries
+    the fix, and the label taken off. Only when a release is first published, never when its
+    notes are rewritten: an issue fixed after it would be called fixed in it. One that could
+    not be closed is said and keeps its label, so the next release closes it; the release is
+    out either way. The numbers closed."""
+    gh = gh or _gh
+    got = gh(["issue", "list", "--label", FIXED_LABEL, "--state", "open", "--json", "number",
+              "--limit", "200"])
+    try:
+        numbers = [int(i["number"]) for i in json.loads(got.stdout or "[]")] \
+            if got.returncode == 0 else None
+    except (ValueError, TypeError, KeyError):
+        numbers = None
+    if numbers is None:
+        print(f"release: the issues fixed in {tag} could not be listed: "
+              f"{(got.stderr or got.stdout or '').strip()[:200]}")
+        return []
+    closed = []
+    for n in numbers:
+        # Closed first, the label taken off after: a label gone from an issue still open
+        # would leave it open for good.
+        shut = gh(["issue", "close", str(n), "--reason", "completed",
+                   "--comment", f"Fixed in {tag}"])
+        if shut.returncode != 0:
+            print(f"release: issue #{n} could not be closed: "
+                  f"{(shut.stderr or shut.stdout or '').strip()[:200]}")
+            continue
+        gh(["issue", "edit", str(n), "--remove-label", FIXED_LABEL])
+        closed.append(n)
+    if numbers:
+        print(f"release: closed {len(closed)} of {len(numbers)} issue(s) fixed in {tag}")
+    return closed
+
 
 
 def refresh(tag: str, text: str) -> int:

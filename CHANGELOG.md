@@ -20,6 +20,10 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Added
+
+- **The app's maker hears of its bugs without anyone passing them on.** A bug met in the maker's own copy is filed for the app by itself and fixed by a scheduled builder; nothing changes for you.
+
 ### Changed
 
 - **The maintainer's releases take one command.** `python3 tools/release.py cut X.Y.Z --headline "..."`
