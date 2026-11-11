@@ -1,7 +1,7 @@
 {
  "model": 1,
  "made_at": "2026-10-25T18:00:00Z",
- "rev": "30206322146c",
+ "rev": "e0c1301bdafb",
  "app": {
   "version": "4.15.0",
   "url": null,
@@ -13,7 +13,7 @@
   ],
   "privacy": "Only you can open this page unless you share it. It holds first names, employers, your drafts and your setup answers, so keep it unshared.",
   "repo": "https://github.com/aranculleton/last-job-search",
-  "page": 159,
+  "page": 160,
   "not_saved": 0,
   "app_bugs": []
  },
@@ -77,7 +77,7 @@
  ],
  "jobs": {
   "round": "r9",
-  "made_at": "2026-11-11T16:13:02Z",
+  "made_at": "2026-11-11T17:20:46Z",
   "met": false,
   "summary": "3 roles from the last search to look at, 1 of them scoring 75 or more. 3 left out, each with its reason.",
   "rows": [
@@ -1012,7 +1012,7 @@
    "when": "2026-10-28",
    "prep": {
     "path": "documents/applications/thornbury_bank_risk_analyst_thornbury/interview_prep.md",
-    "updated": "2026-11-11T16:13:02Z"
+    "updated": "2026-11-11T17:20:46Z"
    },
    "questions": 2,
    "all_day": true,
@@ -1606,7 +1606,7 @@
   "done": [],
   "pending": [],
   "changelog": "https://github.com/aranculleton/last-job-search/blob/master/CHANGELOG.md",
-  "since": false
+  "since": true
  },
  "applications": [
   {
@@ -1872,7 +1872,7 @@
     "computer": "Waiting for their profile: Claude reads it on your computer by itself, then rewrites this note",
     "tab": "Waiting for their profile: press Read them in To do once, and Claude reads it by itself from then on",
     "sign_in": "Waiting for their profile: sign in to LinkedIn in Claude's browser and Claude reads it by itself",
-    "paused": "Waiting for their profile: LinkedIn asked Claude to slow down, so it reads it tomorrow, by itself",
+    "paused": "Waiting for their profile: LinkedIn stopped Claude's reading for today, so it reads it tomorrow, by itself",
     "next": "Waiting its turn: Claude reads their profile here by itself, then rewrites this note",
     "reading": "Reading their profile…",
     "read": "Profile read: Claude rewrites this note next",

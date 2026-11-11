@@ -70,12 +70,23 @@ def test_a_sign_in_question_leaves_the_work_this_chats_so_the_sign_in_stays_on_t
     assert "tell the person" not in said.lower() and "say done" not in said
 
 
-def test_a_second_sign_out_in_a_chat_the_app_started_goes_on_the_page(monkeypatch, capsys):
+def test_a_second_sign_out_in_a_chat_the_app_started_goes_on_the_page(tmp_path, monkeypatch,
+                                                                       capsys):
+    import person
+    monkeypatch.setenv(person.STATE_ENV, str(tmp_path / "state"))
     monkeypatch.setattr(reading, "app_job_here", lambda: WID)
     got = {"kind": "friction", "why": "LinkedIn's sign-in page, the second sign-out today"}
+    # Their sign-in may lift today's stop: the sign-in goes on the page.
+    monkeypatch.setattr(reading, "_way_back", lambda now=None: reading.RESUME_LINE)
     assert reading._said_signout(got) == reading.EXIT["check"]
     out = capsys.readouterr().out
     assert "--signin linkedin" in out and "--work " + WID in out
+    assert "Tell the person" not in out and "never in this chat" in out
+    # It may not today: the job ends on the page, saying so, still nothing in the chat.
+    monkeypatch.setattr(reading, "_way_back", lambda now=None: "")
+    reading._said_signout(got)
+    out = capsys.readouterr().out
+    assert "--failed" in out and "--work " + WID in out and "tomorrow" in out
     assert "Tell the person" not in out and "never in this chat" in out
     # A chat the person reads is still told, as before.
     monkeypatch.setattr(reading, "app_job_here", lambda: "")

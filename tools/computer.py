@@ -137,9 +137,16 @@ SAY = {
     "signed_out": "LinkedIn is signed out in Claude's browser on your computer: sign in there once.",
     "signed_out_lost": ("LinkedIn signed out in Claude's browser on your computer: sign in again "
                         "and keep the sign-in this time."),
-    "forgets": ("Claude's browser on your computer forgets LinkedIn each time the app quits: "
-                "keep its sign-in once."),
-    "paused": "LinkedIn asked Claude to slow down: reading starts again tomorrow, by itself.",
+    # Said by its effect, never a cause nobody measured: no chat sees the app quit (the local
+    # review, 2026-11-11, 5).
+    "forgets": ("Claude's browser on your computer did not keep your LinkedIn sign-in: keep "
+                "its sign-in once."),
+    "keep_signin": ("LinkedIn signed out again in Claude's browser on your computer: keep the "
+                    "sign-in there once, then sign in again."),
+    # What LinkedIn did (a check, or a sign-out mid-read), never a cause nobody measured: a
+    # sign-in that did not last was said as "LinkedIn asked Claude to slow down" (the local
+    # review, 2026-11-11, 5).
+    "paused": "LinkedIn stopped Claude's reading for today: it starts again tomorrow, by itself.",
     "no_bridge": "Claude can't start on your computer yet: switch it on once in the Claude app there.",
     "not_set_up": "Claude doesn't use your computer yet. Set it up once to read LinkedIn profiles there.",
     "no_computer": "No computer for this: paste each person's profile on their card instead.",
@@ -157,6 +164,7 @@ ACTION = {
     "signed_out": ("browser-pane-stay-signed-in", "Sign in once"),
     "signed_out_lost": ("browser-pane-stay-signed-in", "Sign in again"),
     "forgets": ("browser-pane-stay-signed-in", "Stay signed in"),
+    "keep_signin": ("browser-pane-keep-cookies", "Keep the sign-in"),
     "no_bridge": ("remote-control-settings", "Switch it on"),
     "not_set_up": ("remote-control-settings", "Set it up"),
     "starter_waits": None,
@@ -176,8 +184,10 @@ WAITING_SAY = {
                   "sign in once.",
     "signed_out_lost": "{what} because LinkedIn signed out in Claude's browser. Sign in again, "
                        "and keep the sign-in this time.",
-    "forgets": "{what} because Claude's browser forgets your LinkedIn sign-in when the app "
-               "quits. Keep the sign-in once.",
+    "forgets": "{what} because Claude's browser did not keep your LinkedIn sign-in. Keep the "
+               "sign-in once.",
+    "keep_signin": "{what} because LinkedIn signed out again in Claude's browser. First keep "
+                   "the sign-in there once, so your next one lasts.",
     "no_bridge": "{what} until Claude is switched on for your computer. Switch it on once in "
                  "the Claude app there.",
     "not_set_up": "{what} until Claude is set up on your computer. Set it up once.",
@@ -687,8 +697,10 @@ def beat_fields(name: str, now: dt.datetime, browser: str = "none", linkedin: st
 
 
 def beat(db: dict, name: str, now: dt.datetime, out_dir: str, dump_dir: str = "",
-         **facts) -> list[str]:
-    """The batch that writes this computer's heartbeat, pinned to the version read."""
+         since_in: str = "", said_on: str = "", **facts) -> list[str]:
+    """The batch that writes this computer's heartbeat, pinned to the version read. `since_in`
+    and `said_on`: what this computer knows of LinkedIn sign-ins and the saved sign-in besides its
+    heartbeats (cookies_seen)."""
     import page_db
     did = beat_id(name)
     mine = (db.get("chats") or {}).get(did)
@@ -696,7 +708,7 @@ def beat(db: dict, name: str, now: dt.datetime, out_dir: str, dump_dir: str = ""
     fields = beat_fields(name, now, **facts)
     if fields["last_read"] is None and old.get("last_read"):
         fields["last_read"] = old["last_read"]          # nothing read this time: kept
-    fields.update(cookies_seen(old, fields))
+    fields.update(cookies_seen(old, fields, since_in=since_in, said_on=said_on))
     w = page_db.Writes(out_dir)
     w.add("set", "chats", did, fields, if_version=mine["version"] if mine else None)
     if dump_dir:
@@ -716,12 +728,20 @@ def beat(db: dict, name: str, now: dt.datetime, out_dir: str, dump_dir: str = ""
     return batches
 
 
-def cookies_seen(old: dict, new: dict) -> dict:
+def cookies_seen(old: dict, new: dict, since_in: str = "", said_on: str = "") -> dict:
     """Whether the browser keeps sign-ins (browser-pane-stay-signed-in), by its effect: no chat can read the browser's menu, so a LinkedIn sign-in
     seen (`in`) and then lost (`out`) by the next look says the browser did not keep it (it was
     signed in one day and signed out the next morning, and a job stopped with nothing read:
     the maintainer, 2026-11-10). Kept off until a later look finds the sign-in held across a
-    gap of SIGNIN_HELD_S; never guessed on, said by the person or measured otherwise."""
+    gap of SIGNIN_HELD_S; never guessed on, said by the person or measured otherwise.
+
+    `since_in`: the newest sign-in this computer knows of besides its heartbeats (one a chat
+    saw, a read made signed in, the page's own reader), so a sign-in made and lost between two
+    looks is a loss too. Judged only on the heartbeat before, a sign-in made on the page and
+    gone by the next look was never one, and the setting read "unknown" for good (the
+    maintainer's Mac, 2026-11-11). `said_on`: when the person said on their page that they
+    set the browser to keep sign-ins (browser-pane-keep-cookies, KEEP_SAID): "on" from then, until a sign-in is lost after it. A loss is
+    kept (`signin_lost`) for as long as LinkedIn stays signed out."""
     if new.get("keep_cookies") in ("on", "off"):
         return {}
     was, now_ = old.get("linkedin"), new.get("linkedin")
@@ -731,11 +751,22 @@ def cookies_seen(old: dict, new: dict) -> dict:
             out["signed_in_at"] = new.get("seen_at")
         else:
             out["signed_in_at"] = old["signed_in_at"]
-    if was == "in" and now_ == "out":
+    look, between = _time(old.get("seen_at")), _time(since_in)
+    lost = old.get("signin_lost") if isinstance(old.get("signin_lost"), dict) else None
+    if now_ == "out" and (was == "in" or (was != "in" and look and between and between > look)):
         out["keep_cookies"] = "off"
-        out["signin_lost"] = {"in_at": old.get("signed_in_at") or old.get("seen_at"),
+        out["signin_lost"] = {"in_at": (old.get("signed_in_at") or old.get("seen_at")
+                                        if was == "in" else _stamp(between)),
                               "out_at": new.get("seen_at")}
-    elif old.get("keep_cookies") == "off" and now_ != "in":
+        return out
+    if now_ != "in" and lost:
+        out["signin_lost"] = lost              # still signed out since it was lost
+    said = _time(said_on)
+    lost_at = _time((lost or {}).get("out_at"))
+    if said and not (lost_at and lost_at > said):
+        out["keep_cookies"] = "on"
+        return out
+    if old.get("keep_cookies") == "off" and now_ != "in":
         out["keep_cookies"] = "off"
     elif old.get("keep_cookies") == "off" and now_ == "in":
         start = _time(out.get("signed_in_at"))
@@ -743,6 +774,39 @@ def cookies_seen(old: dict, new: dict) -> dict:
         held = start and seen and (seen - start).total_seconds() >= SIGNIN_HELD_S
         out["keep_cookies"] = "unknown" if held else "off"
     return out
+
+
+# The person's word that they set the browser to keep sign-ins, kept when they said it (profile/
+# said_once.json, app_setup.save_said): their Done on the card that asked (state, keep_signin).
+KEEP_SAID = "computer-keep-cookies"
+
+
+def keep_said() -> str:
+    """When the person said on their page they set the browser to keep sign-ins, or ""."""
+    try:
+        import app_setup
+        return str(app_setup.said_once().get(KEEP_SAID) or "")
+    except Exception:  # noqa: BLE001  no profile here: never said
+        return ""
+
+
+def signed_in_here() -> str:
+    """The newest LinkedIn sign-in this computer knows of besides its heartbeats, as a stamp:
+    one a chat here saw or a read made signed in (reading's ledger), or the page's own reader
+    (page_signed_in_at); "" for none."""
+    got = []
+    try:
+        sys.path.insert(0, os.path.join(_HERE, "network"))
+        import reading
+        t = reading._signed_in_at()
+        if t:
+            got.append(t.astimezone(dt.timezone.utc))
+    except Exception:  # noqa: BLE001  no ledger here
+        pass
+    page = _time(page_signed_in_at())
+    if page:
+        got.append(page)
+    return _stamp(max(got)) if got else ""
 
 
 def heartbeat(db: dict) -> dict:
@@ -979,12 +1043,14 @@ def held_there(db: dict, now: dt.datetime, w: dict | None = None) -> tuple[list,
 
 
 def state(db: dict, now: dt.datetime, envs=None, version: str = "",
-          works_on: str = "", page_signin: str = "") -> dict:
+          works_on: str = "", page_signin: str = "", keep_said: str = "") -> dict:
     """The computer as the page shows it: {state, line, action, card, computer, seen_at,
     waiting}. `action` is {label, steps} or None; `card` is True only while computer work
     waits past CARD_AFTER_S (nobody started it, or a chat there holds it) and only the person
     can move it. `envs`: list_environments' answer
-    where the chat asked (None: not known). `works_on`: profile/place.json's answer."""
+    where the chat asked (None: not known). `works_on`: profile/place.json's answer.
+    `keep_said`: when the person said they set the browser to keep sign-ins (KEEP_SAID): asked
+    only once."""
     beat_ = heartbeat(db)
     w = waiting(db, now)
     seen = _time(beat_.get("seen_at"))
@@ -1044,7 +1110,23 @@ def state(db: dict, now: dt.datetime, envs=None, version: str = "",
     for _, d in held:
         asked.append((str(d.get("asked_at") or ""), str(d.get("title") or "").strip()))
     # The words for a sign-in that did not last (cookies_seen): the same state, a truer line.
-    say = "signed_out_lost" if key == "signed_out" and beat_.get("signin_lost") else key
+    # While keeping sign-ins is not known to be on and the person has never been asked, it is
+    # asked first, once, before another sign-in: signed in again and again, it signed out
+    # again, the setting "unknown" for good (the maintainer's Mac, 2026-11-11).
+    lost = beat_.get("signin_lost") if isinstance(beat_.get("signin_lost"), dict) else None
+    keep_ask = bool(lost) and beat_.get("linkedin") == "out" and \
+        beat_.get("keep_cookies") != "on" and not keep_said
+    if keep_ask and key == "signin_unsure":
+        key = "signed_out"
+    say = ("keep_signin" if key == "signed_out" and keep_ask else
+           "signed_out_lost" if key == "signed_out" and lost else key)
+    # Work waiting on its own Sign in to LinkedIn card: asked to keep the sign-in first, at
+    # once, on a card of its own above it (the page holds the sign-in card back till then).
+    on_signin = [d for d in ((doc or {}).get("data") or {} for doc in
+                             (db.get("work") or {}).values()) if waits_on_signin(d)]
+    if say == "keep_signin":
+        asked += [(str(d.get("asked_at") or ""), str(d.get("title") or "").strip())
+                  for d in on_signin]
     act = ACTION.get(say)
     action = None
     if act:
@@ -1057,7 +1139,9 @@ def state(db: dict, now: dt.datetime, envs=None, version: str = "",
     rec = starter(db)
     return {"state": key, "line": SAY[say], "action": action, "say": say,
             "card": needs_them and ((bool(w["queued"]) and waited >= CARD_AFTER_S) or
-                                    (bool(held) and held_waited >= CARD_AFTER_S)),
+                                    (bool(held) and held_waited >= CARD_AFTER_S) or
+                                    (say == "keep_signin" and bool(w["queued"] or held or
+                                                                   on_signin))),
             # The chat the person approves in, linked from the card (card): "open that chat"
             # named no chat and gave no way there (the local review, 2026-11-11, 7).
             "starter": ({"chat": str(rec.get("chat") or ""), "title": STARTER_TITLE}
@@ -1093,7 +1177,7 @@ def seen(db: dict, now: dt.datetime) -> dict | None:
     try:
         works_on = _works_on()
         st = state(db, now, version=app_version(), works_on=works_on,
-                   page_signin=page_signed_in_at())
+                   page_signin=page_signed_in_at(), keep_said=keep_said())
     except Exception:  # noqa: BLE001  the page is drawn whatever the computer's record holds
         return None
     # Someone who never said they have a computer, with nothing waiting for one, keeps the
@@ -1163,8 +1247,9 @@ def card(st: dict) -> dict | None:
     item = {"id": "q-setup-computer", "kind": "setup", "title": "Your computer, for LinkedIn",
             "body": body, "steps": (st.get("action") or {}).get("steps") or [],
             "options": [{"label": "Done", "action": "setup.done"}] if st.get("action") else [],
-            "about": {"step": "computer"}, "rev": app_model.rev_of("computer", st["state"], body)}
-    if st["state"] == "signed_out":
+            "about": {"step": "computer", "say": st.get("say") or st["state"]},
+            "rev": app_model.rev_of("computer", st["state"], body)}
+    if st["state"] == "signed_out" and st.get("say") != "keep_signin":
         item["browser"] = dict(LINKEDIN_LOGIN)
     if (st.get("starter") or {}).get("chat"):
         # The one way through is that chat's approval: the card opens it, by its own link
@@ -2480,7 +2565,7 @@ def main(argv=None) -> int:
             sys.path.insert(0, os.path.join(_HERE, "network"))
             import reading
             if reading.url_kind(a.url) == "signed-in":
-                reading.mark_signed_in()
+                reading.mark_signed_in(person_=True)
                 print(f"signed-in: python3 tools/computer.py signed-in \"$D\" --work {a.work} and "
                       "send its batch, write the heartbeat with --linkedin in, read the page's "
                       "work again (step 3), then step 4 and carry on from step 6.")
@@ -2533,13 +2618,15 @@ def main(argv=None) -> int:
         return 0
     if a.cmd == "beat":
         print(json.dumps({"batches": beat(db, this_computer(a.name), now, out, dump_dir=a.dump,
+                                          since_in=signed_in_here(), said_on=keep_said(),
                                           browser=a.browser, linkedin=a.linkedin,
                                           cookies=a.cookies, read=a.read, chat=a.chat,
                                           stop=stop_here())}))
         return 0
     if a.cmd == "state":
         print(json.dumps(state(db, now, envs=_load_json(a.envs), version=app_version(),
-                               works_on=_works_on()), ensure_ascii=False))
+                               works_on=_works_on(), keep_said=keep_said()),
+                         ensure_ascii=False))
         return 0
     if a.cmd == "waiting":
         w = waiting(db, now)

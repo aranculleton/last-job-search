@@ -148,9 +148,12 @@ know whether it worked.
    steps include keeping the sign-in). Check: a chat already at work on the computer says what
    its own tab shows in its heartbeat (`computer.py beat --linkedin in`), and opens nothing
    extra for it; who looks in each case is the table below. No chat can read whether the
-   browser keeps sign-ins, so it is judged by its effect: a sign-in seen and then lost by the next look
-   marks it off (`computer.cookies_seen`), the card and the brief then say to sign in again
-   and keep the sign-in, and a sign-in that holds for a day clears it.
+   browser keeps sign-ins, so it is judged by its effect: a sign-in lost by the next look, one
+   made on the page or seen by a read between two looks included, marks it off
+   (`computer.cookies_seen`). The page then asks once, before the next sign-in, to keep it
+   (`browser-pane-keep-cookies`), the person's Done records it on, and a sign-in that holds
+   for a day clears it. A sign-in page before anything was read since they signed in is a
+   sign-in that did not last, never friction: nothing stops (`reading.signout`, lost).
 5. **No scheduled task.** An hourly task on the computer started a Claude run every hour the
    app was open, waiting work or not, and needed its own Auto switch and a first run by hand
    (2026-11-09). The cloud already starts a chat on the computer when work waits, so none is

@@ -1228,15 +1228,29 @@ def cmd_next(a) -> int:
     if ended["batches"]:
         chosen = dict(chosen, ended=ended["ended"],
                       batches=list(ended["batches"]) + list(chosen.get("batches") or []))
-    if chosen.get("batches") and getattr(a, "computer_only", False):
+    if chosen.get("batches") and (getattr(a, "computer_only", False) or (
+            (a.kind or "") == "computer" and chosen.get("run") == "here"
+            and chosen.get("kind") in page_db.READS_ON_COMPUTER)):
         # The id it was claimed under, kept on this computer for a chat that compacts and loses
-        # it (computer.py prompt says it again; the builder audit, 2026-11-10, CC-25).
+        # it (computer.py prompt says it again; the builder audit, 2026-11-10, CC-25). A read
+        # taken here by a chat on the computer with plain `next` (route's `here`) or lent its
+        # browser is the page's work too, so it is kept the same way: unkept, its sign-in was
+        # asked in a chat nobody reads (the local review, 2026-11-11, 4).
         import app_setup
         for wid in [chosen["work"]] + [str(o.get("work") or "") for o in chosen.get("with") or []]:
             try:
-                app_setup.record_claim(wid, a.chat)
+                app_setup.record_claim(wid, a.chat, lent=bool(getattr(a, "lent", False)))
             except OSError:
                 pass
+        # The person's sign-in answered on the page lifts today's sign-out stop, once, in code
+        # (reading.resume_from_page): signed in there, every read was still refused.
+        try:
+            sys.path.insert(0, os.path.join(_HERE, "network"))
+            import reading
+            reading.resume_from_page(((page_db.load(a.dump).get("work") or {}).get(
+                page_db.safe_id(chosen["work"])) or {}).get("data") or {})
+        except Exception:  # noqa: BLE001  nothing to lift, or no ledger here
+            pass
     if chosen.get("batches"):
         # Claimed, as it will be once sent: the pins and the finish made from this folder are
         # pinned to the claim's versions and free the holds it makes. Left as read, the first

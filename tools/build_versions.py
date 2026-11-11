@@ -742,8 +742,9 @@ METHODS: dict[str, dict] = {
             (57, "2026-11-10", False, "an HTTP error page (999, 429) is judged on the page's head alone, so an error number in someone's About is no stop"),
             (58, "2026-11-10", False, "a profile read in a chat of a person whom work waiting on the page reads is refused until that work is taken into the chat, so nobody is read twice; the chat that claimed or took the work, and work that has ended, refuse nothing; a number the person gave for one employer (more-at --up-to) is obeyed, a lower one included, and only Open it now's room is never below their usual number"),
             (59, "2026-11-11", False, "a second sign-out the same day in a chat the app started on the computer goes on the person's page with the job, never told in that chat; notes are written as before"),
+            (60, "2026-11-11", False, "a sign-in page before anything was read since the person signed in is a sign-in that did not last, never friction, and the day's first sign-out is kept on the job path; every read of the page's on the computer (plain next and a lent browser too) puts sign-ins and checks on the page, and an answer there lifts a sign-out stop; notes are written as before"),
         ),
-        "fingerprint": "3b777a77abcca715",
+        "fingerprint": "c66b92d94eadeb25",
     },
     "screening": {
         "by": "round", "priority": 2,
@@ -1096,8 +1097,9 @@ METHODS: dict[str, dict] = {
             (157, "2026-11-10", False, "Plan a time writes its event in UTC from your own zone, with your reminder and folded lines, and the Messages to send card has it too"),
             (158, "2026-11-10", False, "the person's own dates are told from someone else's as the engine writes them (an interview's test or day to choose, an offer's reply-by), and no row, card or Brief line of their own says days late or Follow-up due"),
             (159, "2026-11-10", False, "the Brief's tiles lead with this week's applications and messages sent; Progress's counts in words sit under the funnel; the next step reads plainly; a question after the Jobs line is its own sentence"),
+            (160, "2026-11-11", False, "To do holds a LinkedIn sign-in card back while the card asking to keep the sign-in is open, and a stop says LinkedIn stopped the reading, never that it asked Claude to slow down"),
         ),
-        "fingerprint": "8a56f798b90b39c5",
+        "fingerprint": "5dcd9e359687f93f",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

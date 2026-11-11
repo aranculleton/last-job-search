@@ -1918,9 +1918,10 @@ CLAIMS = "ljs-claims.json"
 
 
 def record_claim(work: str, chat: str, today: dt.date | None = None,
-                 now_ts: float | None = None) -> bool:
+                 now_ts: float | None = None, lent: bool = False) -> bool:
     """Remember that `work` was claimed here as `chat`, and when (`at`, and `renewed`, which
-    each pin moves on: the claim's lease runs from it)."""
+    each pin moves on: the claim's lease runs from it). `lent`: a cloud chat lent the
+    computer's browser claimed it as a computer chat (app.py next --lent)."""
     if not work or not chat:
         return False
     import time
@@ -1930,7 +1931,8 @@ def record_claim(work: str, chat: str, today: dt.date | None = None,
     path = _local_file(CLAIMS)
     got = _read_json(path, {})
     got = {k: v for k, v in got.items() if isinstance(v, dict) and str(v.get("day")) >= since}
-    got[str(work)] = {"chat": str(chat), "day": day.isoformat(), "at": ts, "renewed": ts}
+    got[str(work)] = {"chat": str(chat), "day": day.isoformat(), "at": ts, "renewed": ts,
+                      **({"lent": True} if lent else {})}
     _write_json(path, got)
     return True
 

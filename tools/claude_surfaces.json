@@ -702,6 +702,31 @@
       "ui_sensitive": true
     },
     {
+      "id": "browser-pane-keep-cookies",
+      "claim": "The desktop app's Browser pane has Keep cookies in its \u22ee menu, which keeps its sign-ins after the app is quit; the docs do not say whether it is on to begin with, and no chat can read the menu. So a LinkedIn sign-in that did not last is answered by asking the person, once, to choose it, before they sign in again; their Done is what records it as on.",
+      "goal": "keep your LinkedIn sign-in in the app's browser after you quit the app",
+      "how": "Cmd+Shift+B on a Mac or Ctrl+Shift+B on Windows shows the app's browser; choose Keep cookies in its \u22ee menu",
+      "steps": [
+        "Show the app's browser: Browser in this chat's title bar (Cmd+Shift+B on a Mac, Ctrl+Shift+B on Windows).",
+        "In the browser's \u22ee menu, choose Keep cookies, so you stay signed in after you quit the app.",
+        "Say done here."
+      ],
+      "page_goal": "keep your LinkedIn sign-in in the app's browser after you quit the app",
+      "page_steps": [
+        "In the Claude desktop app, show the app's browser: Cmd+Shift+B on a Mac, or Ctrl+Shift+B on Windows.",
+        "In the browser's \u22ee menu, choose Keep cookies, so you stay signed in after you quit the app.",
+        "Come back to this page and tap Done."
+      ],
+      "sources": [
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "To open the Browser, press Cmd+Shift+B on macOS or Ctrl+Shift+B on Windows, or click Browser in the session's title bar."},
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "Choose whether the Browser keeps cookies after you quit the app with Keep cookies in the Browser pane's \u22ee menu, so you don't have to sign in again"}
+      ],
+      "status": "documented",
+      "verified_on": "2026-11-11",
+      "verified_against": "code.claude.com/docs/en/desktop read 2026-11-11: both quotes are on it; whether Keep cookies is on to begin with is not",
+      "ui_sensitive": true
+    },
+    {
       "id": "find-page",
       "claim": "A page a chat publishes stays in the person's Claude account. claude.ai/code/artifacts lists every page they have made, and the page's own header links to it; in the Claude app the same pages are under Artifacts in its side menu, on a computer and on a phone. A chat can pin a page to that side menu with the Artifact tool's pin action, which the app offers once, after the first publish. Whether the phone app shows a page Claude Code published, and a pinned one, was not checked on a phone.",
       "goal": "open your job search page again",

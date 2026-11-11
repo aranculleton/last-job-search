@@ -3794,7 +3794,14 @@ def _setup_done(r: Run) -> dict:
         return {"note": "Your copy is private now.", "undo": None}
     if key == "computer":
         # The computer's own card (tools/computer.py card): nothing to keep, since the next
-        # heartbeat says whether it worked; the helper's wake tries the computer again.
+        # heartbeat says whether it worked; the helper's wake tries the computer again. Asked to
+        # set the browser to keep sign-ins, their word is the one record of it (no chat can read it):
+        # kept, so it is asked once, and the computer's next look records the setting as on.
+        if r.target.get("say") == "keep_signin":
+            import computer
+            app_setup.save_said(computer.KEEP_SAID, app_model.stamp(r.at))
+            return {"note": "Thank you: now sign in to LinkedIn once more, and Claude carries on.",
+                    "undo": None}
         return {"note": "Thank you: Claude tries your computer again now.", "undo": None}
     if app_setup.set_up() or key in app_setup.TOLD:
         app_setup.save_said(key, app_model.stamp(r.at))
