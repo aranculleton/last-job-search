@@ -36,10 +36,18 @@
   const cache = new Map();
   const listeners = new Set();
   let ready = null;
+  // A record's body as the runtime hands it over: frozen, all the way down (db.d.ts 0.2.91,
+  // "Delivered snapshots and their data() are frozen"). Handed out as a copy anyone could
+  // change, the page set a property on an interview's prep that the real store refused, and
+  // Read your prep did nothing on every device while every test passed (2026-11-11).
+  function deepFreeze(o) {
+    if (o && typeof o === "object" && !Object.isFrozen(o)) { for (const k of Object.keys(o)) deepFreeze(o[k]); Object.freeze(o); }
+    return o;
+  }
   function snapDoc(path) {
     const d = cache.get(path);
     const id = segs(path).pop();
-    return Object.freeze({id, exists: !!d, data: () => (d ? JSON.parse(JSON.stringify(d.data)) : undefined), metadata: {fromCache: false, hasPendingWrites: false}});
+    return Object.freeze({id, exists: !!d, data: () => (d ? deepFreeze(JSON.parse(JSON.stringify(d.data))) : undefined), metadata: {fromCache: false, hasPendingWrites: false}});
   }
   function parentOf(path) { return segs(path).slice(0, -1).join("/"); }
   function evalQuery(q) {
