@@ -22,6 +22,7 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **A chat on an older version starts once when it takes this update.** The update check its start asked for changed how a chat starts and said to start again, so the chat went through the whole start twice. The update now carries the start on itself, on the new version, and the chat follows those steps once.
 - **"Only update when I say" is understood.** Said without naming the app, it set nothing; an update to your resume or CV is still never taken for the app's.
 - **A note on your computer that agrees with your update choice is kept.** Where your choice was not yet saved in that copy, the note was taken for one that disagreed and removed.
 - **Your page never says your computer is off while it is on.** A Mac connected that day read as off on a check-in from the day before, so Start it now did nothing; the computer's own connection now counts, and the chat that can start Claude there is woken.

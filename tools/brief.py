@@ -802,9 +802,11 @@ def start(argv: list[str], model: str) -> int:
     import time
     took, t0 = [], time.monotonic()
     before = _prompts_seen()
+    # The run carries on by itself, so its update check starts nothing of its own
+    # (app_setup.IN_COMMAND): never a chat's start inside the brief's run.
     r = subprocess.run([py, os.path.join(_HERE, "sync_app.py"), "--if-stale", "--on", model],
                        cwd=ROOT, text=True, capture_output=True, encoding="utf-8",
-                       errors="replace")
+                       errors="replace", env=dict(os.environ, LJS_SYNC_IN_COMMAND="1"))
     took.append("update %ds" % (time.monotonic() - t0))
     after = _prompts_seen()
     changed = [p for p in PROMPT_FILES if before.get(p) != after.get(p)]

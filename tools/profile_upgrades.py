@@ -3397,7 +3397,22 @@ def run_instant(rows: list[tuple[Upgrade, str]]) -> list[str]:
     return notes
 
 
+# Set by an --after-sync run that carries the start on itself (app_setup.start_after_sync):
+# the new start's steps are printed last, after everything else the sync says.
+_START_HERE = [False]
+
+
 def main(argv: list[str] | None = None) -> int:
+    _START_HERE[0] = False
+    code = _main(argv)
+    if _START_HERE[0]:
+        _START_HERE[0] = False
+        import app_setup
+        print("\n".join(app_setup.start_here()))
+    return code
+
+
+def _main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     mode = ap.add_mutually_exclusive_group()
     mode.add_argument("--line", action="store_true")
@@ -3495,10 +3510,14 @@ def main(argv: list[str] | None = None) -> int:
         if said:
             print("profile upgrades: " + said)
         # The steps an older start printed are out of date once the update changed how a chat
-        # starts (X-78): said from here, the file the sync just brought in.
+        # starts (X-78): said from here, the file the sync just brought in. Where this sync
+        # was a step of a start that never carries itself on (before 4.15.0), the new start
+        # runs here instead, at the end, so the chat goes round the start once (main).
         try:
             import app_setup
-            said = app_setup.start_changed_line()
+            said = app_setup.start_after_sync()
+            if said == app_setup.START_HERE:
+                said, _START_HERE[0] = "", True
         except Exception:  # noqa: BLE001  never breaks the sync
             said = ""
         if said:
@@ -3639,6 +3658,8 @@ def say_page() -> None:
     try:
         import app_setup
         said = app_setup.page_line(landed=os.environ.get(LANDED) == "1")
+        if _START_HERE[0] and said == app_setup.PAGE_NOT_YET:
+            said = ""           # the start this sync runs at its end publishes it
     except Exception:  # noqa: BLE001
         said = ""
     if said:
