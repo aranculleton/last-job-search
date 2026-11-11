@@ -786,6 +786,37 @@ LATE_WORK = ("late: work is waiting that this chat takes before it ends ({ids}):
              "named at every end until it is taken.")
 
 
+# A tap that names files the person added on the page (their LinkedIn download, a resume)
+# waits on this chat alone: only a chat can read the page's file store (Artifact read). Said
+# as a note above "then: nothing else is waiting for this chat. End the turn.", a LinkedIn
+# download's tap was left by wake after wake, until a chat read the page whole (the
+# maintainer's copy, 2026-11-11); and the line at the end of a batch named no asset, so a chat
+# had to read the taps to find them. Now it is the wake's first `then:`, every asset named.
+FETCH_STEPS = ("Artifact read each (url {url}, path the asset id: {ids}) into \"{dump}/assets\", "
+               "then python3 tools/app.py apply \"{dump}\" --chat {chat} --assets "
+               "\"{dump}/assets\", send every batch it prints, delete each asset a receipt names "
+               "in remove_assets (Artifact delete, url, path), and commit what it changed "
+               "(python3 tools/save_state.py)")
+FETCH_FIRST = ("then: first, before anything below and before this turn ends, take the files the "
+               "person added on the page: their tap waits on this chat alone, and nothing else "
+               "takes it. " + FETCH_STEPS + ".")
+
+
+def fetch_ids(fetch) -> list[str]:
+    """Every page asset the taps in `fetch` (apply_dir's "fetch") name, once each."""
+    return sorted({str(x) for f in fetch or () for x in (f or {}).get("assets") or ()})
+
+
+def fetch_steps(fetch, dump: str, chat: str, url: str = "", first: bool = True) -> str:
+    """The steps that take the files a tap names, with every asset id in them: the wake's
+    first `then:` (`first`), or the same steps after another line's words."""
+    if not url:
+        import app_setup
+        url = app_setup.page_record().get("url") or "<the page>"
+    words = dict(url=url, ids=", ".join(fetch_ids(fetch)), dump=dump, chat=chat)
+    return (FETCH_FIRST if first else FETCH_STEPS).format(**words)
+
+
 MARKS_CLAIM = ("view: {n} mark{s} the person made on the page (applied, sent, set aside and "
                "the like) {are} kept first, before the page is drawn, and keeping {them} changes "
                "your copy: send this claim, and once it is accepted run this same command again: "
@@ -830,10 +861,9 @@ def taps_now(dump: str, chat: str, now, out_dir: str, only=None, said: str = "ta
         lines.append(said + ": " + ", ".join(counts) + " (in this batch; each receipt says it "
                      "on the page)")
     if got.get("fetch"):
-        lines.append("fetch: a tap made while the work ran names files the person added: "
-                     f"python3 tools/app.py apply \"{dump}\" --chat {chat} --assets "
-                     f"\"{dump}/assets\" once each is read there (Artifact read, path the "
-                     "asset id), as a wake's fetch line says.")
+        lines.append("fetch: a tap made while the work ran names files the person added, and "
+                     "it waits on this chat alone: before this batch ends, "
+                     + fetch_steps(got["fetch"], dump, chat, first=False) + ".")
     return {"batches": batches, "lines": lines}
 
 
@@ -2475,6 +2505,7 @@ def cmd_wake(a) -> int:
     tidy_due = bool(st.get("tidy"))
     applied_any = False
     copy_now = False             # this run applies taps that change the copy, claimed before
+    fetch_then = ""              # a tap's files to take before anything else (FETCH_FIRST)
 
     if phase == "new":
         if os.environ.get(WAKE_UPDATED):
@@ -2618,13 +2649,7 @@ def cmd_wake(a) -> int:
             notes.append("taps: " + ", ".join(counts) + " (each receipt says it on the page)")
         applied_any = applied_any or bool(got.get("ok"))
         if got.get("fetch"):
-            ids = sorted({x for f in got["fetch"] for x in f.get("assets") or []})
-            notes.append(
-                "fetch: an action names files the person added on the page: Artifact read each "
-                f"(url {url}, path the asset id: {', '.join(ids)}) into \"{a.dump}/assets\", "
-                f"then python3 tools/app.py apply \"{a.dump}\" --chat {chat} --assets "
-                f"\"{a.dump}/assets\", send every batch it prints, and delete each asset a "
-                "receipt names in remove_assets (Artifact delete, url, path).")
+            fetch_then = fetch_steps(got["fetch"], a.dump, chat, url)
         # A setup answer or a resume given on the page: setup carries on here and now, as
         # start says; a wake said only "nothing else is waiting" (journeys audit 13).
         acts = page_db.load(a.dump).get("actions") or {}
@@ -2657,7 +2682,7 @@ def cmd_wake(a) -> int:
                      "about it in the chat: its card on the page says it.")
     chosen = choose(db, chat, kind, now, on=a.on, no_sessions=a.no_sessions,
                     claim_out=os.path.join(rd, "work"))
-    then: list[str] = []
+    then: list[str] = [fetch_then] if fetch_then else []
     if chosen:
         sends += [(p, "work", joined) for p in chosen["batches"]]
         # Claimed, as it will be once sent: run again over this folder, `next` takes the one
@@ -2757,7 +2782,8 @@ def cmd_wake(a) -> int:
         for c in also:
             then.append("also: " + _dump(with_item(c)).rstrip("\n"))
     else:
-        then.append("then: nothing else is waiting for this chat. " + (
+        then.append("then: " + ("once those files are taken, " if fetch_then else "") + (
+            "nothing else is waiting for this chat. ") + (
             "Commit what the taps changed (python3 tools/save_state.py) with this wake's "
             "other work, then end the turn." if applied_any else "End the turn."))
     _save_wake_state(a.dump, {"phase": "done", "runs": run})

@@ -338,6 +338,83 @@ def test_a_tap_applied_whose_receipt_never_landed_is_receipted_not_claimed_again
     assert ring.stored("actions", aid)["version"] == 2
 
 
+# The maintainer's copy, 2026-11-11: a LinkedIn download's tap (export.take) waited through
+# several wakes. Its files are in the page's own store, which only a chat can read, and the
+# wake said so in a note above its last step, "then: nothing else is waiting for this chat.
+# End the turn.", which each chat followed; the end of a batch named no file at all. The files
+# to take are the wake's first step now, every one named, and following the steps takes it.
+
+LINKEDIN_FIX = os.path.join(ROOT, "tests", "fixtures", "linkedin_export")
+DOWNLOAD = {"a1" * 16: "messages.csv", "b2" * 16: "Connections.csv",
+            "c3" * 16: "Invitations.csv"}
+
+
+def _download_tapped(ring):
+    import shutil
+    for name, dest in (("book_contacts.csv", "network_contacts.csv"),
+                       ("book_threads.csv", "network_threads.csv")):
+        shutil.copyfile(os.path.join(LINKEDIN_FIX, name), os.path.join(ring.state, dest))
+    ring.put("actions", "act-take", {
+        "action": "export.take", "item": "linkedin-export", "rev_seen": "", "tab": "t1",
+        "at": "2026-10-25T17:10:00Z",
+        "value": {"assets": [{"id": k, "name": v} for k, v in DOWNLOAD.items()]}})
+    return "act-take"
+
+
+def test_a_linkedin_download_tapped_on_the_page_is_taken_in_the_first_wake(ring):
+    import shutil
+    aid = _download_tapped(ring)
+    d = ring.read("wake1")
+    claimed = ring.wake(d)
+    assert parts(claimed) == [[CHECK_IN, TAPS]], claimed
+    assert all(land(ring, claimed)), claimed
+    said = ring.wake(d)                              # the claim accepted: applied
+    steps = [ln for ln in said.splitlines() if ln.startswith("then: ")]
+    # Its files are the first thing to do, each one named, and nothing ends the turn first.
+    assert steps and steps[0].startswith("then: first, before anything below"), said
+    assert all(k in steps[0] for k in DOWNLOAD), steps[0]
+    assert f"--assets \"{d}/assets\"" in steps[0], steps[0]
+    assert not [ln for ln in steps if ln.startswith("then: nothing else is waiting")], said
+    # Following the step: each file read into the folder it names (an Artifact read saves it
+    # as <asset id>.<its type>), then the command it gives.
+    os.makedirs(os.path.join(d, "assets"))
+    for k, name in DOWNLOAD.items():
+        shutil.copyfile(os.path.join(LINKEDIN_FIX, name), os.path.join(d, "assets", k + ".csv"))
+    got = json.loads(ring.run("apply", d, "--chat", CHAT, "--now", NOW,
+                              "--assets", os.path.join(d, "assets")))
+    assert got["ok"] == [aid], got
+    import fake_db
+    assert all(fake_db.apply(ring.db, p) for p in got["batches"]), got
+    receipt = ring.stored("receipts", aid)["data"]
+    assert receipt["result"] == "ok" and receipt["note"].startswith("Taken: "), receipt
+
+
+def _taps_now(ring, d, out):
+    """app.taps_now over `d`, as the end of a batch runs it (view --end), in this copy."""
+    code = ("import json, sys, datetime as dt; sys.path[:0] = [sys.argv[1]]; import app; "
+            "now = dt.datetime(2026, 10, 25, 18, 0, tzinfo=dt.timezone.utc); "
+            "print(json.dumps(app.taps_now(sys.argv[2], sys.argv[3], now, sys.argv[4])))")
+    r = subprocess.run([sys.executable, "-c", code, os.path.join(ROOT, "tools"), d, CHAT, out],
+                       env=ring.env(), capture_output=True, encoding="utf-8", timeout=120)
+    assert r.returncode == 0, r.stdout + r.stderr
+    return json.loads(r.stdout)
+
+
+def test_a_download_tapped_while_the_work_ran_names_every_file_to_take(ring):
+    """The end of a batch applies the taps made meanwhile (app.taps_now): its line said only
+    "once each is read there", so a chat had to read the taps to learn which files."""
+    import fake_db
+    _download_tapped(ring)
+    got = _taps_now(ring, ring.read("late"), os.path.join(ring.root, "late-out"))
+    assert got.get("claim"), got                     # it changes the copy: claimed first
+    assert all(fake_db.apply(ring.db, p) for p in got["batches"]), got
+    d = ring.read("late2")
+    lines = _taps_now(ring, d, os.path.join(ring.root, "late-out2"))["lines"]
+    fetch = [ln for ln in lines if ln.startswith("fetch: ")]
+    assert fetch and all(k in fetch[0] for k in DOWNLOAD), lines
+    assert f"--assets \"{d}/assets\"" in fetch[0] and "Artifact read each" in fetch[0], fetch
+
+
 def test_every_small_question_waiting_is_taken_in_one_wake(ring):
     """One talk a wake, each followed by a new read, took ten questions about 15 minutes and
     some 30 reads (the maintainer's copy, 2026-11-05). Every small item waiting is claimed in
