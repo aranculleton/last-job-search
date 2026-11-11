@@ -20,7 +20,6 @@ import pytest
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "tests"))
 
-yaml = pytest.importorskip("yaml")              # the 3.9 leg installs pytest and no more
 import workflow_runs as W  # noqa: E402
 
 sys.path.insert(0, os.path.join(ROOT, "tools"))

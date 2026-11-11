@@ -30,7 +30,11 @@ _TOKEN = re.compile(r"\s*(?:(?P<str>'(?:[^']|'')*')|(?P<num>\d+(?:\.\d+)?)"
 
 
 def load(name: str) -> dict:
-    import yaml
+    try:
+        import yaml
+    except ImportError:                  # the 3.9 leg installs pytest and no more
+        import pytest
+        pytest.skip("PyYAML is not installed here")
     wf = yaml.safe_load((WORKFLOWS / name).read_text(encoding="utf-8"))
     if True in wf:                       # YAML 1.1 reads the key `on` as True
         wf["on"] = wf.pop(True)

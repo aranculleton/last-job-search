@@ -22,7 +22,6 @@ sys.path[:0] = [os.path.join(ROOT, "tools"), os.path.join(ROOT, "tests")]
 import ci_plan  # noqa: E402
 import repo_files  # noqa: E402
 
-yaml = pytest.importorskip("yaml")              # the 3.9 leg installs pytest and no more
 import workflow_runs as W  # noqa: E402
 
 
