@@ -2050,8 +2050,16 @@ def memory_conflicts(root: str, home: str | None = None, settings: dict | None =
     chat was blocked (2026-11-09); the start step now removes it (memory_remove)."""
     import learned
     if settings is None:
-        import app_model
-        settings = {"profile/person.json app_updates": app_model.setting_values().get("app_updates")}
+        # Only what the person wrote: with no app_updates in person.json (a computer's copy not
+        # yet up to date with it) the page reads "auto", and a note saying updates come when
+        # they say, which was their choice, was taken for one that disagrees and removed
+        # (the maintainer's Mac, 2026-11-11).
+        import person
+        try:
+            written = str(person.get("app_updates", "") or "").strip().lower()
+        except Exception:  # noqa: BLE001  no profile here: nothing to compare with
+            written = ""
+        settings = {"profile/person.json app_updates": written} if written in ("auto", "when_asked") else {}
     out = []
     for f in memory_files(root, home):
         try:
