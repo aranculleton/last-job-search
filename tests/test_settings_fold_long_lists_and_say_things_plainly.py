@@ -266,6 +266,41 @@ def test_your_rules_lists_what_left_something_out_and_your_search_carries_its_ow
     assert got["more"] and got["inset"] is not None and got["inset"] >= got["rowInset"] - 1, got
 
 
+EVERY_RULE = r"""(() => {
+  const group = (name) => document.querySelector('#main section[aria-label="' + name + '"]');
+  const all = (g) => g ? [...g.querySelectorAll('.set-sum')].map((r) => [r.querySelector('.set-name').textContent.trim(), (r.querySelector('.set-value') || {}).textContent || '']) : null;
+  return {search: all(group('Your search')), rules: all(group('Your rules'))};
+})()"""
+
+
+def test_before_any_search_no_rule_says_what_it_left_out(run, tmp_path, monkeypatch):
+    # Before any search every rule read "None left out by your last search", of a search never
+    # run (the review, 2026-11-11). The engine gives no count then, and the page says none.
+    import datetime as dt
+    import json
+    import shutil
+    import app_model
+    import person
+    state = tmp_path / "state"
+    shutil.copytree(os.path.join(ROOT, "profile.example", "state"), state)
+    monkeypatch.setenv("LJS_STATE", str(state))
+    person.reset()
+    try:
+        built, _ = app_model.build(dt.date(2026, 10, 25), dt.datetime(2026, 10, 25, 9, 30, tzinfo=dt.timezone.utc),
+                                   only=("rules",))
+    finally:
+        monkeypatch.undo()
+        person.reset()
+    m = _sample()
+    m["rules"] = json.loads(json.dumps(built["rules"]))
+    assert [r for r in m["rules"]["rows"] if r["kind"] == "language"][0]["left_out"] is None
+    got = _go(run, tmp_path, [{"hash": "settings"}, {"click": "Show all", "within": '#main section[aria-label="Your rules"]'},
+                              {"eval": EVERY_RULE}], WIDE, model=m)["after"][-1]["eval"]
+    assert got["rules"] and len(got["rules"]) > 2, got["rules"]
+    said = [v for _, v in got["search"] + got["rules"] if "left out" in v.lower()]
+    assert not said, said
+
+
 MONEY = r"""(() => { const t = (s) => (document.querySelector(s) || {}).textContent || ''; return {pay: t('[data-k="info-sum:search-pay"]'), prep: t('dialog.detail')}; })()"""
 
 
