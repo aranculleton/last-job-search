@@ -91,8 +91,15 @@ jobs:
           ENGINES: ${{ matrix.engines }}
         run: |
           npm install -g "playwright@$PW"
-          npx -y "playwright@$PW" install --with-deps $ENGINES
-          sudo apt-get install -y -q fonts-inter fonts-liberation > /dev/null
+          # As ci.yml: Ubuntu's mirror out of reach (2026-11-11) is tried three times, then the
+          # engines alone; without the two fonts the Mac and Windows type variants say so.
+          ok=""
+          for i in 1 2 3; do
+            if npx -y "playwright@$PW" install --with-deps $ENGINES; then ok=1; break; fi
+            sleep 30
+          done
+          [ -n "$ok" ] || npx -y "playwright@$PW" install $ENGINES
+          sudo apt-get install -y -q fonts-inter fonts-liberation > /dev/null || echo "fonts-inter and fonts-liberation did not install"
       - name: The page in each
         if: ${{ steps.want.outputs.variants != '' }}
         env:
