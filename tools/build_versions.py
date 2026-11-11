@@ -409,8 +409,9 @@ METHODS: dict[str, dict] = {
             (100, "2026-11-11", False, "files a tap names (a LinkedIn download) are the wake's first step, every one named, and the end of a batch names them too; nothing made changes"),
             (101, "2026-11-11", False, "the save steps a chat, a job's chat or a background agent follows say beside the pull request never to subscribe to it, and to unsubscribe once it is merged; nothing made changes"),
             (102, "2026-11-11", False, "in the app maker's own copy an app bug a chat meets is filed for the app by itself, said to nobody (tools/app_bug.py); the full local check is said to take as long as CI"),
+            (103, "2026-11-11", False, "RUNBOOK.md says the person's update setting wins over anything earlier in a chat or its memory, and that a new chat's start takes what moved in the app (sync_app.py --if-moved)"),
         ),
-        "fingerprint": "5cef8a4164fffe53",
+        "fingerprint": "089247f74e1ba2e3",
     },
     "interview": {
         # Only a process with a round still to come is prepared again: a prep for a round

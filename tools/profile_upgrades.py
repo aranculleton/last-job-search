@@ -443,6 +443,41 @@ def _updates_choice() -> str:
             f"setting says {say[have]}")
 
 
+def _updates_said() -> str:
+    """A rule about how updates arrive that an older version read as no setting at all: 4.15.0
+    set nothing from "Only update when I say", and _updates_choice re-reads only the rules that
+    did set it. Every active rule newer than the last one that set it is read again with
+    today's reader (learned.updates_said); where the newest that says either way differs
+    from the setting, the person is asked once (a To do card), never changed unasked: their
+    setting may be what they chose since. Their answer is recorded as a rule of its own,
+    newer than the one asked about, so it is never asked again (the review of 2026-11-11)."""
+    if _updates_choice():
+        return ""                       # the same question is already asked
+    try:
+        import learned
+        rows = learned.entries()
+        last = max((i for i, r in enumerate(rows)
+                    if "profile/person.json app_updates" in (r.get("applied_to") or [])),
+                   default=-1)
+        meant, said = "", ""
+        for r in reversed(rows[last + 1:]):
+            # As learned.known_settings reads it: their own words first, then the rule.
+            meant = learned.updates_said(str(r.get("said") or "")) or \
+                learned.updates_said(str(r.get("rule") or ""))
+            if meant:
+                said = str(r.get("said") or "")
+                break
+        have = "when_asked" if str(person.get("app_updates", "") or "").strip().lower() \
+            == "when_asked" else "auto"
+    except Exception:  # noqa: BLE001  no profile or no rules: nothing to ask
+        return ""
+    if not meant or meant == have:
+        return ""
+    say = {"auto": "by themselves", "when_asked": "only when you say"}
+    return (f"your words \"{said}\" say updates come {say[meant]}, but the setting says "
+            f"{say[have]}")
+
+
 def _brief_push() -> str:
     """A brief whose own run would send the phone notification, and nobody asked whether they
     want one: off until they say (brief.push_wanted), and asked once, as the setup sheet asks.
@@ -2442,6 +2477,18 @@ REGISTRY: tuple[Upgrade, ...] = (
             ask="Should the app's updates come by themselves, or only when you say?",
             why_ask="An older version may have saved what you said about this the wrong way "
                     "round, so your setting may not be what you meant."),
+    Upgrade("updates-said", "2026-11-11",
+            "updates arriving the way you said, where an older version saved nothing from your "
+            "words",
+            _updates_said, "python3 tools/learned.py record --area other --said \"<their answer, "
+            "in their words>\" --rule \"<how updates arrive, as they said>\", which writes the "
+            "setting and reads it back; their answer is newer than the words asked about, so the "
+            "question is not asked again",
+            "question", "~0 min", conditional=True, priority=2,
+            needs="you",
+            ask="Should the app's updates come by themselves, or only when you say?",
+            why_ask="Something you said about updates was never saved as your setting by an "
+                    "older version, so your setting may not be what you meant."),
     Upgrade("brief-push", "2026-11-04",
             "a phone notification each morning when your brief is ready, only if you want one",
             _brief_push, "write \"brief_push\": \"on\" or \"off\" into profile/person.json from "

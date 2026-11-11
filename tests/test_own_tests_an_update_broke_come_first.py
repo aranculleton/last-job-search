@@ -151,7 +151,7 @@ def test_start_and_the_briefs_run_say_it_first(monkeypatch, capsys):
     monkeypatch.setattr(sync_app, "is_the_app", lambda root=None: False)
     monkeypatch.setattr(sync_app, "own_tests_step", lambda root=None: "Claude, first, before any other work: X")
     # The start runs the day's update check itself (D1): never the real one, on this checkout.
-    monkeypatch.setattr(app, "days_check", lambda on, chat, tools="": {"ran": False})
+    monkeypatch.setattr(app, "days_check", lambda on, chat, tools="", new_chat=False: {"ran": False})
     monkeypatch.setattr(app_setup, "start", lambda **kw: (0, ["app start: ready", "Claude, do this:", "1. the work"]))
     monkeypatch.setattr(app_listen, "shape", lambda code, lines, **kw: lines)
     a = types.SimpleNamespace(paste=False, work="", on="", tools="", page="", dump="", chat="",
