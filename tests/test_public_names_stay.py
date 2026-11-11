@@ -3,11 +3,13 @@
 A person's own tests (profile/tests) may use any of the app's public names. 3.5.0 moved
 the board reading into tools/openroles and broke dozens of the maintainer's own tests,
 and the work towards the release after 3.13.0 removed holidays.is_holiday and
-score_eval.EXPECTATIONS with nothing in their place. tools/public_names.py holds the
-names the last release shipped, and a name may go only when docs/removed_names.json lists
-it with the date, the reason and the CHANGELOG line that tells people.
+score_eval.EXPECTATIONS with nothing in their place. tools/public_names.py reads the names
+the newest release ships from that release's own tag, and a name may go only when
+docs/removed_names.json lists it and the CHANGELOG section it names announces it. Until
+4.15.1 the names were a snapshot of 89 KB written at every release, a step of its own.
 
-Every case here runs on a copy of the tree; the real files are only read.
+Every case here runs on a copy of the tree, a throwaway git repo; the real files are only
+read.
 """
 from __future__ import annotations
 
@@ -19,25 +21,42 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "tools"))
+sys.path.insert(0, os.path.join(ROOT, "tests"))
 
 import public_names as P  # noqa: E402
 import release  # noqa: E402
+from test_a_beginner_is_told_in_plain_words import _plain  # noqa: E402
 
+ENV = dict(os.environ, GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@example.com",
+           GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@example.com",
+           GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM="1", PYTHONDONTWRITEBYTECODE="1")
 LINE = ("**`holidays.is_holiday` is gone**: look the day up in `holidays.for_year` instead, "
         "which every count of business days already does.")
+EMPTY_LISTING = {"about": "", "removed": []}
 
 
-def _copy(tmp, keep=("tools/holidays.py",)) -> str:
-    """A copy in tmp of the real files in `keep`, the real snapshot's entries for them,
-    the tool itself, CHANGELOG.md and docs/removed_names.json. Only these, so each check
-    reads a few files rather than the whole tree."""
+def _git(cwd, *args) -> str:
+    return subprocess.run(["git", *args], cwd=cwd, env=ENV, check=True, capture_output=True,
+                          text=True, encoding="utf-8").stdout
+
+
+def _released(tmp, keep=("tools/holidays.py",), tag="v1.0.0") -> str:
+    """A git repo in tmp holding the real files in `keep`, the tool itself, a CHANGELOG and an
+    empty docs/removed_names.json, its one commit tagged `tag`: the app as a release left it.
+    Only these, so each check reads a few files rather than the whole tree."""
     root = str(tmp / "app")
-    for f in (*keep, "tools/public_names.py", P.CHANGELOG, P.REMOVED):
+    for f in (*keep, "tools/public_names.py"):
         os.makedirs(os.path.dirname(os.path.join(root, f)), exist_ok=True)
         shutil.copy(os.path.join(ROOT, f), os.path.join(root, f))
-    shot = P._load(ROOT, P.SNAPSHOT, None)
-    with open(os.path.join(root, P.SNAPSHOT), "w", encoding="utf-8") as fh:
-        json.dump({f: shot[f] for f in (*keep, "tools/public_names.py") if f in shot}, fh)
+    with open(os.path.join(root, P.CHANGELOG), "w", encoding="utf-8") as fh:
+        fh.write("# Changelog\n\n## [Unreleased]\n\n## [1.0.0] - 2026-10-01\n\n### Added\n\n"
+                 "- **Everything.**\n")
+    os.makedirs(os.path.join(root, "docs"))
+    P.write_removed(root, EMPTY_LISTING)
+    _git(root, "init", "-q", "-b", "master")
+    _git(root, "add", "-A")
+    _git(root, "commit", "-qm", "the release")
+    _git(root, "tag", tag)
     return root
 
 
@@ -51,68 +70,91 @@ def _edit(root: str, path: str, old: str, new: str) -> None:
 
 
 def _list(root: str, **entry) -> None:
-    with open(os.path.join(root, P.REMOVED), encoding="utf-8") as fh:
-        doc = json.load(fh)
-    doc["removed"] = [dict({"module": "tools/holidays.py", "name": "is_holiday"}, **entry)]
-    with open(os.path.join(root, P.REMOVED), "w", encoding="utf-8") as fh:
-        json.dump(doc, fh)
+    P.write_removed(root, {"about": "", "removed": [
+        dict({"module": "tools/holidays.py", "name": "is_holiday"}, **entry)]})
 
 
 def _run(root: str) -> subprocess.CompletedProcess:
     return subprocess.run([sys.executable, os.path.join(root, "tools", "public_names.py"),
                            "check"], capture_output=True, text=True, encoding="utf-8",
-                          cwd=root)
+                          cwd=root, env=ENV)
 
 
-def test_this_tree_keeps_every_name_the_last_release_shipped():
+def test_this_tree_keeps_every_name_the_newest_release_ships():
+    # The app's own clone compares with its newest release. A person's copy, whose own
+    # remote has no app releases, passes and says why; it is never fetched into.
+    tag, commit, why = P.newest_release(ROOT)
     r = subprocess.run([sys.executable, "tools/public_names.py", "check"], cwd=ROOT,
                        capture_output=True, text=True, encoding="utf-8")
     assert r.returncode == 0, r.stdout + r.stderr
-    shot = P._load(ROOT, P.SNAPSHOT, None)
-    assert "is_holiday" in shot["tools/holidays.py"]
-    assert "EXPECTATIONS" in shot["tools/score_eval.py"]
-    assert not any(p.startswith("tools/openroles/") for p in shot)
-    assert not any(n.startswith("_") for ns in shot.values() for n in ns)
+    _plain(r.stdout)
+    if not os.path.isdir(os.path.join(ROOT, "profile")) and "could not be asked" not in why:
+        assert tag, why
+    if tag:
+        shipped = P.names_at(ROOT, commit)
+        assert "is_holiday" in shipped["tools/holidays.py"]
+        assert "EXPECTATIONS" in shipped["tools/score_eval.py"]
+        assert not any(p.startswith("tools/openroles/") for p in shipped)
+        assert not any(n.startswith("_") for ns in shipped.values() for n in ns)
+    # Every record is small and announced, whichever release it went in.
     with open(os.path.join(ROOT, P.REMOVED), encoding="utf-8") as fh:
-        assert isinstance(json.load(fh)["removed"], list)
+        records = json.load(fh)["removed"]
+    assert len(records) >= 53
+    assert all(set(e) == set(P.NEEDS) for e in records), [e for e in records if set(e) != set(P.NEEDS)]
+    assert not os.path.exists(os.path.join(ROOT, "tools", "public_names.json"))
 
 
-def test_a_removed_name_fails_until_it_is_listed_with_the_line_that_tells_people(tmp_path):
-    root = _copy(tmp_path)
+def test_a_removed_name_fails_until_it_is_listed_and_announced(tmp_path, monkeypatch):
+    root = _released(tmp_path)
     _edit(root, "tools/holidays.py", "def is_holiday(", "def was_holiday(")
-    assert P.check(root) == ["tools/holidays.py no longer has is_holiday."]
+    assert P.check(root) == ["tools/holidays.py no longer has is_holiday, which v1.0.0 ships."]
     r = _run(root)
     assert r.returncode == 1
     assert "1 name a person's own tests may use is gone" in r.stdout
     assert "docs/removed_names.json" in r.stdout
+    _plain(r.stdout)
 
-    # Listed, but not yet with all it needs, or with a line nobody can read.
-    _list(root, date="2026-10-25", changelog=LINE)
-    assert P.check(root) == ["tools/holidays.py no longer has is_holiday: listed in "
-                             "docs/removed_names.json with no reason."]
-    _list(root, date="25/10/2026", reason="replaced by business_days", changelog=LINE)
+    # Listed, but not yet with all it needs, or announced nowhere a person reads.
+    _list(root, date="2026-10-25")
+    assert P.check(root) == ["tools/holidays.py is_holiday: listed in docs/removed_names.json "
+                             "with no announced."]
+    _list(root, date="25/10/2026", announced="Unreleased")
     assert "not YYYY-MM-DD" in P.check(root)[0]
-    _list(root, date="2026-10-25", reason="replaced by business_days", changelog=LINE)
-    assert P.check(root) == ["tools/holidays.py no longer has is_holiday: listed in "
-                             "docs/removed_names.json, but its CHANGELOG line is not in "
-                             "CHANGELOG.md."]
+    _list(root, date="2026-10-25", announced="1.1.0")
+    assert P.check(root) == ["tools/holidays.py is_holiday: listed in docs/removed_names.json "
+                             "as announced in 1.1.0, but CHANGELOG.md has no [1.1.0]."]
+    _list(root, date="2026-10-25", announced="Unreleased")
+    assert P.check(root) == ["tools/holidays.py is_holiday: listed in docs/removed_names.json, "
+                             "but no entry in [Unreleased] of CHANGELOG.md names it with its "
+                             "file (holidays)."]
+    # An entry elsewhere does not announce it: the one in the section the record names does.
+    _edit(root, P.CHANGELOG, "- **Everything.**\n", "- **Everything.**\n- " + LINE + "\n")
+    assert P.check(root) and "no entry in [Unreleased]" in P.check(root)[0]
 
-    # The line in the CHANGELOG, wrapped the way an entry is: it passes.
-    with open(os.path.join(root, P.CHANGELOG), "a", encoding="utf-8") as fh:
-        cut = LINE.rfind(" ", 0, 60)
-        fh.write("\n- " + LINE[:cut] + "\n  " + LINE[cut + 1:] + "\n")
+    # The line under [Unreleased], wrapped the way an entry is: it passes.
+    cut = LINE.rfind(" ", 0, 60)
+    _edit(root, P.CHANGELOG, "## [Unreleased]\n", "## [Unreleased]\n\n### Removed\n\n- "
+          + LINE[:cut] + "\n  " + LINE[cut + 1:] + "\n")
     assert P.check(root) == []
     assert _run(root).returncode == 0
 
+    # Cutting the version names the section, and the record follows it there.
+    with open(os.path.join(root, "docs", "NEXT_BUILDER.md"), "w", encoding="utf-8") as fh:
+        fh.write("Written at the release of 1.1.0.\n")
+    monkeypatch.setattr(release, "tags", lambda root=None: [])
+    assert release.cut("1.1.0", "Days off are looked up one way.", root=root) == 0
+    assert P._load(root)["removed"][0]["announced"] == "1.1.0"
+    assert P.check(root) == []
+
 
 def test_a_whole_file_gone_is_named_and_a_name_imported_back_is_kept(tmp_path):
-    root = _copy(tmp_path)
+    root = _released(tmp_path)
     os.remove(os.path.join(root, "tools", "holidays.py"))
     gone = P.check(root)
     assert gone and all(g.startswith("tools/holidays.py (the file is gone) no longer has")
                         for g in gone)
     # Moved, and imported under its old module: a test using holidays.is_holiday still works.
-    root = _copy(tmp_path / "again")
+    root = _released(tmp_path / "again")
     _edit(root, "tools/holidays.py", "def is_holiday(", "def was_holiday(")
     with open(os.path.join(root, "tools", "holiday_rules.py"), "w", encoding="utf-8") as fh:
         fh.write("def is_holiday(day):\n    return False\n")
@@ -141,29 +183,63 @@ def test_the_names_read_are_the_ones_an_import_gives_and_a_new_one_needs_nothing
         with open(os.path.join(root, "tools", skipped, "x.py"), "w", encoding="utf-8") as fh:
             fh.write("HIDDEN = 1\n")
     assert P.names(root) == {"tools/sample.py": ["A", "B", "C", "D", "K", "L", "M", "g", "h"]}
-    assert P.snapshot(root)["tools/sample.py"][0] == "A"
-    assert not P.stale(root)
+    # The release's own files are read the same way, from git, openroles and tests left out.
+    os.makedirs(os.path.join(root, "docs"))
+    _git(root, "init", "-q", "-b", "master")
+    _git(root, "add", "-A")
+    _git(root, "commit", "-qm", "the release")
+    _git(root, "tag", "v1.0.0")
+    tag, commit, _ = P.newest_release(root)
+    assert tag == "v1.0.0" and P.names_at(root, commit) == P.names(root)
     with open(os.path.join(root, "tools", "sample.py"), "a", encoding="utf-8") as fh:
         fh.write("NEW = 1\n")
-    assert P.check(root) == [] and P.stale(root)
+    assert P.check(root) == []
 
 
-def test_a_release_that_ships_without_its_snapshot_says_so_after_tagging(monkeypatch, capsys):
-    calls = []
+def test_a_shallow_clone_fetches_the_release_and_a_copy_without_releases_passes(tmp_path):
+    """CI checks out one commit with no tags; a person's copy has its own remote, with no app
+    releases on it. The first fetches the newest tag alone and stays shallow; the second says
+    there is nothing to compare with, plainly, and passes."""
+    app = _released(tmp_path, tag="v1.0.0")
+    with open(os.path.join(app, "tools", "later.py"), "w", encoding="utf-8") as fh:
+        fh.write("LATER = 1\n")
+    _git(app, "add", "-A")
+    _git(app, "commit", "-qm", "work since")
+    _git(app, "tag", "v1.1.0")
+    _git(app, "commit", "-q", "--allow-empty", "-m", "more work since")
+    clone = str(tmp_path / "ci")
+    _git(str(tmp_path), "clone", "-q", "--depth=1", "--no-tags", "file://" + app, clone)
+    assert _git(clone, "tag", "-l").strip() == ""
+    tag, commit, why = P.newest_release(clone)
+    assert tag == "v1.1.0" and commit and not why
+    _edit(clone, "tools/later.py", "LATER = 1", "SOONER = 1")
+    assert P.check(clone) == ["tools/later.py no longer has LATER, which v1.1.0 ships."]
+    assert _git(clone, "rev-parse", "--is-shallow-repository").strip() == "true"
+    assert _git(clone, "tag", "-l").strip() == ""          # nothing named in the clone
 
-    class Done:
-        returncode, stdout, stderr = 0, "", ""
+    # A copy made before the newest release keeps what the newest it holds ships.
+    _git(app, "checkout", "-q", "-b", "older", "v1.0.0")
+    assert P.newest_release(app)[0] == "v1.0.0" and P.check(app) == []
+    _git(app, "checkout", "-q", "master")
 
-    monkeypatch.setattr(release, "_gh", lambda args: calls.append(args) or Done())
-    monkeypatch.setattr(release, "tags", lambda: ["v3.2.5"])
-    sample = [{"version": "3.3.0", "date": "2026-10-19", "notes": "### Fixed\n\n- **A fix.**"}]
-    monkeypatch.setattr(release, "sections", lambda text=None: sample)
-    monkeypatch.setattr(P, "stale", lambda root=P.ROOT: True)
-    assert release.publish() == 1
-    assert [c[:2] for c in calls] == [["release", "create"]]       # the tag went out first
-    assert "tools/public_names.py snapshot" in capsys.readouterr().out
-    monkeypatch.setattr(P, "stale", lambda root=P.ROOT: False)
-    assert release.publish() == 0
+    # A person's copy: its own remote has no releases, and one with no remote at all.
+    mine = str(tmp_path / "mine")
+    shutil.copytree(app, mine, ignore=shutil.ignore_patterns(".git"))
+    _git(str(tmp_path), "init", "-q", "--bare", "theirs.git")
+    _git(mine, "init", "-q", "-b", "master")
+    _git(mine, "add", "-A")
+    _git(mine, "commit", "-qm", "Initial commit")
+    _git(mine, "remote", "add", "origin", "file://" + str(tmp_path / "theirs.git"))
+    os.remove(os.path.join(mine, "tools", "later.py"))
+    for remote in (True, False):
+        if not remote:
+            _git(mine, "remote", "remove", "origin")
+        r = _run(mine)
+        assert r.returncode == 0, r.stdout
+        assert r.stdout.startswith("public_names: nothing to compare with: no release of the "
+                                   "app is known here"), r.stdout
+        assert ("GitHub could not be asked" in r.stdout) is not remote
+        _plain(r.stdout)
 
 
 def test_asking_for_help_never_writes_anything(tmp_path, monkeypatch, capsys):
@@ -172,10 +248,11 @@ def test_asking_for_help_never_writes_anything(tmp_path, monkeypatch, capsys):
     recorded a reminder made today with no task, and `upkeep-record --help` an upkeep with
     none, in the person's registry."""
     wrote = []
-    monkeypatch.setattr(P, "snapshot", lambda *a, **k: wrote.append(a) or {})
-    for argv in (["snapshot", "--help"], ["snapshot", "-h"], ["--help"]):
+    monkeypatch.setattr(P, "write_removed", lambda *a, **k: wrote.append(a))
+    monkeypatch.setattr(P, "newest_release", lambda *a, **k: wrote.append(a) or ("", "", ""))
+    for argv in (["check", "--help"], ["check", "-h"], ["--help"]):
         assert P.main(argv) == 0 and not wrote, argv
-    assert "snapshot" in capsys.readouterr().out
+    assert "public_names.py check" in capsys.readouterr().out
     prof = tmp_path / "profile"
     shutil.copytree(os.path.join(ROOT, "profile.example"), prof,
                     ignore=shutil.ignore_patterns("state"))
@@ -187,3 +264,17 @@ def test_asking_for_help_never_writes_anything(tmp_path, monkeypatch, capsys):
                             "--help"], env=env, capture_output=True, text=True, encoding="utf-8")
         assert r.returncode == 0 and "usage" in r.stdout, (cmd, r.stdout, r.stderr)
         assert (reg.read_bytes() if reg.exists() else None) == before, cmd
+
+
+def test_a_release_publishes_with_no_step_for_its_names(monkeypatch):
+    calls = []
+
+    class Done:
+        returncode, stdout, stderr = 0, "", ""
+
+    monkeypatch.setattr(release, "_gh", lambda args: calls.append(args) or Done())
+    monkeypatch.setattr(release, "tags", lambda: ["v3.2.5"])
+    sample = [{"version": "3.3.0", "date": "2026-10-19", "notes": "### Fixed\n\n- **A fix.**"}]
+    monkeypatch.setattr(release, "sections", lambda text=None: sample)
+    assert release.publish() == 0
+    assert [c[:2] for c in calls] == [["release", "create"]]

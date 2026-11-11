@@ -1,376 +1,62 @@
 {
- "about": "Public names the app took away on purpose: a top-level name in tools/ or templates/ with no leading underscore, outside tools/openroles/, which a person's own tests may use. tools/public_names.py check fails on a name gone from tools/public_names.json unless it is listed here with the date, the reason and the CHANGELOG line that tells people, and that line is in CHANGELOG.md. Each entry: {\"module\": \"tools/<file>.py\", \"name\": \"<name>\", \"date\": \"YYYY-MM-DD\", \"reason\": \"<why it went>\", \"changelog\": \"<the CHANGELOG line, as written there>\"}.",
+ "about": "Public names the app took away on purpose: a top-level name in tools/ or templates/ with no leading underscore, outside tools/openroles/, which a person's own tests may use. tools/public_names.py check fails on a name the newest release ships that is gone, unless it is listed here, and on a record here whose CHANGELOG section has no entry naming it with its file. Each record: {\"module\": \"tools/<file>.py\", \"name\": \"<name>\", \"date\": \"YYYY-MM-DD\", \"announced\": \"<the version whose CHANGELOG section says so, or Unreleased until release.py cut names it>\"}. Why it went is in that entry.",
  "removed": [
-  {
-   "module": "tools/env_check.py",
-   "name": "BREW",
-   "date": "2026-10-25",
-   "reason": "the computer set-up no longer installs Homebrew: tools/installs.py puts what is missing in the person's own folders, with no password",
-   "changelog": "**Four messages your own checks might have named were retired**: `env_check.BREW`, `place.SHORT_SIGN_IN`, `place.SHORT_TWO_CHATS` and `place.SIGN_IN_ONCE`. The reading step now asks for the LinkedIn sign-in itself, once, when it finds you signed out; the set-up of a computer needs no Homebrew; and no chat on the computer is recommended for everything."
-  },
-  {
-   "module": "tools/place.py",
-   "name": "SHORT_SIGN_IN",
-   "date": "2026-10-25",
-   "reason": "the sign-in is asked for by the reading step, once, when it finds the person signed out; said by the place check too, it came before any reading (tests/test_place.py)",
-   "changelog": "**Four messages your own checks might have named were retired**: `env_check.BREW`, `place.SHORT_SIGN_IN`, `place.SHORT_TWO_CHATS` and `place.SIGN_IN_ONCE`. The reading step now asks for the LinkedIn sign-in itself, once, when it finds you signed out; the set-up of a computer needs no Homebrew; and no chat on the computer is recommended for everything."
-  },
-  {
-   "module": "tools/place.py",
-   "name": "SHORT_TWO_CHATS",
-   "date": "2026-10-25",
-   "reason": "4.0 recommends no chat on the computer for everything; place.CHATS is what is said now",
-   "changelog": "**Four messages your own checks might have named were retired**: `env_check.BREW`, `place.SHORT_SIGN_IN`, `place.SHORT_TWO_CHATS` and `place.SIGN_IN_ONCE`. The reading step now asks for the LinkedIn sign-in itself, once, when it finds you signed out; the set-up of a computer needs no Homebrew; and no chat on the computer is recommended for everything."
-  },
-  {
-   "module": "tools/place.py",
-   "name": "SIGN_IN_ONCE",
-   "date": "2026-10-25",
-   "reason": "the sign-in is asked for by the reading step, once, when it finds the person signed out; said by the place check too, it came before any reading (tests/test_place.py)",
-   "changelog": "**Four messages your own checks might have named were retired**: `env_check.BREW`, `place.SHORT_SIGN_IN`, `place.SHORT_TWO_CHATS` and `place.SIGN_IN_ONCE`. The reading step now asks for the LinkedIn sign-in itself, once, when it finds you signed out; the set-up of a computer needs no Homebrew; and no chat on the computer is recommended for everything."
-  },
-  {
-   "module": "tools/place.py",
-   "name": "RECOMMEND",
-   "date": "2026-10-25",
-   "reason": "4.0 recommends no chat on the computer: the place question is asked where a chat cannot tell, with no recommendation",
-   "changelog": "**More names your own checks might use were retired**: `place.RECOMMEND` (\"If you have one you can use, say yes\") and `brief.page_parts` (with `brief.py --json`), and the command `tools/setup_state.py` with its names (`setup_state.EXIT`, `PAGE`, `READY`, `ROOT`, `SAY`, `STATES`, `main`, `paste`, `state`, `this_copy`). No chat on a computer is recommended any more, the page builds its own brief, and `python3 tools/app.py start` is the one way any chat finds out where setup stands (`--paste` prints the line for a new computer)."
-  },
-  {
-   "module": "tools/brief.py",
-   "name": "page_parts",
-   "date": "2026-10-25",
-   "reason": "a second builder of the page's brief, due and messages that nothing ran; the page's come from tools/app_model.py",
-   "changelog": "**More names your own checks might use were retired**: `place.RECOMMEND` (\"If you have one you can use, say yes\") and `brief.page_parts` (with `brief.py --json`), and the command `tools/setup_state.py` with its names (`setup_state.EXIT`, `PAGE`, `READY`, `ROOT`, `SAY`, `STATES`, `main`, `paste`, `state`, `this_copy`). No chat on a computer is recommended any more, the page builds its own brief, and `python3 tools/app.py start` is the one way any chat finds out where setup stands (`--paste` prints the line for a new computer)."
-  },
-  {
-   "module": "tools/setup_state.py",
-   "name": "EXIT",
-   "date": "2026-10-25",
-   "reason": "a third command for the one setup detector: python3 tools/app.py start says where setup stands (place.setup_state), and app.py start --paste prints the line for a new computer (app.paste_line)",
-   "changelog": "**More names your own checks might use were retired**: `place.RECOMMEND` (\"If you have one you can use, say yes\") and `brief.page_parts` (with `brief.py --json`), and the command `tools/setup_state.py` with its names (`setup_state.EXIT`, `PAGE`, `READY`, `ROOT`, `SAY`, `STATES`, `main`, `paste`, `state`, `this_copy`). No chat on a computer is recommended any more, the page builds its own brief, and `python3 tools/app.py start` is the one way any chat finds out where setup stands (`--paste` prints the line for a new computer)."
-  },
-  {
-   "module": "tools/setup_state.py",
-   "name": "PAGE",
-   "date": "2026-10-25",
-   "reason": "a third command for the one setup detector: python3 tools/app.py start says where setup stands (place.setup_state), and app.py start --paste prints the line for a new computer (app.paste_line)",
-   "changelog": "**More names your own checks might use were retired**: `place.RECOMMEND` (\"If you have one you can use, say yes\") and `brief.page_parts` (with `brief.py --json`), and the command `tools/setup_state.py` with its names (`setup_state.EXIT`, `PAGE`, `READY`, `ROOT`, `SAY`, `STATES`, `main`, `paste`, `state`, `this_copy`). No chat on a computer is recommended any more, the page builds its own brief, and `python3 tools/app.py start` is the one way any chat finds out where setup stands (`--paste` prints the line for a new computer)."
-  },
-  {
-   "module": "tools/setup_state.py",
-   "name": "READY",
-   "date": "2026-10-25",
-   "reason": "a third command for the one setup detector: python3 tools/app.py start says where setup stands (place.setup_state), and app.py start --paste prints the line for a new computer (app.paste_line)",
-   "changelog": "**More names your own checks might use were retired**: `place.RECOMMEND` (\"If you have one you can use, say yes\") and `brief.page_parts` (with `brief.py --json`), and the command `tools/setup_state.py` with its names (`setup_state.EXIT`, `PAGE`, `READY`, `ROOT`, `SAY`, `STATES`, `main`, `paste`, `state`, `this_copy`). No chat on a computer is recommended any more, the page builds its own brief, and `python3 tools/app.py start` is the one way any chat finds out where setup stands (`--paste` prints the line for a new computer)."
-  },
-  {
-   "module": "tools/setup_state.py",
-   "name": "ROOT",
-   "date": "2026-10-25",
-   "reason": "a third command for the one setup detector: python3 tools/app.py start says where setup stands (place.setup_state), and app.py start --paste prints the line for a new computer (app.paste_line)",
-   "changelog": "**More names your own checks might use were retired**: `place.RECOMMEND` (\"If you have one you can use, say yes\") and `brief.page_parts` (with `brief.py --json`), and the command `tools/setup_state.py` with its names (`setup_state.EXIT`, `PAGE`, `READY`, `ROOT`, `SAY`, `STATES`, `main`, `paste`, `state`, `this_copy`). No chat on a computer is recommended any more, the page builds its own brief, and `python3 tools/app.py start` is the one way any chat finds out where setup stands (`--paste` prints the line for a new computer)."
-  },
-  {
-   "module": "tools/setup_state.py",
-   "name": "SAY",
-   "date": "2026-10-25",
-   "reason": "a third command for the one setup detector: python3 tools/app.py start says where setup stands (place.setup_state), and app.py start --paste prints the line for a new computer (app.paste_line)",
-   "changelog": "**More names your own checks might use were retired**: `place.RECOMMEND` (\"If you have one you can use, say yes\") and `brief.page_parts` (with `brief.py --json`), and the command `tools/setup_state.py` with its names (`setup_state.EXIT`, `PAGE`, `READY`, `ROOT`, `SAY`, `STATES`, `main`, `paste`, `state`, `this_copy`). No chat on a computer is recommended any more, the page builds its own brief, and `python3 tools/app.py start` is the one way any chat finds out where setup stands (`--paste` prints the line for a new computer)."
-  },
-  {
-   "module": "tools/setup_state.py",
-   "name": "STATES",
-   "date": "2026-10-25",
-   "reason": "a third command for the one setup detector: python3 tools/app.py start says where setup stands (place.setup_state), and app.py start --paste prints the line for a new computer (app.paste_line)",
-   "changelog": "**More names your own checks might use were retired**: `place.RECOMMEND` (\"If you have one you can use, say yes\") and `brief.page_parts` (with `brief.py --json`), and the command `tools/setup_state.py` with its names (`setup_state.EXIT`, `PAGE`, `READY`, `ROOT`, `SAY`, `STATES`, `main`, `paste`, `state`, `this_copy`). No chat on a computer is recommended any more, the page builds its own brief, and `python3 tools/app.py start` is the one way any chat finds out where setup stands (`--paste` prints the line for a new computer)."
-  },
-  {
-   "module": "tools/setup_state.py",
-   "name": "main",
-   "date": "2026-10-25",
-   "reason": "a third command for the one setup detector: python3 tools/app.py start says where setup stands (place.setup_state), and app.py start --paste prints the line for a new computer (app.paste_line)",
-   "changelog": "**More names your own checks might use were retired**: `place.RECOMMEND` (\"If you have one you can use, say yes\") and `brief.page_parts` (with `brief.py --json`), and the command `tools/setup_state.py` with its names (`setup_state.EXIT`, `PAGE`, `READY`, `ROOT`, `SAY`, `STATES`, `main`, `paste`, `state`, `this_copy`). No chat on a computer is recommended any more, the page builds its own brief, and `python3 tools/app.py start` is the one way any chat finds out where setup stands (`--paste` prints the line for a new computer)."
-  },
-  {
-   "module": "tools/setup_state.py",
-   "name": "paste",
-   "date": "2026-10-25",
-   "reason": "a third command for the one setup detector: python3 tools/app.py start says where setup stands (place.setup_state), and app.py start --paste prints the line for a new computer (app.paste_line)",
-   "changelog": "**More names your own checks might use were retired**: `place.RECOMMEND` (\"If you have one you can use, say yes\") and `brief.page_parts` (with `brief.py --json`), and the command `tools/setup_state.py` with its names (`setup_state.EXIT`, `PAGE`, `READY`, `ROOT`, `SAY`, `STATES`, `main`, `paste`, `state`, `this_copy`). No chat on a computer is recommended any more, the page builds its own brief, and `python3 tools/app.py start` is the one way any chat finds out where setup stands (`--paste` prints the line for a new computer)."
-  },
-  {
-   "module": "tools/setup_state.py",
-   "name": "state",
-   "date": "2026-10-25",
-   "reason": "a third command for the one setup detector: python3 tools/app.py start says where setup stands (place.setup_state), and app.py start --paste prints the line for a new computer (app.paste_line)",
-   "changelog": "**More names your own checks might use were retired**: `place.RECOMMEND` (\"If you have one you can use, say yes\") and `brief.page_parts` (with `brief.py --json`), and the command `tools/setup_state.py` with its names (`setup_state.EXIT`, `PAGE`, `READY`, `ROOT`, `SAY`, `STATES`, `main`, `paste`, `state`, `this_copy`). No chat on a computer is recommended any more, the page builds its own brief, and `python3 tools/app.py start` is the one way any chat finds out where setup stands (`--paste` prints the line for a new computer)."
-  },
-  {
-   "module": "tools/setup_state.py",
-   "name": "this_copy",
-   "date": "2026-10-25",
-   "reason": "a third command for the one setup detector: python3 tools/app.py start says where setup stands (place.setup_state), and app.py start --paste prints the line for a new computer (app.paste_line)",
-   "changelog": "**More names your own checks might use were retired**: `place.RECOMMEND` (\"If you have one you can use, say yes\") and `brief.page_parts` (with `brief.py --json`), and the command `tools/setup_state.py` with its names (`setup_state.EXIT`, `PAGE`, `READY`, `ROOT`, `SAY`, `STATES`, `main`, `paste`, `state`, `this_copy`). No chat on a computer is recommended any more, the page builds its own brief, and `python3 tools/app.py start` is the one way any chat finds out where setup stands (`--paste` prints the line for a new computer)."
-  },
-  {
-   "module": "tools/app_listen.py",
-   "name": "HELPER_PROMPT",
-   "date": "2026-10-29",
-   "reason": "no helper chat is started for the page any more: it lacked the page's tools and made a spare page; the helper is the chat the person starts from Settings (WAKE_PROMPT)",
-   "changelog": "**A name your own checks might have used was retired**: `app_listen.HELPER_PROMPT`. The page never starts a helper chat of its own any more; your helper is the chat you start from Settings, and it says what it is for in its first message."
-  },
-  {
-   "module": "tools/app_listen.py",
-   "name": "setup_done",
-   "date": "2026-10-29",
-   "reason": "nothing called it: start reads setup through place.setup_state",
-   "changelog": "**Names your own checks might have used were retired**: `app_listen.setup_done`, `ats_boards.workday_paths`, `interview_pack.campaign_offer`, `reading.last_browser_read`, `reading.reads_today`, `page_db.where` (now `page_db.can_take`), `place.CLOUD_LINK_NOT`, `place.QUESTION`, `place.TRADE_OFF`, `place.TWO_CHATS`, `safe_name.short_hash` and `scrape_wide.PortalDown`. Nothing in the app used them any more: setup asks nobody where they will work, no separate chat is offered for an interview, and work goes to the chat that answers your page."
-  },
-  {
-   "module": "tools/ats_boards.py",
-   "name": "workday_paths",
-   "date": "2026-10-29",
-   "reason": "nothing called it: openroles reads Workday boards itself",
-   "changelog": "**Names your own checks might have used were retired**: `app_listen.setup_done`, `ats_boards.workday_paths`, `interview_pack.campaign_offer`, `reading.last_browser_read`, `reading.reads_today`, `page_db.where` (now `page_db.can_take`), `place.CLOUD_LINK_NOT`, `place.QUESTION`, `place.TRADE_OFF`, `place.TWO_CHATS`, `safe_name.short_hash` and `scrape_wide.PortalDown`. Nothing in the app used them any more: setup asks nobody where they will work, no separate chat is offered for an interview, and work goes to the chat that answers your page."
-  },
-  {
-   "module": "tools/interview_pack.py",
-   "name": "campaign_offer",
-   "date": "2026-10-29",
-   "reason": "no separate chat is offered for an interview (4.3): prep stays in the chat that answers the page",
-   "changelog": "**Names your own checks might have used were retired**: `app_listen.setup_done`, `ats_boards.workday_paths`, `interview_pack.campaign_offer`, `reading.last_browser_read`, `reading.reads_today`, `page_db.where` (now `page_db.can_take`), `place.CLOUD_LINK_NOT`, `place.QUESTION`, `place.TRADE_OFF`, `place.TWO_CHATS`, `safe_name.short_hash` and `scrape_wide.PortalDown`. Nothing in the app used them any more: setup asks nobody where they will work, no separate chat is offered for an interview, and work goes to the chat that answers your page."
-  },
-  {
-   "module": "tools/network/reading.py",
-   "name": "last_browser_read",
-   "date": "2026-10-29",
-   "reason": "nothing called it: the page reads profiles itself",
-   "changelog": "**Names your own checks might have used were retired**: `app_listen.setup_done`, `ats_boards.workday_paths`, `interview_pack.campaign_offer`, `reading.last_browser_read`, `reading.reads_today`, `page_db.where` (now `page_db.can_take`), `place.CLOUD_LINK_NOT`, `place.QUESTION`, `place.TRADE_OFF`, `place.TWO_CHATS`, `safe_name.short_hash` and `scrape_wide.PortalDown`. Nothing in the app used them any more: setup asks nobody where they will work, no separate chat is offered for an interview, and work goes to the chat that answers your page."
-  },
-  {
-   "module": "tools/network/reading.py",
-   "name": "reads_today",
-   "date": "2026-10-29",
-   "reason": "nothing called it",
-   "changelog": "**Names your own checks might have used were retired**: `app_listen.setup_done`, `ats_boards.workday_paths`, `interview_pack.campaign_offer`, `reading.last_browser_read`, `reading.reads_today`, `page_db.where` (now `page_db.can_take`), `place.CLOUD_LINK_NOT`, `place.QUESTION`, `place.TRADE_OFF`, `place.TWO_CHATS`, `safe_name.short_hash` and `scrape_wide.PortalDown`. Nothing in the app used them any more: setup asks nobody where they will work, no separate chat is offered for an interview, and work goes to the chat that answers your page."
-  },
-  {
-   "module": "tools/page_db.py",
-   "name": "where",
-   "date": "2026-10-29",
-   "reason": "one chat answers the page, so work goes to it whatever its kind: page_db.can_take",
-   "changelog": "**Names your own checks might have used were retired**: `app_listen.setup_done`, `ats_boards.workday_paths`, `interview_pack.campaign_offer`, `reading.last_browser_read`, `reading.reads_today`, `page_db.where` (now `page_db.can_take`), `place.CLOUD_LINK_NOT`, `place.QUESTION`, `place.TRADE_OFF`, `place.TWO_CHATS`, `safe_name.short_hash` and `scrape_wide.PortalDown`. Nothing in the app used them any more: setup asks nobody where they will work, no separate chat is offered for an interview, and work goes to the chat that answers your page."
-  },
-  {
-   "module": "tools/place.py",
-   "name": "CLOUD_LINK_NOT",
-   "date": "2026-10-29",
-   "reason": "no longer said since 4.0: the page reads profiles",
-   "changelog": "**Names your own checks might have used were retired**: `app_listen.setup_done`, `ats_boards.workday_paths`, `interview_pack.campaign_offer`, `reading.last_browser_read`, `reading.reads_today`, `page_db.where` (now `page_db.can_take`), `place.CLOUD_LINK_NOT`, `place.QUESTION`, `place.TRADE_OFF`, `place.TWO_CHATS`, `safe_name.short_hash` and `scrape_wide.PortalDown`. Nothing in the app used them any more: setup asks nobody where they will work, no separate chat is offered for an interview, and work goes to the chat that answers your page."
-  },
-  {
-   "module": "tools/place.py",
-   "name": "QUESTION",
-   "date": "2026-10-29",
-   "reason": "setup no longer asks where the person will work: the answer changed nothing",
-   "changelog": "**Names your own checks might have used were retired**: `app_listen.setup_done`, `ats_boards.workday_paths`, `interview_pack.campaign_offer`, `reading.last_browser_read`, `reading.reads_today`, `page_db.where` (now `page_db.can_take`), `place.CLOUD_LINK_NOT`, `place.QUESTION`, `place.TRADE_OFF`, `place.TWO_CHATS`, `safe_name.short_hash` and `scrape_wide.PortalDown`. Nothing in the app used them any more: setup asks nobody where they will work, no separate chat is offered for an interview, and work goes to the chat that answers your page."
-  },
-  {
-   "module": "tools/place.py",
-   "name": "TRADE_OFF",
-   "date": "2026-10-29",
-   "reason": "went with QUESTION",
-   "changelog": "**Names your own checks might have used were retired**: `app_listen.setup_done`, `ats_boards.workday_paths`, `interview_pack.campaign_offer`, `reading.last_browser_read`, `reading.reads_today`, `page_db.where` (now `page_db.can_take`), `place.CLOUD_LINK_NOT`, `place.QUESTION`, `place.TRADE_OFF`, `place.TWO_CHATS`, `safe_name.short_hash` and `scrape_wide.PortalDown`. Nothing in the app used them any more: setup asks nobody where they will work, no separate chat is offered for an interview, and work goes to the chat that answers your page."
-  },
-  {
-   "module": "tools/place.py",
-   "name": "TWO_CHATS",
-   "date": "2026-10-29",
-   "reason": "an old name for place.CHATS that nothing read",
-   "changelog": "**Names your own checks might have used were retired**: `app_listen.setup_done`, `ats_boards.workday_paths`, `interview_pack.campaign_offer`, `reading.last_browser_read`, `reading.reads_today`, `page_db.where` (now `page_db.can_take`), `place.CLOUD_LINK_NOT`, `place.QUESTION`, `place.TRADE_OFF`, `place.TWO_CHATS`, `safe_name.short_hash` and `scrape_wide.PortalDown`. Nothing in the app used them any more: setup asks nobody where they will work, no separate chat is offered for an interview, and work goes to the chat that answers your page."
-  },
-  {
-   "module": "tools/safe_name.py",
-   "name": "short_hash",
-   "date": "2026-10-29",
-   "reason": "nothing called it",
-   "changelog": "**Names your own checks might have used were retired**: `app_listen.setup_done`, `ats_boards.workday_paths`, `interview_pack.campaign_offer`, `reading.last_browser_read`, `reading.reads_today`, `page_db.where` (now `page_db.can_take`), `place.CLOUD_LINK_NOT`, `place.QUESTION`, `place.TRADE_OFF`, `place.TWO_CHATS`, `safe_name.short_hash` and `scrape_wide.PortalDown`. Nothing in the app used them any more: setup asks nobody where they will work, no separate chat is offered for an interview, and work goes to the chat that answers your page."
-  },
-  {
-   "module": "tools/scrape_wide.py",
-   "name": "PortalDown",
-   "date": "2026-10-29",
-   "reason": "nothing raised or caught it",
-   "changelog": "**Names your own checks might have used were retired**: `app_listen.setup_done`, `ats_boards.workday_paths`, `interview_pack.campaign_offer`, `reading.last_browser_read`, `reading.reads_today`, `page_db.where` (now `page_db.can_take`), `place.CLOUD_LINK_NOT`, `place.QUESTION`, `place.TRADE_OFF`, `place.TWO_CHATS`, `safe_name.short_hash` and `scrape_wide.PortalDown`. Nothing in the app used them any more: setup asks nobody where they will work, no separate chat is offered for an interview, and work goes to the chat that answers your page."
-  },
-  {
-   "module": "tools/brief.py",
-   "name": "BANK_DECISION",
-   "date": "2026-11-02",
-   "reason": "the brief decides no kind of news for anyone: what it watches is the person's own list (person.json brief.watch)",
-   "changelog": "**Names your own checks might have used were retired**: `brief.CENTRAL_BANK`, `brief.BANK_DECISION`, `brief.EURO`, `brief.COUNTRY`, `brief.LANGUAGE`, `brief.NEVER_OFF`, `brief.country_name`, `brief.rights_term` and `brief.target_names`. The brief no longer decides any kind of news for anyone, so its tables of central banks and countries went with the fixed searches."
-  },
-  {
-   "module": "tools/brief.py",
-   "name": "CENTRAL_BANK",
-   "date": "2026-11-02",
-   "reason": "the brief decides no kind of news for anyone: what it watches is the person's own list (person.json brief.watch)",
-   "changelog": "**Names your own checks might have used were retired**: `brief.CENTRAL_BANK`, `brief.BANK_DECISION`, `brief.EURO`, `brief.COUNTRY`, `brief.LANGUAGE`, `brief.NEVER_OFF`, `brief.country_name`, `brief.rights_term` and `brief.target_names`. The brief no longer decides any kind of news for anyone, so its tables of central banks and countries went with the fixed searches."
-  },
-  {
-   "module": "tools/brief.py",
-   "name": "COUNTRY",
-   "date": "2026-11-02",
-   "reason": "the brief decides no kind of news for anyone: what it watches is the person's own list (person.json brief.watch)",
-   "changelog": "**Names your own checks might have used were retired**: `brief.CENTRAL_BANK`, `brief.BANK_DECISION`, `brief.EURO`, `brief.COUNTRY`, `brief.LANGUAGE`, `brief.NEVER_OFF`, `brief.country_name`, `brief.rights_term` and `brief.target_names`. The brief no longer decides any kind of news for anyone, so its tables of central banks and countries went with the fixed searches."
-  },
-  {
-   "module": "tools/brief.py",
-   "name": "EURO",
-   "date": "2026-11-02",
-   "reason": "the brief decides no kind of news for anyone: what it watches is the person's own list (person.json brief.watch)",
-   "changelog": "**Names your own checks might have used were retired**: `brief.CENTRAL_BANK`, `brief.BANK_DECISION`, `brief.EURO`, `brief.COUNTRY`, `brief.LANGUAGE`, `brief.NEVER_OFF`, `brief.country_name`, `brief.rights_term` and `brief.target_names`. The brief no longer decides any kind of news for anyone, so its tables of central banks and countries went with the fixed searches."
-  },
-  {
-   "module": "tools/brief.py",
-   "name": "LANGUAGE",
-   "date": "2026-11-02",
-   "reason": "the brief decides no kind of news for anyone: what it watches is the person's own list (person.json brief.watch)",
-   "changelog": "**Names your own checks might have used were retired**: `brief.CENTRAL_BANK`, `brief.BANK_DECISION`, `brief.EURO`, `brief.COUNTRY`, `brief.LANGUAGE`, `brief.NEVER_OFF`, `brief.country_name`, `brief.rights_term` and `brief.target_names`. The brief no longer decides any kind of news for anyone, so its tables of central banks and countries went with the fixed searches."
-  },
-  {
-   "module": "tools/brief.py",
-   "name": "NEVER_OFF",
-   "date": "2026-11-02",
-   "reason": "the brief decides no kind of news for anyone: what it watches is the person's own list (person.json brief.watch)",
-   "changelog": "**Names your own checks might have used were retired**: `brief.CENTRAL_BANK`, `brief.BANK_DECISION`, `brief.EURO`, `brief.COUNTRY`, `brief.LANGUAGE`, `brief.NEVER_OFF`, `brief.country_name`, `brief.rights_term` and `brief.target_names`. The brief no longer decides any kind of news for anyone, so its tables of central banks and countries went with the fixed searches."
-  },
-  {
-   "module": "tools/brief.py",
-   "name": "country_name",
-   "date": "2026-11-02",
-   "reason": "the brief decides no kind of news for anyone: what it watches is the person's own list (person.json brief.watch)",
-   "changelog": "**Names your own checks might have used were retired**: `brief.CENTRAL_BANK`, `brief.BANK_DECISION`, `brief.EURO`, `brief.COUNTRY`, `brief.LANGUAGE`, `brief.NEVER_OFF`, `brief.country_name`, `brief.rights_term` and `brief.target_names`. The brief no longer decides any kind of news for anyone, so its tables of central banks and countries went with the fixed searches."
-  },
-  {
-   "module": "tools/brief.py",
-   "name": "rights_term",
-   "date": "2026-11-02",
-   "reason": "the brief decides no kind of news for anyone: what it watches is the person's own list (person.json brief.watch)",
-   "changelog": "**Names your own checks might have used were retired**: `brief.CENTRAL_BANK`, `brief.BANK_DECISION`, `brief.EURO`, `brief.COUNTRY`, `brief.LANGUAGE`, `brief.NEVER_OFF`, `brief.country_name`, `brief.rights_term` and `brief.target_names`. The brief no longer decides any kind of news for anyone, so its tables of central banks and countries went with the fixed searches."
-  },
-  {
-   "module": "tools/brief.py",
-   "name": "target_names",
-   "date": "2026-11-02",
-   "reason": "the brief decides no kind of news for anyone: what it watches is the person's own list (person.json brief.watch)",
-   "changelog": "**Names your own checks might have used were retired**: `brief.CENTRAL_BANK`, `brief.BANK_DECISION`, `brief.EURO`, `brief.COUNTRY`, `brief.LANGUAGE`, `brief.NEVER_OFF`, `brief.country_name`, `brief.rights_term` and `brief.target_names`. The brief no longer decides any kind of news for anyone, so its tables of central banks and countries went with the fixed searches."
-  },
-  {
-   "module": "tools/app_listen.py",
-   "name": "fresh_task",
-   "date": "2026-11-06",
-   "reason": "a chat a scheduled task started had no copy of the person's files and could not start the helper; the listener starts it with create_session",
-   "changelog": "**Names your own checks might have used were retired**: `app_listen.fresh_task`, `app_listen.FRESH_FROM_TASK` and `app_listen.TASK_AHEAD_S`. The fresh page helper is now started by the chat that answers your page, never by a scheduled task."
-  },
-  {
-   "module": "tools/app_listen.py",
-   "name": "FRESH_FROM_TASK",
-   "date": "2026-11-06",
-   "reason": "a chat a scheduled task started had no copy of the person's files and could not start the helper; the listener starts it with create_session",
-   "changelog": "**Names your own checks might have used were retired**: `app_listen.fresh_task`, `app_listen.FRESH_FROM_TASK` and `app_listen.TASK_AHEAD_S`. The fresh page helper is now started by the chat that answers your page, never by a scheduled task."
-  },
-  {
-   "module": "tools/app_listen.py",
-   "name": "TASK_AHEAD_S",
-   "date": "2026-11-06",
-   "reason": "a chat a scheduled task started had no copy of the person's files and could not start the helper; the listener starts it with create_session",
-   "changelog": "**Names your own checks might have used were retired**: `app_listen.fresh_task`, `app_listen.FRESH_FROM_TASK` and `app_listen.TASK_AHEAD_S`. The fresh page helper is now started by the chat that answers your page, never by a scheduled task."
-  },
-  {
-   "module": "tools/app_listen.py",
-   "name": "grown_tokens",
-   "date": "2026-11-11",
-   "reason": "nothing in the app called it: the helper's growth is read where it hands over",
-   "changelog": "**Eleven names your own checks might use were retired, since nothing in the app used them any more**: `app_listen.grown_tokens`, `app_model.owed_button`, `app_page.code_files`, `brief.news_items`, `computer.memory_line`, `general_resume.for_contact_word`, `merge_state.first_written`, `render_application.strip_legal`, `text_screen.other_language_named`, `ats_boards.shown_text` (openroles now counts what a posting hid itself) and `computer.SETUP_CHAT` (the chat you set the computer up in is now known by the exact words you pasted, so no other chat is put away for looking like it). Each did nothing the app runs: a check of yours that used one is brought in line by itself after the update (audit CS-3, CS-4)."
-  },
-  {
-   "module": "tools/app_model.py",
-   "name": "owed_button",
-   "date": "2026-11-11",
-   "reason": "the page's button is standing()'s, which reads the person's messages and rules; this older one was kept only for own tests",
-   "changelog": "**Eleven names your own checks might use were retired, since nothing in the app used them any more**: `app_listen.grown_tokens`, `app_model.owed_button`, `app_page.code_files`, `brief.news_items`, `computer.memory_line`, `general_resume.for_contact_word`, `merge_state.first_written`, `render_application.strip_legal`, `text_screen.other_language_named`, `ats_boards.shown_text` (openroles now counts what a posting hid itself) and `computer.SETUP_CHAT` (the chat you set the computer up in is now known by the exact words you pasted, so no other chat is put away for looking like it). Each did nothing the app runs: a check of yours that used one is brought in line by itself after the update (audit CS-3, CS-4)."
-  },
-  {
-   "module": "tools/app_page.py",
-   "name": "code_files",
-   "date": "2026-11-11",
-   "reason": "nothing in the app called it: the page is built in parts by app_page's own build",
-   "changelog": "**Eleven names your own checks might use were retired, since nothing in the app used them any more**: `app_listen.grown_tokens`, `app_model.owed_button`, `app_page.code_files`, `brief.news_items`, `computer.memory_line`, `general_resume.for_contact_word`, `merge_state.first_written`, `render_application.strip_legal`, `text_screen.other_language_named`, `ats_boards.shown_text` (openroles now counts what a posting hid itself) and `computer.SETUP_CHAT` (the chat you set the computer up in is now known by the exact words you pasted, so no other chat is put away for looking like it). Each did nothing the app runs: a check of yours that used one is brought in line by itself after the update (audit CS-3, CS-4)."
-  },
-  {
-   "module": "tools/brief.py",
-   "name": "news_items",
-   "date": "2026-11-11",
-   "reason": "nothing in the app called it: the brief's news comes from its own steps",
-   "changelog": "**Eleven names your own checks might use were retired, since nothing in the app used them any more**: `app_listen.grown_tokens`, `app_model.owed_button`, `app_page.code_files`, `brief.news_items`, `computer.memory_line`, `general_resume.for_contact_word`, `merge_state.first_written`, `render_application.strip_legal`, `text_screen.other_language_named`, `ats_boards.shown_text` (openroles now counts what a posting hid itself) and `computer.SETUP_CHAT` (the chat you set the computer up in is now known by the exact words you pasted, so no other chat is put away for looking like it). Each did nothing the app runs: a check of yours that used one is brought in line by itself after the update (audit CS-3, CS-4)."
-  },
-  {
-   "module": "tools/computer.py",
-   "name": "memory_line",
-   "date": "2026-11-11",
-   "reason": "the start removes a disagreeing memory note itself (memory_remove, memory_said); this line said to leave it, and only a test called it",
-   "changelog": "**Eleven names your own checks might use were retired, since nothing in the app used them any more**: `app_listen.grown_tokens`, `app_model.owed_button`, `app_page.code_files`, `brief.news_items`, `computer.memory_line`, `general_resume.for_contact_word`, `merge_state.first_written`, `render_application.strip_legal`, `text_screen.other_language_named`, `ats_boards.shown_text` (openroles now counts what a posting hid itself) and `computer.SETUP_CHAT` (the chat you set the computer up in is now known by the exact words you pasted, so no other chat is put away for looking like it). Each did nothing the app runs: a check of yours that used one is brought in line by itself after the update (audit CS-3, CS-4)."
-  },
-  {
-   "module": "tools/general_resume.py",
-   "name": "for_contact_word",
-   "date": "2026-11-11",
-   "reason": "nothing in the app called it",
-   "changelog": "**Eleven names your own checks might use were retired, since nothing in the app used them any more**: `app_listen.grown_tokens`, `app_model.owed_button`, `app_page.code_files`, `brief.news_items`, `computer.memory_line`, `general_resume.for_contact_word`, `merge_state.first_written`, `render_application.strip_legal`, `text_screen.other_language_named`, `ats_boards.shown_text` (openroles now counts what a posting hid itself) and `computer.SETUP_CHAT` (the chat you set the computer up in is now known by the exact words you pasted, so no other chat is put away for looking like it). Each did nothing the app runs: a check of yours that used one is brought in line by itself after the update (audit CS-3, CS-4)."
-  },
-  {
-   "module": "tools/merge_state.py",
-   "name": "first_written",
-   "date": "2026-11-11",
-   "reason": "the page record merges by newest_written since 2026-11-04; this was kept only for own tests",
-   "changelog": "**Eleven names your own checks might use were retired, since nothing in the app used them any more**: `app_listen.grown_tokens`, `app_model.owed_button`, `app_page.code_files`, `brief.news_items`, `computer.memory_line`, `general_resume.for_contact_word`, `merge_state.first_written`, `render_application.strip_legal`, `text_screen.other_language_named`, `ats_boards.shown_text` (openroles now counts what a posting hid itself) and `computer.SETUP_CHAT` (the chat you set the computer up in is now known by the exact words you pasted, so no other chat is put away for looking like it). Each did nothing the app runs: a check of yours that used one is brought in line by itself after the update (audit CS-3, CS-4)."
-  },
-  {
-   "module": "tools/render_application.py",
-   "name": "strip_legal",
-   "date": "2026-11-11",
-   "reason": "company_key.display_name does it, and only a test called this",
-   "changelog": "**Eleven names your own checks might use were retired, since nothing in the app used them any more**: `app_listen.grown_tokens`, `app_model.owed_button`, `app_page.code_files`, `brief.news_items`, `computer.memory_line`, `general_resume.for_contact_word`, `merge_state.first_written`, `render_application.strip_legal`, `text_screen.other_language_named`, `ats_boards.shown_text` (openroles now counts what a posting hid itself) and `computer.SETUP_CHAT` (the chat you set the computer up in is now known by the exact words you pasted, so no other chat is put away for looking like it). Each did nothing the app runs: a check of yours that used one is brought in line by itself after the update (audit CS-3, CS-4)."
-  },
-  {
-   "module": "tools/app.py",
-   "name": "data_current",
-   "date": "2026-11-10",
-   "reason": "nothing passed app.py start --dump, so it was never true; the start's page step reads through the page mirror instead (second audit D4)",
-   "changelog": "**A name your own checks might have used was retired**: `app.data_current`, which nothing called. A start brings your page up to date through what Claude keeps of it, so a page already current costs only a small read."
-  },
-  {
-   "module": "tools/text_screen.py",
-   "name": "other_language_named",
-   "date": "2026-11-11",
-   "reason": "only a test called it; the screen reads the posting's language another way",
-   "changelog": "**Eleven names your own checks might use were retired, since nothing in the app used them any more**: `app_listen.grown_tokens`, `app_model.owed_button`, `app_page.code_files`, `brief.news_items`, `computer.memory_line`, `general_resume.for_contact_word`, `merge_state.first_written`, `render_application.strip_legal`, `text_screen.other_language_named`, `ats_boards.shown_text` (openroles now counts what a posting hid itself) and `computer.SETUP_CHAT` (the chat you set the computer up in is now known by the exact words you pasted, so no other chat is put away for looking like it). Each did nothing the app runs: a check of yours that used one is brought in line by itself after the update (audit CS-3, CS-4)."
-  },
-  {
-   "module": "tools/ats_boards.py",
-   "name": "shown_text",
-   "date": "2026-11-11",
-   "reason": "openroles 0.5.0 counts what a posting's markup hid itself (Job.hidden), so the app no longer wraps its text converter; the app's own count was lost wherever a reader joined a description's parts",
-   "changelog": "**Eleven names your own checks might use were retired, since nothing in the app used them any more**: `app_listen.grown_tokens`, `app_model.owed_button`, `app_page.code_files`, `brief.news_items`, `computer.memory_line`, `general_resume.for_contact_word`, `merge_state.first_written`, `render_application.strip_legal`, `text_screen.other_language_named`, `ats_boards.shown_text` (openroles now counts what a posting hid itself) and `computer.SETUP_CHAT` (the chat you set the computer up in is now known by the exact words you pasted, so no other chat is put away for looking like it). Each did nothing the app runs: a check of yours that used one is brought in line by itself after the update (audit CS-3, CS-4)."
-  },
-  {
-   "module": "tools/computer.py",
-   "name": "SETUP_CHAT",
-   "date": "2026-11-11",
-   "reason": "a pattern that matched any chat title starting open, set up or start and naming a job search and a computer; the setup chat is now matched by the exact words the person pasted, so a chat of theirs with a similar title is never put away",
-   "changelog": "**Eleven names your own checks might use were retired, since nothing in the app used them any more**: `app_listen.grown_tokens`, `app_model.owed_button`, `app_page.code_files`, `brief.news_items`, `computer.memory_line`, `general_resume.for_contact_word`, `merge_state.first_written`, `render_application.strip_legal`, `text_screen.other_language_named`, `ats_boards.shown_text` (openroles now counts what a posting hid itself) and `computer.SETUP_CHAT` (the chat you set the computer up in is now known by the exact words you pasted, so no other chat is put away for looking like it). Each did nothing the app runs: a check of yours that used one is brought in line by itself after the update (audit CS-3, CS-4)."
-  }
+  {"module": "tools/env_check.py", "name": "BREW", "date": "2026-10-25", "announced": "4.0.0"},
+  {"module": "tools/place.py", "name": "SHORT_SIGN_IN", "date": "2026-10-25", "announced": "4.0.0"},
+  {"module": "tools/place.py", "name": "SHORT_TWO_CHATS", "date": "2026-10-25", "announced": "4.0.0"},
+  {"module": "tools/place.py", "name": "SIGN_IN_ONCE", "date": "2026-10-25", "announced": "4.0.0"},
+  {"module": "tools/place.py", "name": "RECOMMEND", "date": "2026-10-25", "announced": "4.0.0"},
+  {"module": "tools/brief.py", "name": "page_parts", "date": "2026-10-25", "announced": "4.0.0"},
+  {"module": "tools/setup_state.py", "name": "EXIT", "date": "2026-10-25", "announced": "4.0.0"},
+  {"module": "tools/setup_state.py", "name": "PAGE", "date": "2026-10-25", "announced": "4.0.0"},
+  {"module": "tools/setup_state.py", "name": "READY", "date": "2026-10-25", "announced": "4.0.0"},
+  {"module": "tools/setup_state.py", "name": "ROOT", "date": "2026-10-25", "announced": "4.0.0"},
+  {"module": "tools/setup_state.py", "name": "SAY", "date": "2026-10-25", "announced": "4.0.0"},
+  {"module": "tools/setup_state.py", "name": "STATES", "date": "2026-10-25", "announced": "4.0.0"},
+  {"module": "tools/setup_state.py", "name": "main", "date": "2026-10-25", "announced": "4.0.0"},
+  {"module": "tools/setup_state.py", "name": "paste", "date": "2026-10-25", "announced": "4.0.0"},
+  {"module": "tools/setup_state.py", "name": "state", "date": "2026-10-25", "announced": "4.0.0"},
+  {"module": "tools/setup_state.py", "name": "this_copy", "date": "2026-10-25", "announced": "4.0.0"},
+  {"module": "tools/app_listen.py", "name": "HELPER_PROMPT", "date": "2026-10-29", "announced": "4.3.0"},
+  {"module": "tools/app_listen.py", "name": "setup_done", "date": "2026-10-29", "announced": "4.3.0"},
+  {"module": "tools/ats_boards.py", "name": "workday_paths", "date": "2026-10-29", "announced": "4.3.0"},
+  {"module": "tools/interview_pack.py", "name": "campaign_offer", "date": "2026-10-29", "announced": "4.3.0"},
+  {"module": "tools/network/reading.py", "name": "last_browser_read", "date": "2026-10-29", "announced": "4.3.0"},
+  {"module": "tools/network/reading.py", "name": "reads_today", "date": "2026-10-29", "announced": "4.3.0"},
+  {"module": "tools/page_db.py", "name": "where", "date": "2026-10-29", "announced": "4.3.0"},
+  {"module": "tools/place.py", "name": "CLOUD_LINK_NOT", "date": "2026-10-29", "announced": "4.3.0"},
+  {"module": "tools/place.py", "name": "QUESTION", "date": "2026-10-29", "announced": "4.3.0"},
+  {"module": "tools/place.py", "name": "TRADE_OFF", "date": "2026-10-29", "announced": "4.3.0"},
+  {"module": "tools/place.py", "name": "TWO_CHATS", "date": "2026-10-29", "announced": "4.3.0"},
+  {"module": "tools/safe_name.py", "name": "short_hash", "date": "2026-10-29", "announced": "4.3.0"},
+  {"module": "tools/scrape_wide.py", "name": "PortalDown", "date": "2026-10-29", "announced": "4.3.0"},
+  {"module": "tools/brief.py", "name": "BANK_DECISION", "date": "2026-11-02", "announced": "4.7.0"},
+  {"module": "tools/brief.py", "name": "CENTRAL_BANK", "date": "2026-11-02", "announced": "4.7.0"},
+  {"module": "tools/brief.py", "name": "COUNTRY", "date": "2026-11-02", "announced": "4.7.0"},
+  {"module": "tools/brief.py", "name": "EURO", "date": "2026-11-02", "announced": "4.7.0"},
+  {"module": "tools/brief.py", "name": "LANGUAGE", "date": "2026-11-02", "announced": "4.7.0"},
+  {"module": "tools/brief.py", "name": "NEVER_OFF", "date": "2026-11-02", "announced": "4.7.0"},
+  {"module": "tools/brief.py", "name": "country_name", "date": "2026-11-02", "announced": "4.7.0"},
+  {"module": "tools/brief.py", "name": "rights_term", "date": "2026-11-02", "announced": "4.7.0"},
+  {"module": "tools/brief.py", "name": "target_names", "date": "2026-11-02", "announced": "4.7.0"},
+  {"module": "tools/app_listen.py", "name": "fresh_task", "date": "2026-11-06", "announced": "4.13.0"},
+  {"module": "tools/app_listen.py", "name": "FRESH_FROM_TASK", "date": "2026-11-06", "announced": "4.13.0"},
+  {"module": "tools/app_listen.py", "name": "TASK_AHEAD_S", "date": "2026-11-06", "announced": "4.13.0"},
+  {"module": "tools/app_listen.py", "name": "grown_tokens", "date": "2026-11-11", "announced": "4.15.0"},
+  {"module": "tools/app_model.py", "name": "owed_button", "date": "2026-11-11", "announced": "4.15.0"},
+  {"module": "tools/app_page.py", "name": "code_files", "date": "2026-11-11", "announced": "4.15.0"},
+  {"module": "tools/brief.py", "name": "news_items", "date": "2026-11-11", "announced": "4.15.0"},
+  {"module": "tools/computer.py", "name": "memory_line", "date": "2026-11-11", "announced": "4.15.0"},
+  {"module": "tools/general_resume.py", "name": "for_contact_word", "date": "2026-11-11", "announced": "4.15.0"},
+  {"module": "tools/merge_state.py", "name": "first_written", "date": "2026-11-11", "announced": "4.15.0"},
+  {"module": "tools/render_application.py", "name": "strip_legal", "date": "2026-11-11", "announced": "4.15.0"},
+  {"module": "tools/app.py", "name": "data_current", "date": "2026-11-10", "announced": "4.15.0"},
+  {"module": "tools/text_screen.py", "name": "other_language_named", "date": "2026-11-11", "announced": "4.15.0"},
+  {"module": "tools/ats_boards.py", "name": "shown_text", "date": "2026-11-11", "announced": "4.15.0"},
+  {"module": "tools/computer.py", "name": "SETUP_CHAT", "date": "2026-11-11", "announced": "4.15.0"},
+  {"module": "tools/public_names.py", "name": "SNAPSHOT", "date": "2026-11-11", "announced": "Unreleased"},
+  {"module": "tools/public_names.py", "name": "snapshot", "date": "2026-11-11", "announced": "Unreleased"},
+  {"module": "tools/public_names.py", "name": "stale", "date": "2026-11-11", "announced": "Unreleased"},
+  {"module": "tools/release.py", "name": "names_kept", "date": "2026-11-11", "announced": "Unreleased"}
  ]
 }

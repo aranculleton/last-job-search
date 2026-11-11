@@ -1262,8 +1262,7 @@ KEEPS_NOTHING: dict[str, str] = {
     "tools/release.py": "publishes the app's releases from its own CI; keeps nothing in a repo",
     "tools/remembered.py": "keeps each answer for one page build only, in memory; keeps nothing",
     "tools/readme_pictures.py": "names the README's pictures after their contents; keeps nothing in a person's repo",
-    "tools/public_names.py": "development tooling: checks no public name goes unannounced, keeps nothing",
-    "tools/public_names.json": "the names the last release shipped, read by a check; keeps nothing",
+    "tools/public_names.py": "development tooling: checks no public name the newest release ships goes unannounced, keeps nothing",
     "docs/removed_names.json": "the public names the app took away on purpose, read by a check; "
                                "keeps nothing",
     "tools/name_guard_allow.txt": "the name guard's list of invented names; keeps nothing",
