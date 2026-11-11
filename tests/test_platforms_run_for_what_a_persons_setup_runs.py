@@ -10,7 +10,9 @@ reads it, because a `paths:` filter applies to every event and would stop a rele
 """
 from __future__ import annotations
 
+import ast
 import os
+import re
 import subprocess
 import sys
 
@@ -46,10 +48,99 @@ def test_every_path_says_why_and_names_a_file_that_is_there():
     ("tools/app.py", False), ("tools/sync_app.py", False), ("tools/app_listen.py", False),
     ("tools/merge_state.py", False), ("tools/computer_setup.ps1", False),
     (".claude/settings.json", False), ("COMPUTER.md", False), (".gitattributes", False),
-    ("tools/setup_env.sh", False), ("tools/network/state.py", False), ("CHANGELOG.md", False),
+    ("tools/setup_env.sh", False), ("CHANGELOG.md", False),
+    # The seed, interview and networking steps' own (the process review, 2026-11-11: the
+    # contact book's command was pinned False here, and the networking step runs it).
+    ("tools/history_interview.py", True), ("tools/interview_pack.py", True),
+    ("tools/network/compose.py", True), ("tools/network/surface.py", True),
+    ("tools/network/state.py", True), ("tools/open_actions.py", True),
 ])
 def test_only_what_a_persons_set_up_runs_starts_it(path, runs):
     assert ci_plan.touches_platforms([path]) is runs
+
+
+# The steps the person job runs that are not the set-up: the suite is the one Checks runs on
+# Linux for every pull request, and a step's helper in tests/ is the suite's own.
+NOT_SET_UP = {"suite": "the test suite, which Checks runs on Linux on every pull request"}
+WHERE = ("tools", "tools/network", "templates")
+PROBE = re.compile(r"(?:^|;)\s*(?:import ([\w, ]+)|from (\w+) import)", re.M)
+
+
+def _module(name: str):
+    """The file `import name` takes with platform_check's path, or None (the standard
+    library, a package, tests/)."""
+    return next((f"{d}/{name}.py" for d in WHERE
+                 if os.path.isfile(os.path.join(ROOT, d, name + ".py"))), None)
+
+
+def _in_text(text: str) -> set:
+    """The app's files a command line or a probe run in its own Python names."""
+    found = set(re.findall(r"\b((?:tools|templates)/[\w/]+\.py)\b", text))
+    for m in PROBE.finditer(text):
+        for name in (m.group(1) or m.group(2)).split(","):
+            found.add(_module(name.strip()))
+    return found - {None}
+
+
+def _what_the_steps_run(steps) -> set:
+    """Every file in tools/ or templates/ that these platform_check.py steps run, as a
+    command, an import in their own Python or an import in a probe, following the helpers
+    they call. Read from the source, never imported: platform_check starts itself again
+    under the app's .venv when imported."""
+    with open(os.path.join(ROOT, "tools", "platform_check.py"), encoding="utf-8") as fh:
+        tree = ast.parse(fh.read())
+    defs = {n.name: n for n in tree.body if isinstance(n, ast.FunctionDef)}
+    named = {t.id: n.value for n in tree.body if isinstance(n, ast.Assign)
+             for t in n.targets if isinstance(t, ast.Name)}
+    table = named["STEPS"]
+    by_step = {k.value: v.id for k, v in zip(table.keys, table.values)}
+    found = {_module(a.name) for n in tree.body if isinstance(n, ast.Import) for a in n.names}
+    todo, seen = [by_step[s] for s in steps], set()
+    while todo:
+        name = todo.pop()
+        if name in seen:
+            continue
+        seen.add(name)
+        for node in ast.walk(defs[name] if name in defs else named[name]):
+            if isinstance(node, ast.Name) and (node.id in defs or node.id in named) \
+                    and node.id not in ("STEPS", "RESULTS"):
+                todo.append(node.id)
+            elif isinstance(node, ast.Import):
+                found |= {_module(a.name) for a in node.names}
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                found.add(_module(node.module))
+            elif isinstance(node, ast.Call) and ast.unparse(node.func) == "os.path.join":
+                parts = [a.value for a in node.args if isinstance(a, ast.Constant)
+                         and isinstance(a.value, str)]
+                if parts and parts[-1].endswith(".py"):
+                    first = node.args[0]
+                    lead = ["tools"] if isinstance(first, ast.Name) and first.id == "TOOLS" else []
+                    found.add("/".join(lead + parts))
+            elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+                found |= _in_text(node.value)
+    return {f for f in found if f and f.startswith(("tools/", "templates/"))}
+
+
+def test_every_file_the_person_jobs_steps_run_starts_it():
+    """The process review of 2026-11-11: the interview and networking steps ran
+    tools/interview_pack.py, tools/network/state.py, surface.py and tools/open_actions.py,
+    and a change to any of them started nothing on Linux or the Mac. The list is checked
+    against what the job's own lines and platform_check.py's steps run, so it cannot drift."""
+    job = W.load("platforms.yml")["jobs"]["person"]
+    lines = "\n".join(s.get("run", "") for s in job["steps"])
+    steps = [w for m in re.finditer(r"tools/platform_check\.py((?: +[a-z]+)+)", lines)
+             for w in m.group(1).split()]
+    assert {"install", "documents", "seed", "interview", "networking", "suite"} <= set(steps)
+    run = _what_the_steps_run([s for s in steps if s not in NOT_SET_UP]) | _in_text(lines)
+    # It reads what it should: a command, an import in a probe, a helper's own and the
+    # entries a step looks for.
+    assert {"tools/interview_pack.py", "tools/network/state.py", "tools/network/compose.py",
+            "tools/pdftext.py", "tools/fit_to_page.py", "tools/stage_picks.py",
+            "tools/history_interview.py", "templates/doc_style.py", "tools/installs.py",
+            "tools/python_floor.py"} <= run, sorted(run)
+    assert "tools/ci_plan.py" not in run            # the suite's split, not the set-up
+    missing = sorted(f for f in run if not ci_plan.touches_platforms([f]))
+    assert not missing, f"the person job runs these, and a change to one starts nothing: {missing}"
 
 
 def _git(cwd, *args):

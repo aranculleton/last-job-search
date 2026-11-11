@@ -146,10 +146,10 @@ message give the builder prompt whole, in one copyable block. Never start that c
 - **The suite runs in parts side by side** (`ci_plan.py part`; every test file in exactly one
   part): a normal pull request is green in about six minutes.
 - **Platforms on an ordinary pull request** runs only when it touches what a person's set-up
-  runs on Linux or a Mac (`ci_plan.py` `PLATFORM_PATHS`, each path with its reason; add one when
-  the person job starts running a new tool), and then without the suite on Linux, which the
-  suite parts already run. Every system, Windows included, runs on the `release` label,
-  weekly and by hand.
+  runs on Linux or a Mac (`ci_plan.py` `PLATFORM_PATHS`, each path with its reason; a test
+  fails when the person job's steps run a tool not listed there), and then without the suite
+  on Linux, which the suite parts already run. Every system, Windows included, runs on the
+  `release` label, weekly and by hand.
 
 ## The builder prompt
 

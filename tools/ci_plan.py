@@ -259,8 +259,12 @@ def part(shard: str, files: list[str] | None = None, root: str = ROOT) -> list[s
 # ------------------------------------------------------------------ Platforms
 
 # What a person's set-up on Linux or a Mac runs in the Platforms `person` job's own steps
-# (tools/platform_check.py: install, python, documents, general, designs, seed, round), and
-# behaves differently from one system to another. An ordinary pull request touching one of
+# (tools/platform_check.py: install, python, documents, general, designs, seed, round,
+# interview, networking), and behaves differently from one system to another. Every tools/
+# file those steps run or import is here, and a test reads the steps and fails on one
+# missing (tests/test_platforms_run_for_what_a_persons_setup_runs.py): the interview and
+# networking steps' own were not, so a change to the contact book's command started nothing
+# there (the process review, 2026-11-11). An ordinary pull request touching one of
 # these runs that job on Linux and the Mac; one touching none of them runs nothing there,
 # since Windows never runs on an ordinary change and Checks already runs the suite on Linux.
 #
@@ -298,10 +302,20 @@ PLATFORM_PATHS = {
     # ends, read into a profile seed, and the general resume staged from it.
     "tools/network/export.py": "reading a LinkedIn download",
     "tools/network/own_profile.py": "their own profile from that download",
+    "tools/history_interview.py": "the profile seed the seed step reads that download into",
     "tools/stage_picks.py": "staging the general resume",
     # The offline round: the portals' runtime (Node or Bun) is found the system's way.
     "tools/portals.py": "finding Node or Bun to run a portal",
     "tools/scrape_wide.py": "the round the person job runs offline",
+    "tools/person.py": "the profile every step reads, which the round step resets",
+    # The interview and networking steps: an interview pack, a first note drafted and
+    # checked, a message and a reply logged in the contact book, and the due list, each in
+    # a Python of its own with the system's own console and line ends.
+    "tools/interview_pack.py": "the interview pack the interview step writes",
+    "tools/network/compose.py": "the first note the networking step drafts and checks",
+    "tools/network/surface.py": "the surfacing check the networking step runs",
+    "tools/network/state.py": "the contact book the networking step logs a message and a reply in",
+    "tools/open_actions.py": "the due list the networking step ends on",
     # The check itself.
     "tools/platform_check.py": "the steps the person job runs",
     ".github/workflows/platforms.yml": "this workflow",
