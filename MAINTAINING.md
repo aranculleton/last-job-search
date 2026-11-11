@@ -76,10 +76,8 @@ the app's address in full (`aranculleton/last-job-search`). A touched portal CLI
 (`tools/fit_to_page.py`, `tools/verify_batch.sh`).
 
 - **`Fast checks` is the one check a merge waits for**: master's ruleset requires it and
-  nothing else (set by the maintainer on 2026-11-11). It waits for every part of Checks,
-  Python 3.9, the Chrome page tests and, when touched, LaTeX; a change only to files no tool
-  reads (the CHANGELOG, `docs/NEXT_BUILDER.md`, the README) runs only the tests that read
-  them. A job renamed, split or added changes `Fast checks`' `needs:`, never the ruleset.
+  nothing else (set by the maintainer on 2026-11-11). A job renamed, split or added changes
+  `Fast checks`' `needs:`, never the ruleset. What it waits for: "How CI runs".
 - **A description is posted or changed through `push_gate.sh --text`**, which scans it: CI
   reads it again on the next push, never on an edit, so an edit made on GitHub is unchecked.
 - **Never merge while the maintainer's own scheduled tasks run** (their brief takes master):
@@ -110,8 +108,8 @@ the version was built.
    headline first under `### Changed` and commits nothing. It refuses an empty section, a
    number not newer than the newest release, a hand-over without the number, and a headline
    over 140 characters, of two sentences, with marks, or naming the maintainer.
-3. Title the pull request "Release X.Y.Z: <headline>" and add the `release` label: Everywhere
-   and Platforms run on the label, never on the title, and never block.
+3. Label the pull request `release` once it has code: Everywhere and every system in
+   Platforms run on the label and each push under it, never block; title it "Release X.Y.Z: ...".
 4. When the page's look changed, `python3 tools/readme_pictures.py shoot` (Node, Playwright and
    Pillow) remakes the README's four pictures from the sample; look at each before committing.
 5. Push with the gate and merge with `Fast checks` green: merging it is the release.
@@ -130,6 +128,27 @@ into this file the day it is made ("Decisions that hold" or its own section), ne
 the hand-over. With the release out, tell the maintainer in one line the number, the reason,
 what changed for them, what was checked and what was not; recommend a new chat; and in that
 message give the builder prompt whole, in one copyable block. Never start that chat.
+
+
+## How CI runs
+
+- **`Fast checks`** waits for the plan, Checks (lint,
+  guards, CLIs), the three parts of the suite on Python 3.13, the three on 3.9 and the two
+  parts of the Chrome page tests, and LaTeX only when the change touches it (`tools/ci_plan.py`
+  `LATEX`). Any failure is red, and so is a job skipped that the change needed. A job renamed,
+  split or added changes its `needs:` only.
+- **A pull request that changes only documents runs only the tests that read them**: when
+  every file is on `ci_plan.py` `DOCS_ONLY` (the CHANGELOG, `docs/NEXT_BUILDER.md`,
+  `docs/images/`, the README, MAINTAINING.md and a few more), one job runs each test naming a
+  changed file in about four minutes. Add a file there only if no chat or tool reads it while
+  it works. Master's own run after a merge is always the whole suite.
+- **The suite runs in parts side by side** (`ci_plan.py part`; every test file in exactly one
+  part): a normal pull request is green in about six minutes.
+- **Platforms on an ordinary pull request** runs only when it touches what a person's set-up
+  runs on Linux or a Mac (`ci_plan.py` `PLATFORM_PATHS`, each path with its reason; add one when
+  the person job starts running a new tool), and then without the suite on Linux, which the
+  suite parts already run. Every system, Windows included, runs on the `release` label,
+  weekly and by hand.
 
 ## The builder prompt
 
