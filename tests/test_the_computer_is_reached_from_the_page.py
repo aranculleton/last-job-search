@@ -273,7 +273,7 @@ def test_j6_the_copys_folder_is_chosen_and_the_copy_found(tmp_path, monkeypatch)
     assert cmd in got["call"]["prompt"]
     for env, depth in (("env_copy", ["."]), ("env_docs", ["./GitHub/my-job-search"])):
         r = subprocess.run(["bash", "-c", cmd], cwd=str(started_in[env]), capture_output=True,
-                           text=True)
+                           text=True, encoding="utf-8")
         assert r.stdout.split() == depth, (env, r.stdout, r.stderr)
     # With only Documents shared, Documents: it holds the copy, four folders down.
     docs_only = {"environments": envs["environments"][:1]}
@@ -281,7 +281,7 @@ def test_j6_the_copys_folder_is_chosen_and_the_copy_found(tmp_path, monkeypatch)
                          copy=copy)
     assert got["call"]["environment_id"] == "env_docs"
     if shutil.which("zsh"):
-        r = subprocess.run(["zsh", "-c", cmd], cwd=str(docs), capture_output=True, text=True)
+        r = subprocess.run(["zsh", "-c", cmd], cwd=str(docs), capture_output=True, text=True, encoding="utf-8")
         assert r.stdout.split() == ["./GitHub/my-job-search"], r.stdout + r.stderr
 
 

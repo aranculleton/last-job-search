@@ -144,11 +144,11 @@ def test_the_copy_is_found_four_folders_down_and_by_its_own_address(tmp_path, sh
           "https://github.com/morgan-example/my-job-search-2.git")
     cmd = computer.find_copy_command(COPY)
     assert computer.shell_problems(cmd) == []
-    got = subprocess.run([shell, "-c", cmd], cwd=str(docs), capture_output=True, text=True)
+    got = subprocess.run([shell, "-c", cmd], cwd=str(docs), capture_output=True, text=True, encoding="utf-8")
     assert got.stdout.split() == ["./GitHub/my-job-search"], got.stdout + got.stderr
     # Started in the copy itself, it is found where it is.
     here = subprocess.run([shell, "-c", cmd], cwd=str(docs / "GitHub" / "my-job-search"),
-                          capture_output=True, text=True)
+                          capture_output=True, text=True, encoding="utf-8")
     assert here.stdout.split() == ["."], here.stdout + here.stderr
 
 
