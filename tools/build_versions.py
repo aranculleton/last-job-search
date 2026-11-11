@@ -667,7 +667,7 @@ METHODS: dict[str, dict] = {
             (121, "2026-11-11", False, "the person's follow-up rule (FOLLOW_UP_DAYS, MAX_UNANSWERED and the follow-ups it leaves) is read again with the plan whenever their networking settings change"),
             (122, "2026-11-11", False, "a lint finding taken out of schema.limits_now; nothing changes"),
         ),
-        "fingerprint": "67aa7874473b96de",
+        "fingerprint": "e06e72e500814985",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",

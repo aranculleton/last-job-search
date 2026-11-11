@@ -687,6 +687,9 @@ def _record(tables, today) -> None:
 # than this with nothing taken since, it is asked for again.
 REQUEST_WAIT_DAYS = 3
 BROWSERS = ("browser", "chrome", "enable")
+# What the person is told when it has been asked for: one line, nothing to do.
+REQUESTED_SAY = ("I've asked LinkedIn for a copy of your data. It takes a while to prepare, "
+                 "and I'll pick it up when it's ready.")
 
 
 def has_browser(tools) -> bool:
@@ -694,9 +697,6 @@ def has_browser(tools) -> bool:
     by the words the start command takes or by its tools' own names."""
     import place
     return place.browser_of(tools) != "none"
-# What the person is told when it has been asked for: one line, nothing to do.
-REQUESTED_SAY = ("I've asked LinkedIn for a copy of your data. It takes a while to prepare, "
-                 "and I'll pick it up when it's ready.")
 
 
 def _found_since(taken, found=None) -> str:
