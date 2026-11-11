@@ -88,7 +88,9 @@ def test_this_tree_keeps_every_name_the_newest_release_ships():
                        capture_output=True, text=True, encoding="utf-8")
     assert r.returncode == 0, r.stdout + r.stderr
     _plain(r.stdout)
-    if not os.path.isdir(os.path.join(ROOT, "profile")) and "could not be asked" not in why:
+    # CI's 3.9 leg is a shallow clone, which may not be able to tell; the 3.13 suite can.
+    if (not os.path.isdir(os.path.join(ROOT, "profile")) and "could not be asked" not in why
+            and why != P.TOO_SHALLOW):
         assert tag, why
     if tag:
         shipped = P.names_at(ROOT, commit)
@@ -196,10 +198,11 @@ def test_the_names_read_are_the_ones_an_import_gives_and_a_new_one_needs_nothing
     assert P.check(root) == []
 
 
-def test_a_shallow_clone_fetches_the_release_and_a_copy_without_releases_passes(tmp_path):
-    """CI checks out one commit with no tags; a person's copy has its own remote, with no app
-    releases on it. The first fetches the newest tag alone and stays shallow; the second says
-    there is nothing to compare with, plainly, and passes."""
+def test_a_shallow_clone_compares_only_what_it_can_tell_and_a_copy_without_releases_passes(tmp_path):
+    """CI's 3.9 leg checks out one commit with no tags; a person's copy has its own remote,
+    with no app releases on it. A shallow clone compares with a release it can show it holds
+    and otherwise passes, plainly, fetching nothing; the second says there is nothing to
+    compare with, plainly, and passes."""
     app = _released(tmp_path, tag="v1.0.0")
     with open(os.path.join(app, "tools", "later.py"), "w", encoding="utf-8") as fh:
         fh.write("LATER = 1\n")
@@ -210,12 +213,26 @@ def test_a_shallow_clone_fetches_the_release_and_a_copy_without_releases_passes(
     clone = str(tmp_path / "ci")
     _git(str(tmp_path), "clone", "-q", "--depth=1", "--no-tags", "file://" + app, clone)
     assert _git(clone, "tag", "-l").strip() == ""
-    tag, commit, why = P.newest_release(clone)
-    assert tag == "v1.1.0" and commit and not why
+    # One commit: v1.1.0 is its parent, beyond the history it holds, so it cannot tell.
+    assert P.newest_release(clone) == ("", "", P.TOO_SHALLOW)
     _edit(clone, "tools/later.py", "LATER = 1", "SOONER = 1")
-    assert P.check(clone) == ["tools/later.py no longer has LATER, which v1.1.0 ships."]
+    assert P.check(clone) == []
+    r = _run(clone)
+    assert r.returncode == 0 and r.stdout.strip() == ("public_names: nothing to compare with: "
+                                                      + P.TOO_SHALLOW + "."), r.stdout
+    _plain(r.stdout)
     assert _git(clone, "rev-parse", "--is-shallow-repository").strip() == "true"
-    assert _git(clone, "tag", "-l").strip() == ""          # nothing named in the clone
+    assert _git(clone, "tag", "-l").strip() == ""          # nothing fetched or named
+    v110 = _git(app, "rev-parse", "v1.1.0").strip()
+    assert subprocess.run(["git", "cat-file", "-e", v110 + "^{commit}"], cwd=clone,
+                          env=ENV).returncode != 0
+    # Two commits: v1.1.0 is within it, so it is compared with, and the name is missed.
+    deeper = str(tmp_path / "ci2")
+    _git(str(tmp_path), "clone", "-q", "--depth=2", "--no-tags", "file://" + app, deeper)
+    tag, commit, why = P.newest_release(deeper)
+    assert (tag, commit, why) == ("v1.1.0", v110, "")
+    _edit(deeper, "tools/later.py", "LATER = 1", "SOONER = 1")
+    assert P.check(deeper) == ["tools/later.py no longer has LATER, which v1.1.0 ships."]
 
     # A copy made before the newest release keeps what the newest it holds ships.
     _git(app, "checkout", "-q", "-b", "older", "v1.0.0")
@@ -238,8 +255,56 @@ def test_a_shallow_clone_fetches_the_release_and_a_copy_without_releases_passes(
         assert r.returncode == 0, r.stdout
         assert r.stdout.startswith("public_names: nothing to compare with: no release of the "
                                    "app is known here"), r.stdout
+        assert r.stdout.rstrip().endswith("so no name can have gone."), r.stdout
         assert ("GitHub could not be asked" in r.stdout) is not remote
         _plain(r.stdout)
+
+
+def test_a_copy_made_before_a_release_compares_with_the_one_it_holds_on_every_run(tmp_path):
+    """The process review of 2026-11-11: a clone made at v1.0.0, then v1.1.0 tagged on the
+    app with a name added. A full clone was told on its first check that it no longer had
+    the name v1.1.0 ships, and passed on its second, because the first run's fetch left the
+    commit behind; a shallow clone was told so on every run. A release HEAD does not hold
+    is never compared with, and nothing is fetched."""
+    app = _released(tmp_path, keep=())
+    with open(os.path.join(app, "tools", "thing.py"), "w", encoding="utf-8") as fh:
+        fh.write("def old():\n    pass\n")
+    _git(app, "add", "-A")
+    _git(app, "commit", "-qm", "a thing")
+    _git(app, "tag", "-f", "v1.0.0")
+    full, shallow = str(tmp_path / "full"), str(tmp_path / "shallow")
+    _git(str(tmp_path), "clone", "-q", "file://" + app, full)
+    _git(str(tmp_path), "clone", "-q", "--depth=1", "file://" + app, shallow)
+    with open(os.path.join(app, "tools", "thing.py"), "a", encoding="utf-8") as fh:
+        fh.write("def newer():\n    pass\n")
+    _git(app, "commit", "-qam", "a newer thing")
+    _git(app, "tag", "v1.1.0")
+    v110 = _git(app, "rev-parse", "v1.1.0").strip()
+    for clone in (full, shallow):
+        _git(clone, "checkout", "-q", "-b", "old")
+        for _ in range(2):
+            r = _run(clone)
+            assert r.returncode == 0, (clone, r.stdout)
+            assert r.stdout.strip() == ("public_names: every name v1.0.0 ships is still here, "
+                                        "or listed as gone"), (clone, r.stdout)
+        assert subprocess.run(["git", "cat-file", "-e", v110 + "^{commit}"], cwd=clone,
+                              env=ENV).returncode != 0, clone       # nothing was fetched
+    # A name v1.0.0 ships, gone from the copy, is still found.
+    _edit(full, "tools/thing.py", "def old(", "def gone(")
+    assert P.check(full) == ["tools/thing.py no longer has old, which v1.0.0 ships."]
+    # Once the copy takes the release, it compares with that one.
+    _git(full, "checkout", "-q", "--", "tools/thing.py")
+    _git(full, "fetch", "-q", "origin")
+    _git(full, "merge", "-q", "--ff-only", "origin/master")
+    assert P.newest_release(full)[:2] == ("v1.1.0", v110)
+    # A copy built on none of the releases (its history began after a fresh start) passes.
+    _git(full, "checkout", "-q", "--orphan", "fresh")
+    _git(full, "commit", "-qm", "a fresh start")
+    assert P.newest_release(full) == ("", "", P.NONE_HELD)
+    r = _run(full)
+    assert r.returncode == 0 and r.stdout.strip() == ("public_names: nothing to compare with: "
+                                                      + P.NONE_HELD + "."), r.stdout
+    _plain(r.stdout)
 
 
 def test_asking_for_help_never_writes_anything(tmp_path, monkeypatch, capsys):
