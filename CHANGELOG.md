@@ -20,6 +20,10 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Read your prep and Practise 3 questions open your interview prep in the Claude app on a Mac.** Both flickered and opened nothing: the app moved the page's address as the prep opened, and any move of the address closed it at once. A prep, a person or an application now stays open until you close it or go Back.
+
 ## [4.15.0] - 2026-11-11
 
 ### Changed
