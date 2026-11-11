@@ -43,6 +43,7 @@ make sense to somebody whose repo just received it.
 - **A LinkedIn download you add on your page is taken straight away.** Its tap could wait through several rings, as Claude was told to stop before reading the files; reading them is now the first thing it does, with every file named.
 - **Settings and Your rules say what your last search left out.** Roles, Where and Pay said "38,547 left out lately": a month of searches added up, each cutting the same jobs again. Each rule now gives the number Jobs gives for your newest search, and an employer you turned down counts each job once over the last 30 days.
 - **Your page takes Claude's updates when Claude's copy of it lacks one of its screens.** The update then wrote that screen with no version and the page refused all of it, so cards sat on "Putting it on your page"; Claude now reads your page's screens first in that case, then updates it.
+- **A tap on your page reads only what changed, and what Claude saves after it is taken first time.** Each tap brought back every piece of work not finished, a follow-up untouched since the day before among them, and the saves after it could be refused until Claude typed in each record's number by hand. Every change to a piece of work now says when it was made, so only what changed is read; work Claude saved that never reached your page is read again before anything is pinned to it; and an update from a fresh copy no longer rewrites your Interviews screen with nothing in it changed (issue 217).
 
 ## [4.15.0] - 2026-11-11
 

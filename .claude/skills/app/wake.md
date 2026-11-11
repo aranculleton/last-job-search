@@ -28,9 +28,11 @@ python3 tools/app.py reads --in "<your scratchpad>"
 makes this wake's own folder there, a fresh one with a short name, and names it first: that is
 `$D` from here on. Then it prints the reads, one ArtifactData `query` a line: make them all in
 one message, each with `out_dir: $D` and the url. It asks for the small collections whole (`meta`, `beats`, `holds`)
-and only what changed since the last read for the rest (taps, receipts, work not finished or
+and only what changed since the last read for the rest (taps, receipts, and work changed,
 asked or finished since); this copy keeps the rest from the last read, and `wake` lays it
-under what was read, so every command sees the whole database. The screens (`screen`,
+under what was read, so every command sees the whole database. Where work this copy wrote
+never reached the page, `wake` asks for the work not finished to be read again into `$D`
+first: make that read, then run the same command again. The screens (`screen`,
 `addr`) are read only when another chat drew the page since (`app.py view` asks for them).
 A whole read comes by itself with the day's first wake, and after a write was refused. The
 files a read saves hold no version (only the lines it prints do); the app's hook keeps them,

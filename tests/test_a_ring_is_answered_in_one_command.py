@@ -568,6 +568,8 @@ def test_keep_landed_is_the_dump_as_the_store_will_hold_it(tmp_path):
     w.add("set", "holds", "emp~fernhill", {"work": "talk~1"})
     page_db.keep_landed(str(d), w.save("b"))
     db = page_db.load(str(d))
+    # As the store will hold it, with when the write was made (every write to work says).
+    assert db["work"]["talk~1"]["data"].pop(page_db.CHANGED_FIELD)
     assert db["work"]["talk~1"] == {"data": {"kind": "talk", "status": "running"}, "version": 4}
     assert db["locks"]["emp~fernhill"]["version"] == 1
 

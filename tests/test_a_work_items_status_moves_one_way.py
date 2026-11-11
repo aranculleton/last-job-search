@@ -49,8 +49,11 @@ def _written(batches) -> list[dict]:
             for e in json.load(fh):
                 body = {}
                 if e.get("file_path"):
+                    # Each write's own stamps (its version, when it was made) are no part of a
+                    # move from one status to another.
                     with open(e["file_path"], encoding="utf-8") as fh2:
-                        body = {k: v for k, v in json.load(fh2).items() if k != page_db.VERSION_FIELD}
+                        body = {k: v for k, v in json.load(fh2).items()
+                                if k not in (page_db.VERSION_FIELD, page_db.CHANGED_FIELD)}
                 out.append(dict(e, body=body))
     return out
 

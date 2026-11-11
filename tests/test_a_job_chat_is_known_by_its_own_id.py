@@ -79,7 +79,8 @@ def test_a_job_whose_chat_is_known_waits_a_lease_more_before_it_starts_again(tmp
     assert page_db.next_item(_db(("d1", quiet)), "cloud", T, cap=page_db.HEAVY_CAP_CHATS) is None
     # Kept going by the helper, which asked and heard it is still at work.
     body = _body(page_db.mark_alive(_db(("d1", quiet)), "d1", T, str(tmp_path / "a"))["batches"])
-    assert body["lease_until"] > NOW and set(body) <= {"lease_until", page_db.VERSION_FIELD}
+    assert body["lease_until"] > NOW and \
+        set(body) <= {"lease_until", page_db.VERSION_FIELD, page_db.CHANGED_FIELD}
     # A lease more with no word: started again, and the new claim knows no chat yet.
     later = T + dt.timedelta(minutes=page_db.LEASE_S / 60 + 1)
     db = _db(("d1", quiet))

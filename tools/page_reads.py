@@ -10,7 +10,8 @@ it last read and wrote (the mirror, in its git folder, never committed), and a w
 - whole, the small collections: `meta` (the listener and the page's revision, `meta/now`),
   `beats` (each chat's heartbeat) and `holds` (the locks);
 - only what changed since the cursor: taps (`actions`) by when they were made, receipts by
-  when they were applied, and work that is not finished, or was asked for or finished since;
+  when they were applied, and work changed since (`changed_at`, which every write to a work
+  item carries, page_db.CHANGED_FIELD), or asked for or finished since;
 - never the screen documents or the page's addresses: the mirror holds them, as this
   checkout last read or drew them.
 
@@ -34,6 +35,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import operator
 import os
 import re
 import shutil
@@ -63,6 +65,13 @@ FINISHED = ("done", "failed", "stopped")
 # Every collection of a whole read, as a wake always read them (the talk threads are read
 # for the one item in hand, never here).
 FULL_READS = ("actions", "receipts", "work", "beats", "holds", "meta", "screen", "addr")
+# The page version from which every write the page makes to a work item says when it was made
+# (`changed_at`), found by its own words in build_versions. Until the published page is on it,
+# a tap's Stop or answer changes an item with no field a read could ask for by time, so a read
+# still asks for every item not finished (`OPEN_WORK`); from it on, only for what changed.
+STAMPS_WORK = "every write to a work item says when it was made"
+OPEN_WORK = {"collection": "work",
+             "query": {"limit": LIMIT, "where": [["status", "not-in", list(FINISHED)]]}}
 
 
 def _now() -> dt.datetime:
@@ -149,6 +158,21 @@ def _zone() -> str:
         return person.home_zone_named(person.directory()) or "UTC"
     except Exception:  # noqa: BLE001
         return "UTC"
+
+
+def page_stamps_work() -> bool:
+    """Does the published page say when it changed a work item (STAMPS_WORK)? True where no
+    page is published: nothing writes work but the chats, and every one of theirs says."""
+    try:
+        import app_setup
+        import build_versions
+        if not app_setup.page_record().get("url"):
+            return True
+        since = next((v[0] for v in build_versions.METHODS["page"]["versions"]
+                      if STAMPS_WORK in v[3]), None)
+        return since is not None and int(build_versions.recorded().get("page") or 1) >= since
+    except Exception:  # noqa: BLE001  no profile: no page writes anything
+        return True
 
 
 def full_due(meta: dict, now: dt.datetime, url: str = "") -> str:
@@ -367,17 +391,21 @@ def plan(dump: str, now: dt.datetime | None = None, full: bool = False,
         cursor = _stamp(start - dt.timedelta(seconds=CLOCK_SLACK_S))
         for coll in WHOLE:
             queries.append({"collection": coll, "query": {"limit": LIMIT}})
+        import page_db
         queries += [
             {"collection": "actions", "query": {"limit": LIMIT, "where": [["at", ">=", cursor]]}},
             {"collection": "receipts",
              "query": {"limit": LIMIT, "where": [["applied_at", ">=", cursor]]}},
+            # Work by what changed: every item not finished came back with every tap, a
+            # follow-up untouched since the day before among them (issue 217). Asked for or
+            # finished since is read too, for a chat on an older copy whose writes say no time.
             {"collection": "work",
-             "query": {"limit": LIMIT, "where": [["status", "not-in", list(FINISHED)]]}},
+             "query": {"limit": LIMIT, "where": [[page_db.CHANGED_FIELD, ">=", cursor]]}},
             {"collection": "work",
              "query": {"limit": LIMIT, "where": [["finished_at", ">=", cursor]]}},
             {"collection": "work",
              "query": {"limit": LIMIT, "where": [["asked_at", ">=", cursor]]}},
-        ]
+        ] + ([] if page_stamps_work() else [OPEN_WORK])
     os.makedirs(dump, exist_ok=True)
     _write(os.path.join(dump, PLAN), {"full": why, "cursor": cursor, "at": _stamp(now),
                                       "url": url, "queries": queries})
@@ -414,9 +442,41 @@ def _before(value, cursor: str) -> bool:
     return t is not None and c is not None and t < c
 
 
-def _keep_from_mirror(coll: str, fields: dict, cursor: str) -> bool:
+def _matches(fields: dict, where) -> bool:
+    """Would the store return a record holding `fields` for this `where` (every clause holds)?
+    A field the record lacks matches nothing; times compare as the store compares them, as
+    text."""
+    for clause in where or []:
+        try:
+            field, op, val = clause
+        except (TypeError, ValueError):
+            return False
+        v = fields.get(field)
+        if v is None:
+            return False
+        if isinstance(v, str) or isinstance(val, str):
+            v, val = str(v), (val if isinstance(val, list) else str(val))
+        test = _OPS.get(op)
+        try:
+            if test is None or not test(v, val):
+                return False
+        except TypeError:
+            return False
+    return True
+
+
+_OPS = {">=": operator.ge, ">": operator.gt, "<=": operator.le, "<": operator.lt,
+        "==": operator.eq, "!=": operator.ne, "in": lambda v, val: v in val,
+        "not-in": lambda v, val: v not in val}
+
+
+def _keep_from_mirror(coll: str, fields: dict, cursor: str, queries=None) -> bool:
     """Would the read have returned this record had it still been there? If so, and it was
-    not returned, it is gone (or changed past what the mirror knows): never laid back."""
+    not returned, it is gone (or changed past what the mirror knows): never laid back. Work
+    is judged by the read's own queries (`queries`, the plan's), as the store answers them."""
+    if coll == "work" and queries is not None:
+        return not any(_matches(fields, (q.get("query") or {}).get("where"))
+                       for q in queries if q.get("collection") == "work")
     if coll == "actions":
         return _before(fields.get("at"), cursor)
     if coll == "receipts":
@@ -461,11 +521,13 @@ def assemble(dump: str, now: dt.datetime | None = None) -> dict:
     kept = 0
     import page_db
     laid_known: dict = {}
+    unlanded: list[str] = []
     laid: set = set()
     if not p.get("full"):
         cursor = str(p.get("cursor") or "")
         root = mirror_dir()
         mirror_known = page_db.listed_versions(root)
+        queries = p.get("queries") if isinstance(p.get("queries"), list) else None
         colls = ("actions", "receipts", "work")
         # The screens as this checkout last read or drew them stand only while nobody else
         # drew since: `meta/now` (read whole every time) names who drew last. Another chat's
@@ -483,8 +545,10 @@ def assemble(dump: str, now: dt.datetime | None = None) -> dict:
             for name in os.listdir(src):
                 if not name.endswith(".json") or os.path.exists(os.path.join(dst, name)):
                     continue
-                if coll not in KEPT and coll != "view" and \
-                        not _keep_from_mirror(coll, _fields(os.path.join(src, name)), cursor):
+                if coll not in KEPT and coll != "view" and not _keep_from_mirror(
+                        coll, _fields(os.path.join(src, name)), cursor, queries):
+                    if coll == "work":
+                        unlanded.append(name[:-5].replace("@", "~"))
                     continue
                 os.makedirs(dst, exist_ok=True)
                 shutil.copy(os.path.join(src, name), os.path.join(dst, name))
@@ -496,6 +560,12 @@ def assemble(dump: str, now: dt.datetime | None = None) -> dict:
                     laid_known[stem] = mirror_known[stem]
     if laid_known:
         page_db.index_versions(dump, laid_known)
+    if unlanded and not any(q == OPEN_WORK for q in p.get("queries") or []):
+        # Work the copy kept as this checkout last wrote it, which the read says the page does
+        # not hold so: a write from here that never reached the page (its batch never sent).
+        # Laid from the copy, its next write was pinned one past the page's number and refused;
+        # left out, the item went missing. Every item not finished is read again instead.
+        p["again"] = [OPEN_WORK]
     p.update({"assembled": True, "read": read, "kept": kept, "laid": sorted(laid)})
     _write(path, p)
     meta = _meta()
@@ -672,6 +742,29 @@ def needs(dump: str) -> list[str]:
         p["need_asked"] = True
         _write(path, p)
     return need
+
+
+AGAIN = ("reads: what this checkout last wrote to the page's work did not all reach it, so the "
+         "work not finished is read again: ArtifactData query, url {url}, out_dir \"{dump}\" "
+         "(the same folder; never list or open what it saves), {keep}then run {then} again: "
+         "{queries}")
+
+
+def again(dump: str) -> list[dict]:
+    """The reads to make into `dump` before going on (`assemble` found work this checkout
+    wrote that the page does not hold as written), once a folder; [] when there are none."""
+    path = os.path.join(dump, PLAN)
+    p = _read(path)
+    if not isinstance(p, dict) or not p.get("again") or p.get("again_asked"):
+        return []
+    p["again_asked"] = _stamp(_now())
+    _write(path, p)
+    return [q for q in p["again"] if isinstance(q, dict)]
+
+
+def say_again(queries: list[dict], dump: str, url: str, then: str) -> str:
+    return AGAIN.format(url=url, dump=dump, keep=keep_step(dump), then=then, queries=" ".join(
+        json.dumps(q, separators=(",", ":")) for q in queries))
 
 
 def partial(dump: str) -> bool:

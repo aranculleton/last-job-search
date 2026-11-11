@@ -427,17 +427,19 @@ def cmd_view(a) -> int:
     if planned:
         page_reads.assemble(a.dump, now)
         need = page_reads.needs(a.dump)
+        more = page_reads.again(a.dump)
         # The end of a wake's work reads what came in while it ran, so a tap made meanwhile
         # is applied in this batch, never left for the person's next message.
         late = page_reads.late_queries(a.dump, now) \
             if end and answers_page(page_db.load(a.dump), a.chat) else []
-        if need or late:
+        if need or late or more:
+            url = app_setup.page_record().get("url") or "<the page>"
             print(_dump({"rev": None, "batches": [], "for_claude": (
                 [page_reads.NEED_SCREENS.format(colls=" and ".join(need), dump=a.dump,
                                                 keep=page_reads.keep_step(a.dump))]
-                if need else []) + ([page_reads.say_late(
-                    late, a.dump, app_setup.page_record().get("url") or "<the page>")]
-                    if late else [])}), end="")
+                if need else []) + ([page_reads.say_again(
+                    more, a.dump, url, "this same command")] if more else []) + ([
+                    page_reads.say_late(late, a.dump, url)] if late else [])}), end="")
             return 2
     late_batches: list = []
     late_lines: list = []
@@ -2600,6 +2602,12 @@ def cmd_wake(a) -> int:
                 reads = page_reads.assemble(a.dump, now)
         except Exception:  # noqa: BLE001  a read made without `reads`: the folder as it is
             reads = {}
+        more = page_reads.again(a.dump) if planned else []
+        if more:
+            # Work this checkout wrote that never reached the page: read as the page holds it
+            # before anything is pinned to it, never typed in by hand after a refusal.
+            print("\n".join(head + [page_reads.say_again(more, a.dump, url, _again(a, chat))]))
+            return 0
         got = check_in(a.dump, chat, now, os.path.join(rd, "listen"),
                        partial=bool(reads) and not reads.get("full"))
         if got["read"]:

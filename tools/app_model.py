@@ -3317,7 +3317,10 @@ def _call_of(cid: str, status: str, due: str, said: str = "", home: str = "",
             **({"time": clock} if clock else {}),
             # Asked for and not confirmed by them yet, as the call's own line says it.
             **({"tentative": True} if status == "call_booked" and upcoming.call_tentative(said) else {}),
-            "prep": {"path": rel(path), "updated": _mtime(path), "text": _prep_text(path, names)}
+            # When it was written (its commit), never when this checkout put the file down: a
+            # fresh copy or another chat's folder rewrote the whole section for nothing.
+            "prep": {"path": rel(path), "updated": _saved_stamp(path),
+                     "text": _prep_text(path, names)}
             if have else None}
 
 
@@ -4201,7 +4204,10 @@ def _interviews(ctx: Ctx, targets: dict) -> list:
                 "when": interview_when(stage.get("date"), clock, stage.get("zone"), ctx.zone),
                 # Asked for and not confirmed by them yet (the maintainer, 2026-11-05).
                 **({"tentative": True} if stage.get("tentative") and stage.get("date") else {}),
-                "prep": ({"path": rel(prep), "updated": _mtime(prep),
+                # When the prep was written (its commit), never when this checkout put the file
+                # down: every page update from a fresh copy or another chat's folder rewrote the
+                # whole of Interviews, preps and all, with nothing in it changed (issue 217).
+                "prep": ({"path": rel(prep), "updated": _saved_stamp(prep),
                           **({"stale": True, "stale_since": _saved_stamp(os.path.join(folder, "outcome.md"))}
                              if _prep_stale(folder, text, stage) else {})}
                          if text else None),
