@@ -20,12 +20,11 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
-### Added
-
-- **The app's maker hears of its bugs without anyone passing them on.** A bug met in the maker's own copy is filed for the app by itself and fixed by a scheduled builder; nothing changes for you.
+## [4.15.1] - 2026-11-11
 
 ### Changed
 
+- **Interview preps open in the Mac app, a computer that is on is never called off, and automatic updates stay automatic.**
 - **The maintainer's releases take one command.** `python3 tools/release.py cut X.Y.Z --headline "..."`
   names and dates the version on its own pull request, so merging that pull request is the
   release. The release notes open on that headline, then what is new, changed and fixed. The
@@ -33,6 +32,10 @@ make sense to somebody whose repo just received it.
   snapshot a release wrote is gone, and with it `public_names.snapshot`, `public_names.stale`,
   `public_names.SNAPSHOT` and `release.names_kept`. `python3 tools/readme_pictures.py shoot`
   takes the README's four pictures from the sample page and names them.
+
+### Added
+
+- **The app's maker hears of its bugs without anyone passing them on.** A bug met in the maker's own copy is filed for the app by itself and fixed by a scheduled builder; nothing changes for you.
 
 ### Fixed
 

@@ -54,9 +54,9 @@
   {"module": "tools/text_screen.py", "name": "other_language_named", "date": "2026-11-11", "announced": "4.15.0"},
   {"module": "tools/ats_boards.py", "name": "shown_text", "date": "2026-11-11", "announced": "4.15.0"},
   {"module": "tools/computer.py", "name": "SETUP_CHAT", "date": "2026-11-11", "announced": "4.15.0"},
-  {"module": "tools/public_names.py", "name": "SNAPSHOT", "date": "2026-11-11", "announced": "Unreleased"},
-  {"module": "tools/public_names.py", "name": "snapshot", "date": "2026-11-11", "announced": "Unreleased"},
-  {"module": "tools/public_names.py", "name": "stale", "date": "2026-11-11", "announced": "Unreleased"},
-  {"module": "tools/release.py", "name": "names_kept", "date": "2026-11-11", "announced": "Unreleased"}
+  {"module": "tools/public_names.py", "name": "SNAPSHOT", "date": "2026-11-11", "announced": "4.15.1"},
+  {"module": "tools/public_names.py", "name": "snapshot", "date": "2026-11-11", "announced": "4.15.1"},
+  {"module": "tools/public_names.py", "name": "stale", "date": "2026-11-11", "announced": "4.15.1"},
+  {"module": "tools/release.py", "name": "names_kept", "date": "2026-11-11", "announced": "4.15.1"}
  ]
 }
