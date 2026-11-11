@@ -223,6 +223,10 @@ _UPDATES_AUTO = re.compile(r"\bupdat\w*\b[^.;]{0,40}\b(?:by (?:them|it)sel(?:f|v
 _ASK_OFF = re.compile(r"\b(?:never|don'?t|do not|no need to|no more|stop|quit)\s+"
                       r"(?:(?:ever|even|again|me|him|her|them|you|bother)\s+){0,2}"
                       r"ask(?:ing|s)?\b", re.I)
+# "Only update when I say", the app's own words for the choice (CLAUDE.md), names no app: an
+# update with no object of its own is the app's; "update my resume" is not (2026-11-11).
+_BARE_UPDATE = re.compile(r"\bupdat(?:e|es|ing)\b(?!\s+(?:my|the|his|her|their|your|this|that|"
+                          r"these|those|it|them|a|an|me|him)\b)", re.I)
 # A reply's own "no" in front of what it says ("No, updates come by themselves").
 _REPLY_NO = re.compile(r"^\s*(?:no|nope|nah)\s*[,!:-]\s*", re.I)
 # One sentence at a time: a full stop inside a file's name (sync_app.py) is not an end.
@@ -233,7 +237,8 @@ def updates_said(text: str) -> str:
     """"auto", "when_asked" or "" (they say neither, or both): what these words say about how
     the app's updates arrive. Each sentence is read on its own, and a "not" that belongs to
     asking ("never ask him again") is about asking, never about updating."""
-    if not (_ABOUT_UPDATES.search(text or "") and re.search(r"\bupdat", text or "", re.I)):
+    if not ((_ABOUT_UPDATES.search(text or "") or _BARE_UPDATE.search(text or ""))
+            and re.search(r"\bupdat", text or "", re.I)):
         return ""
     found: set[str] = set()
     asked_off = False

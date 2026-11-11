@@ -120,7 +120,15 @@ WAIT_FOR_ME = [
     "The app updates only when he asks.",
     "don't ask me, only take the app's update when I say",
     "Don't take updates without asking me",
+    # The app's own words for the choice (CLAUDE.md), naming no app: missed until 2026-11-11.
+    "Only update when I say",
+    "only update when i say so",
 ]
+
+
+@pytest.mark.parametrize("words", ["Don't update my resume until I say", "Update my CV only when I say"])
+def test_an_update_to_something_of_theirs_is_never_the_apps_updates(words):
+    assert learned.known_settings("other", words, words) == [], words
 
 
 @pytest.mark.parametrize("words", BY_THEMSELVES)

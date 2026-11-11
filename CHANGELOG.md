@@ -22,6 +22,8 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **"Only update when I say" is understood.** Said without naming the app, it set nothing; an update to your resume or CV is still never taken for the app's.
+- **A note on your computer that agrees with your update choice is kept.** Where your choice was not yet saved in that copy, the note was taken for one that disagreed and removed.
 - **Your page never says your computer is off while it is on.** A Mac connected that day read as off on a check-in from the day before, so Start it now did nothing; the computer's own connection now counts, and the chat that can start Claude there is woken.
 - **Settings and Your rules say what your last search left out.** Roles, Where and Pay said "38,547 left out lately": a month of searches added up, each cutting the same jobs again. Each rule now gives the number Jobs gives for your newest search, and an employer you turned down counts each job once over the last 30 days.
 

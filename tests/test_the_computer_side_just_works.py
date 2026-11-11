@@ -337,6 +337,25 @@ def test_an_old_chat_memory_never_outranks_the_persons_setting(tmp_path):
     assert agree == []
 
 
+def test_a_memory_note_is_never_judged_against_a_setting_the_person_never_wrote(tmp_path, monkeypatch):
+    # A computer's copy without app_updates in person.json read as "auto", and the note saying
+    # updates come when they say, their own choice, was removed (the maintainer's Mac,
+    # 2026-11-11). Only a setting they wrote is compared with.
+    import person
+    home = tmp_path / "home"
+    copy = tmp_path / "Documents" / "search"
+    copy.mkdir(parents=True)
+    proj = re.sub(r"[^A-Za-z0-9]", "-", str(tmp_path / "Documents"))
+    mem = home / ".claude" / "projects" / proj / "memory"
+    mem.mkdir(parents=True)
+    (mem / "feedback_updates.md").write_text("Only update when I say.\n", encoding="utf-8")
+    os.environ.pop("CLAUDE_CONFIG_DIR", None)
+    monkeypatch.setattr(person, "get", lambda key, default=None: default)
+    assert computer.memory_conflicts(str(copy), home=str(home)) == []
+    monkeypatch.setattr(person, "get", lambda key, default=None: "auto" if key == "app_updates" else default)
+    assert [c["memory_says"] for c in computer.memory_conflicts(str(copy), home=str(home))] == ["when_asked"]
+
+
 def test_every_command_the_app_prints_runs_the_same_in_zsh_and_bash():
     assert computer.shell_problems('for kv in "a 1" "b 2"; do set -- $kv; echo "$1"; done')
     assert computer.shell_problems("for w in $list; do echo $w; done")
