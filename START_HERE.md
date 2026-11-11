@@ -9,7 +9,7 @@ on a computer (below). Another agent tool? See [AGENTS.md](AGENTS.md).
 ## 1. Make your own private copy
 
 <!-- claude-surface: make-copy -->
-<!-- checked 2026-10-25;
+<!-- checked 2026-11-11;
 https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-new-repository
 -->
 To make your own private copy:
@@ -29,7 +29,7 @@ Screens change: if yours looks different, tell Claude what you see.
 ## 2. Let Claude see it
 
 <!-- claude-surface: connect-github -->
-<!-- checked 2026-11-03; https://code.claude.com/docs/en/web-quickstart -->
+<!-- checked 2026-11-11; https://code.claude.com/docs/en/web-quickstart -->
 To let Claude see your copy:
 1. Open https://claude.ai/code and sign in. When it asks to connect GitHub, follow it and
    approve.
@@ -51,12 +51,12 @@ So Claude carries on while you're away (recommended, once). Auto lets Claude car
 without asking each time, its safety checks still on:
 
 <!-- claude-surface: cloud-auto -->
-<!-- checked 2026-11-03; https://code.claude.com/docs/en/permission-modes -->
+<!-- checked 2026-11-11; https://code.claude.com/docs/en/permission-modes -->
 To let Claude carry on while you're away:
 1. In your job search chat, open the mode menu in the row under the message box (in the
    Claude app on a phone: the + in the message box, then Permission).
-2. Choose Auto. If Auto is not there, your plan or organization does not offer it: Claude
-   then asks before some steps, so answer in the chat when it does.
+2. Choose Auto. If it is greyed out or missing, this chat's model or your organization does
+   not allow it: Claude then asks before some steps, so answer when it does.
 
 Screens change: if yours looks different, tell Claude what you see.
 <!-- /claude-surface -->
@@ -65,7 +65,7 @@ If it says it can't reach job sites (recommended, once). Full lets this chat ope
 website, job sites included:
 
 <!-- claude-surface: cloud-internet -->
-<!-- checked 2026-11-03; https://code.claude.com/docs/en/cloud-environments -->
+<!-- checked 2026-11-11; https://code.claude.com/docs/en/cloud-environments -->
 To let this chat reach job sites:
 1. At the top of this chat, open the small arrow after its title and choose Edit cloud
    environment.

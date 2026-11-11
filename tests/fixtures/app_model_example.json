@@ -1,7 +1,7 @@
 {
  "model": 1,
  "made_at": "2026-10-25T18:00:00Z",
- "rev": "30206322146c",
+ "rev": "769224c5da74",
  "app": {
   "version": "4.15.0",
   "url": null,
@@ -67,8 +67,8 @@
     "label": "Where do I find it?",
     "lines": [
      "On LinkedIn, select the Me icon at the top.",
-     "Choose Access My Premium (in the phone app, Premium features).",
-     "Under InMail, read the number beside InMail credits available."
+     "Choose Premium features (on some accounts, Access My Premium). It opens your My Premium page.",
+     "Choose See all features, open the InMail part, and read the number beside InMail message credits available."
     ]
    },
    "about": {},
@@ -1751,7 +1751,7 @@
      "2. Choose the larger download, the whole archive, and request it. LinkedIn may ask for your password.",
      "3. LinkedIn emails you a link anything from about ten minutes to a day later, and it works for 72 hours. Attach the ZIP, or only the files you want me to read: messages.csv and Invitations.csv for your history; Profile.csv, Positions.csv, Education.csv, Skills.csv and Certifications.csv for your own profile."
     ],
-    "checked": "2026-10-21",
+    "checked": "2026-11-11",
     "link": "https://www.linkedin.com/help/linkedin/answer/50191"
    },
    "files": [

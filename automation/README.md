@@ -52,12 +52,12 @@ makes (a).
 | Set up from | The bell (Claude does it) | A routine, made by you, once |
 
 <!-- claude-surface: chat-push claim -->
-<!-- checked 2026-11-03; https://code.claude.com/docs/en/tools-reference -->
-A chat can send the person a phone notification with the PushNotification tool. The docs
-name it a phone push while Remote Control is connected, and Push when Claude decides
-(agentPushNotifEnabled, off by default) lets Claude send one; a cloud chat reads that
-setting from the copy's own .claude/settings.json, which turns it on. A scheduled run in a
-cloud chat was seen to send one: the tool answered Mobile push requested, with the push
+<!-- checked 2026-11-11; https://code.claude.com/docs/en/tools-reference -->
+A chat can send the person a phone notification with the PushNotification tool. The docs say
+it sends a phone push with Remote Control or in a cloud session, and Push when Claude
+decides (agentPushNotifEnabled, off by default) lets Claude send one; a cloud chat reads
+that setting from the copy's own .claude/settings.json, which turns it on. A scheduled run
+in a cloud chat was seen to send one: the tool answered Mobile push requested, with the push
 sent. A scheduled task bound to a chat has no notification of its own (create_trigger's
 notifications are only for a task that starts a new chat each run, and such a run gets no
 copy of the files and no add_repo to fetch one), so a brief that runs in a chat sends its
@@ -88,7 +88,7 @@ chat is awake to start one there.
 Claude cannot start a cloud chat from its own shell on your computer, so it never tries:
 
 <!-- claude-surface: cli-cloud claim -->
-<!-- checked 2026-10-18; https://code.claude.com/docs/en/claude-code-on-the-web -->
+<!-- checked 2026-11-11; https://code.claude.com/docs/en/claude-code-on-the-web -->
 claude --cloud starts a cloud chat from a terminal. It needs the terminal version of Claude
 Code, installed apart from the desktop app and signed in to the same claude.ai account, and
 it refuses to run without an interactive terminal: Claude cannot run it from its own shell,
@@ -218,12 +218,12 @@ tools/tidy.py undo`).
 1. Make a routine for each task:
 
    <!-- claude-surface: routines-cloud -->
-   <!-- checked 2026-10-29; https://code.claude.com/docs/en/routines -->
+   <!-- checked 2026-11-11; https://code.claude.com/docs/en/routines -->
    To make the brief in the cloud:
    1. Open claude.ai/code/routines and choose New task (in the desktop app's Code tab:
-      Scheduled, then New task).
+      Scheduled, then New task). If it asks, choose Set up manually.
    2. Name it Job search: morning brief, choose your copy, set it daily at your time, paste
-      the prompt I give you, and save.
+      the prompt I give you, then choose Create.
    3. Only for days other than every day: open it again, choose Custom, and paste the
       schedule I give you.
 

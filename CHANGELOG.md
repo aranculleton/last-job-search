@@ -53,6 +53,7 @@ make sense to somebody whose repo just received it.
 - **A follow-up still to be rewritten is never shown as ready to send.** Where your own rules for messages ask for more than Claude's short follow-up says, the run listed it to rewrite and still put it on the person's card as ready to send, and the next run finished it unchanged; it now reaches the card only once it is rewritten and passes its checks.
 - **Follow-ups already on a card that were never fitted to your rules come off it.** Claude's short follow-ups that earlier runs left on a card, word for word, before they were fitted to your own rules for messages still said ready to send; each is set aside (kept) and written again to fit your rules first. A draft you or Claude wrote or changed, and one already sent, stay as they are. Profile upgrade: `follow-ups-fitted`
 - **A greeting by either of someone's names is right.** For a name with another in brackets, such as "Ottilie (Lark) Fennimore", your page's check took the bracketed name as the only one, called "Hi Ottilie" the wrong name and queued a rewrite; a greeting by the name before the brackets or the one inside them now passes, and a greeting to somebody else is still caught.
+- **Steps on Claude's and LinkedIn's own screens match what they show today.** The setup script for the PDF tools opens from its own Setup script row, Auto can be greyed out for a chat's model, a new scheduled task may first offer Set up manually, and LinkedIn's InMail count is under Premium features.
 
 ## [4.15.0] - 2026-11-11
 
