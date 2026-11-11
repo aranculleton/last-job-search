@@ -79,7 +79,10 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   Look, Chat button, or the panel's own arrow; the same choice, kept on the device), small or big.
   The panel's controls are the page's own soft pills (Open in Chat, Close), never underlined words.
   The conversation opens on its last day; earlier messages come only by its Show, never by
-  scrolling up (the maintainer, 2026-11-06). (chat panel tests)
+  scrolling up (the maintainer, 2026-11-06). (chat panel tests) On a phone the Chat is as tall
+  as the room under the header as it is drawn, so it opens with its first words in sight,
+  never behind the header (taken as 56px, its first words slid under the Refresh pill,
+  2026-11-11). (overlap test: chat opens)
   With no messages yet the starters and the box sit under the header, with no subtitle; once
   there are messages the box keeps to the foot. Why: an empty Chat stood its starters at the
   foot of a blank screen and said "Ask anything" three ways (the screen review, 2026-11-11).
@@ -91,7 +94,11 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   title, one short state with its clock ("Waking Claude · 1m 4s", never a chip and a line
   both saying it), its bar, and Stop Claude at the end of the clock's line, never on a line
   of its own; in a narrow panel the state goes under the title rather than squeeze it. The
-  sheet's Close and the panel's Hide are soft pills on the title's own line (2026-11-10). A finished one is a compact row under
+  sheet's Close and the panel's Hide are soft pills on the title's own line (2026-11-10). Its
+  actions share the clock's line only while both fit, the words keeping a short line's width,
+  else they take the line under it; a finished run's trash is in its corner on its title's
+  line. Why: in a column of their own beside the words, three pills drew "38 messages ready to
+  send." a letter a line (the screen review, 2026-11-11). (overlap test: crushed) A finished one is a compact row under
   "finished": its title and one-line result, the time small at its end, the whole row opening
   where its record lives (a person's work in Contacts on that person, a job's in Jobs, a
   draft's in its draft), its trash shown on hover or focus; no Done chip, no Open button.
@@ -100,7 +107,9 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   Coming up and Next; Waiting on you, Jobs, News and the numbers) that share the window's
   height, with the privacy line and the tip on one last row beside the Chat button, so the
   page does not scroll at 1000 by 560, 1280 by 720 or 1440 by 900. Each list shows as many as
-  its room holds and gives way below to one, its panel's own "All ..." opening the rest; News,
+  its room holds and gives way below to one, its panel's own "All ..." opening the rest, at
+  every width, two columns too: nothing is cut off inside a panel (Next three cut its third step
+  in half at a tablet's width, the screen review, 2026-11-11); News,
   with no screen of its own, says "2 more" and opens them in place. On a short window (660px
   or less) the numbers are one line under the greeting, opening Progress with its chart. A
   phone scrolls. (the maintainer, 2026-11-05; fit tests)
@@ -124,7 +133,8 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   what is working, only when the person's own numbers carry it (two groups of five or more),
   said as counts, never a cause. The weeks are applications and messages sent, the two chart
   colours, each named by a swatch in the line under them; one series where the person only
-  does one. Progress says the same, its "Each week" card open on its chart, every fold in it
+  does one. Its axis steps by 1, 2 or 5 times a power of ten, five lines at most, whatever a week
+  holds (a week of 400 drew 42 numbers on top of each other, 2026-11-11). Progress says the same, its "Each week" card open on its chart, every fold in it
   with the chevron Settings' rows use (folded, it read as a heading over an empty box, the
   review, 2026-11-10). (the maintainer, 2026-11-10: "not make it look like im
   doing nothing"; progress glance tests)
@@ -161,6 +171,13 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   pencil alone on a line, and a
   draft's lines are a card's 8px apart, as a find's are (2026-11-10). (jobs page tests, layout
   16, room test)
+- A dot between facts never starts or ends a line, and a day said in words ("Sun 20 Sept") is
+  never broken over two: a dot is held to the word after it, and one a line would still start
+  or end with goes out of sight (app.js `wordsAdd`, `sepFit`). A file's name or the page's
+  address wraps only after an underscore, a slash or a dot, never inside a word. Why: "·
+  Applied 3 Nov" with nothing before it, "Interview · Supply Chain Analyst ·" over a pill, a
+  row's "· Recruiter" under its name, and a name broken after its 41st letter (the screen
+  review, 2026-11-11). (overlap test: separator, crushed)
 - A Jobs card's actions are the one row of pills of Buttons, below: one filled next step, two soft
   pills at most, then More. A pencil beside the resume's words and one beside the letter's ("CV 1
   page ✎ letter 1 page ✎", the engine's own parts, kept on one line each) open the Tweak panel; the
@@ -264,7 +281,9 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   button sat 650px from its name), the buttons one column; the row spans the card, its trash at
   the card's edge (rows stopping short left the trash a column in mid-card, the screen review,
   2026-11-11). On a phone the name is one line and where they work the muted line under it,
-  beside the row's button. (layout 8, one-card tests, room test)
+  beside the row's button. A row's button and its trash keep one line at any width, the words
+  beside them giving way (at a tablet's width the trash fell under its button, 2026-11-11).
+  (layout 8, one-card tests, room test, overlap test: alone)
 - One "?" a card at most, after the last word of its line, and no more than three on a first
   screen. (design test, budget test)
 
@@ -460,7 +479,9 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   rare has no More, and anything nobody uses goes. (the maintainer, 2026-11-05: "shouldn't More
   be for genuine additional features, not just burying EVERYTHING under there"; action-row test)
 - More's toggle stays in its row beside the card's other pills, open or shut, and its panel
-  opens under the row, on every card. Its buttons are one row of pills that wraps only at the
+  opens under the row, on every card. Where the row is too wide for its line, the pill before
+  More goes down to the next line with it, never More alone (`moreFit`; under "Practise 3
+  questions" and "Read your prep" on a phone, the screen review, 2026-11-11). Its buttons are one row of pills that wraps only at the
   panel's width, never a line a kind; a note or a link in a sentence follows them. Why: opened
   inside the row it took the whole width and dropped below "I sent it", and a row a kind left
   one button alone on a line (the maintainer, 2026-11-05). (More test)
@@ -508,7 +529,9 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   minutes). (the maintainer,
   2026-11-05: the gauge "is meant to deter someone from spending tokens unnecessarily")
 - Text on a pill reads at 4.5:1 and a soft pill's edge at 3:1 against its card, in both looks;
-  every control shows its focus ring. (colour tests, layout 14)
+  every control shows its focus ring. Words on the soft accent (an answer's box, your own
+  message in a chat) are in the ink: the muted grey is 3.56:1 there in the dark (2026-11-11).
+  Every word on every screen is checked in both looks (overlap test: faint). (colour tests, layout 14)
 - On a phone everything is drawn at the page's own size with a full-size tap area (44px), and
   hover styles apply only on devices that hover, so nothing needs two taps. A phone's density
   comes from padding, never from shrinking type: a card's edge 12px, a row of pills 8px apart
@@ -517,6 +540,12 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   words 11.2px in grey (the review, 2026-11-10); "1 job posting per screen" (the maintainer,
   2026-10-29) is answered by the padding. (room test, target probe) A switch or a checkbox is reached
   through its whole row, its label. (target probe, layout 14)
+- On a computer every control is at least 24px each way where it is reached (WCAG 2.2, 2.5.8),
+  at any of the page's sizes: a small one keeps its drawn look and reaches the rest through its
+  `::after`; a row that is a link, and a fold's heading, are that tall; a setting's pill is its
+  label's target, the whole pill. A text link inside a sentence keeps its line, as WCAG lets
+  it. Why: the "?" was 20px, a tip's Got it 19px, a pencil 22px, "Show all" 13px and a
+  setting's words 18px of its 36px pill (the screen review, 2026-11-11). (overlap test: small)
 - Three sizes: Smaller, Standard (the default), Larger, Smaller and Larger each drawn in the
   size it sets, the control keeping its height and targets. On a phone Standard is 100%,
   Smaller the old 85% and Larger 115%. (the maintainer, 4.12; settings
@@ -649,4 +678,9 @@ No words are drawn over other words or over a button, on any screen or view, at 
 tablet's or a laptop's width: the harness measures every line and every drawn control, and an
 overlap meant to be there is named in the test with why (overlap test, on the sample and on its
 extremes: two zones, long names). Why: a two-zone time ran over a row's words for a release and
-only a person saw it (2026-11-11).
+only a person saw it (2026-11-11). The same run reads every screen and view, Settings with its
+rows open, Claude's work, an application's page and the live prep, at 390, 768, 1280 and 1600
+wide in both looks, for words crushed or broken, words cut off with nothing to say so, a dot
+starting or ending a line, a control under 24px on a computer, More or a row's trash alone on
+its line, words too faint, a chart's numbers piled up and a day written 2026-10-20; an
+exception is named in the test with why (`DRAWN_ALLOW`).

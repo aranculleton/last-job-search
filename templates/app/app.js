@@ -100,8 +100,207 @@
   function add(el, kid) {
     if (kid === null || kid === undefined || kid === false) return;
     if (Array.isArray(kid)) { for (const k of kid) add(el, k); return; }
-    el.appendChild(kid instanceof Node ? kid : document.createTextNode(String(kid)));
+    if (kid instanceof Node) { el.appendChild(kid); return; }
+    const s = String(kid);
+    // Words that follow words are one run, as two texts side by side are: a run with a dot or a
+    // day in it is one inline part (`.words`), so in a row of boxes it stays one box, as its
+    // text was (a draft's "Reply · LinkedIn InMail" fell into three of its heading's columns).
+    const last = el.lastChild;
+    if (last && last.__words) { wordsAdd(last, s); return; }
+    if (NO_SEP.test(el.tagName) || !((s.indexOf("·") >= 0 && SEP_AT.test(s)) || DAY_AT.test(s))) { el.appendChild(document.createTextNode(s)); return; }
+    const run = document.createElement("span");
+    run.className = "words";
+    run.__words = true;
+    if (last && last.nodeType === 3) run.appendChild(last);
+    el.appendChild(run);
+    wordsAdd(run, s);
   }
+  // A separator dot never starts or ends a line (the screen review, 2026-11-11: "· Applied 3
+  // Nov" with nothing before it, "Interview · Data Analyst ·" over a pill on the line below, a
+  // row's "· Recruiter" wrapped under its name). Each " · " in the page's words is its own
+  // small part (`.sep-dot`), held to the word after it (`.sep-hold`), so a line breaks before a dot
+  // rather than after one; a dot a line then starts or ends with is put out of sight by sepFit,
+  // its words kept for a screen reader and for a copy. A day said in words ("Sun 20 Sept") is
+  // read whole, never broken over two lines (`.day`). The words read the same.
+  const SEP_AT = /(^|[\s\u00a0])\u00b7(?=[\s\u00a0]|$)/;
+  const MONTHS = "(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sept?|Oct|Nov|Dec)";
+  const DAY_SRC = "(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun) )?(?:\\d{1,2} " + MONTHS + "|" + MONTHS + " \\d{1,2})\\b";
+  const DAY_AT = new RegExp("\\b" + DAY_SRC);
+  const NO_SEP = /^(OPTION|TEXTAREA|TITLE|STYLE|SCRIPT|PRE|CODE)$/;
+  function sepHold() { const w = document.createElement("span"); w.className = "sep-hold"; return w; }
+  function dayPart(t) { const d = document.createElement("span"); d.className = "day"; d.textContent = t; return d; }
+  function wordsAdd(el, s) {
+    // A dot that ended the words before is held to the word that comes next; a box that comes
+    // next is not held to it, as it may be too wide for any line with the dot, and a dot then
+    // left ending a line is put out of sight (sepFit).
+    const tail = el.__sepTail && el.__sepTail === el.lastChild ? el.__sepTail : null;
+    el.__sepTail = null;
+    const re = new RegExp("(^|[\\s\\u00a0])\\u00b7([\\s\\u00a0]|$)|\\b" + DAY_SRC, "g");
+    const day = new RegExp("^" + DAY_SRC);
+    let at = 0;
+    // What follows a dot is held to it: the day it starts with, else its first word.
+    const hold = (sep) => {
+      const rest = s.slice(at);
+      const d = day.exec(rest);
+      const word = d ? null : /^[^\s\u00a0]+/.exec(rest);
+      if (!d && (!word || word[0] === "\u00b7")) return false;
+      const w = sepHold();
+      if (sep.parentNode) sep.parentNode.replaceChild(w, sep);
+      w.append(sep, d ? dayPart(d[0]) : word[0]);
+      el.appendChild(w);
+      at += (d || word)[0].length;
+      return true;
+    };
+    if (tail && hold(tail)) { /* held */ }
+    re.lastIndex = at;
+    for (let m = re.exec(s); m; m = re.exec(s)) {
+      if (m[2] === undefined) {
+        if (m.index > at) el.appendChild(document.createTextNode(s.slice(at, m.index)));
+        el.appendChild(dayPart(m[0]));
+        at = m.index + m[0].length;
+        re.lastIndex = at;
+        continue;
+      }
+      const dot = m.index + m[1].length;
+      if (dot > at) el.appendChild(document.createTextNode(s.slice(at, dot)));
+      const sep = document.createElement("span");
+      sep.className = "sep-dot";
+      sep.textContent = "\u00b7" + m[2];
+      at = dot + 1 + m[2].length;
+      if (!hold(sep)) {
+        el.appendChild(sep);
+        if (at >= s.length) el.__sepTail = sep;
+      }
+      re.lastIndex = at;
+    }
+    if (at < s.length) el.appendChild(document.createTextNode(s.slice(at)));
+  }
+  // A dot that starts a line is put out of sight, and one put out of sight that no longer
+  // starts its line comes back: after every drawing, on a resize and when a fold opens. A dot
+  // starts its line when nothing drawn before it in the box its words flow in (through inline
+  // parts and a row of boxes laid side by side, a row's name and the line beside it) is on
+  // its line.
+  function sepBox(el) {
+    let e = el;
+    for (;;) {
+      const p = e.parentElement;
+      if (!p || p === document.body) return e;
+      const d = getComputedStyle(e).display, pd = getComputedStyle(p);
+      if (/^inline|contents/.test(d) || (/flex/.test(pd.display) && !/column/.test(pd.flexDirection))) { e = p; continue; }
+      return e;
+    }
+  }
+  // Where a node is drawn: a text's first or last letter, or an element's first or last box.
+  function sepInk(n, last) {
+    if (n.nodeType === 3) {
+      const t = n.textContent;
+      const i = last ? t.search(/\S\s*$/) : t.search(/\S/);
+      if (i < 0 || !n.parentElement || n.parentElement.closest(".sr-only, .sep-cut")) return null;
+      const r = document.createRange();
+      r.setStart(n, i);
+      r.setEnd(n, i + 1);
+      const q = [...r.getClientRects()].filter((x) => x.width > 0.5 && x.height > 0.5);
+      return q.length ? q[last ? q.length - 1 : 0] : null;
+    }
+    if (n.nodeType === 1 && /^(svg|img|input|select|textarea)$/i.test(n.tagName)) {
+      const q = [...n.getClientRects()].filter((x) => x.width > 0.5 && x.height > 0.5);
+      return q.length ? q[last ? q.length - 1 : 0] : null;
+    }
+    return null;
+  }
+  // Where a dot stands on its line: null where it has words on both sides of it; "end" where
+  // nothing after it in its box is on its line (it is kept, out of sight, so nothing moves);
+  // else, at its line's start, "soft" where its line broke inside the same run of words (a
+  // forced break then holds what follows it there), or "lead" where its words start a box of
+  // their own (that box keeps the dot's width at its end, so it never moves up beside what is
+  // before it).
+  function sepFlow(el) { let e = el; while (e.parentElement && /^(inline|contents)$/.test(getComputedStyle(e).display)) e = e.parentElement; return e; }
+  function sepState(s, box) {
+    const before = s.classList.contains("sep-before");
+    const at = before ? sepFirst(s) : [...s.getClientRects()].find((x) => x.width > 0.5) || null;
+    if (!at) return null;
+    const same = (q) => Math.min(q.bottom, at.bottom) - Math.max(q.top, at.top) > 0.5 * Math.min(q.height, at.height);
+    const w = document.createTreeWalker(box, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
+    if (!before) {
+      w.currentNode = s;
+      let next = null;
+      for (let n = w.nextNode(); n && !next; n = w.nextNode()) if (!s.contains(n)) next = sepInk(n, false);
+      if (!next || !(same(next) && next.left >= at.left)) return "end";
+    }
+    w.currentNode = s;
+    for (let n = w.previousNode(); n; n = w.previousNode()) {
+      if (n.contains(s)) continue;
+      const q = sepInk(n, true);
+      if (!q) continue;
+      if (same(q) && q.left < at.left) return null;
+      return !before && sepFlow(n.nodeType === 3 ? n.parentElement : n) === sepFlow(s) ? "soft" : "lead";
+    }
+    return "lead";
+  }
+  function sepFirst(el) {
+    const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
+    for (let n = w.nextNode(); n; n = w.nextNode()) { const q = sepInk(n, false); if (q) return q; }
+    return null;
+  }
+  // A dot drawn by the stylesheet before a part (`.sep-before`, a row's line beside its name)
+  // is put out of sight the same way, where the part starts its line. Each drawing starts from
+  // every dot in sight, as a dot put out of sight holds its line where it was.
+  const SEP_CUT = ["sep-cut", "sep-break", "sep-lead", "sep-end"];
+  function sepFit() {
+    const seps = [...document.querySelectorAll(".sep-dot, .sep-before")];
+    if (!seps.length) return;
+    for (const s of seps) if (s.classList.contains("sep-cut") || s.classList.contains("sep-end")) s.classList.remove(...SEP_CUT);
+    for (let round = 0; round < 4; round++) {
+      const boxes = new Map();
+      const cut = [];
+      for (const s of seps) {
+        if (s.classList.contains("sep-cut") || s.classList.contains("sep-end") || !s.getClientRects().length) continue;
+        const before = s.classList.contains("sep-before");
+        if (before && !/\u00b7/.test(getComputedStyle(s, "::before").content)) continue;
+        const from = before ? s : s.parentElement;
+        if (!boxes.has(from)) boxes.set(from, sepBox(from));
+        const st = sepState(s, boxes.get(from));
+        if (st) cut.push([s, st]);
+      }
+      if (!cut.length) return;
+      for (const [s, st] of cut) s.classList.add(...(st === "end" ? ["sep-end"] : ["sep-cut"].concat(s.classList.contains("sep-before") ? [] : [st === "soft" ? "sep-break" : "sep-lead"])));
+    }
+  }
+  // More never stands alone on a line under its row's other pills (DESIGN.md, "Buttons, links
+  // and taps"): where it would, the pill before it goes down to the next line with it (a break
+  // drawn by the row, app.css). Three pills too wide for a phone left More alone under
+  // "Practise 3 questions" and "Read your prep" (the screen review, 2026-11-11).
+  const MORE_ROWS = ":is(.card-actions, .wc-actions, .suggest-acts, .g-acts)";
+  function moreFit() {
+    for (const r of document.querySelectorAll(".more-wrap")) r.classList.remove("more-wrap");
+    for (const m of document.querySelectorAll(".more-mate")) m.classList.remove("more-mate");
+    const wrap = [];
+    for (const sum of document.querySelectorAll(MORE_ROWS + " > details.more > summary.more-btn")) {
+      const d = sum.parentElement;
+      let prev = d.previousElementSibling;
+      while (prev && !(prev.getClientRects().length && prev.getBoundingClientRect().width > 0)) prev = prev.previousElementSibling;
+      if (!prev || !sum.getClientRects().length) continue;
+      if (sum.getBoundingClientRect().top >= prev.getBoundingClientRect().bottom - 1) wrap.push([d.parentElement, prev]);
+    }
+    for (const [row, prev] of wrap) { row.classList.add("more-wrap"); prev.classList.add("more-mate"); }
+  }
+  // A screen drawn afresh keeps the marks these put on the one on screen (a dot out of sight,
+  // a pill gone down with More), so the two compare as the same when nothing changed (patch).
+  function sepKept(probe, live) {
+    if (!live) return;
+    const ps = probe.querySelectorAll(".sep-dot, .sep-before");
+    const ls = live.querySelectorAll(".sep-dot, .sep-before");
+    if (ps.length && ls.length === ps.length) ps.forEach((p, i) => { for (const c of SEP_CUT) if (ls[i].classList.contains(c)) p.classList.add(c); });
+    const pr = probe.querySelectorAll(MORE_ROWS);
+    const lr = live.querySelectorAll(MORE_ROWS);
+    if (pr.length && lr.length === pr.length) lr.forEach((r, i) => {
+      if (!r.classList.contains("more-wrap")) return;
+      pr[i].classList.add("more-wrap");
+      const at = [...r.children].findIndex((k) => k.classList.contains("more-mate"));
+      if (at >= 0 && pr[i].children[at]) pr[i].children[at].classList.add("more-mate");
+    });
+  }
+  function lineFit() { moreFit(); sepFit(); }
   function svg(tag, attrs, kids) {
     const el = document.createElementNS("http://www.w3.org/2000/svg", tag);
     for (const k of Object.keys(attrs || {})) if (attrs[k] !== null && attrs[k] !== undefined) el.setAttribute(k, String(attrs[k]));
@@ -332,7 +531,7 @@
     let touch = false;
     try { touch = window.matchMedia("(pointer: coarse)").matches; } catch (e) { touch = false; }
     try { document.body.style.zoom = String(f); } catch (e) { /* no zoom here */ }
-    try { document.documentElement.style.setProperty("--tz", phone || touch ? String(1 / f) : "1"); } catch (e) { /* the page's own size */ }
+    try { document.documentElement.style.setProperty("--tz", phone || touch ? String(1 / f) : "1"); document.documentElement.style.setProperty("--pz", String(1 / f)); } catch (e) { /* the page's own size */ }
   }
   function setSize(z) {
     S.size = SIZES[z] ? z : "standard";
@@ -3828,7 +4027,7 @@
       return h("li", {class: "g-row", "data-item": d ? d.id : m.id},
         h("div", {class: "g-main"}, h("p", {class: "g-name"}, rowName(cid, name, "send:" + m.id),
           fs === "going" ? [" ", chip("Claude is fixing it", "info")] : flag || fs === "failed" ? [" ", chip("Check first", "warn")] : null),
-          why ? h("p", {class: "muted small"}, why) : null, stateLine(m.id, "send:" + where + ":msg:" + m.id) || (d ? stateLine(d.id, "send:" + where + ":" + d.id) : null)),
+          why ? h("p", {class: "muted small sep-before"}, why) : null, stateLine(m.id, "send:" + where + ":msg:" + m.id) || (d ? stateLine(d.id, "send:" + where + ":" + d.id) : null)),
         h("div", {class: "g-acts"}, seeDraftBtn(m, "send:" + where + ":" + m.id, "secondary"),
           cid ? btn("", () => askRemovePerson(cid, txt(p ? p.first_name : m.first_name), txt(p ? p.employer : m.employer), null, Object.assign({skip, replied: p && canSayReplied(p) ? () => logReply(p) : null}, d ? {later: laterChoices(d), hide: () => hideTodo("due:" + d.id, txt(d.title))} : {})),
             {kind: "quiet icon-only", small: true, icon: "bin", key: "sendbin:" + where + ":" + m.id, aria: "Not " + name + "?"}) : null));
@@ -3961,7 +4160,7 @@
   // and a day in the words a person uses ("Wed 21 Oct"), never 2026-10-21, wherever the title
   // came from (the maintainer, 2026-11-04: a card named "...: One follow-up sent 2026-10-21").
   function workName(w) {
-    return txt(obj(w).title).replace(/^Nudge /, "Follow up with ").replace(/\b\d{4}-\d{2}-\d{2}\b/g, (d) => fmtDay(d) || d);
+    return isoDays(txt(obj(w).title).replace(/^Nudge /, "Follow up with "));
   }
   function tabLink(tab, item) {
     if (!tab) return null;
@@ -4621,7 +4820,7 @@
       const we = busy(d) ? dueWorkEntry(d, kind) : null;
       return h("li", {class: "g-row" + (marked ? " is-marked" : ""), "data-item": d.id},
         h("div", {class: "g-main"}, h("p", {class: "g-name"}, cid ? rowName(cid, name, "fg:" + d.id) : name),
-          dueWho(d) ? h("p", {class: "muted small"}, cap1(dueWho(d))) : null, stateLine(d.id, "due:" + where + ":" + d.id),
+          dueWho(d) ? h("p", {class: "muted small sep-before"}, cap1(dueWho(d))) : null, stateLine(d.id, "due:" + where + ":" + d.id),
           we ? (compact ? rowWord(we[1]) : workInline(we[0], we[1], {key: "fgw:" + where + ":" + d.id})) : null),
         h("div", {class: "g-acts"}, busy(d) ? null :
           draft ? seeDraftBtn(draft, "fgdraft:" + where + ":" + d.id, "secondary") :
@@ -5601,6 +5800,16 @@
       const over = Math.ceil((document.scrollingElement || document.documentElement).scrollHeight - window.innerHeight);
       if (over > 0 && over <= 48 && grid.style.height) fitFill(grid, Math.max(0, parseFloat(grid.style.height) - Math.ceil(over / z)) + "px");
     }
+    // Last, no list is cut off inside its panel: one whose panel still runs past its foot gives
+    // way from its end, as far as one, its "All ..." opening the rest. Two columns wide, Next
+    // three drew its third step cut in half with nothing to say so (the screen review,
+    // 2026-11-11): its base of three was shown however tall the steps.
+    for (const l of lists) {
+      const panel = l.closest(".bpanel");
+      if (!panel || fitOpened(l)) continue;
+      const body = l.closest(".bp-body") || panel;
+      for (let left = shown(l); fitSpills(body) && left.length > 1; left = shown(l)) left[left.length - 1].hidden = true;
+    }
     // The "2 more" under News is drawn before the room is measured: it is part of its foot.
     fitMore(lists);
     remember(one ? fitAir(grid) : null);
@@ -5720,7 +5929,16 @@
     fitHide(btn, true);
   }
   let fitTimer = null;
-  window.addEventListener("resize", () => { clearTimeout(fitTimer); fitTimer = setTimeout(() => { fitBrief(); fitTop(); }, 120); });
+  window.addEventListener("resize", () => { clearTimeout(fitTimer); fitTimer = setTimeout(() => { fitBrief(); fitTop(); lineFit(); }, 120); });
+  // A fold opened shows words never laid out before: their dots are fitted once it has.
+  let sepQueued = false;
+  // Each may come before the page's later parts have loaded (it is published in parts), so
+  // nothing here leans on a name they define.
+  const lineFitSoon = () => { try { lineFit(); } catch (e) { /* drawn again on the next change */ } };
+  document.addEventListener("toggle", () => { if (sepQueued) return; sepQueued = true; requestAnimationFrame(() => { sepQueued = false; lineFitSoon(); }); }, true);
+  // And once the page's own letters have arrived, which are wider or narrower than the ones
+  // first drawn.
+  try { if (document.fonts && document.fonts.ready) document.fonts.ready.then(lineFitSoon); } catch (e) { /* no fonts list */ }
   function fillRows(grid) {
     const panels = [...grid.children];
     // A short laptop window (ws) has no Progress panel, its numbers a line under the greeting.
@@ -8937,13 +9155,13 @@
     }
     // The row's one pill, in the words To do uses ("Read your prep"): the night before, the key
     // action was a small underlined "Prep ready" (the UX review, 2026-11-10, U-12).
-    if (obj(iv.prep).updated && obj(iv.prep).stale) return h("span", {class: "up-prep"}, "Prep is for an earlier plan ",
+    if (obj(iv.prep).updated && obj(iv.prep).stale) return h("span", {class: "up-prep sep-before"}, "Prep is for an earlier plan ",
       btn("Update my prep", () => askPrep(iv), {kind: "secondary", small: true, key: "up-prep:" + u.id, wakes: "prep", aria: "Update my prep for " + txt(iv.company)}));
     // On a practice day the row leads as To do does: practise first (the review of the fixes,
     // 2026-11-10); the row's own title still opens the prep to read.
-    if (obj(iv.prep).updated && livePrep(iv) && ivPractiseDay(iv)) return h("span", {class: "up-prep"}, btn("Practise 3 questions", () => practisePrep(iv), {kind: "secondary", small: true, key: "up-drill:" + u.id, aria: "Practise 3 questions for " + txt(iv.company)}));
-    if (obj(iv.prep).updated) return h("span", {class: "up-prep"}, btn("Read your prep", () => openDetail("interview", iv.id), {kind: "secondary", small: true, key: "up-read:" + u.id, aria: "Read your prep for " + txt(iv.company)}));
-    return h("span", {class: "up-prep"}, "No prep yet ",
+    if (obj(iv.prep).updated && livePrep(iv) && ivPractiseDay(iv)) return h("span", {class: "up-prep sep-before"}, btn("Practise 3 questions", () => practisePrep(iv), {kind: "secondary", small: true, key: "up-drill:" + u.id, aria: "Practise 3 questions for " + txt(iv.company)}));
+    if (obj(iv.prep).updated) return h("span", {class: "up-prep sep-before"}, btn("Read your prep", () => openDetail("interview", iv.id), {kind: "secondary", small: true, key: "up-read:" + u.id, aria: "Read your prep for " + txt(iv.company)}));
+    return h("span", {class: "up-prep sep-before"}, "No prep yet ",
       btn("Prepare me", () => askPrep(iv), {kind: "secondary", small: true, key: "up-prep:" + u.id, wakes: "prep", aria: "Prepare me for " + txt(iv.company)}));
   }
   // A row: when, what (its tap opens it), whether it is ready, and a calendar with a plus to
@@ -9415,18 +9633,26 @@
   }
   // Applications and messages sent each week, the Brief's two series in its two colours; a
   // model from before messages were counted draws applications and replies as it did.
+  function chartStep(max, lines) {
+    const raw = Math.max(1, max / lines);
+    const p = Math.pow(10, Math.floor(Math.log10(raw)));
+    return [1, 2, 5, 10].map((m) => m * p).find((x) => x >= raw);
+  }
   function weeksChart(weeks) {
     const second = weeks.some((w) => "sent" in obj(w)) ? ["sent", "Messages sent", "messages sent"] : ["replies", "Replies", "replies"];
     const b2 = (w) => Number(w[second[0]]) || 0;
     const max = Math.max(1, ...weeks.map((w) => Math.max(Number(w.applied) || 0, b2(w))));
-    const step = max <= 5 ? 1 : max <= 10 ? 2 : max <= 25 ? 5 : 10;
+    // A round step for any week, 1, 2 or 5 times a power of ten, so the axis has five lines at
+    // most: topped at 10, a week of 400 messages drew 42 lines and their numbers piled into one
+    // another (the screen review, 2026-11-11).
+    const step = chartStep(max, 5);
     const top = Math.ceil(max / step) * step;
     // Drawn to a phone's own width there, so its labels read at the page's small size: scaled
     // down from 640 they were about 7px high (the screen review, 2026-11-11).
     const narrow = window.innerWidth < 760;
     const W = narrow ? 340 : 640;
     const H = narrow ? 200 : 220;
-    const L = 32;
+    const L = 32 + 7 * Math.max(0, String(top).length - 3);
     const B = 34;
     const T = 12;
     const R = 8;
@@ -10974,6 +11200,7 @@
     document.body.appendChild(detailDlg);
     try { detailDlg.showModal(); } catch (e) { detailDlg.setAttribute("open", ""); }
     gaugeWakers();
+    guarded(lineFit);
     if (!o.fromHistory) { addrTaken = null; try { history.pushState(null, "", detailDlg._addr); } catch (e) { /* the frame refuses */ } }
     const hd = $("detail-title");
     if (hd) hd.focus();
@@ -11176,11 +11403,13 @@
   function ivTitle(iv) { return ivOffer(iv) ? "Your offer from " + txt(iv.company) : stageName(iv) + " with " + txt(iv.company); }
   // The round's name for a title, the engine's own short one where the stored name is an
   // employer's whole paragraph (the maintainer, 2026-11-07); the paragraph is its details.
-  function stageName(iv) { return txt(obj(iv).stage_title) || stageShort(obj(iv).next_stage); }
+  // Its days in words, whatever wrote it: a round paused on a day was titled "Paused
+  // 2026-10-20 with ..." (the screen review, 2026-11-11).
+  function stageName(iv) { return isoDays(txt(obj(iv).stage_title) || stageShort(obj(iv).next_stage)); }
   function stageDetails(iv) {
     const d = txt(obj(iv).stage_details);
-    if (d) return d;
-    return txt(obj(iv).next_stage).toLowerCase() !== stageShort(obj(iv).next_stage).toLowerCase() ? txt(obj(iv).next_stage) : "";
+    if (d) return isoDays(d);
+    return txt(obj(iv).next_stage).toLowerCase() !== stageShort(obj(iv).next_stage).toLowerCase() ? isoDays(obj(iv).next_stage) : "";
   }
   function stageShort(st) {
     const t = txt(st) || "Interview";
@@ -11792,8 +12021,11 @@
       stateLine(p.id, "dperson:" + p.id));
   }
   function applicationDetail(a) {
+    // An application only sent has no word of its own: its line is when it went, with no dot
+    // before it ("· Applied Sun 20 Sept", the screen review, 2026-11-11).
+    const word = stateWord((APP_STATE[txt(a.status)] || [cap1(txt(a.status))])[0], (APP_STATE[txt(a.status)] || [0, null])[1]);
     return h("div", {class: "d-stack"},
-      h("p", {}, stateWord((APP_STATE[txt(a.status)] || [cap1(txt(a.status))])[0], (APP_STATE[txt(a.status)] || [0, null])[1]), a.applied_on ? h("span", {class: "muted"}, " · Applied " + fmtDay(a.applied_on)) : null),
+      h("p", {}, word, a.applied_on ? h("span", {class: "muted"}, (word ? " · " : "") + "Applied " + fmtDay(a.applied_on)) : null),
       appLive(a) ? h("div", {class: "card-actions"}, btn("I heard back", () => heardBack(a), {kind: "primary", small: true, key: "dheard:" + a.id})) : null,
       block("What has happened", arr(a.stages).map((s) => h("p", {}, h("span", {class: "muted"}, s.date || s.on ? fmtDay(s.date || s.on) + ": " : ""), txt(s.label || s.name)))),
       block("What went", arr(a.sent_files).map((f) => h("p", {}, typeof f === "string" ? h("bdi", {}, f) : [(f.kind === "letter" ? "Cover letter" : Noun()) + ": ", h("bdi", {}, txt(f.name))]))),
@@ -12164,7 +12396,7 @@
   function anotherDeviceBody() {
     const url = pageUrl();
     return h("div", {class: "d-stack"},
-      url ? foldBody(h("p", {class: "page-url", id: "page-url"}, url), copyButton(url, "Copy link", "copy:page-url", "page-url"), noteFor("copy:page-url")) :
+      url ? foldBody(h("p", {class: "page-url", id: "page-url"}, addressWords(url)), copyButton(url, "Copy link", "copy:page-url", "page-url"), noteFor("copy:page-url")) :
         h("p", {class: "muted"}, "The link arrives with the next update of this page."),
       foldBody(h("p", {}, "Open the link on your phone signed in to the same Claude account. Pinned to your sidebar, the page is always one tap away."),
         btn("Pin it to my sidebar", askPin, {small: true, kind: "secondary", key: "pin-page", wakes: "talk"})));
@@ -14553,18 +14785,21 @@
     const shown = names.slice(0, 3).join(", ") + (names.length > 3 ? " and " + (names.length - 3) + " more" : "");
     const notes = done ? list.filter(([, w]) => { const c = txt(obj(w.args).contact); return c && messageItems().some((m) => txt(m.contact) === c && msgLive(m)); }).length : 0;
     const hid = "wrun-" + seg(gid);
+    // Done, its trash is in its corner, on its title's line, as a To do card's is: at the end of
+    // its row of pills it fell to a line of its own in a tablet's panel (the screen review,
+    // 2026-11-11).
     return h("article", {class: "work-card work-run st-" + (done ? "done" : "queued"), "data-work-run": gid, "aria-labelledby": hid},
       h("div", {class: "wc-head"}, h("span", {class: "dot tone-" + (done ? "ok" : "plain is-waiting"), "aria-hidden": "true"}),
-        h("h3", {id: hid, class: "wc-title"}, n + " " + words[1] + (done ? " done" : " waiting their turn"))),
+        h("h3", {id: hid, class: "wc-title"}, n + " " + words[1] + (done ? " done" : " waiting their turn")),
+        done ? btn("", () => { for (const [id] of list) { workSeenAt.set(id, 0); hiddenWork.add(id); } scheduleRender(); },
+          {kind: "quiet icon-only", small: true, icon: "bin", key: "run-bin:" + gid, aria: "Put away: " + n + " " + words[1]}) : null),
       h("p", {class: "wc-now"}, shown),
       notes ? h("p", {class: "wc-time"}, plural(notes, "message", "messages") + " ready to send.") : null,
       open ? h("div", {class: "stack wc-run"}, list.map(([id, w]) => workCard(id, w))) : null,
       h("div", {class: "wc-actions"},
         btn(open ? "Hide them" : "Show them", () => { openState.set("det:run:" + gid, !open); scheduleRender(); }, {kind: "link", small: true, key: "run:" + gid, aria: (open ? "Hide " : "Show ") + n + " " + words[1]}),
         done ? (notes ? tabLink("contacts", null) : null)
-          : stopClaude(n + " " + words[1], () => { for (const [id] of list) stopWork(id); }, "run-stop:" + gid),
-        done ? btn("", () => { for (const [id] of list) { workSeenAt.set(id, 0); hiddenWork.add(id); } scheduleRender(); },
-          {kind: "quiet icon-only", small: true, icon: "bin", key: "run-bin:" + gid, aria: "Put away: " + n + " " + words[1]}) : null));
+          : stopClaude(n + " " + words[1], () => { for (const [id] of list) stopWork(id); }, "run-stop:" + gid)));
   }
   function workPanel(where) {
     const all = [...allWork()].filter(([, w]) => !TERMINAL.has(txt(w.status)) || now() - finishedAt(w) < 86400000);
@@ -14758,6 +14993,14 @@
   // pill's words leave it too little room, the pill gives way to its count ("Coming…" beside
   // "1 running · 1 waiting", the screen review, 2026-11-11).
   function fitTop() {
+    // The header's own height, for the Chat's room under it (app.css, .talk): taken as 56px, a
+    // header with its line under it (Updated, Refresh) left the Chat taller than the window,
+    // and opening at its end slid its first words under the header (Firefox, 2026-11-11).
+    const top = $("top");
+    if (top && top.getClientRects().length) {
+      const hgt = Math.round(top.getBoundingClientRect().height / drawnPerPx()) + "px";
+      if (document.documentElement.style.getPropertyValue("--top-real") !== hgt) document.documentElement.style.setProperty("--top-real", hgt);
+    }
     const screen = $("screen"), pill = $("pill");
     if (!pill) return;
     pill.classList.remove("tight");
@@ -15921,12 +16164,18 @@
     if (!list.length) return null;
     return h("section", {class: "set-group", "aria-label": title || "Waiting"}, title ? h("h3", {class: "group"}, title) : null, h("div", {class: "set-rows"}, list));
   }
+  // A file's name, a web address: they wrap only after an underscore, a hyphen, a slash or a
+  // dot, never inside a word (a name broke after its 41st letter in a pill on a phone, the
+  // screen review, 2026-11-11). The text reads and copies the same.
+  const partsAfter = (s, re) => txt(s).replace(re, "$1\n").split("\n").filter(Boolean);
+  function fileWords(name) { return partsAfter(name, /([_\-.])/g).flatMap((p, i) => (i ? [h("wbr"), p] : [p])); }
+  function addressWords(url) { return partsAfter(url, /([\/.])/g).flatMap((p, i) => [i ? h("wbr") : null, h("span", {class: "nowrap"}, p)]); }
   function valueWord(s) {
     const copy = SETTING_COPY[txt(s.key)] || {};
     const v = txt(settingValue(s));
     if (s.kind === "toggle") return settingValue(s) ? "On" : "Off";
     // A setting with examples (File names) says the example of the one chosen.
-    if (s.kind === "choice" && txt(obj(s.examples)[v])) return txt(obj(s.examples)[v]);
+    if (s.kind === "choice" && txt(obj(s.examples)[v])) return fileWords(obj(s.examples)[v]);
     if (s.kind === "choice") {
       const c = arr(s.choices).find((x) => txt(x[0]) === v);
       const word = c ? ((copy.choices || {})[v] || [txt(c[1])])[0] : v;
@@ -15977,7 +16226,7 @@
         return h("div", {class: "choice" + (shown ? " has-ex" : "")},
           h("input", {type: "radio", name: sid, id: sid + "-" + i, "data-k": sid + "-" + i, value: txt(c[0]), checked: txt(v) === txt(c[0]), "aria-describedby": hid,
             onchange: () => saveSoon(s, c[0], words[0])}),
-          h("label", {for: sid + "-" + i}, words[0], rec, under ? h("span", {class: "hint block" + (shown ? " chip-ex" : ""), id: hid}, under) : null));
+          h("label", {for: sid + "-" + i}, words[0], rec, under ? h("span", {class: "hint block" + (shown ? " chip-ex" : ""), id: hid}, shown ? fileWords(shown) : under) : null));
       });
       body = h("fieldset", {class: "setting" + (chips ? " pills" : "")}, h("legend", {class: "sr-only"}, settingLabel(s)), copy.hint ? h("p", {class: "hint"}, copy.hint) : null,
         chips ? h("div", {class: "pill-row"}, opts) : opts);
@@ -16904,7 +17153,7 @@
       const node = (sec, b) => guarded(() => sectionNode(sec, b), () => h("section", {class: "section"},
         empty("This part could not be shown.", "Something in it is not as the page expects. Refresh, and if it stays, tell Claude in a chat what you see, or the app's makers (Settings, Something looks wrong).")));
       patch(main, split ? [h("div", {class: "col"}, node(S.section)), h("div", {class: "col"}, node(S.split, "b"))] : [node(S.section)],
-        (probe) => { fitKept(probe); markLast(probe); demotePrimaries([probe]); nameByItem(probe); gaugeWakers([probe]); }, true);
+        (probe) => { fitKept(probe); markLast(probe); demotePrimaries([probe]); nameByItem(probe); gaugeWakers([probe]); sepKept(probe, main); }, true);
     }
     const rail = $("rail");
     // The Brief is a page to take in at a glance, so it has the whole width: no Work rail
@@ -16919,9 +17168,9 @@
     // laptop's Brief ends at the window's foot (fitBrief).
     guarded(() => { if (shell) shell.classList.toggle("on-brief", S.section === "brief" && !split); });
     // An open Tweak panel holds the rail on wide screens until it closes.
-    guarded(() => { if (rail) { if (isWide) { if (!S.tweak) patch(rail, railEmpty || !railNode ? [] : [railNode], (probe) => { demotePrimaries([probe], !!$("main").querySelector(".btn.primary")); gaugeWakers([probe]); }, true); } else if (rail.childNodes.length) rail.replaceChildren(); } });
-    guarded(() => { if (workDlg) { const body = workDlg.querySelector(".work-body"); if (body) patch(body, [workPanel("sheet")]); } });
-    for (const part of [renderFoot, renderBrowserPanel, renderDock, tidyDownload, demotePrimaries, nameByItem, gaugeWakers, renderToasts, fitBrief]) guarded(part);
+    guarded(() => { if (rail) { if (isWide) { if (!S.tweak) patch(rail, railEmpty || !railNode ? [] : [railNode], (probe) => { demotePrimaries([probe], !!$("main").querySelector(".btn.primary")); gaugeWakers([probe]); sepKept(probe, rail); }, true); } else if (rail.childNodes.length) rail.replaceChildren(); } });
+    guarded(() => { if (workDlg) { const body = workDlg.querySelector(".work-body"); if (body) patch(body, [workPanel("sheet")], (probe) => sepKept(probe, body)); } });
+    for (const part of [renderFoot, renderBrowserPanel, renderDock, tidyDownload, demotePrimaries, nameByItem, gaugeWakers, renderToasts, fitBrief, lineFit]) guarded(part);
     const n = guarded(todoBadge, () => 0);
     const base = $("brand") ? $("brand").textContent : document.title;
     document.title = (n ? "(" + n + ") " : "") + base;

@@ -23,6 +23,8 @@
   /* A finger's 44px, drawn larger by --tz where the page is drawn smaller (applySize). */
   --tz: 1;
   --target: calc(44px * var(--tz));
+  /* The page's own size undone (applySize): 24px * --pz is 24px on the screen. */
+  --pz: 1;
   --gap: 12px;
 }
 
@@ -286,8 +288,10 @@ bdi { unicode-bidi: isolate; }
 @media (min-width: 760px) {
   .g-row { flex-wrap: nowrap; }
   .g-main { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 4px; flex: 0 1 30rem; }
-  .g-main > .g-name + p.small::before { content: "· "; }
-  .g-acts { flex: 1 1 auto; }
+  .g-main > .g-name + p.small::before { content: "\00b7\00a0"; }
+  /* The row's button and its bin keep one line: the words beside them give way instead (at a
+     tablet's width the bin fell under its button, the screen review, 2026-11-11). */
+  .g-acts { flex: 1 0 auto; flex-wrap: nowrap; }
   .g-acts > [data-bin] { margin-left: auto; }
 }
 /* On a phone the name is its own line and where they work, with how it stands, the line under
@@ -299,7 +303,7 @@ bdi { unicode-bidi: isolate; }
   .g-main > .g-name { display: contents; }
   .g-name > .name-link { flex-basis: 100%; font-weight: 600; }
   .g-name > .g-at { font-size: var(--t-sm); }
-  .g-main > .g-name:has(> .g-at) + p.small::before { content: "· "; }
+  .g-main > .g-name:has(> .g-at) + p.small::before { content: "\00b7\00a0"; }
 }
 .hidden-note { margin-top: 12px; }
 .top-end { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; }
@@ -767,7 +771,7 @@ dialog.work-sheet { width: min(560px, calc(100vw - 16px)); }
 .checks-list { display: grid; gap: 8px; }
 .checks-list li { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
 .news ul, .brief ul { margin: 0; padding-left: 20px; display: grid; gap: 4px; }
-.upgrade, .learned, .news, .brief-old { display: grid; gap: 4px; padding-block: 8px; border-top: 1px solid var(--line); }
+.upgrade, .learned, .news, .brief-old { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; padding-block: 8px; border-top: 1px solid var(--line); }
 .setup-steps { margin: 0; padding-left: 20px; display: grid; gap: 8px; }
 .recent { border-top: 1px solid var(--line); }
 .recent-list { display: grid; gap: 12px; font-size: var(--t-sm); padding-bottom: 8px; }
@@ -951,11 +955,15 @@ dialog.work-sheet { position: fixed; inset: auto 0 0 0; margin: 0; width: 100%; 
 /* A card's Stop Claude sits at the end of its clock's line, not on a line of its own under
    it: each running card was its title, its words, its bar, its clock and then a row holding
    one quiet pill (the maintainer, 2026-11-10: "inline and things are good"). In a narrow
-   panel the state goes under the title rather than squeeze it to a word a line. */
-.work-card:not(.wc-done) { grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; container-type: inline-size; }
-.work-card:not(.wc-done) > * { grid-column: 1 / -1; }
-.work-card:not(.wc-done) > .wc-time:has(+ .wc-actions) { grid-column: 1; align-self: center; }
-.work-card:not(.wc-done) > .wc-time + .wc-actions { grid-column: 2; justify-content: flex-end; }
+   panel the state goes under the title rather than squeeze it to a word a line.
+   The actions share the clock's line only while both fit, the words keeping at least a short
+   line's width; else the actions take the line under it. Given a column of their own beside
+   the words, three pills took the card's width and drew "38 messages ready to send." a letter
+   a line, and "Stopped" broke in two beside Try again (the screen review, 2026-11-11). */
+.work-card:not(.wc-done) { display: flex; flex-wrap: wrap; align-items: flex-start; column-gap: 12px; container-type: inline-size; }
+.work-card:not(.wc-done) > * { flex: 1 1 100%; min-width: 0; }
+.work-card:not(.wc-done) > .wc-time:has(+ .wc-actions) { flex: 1 1 min(100%, 18ch); align-self: center; }
+.work-card:not(.wc-done) > .wc-time + .wc-actions { flex: 0 1 auto; margin-left: auto; justify-content: flex-end; align-self: center; }
 @container (max-width: 400px) {
   .wc-head > .state-word { grid-column: 2 / -1; grid-row: 2; justify-self: start; max-width: none; white-space: nowrap; }
 }
@@ -981,7 +989,10 @@ dialog.work-sheet { position: fixed; inset: auto 0 0 0; margin: 0; width: 100%; 
 .setting-row[open] > .set-sum::after { transform: rotate(-135deg); }
 .set-name { font-size: 1rem; font-weight: 400; margin-right: auto; }
 .set-value { color: var(--muted); text-align: right; }
-.set-body { padding: 0 16px 16px; display: grid; gap: 12px; }
+/* One column as wide as the card, never as wide as its longest line: a rule cut to a line
+   with "..." gave its whole length as the column's least width, and Your rules were drawn 2250px
+   wide and cut off at the card's edge (the screen review, 2026-11-11). */
+.set-body { padding: 0 16px 16px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
 .act-row { width: 100%; border: 0; border-top: 1px solid var(--line); background: none; text-align: left; color: var(--ink); font: inherit; cursor: pointer; }
 @media (hover: hover) { .act-row:hover { background: var(--raised); } }
 .set-go { color: var(--muted); font-size: 1.125rem; }
@@ -1002,7 +1013,9 @@ dialog.work-sheet { position: fixed; inset: auto 0 0 0; margin: 0; width: 100%; 
 .site-key-fold[open] > .set-sum::after { transform: rotate(-135deg); }
 
 /* Chat: the box pinned at the bottom (4.9) */
-.talk { display: flex; flex-direction: column; gap: 12px; min-height: calc(100dvh * var(--tz) - 56px - var(--tabs-h) - 48px - env(safe-area-inset-bottom, 0px)); }
+/* As tall as the window under the header as it is drawn (app.js, fitTop), never taller: opened
+   at its end, a Chat taller than that slid its first words under the header. */
+.talk { display: flex; flex-direction: column; gap: 12px; min-height: calc(100dvh * var(--tz) - var(--top-real, 56px) - var(--tabs-h) - 48px - env(safe-area-inset-bottom, 0px)); }
 .talk-form { margin-top: auto; position: sticky; bottom: calc(var(--tabs-h) + env(safe-area-inset-bottom, 0px) + 8px); z-index: 5; background: var(--bg); padding-block: 8px; display: grid; gap: 8px; }
 @media (min-width: 760px) { .talk { min-height: calc(100dvh - 120px); } .talk-form { bottom: 0; padding-bottom: 16px; } }
 /* No messages yet: the starters and the box under the header, never at the foot of a blank
@@ -1341,6 +1354,28 @@ a.navlink, .applylink, .btn.link, .fold .btn.link, .bp-foot a { text-decoration-
 }
 label.pick { display: flex; align-items: flex-start; justify-content: center; width: var(--target); min-height: var(--target); margin: -12px 0 0 -8px; padding-top: 12px; cursor: pointer; }
 
+/* ------------------------------------------------------------------ a computer: every control at least 24px each way (WCAG 2.2, 2.5.8) */
+/* Where nothing is touched a control may be drawn small, but its target is 24px each way on
+   the screen at any of the page's sizes (--pz undoes the page's own zoom): a small one reaches
+   the rest through its ::after, centred on it and drawn as it was; a row that is a link, or a
+   fold's heading, is that tall. The "?" was 20px, a tip's Got it 19px, Your profile's way back
+   16px, a pencil 22px, "Show all" 13px and the Brief's rows 18px (the screen review,
+   2026-11-11). */
+@media (min-width: 760px) and (pointer: fine), (min-width: 760px) and (pointer: none) {
+  .sum .help-q, .q, :is(.facts, .checks, .meta) .btn.icon-only, :is(.bp-tip, .tip) > .btn.secondary.small, a.back-link, .few-more > .btn.link,
+  table.data td > .btn.link { position: relative; }
+  .sum .help-q::after, .q::after, :is(.facts, .checks, .meta) .btn.icon-only::after, :is(.bp-tip, .tip) > .btn.secondary.small::after, a.back-link::after,
+  .few-more > .btn.link::after, table.data td > .btn.link::after {
+    content: ""; position: absolute;
+    top: calc(50% - max(50%, 12px * var(--pz))); bottom: calc(50% - max(50%, 12px * var(--pz)));
+    left: calc(50% - max(50%, 12px * var(--pz))); right: calc(50% - max(50%, 12px * var(--pz))); }
+  a.bp-link, .bp-all > summary, .bp-up-row .up-title > a.up-link { min-height: calc(24px * var(--pz)); }
+}
+/* A setting's pill is its label's target, the whole pill: its words alone were 18px of its 36px. */
+.pills .choice { position: relative; }
+.pills .choice > label::after { content: ""; position: absolute; inset: 0; }
+.pills .choice > input { position: relative; z-index: 1; }
+
 /* ------------------------------------------------------------------ more contrast, when the device asks for it */
 @media (prefers-contrast: more) {
   :root { --muted: var(--ink) !important; --line: var(--line-strong) !important; --st-waiting: var(--ink) !important; }
@@ -1388,7 +1423,9 @@ label.pick { display: flex; align-items: flex-start; justify-content: center; wi
 
 
 .quiet-card { background: var(--sunk); }
-.page-url { overflow-wrap: anywhere; }
+/* The page's address wraps only at its slashes and dots (app.js, addressWords), each part
+   kept whole; a part too long for any line still breaks rather than run off the card. */
+.page-url { overflow-wrap: break-word; }
 .add-download { display: inline-flex; gap: 8px; flex-wrap: wrap; }
 /* An opened fold (foldBody): its words, then what they do, then the line a tap leaves. On a
    wide screen the words and the buttons stand side by side, the buttons at the right edge
@@ -1419,7 +1456,8 @@ li:first-child > .fb-row, .fb-row:first-child { border-top: 0; }
 .set-body .pills .choice.has-ex { border-radius: var(--r-sm); padding-block: 8px; align-items: flex-start; flex: 1 1 auto; max-width: 100%; min-width: 0; }
 .set-body .pills .choice.has-ex input { margin-top: 4px !important; flex: none; }
 .set-body .pills .choice.has-ex label { white-space: normal; text-align: left; min-width: 0; flex: 1 1 auto; }
-.chip-ex { overflow-wrap: anywhere; }
+/* A file's name wraps after its underscores (app.js, fileWords), never inside a word. */
+.chip-ex { overflow-wrap: break-word; }
 .chip-rec { color: var(--muted); font-weight: 400; }
 /* Claude's browser: a small panel bottom right on a wide screen, a bottom sheet on a phone.
    Close hides it; the reading carries on. */
@@ -1807,6 +1845,33 @@ body.has-fab .shell { padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-b
 .bp-news a { color: inherit; text-decoration-color: currentColor; text-decoration-thickness: 1px; }
 /* A link's brackets keep to it ("(" ended a line on a phone, the screen review, 2026-11-11). */
 .paren { white-space: nowrap; }
+/* A separator dot is held to what follows it, so a line breaks before a dot and never after
+   one, and a dot a line starts with is put out of sight, keeping its words for a screen
+   reader and a copy (app.js, sepFit; the screen review, 2026-11-11). What it holds wraps as
+   it would have without it. */
+.sep-hold { white-space: nowrap; }
+:where(.sep-hold) > :where(:not(.sep-dot)) { white-space: normal; }
+/* A day said in words is read whole: "Sun 20" ended a line over "Sept" in a narrow column. */
+.day { white-space: nowrap; }
+.sep-dot.sep-cut { font-size: 0; }
+/* Its line broke inside a run of words: the break is held where it was, so what followed the
+   dot never moves up beside the words before it with no dot between. */
+.sep-break::before { content: "\A"; white-space: pre; }
+/* Its words start a box of their own: the box keeps the dot's width at its end, so it never
+   moves up beside what is before it with no dot between. */
+:has(> .sep-hold:first-child > .sep-lead), :has(> .sep-lead:first-child) { padding-right: 0.7em; }
+/* Nothing after it on its line: kept, out of sight, so nothing on the line below moves up. */
+.sep-dot.sep-end { color: transparent; }
+.sep-before.sep-cut::before { content: none !important; }
+/* ... and keeps its width at its end, so the part never moves up beside what is before it. */
+.sep-before.sep-cut::after { content: "\00b7\00a0"; visibility: hidden; }
+/* More's line break: where More would stand alone under its row, the row breaks before the
+   pill beside it, so the two go down together (app.js, moreFit). */
+/* The break is a line of no height; the pills under it take back one of its two gaps. */
+.more-wrap::after { content: ""; flex-basis: 100%; height: 0; order: 1; }
+.more-wrap > .more-mate, .more-wrap > .more-mate ~ * { order: 2; margin-top: -12px !important; }
+.g-acts.more-wrap > :is(.more-mate, .more-mate ~ *) { margin-top: -8px !important; }
+@media (max-width: 759px) { .more-wrap > :is(.more-mate, .more-mate ~ *) { margin-top: -8px !important; } }
 /* An interview's pill leads its line of when on a phone (the screen review, 2026-11-11). */
 .iv-when-line { display: flex; flex-wrap: nowrap; align-items: baseline; gap: 8px; }
 .iv-when-line > .when { margin: 0; flex: 1 1 10em; min-width: 0; }
@@ -2113,11 +2178,11 @@ ul.bp-news { gap: 12px; }
 .up-row > .up-main { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 4px; }
 .up-row > .up-main > * { flex: 1 1 100%; min-width: 0; }
 .up-row > .up-main > :is(.up-note, .up-prep, .state-word) { flex: 0 1 auto; }
-/* The dot between them ends the first, so where they wrap no line starts with it. */
-/* The dot between what a row is and its prep only where they share a line: on a phone the
-   prep's pill takes the line under it, and the dot ended the line before ("Interview · Supply
-   Chain Analyst ·", the screen review, 2026-11-11), or began the prep's. */
-@media (min-width: 760px) { .up-row > .up-main > .up-note:has(+ .up-prep)::after { content: " ·"; } }
+/* The dot between what a row is and its prep only where they share a line: it leads the
+   prep, and where the prep's pill takes the line under it the dot goes (sepFit). Ending the
+   first, it ended its line over the pill on a tablet ("Interview · Supply Chain Analyst ·",
+   the screen review, 2026-11-11). */
+@media (min-width: 760px) { .up-row > .up-main > .up-note + .up-prep.sep-before::before { content: "\00b7\00a0"; } }
 /* The row's icons each keep their own place, the pencil, the calendar, then the trash, so
    they line up down the list whether or not a row has a trash: pushed along by it, each row
    put its calendar somewhere else (the review, 2026-11-10). */
@@ -2136,7 +2201,9 @@ ul.bp-news { gap: 12px; }
 }
 .bp-up-row { display: flex; align-items: center; gap: 8px; }
 .bp-up-row .up-main { flex: 1; display: grid; gap: 2px; min-width: 0; }
-.bp-up-row .up-when { font-size: var(--t-sm); color: var(--muted); }
+/* Its day and time wrap inside its box: held to one line, a time from another zone ran under
+   the calendar beside it and out of the panel at a tablet's width (2026-11-11). */
+.bp-up-row .up-when { font-size: var(--t-sm); color: var(--muted); white-space: normal; }
 .bp-up-row .up-title { overflow-wrap: anywhere; }
 .bp-upcoming { --pc: var(--st-running); --pcbg: var(--st-running-bg); }
 dialog.sheet .sheet-body { display: grid; gap: 16px; }
@@ -2188,7 +2255,8 @@ dialog.sheet .sheet-body { display: grid; gap: 16px; }
 /* Coming up's next three, as small cards side by side where there is room. */
 .bp-up { display: grid; gap: 8px; margin: 0; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
 .bp-up-row { padding: 8px 8px 8px 12px; border-radius: var(--r-sm); background: var(--sunk); align-items: flex-start; }
-.bp-up-row .up-title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+/* Its title cut to two lines is the link itself, so the link can be a whole target. */
+.bp-up-row .up-title > a.up-link { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .bp-share { display: block; font-size: var(--t-sm); font-weight: 600; color: var(--ink); }
 
 ul.bp-news { max-width: 80ch; }
@@ -2301,7 +2369,7 @@ ul.bp-news { max-width: 80ch; }
 
 /* Settings, 4.12: employers turned down as one list with a small trash each; what it learned
    grouped by area, a rule a line with its day small at the end; long lists' "Show all". */
-.dec-list, .l-list, ul.news, ul.upgrades { display: grid; gap: 0; }
+.dec-list, .l-list, ul.news, ul.upgrades { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; }
 .dec-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-block: 4px; border-top: 1px solid var(--line); }
 .dec-row:first-child { border-top: 0; }
 .dec-name { min-width: 0; overflow-wrap: anywhere; }
@@ -2461,6 +2529,10 @@ dialog.detail.full .detail-body > * { grid-column: 2; min-width: 0; }
 .lp-also { font-size: var(--t-sm); color: var(--muted); }
 .lp-ans { background: var(--accent-soft); border-radius: var(--r-sm); padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; }
 .lp-ans-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+/* On the soft accent (an answer's box, your own message in a chat) a label is in the ink: the
+   muted grey is 3.56:1 there in the dark, under the 4.5:1 its small size needs (the screen
+   review, 2026-11-11). */
+.lp-ans :is(.lp-lbl, .muted), .talk-msg.from-you :is(.talk-who, .muted) { color: var(--ink); }
 .lp-draft { background: var(--st-overdue-bg); border-left: 4px solid var(--st-overdue); border-radius: var(--r-sm); padding: 8px 12px; font-size: var(--t-sm); }
 .lp-kids { display: flex; flex-direction: column; gap: 8px; }
 .lp-f { border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--sunk); min-width: 0; }
