@@ -17002,9 +17002,12 @@
       if (m) openState.set("det:draft:" + txt(m.id), true);
       if (who) { S.focusItem = who.id; id = who.id; }
       // Behind the fold unless it is something to do now, as renderContacts folds it.
+      // Someone on hold is in their own folded group under the list, never behind the
+      // "more people" fold: a link to them opens that group (issue #251).
       const p = peopleItems().find((x) => x.id === id);
       const front = contactsFront(peopleItems());
-      if (p && !front(p)) listState("contacts").open = true;
+      if (p && heldSaid(p)) listState("contacts").heldOpen = true;
+      else if (p && !front(p)) listState("contacts").open = true;
     }
   }
   function go(id, o) {

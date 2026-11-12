@@ -20,6 +20,10 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A link to someone on hold opens straight on their card.** It landed on Contacts with the On hold group still folded, so their card could not be seen; the group now opens on them.
+
 ## [4.16.0] - 2026-11-12
 
 ### Changed
