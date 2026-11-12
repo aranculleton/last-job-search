@@ -467,14 +467,18 @@ def read_age_s(dump: str, now: dt.datetime | None = None, late: bool = False) ->
     saved = _oldest_saved(dump) if dump and os.path.isdir(dump) else None
     if saved is None:
         return None
-    return max(0.0, _files_now(dump) - saved)
+    # Measured on Python's clock and on the clock that stamps files there, the smaller age
+    # that is not negative: a stamp still to come on one clock was not made by it. On Python's
+    # clock alone, a read a moment old was called 90 days old where the two differ (a clock
+    # moved for a test, or files stamped by another machine's clock).
+    import time
+    ages = [a for a in (time.time() - saved, _files_now(dump) - saved) if a >= 0]
+    return min(ages) if ages else 0.0
 
 
 def _files_now(dump: str) -> float:
-    """Now, on the clock that stamps files in `dump`: the records' times are that clock's, and
-    one read against Python's own was off by however far the two differ (a clock moved for a
-    test, or a computer whose files are stamped by another machine's clock), so a read just
-    made was called 90 days old. Python's clock where nothing can be written there."""
+    """Now, on the clock that stamps files written in `dump`; Python's clock where nothing can
+    be written there."""
     import tempfile
     import time
     try:
