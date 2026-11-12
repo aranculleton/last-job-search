@@ -101,6 +101,10 @@ ALLOWED_PERMISSIONS = {
     # itself; Auto's own check refused it on 2026-11-12. GitHub still attaches only what the
     # person granted (tests/test_a_scheduled_builder_can_attach_its_repos.py).
     "mcp__claude-code-remote__add_repo",
+    # A chat on the computer, and the chat that starts them, put away the app's own finished
+    # chats; Auto's own check refused it with nobody watching (#243). Only chats the person
+    # owns can be archived (tests/test_a_scheduled_builder_can_attach_its_repos.py).
+    "mcp__claude-code-remote__archive_session",
 
 }
 

@@ -68,6 +68,16 @@ or the app did what its docs say): one comment saying why in two lines and the l
 fix**: it stays open, with one comment saying why in two lines, never a second comment for the
 same reason in a later week.
 
+**One only the maintainer's hand can finish** (a permission rule in `.claude/settings.json`,
+which Auto never lets a chat change, or a check on their own computer): do all the rest of it
+on a branch of its own, with its test, pushed; then one comment naming the one step left in
+the words they act on: "Open the chat App builder (weekly fixes and release), switch it to
+Accept edits, and send: do the maintainer items." Label it `needs-maintainer`. When the
+maintainer sends "do the maintainer items" in this chat: for each such issue, make the step
+left on its branch, run its tests and the gate, merge it the usual way (no release unless
+step 5's exception applies), label it `fixed-unreleased`, take `needs-maintainer` off, and
+reply in one line; then they can switch the chat back to Auto.
+
 ## 4. Release it, only if everything is green
 
 1. Write `docs/NEXT_BUILDER.md` afresh and cut the version: `python3 tools/release.py cut
@@ -82,6 +92,10 @@ same reason in a later week.
 4. While the checks run: `python3 tools/rehearse_sync.py <the maintainer's copy>` and `python3
    tools/try_personal_tests.py <the maintainer's copy>`.
 5. Subscribe to its activity (subscribe_pr_activity) and wait: GitHub wakes you; never poll.
+   GitHub's wake can be lost (2026-11-12: both runs finished and nothing woke the builder for
+   a quarter of an hour), so also start one background wait, Bash `run_in_background` with
+   `sleep 2400`, and when it ends read the pull request's checks once: still running, one
+   more such wait (four at most); finished, carry on as below.
    Red: read only the failing lines, fix, and push with the gate again; a fix you cannot make
    is taken out of the batch, its issue left as step 3 says.
 6. **Merge only when Fast checks, Everywhere, Platforms and both rehearsals are green**, and
@@ -97,10 +111,15 @@ same reason in a later week.
 1. **One call**: rewrite the body of your report, the open issue labelled `builder-report`
    (issue_write, method update; none yet: create it, titled "Weekly builder report", with that
    label), to one line: "<today, YYYY-MM-DD>: released vX.Y.Z with N fixes." or "<today>:
-   nothing released: <why, in a few words>." The maintainer reads it on GitHub, with the
+   nothing released: <why, in a few words>.", with " N need you: see needs-maintainer."
+   added when any wait on the maintainer's hand. The maintainer reads it on GitHub, with the
    issues labelled `needs-maintainer` and the release notes; their brief never says it.
-2. **One call**: list the open issues again, as in step 1. One opened while you worked is taken
-   now, the same way, into a patch release of its own, and the report rewritten; this last
+2. **One call**: list the open issues again, as in step 1. One opened while you worked waits
+   for next week's run: never a second release in one run (the maintainer, 2026-11-12: no
+   follow-up patch releases; one release a week). The only exception, released at once in a
+   patch of its own: waiting a week would do real harm, meaning a person's private details
+   could leak, their data could be lost, or the app cannot be used or updated at all.
+   Wrong words, display faults and anything with a workaround wait for the week; this last
    look is made once.
 
 No review agent, no other chat started, and no reminder set for yourself. Your final reply is
