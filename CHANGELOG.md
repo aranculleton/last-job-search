@@ -42,6 +42,7 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **One morning brief chat in your list.** When the brief moved to a fresh chat, the old one stayed beside it for two more days under the same name, so two "morning brief" chats showed. The old one is now put away at the next tidy-up.
 - **The weekly builder can attach the maintainer's copy on its own.** A scheduled chat in Auto was refused `add_repo` by Auto's own check and stopped before doing anything; `.claude/settings.json` now allows it, the way the app's own chats already attach the app. GitHub still attaches only what the person has granted.
 - **Two chats logging the same sent message at once both say it is done, on Windows too.** On a Windows computer the second chat could wait half a minute and then say "Your messages are being written right now", and every message logged in the next two minutes waited as well; one chat could also be refused because the other was reading the message at that moment. A chat that read your page while the other was half way through logging it said "look again". Each now waits for the other and says "Already logged", and the message is logged once.
 - **A change made today says when.** "Last change: the message rewritten, Wed 11 Nov." on the day itself did not say which rewrite was newest; it now reads "today at 21:58", and an older one its day.
