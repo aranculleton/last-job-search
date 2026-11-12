@@ -20,8 +20,11 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+## [4.16.1] - 2026-11-12
+
 ### Changed
 
+- **Interview preps are easier to use in the call, Find people reaches the number you ask for, and computer jobs reach your page at once**
 - **Interview preps are easier to use during the call.** On a wide screen it uses the width, with each part's opening lines beside its likely questions and staying in view as you read them; the lines you say out loud are bigger and everything else quieter; your opening is shown once; the questions your opening may lead to sit in one line under it; a follow-up opens right under the question you tapped, three deep, with the way back; the quick lines at the foot say what each gives ("Give me a moment", "Could you repeat that?"); and the questions to ask them read as plain lines.
 - **Interview preps read the way you would really say them.** Answers no longer end on a line added to lead into the next question, short points are whole phrases in your own words instead of pieces cut from the answer, your introduction is written once as the answer to "Tell me about yourself", the questions to ask them are a short reason then the question with nothing pasted in brackets, and in a round with coding and a personal story the questions about the work sit in the coding part. A prep already made stays as it is, so nothing you are reading for an interview changes under you.
 - **The chats Claude makes are explained.** README.md, "The chats you'll see", says what each "Job search" chat in your list is for, which stay and which are put away by themselves, how many to expect, and the one time you open one: to let Claude use your computer, once. HELP.md and COMPUTER.md point to it.
