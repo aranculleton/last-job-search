@@ -97,6 +97,10 @@ ALLOWED_PERMISSIONS = {
     "ArtifactData",
     "ArtifactComments",
     "WebSearch",
+    # The weekly builder runs in Auto with nobody watching and attaches the maintainer's copy
+    # itself; Auto's own check refused it on 2026-11-12. GitHub still attaches only what the
+    # person granted (tests/test_a_scheduled_builder_can_attach_its_repos.py).
+    "mcp__claude-code-remote__add_repo",
 
 }
 
