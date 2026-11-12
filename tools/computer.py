@@ -10,8 +10,10 @@ there is, tried in this order (`route`), and the page says which in one line:
      own chat, "Job search: on your computer", kept open after an earlier job and watching a
      bell page of its own, is woken by republishing that bell (`ring computer chat`, the
      listener): no new chat, and nothing for the person to allow. The first chat on the
-     computer that finishes its job while there is none becomes it; one that does not answer
-     is stale, and the work goes on down this list;
+     computer that finishes its job while there is none becomes it; idle, it keeps one
+     background wait whose end wakes it to republish its bell, and after each job it rings
+     the starter, whose wake lands what it saved; one that does not answer is stale, and the
+     work goes on down this list;
   2. a cloud chat starts a chat on the computer itself (`computer session`), which asks the
      person to allow it in the starter's chat each time, so it is the way only until the
      computer has its own chat: the computer
@@ -430,7 +432,8 @@ def starter_prompt(url: str, copy: str) -> str:
         "Then, now and every time this chat is woken (the bell republished): read the page's "
         "work, beats and meta into a fresh folder $D (one ArtifactData query each, out_dir $D, "
         "limit 1000). python3 tools/computer.py starter-woke \"$D\" and send its batch (it "
-        "says this chat answered). python3 tools/computer.py waiting \"$D\": under `finished`, "
+        "says this chat answered); where it prints a `then`, do that too. python3 "
+        "tools/computer.py waiting \"$D\": under `finished`, "
         "archive_session each session (get_session on it first: archived already, it is done, "
         "never archived again), then python3 tools/computer.py archived \"$D\" --work "
         "<its id> --session <its session> and send the batch, whatever archive_session answered (not found or already "
@@ -733,6 +736,19 @@ LISTENER_QUIET_S = 2 * 3600
 LISTENER_KEEP_S = 60 * 60
 # What the page says of work the listener is rung for.
 LISTENER_TAKES = "Your computer's chat takes it."
+# Idle, it keeps its own watch alive: one background wait at a time, just under the two hours a
+# background command may run and under the hours a watch lasts with nothing happening
+# (page-watch). Its end wakes the chat (a background command re-invokes the chat when it
+# exits; a foreground sleep is refused), and that wake republishes its bell, kept_at being
+# over LISTENER_KEEP_S old by then. Without it, a listener on a computer with no scheduled task
+# (COMPUTER.md, section 6, step 5) lost its watch after a quiet afternoon.
+LISTENER_WAIT_S = 6600
+LISTENER_WAIT_TIMEOUT_MS = 7_000_000
+LISTENER_WAIT = ("Then start one background wait, unless one is already running (never a second "
+                 "one, and never a foreground sleep): a Bash call with run_in_background true, "
+                 f"timeout {LISTENER_WAIT_TIMEOUT_MS}, command sleep {LISTENER_WAIT_S}. When it "
+                 "ends it wakes this chat: python3 tools/computer.py listener-steps --chat "
+                 "{chat}, and do what it prints.")
 
 
 def listener(db: dict) -> dict:
@@ -854,9 +870,11 @@ def listener_woke(db: dict, chat: str, now: dt.datetime, out_dir: str, path: str
             write_bell(path, now, "listener")
         said = (f"keep: send the batch first, then Artifact publish with file_path "
                 f"\"{bell_path}\" and url {rec.get('bell')} (your own page: no read first), so "
-                "its watch starts again; then end the turn, saying nothing.")
+                "its watch starts again. " + LISTENER_WAIT.format(chat=chat) +
+                " End the turn, saying nothing.")
     else:
-        said = "rest: nothing waits. End the turn, saying nothing."
+        said = ("rest: nothing waits. " + LISTENER_WAIT.format(chat=chat) +
+                " End the turn, saying nothing.")
     return {"batches": _starter_set(db, fields, out_dir, dump_dir, "listener-woke",
                                     LISTENER_DOC), "next": said}
 
@@ -865,7 +883,8 @@ def listener_steps(url: str, chat: str = "") -> list[str]:
     """What the listener does every time it is woken, in the shape of the starter's wake."""
     me = chat or "<your id>"
     return [
-        "Every time this chat is woken (its bell republished, or anything else), say nothing and:",
+        "Every time this chat is woken (its bell republished, its background wait ending, or "
+        "anything else), say nothing and:",
         "1. Load ArtifactData if it is not loaded (ToolSearch, select:ArtifactData). Read the "
         f"page's work, beats and meta into a fresh folder in your scratchpad, $D: ArtifactData "
         f"query, url {url}, once for each collection, out_dir $D, limit 1000.",
@@ -886,12 +905,13 @@ def listener_become(db: dict, chat: str, path: str, now: dt.datetime) -> str:
     before)."""
     import app_listen
     if is_listener(db, chat):
-        return (f"stay: this chat is your computer's own chat and stays open: skip the rest of "
-                f"step 8 and do step 9; then every time it is woken, python3 tools/computer.py "
-                f"listener-steps --chat {chat}, and do what it prints. Never archive it.")
+        return ("stay: this chat is your computer's own chat and stays open. " +
+                land_steps(db, path, now) + "Skip the rest of step 8 and do step 9. "
+                + LISTENER_WAIT.format(chat=chat) + " Never archive it.")
     if not chat or listener_live(db, now) or app_listen.chat_kind() == "cloud":
         return ""
     write_bell(path, now, "listener")
+    land = land_steps(db, path, now)
     return (
         "stay: this chat becomes your computer's own chat, kept open, so the next job needs no "
         "new chat and nobody's OK. Skip the ring below: 1. publish \"" + path + "\" with the "
@@ -900,11 +920,55 @@ def listener_become(db: dict, chat: str, path: str, now: dt.datetime) -> str:
         "\"<your scratchpad>/bell.html\" and do what it prints, as step 8 says. 2. python3 "
         "tools/computer.py listener-ready \"$D\" --chat " + chat + " --bell <the bell's url> "
         "--computer \"" + this_computer() + "\", and send its batch (refused: another chat "
-        "became it first; ring as in 1). 3. Rename this chat to \"" + LISTENER_TITLE + "\" "
-        "where you can, asked in plain words (claude_surfaces: computer-chat-archive); where "
-        "you cannot, leave it. 4. Do step 9. From then on, every time this chat is woken: "
-        "python3 tools/computer.py listener-steps --chat " + chat + ", and do what it prints. "
-        "Never archive it.")
+        "became it first; ring as in 1). 3. " + (land + "(Only now: kept as the computer's "
+        "own chat, this one is never put away.) " if land else "") + "4. Rename this chat to \"" +
+        LISTENER_TITLE + "\" where you can, asked in plain words (claude_surfaces: "
+        "computer-chat-archive); where you cannot, leave it. 5. Do step 9. " +
+        LISTENER_WAIT.format(chat=chat) + " From then "
+        "on, every time this chat is woken: python3 tools/computer.py listener-steps --chat " +
+        chat + ", and do what it prints. Never archive it.")
+
+
+def land_steps(db: dict, path: str, now: dt.datetime) -> str:
+    """How the computer's own chat brings its saved work to master after a job: its save left
+    the computer at step 7 (land.py --wait-saved), but no chat there may merge it (Claude's own
+    check refused the merge: land.on_computer), and the starter lands it at its wake
+    (starter-woke prints the landing while the listener has finished work since its last
+    wake). Before the listener, each chat's ring of the starter at its end did this; kept, the
+    people a job found waited on GitHub for the next save in the cloud. "" with no starter."""
+    bell = str(starter(db).get("bell") or "")
+    if not bell:
+        return ""
+    there = os.path.join(os.path.dirname(os.path.abspath(path)), "starter-bell.html")
+    write_bell(there, now, "starter")
+    return (f"Wake the chat that starts chats on this computer, so the work this chat "
+            f"saved reaches master: Artifact read with url {bell}, then Artifact publish with "
+            f"file_path \"{there}\" and url {bell} (never a new page), then ArtifactComments "
+            f"watch with url {bell} and on: false, then python3 tools/computer.py rung \"$D\" "
+            "and send its batch; where any of it asks for an approval or is refused, leave it "
+            "(the next save in the cloud brings the work in), and say nothing about it. ")
+
+
+def listener_saved(db: dict, since: dt.datetime | None) -> list[str]:
+    """The work the computer's own chat finished after `since` (all of it where None): saved
+    on the computer and waiting on GitHub for a landing in the cloud (land_steps)."""
+    import page_db
+    me = str(listener(db).get("chat") or "")
+    out = []
+    for wid, doc in sorted((db.get("work") or {}).items()):
+        d = (doc or {}).get("data") or {}
+        if not me or str(d.get("claimed_by") or "") != me or \
+                str(d.get("status") or "") not in page_db.FINISHED:
+            continue
+        done = _time(d.get("finished_at")) or _time(d.get("stage_at"))
+        if since is None or (done and done > since):
+            out.append(wid)
+    return out
+
+
+STARTER_LANDS = ("python3 tools/land.py in the background (run_in_background) and the GitHub "
+                 "calls it prints: it brings the work the computer's own chat saved to master, "
+                 "which no chat there may merge. Say nothing about it.")
 
 
 # ------------------------------------------------------------------ handing a step back
@@ -4036,6 +4100,7 @@ def main(argv=None) -> int:
         return 0
     if a.cmd in ("starter-made", "starter-ready", "rung", "starter-woke", "starter-seen",
                  "starter-waits"):
+        said: dict = {}
         if a.cmd == "starter-waits":
             batches = starter_waits(db, a.on, now, out, dump_dir=a.dump)
         elif a.cmd == "starter-made":
@@ -4043,12 +4108,15 @@ def main(argv=None) -> int:
         elif a.cmd == "starter-ready":
             batches = starter_ready(db, a.chat, a.bell, now, out, dump_dir=a.dump)
         elif a.cmd == "starter-woke":
+            # Work the computer's own chat saved since the last wake: landed now (land_steps).
+            if listener_saved(db, _time(starter(db).get("woke_at"))):
+                said = {"then": STARTER_LANDS}
             batches = starter_woke(db, now, out, dump_dir=a.dump)
         elif a.cmd == "starter-seen":
             batches = starter_seen(db, a.status, now, out, dump_dir=a.dump)
         else:
             batches = rung(db, now, out, dump_dir=a.dump)
-        print(json.dumps({"batches": batches}))
+        print(json.dumps(dict({"batches": batches}, **said)))
         return 0
     if a.cmd == "beat":
         print(json.dumps({"batches": beat(db, this_computer(a.name), now, out, dump_dir=a.dump,

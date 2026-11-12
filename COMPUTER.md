@@ -215,9 +215,12 @@ a chat already on the computer; the computer's own chat, "Job search: on your co
 chat`): the first chat on the computer that finishes its job with no live listener publishes a
 bell of its own and stays open as it (`ring --chat` prints `stay`, then `listener-ready`; its
 record is `meta/computer_listener`), each wake runs `listener-steps` (`listener-woke`: take the
-work as any chat there does, republish its own bell at most hourly, or rest), the starter and
-`archivable` never put it away, and the hourly scheduled task, where there is one, rings it
-once after two quiet hours (`keep-alive`); a ring unanswered for five minutes, or two in a row,
+work as any chat there does, republish its own bell at most hourly, or rest), idle it keeps
+one background wait of just under two hours whose end wakes it to republish its bell, so its
+watch never lapses, after each job it rings the starter, whose wake lands what it saved (no
+chat on the computer may merge: `land.on_computer`; `starter-woke` prints the landing), the
+starter and `archivable` never put it away, and the hourly scheduled task, where there is one,
+also rings it once after two quiet hours (`keep-alive`); a ring unanswered for five minutes, or two in a row,
 marks it stale and the work goes on down this list, so a chat started from the cloud asks the
 person's Allow only until the computer has its own chat (issue #250); a chat started there from
 the cloud (`create_session` on the

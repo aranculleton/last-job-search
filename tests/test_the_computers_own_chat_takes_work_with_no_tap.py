@@ -259,3 +259,67 @@ def test_the_scheduled_task_rings_a_quiet_listener_once_and_never_a_fresh_one(
     # The task's steps run it whenever nothing waits.
     steps = "\n".join(computer.task_steps(URL))
     assert "computer.py keep-alive" in steps and computer.TASK_EVERY_MIN == 60
+
+
+# ------------------------------------------------------------------ its own watch, its own save
+
+
+def test_an_idle_computer_chat_keeps_its_watch_with_one_background_wait(tmp_path, monkeypatch):
+    """With no scheduled task on the computer (COMPUTER.md says none is made), nothing rang an
+    idle listener, and its watch could lapse after a quiet afternoon. Each way it goes idle ends
+    with one background wait, whose end wakes it to republish its bell."""
+    _as(monkeypatch, "computer", tmp_path)
+    me = LISTENER["chat"]
+    wait = ("run_in_background true", f"timeout {computer.LISTENER_WAIT_TIMEOUT_MS}",
+            f"sleep {computer.LISTENER_WAIT_S}", "unless one is already running",
+            "never a foreground sleep", "When it ends it wakes this chat")
+    assert computer.LISTENER_WAIT_S < 2 * 3600 and computer.LISTENER_WAIT_S > \
+        computer.LISTENER_KEEP_S and computer.LISTENER_WAIT_TIMEOUT_MS > \
+        computer.LISTENER_WAIT_S * 1000
+    idle = _with(_db(), LISTENER, kept_at=app_model.stamp(T - timedelta(hours=2)))
+    keep = computer.listener_woke(idle, me, T, str(tmp_path / "a"))["next"]
+    rest = computer.listener_woke(_with(_db(), LISTENER), me, T, str(tmp_path / "b"))["next"]
+    stay = computer.listener_become(_with(_db(), LISTENER), me, str(tmp_path / "s.html"), T)
+    become = computer.listener_become(_with(_db()), "session_macA", str(tmp_path / "n.html"), T)
+    for said, who in ((keep, me), (rest, me), (stay, me), (become, "session_macA")):
+        assert all(w in said for w in wait) and f"listener-steps --chat {who}" in said, said
+    # Mid-job it waits for nothing: its step 8 starts the wait once the job is over.
+    take = computer.listener_woke(_with(_db(WORK), LISTENER), me, T, str(tmp_path / "c"))["next"]
+    assert take.startswith("take:") and "sleep" not in take
+    # Woken by the wait's end, its next wake republishes the bell: an hour has gone by.
+    after = T + timedelta(seconds=computer.LISTENER_WAIT_S)
+    assert computer.listener_woke(_with(_db(), LISTENER, kept_at=NOW), me, after,
+                                  str(tmp_path / "d"))["next"].startswith("keep:")
+    assert "background wait ending" in computer.listener_steps(URL, me)[0]
+
+
+def test_the_work_the_computers_own_chat_saved_is_brought_to_master_at_once(
+        tmp_path, monkeypatch):
+    """A chat on the computer saves to GitHub but may not merge there (land.on_computer): the
+    starter, woken by each chat's ring at its end, brought the work to master. The listener is
+    never put away, so it rings the starter after each job, and the starter's wake lands what
+    it saved; with nothing saved since, the starter's wake lands nothing."""
+    _as(monkeypatch, "computer", tmp_path)
+    me = LISTENER["chat"]
+    stay = computer.listener_become(_with(_db(), LISTENER), me, str(tmp_path / "s.html"), T)
+    assert f"Artifact read with url {BELL}" in stay and "computer.py rung" in stay
+    assert stay.index("rung") < stay.index("do step 9") < stay.index("sleep")
+    assert "<title>" + computer.BELL_TITLE in (tmp_path / "starter-bell.html").read_text(
+        encoding="utf-8")
+    # Becoming it, the ring comes only once it is recorded, so the starter never puts it away.
+    become = computer.listener_become(_with(_db()), "session_macA", str(tmp_path / "n.html"), T)
+    assert become.index("listener-ready") < become.index(f"url {BELL}")
+    # Its job is in the copy's save already (step 7 of every job's prompt).
+    prompt = computer.session_prompt(WID, "People", URL, "their job search")
+    assert prompt.index("land.py --wait-saved") < prompt.index("8. Wake")
+    # The starter's wake lands what it saved since the last wake, and nothing otherwise.
+    done = dict(WORK[1], status="done", claimed_by=me, finished_at=NOW)
+    db = _with(_db((WID, done)), LISTENER)
+    db["meta"]["computer_starter"]["data"]["woke_at"] = app_model.stamp(T - timedelta(hours=1))
+    assert computer.listener_saved(db, T - timedelta(hours=1)) == [WID]
+    got = json.loads(_run("starter-woke", _dump(db, tmp_path / "d1"), "--now", NOW))
+    assert "land.py" in got.get("then", "") and got["batches"]
+    db["meta"]["computer_starter"]["data"]["woke_at"] = app_model.stamp(T + timedelta(minutes=1))
+    got = json.loads(_run("starter-woke", _dump(db, tmp_path / "d2"), "--now", NOW))
+    assert "then" not in got
+    assert "where it prints a `then`, do that too" in computer.starter_prompt(URL, COPY)
