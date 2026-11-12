@@ -467,8 +467,25 @@ def read_age_s(dump: str, now: dt.datetime | None = None, late: bool = False) ->
     saved = _oldest_saved(dump) if dump and os.path.isdir(dump) else None
     if saved is None:
         return None
+    return max(0.0, _files_now(dump) - saved)
+
+
+def _files_now(dump: str) -> float:
+    """Now, on the clock that stamps files in `dump`: the records' times are that clock's, and
+    one read against Python's own was off by however far the two differ (a clock moved for a
+    test, or a computer whose files are stamped by another machine's clock), so a read just
+    made was called 90 days old. Python's clock where nothing can be written there."""
+    import tempfile
     import time
-    return max(0.0, time.time() - saved)
+    try:
+        fd, probe = tempfile.mkstemp(prefix=".clock-", dir=dump)
+        try:
+            return os.fstat(fd).st_mtime
+        finally:
+            os.close(fd)
+            os.remove(probe)
+    except OSError:
+        return time.time()
 
 
 def stale_said(dump: str, now: dt.datetime | None = None, late: bool = False) -> str:

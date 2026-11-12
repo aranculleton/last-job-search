@@ -31,6 +31,7 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **A read of your page just made is never called months old.** Where the computer's clock and the times on its files differed, a chat judged a fresh read of your page's work as stale and would not queue or report anything from it; it now measures both on the same clock.
 - **The morning brief gives an interview's time in your own time.** An interview booked in another time zone was given at its own clock time with no zone named, hours off for you. It now reads, for example, "tomorrow at 01:00 (19:00 Toronto time)". What an employer sees keeps their own time.
 - **A link to someone on hold opens straight on their card.** It landed on Contacts with the On hold group still folded, so their card could not be seen; the group now opens on them.
 - **A connection request nobody accepted in three weeks says to withdraw it.** It stopped counting against its employer then, but nothing told you to withdraw it: its card still said it had not been accepted yet, To do had nothing, and its date was the follow-up day for after they accept, so two requests sent one day showed two days. Now its card and To do say "Withdraw your request to Wren: it has waited 3 weeks", dated by that day (issue 261).
