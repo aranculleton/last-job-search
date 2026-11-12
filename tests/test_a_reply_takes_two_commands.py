@@ -371,6 +371,12 @@ def _page_work_fields() -> set:
 
 def test_ask_queues_work_as_the_page_does_and_next_takes_it(search):
     app = os.path.join(ROOT, "tools", "app.py")
+    # Never read, the folder says nothing of what is going: the page's work is read first, here
+    # into the same empty folder (a page with no work saves nothing), and then it is asked
+    # (issue #255, tests/test_the_page_helper_judges_work_from_a_read_made_now.py).
+    code, out = run(search, app, "ask", search.dump, "--kind", "reply", "--title",
+                    "Reply to Juno", "--args", json.dumps({"contact": LARKSPUR}), "--now", NOW)
+    assert code == 3 and "nothing is queued" in out and f'out_dir "{search.dump}"' in out, out
     code, out = run(search, app, "ask", search.dump, "--kind", "reply", "--title",
                     "Reply to Juno", "--args", json.dumps({"contact": LARKSPUR}), "--now", NOW)
     assert code == 0, out

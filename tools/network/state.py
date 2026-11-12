@@ -2470,6 +2470,15 @@ def owed(contacts, threads, today, index=None, live=None) -> list[dict]:
                         and base["next_action_due"] in _app_dates(msgs, action)):
                     _action_row()
                 continue
+            # Past it, the request is dated by its withdraw day. The app's own line on the row
+            # ("Once they accept: ...") and its day are for after they accept: carried here,
+            # they dated the request by that follow-up day, so two sent on one day showed two
+            # days, by whichever rule each row was written under (issue 261).
+            # A date of the person's own on it stays.
+            if _APP_ACTION.fullmatch(" ".join(action.split())) and (
+                    not base["next_action_due"]
+                    or base["next_action_due"] in _app_dates(msgs, action)):
+                base["next_action"] = base["next_action_due"] = ""
             items.append(dict(base, kind="request_pending", channel="connection",
                               since=pending.isoformat(),
                               business_days=business_days_between(pending, today),
@@ -4322,6 +4331,7 @@ def close(contacts, contact_id, today, reason, row=None) -> dict:
             raise ValueError(f"no contact {cid!r} in the contact book")
         contact = {k: "" for k in schema.CONTACT_COLUMNS}
         contact.update({k: v for k, v in row.items() if k in schema.CONTACT_COLUMNS})
+        contact["company"] = employer_display(contact.get("company"), contacts)
         contact["contact_id"] = cid
         contact["company_key"] = contact.get("company_key") or company_key(contact.get("company"))
         contacts.append(contact)
@@ -4337,6 +4347,40 @@ def close(contacts, contact_id, today, reason, row=None) -> dict:
 
 # What `close` writes: a run's own ruling after a read, never the person's word.
 RUN_CLOSE = re.compile(r"\bskipped after a read (\d{4}-\d{2}-\d{2}): ?([^;]*)")
+# A close for a list rule, which a later run checks again by its own rules: the employer's
+# limit of people waiting on a reply ("two already waiting there"). Anything else a read
+# ruled is the read's own judgement of the person (close_holds).
+LIST_RULE_CLOSE = re.compile(r"\b(?:already waiting|waiting (?:there|on a reply|at)|people "
+                             r"waiting|a company|per employer|limit)\b", re.I)
+_ELLIPSIS = ("...", "\u2026")
+
+
+def _headline(s) -> str:
+    return " ".join(re.sub(r"[^\w]+", " ", str(s or "").lower()).split())
+
+
+def close_holds(contact, title: str = "", company: str = "", msgs=()) -> str:
+    """Why a run's close after a read still holds for a search result showing them as `title`
+    at `company`, or "": a read's own ruling of the person holds until something new is known
+    about them, a headline or an employer other than the one on their row. A later check of the
+    same results reopened one a read had ruled out that morning (#260, 2026-11-12). A close for
+    a list rule (LIST_RULE_CLOSE) does not hold: today's rules decide."""
+    c = contact or {}
+    if not closed_by_a_run(c, msgs):
+        return ""
+    m = RUN_CLOSE.search(str(c.get("outcome") or ""))
+    day, why = m.group(1), m.group(2).strip().rstrip(".")
+    if LIST_RULE_CLOSE.search(why):
+        return ""
+    was, now = str(c.get("title") or "").strip(), str(title or "").strip()
+    a, b = _headline(was), _headline(now)
+    cut = was.endswith(_ELLIPSIS) or now.endswith(_ELLIPSIS)
+    if a and b and a != b and not (cut and (a.startswith(b) or b.startswith(a))):
+        return ""
+    if company and c.get("company") and company_key(company) != company_key(c.get("company")):
+        return ""
+    return (f"a read on {day} ruled them out" + (f" ({why})" if why else "")
+            + ", and nothing new is known about them since")
 
 
 def closed_by_a_run(contact, msgs=()) -> str:
@@ -4360,11 +4404,93 @@ def closed_by_a_run(contact, msgs=()) -> str:
                                                             if m.group(2).strip() else "")
 
 
+# The employer a row shows is its proper name, never the lower-case key the employer lists are
+# written in: the people a day's runs added read "<name> at <employer in lower case>" beside
+# older ones with the proper name, because `candidates.py employers` handed on the profile's
+# lists (employers.py TIER_1 and the rest), which hold keys (the maintainer's page,
+# 2026-11-12). The page shows the `company` column as it is.
+_SMALL_WORDS = {"of", "and", "the", "for", "in", "on", "at", "de", "du", "la", "le", "y", "&"}
+
+
+def _written_properly(name: str) -> str:
+    """A lower-case employer name written as a name: each word with its capital, a short
+    one-word name in capitals ("qxb" is "QXB"), the small joining words left small."""
+    words = str(name or "").split()
+    if len(words) == 1 and words[0].isalpha() and len(words[0]) <= 3:
+        return words[0].upper()
+    return " ".join(w if (i and w in _SMALL_WORDS) else w[:1].upper() + w[1:]
+                    for i, w in enumerate(words))
+
+
+def _proper(name) -> bool:
+    s = str(name or "")
+    return any(ch.isupper() for ch in s)
+
+
+def _spellings(key: str, contacts=None, also=()) -> list:
+    """Every spelling of the employer `key` the person's own records hold with a capital in
+    it, most common first: the names given (`also`), the contact book, the tracker, the
+    employers judged against their bar, and the employers whose company number is kept."""
+    seen: Counter = Counter()
+    first = [str(a).strip() for a in also or () if _proper(a) and company_key(a) == key]
+    for c in contacts or ():
+        n = str(c.get("company") or "").strip()
+        if _proper(n) and company_key(n) == key:
+            seen[n] += 1
+    try:
+        for r in load_tracker() if os.path.exists(TRACKER_CSV) else ():
+            n = str(r.get("company") or "").strip()
+            if _proper(n) and company_key(n) == key:
+                seen[n] += 1
+    except Exception:  # noqa: BLE001  no tracker to read: the rest decide
+        pass
+    try:
+        import bar
+        for r in bar.judged().values():
+            n = str((r or {}).get("name") or "").strip()
+            if _proper(n) and company_key(n) == key:
+                seen[n] += 1
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        import reading
+        n = str(((reading._filters().get("employers") or {}).get(key) or {}).get("name") or "")
+        if _proper(n) and company_key(n) == key:
+            seen[n.strip()] += 1
+    except Exception:  # noqa: BLE001
+        pass
+    return list(dict.fromkeys(first + [n for n, _c in seen.most_common()]))
+
+
+def employer_display(company, contacts=None, also=()) -> str:
+    """The employer's name as a row shows it: `company` as written where it has a capital (the
+    person's own spelling); else the proper name for its key, first as LinkedIn showed it on
+    the person's card (`also`), then the spelling the person's records use most
+    (`_spellings`), else the name written properly (`_written_properly`)."""
+    name = " ".join(str(company or "").split())
+    if not name or _proper(name) or not any(ch.isalpha() for ch in name):
+        return name
+    got = _spellings(company_key(name), contacts, also)
+    return got[0] if got else _written_properly(name)
+
+
+def lower_employers(contacts) -> list:
+    """[(row, the proper name)] for each row whose employer is written in lower case."""
+    out = []
+    for c in contacts or ():
+        n = " ".join(str(c.get("company") or "").split())
+        if n and any(ch.isalpha() for ch in n) and not _proper(n):
+            out.append((c, employer_display(n, [x for x in contacts if x is not c])))
+    return out
+
+
 def add_row(contacts, contact_id, fields) -> dict:
     """Append one contact row in the schema's shape, at `not_contacted` unless `fields`
-    says otherwise, and return it. The caller saves the book."""
+    says otherwise, and return it. The caller saves the book. The employer is written by its
+    proper name (employer_display), never a lower-case key."""
     row = {k: "" for k in schema.CONTACT_COLUMNS}
     row.update({k: str(v or "") for k, v in (fields or {}).items() if k in schema.CONTACT_COLUMNS})
+    row["company"] = employer_display(row.get("company"), contacts)
     row["contact_id"] = str(contact_id or "").strip()
     row["company_key"] = row.get("company_key") or company_key(row.get("company"))
     row["status"] = row.get("status") or "not_contacted"
@@ -6438,6 +6564,20 @@ def main(argv=None) -> int:
         return _cli_gone_cold(argv[1:])
     if argv[:1] == ["recount"]:
         return _cli_recount(argv[1:])
+    if argv[:1] == ["employer-names"]:
+        # The one-off repair (Profile upgrade: employer-names): each row whose employer was
+        # written as its lower-case key gets the proper name back.
+        contacts = load_contacts()
+        fixed = lower_employers(contacts)
+        if "--apply" in argv and fixed:
+            for row, proper in fixed:
+                row["company"] = proper
+            save_contacts(contacts)
+        print(f"employer-names: {len(fixed)} contact(s) with the employer in lower case "
+              + ("given its proper name" if "--apply" in argv else "to put right; --apply"))
+        for row, proper in fixed[:40]:
+            print(f"  {row.get('contact_id')}: {proper}")
+        return 0
     if argv[:1] == ["linkedin-limits"]:
         return _cli_linkedin_limits(argv[1:])
     if argv[:1] == ["rekey"]:

@@ -259,6 +259,33 @@ def joins_by_hold() -> bool:
         return since is None or int(build_versions.recorded().get("page") or 1) >= since
     except Exception:  # noqa: BLE001  no profile: nothing published reads them
         return True
+
+
+# The page version from which the page's code puts each item's links to the rest at its
+# employer back on the item from the records kept apart (app_lists.links_docs; issue 254),
+# found by its own words in build_versions. A page published before it shows no links on an
+# item read from the database without them, so until then a page update writes them on the
+# items, as before.
+LINKS_APART = "each item's links to the rest at its employer are kept apart"
+
+
+def reads_links_apart(held: int = 0) -> bool:
+    """Does the published page's code put the links kept apart back on the items? True where no
+    page is published, or its version is that one or later: as this copy recorded it, or as the
+    page's own record says (`held`, meta/now `page`), where another chat published it since."""
+    try:
+        import app_setup
+        import build_versions
+        if not app_setup.page_record().get("url"):
+            return True
+        since = next((v[0] for v in build_versions.METHODS["page"]["versions"]
+                      if LINKS_APART in v[3]), None)
+        have = max(int(build_versions.recorded().get("page") or 1), int(held or 0))
+        return since is not None and have >= since
+    except Exception:  # noqa: BLE001  no profile: nothing published reads them
+        return True
+
+
 BATCH_MAX = 160 * 1024        # what one publish sends, so one agent reads it at a time
 PAGE_MAX = 64 * 1024          # the small page, whatever the size of the search
 _JS_HEAD = re.compile(r"^  // -{10,}\s*(.*)$")

@@ -157,8 +157,13 @@ def test_requests_nobody_accepted_are_one_row_to_withdraw_never_a_nudge(search):
     _pending(search)
     m = search.model()
     row = next(d for d in m["due"] if d["kind"] == "withdraw")
-    assert row["who"] == [{"contact": WREN, "first_name": "Wren", "employer": "Fernhill Freight"}]
-    assert row["done"] == {"action": "requests.withdrawn", "label": "I withdrew them"}
+    # Each request one line of what to do, dated by its withdraw day (issue 261).
+    [who] = row["who"]
+    assert {k: who[k] for k in ("contact", "first_name", "employer")} == {
+        "contact": WREN, "first_name": "Wren", "employer": "Fernhill Freight"}
+    assert who["said"].startswith("Withdraw your request to Wren: it has waited "), who
+    assert row["title"] == who["said"] and row["due"] == who["on"], row
+    assert row["done"] == {"action": "requests.withdrawn", "label": "I withdrew it"}
     assert not any(d["kind"] == "nudge" and d.get("item") == WREN for d in m["due"])
     claude_surfaces.entry(row["steps"])                       # its steps are in the registry
     before = len(_threads(search))

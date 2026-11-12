@@ -256,6 +256,12 @@ def test_work_begun_in_a_chat_is_on_the_work_list_as_that_chats_own(search):
     one asked on the page: claimed by that chat, running at its first stage, pinned and
     finished there, and never started again by another chat when it goes quiet."""
     import datetime as dt
+    # Never read, the folder says nothing of what is going: the page's work is read first, here
+    # into the same empty folder, then asked again (issue #255).
+    first = search.run("ask", search.dump, "--kind", "search", "--title",
+                       "Analyst roles near Leeds", "--here", "--chat", "session_ASKED",
+                       "--now", NOW, ok=(3,))
+    assert "nothing is queued" in first and f'out_dir "{search.dump}"' in first, first
     got = json.loads(search.run("ask", search.dump, "--kind", "search", "--title",
                                 "Analyst roles near Leeds", "--here", "--chat", "session_ASKED",
                                 "--now", NOW))

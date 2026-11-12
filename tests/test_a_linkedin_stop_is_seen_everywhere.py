@@ -205,7 +205,10 @@ def test_a_chat_the_app_started_on_the_computer_never_waits_on_its_own_chat(monk
     monkeypatch.setattr(app_setup, "current_claim", lambda: {"work": "network~read~1"})
     steps = "\n".join(reading.signin_steps())
     assert "--signin linkedin" in steps and "--work network~read~1" in steps
-    assert "computer.py signin-wait" in steps and "--url <that address>" in steps
+    # Each look after a wait opens the feed afresh (computer.py signin-seen), never an address
+    # read before the wait (decided 2026-11-12, the maintainer's Mac).
+    assert "computer.py signin-wait" in steps and "signin-seen" in steps
+    assert "--url <that address>" not in steps
     assert "say done" not in steps and "ask once more" not in steps
     said = reading._job_signin_said("network~read~1", "the session expired")
     assert "nobody reads it" in said and "--signin linkedin" in said

@@ -778,3 +778,7 @@ Nell Quell                  # invented contact, tests/test_a_request_logged_as_a
 Tamsworth Bank              # invented employer, the same test
 Ada Vane                    # invented contact, the same test
 Hollins Mutual              # invented employer, the same test
+Jory Pellam                 # invented contact, tests/test_a_people_search_result_is_its_own_person.py
+Kit Ames                    # invented contact, the same test
+Tova Fenn                   # invented contact, the same test
+Ivo Marr                    # invented contact, the same test

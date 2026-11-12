@@ -43,7 +43,9 @@
                               [--chat ID]                        a finished item, in one batch
     python3 tools/app.py ask <dump dir> --kind K --title "<words>" [--args '<json>']
                              [--here]                            work queued from a chat message,
-                                                                 or (--here) begun in this chat
+                                                                 or (--here) begun in this chat;
+                                                                 judged from a read made now, and
+                                                                 never queued twice for the computer
 
 `<dump dir>` is where ArtifactData's `out_dir` saved the page's database: `actions/`,
 `receipts/`, `work/`, `locks/`, `chats/`, one JSON file a document. What a chat sends back
@@ -136,18 +138,36 @@ def cmd_model(a) -> int:
     return 0
 
 
-def _published() -> dict:
+def _published(db: dict | None = None) -> dict:
     """The page version last published and when, for meta/now: an open page whose own code is
     older reloads itself to it (templates/app/app.js, `newerPage`). Without it nothing ever
-    told an open page a newer one was out (2026-11-02)."""
+    told an open page a newer one was out (2026-11-02). Never lower than the page's own record
+    says (`page_held`): a copy that had not taken the last publish's record yet wrote the
+    version before it, and the next chat took the page for one a version behind (issue 254)."""
     try:
         import app_setup
         import build_versions
-        rec = app_setup.page_record()
-        return {"page": int(build_versions.recorded().get("page") or 0),
-                "published_at": str(rec.get("published_at") or "")}
+        mine = int(build_versions.recorded().get("page") or 0)
+        if page_held(db) > mine:
+            return {"page": page_held(db),
+                    "published_at": str(_meta_now(db).get("published_at") or "")}
+        return {"page": mine,
+                "published_at": str(app_setup.page_record().get("published_at") or "")}
     except Exception:  # noqa: BLE001  no page record yet
         return {}
+
+
+def _meta_now(db: dict | None) -> dict:
+    got = (((db or {}).get("meta") or {}).get("current") or {}).get("data")
+    return got if isinstance(got, dict) else {}
+
+
+def page_held(db: dict | None) -> int:
+    """The page version the page's own record says was last published (meta/now `page`), or 0."""
+    try:
+        return max(0, int(_meta_now(db).get("page") or 0))
+    except (TypeError, ValueError):
+        return 0
 
 
 def fix_work(messages: list, have: dict, now) -> list:
@@ -614,9 +634,15 @@ def cmd_view(a) -> int:
     # fresh load for the minutes between an update and its republish (the review of
     # 2026-11-11).
     by_hold = app_page.joins_by_hold()
+    # Each item's links to the rest at its employer are kept apart from the items, a record an
+    # employer or so (app_lists.links_docs), once the page's code puts them back: on the items,
+    # one new note at an employer rewrote every colleague's record, most of a long section
+    # (issue 254).
+    stored, links = app_lists.apart(model) if app_page.reads_links_apart(page_held(db)) \
+        else (model, {})
     list_docs = app_lists.docs(full, model["made_at"], model["rev"], by_hold=by_hold)
     as_they_are = app_lists.kept_as_they_are(list_docs, views, by_hold=by_hold)
-    together = people_together(model, views, list_docs, as_they_are, why_newer, me,
+    together = people_together(stored, views, list_docs, as_they_are, why_newer, me,
                                getattr(a, "work", "") or "")
     for doc_id, doc in list_docs:
         old = views.get(doc_id)
@@ -630,17 +656,31 @@ def cmd_view(a) -> int:
     for doc_id in app_lists.stale(full, db.get("view") or {}):
         if db["view"][doc_id]["version"] is not None:      # read under 4.2's name: kept
             w.add("delete", "view", doc_id, if_version=db["view"][doc_id]["version"])
+    link_docs = app_lists.links_docs(model, links, model["made_at"], app_lists.links_held(views))
+    for doc_id, doc in link_docs:
+        old = views.get(doc_id)
+        if app_lists.links_unchanged((old or {}).get("data"), doc):
+            continue
+        if newer(old):
+            kept.append(doc_id)
+            continue
+        w.add("set", "view", doc_id, dict(doc, **stamp),
+              if_version=old["version"] if old else None)
+    for doc_id in sorted(set(d for d in views if d.startswith(app_lists.LINKS_PREFIX))
+                         - {d for d, _ in link_docs}):
+        if views[doc_id]["version"] is not None:
+            w.add("delete", "view", doc_id, if_version=views[doc_id]["version"])
     # The model builds `listener` and `schedule` itself now; each document is written once.
     # A section too big for one document (a long search's jobs, a big contact book) goes as
     # parts the page joins again (page_db.split), never cut short.
     written = []
     for name in dict.fromkeys(tuple(app_model.SECTIONS) + ("people_count", "coming_up", "lists",
                                                            "listener", "schedule")):
-        if name not in model:
+        if name not in stored:
             continue
         docs = page_db.split(name, {"rev": model["rev"], "made_at": model["made_at"],
-                                    "data": model[name], **stamp}, by_hold=by_hold)
-        if views and page_db.joined(views, name) == json.loads(json.dumps(model[name],
+                                    "data": stored[name], **stamp}, by_hold=by_hold)
+        if views and page_db.joined(views, name) == json.loads(json.dumps(stored[name],
                                                                            ensure_ascii=False)):
             # Unchanged: the section's documents stay as they are, parts and all.
             head = (views.get(name) or {}).get("data") or {}
@@ -682,13 +722,15 @@ def cmd_view(a) -> int:
     # document whose contacts changed is written: one per contact meant hundreds of writes
     # on every refresh, and reading them back hundreds of lines (2026-10-29).
     have = (db.get("addr") or {}) if db else {}
-    for doc_id, doc in sorted(page_db.addr_docs(reach).items()):
+    addr = page_db.addr_docs(reach, page_db.addr_held(have))
+    for doc_id, doc in sorted(addr.items()):
         old = have.get(doc_id)
-        if old and old["data"].get("contacts") == doc["contacts"]:
+        if old and old["data"].get("contacts") == doc["contacts"] \
+                and old["data"].get("of", doc["of"]) == doc["of"]:
             continue
         w.add("set", "addr", doc_id, doc, if_version=old["version"] if old else None)
     for doc_id, old in sorted(have.items()):
-        if doc_id not in page_db.addr_docs(reach):
+        if doc_id not in addr:
             w.add("delete", "addr", doc_id, if_version=old["version"])
     # A draft that fails a check with a clear fix is fixed by Claude by itself, the moment the
     # check finds it: its tweak queued here, with no tap (the maintainer, 2026-11-04). Never a
@@ -701,7 +743,7 @@ def cmd_view(a) -> int:
     # "brief", which no listener rule could compare with a chat (engine audit, 2026-11-03).
     if not newer(old):
         w.add("set", "meta", "current", {"rev": model["rev"], "made_at": model["made_at"],
-                                         "model": model["model"], **stamp, **_published()},
+                                         "model": model["model"], **stamp, **_published(db)},
               if_version=old["version"] if old else None)
     # A screen written with no version while the screens came from this checkout's copy of the
     # page, not a read: the copy may lack one the page holds, and every such write was refused,
@@ -786,7 +828,8 @@ def cmd_view(a) -> int:
     first = own_tests_first()
     if first:
         lines = [first] + list(lines or [])
-    stale = page_code_behind()
+    ask: list = []
+    stale = page_code_behind(db, getattr(a, "work", "") or "", a.out_dir, now, asks=ask)
     if stale:
         lines = list(lines or []) + stale
     if getattr(a, "end", False):
@@ -799,8 +842,9 @@ def cmd_view(a) -> int:
             late = ""
         if late:
             lines.append(late)
-    # The taps that came in while the work ran go first: the screens are drawn with them.
-    batches = list(late_batches) + list(batches)
+    # The taps that came in while the work ran go first: the screens are drawn with them. A
+    # republish asked of the chat that answers the page goes last: refused, it holds back nothing.
+    batches = list(late_batches) + list(batches) + list(ask)
     # Pinned to numbers no read confirmed: said first, with the step that takes the store's
     # own from the read's lines (app.py versions), never refused, so a chat whose read kept
     # them by an old hook, or none at all, still sends (the audit of 2026-11-10, PE-2).
@@ -824,20 +868,42 @@ SEND_IN_ORDER = ("Send these in order, each after the one before is accepted. On
                  "refusal says), then run this command again and send what it prints.")
 
 
-def page_code_behind() -> list[str]:
+def page_code_behind(db: dict | None = None, work: str = "", out_dir: str = "", now=None,
+                     asks: list | None = None) -> list[str]:
     """The republish, where the page's own code is older than this copy's: a chat that took an
     update only refreshed the page's data, and the person saw the old buttons until they asked
     for a republish (the maintainer, 2026-11-09). Every `view` says it, so no update's page
-    change waits on one chat following one step. [] when the page is current or not set up."""
+    change waits on one chat following one step. [] when the page is current or not set up:
+    by this copy's record, or by the page's own (`db`, meta/now `page`), where the chat that
+    answers the page published it from a copy this one has not taken yet.
+
+    A job's finish (`work`), or a chat started for one job, never publishes: it asks the chat
+    that answers the page, in one small batch added to `asks` to send last, and its records go
+    now. A chat on the person's computer took a read of the page and its publish, over twenty
+    minutes, before a job's eight notes showed (issue 254)."""
     try:
         import app_listen
         import app_setup
         url = str(app_setup.page_record().get("url") or "")
-        if not url or not app_setup.set_up() or app_setup._page_current():
+        held = page_held(db)
+        if not url or not app_setup.set_up() or (
+                app_setup._page_current(held) if held else app_setup._page_current()):
             return []
-        return ["Claude: the page's own code is older than this copy (an update changed it): "
-                "republish it now, after sending these batches, saying nothing first:"] + \
-            app_listen._publish_now(url, 1)
+        if not (work or app_listen._job_chat()):
+            return ["Claude: the page's own code is older than this copy (an update changed it): "
+                    "republish it now, after sending these batches, saying nothing first:"] + \
+                app_listen._publish_now(url, 1)
+        version = app_listen.page_version()
+        if f"republish~v{version}" in ((db or {}).get("work") or {}):
+            return []                                   # asked for already: the listener has it
+        import tempfile
+        got = app_listen.republish(os.path.join(out_dir or tempfile.mkdtemp(prefix="ljs-"),
+                                                "republish"), now, version)
+        if asks is not None:
+            asks.extend(got["batches"])
+        return ["Claude: the page's own code is older than this copy. This chat never publishes "
+                "it: the last batch asks the chat that answers the page to. Send it with the "
+                "others; refused means the request is there already. Say nothing about it."]
     except Exception:  # noqa: BLE001  the data still goes
         return []
 
@@ -1605,14 +1671,19 @@ def job_steps(chosen: dict, claimer: str, url: str, session: bool = True,
         # LinkedIn signed out is the one thing that stops it, and it goes on the page: told
         # only "never queue a profile for the page", the chat on a Mac kept the sign-in and its
         # steps in its own conversation, "rather than parking it on your page" (the maintainer,
-        # 2026-11-11).
+        # 2026-11-11). Asked for 20, one read the 10 on its list, drafted 8 and stopped there,
+        # saying nothing of the other 12 (the maintainer, 2026-11-12).
         step("This chat has Claude's own browser on the person's computer, so the whole run is "
              "done here, in this chat: the people searches opened in that browser, the short "
              "list, each person's profile read in it (python3 tools/network/reading.py route "
              "--tools browser says `here`: reading.py next, then reading.py read <id> - "
              "--source browser, one at a time), and every note written from what was read "
              "and checked. Never queue a profile for the page to read, never --wait-for-read, "
-             "and never hand any of it to another chat or a background agent. "
+             "and never hand any of it to another chat or a background agent. The number it "
+             "was asked for (args.count) is a target: when today's list is read and fewer have "
+             "a note, it finds more at the next employers (candidates.py employers, its searches "
+             "covering their whole area) and reads on, and app.py done "
+             "refuses a finish short of it unless no good people are left (--short). "
              + computer.SIGNED_OUT_ON_PAGE)
     step(f"At each stage ({keys}): python3 tools/app.py pin \"$D\" --work {wid} --chat "
          f"{claimer} --stage <stage> --line \"<one plain line>\", and send the batch it prints "
@@ -1896,7 +1967,8 @@ def cmd_pin(a) -> int:
                   "here on, then run this again with it.")
             return 2
     db = page_db.load(a.dump)
-    count = {"done": a.done, "total": a.total} if a.total else None
+    count = {"done": a.done, "total": a.total,
+             **({"word": a.word} if getattr(a, "word", "") else {})} if a.total else None
     left, stage = a.left_s, a.stage
     if a.log:
         try:
@@ -1967,6 +2039,9 @@ def cmd_pin(a) -> int:
             app_setup.renew_claim(str(g.get("work") or ""))
         except OSError:
             pass
+    for g in got_all:
+        if g.get("count_refused"):
+            print(f"app: count not written: {g['count_refused']}", file=sys.stderr)
     if len(got_all) == 1:
         print(_dump(got_all[0]), end="")
     else:
@@ -2599,6 +2674,13 @@ def update_stops(before: str) -> list[str]:
     return out
 
 
+WAKE_READ_AGAIN = ("wake: {why}, and work may have started, finished or been asked for since, so "
+                   "nothing is taken from it, and nothing it holds is said to the person about "
+                   "any job. Read the page again into a new folder (python3 tools/app.py reads "
+                   "--in <your scratchpad>, which makes and names it, and its queries), then "
+                   "wake once more with it: {again}")
+
+
 def _again(a, chat: str) -> str:
     flags = (f" --kind {a.kind}" if a.kind else "") + \
         (f" --on \"{a.on}\"" if a.on else "") + (" --no-sessions" if a.no_sessions else "")
@@ -2674,6 +2756,16 @@ def cmd_wake(a) -> int:
     run = int(st.get("runs") or 0) + 1
     rd = os.path.join(a.dump, "wake", str(run))
     phase = str(st.get("phase") or "new")
+    if phase == "done":
+        # Run again over a folder this wake already went through (step 3 again): what is
+        # waiting, and that nothing is, comes only from a read made now (issue #255). Minutes
+        # on, a run finished since was still "running" here, and "nothing new needed doing".
+        import page_reads
+        why = page_reads.stale_said(a.dump, now, late=True)
+        if why:
+            print(WAKE_READ_AGAIN.format(why=why, again=_again(a, chat).replace(
+                f"\"{a.dump}\"", "\"<the new folder>\"")))
+            return 0
     head: list[str] = []
     notes: list[str] = []
     # (batch file, what it is, whether it goes in one batch with the one before)
@@ -3680,7 +3772,9 @@ def cmd_done(a) -> int:
                              chat=a.chat, question=a.question, about=a.about,
                              answer=_answer(a), answered=a.answered, left_out=left,
                              outcome=getattr(a, "outcome", "") or "",
-                             signin=getattr(a, "signin", "") or "", go=made, me=_me(a.chat))
+                             signin=getattr(a, "signin", "") or "", go=made, me=_me(a.chat),
+                             drafted=getattr(a, "drafted", None),
+                             short=getattr(a, "short", "") or "")
     except (KeyError, ValueError) as e:
         return _refuse("done", f"not finished: {e.args[0] if e.args else e}")
     if got.get("status") in ("done", "failed", "stopped") and not got.get("again"):
@@ -4165,12 +4259,25 @@ def cmd_ask(a) -> int:
     import app_listen
     import app_model
     import page_db
+    import page_reads
     _, now = app_model.clock(None, a.now)
     try:
         args = json.loads(a.args) if a.args else {}
     except ValueError:
         print("app: --args is JSON, like '{\"contact\": \"<contact id>\"}'", file=sys.stderr)
         return 2
+    why = page_reads.stale_said(a.dump, now)
+    if why:
+        # Whether the same is still going, or already asked for, is judged only from a read
+        # made now (issue #255): from the wake's read minutes old, a run finished since was
+        # "still going", and two chats each queued the same work.
+        import app_setup
+        fresh = page_reads.fresh_read(a.dump, now)
+        same = os.path.abspath(fresh["dump"]) == os.path.abspath(a.dump)
+        print(ASK_READ_FIRST.format(
+            why=why, over="" if same else f" with \"{fresh['dump']}\" in place of \"{a.dump}\"",
+            read=page_reads.say_fresh(fresh, app_setup.page_record().get("url") or "<the page>")))
+        return 3
     try:
         got = page_db.ask(page_db.load(a.dump), a.kind, a.title, now,
                           a.out or os.path.join(a.dump, "out"), args=args, to=a.to,
@@ -4184,6 +4291,13 @@ def cmd_ask(a) -> int:
     touched.note("work", str(got.get("work") or ""), chat=a.chat)
     print(_dump(got), end="")
     return 0
+
+
+ASK_READ_FIRST = ("ask: {why}, and a job may have started or finished since, so nothing is "
+                  "queued from it and nothing it holds is said to the person about any job. Read "
+                  "the page's work now, then run this same command again{over}: it queues the "
+                  "work, or says the same is already on its way. Everything else this work does "
+                  "stays in the folder it was using. {read}")
 
 
 def cmd_versions(a) -> int:
@@ -4384,6 +4498,9 @@ def main(argv=None) -> int:
     p.add_argument("--line", default="", help="one plain line of what happened")
     p.add_argument("--done", type=int, default=0)
     p.add_argument("--total", type=int, default=0)
+    p.add_argument("--word", default="",
+                   help="what the count counts, as the card says it (\"9 of 14 read\"): never "
+                        "more done than its total")
     p.add_argument("--left-s", dest="left_s", type=int, default=None,
                    help="seconds left in this stage, when the work itself says")
     p.add_argument("--log", default="", help="a search's round.log: the count and time left")
@@ -4573,6 +4690,13 @@ def main(argv=None) -> int:
                    help="a draft stopped because the job is not one they can take: why, in "
                         "plain words; the job leaves Jobs, set aside with that reason as one "
                         "they set aside is, and shown under Held back for now")
+    p.add_argument("--drafted", type=int, default=None,
+                   help="a people run: how many people it drafted a note for. Asked for a "
+                        "number (args.count), it is done only at that number")
+    p.add_argument("--short", default="",
+                   help="a people run that ran out of good people within the person's rules "
+                        "before the number asked: why, in plain words; it finishes part-done, "
+                        "its summary saying how many of how many (\"12 of 20: ...\")")
     p.add_argument("--now", default=None)
     p = sub.add_parser("search-drafts", help="a search that drafts what it finds: a draft of "
                                              "each job that passes every rule, claimed with it")

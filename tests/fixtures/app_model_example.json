@@ -1,19 +1,19 @@
 {
  "model": 1,
  "made_at": "2026-10-25T18:00:00Z",
- "rev": "69ccc65a576f",
+ "rev": "c724c38d6108",
  "app": {
-  "version": "4.15.0",
+  "version": "4.16.0",
   "url": null,
   "update_waiting": null,
   "news": [
-   "Your interview prep now follows the interview itself.",
-   "A two-page resume no longer ends on a page of a few lines.",
-   "A job whose posting has words written to an AI tool says so on its card."
+   "The app's maker hears of its bugs without anyone passing them on.",
+   "Interview preps open everywhere and read well during the call, questions in Chat are answered first, and the week's problems are fixed.",
+   "In the app maker's own copy, a problem Claude works round is reported then, not only one pointed out."
   ],
   "privacy": "Only you can open this page unless you share it. It holds first names, employers, your drafts and your setup answers, so keep it unshared.",
   "repo": "https://github.com/aranculleton/last-job-search",
-  "page": 165,
+  "page": 206,
   "not_saved": 0,
   "app_bugs": []
  },
@@ -77,7 +77,7 @@
  ],
  "jobs": {
   "round": "r9",
-  "made_at": "2026-11-11T18:33:31Z",
+  "made_at": "2026-11-12T15:13:44Z",
   "met": false,
   "summary": "3 roles from the last search to look at, 1 of them scoring 75 or more. 3 left out, each with its reason.",
   "rows": [
@@ -1013,7 +1013,7 @@
    "when": "2026-10-28",
    "prep": {
     "path": "documents/applications/thornbury_bank_risk_analyst_thornbury/interview_prep.md",
-    "updated": "2026-11-11T18:33:31Z"
+    "updated": "2026-11-12T15:13:44Z"
    },
    "questions": 2,
    "all_day": true,
@@ -1574,11 +1574,23 @@
   ]
  },
  "updates": {
-  "version": "4.15.0",
-  "newest": "4.15.0",
+  "version": "4.16.0",
+  "newest": "4.16.0",
   "mode": "auto",
   "waiting": null,
   "changed": [
+   {
+    "version": "4.16.0",
+    "date": "2026-11-12",
+    "lines": [
+     "The app's maker hears of its bugs without anyone passing them on.",
+     "Interview preps open everywhere and read well during the call, questions in Chat are answered first, and the week's problems are fixed.",
+     "In the app maker's own copy, a problem Claude works round is reported then, not only one pointed out.",
+     "When someone offers to refer you, their employer's open roles are checked first.",
+     "A question you ask Claude on your page is answered first.",
+     "Your live interview prep is written to be read during the call, not learned."
+    ]
+   },
    {
     "version": "4.15.0",
     "date": "2026-11-11",
@@ -1589,18 +1601,6 @@
      "Interviews still ahead are prepared the new way by themselves. (set up for you)",
      "Claude's answers in Chat take you straight to what changed.",
      "Interview records and the rules Claude learns from you are dated on your own day."
-    ]
-   },
-   {
-    "version": "4.14.0",
-    "date": "2026-11-10",
-    "lines": [
-     "A people search goes to the likely employers first.",
-     "A run's time is split into searching and reading.",
-     "Back from LinkedIn, the page shows you whose note you were sending.",
-     "Claude starts its LinkedIn work on your computer by itself.",
-     "Your computer's state, in one line.",
-     "Every run on your computer is measured, not guessed."
     ]
    }
   ],
@@ -2419,7 +2419,7 @@
    {
     "id": "employer_wait",
     "area": "people",
-    "line": "More people at an employer where people are waiting on a reply: 2 people at a time; each one waiting frees their place about 9 days after the last message, once a follow-up is due by your rule; a connection request nobody accepted frees it after 21 days at most, and a conversation with no answer in 90 days is closed as gone cold. Ask Claude for more people at the employer."
+    "line": "More people at an employer where people are waiting on a reply: 2 people at a time; each one waiting frees their place about 9 days after the last message, or once the follow-up then due by your rule has gone; a connection request nobody accepted frees it after 21 days at most, and a conversation with no answer in 90 days is closed as gone cold. Ask Claude for more people at the employer."
    },
    {
     "id": "limit",

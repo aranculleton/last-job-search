@@ -65,6 +65,28 @@ _ATS_ID_PARAM = ("gh_jid", "jobid", "job_id", "opportunityid",
 _LINKEDIN_HOST = re.compile(r"^(?:https?://)?(?:[\w-]+\.)*linkedin\.com(?=[/:?#]|$)|^/", re.I)
 
 
+# A language tag a board writes before a posting's title ("en - Senior AI Developer", "fr-CA |
+# Analyste de données", "[EN] Data Analyst"): the board's, never the title's, and a title shown
+# with it read "en - Senior AI Developer, Data" on the person's Jobs (2026-11-12). Small letters
+# for any of these languages; in capitals only the codes that are no English word or job's
+# initials ("IT - Service Desk Analyst" and "HR - Generalist" keep theirs).
+_LANG_CODES = ("en|fr|de|es|it|pt|nl|sv|da|no|nb|nn|fi|pl|cs|sk|hu|ro|el|tr|ru|uk|ja|zh|ko|"
+               "ar|he|hi")
+_LANG_CAPS = "EN|FR|DE|ES|NL|SV|DA|FI|JA|ZH|KO|RU"
+_LANG = rf"(?:(?:{_LANG_CODES})(?:[-_][A-Za-z]{{2}})?|(?:{_LANG_CAPS})(?:[-_][A-Z]{{2}})?)"
+_LANG_TAG = re.compile(rf"^(?:{_LANG}[ \t]*[-–—|:][ \t]+|[\[(]{_LANG}[\])][ \t]*(?:[-–—|:][ \t]*)?)")
+
+
+def strip_language_tag(title):
+    """A posting's `title` without a language tag its board wrote before it, or as it is: as
+    a search takes it in (scrape_wide.clean_title) and as the page shows one already kept."""
+    if not isinstance(title, str):
+        return title
+    t = title.strip()
+    m = _LANG_TAG.match(t)
+    return t[m.end():].strip() if m and re.search(r"\w", t[m.end():]) else title
+
+
 def norm(url: str | None) -> str | None:
     """Normalize a posting URL (or bare id) to a stable dedup key.
 

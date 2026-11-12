@@ -281,21 +281,24 @@ bdi { unicode-bidi: isolate; }
 .g-name { font-weight: 600; }
 .g-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .g-at { font-weight: 400; color: var(--muted); }
-/* On a wide screen a row is one line, the name and how it stands side by side, and each row's
-   button sits near the name it acts on rather than across the screen from it (the review,
-   2026-11-10: the name at the left edge, "See the draft" 650px away): the words take a reading
-   width, so the buttons stand in one column near them. The row itself spans the card, its
-   trash at the card's edge as every card's is: rows stopping 300px short of it left the pills
-   and trash a column in mid-card (the screen review, 2026-11-11). 30rem keeps the button under
-   520px from the name in Safari's engine too. */
+/* On a wide screen a row is one line, the name and how it stands side by side, and its
+   buttons sit together at the row's end, just before its trash at the card's edge: a column in
+   mid-card, with empty room after it and the trash alone at the edge, read as two places to
+   look (the maintainer, 2026-11-12). Every row's buttons start at one edge, the rows sharing
+   the list's columns (subgrid): the words take what is left, the buttons the widest row's
+   room. Without subgrid each row's buttons still end at its trash. */
 @media (min-width: 760px) {
   .g-row { flex-wrap: nowrap; }
-  .g-main { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 4px; flex: 0 1 30rem; }
+  .g-main { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 4px; flex: 1 1 auto; }
   .g-main > .g-name + p.small::before { content: "\00b7\00a0"; }
   /* The row's button and its bin keep one line: the words beside them give way instead (at a
      tablet's width the bin fell under its button, the screen review, 2026-11-11). */
-  .g-acts { flex: 1 0 auto; flex-wrap: nowrap; }
+  .g-acts { flex: none; flex-wrap: nowrap; }
   .g-acts > [data-bin] { margin-left: auto; }
+  @supports (grid-template-columns: subgrid) {
+    ul.g-rows { grid-template-columns: minmax(0, 1fr) max-content; column-gap: 12px; }
+    ul.g-rows > .g-row { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; }
+  }
 }
 /* On a phone the name is its own line and where they work, with how it stands, the line under
    it, both beside the row's button. */
@@ -2442,16 +2445,16 @@ a.bp-stat .bp-n { color: var(--ink); }
    a dotted word that opens a panel beside the parts on a wide screen and a sheet on a phone. */
 dialog.detail.full { top: 0; bottom: 0; height: auto; max-height: none; }
 @media (min-width: 760px) { dialog.detail.wide.full { width: 100%; max-width: 100%; height: auto; max-height: none; margin: 0; border: 0; border-radius: 0; } }
-/* The reading column sits in the middle of three; from 1180px the right one keeps room for a
-   term's panel, so opening a term never moves the column (the review, 2026-11-10: "nothing
-   jumps"). */
-dialog.detail.full .detail-body { grid-template-columns: minmax(0, 1fr) minmax(0, 920px) minmax(0, 1fr); }
+/* The reading column sits in the middle of three and uses the width, up to 1200px (1080 drawn
+   at the page's standard size on a 1440 screen): at 920 with room kept beside it for a term's
+   panel it was a narrow column between wide empty margins (the maintainer, 2026-11-12). A term
+   opens in a small box beside its word, never a panel, so nothing needs the room. */
+dialog.detail.full .detail-body { grid-template-columns: minmax(0, 1fr) minmax(0, 1200px) minmax(0, 1fr); }
 dialog.detail.full .detail-body > * { grid-column: 2; min-width: 0; }
 /* Below the wide layout the side columns are empty, and the body's gap between them and the
    reading column was 16px more padding on each side: on a phone the prep's first lines took a
    line more each and its glance fell below the first screen (2026-11-11). */
 @media (max-width: 759px) { dialog.detail.full .detail-body { column-gap: 0; } }
-@media (min-width: 1180px) { dialog.detail.full .detail-body { grid-template-columns: minmax(0, 1fr) minmax(0, 920px) minmax(432px, 1fr); } }
 /* Laid out as the maintainer's call-prep page (2026-11-10), in the page's own colours, type and
    looks: a quiet head, the timing and what they are known to ask in two plain boxes, then each
    part under its own rule, what to say first in a box, its questions as cards; depth one tap
@@ -2470,7 +2473,9 @@ dialog.detail .detail-body:has(> .d-live > .lp) > .detail-title { margin-top: 16
 .lp { --lp-bar-h: 0px; display: flex; flex-direction: column; gap: 32px; min-width: 0; line-height: 1.55; }
 .lp p, .lp h3, .lp h4, .lp ul, .lp ol, .lp dl { margin: 0; }
 .lp-head { display: flex; flex-direction: column; gap: 12px; }
-.lp-lbl, .lp-eyebrow, .lp-qhead, .lp-kids-h { font-size: var(--t-sm); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+/* Everything around what to say is small and quiet: the labels, who asks, the notes under an
+   answer. What is read aloud is large (the maintainer, 2026-11-12). */
+.lp-lbl, .lp-eyebrow, .lp-qhead, .lp-kids-h { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
 /* The bar: find and the parts stay at the top while the prep scrolls under it, two rows at most
    on a phone, nothing folded behind it (the maintainer, 2026-11-11). One solid ground from the
    header to under the chips, as wide as the screen's column and its gutters, so no word shows
@@ -2488,9 +2493,14 @@ dialog.detail .detail-body:has(> .d-live > .lp) > .detail-title { margin-top: 16
 .lp-glance-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; }
 .lp-glance-row dd { margin: 0; min-width: 0; }
 .lp-glance-row dd { display: flex; flex-direction: column; gap: 4px; }
-.lp-glance .btn.link { display: inline; text-align: left; font-weight: 400; }
 .lp-glance-row dd > .btn { align-self: flex-start; }
-.lp-glance-part { font-size: var(--t-sm); font-weight: 400; color: var(--muted); text-decoration: none; display: inline-block; margin-left: 4px; }
+/* Its questions are plain lines to read, in the ink, never underlined as links (the maintainer,
+   2026-11-12): a tap still goes to the place, and a mouse over one underlines it. */
+.lp-glance-line { line-height: 1.45; }
+.lp-glance-q { display: inline; font: inherit; color: var(--ink); background: none; border: 0; margin: 0; padding: 2px 0; text-align: left; cursor: pointer; }
+@media (hover: hover) { .lp-glance-q:hover { text-decoration: underline; text-underline-offset: 3px; } }
+.lp-glance-q:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.lp-glance-part { font-size: 0.8125rem; font-weight: 400; color: var(--muted); white-space: nowrap; }
 @media (min-width: 760px) { .lp-glance-row { grid-template-columns: 9em minmax(0, 1fr); column-gap: 16px; align-items: baseline; } }
 /* On a phone the glance asks one question of them, the first; the second is in its part below.
    With both, the glance ran past the first screen in a wider font (GitHub's runner, 2026-11-11). */
@@ -2502,10 +2512,15 @@ dialog.detail .detail-body:has(> .d-live > .lp) > .detail-title { margin-top: 16
 .lp-layers { display: flex; flex-direction: column; gap: 12px; }
 .lp-cues { padding-left: 20px; display: flex; flex-direction: column; gap: 4px; font-size: 17px; line-height: 1.35; }
 .lp-cues > li:first-child { font-size: 19px; font-weight: 700; }
-.lp-script { font-size: 17px; line-height: 1.5; max-width: 60ch; color: var(--ink); }
+/* The script is read aloud: a quarter larger than the words round it, with room between its
+   lines, and never more than about 95 characters a line. */
+.lp-script { font-size: 1.25rem; line-height: 1.6; max-width: 44em; color: var(--ink); display: flex; flex-direction: column; gap: 4px; }
+/* An answer that opens as Say first does goes on from there, with the way to those lines. */
+.lp-said { font-size: var(--t-sm); line-height: 1.4; color: var(--ink); }
+.lp-said .btn.link { display: inline; min-height: 0; padding: 0; font-weight: 600; text-align: left; }
 .lp[data-lead="cues"] .lp-cues-w { order: -1; }
 .lp[data-lead="cues"] .lp-points-h { display: none; }
-.lp[data-lead="cues"] .lp-script { border-top: 1px solid var(--line); padding-top: 12px; }
+.lp[data-lead="cues"] .lp-script:has(+ .lp-cues-w) { border-top: 1px solid var(--line); padding-top: 12px; }
 .lp[data-lead="script"] .lp-cues-w { border-top: 1px solid var(--line); padding-top: 8px; }
 .lp-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 /* On a phone the chips are one row that scrolls sideways inside itself, its far end fading:
@@ -2547,15 +2562,38 @@ dialog.detail .detail-body:has(> .d-live > .lp) > .detail-title { margin-top: 16
 .lp-part:focus { outline: none; }
 .lp-part-top { display: flex; flex-direction: column; gap: 4px; padding-bottom: 8px; border-bottom: 2px solid var(--mark); }
 .lp-part-h { font-size: var(--t-xl); font-weight: 700; line-height: 1.25; text-wrap: balance; }
-.lp-narr { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px 20px; display: flex; flex-direction: column; gap: 12px; }
-.lp-beats { padding-left: 20px; display: flex; flex-direction: column; gap: 8px; }
+/* A part's body: what to say first, then its questions; side by side on a wide screen, where
+   one column ran the lines past 95 characters or left the width empty (2026-11-12). */
+.lp-part-body, .lp-part-qs { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+@media (min-width: 1180px) {
+  .lp-part-body.lp-two { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 24px; align-items: start; }
+  .lp-part-body.lp-two:has(> .lp-narr[hidden]) { grid-template-columns: minmax(0, 1fr); }
+  /* What to say first stays beside the questions as they scroll by, where it fits between the
+     bar and the lifelines (liveView sets lp-pin); a taller one scrolls with them. */
+  .lp-part-body.lp-two > .lp-narr.lp-pin { position: sticky; top: calc(var(--lp-bar-h, 0px) + 12px); }
+}
+.lp-narr { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px 20px; display: flex; flex-direction: column; gap: 12px; min-width: 0; scroll-margin-top: calc(var(--lp-bar-h, 0px) + 12px); }
+.lp-narr:focus { outline: none; }
+/* The lines to say first are what is read aloud now: a quarter larger, with room between. */
+.lp-beats { padding-left: 20px; display: flex; flex-direction: column; gap: 12px; font-size: 1.25rem; line-height: 1.6; color: var(--ink); max-width: 44em; }
+/* The questions those lines may bring: one quiet line under them, each a tap to its answer. */
+.lp-next { font-size: var(--t-sm); line-height: 1.5; color: var(--muted); border-top: 1px dashed var(--line); padding-top: 8px; }
+.lp-next-h { font-weight: 600; }
+.lp-next-q { display: inline; font: inherit; color: var(--ink); background: none; border: 0; margin: 0; padding: 2px 0; text-align: left; cursor: pointer;
+  text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 3px; }
+@media (hover: hover) { .lp-next-q:hover { text-decoration-color: var(--ink); } }
+.lp-next-q:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.lp-next-q > .lp-dot { margin-left: 4px; }
 .lp-badge { display: inline-block; align-self: flex-start; margin-right: 8px; padding: 0 8px; border-radius: 999px; background: var(--st-overdue-bg); color: var(--st-overdue); font-size: var(--t-sm); font-weight: 600; line-height: 1.6; }
 .lp-hooks { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .lp-hook { position: relative; font: inherit; font-size: var(--t-sm); line-height: 1.4; text-align: left; color: var(--ink); background: none; border: 1px dashed var(--line-strong); border-radius: var(--r-sm); padding: 4px 8px; cursor: pointer; }
 .lp-hook::after { content: ""; position: absolute; inset: -4px 0; }
 @media (hover: hover) { .lp-hook:hover { background: var(--accent-soft); } }
 .lp-hook:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
-.lp-bridge { font-style: italic; color: var(--muted); border-top: 1px dashed var(--line); padding-top: 8px; }
+.lp-bridge { font-style: italic; font-size: 1.25rem; line-height: 1.6; color: var(--ink); border-top: 1px dashed var(--line); padding-top: 8px; max-width: 44em; }
+.lp-bridge-h { font-style: normal; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+/* On a phone a step less, so a line holds more than a few words. */
+@media (max-width: 759px) { .lp-script, .lp-beats, .lp-bridge { font-size: 1.125rem; } }
 .lp-group { display: flex; flex-direction: column; gap: 12px; }
 .lp-q { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px 20px; display: flex; flex-direction: column; gap: 12px; min-width: 0; scroll-margin-top: calc(var(--lp-bar-h, 0px) + 12px); }
 .lp-q-known { border-left: 4px solid var(--st-overdue); }
@@ -2564,7 +2602,7 @@ dialog.detail .detail-body:has(> .d-live > .lp) > .detail-title { margin-top: 16
 .lp-flash { box-shadow: 0 0 0 3px var(--mark); }
 .lp-q-q { font-size: var(--t-lg); font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
 .lp-who { display: inline-block; vertical-align: 2px; margin-right: 4px; padding: 0 8px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--muted); font-size: var(--t-sm); font-weight: 400; line-height: 1.6; white-space: nowrap; }
-.lp-also { font-size: var(--t-sm); color: var(--muted); }
+.lp-also { font-size: 0.8125rem; color: var(--muted); }
 .lp-ans { background: var(--accent-soft); border-radius: var(--r-sm); padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; }
 .lp-ans-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
 /* On the soft accent (an answer's box, your own message in a chat) a label is in the ink: the
@@ -2572,20 +2610,22 @@ dialog.detail .detail-body:has(> .d-live > .lp) > .detail-title { margin-top: 16
    review, 2026-11-11). */
 .lp-ans :is(.lp-lbl, .muted), .talk-msg.from-you :is(.talk-who, .muted) { color: var(--ink); }
 .lp-draft { background: var(--st-overdue-bg); border-left: 4px solid var(--st-overdue); border-radius: var(--r-sm); padding: 8px 12px; font-size: var(--t-sm); }
-.lp-kids { display: flex; flex-direction: column; gap: 8px; }
-/* Follow-ups as choices: a pick shows its answer in the same place, with the way back above. */
-.lp-choices { display: flex; flex-direction: column; gap: 8px; }
-.lp-choice { font: inherit; text-align: left; color: var(--ink); background: var(--sunk); border: 1px solid var(--line-strong); border-radius: var(--r-sm); min-height: var(--target); padding: 8px 12px; cursor: pointer; overflow-wrap: anywhere; }
+/* Follow-ups: the next likely questions as rows under the answer; the one tapped opens its
+   answer in place under its row, its own follow-ups as rows under that, three deep. The rows
+   on the open path are filled, as the part on the screen is among the chips. */
+.lp-kids, .lp-choices { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.lp-fu-item { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.lp-choice { display: block; width: 100%; font: inherit; font-weight: 600; text-align: left; color: var(--ink); background: var(--sunk); border: 1px solid var(--line-strong); border-radius: var(--r-sm); min-height: var(--target); padding: 8px 12px; cursor: pointer; overflow-wrap: anywhere; }
 .lp-choice::before { content: "\2192\00a0"; color: var(--muted); }
-@media (hover: hover) { .lp-choice:hover { background: var(--accent-soft); } }
-.lp-choice:focus-visible, .lp-crumb:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.lp-choice[aria-expanded="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.lp-choice[aria-expanded="true"]::before { content: "\2193\00a0"; color: inherit; }
+@media (hover: hover) { .lp-choice:not([aria-expanded="true"]):hover { background: var(--accent-soft); } }
+.lp-choice:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .lp-fu { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-.lp-trail { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: var(--t-sm); color: var(--muted); }
-.lp-trail-path { flex: 1 1 12em; min-width: 0; }
-.lp-trail .btn.link { display: inline; min-height: 0; padding: 0; text-align: left; font-weight: 400; }
-.lp-fu-node { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: var(--r-sm); background: var(--sunk); scroll-margin-top: calc(var(--lp-bar-h, 0px) + 12px); }
-.lp-fu-q { font-weight: 600; }
-.lp-fu-q:focus { outline: none; }
+.lp-fu-node { display: flex; flex-direction: column; gap: 8px; margin-left: 16px; padding: 12px; border-radius: var(--r-sm); background: var(--sunk); min-width: 0;
+  scroll-margin-top: calc(var(--lp-bar-h, 0px) + 12px); scroll-margin-bottom: 120px; }
+.lp-fu-node .lp-fu-node { margin-left: 8px; padding: 8px 0 0 8px; background: none; }
+.lp-fu-back { align-self: flex-start; font-size: var(--t-sm); text-align: left; }
 .lp-fu .lp-ans { background: var(--surface); border: 1px solid var(--line); }
 .lp-ifs, .lp-flags { padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }
 .lp-dot { display: inline-block; width: 10px; height: 10px; margin-left: 8px; border-radius: 50%; background: var(--st-overdue); vertical-align: 1px; }
@@ -2635,8 +2675,9 @@ dialog.detail .detail-body:has(> .d-live > .lp) > .detail-title { margin-top: 16
    the answers, fading after a while (the live review, 2026-11-11). */
 .lp-life { position: sticky; bottom: 0; z-index: 5; margin: 0 -16px; padding: 4px 16px max(4px, env(safe-area-inset-bottom, 0px)); background: var(--surface); border-top: 1px solid var(--line); }
 .lp-life-row { display: flex; flex-wrap: wrap; gap: 8px; }
-@media (max-width: 759px) { .lp-life-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(6.5rem, 1fr)); } }
-.lp-life-btn { font: inherit; font-size: var(--t-sm); color: var(--ink); background: var(--surface); border: 1px solid var(--line-strong); border-radius: 999px; min-height: var(--target); padding: 4px 12px; cursor: pointer; }
+/* On a phone three a row, each label wrapping inside its pill, so six fit in two rows. */
+@media (max-width: 759px) { .lp-life-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(6.5rem, 1fr)); } .lp-life-btn { padding: 4px 8px; } }
+.lp-life-btn { font: inherit; font-size: var(--t-sm); line-height: 1.2; color: var(--ink); background: var(--surface); border: 1px solid var(--line-strong); border-radius: 999px; min-height: var(--target); padding: 4px 12px; cursor: pointer; }
 .lp-life-btn[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
 .lp-life-btn:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .lp-life-line { position: absolute; inset: 0; z-index: 1; display: flex; flex-wrap: wrap; align-items: center; align-content: center; gap: 0 8px; margin: 0; padding: 4px 16px; border: 0; background: var(--accent-soft); color: var(--ink); font: inherit; text-align: left; cursor: pointer; overflow-y: auto; transition: opacity 0.6s ease; }

@@ -444,12 +444,23 @@ def test_people_waiting_on_a_reply_count_against_two_a_company(book, capsys):
 
 
 def test_a_note_unanswered_for_months_no_longer_holds_the_employer():
-    old = (TODAY - datetime.timedelta(days=reading.WAITING_DAYS + 15)).isoformat()
-    waiting = [dict(_row(f"kestrel_{i}", n, "Kestrel Mutual", status="awaiting_reply",
-                         location="Manchester"), first_contacted=old)
-               for i, n in enumerate(("Rosalind Achterberg", "Corwin Haldane"))]
+    import state
+
+    def two(days):
+        sent = (TODAY - datetime.timedelta(days=days)).isoformat()
+        return [dict(_row(f"kestrel_{i}", n, "Kestrel Mutual", status="awaiting_reply",
+                          location="Manchester"), first_contacted=sent)
+                for i, n in enumerate(("Rosalind Achterberg", "Corwin Haldane"))]
     new = _row("kestrel_allard", "Wren Allard", "Kestrel Mutual", location="Manchester")
-    got = reading.shortlist(["kestrel_allard"], TODAY, contacts=waiting + [new])
+    # Past their wait with a follow-up owed, they hold it until the follow-up goes, and the
+    # line says to send it first (issue 262).
+    owed = two(reading.WAITING_DAYS + 15)
+    got = reading.shortlist(["kestrel_allard"], TODAY, contacts=owed + [new])
+    assert got["ids"] == [] and "send those follow-ups first" in got["employer_full"][
+        "kestrel_allard"], got
+    # Months on, their follow-ups are set aside as too old to chase: they hold nothing.
+    old = two(reading.WAITING_DAYS + state.OLD_OWED_DAYS + 15)
+    got = reading.shortlist(["kestrel_allard"], TODAY, contacts=old + [new])
     assert got["ids"] == ["kestrel_allard"]
 
 

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
 
 from pathlib import Path
@@ -40,6 +41,16 @@ from scrape_wide import clean_row, clean_title  # noqa: E402
     ("Data Analyst Data Analyst with verification", "Leeds", "Data Analyst"),
     ("Data Engineer - Greater Toronto Area", "Toronto, ON", "Data Engineer"),
     ("Data Analyst - Austin, TX", "Austin, Texas, United States", "Data Analyst"),
+    # A language tag its board wrote before the title ("en - Senior AI Developer, Data" on a
+    # person's Jobs, 2026-11-12).
+    ("en - Senior AI Developer, Data", "Toronto, ON", "Senior AI Developer, Data"),
+    ("fr - Analyste de données", "Montréal, QC", "Analyste de données"),
+    ("en-CA - Data Analyst", "Toronto, ON", "Data Analyst"),
+    ("fr_CA | Analyste principal", "Toronto, ON", "Analyste principal"),
+    ("EN - Data Analyst", "Leeds", "Data Analyst"),
+    ("[EN] Data Analyst", "Leeds", "Data Analyst"),
+    ("(FR) Analyste", "Leeds", "Analyste"),
+    ("en – Data Analyst Promoted", "Leeds", "Data Analyst"),
 ])
 def test_a_badge_and_the_rows_own_place_are_cut(title, location, clean):
     assert clean_title(title, location) == clean
@@ -63,6 +74,12 @@ def test_a_badge_and_the_rows_own_place_are_cut(title, location, clean):
     # Nothing left would be no title at all.
     ("Toronto", "Toronto"),
     ("New", ""),
+    # Initials a job starts with are the title's, not a language.
+    ("IT - Service Desk Analyst", "Leeds"),
+    ("HR - People Analyst", "Leeds"),
+    ("AI - Platform Engineer", "Leeds"),
+    ("Data Analyst - en", "Leeds"),
+    ("enterprise - Data Analyst", "Leeds"),
 ])
 def test_nothing_that_is_the_title_is_cut(title, location):
     assert clean_title(title, location) == title
@@ -91,7 +108,7 @@ def test_every_row_a_round_takes_in_is_cleaned(tmp_path, monkeypatch):
         _portal(root, name)
     monkeypatch.setattr(portals, "SKILLS", str(root))
     monkeypatch.setenv("LJS_STATE", str(tmp_path / "state"))
-    board = [{"id": "b1", "title": "Planner Actively hiring", "company": "Oakmere Foods",
+    board = [{"id": "b1", "title": "en - Planner Actively hiring", "company": "Oakmere Foods",
               "url": "https://boards.example/oakmere/b1", "location": "Leeds",
               "date": "2026-10-18", "portal": "ats", "desc": "A posting."}]
     monkeypatch.setattr(ats_boards, "fetch_all", lambda **k: (board, {}))
@@ -118,4 +135,44 @@ def test_every_row_a_round_takes_in_is_cleaned(tmp_path, monkeypatch):
     titles = {r["title"] for r in rows}
     assert titles == {"Supply Chain Analyst", "Planner"}, titles
     assert {r.get("title_seen") for r in rows} == {"Supply Chain Analyst New Leeds, England",
-                                                   "Planner Actively hiring"}
+                                                   "en - Planner Actively hiring"}
+
+
+def test_a_title_kept_from_before_shows_without_its_language_tag(tmp_path):
+    """A search kept before the clean-up still holds "en - ..." titles: Jobs and what a search
+    left out show them without it, and every id and rev stays on the title as kept, so a tap
+    made on the page before still finds its posting."""
+    sys.path.insert(0, os.path.join(ROOT, "tests"))
+    import app_state
+    state = app_state.small(str(tmp_path / "state"))
+    rounds = os.path.join(state, "documents", "rounds")
+    path = os.path.join(rounds, "r9.json")
+    rows = json.load(open(path, encoding="utf-8"))
+    rows[0]["title"] = "en - " + rows[0]["title"]
+    rows.append({"priority": 60, "fit": 60, "title": "fr-CA | Demand Analyst",
+                 "company": "Oakmere Foods", "location": "Manchester", "url": "",
+                 "portal": "employer"})
+    json.dump(rows, open(path, "w", encoding="utf-8"))
+    left = os.path.join(rounds, "filtered", "r9.json")
+    text = open(left, encoding="utf-8").read().replace('"title": "Planner"', '"title": "[EN] Planner"')
+    open(left, "w", encoding="utf-8").write(text)
+    code = ("import sys, json; sys.path.insert(0, %r)\n"
+            "import app_model\n"
+            "m, t = app_model.build(*app_model.clock('2026-10-25'), only={'jobs'})\n"
+            "rows = m['jobs']['rows']\n"
+            "left = [i for g in m['jobs']['filtered']['groups'] for i in g.get('items') or []]\n"
+            "print(json.dumps({'rows': [[r['title'], r['company'], r['rev'], r['draft_work']['id']] for r in rows],\n"
+            "                  'left': [i['title'] for i in left],\n"
+            "                  'rev': [app_model.job_rev('', 'Oakmere Foods', 'fr-CA | Demand Analyst', 'new'),\n"
+            "                          app_model.draft_work_id('', 'Oakmere Foods', 'fr-CA | Demand Analyst')]}))"
+            % os.path.join(ROOT, "tools"))
+    r = subprocess.run([sys.executable, "-c", code], capture_output=True, encoding="utf-8",
+                       env=dict(os.environ, LJS_STATE=state), timeout=180)
+    assert r.returncode == 0, r.stdout + r.stderr
+    got = json.loads(r.stdout.strip().splitlines()[-1])
+    titles = {t for t, *_ in got["rows"]}
+    assert "Demand Planning Analyst" in titles and "Demand Analyst" in titles, got
+    assert not any(t.startswith(("en - ", "fr-CA")) for t in titles), got
+    oak = next(x for x in got["rows"] if x[1] == "Oakmere Foods")
+    assert [oak[2], oak[3]] == got["rev"], got
+    assert "Planner" in got["left"] and "[EN] Planner" not in got["left"], got

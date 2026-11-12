@@ -471,6 +471,59 @@
       "ui_sensitive": true
     },
     {
+      "id": "computer-allow",
+      "claim": "The first time a cloud chat starts a chat on the person's computer, create_session is refused until the person answers one question in that chat, in the Claude app on a device of theirs: \"Let Claude use your computers and other sessions from here?\", with Allow (confirm_repository_trust). Allowing ties that chat to the person's own devices for good. Observed on 2026-11-12: once Allow was tapped, the chat's own Auto was lost (get_session showed no permission mode while the app's screen still said Auto) and create_session in Auto was refused as the parent not being in auto mode, until the chat was switched to another mode and back to Auto (computer-auto-again).",
+      "goal": "let Claude start its chats on your computer",
+      "how": "in the chat that starts Claude on your computer, Allow on its question, then that chat's mode menu set to Accept edits and back to Auto",
+      "steps": [
+        "Open the chat that starts Claude on your computer.",
+        "Where it asks \"Let Claude use your computers and other sessions from here?\", choose Allow.",
+        "Then, in the mode menu in the row under its message box, choose Accept edits and then Auto again: Claude clears its Auto when you allow."
+      ],
+      "page_goal": "let Claude start its chats on your computer",
+      "page_steps": [
+        "Open the chat named on this card in the Claude app: Open it, on this card, goes straight there.",
+        "Where it asks \"Let Claude use your computers and other sessions from here?\", choose Allow.",
+        "Then, in the mode menu in the row under its message box, choose Accept edits and then Auto again: Claude clears its Auto when you allow.",
+        "Come back to this page and tap Done."
+      ],
+      "sources": [
+        {"url": "tool:confirm_repository_trust", "quote": "in person, in the Claude app on a trusted device"},
+        {"url": "https://code.claude.com/docs/en/permission-modes", "quote": "use the mode dropdown in the row under the prompt box."},
+        {"url": "observed:starter-mode-lost", "quote": "permission_mode 'auto' requires the parent session to be in auto mode"}
+      ],
+      "status": "observed",
+      "verified_on": "2026-11-12",
+      "verified_against": "the confirm_repository_trust tool's description that day; code.claude.com/docs/en/permission-modes read 2026-11-11 for the mode menu; the question's words, the lost Auto and switching away and back observed in the maintainer's starter chat on 2026-11-12",
+      "ui_sensitive": true
+    },
+    {
+      "id": "computer-auto-again",
+      "claim": "Observed on 2026-11-12: a cloud chat whose mode menu said Auto was refused a new chat in Auto as not being in auto mode (get_session showed no permission mode) after its one-time question about using the person's computers was answered; choosing another mode in its mode menu and then Auto again made Auto stick. The mode menu is in the row under the message box (cloud-auto).",
+      "goal": "let Claude start its chats on your computer by itself",
+      "how": "in the chat that starts Claude on your computer, its mode menu in the row under the message box set to Accept edits and then back to Auto",
+      "steps": [
+        "Open the chat that starts Claude on your computer.",
+        "In the mode menu in the row under its message box, choose Accept edits.",
+        "Open the same menu again and choose Auto."
+      ],
+      "page_goal": "let Claude start its chats on your computer by itself",
+      "page_steps": [
+        "Open the chat named on this card in the Claude app: Open it, on this card, goes straight there.",
+        "In the mode menu in the row under its message box, choose Accept edits.",
+        "Open the same menu again and choose Auto.",
+        "Come back to this page and tap Done."
+      ],
+      "sources": [
+        {"url": "https://code.claude.com/docs/en/permission-modes", "quote": "use the mode dropdown in the row under the prompt box."},
+        {"url": "observed:starter-mode-lost", "quote": "permission_mode 'auto' requires the parent session to be in auto mode"}
+      ],
+      "status": "observed",
+      "verified_on": "2026-11-12",
+      "verified_against": "code.claude.com/docs/en/permission-modes read 2026-11-11 for the mode menu; the lost Auto, and switching away and back, observed in the maintainer's starter chat on 2026-11-12",
+      "ui_sensitive": true
+    },
+    {
       "id": "cloud-internet",
       "claim": "A cloud chat's network access is one of None, Limited (the default, with Allow package managers checked: package registries, GitHub and cloud SDKs, plus any sites the person lists) or Full (any website); an environment saved earlier as Trusted or Custom opens as Limited. Job sites and employers' own websites are not on the default list, so a cloud chat on the default cannot reach them; a list of the person's own reaches only the sites it names, so every employer's own site stays out, and Full is the setting that works. Set to Full, a running chat reaches them within about a minute, with no new chat. On a Team or Enterprise plan an environment an Owner shares opens read-only, so an Owner changes it, or the member makes an environment of their own (New environment) with Full and starts chats in it.",
       "goal": "let this chat reach job sites",

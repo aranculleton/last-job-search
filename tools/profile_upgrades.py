@@ -1493,6 +1493,15 @@ def _one_surface_check() -> str:
             "employers you turned down, profile addresses)" % ", ".join(r for r, _ in rows))
 
 
+def _employer_names() -> str:
+    """Contacts whose employer was written as its lower-case key ("<name> at <employer in
+    lower case>" on the page): the people runs added from the employer lists, which hold keys
+    (the maintainer's page, 2026-11-12)."""
+    found = _probe("import state; print(len(state.lower_employers(state.load_contacts())))")
+    n = int(found) if found.isdigit() else 0
+    return ("%d contact(s) with their employer in lower case" % n) if n else ""
+
+
 def _readings_linked() -> str:
     """Contacts with no employer whose saved profile read names one: every check made per
     employer passed them by (the audit's NW-6, NW-28 and PD-20)."""
@@ -2201,6 +2210,11 @@ REGISTRY: tuple[Upgrade, ...] = (
             "script a thin call to surface.check() so anything that still runs it gets the "
             "same answer. Keep every rule the script had that surface.py does not; change "
             "nothing else", "edit", "~5 min", priority=2),
+    Upgrade("employer-names", "2026-11-12",
+            "every contact shows their employer's proper name, never it in lower case",
+            _employer_names, "python3 tools/network/state.py employer-names --apply", "instant",
+            command=("python3", "tools/network/state.py", "employer-names", "--apply"),
+            paths=("network_contacts.csv",), priority=2, conditional=True),
     Upgrade("readings-linked", "2026-11-11",
             "every contact whose profile was read has the employer it names",
             _readings_linked, "python3 tools/network/reading.py link-all", "instant",

@@ -17,9 +17,11 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "tests"))
+sys.path.insert(0, os.path.join(ROOT, "tools"))
 
 import pytest  # noqa: E402
 
+import app_lists  # noqa: E402
 import test_the_page_journeys as journeys  # noqa: E402
 from test_the_page_journeys import PHONE, WIDE, _go  # noqa: E402
 
@@ -62,6 +64,27 @@ def _one_with_a_draft():
     msg.update(hold=AWAY, hold_why="person_hold")
     m["people_count"] = {"on_hold": {"n": 1, "why": None}}
     return m
+
+
+# Someone in the book the page was published without: only in the whole list, behind "Show".
+ORLA = "kestrel_mutual_orla"
+
+
+def _whole_list(m):
+    """The people's whole list as `app.py view` writes it beside the page (`view/list~people~*`,
+    tools/app_lists.docs): everyone in the book, those on hold included, each as the engine's
+    short record (app_model's `light`), and someone the page itself was published without."""
+    def light(p):
+        return {"id": p["id"], "first_name": p["first_name"], "employer": p.get("employer") or "",
+                "status": p["status"], "status_word": p["status"].replace("_", " "),
+                "group": p.get("group"), "route": "linkedin", "last": p.get("last"),
+                "contacted": "90", "due": p.get("due"), "replied": False,
+                "live": p.get("group") in ("now", "follow", "held")}
+    rest = {"id": ORLA, "first_name": "Orla", "employer": "Kestrel Mutual",
+            "status": "awaiting_reply", "group": "done", "last": "2026-06-02"}
+    whole = [light(p) for p in m["people"]] + [light(rest)]
+    return {"view/" + doc_id: doc for doc_id, doc in
+            app_lists.docs({"people": whole}, m["made_at"], "r-" + m["made_at"])}
 
 
 # Where things are drawn, in every engine (the harness's __drawnRect): the page is zoomed on a
@@ -134,6 +157,33 @@ def test_a_held_draft_is_folded_away_with_send_it_anyway_inside(run, tmp_path, v
     assert sent["fold"] is None and WREN in sent["main"], sent
     back = next(c for c in sent["mainCards"] if c["id"] == WREN)
     assert back["draftOpen"] is True and back["copy"] and back["sent"] and back["state"] != "On hold", back
+
+
+def test_someone_on_hold_is_drawn_once_in_their_group_with_the_whole_list_in(run, tmp_path, vp):
+    """The whole list beside the page holds everyone, those on hold too: brought into the main
+    list for its fold, it drew a held person a second time there, the same card as in the On
+    hold group, its held follow-up folded under it (the maintainer's page, 2026-11-12)."""
+    m = _one_with_a_draft()
+    # The engine's own count of what is ready to send never holds a held draft.
+    m["to_send"] = {"n": m["to_send"]["n"] - 1, "ids": [i for i in m["to_send"]["ids"] if i != "msg-wren-2"]}
+    look = "Object.assign(%s, {n: document.querySelectorAll('#main [data-item=\"%s\"]').length})" % (LOOK, WREN)
+    got = _go(run, tmp_path, [
+        {"hash": "contacts", "ready": "LJS.state().views.has('list~people~1') && "
+                                      "!!document.querySelector('#main [data-on-hold]') && "
+                                      "!!document.querySelector('#main [data-k=\"fold:contacts\"]')", "eval": look},
+        # Everyone else, the whole list's own people with them: drawn once that list is in.
+        {"open": "fold:contacts", "ready": "!!document.querySelector('#main [data-item=\"%s\"]')" % ORLA, "eval": look},
+        {"open": "held:contacts", "ready": "!!document.querySelector('#main ul[data-held-list]')", "eval": look},
+    ], vp, model=m, seed=_whole_list(m))
+    folded, everyone, open_ = (got["after"][i]["eval"] for i in (0, 1, 2))
+    assert WREN not in folded["main"] and folded["n"] == 0, folded
+    assert folded["fold"] == "On hold: 1: Show", folded
+    assert ORLA in everyone["main"] and WREN not in everyone["main"] and everyone["n"] == 0, everyone
+    # Shown: in the group once, and nowhere else on the screen.
+    assert [c["id"] for c in open_["held"]] == [WREN] and open_["n"] == 1, open_
+    assert WREN not in open_["main"], open_
+    (card,) = open_["held"]
+    assert card["state"] == "On hold" and card["line"] == AWAY and card["draftOpen"] is False, card
 
 
 def test_a_name_searched_for_still_finds_someone_on_hold(run, tmp_path):

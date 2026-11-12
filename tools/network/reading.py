@@ -1563,18 +1563,22 @@ def computer_signin_steps(wid: str) -> list:
     signin-wait), never asking in the chat. Told to "say done" and ask again after five
     minutes, it waited on a chat nobody watched until its lease ran out and a second chat
     started on the same job (the builder audit, 2026-11-10, CC-10)."""
+    # The look is made afresh after each wait (computer.py SIGNIN_SEEN): an address read
+    # before the wait never saw a sign-in made during it (the maintainer's Mac, 2026-11-12).
     return [
-        f"open {SIGNIN_URL} in Claude's browser, in a tab of its own, so the sign-in is there "
-        "when they look",
+        f"open {SIGNIN_URL} in Claude's browser, in a tab of its own, and show Claude's browser "
+        "in this chat (its panel up), so the sign-in page is in front of them when they open "
+        "this chat from their page",
         f"put it on their page, never in this chat: python3 tools/app.py done \"$D\" --work {wid} "
         "--chat <your id> --kind computer --signin linkedin --question \"LinkedIn is signed out "
-        "in Claude's browser.\" and send its batch",
+        "in Claude's browser.\" and send its batch (its card's one button opens this chat)",
         HEARTBEAT_OUT,
-        "wait for it one look at a time, each look: tabs_context for the sign-in tab's "
-        "address, ArtifactData query of the page's work into \"$D\" (as it is now), then "
-        f"python3 tools/computer.py signin-wait \"$D\" --work {wid} --url <that address> (a Bash "
-        "call with timeout 240000), and do what it prints, until it says stop, then step 7 of "
-        "your prompt. Never ask the person anything in this chat",
+        "wait for it one wait at a time: ArtifactData query of the page's work into \"$D\" (as "
+        f"it is now), then python3 tools/computer.py signin-wait \"$D\" --work {wid} (a Bash "
+        "call with timeout 240000), and do what it prints: after each wait it says how to look, "
+        "LinkedIn's feed opened afresh in Claude's browser and judged by computer.py "
+        "signin-seen, never an address read before the wait; until it says stop, then step 7 "
+        "of your prompt. Never ask the person anything in this chat",
     ]
 
 
@@ -3139,13 +3143,16 @@ MORE_AT_FILE = "more_at.json"
 WAITING = ("awaiting_reply", "connected_no_reply")
 # How long someone waiting on a reply holds their employer: one follow-up wait by the person's
 # own rule (schema.FOLLOW_UP_DAYS, else the app's business days), counted from the last
-# contact (`waiting_until`); then a follow-up is due, and the employer is free. Under a rule
-# of 14 days, a fortnight after the last message. Waiting for every message their limit
-# allows (about four weeks) held four big employers shut through a run, with requests
-# three weeks old nobody accepted (the maintainer, 2026-11-10). A connection request
-# nobody accepted stops counting once it is worth withdrawing (state.REQUEST_WITHDRAW_DAYS),
-# whatever the wait, and a thread with no answer in state.GONE_COLD_DAYS is closed as gone
-# cold (state.close_gone_cold), so it never waits at all. EMPLOYER_WAIT_DAYS in
+# contact (`waiting_until`); then a follow-up is due, and they hold it until that follow-up
+# has gone (`follow_up_owed`): freed the day it fell due, the employer read as open while the
+# follow-up list offered that very follow-up, and a run drafted new notes there beside it
+# (issue 262). Under a rule of 14 days, a fortnight after the last message. Waiting for
+# every message their limit allows (about four weeks) held four big employers shut through
+# a run, with requests three weeks old nobody accepted (the maintainer, 2026-11-10). A
+# connection request nobody accepted stops counting once it is worth withdrawing
+# (state.REQUEST_WITHDRAW_DAYS), whatever the wait, and a thread with no answer in
+# state.GONE_COLD_DAYS is closed as gone cold (state.close_gone_cold), so it never waits at
+# all. EMPLOYER_WAIT_DAYS in
 # networking.py sets a number of their own, counted from the last contact; unset or not a
 # whole number, the rule decides. A fixed 45 days from the first note held an employer six
 # weeks and more, a number nobody chose (the maintainer, 2026-11-09).
@@ -3210,6 +3217,36 @@ def waiting_until(contact, msgs, wait_days: int | None = -1) -> datetime.date | 
     return until
 
 
+# What is owed to someone waiting on a reply that is a message to them: a follow-up, or a first
+# message to someone who accepted a request that said nothing (state.owed's kinds).
+FOLLOW_UP_KINDS = ("nudge", "first_message")
+
+
+def follow_up_owed(contact, msgs, today: datetime.date, memo: dict | None = None) -> bool:
+    """Is a follow-up owed to them on `today`, one the lists offer? state.owed lists one (a
+    follow-up, or a first message after they accepted), not set aside as too old to chase,
+    with no hold on their row (state.action_hold) and none of the person's own rules stopping
+    it (surface.held: somewhere outside where they look, an employer turned down, their limit
+    of unanswered messages). Someone so owed holds their place at their employer until it
+    goes, as someone within their wait does (`at_employer`): the follow-up list and the
+    people a run picks there share one count (issue 262). A request nobody accepted is owed
+    nothing: it is one to withdraw, and holds nothing once it is."""
+    import state
+    import surface
+    msgs = [m for m in msgs or () if state.direction(m)]
+    try:
+        got = state.owed([contact], msgs, today)
+    except (TypeError, ValueError):
+        return False
+    if not any(i["kind"] in FOLLOW_UP_KINDS and not i.get("old") for i in got):
+        return False
+    c = contact or {}
+    if state.action_hold(c.get("next_action"), today, c.get("next_action_due")):
+        return False
+    status = state.effective_status(c, msgs)
+    return surface.held(c, msgs, status, memo=memo, today=today) is None
+
+
 def _waiting_days() -> int:
     """About how many days a first note, with nothing after it, holds its employer under the
     person's rule (business days read as calendar days, rounded up): the number a line or a
@@ -3249,12 +3286,15 @@ LOG_UNREADABLE = ("your message log could not be read ({why}), so who is waiting
 
 
 def at_employer(company: str, contacts, also=(), today: datetime.date | None = None,
-                threads=None, until: dict | None = None) -> tuple:
+                threads=None, until: dict | None = None, owed: set | None = None) -> tuple:
     """(who at this employer is waiting on a reply, who of `also` is there too), by
     company_key, so an employer under another of its names is the same employer. Someone
-    waiting holds the employer only until `waiting_until` (the person's follow-up rule, from
-    the last contact); one with no date at all holds nothing. `until`, given a dict, gets
-    each waiting person's day by contact id, for the line that says when it opens.
+    waiting holds the employer until `waiting_until` (the person's follow-up rule, from
+    the last contact), and after it while a follow-up the lists offer is owed to them
+    (`follow_up_owed`), until it goes; one with no date at all holds nothing. `until`, given
+    a dict, gets each waiting person's day by contact id, for the line that says when it
+    opens; `owed`, given a set, gets the contact ids held by a follow-up owed, for the line
+    that says to send it first.
     Waiting is what the message log says (state.effective_status), never the stored status
     alone: someone who had replied was counted, and named, as waiting (2026-10-21).
     `threads` is the message log; None reads it. A log that cannot be read raises
@@ -3286,12 +3326,24 @@ def at_employer(company: str, contacts, also=(), today: datetime.date | None = N
             until[str(c.get("contact_id") or "")] = day
         return day is not None and day > today
 
+    # Past their wait, a follow-up owed to them still holds their place until it goes: freed
+    # the day it fell due, the employer took new notes the day the follow-up was offered, and
+    # four or five people there had an unanswered message at once (issue 262).
+    memo: dict = {}
+
+    def owes(c) -> bool:
+        if not follow_up_owed(c, msgs(c), today, memo):
+            return False
+        if owed is not None:
+            owed.add(str(c.get("contact_id") or ""))
+        return True
+
     # Never someone whose thread the follow-up rule has closed: two unanswered messages from
     # us is the limit (state.at_limit), and a closed thread at an employer held the next person
     # there until somebody replied, which might be never (the maintainer, 2026-11-10).
     waiting = [c for c in contacts or () if state.row_company_key(c) == k
                and state.effective_status(c, msgs(c)) in WAITING
-               and not state.at_limit(c, msgs(c)) and recent(c)]
+               and not state.at_limit(c, msgs(c)) and (recent(c) or owes(c))]
     there = [x for x in also if x and company_key(x.get("company")) == k]
     return waiting, there
 
@@ -3436,23 +3488,35 @@ def employer_full_line(company: str, contacts, also=(), today: datetime.date | N
     notes already drafted for people there). The one test of it, read by the short list and
     by every draft saved: six notes at four employers that already had two cold notes
     waiting each were saved and shown as ready to send, because only the read step held it
-    (2026-10-21)."""
+    (2026-10-21). Someone owed a follow-up is counted and said as that, with the follow-up
+    named as what goes first: the follow-up and a new note there were both offered (issue
+    262)."""
     limit, theirs = employer_limit(company)
     if limit is None:
         return ""
-    waiting, there = at_employer(company, contacts, also, today=today, threads=threads)
+    owed: set = set()
+    waiting, there = at_employer(company, contacts, also, today=today, threads=threads,
+                                 owed=owed)
     if len(waiting) + len(there) < limit:
         return ""
+
+    def named(rows) -> str:
+        return ", ".join(c.get("name") or c.get("contact_id") for c in rows[:4])
+    chasing = [c for c in waiting if str(c.get("contact_id") or "") in owed]
+    waiting = [c for c in waiting if str(c.get("contact_id") or "") not in owed]
     said = []
     if waiting:
-        said.append(f"{len(waiting)} waiting on a reply ("
-                    + ", ".join(c.get("name") or c.get("contact_id") for c in waiting[:4]) + ")")
+        said.append(f"{len(waiting)} waiting on a reply ({named(waiting)})")
+    if chasing:
+        said.append(f"{len(chasing)} owed a follow-up ({named(chasing)})")
     if there:
         said.append(f"{len(there)} {also_is}")
+    first = (": send that follow-up first" if len(chasing) == 1
+             else ": send those follow-ups first" if chasing else "")
     if theirs:
         return (f"{company} has {' and '.join(said)}, against the {limit} you asked for there "
-                f"on {theirs.get('date', '')}")
-    return f"{company} has {' and '.join(said)}, against {limit} a company"
+                f"on {theirs.get('date', '')}{first}")
+    return f"{company} has {' and '.join(said)}, against {limit} a company{first}"
 
 
 def shortlist(ids, today: datetime.date | None = None, contacts=None, remove=()) -> dict:
@@ -4807,28 +4871,38 @@ EXTRACTOR_ACTIVITY = _EXTRACTOR.replace(
 # each card's text with the address of the person it is about, and the labels of its
 # buttons. A page's text has names but no addresses, so a chat had to read the links
 # itself, and a script of its own for that was refused by the desktop app's safety check.
-# Read-only like the one above: nothing is clicked, typed or scrolled. A card's first
-# profile link is the person's; a later one in it (a mutual connection) is not.
+# Read-only like the one above: nothing is clicked, typed or scrolled. A link on a line that
+# names a mutual connection ("<name> is a mutual connection", "... and 2 other mutual
+# connections") is never a result: paired with the card it sat in, it came back as a second
+# person carrying the card's own name and headline, about half the cards of a page (#259,
+# 2026-11-12). Each card is the largest block around a person's own link that holds no other
+# person's, so the whole card comes with it (its place and its buttons) whatever LinkedIn
+# draws it as; an item of a list is one such block.
 LIST_EXTRACTOR = r"""(() => {
   const main = document.querySelector("main") || document.body;
   const prof = /linkedin\.com\/in\/[^/?#]+/;
-  const holders = new Map();
+  const lines = (el) => (el.innerText || "").split("\n").filter((s) => s.trim()).length;
+  const lineOf = (a) => {
+    let el = a;
+    while (el.parentElement && el.parentElement !== main && lines(el.parentElement) <= 1)
+      el = el.parentElement;
+    return el.innerText || "";
+  };
+  const links = [];
   for (const a of main.querySelectorAll('a[href*="/in/"]')) {
     const m = (a.href || "").match(prof);
-    if (!m) continue;
-    let card = a.closest("li");
-    if (!card) {
-      card = a.parentElement;
-      for (let i = 0; card && i < 6 && card.innerText.split("\n").filter(Boolean).length < 3; i++)
-        card = card.parentElement;
-    }
-    if (card && !holders.has(card)) holders.set(card, "https://www." + m[0]);
+    if (!m || /\bmutual connections?\b/i.test(lineOf(a))) continue;
+    links.push([a, "https://www." + m[0]]);
   }
+  const others = (el, url) => links.some(([b, u]) => u !== url && el.contains(b));
   const cards = [];
   const seen = new Set();
-  for (const [card, url] of holders) {
+  for (const [a, url] of links) {
     if (seen.has(url)) continue;
     seen.add(url);
+    let card = a;
+    while (card.parentElement && card.parentElement !== main && card.parentElement !== document.body
+           && !others(card.parentElement, url)) card = card.parentElement;
     const buttons = Array.from(card.querySelectorAll("button"))
       .map(b => ((b.innerText || "").trim() || (b.getAttribute("aria-label") || "").trim()))
       .filter(t => t && t.length < 80);
@@ -5821,7 +5895,9 @@ def save_drafts(batch: dict, own_facts_why: dict | None = None) -> int:
                        or c.get("contact_id") in ready)]
         full_ = employer_full_line(company, contacts, others, threads=log_rows) if company else ""
         if full_:
-            print(f"reading: not saved. {full_}: no more notes there until someone answers. "
+            # A line that already says what goes first (a follow-up owed there) says no more.
+            until_ = "" if full_.endswith(" first") else ": no more notes there until someone answers"
+            print(f"reading: not saved. {full_}{until_}. "
                   "Send the ones waiting, or set this one aside (python3 tools/network/state.py "
                   f"drop {cid} --reason \"<why>\"); {more_at_hint(company)}")
             refused += 1
@@ -6210,6 +6286,9 @@ def main(argv: list | None = None) -> int:
         print(f"place-ids: {kept} of {len(got)} kept in your own files "
               f"({os.path.join(*SEARCH_FILE)}); a search there: candidates.py search "
               "\"<employer>\" --place \"<place>\"")
+        for line in dict.fromkeys(area_gap_line(name) for name, _x, _w in got):
+            if line:
+                print(line)
         return EXIT["ok"] if kept == len(got) else EXIT["error"]
     if a.cmd == "company-ids":
         got = learn_company_ids(a.pairs)
@@ -7067,10 +7146,15 @@ def _cli_next(a) -> int:
                   "reading.py next again")
             return EXIT["new_day"]
         done = [i for i in _shortlist_file(day) if _read_on(i, today)]
+        # Today's list read is not the run done: one asked for 20 read the 10 on its list,
+        # drafted 8 and told the person it was done (the maintainer, 2026-11-12).
         print(f"done: nothing left to read on today's list ({len(done)} read today"
-              + (f": {', '.join(done)}" if done else "") + "). Show each draft that is not "
-              "shown yet, then tell the person the run is done (a notification where the "
-              "session has one)")
+              + (f": {', '.join(done)}" if done else "") + "). Draft each one kept. A run "
+              "asked for more people than now have a note is not done: find the rest at the "
+              "next employers (python3 tools/network/candidates.py employers, then search, "
+              "check --want <how many more> --add --shortlist) and reading.py next again. Only "
+              "once the number asked has a note, or no good people are left (app.py done "
+              "--short), show each draft not shown yet and tell the person the run is done")
         return EXIT["done"]
     g = _wait_gate(a.timeout) if a.wait else gate_state()
     if g["kind"] != "go":
@@ -7272,6 +7356,114 @@ def learn_place_ids(pairs) -> list:
     return out
 
 
+# A people search in the person's own city covers their whole area. Narrowed to the city's own
+# location number alone, LinkedIn left out everyone who lists the metro area or a town around
+# it, and a run asked for 20 people met far fewer than work there (#257, 2026-11-12). The
+# filter is a list of location numbers, as the address of a search the person narrows by hand
+# to two places carries both, so every number kept for their area goes in it.
+
+
+def _place_name(place) -> str:
+    """A place as the filters key it: its own part before any comma, folded and lower case."""
+    return " ".join(fold(str(place or "")).lower().split(",")[0].split())
+
+
+def _area() -> tuple:
+    """(the metro region's name as written, {name: as written} for the towns the person's job
+    search covers, the other places of their area): from search.py LOCATION metro_name and
+    SCRAPE_LOCATIONS (a town's own part, never a region, a country or remote), networking.py
+    HOME_CITY, and their metro list (discovery.METRO). Nothing where the profile names none."""
+    try:
+        import discovery
+        import places as _pl
+        search = person.module("search")
+    except Exception:  # noqa: BLE001  no profile: no area
+        return "", {}, []
+    loc = _pl.LOCATION
+    broad = {_place_name(x) for x in (*_pl.REGIONS, *_pl.REGIONS.values(),
+                                      loc.get("home_region") or "", loc.get("home_country") or "",
+                                      *(loc.get("home_country_alone") or ()), "remote")} - {""}
+    towns: dict = {}
+    home = str(discovery.HOME_CITY or "").strip()
+    if home:
+        towns[_place_name(home)] = home
+    for raw in getattr(search, "SCRAPE_LOCATIONS", ()) or ():
+        name = _place_name(raw)
+        if "," in str(raw) and name and name not in broad:
+            towns.setdefault(name, str(raw).split(",")[0].strip())
+    rest = [_place_name(m) for m in discovery.METRO if _place_name(m)]
+    return str(loc.get("metro_name") or "").strip(), towns, rest
+
+
+def area_places(place: str) -> list:
+    """The places a people search in `place` covers, by `_place_name`, `place` first: where it
+    is the person's own city or a place of their area, every place of that area (`_area`);
+    anywhere else, `place` alone."""
+    here = _place_name(place)
+    if not here:
+        return []
+    metro, towns, rest = _area()
+    area = [x for x in dict.fromkeys([_place_name(metro), *towns, *rest]) if x]
+    return list(dict.fromkeys([here, *area])) if here in area else [here]
+
+
+def _kept_places() -> dict:
+    """{place name: [location numbers]} for every place kept (place-ids, or a search narrowed
+    by hand and kept with --learn)."""
+    out: dict = {}
+    for k, v in ((_filters().get("places") or {})).items():
+        try:
+            got = json.loads(v) if isinstance(v, str) else v
+        except ValueError:
+            got = re.findall(r"\d+", str(v))
+        ids = [str(x) for x in (got if isinstance(got, list) else [got]) if str(x).strip()]
+        if ids:
+            out.setdefault(_place_name(k), [])
+            out[_place_name(k)] += [i for i in ids if i not in out[_place_name(k)]]
+    return out
+
+
+def place_filter(place: str) -> tuple:
+    """(the location numbers a people search in `place` is narrowed to, the places of the
+    person's area still to keep a number for). Every number kept for its area (`area_places`),
+    `place` first; the area is whole once the metro region's own number is kept, or every town
+    their job search covers. ([], []) for no place."""
+    names = area_places(place)
+    kept = _kept_places()
+    ids = list(dict.fromkeys(i for n in names for i in kept.get(n, [])))
+    if len(names) < 2:
+        return ids, []
+    metro, towns, _rest = _area()
+    if metro and _place_name(metro) in kept:
+        return ids, []
+    missing = [shown for n, shown in towns.items() if n not in kept]
+    if not missing:
+        return ids, []
+    return ids, ([metro] if metro else []) + missing
+
+
+def area_gap_line(place: str) -> str:
+    """What to say when a people search in the person's own city leaves part of their area out
+    (`place_filter`), or ""."""
+    _ids, gaps = place_filter(place)
+    if not gaps:
+        return ""
+    metro, _towns, _rest = _area()
+    towns = [g for g in gaps if g != metro]
+    if metro:
+        keep = (f"keep {metro}'s own number, which covers its towns: reading.py place-ids "
+                f"\"{metro}=<number>\"" + (f", or each town's ({', '.join(towns)})"
+                                           if towns else ""))
+        what = f"{metro} or a town around it"
+    else:
+        keep = (f"keep each town's number: reading.py place-ids \"{towns[0]}=<number>\""
+                + (f" ({', '.join(towns)})" if len(towns) > 1 else ""))
+        what = "a town around it"
+    return (f"  place: a city's location number covers only people who list that city, so people "
+            f"who list {what} are not seen; {keep}. Every people search there uses every number "
+            "of your area that is kept")
+
+
 def learn_company_ids(pairs) -> list:
     """Keep several employers' company numbers at once, each "Employer=1234", where
     learn_company_id keeps one: the person's own files, each unconfirmed until the first page
@@ -7297,6 +7489,17 @@ def learn_company_ids(pairs) -> list:
     return out
 
 
+def _geo(place: str) -> str:
+    """The location filter of a people search in `place`: every number kept for its area
+    (place_filter), as the address carries a list of them. LookupError when none is kept."""
+    ids, _gaps = place_filter(place)
+    if not ids:
+        raise LookupError(f"no location filter on file for {place}: keep its location number "
+                          f"with reading.py place-ids \"{place}=<number>\", or filter one search "
+                          "by it by hand and keep its address with --learn")
+    return json.dumps(ids, separators=(",", ":"))
+
+
 def search_url(company: str, place: str = "", keywords: str = "") -> str:
     """The address of a people search narrowed to this employer (and place), with these
     keywords, in the shape learned from the person's own filtered search."""
@@ -7312,11 +7515,7 @@ def search_url(company: str, place: str = "", keywords: str = "") -> str:
         raise LookupError(no_filter_line(company, place))
     q = {"currentCompany": emp["currentCompany"]}
     if place:
-        geo = (data.get("places") or {}).get(" ".join(place.lower().split()))
-        if not geo:
-            raise LookupError(f"no location filter on file for {place}: filter one search by it "
-                              "by hand and keep its address with --learn")
-        q["geoUrn"] = geo
+        q["geoUrn"] = _geo(place)
     if keywords:
         q["keywords"] = keywords
     q.update(data.get("shape") or {})
@@ -7335,11 +7534,7 @@ def title_search_url(keywords: str, place: str = "") -> str:
     data = _filters()
     q = {"keywords": keywords}
     if place:
-        geo = (data.get("places") or {}).get(" ".join(place.lower().split()))
-        if not geo:
-            raise LookupError(f"no location filter on file for {place}: filter one search by it "
-                              "by hand and keep its address with --learn")
-        q["geoUrn"] = geo
+        q["geoUrn"] = _geo(place)
     q.update(data.get("shape") or {})
     return SEARCH_BASE + "?" + urlencode(q)
 

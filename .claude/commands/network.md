@@ -42,9 +42,14 @@ the app's code mid-run: if a step needs something no command prints, that is a b
 report, not a file to open. `N` is the number asked (`args.count`, 5 when not given) and it
 is a target: the run keeps going until N are found and drafted. On a page work item, pin
 each stage as it starts (`python3 tools/app.py pin "$D" --work <id> --chat <id> --stage
-<start|find|read|write|check> --done <found so far> --total <N> --line "<one plain line>"`),
-and again every ten minutes on a long one, so the page shows the stage, the count and the
-time honestly. The run's record splits its time by these stages (`computer.py measure`):
+<start|find|read|write|check> --line "<one plain line>"`), and again every ten minutes on a
+long one, so the page shows the stage, the count and the time honestly. A count is of one
+thing against its own whole, never more done than its total: `find` says in its line how
+many are found and that N notes are wanted ("14 found so far; 12 notes wanted"), with no
+count; `read` adds `--done <read so far> --total <on the list to read> --word read`; `write`
+adds `--done <notes written> --total <notes this run writes> --word drafted`. Found people
+counted against N read "reading profiles, 14 of 12 done" (2026-11-12), and `pin` writes no
+count past its total. The run's record splits its time by these stages (`computer.py measure`):
 `find` is the searching, `read` the profile reads, so the brief's trend can say which one
 the time went on. Pin `find` before the first search and `read` before the first profile,
 every run, never one stage for both.
@@ -68,14 +73,18 @@ this chat does none of it but what `then` says. Otherwise it is this chat's, as 
 3. **find: the likely employers first.** `python3 tools/network/candidates.py order
    "<employer>" ... --place "<their city>"` puts first the employers where people who fit are
    already known in that place (the contact book, earlier checks), then those one search
-   away, and skips one an earlier check found nobody for there in the last 30 days, with the
-   day it is looked at again. From what is known only: no web search. Then search exactly
+   away, and skips one an earlier check found nobody who fits for there in the last 30 days,
+   with the day it is looked at again, and one whose people who fit were all held back (written
+   to, its limit of people waiting on a reply) only while it is still full: a reply or a close
+   lifts it at once. From what is known only: no web search. Then search exactly
    those people: `python3 tools/network/candidates.py search "<employer>" ... --place "<their
    city>"` (in that order, the skipped ones left out) prints the LinkedIn people searches,
    one for each kind of reader that helps, best-answering first, narrowed to the employer's company
-   number and the place's location number, each kept once (`reading.py company-ids
-   "<Employer>=<number>"`, `reading.py place-ids "<City>=<number>"`; a profile read gives
-   employer numbers by itself). Open each in the signed-in browser on the person's computer,
+   number and every location number kept for their area (the metro region, their city, the towns
+   their job search covers), each kept once (`reading.py company-ids "<Employer>=<number>"`,
+   `reading.py place-ids "<Place>=<number>"`; a profile read gives employer numbers by itself).
+   A city's own number leaves out everyone who lists the metro area or a town around it: where
+   `search` or `place-ids` says so, keep the metro region's number first. Open each in the signed-in browser on the person's computer,
    run `python3 tools/network/reading.py extractor --list` on it and save what it returns. No
    web search while these work; where no browser is here, the ladder's rungs 1 to 3 (step 3
    of "Run it") make the list instead.
@@ -87,8 +96,9 @@ this chat does none of it but what `then` says. Otherwise it is this chat's, as 
    where they live when the result says, twice on one list), and ranks the kind of reader
    who answers them first (their reply rates), then a hiring signal in the headline. It
    keeps what each employer held in that place, so the next run's first pass knows. Never
-   put anyone on the list it left out. Someone an earlier run closed (not the person) is
-   checked again and says so.
+   put anyone on the list it left out. Someone an earlier run closed for a list rule (not the
+   person) is checked again and says so; someone a read of their own page ruled out stays out
+   until their headline or employer is new.
 5. **Keep going until N.** Recruiters, hiring leaders and founders come first: while it
    prints `peers held back:` or `short:`, take the next employer it names, search (step 3)
    and check again. Peers fill what is left only once the hiring side at every employer has
@@ -110,8 +120,13 @@ this chat does none of it but what `then` says. Otherwise it is this chat's, as 
    on it saves. Save the batch in one call: `python3 tools/network/reading.py drafts
    <file.json>`; `reading.py batch <ids>` checks this run's notes, never older ones alone.
 9. **check:** `python3 tools/network/inmail_pick.py pick <ids>` (from what is known only),
-   then the page's finish (`app.py done`). Someone already in conversation whose draft must
-   wait: `python3 tools/network/state.py hold <id> --until "<condition>"`.
+   then the page's finish, `app.py done ... --drafted <n>` with how many have a note. Today's
+   list read with fewer than N drafted (a read that rules someone out leaves a gap) is step 5
+   again, never the finish: `app.py done` refuses a run asked for N that stops short. Only
+   when no good people are left within their rules does it finish short, saying why: `--short
+   "<why, plain>" --summary "<n> of <N>: <why>."`, kept as part-done on their page. Someone
+   already in conversation whose draft must wait: `python3 tools/network/state.py hold <id>
+   --until "<condition>"`.
 
 ## Run it
 
@@ -279,9 +294,11 @@ this chat does none of it but what `then` says. Otherwise it is this chat's, as 
 
    A run the page asked for brings back `args.count` people (5 when not given), never more
    than can be sent: the person chose how many (2026-10-30). The number is a target, not a
-   hint: a run asked for ten stopped at eight (2026-11-09). When one employer's searches are
+   hint: a run asked for ten stopped at eight (2026-11-09), and one asked for twenty read the
+   ten on its list and stopped at eight (2026-11-12). When one employer's searches are
    spent, the run widens to the next employer (`candidates.py employers`), and goes on
-   until the number is found and drafted.
+   until the number is found and drafted; its finish says how many (`app.py done
+   --drafted <n>`), and short of the number only with `--short "<why>"` (step 9 above).
 
    **Only when no employer that clears their bar is left and the batch is not full, stop and
    say so**, with `sources.short_batch(found, wanted, tried, have_connections, browser, named)`:

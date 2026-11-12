@@ -168,9 +168,11 @@ PART_WHO = {
 _KIND_OF = (
     ("opening", re.compile(r"about yourself|walk me through your (?:career|background|cv|resume)"
                            r"|introduce yourself", re.I)),
+    # "How do you know <someone>?", never "How do you know it worked?".
     ("basics", re.compile(r"\bsalary\b|\bpay\b|compensation|\bnotice\b|\bstart\b|sponsor|right to "
                           r"work|\bvisa\b|where are you based|interviewing anywhere|\btravel\b|"
-                          r"\bpermit\b|how do you know", re.I)),
+                          r"\bpermit\b|how do you know (?!(?:if|whether|that|it|its|the|this|these|"
+                          r"what|when|how|your|you)\b)\w+\W*$", re.I)),
     ("maths", re.compile(r"estimate how many|how many .* (?:a|per) (?:year|day|week)|"
                          r"calculate|back of the envelope|market siz", re.I)),
     ("synthesis", re.compile(r"\brecommend|what would you tell (?:the|their) (?:ceo|client)|"
@@ -178,6 +180,13 @@ _KIND_OF = (
     # What a take-home brings: what was left out, what more time would change.
     ("presenting", re.compile(r"\bleave out\b|\bleft out\b|with more time|your (?:take-home|"
                               r"presentation|slides|analysis)\b", re.I)),
+    # "Why that change and not a bigger one?" asks about a choice in the work, never why them: a
+    # mixed round put it in the hello (the maintainer, 2026-11-12).
+    ("probes", re.compile(r"\bwhy (?:that|this|those|these|the|your) (?:change|approach|model|method|"
+                          r"choice|features?|metric|threshold|solution|design|fix|step|algorithm|"
+                          r"library|split|cut|number|test|query|join|tool|way)\b|\bwhy (?:did|would) "
+                          r"you (?:choose|pick|use|go with)\b|\bwhy not\b|\band not (?:a|an|the) "
+                          r"(?:bigger|smaller|simpler|harder|different|other)\b", re.I)),
     ("motivation", re.compile(r"\bwhy\b|leaving|looking|five years|reservations|motivat|draws you|"
                               r"interest(?:ed)? in|the moves", re.I)),
     ("case", re.compile(r"\bcase\b|how would you (?:size|price)", re.I)),
@@ -190,9 +199,15 @@ _KIND_OF = (
     ("behaviour", re.compile(r"\ba time\b|describe a situation|an example of|went wrong|"
                              r"changed someone|led something", re.I)),
     ("probes", re.compile(r"trade-?off|differently|why not|what if|how would it scale|edge case|"
-                          r"complexity", re.I)),
+                          r"complexity|\bfaster\b|speed (?:it|this|that) up|optimi[sz]|"
+                          r"explain (?:this|it|that|the \w+|your \w+) to (?:the |a |your )?"
+                          r"(?:client|business|stakeholders?|manager|non-?technical|team)", re.I)),
+    # The work in front of them: the data, its columns and features, the model, taking it live.
     ("technical", re.compile(r"validat|check the result|\bmodel\b|\bcode\b|\bsql\b|pipeline|"
-                             r"\bbug\b|\btest|statistic|data quality|python|algorithm", re.I)),
+                             r"\bbug\b|\btest|statistic|data quality|python|algorithm|"
+                             r"\b(?:this|the|that) (?:data|dataset|table|file|function|query|"
+                             r"output|result|analysis)\b|\bin the data\b|\bfeatures?\b|"
+                             r"\bcolumns?\b|\bproduction\b|\bdeploy", re.I)),
 )
 _FALLBACK = {"basics": ("basics", "motivation", "opening"),
              "motivation": ("motivation", "basics", "opening"),
@@ -261,6 +276,20 @@ CONTRACTION_EVERY = 60
 ESSAY = ("furthermore", "moreover", "additionally", "in conclusion", "whilst", "thereby",
          "in order to", "utilise", "utilize", "leverage")
 HOOK_FILLER = ("happy to", "more detail", "if you'd like", "if you want", "i can go into")
+# A point is the script's idea in a few words of the person's own: it may share up to three
+# words in a row with the script, never four, and it may sum the script up rather than quote
+# it. The maintainer, 2026-11-12, on a real prep ("all the content could be better"): points
+# made to share the script's words but never five in a row came out as pieces cut from its
+# sentences, stopping on "gets" or "under" (here invented: "Every new forecast gets").
+CUE_SHARED_RUN = 4
+# Words a phrase never stops on, at its end or before a comma inside it: each needs something
+# after it. "with", "for" and "about" are left out, as a phrase ends on them naturally ("the
+# teams I worked with").
+DANGLING = frozenset((
+    "a an the my our your their his her its every "
+    "of to at by from under into onto through across between than as via per toward towards "
+    "and or but nor so because if whether while which whose "
+    "gets could should would must might very").split())
 # Follow-ups a node: two or three under a question, then up to three, then up to two.
 FOLLOW_N = (2, 3)
 FOLLOW_MAX = {2: 3, 3: 2}
@@ -785,7 +814,13 @@ def _place(kind, kinds, strict=False) -> str:
     """The part a question of this kind is asked in. `strict`: None where the round has no
     part for it (a case interview asks no "What is your experience with SAP?" as its case);
     otherwise the nearest part, for a question they are known to ask, which is always placed."""
-    hit = next((k for k in _FALLBACK.get(kind, (kind,)) if k in kinds), None)
+    order = _FALLBACK.get(kind, (kind,))
+    if strict:
+        # The hello holds the introduction and why them, nothing else: pay or notice the records
+        # bring to a round with no part for them is left for the pack (the maintainer,
+        # 2026-11-12, of a mixed round whose opening held a question about the work).
+        order = tuple(k for k in order if k != "opening" or kind in ("opening", "motivation"))
+    hit = next((k for k in order if k in kinds), None)
     if hit or strict:
         return hit
     return "experience" if "experience" in kinds else kinds[1] if len(kinds) > 2 else kinds[0]
@@ -986,7 +1021,7 @@ def build(ctx) -> dict:
         text = P.plain_line(ln)[0]
         q, why = P._last_parens(text)
         q = said_ask(q)
-        if q.endswith("?"):
+        if q.endswith("?") and not any(_norm(a["q"]) == _norm(q) for a in asks):
             asks.append({"id": "a%d" % (len(asks) + 1), "q": q, "why": why,
                          "follow": []})
     if "close" in kinds:
@@ -1018,13 +1053,52 @@ def _lc(text) -> str:
     return t[:1].lower() + t[1:] if t[:1].isupper() and t[1:2].islower() else t
 
 
+# A fact said as the reason for a question is short and whole: past this many words, or cut
+# short where it was read, the question is asked on its own (the maintainer, 2026-11-12: a real
+# prep pasted a fact cut short, the role's title and city in brackets, in front of the question).
+ASK_FACT_WORDS = 14
+# A question that leans on the fact before it, as it is asked with no fact said.
+_ASK_ALONE = {
+    "is that still how the team is set up?": "How is the team set up today?",
+    "what does that mean for headcount on this team?": "Is the team growing this year?",
+    "what has that changed for your team?": "What has changed most for your team this year?",
+    "how much of that reaches the work day to day?": "What does the work look like day to day?",
+    "what is the part of that an outsider would get wrong?":
+        "What would an outsider most often get wrong about the work here?",
+    "what is the first thing it needs someone to fix?":
+        "What is the first thing this role needs someone to fix?",
+}
+
+
+def _said_fact(fact) -> str:
+    """A fact read about them as it can be said aloud: what is in brackets taken out, its end
+    tidied. "" when it was cut short where it was read, or is too long to say in a breath."""
+    t = _t(fact)
+    clipped = t.endswith(("...", "\u2026"))
+    while True:
+        u = re.sub(r"\s*[(\[][^()\[\]]*[)\]]", "", t)
+        if u == t:
+            break
+        t = u
+    t = _t(t).rstrip(".!\u2026 ")
+    if clipped or not t or re.search(r"[()\[\]\"\u201c\u201d;:]", t) or len(_WORD.findall(t)) > ASK_FACT_WORDS:
+        return ""
+    return t
+
+
 def said_ask(question) -> str:
-    """A question to ask them as it would be said: 'I saw you opened a cross-dock in January,
-    so what has that changed for your team?'. Anything else is left as it is."""
+    """A question to ask them as it would be said, a short reason and then the question: 'I saw
+    you opened a cross-dock in January. What has that changed for your team?'. A fact too long
+    to say, or cut short where it was read, is never pasted in: the question is asked on its own
+    ('What has changed most for your team this year?'). Anything else is left as it is."""
     m = _ANCHORED.match(_t(question))
     if not m:
         return _t(question)
-    kind, fact, tail = m.group(1), m.group(2).strip().rstrip(".!"), _lc(m.group(3))
+    kind, tail = m.group(1), _t(m.group(3))
+    tail = tail[:1].upper() + tail[1:]
+    fact = _said_fact(m.group(2))
+    if not fact:
+        return _ASK_ALONE.get(tail.lower(), tail)
     # A name keeps its capital ("Fernhill Freight runs ..."); an ordinary first word does not.
     common = _lc(fact) if _DID.match(fact) or re.match(
         r"(?i)(?:the|a|an|its|their|it|this|they|there|more|most|over|about)\b", fact) else fact
@@ -1034,7 +1108,23 @@ def said_ask(question) -> str:
         lead = "I saw you %s" % common
     else:
         lead = "I read that %s" % common
-    return "%s, so %s" % (lead, tail)
+    return "%s. %s" % (lead, tail)
+
+
+def _ask_like(q, olds):
+    """The question to ask among `olds` (keyed by their words) that is `q` said another way,
+    taken out of `olds`; None when there is none. A prep saved before 2026-11-12 says them
+    "I read that <fact>, so <question>", and its follow-ups stay with the question."""
+    mine = _content(q)
+    best, score = None, 0.0
+    for key, a in olds.items():
+        theirs = _content(a.get("q"))
+        if len(mine) < 2 or len(theirs) < 2:
+            continue
+        n = len(mine & theirs) / float(min(len(mine), len(theirs)))
+        if n > score:
+            best, score = key, n
+    return olds.pop(best) if best is not None and score >= 0.8 else None
 
 
 def _place_known(known, questions, parts, room) -> None:
@@ -1251,7 +1341,7 @@ def merge(fresh, filled) -> dict:
     # The questions to ask: the records' with Claude's follow-ups, then Claude's own.
     old_ask = {_norm(said_ask(a.get("q"))): a for a in filled.get("ask") or []}
     for a in doc["ask"]:
-        old = old_ask.pop(_norm(a["q"]), None)
+        old = old_ask.pop(_norm(a["q"]), None) or _ask_like(a["q"], old_ask)
         if old and old.get("follow"):
             a["follow"] = old["follow"]
     for old in old_ask.values():
@@ -1621,6 +1711,20 @@ def _runs(text, terms=None, n=5) -> set:
     return {tuple(w[i:i + n]) for i in range(len(w) - n + 1)}
 
 
+def dangles(text, terms=None) -> str:
+    """The word a point stops on that needs something after it ("gets", "under", "the"), at its
+    end or before a comma, colon or semicolon inside it; "" when it reads as a whole phrase."""
+    toks = _t(plain(text, terms)).split()
+    for i, tok in enumerate(toks):
+        last = i == len(toks) - 1
+        if not last and (i == 0 or not tok.endswith((",", ";", ":"))):
+            continue
+        w = tok.strip(",;:.!?\"'()\u2018\u2019\u201c\u201d").lower()
+        if w in DANGLING:
+            return w
+    return ""
+
+
 def _lines_of(text, terms=None) -> list:
     t = _t(plain(text, terms))
     return [x for x in _SENTENCE.split(t) if x.strip()] if t else []
@@ -1628,12 +1732,13 @@ def _lines_of(text, terms=None) -> list:
 
 def _live_checks(node, where, terms, level, basic) -> list:
     """The checks for an answer written the live way: its points (`simple`, a list) are the
-    script in a few words, never a copy of it, and the script (`detailed`) is said as the
-    person talks, the point first and its end leading into the first follow-up."""
+    script in a few words, each a whole phrase and never a piece cut from it, and the script
+    (`detailed`) is said as the person talks, the point first. Neither has to set up a follow-up:
+    the page offers the follow-ups as choices, and an answer that ends on a hook to one reads
+    like a machine (the maintainer, 2026-11-12)."""
     out = []
     cues = _cues(node)
     d = _t(node.get("detailed"))
-    follow = [f for f in node.get("follow") or [] if isinstance(f, dict) and _t(f.get("q"))]
     lo, hi = CUES_BASIC if basic else CUES_FOLLOW if level else CUES
     if level and words(node.get("q")) > FOLLOW_Q_WORDS:
         out.append((where, "the follow-up runs to %d words: put it as they would ask it, %d "
@@ -1645,7 +1750,6 @@ def _live_checks(node, where, terms, level, basic) -> list:
     if not lo <= len(cues) <= hi:
         out.append((where, "it has %d point%s: make it %d to %d short lines to glance at"
                     % (len(cues), "" if len(cues) == 1 else "s", lo, hi)))
-    starts = {}
     for c in cues:
         n = words(c, terms)
         if n > CUE_WORDS:
@@ -1654,11 +1758,10 @@ def _live_checks(node, where, terms, level, basic) -> list:
         if c.rstrip().endswith("."):
             out.append((where, "the point \"%s\" ends with a full stop: it is a line to glance "
                                "at, not a sentence" % _t(plain(c, terms))))
-        first = (_WORD.findall(plain(c, terms).lower()) or [""])[0]
-        if first and first in starts:
-            out.append((where, "two points start with \"%s\": start each its own way, so the eye "
-                               "can tell them apart" % first))
-        starts[first] = True
+        stop = dangles(c, terms)
+        if stop:
+            out.append((where, "the point \"%s\" stops on \"%s\": make it a whole phrase, the "
+                               "idea in your own words" % (_t(plain(c, terms)), stop)))
     if not d:
         if not basic:
             out.append((where, "the script is not written yet: the answer as you would say it "
@@ -1690,34 +1793,26 @@ def _live_checks(node, where, terms, level, basic) -> list:
                 (_content(head) & _content(q)) or _numbers(head) or not q):
             out.append((where, "the script does not open on the point: say the answer to \"%s\" "
                                "first, in one short sentence" % (q or "the question")))
-    if follow and lines:
-        last, nxt = lines[-1], _t(follow[0]["q"])
-        lowl = last.lower()
-        if "?" in last or any(f in lowl for f in HOOK_FILLER) or not _content(last) & _content(nxt):
-            out.append((where, "end on the thread that leads to \"%s\", said as part of the "
-                               "answer, never as an offer to say more" % nxt))
-    # The points are the script in a few words: the same numbers, the same content, and never
-    # the script's own words copied out.
+    # It ends where the answer ends: never on an offer to say more, and never made to set up
+    # the first follow-up, which the page offers as a choice (the maintainer, 2026-11-12).
+    if lines and any(f in lines[-1].lower() for f in HOOK_FILLER):
+        out.append((where, "the script ends on an offer to say more: end on your answer, and let "
+                           "them ask"))
+    # The points are the script in a few words: the same numbers, and never four of the
+    # script's words in a row; a point may sum it up in words of its own.
     said = " ".join(cues)
     if _numbers(said, terms) != _numbers(d, terms):
         out.append((where, "the points and the script hold different numbers: a point says what "
                            "the script does not, or the script holds a number the points miss"))
-    mine, script = _content(said, terms), _content(d, terms)
-    alone = [c for c in cues if _content(c, terms) and not _content(c, terms) & script]
-    if (mine and len(mine & script) < 0.5 * len(mine)) or alone:
-        out.append((where, "the points say what the script does not%s: keep them to what the "
-                           "script says, in fewer words"
-                    % (" (\"%s\")" % _t(plain(alone[0], terms)) if alone else "")))
-    shared = _runs(said, terms) & _runs(d, terms)
+    script_runs = _runs(d, terms, CUE_SHARED_RUN)
     for c in cues:
-        if _runs(c, terms) & shared:
-            out.append((where, "the point \"%s\" repeats the script word for word: cut it to "
-                               "the key words" % _t(plain(c, terms))))
+        hit = sorted(_runs(c, terms, CUE_SHARED_RUN) & script_runs)
+        if hit:
+            out.append((where, "the point \"%s\" copies the script (\"%s\"): say the idea in a "
+                               "few words of your own, three in a row from the script at most"
+                        % (_t(plain(c, terms)), " ".join(hit[0]))))
     if lines and not _content(cues[0], terms) & _content(lines[0]):
         out.append((where, "the first point is not the point the script opens on: lead with it"))
-    if follow and not _content(cues[-1], terms) & _content(follow[0]["q"]):
-        out.append((where, "the last point does not lead into \"%s\": end on the thread to it"
-                    % _t(follow[0]["q"])))
     return out
 
 
@@ -1791,6 +1886,16 @@ _SAY_FIRST = {
 }
 
 
+def intro_question(doc, part):
+    """The opening part's "Tell me about yourself" (or "Walk me through your background"), the
+    question its answer is the opening of, or None: a part that is no opening, or holds no such
+    question, opens on its own lines to say first."""
+    if (part or {}).get("kind") != "opening":
+        return None
+    return next((q for q in (doc or {}).get("questions") or []
+                 if q.get("part") == part.get("id") and kind_of(q.get("q")) == "opening"), None)
+
+
 def _tree_checks(q, where) -> list:
     """A question written the live way has two or three follow-ups, then up to three under
     each, then up to two, and at least one line of them three deep, so whatever they ask next
@@ -1799,8 +1904,8 @@ def _tree_checks(q, where) -> list:
     lo, hi = FOLLOW_N
     own = [f for f in q.get("follow") or [] if isinstance(f, dict)]
     if not lo <= len(own) <= hi:
-        out.append((where, "it has %d follow-up%s: give it %d or %d, the first the one its "
-                           "answer leads into" % (len(own), "" if len(own) == 1 else "s", lo, hi)))
+        out.append((where, "it has %d follow-up%s: give it %d or %d, the likeliest first"
+                    % (len(own), "" if len(own) == 1 else "s", lo, hi)))
     deepest = 0
     for f, depth, here in _nodes(q, where=where):
         deepest = max(deepest, depth)
@@ -2022,7 +2127,17 @@ def problems(doc, ctx=None) -> list:
     timing = (doc.get("timing") or {}).get("parts") or {}
     for p in doc.get("parts") or []:
         say = p.get("say") or []
-        if not say:
+        intro = intro_question(doc, p)
+        if intro is not None:
+            # The answer to "Tell me about yourself" is how the opening is said: one script, never
+            # also as lines to say first (the maintainer, 2026-11-12: the same intro stood as the
+            # part's lines, as that answer, and again at a glance). A line answering a question
+            # they are known to ask is still said first.
+            if [b for b in say if not b.get("known")]:
+                out.append(("\"%s\"" % p.get("title"), "the answer to \"%s\" is how you open: "
+                            "write the opening once, as that answer, and leave this part's lines "
+                            "to say first empty" % _t(intro.get("q"))))
+        elif not say:
             out.append(("\"%s\"" % p.get("title"), "nothing to say first yet: write two or three "
                                                    "sentences to say aloud as it starts"
                         + _SAY_FIRST.get(p.get("kind"), "")))
@@ -2114,8 +2229,11 @@ def problems(doc, ctx=None) -> list:
             if not _t(f.get("if")) or not _t(f.get("then")):
                 out.append(("your question \"%s\"" % _t(a.get("q")),
                             "a follow-up needs their likely answer and what you say next"))
-    # Every known question: on a question, and answered before they ask it, in an opening.
+    # Every known question: on a question, and answered before they ask it, in an opening. One
+    # asked as "Tell me about yourself" is answered by the opening itself, which is its answer.
     said_known = {b.get("known") for p in doc.get("parts") or [] for b in p.get("say") or []}
+    said_known |= {q.get("known") for p in doc.get("parts") or []
+                   for q in [intro_question(doc, p)] if q is not None and _said(q)}
     for k in doc.get("known") or []:
         if not k.get("question") or k["question"] not in qids:
             out.append(("\"%s\"" % k.get("text"), "a question they are known to ask is not "

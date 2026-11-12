@@ -11,6 +11,7 @@ way there. Invented people and computers only.
 from __future__ import annotations
 
 import datetime as dt
+import json
 import os
 import sys
 
@@ -42,9 +43,14 @@ def test_a_read_held_on_the_computer_while_linkedin_is_signed_out_has_its_card()
     st = computer.state(db, T, envs=BRIDGE)
     assert st["state"] == "signed_out" and st["card"], st
     card = computer.card(st)
-    assert card["body"].startswith("“Reading 3 profiles” waits until you sign in"), card["body"]
-    # One way through, on its face: LinkedIn opened in Claude's browser beside the page.
-    assert card["browser"]["label"] == "Open LinkedIn" and card["steps"]
+    # Decided 2026-11-12 (the maintainer's Mac): the one way through opens the chat on the
+    # computer that holds the read, where LinkedIn's sign-in is open in its own browser; a
+    # sign-in beside the page did not reach it, so no LinkedIn link is on the card.
+    assert card["body"].startswith("Sign in to LinkedIn once, in the chat on your Studio "
+                                   "Laptop"), card["body"]
+    assert card["open"] == {"label": "Open the chat",
+                            "url": "https://claude.ai/code/session_mac1"}
+    assert "browser" not in card and "linkedin.com" not in json.dumps(card)
     # Just taken: the chat there gets its ten minutes to put it on the page itself.
     assert not computer.state(dict(_db((WID, _held(2))), chats=_beat(linkedin="out")), T,
                               envs=BRIDGE)["card"]

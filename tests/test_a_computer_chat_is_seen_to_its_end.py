@@ -279,17 +279,18 @@ def test_the_sign_in_wait_is_one_fresh_look_every_three_minutes(tmp_path):
     assert computer.SIGNIN_LOOK_S == 180
     prompt = computer.session_prompt("network~read~1", "People", URL, "their job search")
     step5 = prompt[prompt.index("5. Say how"):prompt.index("6. Follow")]
-    assert "collection work" in step5 and "signin-wait" in step5 and "--url" in step5
+    assert "collection work" in step5 and "signin-wait" in step5 and "signin-seen" in step5
     assert "timeout 240000" in step5 and "reading.py signin --url" not in step5
 
-    def run(item, *extra):
+    def run(item, *extra, cmd="signin-wait"):
         dump = tmp_path / str(len(list(tmp_path.iterdir())))
         (dump / "work").mkdir(parents=True)
         with open(dump / "work" / ("~".join(("network", "read", "1")).replace("~", "@") + ".json"), "w", encoding="utf-8") as fh:
             json.dump({"data": item, "version": 4}, fh)
         return subprocess.run([sys.executable, os.path.join(ROOT, "tools", "computer.py"),
-                               "signin-wait", str(dump), "--work", "network~read~1",
-                               "--every", "0", "--now", NOW, *extra],
+                               cmd, str(dump), "--work", "network~read~1",
+                               *(("--every", "0") if cmd == "signin-wait" else ()),
+                               "--now", NOW, *extra],
                               env=dict(os.environ, LJS_STATE=str(tmp_path / "state")),
                               capture_output=True, text=True, encoding="utf-8")
     # The page sent it back (they signed in there): seen at the next look.
@@ -299,11 +300,18 @@ def test_the_sign_in_wait_is_one_fresh_look_every_three_minutes(tmp_path):
     # They tapped Stop on the page: the chat stops waiting.
     stop = run(_signed_out_item(stop_asked=True), "--url", "https://www.linkedin.com/login")
     assert stop.stdout.startswith("stopped:"), stop.stdout
-    # The sign-in tab shows them signed in: carried on at once, with no wait.
-    signed = run(_signed_out_item(), "--url", "https://www.linkedin.com/feed/")
+    # Decided 2026-11-12 (the maintainer's Mac): the wait only waits, and never judges an
+    # address read before it, so after it the chat looks afresh: LinkedIn's feed opened in
+    # Claude's browser and judged by signin-seen.
+    waited = run(_signed_out_item(), "--url", "https://www.linkedin.com/feed/")
+    assert waited.stdout.startswith("look now") and "signin-seen" in waited.stdout, waited.stdout
+    assert computer.FEED_URL in waited.stdout
+    # The feed shows them signed in: carried on at once.
+    signed = run(_signed_out_item(), "--url", "https://www.linkedin.com/feed/", "--title",
+                 "Feed | LinkedIn", cmd="signin-seen")
     assert signed.stdout.startswith("signed-in:") and "computer.py signed-in" in signed.stdout
-    # Still on the sign-in page: the next look is the same three calls, the work read afresh.
-    look = run(_signed_out_item(), "--url", "https://www.linkedin.com/login")
+    # Still on the sign-in page: the next wait, the work read afresh.
+    look = run(_signed_out_item(), "--url", "https://www.linkedin.com/login", cmd="signin-seen")
     assert look.stdout.startswith("look:") and "collection work" in look.stdout, look.stdout
 
 
