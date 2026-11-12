@@ -28,8 +28,8 @@
       "Bash(python3 tools/app.py:*)",
       "ArtifactData",
       "ArtifactComments",
-      "WebSearch"
-
+      "WebSearch",
+      "mcp__claude-code-remote__add_repo"
     ]
   },
   "hooks": {
