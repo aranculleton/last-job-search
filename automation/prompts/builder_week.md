@@ -103,9 +103,11 @@ same reason in a later week.
    label), to one line: "<today, YYYY-MM-DD>: released vX.Y.Z with N fixes." or "<today>:
    nothing released: <why, in a few words>." The maintainer reads it on GitHub, with the
    issues labelled `needs-maintainer` and the release notes; their brief never says it.
-2. **One call**: list the open issues again, as in step 1. One opened while you worked is taken
-   now, the same way, into a patch release of its own, and the report rewritten; this last
-   look is made once.
+2. **One call**: list the open issues again, as in step 1. One opened while you worked waits
+   for next week's run: never a second release in one run (the maintainer, 2026-11-12: no
+   follow-up patch releases). The one exception is a fix that stops something working for
+   people other than the maintainer (MAINTAINING.md, "Builder"), and that goes into its own
+   release only then. This last look is made once.
 
 No review agent, no other chat started, and no reminder set for yourself. Your final reply is
 the report's line. Then stop.
