@@ -79,6 +79,11 @@ BUILDER_PROMPT = "automation/prompts/builder_week.md"
 # Wednesdays at 23:15 UK time: the maintainer's weekly usage starts again at 23:00, and the
 # release merges before 07:30 so their 07:56 brief takes it.
 BUILDER_CRON = "CRON_TZ=Europe/London 15 23 * * 3"
+# The chat the builder's task fires into, made first with the app attached: a fresh chat per run
+# has no repository, no add_repo and no GitHub tools, and stops at once (issue #245).
+BUILDER_CHAT = "<the builder's chat id, from create_session>"
+BUILDER_CHAT_PROMPT = ("This chat runs the app's weekly builder on its schedule, and nothing "
+                       "else. Nothing to do now: reply with the one word Ready.")
 TOKENS_HOURS = 12                     # the denylist is built again after this, as the push gate's is
 WAKE_HOURS = 1                        # urgent bugs in a burst poke the builder once
 WINDOW = (15, 20)                     # no merge from 15 minutes before to 20 after their tasks
@@ -390,11 +395,13 @@ def window(copy: str, now: dt.datetime | None = None) -> tuple[int, str]:
 
 
 def task(copy: str) -> dict:
-    """The builder's scheduled task, as create_trigger takes it: weekly, a fresh chat each run,
-    poked at once only for a bug that stops the search. Its prompt is a stub that
-    reads the builder's instructions from the app's master, so a change to what it does is a
-    pull request, never an edit to the task; `copy` (the maintainer's own, owner/name) is in
-    the task alone, never in the app."""
+    """The builder's scheduled task, as two calls in order: create_session, a chat made with the
+    app as its source in Auto (so add_repo and the GitHub tools are there), then create_trigger
+    bound to that chat, weekly, poked at once only for a bug that stops the search. Never a
+    fresh chat each run: one has no repository and stops at once (issue #245). Its prompt is a
+    stub that reads the builder's instructions from the app's master, so a change to what it
+    does is a pull request, never an edit to the task; `copy` (the maintainer's own,
+    owner/name) is in the task alone, never in the app."""
     import app_setup
     copy = str(copy or "").strip().removeprefix("https://github.com/").removesuffix(".git").strip("/")
     if not re.fullmatch(r"[A-Za-z0-9-]+/[A-Za-z0-9._-]+", copy) or copy.lower() == app_setup.APP_REPO:
@@ -407,9 +414,21 @@ def task(copy: str) -> dict:
               f"fetch origin master`, read {BUILDER_PROMPT} as it is on origin/master (`git show "
               f"origin/master:{BUILDER_PROMPT}`) and follow it exactly. If anything here cannot "
               "be had, reply with one line saying which and why, and stop.")
-    return {"name": BUILDER_TASK, "cron_expression": BUILDER_CRON,
-            "create_new_session_on_fire": True, "initiation": "human_request",
-            "notifications": {}, "prompt": prompt}
+    try:
+        import app_listen
+        mode = app_listen.SESSION_MODE
+    except Exception:  # noqa: BLE001
+        mode = "auto"
+    return {"calls": [
+        {"tool": "create_session",
+         "args": {"title": BUILDER_TASK, "source_url": f"https://github.com/{app}",
+                  "prompt": BUILDER_CHAT_PROMPT, "permission_mode": mode},
+         "why": f"the builder's own chat, with the app attached; its id is {BUILDER_CHAT} below"},
+        {"tool": "create_trigger",
+         "args": {"name": BUILDER_TASK, "cron_expression": BUILDER_CRON,
+                  "persistent_session_id": BUILDER_CHAT, "initiation": "human_request",
+                  "prompt": prompt},
+         "why": "the weekly task, firing in that chat"}]}
 
 
 # ------------------------------------------------------------------ held for a chat that can file
@@ -718,7 +737,7 @@ def main(argv=None, build=None) -> int:
     w.add_argument("--none", action="store_true", help="nothing could be poked: the next urgent bug pokes it")
     m = sub.add_parser("window", help="may the builder merge now, clear of the maintainer's tasks")
     m.add_argument("copy", help="the maintainer's own copy, checked out")
-    t = sub.add_parser("task", help="the builder's scheduled task, as create_trigger takes it")
+    t = sub.add_parser("task", help="the builder's chat and scheduled task, as the two calls that make them")
     t.add_argument("--copy", required=True, help="the maintainer's own copy, as owner/name")
     a = ap.parse_args(argv)
     if a.cmd == "window":
