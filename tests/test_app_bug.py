@@ -365,6 +365,8 @@ def test_the_builders_prompt_says_what_it_must():
             "needs-maintainer", "fixed-unreleased", "builder-report",
             "never a second comment for the same reason",
             "list the open issues again", "this last look is made once",
+            "never a second release in one run", "one release a week",
+            "sleep 2400",
             "never poll"):
         assert must in text, must
 

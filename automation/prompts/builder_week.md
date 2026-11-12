@@ -105,9 +105,11 @@ same reason in a later week.
    issues labelled `needs-maintainer` and the release notes; their brief never says it.
 2. **One call**: list the open issues again, as in step 1. One opened while you worked waits
    for next week's run: never a second release in one run (the maintainer, 2026-11-12: no
-   follow-up patch releases). The one exception is a fix that stops something working for
-   people other than the maintainer (MAINTAINING.md, "Builder"), and that goes into its own
-   release only then. This last look is made once.
+   follow-up patch releases; one release a week). The only exception, released at once in a
+   patch of its own: waiting a week would do real harm, meaning a person's private details
+   could leak, their data could be lost, or the app cannot be used or updated at all.
+   Wrong words, display faults and anything with a workaround wait for the week; this last
+   look is made once.
 
 No review agent, no other chat started, and no reminder set for yourself. Your final reply is
 the report's line. Then stop.
