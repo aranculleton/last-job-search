@@ -143,3 +143,15 @@ def test_a_name_searched_for_still_finds_someone_on_hold(run, tmp_path):
     ], WIDE, model=_two_waiting_for_a_role())
     found = got["after"][1]["eval"]
     assert found["main"] == [LEORIC] and found["mainCards"][0]["state"] == "On hold", found
+
+
+def test_a_link_to_someone_on_hold_opens_the_group_on_their_card(run, tmp_path):
+    """A link to a person opened the "more people" fold behind them, never the On hold group,
+    so a link to someone on hold landed with their card still folded away (issue #251)."""
+    got = _go(run, tmp_path, [
+        {"hash": "contacts/" + LEORIC, "ready": "!!document.querySelector('#main [data-on-hold]')",
+         "eval": LOOK},
+    ], WIDE, model=_two_waiting_for_a_role())
+    landed = got["after"][0]["eval"]
+    assert LEORIC in [c["id"] for c in landed["held"]], landed
+    assert landed["fold"] == "On hold: 2, waiting for a role to be posted: Hide", landed

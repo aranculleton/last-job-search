@@ -1163,8 +1163,9 @@ METHODS: dict[str, dict] = {
             (199, "2026-11-12", True, "a settings row under the pointer shows its arrow and its grey line in ink, readable on the hover colour"),
             (200, "2026-11-12", True, "the live prep on an iPhone, in Safari and in Firefox: a word's box opens at a tap on a touch screen and stays, where the focus the tap gave the word had shut it at once; an Esc that shuts a word's box or a lifeline's line never also closes the prep in Safari; a jump on a phone folds the bar before it scrolls, so Safari's scroll reaches the part tapped; the day and the drafts asked for are one quiet line under the title, so At a glance starts on a phone's first screen in any language; Chat opens with its first words under the header, its end placed where Latest puts it"),
             (201, "2026-11-12", True, "the live prep's row of chips follows the part marked only when the mark moves or the bar changes shape: put back on every scroll, a row moved sideways to reach a chip slid it from under the finger and the tap went nowhere"),
+            (202, "2026-11-12", True, "a link to someone on hold opens the On hold group on their card, where it landed with the group still folded"),
         ),
-        "fingerprint": "9ac38ebfd3508618",
+        "fingerprint": "4a4da5f26cdd4f87",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

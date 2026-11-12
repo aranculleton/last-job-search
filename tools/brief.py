@@ -1335,6 +1335,42 @@ def _where_once(write: bool) -> str:
         return ""
 
 
+def _own_zone() -> str:
+    """The zone the person's routines run in (profile/routines.json `timezone`), else the
+    profile's own; "" when neither says."""
+    try:
+        import routines
+        return str((routines.load() or {}).get("timezone") or "") or routines.home_zone()
+    except Exception:  # noqa: BLE001  no registry or no profile: not known
+        return ""
+
+
+def _in_own_time(st: dict):
+    """(day, " at HH:MM (HH:MM <city> time)") for a stage booked in another zone than the
+    person's, read in theirs, or None where the zones agree or one is not known. Only for what
+    the person reads privately: what an employer sees keeps the employer's time (issue #247)."""
+    if not st.get("time") or not st.get("date"):
+        return None
+    try:
+        import zoneinfo
+        import open_actions
+        import routines
+        word = str(st.get("zone") or "")
+        theirs = word if "/" in word else (open_actions._stage_zone(word) if word else "")
+        mine = _own_zone()
+        if not theirs or not mine or theirs == mine:
+            return None
+        h, m = (int(x) for x in str(st["time"]).split(":"))
+        at = dt.datetime.combine(_d(st["date"]), dt.time(h, m), tzinfo=zoneinfo.ZoneInfo(theirs))
+        here = at.astimezone(zoneinfo.ZoneInfo(mine))
+    except Exception:  # noqa: BLE001  no zone data, or a time that is not one: as written
+        return None
+    if here.utcoffset() == at.utcoffset():
+        return None
+    return here.date(), " at %s (%s %s time)" % (here.strftime("%H:%M"), st["time"],
+                                                 routines.city_of(theirs))
+
+
 def _lead(counts, replies, nudges_due, sent_lately, warm, owned, today, set_up_on=None) -> str:
     procs = counts["processes"]
     if procs:
@@ -1351,11 +1387,14 @@ def _lead(counts, replies, nudges_due, sent_lately, warm, owned, today, set_up_o
                 open_actions._days_said([x for x in st["offered"] if x >= today.isoformat()]),
                 ", by %s" % _weekday(by) if by else "")
         if st.get("date"):
-            day = _d(st["date"])
+            day, clock = _d(st["date"]), " at %s" % st["time"] if st.get("time") else ""
+            mine = _in_own_time(st)
+            if mine:
+                day, clock = mine
             when = ("today" if day == today else "tomorrow" if day == today + dt.timedelta(days=1)
                     else "on %s" % _weekday(day))
             return "%s with %s is %s%s%s. Your prep is on your page." % (
-                label, company, when, " at %s" % st["time"] if st.get("time") else "", more)
+                label, company, when, clock, more)
         # An employer whose own chat runs its process: the chat is Claude's to know, never
         # named to the person ("its own chat (... campaign (this chat))", the audit).
         return "Your %s process is live%s. Your prep is on your page." % (company, more)
