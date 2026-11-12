@@ -10,12 +10,14 @@ set up, clicking **Install** in a window from Apple.
 the Claude app open there, with your computer awake, and that is all: when something needs
 your computer (reading someone's LinkedIn profile before Claude writes to them), Claude
 starts a chat there by itself, called "Job search · what it is doing · your computer's
-name", does the work and puts it on your page. Each is put away by itself once its work is
-done, and is safe to delete. To watch one, open it in the Claude app on your computer. They
-are started by one small chat of Claude's, "Job search: starts chats on your computer",
-which stays. The first time, it asks "Let Claude use your computers and other sessions from
-here?": choose Allow, once, and a card on your page's To do says which chat. If your computer
-is off, your page says so in one line and the work waits; nothing else is asked of you.
+name", does the work and puts it on your page. The first of them stays open afterwards as
+"Job search: on your computer" and takes every later job there by itself, so nothing new
+needs your OK; any others are put away by themselves once their work is done, and are safe to
+delete. To watch one, open it in the Claude app on your computer. The first is started by one
+small chat of Claude's, "Job search: starts chats on your computer", which stays. The first
+time, it asks "Let Claude use your computers and other sessions from here?": choose Allow,
+once, and a card on your page's To do says which chat. If your computer is off, your page
+says so in one line and the work waits; nothing else is asked of you.
 Every chat Claude makes, and why: [README.md](README.md#the-chats-youll-see).
 
 ---
@@ -208,7 +210,20 @@ helper (a `computer:` line, while work waits there or a chat there is left to pu
 the brief looks on each run; while something waits, the chat runs `route` (a step it has no
 tool for, such as `list_environments` in the helper's subagent, is handed back to the chat
 that started it: `handback`), which picks the first that works:
-a chat already on the computer; a chat started there from the cloud (`create_session` on the
+a chat already on the computer; the computer's own chat, "Job search: on your computer"
+(`computer.py` LISTENER_TITLE, the listener), woken by republishing its bell (`ring computer
+chat`): the first chat on the computer that finishes its job with no live listener publishes a
+bell of its own and stays open as it (`ring --chat` prints `stay`, then `listener-ready`; its
+record is `meta/computer_listener`), each wake runs `listener-steps` (`listener-woke`: take the
+work as any chat there does, republish its own bell at most hourly, or rest), idle it keeps
+one background wait of just under two hours whose end wakes it to republish its bell, so its
+watch never lapses, after each job it rings the starter, whose wake lands what it saved (no
+chat on the computer may merge: `land.on_computer`; `starter-woke` prints the landing), the
+starter and `archivable` never put it away, and the hourly scheduled task, where there is one,
+also rings it once after two quiet hours (`keep-alive`); a ring unanswered for five minutes, or two in a row,
+marks it stale and the work goes on down this list, so a chat started from the cloud asks the
+person's Allow only until the computer has its own chat (issue #250); a chat started there from
+the cloud (`create_session` on the
 bridge by the computer starter, woken by its bell, in Auto, titled `Job search · <job> ·
 <computer>`, its prompt complete, its results back through the page and the copy and never
 `send_message`, archived by the starter once its work is finished or waits on the person: a
@@ -233,10 +248,11 @@ is off only where the person's list of computers (`list_environments`, kept on t
 none of theirs on, never on an old check-in alone (2026-11-12: a Mac on and connected was said
 to be off). Work queued behind a chat at work there says "Waiting its turn on <the computer>",
 and a check-in's sign-in words are believed only while it is newer than the last LinkedIn read
-moved on there. At the end of its job a chat on the computer wakes the starter by reading its
-bell first and then republishing it (`computer.ring_steps`): a publish alone, to another chat's
-page, was refused; refused even so, its finished work and last heartbeat already list it to be
-put away at the next wake of Claude's chats.
+moved on there. At the end of its job a chat on the computer either stays as the computer's own
+chat (above) or wakes the starter by reading its bell first and then republishing it
+(`computer.ring_steps`): a publish alone, to another chat's page, was refused; refused even so,
+its finished work and last heartbeat already list it to be put away at the next wake of
+Claude's chats.
 
 ## If something does not work
 

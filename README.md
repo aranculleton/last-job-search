@@ -77,15 +77,17 @@ and nothing is lost: the app starts it again when it's needed.
 | **Job search: morning brief** | Writes your brief on its days, in a chat of its own so your page still answers at once | Stays. When it grows long, a fresh one takes over and the old one is put away by itself |
 | **Job search: starts chats on your computer** | Only if you use your computer for LinkedIn: starts the chats there | Stays for good, so you allow it only once (below) |
 | **Job search: *the work*** (for example "Job search: Finding jobs") | One big job: finding jobs, drafting, finding people, an interview prep, or a question in **Chat** while the page is busy | Put away by itself when the work is done |
-| **Job search · *the work* · *your computer's name*** | A job that reads LinkedIn on your computer | Put away by itself when the work is done |
+| **Job search · *the work* · *your computer's name*** | A job that reads LinkedIn on your computer | Put away by itself when the work is done, except the first one, which stays as the one below |
+| **Job search: on your computer** | Only if you use your computer for LinkedIn: takes every later LinkedIn job there by itself, so nothing new needs your OK | Stays open on your computer |
 
-So you'll normally see three that stay (two if you don't use a computer), plus one for each
-job while it runs. Chats an older version made are put away by themselves too, and each can
-be brought back.
+So you'll normally see three that stay (two if you don't use a computer), plus the one on your
+computer and one for each job while it runs. Chats an older version made are put away by
+themselves too, and each can be brought back.
 
 **The first time Claude uses your computer**, "Job search: starts chats on your computer"
 asks "Let Claude use your computers and other sessions from here?". Choose Allow, once. A
-card on your page's **To do** says which chat and what to choose.
+card on your page's **To do** says which chat and what to choose. After that first job, the
+chat on your computer takes the next ones by itself, with nothing to allow.
 
 ## Why it's different
 
