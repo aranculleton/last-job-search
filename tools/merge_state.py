@@ -393,6 +393,7 @@ JSON_NAMES = {
     ".finished.json": "each finish made from a page dump, with its batches, in the dump's own scratch folder, so the same finish run again gives the same batch (page_db.finished_here); never committed",
     "merged.json": "what a tweak round's own merges left, in that round's folder in the chat's scratch folder, so a second pass on the round starts from its own result (tweak.ROUND_RESULTS); never committed",
     ".versions.json": "the versions a read of the page listed, in the dump's own scratch folder (page_db.listed_here); never committed",
+    ".fresh.json": "when a read of the page's work was asked for now, in the dump's own scratch folder, so a command judges running or queued work only from a read under two minutes old (page_reads.fresh_read); never committed",
     "tools/app.py: .json": "a page message's own record in a dump's talk folder, read only for its words (app.talk_words), in the chat's scratch folder; never committed",
     # run_round reads every round's summary to find a job set aside while a search ran; the
     # files themselves are wired as "documents/rounds/*.json" above.
