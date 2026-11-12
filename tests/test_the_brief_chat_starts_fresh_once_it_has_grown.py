@@ -71,3 +71,40 @@ def test_never_near_the_limit_of_how_deep_chats_go_and_always_before_the_landing
     assert "create_session" in capsys.readouterr().out
     import brief
     assert "before the landing" in brief.FRESH_LINE and "--lineage" in brief.FRESH_LINE
+
+
+def test_the_brief_chat_it_left_is_put_away_at_the_next_tidy_up_not_two_days_on():
+    """Moved to a fresh chat, the old brief chat stayed in the list for two more days under
+    the same name, so two "morning brief" chats showed (issue #244). Once the brief's task
+    fires in its new chat, the next tidy-up puts the old one away; still running, it waits."""
+    import datetime as dt
+    import tidy
+    repo, helper = "example-owner/my-job-search", "session_EXAMPLEPAGEHELPER"
+    new, old = "session_EXAMPLENEWBRIEF", "session_EXAMPLEOLDBRIEF"
+    reg = {"setup": "chat_per_briefing", "timezone": "Europe/London", "routines": [
+        {"key": "morning_brief", "name": routines.BRIEF_NAME, "trigger_id": "trig_EXAMPLENEW",
+         "cron": CRON, "prompt_file": routines.BRIEF_FILE, "copy": True,
+         "chat": {"session_id": new, "own": True}}]}
+    prompt = routines.with_copy(routines.stub(reg, "morning_brief"), repo)
+    triggers = [{"id": "trig_EXAMPLENEW", "session": new, "enabled": True, "prompt": prompt},
+                {"id": "trig_EXAMPLEOLD", "session": old, "enabled": False, "prompt": prompt}]
+
+    def chat(sid, **more):
+        return dict({"id": sid, "title": routines.BRIEF_NAME, "updated_at": "2026-11-10T08:00:00Z",
+                     "created_at": "2026-11-01T08:00:00Z", "origin": "claude_code_mcp_seed"}, **more)
+
+    def plan(old_status=None):
+        chats = [chat(helper, title="Job search: page helper"), chat(new), chat(old)]
+        info = {c["id"]: {"id": c["id"], "session_context": {"sources": [{"git_repository": {
+            "url": f"https://github.com/{repo}"}}]}} for c in chats}
+        if old_status:
+            info[old]["status"] = old_status
+        return tidy.plan(chats, triggers, info, reg, {"chat": helper, "helper": True}, helper,
+                         repo, dt.date(2026, 11, 10), set(), set(), set(),
+                         now=dt.datetime(2026, 11, 10, 16, 0, tzinfo=dt.timezone.utc))
+
+    got = plan()
+    gone = {a["id"]: a["why"] for a in got["archive"]}
+    assert old in gone and "fresh chat" in gone[old]
+    assert new not in gone and helper not in gone
+    assert old not in {a["id"] for a in plan("running")["archive"]}

@@ -23,6 +23,7 @@ sys.path.insert(0, os.path.join(ROOT, "tools"))
 
 import app_bug  # noqa: E402
 import routines  # noqa: E402
+import app_setup  # noqa: E402
 import sync_app  # noqa: E402
 
 # The words the app carries, as name_guard would read them from the app's master.
@@ -324,15 +325,23 @@ def test_no_merge_while_the_maintainers_brief_takes_master(tmp_path):
     assert app_bug.window(str(tmp_path / "none"), _uk(11, 7, 50)) == (0, "")
 
 
-def test_the_builders_task_runs_wednesday_night_uk_time_a_fresh_chat_each_run(tmp_path):
+def test_the_builders_task_runs_wednesday_night_uk_time_in_a_chat_made_with_the_app(tmp_path):
     got = app_bug.task("example-owner/my-search")
-    assert got["name"] == app_bug.BUILDER_TASK == "App builder: weekly fixes and release"
-    assert got["create_new_session_on_fire"] is True and got["notifications"] == {}
+    # Issue #245: a fresh chat per run has no repository and no add_repo, so it stops at once.
+    # First a chat made with the app as its source, in Auto; then the task bound to it.
+    chat, trig = got["calls"]
+    assert chat["tool"] == "create_session" and trig["tool"] == "create_trigger"
+    assert chat["args"]["source_url"] == f"https://github.com/{app_setup.APP_REPO}"
+    assert chat["args"]["permission_mode"] == "auto" and chat["args"]["title"] == app_bug.BUILDER_TASK
+    args = trig["args"]
+    assert "create_new_session_on_fire" not in args and "notifications" not in args
+    assert args["persistent_session_id"] == app_bug.BUILDER_CHAT
+    assert args["name"] == app_bug.BUILDER_TASK == "App builder: weekly fixes and release"
     # Just after the maintainer's weekly usage starts again, Wednesdays at 23:00 UK time.
-    assert got["cron_expression"] == "CRON_TZ=Europe/London 15 23 * * 3"
-    assert routines.read_cron(got["cron_expression"])["days"] == [3]
-    assert app_bug.BUILDER_PROMPT in got["prompt"] and "example-owner/my-search" in got["prompt"]
-    assert "access push" in got["prompt"] and "access read" in got["prompt"]
+    assert args["cron_expression"] == "CRON_TZ=Europe/London 15 23 * * 3"
+    assert routines.read_cron(args["cron_expression"])["days"] == [3]
+    assert app_bug.BUILDER_PROMPT in args["prompt"] and "example-owner/my-search" in args["prompt"]
+    assert "access push" in args["prompt"] and "access read" in args["prompt"]
     for bad in ("aranculleton/last-job-search", "not a repo", ""):
         with pytest.raises(ValueError):
             app_bug.task(bad)

@@ -1,7 +1,7 @@
 # The weekly builder: fix what the week reported, and release it
 
-The maintainer's scheduled task "App builder: weekly fixes and release" started this run, in a
-fresh chat: every Wednesday at 23:15 UK time, just after their weekly usage starts again, or
+The maintainer's scheduled task "App builder: weekly fixes and release" started this run, in its
+own chat made with the app attached: every Wednesday at 23:15 UK time, just after their weekly usage starts again, or
 at once when a chat in their copy poked it for a bug that stops their search
 (`tools/app_bug.py wake`). During the week, reports only queue. This file stands alone: it is
 not a person's routine, so `_common.md` is not read.

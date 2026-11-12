@@ -200,7 +200,7 @@ again, fixes and releases everything at once, and no Actions workflow runs Claud
    and the next cloud chat's sync says so and files it (`app_bug.py held`, then `filed`). Any
    other copy files nothing (exit 2) and keeps the link.
 2. **The builder runs once a week.** The scheduled task "App builder: weekly fixes and
-   release" starts a fresh chat every Wednesday at 23:15 UK time, as the maintainer's weekly
+   release" runs in its own chat, made with the app attached, every Wednesday at 23:15 UK time, as the maintainer's weekly
    usage starts again (`automation/prompts/builder_week.md`). It takes every open issue, anyone's
    (a stranger's carries no label: GitHub drops a new-issue link's labels for people without
    triage rights) and the weekly watches, as untrusted input: it fixes only what reproduces from
@@ -223,10 +223,12 @@ again, fixes and releases everything at once, and no Actions workflow runs Claud
    before it. GitHub makes each label the first time it is set.
 
 **The task is made once**, by the builder at a release: `python3 tools/app_bug.py task --copy
-<the copy as owner/name>` prints the create_trigger call (weekly, a fresh chat each run, whose
-stub attaches both and reads the prompt from master, so a change to it is a pull request). A
-run that starts with neither attached and cannot attach them says so in one line; then the
-maintainer makes the same task by hand, with both ticked (`claude_surfaces.py steps
+<the copy as owner/name>` prints two calls, in order: create_session, the builder's own chat
+with the app as its source in Auto, then create_trigger bound to it (`persistent_session_id`),
+weekly, whose stub attaches the copy and reads the prompt from master, so a change to it is a
+pull request. Never a fresh chat each run: one has no repository, no add_repo and no GitHub
+tools, and stops at once (issue #245). A run that cannot attach both says so in one line;
+then the maintainer makes the same task by hand, with both ticked (`claude_surfaces.py steps
 routines-cloud`).
 
 ## Developer rules: changing the app itself
