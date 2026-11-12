@@ -561,7 +561,9 @@ S.parts = async (a) => {
     const got = {opening: await visible(page, "#opening"), sections: {}};
     for (const id of SECTIONS) {
       await goto(page, id);
-      await turn(page, 2);
+      // Read once the page says it has settled: two ticks on a busy runner read Chat before
+      // what the page in parts takes from its store had drawn (Everywhere, 2026-11-12).
+      await settle(page);
       got.sections[id] = ((await one(page, "#main")) || "").replace(/\s+/g, " ").trim();
     }
     got.title = await page.evaluate(() => document.title);
