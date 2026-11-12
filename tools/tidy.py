@@ -92,6 +92,9 @@ APP_TITLE = re.compile(r"^(?:[^\w\s]{1,3}\s*)?Job search(?::\s*\S.{0,60}|\s+(?:h
 # own and the live page helper; a heavy user's renewals had stacked up several).
 # The computer starter (tools/computer.py STARTER_TITLE), kept for good.
 STARTER_NAME = re.compile(r"^(?:[^\w\s]{1,3}\s*)?Job search:\s+starts chats on your computer\b", re.I)
+# The computer's own chat (tools/computer.py LISTENER_TITLE), kept open for the next job there,
+# by its name or by the page's record of it (meta/computer_listener), whatever it is called.
+LISTENER_NAME = re.compile(r"^(?:[^\w\s]{1,3}\s*)?Job search:\s+on your computer\b", re.I)
 HELPER_NAME = re.compile(r"^(?:[^\w\s]{1,3}\s*)?Job search\s+(?:helper|page)\b", re.I)
 # Once after the update that brought that rule, the tidy-up is due even if it ran that day,
 # so the helpers left over from before are put away by themselves (`due`). Moved on with
@@ -741,7 +744,7 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
          branches: set[str] | None, done_before: set[str],
          jobs: dict | None = None, now: dt.datetime | None = None,
          on_github: set[str] | None = None, saves: dict | None = None,
-         job_items: dict | None = None) -> dict:
+         job_items: dict | None = None, computer_chat: str = "") -> dict:
     """{"ask": [ids to read with get_session], "archive": [{id, title, why}],
     "keep": [{id, title, why}], "brief": [calls] or [], "save": [{id, title, work}],
     "lost": [{id, title, work: [ids]}]}. `jobs` is finished_jobs(): a chat in it is not kept
@@ -995,6 +998,10 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
             # The one chat that holds the computer approval: it can be archived by no chat,
             # and it is woken again for the next work on the computer (tools/computer.py).
             keep("it starts the chats on the person's computer")
+            continue
+        if LISTENER_NAME.match(title) or (computer_chat and sid == computer_chat):
+            # The computer's own chat, woken by its bell for each job there (tools/computer.py).
+            keep("it takes the work on the person's computer")
             continue
         if fires.get(sid, set()) - moving:
             keep("a scheduled task that is on runs in it")
@@ -1302,6 +1309,15 @@ def _remember_runs(runs: dict) -> None:
         fh.write("\n")
 
 
+def _computer_chat(pagedb: dict | None) -> str:
+    """The computer's own chat, by the page's record of it (tools/computer.py listener)."""
+    try:
+        import computer
+        return str(computer.listener(pagedb or {}).get("chat") or "")
+    except Exception:  # noqa: BLE001  no record: kept by its name alone
+        return ""
+
+
 def run_plan(a) -> int:
     import routines
     today = dt.date.fromisoformat(a.today) if a.today else dt.date.today()
@@ -1367,7 +1383,8 @@ def run_plan(a) -> int:
                details(_pages(a.details) + _as_pages(given.get("details"))), reg,
                listener, me, repo, today,
                _campaign_chats(), unmerged(), done, jobs, now=now, on_github=on_github(),
-               saves=saves(), job_items=job_items(pagedb) if pagedb is not None else None)
+               saves=saves(), job_items=job_items(pagedb) if pagedb is not None else None,
+               computer_chat=_computer_chat(pagedb))
     if got["ask"]:
         print("tidy: read these chats first, each with get_session, and run this again with "
               "what each returned under \"details\" in the same standard input (or --details "

@@ -940,8 +940,9 @@ METHODS: dict[str, dict] = {
             (86, "2026-11-11", False, "the app maker's own builder task is listed (it fixes the bugs their copy files); nothing changes for anyone else"),
             (87, "2026-11-11", False, "the steps for making the brief in the cloud and the note on its phone notification follow Claude's own pages as read on 2026-11-11: a new scheduled task may first offer Set up manually and its form ends on Create, and the phone notification is documented from a cloud chat too; wording only"),
             (88, "2026-11-12", False, "the tidy-up puts away a brief chat the brief left for a fresh one at its next run, not two quiet days on, so two morning brief chats never show side by side; nothing made before needs making again"),
+            (89, "2026-11-12", False, "the tidy-up keeps the chat on your computer that takes its LinkedIn work (\"Job search: on your computer\"), by its name or the page's record of it, so later jobs there need no new chat and nobody's OK; nothing made before needs making again"),
         ),
-        "fingerprint": "71bd23eab3ad4c8c",
+        "fingerprint": "a7861071fc9d4d18",
     },
     "expand": {
         "by": "upgrade", "priority": 4, "time": "~15 min",
