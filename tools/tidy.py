@@ -963,6 +963,14 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
         for c in up_calls)
     if up_moves:
         moved_from |= {str((up.get("chat") or {}).get("session_id") or "")} - {"", helper}
+    # A brief chat the brief has left for a fresh one of its own (routines.fresh_calls): once
+    # its task fires in the new chat, the old one goes at the next tidy-up, not two quiet days
+    # on, so two "morning brief" chats never sit side by side (issue #244). One still running
+    # (the morning's brief not yet out) is kept as ever, and a task still on in it keeps it.
+    left_brief = {str(s.get("id") or "") for s in chats
+                  if routines._BRIEF_TITLE.match(str(s.get("title") or "").strip())} - {"", brief_chat} \
+        if routines.owns_chat(brief) and brief_chat and fired_in == brief_chat \
+        and any(s.get("id") == brief_chat for s in chats) else set()
     # The tasks this plan moves away from their chats: only these stop keeping a chat.
     moving = ({brief.get("trigger_id")} if adopt and out["brief"] else set()) | \
         ({rnd.get("trigger_id")} if out["moves"] else set()) | \
@@ -1054,6 +1062,7 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
             keep("they used it in the last hour")
             continue
         if (sid not in moved_from and sid not in jobs and sid not in old_helpers
+                and sid not in left_brief
                 and quiet < (WAITING_DAYS if waits else IDLE_DAYS)):
             keep(f"used {quiet:.0f} day(s) ago")
             continue
@@ -1101,6 +1110,7 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
             keep("its work is not on GitHub yet (" + ", ".join(local) + ")")
             continue
         why = ("the brief moved into a chat of its own" if sid == adopt else
+               "the brief moved to a fresh chat of its own" if sid in left_brief else
                "the shortlist moved into the chat that answers the page" if sid in moved_from else
                "a helper the page no longer uses" if sid in old_helpers or sid in helped
                or re.search(r"helper", title, re.I)
