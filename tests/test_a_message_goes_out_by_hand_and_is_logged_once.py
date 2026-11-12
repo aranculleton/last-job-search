@@ -185,6 +185,105 @@ def test_two_chats_logging_the_same_send_at_once_write_one_row(search):
     assert len(rows) == 1
 
 
+def _in_this_search(search, monkeypatch):
+    import person
+    monkeypatch.setenv("LJS_STATE", search.state)
+    monkeypatch.setenv(person.ENV, search.profile)
+    monkeypatch.setenv("LJS_COPY", "private")
+    person.reset()
+
+
+def test_a_chat_reading_the_page_while_another_logs_the_send_reads_already_logged(
+        search, monkeypatch):
+    # The other chat part way through logging the same send (state.py sent takes the draft off
+    # the page, then writes the row), held there under the log's lock. Read in that moment, the
+    # message was gone and nothing was logged yet, so this chat said "look again" for a send the
+    # other then logged (CI, 2026-11-12). It waits for the lock and reads Already logged.
+    import datetime as dt
+    import threading
+    import time
+
+    import app_actions
+    import person
+    from network import state
+    (msg,) = search.model()["messages"]
+    aid = search.act("msg.sent", msg["id"], value={"text": msg["body"]}, rev=msg["rev"])
+    _in_this_search(search, monkeypatch)
+    waiting = threading.Event()               # this chat is at the lock, waiting for the other
+    born = app_actions._lock_born
+    monkeypatch.setattr(app_actions, "_lock_born", lambda p: waiting.set() or born(p))
+    got: dict = {}
+    second = threading.Thread(target=lambda: got.update(app_actions.apply_dir(
+        search.dump, "chat-2", dt.datetime(2026, 10, 25, 18, tzinfo=dt.timezone.utc))))
+    book_path = os.path.join(search.state, "network_contacts.csv")
+    log_path = os.path.join(search.state, "network_threads.csv")
+    try:
+        with app_actions._thread_lock():
+            os.remove(os.path.join(search.state, "documents", "network", PELL, "draft.md"))
+            second.start()
+            end = time.time() + 120
+            while not waiting.is_set() and second.is_alive() and time.time() < end:
+                time.sleep(0.01)
+            book, log = state.load_contacts(book_path), state.load_threads(log_path)
+            state.sent(book, log, PELL, "2026-10-25", text=msg["body"], channel="connection")
+            state.save_threads(log, log_path)
+            state.save_contacts(book, book_path)
+        second.join(120)
+    finally:
+        person.reset()
+    assert got.get("ok") == [aid], got
+    assert search.receipt(aid)["note"] == "Already logged on Sunday 25 October."
+    assert len([r for r in _threads(search, PELL) if r["full_text"] == msg["body"]]) == 1
+
+
+def test_the_log_is_unlocked_while_a_waiting_chat_reads_when_it_was_locked(search, monkeypatch):
+    # A chat waiting for the log opens its lock a moment to read when it was taken. Windows
+    # refuses to remove a file another process has open, and the release gave up at once: the
+    # lock stayed, the waiting chat was refused after half a minute ("Your messages are being
+    # written right now") and every send for two minutes after waited (CI, 2026-11-12).
+    import threading
+
+    import app_actions
+    import person
+    _in_this_search(search, monkeypatch)
+    try:
+        with app_actions._thread_lock() as lock:
+            reading = open(lock, encoding="ascii")          # as _lock_born reads it
+            done = threading.Timer(0.3, reading.close)
+            done.start()
+        done.join()
+        assert not os.path.exists(lock)
+        with app_actions._thread_lock(wait=1):              # the next chat takes it at once
+            pass
+    finally:
+        person.reset()
+
+
+def test_a_send_is_logged_while_another_chats_page_read_has_its_draft_open(search, monkeypatch):
+    # The other chat's page read has the draft open a moment. Windows refused its removal, and
+    # with it the send ("It could not be done"), so the other chat logged it instead (CI,
+    # 2026-11-12): the send waits that moment out.
+    import threading
+
+    import person
+    from network import state
+    (msg,) = search.model()["messages"]
+    _in_this_search(search, monkeypatch)
+    draft = os.path.join(search.state, "documents", "network", PELL, "draft.md")
+    try:
+        reading = open(draft, encoding="utf-8")
+        done = threading.Timer(0.3, reading.close)
+        done.start()
+        book = state.load_contacts(os.path.join(search.state, "network_contacts.csv"))
+        log = state.load_threads(os.path.join(search.state, "network_threads.csv"))
+        state.sent(book, log, PELL, "2026-10-25", text=msg["body"], channel="connection")
+        done.join()
+    finally:
+        person.reset()
+    assert not os.path.exists(draft)
+    assert [r["full_text"] for r in log if r["contact_id"] == PELL] == [msg["body"]]
+
+
 # ------------------------------------------------------------------ they replied
 
 

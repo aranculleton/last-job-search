@@ -4038,7 +4038,10 @@ def _drop_draft(contact_id: str) -> bool:
     except (ImportError, ValueError):
         return False
     if os.path.isfile(path):
-        os.remove(path)
+        # Waiting out another chat's page read, which has the draft open for a moment: on
+        # Windows the removal was refused, and with it the send (csv_store.remove).
+        import csv_store
+        csv_store.remove(path)
         return True
     return False
 

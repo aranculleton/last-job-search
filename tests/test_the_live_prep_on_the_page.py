@@ -86,12 +86,12 @@ def _model(ctx=None):
     return m
 
 
-def _go(run, tmp_path, model, steps, vp, scheme=None):
+def _go(run, tmp_path, model, steps, vp, scheme=None, touch=False):
     path = os.path.join(str(tmp_path), "page.html")
     with open(path, "w", encoding="utf-8") as fh:
         fh.write(app_page.standalone(app_page.render(model)))
     got = run("engine", html=path, viewport=vp, steps=steps, seed={}, fake={"canSend": "available"},
-              **({"scheme": scheme} if scheme else {}))
+              **({"scheme": scheme} if scheme else {}), **({"touch": True} if touch else {}))
     assert not got["errors"], got["errors"]
     return got
 
@@ -264,6 +264,25 @@ def test_a_term_opens_in_a_small_box_beside_its_word_and_a_second_tap_closes_it(
     assert "lp-pop" not in first["focus"], "the box never takes the focus"
     assert not again["open"] and not again["described"], "a second tap closes it"
     assert not outside["open"], "a tap outside closes it"
+
+
+def test_a_term_opens_at_a_fingers_tap_on_a_touch_screen_and_a_second_tap_closes_it(run, tmp_path):
+    # A tap focuses the word before its click comes: the box opened on the focus, the click
+    # took it for a second tap and shut it, and on an iPhone no word ever explained itself
+    # (Safari's and Firefox's runs, 2026-11-12). A finger's tap, as a phone makes it.
+    got = _go(run, tmp_path, _model(_ctx()), [
+        dict(OPEN, eval="matchMedia('(pointer: coarse)').matches && !matchMedia('(hover: hover)').matches"),
+        {"finger": TERM, "within": "dialog.detail .lp-part", "eval": POP},
+        {"wait": 400, "eval": POP},
+        {"finger": TERM, "within": "dialog.detail .lp-part", "eval": POP},
+    ], PHONE, touch=True)
+    touch, tapped, later, again = (a.get("eval") for a in got["after"])
+    assert touch is True, "a touch screen, no mouse"
+    assert tapped["open"] and tapped["described"] == "demand-forecast", tapped
+    assert tapped["text"].startswith("Demand forecast") and tapped["clear"] and tapped["inside"], tapped
+    assert "lp-pop" not in tapped["focus"], "the box never takes the focus"
+    assert later["open"], "it stays open after the tap"
+    assert not again["open"] and not again["described"], "a second tap closes it"
 
 
 def test_a_term_opens_on_a_deliberate_hover_and_on_focus_never_under_a_resting_mouse(run, tmp_path):
@@ -829,10 +848,14 @@ def test_the_part_on_the_screen_is_the_chip_marked_and_a_known_part_wears_a_dot(
     got = _go(run, tmp_path, model, [
         dict(OPEN, ready=now(names[0]), eval=look),
         {"click": "4 Probes", "exact": True, "within": "dialog.detail .lp-chips", "ready": now("4 Probes"), "eval": look},
-        mid("p1"), {"ready": now(names[0]), "hover": "dialog.detail .lp-chips [data-k='lpchip:p2']", "eval": look},
+        # The bar settles (a phone's bar folds to one row once scrolled) before the mouse rests on
+        # a chip: hovered while it folded, the chip slid out from under the mouse (CI, 2026-11-12).
+        mid("p1"), {"ready": now(names[0]) + " && !document.getAnimations().some((a) => a.playState === 'running')", "eval": "1"},
+        {"hover": "dialog.detail .lp-chips [data-k='lpchip:p2']",
+         "ready": "document.querySelector(\"dialog.detail .lp-chips [data-k='lpchip:p2']\").matches(':hover')", "eval": look},
         mid("p3"), {"ready": now(names[2]), "eval": look},
     ], vp)
-    top, probes, below1, part1, below3, part3 = (a.get("eval") for a in got["after"])
+    top, probes, below1, _settled, part1, below3, part3 = (a.get("eval") for a in got["after"])
     assert below1 > 24 and below3 > 24, ("the next part is still below the bar", below1, below3)
     assert top["now"] == [names[0]] and top["filled"] == [names[0]], ("the top of the prep is read before Part 1", top)
     assert top["dots"] == ["2 Your story"], ("a known part wears a dot, not a fill", top)

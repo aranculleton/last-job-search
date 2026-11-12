@@ -1160,8 +1160,10 @@ METHODS: dict[str, dict] = {
             (197, "2026-11-12", False, "the live prep's bar height has a value of its own on the prep before the script has measured the bar; nothing changes on screen"),
             (198, "2026-11-12", True, "a double tap on Try again asks once and never stops the work: its second tap, landing on the Stop drawn in its place, is the same tap"),
             (199, "2026-11-12", True, "a settings row under the pointer shows its arrow and its grey line in ink, readable on the hover colour"),
+            (200, "2026-11-12", True, "the live prep on an iPhone, in Safari and in Firefox: a word's box opens at a tap on a touch screen and stays, where the focus the tap gave the word had shut it at once; an Esc that shuts a word's box or a lifeline's line never also closes the prep in Safari; a jump on a phone folds the bar before it scrolls, so Safari's scroll reaches the part tapped; the day and the drafts asked for are one quiet line under the title, so At a glance starts on a phone's first screen in any language; Chat opens with its first words under the header, its end placed where Latest puts it"),
+            (201, "2026-11-12", True, "the live prep's row of chips follows the part marked only when the mark moves or the bar changes shape: put back on every scroll, a row moved sideways to reach a chip slid it from under the finger and the tap went nowhere"),
         ),
-        "fingerprint": "a89df8e5e106895a",
+        "fingerprint": "9ac38ebfd3508618",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

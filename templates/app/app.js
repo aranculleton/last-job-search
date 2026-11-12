@@ -11302,6 +11302,19 @@
   // A record has more than a card can hold: a conversation, a timeline, a prep to read. On a
   // phone it is pushed full screen with Back; on wide screens it is a panel on the right.
   let detailDlg = null;
+  // An Esc something inside the panel used (a word's box shut, a lifeline's line, find
+  // cleared) never also closes the panel. Safari 26.0 takes an Esc sent by a script for a
+  // request to close the dialog even once the page has used it, a moment later, and the whole
+  // prep went with the line (Safari's run, 2026-11-12); a key pressed on the keyboard it
+  // leaves alone, as every other engine does. Kept for the latest key alone.
+  let escUsed = null;
+  window.addEventListener("keydown", () => { escUsed = null; }, true);
+  function useEsc(e) { e.preventDefault(); e.stopPropagation(); escUsed = e; }
+  function escWasUsed(e) {
+    const u = escUsed;
+    escUsed = null;
+    return !!u && Math.abs((Number(e && e.timeStamp) || 0) - (Number(u.timeStamp) || 0)) < 1000;
+  }
   function closeDetail(fromHistory) {
     if (!detailDlg) return;
     const d = detailDlg;
@@ -11337,7 +11350,7 @@
     detailDlg._addr = "#" + section + "/" + id + "/open";
     detailDlg._from = location.hash;
     detailDlg._at = performance.now();
-    detailDlg.addEventListener("cancel", (e) => { e.preventDefault(); closeDetail(false); });
+    detailDlg.addEventListener("cancel", (e) => { e.preventDefault(); if (!escWasUsed(e)) closeDetail(false); });
     document.body.appendChild(detailDlg);
     try { detailDlg.showModal(); } catch (e) { detailDlg.setAttribute("open", ""); }
     gaugeWakers();
@@ -11588,7 +11601,12 @@
     // are, and the call-prep page's head has no such row (the maintainer, 2026-11-10).
     const one = busy ? btn("See its progress", openWork, {small: true, key: "dprep-work:" + iv.id})
       : offer ? null : btn("Practise with Claude", () => { closeDetail(true); startMock(iv); }, {kind: "primary", small: true, key: "dmock:" + iv.id, wakes: "talk"});
-    if (lv) return h("div", {class: "d-stack d-live"}, head ? h("p", {class: "when"}, head) : null, hint,
+    // The day and the drafts the person asked for are one quiet line under the title: the day
+    // in large type over three lines on a phone, and the drafts on a line of their own, pushed At
+    // a glance past the first screen where the words drew longer (the German run, 2026-11-12).
+    const drafts = lv ? Number(lv.drafts) || 0 : 0;
+    const draftsSaid = drafts ? h("span", {class: "lp-drafts"}, (drafts === 1 ? "One answer is a draft" : drafts + " answers are drafts") + " you asked for.") : null;
+    if (lv) return h("div", {class: "d-stack d-live"}, h("p", {class: "when lp-day"}, head, draftsSaid ? [" · ", draftsSaid] : null), hint,
       refLine ? h("p", {class: "meta"}, refLine) : null, liveView(iv, lv, one ? h("div", {class: "card-actions"}, one) : null));
     return h("div", {class: "d-stack"},
       head ? h("p", {class: "when"}, head) : null,
@@ -11893,6 +11911,9 @@
     if (root._popEl && root._popEl !== el) root._popEl.removeAttribute("aria-describedby");
     root._popEl = el;
     root._popPinned = !!pinned;
+    // The press it opened in, if any: the focus a tap gives the word opens it before the tap's
+    // own click comes (liveView, the terms).
+    root._popPress = root._press || 0;
     clearTimeout(root._popOff);
     pop.textContent = "";
     const line = (label, text) => txt(text) ? h("p", {}, h("strong", {}, label + " "), lpPlain(lv, text)) : null;
@@ -12128,7 +12149,6 @@
     const root = h("div", {class: "lp", "data-mode": mode, "data-lead": lpLead(lv)});
     const fid = lpId(lv, "x", "find");
     const company = txt(lv.company || iv.company);
-    const drafts = Number(lv.drafts) || 0;
     const partEls = parts.map((p, i) => {
       const beats = lpBeats(p);
       const hid = lpId(lv, "ph", p.id);
@@ -12196,9 +12216,7 @@
     // maintainer, 2026-11-11). The order never sits after the chips, where a row that scrolls
     // sideways hid it past the screen's edge (the live review, 2026-11-11).
     put(root,
-      h("div", {class: "lp-head"},
-        acts,
-        drafts ? h("p", {class: "lp-drafts"}, (drafts === 1 ? "One answer is a draft" : drafts + " answers are drafts") + " you asked for.") : null),
+      h("div", {class: "lp-head"}, acts),
       h("div", {class: "lp-bar", role: "search", "aria-label": lpTimeLine(lv, parts)},
         h("div", {class: "lp-find-row"},
           h("label", {class: "lp-search", for: fid}, h("span", {class: "sr-only"}, "Find what they asked"),
@@ -12232,11 +12250,20 @@
     };
     // A jump on a phone lands under the bar as it will be once there, one row: landing under
     // the whole bar left a part's heading short of the bar, and the part before it marked.
+    // The bar is one row before the jump's scroll starts and stays so while it runs: Safari
+    // stops a smooth scroll where the page changes shape under it, and the bar folding on the
+    // way left "Your notes", tapped at the top, a screen down (Safari's run, 2026-11-12).
     root._toJump = () => {
       const find = root.querySelector(".lp-search input");
       if (!barEl || !phone() || (find && find.value)) return;
-      if (!root._barTight) { const was = barEl.classList.contains("lp-tight"); barEl.classList.add("lp-tight"); root._barTight = barEl.offsetHeight; if (!was) barEl.classList.remove("lp-tight"); }
+      tight(true);
       root.style.setProperty("--lp-bar-h", root._barTight + "px");
+      const sc = root.closest(".detail-body");
+      const done = () => { if (!root._hold) return; root._hold = false; clearTimeout(root._holdOff); lpSeen(); };
+      root._hold = true;
+      clearTimeout(root._holdOff);
+      if (sc && "onscrollend" in window) sc.addEventListener("scrollend", done, {once: true});
+      root._holdOff = setTimeout(done, 2000);
     };
     let raf = 0;
     const seen = () => {
@@ -12246,7 +12273,8 @@
       const find = root.querySelector(".lp-search input");
       const sr = sc.getBoundingClientRect();
       const under = sc.scrollTop + (root._barFull || barEl.offsetHeight) - (glanceEl.getBoundingClientRect().top - sr.top + sc.scrollTop);
-      if (!phone() || document.activeElement === find || (find && find.value)) tight(false);
+      if (root._hold) { /* a jump's scroll is running: the bar keeps its shape until it ends */ }
+      else if (!phone() || document.activeElement === find || (find && find.value)) tight(false);
       else if (under > 48) tight(true);
       else if (under < 8) tight(false);
       // The part whose heading was last scrolled up to the bar, and the first part until the
@@ -12277,8 +12305,16 @@
         if (tapped) root._tappedEnd = true;
       }
       for (const [, c] of marks) { if (c === cur) c.setAttribute("aria-current", "true"); else c.removeAttribute("aria-current"); }
+      // The row follows the mark when the mark moves (or the bar changes shape), never
+      // otherwise: put back on every scroll, a row moved sideways to reach "1 Intro" slid the
+      // chip from under the finger as the tap landed, and the tap went nowhere (Firefox's run,
+      // 2026-11-12).
+      const shape = barEl.classList.contains("lp-tight");
+      const follow = cur !== root._marked || shape !== root._markedShape;
+      root._marked = cur;
+      root._markedShape = shape;
       const row = cur && cur.parentElement;
-      if (row && row.scrollWidth > row.clientWidth) {
+      if (follow && row && row.scrollWidth > row.clientWidth) {
         const a = cur.offsetLeft - row.offsetLeft;
         if (a < row.scrollLeft || a + cur.offsetWidth > row.scrollLeft + row.clientWidth) row.scrollLeft = Math.max(0, a - 8);
       }
@@ -12305,15 +12341,25 @@
     const hover = !!(window.matchMedia && window.matchMedia("(hover: hover) and (pointer: fine)").matches);
     const termOf = (e) => { const t = e.target && e.target.closest ? e.target.closest(".lp-term") : null; return t && root.contains(t) ? t : null; };
     const leave = () => { if (root._popPinned) return; clearTimeout(root._popOff); root._popOff = setTimeout(() => lpPopClose(root), 250); };
+    // A press focuses the word before its click comes, and the focus opens the box: the click
+    // of that same press keeps it open. Taken for a second tap, it shut the box the moment it
+    // opened on every touch screen, an iPhone's included (Safari's and Firefox's runs,
+    // 2026-11-12), and the word never explained itself there.
+    let presses = 0;
+    root.addEventListener("pointerdown", () => { root._press = ++presses; }, true);
+    root.addEventListener("pointercancel", () => { root._press = 0; }, true);
     root.addEventListener("click", (e) => {
       const t = termOf(e);
+      const press = root._press;
+      root._press = 0;
       if (!t) {
         if (!(e.target.closest && e.target.closest(".lp-pop"))) lpPopClose(root);
         return;
       }
       e.preventDefault();
       e.stopPropagation();
-      if (root._popEl === t && (root._popPinned || !hover)) lpPopClose(root);
+      const own = !!press && root._popPress === press;
+      if (root._popEl === t && !own && (root._popPinned || !hover)) lpPopClose(root);
       else lpPop(root, lv, t, true);
     });
     if (hover) {
@@ -12344,13 +12390,13 @@
     root.addEventListener("focusin", (e) => { if (e.target && e.target.matches && e.target.matches(".lp-search input")) lpSeen(); const t = termOf(e); if (t && root._popEl !== t) lpPop(root, lv, t, false); });
     root.addEventListener("focusout", (e) => { if (e.target && e.target.matches && e.target.matches(".lp-search input")) lpSeen(); if (termOf(e) && !root._popPinned) leave(); });
     root.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && lpPopClose(root)) { e.preventDefault(); e.stopPropagation(); return; }
+      if (e.key === "Escape" && lpPopClose(root)) { useEsc(e); return; }
       const life = root.querySelector(".lp-life");
-      if (e.key === "Escape" && life && life._close()) { e.preventDefault(); e.stopPropagation(); return; }
+      if (e.key === "Escape" && life && life._close()) { useEsc(e); return; }
       const field = e.target && e.target.closest ? e.target.closest("input, textarea, select, [contenteditable]") : null;
       const find = root.querySelector(".lp-search input");
       // Esc in find clears it; "/" anywhere else in the prep goes to find.
-      if (e.key === "Escape" && field && field === find && find.value) { e.preventDefault(); e.stopPropagation(); find.value = ""; lpSearch(root, ""); return; }
+      if (e.key === "Escape" && field && field === find && find.value) { useEsc(e); find.value = ""; lpSearch(root, ""); return; }
       if (e.key === "/" && !field && find) { e.preventDefault(); find.focus(); return; }
       const t = (e.key === "Enter" || e.key === " ") ? termOf(e) : null;
       if (t) { e.preventDefault(); e.stopPropagation(); lpPop(root, lv, t, true); }
@@ -16523,7 +16569,13 @@
       if (at === null || at === undefined || !chatShown() || Math.abs(talkEl.getBoundingClientRect().bottom - at) < 1) return;
     } else if (!S.chatPlace) return;
     S.chatPlace = false;
-    try { talkEl.scrollIntoView({block: "end"}); } catch (e) { /* no layout */ }
+    // On the Chat screen the end is where Latest puts it (chatEndTop), the field resting over
+    // the tabs: placed by the screen's scroll room instead, a Chat that fitted under the header
+    // went 32px down, its first words under the header, whenever this ran after Latest's own
+    // move (Firefox, 2026-11-12).
+    const sc = document.scrollingElement || document.documentElement;
+    if (S.section === "chat" && !dockOpen && chatScroller() === sc) { try { sc.scrollTop = chatEndTop(sc); } catch (e) { /* no layout */ } }
+    else { try { talkEl.scrollIntoView({block: "end"}); } catch (e) { /* no layout */ } }
     S.chatPlacedAt = late ? null : talkEl.getBoundingClientRect().bottom;
   }
   // Called by render(): where the conversation sits, whether the panel and the button show.

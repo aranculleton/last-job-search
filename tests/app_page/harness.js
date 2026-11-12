@@ -122,6 +122,12 @@ class Store {
 
 // ---------------------------------------------------------------- opening a page
 let browser = null;
+// Firefox with a mouse, as a person's Firefox on a computer has and Chrome's and Safari's
+// engines say they have here: Playwright 1.56's Firefox without a screen says it has no
+// pointer at all ("pointer: none", "hover: none"), which no screen a person reads on has, so a
+// test of what a mouse does could not run there (2026-11-12). Fine and hovering (2 and 4); a
+// context with touch still says touch, which Playwright sets per context over these.
+const FIREFOX_MOUSE = {"ui.primaryPointerCapabilities": 6, "ui.allPointerCapabilities": 6};
 // Where a box is drawn on the screen, in every engine: Safari's (Playwright 1.56's WebKit)
 // measures inside the zoomed body before the zoom but takes off the scroll as drawn, so a box
 // is put back where it is drawn by adding the scroll, zooming, and taking it off again. With no
@@ -1358,6 +1364,9 @@ S.engine = async (a) => {
     if (st.then) { await page.getByRole("button", {name: st.then, exact: !!st.exact}).first().click(); await turn(page, 6); }
     // The mouse moved onto a control and left there, as a person reading with a mouse does.
     if (st.hover) { await page.locator(st.hover).first().hover(); await turn(page, 2); }
+    // A finger's tap on a screen with touch (`touch`): the touch, then the mouse's events and
+    // the click a phone makes of it, the focus they give included. A click is a mouse's alone.
+    if (st.finger) { await (st.within ? page.locator(st.within) : page).getByRole(st.role || "button", {name: st.finger, exact: !!st.exact}).first().tap(); await turn(page, 6); }
     // Taps one after another as fast as a person makes them: one turn between each, never a
     // wait for the one before (ten replies pasted in a row, 2026-11-04).
     for (const q of st.quick || []) {
@@ -3249,7 +3258,7 @@ S.motion = async (a) => {
     // and 4.7's Everywhere runs): there it is a Firefox of its own, started with the
     // preference itself, and the page says whether the setting reached it at all.
     const own = m === "reduce" && ENGINE === "firefox"
-      ? await playwright.firefox.launch({firefoxUserPrefs: {"ui.prefersReducedMotion": 1}}).catch(() => null) : null;
+      ? await playwright.firefox.launch({firefoxUserPrefs: Object.assign({"ui.prefersReducedMotion": 1}, FIREFOX_MOUSE)}).catch(() => null) : null;
     const shared = browser;
     if (own) browser = own;
     let o;
@@ -3927,7 +3936,7 @@ S.contract = async (a) => {
 
 // ---------------------------------------------------------------- the loop
 async function main() {
-  browser = await playwright[ENGINE].launch();
+  browser = await playwright[ENGINE].launch(ENGINE === "firefox" ? {firefoxUserPrefs: FIREFOX_MOUSE} : {});
   const out = (o) => process.stdout.write(JSON.stringify(o) + "\n");
   out({ready: true, version: browser.version()});
   const rl = readline.createInterface({input: process.stdin});

@@ -1489,9 +1489,17 @@ SAME_SEND_DAYS = 7
 def _thread_lock(wait: float = 30.0):
     """One writer of the message log at a time on this computer: two chats, or one chat
     applying a double tap from two dumps, check for the same send and write it in turn, so
-    the second finds the first's row (FUNCTIONS_SPEC 1.5 item 3)."""
+    the second finds the first's row (FUNCTIONS_SPEC 1.5 item 3).
+
+    On Windows a file another process has open cannot be removed, and a chat waiting here
+    opens the lock for a moment to read when it was taken: the release waits that out
+    (csv_store.remove). Given up at once, the lock stayed behind, so the waiting chat was
+    refused after half a minute and every send for two minutes after waited (CI, 2026-11-12).
+    A lock removed while something still holds it open refuses a new one for that moment
+    (PermissionError, never FileExistsError there): it is waited out as a lock still held."""
     import hashlib
     import time
+    import csv_store
     folder = os.path.join(tempfile.gettempdir(), "ljs-thread-locks")
     os.makedirs(folder, exist_ok=True)
     name = hashlib.sha1(os.path.abspath(person.state("network_threads.csv")).encode()
@@ -1504,22 +1512,26 @@ def _thread_lock(wait: float = 30.0):
             os.write(fd, repr(time.time()).encode("ascii"))
             os.close(fd)
             break
-        except FileExistsError:
+        except (FileExistsError, PermissionError) as e:
+            if isinstance(e, PermissionError) and os.name != "nt":
+                raise
             try:
                 if time.time() - _lock_born(lock) > 120:      # a writer that died
                     os.remove(lock)
                     continue
+            except FileNotFoundError:
+                continue                                      # released since: taken now
             except OSError:
-                continue
+                pass                                          # still going: waited out
             if time.time() - start > wait:
                 raise Refused("Your messages are being written right now: try again in a "
                               "minute.") from None
             time.sleep(0.05)
     try:
-        yield
+        yield lock
     finally:
         try:
-            os.remove(lock)
+            csv_store.remove(lock)
         except OSError:
             pass
 
@@ -4010,7 +4022,12 @@ def _target_of(act: dict, index: Index) -> dict | None:
 def _logged_already(act: dict, zone: str, now: dt.datetime) -> str:
     """For "I sent it" on a message no longer on the page because it went (logged in a
     chat, or from another device): the day those words were logged, so the receipt says
-    so instead of "look again"."""
+    so instead of "look again".
+
+    Read under the log's lock: a chat part way through logging the same send has taken its
+    draft off the page before its row is written, and a page read in that moment found the
+    message gone and nothing logged, so the second chat said "look again" for a send the
+    first then logged (two chats at once, CI, 2026-11-12). The lock waits for that write."""
     if str(act.get("action") or "") != "msg.sent":
         return ""
     item = str(act.get("item") or "")
@@ -4020,8 +4037,9 @@ def _logged_already(act: dict, zone: str, now: dt.datetime) -> str:
         return ""
     at = app_model.parse_time(act.get("at")) or now
     try:
-        return _already_sent(cid, _state().split_subject(text)[1].strip(),
-                             app_model.local_day(at, zone))
+        with _thread_lock():
+            return _already_sent(cid, _state().split_subject(text)[1].strip(),
+                                 app_model.local_day(at, zone))
     except Exception:  # noqa: BLE001
         return ""
 

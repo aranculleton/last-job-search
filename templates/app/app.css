@@ -2457,6 +2457,9 @@ dialog.detail.full .detail-body > * { grid-column: 2; min-width: 0; }
    part under its own rule, what to say first in a box, its questions as cards; depth one tap
    away. Every rule here starts at .lp, so nothing reaches the rest of the page. */
 .d-live > .lp { margin-top: 8px; padding-bottom: 32px; }
+/* The day and the drafts asked for, one quiet line under the title, so At a glance starts on a
+   phone's first screen whatever length the words draw at (the German run, 2026-11-12). */
+.d-live > .when.lp-day { font-size: var(--t-sm); font-weight: 400; color: var(--muted); }
 /* The prep's screen keeps no padding of its own above and below: a bar that stays at the top
    stuck 16px under the header, and the lifelines 32px over the foot, with the text scrolling
    past in the gaps (the live review, 2026-11-11). The title and the end keep their room. */
@@ -2479,7 +2482,6 @@ dialog.detail .detail-body:has(> .d-live > .lp) > .detail-title { margin-top: 16
 .lp-search { flex: 1 1 auto; min-width: 0; display: flex; }
 .lp-search input { width: 100%; min-width: 0; min-height: var(--target); padding: 8px 16px; border: 1px solid var(--line-strong); border-radius: var(--r-sm); background: var(--surface); color: var(--ink); font: inherit; }
 .lp-found { font-size: var(--t-sm); color: var(--muted); }
-.lp-drafts { font-size: var(--t-sm); color: var(--muted); }
 .lp-find-row > .lp-lead { flex: none; display: inline-flex; align-items: center; min-height: var(--target); padding: 0 8px; white-space: nowrap; font-size: var(--t-sm); }
 /* At a glance: a label and its line, stacked on a phone, side by side on a wide screen. */
 .lp-glance dl { margin: 0; display: flex; flex-direction: column; gap: 8px; }

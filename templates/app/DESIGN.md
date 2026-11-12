@@ -235,8 +235,10 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   as the maintainer's call-prep page (2026-11-10: "this is what i want ... more tailored to
   interviews"), on every screen, and kept open beside the call. **Nothing needs opening before
   it can be read** (the maintainer, 2026-11-11): there is no fold, switch or "Show" in it. The
-  head: the day, one pill, Practise with Claude (Update my prep and the calendar stay on its card
-  in Coming up), and the drafts the person asked for in one muted line. Then the bar, the one
+  head: the day and the drafts the person asked for in one quiet line under the title (in large
+  type over lines of their own, At a glance began past a phone's first screen where the words
+  drew longer, the German run, 2026-11-12), then one pill, Practise with Claude (Update my prep
+  and the calendar stay on its card in Coming up). Then the bar, the one
   thing that stays at the top while the prep scrolls, one solid ground flush with the header
   down to under its chips: find ("They asked..."; "/" goes to it, Esc clears it) with "Points
   first" or "Script first" beside it, never after the chips, and under them a chip to every
@@ -244,14 +246,16 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   far end fading. One chip is filled, the part whose heading was last scrolled up to the bar
   (the first part from the top of the prep until the next heading gets there; at the end of the
   prep, where the last parts cannot get there, the one tapped, else the last in view), marked as the
-  prep scrolls (the one thing that changes by itself) and kept in view in its row; nothing else
+  prep scrolls (the one thing that changes by itself) and kept in view in its row as the mark
+  moves, a row moved sideways by hand left where it was put until then; nothing else
   looks filled, a chip under the mouse underlined instead of shaded; a part with a known
   question wears a gold dot, the chip's name and hover saying why. A jump on a phone lands under
-  the bar as it will be once there. On a phone, once the prep is read
-  under the bar, find, the order and the chips are one row, the bar keeping its room in the
-  flow so nothing under it moves, whole again near the top and while find is in use. The
-  bar's name for a screen reader is the timing in a line ("60 minutes in 5 parts, the last 7
-  minutes for your questions", a day of interviews in hours). Then At a glance, in a plain box:
+  the bar as it will be once there, the bar one row before the scroll starts and holding its
+  shape until it ends (Safari stops a smooth scroll where the page changes shape under it). On a
+  phone, once the prep is read under the bar, find, the order and the chips are one row, the bar
+  keeping its room in the flow so nothing under it moves, whole again near the top and while find
+  is in use. The bar's name for a screen reader is the timing in a line ("60 minutes in 5 parts,
+  the last 7 minutes for your questions", a day of interviews in hours). Then At a glance, in a plain box:
   the line to open with, what they are known to ask (else the first likely question) with the
   part it is in and its gold dot, two questions to ask them, each a tap to its place, and a guessed kind of
   interview said there with "Not this kind of interview?" one tap from the right one. A test
@@ -281,7 +285,9 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   panel or a dimmed page, saying what it means, what it means here and what it is like, with
   More for an example and the technical answer. A mouse moved onto the word and kept there 700ms
   opens it, never a word the text scrolled under a mouse left resting; leaving the word and the
-  box closes it; focus opens it at once; a tap opens it until Esc, a tap outside or a second tap.
+  box closes it; focus opens it at once; a tap opens it until Esc, a tap outside or a second tap,
+  the focus a tap gives the word being that same tap on a touch screen, never a first one. An Esc
+  used inside the prep never also closes it.
   It never takes the focus, and nothing moves when it opens. Numbers in what to say are bold. At
   the foot of the screen, flush with it as the prep scrolls, a row of lifelines (Moment, Again?,
   Don't know, and Pay, Notice and Based where the notes hold them), wrapping to a second row on
