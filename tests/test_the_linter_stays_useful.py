@@ -124,7 +124,7 @@ class TheDependenciesAreWrittenDown(unittest.TestCase):
                     third.update(a.name.split(".")[0] for a in n.names)
                 elif isinstance(n, ast.ImportFrom) and n.module and n.level == 0:
                     third.add(n.module.split(".")[0])
-        alias = {"yaml": "pyyaml"}
+        alias = {"yaml": "pyyaml", "PIL": "pillow"}
         for mod in sorted(m for m in third - std - local if not _stdlib_on_39(m)):
             with self.subTest(module=mod):
                 self.assertIn(alias.get(mod, mod), manifest,

@@ -1,9 +1,10 @@
 """Every function of the app's is used by the app itself, not kept alive by a list or a test.
 
 Audits CS-3 and CS-4 (2026-11-10): ten functions were named only where they were defined (some
-kept alive by tools/public_names.json), and four were called only by tests, which therefore
-tested nothing the app runs. A name leaves the way MAINTAINING.md says: out of the code, and
-into docs/removed_names.json with its CHANGELOG line, since a person's own tests may use it.
+kept alive by the snapshot of public names a release wrote then), and four were called only by
+tests, which therefore tested nothing the app runs. A name leaves the way MAINTAINING.md says:
+out of the code, and into docs/removed_names.json with the CHANGELOG section whose entry
+announces it, since a person's own tests may use it.
 
 A top-level function in tools/ or templates/ counts as used when its name appears anywhere in
 the app's own files (code, instructions, skills, workflows) besides its definition; a test's
@@ -30,7 +31,7 @@ LEFT_FOR_ITS_AREA = {
     "tools/followup_drafts.py:offer_words",          # referral offers in follow-ups
 }
 _TEXT = (".py", ".md", ".js", ".sh", ".json", ".yml", ".yaml", ".html", ".toml")
-_NOT_A_USE = ("tools/public_names.json", "docs/removed_names.json", "CHANGELOG.md")
+_NOT_A_USE = ("docs/removed_names.json", "CHANGELOG.md")
 
 
 def _unused() -> list[str]:

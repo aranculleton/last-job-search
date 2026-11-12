@@ -123,8 +123,7 @@ NEWS_HOLD = re.compile(r"\b(?:lay ?offs?|laid off|job cuts|cuts? \d+|hiring free
 _LINK = re.compile(r"https?://[^\s)>\]]+")
 _DATE_IN = re.compile(r"\b(\d{4}-\d{2}-\d{2})\b")
 
-WHAT_COUNTS = ("employers the person is in process with or has a live thread at, first; then "
-               "what they asked the brief to watch, in the order they gave")
+WHAT_COUNTS = "live processes and threads first, then their watch list in order"
 
 
 # ---------------------------------------------------------------- reading the state
@@ -802,9 +801,11 @@ def start(argv: list[str], model: str) -> int:
     import time
     took, t0 = [], time.monotonic()
     before = _prompts_seen()
+    # The run carries on by itself, so its update check starts nothing of its own
+    # (app_setup.IN_COMMAND): never a chat's start inside the brief's run.
     r = subprocess.run([py, os.path.join(_HERE, "sync_app.py"), "--if-stale", "--on", model],
                        cwd=ROOT, text=True, capture_output=True, encoding="utf-8",
-                       errors="replace")
+                       errors="replace", env=dict(os.environ, LJS_SYNC_IN_COMMAND="1"))
     took.append("update %ds" % (time.monotonic() - t0))
     after = _prompts_seen()
     changed = [p for p in PROMPT_FILES if before.get(p) != after.get(p)]
@@ -812,6 +813,18 @@ def start(argv: list[str], model: str) -> int:
         sys.stdout.write("FOR CLAUDE, first: this run's update changed the brief's own "
                          "instructions: read %s again now, and follow the new ones, not the copy "
                          "read before this command.\n\n" % " and ".join(changed))
+        sys.stdout.flush()
+    # The person's own setting for updates, as the rule that wins: a scheduled task that wakes
+    # the same chat each morning still held the October "say so and wait" in its history a
+    # month after they set updates to come by themselves (the maintainer, 2026-11-11). The
+    # check's own copy of the line went to the log with the rest of what it printed.
+    try:
+        import sync_app
+        setting = sync_app.setting_line()
+    except Exception:  # noqa: BLE001  the brief goes on without it
+        setting = ""
+    if setting:
+        sys.stdout.write(setting + "\n\n")
         sys.stdout.flush()
     # The Python side, after the update check, so a package an update adds is installed; the
     # script itself asks the package index nothing where everything already imports, from its
@@ -1391,7 +1404,7 @@ def _owed_line(i: dict) -> dict:
     else:
         what = "follow-up %s" % ((i.get("what") or "").split(",")[0].replace("nudge ", "")) \
             + (" %s" % i["to"].replace("to: ", "to ").split(" (")[0] if i.get("to") else "")
-    status = {"ready": "draft ready", "check": "draft ready, check it first",
+    status = {"ready": "draft ready", "check": "draft to rewrite",
               "write": ("%s to write" % ("reply" if d.get("kind") == "reply" else "draft"))
               if d.get("who") == "here" else "needs you",
               "none": ""}[d["status"]]
@@ -1863,7 +1876,9 @@ def _computer_lines(b: dict) -> list[str]:
         trend = computer.trend(today) if today.weekday() == 0 else ""
     except Exception:  # noqa: BLE001  a check never stops the brief
         return []
-    out = ["computer: python3 tools/computer.py check <page work+beats> --envs "
+    # The page's meta too: the list of computers the check is given is kept there for the
+    # page's row (tools/computer.py envs_kept, local review 2), pinned to the version read.
+    out = ["computer: python3 tools/computer.py check <work+beats+meta> --envs "
            "<list_environments saved> --triggers <list_triggers saved>; do each line"]
     if trend:
         out.append(f"the computer's week, one line at the end of the message: \"{trend}\"")
@@ -1920,9 +1935,10 @@ def claude_lines(b: dict) -> list[str]:
     if b["write_here"]:
         import followup_drafts
         n, most = len(b["write_here"]), followup_drafts.WRITE_HERE_MAX
-        out.append("%d draft%s this run can write or rewrite from the thread%s: python3 "
-                   "tools/followup_drafts.py context --due, write them, then "
-                   "followup_drafts.py check - --pack" % (
+        # Short: the lines for Claude are never cut, so every word here is paid for in the
+        # message the person reads (TEXT_MAX).
+        out.append("%d draft%s to write from the thread%s: followup_drafts.py context --due, "
+                   "then check - --pack" % (
                        n, "" if n == 1 else "s",
                        " (the first %d; the rest wait in the pack)" % most if n > most else ""))
     if b["profile_line"]:
@@ -1955,18 +1971,19 @@ def claude_lines(b: dict) -> list[str]:
         # items dropped (review of fix/helpers, item 17).
         out.append("news, one round: today is %s; only these %d searches: every search at once, "
                    "in parallel, then %d to %d items, newest and most relevant first, each story "
-                   "once, each with its [n]; wider back to %s, then %s%s" % (
+                   "once, each with [n]; wider back to %s, then %s%s" % (
                        today.isoformat(), len(searches), NEWS_MIN, NEWS_MAX, week.isoformat(),
                        month.isoformat(), "; the wider: " + wide if wide else ""))
         if b.get("in_play"):
-            out.append("news, in play (for how to use each item, never searched): "
+            out.append("news, in play (to use with each item, never searched): "
                        + "; ".join(b["in_play"]))
     else:
         out.append("news: run no news search (%s)" % (
             "none in the message, by the person's setting" if not n else
             "the profile does not say enough yet for one"))
-    out.append("since %s; links already sent: %s" % (
-        b["since"], " ".join(b["skip_links"][-20:]) or "none"))
+    # The links already sent, only where there are some: "none" said nothing a run acts on.
+    sent = " ".join(b["skip_links"][-20:])
+    out.append("since %s%s" % (b["since"], "; links already sent: " + sent if sent else ""))
     out.append("what counts: " + b["what_counts"])
     if b.get("page"):
         behind = page_behind()
@@ -1988,8 +2005,9 @@ def claude_lines(b: dict) -> list[str]:
                    "take: this run starts it). Then python3 tools/computer.py waiting <D>; "
                    "under queued: list_environments, saved to a file, then python3 "
                    "tools/computer.py route <D> --chat <this chat's id> --envs <that file> "
-                   "--tools \"<this chat's tool names, comma separated>\", and do what it prints "
-                   "(it wakes the chat that starts chats on the computer, or makes it once). "
+                   "--tools \"<this chat's tool names, comma separated>\", and do what it prints, "
+                   "its batches first (it wakes or makes the chat that starts chats on the "
+                   "computer). "
                    "Then the app skill's steps 1 to 3, for work still waiting" % b["page"])
         # A publish subscribes the chat that makes it to the page's comments: the page rang the
         # brief's chat twice the day it republished, each ring a paid run that ended "Nothing to

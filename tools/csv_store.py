@@ -292,10 +292,23 @@ def _swap(part: str, real: str) -> None:
     """os.replace, waiting out another chat that has the file open: Windows refuses to
     replace a file while another process reads it (PermissionError), where POSIX lets
     both through. Two chats taking one LinkedIn download at once met it (2026-10-26)."""
+    _waiting_out_readers(os.replace, part, real)
+
+
+def remove(path: str) -> None:
+    """os.remove, waiting out another chat that has the file open, as `_swap` does: Windows
+    refuses to remove a file while another process reads it. Two chats logging one "I sent
+    it" at once met it twice on Windows (CI, 2026-11-12): the draft the other chat's page read
+    had open refused its removal, so the send was refused; and a lock file a waiting chat was
+    reading stayed behind, so that chat waited half a minute and was refused."""
+    _waiting_out_readers(os.remove, path)
+
+
+def _waiting_out_readers(step, *paths) -> None:
     import time
     for i in range(40):
         try:
-            os.replace(part, real)
+            step(*paths)
             return
         except PermissionError:
             if os.name != "nt" or i == 39:

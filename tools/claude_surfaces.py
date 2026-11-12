@@ -12,8 +12,8 @@ every time it is used, so a session re-checks the page before relying on it.
 
     python3 tools/claude_surfaces.py check               # stale entries, as warnings (exit 0)
     python3 tools/claude_surfaces.py show <id>           # one entry, its sources and its age
-    python3 tools/claude_surfaces.py say <id> [--name N] [--owner O]   # the words a person sees
-    python3 tools/claude_surfaces.py steps <id> [--name N] [--owner O] # its steps, for a person who said yes
+    python3 tools/claude_surfaces.py say <id> [--name N] [--owner O] [--system S]   # the words a person sees
+    python3 tools/claude_surfaces.py steps <id> [--name N] [--owner O] [--system S] # its steps, for a person who said yes
     python3 tools/claude_surfaces.py sync-docs           # rewrite every marked block from here
     python3 tools/claude_surfaces.py watch [--strict]    # the maintainer's: quotes still on
                                                          # their pages? a newer release?
@@ -26,6 +26,16 @@ checked and its official page are for Claude, never the person (`source`, which 
 2026-10-20; official page: https://...)" headed every step a beginner was given, six times
 in one page of START_HERE, and nobody it was for could use it (2026-10-25). A doc's steps end
 on one line instead, CLOSING.
+
+Where a screen differs between a Mac, Windows and Linux (the key that shows Claude's browser,
+the menu that updates the app, Linux's terminal), an entry has one variant a system, with an
+id of its own (`<id>-mac`, `<id>-windows`, `<id>-linux`), and the entry itself says all three
+in one short line for when the computer is not known. `for_system` picks the variant from what
+the computer reports (sys.platform there, as its heartbeat carries it: darwin, win32, linux);
+`steps` and `say` take `system`, and the command takes `--system` (on the person's computer it
+defaults to that computer's own, in a cloud chat to all three). Every step a Mac was given
+named Cmd+Shift+B first and Windows second, and nothing said what Linux takes (2026-11-11).
+
 `watch` runs only in the app (.github/workflows/claude-surfaces-watch.yml), never in a
 person's repo.
 """
@@ -73,6 +83,69 @@ def entry(eid: str, reg: dict | None = None) -> dict:
     raise KeyError(f"claude_surfaces: no entry {eid!r}")
 
 
+# The systems a person's computer reports (sys.platform there) and the suffix of each one's
+# variant of an entry.
+SYSTEMS = {"darwin": "mac", "win32": "windows", "linux": "linux"}
+# The words for each, in what Claude is told (never the person: they know their computer).
+SYSTEM_NAMES = {"darwin": "a Mac", "win32": "Windows", "linux": "Linux"}
+
+
+def system_of(value) -> str:
+    """"darwin", "win32" or "linux" for what a computer reported (sys.platform, or a word a
+    list of computers carries: "macOS", "Windows", "Linux"), else "" where it says none of
+    them. Windows' own shells (cygwin, msys) are Windows."""
+    v = str(value or "").strip().lower()
+    if not v:
+        return ""
+    if v in ("darwin", "mac", "macos", "osx", "mac os", "mac os x") or v.startswith("darwin"):
+        return "darwin"
+    if v.startswith(("win", "cygwin", "msys", "mingw")):
+        return "win32"
+    if v.startswith("linux"):
+        return "linux"
+    return ""
+
+
+def this_system(platform: str | None = None, release: str | None = None) -> str:
+    """The system whose Claude app this computer runs: sys.platform, except inside WSL, where
+    Python says linux but the app on screen is the Windows one (code.claude.com/docs/en/
+    desktop-linux: on Windows with WSL 2, the Windows desktop app is used), so its keys and
+    menus are Windows'."""
+    import platform as _p
+    plat = sys.platform if platform is None else platform
+    got = system_of(plat)
+    if got == "linux":
+        rel = _p.release() if release is None else release
+        if "microsoft" in str(rel).lower():
+            return "win32"
+    return got
+
+
+def here_system(env=None) -> str:
+    """This computer's system where this chat runs on the person's computer, else "": a cloud
+    chat runs on Linux in a container of its own, and its sys.platform says nothing about the
+    person's computer."""
+    try:
+        import place
+        if place.in_cloud(env):
+            return ""
+    except Exception:  # noqa: BLE001  no place module here: judged by the documented marker
+        e = os.environ if env is None else env
+        if str(e.get("CLAUDE_CODE_REMOTE", "")).lower() == "true":
+            return ""
+    return this_system()
+
+
+def for_system(eid: str, system: str = "", reg: dict | None = None) -> str:
+    """The id of `eid`'s variant for `system` (darwin, win32, linux, or any word system_of
+    reads), where the registry has one; else `eid` itself, which says all three."""
+    suffix = SYSTEMS.get(system_of(system))
+    if not suffix:
+        return eid
+    want = f"{eid}-{suffix}"
+    return want if any(e["id"] == want for e in (reg or load())["entries"]) else eid
+
+
 def official(e: dict) -> str:
     """The official page for an entry: its own `official_page` where its sources are not
     the product's own pages (LinkedIn's help, which no session fetches), else the first
@@ -99,17 +172,17 @@ def _goal(e: dict) -> str:
     return g[:1].upper() + g[1:] if g else ""
 
 
-def source(eid: str, reg=None) -> str:
+def source(eid: str, reg=None, system: str = "") -> str:
     """For Claude, never the person: the day an entry was checked and the page to check it
     against that day before passing it on (CLAUDE.md, "A step on another company's site")."""
-    e = entry(eid, reg)
+    e = entry(for_system(eid, system, reg), reg)
     page = official(e)
     return (f"[claude_surfaces: {e['id']!r} checked {e['verified_on']}"
             + (f"; official page: {page}" if page else "") + "; check it today before giving it]")
 
 
 def steps(eid: str, reg=None, today=None, name: str = "your copy", owner: str = "",
-          page: bool = False) -> list:
+          page: bool = False, system: str = "") -> list:
     """An entry's steps for a person who said yes, one action a line, headed by what they are
     for: never shown before they asked. An entry with a path and no steps gives its path as
     the one step, and one with neither its claim: `steps` on eight entries printed only a
@@ -118,8 +191,11 @@ def steps(eid: str, reg=None, today=None, name: str = "your copy", owner: str = 
     The person's lines only. The day it was checked and its page (`source`), and past
     `stale_after_days` the line telling Claude to re-check it (`warning`, `notes`), come
     apart from them: inside them, every message that passes steps on word for word carried
-    a file path or a date, and grew past its length the day the entry aged."""
-    e = entry(eid, reg)
+    a file path or a date, and grew past its length the day the entry aged.
+
+    `system` (darwin, win32, linux) gives that computer's own variant where the entry has one
+    (for_system); "" gives the entry, which says all three."""
+    e = entry(for_system(eid, system, reg), reg)
     # On the page there is no "this chat": an entry used on a card carries steps worded for
     # it (`page_steps`, the helper chat named, Done being the card's own button).
     use_page = page and e.get("page_steps")
@@ -163,11 +239,11 @@ def notes(*eids: str, today=None, reg=None) -> list:
 
 
 def say(eid: str, name: str = "your copy", owner: str = "", today=None, reg=None,
-        goal: bool = True) -> str:
+        goal: bool = True, system: str = "") -> str:
     """The words a person sees: the goal, then the destination, in one sentence. goal=False
     leaves the goal out, for a sentence that has already said it. The date and the official
-    page are Claude's (`source`)."""
-    e = entry(eid, reg)
+    page are Claude's (`source`). `system`: as `steps` takes it."""
+    e = entry(for_system(eid, system, reg), reg)
     how = _fill(e.get("how", ""), name, owner)
     if not how:
         return ""
@@ -331,6 +407,11 @@ def main(argv=None) -> int:
         return 2
     cmd, rest = argv[0], argv[1:]
     opt = {k: rest[rest.index(k) + 1] for k in ("--name", "--owner") if k in rest}
+    # Which computer the steps are for: --system darwin|win32|linux, "all" for the entry that
+    # says all three, and by default this computer's own where the chat runs on the person's
+    # computer (here_system), all three in a cloud chat, whose own system is the container's.
+    asked = rest[rest.index("--system") + 1] if "--system" in rest[:-1] else "here"
+    system = here_system() if asked == "here" else "" if asked == "all" else system_of(asked)
     if cmd == "check":
         old = stale()
         for e, _n in old:
@@ -350,17 +431,19 @@ def main(argv=None) -> int:
             print(w)
         return 0
     if cmd == "say":
-        e = entry(rest[0])
-        print(say(rest[0], **{k[2:]: v for k, v in opt.items()}))
-        print(source(rest[0]), file=sys.stderr)    # for Claude: never said
+        eid = for_system(rest[0], system)
+        e = entry(eid)
+        print(say(eid, **{k[2:]: v for k, v in opt.items()}))
+        print(source(eid), file=sys.stderr)    # for Claude: never said
         w = warning(e)
         if w:
             print(w, file=sys.stderr)
         return 0
     if cmd == "steps":
-        print("\n".join(steps(rest[0], **{k[2:]: v for k, v in opt.items()})))
-        print(source(rest[0]), file=sys.stderr)    # for Claude, as `say` gives it: never said
-        for w in notes(rest[0]):
+        eid = for_system(rest[0], system)
+        print("\n".join(steps(eid, **{k[2:]: v for k, v in opt.items()})))
+        print(source(eid), file=sys.stderr)    # for Claude, as `say` gives it: never said
+        for w in notes(eid):
             print(w, file=sys.stderr)
         return 0
     if cmd == "sync-docs":

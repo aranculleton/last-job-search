@@ -142,6 +142,12 @@ def test_two_finishes_in_a_row_and_an_answer_mid_way_with_no_version_typed(ring)
     d = read(ring, "r1", "--full", now=LATER)
     said = T.wake(ring, d, now=LATER)
     assert all(land(ring, [p for p, _ in R.sends(said)])), said
+    # The redraft the view queued is a big job: started first, in a chat of its own, so it never
+    # waits behind the changes (issue #231); the changes are the same folder's next wake.
+    if R.next_item(said)["kind"] == "draft":
+        assert "More is waiting" in said, said
+        said = T.wake(ring, d, now=LATER)
+        assert all(land(ring, [p for p, _ in R.sends(said)])), said
     for wid in ("tweak~msg-a~1", "tweak~msg-b~1"):
         assert stored(ring, "work", wid)["data"]["status"] == "running", wid
     held = sorted(os.listdir(os.path.join(ring.db, "holds")))
@@ -303,7 +309,10 @@ def test_a_page_chat_message_comes_with_its_words(ring):
                                           "status": "queued", "asked_at": "2026-10-25T17:59:00Z",
                                           "args": {"thread": "cloud-t1", "message": "m1"}, "_v": 1})
     d = read(ring, "r1")
-    said = T.wake(ring, d)
+    # Answered here, where no chat of its own can be started for it (--no-sessions; one that
+    # is reads the thread itself, tests/test_the_chat_has_a_chat_of_its_own.py).
+    said = ring.run("wake", d, "--chat", R.CHAT, "--kind", "cloud", "--on", "Opus 5.5", "--now",
+                    R.NOW, "--no-sessions", LJS_PAGE_MIRROR=ring.mirror)
     item = R.next_item(said)
     # An item made before the page put the words on it: the one read that fetches them.
     assert "talk/cloud-t1/messages" in item.get("read_words", ""), item
@@ -312,5 +321,6 @@ def test_a_page_chat_message_comes_with_its_words(ring):
                                           "args": {"thread": "cloud-t2", "message": "m2",
                                                    "text": "Is the panel on Thursday?"}, "_v": 1})
     d = read(ring, "r2", now=LATER)
-    said = T.wake(ring, d, now=LATER)
+    said = ring.run("wake", d, "--chat", R.CHAT, "--kind", "cloud", "--on", "Opus 5.5", "--now",
+                    LATER, "--no-sessions", LJS_PAGE_MIRROR=ring.mirror)
     assert "Is the panel on Thursday?" in said, said

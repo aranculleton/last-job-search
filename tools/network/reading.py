@@ -1373,12 +1373,15 @@ SIGNED_OUT_LESS = ("You're not signed in to LinkedIn in this browser, so it show
                    "both know.")
 
 
-def signed_out_say(browser: str = "pane") -> str:
+def signed_out_say(browser: str = "pane", system: str = "") -> str:
     """The prompt, two short lines: what signing in gives, and how. `browser` is "pane" (the
-    desktop app's own) or anything else (their own browser, through Claude in Chrome)."""
+    desktop app's own) or anything else (their own browser, through Claude in Chrome).
+    `system`: the computer's (darwin, win32, linux) for its own keys, "" for all three; a
+    command run in the chat on the computer passes its own (here_system)."""
     if str(browser or "pane").lower() in ("pane", "browser", "enable"):
         import claude_surfaces
-        how = claude_surfaces.entry("browser-pane-stay-signed-in")["how"]
+        how = claude_surfaces.entry(claude_surfaces.for_system(
+            "browser-pane-stay-signed-in", system))["how"]
         return f"{SIGNED_OUT_LESS}\nSign in there once ({how}), then say done."
     return f"{SIGNED_OUT_LESS}\nSign in there once, in the tab I opened, then say done."
 
@@ -1497,10 +1500,20 @@ def _write_file(rel: tuple, rec) -> None:
                          "nothing was recorded") from e
 
 
-def mark_signed_in(now: datetime.datetime | None = None) -> None:
+def mark_signed_in(now: datetime.datetime | None = None, person_: bool = False) -> None:
+    """LinkedIn seen signed in. `person_`: seen right after the person signed in (`signin`,
+    signin-wait, their word on the page), kept apart from a read made signed in, so a sign-in
+    page before anything was read since is a sign-in that did not last (`signout`, lost)."""
     now = now or datetime.datetime.now()
     rec = {"date": now.date().isoformat(), "at": now.isoformat(timespec="seconds")}
     _keep(SIGNIN_FILE, "signed_in", rec)
+    if person_:
+        pace.put("person_signed_in", rec)
+
+
+def _person_signed_in_at() -> datetime.datetime | None:
+    got = pace.load().get("person_signed_in")
+    return _at(got) if isinstance(got, dict) else None
 
 
 def _signin_say() -> str:
@@ -1513,6 +1526,16 @@ def _signin_say() -> str:
 SIGNIN_SAY = _signin_say()
 
 
+def here_system() -> str:
+    """This computer's system where this chat runs on it (darwin, win32, linux), else "": the
+    sign-in line then names this computer's own keys (claude_surfaces.here_system)."""
+    try:
+        import claude_surfaces
+        return claude_surfaces.here_system()
+    except Exception:  # noqa: BLE001  not known: the line names all three
+        return ""
+
+
 def app_job_here() -> str:
     """The work item a chat the app started on the person's computer was started for (app.py
     start --work), or "": nobody watches such a chat, so it never asks there, and its
@@ -1520,12 +1543,16 @@ def app_job_here() -> str:
     try:
         import app_listen
         import app_setup
-        if app_listen.chat_kind() != "computer":
-            return ""
         # The work this chat holds now (its latest claim made here, not finished): a job chat
         # whose work is over, typed into later, asks the person in the chat again (the
-        # independent review, 2026-11-11).
-        return str(app_setup.current_claim().get("work") or "")
+        # independent review, 2026-11-11). Any read of the page's taken on the computer, by
+        # `next --computer-only` or plain `next`, or by a cloud chat lent the computer's
+        # browser (`lent`), is one: nobody reads those chats either (the local review,
+        # 2026-11-11, 4).
+        rec = app_setup.current_claim()
+        if app_listen.chat_kind() != "computer" and not rec.get("lent"):
+            return ""
+        return str(rec.get("work") or "")
     except Exception:  # noqa: BLE001  not known: an ordinary chat, which asks in its chat
         return ""
 
@@ -1542,6 +1569,7 @@ def computer_signin_steps(wid: str) -> list:
         f"put it on their page, never in this chat: python3 tools/app.py done \"$D\" --work {wid} "
         "--chat <your id> --kind computer --signin linkedin --question \"LinkedIn is signed out "
         "in Claude's browser.\" and send its batch",
+        HEARTBEAT_OUT,
         "wait for it one look at a time, each look: tabs_context for the sign-in tab's "
         "address, ArtifactData query of the page's work into \"$D\" (as it is now), then "
         f"python3 tools/computer.py signin-wait \"$D\" --work {wid} --url <that address> (a Bash "
@@ -1571,6 +1599,79 @@ def _job_signin_said(wid: str, why: str = "") -> str:
                                     enumerate(computer_signin_steps(wid), 1))
 
 
+# Every chat doing computer work writes its heartbeat once LinkedIn is signed out, so the page
+# says how the computer is and, where a sign-in did not last, asks first to keep the next one
+# (computer.py cookies_seen, state keep_signin). Unwritten, the heartbeat said "in" until the
+# chat's last step, and a sign-in that did not last was never seen as one.
+HEARTBEAT_OUT = ("write the heartbeat with --linkedin out (python3 tools/computer.py beat \"$D\" "
+                 "--chat <your id> --browser <shown|hidden> --linkedin out) and send its batch, "
+                 "so the page says how the computer is")
+
+
+def _job_friction_said(wid: str, why: str) -> str:
+    """A sign-out that is friction in a chat the app started on the computer for `wid`: the
+    day's reads are stopped. Where the person's sign-in may lift the stop today (resumable),
+    the sign-in goes on their page with the job, and their answer there lifts it
+    (resume_from_page); otherwise the job ends there, saying why in plain words. Nothing waits
+    in this chat: nobody reads it."""
+    if _way_back():
+        first = (f"put it on their page, never in this chat: python3 tools/app.py done \"$D\" "
+                 f"--work {wid} --chat <your id> --kind computer --signin linkedin --question "
+                 "\"LinkedIn is signed out in Claude's browser.\" and send its batch")
+    else:
+        first = (f"say it on their page, never in this chat: python3 tools/app.py done \"$D\" "
+                 f"--work {wid} --chat <your id> --kind computer --failed \"LinkedIn signed "
+                 "Claude's browser out again today, so reading there starts again tomorrow.\" "
+                 "and send its batch")
+    steps = [first, HEARTBEAT_OUT,
+             "read nobody more today and wait for nothing: go to step 7 of your prompt. Say "
+             "nothing to the person in this chat"]
+    return (f"reading: {why}. That is friction: browser reads are stopped for today. This chat "
+            "was started on the person's computer for their page, and nobody reads it: it goes "
+            "on their page.\n" + "\n".join(f"  {i}. {x}" for i, x in enumerate(steps, 1)))
+
+
+def _job_check_said(wid: str, words: str) -> str:
+    """LinkedIn showed a check in a chat the app started on the computer for `wid`: the day's
+    reads are stopped, and never lifted by hand, so the job ends on the page saying what was
+    seen, never "tell the person" in a chat nobody reads (the local review, 2026-11-11, 4)."""
+    shown = " ".join(str(words or "a check").replace('"', "'").split())[:120]
+    return ("reading: LinkedIn showed a check (%s). Browser reads are stopped for today; never "
+            "try to get past it. This chat was started on the person's computer for their page, "
+            "and nobody reads it: it goes on their page.\n  1. say it on their page, never in "
+            "this chat: python3 tools/app.py done \"$D\" --work %s --chat <your id> --kind "
+            "computer --failed \"LinkedIn showed a check in Claude's browser (%s), so reading "
+            "there starts again tomorrow.\" and send its batch\n  2. read nobody more today: go "
+            "to step 7 of your prompt. Say nothing to the person in this chat"
+            % (shown, wid, shown))
+
+
+def resume_from_page(item: dict, now: datetime.datetime | None = None) -> str:
+    """Their answer on the page to a job's sign-in question ("Signed in to LinkedIn") is their
+    word: today's sign-out stop is lifted by it where it may be (resumable), once a day, in
+    code. Signed in on the page, the gate still refused every read until someone ran `resume`
+    by hand (the local review, 2026-11-11, 5). The stop, if any, as it stands after: ""."""
+    answers = ((item or {}).get("args") or {}).get("answers") or {}
+    said = [str(v) for v in (answers.values() if isinstance(answers, dict) else [])]
+    if not any("signed in to linkedin" in v.lower() for v in said):
+        return ""
+    now = now or datetime.datetime.now()
+    rec = _stop_today(now.date())
+    if not rec or rec.get("lifted"):
+        return ""
+    # Only an answer given after the stop is their word on it.
+    answered, stopped_at = _stamp(item.get("answered_at")), _at(rec)
+    if not answered or not stopped_at or answered <= stopped_at.astimezone():
+        return ""
+    if str(rec.get("kind") or _signal_kind(rec.get("reason"))) != "signed_out":
+        return "a check stays: reading starts again tomorrow"
+    mark_signed_in(now, person_=True)
+    if resumable(now):
+        return resumable(now)
+    resume("signed in again on their page", now)
+    return ""
+
+
 def signin_steps() -> list:
     """What the session does when LinkedIn is not signed in yet: open its sign-in page
     in the pane, say one sentence, and wait, looking only at the pane's address."""
@@ -1584,7 +1685,8 @@ def signin_steps() -> list:
         "them `python3 tools/claude_surfaces.py steps browser-pane-show` first (the pane keeps "
         "its sign-ins when hidden; it only goes out of view)",
         f"tell the person, once (in their own browser through Claude in Chrome, the second "
-        f"line names the tab instead: `reading.py signin --browser chrome`): {SIGNIN_SAY}",
+        f"line names the tab instead: `reading.py signin --browser chrome`): "
+        f"{signed_out_say('pane', here_system())}",
         "never type in it, read it, look at it or keep anything from it while they sign in",
         f"every {SIGNIN_POLL_SECONDS}s, look only at the pane's address and title and run "
         "`reading.py signin --url <address>`: signed-in means carry on with the first "
@@ -2005,7 +2107,8 @@ def what_to_send(where: str) -> str:
 
 
 # The tools that are Claude's own browser pane on the person's computer (place.BROWSERS less
-# Chrome, whose tabs are the person's own): a chat holding one reads profiles itself.
+# Chrome, whose tabs are the person's own): a chat holding one reads profiles itself. Its tool
+# names count as well as these words (place.browser_of).
 READS_HERE = {"browser", "enable"}
 
 
@@ -2033,7 +2136,8 @@ def route(tools=(), consent: str | None = None, env=None, signed_in: bool | None
     if consent == "off":
         return {"route": "public", "browser": "", "usable": False, "do": "public work only",
                 "say": "", "signin": False}
-    if consent == "browser" and READS_HERE & {str(t).strip().lower() for t in tools or ()}:
+    import place
+    if consent == "browser" and place.browser_of(tools, place.in_cloud(env)) in ("pane", "linked"):
         return {"route": "here", "browser": "Claude's browser on the person's computer",
                 "usable": True,
                 "do": ("read the short list in this chat's own browser now, in this run: "
@@ -2047,7 +2151,6 @@ def route(tools=(), consent: str | None = None, env=None, signed_in: bool | None
                        "it is read only in the signed-in browser on the person's computer"),
                 "say": "", "signin": True}
     if consent == "browser":
-        import place
         return {"route": "page", "browser": "your page in the Claude desktop app",
                 "usable": True,
                 "do": ("put the best on today's short list (`reading.py shortlist`), queue them "
@@ -2620,6 +2723,8 @@ def stop(reason: str, today: datetime.date | None = None) -> str:
 # is friction, and stops the day.
 EXPIRY_HOURS = pace.EXPIRY_HOURS
 SIGNOUT_KEEP_DAYS = 7
+# Sign-ins that did not last (`signout`, lost) a day before one is friction again.
+LOST_MAX = 2
 
 
 def _at(rec) -> datetime.datetime | None:
@@ -2655,9 +2760,11 @@ def signout(now: datetime.datetime | None = None,
             seen: str = "LinkedIn's sign-in page") -> dict:
     """Classify a sign-in page seen where a page was expected, record it, and act on it.
 
-    {"kind": "expired" | "friction", "why", "at", "again"}. Expired: the first page of the
-    day, or EXPIRY_HOURS or more since the last page load. The person signs in, nothing
-    stops and it is no signal. Friction: within EXPIRY_HOURS of a load, or a second sign-out
+    {"kind": "expired" | "lost" | "friction", "why", "at", "again"}. Expired: the first page
+    of the day, or EXPIRY_HOURS or more since the last page load. The person signs in, nothing
+    stops and it is no signal. Lost: within EXPIRY_HOURS of the person signing in, with nothing
+    read since, LOST_MAX times a day at most: their sign-in did not last, and they sign in
+    again (keeping it, computer.py keep_signin), nothing stops and it is no signal. Friction: within EXPIRY_HOURS of a load, or a second sign-out
     the same day. The day's reads stop, it is a signal, and the stop names `resume`. The same
     sign-in page seen again before the person has signed in is the same sign-out
     (`again`), recorded once."""
@@ -2676,7 +2783,18 @@ def signout(now: datetime.datetime | None = None,
     load_words = (f"{_ago(since)} after the last {what} ({ref:%Y-%m-%d %H:%M})" if ref
                   else "with nothing loaded or signed into before it on this computer")
     first_of_day = ref is None or ref.date() < now.date()
-    if outs:
+    person_in = _person_signed_in_at()
+    lost_today = [x for x in outs if x.get("kind") == "lost"]
+    if person_in and person_in <= now and now - person_in < datetime.timedelta(
+            hours=EXPIRY_HOURS) and (last is None or last < person_in) and \
+            (not outs or person_in > (_at(outs[-1]) or now)) and len(lost_today) < LOST_MAX:
+        # Signed in, and the sign-in page again before anything was read: the sign-in did not
+        # last, and nothing read could have caused it. A wait for the person, never friction:
+        # it stopped the whole day and the page said LinkedIn asked Claude to slow down (the
+        # local review, 2026-11-11, 5).
+        kind = "lost"
+        why = f"{seen} {_ago(now - person_in)} after they signed in, before anything was read"
+    elif outs:
         kind = "friction"
         why = (f"{seen}, the second sign-out today (the first at {_at(outs[0]):%H:%M}, signed "
                f"back in at {signed:%H:%M}), {load_words}")
@@ -2699,6 +2817,21 @@ def signout(now: datetime.datetime | None = None,
     return dict(rec, again=False)
 
 
+def note_first_signout(now: datetime.datetime | None = None,
+                       seen: str = "LinkedIn's sign-in page") -> None:
+    """The day's first sign-in page, before any sign-in today, kept as the day's sign-out (no
+    stop, no signal), so the next one after the person signs in is judged against it. A chat
+    on the computer sent it straight to the page and kept nothing, and the next sign-in page,
+    minutes after they signed in, read as a first sign-out (the local review, 2026-11-11, 5)."""
+    now = now or datetime.datetime.now()
+    if signouts(now.date()):
+        return
+    rec = {"at": now.isoformat(timespec="seconds"), "kind": "expired",
+           "why": f"{seen} before any sign-in today", "minutes_since": None}
+    pace.update(lambda d: d.__setitem__("signouts", [
+        x for x in d.get("signouts") or [] if isinstance(x, dict)] + [rec]))
+
+
 def resumable(now: datetime.datetime | None = None) -> str:
     """"" when today's stop may be lifted by the person's word (`resume`), else why not."""
     now = now or datetime.datetime.now()
@@ -2710,7 +2843,7 @@ def resumable(now: datetime.datetime | None = None) -> str:
                 "by hand: the reads wait for tomorrow, or a paste")
     if (pace.load().get("resumed") or {}).get("date") == now.date().isoformat():
         return "the day's one resume is spent: a second sign-out stops the day for good"
-    if len(signouts(now.date())) > 1:
+    if len([x for x in signouts(now.date()) if x.get("kind") != "lost"]) > 1:
         return "two sign-outs today: the day stops for good, tomorrow or a paste"
     signed, at = _signed_in_at(), _at(rec)
     if not signed or (at and signed <= at):
@@ -2732,13 +2865,19 @@ def _way_back(now: datetime.datetime | None = None) -> str:
 
 def _said_signout(got: dict) -> int:
     """What a session is told about a sign-out, and the exit code."""
+    wid = app_job_here()
+    if got["kind"] == "friction" and wid:
+        # A chat the app started on the computer: nobody reads it, so what was seen goes on
+        # the page with the job, never "tell the person" in its own conversation, which kept a
+        # second sign-out in a chat on the person's Mac (the maintainer, 2026-11-11).
+        print(_job_friction_said(wid, got["why"]))
+        return EXIT["check"]
     if got["kind"] == "friction":
         print(f"reading: {got['why']}. That is friction: browser reads are stopped for today. "
               "Tell the person what was seen.")
         if _way_back():
             print(f"  {_way_back()}")
         return EXIT["check"]
-    wid = app_job_here()
     if wid:
         print(_job_signin_said(wid, f"{got['why']}. Not a stop and not a signal; nothing is "
                                     "counted"))
@@ -3065,7 +3204,7 @@ def waiting_until(contact, msgs, wait_days: int | None = -1) -> datetime.date | 
             return None
         return due + datetime.timedelta(days=wait_days) if wait_days else state.follow_up_on(due)
     until = sent + datetime.timedelta(days=wait_days) if wait_days else state.follow_up_on(sent)
-    pending = state.request_pending(msgs)
+    pending = state.request_pending(msgs, contact)
     if pending is not None and pending != datetime.date.min:
         until = min(until, pending + datetime.timedelta(days=state.REQUEST_WITHDRAW_DAYS))
     return until
@@ -3972,7 +4111,7 @@ def match_invitations(cards: list, contacts: list, threads: list | None = None,
         if cid in listed:
             continue
         rows = [r for r in state.threads_for(threads, cid) if state._direction(r)]
-        when = state.request_pending(rows)
+        when = state.request_pending(rows, c)
         if when is None:
             continue
         if complete or (edge is not None and when > edge):
@@ -6186,7 +6325,7 @@ def main(argv: list | None = None) -> int:
             text = sys.stdin.read() if a.page == "-" else open(a.page, encoding="utf-8").read()
             got = signed_in(text)
             if got:
-                mark_signed_in()
+                mark_signed_in(person_=True)
                 print("signed-in: carry on")
                 if _signed_in_step():
                     print(_signed_in_step())
@@ -6202,18 +6341,20 @@ def main(argv: list | None = None) -> int:
             if not never_signed_in_today():
                 return _said_signout(signout())
             if app_job_here():
+                note_first_signout()
                 print(_job_signin_said(app_job_here()))
                 return EXIT["signin"]
             if declined_sign_in():
                 print("signed-out: they said not today, so read on signed out")
                 return EXIT["ok"]
             mark_asked()
-            print("signed-out. Tell the person, as it is:\n" + signed_out_say(a.browser)
+            print("signed-out. Tell the person, as it is:\n"
+                  + signed_out_say(a.browser, here_system())
                   + "\nWhen they say done, load the page again and run this again. If they would "
                   "rather not: `reading.py signin --not-today`, and read on signed out.")
             return EXIT["signin"]
         if a.done:
-            mark_signed_in()
+            mark_signed_in(person_=True)
             print("reading: signed in; carry on with the first profile")
             if _signed_in_step():
                 print(_signed_in_step())
@@ -6221,7 +6362,7 @@ def main(argv: list | None = None) -> int:
         if a.url:
             state_ = url_kind(a.url)
             if state_ == "signed-in":
-                mark_signed_in()
+                mark_signed_in(person_=True)
             print(state_)
             if state_ == "signed-in" and _signed_in_step():
                 print(_signed_in_step())
@@ -6614,6 +6755,9 @@ def main(argv: list | None = None) -> int:
             kind, words = page_kind(text)
             if kind == "check":
                 stop(f"LinkedIn showed a check: {words}")
+                if app_job_here():
+                    print(_job_check_said(app_job_here(), words))
+                    return EXIT["check"]
                 print(f"reading: LinkedIn showed a check ({words}). Browser reads are stopped "
                       "for today; tell the person what it showed, and never try to get past it")
                 return EXIT["check"]
@@ -6623,13 +6767,15 @@ def main(argv: list | None = None) -> int:
                     # one within the hour of the last page stops the day (`signout`).
                     return _said_signout(signout())
                 if app_job_here():
+                    note_first_signout()
                     print(_job_signin_said(app_job_here(), "not a read, and nothing counted"))
                     return EXIT["signin"]
                 if not declined_sign_in():
                     mark_asked()
                     print("reading: LinkedIn is not signed in in this browser, so it shows only "
                           "part of each profile. Not a read, and nothing counted. Tell the "
-                          f"person, as it is:\n{signed_out_say(a.browser)}\nWhen they say done, "
+                          f"person, as it is:\n{signed_out_say(a.browser, here_system())}\nWhen "
+                          "they say done, "
                           "load the page again and read it; if they would rather not, run "
                           "`reading.py signin --not-today` and read on signed out. (The steps: "
                           "run `reading.py signin`.)")

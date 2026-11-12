@@ -366,6 +366,20 @@ def _day_words(m) -> str:
     return f"{d.strftime('%a')} {d.day} {d.strftime('%b')}"
 
 
+def said_days(text, today: dt.date | None = None) -> str:
+    """`text` with each ISO date in it said in words, "15 Oct", with the year only when it is
+    not `today`'s: how a contact was found ("leaders search, 2026-10-15") read as a date on To
+    do, never as 2026-10-15 beside "you wrote 15 Oct" (issue 242)."""
+    def said(m):
+        try:
+            d = dt.date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        except ValueError:
+            return m.group(0)
+        out = f"{d.day} {d.strftime('%b')}"
+        return out if today is not None and d.year == today.year else f"{out} {d.year}"
+    return _ISO_DAY.sub(said, str(text or ""))
+
+
 def plain_action(text) -> str:
     """A contact's next step in plain words: the app's own wording turned into a short line,
     never a command; anything the person wrote is shown as they wrote it, with a date read as
@@ -1070,7 +1084,10 @@ def _computer_card(ctx: Ctx, targets: dict) -> list:
     item = computer.card(ctx._got.get("computer") or {})
     if not item:
         return []
-    targets[item["id"]] = {"kind": "outside", "key": "computer", "rev": item["rev"]}
+    # What it asked (`say`), so its Done keeps the person's word where that is the answer
+    # (app_actions, keep_signin).
+    targets[item["id"]] = {"kind": "outside", "key": "computer", "rev": item["rev"],
+                           "say": item["about"].get("say") or ""}
     return [item]
 
 
@@ -2633,7 +2650,10 @@ def count_of(chars: int, limit, mtype: str) -> dict:
     return {"chars": chars, "limit": limit, "near_at": near_at,
             "show": mtype == "first_note" or near or over, "near": near, "over": over,
             "tone": "bad" if over else "muted",
-            "label": f"{chars} of {limit} characters" if limit else f"{chars} characters"}
+            "label": f"{chars} of {limit} characters" if limit else f"{chars} characters",
+            # As the note's one line of facts says it ("290/300 · Waiting for their profile"),
+            # the label read aloud and behind its "?" (the maintainer, 2026-11-09).
+            "short": f"{chars}/{limit}" if limit else f"{chars} characters"}
 
 
 # advise()'s rules, said the way the person would say them. Any other is said as its fix.
@@ -2674,7 +2694,7 @@ def message_warnings(text: str, mtype: str, contact: dict) -> list[dict]:
     try:
         import compose
         found = compose.advise(text, COMPOSE_KIND.get(mtype, "reply"),
-                               name=first_name(contact.get("name")) or None,
+                               name=str(contact.get("name") or "") or None,
                                title=str(contact.get("title") or ""),
                                their=(str(contact.get("company") or ""),)
                                if contact.get("company") else (),
@@ -2723,9 +2743,13 @@ def last_words(ctx, ids) -> dict:
     return out
 
 
-def reach_docs(contacts, ids) -> dict:
+def reach_docs(contacts, ids, by_contact=None) -> dict:
     """{contact id: {linkedin, email}} for the people the page has a message or a row for:
-    the owner-only documents `app.py view` writes, read by the page only for its owner."""
+    the owner-only documents `app.py view` writes, read by the page only for its owner.
+    `by_contact` (their thread rows): a record with no address takes the one a message of
+    theirs gave, newest first, however it was logged (#239: an address in a reply sat in the
+    thread, and the person copied it out by hand)."""
+    from network import state as net_state
     out = {}
     want = set(ids)
     for c in contacts:
@@ -2734,9 +2758,17 @@ def reach_docs(contacts, ids) -> dict:
             continue
         li = LINKEDIN_IN.search(str(c.get("linkedin_url") or ""))
         em = EMAIL.search(str(c.get("email") or ""))
-        if li or em:
+        given = ""
+        if not em and by_contact:
+            for r in reversed(by_contact.get(cid) or []):
+                if net_state._direction(r) == "in" and net_state.said_something(r):
+                    given = net_state.address_given(r.get("full_text") or "", c,
+                                                    r.get("scenario") or "")
+                    if given:
+                        break
+        if li or em or given:
             out[cid] = {"linkedin": li.group(0) if li else None,
-                        "email": em.group(0) if em else None}
+                        "email": em.group(0) if em else (given or None)}
     return out
 
 
@@ -2806,8 +2838,11 @@ def message_blocks(text: str, mtype: str, contact: dict, today=None) -> list[dic
     person recorded since, a message of theirs logged since, a limit for what it now is)."""
     try:
         import compose
+        # Their whole name, never the one name a greeting would pick: the check passes a
+        # greeting by any name they go by, and "Odile (Lee) Smith" read as "Lee" alone
+        # refused "Hi Odile" (a person's copy, 2026-11-11).
         found = compose.validate(text, COMPOSE_KIND.get(mtype, "reply"),
-                                 name=first_name(contact.get("name")) or None,
+                                 name=str(contact.get("name") or "") or None,
                                  title=str(contact.get("title") or ""),
                                  employers=(str(contact.get("company") or ""),)
                                  if contact.get("company") else (),
@@ -3138,13 +3173,28 @@ READ_HOLD = {
            "itself from then on",
     "sign_in": "Waiting for their profile: sign in to LinkedIn in Claude's browser and Claude "
                "reads it by itself",
-    "paused": "Waiting for their profile: LinkedIn asked Claude to slow down, so it reads it "
-              "tomorrow, by itself",
+    "paused": "Waiting for their profile: LinkedIn stopped Claude's reading for today, so it "
+              "reads it tomorrow, by itself",
     "next": "Waiting its turn: Claude reads their profile here by itself, then rewrites this note",
     "reading": "Reading their profile…",
     "read": "Profile read: Claude rewrites this note next",
     "again": "Claude could not read their profile just now: it tries again later, by itself",
 }
+# The same, as a few words in the note's one quiet line of facts ("290/300 · Waiting for their
+# profile · Location not on record"); the sentence above is behind its "?". Five lines of
+# different weights under one note did not read as one card (the maintainer, 2026-11-09: "any
+# better way to display").
+READ_HOLD_SHORT = {
+    "browser": "Waiting for their profile", "paste": "Waiting for their profile",
+    "computer": "Waiting for their profile", "tab": "Waiting for their profile",
+    "sign_in": "Waiting for their profile", "paused": "Waiting for their profile",
+    "next": "Their profile is read next", "reading": "Reading their profile…",
+    "read": "Profile read", "again": "Profile not read yet",
+}
+# Where they live is not on record, so the person's own rule about where people are cannot be
+# checked before a new message goes: the fact in a few words, and what to do, behind the same "?".
+WHERE_UNKNOWN = ("Location not on record",
+                 "Where they live is not on record: check their profile before you send")
 
 
 # One plain word for each status, and what the row offers when something is owed by the
@@ -3156,6 +3206,8 @@ STATUS_WORDS = {
     "referral_in_progress": "Referral", "converted_to_application": "Applied",
     "gone_cold": "Gone quiet", "closed": "Closed", "dropped": "Set aside",
 }
+# What a card says in its corner while a connection request waits to be accepted.
+REQUEST_WORD = "Request pending"
 # One word for each status, on every card, filter and person page: the page's own map
 # (templates/app/app.js PERSON_STATUS) says the same words, which a test holds. A row said
 # "Sent" where the person's page said "Waiting for a reply" (2026-11-03).
@@ -3317,7 +3369,10 @@ def _call_of(cid: str, status: str, due: str, said: str = "", home: str = "",
             **({"time": clock} if clock else {}),
             # Asked for and not confirmed by them yet, as the call's own line says it.
             **({"tentative": True} if status == "call_booked" and upcoming.call_tentative(said) else {}),
-            "prep": {"path": rel(path), "updated": _mtime(path), "text": _prep_text(path, names)}
+            # When it was written (its commit), never when this checkout put the file down: a
+            # fresh copy or another chat's folder rewrote the whole section for nothing.
+            "prep": {"path": rel(path), "updated": _saved_stamp(path),
+                     "text": _prep_text(path, names)}
             if have else None}
 
 
@@ -3681,8 +3736,12 @@ def _people(ctx: Ctx, targets: dict) -> list:
                               or (status in throttle_sent() and days is not None
                                   and days <= fold)))
         first = first_name(c.get("name"))
+        # A connection request nobody has accepted says so in its corner: "Waiting for a reply"
+        # sat over a note nobody could answer yet (issue 242).
+        word = REQUEST_WORD if hold and hold.get("why") == "request" \
+            else STATUS_WORDS.get(status, status.replace("_", " "))
         light = {"id": cid, "first_name": first, "employer": str(c.get("company") or ""),
-                 "status": status, "status_word": STATUS_WORDS.get(status, status.replace("_", " ")),
+                 "status": status, "status_word": word,
                  "group": group, "route": route_group(c.get("route")), "last": last,
                  "contacted": app_lists.bucket(days), "due": due or None,
                  "replied": any(state.said_something(t) for t in msgs), "live": live}
@@ -3980,7 +4039,7 @@ def _due(ctx: Ctx, targets: dict) -> list:
             co, role = str(c.get("company") or "").strip(), str(c.get("title") or "").strip()
             bits = [role + (f" at {co}" if co and co not in title else "")] if role else (
                 [co] if co and co not in title else [])
-            how = str(c.get("route_detail") or "").strip() or _ROUTE_WORDS.get(
+            how = said_days(str(c.get("route_detail") or "").strip(), ctx.today) or _ROUTE_WORDS.get(
                 str(c.get("route") or "").strip().lower(), "")
             # "Recruiter · recruiter": their route said again after a title that already says it.
             if how and how.lower() not in role.lower():
@@ -4194,14 +4253,19 @@ def _interviews(ctx: Ctx, targets: dict) -> list:
                 # a title: "Initial round" where the employer's whole paragraph was stored,
                 # the paragraph kept as its details (the maintainer, 2026-11-07).
                 "next_stage": upcoming.label(stage.get("label")) or None,
-                "stage_title": upcoming.short_label(stage.get("label")) or None,
-                "stage_details": upcoming.label_details(stage.get("label")) or None,
+                # A day in the name said in words ("Paused 2026-10-20" was a title as it
+                # stood, the screen review, 2026-11-11); the name as written stays above.
+                "stage_title": _ISO_DAY.sub(_day_words, upcoming.short_label(stage.get("label"))) or None,
+                "stage_details": _ISO_DAY.sub(_day_words, upcoming.label_details(stage.get("label"))) or None,
                 "offered": offered or None,
                 "reply_by": (stage.get("reply_by") or None) if offered else None,
                 "when": interview_when(stage.get("date"), clock, stage.get("zone"), ctx.zone),
                 # Asked for and not confirmed by them yet (the maintainer, 2026-11-05).
                 **({"tentative": True} if stage.get("tentative") and stage.get("date") else {}),
-                "prep": ({"path": rel(prep), "updated": _mtime(prep),
+                # When the prep was written (its commit), never when this checkout put the file
+                # down: every page update from a fresh copy or another chat's folder rewrote the
+                # whole of Interviews, preps and all, with nothing in it changed (issue 217).
+                "prep": ({"path": rel(prep), "updated": _saved_stamp(prep),
                           **({"stale": True, "stale_since": _saved_stamp(os.path.join(folder, "outcome.md"))}
                              if _prep_stale(folder, text, stage) else {})}
                          if text else None),
@@ -5258,8 +5322,8 @@ def _where(ctx: Ctx, targets: dict) -> dict:
     reading_row = ({"state": "paste", "say": "Off: you paste someone's profile when you write "
                                              "to them."}
                    if reading.reads_now() != "browser" else
-                   {"state": "paused", "say": "LinkedIn asked Claude to slow down: reading "
-                                              "starts again tomorrow, by itself."}
+                   {"state": "paused", "say": "LinkedIn stopped Claude's reading for today: "
+                                              "it starts again tomorrow, by itself."}
                    if reading.gate_state()["kind"] != "go" or _computer_stopped(ctx) else
                    {"state": "ready", "say": "Your page reads LinkedIn profiles in the Claude "
                                             "desktop app."} if reads else
@@ -5436,7 +5500,7 @@ def _linkedin(ctx: Ctx, targets: dict) -> dict:
                      "setting": setting, "paused": paused, "paused_until": paused_until,
                      # A waiting note's one line, for where reading stands where the page is
                      # open (READ_HOLD): the page picks it, never writes its own.
-                     "hold": dict(READ_HOLD),
+                     "hold": dict(READ_HOLD), "hold_short": dict(READ_HOLD_SHORT),
                      # The day's sign-in check (reading.linkedin_check): passed today, the page
                      # opens nothing to check again; it compares `on` with its own day.
                      "check": {k: got for k, got in reading.linkedin_check(ctx.now).items()
@@ -6244,7 +6308,7 @@ def _schedule(ctx: Ctx, targets: dict) -> dict:
 def _rules(ctx: Ctx, targets: dict) -> dict:
     """Your rules (tools/rules_view.py your_rules): every rule that shapes the search and the
     messages, each one plain sentence with the day it was set, the person's words, what it
-    left out in the last 30 days, the pencil's setting and the trash's writer, and a quiet
+    left out of the search Jobs shows, the pencil's setting and the trash's writer, and a quiet
     "Still right?" where it is old and busy; `brief_line`, the Brief's one line about them,
     at most once a month. The person: "how easy is it to change the rules ... which might be
     permanent despite someone's preferences changing over time?" (2026-11-05)."""

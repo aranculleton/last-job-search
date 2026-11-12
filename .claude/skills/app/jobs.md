@@ -23,17 +23,33 @@ page waited on every tap (2026-10-29). `next` never hands one to this chat to ru
   publishes, watches or answers the page, and is titled `Job search: <title>`, never the same
   as another job's chat at work; it puts itself away once its work is saved and nothing else
   waits, and the daily tidy puts away one that could not.
+- **A question typed in the page's Chat gets a chat of its own too** (`Job search: Chat`,
+  `page_db.QUESTION_CHAT_TITLE`) while this chat has other work of its own running or waiting
+  (`page_db.busy_here`), so it never waits on that work (issue #226): `next` hands it out
+  first with `run: child session`, made exactly as a big job's call is. With nothing else
+  going on it is answered here, at once, which is quicker than a fresh chat's start. A start
+  refused or failed is never made again for it: `app.py let-go` lets its claim go at once
+  (as the wake's line says), and the wake run again answers it here, first.
+  One such chat answers every Chat question while it is at work: this chat then leaves them to
+  it, and it takes the next one itself (`next --job-chat --questions`) and puts itself away
+  when none is left; it takes one of the cloud's ten places, and the daily tidy puts it away
+  like a job's chat. With no `create_session` here, or every place taken, the question is
+  answered here, before anything else (`run: here`, wake.md step 3); a question asked under a
+  card is always answered here, under its card.
 - `run: background agent` is the fallback where `create_session` is not available: a chat
   on a computer, or a chat without that tool (`wake` with `--no-sessions`). Send the
   claim, then make the Agent call exactly as printed (`run_in_background: true`,
   `isolation: "worktree"`).
 - **Work for the computer** (a LinkedIn read: a networking run the page sent `to: computer`)
   is never `next`'s for a cloud chat: the engine refuses its claim, finish and fail there.
-  After each `wake`, `python3 tools/computer.py waiting "$D"` (read `beats` with the rest).
-  Nothing printed: nothing to do. Under `queued` or `finished`: `list_environments`, saved to
-  a file, then `python3 tools/computer.py route "$D" --chat <your id> --envs <that file>
-  --tools "<this chat's tool names, comma separated>"`, and do what it prints: a `call` exactly
-  as printed, then its `then`; `paste` needs nothing more, the page already says it. **This
+  `wake` names it on every wake in a `computer:` line, while any waits there or a chat there
+  is left to put away, and says what to do: `python3 tools/computer.py route "$D" --chat <your
+  id> --tools "<this chat's tool names, comma separated>"` (with `--envs <that file>` where
+  this chat has `list_environments`, its answer saved to a file), and do what it prints: its
+  batches first (the list of computers, kept for the page), then a `call` exactly as printed,
+  then its `then`. A `handback` is a step this chat has no tool for: a subagent ends its answer
+  with its lines, exactly as printed, and its listener makes them (SKILL.md, step 0). `paste`
+  needs nothing more, the page already says it. **This
   chat never approves computer access** (`confirm_repository_trust`): one small chat of its
   own, "Job search: starts chats on your computer", holds that approval and starts and puts
   away the chats there; `route` makes it once and wakes it by republishing its bell page.
@@ -41,7 +57,10 @@ page waited on every tap (2026-10-29). `next` never hands one to this chat to ru
   helper in the sidebar (2026-11-10). Never `send_message` a chat on the computer: it reports
   through the page and the copy. On the computer itself, `next --kind computer --computer-only` runs it in that
   chat, which has the browser, never as an agent (COMPUTER.md, "How the work reaches the
-  computer").
+  computer"). Where only the person can move it (LinkedIn signed out there, an approval), the
+  page says what is wrong in one line with one button (`computer.py state`: its To do card and
+  its row under LinkedIn): asked about it, point them there, and never send them to a chat as
+  the way through, the one on their computer included (2026-11-11).
 
 Never wait for either: go straight back to step 3 for the next item, so a search, a
 networking run and an interview prep run side by side (ten at most in the cloud, each in a chat of

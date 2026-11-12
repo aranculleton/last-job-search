@@ -10,7 +10,10 @@ missing was taking them together. Now the first follow-up waiting is claimed `wi
 other one, as drafts queued together are, and `app.py follow-ups` drafts every one this chat
 holds in one run, keeps each clean draft where Messages shows it and finishes those items in
 one batch; only what code could not write is left, all in one context block, and comes back
-through the same command with `--written`. Every person, employer and chat id is invented.
+through the same command with `--written`. Code's own short follow-up is the same stock lines
+for everyone, so it is never finished as ready (issue 223): the chat writes each for its
+reader, and the nine come back together through `--written` (`written`). Every person,
+employer and chat id is invented.
 """
 from __future__ import annotations
 
@@ -58,6 +61,24 @@ def batches(said):
     return [ln for ln in said.splitlines() if ln.endswith(".json") and os.path.isfile(ln)]
 
 
+# What the chat writes for each, from their thread: a different question for every reader,
+# never code's stock lines with the name changed (issue 223).
+ASKED = ("How did the autumn peak go for your planners this year?",
+         "Are you still building the forecasting work in house, or buying tools in?",
+         "What has been the hardest data problem on your side this quarter?",
+         "Has the move to cloud reporting changed how your group works day to day?",
+         "Which projects are taking most of your time going into the new year?",
+         "Is pricing work done centrally at your place, or within each business?",
+         "How do you usually bring new people up to speed on your data?",
+         "What tools has your group been leaning on most this year?",
+         "Is there a meetup in Manchester your people go to that you would suggest?")
+
+
+def written(ids) -> str:
+    return json.dumps([{"id": cid, "text": "Hi there, following up on my note from September. "
+                        + ASKED[n % len(ASKED)]} for n, cid in enumerate(ids)])
+
+
 def test_nine_follow_ups_are_one_claim_and_one_command(ring):
     d = ring.read("wake1")
     said = ring.wake(d)
@@ -74,12 +95,19 @@ def test_nine_follow_ups_are_one_claim_and_one_command(ring):
     run = f"python3 tools/app.py follow-ups \"{d}\" --chat {CHAT}"
     assert run in said and "load no skill for them" in said, said
     assert "step 4's row says for a follow_up" not in said, said
-    # One run drafts every one in code and finishes them in one batch.
-    got = follow_ups(ring, d)
+    # One run drafts every one in code; code's stock lines are listed for this chat to write,
+    # never finished (issue 223), and what it writes finishes them all in one batch.
+    first = follow_ups(ring, d)
+    assert first.startswith("follow-ups: 0 finished") and "9 to write here" in first, first
+    import fake_db
+    assert all(fake_db.apply(ring.db, b) for b in batches(first)), first
+    for cid in ring.ids:
+        assert not os.path.isfile(os.path.join(ring.state, "documents", "network", cid,
+                                               "draft.md")), cid
+    got = follow_ups(ring, d, "--written", "-", stdin=written(ring.ids))
     assert got.startswith("follow-ups: 9 finished"), got
     sent = batches(got)
     assert len(sent) == 1, got
-    import fake_db
     assert all(fake_db.apply(ring.db, b) for b in sent), got
     for cid in ring.ids:
         doc = ring.stored("work", "follow_up~" + cid)["data"]
@@ -104,7 +132,7 @@ def test_a_follow_up_code_cannot_write_is_written_here_and_passed_back(ring, mon
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as fh:
         fh.write("x" * 900 + "\n")
-    got = follow_ups(ring, d)
+    got = follow_ups(ring, d, "--written", "-", stdin=written(ring.ids[1:]))
     assert "8 finished" in got and "1 to write here" in got, got
     assert f"to write: {bad}" in got and "--written -" in got, got
     import fake_db
@@ -158,8 +186,9 @@ def test_no_follow_up_is_drafted_for_someone_living_where_the_persons_rules_excl
     assert all(land(ring, ring.wake(d)))
     text = ("Hi there, following up on my note from September. How is the analytics team "
             "set up these days?")
+    mine = json.loads(written([unknown]))
     got = follow_ups(ring, d, "--written", "-",
-                     stdin=json.dumps([{"id": read_away, "text": text}]))
+                     stdin=json.dumps([{"id": read_away, "text": text}] + mine))
     import fake_db
     assert all(fake_db.apply(ring.db, b) for b in batches(got)), got
     assert "refused" not in got, got
@@ -222,7 +251,7 @@ def test_a_follow_up_put_to_the_person_before_is_taken_back_and_drafted(ring):
         "needs": {"question": "What should the follow-up to Ana say?", "work": "follow_up~" + asked}})
     d = ring.read("wake1")
     assert all(land(ring, ring.wake(d)))
-    got = follow_ups(ring, d)
+    got = follow_ups(ring, d, "--written", "-", stdin=written(ring.ids))
     assert got.startswith("follow-ups: 9 finished"), got
     import fake_db
     assert all(fake_db.apply(ring.db, b) for b in batches(got)), got
@@ -249,7 +278,8 @@ def test_one_finish_refused_keeps_the_rest_of_the_batch(ring):
                  "app.FOLLOW_UP_DONE = 'Ready. Your follow-up to {first} is written.'\n"
                  "sys.exit(app.main(sys.argv[1:]))\n")
     r = subprocess.run([*repo_files.python_on_github(driver), "follow-ups", d, "--chat", CHAT,
-                        "--now", NOW, "--today", "2026-10-25"], env=ring.env(), capture_output=True,
+                        "--now", NOW, "--today", "2026-10-25", "--written", "-"], env=ring.env(),
+                       input=written(ring.ids), capture_output=True,
                        encoding="utf-8", errors="replace", timeout=120)
     assert r.returncode == 0, r.stdout + r.stderr
     assert r.stdout.startswith("follow-ups: 9 finished"), r.stdout

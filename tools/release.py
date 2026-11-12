@@ -7,13 +7,31 @@ nothing reminded anyone of: 3.3.0 sat merged and unpublished, and a session cann
 a tag. .github/workflows/release.yml runs this on every push to master that touches
 CHANGELOG.md, so merging the release PR is the release.
 
+    python3 tools/release.py cut X.Y.Z --headline "<one plain sentence for the person>"
     python3 tools/release.py newest            # the version, its date, and whether it is tagged
     python3 tools/release.py notes [X.Y.Z]     # the release notes a person reads
     python3 tools/release.py notes X.Y.Z --full    # the whole CHANGELOG section
     python3 tools/release.py publish           # tag and publish the newest, if it has no tag yet
 
-The notes are short on purpose: one line per change, its headline from the CHANGELOG, a
-few plain words where a change needs the person, and one closing line on what to do. The
+`cut` names and dates the version on its own pull request, before that pull request's last
+push, so merging it is the release (4.15.0 took a second pull request and two hours for the
+rename alone). It renames [Unreleased] to [X.Y.Z] with today's date (UTC), opens a fresh
+empty [Unreleased] above it and writes the headline as the section's first entry: the one
+line a person who updates when they choose is told about the version (tools/sync_app.py,
+brings()). It refuses when [Unreleased] is empty, when X.Y.Z is not newer than the newest
+release, when the headline is longer than 140 characters or is not one plain sentence, and
+when docs/NEXT_BUILDER.md does not name X.Y.Z yet or still has a bracketed line saying what
+goes there. It never commits.
+
+Publishing a release also closes every open issue labelled `fixed-unreleased` (a bug from the
+maintainer's copy, fixed on master since the last release: tools/app_bug.py) with a comment
+"Fixed in vX.Y.Z", and takes the label off: each labelled before the tagged commit was made,
+so one labelled between the release's merge and the release job waits for the next.
+
+The notes are short on purpose: the version's headline (the section's first entry), then
+one line per change by kind, new things first, then changed, fixed and removed, each with
+its headline from the CHANGELOG, a few plain words where a change needs the person, and one
+closing line on what to do. The
 CHANGELOG keeps the detail, for the sessions that work on the app; the release page held
 the whole section once, and to a person it read as walls of text.
 
@@ -22,13 +40,13 @@ earlier run) is not tagged again, and one no newer than the newest tag is not re
 a fix to an old section's wording is not a release. The newest release's notes are
 rewritten when they differ from what this file now makes of its section.
 
-A release ships with the snapshot of its own public names (tools/public_names.py), which
-the release PR writes, so the next release is checked against the names people have. This
-job's checkout is thrown away with it, so a snapshot written here would be lost: publish
-says when the release went out without one, and fails, after tagging, never before.
+The names a release ships are read from its own tag by tools/public_names.py, so nothing
+about them is written at a release.
 """
 from __future__ import annotations
 
+import datetime as dt
+import json
 import os
 import re
 import subprocess
@@ -73,12 +91,19 @@ def _needs(ids: list[str]) -> str:
 
 MAX_PER_GROUP = 8
 CHANGELOG_URL = "https://github.com/aranculleton/last-job-search/blob/master/CHANGELOG.md"
+# The order a person reads the kinds in, after the headline: what is new first. A section
+# lists them in the order it was written, and 4.15.0's notes showed eight fixes and "And 318
+# more" before its five new things (the release audit, 2026-11-11). Any other kind follows,
+# in the section's own order.
+ORDER = ("New", "Changed", "Fixed", "Removed")
 
 
 def short(notes: str) -> str:
-    """The release notes a person reads, from a CHANGELOG section."""
+    """The release notes a person reads, from a CHANGELOG section: its headline, the section's
+    first entry (`cut` writes it there), then the rest by kind, new things first."""
     groups: list[tuple[str, list[str]]] = []
     asks = set_up = 0
+    lead = ""
     entries: list[tuple[str, str]] = []           # (group, the entry's whole text)
     group = ""
     for line in notes.splitlines():
@@ -104,10 +129,14 @@ def short(notes: str) -> str:
         elif need == "nobody":
             set_up += 1
             head += " (set up for you)"
-        if not groups or groups[-1][0] != group:
+        if not lead:
+            lead = head
+            continue
+        if group not in (g for g, _ in groups):
             groups.append((group, []))
-        groups[-1][1].append(head)
-    out = []
+        next(hs for g, hs in groups if g == group).append(head)
+    groups.sort(key=lambda g: ORDER.index(g[0]) if g[0] in ORDER else len(ORDER))
+    out = [lead, ""] if lead else []
     for group, heads in groups:
         # A big release is still a page someone reads: the first few of each kind (the
         # CHANGELOG puts the ones a person notices first), then a count.
@@ -125,10 +154,14 @@ def short(notes: str) -> str:
 
 
 def _gh(args: list[str]) -> subprocess.CompletedProcess:
-    cmd = ["gh", *args]
+    cmd, env = ["gh", *args], None
     if os.environ.get("GITHUB_REPOSITORY"):
-        cmd += ["--repo", os.environ["GITHUB_REPOSITORY"]]
-    return subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True,
+        if args[:1] == ["api"]:
+            # `gh api` takes no --repo: its {owner}/{repo} come from GH_REPO.
+            env = dict(os.environ, GH_REPO=os.environ["GITHUB_REPOSITORY"])
+        else:
+            cmd += ["--repo", os.environ["GITHUB_REPOSITORY"]]
+    return subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, env=env,
                           encoding="utf-8", errors="replace")
 
 
@@ -136,11 +169,172 @@ def _key(version: str) -> tuple:
     return tuple(int(x) for x in version.split("."))
 
 
-def tags() -> list[str]:
-    out = subprocess.run(["git", "-C", ROOT, "ls-remote", "--tags", "--refs", "origin", "v*"],
-                         capture_output=True, text=True, check=True,
+def tags(root: str = ROOT) -> list[str]:
+    out = subprocess.run(["git", "-C", root, "ls-remote", "--tags", "--refs", "origin", "v*"],
+                         capture_output=True, text=True, check=True, timeout=60,
                          encoding="utf-8", errors="replace").stdout
     return [ln.split("refs/tags/", 1)[1] for ln in out.splitlines() if "refs/tags/" in ln]
+
+
+# ------------------------------------------------------------------ cutting a version
+
+VERSION = re.compile(r"^\d+\.\d+\.\d+$")
+UNRELEASED = re.compile(r"^## \[Unreleased\][^\n]*\n", re.M)
+NEXT_BUILDER = os.path.join("docs", "NEXT_BUILDER.md")
+HEADLINE_MAX = 140
+# A line of the hand-over left for the release to fill: "[4.15.1's final test results go
+# here, written at the release.]" named the version, so the hand-over passed, and the
+# release would have gone out with the placeholder in it (the process review, 2026-11-11).
+PLACEHOLDER = re.compile(r"\[[^\]\n]*\bgo(?:es)? here\b[^\]\n]*\]", re.I)
+
+
+def placeholder(text: str) -> tuple[int, str] | None:
+    """(line number, the line) for the first line of the hand-over that is still a bracketed
+    "... goes here", or None."""
+    for n, line in enumerate(text.splitlines(), 1):
+        if PLACEHOLDER.search(line):
+            return n, line.strip()
+    return None
+
+
+def headline_problem(headline: str) -> str:
+    """Why `headline` cannot open a version, or "". It is the one line a person who chose to
+    update when they say is told (sync_app.brings), so it is one plain sentence they can read:
+    sync_app leaves out, for anyone but the maintainer, a line that opens on a tool's name or
+    mentions the maintainer, and cuts one past 140 characters."""
+    h = headline.strip()
+    if not h:
+        return "the headline is empty: write one plain sentence for the person"
+    if "\n" in h:
+        return "the headline runs over more than one line: make it one sentence"
+    if len(h) > HEADLINE_MAX:
+        return (f"the headline is {len(h)} characters, and a person is told at most "
+                f"{HEADLINE_MAX}: shorten it")
+    if "*" in h or "`" in h:
+        return "the headline has bold marks or code in it: write it as plain words"
+    if "maintainer" in h.lower():
+        return "the headline is about the maintainer, so a person would never be told it"
+    if re.search(r"[.!?]\s+\S", h):
+        return "the headline is more than one sentence: keep the first, put the rest below it"
+    return ""
+
+
+def _local_tags(root: str) -> list[str]:
+    try:
+        r = subprocess.run(["git", "-C", root, "tag", "-l", "v*"], capture_output=True,
+                           text=True, encoding="utf-8", errors="replace", timeout=60)
+    except (OSError, subprocess.SubprocessError):
+        return []
+    return r.stdout.split() if r.returncode == 0 else []
+
+
+def _newest(versions) -> str:
+    good = [v for v in versions if VERSION.match(v)]
+    return max(good, key=_key) if good else ""
+
+
+def _groups(body: str) -> tuple[list[str], list[tuple[str, list[str]]]]:
+    """A section's body as (the lines before its first ### heading, [(heading, lines)])."""
+    lead: list[str] = []
+    groups: list[tuple[str, list[str]]] = []
+    for line in body.splitlines():
+        if line.startswith("### "):
+            groups.append((line[4:].strip(), []))
+        elif groups:
+            groups[-1][1].append(line)
+        else:
+            lead.append(line)
+    return lead, groups
+
+
+def _block(lines: list[str]) -> str:
+    return "\n".join(lines).strip("\n")
+
+
+def cut_text(text: str, version: str, headline: str, day: str) -> str:
+    """CHANGELOG.md's text with [Unreleased] named `version` and dated `day`, a fresh empty
+    [Unreleased] above it, and `headline` its first entry: the first under its Changed
+    heading, which opens the section."""
+    m = UNRELEASED.search(text)
+    end = re.compile(r"^## \[", re.M).search(text, m.end())
+    stop = end.start() if end else len(text)
+    lead, groups = _groups(text[m.end():stop])
+    changed = next((i for i, (name, _) in enumerate(groups) if name == "Changed"), None)
+    first = [f"- **{headline.strip()}**"]
+    if changed is not None:
+        rest = _block(groups.pop(changed)[1])
+        first += [rest] if rest else []
+    parts = ["### Changed\n\n" + "\n".join(first)]
+    if _block(lead):
+        parts.append(_block(lead))
+    parts += [f"### {name}\n\n{_block(lines)}" for name, lines in groups]
+    section = f"## [{version}] - {day}\n\n" + "\n\n".join(parts) + "\n"
+    return text[:m.start()] + "## [Unreleased]\n\n" + section + ("\n" + text[stop:] if end else "")
+
+
+def cut(version: str, headline: str, root: str = ROOT, day: str | None = None) -> int:
+    """Name and date [Unreleased] as `version`, headed by `headline`. 0 when done, 1 with one
+    plain line saying why not. Never commits."""
+    if not VERSION.match(version or ""):
+        print(f"release: {version!r} is not a version number like 4.15.1")
+        return 1
+    why = headline_problem(headline)
+    if why:
+        print(f"release: nothing changed: {why}.")
+        return 1
+    path = os.path.join(root, "CHANGELOG.md")
+    with open(path, encoding="utf-8") as fh:
+        text = fh.read()
+    m = UNRELEASED.search(text)
+    if not m:
+        print("release: CHANGELOG.md has no [Unreleased] section to name.")
+        return 1
+    end = re.compile(r"^## \[", re.M).search(text, m.end())
+    if not re.search(r"^- ", text[m.end():end.start() if end else len(text)], re.M):
+        print("release: nothing changed: [Unreleased] has no entries, so there is nothing to "
+              "release.")
+        return 1
+    known = [s["version"] for s in sections(text)] + [t[1:] for t in _local_tags(root)]
+    try:
+        known += [t[1:] for t in tags(root)]
+    except (OSError, subprocess.SubprocessError):
+        print("release: the app's releases on GitHub could not be read from here, so "
+              f"{version} is checked against the CHANGELOG and this copy's own tags only.")
+    newest = _newest(known)
+    if newest and _key(version) <= _key(newest):
+        print(f"release: nothing changed: {version} is not newer than {newest}, the newest "
+              f"release.")
+        return 1
+    note = os.path.join(root, NEXT_BUILDER)
+    try:
+        with open(note, encoding="utf-8") as fh:
+            handover = fh.read()
+    except OSError:
+        handover = ""
+    if not re.search(r"(?<![\d.])" + re.escape(version) + r"(?!\d|\.\d)", handover):
+        print(f"release: nothing changed: docs/NEXT_BUILDER.md does not name {version} yet. "
+              f"Write the handover for {version} first, then cut it.")
+        return 1
+    waiting = placeholder(handover)
+    if waiting:
+        n, line = waiting
+        print(f"release: nothing changed: docs/NEXT_BUILDER.md still waits to be written at "
+              f"line {n}: \"{line}\". Write what goes there, then cut {version}.")
+        return 1
+    day = day or dt.datetime.now(dt.timezone.utc).date().isoformat()
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(cut_text(text, version, headline, day))
+    # A name taken away in this version was announced in [Unreleased]; it is in X.Y.Z now.
+    sys.path.insert(0, os.path.join(ROOT, "tools"))
+    import public_names
+    moved = public_names.announce(root, version)
+    if moved:
+        print(f"release: {moved} name{'s' if moved != 1 else ''} taken away in {version} "
+              f"now point{'' if moved != 1 else 's'} at its section in docs/removed_names.json.")
+    print(f"release: CHANGELOG.md now names {version} ({day}), opening on \"{headline.strip()}\", "
+          f"with an empty [Unreleased] above it. Nothing is committed: commit it on this "
+          f"version's pull request, and merging that pull request is the release.")
+    return 0
 
 
 def decide(newest: dict | None, existing: list[str]) -> str:
@@ -178,26 +372,100 @@ def publish(sha: str | None = None) -> int:
              "--target", sha or os.environ.get("GITHUB_SHA") or "master"])
     os.unlink(notes)
     print(f"release: published {tag}" if r.returncode == 0 else (r.stderr or r.stdout))
-    return r.returncode or names_kept(tag)
+    if r.returncode == 0:
+        close_fixed(tag, sha or os.environ.get("GITHUB_SHA") or "")
+    return r.returncode
 
 
-def names_kept(tag: str) -> int:
-    """0 when this tree's snapshot of public names is its own, so the next release must
-    keep what `tag` ships; otherwise 1, with the command that writes it. It never holds a
-    release back: by the time it runs, the tag is out."""
+FIXED_LABEL = "fixed-unreleased"
+EVENTS_PAGE = 100
+
+
+def _when(stamp: str) -> dt.datetime:
+    """A time as git and GitHub write it ("2026-11-11T12:00:00Z", "...+00:00")."""
+    return dt.datetime.fromisoformat(stamp.strip().replace("Z", "+00:00"))
+
+
+def _tagged_at(tag: str, sha: str, gh, root: str) -> dt.datetime | None:
+    """When the commit `tag` is on was made: from this checkout when it holds `sha` (release.yml
+    checks out the very commit it tags), else from GitHub. None when neither can tell."""
+    if re.fullmatch(r"[0-9a-f]{40}", sha or ""):
+        r = subprocess.run(["git", "-C", root, "show", "-s", "--format=%cI", sha],
+                           capture_output=True, text=True, encoding="utf-8", errors="replace")
+        if r.returncode == 0 and r.stdout.strip():
+            return _when(r.stdout)
+    got = gh(["api", f"repos/{{owner}}/{{repo}}/commits/{tag}"])
     try:
-        sys.path.insert(0, os.path.join(ROOT, "tools"))
-        import public_names
-        behind = public_names.stale()
-    except Exception as e:  # noqa: BLE001  the release is out either way: say why, and fail
-        print(f"release: {tag} is out, but its public names could not be read: {e}")
-        return 1
-    if not behind:
-        return 0
-    print(f"release: {tag} is out, but went without the snapshot of its public names. Run "
-          f"`python3 tools/public_names.py snapshot` on master and land it, so the next "
-          f"release is checked against what {tag} ships.")
-    return 1
+        return _when(json.loads(got.stdout)["commit"]["committer"]["date"])
+    except (ValueError, TypeError, KeyError):
+        return None
+
+
+def _marked_late(numbers: list[int], since: dt.datetime, gh) -> set[int] | None:
+    """Which of these issues had FIXED_LABEL put on after `since`, from the repo's issue
+    events (one call, newest first); None when they cannot all be seen: the call failed, or
+    a whole page of events came after `since`."""
+    got = gh(["api", f"repos/{{owner}}/{{repo}}/issues/events?per_page={EVENTS_PAGE}"])
+    try:
+        events = json.loads(got.stdout or "") if got.returncode == 0 else None
+        if not isinstance(events, list):
+            return None
+        if len(events) >= EVENTS_PAGE and _when(events[-1]["created_at"]) > since:
+            return None
+        return {int(e["issue"]["number"]) for e in events
+                if e.get("event") == "labeled"
+                and (e.get("label") or {}).get("name") == FIXED_LABEL
+                and int(e["issue"]["number"]) in numbers and _when(e["created_at"]) > since}
+    except (ValueError, TypeError, KeyError):
+        return None
+
+
+def close_fixed(tag: str, sha: str = "", gh=None, root: str = ROOT) -> list[int]:
+    """Every open issue labelled FIXED_LABEL (a bug from the maintainer's copy the builder
+    fixed on master, tools/app_bug.py) closed with a comment naming the release that carries
+    the fix, and the label taken off. Only when a release is first published, never when its
+    notes are rewritten: an issue fixed after it would be called fixed in it. For the same
+    reason only an issue labelled before the tagged commit (`sha`) was made: one labelled
+    between the release's merge and this run waits for the next release, as do all of them
+    when that cannot be told. One that could not be closed is said and keeps its label, so
+    the next release closes it; the release is out either way. The numbers closed."""
+    gh = gh or _gh
+    got = gh(["issue", "list", "--label", FIXED_LABEL, "--state", "open", "--json", "number",
+              "--limit", "200"])
+    try:
+        numbers = [int(i["number"]) for i in json.loads(got.stdout or "[]")] \
+            if got.returncode == 0 else None
+    except (ValueError, TypeError, KeyError):
+        numbers = None
+    if numbers is None:
+        print(f"release: the issues fixed in {tag} could not be listed: "
+              f"{(got.stderr or got.stdout or '').strip()[:200]}")
+        return []
+    if not numbers:
+        return []
+    since = _tagged_at(tag, sha, gh, root)
+    late = _marked_late(numbers, since, gh) if since else None
+    if late is None:
+        print(f"release: {len(numbers)} issue(s) marked fixed wait for the next release: when "
+              f"each was marked, against {tag}'s commit, could not be told.")
+        return []
+    for n in sorted(late):
+        print(f"release: issue #{n} was marked fixed after {tag}'s commit was made, so the "
+              f"next release closes it.")
+    closed = []
+    for n in (n for n in numbers if n not in late):
+        # Closed first, the label taken off after: a label gone from an issue still open
+        # would leave it open for good.
+        shut = gh(["issue", "close", str(n), "--reason", "completed",
+                   "--comment", f"Fixed in {tag}"])
+        if shut.returncode != 0:
+            print(f"release: issue #{n} could not be closed: "
+                  f"{(shut.stderr or shut.stdout or '').strip()[:200]}")
+            continue
+        gh(["issue", "edit", str(n), "--remove-label", FIXED_LABEL])
+        closed.append(n)
+    print(f"release: closed {len(closed)} of {len(numbers)} issue(s) fixed in {tag}")
+    return closed
 
 
 def refresh(tag: str, text: str) -> int:
@@ -221,9 +489,22 @@ def refresh(tag: str, text: str) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
-    if not argv or argv[0] not in ("newest", "notes", "publish"):
+    if not argv or argv[0] not in ("cut", "newest", "notes", "publish") or "-h" in argv \
+            or "--help" in argv:
         print(__doc__.split("\n\n")[2])
-        return 2
+        return 0 if argv and ("-h" in argv or "--help" in argv) else 2
+    if argv[0] == "cut":
+        rest = argv[1:]
+        headline = None
+        if "--headline" in rest:
+            i = rest.index("--headline")
+            headline = rest[i + 1] if i + 1 < len(rest) else ""
+            rest = rest[:i] + rest[i + 2:]
+        if len(rest) != 1 or headline is None:
+            print('release: say the version and its headline: python3 tools/release.py cut '
+                  'X.Y.Z --headline "<one plain sentence for the person>"')
+            return 2
+        return cut(rest[0], headline)
     if argv[0] == "publish":
         return publish()
     got = sections()

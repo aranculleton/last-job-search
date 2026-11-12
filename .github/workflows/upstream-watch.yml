@@ -27,7 +27,7 @@ name: Upstream watch
 
 on:
   schedule:
-    - cron: "0 8 * * 1" # 08:00 UTC every Monday
+    - cron: "7 20 * * 3" # 20:07 UTC every Wednesday: before the builder's weekly run (MAINTAINING.md)
   workflow_dispatch:
 
 permissions:

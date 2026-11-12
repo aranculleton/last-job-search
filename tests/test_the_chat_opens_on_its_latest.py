@@ -85,6 +85,11 @@ def test_latest_on_a_phone_stops_with_the_field_at_the_foot_of_the_screen(run, t
     assert 0 <= left <= 40, f"{left}px of empty page under the field"
 
 
+# What the thread draws: Claude's messages, and the state said under each of your questions.
+THREAD = ("({claude: [...document.querySelectorAll('#main .talk-msg:not(.from-you) .talk-text')].map((e) => e.textContent),"
+          " states: [...document.querySelectorAll('#main .talk-msg.from-you .talk-state')].map((e) => e.textContent.trim())})")
+
+
 def test_an_answer_waits_until_the_page_has_what_its_work_changed(run, tmp_path):
     # The answer said "see the updated message" while the card still showed the old draft
     # (reported from a person's copy, 2026-11-05): an answer written with its work after the
@@ -94,12 +99,56 @@ def test_an_answer_waits_until_the_page_has_what_its_work_changed(run, tmp_path)
     def seed(at):
         return {"talk/cloud-1": {"to": "cloud", "conv": "1", "title": "Questions", "created_at": "2026-10-25T17:00:00Z", "_v": 1},
                 "talk/cloud-1/messages/q1": {"from": "you", "text": "Make the note shorter", "at": "2026-10-25T17:59:00Z", "work": "talk~1", "_v": 1},
-                "talk/cloud-1/messages/a1": {"from": "cloud", "text": "Done: see the updated message on the card.", "at": at, "work": "talk~1", "_v": 1}}
-    texts = "[...document.querySelectorAll('#main .talk-msg .talk-text')].map((e) => e.textContent)"
-    fresh = run("engine", html=html, viewport=WIDE, clock=CLOCK, seed=seed("2026-10-25T18:29:00Z"), steps=[{"hash": "chat", "eval": texts}])
+                "talk/cloud-1/messages/a1": {"from": "cloud", "text": "Done: see the updated message on the card.", "at": at, "work": "talk~1", "_v": 1,
+                                             "go": [{"label": "Contacts", "to": "page:contacts"}]}}
+    # Said under the question, never as a Claude message that reads as the answer (issue #234).
+    fresh = run("engine", html=html, viewport=WIDE, clock=CLOCK, seed=seed("2026-10-25T18:29:00Z"), steps=[{"hash": "chat", "eval": THREAD}])
     assert not fresh["errors"], fresh["errors"]
-    said = " ".join(fresh["after"][0]["eval"])
-    assert "Putting the change on your page first" in said and "see the updated message" not in said, said
-    old = run("engine", html=html, viewport=WIDE, clock=CLOCK, seed=seed("2026-10-25T18:00:00Z"), steps=[{"hash": "chat", "eval": texts}])
-    said = " ".join(old["after"][0]["eval"])
-    assert "see the updated message" in said, said
+    got = fresh["after"][0]["eval"]
+    assert got["claude"] == [] and got["states"] == ["Putting the change on your page"], got
+    old = run("engine", html=html, viewport=WIDE, clock=CLOCK, seed=seed("2026-10-25T18:00:00Z"), steps=[{"hash": "chat", "eval": THREAD}])
+    got = old["after"][0]["eval"]
+    assert "see the updated message" in " ".join(got["claude"]) and got["states"] == [], got
+
+
+def test_an_answer_that_changed_nothing_on_the_page_shows_at_once(run, tmp_path):
+    # A plain answer waits for nothing: held behind "Putting the change on your page first"
+    # until the chat's last item was put on the page, a question asked behind three message
+    # changes read as slow, the line promising an order the chat did not keep (issue #226).
+    html = _write(tmp_path, "plain", _sample())
+    seed = {"talk/cloud-1": {"to": "cloud", "conv": "1", "title": "Questions", "created_at": "2026-10-25T17:00:00Z", "_v": 1},
+            "talk/cloud-1/messages/q1": {"from": "you", "text": "When is the Larkspur interview?", "at": "2026-10-25T18:28:00Z", "work": "talk~2", "_v": 1},
+            "talk/cloud-1/messages/a1": {"from": "cloud", "text": "Thursday at 10am, with the data team.", "at": "2026-10-25T18:29:00Z", "work": "talk~2", "_v": 1}}
+    texts = "[...document.querySelectorAll('#main .talk-msg .talk-text')].map((e) => e.textContent)"
+    got = run("engine", html=html, viewport=WIDE, clock=CLOCK, seed=seed, steps=[{"hash": "chat", "eval": texts}])
+    assert not got["errors"], got["errors"]
+    said = " ".join(got["after"][0]["eval"])
+    assert "Thursday at 10am" in said and "Putting the change on your page first" not in said, said
+
+
+def test_a_queued_question_says_so_under_itself_until_its_answer_is_drawn(run, tmp_path):
+    # Issue #234: a question sent while other work ran got a grey Claude message, one more for
+    # each question, and nothing on the question said whether it waited or was being answered.
+    # Now each says it under itself, a spinner and a word or two, and no Claude message is
+    # drawn until there is an answer; the state goes once it is.
+    html = _write(tmp_path, "waiting", _sample())
+    seed = {"talk/cloud-1": {"to": "cloud", "conv": "1", "title": "Questions", "created_at": "2026-10-25T17:00:00Z", "_v": 1},
+            "talk/cloud-1/messages/q1": {"from": "you", "text": "Which jobs came in today?", "at": "2026-10-25T18:25:00Z", "work": "talk~3", "_v": 1},
+            "talk/cloud-1/messages/q2": {"from": "you", "text": "And which are in Leeds?", "at": "2026-10-25T18:27:00Z", "work": "talk~4", "_v": 1},
+            "work/talk~3": {"kind": "talk", "title": "Which jobs came in today?", "to": "cloud", "args": {"thread": "cloud-1"},
+                            "asked_at": "2026-10-25T18:25:00Z", "status": "claimed", "claimed_by": "session_EXAMPLEhelper2",
+                            "claimed_at": "2026-10-25T18:25:10Z", "lease_until": "2026-10-25T18:55:10Z", "stage": 0, "steps": [], "_v": 2},
+            "work/talk~4": {"kind": "talk", "title": "And which are in Leeds?", "to": "cloud", "args": {"thread": "cloud-1"},
+                            "asked_at": "2026-10-25T18:27:00Z", "status": "queued", "stage": 0, "steps": [], "_v": 1},
+            "chats/session_EXAMPLEhelper2": {"kind": "cloud", "seen_at": "2026-10-25T18:29:30Z", "watching": True}}
+    waiting = run("engine", html=html, viewport=WIDE, clock=CLOCK, seed=seed, steps=[{"hash": "chat", "eval": THREAD}])
+    assert not waiting["errors"], waiting["errors"]
+    got = waiting["after"][0]["eval"]
+    assert got["claude"] == [] and got["states"] == ["Claude is answering", "Waiting its turn"], got
+    # Answered: the answer is drawn and the first question's state is gone.
+    seed["talk/cloud-1/messages/a1"] = {"from": "cloud", "text": "Two came in today, both in York.", "at": "2026-10-25T18:28:00Z", "work": "talk~3", "_v": 1}
+    seed["work/talk~3"] = dict(seed["work/talk~3"], status="done", done_at="2026-10-25T18:28:00Z")
+    answered = run("engine", html=html, viewport=WIDE, clock=CLOCK, seed=seed, steps=[{"hash": "chat", "eval": THREAD}])
+    assert not answered["errors"], answered["errors"]
+    got = answered["after"][0]["eval"]
+    assert got["claude"] == ["Two came in today, both in York."] and got["states"] == ["Waiting its turn"], got

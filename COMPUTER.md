@@ -125,7 +125,11 @@ it for a new person who works on a computer (`--section computer`), and an exist
 it as one card (the `computer-linkedin` profile upgrade). Each step below is one plain line
 to the person from `python3 tools/claude_surfaces.py steps <id>`, checked against its
 official page that day, and each is checked by Claude after it, so the person never has to
-know whether it worked.
+know whether it worked. The keys and menus differ between a Mac, Windows and Linux, so the
+steps are that computer's own: run on the computer, the command reads it itself; in a cloud
+chat, `python3 tools/computer.py steps <id> "$D" --envs <list_environments saved> --folders
+<list_computer_folders saved>` reads it from the computer's heartbeat or the lists, and with
+neither the steps say all three in one line. Never pass on a Mac's keys to anyone else.
 
 1. **Let Claude start its chats there** (`remote-control-settings`). Check: in a cloud chat,
    `list_environments` lists this computer as an active environment of kind `bridge`
@@ -148,9 +152,12 @@ know whether it worked.
    steps include keeping the sign-in). Check: a chat already at work on the computer says what
    its own tab shows in its heartbeat (`computer.py beat --linkedin in`), and opens nothing
    extra for it; who looks in each case is the table below. No chat can read whether the
-   browser keeps sign-ins, so it is judged by its effect: a sign-in seen and then lost by the next look
-   marks it off (`computer.cookies_seen`), the card and the brief then say to sign in again
-   and keep the sign-in, and a sign-in that holds for a day clears it.
+   browser keeps sign-ins, so it is judged by its effect: a sign-in lost by the next look, one
+   made on the page or seen by a read between two looks included, marks it off
+   (`computer.cookies_seen`). The page then asks once, before the next sign-in, to keep it
+   (`browser-pane-keep-cookies`), the person's Done records it on, and a sign-in that holds
+   for a day clears it. A sign-in page before anything was read since they signed in is a
+   sign-in that did not last, never friction: nothing stops (`reading.signout`, lost).
 5. **No scheduled task.** An hourly task on the computer started a Claude run every hour the
    app was open, waiting work or not, and needed its own Auto switch and a first run by hand
    (2026-11-09). The cloud already starts a chat on the computer when work waits, so none is
@@ -176,8 +183,11 @@ CC-20).
 ### How the work reaches the computer (for Claude)
 
 Work that needs a LinkedIn read is `to: computer` and is refused to any cloud chat
-(`tools/page_db.py` `computer_only`). The page's helper runs `python3 tools/computer.py
-waiting` on each wake, and the brief on each run, and, while something waits, `route`, which picks the first that works:
+(`tools/page_db.py` `computer_only`). `app.py wake` names it on every wake of the page's
+helper (a `computer:` line, while work waits there or a chat there is left to put away), and
+the brief looks on each run; while something waits, the chat runs `route` (a step it has no
+tool for, such as `list_environments` in the helper's subagent, is handed back to the chat
+that started it: `handback`), which picks the first that works:
 a chat already on the computer; a chat started there from the cloud (`create_session` on the
 bridge by the computer starter, woken by its bell, in Auto, titled `Job search · <job> ·
 <computer>`, its prompt complete, its results back through the page and the copy and never

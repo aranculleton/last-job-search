@@ -28,9 +28,11 @@ python3 tools/app.py reads --in "<your scratchpad>"
 makes this wake's own folder there, a fresh one with a short name, and names it first: that is
 `$D` from here on. Then it prints the reads, one ArtifactData `query` a line: make them all in
 one message, each with `out_dir: $D` and the url. It asks for the small collections whole (`meta`, `beats`, `holds`)
-and only what changed since the last read for the rest (taps, receipts, work not finished or
+and only what changed since the last read for the rest (taps, receipts, and work changed,
 asked or finished since); this copy keeps the rest from the last read, and `wake` lays it
-under what was read, so every command sees the whole database. The screens (`screen`,
+under what was read, so every command sees the whole database. Where work this copy wrote
+never reached the page, `wake` asks for the work not finished to be read again into `$D`
+first: make that read, then run the same command again. The screens (`screen`,
 `addr`) are read only when another chat drew the page since (`app.py view` asks for them).
 A whole read comes by itself with the day's first wake, and after a write was refused. The
 files a read saves hold no version (only the lines it prints do); the app's hook keeps them,
@@ -114,14 +116,25 @@ for one it created). `wake` says when either is due.
 
 `wake` takes the next item that is yours (`app.py next --claim-out`, in code) and prints it
 under `next:` exactly as `next` prints it, its claim in the last batch. Nothing waiting: it
-says so; end the turn. A refused claim means another chat took it: read again into a new
+says so; end the turn. **Work for the person's computer** is never this chat's to take, so
+`wake` names it in a `computer:` line whenever some waits there or a chat there is left to put
+away: do exactly what that line says once the wake's batches are sent, before ending the
+turn. Its `computer.py route` may ring the chat that starts chats on the computer (an
+Artifact publish), or print a `handback`: the steps this chat has no tool for, whose lines end
+your answer exactly as printed, for the listener to make (SKILL.md, step 0). A refused claim means another chat took it: read again into a new
 folder and wake once more. Never take an item `wake` or `next` did not give you: they keep
 the locks and the heavy-job cap. `run` says where it is done: `here`, `child session` or
 `background agent` (`.claude/skills/app/jobs.md`, "A big job runs in a chat of its own"); a `create_session` or
 Agent call is made only once the claim is accepted. Small work done here (`run: here`) is
 claimed running at its first stage, and no progress pin follows it, unless something else comes first (a page update, a read): then `python3 tools/app.py pin "$D" --work <its id> --line "<what, in a few plain words>"` first, so the page shows it running. It is finished only with the answer itself: a reply saying the answer follows is refused, as the page then showed nothing running while the work went on (2026-11-10). Every small item waiting
 (a talk, a reply, a tweak) is claimed in that same pass: each further one is under `also:`, done
-in order after the one under `next:`, with no new read between. Step 3 again is `wake`
+in order after the one under `next:`, with no new read between. **A question the person asked
+goes first** (a `talk`: `next` hands it out before every message change, redraft or draft as
+urgent, `page_db.ASKED_FIRST`; a Chat question goes to a chat of its own where one can be
+started, `.claude/skills/app/jobs.md`): answered here, first, and put on the page (`view` without `--end`)
+before the next item, as `wake`'s `first:` line says; where two or more other items follow,
+its `between items:` line is the one look for a question asked meanwhile, answered before the
+next item, never after the whole pass (issue #226). Step 3 again is `wake`
 run again: with the same folder after a big job's call, from a new read after small work
 (finishing it writes records the folder does not see); it says when more is waiting.
 

@@ -19,10 +19,15 @@
   --r: 14px;
   --r-sm: 10px;
   --tabs-h: 64px;
+  /* The header's height as drawn: the script sets it from the header itself (Chat's first words
+     under the header, never behind it); this is its value before the script has measured. */
+  --top-real: 56px;
   --top-h: 60px;
   /* A finger's 44px, drawn larger by --tz where the page is drawn smaller (applySize). */
   --tz: 1;
   --target: calc(44px * var(--tz));
+  /* The page's own size undone (applySize): 24px * --pz is 24px on the screen. */
+  --pz: 1;
   --gap: 12px;
 }
 
@@ -286,8 +291,10 @@ bdi { unicode-bidi: isolate; }
 @media (min-width: 760px) {
   .g-row { flex-wrap: nowrap; }
   .g-main { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 4px; flex: 0 1 30rem; }
-  .g-main > .g-name + p.small::before { content: "· "; }
-  .g-acts { flex: 1 1 auto; }
+  .g-main > .g-name + p.small::before { content: "\00b7\00a0"; }
+  /* The row's button and its bin keep one line: the words beside them give way instead (at a
+     tablet's width the bin fell under its button, the screen review, 2026-11-11). */
+  .g-acts { flex: 1 0 auto; flex-wrap: nowrap; }
   .g-acts > [data-bin] { margin-left: auto; }
 }
 /* On a phone the name is its own line and where they work, with how it stands, the line under
@@ -299,7 +306,7 @@ bdi { unicode-bidi: isolate; }
   .g-main > .g-name { display: contents; }
   .g-name > .name-link { flex-basis: 100%; font-weight: 600; }
   .g-name > .g-at { font-size: var(--t-sm); }
-  .g-main > .g-name:has(> .g-at) + p.small::before { content: "· "; }
+  .g-main > .g-name:has(> .g-at) + p.small::before { content: "\00b7\00a0"; }
 }
 .hidden-note { margin-top: 12px; }
 .top-end { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; }
@@ -655,6 +662,9 @@ p.count.tone-bad { color: var(--st-failed); }
 
 /* ------------------------------------------------------------------ work */
 .workp { display: grid; gap: 12px; }
+/* The queue over Claude's work: what runs now and what waits, in order, in two short lines. */
+.work-queue { display: grid; gap: 4px; color: var(--muted); }
+.work-queue strong { color: var(--ink); font-weight: 600; }
 .work-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px 16px; display: grid; gap: 8px; min-width: 0; }
 .work-card:focus { outline: none; }
 .work-card:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
@@ -767,7 +777,7 @@ dialog.work-sheet { width: min(560px, calc(100vw - 16px)); }
 .checks-list { display: grid; gap: 8px; }
 .checks-list li { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
 .news ul, .brief ul { margin: 0; padding-left: 20px; display: grid; gap: 4px; }
-.upgrade, .learned, .news, .brief-old { display: grid; gap: 4px; padding-block: 8px; border-top: 1px solid var(--line); }
+.upgrade, .learned, .news, .brief-old { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; padding-block: 8px; border-top: 1px solid var(--line); }
 .setup-steps { margin: 0; padding-left: 20px; display: grid; gap: 8px; }
 .recent { border-top: 1px solid var(--line); }
 .recent-list { display: grid; gap: 12px; font-size: var(--t-sm); padding-bottom: 8px; }
@@ -793,6 +803,7 @@ textarea { width: 100%; resize: vertical; line-height: 1.45; }
 
 
 .talk-msg.pending { opacity: 0.9; }
+.talk-state .spin { width: 11px; height: 11px; border-width: 2px; vertical-align: -1px; }
 .talk-who { font-size: var(--t-sm); font-weight: 600; color: var(--muted); }
 .talk-text { white-space: pre-wrap; }
 .talk-examples { display: grid; gap: 8px; }
@@ -951,11 +962,15 @@ dialog.work-sheet { position: fixed; inset: auto 0 0 0; margin: 0; width: 100%; 
 /* A card's Stop Claude sits at the end of its clock's line, not on a line of its own under
    it: each running card was its title, its words, its bar, its clock and then a row holding
    one quiet pill (the maintainer, 2026-11-10: "inline and things are good"). In a narrow
-   panel the state goes under the title rather than squeeze it to a word a line. */
-.work-card:not(.wc-done) { grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; container-type: inline-size; }
-.work-card:not(.wc-done) > * { grid-column: 1 / -1; }
-.work-card:not(.wc-done) > .wc-time:has(+ .wc-actions) { grid-column: 1; align-self: center; }
-.work-card:not(.wc-done) > .wc-time + .wc-actions { grid-column: 2; justify-content: flex-end; }
+   panel the state goes under the title rather than squeeze it to a word a line.
+   The actions share the clock's line only while both fit, the words keeping at least a short
+   line's width; else the actions take the line under it. Given a column of their own beside
+   the words, three pills took the card's width and drew "38 messages ready to send." a letter
+   a line, and "Stopped" broke in two beside Try again (the screen review, 2026-11-11). */
+.work-card:not(.wc-done) { display: flex; flex-wrap: wrap; align-items: flex-start; column-gap: 12px; container-type: inline-size; }
+.work-card:not(.wc-done) > * { flex: 1 1 100%; min-width: 0; }
+.work-card:not(.wc-done) > .wc-time:has(+ .wc-actions) { flex: 1 1 min(100%, 18ch); align-self: center; }
+.work-card:not(.wc-done) > .wc-time + .wc-actions { flex: 0 1 auto; margin-left: auto; justify-content: flex-end; align-self: center; }
 @container (max-width: 400px) {
   .wc-head > .state-word { grid-column: 2 / -1; grid-row: 2; justify-self: start; max-width: none; white-space: nowrap; }
 }
@@ -981,9 +996,14 @@ dialog.work-sheet { position: fixed; inset: auto 0 0 0; margin: 0; width: 100%; 
 .setting-row[open] > .set-sum::after { transform: rotate(-135deg); }
 .set-name { font-size: 1rem; font-weight: 400; margin-right: auto; }
 .set-value { color: var(--muted); text-align: right; }
-.set-body { padding: 0 16px 16px; display: grid; gap: 12px; }
+/* One column as wide as the card, never as wide as its longest line: a rule cut to a line
+   with "..." gave its whole length as the column's least width, and Your rules were drawn 2250px
+   wide and cut off at the card's edge (the screen review, 2026-11-11). */
+.set-body { padding: 0 16px 16px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
 .act-row { width: 100%; border: 0; border-top: 1px solid var(--line); background: none; text-align: left; color: var(--ink); font: inherit; cursor: pointer; }
-@media (hover: hover) { .act-row:hover { background: var(--raised); } }
+/* Its grey parts turn to ink on the hovered row, as a side list's count does: the grey arrow
+   read 4.44:1 on the hover colour under a pointer left on it (French, CI, 2026-11-11). */
+@media (hover: hover) { .act-row:hover { background: var(--raised); } .act-row:hover :is(.set-go, .hint) { color: var(--ink); } }
 .set-go { color: var(--muted); font-size: 1.125rem; }
 .look-row .segctl { flex: 0 1 auto; }
 .look-row .seg-opt { padding: 8px 12px; font-size: 0.875rem; }
@@ -1002,7 +1022,9 @@ dialog.work-sheet { position: fixed; inset: auto 0 0 0; margin: 0; width: 100%; 
 .site-key-fold[open] > .set-sum::after { transform: rotate(-135deg); }
 
 /* Chat: the box pinned at the bottom (4.9) */
-.talk { display: flex; flex-direction: column; gap: 12px; min-height: calc(100dvh * var(--tz) - 56px - var(--tabs-h) - 48px - env(safe-area-inset-bottom, 0px)); }
+/* As tall as the window under the header as it is drawn (app.js, fitTop), never taller: opened
+   at its end, a Chat taller than that slid its first words under the header. */
+.talk { display: flex; flex-direction: column; gap: 12px; min-height: calc(100dvh * var(--tz) - var(--top-real, 56px) - var(--tabs-h) - 48px - env(safe-area-inset-bottom, 0px)); }
 .talk-form { margin-top: auto; position: sticky; bottom: calc(var(--tabs-h) + env(safe-area-inset-bottom, 0px) + 8px); z-index: 5; background: var(--bg); padding-block: 8px; display: grid; gap: 8px; }
 @media (min-width: 760px) { .talk { min-height: calc(100dvh - 120px); } .talk-form { bottom: 0; padding-bottom: 16px; } }
 /* No messages yet: the starters and the box under the header, never at the foot of a blank
@@ -1054,6 +1076,18 @@ dialog.question-screen[open] { display: flex; flex-direction: column; }
 .openlink { display: inline-flex; align-items: center; min-height: var(--target); font-weight: 600; }
 
 p.count.tone-warn { color: var(--st-overdue); }
+/* A note's facts, one quiet line in one tone: the count, why it waits, where they live; the
+   count alone takes a state's colour, red over its limit and amber while edited near it. */
+.msg-facts .facts-line { color: var(--muted); }
+.msg-facts .count { font: inherit; color: inherit; }
+.msg-facts .count.tone-bad { color: var(--st-failed); }
+.msg-facts .count.tone-warn { color: var(--st-overdue); }
+.msg-facts .msg-held .spin { width: 12px; height: 12px; border-width: 2px; vertical-align: -1px; }
+/* A change asked with the pencil: one soft grey block under the draft, what was asked and then
+   its state with Stop Claude beside the words, never pushed to the card's far edge. */
+.tweak-going { display: grid; gap: 4px; padding: 8px 12px; border-radius: var(--r-sm); background: var(--sunk); }
+.tweak-going .work-inline .wi-text { flex: 0 1 auto; }
+.tweak-going .work-inline { gap: 4px 8px; }
 .copy-box { width: 100%; font: inherit; background: var(--sunk); border: 2px solid var(--focus); border-radius: var(--r-sm); padding: 8px 12px; }
 .copy-buffer { position: fixed; top: 0; left: 0; width: 2px; height: 2px; opacity: 0; pointer-events: none; }
 .changed > summary { cursor: pointer; font-weight: 600; font-size: var(--t-sm); color: var(--muted); min-height: var(--target); display: flex; align-items: center; gap: 4px; list-style: none; }
@@ -1095,12 +1129,13 @@ p.count.tone-warn { color: var(--st-overdue); }
 /* The pencil carries a line of text of its own (an empty one), so it lines up with "Why" by the
    same baseline in any font: with none, a button's baseline is its box's bottom, and in a wider
    font the two were 5px apart (GitHub's runner, 2026-11-11). */
-.facts .btn.icon-only::before { content: "\200b"; width: 0; }
+.facts .btn.icon-only::before, .meta .btn.icon-only::before { content: "\200b"; width: 0; }
 /* A document's words and its pencil keep together: a pencil alone on a line named nothing. */
 .checks .doc-part { white-space: nowrap; }
 @media (min-width: 760px) and (pointer: fine), (min-width: 760px) and (pointer: none) {
   .facts .info-toggle { display: inline; min-height: 0; padding: 0 2px; }
-  .facts .btn.icon-only, .checks .btn.icon-only { min-height: 0; padding: 2px 8px; margin-block: -4px; vertical-align: middle; }
+  /* An interview's pencil beside its prep's word, on its line of facts, the same (2026-11-11). */
+  .facts .btn.icon-only, .checks .btn.icon-only, .meta .btn.icon-only { min-height: 0; padding: 2px 8px; margin-block: -4px; vertical-align: middle; }
 }
 .pen-tell .pen-ask { width: 100%; }
 .wave { display: grid; gap: 12px; }
@@ -1190,9 +1225,6 @@ dialog.tweak-sheet > .tweak-panel { height: auto; flex: 1 1 auto; }
 .tweak-actions { display: flex; gap: 12px; align-items: center; }
 .tweak-actions .btn.primary[disabled] { background: var(--raised); color: var(--muted); border-color: var(--raised); cursor: not-allowed; }
 .tweak-when { display: flex; gap: 8px; }
-/* One small line, never a box (the maintainer, 2026-10-29: "huge and out of place"). */
-.tweak-tip { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: var(--t-sm); color: var(--muted); }
-.tweak-tip p { margin: 0; }
 .tweak-done { margin: 0; }
 .near-line { margin: 0; color: var(--muted); }
 
@@ -1331,6 +1363,28 @@ a.navlink, .applylink, .btn.link, .fold .btn.link, .bp-foot a { text-decoration-
 }
 label.pick { display: flex; align-items: flex-start; justify-content: center; width: var(--target); min-height: var(--target); margin: -12px 0 0 -8px; padding-top: 12px; cursor: pointer; }
 
+/* ------------------------------------------------------------------ a computer: every control at least 24px each way (WCAG 2.2, 2.5.8) */
+/* Where nothing is touched a control may be drawn small, but its target is 24px each way on
+   the screen at any of the page's sizes (--pz undoes the page's own zoom): a small one reaches
+   the rest through its ::after, centred on it and drawn as it was; a row that is a link, or a
+   fold's heading, is that tall. The "?" was 20px, a tip's Got it 19px, Your profile's way back
+   16px, a pencil 22px, "Show all" 13px and the Brief's rows 18px (the screen review,
+   2026-11-11). */
+@media (min-width: 760px) and (pointer: fine), (min-width: 760px) and (pointer: none) {
+  .sum .help-q, .q, :is(.facts, .checks, .meta) .btn.icon-only, :is(.bp-tip, .tip) > .btn.secondary.small, a.back-link, .few-more > .btn.link,
+  table.data td > .btn.link { position: relative; }
+  .sum .help-q::after, .q::after, :is(.facts, .checks, .meta) .btn.icon-only::after, :is(.bp-tip, .tip) > .btn.secondary.small::after, a.back-link::after,
+  .few-more > .btn.link::after, table.data td > .btn.link::after {
+    content: ""; position: absolute;
+    top: calc(50% - max(50%, 12px * var(--pz))); bottom: calc(50% - max(50%, 12px * var(--pz)));
+    left: calc(50% - max(50%, 12px * var(--pz))); right: calc(50% - max(50%, 12px * var(--pz))); }
+  a.bp-link, .bp-all > summary, .bp-up-row .up-title > a.up-link { min-height: calc(24px * var(--pz)); }
+}
+/* A setting's pill is its label's target, the whole pill: its words alone were 18px of its 36px. */
+.pills .choice { position: relative; }
+.pills .choice > label::after { content: ""; position: absolute; inset: 0; }
+.pills .choice > input { position: relative; z-index: 1; }
+
 /* ------------------------------------------------------------------ more contrast, when the device asks for it */
 @media (prefers-contrast: more) {
   :root { --muted: var(--ink) !important; --line: var(--line-strong) !important; --st-waiting: var(--ink) !important; }
@@ -1373,12 +1427,14 @@ label.pick { display: flex; align-items: flex-start; justify-content: center; wi
    links and taps"), and on a computer one drawn to the tip's own line, so the line the
    Brief's foot fits on keeps its height (the review, 2026-11-10). */
 @media (min-width: 760px) and (pointer: fine), (min-width: 760px) and (pointer: none) {
-  :is(.bp-tip, .tip, .tweak-tip) > .btn.secondary.small { min-height: 0; padding: 2px 12px; }
+  :is(.bp-tip, .tip) > .btn.secondary.small { min-height: 0; padding: 2px 12px; }
 }
 
 
 .quiet-card { background: var(--sunk); }
-.page-url { overflow-wrap: anywhere; }
+/* The page's address wraps only at its slashes and dots (app.js, addressWords), each part
+   kept whole; a part too long for any line still breaks rather than run off the card. */
+.page-url { overflow-wrap: break-word; }
 .add-download { display: inline-flex; gap: 8px; flex-wrap: wrap; }
 /* An opened fold (foldBody): its words, then what they do, then the line a tap leaves. On a
    wide screen the words and the buttons stand side by side, the buttons at the right edge
@@ -1409,7 +1465,8 @@ li:first-child > .fb-row, .fb-row:first-child { border-top: 0; }
 .set-body .pills .choice.has-ex { border-radius: var(--r-sm); padding-block: 8px; align-items: flex-start; flex: 1 1 auto; max-width: 100%; min-width: 0; }
 .set-body .pills .choice.has-ex input { margin-top: 4px !important; flex: none; }
 .set-body .pills .choice.has-ex label { white-space: normal; text-align: left; min-width: 0; flex: 1 1 auto; }
-.chip-ex { overflow-wrap: anywhere; }
+/* A file's name wraps after its underscores (app.js, fileWords), never inside a word. */
+.chip-ex { overflow-wrap: break-word; }
 .chip-rec { color: var(--muted); font-weight: 400; }
 /* Claude's browser: a small panel bottom right on a wide screen, a bottom sheet on a phone.
    Close hides it; the reading carries on. */
@@ -1797,6 +1854,35 @@ body.has-fab .shell { padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-b
 .bp-news a { color: inherit; text-decoration-color: currentColor; text-decoration-thickness: 1px; }
 /* A link's brackets keep to it ("(" ended a line on a phone, the screen review, 2026-11-11). */
 .paren { white-space: nowrap; }
+/* A separator dot is held to what follows it, so a line breaks before a dot and never after
+   one, and a dot a line starts with is put out of sight, keeping its words for a screen
+   reader and a copy (app.js, sepFit; the screen review, 2026-11-11). What it holds wraps as
+   it would have without it. */
+.sep-hold { white-space: nowrap; }
+:where(.sep-hold) > :where(:not(.sep-dot)) { white-space: normal; }
+/* A day said in words is read whole: "Sun 20" ended a line over "Sept" in a narrow column. */
+.day { white-space: nowrap; }
+.sep-dot.sep-cut { font-size: 0; }
+/* Its line broke inside a run of words: the break is held where it was, so what followed the
+   dot never moves up beside the words before it with no dot between. */
+.sep-break::before { content: "\A"; white-space: pre; }
+/* Its words start a box of their own: the box keeps the dot's width at its end, so it never
+   moves up beside what is before it with no dot between. */
+:has(> .sep-hold:first-child > .sep-lead), :has(> .sep-lead:first-child) { padding-right: 0.7em; }
+/* Nothing after it on its line: kept, out of sight, so nothing on the line below moves up.
+   Drawn in no colour, never hidden: a hidden dot fell out of the line's own words (innerText),
+   which Safari's engine read as "Waiting for Claude Saved." (2026-11-12). */
+.sep-dot.sep-end { color: transparent; }
+.sep-before.sep-cut::before { content: none !important; }
+/* ... and keeps its width at its end, so the part never moves up beside what is before it. */
+.sep-before.sep-cut::after { content: "\00b7\00a0"; visibility: hidden; }
+/* More's line break: where More would stand alone under its row, the row breaks before the
+   pill beside it, so the two go down together (app.js, moreFit). */
+/* The break is a line of no height; the pills under it take back one of its two gaps. */
+.more-wrap::after { content: ""; flex-basis: 100%; height: 0; order: 1; }
+.more-wrap > .more-mate, .more-wrap > .more-mate ~ * { order: 2; margin-top: -12px !important; }
+.g-acts.more-wrap > :is(.more-mate, .more-mate ~ *) { margin-top: -8px !important; }
+@media (max-width: 759px) { .more-wrap > :is(.more-mate, .more-mate ~ *) { margin-top: -8px !important; } }
 /* An interview's pill leads its line of when on a phone (the screen review, 2026-11-11). */
 .iv-when-line { display: flex; flex-wrap: nowrap; align-items: baseline; gap: 8px; }
 .iv-when-line > .when { margin: 0; flex: 1 1 10em; min-width: 0; }
@@ -2087,6 +2173,13 @@ ul.bp-news { gap: 12px; }
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); }
 .up-when { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .up-when > .btn { padding-inline: 12px; }
+/* A time read from another zone says both ("15:00 Toronto time (20:00 here)"): it wraps in its
+   own column, the time here kept whole under the person's clock, and the column is wider on
+   every row of the list alike, so the rows still line up. Held to one line in 7rem it ran under
+   the title, over the row's line of facts and into its pill on a laptop (2026-11-11). */
+.up-when:has(> .up-here) { white-space: normal; overflow-wrap: anywhere; }
+.up-here { white-space: nowrap; }
+@media (min-width: 760px) { .up-days:has(.up-here) .up-row { grid-template-columns: 10rem minmax(0, 1fr) auto; } }
 .up-main { display: grid; gap: 2px; min-width: 0; }
 .up-title { overflow-wrap: anywhere; }
 /* What it is and whether its prep is ready are one line under its title ("Interview · Supply
@@ -2096,11 +2189,11 @@ ul.bp-news { gap: 12px; }
 .up-row > .up-main { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 4px; }
 .up-row > .up-main > * { flex: 1 1 100%; min-width: 0; }
 .up-row > .up-main > :is(.up-note, .up-prep, .state-word) { flex: 0 1 auto; }
-/* The dot between them ends the first, so where they wrap no line starts with it. */
-/* The dot between what a row is and its prep only where they share a line: on a phone the
-   prep's pill takes the line under it, and the dot ended the line before ("Interview · Supply
-   Chain Analyst ·", the screen review, 2026-11-11), or began the prep's. */
-@media (min-width: 760px) { .up-row > .up-main > .up-note:has(+ .up-prep)::after { content: " ·"; } }
+/* The dot between what a row is and its prep only where they share a line: it leads the
+   prep, and where the prep's pill takes the line under it the dot goes (sepFit). Ending the
+   first, it ended its line over the pill on a tablet ("Interview · Supply Chain Analyst ·",
+   the screen review, 2026-11-11). */
+@media (min-width: 760px) { .up-row > .up-main > .up-note + .up-prep.sep-before::before { content: "\00b7\00a0"; } }
 /* The row's icons each keep their own place, the pencil, the calendar, then the trash, so
    they line up down the list whether or not a row has a trash: pushed along by it, each row
    put its calendar somewhere else (the review, 2026-11-10). */
@@ -2119,7 +2212,9 @@ ul.bp-news { gap: 12px; }
 }
 .bp-up-row { display: flex; align-items: center; gap: 8px; }
 .bp-up-row .up-main { flex: 1; display: grid; gap: 2px; min-width: 0; }
-.bp-up-row .up-when { font-size: var(--t-sm); color: var(--muted); }
+/* Its day and time wrap inside its box: held to one line, a time from another zone ran under
+   the calendar beside it and out of the panel at a tablet's width (2026-11-11). */
+.bp-up-row .up-when { font-size: var(--t-sm); color: var(--muted); white-space: normal; }
 .bp-up-row .up-title { overflow-wrap: anywhere; }
 .bp-upcoming { --pc: var(--st-running); --pcbg: var(--st-running-bg); }
 dialog.sheet .sheet-body { display: grid; gap: 16px; }
@@ -2171,7 +2266,8 @@ dialog.sheet .sheet-body { display: grid; gap: 16px; }
 /* Coming up's next three, as small cards side by side where there is room. */
 .bp-up { display: grid; gap: 8px; margin: 0; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
 .bp-up-row { padding: 8px 8px 8px 12px; border-radius: var(--r-sm); background: var(--sunk); align-items: flex-start; }
-.bp-up-row .up-title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+/* Its title cut to two lines is the link itself, so the link can be a whole target. */
+.bp-up-row .up-title > a.up-link { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .bp-share { display: block; font-size: var(--t-sm); font-weight: 600; color: var(--ink); }
 
 ul.bp-news { max-width: 80ch; }
@@ -2284,7 +2380,7 @@ ul.bp-news { max-width: 80ch; }
 
 /* Settings, 4.12: employers turned down as one list with a small trash each; what it learned
    grouped by area, a rule a line with its day small at the end; long lists' "Show all". */
-.dec-list, .l-list, ul.news, ul.upgrades { display: grid; gap: 0; }
+.dec-list, .l-list, ul.news, ul.upgrades { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; }
 .dec-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-block: 4px; border-top: 1px solid var(--line); }
 .dec-row:first-child { border-top: 0; }
 .dec-name { min-width: 0; overflow-wrap: anywhere; }
@@ -2360,30 +2456,33 @@ dialog.detail.full .detail-body > * { grid-column: 2; min-width: 0; }
    looks: a quiet head, the timing and what they are known to ask in two plain boxes, then each
    part under its own rule, what to say first in a box, its questions as cards; depth one tap
    away. Every rule here starts at .lp, so nothing reaches the rest of the page. */
-.d-live > .lp { margin-top: 8px; }
-.lp { display: flex; flex-direction: column; gap: 32px; min-width: 0; line-height: 1.55; }
+.d-live > .lp { margin-top: 8px; padding-bottom: 32px; }
+/* The day and the drafts asked for, one quiet line under the title, so At a glance starts on a
+   phone's first screen whatever length the words draw at (the German run, 2026-11-12). */
+.d-live > .when.lp-day { font-size: var(--t-sm); font-weight: 400; color: var(--muted); }
+/* The prep's screen keeps no padding of its own above and below: a bar that stays at the top
+   stuck 16px under the header, and the lifelines 32px over the foot, with the text scrolling
+   past in the gaps (the live review, 2026-11-11). The title and the end keep their room. */
+dialog.detail .detail-body:has(> .d-live > .lp) { padding-top: 0; padding-bottom: 0; }
+dialog.detail .detail-body:has(> .d-live > .lp) > .detail-title { margin-top: 16px; }
+/* --lp-bar-h is the bar's height as drawn: the script sets it on the prep from the bar itself (a
+   part jumped to lands under the bar, never behind it); this is its value before it has measured. */
+.lp { --lp-bar-h: 0px; display: flex; flex-direction: column; gap: 32px; min-width: 0; line-height: 1.55; }
 .lp p, .lp h3, .lp h4, .lp ul, .lp ol, .lp dl { margin: 0; }
 .lp-head { display: flex; flex-direction: column; gap: 12px; }
-.lp-lede { color: var(--muted); max-width: 70ch; }
 .lp-lbl, .lp-eyebrow, .lp-qhead, .lp-kids-h { font-size: var(--t-sm); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
-.lp-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.lp-search { flex: 1 1 220px; min-width: 0; display: flex; }
+/* The bar: find and the parts stay at the top while the prep scrolls under it, two rows at most
+   on a phone, nothing folded behind it (the maintainer, 2026-11-11). One solid ground from the
+   header to under the chips, as wide as the screen's column and its gutters, so no word shows
+   through above find or under the chips (the live review, 2026-11-11). */
+.lp-bar { --lp-bar-pull: 16px; position: sticky; top: 0; z-index: 5; display: flex; flex-direction: column; gap: 8px; margin: -24px -16px calc(-1 * var(--lp-bar-pull)); padding: 8px 16px; background: var(--surface); border-bottom: 1px solid var(--line); }
+/* Find, and the order of each answer beside it: never after the chips, where a row that scrolls
+   sideways hid it past the screen's edge. */
+.lp-find-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.lp-search { flex: 1 1 auto; min-width: 0; display: flex; }
 .lp-search input { width: 100%; min-width: 0; min-height: var(--target); padding: 8px 16px; border: 1px solid var(--line-strong); border-radius: var(--r-sm); background: var(--surface); color: var(--ink); font: inherit; }
-.lp-global { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.lp-switch .seg-opt { padding: 4px 12px; font-size: var(--t-sm); }
-.lp-switch.small .seg-opt { padding: 2px 8px; }
-.lp-switch .seg-opt[aria-checked="true"] { background: var(--ink); color: var(--surface); }
 .lp-found { font-size: var(--t-sm); color: var(--muted); }
-/* Search and Open all, Close all, folded under one small row beside the answers switch; open,
-   they take the row under it. */
-.lp-toolfold { margin-left: auto; min-width: 0; }
-.lp-toolfold[open] { flex: 1 1 100%; margin-left: 0; }
-.lp-toolfold-sum { cursor: pointer; list-style: none; display: inline-flex; align-items: center; gap: 4px; min-height: var(--target); padding: 4px 12px; border: 1px solid var(--line-strong); border-radius: 999px; font-size: var(--t-sm); font-weight: 600; color: var(--ink); }
-.lp-toolfold-sum::-webkit-details-marker { display: none; }
-.lp-toolfold-sum::before { content: "+"; width: 12px; }
-.lp-toolfold[open] > .lp-toolfold-sum::before { content: "\2212"; }
-.lp-toolfold-sum:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
-.lp-toolfold > .lp-tools { margin-top: 8px; }
+.lp-find-row > .lp-lead { flex: none; display: inline-flex; align-items: center; min-height: var(--target); padding: 0 8px; white-space: nowrap; font-size: var(--t-sm); }
 /* At a glance: a label and its line, stacked on a phone, side by side on a wide screen. */
 .lp-glance dl { margin: 0; display: flex; flex-direction: column; gap: 8px; }
 .lp-glance-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; }
@@ -2396,15 +2495,18 @@ dialog.detail.full .detail-body > * { grid-column: 2; min-width: 0; }
 /* On a phone the glance asks one question of them, the first; the second is in its part below.
    With both, the glance ran past the first screen in a wider font (GitHub's runner, 2026-11-11). */
 @media (max-width: 759px) { .lp-glance-ask > dd > p + p { display: none; } }
-/* Hidden: the answer behind a small pill, to say it first and then look. */
-.lp-reveal { margin-left: auto; }
-.lp-narr-show { display: none; }
-.lp[data-mode="hidden"] .lp-narr:not(.lp-shown) > .lp-narr-show { display: inline-flex; align-self: flex-start; }
-.lp[data-mode="hidden"] .lp-narr:not(.lp-shown) > .lp-beats,
-.lp[data-mode="hidden"] .lp-narr:not(.lp-shown) > .lp-bridge,
-.lp[data-mode="hidden"] .lp-glance-open { display: none; }
-/* A simple answer, a sentence a line. */
-.lp-lines { display: flex; flex-direction: column; gap: 8px; }
+/* A practice: the answer behind one pill, to say it first and then look. */
+.lp-reveal { align-self: flex-start; }
+/* Both ways of an answer at once: the script to read aloud and the same answer as points. Which
+   leads is the view's own order (data-lead), so a flip moves nothing but the two. */
+.lp-layers { display: flex; flex-direction: column; gap: 12px; }
+.lp-cues { padding-left: 20px; display: flex; flex-direction: column; gap: 4px; font-size: 17px; line-height: 1.35; }
+.lp-cues > li:first-child { font-size: 19px; font-weight: 700; }
+.lp-script { font-size: 17px; line-height: 1.5; max-width: 60ch; color: var(--ink); }
+.lp[data-lead="cues"] .lp-cues-w { order: -1; }
+.lp[data-lead="cues"] .lp-points-h { display: none; }
+.lp[data-lead="cues"] .lp-script { border-top: 1px solid var(--line); padding-top: 12px; }
+.lp[data-lead="script"] .lp-cues-w { border-top: 1px solid var(--line); padding-top: 8px; }
 .lp-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 /* On a phone the chips are one row that scrolls sideways inside itself, its far end fading:
    over three rows they pushed Part 1 more than a screen down (the screen review, 2026-11-11). */
@@ -2412,15 +2514,36 @@ dialog.detail.full .detail-body > * { grid-column: 2; min-width: 0; }
   .lp-chips { flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; padding-block: 2px;
     -webkit-mask-image: linear-gradient(to right, var(--ink) calc(100% - 32px), transparent); mask-image: linear-gradient(to right, var(--ink) calc(100% - 32px), transparent); }
   .lp-chips::-webkit-scrollbar { display: none; }
+  .lp-chips.lp-scrolled { -webkit-mask-image: linear-gradient(to right, transparent, var(--ink) 24px, var(--ink) calc(100% - 32px), transparent); mask-image: linear-gradient(to right, transparent, var(--ink) 24px, var(--ink) calc(100% - 32px), transparent); }
   .lp-chips > .btn { flex: none; }
 }
-.lp-chips .btn.lp-chip-known { background: var(--st-overdue-bg); color: var(--st-overdue); border-color: var(--st-overdue); }
-/* The mark's key at a glance: a known question's part in the same gold as its chip. */
-.lp-glance-part.lp-chip-known { background: var(--st-overdue-bg); color: var(--st-overdue); border: 1px solid var(--st-overdue); border-radius: 999px; padding: 0 8px; }
+/* The part on the screen is the chip filled, marked as the prep scrolls; a part with a question
+   they are known to ask wears a gold dot, keyed at a glance by the same dot. A chip filled gold
+   read as "you are here" (the live review, 2026-11-11). */
+.lp-chips .btn[aria-current="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+/* Only the current part looks filled: a chip under a mouse, or left hovered by a tap on a
+   phone, is underlined instead of shaded, which read as a second part being "here". */
+@media (hover: hover) {
+  .lp-chips .btn.secondary:not([aria-current="true"]):hover { background: var(--raised); border-color: var(--line-strong); text-decoration: underline; text-underline-offset: 3px; }
+  .lp-chips .btn[aria-current="true"]:hover { background: var(--ink); border-color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+}
+.lp-chip-dot { flex: none; width: 8px; height: 8px; margin-left: 4px; vertical-align: 1px; }
+/* On a phone, once the prep is read under the bar, find, the order and the chips are one row:
+   the parts that stay took about 30% of the screen (the live review, 2026-11-11). */
+@media (max-width: 759px) {
+  .lp-bar.lp-tight { flex-direction: row; align-items: center; padding-block: 4px; }
+  .lp-bar.lp-tight > .lp-find-row { flex: 0 1 auto; min-width: 0; }
+  .lp-bar.lp-tight .lp-search { flex: 0 1 8.5rem; min-width: 8.5rem; }
+  .lp-bar.lp-tight .lp-search input { padding: 8px; }
+  .lp-bar.lp-tight .lp-lead { padding: 0 4px; }
+  .lp-bar.lp-tight > .lp-chips { flex: 1 1 0; min-width: 7.5rem; }
+  .lp-bar.lp-tight > .lp-found { display: none; }
+}
+@media (min-width: 560px) and (max-width: 759px) { .lp-bar.lp-tight .lp-search { flex-basis: 14rem; } }
 .lp-box { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px 20px; display: flex; flex-direction: column; gap: 8px; }
 .lp-box ol { padding-left: 24px; display: flex; flex-direction: column; gap: 4px; }
 .lp-box .btn.link { text-align: left; }
-.lp-part { display: flex; flex-direction: column; gap: 16px; scroll-margin-top: 12px; }
+.lp-part { display: flex; flex-direction: column; gap: 16px; scroll-margin-top: calc(var(--lp-bar-h, 0px) + 12px); }
 .lp-part:focus { outline: none; }
 .lp-part-top { display: flex; flex-direction: column; gap: 4px; padding-bottom: 8px; border-bottom: 2px solid var(--mark); }
 .lp-part-h { font-size: var(--t-xl); font-weight: 700; line-height: 1.25; text-wrap: balance; }
@@ -2434,9 +2557,9 @@ dialog.detail.full .detail-body > * { grid-column: 2; min-width: 0; }
 .lp-hook:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .lp-bridge { font-style: italic; color: var(--muted); border-top: 1px dashed var(--line); padding-top: 8px; }
 .lp-group { display: flex; flex-direction: column; gap: 12px; }
-.lp-q { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px 20px; display: flex; flex-direction: column; gap: 12px; min-width: 0; scroll-margin-top: 12px; }
+.lp-q { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px 20px; display: flex; flex-direction: column; gap: 12px; min-width: 0; scroll-margin-top: calc(var(--lp-bar-h, 0px) + 12px); }
 .lp-q-known { border-left: 4px solid var(--st-overdue); }
-.lp-q:focus, .lp-notes:focus, .lp-glossary:focus { outline: none; }
+.lp-q:focus, .lp-notes:focus { outline: none; }
 .lp-q:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .lp-flash { box-shadow: 0 0 0 3px var(--mark); }
 .lp-q-q { font-size: var(--t-lg); font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
@@ -2444,54 +2567,93 @@ dialog.detail.full .detail-body > * { grid-column: 2; min-width: 0; }
 .lp-also { font-size: var(--t-sm); color: var(--muted); }
 .lp-ans { background: var(--accent-soft); border-radius: var(--r-sm); padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; }
 .lp-ans-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+/* On the soft accent (an answer's box, your own message in a chat) a label is in the ink: the
+   muted grey is 3.56:1 there in the dark, under the 4.5:1 its small size needs (the screen
+   review, 2026-11-11). */
+.lp-ans :is(.lp-lbl, .muted), .talk-msg.from-you :is(.talk-who, .muted) { color: var(--ink); }
 .lp-draft { background: var(--st-overdue-bg); border-left: 4px solid var(--st-overdue); border-radius: var(--r-sm); padding: 8px 12px; font-size: var(--t-sm); }
 .lp-kids { display: flex; flex-direction: column; gap: 8px; }
-.lp-f { border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--sunk); min-width: 0; }
-.lp-f-sum { cursor: pointer; list-style: none; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; min-height: var(--target); padding: 8px 12px; font-weight: 600; }
-.lp-f-sum::-webkit-details-marker { display: none; }
-.lp-f-sum::before { content: "+"; flex: none; width: 12px; color: var(--ink); }
-.lp-f[open] > .lp-f-sum::before { content: "\2212"; }
-.lp-f-q { min-width: 0; flex: 1 1 12em; }
-.lp-f-body { padding: 0 12px 12px 32px; display: flex; flex-direction: column; gap: 8px; }
-.lp-f .lp-ans { background: var(--surface); border: 1px solid var(--line); }
-.lp-f .lp-f .lp-ans { background: var(--accent-soft); border: 0; }
-@media (max-width: 759px) { .lp-box, .lp-narr, .lp-q { padding: 16px; } .lp-f-body { padding-left: 12px; } }
-/* On a phone who asks sits on its own line over the question, so a title never breaks after a
-   word or two beside it; the search box takes its row, and Open all and Close all share the
-   next (the review, 2026-11-10). */
-@media (max-width: 759px) { .lp-q-q > .lp-who { display: table; margin: 0 0 4px; } .lp-search { flex-basis: 100%; } .lp-toolfold { margin-left: 0; } }
-/* On a phone "All answers" heads its switch on a line of its own, so the switch and Tools share
-   the next row in any type: in a Mac's and Windows' type the three were wider than a phone
-   and Tools went to a row of its own (Everywhere, 4.15.0). */
-@media (max-width: 759px) { .lp-global > .lp-lbl { flex-basis: 100%; } }
+/* Follow-ups as choices: a pick shows its answer in the same place, with the way back above. */
+.lp-choices { display: flex; flex-direction: column; gap: 8px; }
+.lp-choice { font: inherit; text-align: left; color: var(--ink); background: var(--sunk); border: 1px solid var(--line-strong); border-radius: var(--r-sm); min-height: var(--target); padding: 8px 12px; cursor: pointer; overflow-wrap: anywhere; }
+.lp-choice::before { content: "\2192\00a0"; color: var(--muted); }
+@media (hover: hover) { .lp-choice:hover { background: var(--accent-soft); } }
+.lp-choice:focus-visible, .lp-crumb:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.lp-fu { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.lp-trail { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: var(--t-sm); color: var(--muted); }
+.lp-trail-path { flex: 1 1 12em; min-width: 0; }
+.lp-trail .btn.link { display: inline; min-height: 0; padding: 0; text-align: left; font-weight: 400; }
+.lp-fu-node { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: var(--r-sm); background: var(--sunk); scroll-margin-top: calc(var(--lp-bar-h, 0px) + 12px); }
+.lp-fu-q { font-weight: 600; }
+.lp-fu-q:focus { outline: none; }
+.lp-fu .lp-ans { background: var(--surface); border: 1px solid var(--line); }
+.lp-ifs, .lp-flags { padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }
+.lp-dot { display: inline-block; width: 10px; height: 10px; margin-left: 8px; border-radius: 50%; background: var(--st-overdue); vertical-align: 1px; }
+@media (max-width: 759px) { .lp-box, .lp-narr, .lp-q { padding: 16px; } }
+/* Who asks comes after the question, small, never ahead of it. */
+.lp-q-q > .lp-who, .lp-fu-q > .lp-who, .lp-choice > .lp-who { margin: 0 0 0 4px; font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; }
 .lp-star { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; }
 .lp-star dt { font-size: var(--t-sm); font-weight: 600; color: var(--muted); }
 .lp-star dd { margin: 0 0 8px; }
 @media (min-width: 760px) { .lp-star { grid-template-columns: 8em minmax(0, 1fr); column-gap: 16px; } .lp-star dd { margin: 0; } }
-.lp-az { display: flex; flex-wrap: wrap; gap: 8px 16px; }
 /* A term: a word of its sentence, wrapping with it, under a dotted line in the words' own
    muted tone. In the accent's red it read as a spelling mistake (the screen review,
    2026-11-11). */
 .lp-term { cursor: pointer; position: relative; border-radius: 2px;
-  text-decoration: underline dotted; text-decoration-color: var(--muted); text-decoration-thickness: 2px; text-underline-offset: 4px; }
+  text-decoration: underline dotted; text-decoration-color: var(--muted); text-decoration-thickness: 1px; text-underline-offset: 3px; }
 .lp-term:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .lp-term::after { content: ""; position: absolute; inset: -8px 0; }
 @media (hover: hover) { .lp-term:hover { background: var(--accent-soft); } }
 .lp-notes { background: var(--st-overdue-bg); border-left: 4px solid var(--st-overdue); border-radius: var(--r); padding: 16px 20px; display: flex; flex-direction: column; gap: 8px; }
 .lp-notes .lp-lbl { color: var(--st-overdue); }
 .lp-notes ul { padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }
-.lp-notes .lp-f { background: var(--surface); }
-.lp-scrim { position: fixed; inset: 0; z-index: 19; background: var(--bg); opacity: 0.8; }
-@media (min-width: 760px) { .lp-scrim { display: none; } }
-.lp-panel { position: fixed; z-index: 20; left: 0; right: 0; bottom: 0; max-height: 72dvh; overflow-y: auto; overscroll-behavior: contain; background: var(--surface); color: var(--ink);
-  border: 1px solid var(--line-strong); border-radius: var(--r) var(--r) 0 0; box-shadow: var(--shadow); padding: 16px 16px max(16px, env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 12px; line-height: 1.55; }
-@media (min-width: 760px) { .lp-panel { left: auto; top: 16px; right: 16px; bottom: auto; max-height: calc(100dvh - 32px); width: min(400px, calc(100vw - 32px)); border-radius: var(--r); } }
-.lp-panel-top { display: flex; align-items: center; gap: 8px; }
-.lp-panel-title { flex: 1 1 auto; min-width: 0; font-size: var(--t-lg); font-weight: 700; }
-.lp-panel-title:focus { outline: none; }
-.lp-panel-body { display: flex; flex-direction: column; gap: 12px; }
-.lp-tp { display: flex; flex-direction: column; gap: 4px; }
-.lp-tp-here { background: var(--accent-soft); border-radius: var(--r-sm); padding: 12px 16px; }
+/* Numbers in bold, everywhere in what to say. */
+.lp-num { font-weight: 700; }
+/* A coding part's cockpit: every step in view, ticked as it is done, the next one marked. */
+.lp-ck-steps, .lp-ck-list { padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }
+/* The steps a short checklist: a step's name and its line in one run of words, no box round
+   each, the next one marked. */
+.lp-ck-steps { gap: 2px; }
+.lp-ck-step { display: block; font: inherit; font-size: 16px; line-height: 1.35; text-align: left; color: var(--ink); background: none; border: 1px solid transparent; border-radius: var(--r-sm); min-height: var(--target); width: 100%; padding: 4px 8px; cursor: pointer; }
+.lp-ck-step.lp-ck-next { border-color: var(--line-strong); background: var(--accent-soft); }
+.lp-ck-step[aria-pressed="true"] { color: var(--muted); }
+.lp-ck-step[aria-pressed="true"] .lp-ck-t::before { content: "\2713\00a0"; }
+.lp-ck-t { font-weight: 700; }
+.lp-ck-say { font-size: var(--t-sm); }
+.lp-ck-first { font-size: 19px; font-weight: 700; }
+.lp-ck-edges { display: flex; flex-wrap: wrap; gap: 8px; }
+.lp-ck-edge { font: inherit; font-size: var(--t-sm); color: var(--ink); background: var(--surface); border: 1px solid var(--line-strong); border-radius: 999px; min-height: var(--target); padding: 4px 12px; cursor: pointer; }
+.lp-ck-edge[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
+.lp-ck-step:focus-visible, .lp-ck-edge:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.lp-ck-code { display: flex; flex-direction: column; gap: 8px; }
+.lp-ck-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
+.lp-ck-row > code { flex: 1 1 16em; min-width: 0; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: var(--t-sm); background: var(--sunk); border-radius: var(--r-sm); padding: 4px 8px; overflow-wrap: anywhere; }
+.lp-ck-row > .lp-also { flex-basis: 100%; }
+.lp-ck-copied { font-size: var(--t-sm); color: var(--muted); }
+/* Lifelines: a row at the foot of the screen, flush with it, wrapping to a second row on a phone
+   rather than scrolling one past the edge; a line said over the row itself, never above it over
+   the answers, fading after a while (the live review, 2026-11-11). */
+.lp-life { position: sticky; bottom: 0; z-index: 5; margin: 0 -16px; padding: 4px 16px max(4px, env(safe-area-inset-bottom, 0px)); background: var(--surface); border-top: 1px solid var(--line); }
+.lp-life-row { display: flex; flex-wrap: wrap; gap: 8px; }
+@media (max-width: 759px) { .lp-life-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(6.5rem, 1fr)); } }
+.lp-life-btn { font: inherit; font-size: var(--t-sm); color: var(--ink); background: var(--surface); border: 1px solid var(--line-strong); border-radius: 999px; min-height: var(--target); padding: 4px 12px; cursor: pointer; }
+.lp-life-btn[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
+.lp-life-btn:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.lp-life-line { position: absolute; inset: 0; z-index: 1; display: flex; flex-wrap: wrap; align-items: center; align-content: center; gap: 0 8px; margin: 0; padding: 4px 16px; border: 0; background: var(--accent-soft); color: var(--ink); font: inherit; text-align: left; cursor: pointer; overflow-y: auto; transition: opacity 0.6s ease; }
+.lp-life-line[hidden] { display: none; }
+.lp-life-line.lp-fading { opacity: 0; }
+.lp-life-line:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
+@media (prefers-reduced-motion: reduce) { .lp-life-line { transition: none; } }
+.lp-life-say { font-size: 17px; line-height: 1.3; color: var(--ink); }
+/* A term's meaning: a small box under the word's line (else over it), never on it, never a
+   panel or a dimmed page (the maintainer, 2026-11-11). */
+.lp-pop { position: fixed; z-index: 20; max-width: calc(100vw - 32px); max-height: 40dvh; overflow-y: auto; overscroll-behavior: contain;
+  background: var(--surface); color: var(--ink); border: 1px solid var(--line-strong); border-radius: var(--r-sm); box-shadow: var(--shadow);
+  padding: 8px 12px; display: flex; flex-direction: column; gap: 4px; font-size: var(--t-sm); line-height: 1.4; }
+.lp-pop[hidden] { display: none; }
+.lp-pop-name { font-weight: 700; }
+.lp-pop-btn { align-self: flex-start; }
+.lp-pop-more { display: flex; flex-direction: column; gap: 4px; }
 
 /* A phone drawn at its own size (2026-11-10) gets its density from less padding, never from
    smaller type: a card's edge 12px, a row of pills 8px apart with 12px either side of a pill's

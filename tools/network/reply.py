@@ -21,9 +21,12 @@ first match wins, and everything else comes back as `runners_up` so nothing the
 classifier saw is thrown away.
 
 **Action beats substance.** An email address inside four detailed paragraphs is
-still `send_resume`. The substance gets engaged with in the email; the address is
-the thing that stops being actionable if it is missed. Same for a scheduling
-link, which sits above it because slots disappear while inboxes do not.
+still an email to write (`send_email`). The substance gets engaged with in the email; the
+address is the thing that stops being actionable if it is missed. Same for a scheduling
+link, which sits above it because slots disappear while inboxes do not. An address is
+never a resume ask on its own: `send_resume` needs their words to ask for the resume, a CV
+or their background, or a role being discussed (#241: "send me an email if you'd like to
+connect" drafted "Email the resume now, attached", and a resume nobody asked for was made).
 
 **Target length is computed, never fixed.** The rule is match their effort, so
 one number could not be right for both "sure" and four paragraphs. The ladder
@@ -349,12 +352,23 @@ _DOC_OVER = r"\b(resume|r[eé]sum[eé]|cv)\b[^.!?\n]{0,30}\b(over|across|through
 RESUME_ASK = _rx(
     (0.92, "asked for the resume",
      _SEND_VERBS + r"[^.!?\n]{0,40}"
-     r"\b(resume|r[eé]sum[eé]|cv|profile|background|details)\b"),
+     r"\b(resume|r[eé]sum[eé]|cv|background)\b"),
     (0.92, "asked for the resume", _DOC_OVER),
+)
+
+# Asked to be written to, or given the way to: an email to write, which sets up the
+# conversation and carries nothing unless their words ask for the resume (#241). Read as a
+# resume ask, "Send me an email if you'd like to connect next week" had one made for them.
+EMAIL_ASK = _rx(
     (0.88, "asked to be emailed", r"\b(email|e-mail|drop|shoot|write)\s+(me|us)\b[^.!?\n]{0,25}"),
     (0.85, "gave a contact route",
      r"\b(my|our)\s+e-?mail\b|\b(reach|contact)\s+me\s+(at|on)\b|\bget in touch (at|on)\b"),
 )
+
+# A role being discussed: "email me about the analyst role" wants the resume with the email.
+ROLE_NAMED = re.compile(
+    r"\b(?:the|this|that|our)\s+(?:[\w/&+-]+\s+){0,3}(?:role|position|opening|vacancy|"
+    r"req|requisition|posting)s?\b", re.I)
 
 # The commonest referral form in this market is not an introduction at all: it
 # is being told to name the person on the application. Most realistic
@@ -727,13 +741,29 @@ def _match_send_resume(text, ctx):
     blocked = (_hits(text, REJECTION) or _hits(text, MISMATCH)
                or bool(REFERRAL_FIELD.search(text)))
     asked = _without_thanks(text)
-    hits = [] if (_ALREADY_DONE.search(asked) or blocked) else _hits(asked, RESUME_ASK)
-    if ctx["email"] and not blocked:
-        # An address with no ask around it is usually a signature block rather than
-        # an invitation, and the classifier cannot tell the two apart. It still
-        # classifies here, at a confidence that says "check this", because the cost
-        # of a resume sent to a signature is far below the cost of one never sent.
-        hits.append((0.95 if hits else 0.7, "gave an email address: %s" % ctx["email"]))
+    if _ALREADY_DONE.search(asked) or blocked:
+        return []
+    hits = _hits(asked, RESUME_ASK)
+    if not hits and ROLE_NAMED.search(asked) and (ctx["email"] or _hits(asked, EMAIL_ASK)):
+        hits = [(0.9, "a role is being discussed, and they gave the way to email them")]
+    # An address on its own is an email to write (send_email, below), never a resume ask:
+    # read as one, a resume nobody asked for went with an email setting up a call (#241).
+    if ctx["email"] and hits:
+        hits.append((0.95, "gave an email address: %s" % ctx["email"]))
+    return hits
+
+
+def _match_send_email(text, ctx):
+    # The address, or "email me", with no resume asked for: write to them to set up the
+    # conversation. A no, a dead end or a referral field outranks it, as it does the resume.
+    if (_hits(text, REJECTION) or _hits(text, MISMATCH) or REFERRAL_FIELD.search(text)):
+        return []
+    hits = _hits(text, EMAIL_ASK)
+    if ctx["email"]:
+        # An address with no ask around it is usually a signature block rather than an
+        # invitation, and the classifier cannot tell the two apart. It still classifies
+        # here, at a confidence that says "check this".
+        hits.append((0.9 if hits else 0.7, "gave an email address: %s" % ctx["email"]))
     return hits
 
 
@@ -831,6 +861,10 @@ _NOUN_RULE = tuple(f"Do not attach a file named {b}; the attachment says {_NOUN}
 # in a bounce folder.
 NO_ADDRESS_ACTION = (f"Ask for the best address, or attach the {_NOUN} in this thread if the "
                      "channel carries attachments.")
+# An email to write with no address in their message: the one their record holds, if any.
+NO_EMAIL_ACTION = ("No address in the message: write to the one their record holds, or ask in "
+                   f"the thread for the best one; no {_NOUN} attached, as they did not ask for "
+                   "one.")
 
 # Which resume goes, said with every action that sends one. A networking chat said "Email
 # the resume today", a drafting chat made one, and nothing said which, or recorded which
@@ -889,7 +923,10 @@ NO_LINK_ACTION = ("No booking link in the message: propose two specific times in
 #   auto_reply        an out-of-office or "no longer here": a machine, so nothing below
 #                     applies (its signature's address is not an ask, its length not effort)
 #   calendar_link     an offered slot expires; booking it is the only urgent action
-#   send_resume       an ask or an address, even buried in four generous paragraphs
+#   send_resume       the resume, a CV or their background asked for, or a role discussed
+#                     with the way to email them
+#   send_email        an address or "email me" and nothing asked for: an email to write,
+#                     even buried in four generous paragraphs, with nothing attached
 #   referral_offered  outranks a no, because "we are not hiring but talk to Wren"
 #                     is a referral with a decline attached, not a decline
 #   chat_offered      a call or a coffee offered: a yes to the conversation, whatever
@@ -961,6 +998,23 @@ SCENARIOS = {s.name: s for s in (
             *_NOUN_RULE,
         ),
         matcher=_match_send_resume,
+    ),
+    Scenario(
+        name="send_email",
+        move=("Write the email they asked for: a subject line, then a short note that sets up "
+              "the conversation, with two specific times in " + TIMEZONE + ". Nothing "
+              f"attached: the {_NOUN} goes only when they ask for it or a role is being "
+              "discussed."),
+        sentences=(1, 3),
+        owes_action=True,
+        next_action=("Email {email} to set up the conversation, with a subject line; no "
+                     + _NOUN + " attached, as they did not ask for one."),
+        do_not=(
+            f"Do not attach or offer the {_NOUN}: they asked for an email, not a document.",
+            "Do not answer the substance at length; that is what the conversation is for.",
+            "Do not ask them to suggest a time from nothing; give two.",
+        ),
+        matcher=_match_send_email,
     ),
     Scenario(
         name="referral_offered",
@@ -1093,6 +1147,7 @@ PRECEDENCE = tuple(SCENARIOS)
 # blank destination in it.
 NO_DESTINATION = {
     "send_resume": NO_ADDRESS_ACTION,
+    "send_email": NO_EMAIL_ACTION,
     "calendar_link": NO_LINK_ACTION,
 }
 
@@ -1945,8 +2000,7 @@ def prepare(argv) -> int:
                                      scenario=scen if last else "", subject=a.subject)
             except ValueError as e:
                 if not str(e).startswith("already logged"):
-                    print(f"prepare: not recorded: {e}")
-                    return 1
+                    return _refused("prepare", f"prepare: not recorded: {e}", 1)
                 continue
             added += 1
             print(f"received: {got['row']['summary']} on {got['row']['date']}, read as "
@@ -1976,8 +2030,7 @@ def prepare(argv) -> int:
                                  subject=a.subject)
         except ValueError as e:
             if not str(e).startswith("already logged"):
-                print(f"prepare: not recorded: {e}")
-                return 1
+                return _refused("prepare", f"prepare: not recorded: {e}", 1)
             print(f"received: {e}; nothing logged twice")
             logged = False
     if logged:
@@ -2014,8 +2067,17 @@ def prepare(argv) -> int:
         print("reply owed: yes, they wrote last.")
     print(f"move: {advice['move']}")
     print(f"length: {advice['target_sentences']} sentences")
+    if (email_reply(c, [r for r in state.threads_for(threads, cid) if _direction(r)])[0]
+            or (scen in ("send_email", "send_resume") and extract_email(body))):
+        print(f"format: {SUBJECT_SAID}")
+    if str(c.get("email") or "").strip():
+        print(f"their email: {str(c.get('email')).strip()} (on their card and beside the draft, "
+              "with Copy)")
     if advice["next_action"]:
         print(f"owed outside the thread: {advice['next_action']}")
+    if scen == "referral_offered" and go_on:
+        for line in roles_to_refer(c):
+            print(line)
     if advice.get("which_resume"):
         print("which %s: %s" % (_NOUN, advice["which_resume"].split(": ", 1)[-1]))
     for line in advice["do_not"]:
@@ -2040,6 +2102,75 @@ def prepare(argv) -> int:
     print(f"then: python3 tools/network/reply.py finish {cid} --draft-file - with the reply "
           "on its input (for the page's work: --work <id> --dump \"$D\").")
     return 0
+
+
+def _refused(cmd: str, said: str, code: int, what: str = "") -> int:
+    """A refusal a chat may recover from, and beneath it, in the maintainer's own copy, the one
+    command that files it the moment the chat works round it instead (a draft saved by hand, a
+    message logged another way): those were never filed (issue #240, app_bug.met_line)."""
+    print(said)
+    try:
+        import app_bug
+        line = app_bug.met_line(f"tools/network/reply.py:{cmd}",
+                                what or f"reply.py {cmd} refused: {said.split(': ', 1)[-1]}")
+    except Exception:  # noqa: BLE001  the refusal stands as it was
+        line = ""
+    if line:
+        print(line)
+    return code
+
+
+def roles_to_refer(c, tracker=None) -> list[str]:
+    """Before a reply to an offer to refer is drafted, their employer's open roles against the
+    person's search (employer_roles.check: the board profile/boards.py names, read and scored
+    the way a round does), as prepare prints them: the role to name in the reply and ask the
+    referral for, with its link; or "No open role there fits yet", the thanks alone, and the
+    wait for one; or that there is no board on file (issue 233)."""
+    company = " ".join(str(c.get("company") or "").split())
+    try:
+        import employer_roles
+        employer_roles.forget()      # read now, never an earlier read's answer
+        if tracker is None:
+            import open_actions
+            tracker = open_actions._tracker()
+        got = employer_roles.check(company, contact_name=str(c.get("name") or ""),
+                                   tracker=tracker)
+    except Exception as e:  # noqa: BLE001  the reply is still drafted, and said so
+        return [f"open roles: not checked ({type(e).__name__}); thank them, and say you will "
+                "send the role once one fits"]
+    first = _first(c)
+    if got["role"]:
+        role = got["role"]
+        lines = [f"open roles: {got['said']}",
+                 f"  the reply: thank {first} and ask for the referral for {role['title']}, "
+                 "naming it, with its link; one role, not a list"]
+        lines += ["  also fits: %s (fit %d)" % (f["title"], f["fit"]) for f in got["fits"][1:3]]
+        return lines
+    wait = (f"  the reply: thank {first}, plainly. Once it has gone, their follow-up waits for a "
+            f"role at {company or 'their employer'}: when a search finds one that fits, the "
+            "referral ask is written for it (followup_drafts.py)")
+    return [f"open roles: {got['said']}", wait]
+
+
+# An email starts with its subject (#239): drafted as a body alone, the person had to ask for a
+# subject in a change before it could go.
+SUBJECT_SAID = ("an email, so it starts with its subject: a first line \"Subject: <a few plain "
+                "words>\", a blank line, then the message (state.split_subject reads it)")
+
+
+def email_reply(c, rows) -> tuple[bool, str]:
+    """(the reply goes as an email, the subject of theirs it answers or ""): their newest
+    message came by email, or asked for one (send_email, or send_resume with an address), or
+    nothing of theirs came yet on a thread that runs by email."""
+    theirs = [r for r in rows if _direction(r) == "in" and _inbound(r)]
+    if not theirs:
+        return state.channel_of(c) == "email", ""
+    last = theirs[-1]
+    if state.channel_of(last) == "email":
+        return True, " ".join(str(last.get("subject") or "").split())
+    scen = str(last.get("scenario") or "").strip()
+    return (scen == "send_email" or (scen == "send_resume" and bool(
+        extract_email(without_own_address(_row_text(last)))))), ""
 
 
 def _first(c) -> str:
@@ -2070,6 +2201,89 @@ def save_draft(contact_id: str, text: str, msgs=None) -> str:
     except Exception:  # noqa: BLE001  the draft stands; the row is as it was
         pass
     return path
+
+
+# A resume made for them, queued with the reply that answers their ask (#232): a reply to
+# "send me an email with your resume" pointed at the general resume, and nothing was made for
+# that reader until the person noticed and asked. Its work is the page's own
+# (templates/app/app.js askContactResume): one resume, no letter, no role named.
+RESUME_WORK = "resume_for_contact"
+
+
+def resume_to_make(c, threads, draft, tracker=None) -> str:
+    """Why a resume made for them goes with this reply, in a few words, or "" when none is
+    wanted: their newest message asks for it (read as `send_resume`, or asking in words) or the
+    draft says one is attached, and nothing is made for them yet (one kept in their folder, or
+    an application's made for them), none has gone since they asked, and it is not one to put
+    in through the portal under their name."""
+    cid = str(c.get("contact_id") or "").strip()
+    rows = [r for r in state.threads_for(threads, cid) if _direction(r)]
+    theirs = [i for i, r in enumerate(rows) if _direction(r) == "in" and _inbound(r)]
+    last = rows[theirs[-1]] if theirs else None
+    asked = bool(last) and (str(last.get("scenario") or "").strip() == "send_resume"
+                            or state.asks_for_resume(last))
+    said = state.says_resume_went({"direction": "out", "channel": "message", "summary": "",
+                                   "full_text": str(draft or "")})
+    if not (asked or said):
+        return ""
+    if asked and any(state.says_resume_went(r) or state.answered_with_a_file(r)
+                     for r in rows[theirs[-1] + 1:]):
+        return ""
+    if state.resume_route(threads, cid) == state.ROUTE_PORTAL:
+        return ""
+    try:
+        import app_model
+        if app_model.resume_made_for(cid):
+            return ""
+    except Exception:  # noqa: BLE001  no copy to look in: nothing made
+        pass
+    if tracker is None:
+        try:
+            tracker = state.load_tracker()
+        except (OSError, ValueError):
+            tracker = []
+    if state.made_for_rows(tracker, [c], cid):
+        return ""
+    return "they asked for it" if asked else f"the reply says your {_NOUN} is attached"
+
+
+def resume_note(c) -> str:
+    """What the resume made for them is aimed at, from their record: their team and what it
+    works in, said by their first name, title and employer alone."""
+    first, title = _first(c), " ".join(str(c.get("title") or "").split())
+    company = " ".join(str(c.get("company") or "").split())
+    where = ", ".join(x for x in (title, company) if x)
+    return (f"{first} asked for your {_NOUN} in their reply. Aim it at their team and the work "
+            "it does" + (f": {where}." if where else "."))
+
+
+def resume_work(c, now) -> tuple[str, dict]:
+    """The page's own resume_for_contact for them, as its "Make one for them" queues it with
+    no role named: (id, fields)."""
+    import page_db
+    cid = str(c.get("contact_id") or "").strip()
+    first = _first(c)
+    return (page_db.safe_id(f"contact_resume~{cid}~general"),
+            page_db.queued(RESUME_WORK, f"{_NOUN[:1].upper()}{_NOUN[1:]} for {first}",
+                           {"contact": cid, "job": None, "note": resume_note(c),
+                            "resume_only": True}, now))
+
+
+def app_model_now(given=None):
+    import app_model
+    return app_model.clock(None, given)[1]
+
+
+def resume_making(db, cid) -> str:
+    """The id of a resume_for_contact for them still queued or running, or ""."""
+    import page_db
+    for wid, d in sorted((db.get("work") or {}).items()):
+        w = d.get("data") or {}
+        a = w.get("args") if isinstance(w.get("args"), dict) else {}
+        if (w.get("kind") == RESUME_WORK and str(a.get("contact") or "") == cid
+                and str(w.get("status") or "queued") in ("queued",) + page_db.ACTIVE):
+            return wid
+    return ""
 
 
 def finish(argv) -> int:
@@ -2133,14 +2347,27 @@ def finish(argv) -> int:
     kind = "reply"
     if compose.unanswered_ours(rows) is not None:
         kind = "message" if state.channel_of(c) == "email" else "nudge"
+    if kind == "reply":
+        by_email, theirs_subject = email_reply(c, rows)
+        if by_email and not state.split_subject(draft)[0]:
+            if not theirs_subject:
+                print("finish: REFUSED, nothing saved: the reply is " + SUBJECT_SAID + ".")
+                print("Rewrite it with its subject and run finish again.")
+                return 1
+            # Their subject, answered: what a reply in that email keeps, never made up.
+            subject = (theirs_subject if re.match(r"(?i)re\s*:", theirs_subject)
+                       else "Re: " + theirs_subject)
+            draft = f"Subject: {subject}\n\n{draft}"
+            print(f"subject: {subject} (theirs, as a reply in their email keeps it)")
     got = followup_drafts.check([{"id": cid, "text": draft, "kind": kind}], contacts,
                                 threads, a.today)[0]
     if got["findings"]:
         print("finish: REFUSED, nothing saved: the draft check found what must change first.")
         for f in got["findings"]:
             print(f"  fix: {f}")
-        print("Rewrite it and run finish again.")
-        return 1
+        return _refused("finish", "Rewrite it and run finish again.", 1,
+                        what="reply.py finish's draft check refused the draft: "
+                        + "; ".join(got["findings"][:2]))
     print(f"check: passed ({len(draft)} characters)")
     for w in got["warnings"]:
         print(f"  warning: {w}")
@@ -2179,7 +2406,16 @@ def finish(argv) -> int:
     if tip:
         extra.append(tip)
         print(f"end with: {tip}")
+    first = _first(c)
+    # Their ask for the resume answered with one made for them, queued with the reply (#232).
+    why = resume_to_make(c, threads, draft)
     if not a.work:
+        if why:
+            qid, fields = resume_work(c, app_model_now(a.now))
+            print(f"{_NOUN}: {why}, and none is made for {first}: queue one made for them now, "
+                  f"so the reply and the {_NOUN} go together: python3 tools/app.py ask \"$D\" "
+                  f"--kind {RESUME_WORK} --id {qid} --title \"{fields['title']}\" --args "
+                  f"'{json.dumps(fields['args'], ensure_ascii=False)}'")
         print("Show the draft in full, ready to copy, never only where it was saved.")
         return 0
     import app_listen
@@ -2187,28 +2423,52 @@ def finish(argv) -> int:
     import page_db
     _, now = app_model.clock(None, a.now)
     db = page_db.load(a.dump)
-    first = _first(c)
     what = "reply" if kind == "reply" else "follow-up"
+    queue = []
+    if why:
+        making = resume_making(db, cid)
+        if making:
+            print(f"{_NOUN}: {why}; the one for {first} is being made already ({making}), so "
+                  "nothing more is queued")
+        else:
+            queue = [resume_work(c, now)]
+            print(f"{_NOUN}: {why}, and none is made for {first}: one made for them is queued "
+                  f"({queue[0][0]}) in this finish's batch, so the reply and the {_NOUN} "
+                  "arrive together")
+    made_line = f"A {_NOUN} for {first} is being made to go with it." if why else ""
     # The thread is a pointer, never a copy: one line and a button to their card, where the
     # draft is with its Copy and "I sent it" (the maintainer, 2026-11-10). The draft goes in the
     # thread too only when they asked to see it there.
     answer = ("\n\n".join([f"Your {what} to {first}, ready to copy (nothing is sent):", draft]
-                          + extra) if a.in_thread
-              else f"Your {what} to {first} is drafted, ready to copy on their card.")
+                          + ([made_line] if made_line else []) + extra) if a.in_thread
+              else f"Your {what} to {first} is drafted, ready to copy on their card."
+              + (f" {made_line}" if made_line else ""))
     item = ((db.get("work") or {}).get(page_db.safe_id(a.work)) or {}).get("data") or {}
     made, noted = touched.gather(a.work, item)
     args = item.get("args") if isinstance(item.get("args"), dict) else {}
     thread = a.thread or str(args.get("thread") or "")
-    summary = a.summary or (f"Your {what} to {first} is ready to copy"
-                            + ("." if thread else " in Messages."))
+    # One item answering several people's replies (one message, three screenshots): each
+    # finish adds its person to the item's one finish, their line and their button, and the
+    # summary names them all (#228).
+    before = page_db.finished_here(a.dump, a.work) and page_db.kept_finish(a.dump, a.work)
+    whom = [w for w in (before or {}).get("whom") or []
+            if isinstance(w, list) and len(w) == 2 and w[0] != cid] + [[cid, first]]
+    said = [w[1] for w in whom]
+    names = (", ".join(said[:-1]) + " and " + said[-1]) if len(said) <= 4 \
+        else f"{len(said)} people"
+    summary = a.summary or ((f"Your {what} to {first} is ready, and a {_NOUN} for them is "
+                             "being made." if made_line else
+                             f"Your {what} to {first} is ready to copy"
+                             + ("." if thread else " in Messages.")) if len(whom) == 1
+                            else f"Your messages to {names} are ready to copy.")
     try:
         done = page_db.finish(db, a.work, now, a.out or os.path.join(a.dump, "out"),
                               summary=summary, reply=answer if thread else "", thread=thread,
                               chat_kind=a.kind or app_listen.chat_kind(), dump_dir=a.dump,
-                              go=touched.buttons(made))
+                              go=touched.buttons(made), add=True, whom=whom, queue=queue)
     except (KeyError, ValueError) as e:
-        print(f"finish: the page's work not finished: {e.args[0] if e.args else e}")
-        return 2
+        return _refused("finish", "finish: the page's work not finished: "
+                        f"{e.args[0] if e.args else e}", 2)
     if not done.get("again"):
         touched.clear(noted)
     if not a.in_thread:

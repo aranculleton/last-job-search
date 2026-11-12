@@ -217,10 +217,13 @@ _PIECES = (
     # "PEI" is the name every consulting recruiter uses for it, not one firm's private one.
     ("personal", re.compile(r"personal[- ]experience|personal stor(?:y|ies)|\bPEIs?\b", re.I),
      "a personal experience interview", (("personal", 20),)),
+    # "Practical skills" and a code review are a problem worked in front of them, as a coding
+    # round is (an invented round, 2026-11-11: "Practical Skills and Personal Experience").
     ("technical", re.compile(r"\b(?:technical|coding|code|sql|python|hackerrank|leetcode|"
                              r"codesignal|codility|coderpad|statistics|machine learning|"
                              r"system design|data structures|algorithms?|pairing|"
-                             r"pair programming|live coding)\b", re.I),
+                             r"pair[- ]programming|live coding|practical(?: skills?)?|"
+                             r"code review|problem[- ]solving)\b", re.I),
      "a technical interview", (("technical", 22), ("probes", 10))),
     ("case", re.compile(r"\bcase\b(?! study)|market[- ]sizing|guesstimate", re.I),
      "a case", (("case", 12), ("maths", 8), ("synthesis", 6))),
@@ -228,7 +231,8 @@ _PIECES = (
                               re.I),
      "a take-home presented back", (("presenting", 20),)),
     ("behaviour", re.compile(r"\bbehaviou?ral\b|competenc|\bvalues\b|\bculture (?:fit|add)\b|"
-                             r"\bbar raiser\b|\bsituational\b", re.I),
+                             r"\bbar raiser\b|\bsituational\b|\b(?:cultural|team) fit\b|"
+                             r"\bfit (?:interview|questions?|round|conversation)\b", re.I),
      "behavioural questions", (("behaviour", 12),)),
 )
 _ROOM_OF = {"personal": ("partner", "senior"), "technical": ("technical", "peer"),
@@ -242,6 +246,46 @@ SIMPLE_SENTENCES = (2, 4)
 # page: none longer than this many words (the UX review, 2026-11-10, U-5).
 SIMPLE_WORDS = 30
 DETAIL_RATIO = 1.6
+# A prep written the live way (2026-11-11): `simple` is a list of points, cue lines to glance at
+# mid-call, and `detailed` the script read aloud in the person's own voice. A `simple` still
+# written as one string is a prep from before, held to the rules above and never to these.
+CUES = (3, 5)
+CUES_FOLLOW = (2, 4)
+CUES_BASIC = (1, 3)
+CUE_WORDS = 10
+SCRIPT_WORDS = (80, 200)
+SCRIPT_WORDS_FOLLOW = (30, 90)
+SCRIPT_AVERAGE = 18
+SCRIPT_FIRST = 25
+CONTRACTION_EVERY = 60
+ESSAY = ("furthermore", "moreover", "additionally", "in conclusion", "whilst", "thereby",
+         "in order to", "utilise", "utilize", "leverage")
+HOOK_FILLER = ("happy to", "more detail", "if you'd like", "if you want", "i can go into")
+# Follow-ups a node: two or three under a question, then up to three, then up to two.
+FOLLOW_N = (2, 3)
+FOLLOW_MAX = {2: 3, 3: 2}
+FOLLOW_Q_WORDS = 12
+TERM_PLAIN_WORDS = 25
+TERM_LIKE_WORDS = 30
+# Which way of an answer leads: the points on a call (the live review, 2026-11-11: the lines
+# found at a glance come first, the script to read from under them), unless the person says.
+LEADS = ("cues", "script")
+LEAD = LEADS[0]
+# Capitals anyone reads as a word: never a term to explain.
+PLAIN_CAPS = {"I", "OK", "UK", "US", "CEO"}
+# Words a person outside the field may not know, said or not: each is explained in the terms
+# wherever a live prep says it (`uncovered`). The employer's own words are added from the records.
+JARGON = ("MAPE", "regression", "cohort", "pipeline", "ETL", "A/B test", "p-value", "SHAP",
+          "XGBoost", "feature", "backtest", "merge", "groupby", "join", "null", "vectorise",
+          "SKU", "KPI", "SLA", "stakeholder", "dashboard", "model drift", "IFRS 9", "Basel",
+          "PD", "LGD")
+# What a coding part holds, each a list (`steps`, `stuck`, `edges`, `code`, `more`).
+CODING = ("steps", "stuck", "edges", "code", "more")
+STEPS = (4, 7)
+STUCK = (2, 4)
+EDGES = (3, 6)
+CODE_ROWS = (3, 8)
+MORE = (2, 4)
 MAX_BEATS = 7
 MAX_DEPTH = 3
 # The follow-ups that come after nearly every story, by who asks them: said once in each part a
@@ -249,7 +293,9 @@ MAX_DEPTH = 3
 # three stood again and again (the screen review, 2026-11-11). Their answers are Claude's to
 # write from the stories told there.
 STORY_FOLLOW = (("manager", "What was your part in it, exactly?"),
+                ("technical", "What didn't work?"),
                 ("technical", "How did you know it had worked?"),
+                ("senior", "Who disagreed, and how did you handle it?"),
                 ("senior", "What would you do differently now?"))
 RED_FLAGS = (
     "Speaking badly of an employer you have worked for.",
@@ -317,9 +363,44 @@ def sentences(text, terms=None) -> int:
     return len([s for s in _SENTENCE.split(t) if s.strip()]) if t else 0
 
 
+def _cues(node) -> list:
+    """An answer's points as lines: the list written the live way, or an older one-string
+    answer split by its sentences, as the page splits it."""
+    s = (node or {}).get("simple")
+    if isinstance(s, list):
+        return [_t(c) for c in s if _t(c)]
+    t = _t(s)
+    return [x for x in _SENTENCE.split(t) if x.strip()] if t else []
+
+
+def _said(node) -> str:
+    """An answer's points as one text, for the timing, the checks and the Brief."""
+    s = (node or {}).get("simple")
+    if isinstance(s, list):
+        return " ".join(c if c.rstrip().endswith((".", "!", "?")) else c + "."
+                        for c in _cues(node))
+    return _t(s)
+
+
+def _live_way(node) -> bool:
+    """Is this answer written the live way, its points a list (2026-11-11)?"""
+    return isinstance((node or {}).get("simple"), list)
+
+
 def minutes(n_words, wpm) -> float:
     """Minutes to say `n_words`, to the nearest half."""
     return round(2 * n_words / max(60, int(wpm or WPM))) / 2
+
+
+def lead() -> str:
+    """Which the page shows first in each answer: the points ("cues", the app's default) or the
+    script ("script"), as the person said (person.json interview.lead). A tap on the page puts
+    the other first on that device, and that wins on it."""
+    try:
+        v = _t(person.get("interview.lead", LEAD)).lower()
+    except (TypeError, ValueError, person.NoProfile):
+        v = LEAD
+    return v if v in LEADS else LEAD
 
 
 def wpm() -> int:
@@ -373,14 +454,100 @@ _DAY = re.compile(r"\bsuper ?day\b|\bvirtual on-?site\b|\bassessment (?:cent(?:r
 _ONSITE = re.compile(r"\bon-?site\b", re.I)
 
 
-def pieces(said) -> list:
-    """The kinds of interview a round's own words name, in the order they name them."""
+_PROBLEM_SOLVING = re.compile(r"\bproblem[- ]solving\b", re.I)
+
+
+def pieces(said, consulting=False) -> list:
+    """The kinds of interview a round's own words name, in the order they name them. At a
+    consulting firm a problem-solving interview is its case."""
     found = []
     for name, rx, _label, _parts in _PIECES:
-        m = rx.search(said or "")
-        if m:
-            found.append((m.start(), name))
+        hits = [m for m in rx.finditer(said or "")
+                if not (consulting and name == "technical" and _PROBLEM_SOLVING.fullmatch(m.group(0)))]
+        if hits:
+            found.append((hits[0].start(), name))
+    if consulting and "case" not in [n for _a, n in found]:
+        m = _PROBLEM_SOLVING.search(said or "")
+        # A problem-solving test is taken alone, never a case.
+        if m and not re.match(r"\s+(?:test|assessment|game|exercise|challenge)", said[m.end():], re.I):
+            found.append((m.start(), "case"))
     return [n for _at, n in sorted(found)]
+
+
+# A part the written prep states with its length: "Practical Skills, about 30 to 45 minutes",
+# "Then Personal Experience: Connection, about 15 minutes". The kind is the last one named
+# before the minutes, in the same sentence.
+_STATED_KIND = re.compile(
+    r"\b(?:practical(?: skills?)?|technical|live coding|coding|code review|pair[- ]programming|"
+    r"problem[- ]solving|case(?! stud)|market[- ]sizing|personal experience|PEIs?|"
+    r"behaviou?ral|competenc\w*|(?:culture|cultural|team) fit|fit (?=interview|questions?|round)|"
+    r"take[- ]?home)\b", re.I)
+_STATED_MINUTES = re.compile(r"(?:\b(?:about|around|roughly|approximately|up to)\s+|~\s*)?"
+                             r"\b(\d{1,3})(?:\s*(?:to|-|\u2013|or)\s*(\d{1,3}))?\s*(?:minutes?|mins?)\b",
+                             re.I)
+# Stated parts further apart than this are not one round's split.
+_STATED_SPAN = 700
+
+
+def _stated_piece(word, consulting) -> str:
+    w = word.lower()
+    if re.match(r"personal|pei", w):
+        return "personal"
+    if re.match(r"case|market", w) or (consulting and _PROBLEM_SOLVING.match(w)):
+        return "case"
+    if re.match(r"behav|competenc|culture|cultural|team|fit", w):
+        return "behaviour"
+    if re.match(r"take", w):
+        return "presenting"
+    return "technical"
+
+
+def stated_split(ctx, consulting=None) -> list:
+    """[(kind, low, high)] as the round's own written words state its parts, each with its
+    minutes, in their order: the format first, then the written prep beside it
+    (`interview_prep.md`). Only a split of two kinds or more counts, close together and no
+    longer in all than the round. The prep is one for the whole hiring process, so a split
+    in it is this round's only after the round's name, or where it shares a kind the round's
+    own name says: another round's split is never this one's. Empty where nothing states one."""
+    if consulting is None:
+        import interview_pack as P
+        consulting = P.employer_type(ctx) == "consulting"
+    label = _t(ctx.get("stage")).lower()
+    own = set(pieces(" ".join(_t(x) for x in (ctx.get("stage"), ctx.get("format"))), consulting))
+    for source, text in (("format", _t(ctx.get("format"))), ("prep", str(ctx.get("living") or ""))):
+        found = []
+        for m in _STATED_MINUTES.finditer(text):
+            before = re.split(r"[.!?;]\s|\n", text[max(0, m.start() - 90):m.start()])[-1]
+            kinds = list(_STATED_KIND.finditer(before))
+            if not kinds:
+                continue
+            lo = int(m.group(1))
+            hi = int(m.group(2)) if m.group(2) and int(m.group(2)) >= lo else lo
+            if not 2 <= lo <= 240:
+                continue
+            found.append((m.start(), _stated_piece(kinds[-1].group(0), consulting), lo, hi))
+        runs, run = [], []
+        for item in found:
+            if run and item[0] - run[-1][0] > _STATED_SPAN:
+                runs.append(run)
+                run = []
+            run.append(item)
+        if run:
+            runs.append(run)
+        named = text.lower().find(label) if label else -1
+        if named >= 0:
+            runs.sort(key=lambda r: r[0][0] < named)
+        for r in runs:
+            split = {}
+            for _at, kind, lo, hi in r:
+                was = split.get(kind, (0, 0))
+                split[kind] = (was[0] + lo, was[1] + hi)
+            if len(split) < 2 or sum(lo for lo, _hi in split.values()) > 240:
+                continue
+            if source == "prep" and not (0 <= named < r[0][0]) and not own & set(split):
+                continue
+            return [(k, lo, hi) for k, (lo, hi) in split.items()]
+    return []
 
 
 def shape_def(shape) -> tuple:
@@ -421,7 +588,14 @@ def shape_of(ctx) -> tuple:
     if step == "offer":
         return None, ""
     consulting = P.employer_type(ctx) == "consulting"
-    names = pieces(said)
+    names = pieces(said, consulting)
+    # The parts the round's own written words state, each with its minutes, are what it is,
+    # whatever one kind its name says: "Practical Skills, about 30 to 45 minutes ... Then
+    # Personal Experience, about 15 minutes" is both, in that order (an invented round,
+    # 2026-11-11: the hour was all personal questions and nothing for the coding).
+    stated = stated_split(ctx, consulting)
+    if stated and sum(lo for _k, lo, _hi in stated) <= (_booked_minutes(ctx) or 180):
+        names = [k for k, _lo, _hi in stated]
     # Whether anyone is in the room is the format's to say where one is given: "Technical
     # interview" with "CodeSignal General Coding Assessment" is a test taken alone (the review
     # of the fixes, 2026-11-10).
@@ -498,8 +672,15 @@ _EACH = re.compile(r"\b([2-6]|two|three|four|five|six)\s+(?:interviews|rounds|se
                    r"(?:interviews|rounds|sessions|conversations)\b", re.I)
 
 
-def round_minutes(ctx, shape) -> int:
-    """The round's length as booked, else the shape's usual length."""
+def round_minutes(ctx, shape, stated=None) -> int:
+    """The round's length as booked, else the shape's usual length, or the parts the written
+    prep states where they take longer."""
+    return _booked_minutes(ctx) or max(shape_def(shape)[1],
+                                       sum(hi for _k, _lo, hi in stated or ()))
+
+
+def _booked_minutes(ctx) -> int:
+    """The round's length as booked or said, 0 where nothing says it."""
     label = _t(ctx.get("stage")).lower()
     for s in ctx.get("stages") or []:
         if _t(s.get("label")).lower() == label and int(s.get("minutes") or 0) > 0:
@@ -521,11 +702,69 @@ def round_minutes(ctx, shape) -> int:
         hours += 0.5 if re.search(r"and a half", m.group(0), re.I) else 0
         if 0.25 <= hours <= 9:
             return int(round(hours * 60))
-    return shape_def(shape)[1]
+    return 0
 
 
-def _part_minutes(shape, total) -> list:
+def _piece_of(kind) -> str:
+    """The kind of interview a part belongs to ("probes" is the technical interview's)."""
+    return next((n for n, _rx, _label, pp in _PIECES if any(k == kind for k, _m in pp)), "")
+
+
+def stated_for(ctx, shape) -> list:
+    """The written split (`stated_split`) where it is the one this shape was built from: a
+    sitting of several kinds whose parts are exactly the kinds stated."""
+    stated = stated_split(ctx)
+    if not stated:
+        return []
+    have = {_piece_of(p[0]) for p in shape_def(shape)[3]} - {""}
+    return stated if have == {k for k, _lo, _hi in stated} else []
+
+
+def _stated_minutes(parts, total, stated):
+    """Each stated kind's minutes as the prep gives them (a range is its middle), shared among
+    its own parts as they usually are; the hello and their questions take what is left, never
+    under two minutes each. None where the parts are not the kinds stated."""
+    want = {k: int(round((lo + hi) / 2.0)) for k, lo, hi in stated}
+    groups, edges = {}, []
+    for i, p in enumerate(parts):
+        n = _piece_of(p[0])
+        if n in want:
+            groups.setdefault(n, []).append(i)
+        else:
+            edges.append(i)
+    if set(groups) != set(want) or not edges:
+        return None
+    room = total - 2 * len(edges)
+    if room < 2 * sum(len(ix) for ix in groups.values()):
+        return None
+    if sum(want.values()) > room:
+        # Longer in all than the round: each kind keeps its share of what there is.
+        scale = room / float(sum(want.values()))
+        want = {k: max(2 * len(groups[k]), int(v * scale)) for k, v in want.items()}
+    got = [0] * len(parts)
+    for n, ix in groups.items():
+        usual = sum(parts[i][1] for i in ix)
+        share = [max(2, int(round(parts[i][1] * want[n] / float(usual)))) for i in ix]
+        share[share.index(max(share))] += want[n] - sum(share)
+        for i, m in zip(ix, share):
+            got[i] = m
+    rest = total - sum(got)
+    usual = sum(parts[i][1] for i in edges)
+    for i in edges:
+        got[i] = max(2, int(round(parts[i][1] * rest / float(usual))))
+    while sum(got) != total:
+        step = 1 if sum(got) < total else -1
+        pool = [i for i in edges if step > 0 or got[i] > 2] or \
+            [i for i in range(len(got)) if step > 0 or got[i] > 2]
+        got[max(pool, key=lambda i: got[i])] += step
+    return got
+
+
+def _part_minutes(shape, total, stated=None) -> list:
     parts = shape_def(shape)[3]
+    got = _stated_minutes(parts, total, stated) if stated else None
+    if got:
+        return got
     usual = sum(p[1] for p in parts)
     got = [max(2, int(round(p[1] * total / usual))) for p in parts]
     # Rounding never takes the parts past the round itself.
@@ -658,9 +897,10 @@ def build(ctx) -> dict:
     # A partner asks at a consulting firm; anywhere else the same seat is the hiring manager's.
     if P.employer_type(ctx) != "consulting":
         room = tuple(dict.fromkeys("manager" if w == "partner" else w for w in room))
-    total = round_minutes(ctx, shape)
+    stated = stated_for(ctx, shape)
+    total = round_minutes(ctx, shape, stated)
     kinds = [d[0] for d in parts_def]
-    mins = _part_minutes(shape, total)
+    mins = _part_minutes(shape, total, stated)
     parts = [{"id": "p%d" % (i + 1), "kind": d[0],
               "title": d[2] if len(d) > 2 else PART_TITLES[d[0]], "short": PART_SHORT[d[0]],
               "minutes": m,
@@ -757,7 +997,7 @@ def build(ctx) -> dict:
            "company": ctx["company"], "role": ctx.get("role") or "", "stage": ctx.get("stage") or "",
            "date": ctx.get("date") or "", "with": ctx.get("with") or "", "format": _t(ctx.get("format")),
            "shape": shape, "shape_name": name, "assumed": assumed, "minutes": total,
-           "wpm": wpm(), "room": list(room), "parts": parts, "questions": questions,
+           "wpm": wpm(), "lead": lead(), "room": list(room), "parts": parts, "questions": questions,
            "stories": stories, "ask": asks, "terms": employer_terms(ctx), "known": known,
            "private": private_notes(ctx)}
     return finish(doc)
@@ -972,6 +1212,9 @@ def merge(fresh, filled) -> dict:
             part["title"] = _t(old["title"])
         if old.get("follow"):
             part["follow"] = old["follow"]
+        for f in CODING:
+            if isinstance(old.get(f), list) and old[f]:
+                part[f] = old[f]
     # The known questions: the records' and Claude's, once each.
     have = {_norm(k["text"]) for k in doc["known"]}
     for k in filled.get("known") or []:
@@ -1056,6 +1299,10 @@ def words_shape(words) -> str:
                 return ("the words file's \"%s\" entry %r is not an object of words: write it "
                         "as {\"say\": [...]} or {\"simple\": \"...\"} (interview.md Step 3b)" % (k, key))
     for key, w in (words.get("parts") or {}).items():
+        for f in CODING:
+            if f in w and not isinstance(w[f], list):
+                return ("the words file's part %r writes \"%s\" as one value: write it as a list "
+                        "(interview.md Step 3b)" % (key, f))
         if "say" in w and not isinstance(w["say"], list):
             return ("the words file's part %r writes \"say\" as one value: write it as a list of "
                     "lines, [{\"t\": \"<the words to say>\", \"prompts\": [...]}] (interview.md "
@@ -1102,7 +1349,7 @@ def words_into(base, words) -> dict:
 
     for key, w in (words.get("parts") or {}).items():
         part = part_of(key)
-        for f in ("say", "bridge", "title", "follow"):
+        for f in ("say", "bridge", "title", "follow") + CODING:
             if f in (w or {}):
                 part[f] = w[f]
     byid = {q["id"]: q for q in doc["questions"]}
@@ -1189,7 +1436,7 @@ def _follow_once(part, mine) -> None:
                 got = have[k] = {"who": f.get("who") or "", "q": _t(f.get("q")), "also": [],
                                  "simple": "", "detailed": "", "follow": []}
                 own.append(got)
-            if not _t(got.get("simple")) and _t(f.get("simple")):
+            if not _said(got) and _said(f):
                 for key in ("who", "also", "simple", "detailed", "follow", "draft"):
                     if f.get(key) not in (None, "", []):
                         got[key] = f[key]
@@ -1224,7 +1471,7 @@ def finish(doc) -> dict:
         p["questions"] = [q["id"] for q in mine]
         _follow_once(p, mine)
         n = sum(words(b.get("t"), terms) for b in p["say"]) + words(p.get("bridge"), terms)
-        n += sum(words(q.get("simple"), terms) for q in doc["questions"] if q["part"] == p["id"])
+        n += sum(words(_said(q), terms) for q in doc["questions"] if q["part"] == p["id"])
         talk = minutes(n, speed)
         talk_all += n
         parts_t[p["id"]] = {"minutes": p["minutes"], "talk": talk, "words": n}
@@ -1243,6 +1490,42 @@ def _nodes(q, depth=1, where=""):
         yield from _nodes(f, depth + 1, here)
 
 
+# Where an answer's points are said, as `spoken` names them: cue lines to glance at, never
+# held to the rules for sentences (choppy, two to four of them).
+POINTS = "the points"
+# Where a coding part's lines are said: short on purpose, never held to flowing sentences.
+CODING_LINE = "while coding"
+
+
+def _answer_texts(node, where, draft, question):
+    if _live_way(node):
+        if _cues(node):
+            yield ("%s, %s" % (where, POINTS), _said(node), draft, question)
+    elif _t(node.get("simple")):
+        yield ("%s, simple answer" % where, node["simple"], draft, question)
+    if _t(node.get("detailed")):
+        yield ("%s, detailed answer" % where, node["detailed"], draft, question)
+
+
+def _coding_lines(p):
+    """(where, text) for what a coding part has the person say: each step, what to say when
+    stuck, the cases to name, what each piece of code means and what they would do next."""
+    title = p.get("title")
+    for i, st in enumerate(p.get("steps") or []):
+        if isinstance(st, dict):
+            for key in ("t", "say"):
+                if _t(st.get(key)):
+                    yield ("\"%s\", step %d, %s" % (title, i + 1, CODING_LINE), st[key])
+    for key, name in (("stuck", "if you are stuck"), ("edges", "a case to name"),
+                      ("more", "with more time")):
+        for i, x in enumerate(p.get(key) or []):
+            if isinstance(x, str) and _t(x):
+                yield ("\"%s\", %s (%d), %s" % (title, name, i + 1, CODING_LINE), x)
+    for i, c in enumerate(p.get("code") or []):
+        if isinstance(c, dict) and _t(c.get("means")):
+            yield ("\"%s\", what code line %d means, %s" % (title, i + 1, CODING_LINE), c["means"])
+
+
 def spoken(doc):
     """(where, text, draft, question) for everything the person will say aloud."""
     qs = {q["id"]: q for q in doc.get("questions") or []}
@@ -1252,20 +1535,15 @@ def spoken(doc):
         if _t(p.get("bridge")):
             yield ("\"%s\", what to say first (the line to end on)" % p.get("title"),
                    p["bridge"], False, "")
+        for where, text in _coding_lines(p):
+            yield (where, text, False, "")
         for f, _d, here in _nodes(p, where="\"%s\", after any story" % p.get("title")):
-            for key in ("simple", "detailed"):
-                if _t(f.get(key)):
-                    yield ("%s, %s answer" % (here, key), f[key], bool(f.get("draft")), f.get("q") or "")
+            yield from _answer_texts(f, here, bool(f.get("draft")), f.get("q") or "")
     for q in qs.values():
         where = "\"%s\"" % _t(q.get("q"))
-        for key in ("simple", "detailed"):
-            if _t(q.get(key)):
-                yield ("%s, %s answer" % (where, key), q[key], bool(q.get("draft")), q["q"])
+        yield from _answer_texts(q, where, bool(q.get("draft")), q["q"])
         for f, _d, here in _nodes(q, where=where):
-            for key in ("simple", "detailed"):
-                if _t(f.get(key)):
-                    yield ("%s, %s answer" % (here, key), f[key],
-                           bool(q.get("draft") or f.get("draft")), q["q"])
+            yield from _answer_texts(f, here, bool(q.get("draft") or f.get("draft")), q["q"])
     for a in doc.get("ask") or []:
         yield ("your question \"%s\"" % _t(a.get("q")), a.get("q"), False, "")
         for f in a.get("follow") or []:
@@ -1302,6 +1580,147 @@ def choppy(text, terms=None) -> bool:
     return sum(counts) / float(len(counts)) < CHOPPY_AVERAGE
 
 
+_STOP = frozenset((
+    "a an and the of to in on for at by with from as is was "
+    "were be been are it its this that these those i i'm i've i'd we you "
+    "your my our they their them he she his her or but so if then than "
+    "not no do did does done have has had will would could should can just about "
+    "into over out up what which who how when where why there here very really also "
+    "more most some any all each one two three me us what's that's it's don't didn't").split())
+_CONTRACTION = re.compile(r"\b\w+['\u2019](?:s|re|ve|d|ll|t|m)\b", re.I)
+_NUM = re.compile(r"(?:^|(?<=[\s(~]))([£$€]?\d[\d,.]*\s?(?:%|k|K|M|B|bn|x|pp)?\+?)(?=[\s.,;:)!?]|$)")
+
+
+def _content(text, terms=None) -> set:
+    """The words that carry a text's meaning, each by its first five letters, so "trusted"
+    meets "trust" and the small words never count."""
+    out = set()
+    for w in _WORD.findall(plain(text, terms).lower()):
+        w = w.replace("\u2019", "'").strip("'.,")
+        if len(w) > 2 and w not in _STOP and not w[0].isdigit():
+            out.add(_stem(w))
+    return out
+
+
+def _stem(w) -> str:
+    """A word by its first five letters once an ending is off: "tests", "tested" and "test"
+    are one word, as are "trusted" and "trust"."""
+    for end in ("ing", "ed", "s"):
+        if len(w) > len(end) + 2 and w.endswith(end) and not w.endswith("ss"):
+            w = w[:-len(end)]
+            break
+    return w[:5]
+
+
+def _numbers(text, terms=None) -> set:
+    return {m.group(1).rstrip(".,").replace(" ", "") for m in _NUM.finditer(plain(text, terms))}
+
+
+def _runs(text, terms=None, n=5) -> set:
+    w = [x.lower().strip("'.,") for x in _WORD.findall(plain(text, terms))]
+    return {tuple(w[i:i + n]) for i in range(len(w) - n + 1)}
+
+
+def _lines_of(text, terms=None) -> list:
+    t = _t(plain(text, terms))
+    return [x for x in _SENTENCE.split(t) if x.strip()] if t else []
+
+
+def _live_checks(node, where, terms, level, basic) -> list:
+    """The checks for an answer written the live way: its points (`simple`, a list) are the
+    script in a few words, never a copy of it, and the script (`detailed`) is said as the
+    person talks, the point first and its end leading into the first follow-up."""
+    out = []
+    cues = _cues(node)
+    d = _t(node.get("detailed"))
+    follow = [f for f in node.get("follow") or [] if isinstance(f, dict) and _t(f.get("q"))]
+    lo, hi = CUES_BASIC if basic else CUES_FOLLOW if level else CUES
+    if level and words(node.get("q")) > FOLLOW_Q_WORDS:
+        out.append((where, "the follow-up runs to %d words: put it as they would ask it, %d "
+                           "words at most" % (words(node.get("q")), FOLLOW_Q_WORDS)))
+    if not cues:
+        out.append((where, "the points are not written yet: %d to %d short lines, the point "
+                           "first" % (lo, hi)))
+        return out
+    if not lo <= len(cues) <= hi:
+        out.append((where, "it has %d point%s: make it %d to %d short lines to glance at"
+                    % (len(cues), "" if len(cues) == 1 else "s", lo, hi)))
+    starts = {}
+    for c in cues:
+        n = words(c, terms)
+        if n > CUE_WORDS:
+            out.append((where, "the point \"%s\" runs to %d words: keep each to %d at most, the "
+                               "key words only" % (_t(plain(c, terms)), n, CUE_WORDS)))
+        if c.rstrip().endswith("."):
+            out.append((where, "the point \"%s\" ends with a full stop: it is a line to glance "
+                               "at, not a sentence" % _t(plain(c, terms))))
+        first = (_WORD.findall(plain(c, terms).lower()) or [""])[0]
+        if first and first in starts:
+            out.append((where, "two points start with \"%s\": start each its own way, so the eye "
+                               "can tell them apart" % first))
+        starts[first] = True
+    if not d:
+        if not basic:
+            out.append((where, "the script is not written yet: the answer as you would say it "
+                               "aloud, in your own voice"))
+        return out
+    wd = words(d, terms)
+    lo, hi = SCRIPT_WORDS_FOLLOW if level else SCRIPT_WORDS
+    if wd < lo or wd > hi:
+        out.append((where, "the script is %d words: make it %d to %d, about %s to say"
+                    % (wd, lo, hi, "half a minute" if level else "a minute or so")))
+    lines = _lines_of(d, terms)
+    counts = [len(_WORD.findall(x)) for x in lines]
+    if counts and (sum(counts) / float(len(counts)) > SCRIPT_AVERAGE or max(counts) > SIMPLE_WORDS):
+        out.append((where, "the script's sentences are too long to say in one breath: keep them "
+                           "to about %d words, none over %d" % (SCRIPT_AVERAGE, SIMPLE_WORDS)))
+    need = max(1, wd // CONTRACTION_EVERY)
+    if len(_CONTRACTION.findall(plain(d, terms))) < need:
+        out.append((where, "the script reads as written, not said: use the short forms you say "
+                           "(I'd, it's, we didn't), about one every %d words" % CONTRACTION_EVERY))
+    low = " " + _t(plain(d, terms)).lower() + " "
+    for w in ESSAY:
+        if re.search(r"\b%s\b" % re.escape(w), low):
+            out.append((where, "\"%s\" is a written word, not a said one: say it the way you "
+                               "would out loud" % w))
+    q = _t(node.get("q"))
+    if lines:
+        head = lines[0]
+        if len(_WORD.findall(head)) > SCRIPT_FIRST or not (
+                (_content(head) & _content(q)) or _numbers(head) or not q):
+            out.append((where, "the script does not open on the point: say the answer to \"%s\" "
+                               "first, in one short sentence" % (q or "the question")))
+    if follow and lines:
+        last, nxt = lines[-1], _t(follow[0]["q"])
+        lowl = last.lower()
+        if "?" in last or any(f in lowl for f in HOOK_FILLER) or not _content(last) & _content(nxt):
+            out.append((where, "end on the thread that leads to \"%s\", said as part of the "
+                               "answer, never as an offer to say more" % nxt))
+    # The points are the script in a few words: the same numbers, the same content, and never
+    # the script's own words copied out.
+    said = " ".join(cues)
+    if _numbers(said, terms) != _numbers(d, terms):
+        out.append((where, "the points and the script hold different numbers: a point says what "
+                           "the script does not, or the script holds a number the points miss"))
+    mine, script = _content(said, terms), _content(d, terms)
+    alone = [c for c in cues if _content(c, terms) and not _content(c, terms) & script]
+    if (mine and len(mine & script) < 0.5 * len(mine)) or alone:
+        out.append((where, "the points say what the script does not%s: keep them to what the "
+                           "script says, in fewer words"
+                    % (" (\"%s\")" % _t(plain(alone[0], terms)) if alone else "")))
+    shared = _runs(said, terms) & _runs(d, terms)
+    for c in cues:
+        if _runs(c, terms) & shared:
+            out.append((where, "the point \"%s\" repeats the script word for word: cut it to "
+                               "the key words" % _t(plain(c, terms))))
+    if lines and not _content(cues[0], terms) & _content(lines[0]):
+        out.append((where, "the first point is not the point the script opens on: lead with it"))
+    if follow and not _content(cues[-1], terms) & _content(follow[0]["q"]):
+        out.append((where, "the last point does not lead into \"%s\": end on the thread to it"
+                    % _t(follow[0]["q"])))
+    return out
+
+
 def _answer_checks(node, where, terms, need_detail) -> list:
     out = []
     s, d = _t(node.get("simple")), _t(node.get("detailed"))
@@ -1335,6 +1754,206 @@ def _answer_checks(node, where, terms, need_detail) -> list:
     return out
 
 
+# The words of the work a prep's questions and answers use that a listener may need explained:
+# a prep that uses any of them with no terms at all is not finished (an invented round,
+# 2026-11-11: a live coding hour was shown with an empty glossary).
+_TECH_WORDS = re.compile(
+    r"\b(?:python|sql|pandas|numpy|scikit-learn|sklearn|pyspark|spark|dbt|airflow|snowflake|"
+    r"databricks|tableau|power bi|sap|apis?|etl|elt|pipelines?|data warehouse|schemas?|"
+    r"quer(?:y|ies)|joins?|window functions?|regressions?|classifi(?:er|ers|cation)|clustering|"
+    r"forecast(?:s|ing)?|time series|machine learning|deep learning|neural networks?|"
+    r"models?|modell?ing|statistic(?:s|al)?|p-values?|hypothesis tests?|a/b tests?|"
+    r"confidence intervals?|algorithms?|complexity|big o|data structures?|hash ?maps?|"
+    r"recursion|unit tests?|edge cases?|dataframes?|hackerrank|pair[- ]programming|"
+    r"live coding|starter code)\b", re.I)
+
+
+def technical_words(doc) -> list:
+    """The technical words a prep's questions and answers use, first seen first, lower case."""
+    texts = [_t(q.get("q")) for q in doc.get("questions") or []]
+    texts += [_t(t) for w, t, _d, _q in spoken(doc) if not w.startswith("your question")]
+    seen = []
+    for t in texts:
+        for m in _TECH_WORDS.finditer(t):
+            w = m.group(0).lower()
+            if w not in seen:
+                seen.append(w)
+    return seen
+
+
+# What the first words of a part that works a problem are for, said with what to write there.
+_SAY_FIRST = {
+    "technical": (" (how you open a problem: say it back in your own words, say what you will "
+                  "check first in any starter code and data, and that you will think aloud as "
+                  "you go)"),
+    "probes": (" (the trade-offs you chose on purpose, and what you would change with more time "
+               "or more data)"),
+}
+
+
+def _tree_checks(q, where) -> list:
+    """A question written the live way has two or three follow-ups, then up to three under
+    each, then up to two, and at least one line of them three deep, so whatever they ask next
+    has its answer ready."""
+    out = []
+    lo, hi = FOLLOW_N
+    own = [f for f in q.get("follow") or [] if isinstance(f, dict)]
+    if not lo <= len(own) <= hi:
+        out.append((where, "it has %d follow-up%s: give it %d or %d, the first the one its "
+                           "answer leads into" % (len(own), "" if len(own) == 1 else "s", lo, hi)))
+    deepest = 0
+    for f, depth, here in _nodes(q, where=where):
+        deepest = max(deepest, depth)
+        n = len([x for x in f.get("follow") or [] if isinstance(x, dict)])
+        most = FOLLOW_MAX.get(depth + 1, 0)
+        if depth < MAX_DEPTH and n > most:
+            out.append((here, "it has %d follow-ups: keep it to %d" % (n, most)))
+    if own and deepest < MAX_DEPTH:
+        out.append((where, "no line of its follow-ups goes %d deep: take the likeliest one "
+                           "further, a question and its answer at each step" % MAX_DEPTH))
+    return out
+
+
+def _coding_checks(p) -> list:
+    """What a coding part holds, when it is written: the steps to take, what to say when
+    stuck, the cases to name, a few lines of code and what each means, what you'd do next."""
+    out = []
+    title = "\"%s\"" % p.get("title")
+    if not any(k in p for k in CODING):
+        return out
+    for key in CODING:
+        if key in p and not isinstance(p[key], list):
+            out.append((title, "its %s is one value: write it as a list" % key))
+    if out:
+        return out
+
+    def count(key, rng, what):
+        n = len(p.get(key) or [])
+        if not rng[0] <= n <= rng[1]:
+            out.append((title, "it has %d %s: write %d to %d" % (n, what, rng[0], rng[1])))
+    count("steps", STEPS, "steps to take")
+    count("stuck", STUCK, "lines for when you are stuck")
+    count("edges", EDGES, "cases to name")
+    count("code", CODE_ROWS, "lines of handy code")
+    count("more", MORE, "things you'd do with more time")
+    for i, st in enumerate(p.get("steps") or []):
+        st = st if isinstance(st, dict) else {}
+        if not _t(st.get("t")) or len(_WORD.findall(_t(st.get("t")))) > 6:
+            out.append((title, "step %d needs a name of six words at most" % (i + 1)))
+        if not _t(st.get("say")) or len(_WORD.findall(_t(st.get("say")))) > 20:
+            out.append((title, "step %d needs what to say as you do it, twenty words at most"
+                        % (i + 1)))
+    first = p.get("steps") or []
+    if first and isinstance(first[0], dict) and not re.search(
+            r"\bback\b|\bdata\b|\bcheck\b|\bconfirm\b|\bask\b", _t(first[0].get("say")), re.I):
+        out.append((title, "the first step is saying the task back and asking about the data"))
+    for x in p.get("edges") or []:
+        if not isinstance(x, str) or len(_WORD.findall(_t(x))) > 8:
+            out.append((title, "a case to name runs long: eight words at most, from this task's "
+                               "own data"))
+    for i, c in enumerate(p.get("code") or []):
+        c = c if isinstance(c, dict) else {}
+        if not c.get("c") or "\n" in str(c["c"]) or len(str(c["c"])) > 80:
+            out.append((title, "code line %d should be one line of 80 characters at most" % (i + 1)))
+        if not _t(c.get("means")) or len(_WORD.findall(_t(c.get("means")))) > 12:
+            out.append((title, "code line %d needs what it means in twelve plain words at most"
+                        % (i + 1)))
+    for x in p.get("more") or []:
+        if not _t(x).startswith("With more time I'd"):
+            out.append((title, "what you'd do next starts \"With more time I'd\""))
+    return out
+
+
+_ACRONYM = re.compile(r"\b[A-Z][A-Z0-9&/]+\b")
+
+
+def _matches(terms) -> list:
+    """Every phrase that opens a term, lower case: its match phrases, its name and its key."""
+    out = []
+    for k, v in terms.items():
+        for ph in list(v.get("match") or []) + [v.get("name"), k]:
+            if isinstance(ph, str) and _t(ph):
+                out.append(_t(ph).lower())
+    return out
+
+
+def _covered(word, text, terms, phrases) -> bool:
+    low = word.lower()
+    if any(low == ph or re.search(r"\b%s" % re.escape(low), ph) for ph in phrases):
+        return True
+    for m in _TERM.finditer(str(text or "")):
+        label = _t(m.group(2) or (terms.get(m.group(1)) or {}).get("name") or m.group(1)).lower()
+        if low in label:
+            return True
+    return False
+
+
+def uncovered(doc, ctx=None) -> list:
+    """[(where, word)] for each word a person outside the field may not know, said in a live
+    prep written the live way and explained by none of its terms: an acronym, a word of the
+    employer's own, or one on JARGON."""
+    terms = doc.get("terms") or {}
+    phrases = _matches(terms)
+    try:
+        theirs = [_t((v or {}).get("name")) for v in employer_terms(ctx).values()] if ctx else []
+    except (KeyError, OSError, person.NoProfile):
+        theirs = []
+    words_ = [w for w in list(JARGON) + theirs if w]
+    out, seen = [], set()
+    for where, text, _d, _q in spoken(doc):
+        if where.startswith("your question"):
+            continue
+        t = plain(text, terms)
+        found = [m.group(0) for m in _ACRONYM.finditer(t) if m.group(0) not in PLAIN_CAPS]
+        low = t.lower()
+        for w in words_:
+            if re.search(r"(?<![a-z])%s(?:s|es|ed|ing)?(?![a-z])" % re.escape(w.lower()), low):
+                found.append(w)
+        for w in found:
+            if w.lower() in seen or _covered(w, text, terms, phrases):
+                continue
+            seen.add(w.lower())
+            out.append((where, w))
+    return out
+
+
+def _term_live_checks(doc) -> list:
+    """Each term of a prep written the live way: plain words short, an everyday likeness of
+    its own, and neither leaning on another term or a set of capitals."""
+    out = []
+    terms = doc.get("terms") or {}
+    for k, v in terms.items():
+        name = _t(v.get("name")) or k
+        where = "the term \"%s\"" % name
+        pl, like = _t(v.get("plain")), _t(v.get("like"))
+        if pl and len(_WORD.findall(pl)) > TERM_PLAIN_WORDS:
+            out.append((where, "say what it means in %d words at most" % TERM_PLAIN_WORDS))
+        if not like:
+            out.append((where, "add what it is like, an everyday likeness anyone would know"))
+        elif len(_WORD.findall(like)) > TERM_LIKE_WORDS:
+            out.append((where, "keep what it is like to %d words" % TERM_LIKE_WORDS))
+        elif _runs(like) & _runs(pl):
+            out.append((where, "what it is like repeats what it means: give a likeness of its own"))
+        others = [ph for kk, vv in terms.items() if kk != k for ph in _matches({kk: vv})]
+        for text in (pl, like):
+            low = " " + text.lower() + " "
+            hit = next((ph for ph in others if re.search(r"(?<![a-z])%s(?![a-z])" % re.escape(ph), low)), None)
+            caps = [m.group(0) for m in _ACRONYM.finditer(text) if m.group(0) not in PLAIN_CAPS]
+            if hit or caps:
+                out.append((where, "explain it without another hard word (\"%s\"): it has to make "
+                                   "sense on its own" % (hit or caps[0])))
+                break
+    return out
+
+
+def live_way(doc) -> bool:
+    """Is any answer in this prep written the live way (points as a list)?"""
+    for q in doc.get("questions") or []:
+        if _live_way(q) or any(_live_way(f) for f, _d, _w in _nodes(q)):
+            return True
+    return any(_live_way(f) for p in doc.get("parts") or [] for f, _d, _w in _nodes(p))
+
+
 def problems(doc, ctx=None) -> list:
     """[(where, what to fix)] for a live prep not yet fit to show, in plain words. Empty when
     it is ready. Drafts the person asked for are not problems: `drafts` lists them."""
@@ -1346,12 +1965,13 @@ def problems(doc, ctx=None) -> list:
     # worked example.
     for where, text, _d, _q in list(spoken(doc)) + [
             ("the term \"%s\"" % k, " ".join(_t(v.get(f)) for f in ("here", "example", "plain",
-                                                                    "technical")), False, "")
+                                                                    "technical", "like")), False, "")
             for k, v in terms.items()]:
         for m in _TERM.finditer(str(text or "")):
             if m.group(1) not in terms:
                 out.append((where, "it explains \"%s\", and there is no such term: add it to the "
                                    "terms, or take the brackets off" % (m.group(2) or m.group(1))))
+    new_way = live_way(doc)
     # The employer named by the first word of its name that is not a small one ("The", "&").
     first = next((w for w in re.findall(r"[A-Za-z0-9]+", company.lower())
                   if w not in ("the", "and", "of", "a", "an")), "") if company else ""
@@ -1365,7 +1985,7 @@ def problems(doc, ctx=None) -> list:
         elif first and first not in _t(v.get("here")).lower() + " " + _t(v.get("example")).lower():
             out.append(("the term \"%s\"" % name, "explain it in %s's own work: name them, or one "
                         "of their products, in what it means there" % company))
-        if not _t(v.get("example")):
+        if not _t(v.get("example")) and not new_way:
             out.append(("the term \"%s\"" % name, "it needs a small worked example"))
         if not _t(v.get("plain")):
             out.append(("the term \"%s\"" % name, "say what it means in plain words too"))
@@ -1384,6 +2004,15 @@ def problems(doc, ctx=None) -> list:
                             "\"%s\" already opens \"%s\": one phrase for one term"
                             % (_t(ph), _t(terms[owner[low]].get("name")) or owner[low])))
             owner.setdefault(low, k)
+    # Words of the work used and none explained: the glossary is still to write, and a prep
+    # with an empty one is never shown as finished.
+    if not terms:
+        used = technical_words(doc)
+        if used:
+            out.append(("the terms", "none are explained yet, and the questions and answers use "
+                        "%s: add each word a listener may not know to the terms, with what it "
+                        "means at %s, a small worked example and plain words"
+                        % (", ".join("\"%s\"" % w for w in used[:4]), company or "the employer")))
     # No dashes of the kind the app never writes, anywhere.
     for s in _all_strings(doc):
         if _DASH.search(s):
@@ -1395,7 +2024,8 @@ def problems(doc, ctx=None) -> list:
         say = p.get("say") or []
         if not say:
             out.append(("\"%s\"" % p.get("title"), "nothing to say first yet: write two or three "
-                                                   "sentences to say aloud as it starts"))
+                                                   "sentences to say aloud as it starts"
+                        + _SAY_FIRST.get(p.get("kind"), "")))
         if p.get("kind") == "technical" and not any(_TASK.search(_t(q.get("q"))) for q in
                                                        doc.get("questions") or [] if q.get("part") == p.get("id")):
             out.append(("\"%s\"" % p.get("title"), "add the problem they are likely to set, as they "
@@ -1405,6 +2035,14 @@ def problems(doc, ctx=None) -> list:
             out.append(("\"%s\"" % p.get("title"), "no items to practise yet: add three to five of "
                         "the kind the test sets, each with how to take it (simple) and the worked "
                         "answer (detailed)"))
+        out += _coding_checks(p)
+        if p.get("steps"):
+            for q in doc.get("questions") or []:
+                if q.get("part") == p.get("id") and kind_of(_t(q.get("q"))) in (
+                        "behaviour", "personal", "motivation"):
+                    out.append(("\"%s\"" % _t(q.get("q")), "a question about your past or your "
+                                "reasons belongs in the part where you tell your story, not "
+                                "while you code"))
         if len(say) > MAX_BEATS:
             out.append(("\"%s\"" % p.get("title"), "%d things to say first: keep it to %d"
                         % (len(say), MAX_BEATS)))
@@ -1439,7 +2077,12 @@ def problems(doc, ctx=None) -> list:
             out.append((where, "it is in no part of the interview"))
         if q.get("who") not in PERSONAS:
             out.append((where, "say who is likely to ask it"))
-        out += _answer_checks(q, where, terms, kind not in _NO_DETAIL)
+        if _live_way(q):
+            out += _live_checks(q, where, terms, 0, kind in _NO_DETAIL)
+            if kind not in _NO_DETAIL:
+                out += _tree_checks(q, where)
+        else:
+            out += _answer_checks(q, where, terms, kind not in _NO_DETAIL)
         if q.get("story") and not any(s["id"] == q["story"] for s in doc.get("stories") or []):
             out.append((where, "it is answered with a story that is not among yours"))
         for f, depth, here in _nodes(q, where=where):
@@ -1448,7 +2091,8 @@ def problems(doc, ctx=None) -> list:
                                   "above"))
             if f.get("who") not in PERSONAS:
                 out.append((here, "say who is likely to ask it"))
-            out += _answer_checks(f, here, terms, False)
+            out += (_live_checks(f, here, terms, depth, False) if _live_way(f)
+                    else _answer_checks(f, here, terms, False))
     # The follow-ups said once in a part, after any story told there: written as any other.
     for p in doc.get("parts") or []:
         for f, depth, here in _nodes(p, where="\"%s\", after any story" % p.get("title")):
@@ -1457,7 +2101,8 @@ def problems(doc, ctx=None) -> list:
                                   "above"))
             if f.get("who") not in PERSONAS:
                 out.append((here, "say who is likely to ask it"))
-            out += _answer_checks(f, here, terms, False)
+            out += (_live_checks(f, here, terms, depth, False) if _live_way(f)
+                    else _answer_checks(f, here, terms, False))
             if f.get("story") and not any(s["id"] == f["story"] for s in doc.get("stories") or []):
                 out.append((here, "it is answered with a story that is not among yours"))
     # The questions to ask: each with what to say back to their likely answer.
@@ -1485,13 +2130,19 @@ def problems(doc, ctx=None) -> list:
                 if (parts.get(q.get("part")) or {}).get("kind") in _NO_DETAIL}
     for where, text, _d, _q in spoken(doc):
         t = plain(text, terms)
-        if not where.startswith("your question") and _q not in short_ok and choppy(text, terms):
+        if not where.startswith("your question") and _q not in short_ok and \
+                not where.endswith((POINTS, CODING_LINE)) and choppy(text, terms):
             out.append((where, CHOPPY))
         m = _SHARED.search(t) or (_SHARED_OPENING.search(t) if "what to say first" in where else None)
         if m:
             out.append((where, "\"%s\" assumes you have spoken before: say it fresh" % m.group(0)))
         for hit in learned.dislikes(t):
             out.append((where, "\"%s\" is a phrase you asked never to use" % hit))
+    if new_way:
+        out += _term_live_checks(doc)
+        for where, w in uncovered(doc, ctx):
+            out.append((where, "\"%s\" is not explained: add it to the terms with plain, here "
+                               "and like" % w))
     out += grounding(doc, ctx)
     return out
 
@@ -1673,6 +2324,9 @@ def for_page(doc) -> dict | None:
         q.pop("from", None)
     out["drafts"] = (out.pop("checked", None) or {}).get("drafts", 0)
     out["personas"] = dict(PERSONAS)
+    # The person's own setting as it is now, so a change reaches the page without making the
+    # prep again; with none, the points lead, as the page leads with them.
+    out["lead"] = lead()
     # What the Brief's "Likely to come up" draws, in the engine's one order.
     out["likely"] = [q["id"] for q in _likely_order(out)]
     return out
@@ -1681,7 +2335,7 @@ def for_page(doc) -> dict | None:
 def likely(doc, n=5) -> list:
     """The questions most likely to come up, in the order the interview runs: the known ones
     first in each part, then the rest. What the Brief's "Likely to come up" reads."""
-    return [{"question": q["q"], "answer": _t(plain(q.get("simple"), doc.get("terms"))),
+    return [{"question": q["q"], "answer": _t(plain(_said(q), doc.get("terms"))),
              "draft": bool(q.get("draft"))} for q in _likely_order(doc)[:n]]
 
 

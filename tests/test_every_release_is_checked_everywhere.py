@@ -5,7 +5,8 @@ another, the clock-moved check was a release step done by hand and skipped, and 
 wrote "29 oct." inside an English sentence on a French device. tools/everywhere.sh runs the
 page in Safari's engine, Firefox, a Mac's and Windows' type, French and German, and the far
 time zones, and the rest with the clock moved on, in the far time zones, from an odd folder
-and on the newest Python; .github/workflows/everywhere.yml runs it on every release.
+and on the newest Python; .github/workflows/everywhere.yml runs it on every release
+(a pull request labelled `release`).
 """
 from __future__ import annotations
 
@@ -41,9 +42,11 @@ def test_it_runs_on_every_release_free_and_never_on_a_private_copy():
     wf = yaml.safe_load(open(WF, encoding="utf-8"))
     on = wf.get("on", wf.get(True))
     assert "paths" not in (on.get("pull_request") or {})        # any change can break these
-    assert set(wf["jobs"]) == {"page", "suite"}                  # two summaries, never fifteen
+    assert set(wf["jobs"]) == {"page", "suite"}                  # a summary a job, never fifteen
     for job in wf["jobs"].values():
-        assert "!github.event.repository.private" in job["if"] and "'Release '" in job["if"]
+        # The `release` label starts it (tests/test_release_checks_start_on_the_release_label.py).
+        assert "!github.event.repository.private" in job["if"]
+        assert "github.event.label.name == 'release'" in job["if"]
         steps = "\n".join(str(s.get("run", "")) for s in job["steps"])
         assert "tools/everywhere.sh" in steps
         assert any(s.get("env", {}).get("EVERYWHERE_STRICT") == "1" for s in job["steps"])

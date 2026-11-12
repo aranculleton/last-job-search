@@ -383,8 +383,11 @@ def test_every_chat_the_app_starts_asks_for_auto(monkeypatch):
     line = app_listen.renew_line(call)
     assert '"permission_mode": "auto"' in line and "without permission_mode" in line
     # Refused as more than this chat's own mode, the person is asked once to switch it to Auto,
-    # never left with a new chat in Manual (a chat on a computer, 2026-11-09).
-    assert "change Manual to Auto" in line and "change the mode to Auto" in line
+    # never left with a new chat in Manual (a chat on a computer, 2026-11-09): on their page,
+    # with that chat's link, never in this chat, which nobody may read (the local review,
+    # 2026-11-11, 6; the card: test_nothing_tells_a_chat_nobody_reads_to_ask_the_person).
+    assert "app.py mode-refused" in line and "switch it to Auto" in line
+    assert "say nothing about it in this chat" in line
     monkeypatch.setattr(app_setup, "page_record", lambda: {"url": "https://claude.ai/x"})
     job = app.where_it_runs({"heavy": True, "kind": "search", "title": "Find jobs",
                              "work": "work/search~example"}, LIVE,

@@ -172,8 +172,10 @@ def test_the_card_says_it_is_on_hold_and_offers_one_way_to_send_it_anyway(run, t
         if msg["id"] == "msg-ash-1":
             msg["hold"] = "On hold until Copperleaf Pay posts a fitting role. Claude checks again on Mon 23 Nov."
             msg["hold_why"] = "decided"
+    # Held by Claude's decision on the draft, before the person's own record says so: they are
+    # with the people on hold at once, at the foot of Contacts (the maintainer, 2026-11-11).
     got = _go(run, tmp_path, [
-        {"hash": "contacts", "eval": LOOK},
+        {"hash": "contacts", "open": "held:contacts", "ready": "!!document.querySelector('#main ul[data-held-list]')", "eval": LOOK},
         {"eval": "(() => { document.querySelector('[data-k=\"unhold:msg-ash-1\"]').click(); return 1; })()"},
         {"tick": 300},
         {"eval": LOOK},

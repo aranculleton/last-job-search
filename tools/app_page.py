@@ -120,9 +120,10 @@ def problems(model: object) -> list:
 
 def tables() -> dict:
     """The engine's own tables the page reads, so the two never drift: each kind of work's
-    stages with their seconds (page_db.STAGES) and how much of Claude it takes
-    (app_alerts.WORK_COST)."""
+    stages with their seconds (page_db.STAGES), how much of Claude it takes
+    (app_alerts.WORK_COST), and a note's facts in few words (app_model.WHERE_UNKNOWN)."""
     import app_alerts
+    import app_model
     import page_db
     # The resume drafted alone is `draft` work, not a kind of its own: its stages are an
     # estimate beside them, its own minutes beside "Draft the resume only", and as much of
@@ -132,7 +133,9 @@ def tables() -> dict:
             "estimates": {page_db.RESUME_ONLY_KIND: [[name, secs] for _key, name, secs
                                                      in page_db.RESUME_ONLY_STAGES]},
             "work_cost": dict(app_alerts.WORK_COST,
-                              **{page_db.RESUME_ONLY_KIND: app_alerts.WORK_COST["draft"]})}
+                              **{page_db.RESUME_ONLY_KIND: app_alerts.WORK_COST["draft"]}),
+            # A note's facts said in a few words, and in a sentence behind its "?".
+            "facts": {"where_unknown": list(app_model.WHERE_UNKNOWN)}}
 
 
 def compact_js(js: str) -> str:
@@ -426,10 +429,12 @@ def js_parts() -> list[tuple[str, str]]:
                     continue
                 parts.append((_piece_name(name, piece, not parts or parts[-1][2] != name),
                               text, name))
-        if len(parts) <= room or part_cap >= PART_MAX:
+        if len(parts) <= room or part_min >= PART_MAX:
             break
-        # More files than a version may hold with the rest: bigger parts (FILES_MAX).
-        part_min, part_cap = part_min * 2, min(part_cap * 2, PART_MAX)
+        # More files than a version may hold with the rest: bigger parts (FILES_MAX), the
+        # smallest a part may end at as well as the biggest, both up to PART_MAX: a cap at
+        # its most with the floor still low left 280 parts of a page four times today's.
+        part_min, part_cap = min(part_min * 2, PART_MAX), min(part_cap * 2, PART_MAX)
     return _named("js", [(n, '"use strict";\n' + t + "\n") for n, t, _sec in parts], "js")
 
 

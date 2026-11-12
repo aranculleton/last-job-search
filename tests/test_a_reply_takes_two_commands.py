@@ -212,7 +212,10 @@ def test_finish_saves_the_draft_for_the_page_and_writes_the_finishing_batch(sear
         assert fh.read() == "Thanks Juno, that is kind of you. I have sent my CV to your email.\n"
     assert [r["direction"] for r in rows_for(search, LARKSPUR)] == ["outbound", "inbound"]
     got = json.loads(out[out.index("{"):])
-    (said, work, lock) = batch(got["batches"][0])
+    (said, work, lock, made) = batch(got["batches"][0])
+    # Juno asked for the CV and none is made for her: one is queued with the reply (#232).
+    assert (made["op"], made["doc_id"], made["body"]["kind"], made["body"]["args"]["job"]) == \
+        ("set", f"contact_resume~{LARKSPUR}~general", "resume_for_contact", None)
     assert (said["op"], said["collection"]) == ("set", "talk/cloud-c1/messages")
     assert said["body"]["from"] == "cloud" and said["body"]["work"] == wid
     # The thread says where the draft is, with the button to their card, never the draft
@@ -222,8 +225,9 @@ def test_finish_saves_the_draft_for_the_page_and_writes_the_finishing_batch(sear
     assert said["body"]["go"] == go
     assert (work["op"], work["if_version"]) == ("update", 3)
     assert work["body"]["status"] == "done"
-    assert work["body"]["result"] == {"summary": "Your reply to Juno is ready to copy.",
-                                      "links": [], "go": go}
+    assert work["body"]["result"] == {
+        "summary": "Your reply to Juno is ready, and a CV for them is being made.",
+        "links": [], "go": go}
     assert (lock["op"], lock["collection"], lock["doc_id"], lock["if_version"]) == \
         ("delete", "holds", f"contact~{LARKSPUR}", 2)      # the other job's lock stays
 

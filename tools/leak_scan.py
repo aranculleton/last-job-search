@@ -98,6 +98,11 @@ ALLOW = (
     # repository as two values (2026-10-26).
     ("**", r"(?i)template_owner=aranculleton&template_name=last-job-search(?![-\w])"),
     ("**", r"(?i)aranculleton%2Flast-job-search(?![-\w])"),
+    # And as GitHub's own tools take it, the owner as a value of its own: "owner <the app's
+    # owner>, repo last-job-search" (the weekly builder's steps and app_bug.py's, 2026-11-11).
+    # The owner is public in the app's address; only that use is set aside. Taken from the
+    # address, so this line names nobody on its own.
+    ("**", r"(?i)\bowner[\s:=\"']+" + "aranculleton/last-job-search".split("/")[0] + r"(?![-\w])"),
     # Nor is the address of openroles, the app's employer-board reader published as its
     # own library and vendored in tools/openroles/.
     ("**", r"(?i)github\.com/aranculleton/openroles(?![-\w])"),

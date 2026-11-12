@@ -443,6 +443,41 @@ def _updates_choice() -> str:
             f"setting says {say[have]}")
 
 
+def _updates_said() -> str:
+    """A rule about how updates arrive that an older version read as no setting at all: 4.15.0
+    set nothing from "Only update when I say", and _updates_choice re-reads only the rules that
+    did set it. Every active rule newer than the last one that set it is read again with
+    today's reader (learned.updates_said); where the newest that says either way differs
+    from the setting, the person is asked once (a To do card), never changed unasked: their
+    setting may be what they chose since. Their answer is recorded as a rule of its own,
+    newer than the one asked about, so it is never asked again (the review of 2026-11-11)."""
+    if _updates_choice():
+        return ""                       # the same question is already asked
+    try:
+        import learned
+        rows = learned.entries()
+        last = max((i for i, r in enumerate(rows)
+                    if "profile/person.json app_updates" in (r.get("applied_to") or [])),
+                   default=-1)
+        meant, said = "", ""
+        for r in reversed(rows[last + 1:]):
+            # As learned.known_settings reads it: their own words first, then the rule.
+            meant = learned.updates_said(str(r.get("said") or "")) or \
+                learned.updates_said(str(r.get("rule") or ""))
+            if meant:
+                said = str(r.get("said") or "")
+                break
+        have = "when_asked" if str(person.get("app_updates", "") or "").strip().lower() \
+            == "when_asked" else "auto"
+    except Exception:  # noqa: BLE001  no profile or no rules: nothing to ask
+        return ""
+    if not meant or meant == have:
+        return ""
+    say = {"auto": "by themselves", "when_asked": "only when you say"}
+    return (f"your words \"{said}\" say updates come {say[meant]}, but the setting says "
+            f"{say[have]}")
+
+
 def _brief_push() -> str:
     """A brief whose own run would send the phone notification, and nobody asked whether they
     want one: off until they say (brief.push_wanted), and asked once, as the setup sheet asks.
@@ -1154,6 +1189,17 @@ def _drafts_before_a_role() -> str:
     found = _probe("import followup_drafts; print(len(followup_drafts.drafts_before_a_role()))")
     n = int(found) if found.isdigit() else 0
     return ("%d draft(s) were written before the role they wait for" % n if n else "")
+
+
+def _unfitted_follow_ups() -> str:
+    """Code's plain follow-ups left on a card before they were fitted to the person's own
+    rules for messages: runs before 2026-11-11 kept a draft flagged for a rewrite there, where
+    the page said ready to send, and the next run finished it unchanged. Setting them aside
+    (kept) is instant; each is written again to fit those rules before it is offered."""
+    found = _probe("import followup_drafts; print(len(followup_drafts.unfitted_on_cards()))")
+    n = int(found) if found.isdigit() else 0
+    return ("%d follow-up(s) on a card were never written for their reader or fitted to your "
+            "own rules for messages" % n if n else "")
 
 
 def _old_sweep_cursor() -> str:
@@ -2198,7 +2244,8 @@ REGISTRY: tuple[Upgrade, ...] = (
             "with the CHANGELOG entry that changed it, keeping everything it checks about the "
             "person's own data; where the change looks wrong for them, bring it in line all the "
             "same (a failing test holds every save back) and, in the maintainer's own repo, "
-            "report it the way its profile says. For a test that reads the app's code as text: "
+            "file it for the app with tools/app_bug.py, said to nobody. For a test that reads "
+            "the app's code as text: "
             "rewrite it to run the code and check what it does, through the app's public names "
             "(a job board through tools/offline_boards.py), keeping every assertion's intent. "
             "Never weaken a test to pass; one that uses a part the update removed is rewritten "
@@ -2303,6 +2350,13 @@ REGISTRY: tuple[Upgrade, ...] = (
             _notes_aside_dated, "python3 tools/network/state.py date-page-drops", "instant",
             command=("python3", "tools/network/state.py", "date-page-drops"),
             paths=("network_contacts.csv",), conditional=True, priority=2),
+    Upgrade("follow-ups-fitted", "2026-11-11",
+            "follow-ups Claude drafted but never written for their reader or fitted to your "
+            "own rules for messages taken off their cards (kept), so none is offered as ready "
+            "to send; each is written again for its reader first",
+            _unfitted_follow_ups, "python3 tools/followup_drafts.py unfitted", "instant",
+            command=("python3", "tools/followup_drafts.py", "unfitted"),
+            paths=("documents/network/*/draft*",), conditional=True, priority=2),
     Upgrade("drafts-before-a-role", "2026-11-10",
             "drafts written before the role they wait for set aside (kept), and their people "
             "put on hold until a role is posted, so no card carries one message with the name "
@@ -2423,6 +2477,18 @@ REGISTRY: tuple[Upgrade, ...] = (
             ask="Should the app's updates come by themselves, or only when you say?",
             why_ask="An older version may have saved what you said about this the wrong way "
                     "round, so your setting may not be what you meant."),
+    Upgrade("updates-said", "2026-11-11",
+            "updates arriving the way you said, where an older version saved nothing from your "
+            "words",
+            _updates_said, "python3 tools/learned.py record --area other --said \"<their answer, "
+            "in their words>\" --rule \"<how updates arrive, as they said>\", which writes the "
+            "setting and reads it back; their answer is newer than the words asked about, so the "
+            "question is not asked again",
+            "question", "~0 min", conditional=True, priority=2,
+            needs="you",
+            ask="Should the app's updates come by themselves, or only when you say?",
+            why_ask="Something you said about updates was never saved as your setting by an "
+                    "older version, so your setting may not be what you meant."),
     Upgrade("brief-push", "2026-11-04",
             "a phone notification each morning when your brief is ready, only if you want one",
             _brief_push, "write \"brief_push\": \"on\" or \"off\" into profile/person.json from "
@@ -3397,7 +3463,22 @@ def run_instant(rows: list[tuple[Upgrade, str]]) -> list[str]:
     return notes
 
 
+# Set by an --after-sync run that carries the start on itself (app_setup.start_after_sync):
+# the new start's steps are printed last, after everything else the sync says.
+_START_HERE = [False]
+
+
 def main(argv: list[str] | None = None) -> int:
+    _START_HERE[0] = False
+    code = _main(argv)
+    if _START_HERE[0]:
+        _START_HERE[0] = False
+        import app_setup
+        print("\n".join(app_setup.start_here()))
+    return code
+
+
+def _main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     mode = ap.add_mutually_exclusive_group()
     mode.add_argument("--line", action="store_true")
@@ -3495,10 +3576,14 @@ def main(argv: list[str] | None = None) -> int:
         if said:
             print("profile upgrades: " + said)
         # The steps an older start printed are out of date once the update changed how a chat
-        # starts (X-78): said from here, the file the sync just brought in.
+        # starts (X-78): said from here, the file the sync just brought in. Where this sync
+        # was a step of a start that never carries itself on (before 4.15.0), the new start
+        # runs here instead, at the end, so the chat goes round the start once (main).
         try:
             import app_setup
-            said = app_setup.start_changed_line()
+            said = app_setup.start_after_sync()
+            if said == app_setup.START_HERE:
+                said, _START_HERE[0] = "", True
         except Exception:  # noqa: BLE001  never breaks the sync
             said = ""
         if said:
@@ -3639,6 +3724,8 @@ def say_page() -> None:
     try:
         import app_setup
         said = app_setup.page_line(landed=os.environ.get(LANDED) == "1")
+        if _START_HERE[0] and said == app_setup.PAGE_NOT_YET:
+            said = ""           # the start this sync runs at its end publishes it
     except Exception:  # noqa: BLE001
         said = ""
     if said:

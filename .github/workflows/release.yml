@@ -9,7 +9,10 @@
 # replaces or deletes a tag: a version already tagged, by hand or by an earlier run, is
 # not tagged again. Runs only in the public app, where Actions minutes are free;
 # every private copy carries this file and never runs it. The token is the built-in
-# GITHUB_TOKEN, scoped to this repo's contents (a tag and a release).
+# GITHUB_TOKEN, scoped to this repo's contents (a tag and a release) and its issues: a release
+# closes the bugs from the maintainer's copy fixed since the last one (labelled
+# fixed-unreleased, tools/app_bug.py, before the commit it tags was made) with a comment
+# naming it.
 
 name: Release
 
@@ -20,6 +23,7 @@ on:
 
 permissions:
   contents: write
+  issues: write
 
 concurrency:
   group: release

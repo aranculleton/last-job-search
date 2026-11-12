@@ -822,6 +822,27 @@ def said_once() -> dict:
     return {**(old if isinstance(old, dict) else {}), **(got if isinstance(got, dict) else {})}
 
 
+# A chat the app could not start because the chat starting it is not in Auto (create_session
+# refused its permission_mode): "<when> <that chat's id>", kept with the things said once so
+# the page asks the person on a card (outside_items, "auto"), never the chat that was refused,
+# which nobody reads (the local review, 2026-11-11, 6). Their Done there (told "auto") is later.
+AUTO_REFUSED = "auto-refused"
+
+
+def record_auto_refused(chat: str, at: str) -> str:
+    """Keep that `chat` was refused a chat in Auto at `at` (app.py mode-refused)."""
+    return save_said(AUTO_REFUSED, f"{at} {chat}".strip())
+
+
+def auto_refused() -> dict:
+    """{"at", "chat"} of the newest Auto refusal not yet answered on the page, or {}."""
+    got = str(said_once().get(AUTO_REFUSED) or "").split()
+    if not got:
+        return {}
+    at, chat = got[0], (got[1] if len(got) > 1 else "")
+    return {} if told("auto") >= at else {"at": at, "chat": chat}
+
+
 DOORBELLS = "doorbells-cleared"
 
 
@@ -889,12 +910,15 @@ def setup_script_line() -> str:
         return ""
 
 
-def outside_item(key: str, owner: str = "", name: str = "") -> dict:
+def outside_item(key: str, owner: str = "", name: str = "", system: str = "") -> dict:
     """A card for something only the person can do: the numbered steps the registry prints
-    (never typed by hand), the official page, and the day the steps were checked."""
+    (never typed by hand), the official page, and the day the steps were checked. `system`:
+    the person's computer's (darwin, win32, linux; computer.system_seen), for a screen on it
+    whose keys and menus differ (claude_surfaces.for_system); "" says all three."""
     import app_model
     import claude_surfaces
     eid, why = OUTSIDE[key]
+    eid = claude_surfaces.for_system(eid, system)
     lines = claude_surfaces.steps(eid, name=name or "your copy", owner=owner, page=True)
     entry = claude_surfaces.entry(eid)
     options = [{"label": "Done", "action": "setup.done"}]
@@ -947,8 +971,21 @@ def outside_items(targets: dict, kind: dict | None = None) -> list:
                         "copy": setup_script_line(),
                         "checked": claude_surfaces.entry("cloud-setup-script").get("verified_on", "")}
         out.append(item)
+    refused = auto_refused() if k not in ("app", "public", "fork", "none") else {}
+    if refused:
+        # Refused a chat because the one starting it is not in Auto: the page says so and
+        # links that chat, whichever chat draws the page; its Done is their word.
+        item = outside_item("auto")
+        item["body"] = ("Claude couldn't start a chat for your work, because the chat that "
+                        "starts it is not in Auto. Switch that chat to Auto once, and Claude "
+                        "starts it by itself.")
+        item["rev"] = app_model_rev("auto", refused["at"], item["rev"])
+        if refused["chat"].startswith("session_"):
+            item["open"] = {"label": "Open that chat",
+                            "url": "https://claude.ai/code/" + refused["chat"]}
+        out.append(item)
     if _cloud() and k not in ("app", "public", "fork", "none"):
-        if not told("auto"):
+        if not told("auto") and not refused:
             out.append(outside_item("auto"))
         # The line in its own card, whenever a cloud chat starts without the PDF tools: it
         # was offered only beside blocked job sites, so it went with them (X-59). A chat that
@@ -967,6 +1004,11 @@ def outside_items(targets: dict, kind: dict | None = None) -> list:
     for item in out:
         targets[item["id"]] = {"kind": "outside", "key": item["about"]["step"], "rev": item["rev"]}
     return out
+
+
+def app_model_rev(*parts) -> str:
+    import app_model
+    return app_model.rev_of(*parts)
 
 
 def report_items(today: dt.date | None = None) -> list:
@@ -1830,29 +1872,107 @@ def start_changed_line() -> str:
     """After a sync: the line telling a chat its start's steps are out of date, when the app
     it took changed how a chat starts since start last spoke (or start never recorded it: a
     version from before this one). Said once a version."""
+    return _start_change()[0]
+
+
+def _start_change() -> tuple[str, str]:
+    """(start_changed_line's line, the commit the start last spoke for, or "")."""
     head = _head()
     if not head:
-        return ""
+        return "", ""
     try:
         with open(_local_file(START_HEAD), encoding="utf-8") as fh:
             was = fh.read().strip()
     except OSError:
         was = ""
     if was == head:
-        return ""
+        return "", was
     changed = True
     if was:
         code, out = _git("diff", "--name-only", was, head, "--", *START_FILES)
         changed = code != 0 or bool(out.strip())
     note_start()
     if not changed:
-        return ""
-    return START_CHANGED
+        return "", was
+    return START_CHANGED, was
 
 
 START_CHANGED = ("Claude: this update changed how a chat starts. If python3 tools/app.py start "
                  "printed steps earlier in this chat, they are out of date: run it again now and "
                  "follow what it prints instead, never the steps from before.")
+
+# A start from 4.15.0 on runs the day's update check itself and, when the check brings in an
+# update, runs again on the new code by itself (app.py cmd_start): its tools/app.py carries
+# this name (app.py START_UPDATED). An older start printed the check as a step, so a chat ran
+# it, the update changed how a chat starts, and START_CHANGED sent the chat round the whole
+# start a second time (the maintainer's copy taking 4.15.0, 2026-11-11).
+START_RUNS_AGAIN = "LJS_START_UPDATED"
+# Set by every command that runs the day's update check inside itself (app.py start and a
+# wake, the brief's run): the update check it runs never starts anything of its own, since
+# the command carries on from the new code itself.
+IN_COMMAND = "LJS_SYNC_IN_COMMAND"
+# What start_after_sync returns when the sync carries the start on itself (start_here).
+START_HERE = "start here"
+START_HERE_SAY = ("Claude: this update changed how a chat starts, so the start has carried on "
+                  "here, on the new version. Follow the steps below in place of every step "
+                  "python3 tools/app.py start printed earlier in this chat; the update check "
+                  "among them is done, and the start is not needed again for this update:")
+
+
+def _runs_again(commit: str) -> bool:
+    """Did the start at `commit` run the day's check itself and carry on by itself? True where
+    it cannot be told (a commit this clone lacks): then the sync says what it always said."""
+    code, text = _git("show", f"{commit}:tools/app.py")
+    return code != 0 or START_RUNS_AGAIN in text
+
+
+def _replaced() -> str:
+    """The commit this checkout was on before the update it holds now: the first parent of
+    its newest sync from the app, or "" with none."""
+    try:
+        import sync_app
+        subject = sync_app.SYNC_SUBJECT
+    except Exception:  # noqa: BLE001
+        return ""
+    code, out = _git("log", "-1", "--format=%P", f"--grep={subject}", "HEAD")
+    parents = out.split() if code == 0 else []
+    return parents[0] if parents else ""
+
+
+def start_after_sync() -> str:
+    """What a sync says about the start, once the update is in: "" (nothing changed for it),
+    START_CHANGED (the chat runs the start again), or START_HERE, where the sync was a step an
+    older start printed, one that never carries itself on: the sync then runs the new start
+    itself at its end (start_here) and the chat follows those steps, the start run once by
+    the chat. Never inside a command that runs the check itself, which carries on by itself
+    (IN_COMMAND, or the code the update replaced running its own check), and never where no
+    start spoke in this checkout: nothing printed steps to replace."""
+    line, was = _start_change()
+    if not line or not was or os.environ.get(IN_COMMAND):
+        return line
+    before = _replaced()
+    if _runs_again(was) or (before and _runs_again(before)):
+        return line
+    return START_HERE
+
+
+def start_here() -> list[str]:
+    """The start run again by the sync on the code it brought in (start_after_sync): its
+    lines under START_HERE_SAY, or START_CHANGED where it could not run. It takes no update
+    check of its own and never runs a further start (app.py START_UPDATED, set empty). Given
+    half the time the sync gives this whole step (sync_app.upgrades), so a slow one still
+    leaves the line that sends the chat round the start, never nothing."""
+    env = dict(os.environ, **{START_RUNS_AGAIN: "", IN_COMMAND: "1"})
+    try:
+        r = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "app.py"), "start"],
+                           cwd=ROOT, env=env, capture_output=True, text=True, encoding="utf-8",
+                           errors="replace", timeout=300, stdin=subprocess.DEVNULL)
+    except (OSError, subprocess.TimeoutExpired):
+        return [START_CHANGED]
+    out = (r.stdout or "").rstrip("\n")
+    if r.returncode not in (0, 1) or not out.startswith("app start:"):
+        return [START_CHANGED]
+    return [START_HERE_SAY] + out.splitlines()
 
 
 def _stranded() -> dict[str, int]:
@@ -1918,9 +2038,10 @@ CLAIMS = "ljs-claims.json"
 
 
 def record_claim(work: str, chat: str, today: dt.date | None = None,
-                 now_ts: float | None = None) -> bool:
+                 now_ts: float | None = None, lent: bool = False) -> bool:
     """Remember that `work` was claimed here as `chat`, and when (`at`, and `renewed`, which
-    each pin moves on: the claim's lease runs from it)."""
+    each pin moves on: the claim's lease runs from it). `lent`: a cloud chat lent the
+    computer's browser claimed it as a computer chat (app.py next --lent)."""
     if not work or not chat:
         return False
     import time
@@ -1930,7 +2051,8 @@ def record_claim(work: str, chat: str, today: dt.date | None = None,
     path = _local_file(CLAIMS)
     got = _read_json(path, {})
     got = {k: v for k, v in got.items() if isinstance(v, dict) and str(v.get("day")) >= since}
-    got[str(work)] = {"chat": str(chat), "day": day.isoformat(), "at": ts, "renewed": ts}
+    got[str(work)] = {"chat": str(chat), "day": day.isoformat(), "at": ts, "renewed": ts,
+                      **({"lent": True} if lent else {})}
     _write_json(path, got)
     return True
 
@@ -1957,9 +2079,21 @@ def end_claim(work: str, now_ts: float | None = None) -> bool:
     return _claim_mark(work, "ended", now_ts)
 
 
+def ask_claim(work: str, now_ts: float | None = None) -> bool:
+    """`work` stopped here on a question to the person (app.py done --question, a LinkedIn
+    sign-in above all): the question is on their page and the work waits there for their
+    answer, never finished. It stays this chat's own for what it says (reading.app_job_here),
+    so a sign-in it meets while it waits goes on the page too. Ended at the question, every
+    later sign-in line was the one for a chat the person watches ("tell the person ... then
+    say done"), and a chat on their computer kept the sign-in in its own conversation (the
+    maintainer, 2026-11-11)."""
+    return _claim_mark(work, "asked", now_ts)
+
+
 def current_claim() -> dict:
     """The work this checkout's chat holds now: the latest claim made here and not ended,
-    as {"work", "chat", "at", "renewed"}, or {} when it holds none (a finished job's chat)."""
+    as {"work", "chat", "at", "renewed"}, or {} when it holds none (a finished job's chat).
+    Work waiting on the person's answer (ask_claim) is still its own, with `asked` set."""
     got = _read_json(_local_file(CLAIMS), {})
     live = [(float(v.get("at") or 0), k, v) for k, v in got.items()
             if isinstance(v, dict) and not v.get("ended")]

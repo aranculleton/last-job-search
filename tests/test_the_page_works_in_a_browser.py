@@ -810,10 +810,13 @@ def test_progress_moves_with_the_clock_slow_is_not_stalled_and_only_a_missed_che
     assert s2["sentence"] == "Scoring 214 postings, 3 of 4 done", "one live sentence, in words"
     assert any("step-now:Now: Scoring" in s for s in s2["steps"])
     ov = r["over"]
-    assert ov["status"] == "" and ov["now"] == 97, "held below 100 until done, and no state word"
+    # Past its estimate no bar is drawn, held at its end (issue #238: it looked stuck): its
+    # time so far says how long it has run, and no state word.
+    assert ov["status"] == "" and ov["now"] is None, "no bar stuck at its end, and no state word"
     assert ov["warn"] == [], "slower than usual is no warning"
-    assert "so far" in ov["time"] and "longer" not in ov["time"] + ov["text"], ov["time"]
-    assert "left" not in ov["time"] and "left" not in ov["text"], "no time left once it has run past it"
+    assert ov["text"] is None, ov
+    assert "so far" in ov["time"] and "longer" not in ov["time"], ov["time"]
+    assert "left" not in ov["time"], "no time left once it has run past it"
     # One name for calling off Claude's work (the maintainer, 2026-11-05: "Stop Claude").
     assert "Try again" not in ov["buttons"] and "Stop Claude" in ov["buttons"]
     assert not any("usage limit" in b for b in r["overBanner"]), "slow is never the plan's limit"

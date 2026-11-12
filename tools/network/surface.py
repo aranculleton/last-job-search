@@ -471,6 +471,7 @@ HELD_WORDS = {
     "employer": "Nothing to send: {company} is an employer you turned down",
     "place": "Nothing to send: they are in {place}, outside where you are looking",
     "request": "Your connection request has not been accepted yet",
+    "told": "Their record says no more messages: leave it unless they write back",
     "recent": "Written to on {last}: nothing more until {until}",
 }
 
@@ -516,12 +517,17 @@ def held(contact, msgs, status, replying=False, memo=None, today=None) -> dict |
     if recent:
         return recent
     import throttle
+    # A request nobody accepted first: nothing can go to them whatever else is true, and it
+    # is one to withdraw in three weeks (issue 242).
+    if status in throttle.SENT_NO_REPLY and state.request_pending(msgs, c) is not None:
+        return {"why": "request", "said": HELD_WORDS["request"]}
     # Their limit, the one answer the dates written on a row also read (state.at_limit).
     if state.at_limit(c, msgs, status):
         n = max(state._chases(msgs) if msgs else 0, state.schema.MAX_UNANSWERED)
+        if state._chases(msgs) < state.schema.MAX_UNANSWERED and state.told_no_more(c, msgs):
+            # Their record says so, not the count: "No reply to 2 messages" after one was false.
+            return {"why": "limit", "said": HELD_WORDS["told"], "n": n}
         return {"why": "limit", "said": HELD_WORDS["limit"].format(n=n), "n": n}
-    if status in throttle.SENT_NO_REPLY and state.request_pending(msgs) is not None:
-        return {"why": "request", "said": HELD_WORDS["request"]}
     return None
 
 

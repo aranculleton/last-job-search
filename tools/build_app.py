@@ -90,6 +90,7 @@ INVENTED_FIRST_NAMES = frozenset({
     "Sally", "Sasha", "Shirin", "Tamsin", "Taylor", "Thad", "Wren", "Wrenfield", "Xiu",
     "Zo", "Zoe",
     "Ines", "Teo",  # tests/test_a_generated_document_passes_its_own_checker.py
+    "Odile", "Ottilie",  # the bracketed-name greeting (issue 216): app_model.py, CHANGELOG.md
     "Bexley", "Jo", "Person",  # tests/test_a_save_waits_on_nothing_it_does_not_need.py, a people run's test
     "Quill",  # tests/test_contacts_show_only_what_the_persons_rules_allow.py (Quill Orme)
     "Tove",  # tests/test_an_edited_copy_is_never_a_different_message.py

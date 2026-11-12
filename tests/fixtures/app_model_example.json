@@ -1,19 +1,19 @@
 {
  "model": 1,
  "made_at": "2026-10-25T18:00:00Z",
- "rev": "bde5f96ed96a",
+ "rev": "69ccc65a576f",
  "app": {
-  "version": "4.14.0",
+  "version": "4.15.0",
   "url": null,
   "update_waiting": null,
   "news": [
-   "Conversations with no answer in about three months close by themselves. (set up for you)",
-   "A people search goes to the likely employers first.",
-   "A run's time is split into searching and reading."
+   "Your interview prep now follows the interview itself.",
+   "A two-page resume no longer ends on a page of a few lines.",
+   "A job whose posting has words written to an AI tool says so on its card."
   ],
   "privacy": "Only you can open this page unless you share it. It holds first names, employers, your drafts and your setup answers, so keep it unshared.",
   "repo": "https://github.com/aranculleton/last-job-search",
-  "page": 159,
+  "page": 165,
   "not_saved": 0,
   "app_bugs": []
  },
@@ -67,8 +67,8 @@
     "label": "Where do I find it?",
     "lines": [
      "On LinkedIn, select the Me icon at the top.",
-     "Choose Access My Premium (in the phone app, Premium features).",
-     "Under InMail, read the number beside InMail credits available."
+     "Choose Premium features (on some accounts, Access My Premium). It opens your My Premium page.",
+     "Choose See all features, open the InMail part, and read the number beside InMail message credits available."
     ]
    },
    "about": {},
@@ -77,7 +77,7 @@
  ],
  "jobs": {
   "round": "r9",
-  "made_at": "2026-11-11T10:31:39Z",
+  "made_at": "2026-11-11T18:33:31Z",
   "met": false,
   "summary": "3 roles from the last search to look at, 1 of them scoring 75 or more. 3 left out, each with its reason.",
   "rows": [
@@ -661,7 +661,8 @@
     "near": false,
     "over": false,
     "tone": "muted",
-    "label": "144 of 300 characters"
+    "label": "144 of 300 characters",
+    "short": "144/300"
    },
    "warnings": [],
    "blocked": [],
@@ -1012,7 +1013,7 @@
    "when": "2026-10-28",
    "prep": {
     "path": "documents/applications/thornbury_bank_risk_analyst_thornbury/interview_prep.md",
-    "updated": "2026-11-11T10:31:39Z"
+    "updated": "2026-11-11T18:33:31Z"
    },
    "questions": 2,
    "all_day": true,
@@ -1573,33 +1574,33 @@
   ]
  },
  "updates": {
-  "version": "4.14.0",
-  "newest": "4.14.0",
+  "version": "4.15.0",
+  "newest": "4.15.0",
   "mode": "auto",
   "waiting": null,
   "changed": [
    {
+    "version": "4.15.0",
+    "date": "2026-11-11",
+    "lines": [
+     "Your interview prep now follows the interview itself.",
+     "A two-page resume no longer ends on a page of a few lines.",
+     "A job whose posting has words written to an AI tool says so on its card.",
+     "Interviews still ahead are prepared the new way by themselves. (set up for you)",
+     "Claude's answers in Chat take you straight to what changed.",
+     "Interview records and the rules Claude learns from you are dated on your own day."
+    ]
+   },
+   {
     "version": "4.14.0",
     "date": "2026-11-10",
     "lines": [
-     "Conversations with no answer in about three months close by themselves. (set up for you)",
      "A people search goes to the likely employers first.",
      "A run's time is split into searching and reading.",
      "Back from LinkedIn, the page shows you whose note you were sending.",
      "Claude starts its LinkedIn work on your computer by itself.",
-     "Your computer's state, in one line."
-    ]
-   },
-   {
-    "version": "4.13.0",
-    "date": "2026-11-06",
-    "lines": [
-     "A search asked for in a chat costs less of your Claude allowance.",
-     "A job ruled out while it was being drafted says why, and is never drafted again.",
-     "A job you tap keeps its place on Jobs.",
-     "Messages at the foot of the page show how long they have left.",
-     "Cancel under a draft's pencil puts your words back.",
-     "A new text size fits your Brief to the window again."
+     "Your computer's state, in one line.",
+     "Every run on your computer is measured, not guessed."
     ]
    }
   ],
@@ -1751,7 +1752,7 @@
      "2. Choose the larger download, the whole archive, and request it. LinkedIn may ask for your password.",
      "3. LinkedIn emails you a link anything from about ten minutes to a day later, and it works for 72 hours. Attach the ZIP, or only the files you want me to read: messages.csv and Invitations.csv for your history; Profile.csv, Positions.csv, Education.csv, Skills.csv and Certifications.csv for your own profile."
     ],
-    "checked": "2026-10-21",
+    "checked": "2026-11-11",
     "link": "https://www.linkedin.com/help/linkedin/answer/50191"
    },
    "files": [
@@ -1872,11 +1873,23 @@
     "computer": "Waiting for their profile: Claude reads it on your computer by itself, then rewrites this note",
     "tab": "Waiting for their profile: press Read them in To do once, and Claude reads it by itself from then on",
     "sign_in": "Waiting for their profile: sign in to LinkedIn in Claude's browser and Claude reads it by itself",
-    "paused": "Waiting for their profile: LinkedIn asked Claude to slow down, so it reads it tomorrow, by itself",
+    "paused": "Waiting for their profile: LinkedIn stopped Claude's reading for today, so it reads it tomorrow, by itself",
     "next": "Waiting its turn: Claude reads their profile here by itself, then rewrites this note",
     "reading": "Reading their profile…",
     "read": "Profile read: Claude rewrites this note next",
     "again": "Claude could not read their profile just now: it tries again later, by itself"
+   },
+   "hold_short": {
+    "browser": "Waiting for their profile",
+    "paste": "Waiting for their profile",
+    "computer": "Waiting for their profile",
+    "tab": "Waiting for their profile",
+    "sign_in": "Waiting for their profile",
+    "paused": "Waiting for their profile",
+    "next": "Their profile is read next",
+    "reading": "Reading their profile…",
+    "read": "Profile read",
+    "again": "Profile not read yet"
    },
    "check": {
     "state": "due",

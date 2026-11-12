@@ -56,8 +56,12 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   opened with the answers hidden, at the first likely question) beside Read your prep, with
   a line saying so ("Today: practise 3 questions, about 10 minutes"), or Practise with Claude
   where there is no live prep (the UX review, 2026-11-10, U-4). Coming up's row leads with the
-  same step on those days (`ivPractiseDay`, one answer for every place).
-  (one-card tests)
+  same step on those days (`ivPractiseDay`, one answer for every place). On those days Add to
+  calendar waits under More after the three, then Something else, and nothing else is in it:
+  when the prep was made is on the card's line of facts ("Prep ready, updated 29 min ago"),
+  with the pencil that changes it beside it, and "Also at" is on the application's own page.
+  Why: More opened eleven lines deep, the prep's time, "Also at", a tip about the pencil and
+  "Edit the prep" among its buttons (the maintainer, 2026-11-11). (one-card tests, More test)
 - To do holds only what there is to do. Someone who has not answered the person's limit of
   messages is never a card there, nor counted. In Contacts they wait below the fold with the
   others who need nothing, their row saying to leave it unless they write back, with Close.
@@ -75,19 +79,33 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   Look, Chat button, or the panel's own arrow; the same choice, kept on the device), small or big.
   The panel's controls are the page's own soft pills (Open in Chat, Close), never underlined words.
   The conversation opens on its last day; earlier messages come only by its Show, never by
-  scrolling up (the maintainer, 2026-11-06). (chat panel tests)
+  scrolling up (the maintainer, 2026-11-06). (chat panel tests) On a phone the Chat is as tall
+  as the room under the header as it is drawn, so it opens with its first words in sight,
+  never behind the header (taken as 56px, its first words slid under the Refresh pill,
+  2026-11-11). (overlap test: chat opens)
   With no messages yet the starters and the box sit under the header, with no subtitle; once
   there are messages the box keeps to the foot. Why: an empty Chat stood its starters at the
   foot of a blank screen and said "Ask anything" three ways (the screen review, 2026-11-11).
   (empty chat tests)
 - In Claude's work, four or more of one kind waiting, or finished, are one card with their
   count and the first few names; Show lists them. Nobody scrolls past fifty cards. (run test)
+- Over Claude's work, with two or more things going, one short strip says what runs now and
+  what waits, in the order Claude takes it, a big job said as running in a chat of its own, and
+  a big job's card says it does not wait for other work. Why: with several things asked for in
+  a row nobody could tell what was queued, in what order, or why a resume seemed to sit behind
+  small changes (issue #238). Making a resume downloadable is a stage of the resume's own card,
+  "On its way", never a card of its own (#237). (queue test)
 - Claude's work says its count once, in the header's pill: no line under its title repeats
   it, and "Nothing is sent." is not said over the cards. Each running or waiting card has its
   title, one short state with its clock ("Waking Claude · 1m 4s", never a chip and a line
-  both saying it), its bar, and Stop Claude at the end of the clock's line, never on a line
+  both saying it), its bar (none once it runs past its estimate: its time so far says how long,
+  never a bar stuck at its end, #238), and Stop Claude at the end of the clock's line, never on a line
   of its own; in a narrow panel the state goes under the title rather than squeeze it. The
-  sheet's Close and the panel's Hide are soft pills on the title's own line (2026-11-10). A finished one is a compact row under
+  sheet's Close and the panel's Hide are soft pills on the title's own line (2026-11-10). Its
+  actions share the clock's line only while both fit, the words keeping a short line's width,
+  else they take the line under it; a finished run's trash is in its corner on its title's
+  line. Why: in a column of their own beside the words, three pills drew "38 messages ready to
+  send." a letter a line (the screen review, 2026-11-11). (overlap test: crushed) A finished one is a compact row under
   "finished": its title and one-line result, the time small at its end, the whole row opening
   where its record lives (a person's work in Contacts on that person, a job's in Jobs, a
   draft's in its draft), its trash shown on hover or focus; no Done chip, no Open button.
@@ -96,7 +114,9 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   Coming up and Next; Waiting on you, Jobs, News and the numbers) that share the window's
   height, with the privacy line and the tip on one last row beside the Chat button, so the
   page does not scroll at 1000 by 560, 1280 by 720 or 1440 by 900. Each list shows as many as
-  its room holds and gives way below to one, its panel's own "All ..." opening the rest; News,
+  its room holds and gives way below to one, its panel's own "All ..." opening the rest, at
+  every width, two columns too: nothing is cut off inside a panel (Next three cut its third step
+  in half at a tablet's width, the screen review, 2026-11-11); News,
   with no screen of its own, says "2 more" and opens them in place. On a short window (660px
   or less) the numbers are one line under the greeting, opening Progress with its chart. A
   phone scrolls. (the maintainer, 2026-11-05; fit tests)
@@ -120,7 +140,8 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   what is working, only when the person's own numbers carry it (two groups of five or more),
   said as counts, never a cause. The weeks are applications and messages sent, the two chart
   colours, each named by a swatch in the line under them; one series where the person only
-  does one. Progress says the same, its "Each week" card open on its chart, every fold in it
+  does one. Its axis steps by 1, 2 or 5 times a power of ten, five lines at most, whatever a week
+  holds (a week of 400 drew 42 numbers on top of each other, 2026-11-11). Progress says the same, its "Each week" card open on its chart, every fold in it
   with the chevron Settings' rows use (folded, it read as a heading over an empty box, the
   review, 2026-11-10). (the maintainer, 2026-11-10: "not make it look like im
   doing nothing"; progress glance tests)
@@ -157,6 +178,13 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   pencil alone on a line, and a
   draft's lines are a card's 8px apart, as a find's are (2026-11-10). (jobs page tests, layout
   16, room test)
+- A dot between facts never starts or ends a line, and a day said in words ("Sun 20 Sept") is
+  never broken over two: a dot is held to the word after it, and one a line would still start
+  or end with goes out of sight (app.js `wordsAdd`, `sepFit`). A file's name or the page's
+  address wraps only after an underscore, a slash or a dot, never inside a word. Why: "·
+  Applied 3 Nov" with nothing before it, "Interview · Supply Chain Analyst ·" over a pill, a
+  row's "· Recruiter" under its name, and a name broken after its 41st letter (the screen
+  review, 2026-11-11). (overlap test: separator, crushed)
 - A Jobs card's actions are the one row of pills of Buttons, below: one filled next step, two soft
   pills at most, then More. A pencil beside the resume's words and one beside the letter's ("CV 1
   page ✎ letter 1 page ✎", the engine's own parts, kept on one line each) open the Tweak panel; the
@@ -183,6 +211,11 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   own link is drawn over the reach. Why: a line each, each its own 44px, made a row of three
   short lines 190px tall, and the calendar moved a place on every row with a trash (the
   maintainer, 2026-11-10: "inline and things are good"). (room test)
+  A time from another zone ("15:00 Toronto time (20:00 here)") wraps inside its own column,
+  the time here kept whole under the person's clock, and the column is wider on every row of
+  the list alike, so the rows still line up. Why: held to one line it ran under the title, over
+  the row's line of facts and into its pill on a laptop (the maintainer, 2026-11-11).
+  (overlap test)
 - Every message drafted and waiting is one card, "Messages to send (N)": the drafted
   replies and follow-ups, the week's first notes and the ones to check first together, a row a
   person, each opening their draft in Contacts, and one button opening Contacts. A row Claude
@@ -200,49 +233,79 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   claude thing going to happen?" (the maintainer, 2026-11-07). (waiting-note tests)
 - **An interview's live prep reads full screen, one interview in the order it runs**, laid out
   as the maintainer's call-prep page (2026-11-10: "this is what i want ... more tailored to
-  interviews"), on every screen. On screen is only what the moment needs; depth is one tap
-  away (the detailed answer, the follow-ups, a word's meaning, the A to Z), never all at once.
-  The head: the day, one muted line saying what it is ("A technical interview for the ...
-  role, 45 minutes in 4 parts", and the drafts the person asked for), one pill, Practise with
-  Claude (Update my prep and the calendar stay on its card in Coming up), then At a glance, in
-  a plain box, what the first screen is for (the UX review, 2026-11-10, U-5): the line to open
-  with, what they are known to ask (else the first likely question) with the part it is in,
-  and two questions to ask them, each a tap to its place, and a guessed kind of interview said
-  there with "Not this kind of interview?" one tap from the right one. Then a chip to every
-  part, then Stories, Words and Your notes, wrapping (on a phone one row that scrolls sideways inside itself, its far end fading: over three rows they put Part 1 more than a screen down, the screen review, 2026-11-11), the parts with a known question marked in
-  gold, the chip's name and hover saying why ("A question they are known to ask is in this
-  part") and At a glance's "Part 2" beside the known question in the same gold, its key (the
-  screen review, 2026-11-11: a tint nobody could read); "All answers" with the one Simple|Detailed|Hidden switch (the chosen side filled), and Tools
-  beside it, folded, holding search, Open all and Close all. Nothing stays on the screen over
-  the reading. Then the timing, one line on its fold ("Timing: 60 minutes in 5 parts, the last
-  7 minutes for your questions", a day of interviews in hours), the rest said in words inside it (the person's own talk at their
-  pace, the longest stop). A test taken alone has nothing to say first and no talk to time:
-  its parts keep in mind how it works, how to take each kind of item and the pacing, and At a
-  glance says what to know before you start. Each part: a small-capitals line (its number, its minutes, the
-  person's talk in it) and its title over a rule; "Say first" in a plain box, each line a bullet, a known question
-  answered there marked, its "Likely to prompt" or "Full answer and follow-ups" lines dashed
-  under it, going to the answer and marking it until a moment after it arrives, and the line
-  to end on in italics; then its questions as cards, each with who asks it in a pill (inline on a wide screen, over the
-  question on a phone, so a title never breaks beside it), the other
-  ways it is put, its answer in the soft accent box with its own switch (a simple answer a
-  sentence a line, to glance at; the detailed one prose), the story it comes from, and its own follow-ups folded by who asks, three deep at most; the follow-ups after any story said once, at the part's foot ("After any story here, they may ask"), never under each question (the screen review, 2026-11-11: the same three stood under every one); the questions to ask them in
-  the last part, each with what to ask next folded under its likely answers. Then the stories,
-  each once with the questions it answers; every word A to Z, folded; and the notes that are
-  the person's alone, pay and notice among them, last in a gold box. A term is a dotted word
-  inside its sentence, never a pill: it opens a panel at the side on a wide screen and a sheet
-  from the bottom on a phone over the page dimmed, with Back through a term inside a term, and
-  Close; on a wide screen the reading column keeps room for it at its right, so nothing moves
-  when it opens. Practice is Practise with Claude, and Hidden, the third side of the one
-  answers switch: each answer waits behind "Show the answer" beside its Say, and what to say
-  first behind "Show what to say", to be said first and then checked (the UX review,
-  2026-11-10, U-4); Hidden is for that opening only and never kept, so the prep read on the
-  morning of the interview shows every answer; never a Start or a timer on every card, which the
-  maintainer called cluttered. Every id
-  in it carries the interview's, and its listeners are on its own root. Two of the page's
-  rules give way here to the call-prep page: labels are small capitals (a letter-spaced
-  uppercase the rest of the page keeps for the Brief's day), and an answer is drawn at the size
-  of the words around it, not a step larger. The words, the order and the timing are the
-  engine's (`interview_live`). (live prep tests)
+  interviews"), on every screen, and kept open beside the call. **Nothing needs opening before
+  it can be read** (the maintainer, 2026-11-11): there is no fold, switch or "Show" in it. The
+  head: the day and the drafts the person asked for in one quiet line under the title (in large
+  type over lines of their own, At a glance began past a phone's first screen where the words
+  drew longer, the German run, 2026-11-12), then one pill, Practise with Claude (Update my prep
+  and the calendar stay on its card in Coming up). Then the bar, the one
+  thing that stays at the top while the prep scrolls, one solid ground flush with the header
+  down to under its chips: find ("They asked..."; "/" goes to it, Esc clears it) with "Points
+  first" or "Script first" beside it, never after the chips, and under them a chip to every
+  part, then Stories and Your notes, one row on a phone that scrolls sideways inside itself, its
+  far end fading. One chip is filled, the part whose heading was last scrolled up to the bar
+  (the first part from the top of the prep until the next heading gets there; at the end of the
+  prep, where the last parts cannot get there, the one tapped, else the last in view), marked as the
+  prep scrolls (the one thing that changes by itself) and kept in view in its row as the mark
+  moves, a row moved sideways by hand left where it was put until then; nothing else
+  looks filled, a chip under the mouse underlined instead of shaded; a part with a known
+  question wears a gold dot, the chip's name and hover saying why. A jump on a phone lands under
+  the bar as it will be once there, the bar one row before the scroll starts and holding its
+  shape until it ends (Safari stops a smooth scroll where the page changes shape under it). On a
+  phone, once the prep is read under the bar, find, the order and the chips are one row, the bar
+  keeping its room in the flow so nothing under it moves, whole again near the top and while find
+  is in use. The bar's name for a screen reader is the timing in a line ("60 minutes in 5 parts,
+  the last 7 minutes for your questions", a day of interviews in hours). Then At a glance, in a plain box:
+  the line to open with, what they are known to ask (else the first likely question) with the
+  part it is in and its gold dot, two questions to ask them, each a tap to its place, and a guessed kind of
+  interview said there with "Not this kind of interview?" one tap from the right one. A test
+  taken alone has nothing to say first: its parts keep in mind how it works, and At a glance
+  says what to know before you start. Each part: a small-capitals line (its number and minutes)
+  and its title over a rule; "Say first" in a plain box, each line a bullet, its "Likely to
+  prompt" or "Full answer and follow-ups" lines dashed under it, going to the answer and marking
+  it until a moment after it arrives, and the line to end on in italics; then its questions as
+  cards, the question first and who asks after it, small, a gold dot on one they are known to
+  ask. **Every answer shows both ways at once**: the script to read aloud (17px, at most 60
+  characters a line, full ink) and the same answer as points (the first one bold and larger),
+  in the order the person picked, the second under a thin rule; nothing redraws when they flip
+  it. **Follow-ups are choices, never folds**: under an answer, "They may ask next" and a
+  button a follow-up; picking one shows its question, both ways of its answer and its own
+  follow-ups in the same place, three deep, the way back above it (each earlier pick a link,
+  and Back), the picked question taking the focus. The follow-ups after any story are said
+  once, at the part's foot ("After any story here, they may ask"), never under each question.
+  The questions to ask them sit in the last part, each with what to ask next to each likely
+  answer as a plain line ("If they say ... → ask: ..."). Find looks through what to say, both
+  ways of every answer and every follow-up at any depth, and a follow-up it finds is picked so
+  its answer is in view. Then the stories, each once with the questions it answers, and the
+  notes that are the person's alone, pay and notice among them, with the answers to avoid as a
+  plain list, last in a gold box; the last line says Claude does not join, listen or record. A
+  term is a dotted word inside its sentence, never a pill: it opens a small box (at most 272px
+  wide) under the line after its own, or over its own line where that would not fit, never
+  covering the line being read or the next one, between the bar and the lifelines, and never a
+  panel or a dimmed page, saying what it means, what it means here and what it is like, with
+  More for an example and the technical answer. A mouse moved onto the word and kept there 700ms
+  opens it, never a word the text scrolled under a mouse left resting; leaving the word and the
+  box closes it; focus opens it at once; a tap opens it until Esc, a tap outside or a second tap,
+  the focus a tap gives the word being that same tap on a touch screen, never a first one. An Esc
+  used inside the prep never also closes it.
+  It never takes the focus, and nothing moves when it opens. Numbers in what to say are bold. At
+  the foot of the screen, flush with it as the prep scrolls, a row of lifelines (Moment, Again?,
+  Don't know, and Pay, Notice and Based where the notes hold them), wrapping to a second row on
+  a phone, never scrolling one past the edge: a tap says one line over the row itself, labelled
+  "Only for you", never above it over the answers; it fades after a while, and a tap on it or
+  Esc closes it at once. A coding part with steps says first what to say, then the problem as
+  they set it and its answer, then its cockpit, all in view: what to ask before typing, the
+  steps as a short checklist (a step's name and its line in one run of words, the next one
+  marked, ticks kept only while it is open), what to say when stuck, the edge cases to name,
+  handy code with Copy, and what to say you would do with more time; its other questions come
+  after. Practice opens only from Practise 3 questions: each
+  answer waits behind one "Show the answer" in place of both its ways, to be said first and
+  then checked (the UX review, 2026-11-10, U-4), for that opening only, so the prep read on the
+  morning of the interview shows every answer. Every id in it carries the interview's, and its
+  listeners are on its own root. Two of the page's rules give way here to the call-prep page:
+  labels are small capitals, and an answer is drawn larger than the words around it, to be read
+  at a glance mid-call. The words, the order and the timing are the engine's
+  (`interview_live`). (live prep tests)
 - Many of one small thing are one checklist card, a row an item: each row has its own next
   step and Done beside its trash, the trash keeping the rest (They replied, Tomorrow, Next week,
   the person's choices), and the card's own actions keep to the card's anatomy above.
@@ -255,7 +318,9 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   button sat 650px from its name), the buttons one column; the row spans the card, its trash at
   the card's edge (rows stopping short left the trash a column in mid-card, the screen review,
   2026-11-11). On a phone the name is one line and where they work the muted line under it,
-  beside the row's button. (layout 8, one-card tests, room test)
+  beside the row's button. A row's button and its trash keep one line at any width, the words
+  beside them giving way (at a tablet's width the trash fell under its button, 2026-11-11).
+  (layout 8, one-card tests, room test, overlap test: alone)
 - One "?" a card at most, after the last word of its line, and no more than three on a first
   screen. (design test, budget test)
 
@@ -326,15 +391,22 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   Fix it button. Tried twice and still failing, it says so, with the pencil to change it. A
   fact only the person knows is asked through the one rare question. Why: where there is
   clearly a recommended option, the app does it.
-- A first note written before their profile was read has no Copy: one line under it says why
-  and when, in the engine's words for where reading stands where the page is open
-  (`linkedin.reading.hold`): "Claude reads it next time this page is open in the Claude app on
-  your computer" on a phone or the web, "Waiting its turn", then "Reading their profile…" with
-  the spinner in the app. Never a second line or an alert saying it again. "Paste <name>'s
-  profile" is the soft pill beside it where the page cannot read now, its gauge one note's
-  rewrite (`app_alerts.paste_profile`), never a networking run's. Why: the line and an alert
-  said the same twice, and the paste read as "a lot of your allowance" (the maintainer,
-  2026-11-07). (waiting-note tests)
+- A draft's facts are one quiet line under it, in one tone, each in a few words from the
+  engine: its count ("290/300", `count.short`), why it waits for their profile ("Waiting for
+  their profile", `linkedin.reading.hold_short`, for where reading stands where the page is
+  open: "Their profile is read next", "Reading their profile…" with the spinner in the app) and
+  "Location not on record". What each means, in a sentence, is behind the line's one "?"
+  (`linkedin.reading.hold`: "Claude reads it on your computer by itself, then rewrites this
+  note", or "next time this page is open in the Claude app on your computer" on a phone or the
+  web). Never a line a fact, and never an alert saying it again. A note held back on purpose
+  (`hold_why`: people at the employer already wait, a hold on their record, Claude's own
+  decision) keeps its reason on a line of its own, with its one way on. A first note waiting
+  for its profile has no Copy; "Paste <name>'s profile" is the soft pill beside it where the
+  page cannot read now, its gauge one note's rewrite (`app_alerts.paste_profile`), never a
+  networking run's. Why: the line and an alert said the same twice, the paste read as "a lot of
+  your allowance" (the maintainer, 2026-11-07), and five lines of different weights under one
+  note did not read as one card (2026-11-09: "any better way to display"). (waiting-note and
+  calm-card tests)
 - Someone on hold (the engine's `on_hold`: a hold on their record, or Claude's own decision
   on the draft to them) is never in the list of people to act on. Everyone on hold is one
   group at the foot of the list, folded, titled with its count and the reason where they
@@ -444,7 +516,9 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   rare has no More, and anything nobody uses goes. (the maintainer, 2026-11-05: "shouldn't More
   be for genuine additional features, not just burying EVERYTHING under there"; action-row test)
 - More's toggle stays in its row beside the card's other pills, open or shut, and its panel
-  opens under the row, on every card. Its buttons are one row of pills that wraps only at the
+  opens under the row, on every card. Where the row is too wide for its line, the pill before
+  More goes down to the next line with it, never More alone (`moreFit`; under "Practise 3
+  questions" and "Read your prep" on a phone, the screen review, 2026-11-11). Its buttons are one row of pills that wraps only at the
   panel's width, never a line a kind; a note or a link in a sentence follows them. Why: opened
   inside the row it took the whole width and dropped below "I sent it", and a row a kind left
   one button alone on a line (the maintainer, 2026-11-05). (More test)
@@ -462,9 +536,12 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   "Earlier (N)" opening the rest in place in a box that scrolls inside itself; a long answer
   is clipped with Show all, a day-old one to its first line; a hidden or folded exchange
   leaves "Claude answered 5 Nov · Show". The box keeps its own hairline, so it stays apart
-  from a hovered card. A change asked with the pencil is one block under the draft: "You
-  asked" and the words, two lines with Show all, then its state and Stop Claude; "New
-  version" only once the new words are on the card. Why: everything opening the Chat clogged it with tasks, and an answer
+  from a hovered card. A change asked with the pencil is one soft grey block under the draft:
+  "You asked" and the words, two lines with Show all, then its state with Stop Claude beside
+  its words, never at the card's far edge; "New version" only once the new words are on the
+  card. Words in one note's box about every note waiting for a profile, or naming the others,
+  are done for them all (`tweak.about_others`: each put on the page's reading list), this note
+  is left as it was, and the block says so at once (2026-11-09). Why: everything opening the Chat clogged it with tasks, and an answer
   belongs where its question was asked (the maintainer, 2026-11-05: "it opens a text box UNDER
   THAT PARTICULAR THING IM QUERYING ... and then the response shows underneath"; More test)
 - The same box serves an ask that belongs to a place rather than a card (`PLACES`): Paste a
@@ -489,7 +566,9 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   minutes). (the maintainer,
   2026-11-05: the gauge "is meant to deter someone from spending tokens unnecessarily")
 - Text on a pill reads at 4.5:1 and a soft pill's edge at 3:1 against its card, in both looks;
-  every control shows its focus ring. (colour tests, layout 14)
+  every control shows its focus ring. Words on the soft accent (an answer's box, your own
+  message in a chat) are in the ink: the muted grey is 3.56:1 there in the dark (2026-11-11).
+  Every word on every screen is checked in both looks (overlap test: faint). (colour tests, layout 14)
 - On a phone everything is drawn at the page's own size with a full-size tap area (44px), and
   hover styles apply only on devices that hover, so nothing needs two taps. A phone's density
   comes from padding, never from shrinking type: a card's edge 12px, a row of pills 8px apart
@@ -498,6 +577,12 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   words 11.2px in grey (the review, 2026-11-10); "1 job posting per screen" (the maintainer,
   2026-10-29) is answered by the padding. (room test, target probe) A switch or a checkbox is reached
   through its whole row, its label. (target probe, layout 14)
+- On a computer every control is at least 24px each way where it is reached (WCAG 2.2, 2.5.8),
+  at any of the page's sizes: a small one keeps its drawn look and reaches the rest through its
+  `::after`; a row that is a link, and a fold's heading, are that tall; a setting's pill is its
+  label's target, the whole pill. A text link inside a sentence keeps its line, as WCAG lets
+  it. Why: the "?" was 20px, a tip's Got it 19px, a pencil 22px, "Show all" 13px and a
+  setting's words 18px of its 36px pill (the screen review, 2026-11-11). (overlap test: small)
 - Three sizes: Smaller, Standard (the default), Larger, Smaller and Larger each drawn in the
   size it sets, the control keeping its height and targets. On a phone Standard is 100%,
   Smaller the old 85% and Larger 115%. (the maintainer, 4.12; settings
@@ -523,7 +608,10 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
 - Running work turns a small spinner and sweeps its bar; waiting work breathes; an update is a
   moving line under the header. Reduced motion stills all of it. (motion test)
 - Work says where it stands in words: running, Next, Waiting its turn, Not sent yet, Waking Claude,
-  Sent, No answer yet, Waiting for Claude (with when it was asked), in the same chat. "Claude
+  Sent, No answer yet, Waiting for Claude (with when it was asked), in the same chat. Work
+  sent to a chat that is up says "Starting in a moment" for half a minute at most; not taken by
+  then, it is "Waiting for Claude, asked at 10:42" with no clock running ("Changing it next ·
+  starting in a moment · 1m 53s", the maintainer, 2026-11-09). "Claude
   is on it" only for work Claude has begun; a step's clock only from a few seconds in, and
   none where the work counts its own progress. The top pill names the one thing running.
   Work waiting its turn behind the big jobs stays "Waiting its turn" however long it waits ("In line" left people asking what it meant, the maintainer, 2026-11-06), and drafts
@@ -623,3 +711,13 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
 
 Run the browser tests, then look at the screen you changed on a phone and on a laptop, in
 light and dark. A rule here that a change needs to break is changed here first, with its test.
+No words are drawn over other words or over a button, on any screen or view, at a phone's, a
+tablet's or a laptop's width: the harness measures every line and every drawn control, and an
+overlap meant to be there is named in the test with why (overlap test, on the sample and on its
+extremes: two zones, long names). Why: a two-zone time ran over a row's words for a release and
+only a person saw it (2026-11-11). The same run reads every screen and view, Settings with its
+rows open, Claude's work, an application's page and the live prep, at 390, 768, 1280 and 1600
+wide in both looks, for words crushed or broken, words cut off with nothing to say so, a dot
+starting or ending a line, a control under 24px on a computer, More or a row's trash alone on
+its line, words too faint, a chart's numbers piled up and a day written 2026-10-20; an
+exception is named in the test with why (`DRAWN_ALLOW`).

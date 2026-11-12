@@ -151,6 +151,67 @@ def test_the_chats_own_calls_unsubscribe_before_the_merge(chat, capsys):
         out.index("merge_pull_request"), out
 
 
+# The maintainer's copy, 2026-11-11: the page helper's agents opened a save's pull request and
+# the chat was subscribed on every landing (subscription.created), CLAUDE.md's "never subscribe
+# to it" notwithstanding: a cloud chat's own instructions say to subscribe to a pull request it
+# opens, and an agent the page's chat runs may never see CLAUDE.md. The rule is printed in the
+# step that opens it, with the unsubscribe once it is merged, and goes with every job's steps.
+
+NEVER = "never call subscribe_pr_activity for it, whatever this chat's own instructions say"
+AFTER = "unsubscribe_pr_activity for it at once, as soon as it is merged"
+
+
+def test_the_step_that_opens_the_pull_request_says_never_to_subscribe(chat, capsys):
+    (chat / "profile" / "notes.md").write_text("three\n", encoding="utf-8")
+    assert land.main(["--message", "Notes"], root=str(chat), check=GREEN,
+                     sleep=lambda s: None) == 0
+    lines = capsys.readouterr().out.splitlines()
+    opens = [ln for ln in lines if "create_pull_request" in ln]
+    assert len(opens) == 1 and NEVER in opens[0] and AFTER in opens[0], lines
+    # Once merged, the unsubscribe again, before the branch moves on.
+    merge = next(i for i, ln in enumerate(lines) if "merge_pull_request" in ln)
+    again = [i for i, ln in enumerate(lines) if i > merge and "unsubscribe_pr_activity" in ln]
+    after = next(i for i, ln in enumerate(lines) if "--after-merge" in ln)
+    assert again and again[0] < after and "as soon as it is merged" in lines[again[0]], lines
+    # Without GitHub's tools the pull request is opened by hand, and the rule goes with it.
+    rest = next(ln for ln in lines if "No GitHub tools in this chat" in ln)
+    assert NEVER in rest and "2b" in rest, rest
+
+
+def test_a_landing_that_merged_its_own_pull_request_says_never_to_subscribe(chat, capsys):
+    def finish(r, ready):
+        git(r, "push", "-q", "origin", "HEAD:refs/heads/master")      # GitHub's merge
+        return True, "8"
+    (chat / "profile" / "notes.md").write_text("four\n", encoding="utf-8")
+    assert land.main(["--message", "Notes"], root=str(chat), check=GREEN,
+                     sleep=lambda s: None, finish=finish) == 0
+    out = capsys.readouterr().out
+    line = next(ln for ln in out.splitlines() if "unsubscribe_pr_activity" in ln)
+    assert "pullNumber 8" in line and "it is merged" in line and NEVER in line, out
+
+
+@pytest.mark.parametrize("sessions", [True, False], ids=["a job's chat", "a background agent"])
+def test_a_job_that_lands_its_own_work_is_told_never_to_subscribe(sessions, monkeypatch):
+    """A job's chat and the page helper's background agent land with land.py and make the
+    calls it prints: their own steps carry the rule beside that step."""
+    sys.path.insert(0, os.path.join(ROOT, "tests"))
+    import app
+    import app_setup
+    import job_prompt
+    import page_db
+    monkeypatch.setattr(app_setup, "origin", lambda: ("example-owner", "example-copy"))
+    monkeypatch.setattr(app_setup, "page_record",
+                        lambda: {"url": "https://claude.ai/code/artifact/example-page"})
+    chosen = {"work": "prep~1", "kind": "prep", "title": "Interview prep: an invented employer",
+              "heavy": True, "stages": page_db.progress("prep")["stages"]}
+    got = app.where_it_runs(chosen, HELPER, "cloud", no_sessions=not sessions)
+    prompt = (got["create_session"] if sessions else got["agent"])["prompt"]
+    said = " ".join(job_prompt.followed(prompt).split())
+    at = said.index("python3 tools/land.py in the foreground")
+    step = said[at:said.index("tools/app.py view", at) if sessions else len(said)]
+    assert NEVER in step and AFTER in step, step
+
+
 def test_a_github_event_in_a_persons_chat_is_answered_with_nothing_read(monkeypatch, tmp_path):
     monkeypatch.setattr(learned, "_path", lambda: str(tmp_path / "pending.json"))
     monkeypatch.setattr(learned.person, "in_example", lambda p: False)

@@ -63,8 +63,10 @@ def test_lines_a_tool_prints_for_claude_say_so():
 def test_the_update_lines_a_person_hears_name_no_tool_and_no_maintainer_news():
     with open(os.path.join(ROOT, "CHANGELOG.md"), encoding="utf-8") as fh:
         text = fh.read()
-    start = text.index("## [Unreleased]")
-    end = text.index("\n## [", text.index("\n## [", start + 1) + 1)  # Unreleased and the release before
+    # The first two sections: [Unreleased] and the release before, or, once a version is cut,
+    # an empty [Unreleased] and that version.
+    start = text.index("\n## [")
+    end = text.index("\n## [", text.index("\n## [", start + 1) + 1)
     for head in sync_app.headlines(text[start:end].splitlines(), maintainer=False):
         assert not head.startswith("`"), head
         assert "maintainer" not in head.lower(), head

@@ -85,16 +85,24 @@ class Store {
     if (op === "update") {
       const cur = this.docs.get(a.path);
       if (!cur) return {error: "invalid_argument"};
-      return {changes: this.change(a.path, merge(cur.data, a.data))};
+      // A document is at most 256 KiB, merged (db.d.ts).
+      const next = merge(cur.data, a.data);
+      if (Buffer.byteLength(JSON.stringify(next)) > 262144) return {error: "invalid_argument"};
+      return {changes: this.change(a.path, next)};
     }
     if (op === "delete") return {changes: this.change(a.path, null)};
     if (op === "acquire") {
+      // db.d.ts acquire: busy says when the lease in force ends, never who holds it; granted, the
+      // lease's `data` is merged into the document and the result is its version then.
       const t = Date.now();
       const l = this.leases.get(a.path);
       if (l && l.until > t && l.holder !== a.holder) return {acquired: false, expiresAt: new Date(l.until).toISOString()};
-      this.leases.set(a.path, {holder: a.holder, until: t + (a.ttlMs || 30000)});
+      const until = t + (a.ttlMs || 30000);
+      this.leases.set(a.path, {holder: a.holder, until});
+      let changes;
+      if (a.data) { const cur = this.docs.get(a.path); changes = this.change(a.path, cur ? merge(cur.data, a.data) : clone(a.data)); }
       const cur = this.docs.get(a.path);
-      return {acquired: true, version: cur ? cur.version : 0, holder: a.holder};
+      return {acquired: true, version: cur ? cur.version : 0, holder: a.holder, expiresAt: new Date(until).toISOString(), changes};
     }
     return {error: "invalid_argument"};
   }
@@ -114,6 +122,12 @@ class Store {
 
 // ---------------------------------------------------------------- opening a page
 let browser = null;
+// Firefox with a mouse, as a person's Firefox on a computer has and Chrome's and Safari's
+// engines say they have here: Playwright 1.56's Firefox without a screen says it has no
+// pointer at all ("pointer: none", "hover: none"), which no screen a person reads on has, so a
+// test of what a mouse does could not run there (2026-11-12). Fine and hovering (2 and 4); a
+// context with touch still says touch, which Playwright sets per context over these.
+const FIREFOX_MOUSE = {"ui.primaryPointerCapabilities": 6, "ui.allPointerCapabilities": 6};
 // Where a box is drawn on the screen, in every engine: Safari's (Playwright 1.56's WebKit)
 // measures inside the zoomed body before the zoom but takes off the scroll as drawn, so a box
 // is put back where it is drawn by adding the scroll, zooming, and taking it off again. With no
@@ -351,6 +365,10 @@ function a11yProbe() {
     const st = getComputedStyle(el);
     const fg = rgba(st.color);
     if (!fg) continue;
+    // Words in no colour at all are not drawn, as the drawing probe reads them (a dot kept out
+    // of sight at a line's end, app.css .sep-end): no contrast to have. In Windows' type a dot
+    // on To do ended its line and was read at 1.00:1 (CI, 2026-11-11).
+    if (fg[3] === 0) continue;
     const bg = bgOf(el);
     const c = blend(fg, bg, fg[3] * opacityOf(el));
     const l1 = lum(c); const l2 = lum(bg);
@@ -730,6 +748,404 @@ function layoutMeasure() {
     controls, primary, qPrimary, cards, dupNames: [...new Set(dupNames)], dupItems: [...new Set(dupItems)],
     pairs: [...pairs], pairWhere, weights: [...weights], tones: [...tones], empties, overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth};
 }
+// Words drawn over words, or over a button: every line of visible text and every visible
+// control on the page, as drawn and cut by whatever clips it, and each pair that intersects.
+// A two-zone time on Coming up ran under the title column, over the row's line of facts and
+// into its pill, on a laptop in dark (2026-11-11), and no check saw it: `big` finds only what
+// spills past the width. What floats by design (the tab bar, the Chat button, a toast) is
+// its own layer, laid over the page as it scrolls: its parts are checked against each other,
+// never against the page under them. `allow`: selectors for an overlap meant to be there,
+// each named with why where the test passes it.
+function overlapProbe(allow) {
+  allow = allow || [];
+  // Read at the top of the page, in the same moment: a screen that scrolls itself (the Chat
+  // opening at its end) between a scroll and the read slid its words under the header, which
+  // stays put (Firefox, 2026-11-11). That the Chat opens with its words in sight is its own test.
+  window.scrollTo(0, 0);
+  const SKIP = "script, style, template, noscript, select, option, textarea, svg, .sr-only, dialog:not([open])";
+  const CTL = "button, a[href], a.btn, summary, input:not([type=hidden]), select, textarea, [role=button], [role=switch], [role=tab], [role=link]";
+  const shown = (e) => e.checkVisibility({visibilityProperty: true, opacityProperty: true, contentVisibilityAuto: true}) && e.getClientRects().length > 0;
+  const clipCache = new Map();
+  // The box an element's contents can be seen in: every ancestor that clips what overflows it
+  // (a row that scrolls sideways, a line cut with an ellipsis, a clamped title).
+  const clipOf = (el) => {
+    if (clipCache.has(el)) return clipCache.get(el);
+    let r = {l: -1e9, t: -1e9, r: 1e9, b: 1e9};
+    const cs = getComputedStyle(el);
+    if (cs.position !== "fixed" && el.parentElement && el.parentElement !== document.documentElement) r = Object.assign({}, clipOf(el.parentElement));
+    if (cs.overflowX !== "visible" || cs.overflowY !== "visible" || /paint|strict|content/.test(cs.contain)) {
+      const b = el.getBoundingClientRect();
+      if (cs.overflowX !== "visible") { r.l = Math.max(r.l, b.left); r.r = Math.min(r.r, b.right); }
+      if (cs.overflowY !== "visible") { r.t = Math.max(r.t, b.top); r.b = Math.min(r.b, b.bottom); }
+    }
+    clipCache.set(el, r);
+    return r;
+  };
+  const cut = (b, c) => ({l: Math.max(b.left, c.l), t: Math.max(b.top, c.t), r: Math.min(b.right, c.r), b: Math.min(b.bottom, c.b)});
+  // The layer an element is drawn in: the page, or the nearest thing fixed over it.
+  const layerOf = (el) => { for (let a = el; a; a = a.parentElement) if (getComputedStyle(a).position === "fixed") return a; return null; };
+  const name = (e) => (e.tagName.toLowerCase() + (e.id ? "#" + e.id : "") + ([...e.classList].length ? "." + [...e.classList].join(".") : "")).slice(0, 60);
+  const words = (e, n) => (e.nodeType === 3 ? e.textContent : (e.getAttribute("aria-label") || e.textContent || e.value || "")).replace(/\s+/g, " ").trim().slice(0, n || 40);
+  // A selector lets an element pass whole; a pair [a, b] lets only those two meet.
+  const allowed = (e) => allow.some((s) => typeof s === "string" && e.closest(s));
+  // {sel, drawn}: a control drawn smaller than its target (a circle in a 44px tap area) is
+  // measured as the square it is drawn in, at its centre.
+  const drawnOf = (e) => {
+    const d = allow.find((s) => s && typeof s === "object" && !Array.isArray(s) && e.matches(s.sel));
+    if (!d) return null;
+    const b = e.getBoundingClientRect(), z = Math.min(d.drawn, b.width, b.height) / 2, x = (b.left + b.right) / 2, y = (b.top + b.bottom) / 2;
+    return {left: x - z, right: x + z, top: y - z, bottom: y + z};
+  };
+  const pairOk = (x, y) => allow.some((s) => Array.isArray(s) && ((x.closest(s[0]) && y.closest(s[1])) || (y.closest(s[0]) && x.closest(s[1]))));
+  const boxes = [];
+  const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  const range = document.createRange();
+  for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+    const el = n.parentElement;
+    if (!el || !n.textContent.trim() || el.closest(SKIP) || !shown(el) || allowed(el)) continue;
+    range.selectNodeContents(n);
+    const c = clipOf(el), layer = layerOf(el);
+    for (const b of range.getClientRects()) {
+      const r = cut(b, c);
+      if (r.r - r.l > 1 && r.b - r.t > 1) boxes.push({kind: "text", el, node: n, layer, r});
+    }
+  }
+  // A control as drawn: its fill, its edge or its shadow, a line at a time for a link that
+  // wraps. One with none of them (a link in a sentence, a fold's heading row, a name) is its
+  // words alone, checked above: its reach for a finger is not drawn over anything.
+  const clear = (c) => !c || c === "transparent" || /rgba\(.*,\s*0\)$/.test(c);
+  const painted = (cs) => !clear(cs.backgroundColor) || cs.backgroundImage !== "none" || cs.boxShadow !== "none"
+    || ["Top", "Right", "Bottom", "Left"].some((s) => parseFloat(cs["border" + s + "Width"]) > 0 && cs["border" + s + "Style"] !== "none" && !clear(cs["border" + s + "Color"]));
+  for (const el of document.body.querySelectorAll(CTL)) {
+    if (el.closest(SKIP) || !shown(el) || allowed(el) || !painted(getComputedStyle(el))) continue;
+    const c = el.parentElement ? clipOf(el.parentElement) : {l: -1e9, t: -1e9, r: 1e9, b: 1e9}, layer = layerOf(el);
+    const d = drawnOf(el);
+    for (const b of d ? [d] : el.getClientRects()) {
+      const r = cut(b, c);
+      if (r.r - r.l > 1 && r.b - r.t > 1) boxes.push({kind: "control", el, layer, r});
+    }
+  }
+  boxes.sort((x, y) => x.r.t - y.r.t);
+  const found = [], seen = new Set();
+  for (let i = 0; i < boxes.length; i++) {
+    const a = boxes[i];
+    for (let j = i + 1; j < boxes.length && boxes[j].r.t < a.r.b; j++) {
+      const b = boxes[j];
+      if (a.layer !== b.layer || a.node && a.node === b.node) continue;
+      // A control's own words, and a control inside another (a switch in its row's label).
+      if (a.el === b.el || (a.kind === "control" && a.el.contains(b.el)) || (b.kind === "control" && b.el.contains(a.el))) continue;
+      const w = Math.min(a.r.r, b.r.r) - Math.max(a.r.l, b.r.l), h = Math.min(a.r.b, b.r.b) - Math.max(a.r.t, b.r.t);
+      // Two lines of one paragraph whose letters' boxes meet under a tight line height are not
+      // one drawn over the other: a quarter of the smaller line, or 2px, is let pass.
+      const lim = a.kind === "text" && b.kind === "text" ? Math.max(2, 0.25 * Math.min(a.r.b - a.r.t, b.r.b - b.r.t)) : 2;
+      if (w <= 1 || h <= lim || pairOk(a.el, b.el)) continue;
+      const k = name(a.el) + "|" + words(a.node || a.el) + "|" + name(b.el) + "|" + words(b.node || b.el);
+      if (seen.has(k)) continue;
+      seen.add(k);
+      found.push({a: a.kind + " " + name(a.el) + " \"" + words(a.node || a.el) + "\"", b: b.kind + " " + name(b.el) + " \"" + words(b.node || b.el) + "\"",
+        w: Math.round(w), h: Math.round(h), at: [Math.round(Math.max(a.r.l, b.r.l)), Math.round(Math.max(a.r.t, b.r.t))]});
+      if (found.length >= 25) return found;
+    }
+  }
+  return found;
+}
+// What else a screen can draw wrong, short of words over words, each named with where it is:
+//   crushed   words squeezed into a box narrower than three letters, a letter or two a line,
+//             or a word broken between its letters (a work card's "38 messages ready to send."
+//             stood a letter a line in a column the card's buttons left it, 2026-11-11);
+//   clipped   words cut off by a box they do not fit, with no ellipsis, no fade and nothing
+//             folding them (Your rules drawn 2250px wide in a 356px card; the Brief's "Next
+//             three" cut through its third step);
+//   separator a separator dot that starts a line or ends one ("· Applied 3 Nov" with nothing
+//             before it, a row's "· role" wrapped under its name);
+//   small     a control smaller than 24px each way where nothing is touched (WCAG 2.2, 2.5.8),
+//             its reach counted; a text link inside a sentence is let pass, as WCAG lets it;
+//   alone     More, or a row's bin, alone on a line of its own where its row has other pills
+//             (DESIGN.md: More stays in its row beside the card's other pills; a checklist
+//             row's action sits beside its bin);
+//   faint     words below 4.5:1 against what they are drawn on (3:1 at a large size);
+//   piled     a chart's numbers drawn over one another (a week of 400 drew 42 lines on its axis);
+//   date      a day written as a machine writes it, 2026-10-20, where the page says days in words.
+// `allow` names exceptions by kind, {kind: [selector, ...]}, each with why where it is passed.
+function drawnProbe(allow) {
+  allow = allow || {};
+  window.scrollTo(0, 0);
+  const out = [], seen = new Set();
+  const SKIP = "script, style, template, noscript, select, option, textarea, input, svg, .sr-only, dialog:not([open])";
+  const touch = matchMedia("(max-width: 759px), (pointer: coarse)").matches;
+  const csOf = new Map();
+  const cs = (e, p) => { if (p) return getComputedStyle(e, p); if (!csOf.has(e)) csOf.set(e, getComputedStyle(e)); return csOf.get(e); };
+  // Hidden on purpose: a screen reader's words (clipped to a pixel), a closed fold.
+  const hidCache = new Map();
+  const hiddenUp = (el) => {
+    if (hidCache.has(el)) return hidCache.get(el);
+    let h = false;
+    const s = cs(el);
+    if ((s.clip && s.clip !== "auto" && /rect\(0(px)?,? 0(px)?/.test(s.clip)) || /inset\(50%/.test(s.clipPath || "")) h = true;
+    else if (s.position === "absolute" && el.offsetWidth <= 1 && el.offsetHeight <= 1) h = true;
+    else if (el.parentElement && el.parentElement !== document.documentElement) {
+      const p = el.parentElement;
+      // Inside a closed <details> only its summary is shown.
+      if (p.tagName === "DETAILS" && !p.open && !(el.tagName === "SUMMARY" && el === p.querySelector(":scope > summary"))) h = true;
+      else h = hiddenUp(p);
+    }
+    hidCache.set(el, h);
+    return h;
+  };
+  const shown = (e) => e.checkVisibility({visibilityProperty: true, opacityProperty: true, contentVisibilityAuto: true}) && e.getClientRects().length > 0 && !hiddenUp(e);
+  const name = (e) => (e.tagName.toLowerCase() + (e.id ? "#" + e.id : "") + ([...e.classList].length ? "." + [...e.classList].join(".") : "")).slice(0, 60);
+  const path = (e) => { const p = []; for (let a = e; a && a !== document.body && p.length < 3; a = a.parentElement) p.unshift(name(a)); return p.join(" > "); };
+  const words = (e) => (e.nodeType === 3 ? e.textContent : (e.getAttribute("aria-label") || e.textContent || "")).replace(/\s+/g, " ").trim().slice(0, 50);
+  const allowed = (kind, e) => (allow[kind] || []).some((s) => e.closest(s));
+  const say = (kind, e, detail, text) => {
+    if (allowed(kind, e)) return;
+    const k = kind + "|" + path(e) + "|" + detail.replace(/\d+/g, "#");
+    if (seen.has(k)) return;
+    seen.add(k);
+    out.push({kind, el: path(e), words: text !== undefined ? text : words(e), detail});
+  };
+  const lineRects = (n) => { const r = document.createRange(); r.selectNodeContents(n); return [...r.getClientRects()].filter((q) => q.width > 0.5 && q.height > 0.5); };
+  const charRect = (n, i) => { const r = document.createRange(); r.setStart(n, i); r.setEnd(n, i + 1); return [...r.getClientRects()].find((q) => q.width > 0.2) || null; };
+  // The box an element's words can be seen in, and which ancestor cut each side.
+  const clipCache = new Map();
+  const clipOf = (el) => {
+    if (clipCache.has(el)) return clipCache.get(el);
+    let r = {l: -1e9, t: -1e9, r: 1e9, b: 1e9, by: {}};
+    const s = cs(el);
+    if (s.position !== "fixed" && el.parentElement && el.parentElement !== document.documentElement) { const up = clipOf(el.parentElement); r = Object.assign({}, up, {by: Object.assign({}, up.by)}); }
+    if (s.overflowX !== "visible" || s.overflowY !== "visible") {
+      const b = el.getBoundingClientRect();
+      if (s.overflowX !== "visible") { if (b.left > r.l) { r.l = b.left; r.by.l = el; } if (b.right < r.r) { r.r = b.right; r.by.r = el; } }
+      if (s.overflowY !== "visible") { if (b.top > r.t) { r.t = b.top; r.by.t = el; } if (b.bottom < r.b) { r.b = b.bottom; r.by.b = el; } }
+    }
+    clipCache.set(el, r);
+    return r;
+  };
+  // A box that scrolls lets its words be scrolled to; one that fades its edge, or cuts its
+  // line with an ellipsis or a line clamp, says there is more.
+  const says = (cut, side, text) => {
+    const s = cs(cut);
+    const ax = side === "l" || side === "r" ? "overflowX" : "overflowY";
+    if (s[ax] === "auto" || s[ax] === "scroll") return true;
+    for (let a = text; a; a = a.parentElement) {
+      const q = cs(a);
+      if ((q.maskImage && q.maskImage !== "none") || (q.webkitMaskImage && q.webkitMaskImage !== "none")) return true;
+      if (a === cut) break;
+    }
+    if (ax === "overflowX" && s.textOverflow === "ellipsis") return true;
+    if (ax === "overflowY" && s.webkitLineClamp && s.webkitLineClamp !== "none") return true;
+    return false;
+  };
+  // With a sheet open over the page, the sheet is what is read: the page under it is shut off.
+  const root = [...document.querySelectorAll("dialog[open]")].find((d) => d.matches(":modal")) || document.body;
+  const texts = [];
+  const walk = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+    const el = n.parentElement;
+    if (!el || !n.textContent.trim() || el.closest(SKIP) || !shown(el)) continue;
+    // Words in no colour at all are not drawn (a dot kept out of sight at a line's end).
+    if (/^(transparent|rgba\(.*,\s*0\))$/.test(cs(el).color)) continue;
+    texts.push({n, el, rects: lineRects(n)});
+  }
+  // (a) crushed, and words broken between letters.
+  const BREAK_OK = /[-\/._@:?&=,;)\u00ad\u200b\u2013\u2014\u00b7\u2026+#]/;
+  for (const {n, el, rects} of texts) {
+    const tops = [...new Set(rects.map((q) => Math.round(q.top)))];
+    if (tops.length < 2) continue;
+    const t = n.textContent.trim();
+    const fs = parseFloat(cs(el).fontSize) || 16;
+    const widest = Math.max(...rects.map((q) => q.width));
+    if (t.length > 3 && widest < 1.8 * fs) { say("crushed", el, tops.length + " lines, the widest " + Math.round(widest) + "px"); continue; }
+    const re = /[\p{L}\p{N}][^\s\u00a0\u200b]*[\p{L}\p{N}]/gu;
+    for (let m = re.exec(n.textContent); m; m = re.exec(n.textContent)) {
+      const a = charRect(n, m.index), z = charRect(n, m.index + m[0].length - 1);
+      if (!a || !z || Math.abs(a.top - z.top) < a.height / 2) continue;
+      // Where it breaks: the first letter on a line below the first.
+      let at = -1;
+      for (let i = 1; i < m[0].length; i++) { const c = charRect(n, m.index + i); if (c && c.top - a.top > a.height / 2) { at = i; break; } }
+      // An address breaks only at its slashes and dots: "artifact/0000-4000" broken at a hyphen
+      // inside its last part read as two addresses (2026-11-11).
+      const ok = /^(https?:|www\.)|\/\//.test(m[0]) ? /[\/.?&=#]/ : BREAK_OK;
+      if (at > 0 && (ok.test(m[0][at - 1]) || ok.test(m[0][at]))) continue;
+      say("crushed", el, "\"" + m[0].slice(0, 40) + "\" broken after letter " + at, m[0].slice(0, 40));
+      break;
+    }
+  }
+  // A day written as the machine writes it ("Paused 2026-10-20 with ..." as an interview's
+  // title, 2026-11-11): every day on the page is said in words.
+  for (const {n, el} of texts) {
+    const m = /\b\d{4}-\d{2}-\d{2}\b/.exec(n.textContent);
+    if (m) say("date", el, "a day written " + m[0]);
+  }
+  // Numbers on a chart drawn over one another: a week of 400 messages put 42 lines on an axis
+  // 150px tall (2026-11-11).
+  const marks = [...root.querySelectorAll("svg text")].filter((t) => shown(t) && t.textContent.trim()).map((t) => ({t, r: t.getBoundingClientRect()}));
+  for (let i = 0; i < marks.length; i++) for (let j = i + 1; j < marks.length; j++) {
+    const a = marks[i], b = marks[j];
+    if (a.t.ownerSVGElement !== b.t.ownerSVGElement) continue;
+    const w = Math.min(a.r.right, b.r.right) - Math.max(a.r.left, b.r.left), h = Math.min(a.r.bottom, b.r.bottom) - Math.max(a.r.top, b.r.top);
+    if (w > 1 && h > 0.25 * Math.min(a.r.height, b.r.height)) say("piled", a.t.ownerSVGElement, "\"" + a.t.textContent + "\" and \"" + b.t.textContent + "\" drawn over each other", "");
+  }
+  // A day said in words is read whole: "Sun 20" at a line's end and "Sept" under it in a
+  // table's column (2026-11-11).
+  const DAY = /\b(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun) )?\d{1,2} (?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sept?|Oct|Nov|Dec)\b/g;
+  for (const {n, el, rects} of texts) {
+    if (new Set(rects.map((q) => Math.round(q.top))).size < 2) continue;
+    for (let m = DAY.exec(n.textContent); m; m = DAY.exec(n.textContent)) {
+      const a = charRect(n, m.index), z = charRect(n, m.index + m[0].length - 1);
+      if (a && z && z.top - a.top > a.height / 2) { say("crushed", el, "the day \"" + m[0] + "\" broken over two lines", m[0]); break; }
+    }
+    DAY.lastIndex = 0;
+  }
+  // (b) clipped.
+  for (const {el, rects} of texts) {
+    const c = clipOf(el);
+    for (const q of rects) {
+      const tolY = 2;
+      const sides = {l: c.l - q.left, r: q.right - c.r, t: c.t - q.top, b: q.bottom - c.b};
+      // Wholly out of sight is not cut: a fold, a list that gives way, a scroller's far end.
+      if (q.right <= c.l || q.left >= c.r || q.bottom <= c.t || q.top >= c.b) continue;
+      for (const side of ["l", "r", "t", "b"]) {
+        if (sides[side] <= (side === "l" || side === "r" ? 2 : tolY)) continue;
+        const cut = c.by[side];
+        if (!cut || says(cut, side, el)) continue;
+        say("clipped", el, "cut " + Math.round(sides[side]) + "px at its " + {l: "left", r: "right", t: "top", b: "foot"}[side] + " by " + name(cut));
+      }
+    }
+  }
+  // (c) a separator dot at the start or the end of a line. Its line is read across the box its
+  // words flow in: up through inline boxes and through a row of boxes laid side by side.
+  const lineBox = (el) => {
+    let e = el;
+    for (;;) {
+      const p = e.parentElement;
+      if (!p || p === document.body) return e;
+      const d = cs(e).display, pd = cs(p);
+      if (/^inline|contents/.test(d) || (/flex/.test(pd.display) && !/column/.test(pd.flexDirection))) { e = p; continue; }
+      return e;
+    }
+  };
+  const inkIn = new Map();
+  const ink = (box) => {
+    if (inkIn.has(box)) return inkIn.get(box);
+    const list = [];
+    for (const t of texts) if (box.contains(t.el)) for (const q of t.rects) list.push({q, el: t.el, n: t.n});
+    for (const e of box.querySelectorAll("button, a, summary, img, svg, .badge, .chip, .state-word")) if (shown(e)) for (const q of e.getClientRects()) if (q.width > 1 && q.height > 1) list.push({q, el: e});
+    inkIn.set(box, list);
+    return list;
+  };
+  const sameLine = (a, b) => Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 0.5 * Math.min(a.height, b.height);
+  const dotCheck = (el, D, own) => {
+    const box = lineBox(el);
+    const list = ink(box).filter((x) => x.n !== own && !(own && x.el === el && !x.n) && sameLine(x.q, D));
+    // The dot's own line of words: what of it lies before the dot, and after.
+    const left = list.some((x) => x.q.left < D.left - 1) || (own && lineRects(own).some((q) => sameLine(q, D) && q.left < D.left - 1));
+    const right = list.some((x) => x.q.right > D.right + 1) || (own && lineRects(own).some((q) => sameLine(q, D) && q.right > D.right + 1));
+    if (!left) say("separator", el, "a line starts with its separator dot");
+    else if (!right) say("separator", el, "a line ends with its separator dot");
+  };
+  for (const {n, el} of texts) {
+    const s = n.textContent;
+    for (let i = s.indexOf("·"); i >= 0; i = s.indexOf("·", i + 1)) {
+      const D = charRect(n, i);
+      if (D && clipOf(el).l <= D.left && D.right <= clipOf(el).r) dotCheck(el, D, n);
+    }
+  }
+  for (const el of root.querySelectorAll("*")) {
+    if (el.closest(SKIP)) continue;
+    for (const p of ["::before", "::after"]) {
+      const ct = cs(el, p).content;
+      // A dot held out of sight, keeping its width, is not drawn.
+      if (!ct || ct.indexOf("\u00b7") < 0 || cs(el, p).visibility === "hidden" || !shown(el)) continue;
+      const rs = lineRects(el);
+      if (!rs.length) continue;
+      const fs = parseFloat(cs(el).fontSize) || 16;
+      const R = p === "::before" ? rs[0] : rs[rs.length - 1];
+      const D = p === "::before" ? new DOMRect(R.left - 0.6 * fs, R.top, 0.6 * fs, R.height) : new DOMRect(R.right, R.top, 0.6 * fs, R.height);
+      dotCheck(el, D, null);
+    }
+  }
+  // (d) a control under 24px where nothing is touched.
+  if (!touch) {
+    const CTL = "button, a[href], summary, [role=button], [role=switch], [role=tab], label";
+    const painted = (s) => !/^(transparent|rgba\(.*,\s*0\))$/.test(s.backgroundColor) || s.backgroundImage !== "none"
+      || ["Top", "Right", "Bottom", "Left"].some((k) => parseFloat(s["border" + k + "Width"]) > 0 && s["border" + k + "Style"] !== "none");
+    // A target's reach drawn by its ::before or ::after, laid in the box it is placed in (the
+    // control itself, or the pill around a setting's label), in the screen's px.
+    const z = parseFloat(document.body.style.zoom) || 1;
+    const reach = (el, p) => {
+      const a = cs(el, p);
+      if (!a.content || a.content === "none" || a.position !== "absolute") return null;
+      let cb = el;
+      while (cb && cb !== document.body && cs(cb).position === "static" && cs(cb).transform === "none") cb = cb.parentElement;
+      if (!cb) return null;
+      const b = cb.getBoundingClientRect(), v = (x) => (/px$/.test(x) ? parseFloat(x) * z : null);
+      const L = v(a.left), T = v(a.top), R = v(a.right), B = v(a.bottom);
+      if (L === null || T === null || R === null || B === null) return null;
+      return {left: b.left + L, top: b.top + T, right: b.right - R, bottom: b.bottom - B};
+    };
+    for (const el of root.querySelectorAll(CTL)) {
+      if (el.closest(SKIP) || !shown(el)) continue;
+      // A label is a target only for the box it ticks; a label holding a pill is measured as
+      // that pill's target.
+      if (el.tagName === "LABEL" && !el.querySelector("input[type=checkbox], input[type=radio]") && !(el.htmlFor && document.getElementById(el.htmlFor))) continue;
+      if (el.parentElement && el.parentElement.closest(CTL.replace(", label", ""))) continue;
+      const s = cs(el);
+      // A text link in a sentence keeps its line (WCAG 2.5.8, "Inline").
+      if (/^inline/.test(s.display) && !painted(s) && !el.querySelector("svg, img")) {
+        const blk = lineBox(el);
+        if ((blk.textContent || "").replace(/\s+/g, "").length > (el.textContent || "").replace(/\s+/g, "").length) continue;
+      }
+      const b = el.getBoundingClientRect();
+      const box = [reach(el, "::after"), reach(el, "::before")].filter(Boolean).reduce((u, q) => ({left: Math.min(u.left, q.left), top: Math.min(u.top, q.top), right: Math.max(u.right, q.right), bottom: Math.max(u.bottom, q.bottom)}), b);
+      let w = box.right - box.left, h = box.bottom - box.top;
+      // A box ticked through its label: the label and the box together.
+      if (el.tagName === "LABEL") { const i = el.querySelector("input") || document.getElementById(el.htmlFor); if (i && shown(i)) { const ib = i.getBoundingClientRect(); w = Math.max(w, ib.width); h = Math.max(h, ib.height, Math.max(b.bottom, ib.bottom) - Math.min(b.top, ib.top)); } }
+      if (w < 23.5 || h < 23.5) say("small", el, Math.round(w) + "x" + Math.round(h) + "px");
+    }
+  }
+  // (e) More, or a row's bin, alone on its line: each stays beside the row's other pills.
+  const ROWS = ".card-actions, .wc-actions, .g-acts, .suggest-acts, .g-row";
+  for (const c of root.querySelectorAll("details.more > summary.more-btn, :is(" + ROWS + ") > [data-bin]")) {
+    const own = c.matches("summary") ? c.parentElement : c, row = own.parentElement;
+    if (!row || c.closest(SKIP) || !shown(c)) continue;
+    const q = c.getBoundingClientRect();
+    const sibs = [...row.children].filter((k) => k !== own && !k.matches(".more-panel, .more-body") && shown(k) && k.getBoundingClientRect().width > 0);
+    if (!sibs.length) continue;
+    if (!sibs.some((k) => sameLine(k.getBoundingClientRect(), q))) say("alone", c, (c.matches("summary") ? "More" : "the bin") + " alone on its line beside " + sibs.length + " other" + (sibs.length > 1 ? "s" : ""));
+  }
+  // (f) faint words.
+  const rgba = (s) => { const m = /rgba?\(([^)]+)\)/.exec(s || ""); if (!m) return null; const p = m[1].split(/[ ,/]+/).filter(Boolean).map(Number); return [p[0], p[1], p[2], p.length > 3 ? p[3] : 1]; };
+  const lum = (c) => { const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]); };
+  const blend = (fg, bg, a) => [0, 1, 2].map((i) => fg[i] * a + bg[i] * (1 - a));
+  const bgOf = (el) => {
+    const layers = [];
+    for (let e = el; e; e = e.parentElement) {
+      const s = cs(e);
+      if (s.backgroundImage && s.backgroundImage !== "none") return null;
+      const c = rgba(s.backgroundColor);
+      if (c && c[3] > 0) { layers.push(c); if (c[3] >= 1) break; }
+    }
+    let bg = rgba(cs(document.documentElement).backgroundColor) || [255, 255, 255, 1];
+    if (bg[3] < 1) bg = [255, 255, 255, 1];
+    for (const c of layers.reverse()) bg = blend(c, bg, c[3]);
+    return bg;
+  };
+  const opacityOf = (el) => { let o = 1; for (let e = el; e; e = e.parentElement) o *= Number(cs(e).opacity); return o; };
+  const faintSeen = new Set();
+  for (const {el} of texts) {
+    if (faintSeen.has(el)) continue;
+    faintSeen.add(el);
+    if (el.closest("[disabled], :disabled, [aria-disabled=true]")) continue;
+    const s = cs(el), fg = rgba(s.color), bg = bgOf(el);
+    if (!fg || !bg) continue;
+    const c = blend(fg, bg, fg[3] * opacityOf(el));
+    const r = (Math.max(lum(c), lum(bg)) + 0.05) / (Math.min(lum(c), lum(bg)) + 0.05);
+    const size = parseFloat(s.fontSize), need = size >= 24 || (size >= 18.66 && Number(s.fontWeight) >= 700) ? 3 : 4.5;
+    if (r < need) say("faint", el, r.toFixed(2) + ":1 at " + Math.round(size) + "px (" + s.color + " on rgb(" + bg.map(Math.round).join(", ") + "))");
+  }
+  return out;
+}
 function frameMeasure() {
   const vis = (e) => !!e && e.checkVisibility({visibilityProperty: true, contentVisibilityAuto: true}) && e.getClientRects().length > 0;
   const top = document.getElementById("top");
@@ -778,17 +1194,86 @@ async function sheetCheck(page, kind, openIt) {
   }
   return m;
 }
+// A screen's overlaps and drawing, and each of its other views (Coming up's Interviews, Jobs'
+// Applied): every switch on the screen tried in turn, then put back as it was. `probe` reads
+// the screen as it stands under a name.
+async function viewsOf(page, id, probe) {
+  await probe(id);
+  const views = await page.$$eval("#main .segctl .seg-opt[aria-pressed=false]", (bs) => bs.map((b) => b.getAttribute("data-k")).filter(Boolean));
+  const was = await page.$$eval("#main .segctl .seg-opt[aria-pressed=true]", (bs) => bs.map((b) => b.getAttribute("data-k")).filter(Boolean));
+  for (const k of views) {
+    const b = page.locator('#main [data-k="' + k + '"]').first();
+    if (!(await b.count()) || !(await b.isVisible())) continue;
+    await b.click();
+    await turn(page, 4);
+    await probe(id + "/" + k);
+  }
+  for (const k of was) {
+    const b = page.locator('#main [data-k="' + k + '"]').first();
+    if (views.length && (await b.count()) && (await b.isVisible())) { await b.click(); await turn(page, 4); }
+  }
+}
+// The drawing probe on a page as it stands, after a few changes made to it (`spoil`): each
+// change is one defect of the kind the probe names, so each kind is shown to be seen.
+S.drawn_selftest = async (a) => {
+  const o = await open({html: a.html, viewport: a.viewport, clock: a.clock, hash: a.hash || "todo"});
+  await o.page.evaluate((code) => eval(code), a.spoil || "");
+  await turn(o.page, 2);
+  const r = {found: await o.page.evaluate(drawnProbe, a.allow || {}), errors: o.errors};
+  await o.ctx.close();
+  return r;
+};
+S.overlap_selftest = async (a) => {
+  const o = await open({html: a.html, viewport: a.viewport, clock: a.clock, hash: "interviews"});
+  await o.page.evaluate(() => {
+    const t = document.querySelector("#main .up-row .up-title");
+    const s = document.createElement("span");
+    s.textContent = "Drawn over the title";
+    s.style.cssText = "position: absolute; left: 0; top: 0;";
+    t.style.position = "relative";
+    t.appendChild(s);
+  });
+  const r = {found: await o.page.evaluate(overlapProbe, a.allow || []), errors: o.errors};
+  await o.ctx.close();
+  return r;
+};
 S.layout = async (a) => {
   // With the sheets measured, one search is running, so the Work pill is there to open.
   const seed = Object.assign(a.sheets ? {"work/search~1": runningDoc()} : {}, a.seed || {});
   const o = await open({html: a.html, viewport: a.viewport, scheme: a.scheme, fake: a.fake, seed, clock: a.clock || "2026-10-26T09:00:00Z", timezoneId: a.timezoneId});
   const {page} = o;
-  const out = {sections: {}, frames: {}, sheets: {}, big: {}};
+  const out = {sections: {}, frames: {}, sheets: {}, big: {}, overlaps: {}, drawn: {}};
+  const probe = async (key) => {
+    await page.evaluate(() => window.scrollTo(0, 0));
+    if (a.overlaps) out.overlaps[key] = await throughNav(page, () => page.evaluate(overlapProbe, a.allow || []));
+    if (a.drawn) out.drawn[key] = await throughNav(page, () => page.evaluate(drawnProbe, a.drawnAllow || {}));
+  };
   for (const id of SECTIONS) {
     await goto(page, id);
     await page.evaluate(() => window.scrollTo(0, 0));
     out.sections[id] = await page.evaluate(layoutMeasure);
     out.frames[id] = await page.evaluate(frameMeasure);
+    if (a.overlaps || a.drawn) await viewsOf(page, id, probe);
+  }
+  // What opens over a screen or inside it, each read as it stands open: {key, hash, eval (code
+  // run in the page), click (a selector, tapped where it shows), unless (a selector: nothing is
+  // done where it shows), optional (nothing to open is no fault)}. Each is closed again by going
+// to the next.
+  for (const st of a.opened || []) {
+    if (st.hash) await goto(page, st.hash);
+    await page.waitForFunction(() => !!document.querySelector("#main [data-card], #main section, #main .empty"), null, {timeout: 5000}).catch(() => {});
+    if (st.unless && (await page.locator(st.unless).first().isVisible().catch(() => false))) { await probe(st.key); continue; }
+    if (st.eval) { await evalThrough(page, st.eval); await turn(page, 4); }
+    if (st.click) {
+      const b = page.locator(st.click).first();
+      if (!(await b.count()) || !(await b.isVisible())) { if (!st.optional) out.drawn[st.key] = [{kind: "missing", el: st.click, words: "", detail: "nothing to open"}]; continue; }
+      await b.click();
+      await turn(page, 6);
+    }
+    if (st.wait) await page.waitForSelector(st.wait, {timeout: 5000}).catch(() => {});
+    await probe(st.key);
+    await page.keyboard.press("Escape").catch(() => {});
+    await turn(page, 3);
   }
   if (a.sheets) {
     for (const id of SECTIONS) {
@@ -877,6 +1362,11 @@ S.engine = async (a) => {
     // A box on the screen itself, not in a sheet (Contacts' "They replied", 2026-11-04).
     if (st.fillMain) for (const [label, value] of Object.entries(st.fillMain)) await page.locator("#main").getByLabel(label, {exact: false}).first().fill(value);
     if (st.then) { await page.getByRole("button", {name: st.then, exact: !!st.exact}).first().click(); await turn(page, 6); }
+    // The mouse moved onto a control and left there, as a person reading with a mouse does.
+    if (st.hover) { await page.locator(st.hover).first().hover(); await turn(page, 2); }
+    // A finger's tap on a screen with touch (`touch`): the touch, then the mouse's events and
+    // the click a phone makes of it, the focus they give included. A click is a mouse's alone.
+    if (st.finger) { await (st.within ? page.locator(st.within) : page).getByRole(st.role || "button", {name: st.finger, exact: !!st.exact}).first().tap(); await turn(page, 6); }
     // Taps one after another as fast as a person makes them: one turn between each, never a
     // wait for the one before (ten replies pasted in a row, 2026-11-04).
     for (const q of st.quick || []) {
@@ -2218,7 +2708,8 @@ S.talk = async (a) => {
   await page.getByRole("button", {name: "Send", exact: true}).click();
   await page.waitForTimeout(50);
   await turn(page, 12);
-  r.quick = await T(page, "#main .talk-msg .talk-text");
+  // With the state said under the question (issue #234).
+  r.quick = await T(page, "#main .talk-msg .talk-text, #main .talk-msg .talk-state");
   // Handed on to Claude, the note's one button sends it, from the person's own tap.
   const send = page.locator("#main .talk-msg").getByRole("button", {name: "Send to Claude"});
   if (await send.count()) { await send.first().click(); await turn(page, 6); r.afterSend = await T(page, "#main .talk-msg .talk-text"); }
@@ -2244,7 +2735,7 @@ S.chat_cloud = async (a) => {
   await page.getByRole("button", {name: "Send", exact: true}).click();
   await turn(page, 10);
   const r = {docs: store.list("talk/cloud-1/messages/").map((p) => store.get(p)), work: store.list("work/").map((p) => [p, store.get(p)]),
-    rings: (await calls(page)).filter((c) => c.cap === "comments").map((c) => c.text), waiting: await T(page, "#main .talk-msg.pending")};
+    rings: (await calls(page)).filter((c) => c.cap === "comments").map((c) => c.text), waiting: await T(page, "#main .talk-msg.pending, #main .talk-state")};
   store.chat("talk/cloud-1/messages/m-reply", {from: "cloud", text: "Their careers page lists the Pricing Analyst role and closes on 31 October.", at: new Date().toISOString()});
   await turn(page, 8);
   r.shown = await T(page, "#main .talk-msg .talk-text");
@@ -2270,7 +2761,7 @@ S.chat_computer = async (a) => {
   await page.getByRole("button", {name: "Send", exact: true}).click();
   await turn(page, 10);
   r.work = store.list("work/").map((p) => store.get(p)).filter((w) => w.kind === "talk");
-  r.waiting = await T(page, "#main .talk-msg.pending");
+  r.waiting = await T(page, "#main .talk-msg.pending, #main .talk-state");
   r.rings = (await calls(page)).filter((c) => c.cap === "comments").length;
   r.errors = o.errors;
   await o.ctx.close();
@@ -2767,7 +3258,7 @@ S.motion = async (a) => {
     // and 4.7's Everywhere runs): there it is a Firefox of its own, started with the
     // preference itself, and the page says whether the setting reached it at all.
     const own = m === "reduce" && ENGINE === "firefox"
-      ? await playwright.firefox.launch({firefoxUserPrefs: {"ui.prefersReducedMotion": 1}}).catch(() => null) : null;
+      ? await playwright.firefox.launch({firefoxUserPrefs: Object.assign({"ui.prefersReducedMotion": 1}, FIREFOX_MOUSE)}).catch(() => null) : null;
     const shared = browser;
     if (own) browser = own;
     let o;
@@ -3270,9 +3761,182 @@ S.silent = async (a) => {
   return out;
 };
 
+// The fake runtime itself, held to the contract it stands in for (tests/app_page/fake_claude.js,
+// the 0.2.91 type definitions): each probe calls window.claude on a page holding nothing else
+// and says what came back. A fake kinder than the runtime let a page bug pass every test.
+S.contract = async (a) => {
+  const o = await open({html: a.html, noSettle: true, fake: a.fake || {},
+    seed: {"notes/a": {n: 1, deep: {x: [1, {y: 2}]}}, "notes/b": {n: 2}, "notes/c": {n: 3, tag: "t"}}});
+  const {page} = o;
+  // A viewer the page is shared with: the owner's store, assets and Claude are not theirs.
+  if (a.guest) {
+    const g = await page.evaluate(async () => {
+      const code = async (f) => { try { await f(); return "ok"; } catch (e) { return (e && e.code) || String(e); } };
+      const c = window.claude;
+      const db = await c.use("db");
+      const cm = await c.use("comments");
+      const user = await c.use("user");
+      return {read: (await db.doc("notes/a").get()).exists, query: (await db.collection("notes").get()).size,
+        write: await code(() => db.doc("notes/a").set({n: 2})), lease: await code(() => db.doc("notes/a").acquire({holder: "x"})),
+        assets: await c.use("assets"), can: await cm.canSendToClaude(), ring: await code(() => cm.sendToClaude({text: "hi", threadId: "t1"})),
+        dataWrite: await user.can("data.write"), browser: await code(async () => (await c.use("mcp")).callTool("host:claude_browser", "navigate", {url: "https://example.com/"}))};
+    });
+    g.errors = o.errors;
+    await o.ctx.close();
+    return g;
+  }
+  const r = await page.evaluate(async () => {
+    const out = {};
+    const code = async (f) => { try { await f(); return "ok"; } catch (e) { return e instanceof TypeError ? "TypeError" : (e && e.code) || String(e); } };
+    const tick = (ms) => new Promise((res) => setTimeout(res, ms || 0));
+    const c = window.claude;
+    out.oneKey = Object.keys(c).join(",");
+    out.samePromise = c.use("db") === c.use("db");
+    out.undeclared = await Promise.all(["room", "files", "artifact", "dictation", "nonsense"].map((n) => c.use(n)));
+    out.permissions = !!(await c.use("permissions"));
+    const db = await c.use("db");
+    if (!db) return Object.assign(out, {noDb: true});
+    out.nsFrozen = Object.isFrozen(db);
+    // Frozen, all the way down, and the same object while it has not changed.
+    const s1 = await db.doc("notes/a").get();
+    const d1 = s1.data();
+    out.frozen = Object.isFrozen(s1) && Object.isFrozen(s1.metadata) && Object.isFrozen(d1) && Object.isFrozen(d1.deep) && Object.isFrozen(d1.deep.x) && Object.isFrozen(d1.deep.x[1]);
+    out.sameDoc = (await db.doc("notes/a").get()) === s1 && s1.data() === d1;
+    out.strictMutation = await code(() => { "use strict"; d1.n = 9; });
+    const q = await db.collection("notes").orderBy("n", "desc").get();
+    out.queryFrozen = Object.isFrozen(q) && Object.isFrozen(q.docs) && Object.isFrozen(q.metadata) && Object.isFrozen(q.docChanges());
+    out.queryOrder = q.docs.map((d) => d.id);
+    out.queryFirstChanges = q.docChanges().map((x) => x.type);
+    // A write shows at once, pending, before the store answers; then confirmed.
+    const seen = [];
+    const un = db.doc("notes/d").onSnapshot((s) => seen.push([s.exists, s.metadata.hasPendingWrites]));
+    await tick(30);
+    const p = db.doc("notes/d").set({v: 1});
+    await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
+    out.echo = seen.slice();
+    await p;
+    await tick(30);
+    out.confirmed = seen.slice();
+    un();
+    // A refused write is taken back.
+    window.__LJS_FAKE.failWrites = true;
+    const seen2 = [];
+    const un2 = db.doc("notes/e").onSnapshot((s) => seen2.push([s.exists, s.metadata.hasPendingWrites]));
+    await tick(30);
+    out.refused = await code(() => db.doc("notes/e").set({v: 1}));
+    await tick(30);
+    out.refusedSeen = seen2.slice();
+    un2();
+    window.__LJS_FAKE.failWrites = false;
+    // A query listener's changes since its last snapshot; an unchanged document keeps its object.
+    const qs = [];
+    const un3 = db.collection("notes").onSnapshot((s) => qs.push(s));
+    await tick(30);
+    await db.doc("notes/b").update({n: 20});
+    await tick(30);
+    un3();
+    const last = qs[qs.length - 1];
+    out.changes = last.docChanges().map((x) => x.type + ":" + x.doc.id);
+    out.keptObject = last.docs.find((d) => d.id === "a") === qs[0].docs.find((d) => d.id === "a");
+    // Unsubscribed before the first delivery: never called.
+    let early = 0;
+    db.doc("notes/a").onSnapshot(() => { early++; })();
+    await tick(30);
+    out.earlyCalls = early;
+    // Bodies, paths and queries the contract refuses.
+    out.arrayBody = await code(() => db.doc("notes/f").set([1]));
+    out.bigBody = await code(() => db.doc("notes/f").set({t: "x".repeat(270000)}));
+    let deep = {}; for (let i = 0; i < 40; i++) deep = {d: deep};
+    out.deepBody = await code(() => db.doc("notes/f").set(deep));
+    out.updateMissing = await code(() => db.doc("notes/none").update({a: 1}));
+    out.longSegment = await code(() => db.doc("notes/" + "x".repeat(201)));
+    out.manySegments = await code(() => db.doc(Array(18).fill("a").join("/")));
+    out.oddDoc = await code(() => db.doc("notes"));
+    out.badChar = await code(() => db.doc("notes/a b"));
+    out.queries = await Promise.all([
+      () => db.collection("notes").limit(0).get(), () => db.collection("notes").limit(1001).get(),
+      () => db.collection("notes").where("n", "in", Array(31).fill(1)).get(),
+      () => db.collection("notes").orderBy("n").orderBy("tag").get(), () => db.collection("notes").where("n", "~", 1).get(),
+      () => { let x = db.collection("notes"); for (let i = 0; i < 11; i++) x = x.where("n", ">", i); return x.get(); },
+    ].map(code));
+    out.badSub = await new Promise((res) => { db.collection("notes").limit(5000).onSnapshot(() => res("delivered"), (e) => res(e.code)); });
+    // At most 64 live subscriptions a view.
+    const live = [];
+    out.cap = await new Promise((res) => {
+      for (let i = 0; i < 70; i++) live.push(db.doc("notes/a").onSnapshot(() => {}, (e) => res([i, e.code])));
+    });
+    live.forEach((u) => u());
+    // A lease: clamped, and busy says when it ends but never who holds it.
+    const l1 = await db.doc("notes/lock").acquire({holder: "one", ttlMs: 1});
+    const l2 = await db.doc("notes/lock").acquire({holder: "two"});
+    out.lease = [l1.acquired, l2.acquired, "holder" in l2, !!l2.expiresAt, Date.parse(l1.expiresAt) - Date.now() > 500];
+    // The other capabilities.
+    const user = await c.use("user");
+    out.can = [await user.can("data.write"), await user.can("something.else")];
+    out.me = (await user.me()).canEdit === (await user.canEdit());
+    const cm = await c.use("comments");
+    out.ring = await Promise.all([
+      () => cm.sendToClaude({text: "", threadId: "t1"}), () => cm.sendToClaude({text: "x".repeat(5000), threadId: "t1"}),
+      () => cm.sendToClaude({text: "a\u0001b", threadId: "t1"}), () => cm.sendToClaude({text: "hi", threadId: "t1", anchor: {path: "body", x: 1, y: 1}}),
+      () => cm.sendToClaude({text: "hi"}),
+    ].map(code));
+    const dl = await c.use("downloads");
+    out.save = await Promise.all([
+      () => dl.save({filename: "event.ics", data: "BEGIN"}), () => dl.save({filename: "a.pdf", data: ""}),
+      () => dl.save({filename: "x".repeat(600) + ".pdf", data: "a"}), () => dl.save({filename: "a.zip", data: new Blob(["z"])}),
+    ].map(code));
+    const buf = new ArrayBuffer(4);
+    await dl.save({filename: "a.zip", data: buf});
+    out.transferred = buf.byteLength === 0;
+    const as = await c.use("assets");
+    out.upload = await Promise.all([
+      () => as.upload(new Blob(["<p>"], {type: "text/html"})), () => as.upload(new Blob(["a"])), () => as.upload(new Blob([], {type: "application/pdf"})),
+      () => as.upload(new Blob(["a"], {type: "text/csv;charset=utf-8"})), () => as.upload(new Blob(["a"]), {type: "text/csv"}), () => as.upload("text"),
+    ].map(code));
+    const up = await as.upload(new Blob(["%PDF"], {type: "application/pdf"}));
+    const listed = await as.list();
+    out.assets = [up.id.length, listed.assets.length, Object.keys(listed.usage).sort().join(","), (await as.delete(up.id)).deleted, (await as.delete(up.id)).deleted];
+    const sm = await c.use("sample");
+    const ab = new AbortController(); ab.abort();
+    const tool = {name: "t", description: "d", execute: () => { throw new Error("no"); }};
+    out.sample = await Promise.all([
+      () => sm(""), () => sm([{role: "user", content: "a"}, {role: "assistant", content: "b"}]), () => sm([{role: "user", content: ""}]),
+      () => sm("hi", {cache: true, tools: [tool]}), () => sm("hi", {signal: ab.signal}), () => sm("hi", {tools: [{name: "a.b", description: "d", execute: () => 1}]}),
+      () => sm("hi", "quick"), () => sm("x".repeat(270000)), () => sm("hi", {tools: [tool]}),
+    ].map(code));
+    out.badJson = await code(() => sm.json("give json"));
+    const mcp = await c.use("mcp");
+    out.mcp = await Promise.all([
+      () => mcp.callTool("host:claude_browser", "computer", {}), () => mcp.callTool("Claude Code Remote", "send_message", {}),
+      () => mcp.callTool("host:claude_browser", "navigate", {url: "https://example.com/"}),
+    ].map(code));
+    out.listed = (await mcp.listTools()).servers.length;
+    return out;
+  });
+  // A host that never answers: null after ten seconds, never a promise left hanging.
+  const hung = await page.evaluate(() => { window.__hung = "waiting"; const p = window.claude.use(window.__LJS_FAKE.hang[0]); p.then((v) => { window.__hung = v; }); return window.__hung; });
+  await page.clock.runFor(10500);
+  r.hung = [hung, await page.evaluate(() => window.__hung)];
+  // Access taken away while the page runs: each listener hears it once, every call rejects.
+  r.revoked = await page.evaluate(async () => {
+    const db = await window.claude.use("db");
+    const got = [];
+    db.doc("notes/a").onSnapshot(() => {}, (e) => got.push(e.code));
+    await new Promise((res) => setTimeout(res, 30));
+    window.__ljsRevoke();
+    let w = "ok";
+    try { await db.doc("notes/a").set({n: 1}); } catch (e) { w = e.code; }
+    const late = await new Promise((res) => db.doc("notes/a").onSnapshot(() => res("delivered"), (e) => res(e.code)));
+    return [got, w, late];
+  });
+  r.errors = o.errors;
+  await o.ctx.close();
+  return r;
+};
+
 // ---------------------------------------------------------------- the loop
 async function main() {
-  browser = await playwright[ENGINE].launch();
+  browser = await playwright[ENGINE].launch(ENGINE === "firefox" ? {firefoxUserPrefs: FIREFOX_MOUSE} : {});
   const out = (o) => process.stdout.write(JSON.stringify(o) + "\n");
   out({ready: true, version: browser.version()});
   const rl = readline.createInterface({input: process.stdin});

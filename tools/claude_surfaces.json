@@ -2,7 +2,7 @@
   "_about": "Every statement the app makes about the Claude app, Claude Code and where a chat runs: what each surface can do, how to reach it, and how a cloud task is made from a computer. Messages read their words from here (tools/claude_surfaces.py say), docs carry them in marked blocks (sync-docs), and tests/test_claude_surfaces.py fails on a statement outside it. Each entry is dated and sourced; `watch` (the maintainer's, run by .github/workflows/claude-surfaces-watch.yml in the app only) checks each quote is still on its page and flags entries after a new Claude Code release. A path a person follows is written as a destination or as numbered steps and never tells them to press, click, tap or find anything; the day it was checked and its official page are for Claude (`source`), never the person.",
   "stale_after_days": 60,
   "hand_check_days": 30,
-  "checked_version": "2.1.302",
+  "checked_version": "2.1.322",
   "release_notes": "https://code.claude.com/docs/en/changelog",
   "vocabulary": [
     "Code tab", "Routines screen", "New routine", "New task", "claude --cloud",
@@ -40,8 +40,8 @@
         {"url": "https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/working-with-forks/about-forks", "quote": "Public repository forks are public, and private repository forks are private."}
       ],
       "status": "documented",
-      "verified_on": "2026-10-25",
-      "verified_against": "docs.github.com's new-repository page (its URL query parameters: name, owner with @me, visibility public or private, template_owner and template_name), its template page, and GitHub's changelog of 2026-05-11, read 2026-10-25",
+      "verified_on": "2026-11-11",
+      "verified_against": "docs.github.com's new-repository page (its URL query parameters: name, owner with @me, visibility public or private, template_owner and template_name), its template page, and GitHub's changelog of 2026-05-11, read 2026-10-25 and again 2026-11-11, unchanged",
       "ui_sensitive": true
     },
     {
@@ -62,8 +62,8 @@
         {"url": "https://docs.github.com/en/apps/using-github-apps/installing-a-github-app-from-a-third-party", "quote": "If the app requires repository permissions, select All repositories or Only select repositories."}
       ],
       "status": "documented",
-      "verified_on": "2026-11-03",
-      "verified_against": "code.claude.com/docs/en/web-quickstart read 2026-11-03 (its Team and Enterprise note: the GitHub connector an Owner turns on), and docs.github.com's page on installing a GitHub App, read 2026-10-25",
+      "verified_on": "2026-11-11",
+      "verified_against": "code.claude.com/docs/en/web-quickstart read 2026-11-11 (Connect GitHub, its Team and Enterprise note: the GitHub connector an Owner turns on), and docs.github.com's page on installing a GitHub App, read 2026-11-11; nothing it describes changed in Claude Code 2.1.303 to 2.1.322",
       "ui_sensitive": true
     },
     {
@@ -82,13 +82,13 @@
         {"url": "https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/working-with-forks/about-forks", "quote": "You cannot change the visibility of a fork by itself."}
       ],
       "status": "documented",
-      "verified_on": "2026-11-03",
-      "verified_against": "docs.github.com's pages on setting repository visibility and about forks, read 2026-11-03",
+      "verified_on": "2026-11-11",
+      "verified_against": "docs.github.com's pages on setting repository visibility and about forks, read 2026-11-03 and again 2026-11-11, unchanged",
       "ui_sensitive": true
     },
     {
       "id": "local-chat",
-      "claim": "A chat on the person's own computer runs in the Claude desktop app's Code tab, with Local chosen under the message box and a folder opened beside it. The desktop app includes Claude Code, so nothing else needs installing for it, and it needs a Pro, Max, Team or Enterprise plan. Its mode selector, in the row under the message box, offers Auto where auto mode is available, which runs without routine prompts. A new empty folder is enough: the chat makes the person's copy there itself (COMPUTER.md), and where the copy already holds a profile it sets nothing up again and asks nothing. The steps are the same on a Mac and on Windows.",
+      "claim": "A chat on the person's own computer runs in the Claude desktop app's Code tab, with Local chosen under the message box and a folder opened beside it. The desktop app includes Claude Code, so nothing else needs installing for it, and it needs a Pro, Max, Ultra, Team or Enterprise plan. Its mode selector, in the row under the message box, offers Auto where auto mode is available, which runs without routine prompts. A new empty folder is enough: the chat makes the person's copy there itself (COMPUTER.md), and where the copy already holds a profile it sets nothing up again and asks nothing. The steps are the same on a Mac and on Windows.",
       "goal": "set up a chat on your computer",
       "how": "in the Claude desktop app (claude.ai/download), its Code tab, with Local chosen under the message box and a new empty folder opened beside it",
       "steps": [
@@ -100,29 +100,37 @@
       "sources": [
         {"url": "https://code.claude.com/docs/en/desktop-quickstart", "quote": "The desktop app includes Claude Code, so you don't need to install Node.js or the CLI to use the Code tab."},
         {"url": "https://code.claude.com/docs/en/desktop-quickstart", "quote": "select the top entry in the Local group"},
-        {"url": "https://code.claude.com/docs/en/desktop-quickstart", "quote": "Claude Code requires a Pro, Max, Team, or Enterprise subscription."},
+        {"url": "https://code.claude.com/docs/en/desktop-quickstart", "quote": "Claude Code requires a Pro, Max, Ultra, Team, or Enterprise subscription."},
         {"url": "https://code.claude.com/docs/en/desktop", "quote": "You can switch permission modes at any time using the mode selector in the row under the prompt box."},
         {"url": "https://code.claude.com/docs/en/desktop", "quote": "Claude runs without routine prompts"}
       ],
       "status": "documented",
-      "verified_on": "2026-10-25",
-      "verified_against": "code.claude.com/docs/en/desktop-quickstart and /desktop read 2026-10-25",
+      "verified_on": "2026-11-11",
+      "verified_against": "code.claude.com/docs/en/desktop-quickstart and /desktop read 2026-11-11, which now names Ultra among the plans; the Code tab, Local and Open folder are unchanged",
       "ui_sensitive": true
     },
     {
       "id": "plugin-install",
-      "claim": "On a computer, the app's plugin is an optional front door: in any Claude Code chat there, \"open my job search\" opens the person's page, or makes their private copy the first time. It is installed by typing one line into Claude Code: /plugin install last-job-search --marketplace aranculleton/last-job-search (Claude Code 2.1.275 or later), choosing the person's user account as where it goes. A cloud chat, the browser at claude.ai/code included, loads no plugins, so it is for a computer only; the person's copy keeps itself up to date either way. A third-party marketplace's plugins do not update by themselves unless turned on: /plugin, its Marketplaces tab, the marketplace, then Enable auto-update. Typing the line into the desktop app's Code tab rather than a terminal was not tried.",
+      "claim": "On a computer, the app's plugin is an optional front door: in any Claude Code chat there, \"open my job search\" opens the person's page, or makes their private copy the first time. It is installed by typing one line into Claude Code: /plugin install last-job-search --marketplace aranculleton/last-job-search (Claude Code 2.1.275 or later), confirming the source when it asks the first time, then Install for you (user scope), so it works in every folder on that computer. A cloud chat, the browser at claude.ai/code included, loads no plugins, so it is for a computer only; the person's copy keeps itself up to date either way. A third-party marketplace's plugins do not update by themselves unless turned on: /plugin, its Marketplaces tab, the marketplace, then Enable auto-update. Typing the line into the desktop app's Code tab rather than a terminal was not tried.",
       "goal": "open your job search from any chat on your computer",
-      "how": "type /plugin install last-job-search --marketplace aranculleton/last-job-search into Claude Code on your computer, and choose your user account",
+      "how": "type /plugin install last-job-search --marketplace aranculleton/last-job-search into Claude Code on your computer, and choose Install for you",
       "steps": [
         "In Claude Code on your computer (the Claude desktop app's Code tab, or a terminal), type: /plugin install last-job-search --marketplace aranculleton/last-job-search",
-        "When it asks where to install it, choose your user account.",
+        "Confirm when it asks, then choose Install for you (user scope).",
         "From then on, say \"open my job search\" in any chat on that computer."
       ],
       "sources": [
         {
           "url": "https://code.claude.com/docs/en/discover-plugins",
-          "quote": "Run `/plugin install` with the plugin's name and marketplace."
+          "quote": "Run /plugin install with the plugin's name and marketplace."
+        },
+        {
+          "url": "https://code.claude.com/docs/en/discover-plugins",
+          "quote": "Claude Code shows the source it resolved and asks you to confirm before adding it."
+        },
+        {
+          "url": "https://code.claude.com/docs/en/discover-plugins",
+          "quote": "Install for you (user scope): you get the plugin in every project on this machine"
         },
         {
           "url": "https://code.claude.com/docs/en/discover-plugins",
@@ -134,8 +142,8 @@
         }
       ],
       "status": "documented",
-      "verified_on": "2026-10-28",
-      "verified_against": "code.claude.com/docs/en/discover-plugins read 2026-10-28; the one-line install and its version from the same page; the plugin and marketplace checked with claude plugin validate 2.1.312",
+      "verified_on": "2026-11-11",
+      "verified_against": "code.claude.com/docs/en/discover-plugins read 2026-10-28 and again 2026-11-11 (Install a plugin, Add and install in a session: the confirmation of a new source and the scope's own label, Install for you (user scope)); the one-line install and its version from the same page; the plugin and marketplace checked with claude plugin validate 2.1.312",
       "ui_sensitive": true
     },
     {
@@ -150,29 +158,31 @@
         {"url": "https://code.claude.com/docs/en/desktop", "quote": "On Windows, Desktop doesn't read PowerShell profiles, so set PATH in your user or system environment variables, then quit and reopen Desktop."}
       ],
       "status": "documented",
-      "verified_on": "2026-10-25",
-      "verified_against": "code.claude.com/docs/en/desktop-quickstart, /desktop and /chrome read 2026-10-25",
+      "verified_on": "2026-11-11",
+      "verified_against": "code.claude.com/docs/en/desktop-quickstart, /desktop and /chrome read 2026-11-11, unchanged since 2026-10-25 (the x64 and ARM64 installers, the Start menu, Ctrl+Shift+B and the Browser button)",
       "ui_sensitive": true
     },
     {
       "id": "linux-computer",
-      "claim": "The Claude desktop app on Linux is in beta, for Ubuntu 22.04 or later and Debian 12 or later. On other distributions, such as Fedora or Arch, the terminal version of Claude Code is used instead (curl -fsSL https://claude.ai/install.sh | bash), and claude --chrome gives it the person's own Chrome. Claude in Chrome does not work inside WSL; on Windows with WSL, the Windows desktop app is used. The Linux page does not say whether the desktop app there has its Browser pane: not verified.",
+      "claim": "The Claude desktop app on Linux is in beta, for Ubuntu 22.04 or later and Debian 12 or later. On other distributions, such as Fedora or Arch, the terminal version of Claude Code is used instead (curl -fsSL https://claude.ai/install.sh | bash), and claude --chrome gives it the person's own Chrome. Claude in Chrome does not work inside WSL; on Windows with WSL, the Windows desktop app is used, so its keys and menus are Windows'. The Linux page gives the same Claude Code experience as on a Mac and Windows and does not list the Browser pane among what the beta lacks (Computer Use, dictation), but it does not name the pane either: not verified. Its key there would be Ctrl+Shift+B, as on Windows (the desktop page: on Windows and Linux, Cmd becomes Ctrl). Without the desktop app, claude remote-control run in a terminal in the folder takes the chats started from claude.ai (remote-control-settings-linux).",
       "goal": "use Claude on a Linux computer",
       "how": "on Ubuntu or Debian, the Claude desktop app; elsewhere, in a terminal, curl -fsSL https://claude.ai/install.sh | bash, then claude --chrome in the folder {name}",
       "sources": [
         {"url": "https://code.claude.com/docs/en/desktop-linux", "quote": "A Debian-based distribution: Ubuntu 22.04 or later, or Debian 12 or later"},
         {"url": "https://code.claude.com/docs/en/desktop-linux", "quote": "On distributions that aren't Debian-based, such as Fedora or Arch, run the CLI instead."},
         {"url": "https://code.claude.com/docs/en/setup", "quote": "curl -fsSL https://claude.ai/install.sh | bash"},
-        {"url": "https://code.claude.com/docs/en/chrome", "quote": "Chrome integration isn't supported in Windows Subsystem for Linux (WSL)."}
+        {"url": "https://code.claude.com/docs/en/chrome", "quote": "Chrome integration isn't supported in Windows Subsystem for Linux (WSL)."},
+        {"url": "https://code.claude.com/docs/en/desktop-linux", "quote": "The desktop app on Linux gives you the same Chat, Cowork, and Claude Code experience as on macOS and Windows"},
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "Cmd: press Ctrl"}
       ],
       "status": "documented",
-      "verified_on": "2026-10-25",
-      "verified_against": "code.claude.com/docs/en/desktop-linux, /setup and /chrome read 2026-10-25",
+      "verified_on": "2026-11-11",
+      "verified_against": "code.claude.com/docs/en/desktop-linux, /desktop, /setup and /chrome read 2026-11-11",
       "ui_sensitive": true
     },
     {
       "id": "browser-pane",
-      "claim": "A chat in the desktop app can read web pages in the app's own Browser pane, a browser of its own, separate from the person's, with none of their sign-ins until they sign in there, and needing no particular browser of theirs: Safari, Firefox or any other default is fine. It opens from the Browser button in the session's title bar (browser-pane-show). Keep cookies in the pane's menu keeps sign-ins after the app quits; Anthropic's built-in-browser skill says the pane keeps its profile across the app's chats. It is the default way to read people's profiles on a computer. Whether the Linux desktop app has it is not stated on the Linux page (not verified).",
+      "claim": "A chat in the desktop app can read web pages in the app's own Browser pane, a browser of its own, separate from the person's, with none of their sign-ins until they sign in there, and needing no particular browser of theirs: Safari, Firefox or any other default is fine. It opens from the Browser button in the session's title bar (browser-pane-show). Keep cookies in the pane's menu keeps sign-ins after the app quits; Anthropic's built-in-browser skill says the pane keeps its profile across the app's chats. It is the default way to read people's profiles on a computer. The Linux page does not name it, but gives the same Claude Code experience as on a Mac and Windows and does not list it among what the beta lacks (read 2026-11-11).",
       "sources": [
         {"url": "https://code.claude.com/docs/en/desktop", "quote": "The Browser pane uses a clean browser profile, separate from your personal browser, with none of your saved logins or history."},
         {"url": "https://code.claude.com/docs/en/desktop", "quote": "keeps cookies after you quit the app with Keep cookies in the Browser pane's"}
@@ -205,8 +215,8 @@
         {"url": "https://support.claude.com/en/articles/12012173-get-started-with-claude-in-chrome", "quote": "Note: Claude in Chrome is not supported on other Chromium-based web browsers or mobile devices."}
       ],
       "status": "documented",
-      "verified_on": "2026-10-25",
-      "verified_against": "code.claude.com/docs/en/chrome and support.claude.com article 12012173 read 2026-10-25; Claude Code 2.1.302 has --chrome",
+      "verified_on": "2026-11-11",
+      "verified_against": "code.claude.com/docs/en/chrome and support.claude.com article 12012173 read 2026-10-25 and again 2026-11-11, unchanged; Claude Code 2.1.322 has --chrome",
       "ui_sensitive": true
     },
     {
@@ -221,8 +231,8 @@
         {"url": "https://code.claude.com/docs/en/remote-control", "quote": "Turn Chrome integration on or off in the sessions the server creates"}
       ],
       "status": "documented",
-      "verified_on": "2026-10-25",
-      "verified_against": "code.claude.com/docs/en/remote-control read 2026-10-25",
+      "verified_on": "2026-11-11",
+      "verified_against": "code.claude.com/docs/en/remote-control read 2026-10-25 and again 2026-11-11, unchanged; claude remote-control --chrome is in Claude Code 2.1.322",
       "ui_sensitive": true
     },
     {
@@ -236,15 +246,16 @@
         {"url": "https://code.claude.com/docs/en/routines", "quote": "click Scheduled in the sidebar or in the sidebar's More menu, then New task"},
         {"url": "https://code.claude.com/docs/en/routines", "quote": "create the task and select Custom in its edit dialog"},
         {"url": "https://code.claude.com/docs/en/routines", "quote": "pick a preset frequency such as hourly, daily, or weekly"},
-        {"url": "https://code.claude.com/docs/en/routines", "quote": "Use the on/off switch at the top of the page to pause or resume the schedule."}
+        {"url": "https://code.claude.com/docs/en/routines", "quote": "Use the on/off switch at the top of the page to pause or resume the schedule."},
+        {"url": "https://code.claude.com/docs/en/routines", "quote": "If a menu opens with Create with Claude and Set up manually , select Set up manually to open the dialog."}
       ],
       "status": "documented",
-      "verified_on": "2026-10-29",
-      "verified_against": "code.claude.com/docs/en/routines (now titled scheduled tasks, formerly routines) read 2026-10-29",
+      "verified_on": "2026-11-11",
+      "verified_against": "code.claude.com/docs/en/routines (now titled scheduled tasks, formerly routines) read 2026-10-29 and again 2026-11-11 (Create from the web: a menu with Create with Claude and Set up manually may open first, and the dialog ends on Create)",
       "ui_sensitive": true,
       "steps": [
-        "Open claude.ai/code/routines and choose New task (in the desktop app's Code tab: Scheduled, then New task).",
-        "Name it Job search: morning brief, choose your copy, set it daily at your time, paste the prompt I give you, and save.",
+        "Open claude.ai/code/routines and choose New task (in the desktop app's Code tab: Scheduled, then New task). If it asks, choose Set up manually.",
+        "Name it Job search: morning brief, choose your copy, set it daily at your time, paste the prompt I give you, then choose Create.",
         "Only for days other than every day: open it again, choose Custom, and paste the schedule I give you."
       ]
     },
@@ -284,27 +295,27 @@
     },
     {
       "id": "remote-trigger",
-      "claim": "The RemoteTrigger tool creates, updates, runs and lists routines and is what /schedule uses, so a chat that has it makes the brief in the cloud itself. It is in Claude Code 2.1.302; whether a given chat is offered it depends on the plan and the organisation's policy.",
+      "claim": "The RemoteTrigger tool creates, updates, runs and lists cloud scheduled tasks (formerly routines) and is what /schedule uses, so a chat that has it makes the brief in the cloud itself. It is in Claude Code 2.1.322; whether a given chat is offered it depends on the plan and the organisation's policy.",
       "sources": [
-        {"url": "https://code.claude.com/docs/en/tools-reference", "quote": "Creates, updates, runs, and lists Routines on claude.ai. Backs the /schedule command."}
+        {"url": "https://code.claude.com/docs/en/tools-reference", "quote": "Creates, updates, runs, and lists cloud scheduled tasks, formerly routines, on claude.ai. Backs the /schedule command."}
       ],
       "status": "documented",
-      "verified_on": "2026-10-18",
-      "verified_against": "code.claude.com docs read 2026-10-18; present in the Claude Code 2.1.302 binary",
+      "verified_on": "2026-11-11",
+      "verified_against": "code.claude.com/docs/en/tools-reference read 2026-11-11, which now calls routines cloud scheduled tasks; present in the Claude Code 2.1.322 binary",
       "ui_sensitive": false
     },
     {
       "id": "chat-push",
-      "claim": "A chat can send the person a phone notification with the PushNotification tool. The docs name it a phone push while Remote Control is connected, and Push when Claude decides (agentPushNotifEnabled, off by default) lets Claude send one; a cloud chat reads that setting from the copy's own .claude/settings.json, which turns it on. A scheduled run in a cloud chat was seen to send one: the tool answered Mobile push requested, with the push sent. A scheduled task bound to a chat has no notification of its own (create_trigger's notifications are only for a task that starts a new chat each run, and such a run gets no copy of the files and no add_repo to fetch one), so a brief that runs in a chat sends its headline this way; where the tool answers not sent, the person's next message in that chat says the brief is there.",
+      "claim": "A chat can send the person a phone notification with the PushNotification tool. The docs say it sends a phone push with Remote Control or in a cloud session, and Push when Claude decides (agentPushNotifEnabled, off by default) lets Claude send one; a cloud chat reads that setting from the copy's own .claude/settings.json, which turns it on. A scheduled run in a cloud chat was seen to send one: the tool answered Mobile push requested, with the push sent. A scheduled task bound to a chat has no notification of its own (create_trigger's notifications are only for a task that starts a new chat each run, and such a run gets no copy of the files and no add_repo to fetch one), so a brief that runs in a chat sends its headline this way; where the tool answers not sent, the person's next message in that chat says the brief is there.",
       "sources": [
-        {"url": "https://code.claude.com/docs/en/tools-reference", "quote": "Sends a desktop notification, and a phone push when Remote Control is connected, so a long-running task or session-scoped scheduled task can reach you when you step away."},
+        {"url": "https://code.claude.com/docs/en/tools-reference", "quote": "Sends a desktop notification from a local session, and a phone push with Remote Control or in a cloud session."},
         {"url": "https://code.claude.com/docs/en/settings", "quote": "read in a session with one repository outside a project's threads, because the file is part of the clone and the session starts inside it"},
         {"url": "tool:create_trigger", "quote": "Only fresh-session-per-fire scheduled tasks (create_new_session_on_fire=true) take this; the server rejects it for self-bind or persistent_session_id scheduled tasks."},
         {"url": "observed:claude-code-2.1.316", "quote": "Mobile push requested."}
       ],
       "status": "observed",
-      "verified_on": "2026-11-03",
-      "verified_against": "observed: a scheduled run in a cloud chat on 2026-10-31 (Claude Code 2.1.316) called PushNotification and was answered Mobile push requested, with pushSent true; the same run, a task that started a new chat, had no copy of the files and no fire_trigger, as did two other such runs (2026-10-12, 2026-10-29); code.claude.com/docs/en/tools-reference (PushNotification), settings (Settings in cloud sessions) and settings-reference (agentPushNotifEnabled: Any file) read 2026-11-03",
+      "verified_on": "2026-11-11",
+      "verified_against": "observed: a scheduled run in a cloud chat on 2026-10-31 (Claude Code 2.1.316) called PushNotification and was answered Mobile push requested, with pushSent true; the same run, a task that started a new chat, had no copy of the files and no fire_trigger, as did two other such runs (2026-10-12, 2026-10-29); code.claude.com/docs/en/tools-reference (PushNotification), settings (Settings in cloud sessions) and settings-reference (agentPushNotifEnabled: Any file) read 2026-11-03; tools-reference read again 2026-11-11, which now names a cloud session as well as Remote Control for the phone push, and settings-reference that day (agentPushNotifEnabled still off by default, Any file)",
       "ui_sensitive": false
     },
     {
@@ -328,11 +339,11 @@
       "how": "in a terminal on your computer, in the folder {name}, run claude --cloud",
       "sources": [
         {"url": "https://code.claude.com/docs/en/claude-code-on-the-web", "quote": "These workflows require the Claude Code CLI signed in to the same claude.ai account."},
-        {"url": "observed:claude-code-2.1.302", "quote": "Error: --cloud requires an interactive terminal."}
+        {"url": "observed:claude-code-2.1.322", "quote": "Error: --cloud requires an interactive terminal."}
       ],
       "status": "documented",
-      "verified_on": "2026-10-18",
-      "verified_against": "code.claude.com docs read 2026-10-18; run in Claude Code 2.1.302 from a non-interactive shell",
+      "verified_on": "2026-11-11",
+      "verified_against": "code.claude.com/docs/en/claude-code-on-the-web read 2026-11-11; run in Claude Code 2.1.302 from a non-interactive shell on 2026-10-18, and again in 2.1.322 on 2026-11-11 (no terminal and no sign-in, so nothing could start), which refused the same way",
       "ui_sensitive": true
     },
     {
@@ -383,43 +394,43 @@
       "id": "cloud-environment",
       "claim": "A cloud chat runs on a cloud computer whose settings Anthropic calls an environment: its setup script and its network access. They are edited from the environment selector under the message box on the new-session screen at claude.ai/code, or, for a running chat, from the caret after its title (Edit cloud environment). A change to network access reaches chats already running within about a minute; a change to the setup script applies to the next new chat.",
       "goal": "change this chat's cloud settings",
-      "how": "on the new-session screen at claude.ai/code, open the environment selector under the message box and edit the environment (in a running chat: the caret after its title, then Edit cloud environment); its Setup script and Network access are the two settings",
+      "how": "on the new-session screen at claude.ai/code, open the environment selector under the message box and edit the environment (in a running chat: the caret after its title, then Edit cloud environment); its Setup script and Network access are the two settings, each opened from its own row",
       "sources": [
         {"url": "https://code.claude.com/docs/en/cloud-environments", "quote": "Add, edit, and archive environments from the environment selector under the message box on the screen where you start a new session at claude.ai/code ."},
         {"url": "https://code.claude.com/docs/en/cloud-environments", "quote": "select the caret after the session title at the top, then select Edit cloud environment ."},
         {"url": "https://code.claude.com/docs/en/cloud-environments", "quote": "its existing sessions follow the new setting within about a minute"}
       ],
       "status": "documented",
-      "verified_on": "2026-10-20",
-      "verified_against": "code.claude.com docs read 2026-10-20",
+      "verified_on": "2026-11-11",
+      "verified_against": "code.claude.com/docs/en/cloud-environments read 2026-11-11 (Configure your environment: the dialog now opens Network access, Setup script and Environment variables from rows, Claude Code 2.1.310)",
       "ui_sensitive": true
     },
     {
       "id": "cloud-setup-script",
-      "claim": "A cloud environment's setup script runs the first time a chat starts in that environment; when it finishes within about five minutes, a snapshot of what it installed is reused by later chats, which skip it, until the script or the network settings change or about seven days pass. A chat woken after a quiet spell does not run it again. It is in the same settings as network access. A change reaches the next new chat; one already running gets it only when its computer is rebuilt.",
+      "claim": "A cloud environment's setup script runs the first time a chat starts in that environment; when it finishes within about five minutes, a snapshot of what it installed is reused by later chats, which skip it, until the script or the network settings change or about seven days pass. A chat woken after a quiet spell does not run it again. It is in the same settings as network access, opened from its own Setup script row. A change reaches the next new chat; one already running gets it only when its computer is rebuilt.",
       "goal": "make each new chat start with the PDF tools in place",
-      "how": "in the same settings (the small arrow after this chat's title, then Edit cloud environment), the line pasted into Setup script and saved",
+      "how": "in the same settings (the small arrow after this chat's title, then Edit cloud environment), Setup script opened and the line pasted into its box and saved",
       "steps": [
         "At the top of this chat, open the small arrow after its title and choose Edit cloud environment.",
-        "Paste the line into Setup script, then save.",
+        "Open Setup script, paste the line into the box that opens, then save.",
         "It applies from your next new chat. In this one, Claude installs the same tools itself."
       ],
       "page_goal": "make each new chat start with the PDF tools in place",
       "page_steps": [
         "Open any of your chats at claude.ai/code: the setting is the same for all of them.",
         "At the top of that chat, open the small arrow after its title and choose Edit cloud environment.",
-        "Paste the line into Setup script, then save.",
+        "Open Setup script, paste the line into the box that opens, then save.",
         "It applies from the next new chat. Come back to this page and tap Done."
       ],
       "sources": [
-        {"url": "https://code.claude.com/docs/en/cloud-environments", "quote": "open the environment settings dialog and enter your script in the Setup script field"},
+        {"url": "https://code.claude.com/docs/en/cloud-environments", "quote": "Add or edit the environment and select the Setup script row. Enter the script in the box that opens"},
         {"url": "https://code.claude.com/docs/en/cloud-environments", "quote": "select the caret after the session title at the top, then select Edit cloud environment ."},
         {"url": "https://code.claude.com/docs/en/cloud-environments", "quote": "The setup script runs the first time you start a session in an environment."},
         {"url": "https://code.claude.com/docs/en/cloud-environments", "quote": "the setup script doesn't run when a session's VM is restored after being idle"}
       ],
       "status": "documented",
-      "verified_on": "2026-11-03",
-      "verified_against": "code.claude.com docs read 2026-11-03",
+      "verified_on": "2026-11-11",
+      "verified_against": "code.claude.com/docs/en/cloud-environments read 2026-11-11 (Add a setup script, Environment caching): the Setup script field is now a row that opens a box (Claude Code 2.1.310)",
       "ui_sensitive": true
     },
     {
@@ -433,34 +444,35 @@
         {"url": "https://code.claude.com/docs/en/cloud-environments", "quote": "select New environment at the bottom of the menu to open the New environment dialog."}
       ],
       "status": "documented",
-      "verified_on": "2026-11-03",
-      "verified_against": "code.claude.com/docs/en/web-quickstart (Team and Enterprise note) and /cloud-environments (shared environments, New environment), read 2026-11-03",
+      "verified_on": "2026-11-11",
+      "verified_against": "code.claude.com/docs/en/web-quickstart (Team and Enterprise note) and /cloud-environments (shared environments, New environment), read 2026-11-03 and again 2026-11-11, unchanged",
       "ui_sensitive": true
     },
     {
       "id": "cloud-auto",
-      "claim": "A cloud chat runs in one of three modes: Accept edits, Plan or Auto, chosen from the mode menu in the row under the message box at claude.ai/code, or in the Claude app on a phone from the + in the message box, then Permission. Cloud chats make file edits without asking in every mode; Auto also runs routine steps without asking, with a separate check that stops anything risky, and is offered only where the person's organization allows it and the chosen model supports it. Outside Auto, a step the app's own settings do not pre-approve waits for the person to allow it in the chat, which may be one they are not reading.",
+      "claim": "A cloud chat runs in one of three modes: Accept edits, Plan or Auto, chosen from the mode menu in the row under the message box at claude.ai/code, or in the Claude app on a phone from the + in the message box, then Permission. Cloud chats make file edits without asking in every mode; Auto also runs routine steps without asking, with a separate check that stops anything risky, on every plan; it is there unless the person's organization has turned it off, and at claude.ai/code it is greyed out where the chosen model does not support it. Outside Auto, a step the app's own settings do not pre-approve waits for the person to allow it in the chat, which may be one they are not reading.",
       "goal": "let Claude carry on while you're away",
       "how": "in the mode menu in the row under the message box (in the Claude app on a phone, the + in the message box, then Permission), Auto, where it is offered",
       "steps": [
         "In your job search chat, open the mode menu in the row under the message box (in the Claude app on a phone: the + in the message box, then Permission).",
-        "Choose Auto. If Auto is not there, your plan or organization does not offer it: Claude then asks before some steps, so answer in the chat when it does."
+        "Choose Auto. If it is greyed out or missing, this chat's model or your organization does not allow it: Claude then asks before some steps, so answer when it does."
       ],
       "sources": [
         {"url": "https://code.claude.com/docs/en/permission-modes", "quote": "use the mode dropdown in the row under the prompt box."},
         {"url": "https://code.claude.com/docs/en/permission-modes", "quote": "In the mobile app, tap the + button in the prompt box, then Permission."},
-        {"url": "https://code.claude.com/docs/en/permission-modes", "quote": "Auto mode appears only when your organization allows it and the selected model supports it."},
+        {"url": "https://code.claude.com/docs/en/permission-modes", "quote": "Auto mode appears unless your organization turns it off, and on claude.ai/code it's grayed out if the selected model doesn't support it."},
+        {"url": "https://code.claude.com/docs/en/permission-modes", "quote": "Plan : All plans."},
         {"url": "https://code.claude.com/docs/en/permission-modes", "quote": "Auto mode lets Claude execute without routine permission prompts."},
         {"url": "https://code.claude.com/docs/en/web-quickstart", "quote": "Cloud sessions don't offer Manual or Bypass permissions."}
       ],
       "status": "documented",
-      "verified_on": "2026-11-03",
-      "verified_against": "code.claude.com/docs/en/permission-modes (Web and mobile, auto mode) and /web-quickstart (Choose a permission mode), read 2026-11-03",
+      "verified_on": "2026-11-11",
+      "verified_against": "code.claude.com/docs/en/permission-modes (Web and mobile, auto mode) and /web-quickstart (Choose a permission mode), read 2026-11-11: Auto is now on every plan and shown unless the organization turns it off, greyed out at claude.ai/code where the model does not support it",
       "ui_sensitive": true
     },
     {
       "id": "cloud-internet",
-      "claim": "A cloud chat's network access is one of None, Trusted (the default: package registries, GitHub and cloud SDKs only), Full (any website) or Custom (the person's own list). Job sites and employers' own websites are not on the Trusted list, so a cloud chat on the default cannot reach them; a Custom list reaches only the sites it names, so every employer's own site stays out, and Full is the setting that works. Set to Full, a running chat reaches them within about a minute, with no new chat. On a Team or Enterprise plan an environment an Owner shares opens read-only, so an Owner changes it, or the member makes an environment of their own (New environment) with Full and starts chats in it.",
+      "claim": "A cloud chat's network access is one of None, Limited (the default, with Allow package managers checked: package registries, GitHub and cloud SDKs, plus any sites the person lists) or Full (any website); an environment saved earlier as Trusted or Custom opens as Limited. Job sites and employers' own websites are not on the default list, so a cloud chat on the default cannot reach them; a list of the person's own reaches only the sites it names, so every employer's own site stays out, and Full is the setting that works. Set to Full, a running chat reaches them within about a minute, with no new chat. On a Team or Enterprise plan an environment an Owner shares opens read-only, so an Owner changes it, or the member makes an environment of their own (New environment) with Full and starts chats in it.",
       "goal": "let this chat reach job sites",
       "how": "at the top of this chat, the small arrow after its title, then Edit cloud environment, with Network access set to Full",
       "steps": [
@@ -476,15 +488,16 @@
         "Come back to this page and tap Done."
       ],
       "sources": [
-        {"url": "https://code.claude.com/docs/en/cloud-environments", "quote": "The default level, Trusted, allows package registries and other allowlisted domains"},
+        {"url": "https://code.claude.com/docs/en/cloud-environments", "quote": "A new environment starts at Limited with Allow package managers checked, so its sessions reach package registries and other allowlisted domains"},
+        {"url": "https://code.claude.com/docs/en/cloud-environments", "quote": "Saved as Trusted: opens as Limited with Allow package managers checked"},
         {"url": "https://code.claude.com/docs/en/cloud-environments", "quote": "select the caret after the session title at the top, then select Edit cloud environment ."},
         {"url": "https://code.claude.com/docs/en/cloud-environments", "quote": "its existing sessions follow the new setting within about a minute"},
         {"url": "https://code.claude.com/docs/en/cloud-environments", "quote": "opens read-only there, so an Owner changes its network access from the Cloud environments page in admin settings instead."},
         {"url": "https://code.claude.com/docs/en/cloud-environments", "quote": "select New environment at the bottom of the menu to open the New environment dialog."}
       ],
       "status": "documented",
-      "verified_on": "2026-11-03",
-      "verified_against": "code.claude.com/docs/en/cloud-environments read 2026-11-03 (access levels, Custom, shared environments read-only, New environment)",
+      "verified_on": "2026-11-11",
+      "verified_against": "code.claude.com/docs/en/cloud-environments read 2026-11-11 (Network access, Access levels: None, Limited and Full, where Trusted and Custom were; shared environments read-only, New environment); Full and the way to it are unchanged",
       "ui_sensitive": true
     },
     {
@@ -503,8 +516,8 @@
         {"url": "observation: one person's request on 2026-10-19", "quote": "The shorter list offered Articles, Invitations, Profile, Recommendations and Registration, and no Connections; nothing arrived after 15 minutes."}
       ],
       "status": "documented",
-      "verified_on": "2026-10-19",
-      "verified_against": "LinkedIn's help page 50191 as a web search returned it on 2026-10-19 (not fetched), and one person's own request that day; the two third-party guides this rested on before (2020 and 2022) promised a connections-only copy in ten minutes, which LinkedIn no longer offered",
+      "verified_on": "2026-11-11",
+      "verified_against": "LinkedIn's help page 50191 as a web search returned it on 2026-10-19 and again on 2026-11-11 (not fetched; the larger download's email within 24 hours and its 72 hours unchanged), and one person's own request on 2026-10-19; the two third-party guides this rested on before (2020 and 2022) promised a connections-only copy in ten minutes, which LinkedIn no longer offered",
       "ui_sensitive": true
     },
     {
@@ -523,8 +536,8 @@
         {"url": "https://www.linkedin.com/help/linkedin/answer/a566261", "quote": "Current company", "fetch": false, "why_not_fetched": "a session never fetches linkedin.com, and its robots.txt disallows crawlers it does not name; read through a web search"}
       ],
       "status": "documented",
-      "verified_on": "2026-10-19",
-      "verified_against": "LinkedIn's help pages a528043 and a566261 as a web search returned them on 2026-10-19 (not fetched)",
+      "verified_on": "2026-11-11",
+      "verified_against": "LinkedIn's help pages a528043 and a566261 as a web search returned them on 2026-10-19 (not fetched), and LinkedIn's people search help page 53657 as a web search summarised it on 2026-11-11, which lists Connections and Current company among its filters",
       "ui_sensitive": true
     },
     {
@@ -542,8 +555,8 @@
         {"url": "https://linkedapi.io/guides/linkedin-pending-invitations.md", "quote": "The direct address most people end up bookmarking is `linkedin.com/mynetwork/invitation-manager/sent/`"}
       ],
       "status": "documented",
-      "verified_on": "2026-10-19",
-      "verified_against": "LinkedIn's help page a568295 as a web search summarised it on 2026-10-19 (not fetched, so the quote is the summary's words, not the page's), and one third-party guide fetched that day for the direct address",
+      "verified_on": "2026-11-11",
+      "verified_against": "LinkedIn's help page a568295 as a web search summarised it on 2026-10-19 (not fetched, so the quote is the summary's words, not the page's), and one third-party guide fetched that day for the direct address; on 2026-11-11 a web search summarised LinkedIn's Withdraw an invitation page (62008) the same way, the Sent tab under Manage invitations from My Network, and the guide was fetched again",
       "ui_sensitive": true
     },
     {
@@ -585,8 +598,8 @@
         {"url": "observation: one person's request on 2026-10-19", "quote": "The shorter list offered Articles, Invitations, Profile, Recommendations and Registration, and no Connections; nothing arrived after 15 minutes."}
       ],
       "status": "documented",
-      "verified_on": "2026-10-21",
-      "verified_against": "LinkedIn's help page 50191 as a web search returned it on 2026-10-19 (not fetched), a third-party description of the export's files fetched on 2026-10-21, a second parser's code (juanmanueldaza/linkedin2md, parsers/network.py) read that day for the invitations' columns, and one person's own request on 2026-10-19",
+      "verified_on": "2026-11-11",
+      "verified_against": "LinkedIn's help page 50191 as a web search returned it on 2026-10-19 and again on 2026-11-11 (not fetched), a third-party description of the export's files fetched on 2026-10-21, a second parser's code (juanmanueldaza/linkedin2md, parsers/network.py) read that day for the invitations' columns, and one person's own request on 2026-10-19",
       "ui_sensitive": true
     },
     {
@@ -603,13 +616,13 @@
         {"url": "https://www.linkedin.com/help/linkedin/answer/a550270", "quote": "The People tab gives insights about employees' job titles, fields of study, skills, and how they're connected to you", "fetch": false, "why_not_fetched": "a session never fetches linkedin.com, and its robots.txt disallows crawlers it does not name; read through a web search"}
       ],
       "status": "documented",
-      "verified_on": "2026-10-19",
-      "verified_against": "LinkedIn's help page a550270 as a web search summarised it on 2026-10-19 (not fetched, so the quote is the summary's words, not the page's)",
+      "verified_on": "2026-11-11",
+      "verified_against": "LinkedIn's help page a550270 as a web search summarised it on 2026-10-19 and again on 2026-11-11, unchanged (not fetched, so the quote is the summary's words, not the page's)",
       "ui_sensitive": true
     },
     {
       "id": "linkedin-open-profile",
-      "claim": "A LinkedIn member who is not connected to the person can be written to by message in two ways that look the same on their profile, a Message button either way: free, when they are a Premium member who turned on Open Profile, or as an InMail, which spends one of the person's InMail credits (a Premium account's monthly allotment). Which one it is shows only once the message window is open: a free one says Free message in the window, and one that needs a credit the person does not have offers Get more InMail credits instead. Nothing is typed and nothing is sent to see it. The labels are as the person saw them on 2026-10-24 (one free, four needing credits); LinkedIn's help pages, read through a web search because a session never fetches linkedin.com, say non-connections with Open Profile can be messaged free and InMail spends credits, but do not name the labels.",
+      "claim": "A LinkedIn member who is not connected to the person can be written to by message in two ways that look the same on their profile, a Message button either way: free, when they are a Premium member who turned on Open Profile, or as an InMail, which spends one of the person's InMail credits (a Premium account's monthly allotment). Which one it is shows only once the message window is open: a free one says Free message in the window, and one that needs a credit the person does not have offers Get more InMail credits instead. Nothing is typed and nothing is sent to see it. The labels are as the person saw them on 2026-10-24 (one free, four needing credits); LinkedIn's help pages, read through a web search because a session never fetches linkedin.com, say non-connections with Open Profile can be messaged free and InMail spends credits, but do not name the labels; they also say a member on a free or basic account can send only a limited number of Open Profile messages a month, without giving the number.",
       "goal": "see whether a message to someone you are not connected to is free",
       "how": "on LinkedIn, their profile, then Message: the window says Free message when it costs nothing, and offers Get more InMail credits when it needs a credit you do not have",
       "steps": [
@@ -631,63 +644,125 @@
         {"url": "observed:2026-10-24", "quote": "Free message in the compose header for one person; a Get more InMail credits upgrade window for four, each after Message and before anything was typed"}
       ],
       "status": "observed",
-      "verified_on": "2026-10-24",
-      "verified_against": "observed by the person on 2026-10-24 for five profiles; LinkedIn's help pages a554575 and a544787 as a web search summarised them that day (not fetched), which confirm that Open Profile messages are free and InMail spends credits but do not name either label",
+      "verified_on": "2026-11-11",
+      "verified_against": "observed by the person on 2026-10-24 for five profiles; LinkedIn's help pages a554575 and a544787 as a web search summarised them that day (not fetched), which confirm that Open Profile messages are free and InMail spends credits but do not name either label; a web search on 2026-11-11 summarised a554575 and LinkedIn's Open Profile settings page (140) the same way, adding that a member on a free or basic account can send only a limited number of Open Profile messages a month",
       "ui_sensitive": true
     },
     {
       "id": "linkedin-inmail-credits",
-      "claim": "A LinkedIn Premium member sees how many InMail credits they have on their My Premium page, reached from the Me icon at the top of LinkedIn and then Access My Premium (Premium features in the phone app), in its InMail part. Premium Career gets 5 credits a month, on the first day of the billing cycle, and can hold up to 15; credits expire after 90 days, and one comes back when the person written to answers. Checked through a web search of LinkedIn's own help pages: a session never fetches linkedin.com.",
+      "claim": "A LinkedIn Premium member sees how many InMail credits they have on their My Premium page, reached from the Me icon at the top of LinkedIn and then Premium features (Access My Premium on some accounts), where See all features opens its InMail part. Premium Career gets 5 credits a month, on the first day of the billing cycle, and can hold up to 15; credits expire after 90 days, and one comes back when the person written to answers. Checked through a web search of LinkedIn's own help pages: a session never fetches linkedin.com.",
       "goal": "see how many InMails you have left",
-      "how": "on LinkedIn, the Me icon at the top, then Access My Premium (Premium features in the phone app), then the InMail part of that page",
+      "how": "on LinkedIn, the Me icon at the top, then Premium features (Access My Premium on some accounts), then See all features and the InMail part of your My Premium page",
       "steps": [
         "On LinkedIn, select the Me icon at the top.",
-        "Choose Access My Premium (in the phone app, Premium features).",
-        "Under InMail, read the number beside InMail credits available."
+        "Choose Premium features (on some accounts, Access My Premium). It opens your My Premium page.",
+        "Choose See all features, open the InMail part, and read the number beside InMail message credits available."
       ],
       "official_page": "https://www.linkedin.com/help/linkedin/answer/a543685",
       "sources": [
-        {"url": "https://www.linkedin.com/help/linkedin/answer/a543685", "quote": "View Your Total Available InMail Message Credits", "fetch": false, "why_not_fetched": "a session never fetches linkedin.com, and its robots.txt disallows crawlers it does not name; read through a web search, which summarised the page as the Me icon, then Access My Premium, then the InMail section"},
+        {"url": "https://www.linkedin.com/help/linkedin/answer/a543685", "quote": "View Your Total Available InMail Message Credits", "fetch": false, "why_not_fetched": "a session never fetches linkedin.com, and its robots.txt disallows crawlers it does not name; read through a web search, which on 2026-11-05 summarised the page as the Me icon, then Access My Premium, then the InMail section"},
+        {"url": "https://www.linkedin.com/help/linkedin/answer/a545593", "quote": "Select Premium features from the dropdown.", "fetch": false, "why_not_fetched": "a session never fetches linkedin.com, and its robots.txt disallows crawlers it does not name; read through a web search on 2026-11-11, which summarised the page as the Me icon, then Premium features, then See all features, then the InMail dropdown showing InMail message Credits available"},
         {"url": "https://www.linkedin.com/help/linkedin/answer/a543695", "quote": "New allotment arrives every month, on the first day of your billing cycle.", "fetch": false, "why_not_fetched": "a session never fetches linkedin.com, and its robots.txt disallows crawlers it does not name; read through a web search, which gave Premium Career 5 credits a month, holding up to 15"},
         {"url": "https://www.linkedin.com/help/linkedin/answer/a554514", "quote": "you will receive InMail message credit back if a recipient accepts your InMail", "fetch": false, "why_not_fetched": "a session never fetches linkedin.com, and its robots.txt disallows crawlers it does not name; read through a web search, which also gave credits expiring after 90 days"}
       ],
       "status": "documented",
-      "verified_on": "2026-11-05",
-      "verified_against": "LinkedIn's help pages a543685, a543695 and a554514 as a web search summarised them on 2026-11-05 (not fetched, so the quotes are the summary's words, not the pages'); the phone app's Premium features label is the maintainer's, not the help page's",
+      "verified_on": "2026-11-11",
+      "verified_against": "LinkedIn's help pages a545593 and a543685 (View your total available InMail Message credits) and a541643 as a web search summarised them on 2026-11-11 (not fetched, so the quotes are the summary's words, not the pages'): the Me icon, then Premium features, then See all features and the InMail part, where the summary of 2026-11-05 gave Access My Premium; Premium Career 5 a month, holding up to 15, and a credit back when the person accepts, declines or replies within 90 days. That unused credits expire after 90 days was found only in third-party guides that day; a543695 and a554514 as summarised on 2026-11-05",
       "ui_sensitive": true
     },
     {
       "id": "browser-pane-show",
-      "claim": "In the desktop app a hidden Browser pane comes back from the Browser button in the session's title bar, or Cmd+Shift+B on a Mac and Ctrl+Shift+B on Windows. Hiding the pane does not close the browser: it keeps its own profile and its sign-ins across the app's chats (Anthropic's built-in-browser skill; the docs page says only that cookies can be kept after quitting).",
+      "claim": "In the desktop app a hidden Browser pane comes back from the Browser button in the session's title bar, or Cmd+Shift+B on a Mac and Ctrl+Shift+B on Windows and on Linux (the docs: on Windows and Linux, Cmd becomes Ctrl). Each system has its own variant (browser-pane-show-mac, -windows, -linux); this one says all three, for when the computer is not known. Hiding the pane does not close the browser: it keeps its own profile and its sign-ins across the app's chats (Anthropic's built-in-browser skill; the docs page says only that cookies can be kept after quitting).",
       "goal": "bring the browser back into view",
-      "how": "in the Claude desktop app, the Browser button in the session's title bar, or Cmd+Shift+B on a Mac and Ctrl+Shift+B on Windows",
+      "how": "in the Claude desktop app, the Browser button in the session's title bar, or Cmd+Shift+B on a Mac and Ctrl+Shift+B on Windows or Linux",
       "steps": [
-        "In the Claude desktop app, the Browser button in this chat's title bar shows the browser again; Cmd+Shift+B on a Mac, or Ctrl+Shift+B on Windows, does the same.",
+        "In the Claude desktop app, the Browser button in this chat's title bar shows the browser again; Cmd+Shift+B on a Mac, or Ctrl+Shift+B on Windows or Linux, does the same.",
         "You stay signed in: hiding the browser does not sign you out of anything."
       ],
       "sources": [
         {"url": "https://code.claude.com/docs/en/desktop", "quote": "To open the Browser, press Cmd+Shift+B on macOS or Ctrl+Shift+B on Windows, or click Browser in the session's title bar."},
-        {"url": "skill:anthropic-skills:built-in-browser", "quote": "The built-in browser keeps its own persistent profile, shared across the desktop app's sessions."}
+        {"url": "skill:anthropic-skills:built-in-browser", "quote": "The built-in browser keeps its own persistent profile, shared across the desktop app's sessions."},
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "The table in this section shows the macOS keys. On Windows and Linux, change these keys:"}
       ],
       "status": "documented",
-      "verified_on": "2026-10-19",
-      "verified_against": "code.claude.com/docs/en/desktop read word for word 2026-10-19, and the built-in-browser skill as installed that day",
+      "verified_on": "2026-11-11",
+      "verified_against": "code.claude.com/docs/en/desktop read 2026-11-11 (Browse external sites; Keyboard shortcuts, where Cmd becomes Ctrl on Windows and Linux), and the built-in-browser skill as installed 2026-10-19",
+      "ui_sensitive": true
+    },
+    {
+      "id": "browser-pane-show-mac",
+      "variant_of": "browser-pane-show",
+      "system": "darwin",
+      "claim": "On a Mac, a hidden Browser pane comes back from the Browser button in the session's title bar, or Cmd+Shift+B. Hiding it signs nobody out (browser-pane-show).",
+      "goal": "bring the browser back into view",
+      "how": "in the Claude desktop app, the Browser button in the session's title bar, or Cmd+Shift+B",
+      "steps": [
+        "In the Claude desktop app, the Browser button in this chat's title bar shows the browser again; Cmd+Shift+B does the same.",
+        "You stay signed in: hiding the browser does not sign you out of anything."
+      ],
+      "sources": [
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "To open the Browser, press Cmd+Shift+B on macOS or Ctrl+Shift+B on Windows, or click Browser in the session's title bar."}
+      ],
+      "status": "documented",
+      "verified_on": "2026-11-11",
+      "verified_against": "code.claude.com/docs/en/desktop read 2026-11-11 (Browse external sites, Keyboard shortcuts)",
+      "ui_sensitive": true
+    },
+    {
+      "id": "browser-pane-show-windows",
+      "variant_of": "browser-pane-show",
+      "system": "win32",
+      "claim": "On Windows, a hidden Browser pane comes back from the Browser button in the session's title bar, or Ctrl+Shift+B. Hiding it signs nobody out (browser-pane-show).",
+      "goal": "bring the browser back into view",
+      "how": "in the Claude desktop app, the Browser button in the session's title bar, or Ctrl+Shift+B",
+      "steps": [
+        "In the Claude desktop app, the Browser button in this chat's title bar shows the browser again; Ctrl+Shift+B does the same.",
+        "You stay signed in: hiding the browser does not sign you out of anything."
+      ],
+      "sources": [
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "To open the Browser, press Cmd+Shift+B on macOS or Ctrl+Shift+B on Windows, or click Browser in the session's title bar."}
+      ],
+      "status": "documented",
+      "verified_on": "2026-11-11",
+      "verified_against": "code.claude.com/docs/en/desktop read 2026-11-11 (Browse external sites, Keyboard shortcuts)",
+      "ui_sensitive": true
+    },
+    {
+      "id": "browser-pane-show-linux",
+      "variant_of": "browser-pane-show",
+      "system": "linux",
+      "claim": "On Linux, a hidden Browser pane comes back from the Browser button in the session's title bar, or Ctrl+Shift+B. Hiding it signs nobody out (browser-pane-show). The docs give the Mac's keys and say Cmd becomes Ctrl on Windows and Linux; the Linux page gives the same Claude Code experience as on a Mac and Windows and does not list the Browser pane among what the beta lacks (Computer Use, dictation).",
+      "goal": "bring the browser back into view",
+      "how": "in the Claude desktop app, the Browser button in the session's title bar, or Ctrl+Shift+B",
+      "steps": [
+        "In the Claude desktop app, the Browser button in this chat's title bar shows the browser again; Ctrl+Shift+B does the same.",
+        "You stay signed in: hiding the browser does not sign you out of anything."
+      ],
+      "sources": [
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "To open the Browser, press Cmd+Shift+B on macOS or Ctrl+Shift+B on Windows, or click Browser in the session's title bar."},
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "The table in this section shows the macOS keys. On Windows and Linux, change these keys:"},
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "Cmd: press Ctrl"},
+        {"url": "https://code.claude.com/docs/en/desktop-linux", "quote": "The desktop app on Linux gives you the same Chat, Cowork, and Claude Code experience as on macOS and Windows"}
+      ],
+      "status": "documented",
+      "verified_on": "2026-11-11",
+      "verified_against": "code.claude.com/docs/en/desktop read 2026-11-11 (Browse external sites, Keyboard shortcuts), and /desktop-linux read that day",
       "ui_sensitive": true
     },
     {
       "id": "browser-pane-stay-signed-in",
-      "claim": "The desktop app's Browser pane starts with a clean profile of its own, separate from the person's own browser, with none of their saved logins. It shows from the Browser button in the session's title bar, or Cmd+Shift+B on a Mac and Ctrl+Shift+B on Windows, and its menu has Keep cookies, which keeps sign-ins after the app is quit (the docs do not say whether it is on to begin with).",
+      "claim": "The desktop app's Browser pane starts with a clean profile of its own, separate from the person's own browser, with none of their saved logins. It shows from the Browser button in the session's title bar, or Cmd+Shift+B on a Mac and Ctrl+Shift+B on Windows and Linux, and its menu has Keep cookies, which keeps sign-ins after the app is quit (the docs do not say whether it is on to begin with).",
       "goal": "sign in to LinkedIn once in the app's browser and stay signed in",
-      "how": "Cmd+Shift+B on a Mac or Ctrl+Shift+B on Windows shows the app's browser; choose Keep cookies in its \u22ee menu so you stay signed in",
+      "how": "Cmd+Shift+B on a Mac, or Ctrl+Shift+B on Windows or Linux, shows the app's browser; choose Keep cookies in its \u22ee menu so you stay signed in",
       "steps": [
-        "Show the app's browser: Open on the LinkedIn card just above in this chat, or Browser in this chat's title bar (Cmd+Shift+B on a Mac, Ctrl+Shift+B on Windows).",
+        "Show the app's browser: Open on the LinkedIn card just above in this chat, or Browser in this chat's title bar (Cmd+Shift+B on a Mac, Ctrl+Shift+B on Windows or Linux).",
         "Sign in to LinkedIn there yourself.",
         "In the browser's \u22ee menu, choose Keep cookies, so you stay signed in after you quit the app.",
         "Say done here."
       ],
       "page_goal": "sign in to LinkedIn once in the app's browser and stay signed in",
       "page_steps": [
-        "In the Claude desktop app, show the app's browser: Cmd+Shift+B on a Mac, or Ctrl+Shift+B on Windows.",
+        "In the Claude desktop app, show the app's browser: Cmd+Shift+B on a Mac, or Ctrl+Shift+B on Windows or Linux.",
         "Sign in to LinkedIn there yourself.",
         "In the browser's ⋮ menu, choose Keep cookies, so you stay signed in after you quit the app.",
         "Come back to this page and tap Done."
@@ -697,8 +772,121 @@
         {"url": "https://code.claude.com/docs/en/desktop", "quote": "Choose whether the Browser keeps cookies after you quit the app with Keep cookies in the Browser pane's \u22ee menu, so you don't have to sign in again"}
       ],
       "status": "documented",
-      "verified_on": "2026-11-09",
-      "verified_against": "code.claude.com/docs/en/desktop read again 2026-11-09: whether Keep cookies is on to begin with, how long a LinkedIn sign-in lasts in the pane and how a chat can tell the pane is hidden are not on it (a chat looks: tabs_context, and a LinkedIn page showing the sign-in page)",
+      "verified_on": "2026-11-11",
+      "verified_against": "code.claude.com/docs/en/desktop read again 2026-11-09 and 2026-11-11, unchanged: whether Keep cookies is on to begin with, how long a LinkedIn sign-in lasts in the pane and how a chat can tell the pane is hidden are not on it (a chat looks: tabs_context, and a LinkedIn page showing the sign-in page)",
+      "ui_sensitive": true
+    },
+    {
+      "id": "browser-pane-stay-signed-in-mac",
+      "variant_of": "browser-pane-stay-signed-in",
+      "system": "darwin",
+      "claim": "On a Mac, the desktop app's Browser pane shows from the Browser button in the session's title bar, or Cmd+Shift+B, and its ⋮ menu has Keep cookies, which keeps sign-ins after the app is quit (browser-pane-stay-signed-in; the docs do not say whether it is on to begin with).",
+      "goal": "sign in to LinkedIn once in the app's browser and stay signed in",
+      "how": "Cmd+Shift+B shows the app's browser; choose Keep cookies in its ⋮ menu so you stay signed in",
+      "steps": [
+        "Show the app's browser: Open on the LinkedIn card just above in this chat, or Browser in this chat's title bar (Cmd+Shift+B).",
+        "Sign in to LinkedIn there yourself.",
+        "In the browser's ⋮ menu, choose Keep cookies, so you stay signed in after you quit the app.",
+        "Say done here."
+      ],
+      "page_goal": "sign in to LinkedIn once in the app's browser and stay signed in",
+      "page_steps": [
+        "In the Claude desktop app, show the app's browser: Cmd+Shift+B.",
+        "Sign in to LinkedIn there yourself.",
+        "In the browser's ⋮ menu, choose Keep cookies, so you stay signed in after you quit the app.",
+        "Come back to this page and tap Done."
+      ],
+      "sources": [
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "To open the Browser, press Cmd+Shift+B on macOS or Ctrl+Shift+B on Windows, or click Browser in the session's title bar."},
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "Choose whether the Browser keeps cookies after you quit the app with Keep cookies in the Browser pane's ⋮ menu, so you don't have to sign in again"}
+      ],
+      "status": "documented",
+      "verified_on": "2026-11-11",
+      "verified_against": "code.claude.com/docs/en/desktop read 2026-11-11: the key (on Windows and Linux Cmd becomes Ctrl) and Keep cookies in the pane's ⋮ menu; the menu is not described per system",
+      "ui_sensitive": true
+    },
+    {
+      "id": "browser-pane-stay-signed-in-windows",
+      "variant_of": "browser-pane-stay-signed-in",
+      "system": "win32",
+      "claim": "On Windows, the desktop app's Browser pane shows from the Browser button in the session's title bar, or Ctrl+Shift+B, and its ⋮ menu has Keep cookies, which keeps sign-ins after the app is quit (browser-pane-stay-signed-in; the docs do not say whether it is on to begin with).",
+      "goal": "sign in to LinkedIn once in the app's browser and stay signed in",
+      "how": "Ctrl+Shift+B shows the app's browser; choose Keep cookies in its ⋮ menu so you stay signed in",
+      "steps": [
+        "Show the app's browser: Open on the LinkedIn card just above in this chat, or Browser in this chat's title bar (Ctrl+Shift+B).",
+        "Sign in to LinkedIn there yourself.",
+        "In the browser's ⋮ menu, choose Keep cookies, so you stay signed in after you quit the app.",
+        "Say done here."
+      ],
+      "page_goal": "sign in to LinkedIn once in the app's browser and stay signed in",
+      "page_steps": [
+        "In the Claude desktop app, show the app's browser: Ctrl+Shift+B.",
+        "Sign in to LinkedIn there yourself.",
+        "In the browser's ⋮ menu, choose Keep cookies, so you stay signed in after you quit the app.",
+        "Come back to this page and tap Done."
+      ],
+      "sources": [
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "To open the Browser, press Cmd+Shift+B on macOS or Ctrl+Shift+B on Windows, or click Browser in the session's title bar."},
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "Choose whether the Browser keeps cookies after you quit the app with Keep cookies in the Browser pane's ⋮ menu, so you don't have to sign in again"}
+      ],
+      "status": "documented",
+      "verified_on": "2026-11-11",
+      "verified_against": "code.claude.com/docs/en/desktop read 2026-11-11: the key (on Windows and Linux Cmd becomes Ctrl) and Keep cookies in the pane's ⋮ menu; the menu is not described per system",
+      "ui_sensitive": true
+    },
+    {
+      "id": "browser-pane-stay-signed-in-linux",
+      "variant_of": "browser-pane-stay-signed-in",
+      "system": "linux",
+      "claim": "On Linux, the desktop app's Browser pane shows from the Browser button in the session's title bar, or Ctrl+Shift+B, and its ⋮ menu has Keep cookies, which keeps sign-ins after the app is quit (browser-pane-stay-signed-in; the docs do not say whether it is on to begin with).",
+      "goal": "sign in to LinkedIn once in the app's browser and stay signed in",
+      "how": "Ctrl+Shift+B shows the app's browser; choose Keep cookies in its ⋮ menu so you stay signed in",
+      "steps": [
+        "Show the app's browser: Open on the LinkedIn card just above in this chat, or Browser in this chat's title bar (Ctrl+Shift+B).",
+        "Sign in to LinkedIn there yourself.",
+        "In the browser's ⋮ menu, choose Keep cookies, so you stay signed in after you quit the app.",
+        "Say done here."
+      ],
+      "page_goal": "sign in to LinkedIn once in the app's browser and stay signed in",
+      "page_steps": [
+        "In the Claude desktop app, show the app's browser: Ctrl+Shift+B.",
+        "Sign in to LinkedIn there yourself.",
+        "In the browser's ⋮ menu, choose Keep cookies, so you stay signed in after you quit the app.",
+        "Come back to this page and tap Done."
+      ],
+      "sources": [
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "To open the Browser, press Cmd+Shift+B on macOS or Ctrl+Shift+B on Windows, or click Browser in the session's title bar."},
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "Choose whether the Browser keeps cookies after you quit the app with Keep cookies in the Browser pane's ⋮ menu, so you don't have to sign in again"},
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "Cmd: press Ctrl"}
+      ],
+      "status": "documented",
+      "verified_on": "2026-11-11",
+      "verified_against": "code.claude.com/docs/en/desktop read 2026-11-11: the key (on Windows and Linux Cmd becomes Ctrl) and Keep cookies in the pane's ⋮ menu; the menu is not described per system",
+      "ui_sensitive": true
+    },
+    {
+      "id": "browser-pane-keep-cookies",
+      "claim": "The desktop app's Browser pane has Keep cookies in its \u22ee menu, which keeps its sign-ins after the app is quit; the docs do not say whether it is on to begin with, and no chat can read the menu. So a LinkedIn sign-in that did not last is answered by asking the person, once, to choose it, before they sign in again; their Done is what records it as on.",
+      "goal": "keep your LinkedIn sign-in in the app's browser after you quit the app",
+      "how": "Cmd+Shift+B on a Mac or Ctrl+Shift+B on Windows shows the app's browser; choose Keep cookies in its \u22ee menu",
+      "steps": [
+        "Show the app's browser: Browser in this chat's title bar (Cmd+Shift+B on a Mac, Ctrl+Shift+B on Windows).",
+        "In the browser's \u22ee menu, choose Keep cookies, so you stay signed in after you quit the app.",
+        "Say done here."
+      ],
+      "page_goal": "keep your LinkedIn sign-in in the app's browser after you quit the app",
+      "page_steps": [
+        "In the Claude desktop app, show the app's browser: Cmd+Shift+B on a Mac, or Ctrl+Shift+B on Windows.",
+        "In the browser's \u22ee menu, choose Keep cookies, so you stay signed in after you quit the app.",
+        "Come back to this page and tap Done."
+      ],
+      "sources": [
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "To open the Browser, press Cmd+Shift+B on macOS or Ctrl+Shift+B on Windows, or click Browser in the session's title bar."},
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "Choose whether the Browser keeps cookies after you quit the app with Keep cookies in the Browser pane's \u22ee menu, so you don't have to sign in again"}
+      ],
+      "status": "documented",
+      "verified_on": "2026-11-11",
+      "verified_against": "code.claude.com/docs/en/desktop read 2026-11-11: both quotes are on it; whether Keep cookies is on to begin with is not",
       "ui_sensitive": true
     },
     {
@@ -730,8 +918,8 @@
         }
       ],
       "status": "documented",
-      "verified_on": "2026-10-25",
-      "verified_against": "code.claude.com/docs/en/artifacts (\"Share an artifact\") and support.claude.com article 9487310 (\"Find your artifacts\", \"Where you can use artifacts\"), read 2026-10-25; the pin from the Artifact tool's own description in Claude Code; not observed on a phone",
+      "verified_on": "2026-11-11",
+      "verified_against": "code.claude.com/docs/en/artifacts (\"Share an artifact\") and support.claude.com article 9487310 (\"Find your artifacts\", \"Where you can use artifacts\"), read 2026-10-25 and again 2026-11-11, unchanged; the pin from the Artifact tool's own description in Claude Code; not observed on a phone",
       "ui_sensitive": true
     },
     {
@@ -779,13 +967,13 @@
         }
       ],
       "status": "documented",
-      "verified_on": "2026-10-25",
-      "verified_against": "code.claude.com/docs/en/artifacts (\"Share an artifact\") and support.claude.com article 9487310, read 2026-10-25; that a shared page carries its embedded data is how a published page works (one self-contained document)",
+      "verified_on": "2026-11-11",
+      "verified_against": "code.claude.com/docs/en/artifacts (\"Share an artifact\") and support.claude.com article 9487310, read 2026-10-25 and again 2026-11-11, unchanged; that a shared page carries its embedded data is how a published page works (one self-contained document)",
       "ui_sensitive": true
     },
     {
       "id": "remote-control-settings",
-      "claim": "On the computer, the desktop app's settings for this are under Settings, then Claude Code, then Remote Control. The docs name one switch there, Connect new sessions to Remote Control. The screen seen on 2026-11-09 also had Let your phone and claude.ai start sessions here, which is what lets a cloud chat start a chat on the computer (the computer then shows in list_environments as a bridge environment); Keep this computer awake for Remote Control, marked Recommended; and a Folders list, with Add folder and Show folders, where a folder can be pinned. The docs do not name the second and third switches, the Folders list or pinning (not verified beyond what was seen).",
+      "claim": "On the computer, the desktop app's settings for this are under Settings, then Claude Code, then Remote Control. The docs name one switch there, Connect new sessions to Remote Control. The screen seen on 2026-11-09 also had Let your phone and claude.ai start sessions here, which is what lets a cloud chat start a chat on the computer (the computer then shows in list_environments as a bridge environment); Keep this computer awake for Remote Control, marked Recommended; and a Folders list, with Add folder and Show folders, where a folder can be pinned. The docs do not name the second and third switches, the Folders list or pinning (not verified beyond what was seen). Each system has its own variant (remote-control-settings-mac, -windows, -linux): the update menu differs, and Linux has a way without the desktop app; this one says all three, for when the computer is not known.",
       "goal": "let Claude start its chats on your computer",
       "how": "in the Claude desktop app on your computer, Settings, then Claude Code, then Remote Control",
       "steps": [
@@ -794,6 +982,7 @@
         "Turn on Let your phone and claude.ai start sessions here.",
         "Turn on Keep this computer awake for Remote Control.",
         "Under Folders, choose Add folder and pick the folder your job search is in, then pin it.",
+        "If a switch or Folders is not there, update the Claude app first (on a Mac: Claude, then Check for Updates; on Windows: Help, then Check for Updates; on Linux: your system's software updates), then look again.",
         "Say done here."
       ],
       "page_goal": "let Claude start its chats on your computer",
@@ -803,6 +992,7 @@
         "Turn on Let your phone and claude.ai start sessions here.",
         "Turn on Keep this computer awake for Remote Control.",
         "Under Folders, choose Add folder and pick the folder your job search is in, then pin it.",
+        "If a switch or Folders is not there, update the Claude app first (on a Mac: Claude, then Check for Updates; on Windows: Help, then Check for Updates; on Linux: your system's software updates), then look again.",
         "Come back to this page and tap Done."
       ],
       "sources": [
@@ -820,9 +1010,123 @@
         }
       ],
       "status": "observed",
-      "verified_against": "code.claude.com/docs/en/desktop (Control which sessions appear on your other devices) read 2026-11-09; the other switches, Folders and pinning observed on a Mac in the desktop app on 2026-11-09, where the computer then appeared in list_environments as kind bridge, state active, named <computer>:<folder>:<code>; the docs are silent on them, and on Windows (not verified there)",
+      "verified_against": "code.claude.com/docs/en/desktop (Control which sessions appear on your other devices; Check your version) read 2026-11-11; the other switches, Folders and pinning observed on a Mac in the desktop app on 2026-11-09, where the computer then appeared in list_environments as kind bridge, state active, named <computer>:<folder>:<code>; the docs are silent on them, and on Windows and Linux (not verified there)",
       "ui_sensitive": true,
-      "verified_on": "2026-11-09"
+      "verified_on": "2026-11-11"
+    },
+    {
+      "id": "remote-control-settings-mac",
+      "variant_of": "remote-control-settings",
+      "system": "darwin",
+      "claim": "On a Mac, the desktop app's settings for letting Claude start its chats on the computer are under Settings, then Claude Code, then Remote Control (remote-control-settings). An older app is updated from Claude, then Check for Updates, in the menu bar.",
+      "goal": "let Claude start its chats on your computer",
+      "how": "in the Claude desktop app on your computer, Settings, then Claude Code, then Remote Control",
+      "steps": [
+        "On your computer, open the Claude desktop app, then Settings, then Claude Code, then Remote Control.",
+        "Turn on Connect new sessions to Remote Control.",
+        "Turn on Let your phone and claude.ai start sessions here.",
+        "Turn on Keep this computer awake for Remote Control.",
+        "Under Folders, choose Add folder and pick the folder your job search is in, then pin it.",
+        "If a switch or Folders is not there, update the Claude app first: Claude, then Check for Updates, in the menu bar. Then look again.",
+        "Say done here."
+      ],
+      "page_goal": "let Claude start its chats on your computer",
+      "page_steps": [
+        "On your computer, open the Claude desktop app, then Settings, then Claude Code, then Remote Control.",
+        "Turn on Connect new sessions to Remote Control.",
+        "Turn on Let your phone and claude.ai start sessions here.",
+        "Turn on Keep this computer awake for Remote Control.",
+        "Under Folders, choose Add folder and pick the folder your job search is in, then pin it.",
+        "If a switch or Folders is not there, update the Claude app first: Claude, then Check for Updates, in the menu bar. Then look again.",
+        "Come back to this page and tap Done."
+      ],
+      "sources": [
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "new sessions connect automatically while Connect new sessions to Remote Control is on in Settings > Code or Settings > Claude Code"},
+        {"url": "observed:desktop-app-settings", "quote": "Let your phone and claude.ai start sessions here"},
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "Claude > Check for Updates"}
+      ],
+      "status": "observed",
+      "verified_on": "2026-11-11",
+      "verified_against": "the switches, Folders and pinning observed on a Mac in the desktop app on 2026-11-09; code.claude.com/docs/en/desktop read 2026-11-11 for Connect new sessions to Remote Control and Claude > Check for Updates",
+      "ui_sensitive": true
+    },
+    {
+      "id": "remote-control-settings-windows",
+      "variant_of": "remote-control-settings",
+      "system": "win32",
+      "claim": "On Windows, the desktop app's settings for letting Claude start its chats on the computer are under Settings, then Claude Code, then Remote Control (remote-control-settings). An older app is updated from Help, then Check for Updates; only some versions on Windows can share a folder with a cloud chat (list_computer_folders).",
+      "goal": "let Claude start its chats on your computer",
+      "how": "in the Claude desktop app on your computer, Settings, then Claude Code, then Remote Control",
+      "steps": [
+        "On your computer, open the Claude desktop app, then Settings, then Claude Code, then Remote Control.",
+        "Turn on Connect new sessions to Remote Control.",
+        "Turn on Let your phone and claude.ai start sessions here.",
+        "Turn on Keep this computer awake for Remote Control.",
+        "Under Folders, choose Add folder and pick the folder your job search is in, then pin it.",
+        "If a switch or Folders is not there, update the Claude app first: Help, then Check for Updates. Not every version on Windows can share a folder. Then look again.",
+        "Say done here."
+      ],
+      "page_goal": "let Claude start its chats on your computer",
+      "page_steps": [
+        "On your computer, open the Claude desktop app, then Settings, then Claude Code, then Remote Control.",
+        "Turn on Connect new sessions to Remote Control.",
+        "Turn on Let your phone and claude.ai start sessions here.",
+        "Turn on Keep this computer awake for Remote Control.",
+        "Under Folders, choose Add folder and pick the folder your job search is in, then pin it.",
+        "If a switch or Folders is not there, update the Claude app first: Help, then Check for Updates. Not every version on Windows can share a folder. Then look again.",
+        "Come back to this page and tap Done."
+      ],
+      "sources": [
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "new sessions connect automatically while Connect new sessions to Remote Control is on in Settings > Code or Settings > Claude Code"},
+        {"url": "observed:desktop-app-settings", "quote": "Let your phone and claude.ai start sessions here"},
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "Help > Check for Updates"},
+        {"url": "tool:list_computer_folders", "quote": "on Windows, not every version can"}
+      ],
+      "status": "observed",
+      "verified_on": "2026-11-11",
+      "verified_against": "code.claude.com/docs/en/desktop read 2026-11-11 for Connect new sessions to Remote Control and Help > Check for Updates; the list_computer_folders tool's description that day for Windows versions; the other switches, Folders and pinning were seen on a Mac only and are not verified on Windows",
+      "ui_sensitive": true
+    },
+    {
+      "id": "remote-control-settings-linux",
+      "variant_of": "remote-control-settings",
+      "system": "linux",
+      "claim": "On Linux, the desktop app's settings for letting Claude start its chats on the computer are under Settings, then Claude Code, then Remote Control (remote-control-settings). The Linux app is in beta for Ubuntu and Debian and updates with the system's own software updates; elsewhere there is no desktop app, and claude remote-control, run in a terminal in the folder and left running, takes the chats started from claude.ai there (with --chrome they have Chrome on). Whether such a computer shows in list_environments as a bridge is not verified.",
+      "goal": "let Claude start its chats on your computer",
+      "how": "in the Claude desktop app on your computer, Settings, then Claude Code, then Remote Control",
+      "steps": [
+        "On your computer, open the Claude desktop app, then Settings, then Claude Code, then Remote Control.",
+        "Turn on Connect new sessions to Remote Control.",
+        "Turn on Let your phone and claude.ai start sessions here.",
+        "Turn on Keep this computer awake for Remote Control.",
+        "Under Folders, choose Add folder and pick the folder your job search is in, then pin it.",
+        "If a switch or Folders is not there, update the Claude app first with your system's software updates, then look again.",
+        "No Claude desktop app on this computer (it runs on Ubuntu and Debian): instead, in a terminal in the folder your job search is in, run claude remote-control --chrome and leave it running.",
+        "Say done here."
+      ],
+      "page_goal": "let Claude start its chats on your computer",
+      "page_steps": [
+        "On your computer, open the Claude desktop app, then Settings, then Claude Code, then Remote Control.",
+        "Turn on Connect new sessions to Remote Control.",
+        "Turn on Let your phone and claude.ai start sessions here.",
+        "Turn on Keep this computer awake for Remote Control.",
+        "Under Folders, choose Add folder and pick the folder your job search is in, then pin it.",
+        "If a switch or Folders is not there, update the Claude app first with your system's software updates, then look again.",
+        "No Claude desktop app on this computer (it runs on Ubuntu and Debian): instead, in a terminal in the folder your job search is in, run claude remote-control --chrome and leave it running.",
+        "Come back to this page and tap Done."
+      ],
+      "sources": [
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "new sessions connect automatically while Connect new sessions to Remote Control is on in Settings > Code or Settings > Claude Code"},
+        {"url": "observed:desktop-app-settings", "quote": "Let your phone and claude.ai start sessions here"},
+        {"url": "https://code.claude.com/docs/en/desktop-linux", "quote": "The desktop app doesn't update itself on Linux."},
+        {"url": "https://code.claude.com/docs/en/desktop-linux", "quote": "On distributions that aren't Debian-based, such as Fedora or Arch, run the CLI instead."},
+        {"url": "https://code.claude.com/docs/en/remote-control", "quote": "The process stays running in your terminal in server mode, waiting for remote connections."},
+        {"url": "https://code.claude.com/docs/en/remote-control", "quote": "any session you start yourself from claude.ai/code or the Claude app"}
+      ],
+      "status": "observed",
+      "verified_on": "2026-11-11",
+      "verified_against": "code.claude.com/docs/en/desktop-linux and /remote-control read 2026-11-11: the Linux app updates with the system's own updates, other distributions run the terminal version, and claude remote-control keeps running and takes chats started from claude.ai; the switches, Folders and pinning were seen on a Mac only and are not verified on Linux, nor whether a claude remote-control computer shows in list_environments as a bridge",
+      "ui_sensitive": true
     },
     {
       "id": "computer-bridge",
@@ -852,7 +1156,7 @@
     },
     {
       "id": "folder-attach",
-      "claim": "A cloud chat can ask to work in a folder the computer shares (list_computer_folders, then request_computer_folder), but only where that computer offers it to cloud chats. A folder listed under cannot_be_used with the reason not_available is in the person's list but not offered, and the tool says using a folder from a cloud chat is not available to everyone yet. So it is tried only when a folder is listed as usable, and never relied on.",
+      "claim": "A cloud chat can ask to work in a folder the computer shares (list_computer_folders, then request_computer_folder), but only where that computer offers it to cloud chats. A folder listed under cannot_be_used with the reason not_available is in the person's list but not offered, and the tool says using a folder from a cloud chat is not available to everyone yet. So it is tried only when a folder is listed as usable, and never relied on. Which computers can serve one depends on the app's version there: on Windows not every version can (the tool's own words), and a folder listed under cannot_be_used comes with its explanation, which is what the person is told. The tool also says not to send anyone to claude remote-control to add a folder, which for most accounts offers a cloud chat nothing.",
       "sources": [
         {
           "url": "tool:list_computer_folders",
@@ -861,12 +1165,16 @@
         {
           "url": "tool:request_computer_folder",
           "quote": "A session is attached to at most one folder at a time"
+        },
+        {
+          "url": "tool:list_computer_folders",
+          "quote": "on Windows, not every version can"
         }
       ],
       "status": "observed",
-      "verified_against": "the tool descriptions as offered on 2026-11-09, and list_computer_folders that day returning no usable folder and one not_available with no cause given; code.claude.com is silent on it",
+      "verified_against": "the tool descriptions as offered on 2026-11-09 and read again 2026-11-11 (Windows versions, claude remote-control), and list_computer_folders on 2026-11-09 returning no usable folder and one not_available with no cause given; code.claude.com is silent on it",
       "ui_sensitive": false,
-      "verified_on": "2026-11-09"
+      "verified_on": "2026-11-11"
     },
     {
       "id": "computer-chat-browser",

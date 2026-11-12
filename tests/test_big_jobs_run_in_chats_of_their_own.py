@@ -66,10 +66,21 @@ def test_next_sends_a_big_job_to_a_chat_of_its_own_and_keeps_light_work_here(sea
                                   "--no-sessions", "--now", NOW))
     assert alone["run"] == "background agent" and "create_session" not in alone
     search.put("work", "network~acme", _w("network", "Kestrel Mutual", status="done"), version=2)
+    search.put("work", "tweak~1", _w("tweak"), version=1)
+    got = json.loads(search.run("next", search.dump, "--chat", "cloud-1", "--kind", "cloud",
+                                "--now", NOW))
+    assert got["work"] == "tweak~1" and got["heavy"] is False and got["run"] == "here"
+    # A question typed in Chat is light too, but gets a chat of its own where one can be
+    # started, so it never waits on this work (issue #226; tests/test_the_chat_has_a_chat_of_its_own.py).
+    search.put("work", "tweak~1", _w("tweak", status="done"), version=2)
     search.put("work", "talk~1", _w("talk"), version=1)
     got = json.loads(search.run("next", search.dump, "--chat", "cloud-1", "--kind", "cloud",
                                 "--now", NOW))
-    assert got["work"] == "talk~1" and got["heavy"] is False and got["run"] == "here"
+    assert got["work"] == "talk~1" and got["heavy"] is False
+    assert got["run"] in ("child session", "here")
+    alone = json.loads(search.run("next", search.dump, "--chat", "cloud-1", "--kind", "cloud",
+                                  "--no-sessions", "--now", NOW))
+    assert alone["work"] == "talk~1" and alone["run"] == "here"
 
 
 def test_the_chat_that_answers_the_page_never_runs_or_waits_on_a_big_job():

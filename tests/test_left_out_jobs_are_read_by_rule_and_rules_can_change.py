@@ -343,3 +343,118 @@ def test_a_rule_is_dropped_or_changed_through_its_own_writer(state, profile):
 def test_bar_reads_a_kind_of_employer_turned_back_on():
     import bar
     assert all(why not in bar.EXCLUDED_OFF for _rx, why in bar.EXCLUDED_RULES)
+
+
+def test_a_rules_count_is_the_newest_searchs_never_a_month_of_them_added_up(state):
+    """Settings said "38,547 left out lately" for one rule over a search's own few thousand: a
+    month of searches were added up, and each cut the same postings again (2026-11-11). A rule
+    says what the newest search left out by it, the number Jobs says for that search."""
+    person.reset()
+    _left(state, "r19")
+    older = state / "documents" / "rounds" / "r19.json"
+    rows = json.loads(older.read_text(encoding="utf-8"))
+    rows[0]["first_seen"] = "2026-11-01"
+    older.write_text(json.dumps(rows), encoding="utf-8")
+    _left(state, "r20")
+    lately = rules_view.recent(TODAY)
+    one = rules_view.kinds_of(_left(state, "r20"))
+    assert {k: v["n"] for k, v in lately.items() if v["n"]} == {k: n for k, n in one.items() if n}, lately
+    by = {r["id"]: r for r in rules_view.your_rules(TODAY, {})}
+    assert by["rule~roles"]["left_out"] == one.get("field", 0)
+
+
+# ------------------------------------------------------------------ the search Jobs shows
+
+def _a_search(st, name, cut, found_on=None, ran=None, shortlist=True):
+    """A search as run_round leaves it: its shortlist through write_summary, `[]` where it came
+    back empty (found_on None) and none where the search stopped before writing one
+    (shortlist False), and what it left out through filtered.write from its stage files, `cut`
+    titles outside the person's field. `ran` sets the shortlist file's time, the day Jobs
+    gives a search with no posting to date it by."""
+    import run_round
+    work = st.parent / "runs" / name
+    (work / "00_scrape").mkdir(parents=True)
+    kept = [] if found_on is None else [{
+        "title": "Data Analyst", "company": "Kettlewell Foods", "location": "Manchester",
+        "url": f"https://jobs.example/{name}/kept", "fit": 80, "priority": 82,
+        "first_seen": found_on}]
+    if shortlist:
+        (work / "06_shortlist.json").write_text(json.dumps(kept), encoding="utf-8")
+    (work / "00_scrape" / "dropped.json").write_text(json.dumps([{
+        "title": f"Warehouse Supervisor {n}", "company": f"Employer {n % 97}",
+        "location": "Manchester", "url": f"https://jobs.example/{name}/{n}", "prefilter": "FAIL",
+        "prefilter_reason": "title: title matches none of the role families in "
+                            "profile/search.py POSITIVE"} for n in range(cut)]), encoding="utf-8")
+    rounds = st / "documents" / "rounds"
+    path = run_round.write_summary(str(work / "06_shortlist.json"), str(rounds), name)
+    filtered.write(str(work), str(rounds), name)
+    if ran is not None and path:
+        at = dt.datetime.combine(ran, dt.time(12), dt.timezone.utc).timestamp()
+        os.utime(path, (at, at))
+    return path
+
+
+def _as_jobs_says(state):
+    """Jobs' own search and its left-out count by rule; Your rules' counts beside them."""
+    app_model._ROUND_DAY.clear()
+    jobs = app_model._jobs(app_model.Ctx(TODAY, NOW), {})
+    by = {g["kind"]: g["count"] for g in jobs["filtered"]["groups"]}
+    rules = {r["id"]: r for r in rules_view.your_rules(TODAY, {})}
+    return jobs, by, rules
+
+
+def test_a_search_that_found_nothing_is_not_the_newest_for_ever(state):
+    """A search whose shortlist came back empty holds no posting to date it, and Your rules
+    dated it today on every build: r5's 4,321 left out stood beside Jobs' r6 and its 7 (the
+    review, 2026-11-11). One whose shortlist was never written was dated today too. A rule
+    reads the search Jobs shows, dated as Jobs dates it."""
+    person.reset()
+    _a_search(state, "r5", 4321, ran=dt.date(2026, 11, 1))
+    _a_search(state, "r6", 7, found_on="2026-11-04")
+
+    def reads_r6():
+        jobs, by, rules = _as_jobs_says(state)
+        assert jobs["round"] == "r6" and by == {"field": 7}, (jobs["round"], by)
+        assert rules["rule~roles"]["left_out"] == 7, rules["rule~roles"]
+        # Its day is the one Jobs gives the search it shows.
+        assert rules_view.recent(TODAY)["field"]["last"] == "2026-11-04"
+    reads_r6()
+    assert _a_search(state, "r7", 900, shortlist=False) is None
+    reads_r6()
+
+
+def test_two_searches_on_one_day_are_ordered_by_number_as_jobs_orders_them(state):
+    """Two searches the same day were ordered by name as text, so "r9" came after "r10" and a
+    rule said r9's count while Jobs showed r10 (the review, 2026-11-11)."""
+    person.reset()
+    _a_search(state, "r9", 40, found_on="2026-11-04")
+    _a_search(state, "r10", 3, found_on="2026-11-04")
+    jobs, by, rules = _as_jobs_says(state)
+    assert jobs["round"] == "r10" and by == {"field": 3}, (jobs["round"], by)
+    assert rules["rule~roles"]["left_out"] == 3, rules["rule~roles"]
+
+
+def test_a_search_over_a_month_old_still_says_what_it_left_out(state):
+    """With no search in the last 30 days every rule said "None left out by your last search"
+    while Jobs showed that search's thousands (the review, 2026-11-11). However old, the search
+    Jobs shows is the one a rule counts."""
+    person.reset()
+    _a_search(state, "r4", 1200, found_on="2026-09-20")
+    jobs, by, rules = _as_jobs_says(state)
+    assert jobs["round"] == "r4" and by == {"field": 1200}, (jobs["round"], by)
+    assert rules["rule~roles"]["left_out"] == 1200, rules["rule~roles"]
+    assert rules["rule~places"]["left_out"] == 0
+
+
+def test_before_any_search_no_rule_says_a_number(state):
+    """Before any search every rule said "None left out by your last search" of a search never
+    run. No number then: the page says nothing about what a rule left out."""
+    person.reset()
+    assert rules_view.recent(TODAY) is None
+    jobs, _by, rules = _as_jobs_says(state)
+    assert jobs["round"] == "" and jobs["summary"] == "No search has run yet."
+    counted = {k: r["left_out"] for k, r in rules.items()
+               if r["kind"] not in ("declined", "set_aside", "more_at", "learned")}
+    assert counted and set(counted.values()) == {None}, counted
+    m, _ = app_model.build(TODAY, NOW, only=("rules",))
+    assert {r["left_out"] for r in m["rules"]["rows"] if r["id"] in counted} == {None}

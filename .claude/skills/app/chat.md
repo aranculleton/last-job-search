@@ -56,8 +56,11 @@ anywhere. A plain answer to a question stays a short answer, with no button.
   draft check finds anything or a reaction of theirs is unrecorded, saves the draft where
   the person's card in Contacts shows it, and writes this item's finishing batch: one line in
   the thread with "Updated in Contacts" opening their card, where the draft is ready to copy
-  (`--in-thread` only when they asked to see the draft there). Send that batch before anything
-  is saved. Nothing is ever sent.
+  (`--in-thread` only when they asked to see the draft there). Several people's replies in one
+  message: `prepare` and `finish` each with the same `--work`; each finish adds that person,
+  their line and button, to the item's one finishing batch, so send it once, after the last
+  (an answer given after with `app.py done --reply-file -` replaces the lines and keeps every
+  button). Send that batch before anything is saved. Nothing is ever sent.
 - **Someone proposed a time for a call** ("how about 2pm ET Thursday?"): `reply.py
   prepare` logs their message; record the call booked on that day with `network/state.py
   set <contact> --status call_booked --due <day>`, draft the short yes (`reply.py finish`),
@@ -102,7 +105,33 @@ it. If you'd like it fixed in a future update, tap here and press the green butt
 takes a moment): <link>". The link is a new issue on the app's own
 page (`app_setup.APP_REPO` + `/issues/new?title=...&body=...`) with what happened and the
 page's version only, never a name, an employer or anything else of theirs (`tools/name_guard.py
-text` on it first). Never ask them to report it, and never chase it (2026-10-30).
+text` on it first). Never ask them to report it, and never chase it (2026-10-30). **Look first**:
+before the link, run `python3 tools/app_bug.py similar --title "<what breaks>"` and look as it
+prints, at the app's open issues and those closed lately. Where one is the same bug, there is no
+link: the line ends "I've worked round it, and it's already reported." (issue #221).
+
+**In the app maintainer's own copy** (`sync_app.maintainers()`) there is no link and no line
+about it, for this or any app bug a chat there meets (a tool that errors, a state the app
+should not reach, two instructions that disagree, the person sent to a chat where the page
+should act): write what happened, the input that shows it, the tool and function and the
+evidence to a file, run `python3 tools/app_bug.py check <that file> --title "<what breaks>"
+--key "<tool>:<function>"`, do the steps it prints, said to nobody, and carry on round it.
+Its first step looks for the same bug already on the app, open or closed lately, filed by hand
+or by another chat; one that is the same gets the short comment it prints (scanned like a new
+issue), never a second issue.
+
+**A workaround is filed in the same turn, without asking** (there, issue #240): the moment a
+chat works round an app command (a refusal retried with other arguments or another command, a
+step done by hand, a file edited because a tool refused), it runs `python3 tools/app_bug.py met
+--tool <file>:<function> --what "<what it refused, in plain words>" --did "<what you did
+instead>"` and does the steps it prints, said to nobody: the same check and look as `check`, a
+comment where the bug is already filed. A refusal a chat recovers from prints that line ready
+to run (`if you work round this`, or `if_you_work_round_this` in tweak.py's answer): run it
+whenever you do not do the fix it names. **The person's complaint that something should have
+been filed is filed too**, in the same turn, never only promised: what was missed, then their
+complaint itself with `met --person --tool .claude/skills/app/chat.md --what "<their complaint,
+in plain words>" --did "<what was filed now>"`. Any other copy prints no such line, and `met` files
+nothing there.
 
 **"Pin my job search page to my sidebar."** (the page's Pin it): Artifact, action `pin`, the
 page's url, then `python3 tools/app.py pinned yes`, and one line: "Pinned: it's in your sidebar

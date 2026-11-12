@@ -113,6 +113,16 @@ def ring(tmp_path):
     sys.path.remove(r.root)
 
 
+
+def card_question(ring, wid, asked_at="2026-10-25T17:00:00Z"):
+    """A question asked under a card (Ask Claude on it): small work done here. A question typed
+    in Chat gets a chat of its own where one can be started (issue #226,
+    tests/test_the_chat_has_a_chat_of_its_own.py)."""
+    ring.put("work", wid, {"kind": "talk", "status": "queued", "asked_at": asked_at,
+                           "title": "A question", "to": "cloud",
+                           "args": {"thread": "card-job-1", "message": "m-" + wid,
+                                    "about": {"kind": "job", "id": "job-1", "label": "A job"}}})
+
 def sends(said):
     """[(batch file, why)] in the order printed."""
     return [m.groups() for m in map(SEND.match, said.splitlines()) if m]
@@ -191,7 +201,7 @@ def test_a_chat_refused_a_new_chat_for_nesting_runs_big_jobs_as_background_agent
 
 def test_a_tap_that_changes_the_copy_is_applied_only_once_its_claim_is_accepted(ring):
     aid = ring.act("ready.applied", KESTREL)
-    ring.queue("talk~1", kind="talk")
+    card_question(ring, "talk~1")
     before = ring.tracker()
     d = ring.read("wake1")
     said = ring.wake(d)
@@ -338,12 +348,89 @@ def test_a_tap_applied_whose_receipt_never_landed_is_receipted_not_claimed_again
     assert ring.stored("actions", aid)["version"] == 2
 
 
+# The maintainer's copy, 2026-11-11: a LinkedIn download's tap (export.take) waited through
+# several wakes. Its files are in the page's own store, which only a chat can read, and the
+# wake said so in a note above its last step, "then: nothing else is waiting for this chat.
+# End the turn.", which each chat followed; the end of a batch named no file at all. The files
+# to take are the wake's first step now, every one named, and following the steps takes it.
+
+LINKEDIN_FIX = os.path.join(ROOT, "tests", "fixtures", "linkedin_export")
+DOWNLOAD = {"a1" * 16: "messages.csv", "b2" * 16: "Connections.csv",
+            "c3" * 16: "Invitations.csv"}
+
+
+def _download_tapped(ring):
+    import shutil
+    for name, dest in (("book_contacts.csv", "network_contacts.csv"),
+                       ("book_threads.csv", "network_threads.csv")):
+        shutil.copyfile(os.path.join(LINKEDIN_FIX, name), os.path.join(ring.state, dest))
+    ring.put("actions", "act-take", {
+        "action": "export.take", "item": "linkedin-export", "rev_seen": "", "tab": "t1",
+        "at": "2026-10-25T17:10:00Z",
+        "value": {"assets": [{"id": k, "name": v} for k, v in DOWNLOAD.items()]}})
+    return "act-take"
+
+
+def test_a_linkedin_download_tapped_on_the_page_is_taken_in_the_first_wake(ring):
+    import shutil
+    aid = _download_tapped(ring)
+    d = ring.read("wake1")
+    claimed = ring.wake(d)
+    assert parts(claimed) == [[CHECK_IN, TAPS]], claimed
+    assert all(land(ring, claimed)), claimed
+    said = ring.wake(d)                              # the claim accepted: applied
+    steps = [ln for ln in said.splitlines() if ln.startswith("then: ")]
+    # Its files are the first thing to do, each one named, and nothing ends the turn first.
+    assert steps and steps[0].startswith("then: first, before anything below"), said
+    assert all(k in steps[0] for k in DOWNLOAD), steps[0]
+    assert f"--assets \"{d}/assets\"" in steps[0], steps[0]
+    assert not [ln for ln in steps if ln.startswith("then: nothing else is waiting")], said
+    # Following the step: each file read into the folder it names (an Artifact read saves it
+    # as <asset id>.<its type>), then the command it gives.
+    os.makedirs(os.path.join(d, "assets"))
+    for k, name in DOWNLOAD.items():
+        shutil.copyfile(os.path.join(LINKEDIN_FIX, name), os.path.join(d, "assets", k + ".csv"))
+    got = json.loads(ring.run("apply", d, "--chat", CHAT, "--now", NOW,
+                              "--assets", os.path.join(d, "assets")))
+    assert got["ok"] == [aid], got
+    import fake_db
+    assert all(fake_db.apply(ring.db, p) for p in got["batches"]), got
+    receipt = ring.stored("receipts", aid)["data"]
+    assert receipt["result"] == "ok" and receipt["note"].startswith("Taken: "), receipt
+
+
+def _taps_now(ring, d, out):
+    """app.taps_now over `d`, as the end of a batch runs it (view --end), in this copy."""
+    code = ("import json, sys, datetime as dt; sys.path[:0] = [sys.argv[1]]; import app; "
+            "now = dt.datetime(2026, 10, 25, 18, 0, tzinfo=dt.timezone.utc); "
+            "print(json.dumps(app.taps_now(sys.argv[2], sys.argv[3], now, sys.argv[4])))")
+    r = subprocess.run([sys.executable, "-c", code, os.path.join(ROOT, "tools"), d, CHAT, out],
+                       env=ring.env(), capture_output=True, encoding="utf-8", timeout=120)
+    assert r.returncode == 0, r.stdout + r.stderr
+    return json.loads(r.stdout)
+
+
+def test_a_download_tapped_while_the_work_ran_names_every_file_to_take(ring):
+    """The end of a batch applies the taps made meanwhile (app.taps_now): its line said only
+    "once each is read there", so a chat had to read the taps to learn which files."""
+    import fake_db
+    _download_tapped(ring)
+    got = _taps_now(ring, ring.read("late"), os.path.join(ring.root, "late-out"))
+    assert got.get("claim"), got                     # it changes the copy: claimed first
+    assert all(fake_db.apply(ring.db, p) for p in got["batches"]), got
+    d = ring.read("late2")
+    lines = _taps_now(ring, d, os.path.join(ring.root, "late-out2"))["lines"]
+    fetch = [ln for ln in lines if ln.startswith("fetch: ")]
+    assert fetch and all(k in fetch[0] for k in DOWNLOAD), lines
+    assert f"--assets \"{d}/assets\"" in fetch[0] and "Artifact read each" in fetch[0], fetch
+
+
 def test_every_small_question_waiting_is_taken_in_one_wake(ring):
     """One talk a wake, each followed by a new read, took ten questions about 15 minutes and
     some 30 reads (the maintainer's copy, 2026-11-05). Every small item waiting is claimed in
     the same pass, each its own claim, and named under next: and also:."""
     for i in range(3):
-        ring.queue(f"talk~{i}", kind="talk", asked_at=f"2026-10-25T17:0{i}:00Z")
+        card_question(ring, f"talk~{i}", f"2026-10-25T17:0{i}:00Z")
     said = ring.wake(ring.read("wake1"))
     assert all(land(ring, said)), said
     took = [next_item(said)["work"]] + [
@@ -370,7 +457,7 @@ def test_a_ring_with_nothing_waiting_only_checks_in_and_another_chat_writes_noth
 def test_a_small_item_comes_with_its_own_row_of_the_table(ring):
     """`wake` prints the row of step 4's table for a small item it hands this chat, so the
     chat reads none of the table (E-3)."""
-    ring.queue("talk~1", kind="talk")
+    card_question(ring, "talk~1")
     item = next_item(ring.wake(ring.read("wake1")))
     assert item["run"] == "here" and item["do"] == app.work_row("talk") and "chat.md" in item["do"]
 
@@ -379,7 +466,7 @@ def test_the_row_of_the_table_is_printed_once_for_each_kind(ring):
     """Ten tweaks taken in one pass printed the same row of step 4's table ten times, one under
     each (the review of 2026-11-11, E-3): it is printed with the first item of each kind."""
     for i in range(3):
-        ring.queue(f"talk~{i}", kind="talk", asked_at=f"2026-10-25T17:0{i}:00Z")
+        card_question(ring, f"talk~{i}", f"2026-10-25T17:0{i}:00Z")
     ring.queue("tweak~1", kind="tweak", asked_at="2026-10-25T17:05:00Z")
     said = ring.wake(ring.read("wake1"))
     items = [next_item(said)] + [json.JSONDecoder().raw_decode(said[m.end():])[0]
@@ -491,6 +578,8 @@ def test_keep_landed_is_the_dump_as_the_store_will_hold_it(tmp_path):
     w.add("set", "holds", "emp~fernhill", {"work": "talk~1"})
     page_db.keep_landed(str(d), w.save("b"))
     db = page_db.load(str(d))
+    # As the store will hold it, with when the write was made (every write to work says).
+    assert db["work"]["talk~1"]["data"].pop(page_db.CHANGED_FIELD)
     assert db["work"]["talk~1"] == {"data": {"kind": "talk", "status": "running"}, "version": 4}
     assert db["locks"]["emp~fernhill"]["version"] == 1
 

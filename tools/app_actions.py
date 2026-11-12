@@ -1489,9 +1489,17 @@ SAME_SEND_DAYS = 7
 def _thread_lock(wait: float = 30.0):
     """One writer of the message log at a time on this computer: two chats, or one chat
     applying a double tap from two dumps, check for the same send and write it in turn, so
-    the second finds the first's row (FUNCTIONS_SPEC 1.5 item 3)."""
+    the second finds the first's row (FUNCTIONS_SPEC 1.5 item 3).
+
+    On Windows a file another process has open cannot be removed, and a chat waiting here
+    opens the lock for a moment to read when it was taken: the release waits that out
+    (csv_store.remove). Given up at once, the lock stayed behind, so the waiting chat was
+    refused after half a minute and every send for two minutes after waited (CI, 2026-11-12).
+    A lock removed while something still holds it open refuses a new one for that moment
+    (PermissionError, never FileExistsError there): it is waited out as a lock still held."""
     import hashlib
     import time
+    import csv_store
     folder = os.path.join(tempfile.gettempdir(), "ljs-thread-locks")
     os.makedirs(folder, exist_ok=True)
     name = hashlib.sha1(os.path.abspath(person.state("network_threads.csv")).encode()
@@ -1504,22 +1512,26 @@ def _thread_lock(wait: float = 30.0):
             os.write(fd, repr(time.time()).encode("ascii"))
             os.close(fd)
             break
-        except FileExistsError:
+        except (FileExistsError, PermissionError) as e:
+            if isinstance(e, PermissionError) and os.name != "nt":
+                raise
             try:
                 if time.time() - _lock_born(lock) > 120:      # a writer that died
                     os.remove(lock)
                     continue
+            except FileNotFoundError:
+                continue                                      # released since: taken now
             except OSError:
-                continue
+                pass                                          # still going: waited out
             if time.time() - start > wait:
                 raise Refused("Your messages are being written right now: try again in a "
                               "minute.") from None
             time.sleep(0.05)
     try:
-        yield
+        yield lock
     finally:
         try:
-            os.remove(lock)
+            csv_store.remove(lock)
         except OSError:
             pass
 
@@ -3794,10 +3806,21 @@ def _setup_done(r: Run) -> dict:
         return {"note": "Your copy is private now.", "undo": None}
     if key == "computer":
         # The computer's own card (tools/computer.py card): nothing to keep, since the next
-        # heartbeat says whether it worked; the helper's wake tries the computer again.
+        # heartbeat says whether it worked; the helper's wake tries the computer again. Asked to
+        # set the browser to keep sign-ins, their word is the one record of it (no chat can read it):
+        # kept, so it is asked once, and the computer's next look records the setting as on.
+        if r.target.get("say") == "keep_signin":
+            import computer
+            app_setup.save_said(computer.KEEP_SAID, app_model.stamp(r.at))
+            return {"note": "Thank you: now sign in to LinkedIn once more, and Claude carries on.",
+                    "undo": None}
         return {"note": "Thank you: Claude tries your computer again now.", "undo": None}
+    refused = key == "auto" and bool(app_setup.auto_refused())
     if app_setup.set_up() or key in app_setup.TOLD:
         app_setup.save_said(key, app_model.stamp(r.at))
+    if refused:
+        # The chat that was refused tries again by itself at a later wake, in Auto now.
+        return {"note": "Thank you: Claude starts it again by itself.", "undo": None}
     return {"note": "Noted, thank you.", "undo": None}
 
 
@@ -3999,7 +4022,12 @@ def _target_of(act: dict, index: Index) -> dict | None:
 def _logged_already(act: dict, zone: str, now: dt.datetime) -> str:
     """For "I sent it" on a message no longer on the page because it went (logged in a
     chat, or from another device): the day those words were logged, so the receipt says
-    so instead of "look again"."""
+    so instead of "look again".
+
+    Read under the log's lock: a chat part way through logging the same send has taken its
+    draft off the page before its row is written, and a page read in that moment found the
+    message gone and nothing logged, so the second chat said "look again" for a send the
+    first then logged (two chats at once, CI, 2026-11-12). The lock waits for that write."""
     if str(act.get("action") or "") != "msg.sent":
         return ""
     item = str(act.get("item") or "")
@@ -4009,8 +4037,9 @@ def _logged_already(act: dict, zone: str, now: dt.datetime) -> str:
         return ""
     at = app_model.parse_time(act.get("at")) or now
     try:
-        return _already_sent(cid, _state().split_subject(text)[1].strip(),
-                             app_model.local_day(at, zone))
+        with _thread_lock():
+            return _already_sent(cid, _state().split_subject(text)[1].strip(),
+                                 app_model.local_day(at, zone))
     except Exception:  # noqa: BLE001
         return ""
 
@@ -4140,7 +4169,8 @@ def pending(db: dict, chat: str, now: dt.datetime) -> list[tuple[str, dict, int 
 def to_claim(todo: list, chat: str, now: dt.datetime) -> list[str]:
     """The pending actions that need a claim before they are applied: not one this chat holds
     a claim on that still has time to run (CLAIM_MARGIN_S), and not one this copy applied
-    already whose receipt never landed (its receipt is only sent again). Two "Not this
+    already whose receipt never landed (its receipt, and what it wrote to the page, are only
+    sent again: apply_dir). Two "Not this
     person" taps were claimed again on every wake, version 1 to 2 to 3, while a wake that
     stopped after its claim never applied them (the maintainer's copy, 2026-11-05)."""
     kept = _kept_ledger_read()
@@ -4221,12 +4251,56 @@ def _fingerprint(act: dict) -> str:
                                        sort_keys=True, ensure_ascii=False, default=str))
 
 
-def _kept_ledger_add(aid: str, act: dict, receipt: dict) -> None:
+def _kept_writes(entries) -> list[dict]:
+    """What a tap wrote to the page, as it can be written again: each write's op, record and
+    fields (never its stamps, which a write made again takes afresh)."""
+    out = []
+    for e in entries or ():
+        got = {"op": e.get("op"), "collection": e.get("collection"), "doc_id": e.get("doc_id")}
+        if e.get("op") != "delete":
+            body = app_model.read_json(e.get("file_path") or "", None)
+            if not isinstance(body, dict):
+                continue
+            got["body"] = {k: v for k, v in body.items()
+                           if k not in (page_db.VERSION_FIELD, page_db.CHANGED_FIELD)}
+        out.append(got)
+    return out
+
+
+def _write_again(got, act: dict, db: dict, w) -> int:
+    """What a tap applied here wrote to the page, written again with its receipt: the batch
+    that carried them never landed (the receipt is not on the page, and the two always go in
+    one batch, page_db.Writes.unit), so neither did they. A Stop's receipt went alone, and the
+    page said "Stopping at its next step" while the work ran on. Each write is pinned to what
+    this read holds; one that changes a record gone since is left. Returns how many."""
+    if not isinstance(got, dict) or got.get("fp") != _fingerprint(act):
+        return 0
+    n = 0
+    for wr in got.get("writes") or []:
+        coll, doc_id, op = str(wr.get("collection") or ""), str(wr.get("doc_id") or ""), \
+            str(wr.get("op") or "")
+        if not coll or not doc_id or op not in ("set", "update", "delete"):
+            continue
+        have = w._read_version(coll, doc_id)
+        if op == "delete":
+            if have is not None:
+                w.add("delete", coll, doc_id, if_version=have)
+                n += 1
+            continue
+        if op == "update" and have is None:
+            continue
+        if isinstance(wr.get("body"), dict):
+            w.add(op, coll, doc_id, dict(wr["body"]), if_version=have)
+            n += 1
+    return n
+
+
+def _kept_ledger_add(aid: str, act: dict, receipt: dict, writes=None) -> None:
     path = _kept_ledger_path()
     if not path:
         return
     got = _kept_ledger_read()
-    got[aid] = {"fp": _fingerprint(act), "receipt": receipt}
+    got[aid] = {"fp": _fingerprint(act), "receipt": receipt, **({"writes": writes} if writes else {})}
     if len(got) > KEPT_MAX:
         got = dict(sorted(got.items(), key=lambda kv: str(
             ((kv[1] or {}).get("receipt") or {}).get("applied_at") or ""))[-KEPT_MAX:])
@@ -4254,7 +4328,8 @@ def apply_dir(dump_dir: str, chat: str = "chat", now: dt.datetime | None = None,
     ledger = app_model.read_json(ledger_path, {}) or {}
     # What this copy applied, whichever folder it was read into: a tap applied whose receipt
     # never landed was applied again from a new read, and refused as "already" (engine audit
-    # 13, 2026-11-03). Its receipt is sent again instead, for the same action only.
+    # 13, 2026-11-03). Its receipt is sent again instead, for the same action only, with what
+    # it wrote to the page (_write_again): the two went in one batch, which never landed.
     kept = _kept_ledger_read()
     for aid, act, _v in pending(db, chat, now):
         got = kept.get(aid)
@@ -4284,6 +4359,7 @@ def apply_dir(dump_dir: str, chat: str = "chat", now: dt.datetime | None = None,
                 and item not in ("job-new", "jobs-add"):
             index.want(item)
     for aid, act, version in todo:
+        w.unit = None
         if str(act.get("action") or "") not in PUBLIC_SAFE:
             if safe_only is None:
                 import app_setup
@@ -4292,15 +4368,19 @@ def apply_dir(dump_dir: str, chat: str = "chat", now: dt.datetime | None = None,
             if safe_only:
                 summary.setdefault("waiting", []).append(aid)
                 continue           # nothing about the person is written here: it waits
+        # The tap's writes and its receipt go in one batch, so they land together or not at all.
+        w.unit = aid
         if aid in ledger:
             receipt = ledger[aid]
             summary["again"].append(aid)
+            _write_again(kept.get(aid), act, db, w)
         else:
             if names is None:
                 try:
                     names = app_model.Ctx(today, now).names
                 except person.NoProfile:
                     names = app_model.Names([])
+            before = {id(e) for e in w.entries}
             try:
                 receipt = _one(aid, act, index, db, w, chat, zone, now, done, names, version)
             except NeedsAssets as e:
@@ -4310,10 +4390,12 @@ def apply_dir(dump_dir: str, chat: str = "chat", now: dt.datetime | None = None,
             with open(ledger_path, "w", encoding="utf-8", newline="\n") as fh:
                 json.dump(ledger, fh, ensure_ascii=False, indent=1)
                 fh.write("\n")
-            _kept_ledger_add(aid, act, receipt)
+            _kept_ledger_add(aid, act, receipt,
+                             _kept_writes(e for e in w.entries if id(e) not in before))
             summary[receipt["result"]].append(aid)
         done[aid] = receipt
         w.add("set", "receipts", aid, receipt)
+    w.unit = None
     _amend_reasons(db, done, ledger, ledger_path, w, chat, zone, now, summary)
     summary["batches"] = w.save("batch")
     summary["writes"] = len(w.entries)

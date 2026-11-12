@@ -8,8 +8,9 @@
 #
 # A layout that fitted in one font pushed a phone sideways in another, and the clock check
 # was a step done by hand and skipped (2026-10-29). CI's Everywhere workflow runs this on a
-# release pull request, weekly and by hand: free on the public app, never on a private copy,
-# and one job each for the page and the rest, so a failure is one short summary to read.
+# pull request labelled `release` and by hand: free on the public app, never on a
+# private copy, and one job for each page group and each suite variant, side by side, so a
+# failure is one short summary to read.
 #
 #   tools/everywhere.sh page  [variant...]   the page's browser tests in each variant
 #   tools/everywhere.sh suite [variant...]   the rest of the suite in each variant

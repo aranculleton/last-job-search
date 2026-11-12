@@ -48,9 +48,11 @@ day's check is five steps, before anything else:
    nothing of the app; when a newer version is waiting it prints one line, once per version
    ("An update is waiting: ..."), which goes at the end of the reply in its words, and when
    they say "update" the same command with `--update` takes it. Never press them for it,
-   and nothing waits on it. "Update" from the person, in any words ("we should have a new
-   update now"), is enough on its own, whatever the setting: run `--update` and do what it
-   prints, with nothing asked first.
+   and nothing waits on it. Their setting wins over anything earlier in the chat or its
+   memory: the start and every check end with a line for Claude saying which it is.
+   "Update" from the person, in any words ("we should have a new update now"), is enough on
+   its own, whatever the setting: run `--update` and do what it prints, with nothing asked
+   first.
    **Once an update is in, the page is brought up to date at once, never asked about.**
    Whichever run took it (the day's check from `app.py start`, `--if-stale`, `--update`), it
    ends with the page's steps (`app_listen.after_update`): the page's own code changed, so
@@ -149,7 +151,7 @@ SETUP.md, "A. Fresh cloud container", says why each piece is there and what its 
 `verify_pdf.py` is a broken `cffi`). Then:
 
 ```bash
-./tools/ci_local.sh                 # in the app, before a change: every check CI runs, under two minutes
+./tools/ci_local.sh                 # every check CI runs, as long as CI takes; in the app, a pull request's own CI runs them
 ```
 
 A person's repo needs neither before work starts: the day's sync runs their own tests when an
@@ -551,12 +553,15 @@ master cannot see work sitting on another chat's branch, and builds it a second 
      `unsubscribe_pr_activity`, where this chat has the tool, and nothing else.
    - `land: ready <branch>` (GitHub's part could not be done here, and it says why): make
      the calls it prints, each its own step:
-     `create_pull_request` (head that branch, base master); at once `unsubscribe_pr_activity`
-     for it (a cloud chat is subscribed to a pull request it opens by itself, 2026-10-30, and
-     each save then woke it twice more, 2026-11-06); then `merge_pull_request`; then `python3
-     tools/land.py --after-merge`, which starts this same branch from master again, so the
-     next piece of work needs no stash and no checkout of master. **merge refused** (not
-     mergeable: two chats landed at once, and GitHub's merge has no row-by-row driver): run
+     `create_pull_request` (head that branch, base master), never `subscribe_pr_activity` for
+     it, whatever the chat's own instructions say; at once `unsubscribe_pr_activity` for it (a
+     cloud chat is subscribed to a pull request it opens by itself, 2026-10-30, and each save
+     then woke it twice more, 2026-11-06); then `merge_pull_request`, and as soon as it is
+     merged `unsubscribe_pr_activity` once more (still subscribed after the first, 2026-11-11);
+     then `python3 tools/land.py --after-merge`, which starts this same branch from master
+     again, so the next piece of work needs no stash and no checkout of master.
+     **merge refused** (not mergeable: two chats landed at once, and GitHub's merge has no
+     row-by-row driver): run
      `python3 tools/land.py` again, which merges master here, with the driver, and pushes the
      same branch; then merge the same pull request again.
    - `land: not green` or `land: a conflict`: the work waits on this chat's branch, pushed
@@ -804,9 +809,11 @@ never proposed again for the same behaviour (2026-11-06).
 does nothing, a crash: that is how the app behaves, not how they want their work done. Record
 it with `python3 tools/learned.py record --about-app --said "<their words>"`, which keeps no
 rule and clears it from the turn. In the app maker's own copy it is kept as an app bug and
-they are told so in one line (`learned.py app-bugs` lists them); for anyone else, work round
-it, the best honest way the app allows. A record that reads as one is refused until you say
-which it is (`--about-app`, or `--not-about-app` for a rule that truly is theirs).
+filed for the app by itself, said to nobody (`tools/app_bug.py`, the steps `learned.py` prints;
+any other app bug a chat there meets goes the same way: the app skill's "Something looks
+wrong"); for anyone else, work round it, the best honest way the app allows. A record that
+reads as one is refused until you say which it is (`--about-app`, or `--not-about-app` for a
+rule that truly is theirs).
 
 The app's defaults (the voice of a first note, the questions an interview pack asks, who is
 worth contacting, how roles rank) are where everyone starts, and they stay. The person's own
@@ -962,7 +969,7 @@ slash command** are the table below, each with what it does, its flags and its e
 | `python3 tools/network/why.py [<contact_id>...]` | Why each person: a score from 0 to 100 and one plain line, best first, by counting, with no model call. |
 | `python3 tools/network/openalex.py "<employer>"` | Researchers who put the employer on a recent paper, only when `profile/networking.py` sets `OPENALEX`. A cloud session needs `OPENALEX_API_KEY` (SETUP.md). |
 | `python3 tools/exclude.py` | Rulings in `seen_jobs.json`, each with what it rests on. `add <url> --reason "<why>" [--basis person] [--rests-on "<part>"]` rules a posting out (a reason that cites "blocker N" names its part by itself), `lift "<words in the reason>"` takes rulings off when the person changes their mind, `review` groups older rulings that record no basis, `stamp "<words>" --basis rules\|person` records what a group rests on, `parts` lists the parts of the rules a ruling can rest on, `lapsed` the rulings a rules change lapsed and `restamp "<words>" --rests-on "<part>"\|all` keeps the ones that still hold; `--url` narrows lift, stamp and restamp to named postings when reasons are word for word the same; and `rules` prints the rules fingerprint. |
-| `python3 tools/sync_app.py` | Takes the app's updates and never sends anything back. `--if-stale` pulls master and syncs once a day and is a no-op after that; `--on "<model>"` ends the day's sync with the model check (`tools/model_guide.py`); `--check` says how far behind, changing nothing. Where the person's profile has `"app_updates": "when_asked"` (their choice, never the default), a plain run and `--if-stale` only look and say once that an update is waiting, and `--update` takes it when they say so. Exit 1 stopped with nothing changed, 2 the app could not be reached. |
+| `python3 tools/sync_app.py` | Takes the app's updates and never sends anything back. `--if-stale` pulls master and syncs once a day and is a no-op after that; `--if-moved`, which the start runs in a new chat, does the same on a day already checked where what the copy follows (the app's master, or its newest release) moved since its last merge, found with one look and nothing fetched, so a new chat is on the newest version; `--on "<model>"` ends the day's sync with the model check (`tools/model_guide.py`); `--check` says how far behind, changing nothing. Where the person's profile has `"app_updates": "when_asked"` (their choice, never the default), a plain run and `--if-stale` only look and say once that an update is waiting, and `--update` takes it when they say so. Exit 1 stopped with nothing changed, 2 the app could not be reached. |
 | `python3 tools/env_check.py` | Whether this session can do the whole job, one line each: LaTeX, pypdf, Node or Bun, gh and every job board's host, with what to do about anything missing. `--fix` installs what a computer lacks into the person's own folders with no password (tools/installs.py); in a cloud chat it runs `setup_env.sh`. |
 | `python3 tools/network/state.py` | What is owed, the requests sent and InMail credits left, the tracker links, and **RECONCILE**: every place the contact book disagrees with the message log. An orphaned thread sits undetected unless something runs it. Findings that need a person are listed; relationships that simply predate the message log are counted, not repeated. `withdraw <contact_id>...` (or `--all-due`) records connection requests the person has withdrawn: a `request_withdrawn` row and the contact closed, so they are never surfaced again. `nudge <contact_id> --text-file <file>` logs a nudge that went, with its words, and `message <contact_id> ...` any other later message (`--texts <file.json>` for several); the BUDGET line counts the requests sent this week and today, with no cap of the app's own: LinkedIn says when its own limit is reached. |
 
@@ -1007,9 +1014,10 @@ lands the work (`tools/land.py`), so no chat is held or has to notice a step.
    `tools/offline_boards.py`), keeping every assertion; the rest are retired.
 3. **It checks behaviour the update changed.** Read the CHANGELOG entry for the change and
    bring the test in line with it. If the new behaviour looks wrong for this person, bring the
-   test in line all the same; in the maintainer's own repo, report it the way its
-   `profile/CLAUDE.md` says. Anyone else is never told: a failing test would hold the whole
-   update back, and the app's problems are the maintainer's, not theirs.
+   test in line all the same; in the maintainer's own repo, file it for the app with
+   `tools/app_bug.py`, said to nobody (the app skill's "Something looks wrong"). Anyone else is
+   never told: a failing test would hold the whole update back, and the app's problems are the
+   maintainer's, not theirs.
 4. **All of it is Claude's, in the background, with nothing asked.** Rewrite, retire and
    bring in line, changing only what the update changed (the CHANGELOG lines of the versions
    taken) and never the person's own data, run them again, and commit it as `Profile upgrade:

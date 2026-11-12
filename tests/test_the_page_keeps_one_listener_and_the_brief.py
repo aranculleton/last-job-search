@@ -59,6 +59,27 @@ def test_nobody_listening_is_one_card_and_wake_claude_rings_the_doorbell(run, tm
     assert "Claude has been told. It starts on what is waiting as soon as it can" in got["after"][1]["text"]
 
 
+def test_wake_claude_reaches_claude_however_many_taps_wait(run, tmp_path):
+    """A ring is a comment, and a comment over 4 KiB is refused with nothing sent
+    (comments.d.ts): Wake Claude named every tap left waiting, so a person who tapped through a
+    few dozen cards while no chat answered could never wake Claude again. The fake took any
+    length until 4.15. The ring names what fits; the chat reads all that waits from the store."""
+    seed = _waiting()
+    for n in range(80):
+        item = "job-harbourline-bank-senior-pricing-analyst-%02d" % n
+        seed["actions/act~%s~job.dismiss~mh%02d" % (item, n)] = {"item": item, "action": "job.dismiss", "value": None,
+                                                                "at": "2026-10-25T08:20:00Z", "rev_seen": None, "tab": "t-old"}
+    got = _go(run, tmp_path, [
+        {"hash": "todo", "read": '[data-item="listen"]'},
+        {"click": "Wake Claude", "within": '[data-item="listen"]', "wait": 300, "read": '[data-item="listen"]', "calls": "comments"},
+    ], PHONE, seed=seed, clock=T)
+    rings = [c for c in got["after"][1]["calls"] if c.get("text")]
+    assert rings, got["after"][1]["calls"]
+    text = rings[-1]["text"]
+    assert len(text.encode("utf-8")) <= 4096 and text.startswith("[app] [work:search~late,"), text[:120]
+    assert "Claude has been told." in got["after"][1]["text"], got["after"][1]["text"]
+
+
 def test_with_nothing_to_hear_it_the_one_button_is_open_claude(run, tmp_path, vp):
     """Nothing open to hear a ring is known before the tap: the card offers the one button that
     can work, Open Claude, never a Wake Claude that cannot (the 3 November audit, shell 8).

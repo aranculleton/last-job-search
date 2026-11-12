@@ -12,6 +12,7 @@ registry, `profile/routines.json` (`profile.example/routines.json` shows the sha
 | **Job search: morning brief**, every morning once it is turned on (weekdays or other days in one tap) | Led by where the search is (an interview to prep, replies owed, applications waiting, or too little going out), then what is owed with the replies and nudges drafted, the counts since the last brief, three things to do before the next one, and the news that matters. Every run also takes the app's updates, so the copy stays current when no chat is opened (`prompts/morning_brief.md`). |
 | **Job search: daily upkeep**, made by itself where the brief does not run every day | Nothing to read: once a day, silently, it takes the app's updates, brings the page's data up to date and starts any work still waiting, so a page opened with no chat running is today's. The chat that answers the page makes it in its daily tidy-up, moves it with itself as it renews (deleting the old copy, never piling copies up), and takes it away once a brief runs every day (`prompts/upkeep.md`). |
 | **Job search: shortlist**, optional and off by default | A scored round of new postings, best first (`prompts/job_round.md`). Reply with picks in the same chat and it drafts, verifies and records them. |
+| **App builder: weekly fixes and release**, the app maintainer's alone, on the app itself | Nothing to read: every Wednesday night it fixes every issue reported on the app that week and releases the fixes; what it did is on the app's GitHub, in its issues and release notes, never in a brief (`prompts/builder_week.md`; MAINTAINING.md, "Bugs from the maintainer's copy"). Nobody else has it. |
 
 **Where it arrives.** Each brief is a reply in the chat it runs in, and on your Brief where you
 have a page. At the end of each run it sends its headline to your phone; that notification may
@@ -51,12 +52,12 @@ makes (a).
 | Set up from | The bell (Claude does it) | A routine, made by you, once |
 
 <!-- claude-surface: chat-push claim -->
-<!-- checked 2026-11-03; https://code.claude.com/docs/en/tools-reference -->
-A chat can send the person a phone notification with the PushNotification tool. The docs
-name it a phone push while Remote Control is connected, and Push when Claude decides
-(agentPushNotifEnabled, off by default) lets Claude send one; a cloud chat reads that
-setting from the copy's own .claude/settings.json, which turns it on. A scheduled run in a
-cloud chat was seen to send one: the tool answered Mobile push requested, with the push
+<!-- checked 2026-11-11; https://code.claude.com/docs/en/tools-reference -->
+A chat can send the person a phone notification with the PushNotification tool. The docs say
+it sends a phone push with Remote Control or in a cloud session, and Push when Claude
+decides (agentPushNotifEnabled, off by default) lets Claude send one; a cloud chat reads
+that setting from the copy's own .claude/settings.json, which turns it on. A scheduled run
+in a cloud chat was seen to send one: the tool answered Mobile push requested, with the push
 sent. A scheduled task bound to a chat has no notification of its own (create_trigger's
 notifications are only for a task that starts a new chat each run, and such a run gets no
 copy of the files and no add_repo to fetch one), so a brief that runs in a chat sends its
@@ -87,7 +88,7 @@ chat is awake to start one there.
 Claude cannot start a cloud chat from its own shell on your computer, so it never tries:
 
 <!-- claude-surface: cli-cloud claim -->
-<!-- checked 2026-10-18; https://code.claude.com/docs/en/claude-code-on-the-web -->
+<!-- checked 2026-11-11; https://code.claude.com/docs/en/claude-code-on-the-web -->
 claude --cloud starts a cloud chat from a terminal. It needs the terminal version of Claude
 Code, installed apart from the desktop app and signed in to the same claude.ai account, and
 it refuses to run without an interactive terminal: Claude cannot run it from its own shell,
@@ -217,12 +218,12 @@ tools/tidy.py undo`).
 1. Make a routine for each task:
 
    <!-- claude-surface: routines-cloud -->
-   <!-- checked 2026-10-29; https://code.claude.com/docs/en/routines -->
+   <!-- checked 2026-11-11; https://code.claude.com/docs/en/routines -->
    To make the brief in the cloud:
    1. Open claude.ai/code/routines and choose New task (in the desktop app's Code tab:
-      Scheduled, then New task).
+      Scheduled, then New task). If it asks, choose Set up manually.
    2. Name it Job search: morning brief, choose your copy, set it daily at your time, paste
-      the prompt I give you, and save.
+      the prompt I give you, then choose Create.
    3. Only for days other than every day: open it again, choose Custom, and paste the
       schedule I give you.
 

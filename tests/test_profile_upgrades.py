@@ -500,7 +500,11 @@ def test_only_what_truly_needs_the_person_waits_for_them():
                                                                  # the wrong way round: asked,
                                                                  # never changed unasked
                                                                  # (2026-11-11).
-                                                                 "updates-choice"}
+                                                                 "updates-choice",
+                                                                 # The same, for words an older
+                                                                 # version saved no setting from
+                                                                 # (2026-11-11).
+                                                                 "updates-said"}
     # Nothing asks for their email: anything like an alert reaches them inside Claude
     # (the maintainer's instruction, 2026-10-22).
     assert not [u.id for u in U.REGISTRY
@@ -646,7 +650,8 @@ MARK = re.compile(r"Profile upgrade: `([a-z0-9-]+)`")
 
 def _unreleased_and_later():
     text = open(os.path.join(ROOT, "CHANGELOG.md"), encoding="utf-8").read()
-    head = text[text.index("## [Unreleased]"):text.index("## [3.0.0]")]
+    # From the first section, whatever it is named: [Unreleased], or the version `cut` named.
+    head = text[text.index("\n## ["):text.index("## [3.0.0]")]
     return [b for b in re.split(r"\n(?=- \*\*)", head) if b.startswith("- **")]
 
 
@@ -1204,6 +1209,36 @@ def test_a_rule_about_updates_written_the_wrong_way_round_is_asked_about_once(pr
     assert U.by_id("updates-choice").pending() == ""
 
 
+def test_words_an_older_version_saved_no_setting_from_are_asked_about_once(profile):
+    """The review of 2026-11-11: "Only update when I say", said under 4.15.0, set nothing, and
+    updates-choice re-reads only the rules that set it. Read again with today's reader, it
+    says otherwise than the setting: asked once, never written unasked; their answer, recorded
+    as a rule of its own, ends the question. A rule older than the last one that set it is
+    history, and words about someone else's update are never asked about."""
+    import learned
+    person.reset()
+    rows = learned.load()
+    rows.append({"date": "2026-11-05", "area": "other", "said": "Only update when I say",
+                 "rule": "Only update when I say.", "applied_to": [], "never_say": [],
+                 "status": "active"})                   # as 4.15.0 kept it: no setting
+    learned.save_entries(rows)
+    got = U.by_id("updates-said").pending()
+    assert "only when you say" in got and "by themselves" in got, got
+    assert "app_updates" not in json.load(open(person.path("person.json"), encoding="utf-8"))
+    assert U.by_id("updates-said") in [u for u, _w in U.pending()]
+    learned.record("other", "only when I say", "The app's updates come only when he says.",
+                   today="2026-11-11")                  # their answer, on the card
+    person.reset()
+    assert U.by_id("updates-said").pending() == ""
+    assert U.by_id("updates-choice").pending() == ""
+    rows = learned.load()
+    rows.append({"date": "2026-11-11", "area": "messages", "said": "Don't ask recruiters for an update",
+                 "rule": "Never ask recruiters for an update; wait two weeks.", "applied_to": [],
+                 "never_say": [], "status": "active"})
+    learned.save_entries(rows)
+    assert U.by_id("updates-said").pending() == ""
+
+
 def test_roles_set_aside_with_no_day_are_dated_from_the_update(profile, tmp_path):
     """A role the person set aside held for good before set-asides had an end; one with no day
     of its own would come back on the first search after the update, with every other, or be
@@ -1284,3 +1319,82 @@ def test_notes_set_aside_on_the_page_before_they_had_an_end_are_dated_from_the_u
     assert got["ormsby_varga"]["outcome"].endswith("not now, said on the page")
     assert state.dropped_until(got["ormsby_quill"]) is None
     assert state.dropped_until(got["ormsby_hale"]) is None
+
+
+def test_follow_ups_never_fitted_to_your_rules_come_off_their_cards(profile, monkeypatch):
+    """Before 2026-11-11, `app.py follow-ups` and the brief kept code's plain follow-up on its
+    person's card even where it was flagged for Claude to fit to the person's own rules for
+    messages (followup_drafts.RULES_TO_FIT): the page said ready to send, and the next run read
+    it back from the card, unflagged, and finished it as ready. The upgrade takes off each card
+    that still holds code's words exactly (kept, beside it), so the follow-up is owed again and
+    drafted flagged; a clean draft, one the person edited and one already sent stay. Invented
+    people in the example's own state, as the app runs it."""
+    import csv
+    sys.path[:0] = [os.path.join(ROOT, "tools", "network"), os.path.join(ROOT, "tests")]
+    import app_state
+    day = "2026-10-25"
+    monkeypatch.setenv("LJS_TODAY", day)
+    st = os.environ[person.STATE_ENV]
+    flagged, also, clean, edited, sent = app_state.nudges_due(st, 5)
+    with open(profile / "learned.json", "w", encoding="utf-8") as fh:
+        json.dump({"entries": [{
+            "date": "2026-10-20", "area": "messages", "status": "active",
+            "said": "always thank them and say I'm looking for analytics roles in Manchester",
+            "rule": "thank them, and say the roles I want and where I am"}]}, fh)
+    up = U.by_id("follow-ups-fitted")
+    assert up.cost == "instant" and up.needs == "nobody" and up.conditional
+    assert up.pending() == ""                       # nothing on a card yet
+
+    def drafted() -> dict:
+        r = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "followup_drafts.py"),
+                            "--json", "--today", day], cwd=ROOT, capture_output=True,
+                           text=True, encoding="utf-8", env=dict(os.environ))
+        assert r.returncode == 0, r.stderr[-600:]
+        return {i["contact_id"]: i["draft"] for i in json.loads(r.stdout) if i.get("contact_id")}
+
+    code = drafted()
+    for cid in (flagged, also, clean, edited, sent):
+        assert code[cid]["status"] == "check" and code[cid]["source"] == "code", code[cid]
+    # The cards as the older runs left them: code's words on two, a draft written to fit on
+    # one, code's words the person changed on one, and code's words on one logged as sent.
+    folder = lambda cid: os.path.join(st, "documents", "network", cid)  # noqa: E731
+    cards = {flagged: code[flagged]["text"], also: code[also]["text"],
+             clean: ("Hi there, thanks again for connecting. Following up on my note from "
+                     "September: I'm looking for analytics roles in Manchester. How is the "
+                     "analytics team set up these days?"),
+             edited: code[edited]["text"] + " Thanks again for connecting.",
+             sent: code[sent]["text"]}
+    for cid, text in cards.items():
+        os.makedirs(folder(cid), exist_ok=True)
+        with open(os.path.join(folder(cid), "draft.md"), "w", encoding="utf-8") as fh:
+            fh.write(text + "\n")
+    threads = os.path.join(st, "network_threads.csv")
+    rows = list(csv.DictReader(open(threads, encoding="utf-8")))
+    rows.append(dict(rows[-1], contact_id=sent, date="2026-10-24", scenario="nudge",
+                     summary="follow-up", full_text=cards[sent]))
+    with open(threads, "w", encoding="utf-8", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=list(rows[0].keys()))
+        w.writeheader()
+        w.writerows(rows)
+    # On its card, code's unfitted follow-up is still its stock lines: never ready (issue 223).
+    assert drafted()[flagged]["status"] == "check", drafted()[flagged]
+    assert up.pending() == ("2 follow-up(s) on a card were never written for their reader or "
+                            "fitted to your own rules for messages")
+    # As the app runs it (run_instant): "python3" is this Python, which Windows names otherwise.
+    r = subprocess.run([sys.executable, *up.command[1:]], cwd=ROOT, capture_output=True, text=True,
+                       encoding="utf-8", env=dict(os.environ))
+    assert r.returncode == 0, r.stderr[-600:]
+    assert up.pending() == ""
+    for cid in (flagged, also):
+        assert not os.path.exists(os.path.join(folder(cid), "draft.md")), cid
+        with open(os.path.join(folder(cid), "draft.unfitted.md"), encoding="utf-8") as fh:
+            assert fh.read().strip() == cards[cid]          # kept, word for word
+    for cid in (clean, edited, sent):
+        with open(os.path.join(folder(cid), "draft.md"), encoding="utf-8") as fh:
+            assert fh.read().strip() == cards[cid], cid
+        assert not os.path.exists(os.path.join(folder(cid), "draft.unfitted.md")), cid
+    # Back on the list to write: drafted again, flagged for Claude to fit, nothing on the card.
+    again = drafted()
+    import followup_drafts
+    for cid in (flagged, also):
+        assert again[cid]["status"] == "check" and followup_drafts.RULES_TO_FIT in again[cid]["warnings"]

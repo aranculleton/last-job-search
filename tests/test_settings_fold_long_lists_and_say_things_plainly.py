@@ -83,8 +83,8 @@ def test_employers_turned_down_are_one_row_that_opens_their_names_each_with_a_tr
     first, opened, all_ = got["after"]
     assert first["count"] == 0, "no row a turned-down employer"
     assert "Employers you've turned down (30)" in first["eval"] and "No more from Employer" not in first["eval"]
-    # The total they left out lately: 0+1+2 ten times over.
-    assert "30 left out lately" in first["eval"], first["eval"][:400]
+    # The total they left out in the last 30 days, each job once: 0+1+2 ten times over.
+    assert "30 left out in the last 30 days" in first["eval"], first["eval"][:400]
     assert opened["count"] == 5 and "Show all" in opened["text"], (opened["count"], opened["text"][:300])
     assert all_["count"] == 30
 
@@ -256,12 +256,49 @@ def test_your_rules_lists_what_left_something_out_and_your_search_carries_its_ow
         m["rules"] = __import__("json").load(fh)["rules"]
     got = _go(run, tmp_path, [{"hash": "settings", "eval": RULES}], vp, model=m)["after"][0]["eval"]
     where = dict(got["search"])["Where"]
-    assert "2 left out lately" in where, got["search"]
+    # What the newest search left out by it, as Jobs counts it (2026-11-11: a month of searches
+    # added up read "38,547 left out lately").
+    assert "2 left out by your last search" in where, got["search"]
     names = [n for n, _ in got["rules"]]
     assert not {"Where", "Pay", "Your field"} & set(names), got["rules"]
     assert not [v for _, v in got["rules"] if "None left out" in v], got["rules"]
     assert "Needs a qualification you do not hold" in names, got["rules"]
     assert got["more"] and got["inset"] is not None and got["inset"] >= got["rowInset"] - 1, got
+
+
+EVERY_RULE = r"""(() => {
+  const group = (name) => document.querySelector('#main section[aria-label="' + name + '"]');
+  const all = (g) => g ? [...g.querySelectorAll('.set-sum')].map((r) => [r.querySelector('.set-name').textContent.trim(), (r.querySelector('.set-value') || {}).textContent || '']) : null;
+  return {search: all(group('Your search')), rules: all(group('Your rules'))};
+})()"""
+
+
+def test_before_any_search_no_rule_says_what_it_left_out(run, tmp_path, monkeypatch):
+    # Before any search every rule read "None left out by your last search", of a search never
+    # run (the review, 2026-11-11). The engine gives no count then, and the page says none.
+    import datetime as dt
+    import json
+    import shutil
+    import app_model
+    import person
+    state = tmp_path / "state"
+    shutil.copytree(os.path.join(ROOT, "profile.example", "state"), state)
+    monkeypatch.setenv("LJS_STATE", str(state))
+    person.reset()
+    try:
+        built, _ = app_model.build(dt.date(2026, 10, 25), dt.datetime(2026, 10, 25, 9, 30, tzinfo=dt.timezone.utc),
+                                   only=("rules",))
+    finally:
+        monkeypatch.undo()
+        person.reset()
+    m = _sample()
+    m["rules"] = json.loads(json.dumps(built["rules"]))
+    assert [r for r in m["rules"]["rows"] if r["kind"] == "language"][0]["left_out"] is None
+    got = _go(run, tmp_path, [{"hash": "settings"}, {"click": "Show all", "within": '#main section[aria-label="Your rules"]'},
+                              {"eval": EVERY_RULE}], WIDE, model=m)["after"][-1]["eval"]
+    assert got["rules"] and len(got["rules"]) > 2, got["rules"]
+    said = [v for _, v in got["search"] + got["rules"] if "left out" in v.lower()]
+    assert not said, said
 
 
 MONEY = r"""(() => { const t = (s) => (document.querySelector(s) || {}).textContent || ''; return {pay: t('[data-k="info-sum:search-pay"]'), prep: t('dialog.detail')}; })()"""

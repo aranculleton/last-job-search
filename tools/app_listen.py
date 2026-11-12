@@ -82,18 +82,18 @@ WAKE_PROMPT = "Look after my job search page from now on."
 # stops on a permission prompt while the person is away: the helper and a computer chat both
 # started in Manual and waited on the person (the maintainer, 2026-11-09). A chat in a
 # stricter mode than Auto is refused it ("cannot be more permissive than the calling
-# session's mode"), so the call is made again without it (MODE_REFUSED).
+# session's mode"): the person is asked on their page to switch it (MODE_REFUSED), never in
+# a chat nobody reads, the wake's agent, the brief or the starter (the local review,
+# 2026-11-11, 6).
 SESSION_MODE = "auto"
 MODE_REFUSED = (" If it is refused because of its permission_mode: where the refusal says "
-                "this chat (the parent) is not in auto mode, say exactly this to the person, "
-                "once, and wait for \"done\": \"One step, once: at the bottom of this chat, "
-                "change the mode to Auto, then say done. Every chat Claude starts for you then "
-                "runs by itself.\" Then make the same call again (a chat whose mode menu said "
-                "Auto was refused as default on 2026-11-10: the menu is not the proof, the "
-                "refusal is). Only where they say Auto is not offered, or it is refused for any "
-                "other reason, make it without permission_mode; where that new chat is on the "
-                "person's computer, say once: \"On your computer, in the chat named <its "
-                "title>, change Manual to Auto at the bottom.\"")
+                "this chat (the parent) is not in auto mode, python3 tools/app.py mode-refused "
+                "--chat <this chat's id>, which puts one card on the person's page with this "
+                "chat's link and the steps to switch it to Auto; say nothing about it in this "
+                "chat and wait for nothing: what the call was for is tried again at a later "
+                "wake, in Auto once they have switched (a chat whose mode menu said Auto was refused as "
+                "default on 2026-11-10: the menu is not the proof, the refusal is). Only where "
+                "it is refused for any other reason, make it again without permission_mode.")
 WAKE_COMMAND = "python3 tools/app.py start --listen --helper"
 REPUBLISH_TITLE = "Bringing your page up to date"
 # All the person hears about their page after an update: one line. A chat that took an
@@ -1647,14 +1647,72 @@ REBUILD = "python3 tools/app.py page --out-dir <your scratchpad>/page, with no -
 SMALL_WINDOW = 200_000
 
 
+def _last_known_publish(url: str) -> str:
+    """When the page at `url` was last published, as far as this copy knows: the stamp the
+    page's own meta/now carries (app.py view writes it from the record of the chat that drew
+    it), from the last read of the page this copy keeps (tools/page_reads.py). "" when unknown."""
+    try:
+        import page_reads
+        root = page_reads.mirror_dir()
+        if str(page_reads._meta().get("url") or url) != url:
+            return ""
+        got = page_reads._fields(os.path.join(root, "meta", "now.json")) or \
+            page_reads._fields(os.path.join(root, "meta", "current.json"))
+        return str(got.get("published_at") or "")
+    except Exception:  # noqa: BLE001  nothing read yet: the record stands
+        return ""
+
+
+def list_needed(rec: dict, url: str) -> str:
+    """Why the published page's own list of files is needed before a republish, or "" when
+    this copy's record of its last publish (app.py published --parts) says what it holds: no
+    record of its files, a record of another page, or one older than the page's last publish
+    this copy knows of (another chat published it since)."""
+    if not rec.get("code"):
+        return "no record"
+    if str(rec.get("url") or "") != url:
+        return "another page"
+    last = _last_known_publish(url)
+    if last and str(rec.get("published_at") or "") < last:
+        return "older"
+    return ""
+
+
+# A list of the page's files is believed only where it looks like the host's own: a list whose
+# sizes are all one number (a chat that wrote "1 bytes" for each), or with far fewer files than
+# the record, was copied by hand and cut short, and read as it stood it sent the whole page
+# again, about 1 MB in seven publishes (issue #229).
+SAY_BAD_LIST = ("app: that list of the page's files does not look like the one the Artifact "
+                "tool printed{why}, so nothing was planned from it. List the page's files again "
+                "(Artifact, action list, scope files, url {url}) and pass every line exactly as "
+                "it came. If the page really holds that little, add --whole to put every file "
+                "up again.")
+
+
+def bad_listing(listed: dict, held: list | None) -> str:
+    """Why a list of the page's files (app_page.on_page) cannot be believed, or "": every
+    size the same, or far fewer files than the record says the page holds."""
+    sizes = [n for n in listed.values() if n is not None]
+    if len(sizes) >= 5 and len(set(sizes)) == 1:
+        return f": every file in it has the same size ({sizes[0]} bytes)"
+    if held and len(held) >= 10 and len(listed) < len(held) // 2:
+        return (f": it names {len(listed)} code files, and the page was last published "
+                f"with {len(held)}")
+    return ""
+
+
 def parts_plan(built: dict, url: str = "", listing: str | None = None,
                whole: bool = False) -> list[str]:
     """What `app.py page --out-dir` prints: the publishes that put the page in parts up, read
-    file by file. A page already published (a url) is first read and its files listed, and
-    the build is run again with that list (`--on-page`): only the files the page lacks go up,
-    so a file the record says it holds and the host does not (a publish cut short, a file
-    lost) goes up again, and every file the publish replaces or takes off is one this chat
-    has seen listed, as the Artifact tool asks. `whole` (the page's own "did not load fully"
+    file by file. A page already published (a url) is planned from this copy's record of its
+    last publish (profile/app.json `code`, app.py published --parts): only the code files
+    that changed since go up (issue #229). Only where that record cannot say (list_needed) is
+    the page read and its files listed, and the build run again with that list (`--on-page`):
+    then a file the record says it holds and the host does not (a publish cut short, a file
+    lost) goes up again, and every file the publish takes off is one this chat has seen
+    listed, as the Artifact tool asks; a list that looks copied short is refused (ValueError,
+    bad_listing). Planned from the record, nothing is taken off: files the page no longer
+    loads stay until a publish made from a list. `whole` (the page's own "did not load fully"
     button, templates/app/guard.js): every code file goes up again. Its capabilities are
     declared only when they changed, since a publish that declares them asks the person
     first (code.claude.com/docs/en/artifacts, "When Claude Code asks before publishing") and
@@ -1668,7 +1726,7 @@ def parts_plan(built: dict, url: str = "", listing: str | None = None,
 
     def kb(n: int) -> int:
         return max(1, round(n / 1024))
-    if url and listing is None:
+    if url and listing is None and list_needed(rec, url):
         again = (f"python3 tools/app.py page --out-dir {folder} --url {url}"
                  + (" --whole" if whole else "") + " --on-page - <<'EOF'")
         return [f"app: the page is built in parts: {built['page']} ({kb(sizes['page.html'])} KB) "
@@ -1680,8 +1738,14 @@ def parts_plan(built: dict, url: str = "", listing: str | None = None,
                 f"3. {again}, then every line that list printed, exactly as it came, then a line "
                 "EOF; and make exactly the publishes that prints, in order."]
     listed = app_page.on_page(listing) if listing is not None else None
+    if listed is not None and not whole:
+        why = bad_listing(listed, rec.get("code") if same else None)
+        if why:
+            raise ValueError(SAY_BAD_LIST.format(why=why, url=url))
     got = app_page.plan(built, rec.get("code") if same else None,
                         str(rec.get("caps") or "") if same else "", url, listed=listed, whole=whole)
+    if url and listed is None:
+        got["gone"] = []         # never taken off unseen: the Artifact tool asks for a list
     new_kb = kb(sum(sizes[p] for p in got["new"])) if got["new"] else 0
     # Each code file is named from the page's own folder (`root`), so a publish carries its
     # short path once, not the scratchpad's twice; the page is read once (E-1).
@@ -1777,14 +1841,54 @@ def after_update(landed: bool = False, chat: str = "") -> list[str]:
             " Then stop here."] + _publish_now(url, 3)
 
 
+def question_waiting(db: dict, now: dt.datetime | None = None) -> str:
+    """The oldest question the person asked that waits for a chat (a queued `talk`,
+    page_db.ASKED_FIRST), or "": a wake's pass looks for one between its items (app.py
+    ASKED_BETWEEN), so it is answered before the next item, never after the whole pass. A
+    Chat question is left out while the Chat's own chat is at work: that chat takes it."""
+    import page_db
+    now = now or dt.datetime.now(dt.timezone.utc)
+    theirs = page_db.question_chat_live(db, now)
+    got = sorted((str(d["data"].get("asked_at") or ""), wid)
+                 for wid, d in (db.get("work") or {}).items()
+                 if str(d["data"].get("kind") or "") in page_db.ASKED_FIRST
+                 and str(d["data"].get("status") or "") == "queued"
+                 and not d["data"].get("stop_asked")
+                 and not (theirs and page_db.chat_question(d["data"])))
+    return got[0][1] if got else ""
+
+
+def job_waiting(db: dict, now: dt.datetime | None = None) -> str:
+    """The big job a cloud chat that answers the page would start next in a chat of its own
+    (page_db.next_item, big jobs alone, against the cloud's own limit), or "": a wake's pass
+    looks for one between its items too (app.py ASKED_BETWEEN, `--jobs`), so a resume asked for
+    meanwhile is started within a minute or two, never after every message change in the pass
+    (issue #231)."""
+    import page_db
+    now = now or dt.datetime.now(dt.timezone.utc)
+    got = page_db.next_item(db, "cloud", now, cap=page_db.HEAVY_CAP_CHATS, heavy_only=True)
+    return str(got["work"]) if got else ""
+
+
 def main(argv=None) -> int:
-    """python3 tools/app_listen.py waiting <dump>: whether work waits for a chat in a read of
-    the page's work (rings_meanwhile)."""
+    """python3 tools/app_listen.py waiting <dump> [--question [--jobs]]: whether work waits for
+    a chat in a read of the page's work (rings_meanwhile); with --question, whether a question
+    the person asked does (question_waiting), and with --jobs as well, a big job to start in a
+    chat of its own (job_waiting)."""
     argv = sys.argv[1:] if argv is None else argv
-    if argv[:1] != ["waiting"] or len(argv) != 2:
-        print("usage: python3 tools/app_listen.py waiting <dump>", file=sys.stderr)
+    if argv[:1] != ["waiting"] or len(argv) not in (2, 3, 4) \
+            or argv[2:] not in ([], ["--question"], ["--question", "--jobs"]):
+        print("usage: python3 tools/app_listen.py waiting <dump> [--question [--jobs]]",
+              file=sys.stderr)
         return 2
     import page_db
+    if argv[2:3] == ["--question"]:
+        db = page_db.load(argv[1])
+        wid = question_waiting(db)
+        job = job_waiting(db) if not wid and argv[3:] == ["--jobs"] else ""
+        print(f"waiting: a question, {wid}" if wid else f"waiting: a big job to start, {job}"
+              if job else "waiting: no question")
+        return 0
     since = waiting_since(page_db.load(argv[1]))
     print("waiting: work waits since %s" % since.strftime("%Y-%m-%dT%H:%M:%SZ") if since
           else "waiting: nothing")
