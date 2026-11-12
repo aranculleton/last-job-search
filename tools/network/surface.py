@@ -282,13 +282,23 @@ def check(person: dict, ctx: dict | None = None, queued: bool = False,
                                if state._direction(m)])
         statuses = [(r, state.effective_status(r, msgs)) for r in rows]
         if again_after_run:
+            # A read's own ruling holds until something new is known about them (a new
+            # headline or employer): a later check of the same results reopened one a read had
+            # ruled out that morning, ahead of people never looked at (#260, 2026-11-12). A
+            # close by a list rule is checked again by today's rules.
+            again = []
             for r, _s in statuses:
                 why_run = state.closed_by_a_run(r, msgs)
-                if why_run:
-                    out["warn"].append(f"{why_run}, not you: checked again by today's rules")
-                    out["reopen"] = out["reopen"] or str(r.get("contact_id") or "").strip()
-            statuses = [(r, s_) for r, s_ in statuses if not state.closed_by_a_run(r, msgs)] \
-                if out["reopen"] else statuses
+                if not why_run:
+                    continue
+                held = state.close_holds(r, title=str(p.get("title") or ""), company=company,
+                                         msgs=msgs)
+                if held:
+                    return no(f"closed in your contact book as {r.get('contact_id')}: {held}")
+                again.append(r)
+                out["warn"].append(f"{why_run}, not you: checked again by today's rules")
+                out["reopen"] = out["reopen"] or str(r.get("contact_id") or "").strip()
+            statuses = [(r, s_) for r, s_ in statuses if not any(r is x for x in again)]
         for r, status in statuses:
             if status in state.schema.TERMINAL:
                 why = str(r.get("outcome") or r.get("next_action") or "").strip()
@@ -471,6 +481,8 @@ HELD_WORDS = {
     "employer": "Nothing to send: {company} is an employer you turned down",
     "place": "Nothing to send: they are in {place}, outside where you are looking",
     "request": "Your connection request has not been accepted yet",
+    "withdraw": "Withdraw your request to {first}: it has waited {weeks} weeks",
+    "withdraw_undated": "Withdraw your request to {first}: the day it went is not recorded",
     "told": "Their record says no more messages: leave it unless they write back",
     "recent": "Written to on {last}: nothing more until {until}",
 }
@@ -519,7 +531,13 @@ def held(contact, msgs, status, replying=False, memo=None, today=None) -> dict |
     import throttle
     # A request nobody accepted first: nothing can go to them whatever else is true, and it
     # is one to withdraw in three weeks (issue 242).
-    if status in throttle.SENT_NO_REPLY and state.request_pending(msgs, c) is not None:
+    pending = state.request_pending(msgs, c) if status in throttle.SENT_NO_REPLY else None
+    if pending is not None:
+        # From its withdraw day it says so: it stops holding its employer then
+        # (reading.waiting_until), and "not accepted yet" told nobody to withdraw it (issue 261).
+        said, on = withdraw_line(c, pending, today)
+        if said:
+            return {"why": "request", "said": said, "withdraw_on": on}
         return {"why": "request", "said": HELD_WORDS["request"]}
     # Their limit, the one answer the dates written on a row also read (state.at_limit).
     if state.at_limit(c, msgs, status):
@@ -529,6 +547,31 @@ def held(contact, msgs, status, replying=False, memo=None, today=None) -> dict |
             return {"why": "limit", "said": HELD_WORDS["told"], "n": n}
         return {"why": "limit", "said": HELD_WORDS["limit"].format(n=n), "n": n}
     return None
+
+
+def withdraw_line(contact, pending, today=None) -> tuple[str, str]:
+    """(what to do about a connection request nobody accepted, its withdraw day), or ("", "")
+    before that day: "Withdraw your request to Wren: it has waited 3 weeks", from
+    state.REQUEST_WITHDRAW_DAYS after `pending`, the day it went. One line for their card
+    and To do, dated by that day, never by the follow-up day written on the row for
+    after they accept: two requests sent one day showed two days (issue 261)."""
+    import person
+    pending = state.as_date(pending) if pending != datetime.date.min else pending
+    if pending is None:
+        return "", ""
+    try:
+        import tone
+        first = tone.greeting_name((contact or {}).get("name")) or "them"
+    except Exception:  # noqa: BLE001  an odd name is said as them, never breaks a screen
+        first = "them"
+    if pending == datetime.date.min:
+        return HELD_WORDS["withdraw_undated"].format(first=first), ""
+    day = state.as_date(today) or person.today()
+    on = pending + datetime.timedelta(days=state.REQUEST_WITHDRAW_DAYS)
+    if day < on:
+        return "", ""
+    return (HELD_WORDS["withdraw"].format(first=first, weeks=(day - pending).days // 7),
+            on.isoformat())
 
 
 def written_lately(msgs, today=None) -> dict | None:

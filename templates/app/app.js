@@ -191,11 +191,15 @@
     }
   }
   // Where a node is drawn: a text's first or last letter, or an element's first or last box.
+  // A dot put out of sight draws nothing; a line whose own leading dot was put out of sight
+  // (`.sep-before.sep-cut`) still draws every word in it: read as drawing nothing, each dot
+  // inside it found no words after it and was hidden as a line's end, leaving a hole mid-line
+  // ("mentor     wrote to you 9 Nov", the maintainer's To do, 2026-11-12).
   function sepInk(n, last) {
     if (n.nodeType === 3) {
       const t = n.textContent;
       const i = last ? t.search(/\S\s*$/) : t.search(/\S/);
-      if (i < 0 || !n.parentElement || n.parentElement.closest(".sr-only, .sep-cut")) return null;
+      if (i < 0 || !n.parentElement || n.parentElement.closest(".sr-only, .sep-dot.sep-cut")) return null;
       const r = document.createRange();
       r.setStart(n, i);
       r.setEnd(n, i + 1);
@@ -582,7 +586,7 @@
       const data = raw === undefined ? undefined : shaped(S.model[k], raw);
       if (data !== undefined && (tms(v.made_at) || 0) > base && k !== "person" && k !== "model") m[k] = data;
     }
-    S.m = m;
+    S.m = withLinks(m);
     if (S.reading && S.reading.here === true) setTimeout(maybeAutoRead, 0);
   }
   // A section too big for one database document comes as parts (tools/page_db.py split()):
@@ -604,6 +608,49 @@
       text += p.text;
     }
     try { const data = JSON.parse(text); joinedKept.set(k, {rev: key, data}); return data; } catch (e) { return kept ? kept.data : undefined; }
+  }
+  // Each item's links to the rest at its employer (the engine's `related`, app_lists.link) come
+  // apart from the items, in view/links~<n> (app_lists.links_docs): on the items, one new note
+  // at an employer rewrote every colleague's record, and a page update after eight new people
+  // rewrote most of a long People section (issue 254). Put back here on each item read without
+  // them, the same for every section; the page's own copy has them on its items already.
+  const LINKED = ["jobs", "ready", "messages", "people", "interviews", "applications", "referrals", "due"];
+  const linkedKept = new Map();
+  function withLinks(m) {
+    const docs = [];
+    for (const [k, v] of S.views) if (k.indexOf("links~") === 0 && v && v.links && typeof v.links === "object") docs.push(v);
+    if (!docs.length) return m;
+    docs.sort((a, b) => txt(a.made_at).localeCompare(txt(b.made_at)));
+    const key = docs.map((d) => txt(d.rev) + "@" + txt(d.made_at)).join(",");
+    const links = {};
+    for (const d of docs) Object.assign(links, d.links);
+    const put = (sec, list) => {
+      const kept = linkedKept.get(sec);
+      if (kept && kept.src === list && kept.key === key) return kept.out;
+      let bare = false;
+      const out = list.map((it) => {
+        if (!it || typeof it !== "object" || it.related !== undefined) return it;
+        bare = true;
+        const l = obj(links[sec + "/" + txt(it.id)]);
+        return Object.assign({}, it, {related: obj(l.related)}, Number(l.people_more) ? {people_more: Number(l.people_more)} : {});
+      });
+      const res = bare ? out : list;
+      linkedKept.set(sec, {src: list, key, out: res});
+      return res;
+    };
+    const out = Object.assign({}, m);
+    for (const sec of LINKED) {
+      if (sec === "jobs") {
+        const jobs = m.jobs;
+        if (!jobs || typeof jobs !== "object" || !Array.isArray(jobs.rows)) continue;
+        const rows = put("jobs", jobs.rows);
+        if (rows === jobs.rows) continue;
+        const kept = linkedKept.get("jobs:block");
+        if (kept && kept.src === jobs && kept.rows === rows) out.jobs = kept.out;
+        else { out.jobs = Object.assign({}, jobs, {rows}); linkedKept.set("jobs:block", {src: jobs, rows, out: out.jobs}); }
+      } else if (Array.isArray(m[sec])) out[sec] = put(sec, m[sec]);
+    }
+    return out;
   }
   const person = () => obj(M().person);
   const noun = () => txt(person().doc_noun) || "resume";
@@ -1954,6 +2001,9 @@
   // is (tools/computer.py SAY, in Settings' row), never a line made here.
   function computerLine() {
     const c = obj(obj(M().where).computer);
+    // Queued behind a chat at work on the computer: its turn, never the computer's state (the
+    // engine's queued_line; the maintainer's Mac, 2026-11-12).
+    if (txt(c.queued_line)) return txt(c.queued_line);
     const said = txt(c.say);
     return said && txt(c.state) !== "optional" && txt(c.state) !== "ready" ? said : "This needs your computer: Claude starts it there when your computer is on.";
   }
@@ -1965,6 +2015,10 @@
   const COMPUTER_STARTED_MS = 30 * 60000, COMPUTER_RING_MS = 10 * 60000;
   function computerOverdue(w) {
     if (txt(obj(w).to) !== "computer" || txt(obj(w).status || "queued") !== "queued") return false;
+    // Waiting on the person's OK in the chat that starts Claude there (the engine's `asks`): its
+    // line says what to do, never "It has not started on your computer yet." (the maintainer's
+    // Mac, 2026-11-12).
+    if (txt(obj(obj(M().where).computer).asks)) return false;
     const asked = tms(w.answered_at) || tms(w.asked_at) || 0;
     const at = tms(obj(w.computer_session).at) || 0;
     const end = at >= asked && at ? at + COMPUTER_STARTED_MS : asked + COMPUTER_RING_MS;
@@ -3363,7 +3417,7 @@
     return draftInList(d) ? d : null;
   }
   // o: {items, name, render, live(it), fold(it), foldLabel(n), sort(a, b), chips: [{key, label,
-  // options: [[value, label, test]]}], search(it), empty(), box(kids)}. Anything live shows
+  // options: [[value, label, test]]}], search(it), empty(), box(kids), remote, apart}. Anything live shows
   // whatever its age; only folded history waits behind one line; fifty at a time beyond that.
   // The whole of a long list lives in the database (view/list~<name>~<n>), so finished
   // history the page was published without still opens with "Show".
@@ -3393,15 +3447,20 @@
     fullKept.set(name, {rev: key, parts, items});
     return items;
   }
+  // A list's own items and the rest of its whole list in the store (o.remote), each once. What
+  // the screen draws apart from the list (o.apart: Contacts' On hold group) is never brought
+  // back into it from the whole list, which holds everyone: a person on hold was drawn twice,
+  // in the list and again in their group (the maintainer's page, 2026-11-12).
+  function listItems(o) {
+    const items = arr(o.items);
+    if (!o.remote) return {items, remoteIn: false};
+    const have = new Set(items.concat(arr(o.apart)).map(itemKey));
+    const more = fullList(o.remote).filter((it) => !have.has(itemKey(it)));
+    return more.length ? {items: items.concat(more), remoteIn: true} : {items, remoteIn: false};
+  }
   function listView(key, o) {
     const st = listState(key);
-    let items = arr(o.items);
-    let remoteIn = false;
-    if (o.remote) {
-      const have = new Set(items.map(itemKey));
-      const more = fullList(o.remote).filter((it) => !have.has(itemKey(it)));
-      if (more.length) { items = items.concat(more); remoteIn = true; }
-    }
+    const {items, remoteIn} = listItems(o);
     const groups = arr(o.chips).map((g) => Object.assign({}, g, {options: arr(g.options).filter((op) => items.some(op[2]) || arr(st.chips[g.key]).indexOf(op[0]) >= 0)}));
     // A search box on the screen always searches: Contacts shows one from nine people, and
     // under SEARCH_OVER a name typed there changed nothing (2026-11-05).
@@ -3903,10 +3962,11 @@
       // One hidden for a week waits with the other hidden cards, a card of its own there.
       if (!each && quickNeed(n) && !todoHidden(it)) quick.push({id: n.id, kind: it.kind, need: n}); else out.push(it);
     }
-    // Connection requests nobody accepted are never a To do card: nothing about them needs
-    // the person, and a count of them only discouraged (the maintainer, 2026-10-29). Each
-    // still says so on its own contact row.
-    for (const extra of [listenTodo(), exportTodo(), readingTodo()].concat(refusedTodos())) if (extra) out.push(extra);
+    // Connection requests nobody accepted in three weeks: one card, each request a line of
+    // what to do ("Withdraw your request to Wren: it has waited 3 weeks"), as on its contact
+    // row. A count alone only discouraged (the maintainer, 2026-10-29), and with no card at
+    // all nothing told the person to withdraw one (issue 261).
+    for (const extra of [withdrawTodo(), listenTodo(), exportTodo(), readingTodo()].concat(refusedTodos())) if (extra) out.push(extra);
     // Asked first to keep the LinkedIn sign-in (the computer's card, keep_signin): a sign-in
     // waits behind it, never beside it, so the next one lasts (the maintainer's Mac, 2026-11-11).
     const keepFirst = needsItems().some((n) => txt(n.id) === "q-setup-computer" && txt(obj(n.about).say) === "keep_signin" && !effective(n.id));
@@ -4968,6 +5028,20 @@
   }
   function signinBox(id, w, key) {
     if (!signinNeeded(w)) return null;
+    // Met by a chat on the person's computer (needs.chat, the engine's words in needs.say): the
+    // sign-in is made in that chat's own browser, where its sign-in page is open, and the one
+    // button opens that chat. LinkedIn opened beside this page left the chat on the Mac signed
+    // out, twice (the maintainer, 2026-11-12), so nothing here opens LinkedIn.
+    const n = obj(w.needs);
+    const chat = txt(n.chat);
+    if (/^session_[\w-]+$/.test(chat)) {
+      return h("div", {class: "wc-signin", "data-signin": "linkedin-chat"},
+        h("p", {class: "tone-warn"}, txt(n.say)),
+        h("div", {class: "wc-actions"},
+          h("a", {href: "https://claude.ai/code/" + chat, target: "_blank", rel: "noopener noreferrer", class: "btn primary small", "data-primary": "1", "data-k": key + ":chat"},
+            "Open the chat", h("span", {class: "sr-only"}, " (opens in a new tab)")),
+          btn("I've signed in", () => answerWork(id, "Signed in to LinkedIn", "signed in"), {small: true, key: key + ":signed"})));
+    }
     const tried = S.signinFor === id;
     if (tried && S.reading.ok === true && !SIGNIN_SENT.has(id)) {
       SIGNIN_SENT.add(id);
@@ -8274,7 +8348,7 @@
     // (app_model._people); only a tap made here moves someone before Claude has caught up.
     const order = new Map(people.map((p, i) => [p, i]));
     const pos = (p) => (p.__msg ? -1 : order.has(p) ? order.get(p) : 1e9);
-    const lo = {items, name: "contacts", one: "person", many: "people", live: front, fold: (p) => !front(p), remote: "people",
+    const lo = {items, name: "contacts", one: "person", many: "people", live: front, fold: (p) => !front(p), remote: "people", apart: held,
       foldLabel: (k) => plural(k, "more person", "more people") + (anyUp ? ", nothing to do for them now" : ""), foldShow: "Show them",
       // Sorted, never filtered, by default: who is waiting on you first, then the other messages
       // ready to send, then everyone else in the engine's order (the maintainer, 2026-11-05: "the
@@ -10651,12 +10725,7 @@
   // sheet and the row of filters that are on.
   function listFacets(key, o) {
     const st = listState(key);
-    let items = arr(o.items);
-    if (o.remote) {
-      const have = new Set(items.map(itemKey));
-      const more = fullList(o.remote).filter((it) => !have.has(itemKey(it)));
-      if (more.length) items = items.concat(more);
-    }
+    const {items} = listItems(o);
     const groups = arr(o.chips).map((g) => Object.assign({}, g, {options: arr(g.options).filter((op) => items.some(op[2]) || arr(st.chips[g.key]).indexOf(op[0]) >= 0)}))
       .filter((g) => g.options.length >= (g.min || 1));
     const onIn = (g) => arr(st.chips[g.key]).filter((v) => g.options.some((op) => op[0] === v));
@@ -11747,16 +11816,24 @@
   // Detailed in bullets, and a switch was one more thing to find mid-call): the script he can
   // read aloud and the same answer as points. Which leads is the view's own order, so a flip
   // never redraws. In a practice, one "Show the answer" stands in for both.
-  function lpAnswer(lv, node, key, mode) {
+  // `said`, for a question in a part with lines to say first: those lines' word runs and the
+  // way to them. The sentences an answer opens with that say what they say are drawn once, in
+  // Say first, and the answer goes on from there (the maintainer, 2026-11-12: the opening was
+  // on the screen three times, At a glance, Say first and Tell me about yourself).
+  function lpAnswer(lv, node, key, mode, said) {
     // A prep written before the points were a list holds them as one string: drawn once, as
     // written, never cut into sentences under the same script (the live review, 2026-11-11).
     const listed = Array.isArray(node.simple);
-    const d = listed ? txt(node.detailed) : txt(node.detailed) || txt(node.simple);
+    const full = listed ? txt(node.detailed) : txt(node.detailed) || txt(node.simple);
+    const cut = said ? lpSaidCut(lv, full, said.grams) : 0;
+    const d = cut ? lpSentences(full).slice(cut).join(" ") : full;
     const hide = mode === "hidden";
     const cues = listed ? lpCueList(node.simple) : [];
     const seen = new Set();
+    const back = cut ? h("p", {class: "lp-said"}, h("button", {type: "button", class: "btn link", "data-k": "lpsaid:" + key, onclick: said.go},
+      d ? "Start with your lines above" : "Your lines above answer this"), d ? ", then:" : null) : null;
     const layers = h("div", {class: "lp-layers", hidden: hide},
-      d ? h("div", {class: "lp-script lp-detailed"}, h("p", {}, lpRich(lv, d))) : null,
+      full ? h("div", {class: "lp-script lp-detailed"}, back, d ? h("p", {}, lpRich(lv, d)) : null) : null,
       cues.length ? h("div", {class: "lp-cues-w"}, d ? h("p", {class: "lp-lbl lp-points-h"}, "Points") : null,
         h("ul", {class: "lp-cues lp-simple"}, cues.map((x) => h("li", {}, lpRich(lv, x, null, seen))))) : null);
     const box = h("div", {class: "lp-ans", "data-mode": hide ? "hidden" : "both"});
@@ -11766,6 +11843,33 @@
       node.draft ? h("p", {class: "lp-draft"}, stateWord("Draft", "warn"), " You asked for this one: check it is true before you say it.") : null,
       show, layers);
     return box;
+  }
+  // An answer's sentences, as the points of an older prep are cut.
+  function lpSentences(s) {
+    return txt(s).replace(/([.!?]["”’']?)\s+(?=[A-Z0-9"“‘'(£$€[])/g, "$1\u0000").split("\u0000").filter((x) => x.trim());
+  }
+  // A line's runs of three words, for telling two lines that say the same thing.
+  function lpGrams(lv, s) {
+    const w = lpPlain(lv, s).toLowerCase().match(/[\p{L}\p{N}£$€%']+/gu) || [];
+    const out = new Set();
+    for (let i = 0; i + 3 <= w.length; i++) out.add(w.slice(i, i + 3).join(" "));
+    return out;
+  }
+  // How many of an answer's first sentences repeat the lines said first: a sentence of six
+  // words or more whose runs of words are nearly all in them (four in five).
+  function lpSaidCut(lv, d, grams) {
+    if (!d || !grams || !grams.size) return 0;
+    const ss = lpSentences(d);
+    let n = 0;
+    for (const s of ss) {
+      const g = lpGrams(lv, s);
+      if (g.size < 4) break;
+      let hit = 0;
+      for (const x of g) if (grams.has(x)) hit++;
+      if (hit / g.size < 0.8) break;
+      n++;
+    }
+    return n;
   }
   // The story an answer is told from, as a link to it.
   function lpStoryLink(lv, st, key) {
@@ -11785,54 +11889,58 @@
       if (depth < 3) walk(obj(f).follow, q, depth + 1);
     });
     walk(list, [], 1);
-    box._show = (p, focus) => { box._path = p; lpFuDraw(lv, box, list, key, mode, label, focus); };
-    lpFuDraw(lv, box, list, key, mode, label, false);
+    box._show = (p, focus, at) => { box._path = p; lpFuDraw(lv, box, list, key, mode, label, focus ? at || p : null); };
+    lpFuDraw(lv, box, list, key, mode, label, null);
     return box;
   }
+  // The next likely questions as rows under the answer; the one tapped opens its answer in
+  // place, under its own row, with its own follow-ups as rows below it, three deep. The rows
+  // on the open path stay filled, a tap on one closes it, and each open answer ends with the
+  // way back up (the maintainer, 2026-11-12: "more dynamic"). `focus` is the path of the row
+  // to give the focus to: the one opened, or the one just closed.
   function lpFuDraw(lv, box, list, key, mode, label, focus) {
     box.textContent = "";
     const path = box._path;
-    const nodes = [];
-    let cur = list;
-    for (const i of path) { const n = obj(arr(cur)[i]); nodes.push(n); cur = n.follow; }
-    const go = (p) => box._show(p, true);
-    const at = nodes[nodes.length - 1];
-    if (at) {
-      const stories = arr(lv.stories);
-      put(box,
-        h("nav", {class: "lp-trail", "aria-label": "The follow-ups you picked"},
-          h("span", {class: "lp-trail-path"}, nodes.map((n, j) => [j ? h("span", {class: "lp-sep", "aria-hidden": "true"}, " › ") : null,
-            j < nodes.length - 1 ? h("button", {type: "button", class: "btn link lp-crumb", "data-k": "lpcr:" + key + ":" + j, onclick: () => go(path.slice(0, j + 1))}, clip(lpPlain(lv, n.q), 40))
-              : h("span", {class: "lp-crumb-now"}, clip(lpPlain(lv, n.q), 40))])),
-          h("button", {type: "button", class: "btn secondary small lp-fu-back", "data-k": "lpback:" + key, onclick: () => go(path.slice(0, -1))}, "Back")),
-        h("div", {class: "lp-fu-node", "data-depth": String(nodes.length)},
-          h("p", {class: "lp-fu-q", tabindex: "-1"}, lpRich(lv, at.q), " ", h("span", {class: "lp-who"}, lpWho(lv, at.who))),
-          lpAnswer(lv, at, key + "." + path.join("."), mode),
-          lpStoryLink(lv, at.story ? stories.find((s) => s.id === at.story) : null, key + "." + path.join("."))));
-    }
-    const kids = at ? (nodes.length < 3 ? arr(at.follow) : []) : arr(list);
-    if (kids.length) {
-      put(box, h("p", {class: "lp-kids-h"}, at ? "Then they may ask" : label),
-        h("div", {class: "lp-kids lp-choices"}, kids.map((f, i) => h("button", {type: "button", class: "lp-choice", "data-k": "lpf:" + key + "." + path.concat(i).join("."),
-          onclick: () => go(path.concat(i))}, lpPlain(lv, f.q), " ", h("span", {class: "lp-who"}, lpWho(lv, f.who))))));
-    }
+    const stories = arr(lv.stories);
+    const go = (p, at) => box._show(p, true, at);
+    let opened = null;
+    const level = (l, depth, before, parent) => h("ul", {class: "lp-kids lp-choices", "data-depth": String(depth)}, arr(l).map((f, i) => {
+      const here = before.concat(i);
+      const open = path.length >= depth && path[depth - 1] === i;
+      const k2 = key + "." + here.join(".");
+      const row = h("button", {type: "button", class: "lp-choice", "aria-expanded": String(open), "data-path": here.join("."), "data-k": "lpf:" + k2,
+        onclick: () => (open ? go(before, here) : go(here))}, lpPlain(lv, f.q), " ", h("span", {class: "lp-who"}, lpWho(lv, f.who)));
+      if (!open) return h("li", {class: "lp-fu-item"}, row);
+      const kids = depth < 3 ? arr(f.follow) : [];
+      const node = h("div", {class: "lp-fu-node", "data-depth": String(depth)},
+        lpAnswer(lv, f, k2, mode),
+        lpStoryLink(lv, f.story ? stories.find((s) => s.id === f.story) : null, k2),
+        kids.length ? [h("p", {class: "lp-kids-h"}, "Then they may ask"), level(kids, depth + 1, here, f)] : null,
+        h("button", {type: "button", class: "btn link lp-fu-back", "data-k": "lpback:" + k2, onclick: () => go(before, here)},
+          parent ? "Back to “" + clip(lpPlain(lv, parent.q), 48) + "”" : "Close this answer"));
+      if (depth === path.length) opened = node;
+      return h("li", {class: "lp-fu-item lp-open"}, row, node);
+    }));
+    put(box, h("p", {class: "lp-kids-h"}, label), level(list, 1, [], null));
     if (focus) {
-      const t = box.querySelector(at ? ".lp-fu-q" : ".lp-choice");
+      const t = box.querySelector('.lp-choice[data-path="' + focus.join(".") + '"]') || box.querySelector(".lp-choice");
       if (t) try { t.focus({preventScroll: true}); } catch (e) { t.focus(); }
+      // The answer just opened, brought on to the screen if it opened below its edge.
+      if (opened && focus === path) try { opened.scrollIntoView({block: "nearest", behavior: lpReduced() ? "auto" : "smooth"}); } catch (e) { /* drawn where it is */ }
     }
   }
-  // A tap that goes somewhere in the prep: a "Likely to prompt" line, a known question, a
-  // story, a chip. Shown and marked for a moment.
+  // A tap that goes somewhere in the prep: the questions a story answers. Shown and marked for
+  // a moment.
   function lpHook(label, id, key) {
     return h("button", {type: "button", class: "lp-hook", "data-k": "lphook:" + key, onclick: () => lpJump(id)}, label);
   }
-  function lpQuestion(lv, q, mode) {
+  function lpQuestion(lv, q, mode, said) {
     const st = q.story ? arr(lv.stories).find((s) => s.id === q.story) : null;
     const hid = lpId(lv, "qh", q.id);
     return h("article", {class: "lp-q" + (q.known ? " lp-q-known" : ""), id: lpId(lv, "q", q.id), tabindex: "-1", "aria-labelledby": hid, "data-lpq": q.id},
       h("h4", {class: "lp-q-q", id: hid}, lpPlain(lv, q.q), " ", h("span", {class: "lp-who"}, lpWho(lv, q.who)),
         q.known ? h("span", {class: "lp-dot", role: "img", "aria-label": "They are known to ask this", title: "They are known to ask this"}) : null),
-      lpAnswer(lv, q, q.id, mode),
+      lpAnswer(lv, q, q.id, mode, said),
       lpStoryLink(lv, st, q.id),
       arr(q.follow).length ? lpFollows(lv, q.follow, q.id, mode, "They may ask next") : null);
   }
@@ -12026,12 +12134,14 @@
   function lpLife(lv) {
     const priv = obj(lv.private);
     const end = (x) => cap1(txt(x)).replace(/([^.!?”"])$/, "$1.");
-    const lines = [["Moment", "Good question, let me think about that for a second."],
-      ["Again?", "Sorry, could you say that again?"],
-      ["Don't know", "I haven't done that directly; the closest I've done is ..., and here's how I'd go about it."]];
-    if (txt(priv.pay)) lines.push(["Pay", "If pay comes up: " + end(moneyIn(priv.pay))]);
-    if (txt(priv.notice)) lines.push(["Notice", "Your notice: " + end(priv.notice)]);
-    if (txt(priv.based)) lines.push(["Based", "Where you are based: say " + txt(priv.based) + "."]);
+    // Each labelled by what it gives, in full: "Moment", "Again?" and "Pay" were too terse to
+    // read under pressure (the maintainer, 2026-11-12). A phone wraps them to two rows.
+    const lines = [["Give me a moment", "Good question, let me think about that for a second.", "moment"],
+      ["Could you repeat that?", "Sorry, could you say that again?", "again"],
+      ["Don't know it", "I haven't done that directly; the closest I've done is ..., and here's how I'd go about it.", "unknown"]];
+    if (txt(priv.pay)) lines.push(["Salary", "If pay comes up: " + end(moneyIn(priv.pay)), "pay"]);
+    if (txt(priv.notice)) lines.push(["My notice", "Your notice: " + end(priv.notice), "notice"]);
+    if (txt(priv.based)) lines.push(["Where I'm based", "Where you are based: say " + txt(priv.based) + ".", "based"]);
     const said = h("span", {class: "lp-life-say", "aria-live": "polite"});
     const row = h("div", {class: "lp-life-row"});
     const box = h("div", {class: "lp-life", role: "group", "aria-label": "Lines for when you need a moment"}, row);
@@ -12055,8 +12165,8 @@
         box._fade = setTimeout(() => box._close(), lpReduced() ? 0 : 600);
       }, LP_LIFE_MS);
     };
-    for (const [label, line] of lines) {
-      const b = h("button", {type: "button", class: "lp-life-btn", "aria-pressed": "false", "data-k": "lp-life:" + label,
+    for (const [label, line, id] of lines) {
+      const b = h("button", {type: "button", class: "lp-life-btn", "aria-pressed": "false", "data-k": "lp-life:" + id,
         onclick: () => {
           if (box._on === label) { box._close(); return; }
           box._on = label;
@@ -12102,29 +12212,29 @@
   // At a glance, first: the line to open with, what they are known to ask (or the first likely
   // question) with where it comes up, and two questions to ask them; a guessed kind of
   // interview is said here, one tap from the right one (the UX review, 2026-11-10, U-5).
+  // At a glance never holds the line to open with: that is Part 1's Say first, right under it,
+  // and the same opening stood on the screen three times (the maintainer, 2026-11-12). Its
+  // questions are plain lines to read, each a tap to its place, never words drawn as links.
   function lpGlance(iv, lv, qById) {
     const parts = arr(lv.parts);
-    const first = parts[0] || {};
-    // A line with no words is never the one to open with (an empty "Open with", 2026-11-11).
-    const beats = lpBeats(first);
-    const open = beats.find((b) => arr(b.prompts).length) || beats[0];
     const partOf = (q) => parts.findIndex((p) => p.id === obj(q).part);
-    const go = (q, key) => h("button", {type: "button", class: "btn link lp-glance-q", "data-k": "lpg:" + key, onclick: () => lpJump(lpId(lv, "q", q.id))}, lpPlain(lv, q.q),
-      // A known question's part with the gold dot its chip wears in the bar: the mark's key.
-      partOf(q) >= 0 ? h("span", {class: "lp-glance-part" + (q.known ? " lp-chip-known" : ""), title: q.known ? LP_KNOWN_MARK : null}, " Part " + (partOf(q) + 1),
-        q.known ? h("span", {class: "lp-dot", "aria-hidden": "true"}) : null) : null);
+    const where = (i, known) => i >= 0 ? h("span", {class: "lp-glance-part" + (known ? " lp-chip-known" : ""), title: known ? LP_KNOWN_MARK : null}, "Part " + (i + 1),
+      known ? h("span", {class: "lp-dot", "aria-hidden": "true"}) : null) : null;
+    const line = (key, words, id, i, known) => h("p", {class: "lp-glance-line"}, h("button", {type: "button", class: "lp-glance-q", "data-k": key, onclick: () => lpJump(id)}, words), " ", where(i, known));
+    // A known question's part with the gold dot its chip wears in the bar: the mark's key.
     const known = arr(lv.known).map((k) => qById.get(k.question)).filter(Boolean);
     const likely = known.length ? known : arr(lv.likely).map((id) => qById.get(id)).filter(Boolean).filter((q) => partOf(q) > 0).slice(0, 1);
     const asks = arr(lv.ask).slice(0, 2);
-    const close = parts.find((p) => p.kind === "close");
+    const close = parts.findIndex((p) => p.kind === "close");
     const row = (label, body, cls) => h("div", {class: "lp-glance-row" + (cls ? " " + cls : "")}, h("dt", {class: "lp-lbl"}, label), h("dd", {}, body));
+    const rows = [
+      likely.length ? row(known.length ? "Known to ask" : "Likely to ask", likely.map((q, i) => line("lpg:k" + i, lpPlain(lv, q.q), lpId(lv, "q", q.id), partOf(q), q.known))) : null,
+      asks.length ? row("Ask them", asks.map((a) => line("lpga:" + a.id, lpPlain(lv, a.q), lpId(lv, "a", a.id), close, false)), "lp-glance-ask") : null,
+      txt(lv.assumed) ? row("A best guess", [h("p", {}, cap1(txt(lv.assumed)) + "."), btn("Not this kind of interview?", () => askKind(iv), {kind: "secondary", small: true, key: "lp-kind:" + iv.id})]) : null].filter(Boolean);
+    if (!rows.length) return null;
     return h("section", {class: "lp-box lp-glance", "aria-labelledby": lpId(lv, "x", "glance-h")},
       h("p", {class: "lp-lbl lp-glance-h", id: lpId(lv, "x", "glance-h")}, "At a glance"),
-      h("dl", {},
-        open ? h("div", {class: "lp-glance-row lp-glance-open"}, h("dt", {class: "lp-lbl"}, first.kind === "opening" ? "Open with" : "Before you start"), h("dd", {}, h("p", {}, lpRich(lv, open.t)))) : null,
-        likely.length ? row(known.length ? "Known to ask" : "Likely to ask", likely.map((q, i) => h("p", {}, go(q, "k" + i)))) : null,
-        asks.length ? row("Ask them", asks.map((a) => h("p", {}, h("button", {type: "button", class: "btn link lp-glance-q", "data-k": "lpga:" + a.id, onclick: () => lpJump(lpId(lv, "a", a.id))}, lpPlain(lv, a.q)))), "lp-glance-ask") : null,
-        txt(lv.assumed) ? row("A best guess", [h("p", {}, cap1(txt(lv.assumed)) + "."), btn("Not this kind of interview?", () => askKind(iv), {kind: "secondary", small: true, key: "lp-kind:" + iv.id})]) : null));
+      h("dl", {}, rows));
   }
   function liveView(iv, lv, acts) {
     // A copy of the prep carries its interview's id: the prep itself is the store's record,
@@ -12154,8 +12264,16 @@
       const hid = lpId(lv, "ph", p.id);
       const pq = arr(p.questions).map((id) => qById.get(id)).filter(Boolean);
       const asks = p.kind === "close" ? arr(lv.ask) : [];
-      const hook = (b, j, x) => lpHook((b.known && qById.get(x).known === b.known ? "Full answer and follow-ups: " : "Likely to prompt: ") + lpPlain(lv, qById.get(x).q),
-        lpId(lv, "q", x), p.id + ":" + j + ":" + x);
+      // The questions the lines said first may bring, once each, in one quiet line under them:
+      // a "Likely to prompt" pill between the lines being read aloud broke the reading (the
+      // maintainer, 2026-11-12).
+      const next = [];
+      for (const b of beats) for (const x of arr(b.prompts)) if (qById.has(x) && !next.includes(x)) next.push(x);
+      const narrId = lpId(lv, "n", p.id);
+      // What the lines said first say, so an answer here that opens the same way is drawn once.
+      const grams = new Set();
+      for (const b of beats) for (const g of lpGrams(lv, b.t)) grams.add(g);
+      const said = grams.size && !LP_ALONE.has(p.kind) ? {grams, go: () => lpJump(narrId)} : null;
       // A coding part says first what to say, then the problem as they set it (the engine puts it
       // first) and its answer, then the cockpit to follow while typing, then the rest: its
       // steps once stood 1100px tall between "Say first" and the problem's answer on a phone
@@ -12163,25 +12281,31 @@
       const ck = lpCockpit(lv, p);
       const lead = ck && pq.length ? pq[0] : null;
       const rest = lead ? pq.slice(1) : pq;
+      const narr = beats.length || txt(p.bridge) ? h("div", {class: "lp-narr", id: narrId, tabindex: "-1"}, h("p", {class: "lp-lbl"}, LP_ALONE.has(p.kind) ? "Keep in mind" : "Say first"),
+        beats.length ? h("ul", {class: "lp-beats"}, beats.map((b) => h("li", {class: "lp-beat"}, lpRich(lv, b.t)))) : null,
+        txt(p.bridge) ? h("p", {class: "lp-bridge"}, h("span", {class: "lp-bridge-h"}, "End with: "), lpRich(lv, p.bridge)) : null,
+        next.length ? h("p", {class: "lp-next"}, h("span", {class: "lp-next-h"}, "They may follow with: "), next.map((x, j) => {
+          const q = qById.get(x);
+          return [j ? h("span", {class: "lp-sep", "aria-hidden": "true"}, " · ") : null,
+            h("button", {type: "button", class: "lp-next-q", "data-k": "lpnext:" + p.id + ":" + x, onclick: () => lpJump(lpId(lv, "q", x))}, lpPlain(lv, q.q),
+              q.known ? h("span", {class: "lp-dot", role: "img", "aria-label": "They are known to ask this", title: "They are known to ask this"}) : null)];
+        })) : null) : null;
+      const qs = [
+        lead ? h("div", {class: "lp-group"}, h("p", {class: "lp-qhead"}, "Questions likely in this part"), lpQuestion(lv, lead, mode, said)) : null,
+        ck,
+        rest.length ? h("div", {class: "lp-group"}, h("p", {class: "lp-qhead"}, lead ? "Other questions likely in this part" : "Questions likely in this part"), rest.map((q) => lpQuestion(lv, q, mode, said))) : null,
+        // The follow-ups after any story here, said once for the part: the same three stood
+        // under every question told with a story (the screen review, 2026-11-11).
+        arr(p.follow).length ? h("div", {class: "lp-group lp-part-follow"}, lpFollows(lv, p.follow, p.id + ".f", mode, "After any story here, they may ask")) : null,
+        asks.length ? h("div", {class: "lp-group"}, h("p", {class: "lp-qhead"}, "Questions to ask them"), asks.map((a) => lpAsk(lv, a))) : null].filter(Boolean);
+      // On a wide screen what to say first and the part's questions sit side by side, so the
+      // column uses the width and no line of the script runs past about 95 characters (the
+      // maintainer, 2026-11-12: a narrow column between wide empty margins).
       return h("section", {class: "lp-part", id: lpId(lv, "p", p.id), tabindex: "-1", "aria-labelledby": hid, "data-lpp": p.id},
         h("div", {class: "lp-part-top"},
           h("p", {class: "lp-eyebrow"}, "Part " + (i + 1) + " · about " + (Number(p.minutes) || 0) + " min"),
           h("h3", {class: "lp-part-h", id: hid}, txt(p.title))),
-        beats.length || txt(p.bridge) ? h("div", {class: "lp-narr"}, h("p", {class: "lp-lbl"}, LP_ALONE.has(p.kind) ? "Keep in mind" : "Say first"),
-          beats.length ? h("ul", {class: "lp-beats"}, beats.map((b, j) => {
-            const hooks = arr(b.prompts).filter((x) => qById.has(x));
-            return h("li", {class: "lp-beat"},
-              lpRich(lv, b.t),
-              hooks.length ? h("span", {class: "lp-hooks"}, hooks.map((x) => hook(b, j, x))) : null);
-          })) : null,
-          txt(p.bridge) ? h("p", {class: "lp-bridge"}, "End with: ", lpRich(lv, p.bridge)) : null) : null,
-        lead ? h("div", {class: "lp-group"}, h("p", {class: "lp-qhead"}, "Questions likely in this part"), lpQuestion(lv, lead, mode)) : null,
-        ck,
-        rest.length ? h("div", {class: "lp-group"}, h("p", {class: "lp-qhead"}, lead ? "Other questions likely in this part" : "Questions likely in this part"), rest.map((q) => lpQuestion(lv, q, mode))) : null,
-        // The follow-ups after any story here, said once for the part: the same three stood
-        // under every question told with a story (the screen review, 2026-11-11).
-        arr(p.follow).length ? h("div", {class: "lp-group lp-part-follow"}, lpFollows(lv, p.follow, p.id + ".f", mode, "After any story here, they may ask")) : null,
-        asks.length ? h("div", {class: "lp-group"}, h("p", {class: "lp-qhead"}, "Questions to ask them"), asks.map((a) => lpAsk(lv, a))) : null);
+        h("div", {class: "lp-part-body" + (narr && qs.length ? " lp-two" : "")}, narr, qs.length ? h("div", {class: "lp-part-qs"}, qs) : null));
     });
     // The story bank: each story once, with the questions it answers.
     const storyEls = stories.length ? h("section", {class: "lp-part lp-stories", id: lpId(lv, "x", "stories"), tabindex: "-1", "aria-labelledby": lpId(lv, "x", "stories-h")},
@@ -12272,7 +12396,7 @@
       if (!sc || !barEl) return;
       const find = root.querySelector(".lp-search input");
       const sr = sc.getBoundingClientRect();
-      const under = sc.scrollTop + (root._barFull || barEl.offsetHeight) - (glanceEl.getBoundingClientRect().top - sr.top + sc.scrollTop);
+      const under = sc.scrollTop + (root._barFull || barEl.offsetHeight) - ((glanceEl || partEls[0] || barEl).getBoundingClientRect().top - sr.top + sc.scrollTop);
       if (root._hold) { /* a jump's scroll is running: the bar keeps its shape until it ends */ }
       else if (!phone() || document.activeElement === find || (find && find.value)) tight(false);
       else if (under > 48) tight(true);
@@ -12320,9 +12444,21 @@
       }
     };
     const lpSeen = () => { if (!raf) raf = requestAnimationFrame(seen); };
+    // On a wide screen what to say first stays beside the part's questions as they scroll by,
+    // where it fits between the bar and the lifelines; a taller one scrolls with them, so none
+    // of it is ever out of reach.
+    const pin = () => {
+      const sc = root.closest(".detail-body");
+      if (!sc || !barEl || !root.isConnected) return;
+      const life = root.querySelector(".lp-life");
+      const room = sc.clientHeight - barEl.offsetHeight - (life ? life.offsetHeight : 0) - 24;
+      for (const n of root.querySelectorAll(".lp-two > .lp-narr")) n.classList.toggle("lp-pin", n.offsetHeight <= room);
+    };
     const watch = (n) => {
       const sc = root.closest(".detail-body");
       if (!sc) { if (n < 60) requestAnimationFrame(() => watch(n + 1)); return; }
+      pin();
+      if (window.ResizeObserver) new ResizeObserver(pin).observe(sc);
       const on = () => {
         if (!root.isConnected) { sc.removeEventListener("scroll", on); return; }
         // A word's box waiting to open on a resting mouse never opens once the text moves.
@@ -12928,21 +13064,25 @@
     const list = pendingRequests();
     if (!list.length) return null;
     const one = list.find((d) => txt(d.kind) === "withdraw");
-    const who = one ? arr(one.who).map((w) => peopleItems().find((p) => p.id === txt(obj(w).contact || w)) || obj(w)).filter((p) => txt(p.first_name))
+    // Each with the engine's own line for it ("Withdraw your request to Wren: it has waited 3
+    // weeks"); a model made before it had none, and names them as before.
+    const who = one ? arr(one.who).map((w) => Object.assign({}, peopleItems().find((p) => p.id === txt(obj(w).contact || w)) || obj(w), {said: txt(obj(w).said)})).filter((p) => txt(p.first_name))
       : list.map((d) => peopleItems().find((p) => p.id === dueContact(d))).filter(Boolean);
     const ids = one ? arr(one.who).map((w) => txt(obj(w).contact || w)) : list.map((d) => dueContact(d) || d.id);
     const n = one ? Math.max(who.length, ids.length) : list.length;
     const steps = Array.isArray(one ? one.steps : list[0].steps) ? arr(one ? one.steps : list[0].steps) : [];
     const target = one || list[0];
+    // The engine's own words for the card, where it has them.
+    const label = one ? txt(obj(one.done).label) || "I withdrew them" : "I withdrew them";
     return {key: "withdraw", kind: "message", band: "week", employer: null, tab: "contacts", counts: false,
       node: () => card("article", {class: "card todo", "aria-labelledby": "withdraw-title", "data-item": "withdraw"},
         h("div", {class: "todo-top"}, kindMark("message")),
-        h("p", {class: "card-title", id: "withdraw-title"}, nWord(n, "connection request", "connection requests") + " nobody accepted in three weeks"),
-        h("p", {}, "Withdraw them on LinkedIn, then tap I withdrew them.", steps.length ? hintQ("withdraw", steps.map(txt).join(" "), "How") : null),
+        h("p", {class: "card-title", id: "withdraw-title"}, one && txt(one.title) ? txt(one.title) : nWord(n, "connection request", "connection requests") + " nobody accepted in three weeks"),
+        h("p", {}, (n === 1 ? "Withdraw it on LinkedIn, then tap " : "Withdraw them on LinkedIn, then tap ") + label + ".", steps.length ? hintQ("withdraw", steps.map(txt).join(" "), "How") : null),
         h("div", {class: "card-actions"},
-          btn("I withdrew them", () => act([{item: txt(target.id), action: "requests.withdrawn", value: {contacts: ids}, rev: txt(target.rev)}], "Withdrawn: " + nWord(n, "request", "requests")), {kind: "primary", small: true, key: "withdrawn"}),
+          btn(label, () => act([{item: txt(target.id), action: "requests.withdrawn", value: {contacts: ids}, rev: txt(target.rev)}], "Withdrawn: " + nWord(n, "request", "requests")), {kind: "primary", small: true, key: "withdrawn"}),
           more("withdraw", "the requests", [
-            who.length ? h("ul", {class: "plain"}, who.map((p) => h("li", {}, txt(p.employer) ? [txt(p.first_name) + " at ", h("bdi", {}, txt(p.employer))] : txt(p.first_name)))) : null,
+            who.length ? h("ul", {class: "plain"}, who.map((p) => h("li", {}, txt(p.said) ? txt(p.said) : txt(p.employer) ? [txt(p.first_name) + " at ", h("bdi", {}, txt(p.employer))] : txt(p.first_name)))) : null,
             h("div", {class: "more-acts"}, btn("Keep waiting", () => act(list.map((d) => ({item: d.id, action: "due.snooze", value: {until: plusDays(7)}, rev: d.rev})), "Kept waiting a week"), {kind: "quiet", small: true, key: "withdraw-wait"}))])),
         stateLine("withdraw", "withdraw"))};
   }

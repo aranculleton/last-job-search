@@ -14,6 +14,7 @@ from __future__ import annotations
 import copy
 import json
 import os
+import re
 import subprocess
 import sys
 
@@ -38,6 +39,11 @@ def _fill(doc):
     its follow-ups, the terms and what to ask next. Every figure is the example person's own."""
     d = copy.deepcopy(doc)
     for p in d["parts"]:
+        # An opening that holds "Tell me about yourself" is said as that answer, once: its
+        # lines to say first stay empty (the maintainer, 2026-11-12).
+        if L.intro_question(d, p) is not None:
+            p["say"] = []
+            continue
         p["say"] = [{"t": "Thanks for making the time, and I'm glad to be talking about the "
                           "planning work at Fernhill Freight.", "prompts": []},
                     {"t": "The thread through my work is turning messy [[demand-forecast|forecasts]] "
@@ -152,11 +158,12 @@ def test_the_questions_to_ask_are_said_as_a_person_says_them():
     # minutes before, that was no question anyone asks (the review, 2026-11-10).
     asks = [a["q"] for a in _built(stage="Recruiter screen")["ask"]]
     assert not [a for a in asks if "research says" in a.lower() or '"' in a], asks
-    assert "I saw you opened a cross-dock in Warrington in January 2026, so what has that changed " \
+    # A short reason, then the question (the maintainer, 2026-11-12).
+    assert "I saw you opened a cross-dock in Warrington in January 2026. What has that changed " \
            "for your team?" in asks
     assert L.said_ask('The research says "Fernhill Freight runs fourteen sites". Is that still how '
-                      'the team is set up?') == ("I read that Fernhill Freight runs fourteen sites, so "
-                                                 "is that still how the team is set up?")
+                      'the team is set up?') == ("I read that Fernhill Freight runs fourteen sites. "
+                                                 "Is that still how the team is set up?")
     # The pack itself still says where each came from, as its checks require.
     assert any('The research says "' in ln for ln in P.ask_lines(_ctx(stage="Recruiter screen")))
     # Each part has a short name for its chip.
@@ -176,6 +183,45 @@ def test_a_faster_speaker_is_timed_at_their_own_speed(monkeypatch):
 
 
 # ------------------------------------------------------------------ Claude's words, kept and checked
+
+@pytest.mark.parametrize("asked, said", [
+    # What a page says in brackets is never said aloud: a real prep pasted a page's words, its
+    # brackets and all, in front of the question (the maintainer, 2026-11-12; the words here
+    # invented).
+    ('The research says "Fernhill Freight plans on an open-source Python library run by a '
+     'foundation (FF Data & AI)". How much of that reaches the work day to day?',
+     "I read that Fernhill Freight plans on an open-source Python library run by a foundation. "
+     "How much of that reaches the work day to day?"),
+    # A fact cut short where it was read is never pasted in: the question is asked on its own.
+    ('The research says "The role (Analyst II, Leeds) is the standard Fernhill Freight planning '
+     'seat in its northern hub, with...". What is the team spending most of its time on right now?',
+     "What is the team spending most of its time on right now?"),
+    ('The research says "Fernhill Freight moved its whole northern network onto one planning system '
+     'over three years, starting with the chilled lines and then the ambient ones". Is that still '
+     'how the team is set up?', "How is the team set up today?"),
+    ('The posting describes "Owning the weekly forecast for six distribution centres across the '
+     'North, working closely with depot managers and the commercial team". What is the first '
+     'thing it needs someone to fix?', "What is the first thing this role needs someone to fix?"),
+])
+def test_a_question_to_ask_is_a_short_reason_then_the_question(asked, said):
+    got = L.said_ask(asked)
+    assert got == said
+    assert not re.search(r"[()\[\]\"]|, so |\.\.\.", got), got
+    assert len(got.split()) <= 30
+
+
+def test_a_prep_saved_with_the_older_wording_keeps_each_questions_follow_ups():
+    # A prep saved before 2026-11-12 says its questions "I saw you ..., so what ...?": each is
+    # the same question said the new way, its follow-ups kept, never asked twice.
+    ctx = _ctx(stage="Recruiter screen")
+    doc = _fill(L.build(ctx))
+    for a in doc["ask"]:
+        a["q"] = a["q"].replace(". What", ", so what").replace(". Is", ", so is").replace(". How", ", so how")
+    assert any(", so " in a["q"] for a in doc["ask"])
+    again = L.merge(L.build(ctx), doc)
+    assert [a["q"] for a in again["ask"]] == [a["q"] for a in L.build(ctx)["ask"]]
+    assert all(a["follow"] for a in again["ask"])
+
 
 def test_a_filled_prep_passes_every_check_and_is_written():
     ctx = _ctx()
@@ -552,7 +598,8 @@ def test_an_answer_or_a_beat_written_as_fragments_is_refused(ready_doc):
     assert any("write this as flowing sentences, joined with commas and \"and\"" in w for w in got), got
 
     def clip_beat(d):
-        d["parts"][0]["say"][0]["t"] = "Thanks for the time. Glad to be here. The planning work is why."
+        next(p for p in d["parts"] if p["say"])["say"][0]["t"] = (
+            "Thanks for the time. Glad to be here. The planning work is why.")
     assert any("flowing sentences" in w for w in _one(ready_doc, clip_beat))
     # The basics are short on purpose, and a question to ask them is a question.
     assert not any("flowing sentences" in w for w in _one(ready_doc, lambda d: None))
@@ -789,7 +836,9 @@ def test_the_fill_is_only_the_words_and_code_puts_them_in(tmp_path):
     assert kept and kept["questions"][0]["simple"] == _fill(doc)["questions"][0]["simple"]
     added = next(q for q in kept["questions"] if q["q"] == "What would you change with more data?")
     assert next(p for p in kept["parts"] if p["id"] == added["part"])["kind"] == kind
-    assert all(p["say"] for p in kept["parts"]) and kept["terms"]["demand-forecast"]["name"] == "Demand forecast"
+    # Every part has its lines to say first, but an opening said as "Tell me about yourself".
+    assert all(p["say"] or L.intro_question(kept, p) for p in kept["parts"])
+    assert kept["terms"]["demand-forecast"]["name"] == "Demand forecast"
     # A later fill of a few words changes those and keeps the rest.
     later = tmp_path / "later.json"
     later.write_text(json.dumps({"parts": {"opening": {"bridge": "Which is why this role caught my eye."}}}),

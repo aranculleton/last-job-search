@@ -84,7 +84,12 @@ anywhere. A plain answer to a question stays a short answer, with no button.
   more than a few lines with a button is refused unless `--in-thread`. Work it starts is queued
   with `python3 tools/app.py ask "$D" --kind <kind> --title "<a few plain words>" --args
   '<json>'` (the args step 4's table names), the item the page's own Ask writes, never one
-  written by hand; `next` takes it, and it shows in the page's Work list as it runs.
+  written by hand; `next` takes it, and it shows in the page's Work list as it runs. `ask`
+  judges only from a read made now: over an older folder it queues nothing and names the read
+  to make first (do it, then run it again as it says), and what you tell the person about a
+  job (still running, finished) comes from that read too, never from the wake's. Work for the
+  computer already queued or running for the same thing is never queued twice: `ask` answers
+  `already` with a `say` ("That's already on its way: ..."), which is the answer.
 
 **The answer goes in the thread first**, then the saving: `save_state.py`, the commit, and
 `./tools/ci_local.sh --quick` started with Bash `run_in_background`, never chained into

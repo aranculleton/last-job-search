@@ -97,7 +97,9 @@ the person sees what runs and what is done. When the person asks a chat for work
 drafts, a resume, a prep, a reply to draft), first read `work` and `holds` into `$D`
 (ArtifactData `query`), then `python3 tools/app.py ask "$D" --kind <kind> --title "<a few
 plain words>" --args '<json>' --here --chat <your chat id>` and send its batch: the item is
-this chat's, running at its first stage. Do the work here, pin each stage as a big job does
+this chat's, running at its first stage (a read older than two minutes is refused: make the
+read it names and run it again; `already` means the same is on its way: say its `say` and do
+none of it). Do the work here, pin each stage as a big job does
 (`app.py pin ... --chat <your chat id>`, every ten minutes on a long one, "Progress costs
 nothing extra" below), and finish it with `app.py done` (step 5), so its card shows the
 result. A chat that answers the page sends a big job to a chat of its own instead (`ask`

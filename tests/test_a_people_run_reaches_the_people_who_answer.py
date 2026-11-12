@@ -300,9 +300,10 @@ def test_the_likely_employers_are_searched_first_and_empty_ones_wait(tmp_path):
                                             "currentCompany": '["12345"]'}}}))
     old = (_DAY - datetime.timedelta(days=40)).isoformat()
     recent = (_DAY - datetime.timedelta(days=5)).isoformat()
+    # A check's record says who fit and who was held back (#258): six found, none who fit.
     (net / ".people_seen.json").write_text(json.dumps({
         "pinecrest hospital": {"vancouver": {"employer": "Pinecrest Hospital", "date": recent,
-                                             "found": 6, "fit": 0}},
+                                             "found": 6, "fit": 0, "held": 0}},
         "alder bay health": {"vancouver": {"employer": "Alder Bay Health", "date": old,
                                            "found": 4, "fit": 0}}}))
     names = ["Fernlea Clinics", "Pinecrest Hospital", "Harbourline Care", "Alder Bay Health",

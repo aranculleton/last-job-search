@@ -1191,6 +1191,15 @@ def test_the_records_upgrades_wait_only_on_what_they_put_right(profile):
     assert U.by_id("records-agree").pending() == ""
 
 
+def test_employer_names_waits_only_on_a_contact_with_its_employer_in_lower_case(profile):
+    """employer-names (2026-11-12): pending only while a contact's employer is written in lower
+    case, as the people runs of that day wrote the employer lists' keys. The example's book
+    has none; tests/test_a_contact_keeps_its_employers_proper_name.py makes it pending and done."""
+    u = U.by_id("employer-names")
+    assert u.cost == "instant" and u.paths == ("network_contacts.csv",)
+    assert u.pending() == ""
+
+
 def test_a_rule_about_updates_written_the_wrong_way_round_is_asked_about_once(profile):
     """Audit SV-1 and PD-5's app side (2026-11-11): "App updates come by themselves; never ask
     him again" was written as when_asked. The upgrade reads the newest such rule again with

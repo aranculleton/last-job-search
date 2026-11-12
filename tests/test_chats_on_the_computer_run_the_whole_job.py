@@ -187,10 +187,12 @@ def test_signed_out_the_chat_opens_the_sign_in_and_waits_never_parking_the_job(
     # keep it here, and a chat on a Mac did (the maintainer, 2026-11-11).
     assert "computer.py signin-wait" in prompt and "queued for their Done" in prompt
     assert "never kept in this conversation" in prompt and "parking" not in prompt
-    # Each look is one command reading the sign-in tab's address and the work afresh
-    # (`signin-wait --url`), never a separate `reading.py signin --url` on the copy taken before
-    # the wait (the efficiency audit, 2026-11-10, E-10).
-    assert "signin-wait" in prompt and "--url <that address>" in prompt
+    # Each wait reads the work afresh, never a separate `reading.py signin --url` on the copy
+    # taken before the wait (the efficiency audit, 2026-11-10, E-10); and the look after it
+    # opens the feed afresh, never an address read before the wait (decided 2026-11-12, the
+    # maintainer's Mac: the same login address was passed to every wait).
+    assert "signin-wait" in prompt and "signin-seen" in prompt and "--url <that address>" \
+        not in prompt
     assert "computer.py signed-in" in prompt
     # While it waits, it is at work: nobody puts it away, and no second chat starts.
     waiting = _db(("network~read~1", _stopped(3)))
@@ -222,7 +224,7 @@ def test_signed_out_the_chat_opens_the_sign_in_and_waits_never_parking_the_job(
 
 
 def test_signin_wait_says_look_stop_or_answered(tmp_path):
-    for name, item, first in (("look", _stopped(3), "look:"), ("stop", _stopped(16), "stop:"),
+    for name, item, first in (("look", _stopped(3), "look now"), ("stop", _stopped(16), "stop:"),
                               ("answered", _stopped(3, status="queued"), "answered:")):
         dump = tmp_path / name
         (dump / "work").mkdir(parents=True)

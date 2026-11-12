@@ -72,6 +72,20 @@ FULL_READS = ("actions", "receipts", "work", "beats", "holds", "meta", "screen",
 STAMPS_WORK = "every write to a work item says when it was made"
 OPEN_WORK = {"collection": "work",
              "query": {"limit": LIMIT, "where": [["status", "not-in", list(FINISHED)]]}}
+# How old a folder's read of the page's work may be when a command judges from it whether work
+# is still going, is already asked for, or whether nothing waits (issue #255). A Find people run
+# on the person's computer finished after the wake's read; minutes later the helper was asked
+# for 12 more and answered from that read that the run was still going and nothing needed
+# doing, and the same 12 were then queued twice, by two chats each judging from a read that
+# did not hold the other's. Past this, `app.py ask` and a wake run again ask for a read first.
+FRESH_S = 2 * 60
+FRESH_MARK = ".fresh.json"            # in a dump folder: a read of the page's work asked for now
+# What that read takes: the work not finished (what can still be going or asked twice), the
+# locks, and the heartbeats (whether the person's computer is ready for a networking run).
+FRESH_READS = (OPEN_WORK, {"collection": "holds", "query": {"limit": LIMIT}},
+               {"collection": "beats", "query": {"limit": LIMIT}})
+# A read a chat made by hand saves these folders (the store's names and the old ones).
+_SAVED = FULL_READS + ("chats", "locks", "view")
 
 
 def _now() -> dt.datetime:
@@ -414,6 +428,79 @@ def plan(dump: str, now: dt.datetime | None = None, full: bool = False,
         _save_meta(meta)
     return {"full": why, "cursor": cursor, "queries": queries, "dump": dump,
             **({"moved_from": moved} if moved else {})}
+
+
+def _oldest_saved(dump: str) -> float | None:
+    """When a read a chat made by hand into `dump` saved its records (the oldest one's time on
+    this computer's clock; one this folder's own writes moved on since is only newer), or
+    None where it holds none. An empty collection leaves an empty folder at most."""
+    times = []
+    for coll in dict.fromkeys(_SAVED):
+        where = os.path.join(dump, coll)
+        if not os.path.isdir(where):
+            continue
+        files = [os.path.join(where, n) for n in os.listdir(where) if n.endswith(".json")]
+        for p in files or [where]:
+            try:
+                times.append(os.path.getmtime(p))
+            except OSError:
+                pass
+    return min(times) if times else None
+
+
+def read_age_s(dump: str, now: dt.datetime | None = None, late: bool = False) -> float | None:
+    """How many seconds ago the page's work was read into `dump`, or None where it never was.
+    A read `reads` planned, or one `fresh_read` asked for, is as old as that (`at`); with
+    `late`, the reads that end a batch count too (they bring the work asked for since, which a
+    wake run again takes: late_queries). A folder a chat read by hand is as old as the records
+    it saved, on this computer's own clock."""
+    now = now or _now()
+    stamps = []
+    for name in (FRESH_MARK, PLAN):
+        got = _read(os.path.join(dump, name)) if dump else None
+        if not isinstance(got, dict):
+            continue
+        keys = ("at",) + (("late_asked", "late_from") if late and name == PLAN else ())
+        stamps += [t for t in (_time(got.get(k)) for k in keys if got.get(k)) if t is not None]
+    if stamps:
+        return max(0.0, (now - max(stamps)).total_seconds())
+    saved = _oldest_saved(dump) if dump and os.path.isdir(dump) else None
+    if saved is None:
+        return None
+    import time
+    return max(0.0, time.time() - saved)
+
+
+def stale_said(dump: str, now: dt.datetime | None = None, late: bool = False) -> str:
+    """Why `dump` is too old to judge work from, in a few words ("" while it is fresh)."""
+    age = read_age_s(dump, now, late=late)
+    if age is None:
+        return "this folder holds no read of the page's work"
+    if age <= FRESH_S:
+        return ""
+    mins = int(age // 60)
+    return (f"this folder's read of the page's work is {mins} minute{'s' if mins != 1 else ''} "
+            "old")
+
+
+def fresh_read(dump: str, now: dt.datetime | None = None) -> dict:
+    """A read of the page's work to make now (FRESH_READS): into `dump` itself where it holds
+    nothing yet, else into a fresh folder beside it (an earlier read's records would stand for
+    this one). Marked as asked now, so the command run again over it judges from it.
+    {"dump": the folder, "queries": [...]}."""
+    now = now or _now()
+    folder = fresh_beside(dump) if used(dump) else dump
+    os.makedirs(folder, exist_ok=True)
+    queries = [dict(q) for q in FRESH_READS]
+    _write(os.path.join(folder, FRESH_MARK), {"at": _stamp(now), "queries": queries})
+    return {"dump": folder, "queries": queries}
+
+
+def say_fresh(got: dict, url: str) -> str:
+    """The read `fresh_read` asks for, one ArtifactData query a line after its head."""
+    return "\n".join([f"ArtifactData query, each of these in one message, url {url}, out_dir "
+                      f"\"{got['dump']}\" (never list or open what they save):"]
+                     + [json.dumps(q, separators=(",", ":")) for q in got["queries"]])
 
 
 def seen_rev(rev: int) -> bool:

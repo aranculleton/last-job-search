@@ -57,6 +57,10 @@
   {"module": "tools/public_names.py", "name": "SNAPSHOT", "date": "2026-11-11", "announced": "4.16.0"},
   {"module": "tools/public_names.py", "name": "snapshot", "date": "2026-11-11", "announced": "4.16.0"},
   {"module": "tools/public_names.py", "name": "stale", "date": "2026-11-11", "announced": "4.16.0"},
-  {"module": "tools/release.py", "name": "names_kept", "date": "2026-11-11", "announced": "4.16.0"}
+  {"module": "tools/release.py", "name": "names_kept", "date": "2026-11-11", "announced": "4.16.0"},
+  {"module": "tools/app_lists.py", "name": "CHUNK_MIN", "date": "2026-11-12", "announced": "Unreleased"},
+  {"module": "tools/app_lists.py", "name": "CHUNK_CUT", "date": "2026-11-12", "announced": "Unreleased"},
+  {"module": "tools/page_db.py", "name": "PART_MIN_BYTES", "date": "2026-11-12", "announced": "Unreleased"},
+  {"module": "tools/page_db.py", "name": "PART_CUT", "date": "2026-11-12", "announced": "Unreleased"}
  ]
 }

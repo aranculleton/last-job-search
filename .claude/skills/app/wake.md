@@ -126,7 +126,7 @@ folder and wake once more. Never take an item `wake` or `next` did not give you:
 the locks and the heavy-job cap. `run` says where it is done: `here`, `child session` or
 `background agent` (`.claude/skills/app/jobs.md`, "A big job runs in a chat of its own"); a `create_session` or
 Agent call is made only once the claim is accepted. Small work done here (`run: here`) is
-claimed running at its first stage, and no progress pin follows it, unless something else comes first (a page update, a read): then `python3 tools/app.py pin "$D" --work <its id> --line "<what, in a few plain words>"` first, so the page shows it running. It is finished only with the answer itself: a reply saying the answer follows is refused, as the page then showed nothing running while the work went on (2026-11-10). Every small item waiting
+claimed running at its first stage, and no progress pin follows it, unless something else comes first (a page update, a read): then `python3 tools/app.py pin "$D" --work <its id> --line "<what, in a few plain words>"` first, so the page shows it running. It is finished only with the answer itself: a reply saying the answer follows is refused (2026-11-10). Every small item waiting
 (a talk, a reply, a tweak) is claimed in that same pass: each further one is under `also:`, done
 in order after the one under `next:`, with no new read between. **A question the person asked
 goes first** (a `talk`: `next` hands it out before every message change, redraft or draft as
@@ -137,6 +137,7 @@ its `between items:` line is the one look for a question asked meanwhile, answer
 next item, never after the whole pass (issue #226). Step 3 again is `wake`
 run again: with the same folder after a big job's call, from a new read after small work
 (finishing it writes records the folder does not see); it says when more is waiting.
+Over a read more than two minutes old it takes nothing: read again (issue #255).
 
 ## 5. Finish in one batch
 

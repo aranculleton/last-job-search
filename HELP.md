@@ -57,11 +57,14 @@ Get past a setting a work or team plan has locked: ask an Owner of your Claude o
 to turn it on for you.
 <!-- /claude-surface -->
 
+**Chats you didn't start.** They're Claude's, doing your work:
+[README.md](README.md#the-chats-youll-see) says which.
+
 **New chats won't start.** Tell Claude in a chat you already have: a line pasted into your
 cloud settings before 3 November needs replacing.
 
-**No brief arrived on one of its days.** The next chat you open notices and mends it by
-itself. To ask sooner, say "my brief didn't arrive" in any chat on your copy.
+**No brief arrived.** The next chat you open mends it. To ask sooner, say "my brief didn't
+arrive" in any chat on your copy.
 [automation/README.md](automation/README.md) has the rest.
 
 **Something else.** Say what you were doing and what it said. It never sends anything, so

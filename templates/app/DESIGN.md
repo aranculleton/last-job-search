@@ -256,22 +256,36 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   keeping its room in the flow so nothing under it moves, whole again near the top and while find
   is in use. The bar's name for a screen reader is the timing in a line ("60 minutes in 5 parts,
   the last 7 minutes for your questions", a day of interviews in hours). Then At a glance, in a plain box:
-  the line to open with, what they are known to ask (else the first likely question) with the
-  part it is in and its gold dot, two questions to ask them, each a tap to its place, and a guessed kind of
-  interview said there with "Not this kind of interview?" one tap from the right one. A test
-  taken alone has nothing to say first: its parts keep in mind how it works, and At a glance
-  says what to know before you start. Each part: a small-capitals line (its number and minutes)
-  and its title over a rule; "Say first" in a plain box, each line a bullet, its "Likely to
-  prompt" or "Full answer and follow-ups" lines dashed under it, going to the answer and marking
-  it until a moment after it arrives, and the line to end on in italics; then its questions as
+  what they are known to ask (else the first likely question) with the part it is in and its
+  gold dot, and two questions to ask them, each a plain line in the ink, never drawn as a link,
+  and a tap to its place, and a guessed kind of interview said there with "Not this kind of
+  interview?" one tap from the right one. **The opening is on the screen once** (the
+  maintainer, 2026-11-12: At a glance, Say first and Tell me about yourself each said it): it is
+  Part 1's Say first, never At a glance as well, and an answer whose first sentences say what
+  its part's Say first says starts at "Start with your lines above, then:", a tap back to them.
+  A test taken alone has nothing to say first: its parts keep in mind how it works. **The
+  reading column uses the width** (up to 1200px, 1080 drawn on a 1440 screen; a narrow column
+  between wide empty margins, the maintainer, 2026-11-12), and from 1180px a part's Say first
+  and its questions sit side by side, Say first staying beside them under the bar as they
+  scroll by wherever it fits between the bar and the lifelines. Each part: a small-capitals
+  line (its number and minutes) and its title over a rule; "Say first" in a plain box, each
+  line a bullet, the line to end on in italics, and under them all one quiet line, "They may
+  follow with:" and the questions those lines may bring, a gold dot on one they are known to
+  ask, each a tap going to its answer and marking it until a moment after it arrives, never a
+  pill between the lines being read aloud (the maintainer, 2026-11-12); then its questions as
   cards, the question first and who asks after it, small, a gold dot on one they are known to
-  ask. **Every answer shows both ways at once**: the script to read aloud (17px, at most 60
-  characters a line, full ink) and the same answer as points (the first one bold and larger),
-  in the order the person picked, the second under a thin rule; nothing redraws when they flip
-  it. **Follow-ups are choices, never folds**: under an answer, "They may ask next" and a
-  button a follow-up; picking one shows its question, both ways of its answer and its own
-  follow-ups in the same place, three deep, the way back above it (each earlier pick a link,
-  and Back), the picked question taking the focus. The follow-ups after any story are said
+  ask. **What is read aloud is the large type**: the lines said first, the line to end on and
+  the script, a quarter larger than the words round them (a step less on a phone), with room
+  between the lines and never more than about 95 characters a line; the labels, who asks and
+  the notes under an answer are small and quiet. **Every answer shows both ways at once**: the
+  script to read aloud (full ink) and the same answer as points (the first one bold and
+  larger), in the order the person picked, the second under a thin rule; nothing redraws when
+  they flip it. **Follow-ups are choices, never folds of the answer**: under an answer, "They
+  may ask next" and a row a follow-up; the one tapped opens both ways of its answer in place,
+  under its own row, with its own follow-ups as rows under that, three deep, the other rows
+  staying where they are; the rows on the open path are filled, a tap on one closes it, and
+  each open answer ends with the way back up ("Back to “...”", or "Close this answer"), the
+  row tapped keeping the focus (the maintainer, 2026-11-12: "more dynamic"). The follow-ups after any story are said
   once, at the part's foot ("After any story here, they may ask"), never under each question.
   The questions to ask them sit in the last part, each with what to ask next to each likely
   answer as a plain line ("If they say ... → ask: ..."). Find looks through what to say, both
@@ -289,9 +303,11 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   the focus a tap gives the word being that same tap on a touch screen, never a first one. An Esc
   used inside the prep never also closes it.
   It never takes the focus, and nothing moves when it opens. Numbers in what to say are bold. At
-  the foot of the screen, flush with it as the prep scrolls, a row of lifelines (Moment, Again?,
-  Don't know, and Pay, Notice and Based where the notes hold them), wrapping to a second row on
-  a phone, never scrolling one past the edge: a tap says one line over the row itself, labelled
+  the foot of the screen, flush with it as the prep scrolls, a row of lifelines, each labelled
+  by what it gives (Give me a moment, Could you repeat that?, Don't know it, and Salary, My
+  notice and Where I'm based where the notes hold them; "Moment" and "Pay" were too terse under
+  pressure, the maintainer, 2026-11-12), wrapping to a second row on a phone, a label wrapping
+  inside its pill, never scrolling one past the edge: a tap says one line over the row itself, labelled
   "Only for you", never above it over the answers; it fades after a while, and a tap on it or
   Esc closes it at once. A coding part with steps says first what to say, then the problem as
   they set it and its answer, then its cockpit, all in view: what to ask before typing, the
@@ -313,11 +329,15 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   many are overdue, where any are, and once one is done how far it has gone ("2 of 7 done").
   Why: "7 to send" over "Messages to send (7)" said one number twice (the screen review,
   2026-11-11). The quick answers' "1 of 4" stays: it says which question you are on.
-  On a wide screen a row is one line, its name and how it stands side by side, the words a
-  reading width, so a row's button is near the name it acts on (the review, 2026-11-10: the
-  button sat 650px from its name), the buttons one column; the row spans the card, its trash at
-  the card's edge (rows stopping short left the trash a column in mid-card, the screen review,
-  2026-11-11). On a phone the name is one line and where they work the muted line under it,
+  On a wide screen a row is one line, its name and how it stands side by side; the row spans
+  the card, its trash at the card's edge (rows stopping short left the trash a column in
+  mid-card, the screen review, 2026-11-11), and its buttons sit together at its end, just
+  before the trash, every row's starting at one edge (the rows share the list's columns). Why:
+  held a reading width from the name (the review, 2026-11-10: the button sat 650px from it),
+  the buttons stood in a column halfway across the card with empty room after them and the
+  trash alone at the edge, two places to look (the maintainer, 2026-11-12). A row's line of
+  facts is one run of words, its dots kept wherever words stand on both sides of them, never
+  a hole mid-line. On a phone the name is one line and where they work the muted line under it,
   beside the row's button. A row's button and its trash keep one line at any width, the words
   beside them giving way (at a tablet's width the trash fell under its button, 2026-11-11).
   (layout 8, one-card tests, room test, overlap test: alone)

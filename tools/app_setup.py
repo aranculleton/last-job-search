@@ -1261,7 +1261,12 @@ def _first_name() -> str:
         return ""
 
 
-def _page_current() -> bool:
+def _page_current(held: int = 0) -> bool:
+    """Is the published page's code this copy's? `held`: the version the page's own record
+    says was last published (meta/now `page`, app.py page_held). The chat that answers the page
+    publishes from its own copy, and a copy that has not taken that record yet read the page as
+    a version behind: a chat on the computer published it again after a job, for over twenty
+    minutes (issue 254)."""
     if not page_record().get("url"):
         return False
     if not set_up():
@@ -1275,7 +1280,10 @@ def _page_current() -> bool:
         return False
     try:
         import build_versions
-        return not build_versions.behind("page")
+        have = build_versions.recorded()
+        if int(held or 0) > int(have.get("page") or 1):
+            have = dict(have, page=int(held))
+        return not build_versions.behind("page", have)
     except Exception:  # noqa: BLE001
         return True
 

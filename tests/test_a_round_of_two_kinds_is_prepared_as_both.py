@@ -193,3 +193,42 @@ def test_the_coding_part_says_what_its_first_words_are_for():
     assert opening and "starter code and data" in opening[0] and "think aloud" in opening[0], said
     probes = [w for k, w in L.problems(doc) if k == '"The follow-up probes and trade-offs"']
     assert any("trade-offs you chose" in w for w in probes), probes
+
+
+# The questions about the work in front of them, as a real mixed round's prep held them (the
+# maintainer, 2026-11-12): most sat under the personal experience part, and a question about a
+# choice in the work sat in the hello. Worded here for the invented round.
+WORK_QUESTIONS = (
+    "What would you check first in this data?", "Is this model any good?",
+    "Which features matter?", "How would you make this faster?",
+    "If there's a text column, what would you do with it?",
+    "How would you take this to production?", "How did you check the result was right?",
+    "How would you explain this to the client?", "Tell me about your online test.",
+    "Why that change and not a bigger one?")
+
+
+@pytest.mark.parametrize("q", WORK_QUESTIONS)
+def test_a_question_about_the_work_goes_to_the_coding_parts(q):
+    kinds = ["opening", "technical", "probes", "personal", "close"]
+    assert L._place(L.kind_of(q), kinds, strict=True) in ("technical", "probes"), L.kind_of(q)
+    assert L._place(L.kind_of(q), kinds) in ("technical", "probes")
+
+
+def test_a_mixed_round_keeps_stories_in_the_story_part_and_the_hello_for_hello():
+    ctx = _with_prep(WRITTEN)
+    ctx["bank"] = [{"company": COMPANY, "question": q, "source": "the recruiter"} for q in WORK_QUESTIONS]
+    doc = L.build(ctx)
+    kind = {p["id"]: p["kind"] for p in doc["parts"]}
+    where = {q["q"]: kind[q["part"]] for q in doc["questions"]}
+    for q in WORK_QUESTIONS:
+        assert where.get(q) in ("technical", "probes"), (q, where.get(q))
+    # The story part holds stories, and the hello holds the introduction and why them.
+    for q in doc["questions"]:
+        if kind[q["part"]] == "personal":
+            assert L.kind_of(q["q"]) in ("behaviour", "experience", "personal"), q["q"]
+        if kind[q["part"]] == "opening":
+            assert L.kind_of(q["q"]) in ("opening", "motivation"), q["q"]
+    # Why them is still why them, and a question about someone you know is still a basic.
+    assert L.kind_of("Why consulting and not industry?") == "motivation"
+    assert L.kind_of("How do you know Priya?") == "basics"
+    assert L.kind_of("How do you know it worked?") != "basics"

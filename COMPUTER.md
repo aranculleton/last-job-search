@@ -10,9 +10,13 @@ set up, clicking **Install** in a window from Apple.
 the Claude app open there, with your computer awake, and that is all: when something needs
 your computer (reading someone's LinkedIn profile before Claude writes to them), Claude
 starts a chat there by itself, called "Job search · what it is doing · your computer's
-name", does the work and puts it on your page. Those chats are safe to delete. To watch one,
-open it in the Claude app on your computer. If your computer is off, your page says so in one
-line and the work waits; nothing else is asked of you.
+name", does the work and puts it on your page. Each is put away by itself once its work is
+done, and is safe to delete. To watch one, open it in the Claude app on your computer. They
+are started by one small chat of Claude's, "Job search: starts chats on your computer",
+which stays. The first time, it asks "Let Claude use your computers and other sessions from
+here?": choose Allow, once, and a card on your page's To do says which chat. If your computer
+is off, your page says so in one line and the work waits; nothing else is asked of you.
+Every chat Claude makes, and why: [README.md](README.md#the-chats-youll-see).
 
 ---
 
@@ -135,21 +139,37 @@ neither the steps say all three in one line. Never pass on a Mac's keys to anyon
    `list_environments` lists this computer as an active environment of kind `bridge`
    (`computer-bridge`). Not listed after they say done: give the steps once more, then the
    fallbacks below still work.
-2. **The one approval** (`computer-bridge`), held by one small chat of its own, "Job search:
-   starts chats on your computer" (`tools/computer.py` STARTER_TITLE). A chat that approves is
-   tied to the person's devices for good: no chat can archive it, itself included, no
-   scheduled task may fire into it and no other chat's message reaches it. So the page's
-   helper and the brief never approve: their `route` makes the starter once (`create_session`)
-   and later wakes it by republishing its bell, a tiny page it published and watches. The
-   starter's own `route` prints the `create_session` on the computer; refused as an untrusted
-   device, it runs `trust-check`, then `confirm_repository_trust`: one card, once.
-3. **Auto, once.** A chat started on the computer gets Auto only when the chat starting it is
-   in Auto itself ("requires the parent session to be in auto mode (parent is default)",
-   2026-11-10, from a helper whose mode menu showed Auto). So on that refusal the person is
-   asked once to switch the helper to Auto, and the call is made again; every chat after it
-   then starts in Auto (`app_listen.MODE_REFUSED` says each step).
+2. **Claude's OK, once** (`computer-allow`, `computer-auto-again`), held by one small chat of
+   its own, "Job search: starts chats on your computer" (`tools/computer.py` STARTER_TITLE). A
+   chat that approves is tied to the person's devices for good: no chat can archive it, itself
+   included, no scheduled task may fire into it and no other chat's message reaches it. So the
+   page's helper and the brief never approve: their `route` makes the starter once
+   (`create_session`) and later wakes it by republishing its bell, a tiny page it published and
+   watches. The starter takes the app's updates at every wake (`sync_app.py --if-stale`), and
+   its own `route` prints the `create_session` on the computer, always in Auto. Refused as an
+   untrusted device, it runs `trust-check`, then `computer.py starter-waits --on allow`, then
+   `confirm_repository_trust`: the question "Let Claude use your computers and other sessions
+   from here?" in that chat, once. Tapping Allow clears that chat's own Auto (seen on
+   2026-11-12: its mode menu still said Auto, and the next `create_session` in Auto was refused,
+   "parent is default"), so then `starter-waits --on mode`, and it starts nothing until the
+   person switches that chat to Accept edits and back to Auto. Never another mode, never
+   without one: a chat started so came up on the Mac in Manual and stopped at its first command.
+   Each wait is the page's own record (`meta/computer_starter`, `waits_for`), never a file of the
+   starter's copy, which no drawing of the page reads: the page shows one To do card, "Claude
+   needs your OK once", whose button opens that chat and whose steps name only what is still
+   needed, and the work's line says the same. A chat started on the computer since, or the
+   starter's `--on none`, ends it.
+3. **Auto for every other chat.** The page's helper and the brief also start chats in Auto, and
+   one refused Auto because it is not in Auto itself puts one card on the page to switch it
+   (`app_listen.MODE_REFUSED`, `app.py mode-refused`); that is for those chats, never the
+   starter, whose own wait is step 2.
 4. **Signed in to LinkedIn, and staying signed in** (`browser-pane-stay-signed-in`, whose
-   steps include keeping the sign-in). Check: a chat already at work on the computer says what
+   steps include keeping the sign-in). The sign-in that counts is the one in the chat on the
+   computer, in that chat's own browser: being signed in beside the page did not reach it, seen
+   twice on 2026-11-12, so the two are treated as separate. A chat on the computer that finds
+   LinkedIn signed out opens the sign-in page in its own browser with its panel up and puts one
+   card on To do, "Sign in to LinkedIn once, in the chat on <the computer>", whose one button
+   opens that chat; no LinkedIn link is offered anywhere else. Check: a chat already at work on the computer says what
    its own tab shows in its heartbeat (`computer.py beat --linkedin in`), and opens nothing
    extra for it; who looks in each case is the table below. No chat can read whether the
    browser keeps sign-ins, so it is judged by its effect: a sign-in lost by the next look, one
@@ -178,7 +198,7 @@ CC-20).
 |---|---|---|
 | The day's look, whether anything waits or not | the page, once a day, when it opens in the Claude desktop app; no chat opens LinkedIn only to check | `python3 tools/network/reading.py linkedin-check` says passed, signed-out or due |
 | How the computer is, while a job runs there | the chat the app started on the computer, from the tab it already has; it opens nothing extra | `python3 tools/computer.py beat --linkedin in`, `out` or `unknown` |
-| A job stopped on a sign-in, seen signed in again | the chat on the computer that waits for it (`computer.py signin-wait`) | `python3 tools/computer.py signed-in --work <id>` |
+| A job stopped on a sign-in, seen signed in again | the chat on the computer that waits for it: `computer.py signin-wait` only waits, then it opens LinkedIn's feed afresh in its own browser and `computer.py signin-seen` judges what loads (anything but a sign-in or check page is signed in); never an address read before the wait | `python3 tools/computer.py signed-in --work <id>`, after closing the sign-in tab it opened |
 
 ### How the work reaches the computer (for Claude)
 
@@ -192,9 +212,10 @@ a chat already on the computer; a chat started there from the cloud (`create_ses
 bridge by the computer starter, woken by its bell, in Auto, titled `Job search · <job> ·
 <computer>`, its prompt complete, its results back through the page and the copy and never
 `send_message`, archived by the starter once its work is finished or waits on the person: a
-chat that finds LinkedIn signed out opens its sign-in page in Claude's browser, puts the Sign
-in to LinkedIn card on the page and looks again by itself for a quarter of an hour
-(`computer.py signin-wait`), carrying on the moment they are signed in; only after that does
+chat that finds LinkedIn signed out opens its sign-in page in its own browser, puts the Sign
+in to LinkedIn card on the page (its button opens that chat) and looks again by itself for a
+quarter of an hour (`computer.py signin-wait`, then `signin-seen` on the feed opened afresh),
+carrying on the moment they are signed in; only after that does
 it ring the bell, its chat is put away, and a fresh one starts once they sign in; the person
 saying in that chat that they signed in, or asking it to do queued work there, is `app.py resume`,
 which takes the work into that chat so nothing starts it twice); the scheduled task; a folder the computer offers (`folder-attach`); a cloud
@@ -206,7 +227,16 @@ networking run: the people searches, the short list, each profile read in Claude
 checked, and the page brought up to date. A networking run asked in a cloud chat while the
 computer is ready is sent there the same way (`app.py ask`), never half done in the cloud. Each run is measured
 from its own transcript (`computer.py measure`) and its heartbeat says how the computer is,
-so the page shows one line and, only while work waits on the person, one To do card.
+so the page shows one line and, only while work waits on the person, one To do card. That
+line says "Starting on <the computer>" while the starter makes its chat, and says the computer
+is off only where the person's list of computers (`list_environments`, kept on the page) shows
+none of theirs on, never on an old check-in alone (2026-11-12: a Mac on and connected was said
+to be off). Work queued behind a chat at work there says "Waiting its turn on <the computer>",
+and a check-in's sign-in words are believed only while it is newer than the last LinkedIn read
+moved on there. At the end of its job a chat on the computer wakes the starter by reading its
+bell first and then republishing it (`computer.ring_steps`): a publish alone, to another chat's
+page, was refused; refused even so, its finished work and last heartbeat already list it to be
+put away at the next wake of Claude's chats.
 
 ## If something does not work
 

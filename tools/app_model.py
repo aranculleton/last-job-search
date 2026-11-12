@@ -826,7 +826,10 @@ def computer_reads(ctx: Ctx) -> bool:
 
 def employer_held(ctx: Ctx, company: str, cid: str) -> str:
     """"On hold: ..." for a first note whose employer already has as many people waiting on a
-    reply as the person allows there (reading.employer_full_line), or "". Once an employer."""
+    reply as the person allows there (reading.employer_full_line), or "". Once an employer.
+    Where a follow-up owed there fills a place, the follow-up is what goes first, and the line
+    says so by name: the page offered the follow-up and the new note side by side (issue
+    262)."""
     if not company:
         return ""
     memo = ctx._got.setdefault("employer_held", {})
@@ -835,9 +838,17 @@ def employer_held(ctx: Ctx, company: str, cid: str) -> str:
         try:
             import reading
             limit, _theirs = reading.employer_limit(company)
+            owed: set = set()
             waiting, _there = reading.at_employer(company, ctx.contacts, today=ctx.today,
-                                                  threads=ctx.threads) if limit else ([], [])
-            if limit and len(waiting) >= limit:
+                                                  threads=ctx.threads, owed=owed) \
+                if limit else ([], [])
+            chasing = [first_name(c.get("name")) or "someone" for c in waiting
+                       if str(c.get("contact_id") or "") in owed]
+            if limit and len(waiting) >= limit and chasing:
+                who = (" and ".join(chasing) if len(chasing) <= 2
+                       else ", ".join(chasing[:-1]) + " and " + chasing[-1])
+                said = f"On hold: follow up with {who} at {company} first"
+            elif limit and len(waiting) >= limit:
                 n = len(waiting)
                 said = (f"On hold: you already have {n} {'person' if n == 1 else 'people'} "
                         f"waiting on a reply at {company}")
@@ -1722,7 +1733,7 @@ def _jobs(ctx: Ctx, targets: dict) -> dict:
     import app_lists
     import run_round
     import throttle
-    from lookup_score import norm
+    from lookup_score import norm, strip_language_tag
     path = newest_round()
     if not path:
         return {"round": "", "made_at": None, "met": False,
@@ -1756,11 +1767,17 @@ def _jobs(ctx: Ctx, targets: dict) -> dict:
         score = r.get("fit") if r.get("fit") is not None else r.get("priority")
         score = round(score) if isinstance(score, (int, float)) else None
         url = r.get("url") or ""
-        company, title = str(r.get("company") or ""), str(r.get("title") or "")
+        # A language tag its board wrote before the title is never shown, on a posting kept from
+        # before a search cut it (lookup_score.strip_language_tag); its rev and its draft's id
+        # stay on the title as kept.
+        company, kept_title = str(r.get("company") or ""), str(r.get("title") or "")
+        title = strip_language_tag(kept_title)
         entry = ctx.seen.get(norm(url) or url) if url else None
         # By the employer and the role, else by the posting's own link: the role applied to
         # under a title the board has changed since read "Draft this" (2026-11-05).
-        tracked = _tracker_match(ctx, company, title) or _tracker_by_link(ctx, url)
+        tracked = (_tracker_match(ctx, company, title)
+                   or (kept_title != title and _tracker_match(ctx, company, kept_title))
+                   or _tracker_by_link(ctx, url))
         st = _status(tracked) if tracked else ""
         # Ruled out by the person, or by a chat that found it is not one they can take (a draft
         # stopped on where the job is open): either way it leaves the list and its counts. One
@@ -1880,6 +1897,7 @@ def _jobs(ctx: Ctx, targets: dict) -> dict:
                      else "from this search")
         staged.append({"rname": rname, "rank": rank, "r": r, "added": added, "earlier": earlier,
                        "score": score, "url": url, "company": company, "title": title,
+                       "kept_title": kept_title,
                        "status": status, "place": place, "pay": pay, "notes": notes,
                        "posted": posted, "found_day": found_day,
                        "open": status == "new" and not mine and not why})
@@ -1899,6 +1917,7 @@ def _jobs(ctx: Ctx, targets: dict) -> dict:
         rname, rank, r, added, earlier = c["rname"], c["rank"], c["r"], c["added"], c["earlier"]
         score, url, company, title, status = (c["score"], c["url"], c["company"], c["title"],
                                               c["status"])
+        kept_title = c["kept_title"]
         place, pay, notes, posted, found_day = (c["place"], c["pay"], c["notes"], c["posted"],
                                                 c["found_day"])
         jid = f"{rname}-{rank}"
@@ -1919,7 +1938,7 @@ def _jobs(ctx: Ctx, targets: dict) -> dict:
                 "near": [{"asked": str(x.get("asked") or ""), "have": str(x.get("have") or "")}
                          for x in (r.get("near") or []) if isinstance(x, dict)][:5],
                 "deadline": r.get("deadline") or None, "warm": _warm(ctx, company),
-                "draft_work": {"kind": "draft", "id": draft_work_id(url, company, title),
+                "draft_work": {"kind": "draft", "id": draft_work_id(url, company, kept_title),
                                "args": {"round": rname, "rank": rank, "url": url,
                                         "company": company, "title": title}},
                 "why": [scrub(w, ctx.names) for w in why_of(r.get("fit_why"))],
@@ -1931,7 +1950,7 @@ def _jobs(ctx: Ctx, targets: dict) -> dict:
                 "questions": (["Have you already applied?"] if status == "new" else [])
                 + [str(q) for q in (r.get("questions") if isinstance(r.get("questions"), list)
                                     else []) if str(q).strip()],
-                "rev": job_rev(url, company, title, status)}
+                "rev": job_rev(url, company, kept_title, status)}
         _card(ctx, targets, item, "for_job")
         item["near_words"] = near_words(item, _noun())
         rows.append(item)
@@ -2114,6 +2133,7 @@ def _filtered(name: str, targets: dict, ctx: Ctx | None = None) -> dict:
     The rows the page holds for each rule's search box go to the database as the `filtered`
     list, never all of them: a search left out 13,168 (2026-11-05)."""
     import rules_view
+    from lookup_score import strip_language_tag
     path = person.state("documents", "rounds", "filtered", f"{name}.json")
     data = _json(path, {})
     found = (data.get("filtered") if isinstance(data, dict) else data) or []
@@ -2121,13 +2141,14 @@ def _filtered(name: str, targets: dict, ctx: Ctx | None = None) -> dict:
 
     def item_of(n: int, e: dict) -> dict:
         fid = f"{name}-f{n}"
+        kept = str(e.get("title") or "")
         item = {"id": fid, "company": str(e.get("company") or ""),
-                "title": str(e.get("title") or ""), "place": str(e.get("location") or ""),
+                "title": strip_language_tag(kept), "place": str(e.get("location") or ""),
                 "url": str(e.get("url") or ""), "reason": str(e.get("reason") or e.get("rule") or ""),
                 "rev": rev_of(e.get("url"), e.get("company"), e.get("title"),
                               str(e.get("rule") or e.get("stage") or "other"))}
         targets[fid] = {"kind": "filtered", "round": name, "n": n, "url": item["url"],
-                        "company": item["company"], "title": item["title"], "rev": item["rev"]}
+                        "company": item["company"], "title": kept, "rev": item["rev"]}
         return item
 
     # A whole rule comes back by its id, as before: filtered~<its kind>.
@@ -2993,10 +3014,13 @@ def _messages(ctx: Ctx, targets: dict) -> list:
             # profile was read: read it first" on every note drafted in the cloud said neither
             # (2026-11-06).
             hold = read_hold(ctx)
+        if kind == "first_note":
             # Held back on purpose, because people at their employer already wait on a reply
             # (reading.employer_full_line): said as that, never as a read that is coming. A
             # note skipped by the read for that reason said "Claude reads it on your computer
-            # by itself" when nothing would (the maintainer, 2026-11-10).
+            # by itself" when nothing would (the maintainer, 2026-11-10). A note written
+            # before a follow-up there fell due waits behind it, whether or not it waits on a
+            # read: both were offered as ready on one day (issue 262).
             full = employer_held(ctx, str(c.get("company") or ""), cid)
             if full:
                 hold, hold_why = full, "employer_full"
@@ -3708,7 +3732,7 @@ def _people(ctx: Ctx, targets: dict) -> list:
         last = max((str(m.get("date") or "")[:10] for m in msgs), default="") or None
         days = app_lists.ago(last, ctx.today)
         hold = surface.held(c, msgs, status, replying=status in schema.OWED_BY_US,
-                            memo=ctx._got.setdefault("held_memo", {}))
+                            memo=ctx._got.setdefault("held_memo", {}), today=ctx.today)
         call = _call_of(cid, "call_booked" if str(c.get("status") or "") == "call_booked"
                         else status, due, c.get("next_action"), ctx.zone, ctx.names, folders)
         # On hold: their record's (on_hold), or Claude's own decision on the draft to them
@@ -4072,22 +4096,45 @@ def _due(ctx: Ctx, targets: dict) -> list:
                 t.update(company=company, role=role, sub=sub, stage=i.get("stage") or "")
             targets[did] = t
     if pending:
+        from network import surface
         book = {str(c.get("contact_id") or "").strip(): c for c in ctx.contacts}
         ids = sorted({str(i.get("contact_id") or "") for i in pending})
+        since = {str(i.get("contact_id") or ""): _date(i.get("since")) for i in pending}
         did = "due-withdraw"
-        who = [{"contact": cid, "first_name": first_name(book.get(cid, {}).get("name")),
-                "employer": str(book.get(cid, {}).get("company") or "")} for cid in ids]
+        who = []
+        for cid in ids:
+            c = book.get(cid, {})
+            # Each request one plain line, dated by its own withdraw day (surface.withdraw_line,
+            # as their card in Contacts says it): the card only counted them, and was never
+            # drawn, so nothing told the person to withdraw one (issue 261).
+            said, on = surface.withdraw_line(c, since.get(cid) or dt.date.min, ctx.today)
+            who.append({"contact": cid, "first_name": first_name(c.get("name")),
+                        "employer": str(c.get("company") or ""), "said": said, "on": on or None})
+        # Oldest first: the ones most worth withdrawing.
+        who.sort(key=lambda w: (w["on"] or "", w["first_name"].lower(), w["contact"]))
         n = len(ids)
+        days = [w["on"] for w in who if w["on"]]
+        due = min(days) if days else min(i["due"] for i in pending)
+        firsts = list(dict.fromkeys(w["first_name"] or "someone" for w in who))
+        named = (firsts[0] if len(firsts) == 1 else " and ".join(firsts) if len(firsts) == 2
+                 else ", ".join(firsts[:2]) + f" and {len(firsts) - 2} more")
+        weeks = min(((ctx.today - since[c]).days // 7 for c in ids
+                     if since.get(c) and since[c] != dt.date.min), default=0)
+        title = (who[0]["said"] if n == 1 and who[0]["said"] else
+                 f"Withdraw your requests to {named}: nobody accepted them in "
+                 f"{weeks or 3} weeks")
         item = {"id": did, "kind": "withdraw", "sub": "withdraw",
-                "title": f"{n} connection request{'s' if n != 1 else ''} nobody accepted",
+                "title": title,
                 # Every due item carries `context` (the contract, _ITEM_KEYS): this one was the
                 # only one without, and `app.py check` failed every real model that had it.
                 "context": "Withdrawing them keeps your request count clear for new notes.",
-                "due": min(i["due"] for i in pending), "company": "",
-                "overdue_days": max(int(i.get("late") or 0) for i in pending),
+                "due": due, "company": "",
+                "overdue_days": max((ctx.today - _date(due)).days, 0) if _date(due) else
+                max(int(i.get("late") or 0) for i in pending),
                 "action": "requests.withdrawn", "item": None, "work": None,
                 "who": who, "steps": "linkedin-withdraw-invitation",
-                "done": {"action": "requests.withdrawn", "label": "I withdrew them"},
+                "done": {"action": "requests.withdrawn",
+                         "label": "I withdrew it" if n == 1 else "I withdrew them"},
                 "snooze": None, "rev": rev_of(did, ids)}
         out.insert(0, item)
         targets[did] = {"kind": "due", "half": "requests", "contacts": ids, "rev": item["rev"]}
@@ -5352,7 +5399,13 @@ def _where(ctx: Ctx, targets: dict) -> dict:
                         # (the screen review, 2026-11-09).
                         "steps": [s for s in (seen.get("action") or {}).get("steps") or []
                                   if "tap Done" not in s],
-                        "action": (seen.get("action") or {}).get("label") or None}
+                        "action": (seen.get("action") or {}).get("label") or None,
+                        # The starter waits on the person (its Allow, its mode): the work's
+                        # line says what to do whatever its age, never "It has not started"
+                        # (tools/computer.py starter_asks).
+                        "asks": seen.get("asks") or None,
+                        # Work queued behind a chat at work there: its turn, said on its line.
+                        "queued_line": seen.get("queued_line") or None}
     try:
         reg = routines.load()
     except Exception:  # noqa: BLE001

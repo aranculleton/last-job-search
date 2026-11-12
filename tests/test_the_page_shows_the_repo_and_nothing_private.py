@@ -319,9 +319,14 @@ def test_a_section_too_big_for_one_document_goes_in_parts_and_comes_back_whole(t
     view` used to stop on it ("page_db: view/jobs is over 256 KiB"), so nothing new reached
     the page. It now writes the section as parts, each under the cap, that join back to
     exactly the model's section, and an earlier write's parts the section no longer fills
-    are deleted."""
+    are deleted. Each row's links to the rest at its employer are kept beside the section
+    (app_lists.apart, issue 254), so the parts join back to the section without them, and the
+    links records hold every row's."""
+    import app_lists
     state = app_state.many_jobs(str(tmp_path / "state"), n=400)
-    whole = model(state)["jobs"]
+    built = model(state)
+    whole, links = app_lists.apart(built)
+    whole = whole["jobs"]
     assert page_db.stored_size({"data": whole}) > page_db.DOC_MAX * 3 // 2
     dump = tmp_path / "dump"
     (dump / "screen").mkdir(parents=True)
@@ -341,6 +346,12 @@ def test_a_section_too_big_for_one_document_goes_in_parts_and_comes_back_whole(t
             if c == "screen" and op == "set"}
     assert page_db.joined(view, "jobs") == whole
     assert len(page_db.joined(view, "jobs")["rows"]) == 400
+    kept = {k: v for d, doc in view.items() if d.startswith(app_lists.LINKS_PREFIX)
+            for k, v in doc["data"]["links"].items()}
+    rows = {f"jobs/{r['id']}": r for r in built["jobs"]["rows"]}
+    assert {k: v for k, v in kept.items() if k in rows} == \
+        {k: v for k, v in links.items() if k in rows}
+    assert all(kept.get(k, {}).get("related", {}) == r["related"] for k, r in rows.items())
     # A part missing, or from another write, is never read as the section.
     view.pop("part~jobs~2")
     assert page_db.joined(view, "jobs") is None

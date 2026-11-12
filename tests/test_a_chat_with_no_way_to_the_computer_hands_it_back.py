@@ -111,9 +111,12 @@ def test_a_chat_with_no_publish_hands_the_ring_back(tmp_path, monkeypatch):
     db = dict(_db(WORK), **_starter())
     got = computer.route(db, T, chat="session_helper", envs=BRIDGE, tools=["Bash", "ArtifactData"])
     calls, then = _back(got)
-    assert [c[0] for c in calls] == ["Artifact", "ArtifactComments"]
-    assert calls[0][1]["url"] == BELL and calls[0][1]["action"] == "publish"
-    assert calls[1][1] == {"action": "watch", "url": BELL, "on": False}
+    # The bell is read first: it is the starter's page, and a publish to a page this chat has
+    # not read is refused (decided 2026-11-12, the maintainer's Mac).
+    assert [c[0] for c in calls] == ["Artifact", "Artifact", "ArtifactComments"]
+    assert calls[0][1] == {"action": "read", "url": BELL}
+    assert calls[1][1]["url"] == BELL and calls[1][1]["action"] == "publish"
+    assert calls[2][1] == {"action": "watch", "url": BELL, "on": False}
     assert "computer.py rung" in then[0]
 
 

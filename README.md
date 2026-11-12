@@ -64,6 +64,29 @@ No resume yet? Say "build one with me". [START_HERE.md](START_HERE.md) has each 
 
 Anything else, ask in **Chat** on the page.
 
+## The chats you'll see
+
+Claude works in chats of its own, so your list of chats shows a few named "Job search" that
+you didn't start. Nothing is wrong, and you never need to open or type in them unless a card
+on your page's **To do** says so: your page is the one place you use. Delete one by mistake
+and nothing is lost: the app starts it again when it's needed.
+
+| Chat | What it does | How long it stays |
+|---|---|---|
+| **Job search page** | Answers your page and its **Chat** | Stays. Each day you use your page (or sooner, when it grows full) a fresh one takes over; the old one is called "Job search page (finishing up)" for a little while, then is put away by itself |
+| **Job search: morning brief** | Writes your brief on its days, in a chat of its own so your page still answers at once | Stays. When it grows long, a fresh one takes over and the old one is put away by itself |
+| **Job search: starts chats on your computer** | Only if you use your computer for LinkedIn: starts the chats there | Stays for good, so you allow it only once (below) |
+| **Job search: *the work*** (for example "Job search: Finding jobs") | One big job: finding jobs, drafting, finding people, an interview prep, or a question in **Chat** while the page is busy | Put away by itself when the work is done |
+| **Job search · *the work* · *your computer's name*** | A job that reads LinkedIn on your computer | Put away by itself when the work is done |
+
+So you'll normally see three that stay (two if you don't use a computer), plus one for each
+job while it runs. Chats an older version made are put away by themselves too, and each can
+be brought back.
+
+**The first time Claude uses your computer**, "Job search: starts chats on your computer"
+asks "Let Claude use your computers and other sessions from here?". Choose Allow, once. A
+card on your page's **To do** says which chat and what to choose.
+
 ## Why it's different
 
 - **It ranks, it doesn't hide.** A missing skill lowers a score; only real deal-breakers rule

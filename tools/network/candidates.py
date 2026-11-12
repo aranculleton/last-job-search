@@ -468,7 +468,7 @@ def check(people, company: str = "", want: int | None = None, contacts=None, thr
     by = state.by_contact(threads)
     ctx["book"] = ix = ctx.get("book") or surface._book_index(contacts)
     listed = _todays_list(today)
-    seen, ranked, out = set(), [], []
+    seen, ranked, out, held_back = set(), [], [], []
     for raw in people or ():
         if not isinstance(raw, dict):
             continue
@@ -504,12 +504,16 @@ def check(people, company: str = "", want: int | None = None, contacts=None, thr
                 continue
             got = surface.check(p, ctx, again_after_run=True)
             if not got["show"]:
+                # They fit, and a list check holds them back (written to, held, the employer's
+                # limit of people waiting): the employer is full for now, never empty (#258).
                 out.append((p, got["reason"]))
+                held_back.append(p)
                 continue
         kind = kind_of(p["title"])
         w = why_mod.why_them({**p, "tier": p.get("tier", "")}, {}, today=today)
         if w["skip"] and not kept:
             out.append((p, w["line"]))
+            held_back.append(p)
             continue
         reasons = [(pts, fit)] if fit and pts else []
         kp = points.get(kind, 0)
@@ -593,23 +597,26 @@ def check(people, company: str = "", want: int | None = None, contacts=None, thr
             "peers_held": [r["name"] for r in held], "peers_filled": filled,
             "next_employers": [e for e, _w in nxt], "no_hiring_side": hiring_less,
             "kept": [r["name"] for r in chosen if r["kept"]],
-            "seen": _seen(people, ranked, out, company)}
+            "seen": _seen(people, ranked, out, company, held_back)}
 
 
-def _seen(people, ranked, out, company: str) -> dict:
-    """{employer: (people found there, people who fit)} for what a check saw: the record
-    `order` reads next time."""
+def _seen(people, ranked, out, company: str, held_back=()) -> dict:
+    """{employer: (people found there, people who fit, people who fit and were held back by a
+    list check)} for what a check saw: the record `order` reads next time."""
     found: dict = {}
     for raw in people or ():
         if isinstance(raw, dict):
             emp = str(raw.get("company") or raw.get("employer") or company or "").strip()
             if emp:
-                found.setdefault(emp, [0, 0])[0] += 1
+                found.setdefault(emp, [0, 0, 0])[0] += 1
     for r in ranked:
         if r.get("company"):
-            found.setdefault(r["company"], [0, 0])[1] += 1
+            found.setdefault(r["company"], [0, 0, 0])[1] += 1
+    for p in held_back or ():
+        if p.get("company"):
+            found.setdefault(p["company"], [0, 0, 0])[2] += 1
     if company and company not in found:
-        found[company] = [0, 0]
+        found[company] = [0, 0, 0]
     return {k: tuple(v) for k, v in found.items()}
 
 
@@ -633,19 +640,31 @@ def _place_key(place: str) -> str:
 
 
 def record_seen(seen: dict, place: str = "", today: datetime.date | None = None) -> None:
-    """Keep what a check saw at each employer in a place, dated: who was found and who fit.
-    An employer with nobody who fits is skipped by `order` for EMPTY_DAYS."""
+    """Keep what a check saw at each employer in a place, dated: who was found, who fit, and
+    who fit but a list check held back (`held`). An employer with nobody who fits is skipped by
+    `order` for EMPTY_DAYS (`nobody_fits`); one whose fits were all held back is full for now
+    (`full_for_now`). A search that found nobody at all is kept only where its place filter
+    covered the person's whole area (reading.place_filter): through a city's own number alone
+    it says nothing of the metro around it (#258)."""
     if not seen:
         return
     today = today or person.today()
     data = _where()
     pk = _place_key(place)
-    for emp, (found, fit) in seen.items():
+    narrow = False
+    if str(place or "").strip():
+        try:
+            import reading
+            narrow = bool(reading.place_filter(place)[1])
+        except Exception:  # noqa: BLE001  nothing kept to judge it by: taken as narrow
+            narrow = True
+    for emp, counts in seen.items():
+        found, fit, held = (tuple(counts) + (0, 0, 0))[:3]
         k = company_key(emp)
-        if not k:
+        if not k or (narrow and not int(found)):
             continue
         data.setdefault(k, {})[pk] = {"employer": emp, "date": today.isoformat(),
-                                      "found": int(found), "fit": int(fit)}
+                                      "found": int(found), "fit": int(fit), "held": int(held)}
     path = _where_file()
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -678,22 +697,39 @@ def look_again(employer: str) -> int:
     return len(gone)
 
 
+def nobody_fits(rec) -> bool:
+    """Did this check find nobody who fits there: none who fit, and none held back by a list
+    check. A record from before held-back people were told apart (no `held`) says nothing:
+    its employers were skipped for a month though their people were only waiting (#258)."""
+    return isinstance(rec, dict) and "held" in rec and not rec.get("fit") and not rec.get("held")
+
+
+def full_for_now(rec) -> bool:
+    """Did this check find people who fit there, every one held back by a list check (written
+    to, held, the employer's limit of people waiting on a reply)?"""
+    return isinstance(rec, dict) and not rec.get("fit") and bool(rec.get("held"))
+
+
 def _in_place(location: str, place: str) -> bool:
     loc = " ".join(str(location or "").lower().split())
     pl = _place_key(place)
     return pl == "anywhere" or (bool(loc) and pl.split(",")[0].strip() in loc)
 
 
-def order(names, place: str = "", contacts=None, today: datetime.date | None = None) -> list:
+def order(names, place: str = "", contacts=None, today: datetime.date | None = None,
+          threads=None) -> list:
     """[(employer, why, skip)] best first: the employers where people who fit are known in
     the place (the contact book: someone there in the function or on the hiring side, never
     closed by the person; an earlier check that found some), then those with a company
     number kept (one search away), then the rest, each in the order given. `skip` is the
     reason an employer is left out today: an earlier check found nobody who fits in the
-    place within EMPTY_DAYS. From what is already known only: no web search."""
+    place within EMPTY_DAYS, or found people who fit all held back while the employer is
+    still full (its limit of people waiting on a reply), which a reply or a close lifts at
+    once. From what is already known only: no web search."""
     import state
     today = today or person.today()
     contacts = state.load_contacts() if contacts is None else contacts
+    ctx: dict = {}
     seen = _where()
     pk = _place_key(place)
     sets = settings()
@@ -720,11 +756,20 @@ def order(names, place: str = "", contacts=None, today: datetime.date | None = N
         rec = (seen.get(k) or {}).get(pk) or {}
         when = state.as_date(rec.get("date"))
         age = (today - when).days if when else None
-        if rec and not rec.get("fit") and age is not None and age < EMPTY_DAYS:
+        if nobody_fits(rec) and age is not None and age < EMPTY_DAYS:
             again = when + datetime.timedelta(days=EMPTY_DAYS)
             rows.append((3, i, name, "", f"searched {when.isoformat()}: nobody who fits in "
                          f"{place or 'the search'}; looked at again from {again.isoformat()}"))
             continue
+        if full_for_now(rec):
+            import surface
+            if not ctx:
+                ctx = surface.context(contacts=contacts, threads=threads, today=today)
+            full = surface.employer_full(name, ctx)
+            if full:
+                rows.append((3, i, name, "", f"full for now: {full}; searched again as soon as a "
+                             "reply or a close frees a place"))
+                continue
         n = known.get(k, 0)
         fit = int(rec.get("fit") or 0) if age is not None and age < 2 * EMPTY_DAYS else 0
         if n or fit:
@@ -801,7 +846,9 @@ def employers(used=(), most: int = 10, contacts=None, today=None, place: str = "
         seen.add(k)
         if surface.employer_out(name, today) or surface.employer_full(name, ctx):
             continue
-        out.append((name, why_))
+        # By its proper name: the lists hold keys, and the name searched is the name written
+        # on every contact found there (2026-11-12).
+        out.append((state.employer_display(name, contacts), why_))
         if len(out) >= most * 3:
             break
     # The first pass: known people in the place first, known-empty ones left out.
@@ -868,6 +915,15 @@ def _add(chosen, contacts, today) -> list:
             continue
         if r.get("contact_id"):
             continue
+        # The employer by its proper name, as their own card showed it where it did: a run
+        # searching an employer by its lower-case key wrote the key (2026-11-12).
+        try:
+            import reading
+            shown = (r.get("employer"), reading._headline_employer(r.get("current_line") or ""),
+                     reading._headline_employer(r.get("title") or ""))
+        except Exception:  # noqa: BLE001  nothing read off the card: the book's spelling
+            shown = (r.get("employer"),)
+        r["company"] = state.employer_display(r["company"], contacts, also=shown)
         try:
             row, how = state.add_contact(contacts, r["name"], r["company"], today,
                                          title=r.get("title", ""),
@@ -940,6 +996,13 @@ def main(argv=None) -> int:
             except LookupError as err:
                 print(f"  {emp}: {err}")
                 bad += 1
+        if a.place:
+            # Each search covers every number kept for the person's area; where only the
+            # city's is kept, say what it leaves out (#257).
+            import reading
+            line = reading.area_gap_line(a.place)
+            if line:
+                print(line)
         return 1 if bad == len(todo) else 0
     import state
     people = []

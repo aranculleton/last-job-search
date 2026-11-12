@@ -147,19 +147,125 @@ def test_stop_claude_is_on_its_clocks_line_and_the_sheets_close_on_its_titles(ru
 
 # ------------------------------------------------------------------ To do: a checklist row
 
+def _checklists():
+    """The sample's To do with what a real one holds: a headline long enough to wrap under a
+    name before the day it is about ("... · wrote to you 20 Oct"), and a card of application
+    follow-ups, a row an employer with Draft, its gauge and Done and no trash. Invented."""
+    m = journeys._sample()
+    for d in m["due"]:
+        if d["id"] == "due-juno-reply":
+            d["context"] = ("Senior Data Platform Engineer / co-founder, ex-Larkspur Retail, Ellerwick "
+                            "Trust alumni network mentor and occasional speaker at regional meetups")
+        if d["id"] == "due-fernhill-nudge":
+            d["context"] = ("Principal Security Data Scientist, Fernhill Freight analytics and "
+                            "forecasting, previously Quayside Foods pricing and planning")
+    m["due"] = [d for d in m["due"] if d["id"] != "due-quayside-ops-follow"]
+    for n, (app, co, role) in enumerate((("app-quayside-ops", "Quayside Foods", "Operations Analyst"),
+                                         ("app-kestrel-claims", "Kestrel Mutual", "Claims Forecasting Analyst"),
+                                         ("app-copperleaf-risk", "Copperleaf Pay", "Risk Analyst"))):
+        m["due"].append({"id": "due-appf-%d" % n, "kind": "follow_up", "sub": "follow_up",
+                         "title": "Follow up on the %s %s application" % (co, role), "due": "2026-10-24",
+                         "overdue_days": 1, "action": "work:follow_up", "application": app, "company": co,
+                         "done": {"action": "due.done", "label": "Done"}, "rev": "da%d" % n})
+    return m
+
+
 GROWS = r"""(() => [...document.querySelectorAll('#main .g-row')].filter((r) => r.getClientRects().length && r.querySelector('.g-name + p.small')).map((r) => {
   const mid = (e) => { const b = e.getBoundingClientRect(); return (b.top + b.bottom) / 2; };
-  const name = r.querySelector('.g-name'), sub = r.querySelector('.g-name + p.small'), btn = r.querySelector('.g-acts .btn:not(.icon-only)');
-  return {row: r.dataset.item, oneLine: Math.abs(mid(name) - mid(sub)) < 4, reach: btn ? Math.round(btn.getBoundingClientRect().left - name.getBoundingClientRect().left) : null};
+  const name = r.querySelector('.g-name'), sub = r.querySelector('.g-name + p.small');
+  return {row: r.dataset.item, oneLine: Math.abs(mid(name) - mid(sub)) < 4};
 }))()"""
 
 
-def test_a_checklist_rows_name_and_state_share_a_line_near_its_button_on_a_wide_screen(run, tmp_path):
+def test_a_checklist_rows_name_and_state_share_a_line_on_a_wide_screen(run, tmp_path):
     rows = _eval(run, tmp_path, "todo", GROWS, WIDE)
     assert len(rows) >= 5, rows
     assert all(r["oneLine"] for r in rows), rows
-    # The button is within a reading width of the name it acts on, not across the screen.
-    assert all(r["reach"] is not None and r["reach"] < 520 for r in rows), rows
+
+
+# Each checklist's rows: where their buttons start and end, their trash, and the row's own end.
+ACTS = r"""(() => [...document.querySelectorAll('#main ul.g-rows')].filter((u) => u.getClientRects().length).map((u) => ({
+  card: (u.closest('[data-item]') || {}).dataset ? u.closest('[data-item]').dataset.item : null,
+  rows: [...u.children].filter((r) => r.matches('.g-row') && r.getClientRects().length).map((r) => {
+    const acts = [...r.querySelectorAll('.g-acts > :not([data-bin])')].filter((e) => e.getClientRects().length).map((e) => e.getBoundingClientRect());
+    const bin = r.querySelector('.g-acts > [data-bin]'), name = r.querySelector('.g-name').getBoundingClientRect();
+    return {row: r.dataset.item, left: acts.length ? Math.round(Math.min(...acts.map((b) => b.left))) : null,
+      right: acts.length ? Math.round(Math.max(...acts.map((b) => b.right))) : null,
+      top: acts.length ? Math.round(Math.min(...acts.map((b) => b.top))) : null, nameTop: Math.round(name.top),
+      bin: bin ? Math.round(bin.getBoundingClientRect().left) : null, end: Math.round(r.getBoundingClientRect().right)};
+  })})))()"""
+TABLET = {"width": 1000, "height": 800}
+
+
+@pytest.mark.parametrize("size", [WIDE, TABLET], ids=["wide", "tablet"])
+def test_a_checklist_rows_buttons_sit_together_at_its_end_one_column_down_the_card(run, tmp_path, size):
+    """The maintainer, 2026-11-12: a row's buttons stood in a column halfway across the card,
+    empty room after them, and its trash alone at the card's edge. Together at the row's end,
+    just before the trash, every row's starting at one edge."""
+    cards = _eval(run, tmp_path, "todo", ACTS, size, model=_checklists())
+    assert len(cards) >= 2 and any(all(r["bin"] is None for r in c["rows"]) for c in cards), cards
+    for c in cards:
+        rows = [r for r in c["rows"] if r["left"] is not None]
+        assert len(rows) >= 2, c
+        # One column down the card: every row's buttons start at the same edge.
+        assert max(r["left"] for r in rows) - min(r["left"] for r in rows) <= 1, c
+        for r in rows:
+            # On the name's line, never under it, on a wide screen.
+            assert r["top"] < r["nameTop"] + 24, (c["card"], r)
+            if r["bin"] is not None:
+                # Just before the trash: a gap between pills, and what a shorter button leaves.
+                assert 0 < r["bin"] - r["right"] <= 16, (c["card"], r)
+            else:
+                # No trash: the buttons end where the row does.
+                assert r["end"] - r["right"] <= 16, (c["card"], r)
+
+
+# Every dot inside a row's line of facts with words on both sides of it on its line, and
+# whether it is drawn: a hidden one leaves a hole mid-line.
+MID_DOTS = r"""(() => {
+  const out = [];
+  for (const p of document.querySelectorAll('#main .g-row .g-main > p.small')) {
+    if (!p.getClientRects().length) continue;
+    const words = [];
+    const w = document.createTreeWalker(p, NodeFilter.SHOW_TEXT);
+    for (let n = w.nextNode(); n; n = w.nextNode()) {
+      if (n.parentElement.closest('.sep-dot')) continue;
+      const t = n.textContent;
+      for (let i = 0; i < t.length; i++) {
+        if (!/\S/.test(t[i])) continue;
+        const g = document.createRange(); g.setStart(n, i); g.setEnd(n, i + 1);
+        const q = [...g.getClientRects()].find((x) => x.width > 0.5);
+        if (q) words.push(q);
+      }
+    }
+    const same = (a, b) => Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 0.5 * Math.min(a.height, b.height);
+    for (const d of p.querySelectorAll('.sep-dot')) {
+      const q = [...d.getClientRects()].find((x) => x.width > 0.5);
+      if (!q) continue;
+      const line = words.filter((x) => same(x, q));
+      const before = line.filter((x) => x.right <= q.left + 1), after = line.filter((x) => x.left >= q.right - 1);
+      if (!before.length || !after.length) continue;
+      out.push({row: p.closest('.g-row').dataset.item, text: p.textContent, cls: d.className, color: getComputedStyle(d).color,
+        hole: Math.round(Math.min(...after.map((x) => x.left)) - Math.max(...before.map((x) => x.right)))});
+    }
+  }
+  return out;
+})()"""
+
+
+def test_a_rows_line_of_facts_never_hides_a_dot_mid_line(run, tmp_path, vp):
+    """A headline that wraps under the name, then the day it is about: each dot between them
+    stays drawn where it has words on both sides ("... mentor · wrote to you 20 Oct"), never
+    put out of sight as if it ended its line, which left a hole mid-sentence (the maintainer's
+    To do, 2026-11-12)."""
+    dots = _eval(run, tmp_path, "todo", MID_DOTS, vp, model=_checklists())
+    long_ = [d for d in dots if "mentor" in d["text"] or "planning" in d["text"]]
+    assert long_, dots
+    for d in dots:
+        assert "sep-end" not in d["cls"] and "sep-cut" not in d["cls"], d
+        assert d["color"] not in ("transparent", "rgba(0, 0, 0, 0)"), d
+        # The words either side of it: a space, the dot and a space, never more.
+        assert d["hole"] <= 16, d
 
 
 # ------------------------------------------------------------------ To do: later is not the trash
@@ -453,8 +559,8 @@ def test_messages_to_send_rows_span_the_card_with_their_trash_at_its_edge(run, t
     # Wide, the rows stopped about 300px short of the card's edge, their pills and trash a
     # column in mid-card; on a phone a name wrapped to three underlined lines beside its pill
     # ("Noor at / Brackenridge / Advisory") (the screen review, 2026-11-11). The row spans the
-    # card, its trash at the card's edge, its pill in a column near the names; a phone puts
-    # the name on its line and where they work under it.
+    # card, its trash at the card's edge, its pills one column just before it (2026-11-12); a
+    # phone puts the name on its line and where they work under it.
     rows = _eval(run, tmp_path, "todo", SENDROWS, vp)
     assert rows and len(rows) >= 5, rows
     assert all(r["bin"] is not None and r["bin"] <= 8 for r in rows), rows

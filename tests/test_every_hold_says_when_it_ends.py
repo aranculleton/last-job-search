@@ -465,17 +465,29 @@ def test_a_thread_silent_for_months_is_closed_as_gone_cold_and_a_reply_opens_it(
 
 # ------------------------------------------------------------------ T12, with made-up people
 
+# Each person's two people were written to on 30 October and 2 November. A place is held
+# through the wait and then, while a follow-up is owed, until it goes (issue 262): "opens
+# again" on the day the follow-up fell due was untrue, since the follow-up held it.
 PEOPLE = {
+    # Their own rule, fourteen days: Ines's follow-up falls due on the 13th, and sending it
+    # (her second message, their limit) frees her place.
     "nurse": {"name": "Priya Okafor", "city": "Vancouver",
               "networking": "FOLLOW_UP_DAYS = 14\nMAX_UNANSWERED = 2\n",
               "employer": "Larchmont Health", "opens": "2026-11-13",
-              "why": "2 people there are"},
+              "why": "2 people there are",
+              "then": "once your follow-up to Ines has gone, from Fri 13 Nov"},
+    # One person an employer, and their own ten days: Ines's follow-up (six weekdays, the
+    # app's rule) is due already and Bram's will be by the 12th, so both have to go.
     "engineer": {"name": "Tomas Ferreira", "city": "Remote",
                  "networking": "EMPLOYER_WAIT_DAYS = 10\nPEOPLE_PER_EMPLOYER = 1\n",
                  "employer": "Quillfeather Software", "opens": "2026-11-12",
-                 "why": "1 person there is"},
+                 "why": "2 people there are",
+                 "then": "once your follow-ups to Ines and Bram have gone, from Thu 12 Nov"},
+    # The app's own rule, six weekdays: Ines's follow-up fell due today. Before, her place
+    # was free today and Brackenridge Trust read as open beside the follow-up offered.
     "changer": {"name": "Dana Whitlock", "city": "Leeds", "networking": "",
-                "employer": "Brackenridge Trust", "opens": None},
+                "employer": "Brackenridge Trust", "opens": "2026-11-09",
+                "why": "2 people there are", "then": "once your follow-up to Ines has gone"},
 }
 
 
@@ -548,18 +560,13 @@ def test_t12_every_hold_shows_its_end_or_reason_and_its_override_for_a_made_up_p
         assert (r["ends"] or r["why"]) and r["override"][1:] in r["line"], r
     live = {h["rule"] + ":" + h["what"]: h for h in _holds(env)}
     emp = p["employer"]
-    if p["opens"]:
-        h = live[f"employer_wait:{emp}"]
-        d = dt.date.fromisoformat(p["opens"])
-        assert h["until"] == p["opens"], h
-        # Why it is held, then the day, and nothing after it: the page's pill lifts it.
-        assert h["line"] == (f"{emp}: {p['why']} waiting on a reply, so it opens again "
-                             f"{d.strftime('%a')} {d.day} {d.strftime('%b')}"), h["line"]
-        assert h["say"] == f"more at {emp}" and h["lift"] == "Open it now", h
-    else:
-        # The app's own rule: six business days. The note of 30 October had its follow-up
-        # due on the 9th, so only one person still waits, under the app's two: nothing held.
-        assert f"employer_wait:{emp}" not in live
+    h = live[f"employer_wait:{emp}"]
+    assert h["until"] == p["opens"], h
+    # Why it is held, then what opens it and the day, and nothing after it: the page's pill
+    # lifts it.
+    assert h["line"] == (f"{emp}: {p['why']} waiting on a reply, so it opens again "
+                         f"{p['then']}"), h["line"]
+    assert h["say"] == f"more at {emp}" and h["lift"] == "Open it now", h
     app = live["application_open:Fallowmere Clinic"]
     assert app["until"] == "2026-12-04" and app["say"] == "stop waiting on Fallowmere Clinic"
     team = live["no_team:Ridley Assurance"]

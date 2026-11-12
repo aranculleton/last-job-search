@@ -34,23 +34,40 @@ def function(js: str, name: str) -> str:
     return "\n".join(lines[start:end + 1])
 
 
-def read(views: dict, sections=(), lists=(), js: str | None = None) -> dict:
+def constant(js: str, name: str) -> str:
+    """The top-level one-line `const <name> = ...;` of the page's code."""
+    return next(ln for ln in js.split("\n") if ln.startswith(f"  const {name} = "))
+
+
+def read(views: dict, sections=(), lists=(), js: str | None = None,
+         linked: bool = False) -> dict:
     """{"sections": {name: what joined(name, head) gives, or None}, "lists": {name: what
     fullList(name) gives}} for `views` ({doc id: the document's fields}), on a fresh page
-    (nothing kept from before), with `js` the page's code (this copy's app.js by default)."""
+    (nothing kept from before), with `js` the page's code (this copy's app.js by default).
+    `linked`: each section as the page draws it, whole or joined, with every item's links put
+    back from the records kept apart (withLinks)."""
     if js is None:
         with open(APP_JS, encoding="utf-8") as fh:
             js = fh.read()
+    take = ("for (const k of want.sections) { const v = S.views.get(k);"
+            " const got = v ? joined(k, v) : undefined; out.sections[k] = got === undefined ? null : got; }")
+    if linked:
+        take = ("const m = {}; for (const k of want.sections) { const v = S.views.get(k);"
+                " const got = !v ? undefined : v.data !== undefined ? v.data : joined(k, v);"
+                " if (got !== undefined) m[k] = got; }"
+                " const drawn = withLinks(m);"
+                " for (const k of want.sections) out.sections[k] = drawn[k] === undefined ? null : drawn[k];")
     script = "\n".join([
         _HELPERS,
         "const given = JSON.parse(require('fs').readFileSync(0, 'utf8'));",
         "const S = {views: new Map(Object.entries(given.views))};",
         "const joinedKept = new Map();", "const fullKept = new Map();",
         function(js, "joined"), function(js, "fullList"),
+        *((constant(js, "LINKED"), constant(js, "linkedKept"), function(js, "withLinks"))
+          if linked else ()),
         "const want = given.want;",
         "const out = {sections: {}, lists: {}};",
-        "for (const k of want.sections) { const v = S.views.get(k);"
-        " const got = v ? joined(k, v) : undefined; out.sections[k] = got === undefined ? null : got; }",
+        take,
         "for (const k of want.lists) out.lists[k] = fullList(k);",
         "process.stdout.write(JSON.stringify(out));"])
     given = {"views": views, "want": {"sections": list(sections), "lists": list(lists)}}

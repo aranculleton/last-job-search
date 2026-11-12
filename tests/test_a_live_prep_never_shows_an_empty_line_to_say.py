@@ -91,22 +91,25 @@ def test_a_prep_saved_with_empty_lines_shows_none_of_them():
     path, found = L.write(ctx, _fill(L.build(ctx)))
     assert path and not found, found
     saved = json.load(open(path, encoding="utf-8"))
-    # As a prep made before the fix was kept: the first part's lines all empty, no line to end on.
-    saved["parts"][0]["say"] = [{"t": "", "prompts": []} for _ in range(3)]
-    saved["parts"][0]["bridge"] = ""
+    # As a prep made before the fix was kept: a part's lines all empty, no line to end on. The
+    # part is the first that opens on lines of its own: an opening said as "Tell me about
+    # yourself" has none to lose (the maintainer, 2026-11-12).
+    i = next(n for n, p in enumerate(saved["parts"]) if L.intro_question(saved, p) is None)
+    saved["parts"][i]["say"] = [{"t": "", "prompts": []} for _ in range(3)]
+    saved["parts"][i]["bridge"] = ""
     page = L.for_page(saved)
-    assert page["parts"][0]["say"] == []
+    assert page["parts"][i]["say"] == []
     assert all(b["t"] for p in page["parts"] for b in p["say"])
-    assert [b["t"] for b in page["parts"][1]["say"]] == [b["t"] for b in saved["parts"][1]["say"]]
+    assert [b["t"] for b in page["parts"][i + 1]["say"]] == [b["t"] for b in saved["parts"][i + 1]["say"]]
     # A rebuild never brings them back as lines, and its check says the part needs its words.
     again = L.merge(L.build(ctx), saved)
-    assert again["parts"][0]["say"] == []
-    title = again["parts"][0]["title"]
+    assert again["parts"][i]["say"] == []
+    title = again["parts"][i]["title"]
     assert any(where == '"%s"' % title and why.startswith("nothing to say first yet")
                for where, why in L.problems(again, ctx))
     # An empty line handed to the check straight is named, never passed.
     raw = copy.deepcopy(again)
-    raw["parts"][1]["say"].append({"t": "", "prompts": []})
+    raw["parts"][i + 1]["say"].append({"t": "", "prompts": []})
     assert any("it has no words" in why for _w, why in L.problems(raw, ctx))
 
 
@@ -128,16 +131,19 @@ def test_only_the_missing_lines_are_written_again_and_the_rest_of_the_prep_stays
     check = _cli("live-check", COMPANY, "--role", ROLE)
     assert check.returncode == 1 and "nothing to say first yet" in check.stdout, check.stdout
     first = saved["questions"][0]["id"]
+    # Every part but an opening said as "Tell me about yourself", whose answer is its opening.
+    opens = [p for p in saved["parts"] if L.intro_question(saved, p) is None]
     words = {"parts": {p["id"]: {"say": [{"t": OPENING, "prompts": []},
                                          {"t": THREAD, "prompts": [first]}]}
-                       for p in saved["parts"]}}
+                       for p in opens}}
     wf = tmp_path / "say.json"
     wf.write_text(json.dumps(words), encoding="utf-8")
     ok = _cli("live", COMPANY, "--role", ROLE, "--fill", str(wf), "--write")
     assert ok.returncode == 0, ok.stdout + ok.stderr
     kept = L.load(os.path.dirname(path))
     assert kept and kept["checked"]["problems"] == 0
-    assert all([b["t"] for b in p["say"]] == [OPENING, THREAD] for p in kept["parts"])
+    assert all([b["t"] for b in p["say"]] == ([OPENING, THREAD] if L.intro_question(kept, p) is None else [])
+               for p in kept["parts"])
     for key in ("questions", "stories", "ask", "terms", "private", "known"):
         assert kept[key] == saved[key], key
     assert [(p["id"], p["kind"], p["title"], p["bridge"], p["follow"]) for p in kept["parts"]] == \

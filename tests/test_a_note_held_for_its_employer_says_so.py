@@ -34,8 +34,8 @@ def test_an_employer_with_people_waiting_holds_the_note_and_says_why(monkeypatch
     import reading
     monkeypatch.setattr(reading, "employer_limit", lambda company: (2, {}))
     waiting = {"Harbourline Insurance": [{"name": "A"}, {"name": "B"}], "Oakmere Foods": [{"name": "C"}]}
-    monkeypatch.setattr(reading, "at_employer", lambda company, contacts, also=(), today=None, threads=None, until=None:
-                        (waiting.get(company, []), []))
+    monkeypatch.setattr(reading, "at_employer", lambda company, contacts, also=(), today=None, threads=None, until=None,
+                        owed=None: (waiting.get(company, []), []))
     ctx = _Ctx()
     said = app_model.employer_held(ctx, "Harbourline Insurance", "c1")
     assert said == "On hold: you already have 2 people waiting on a reply at Harbourline Insurance", said

@@ -5,13 +5,22 @@ The maintainer, 2026-11-11: Simple and Detailed were nearly the same answer twic
 helped mid-call; follow-ups stopped a level short; and words a data scientist would know, and
 the employer's own, went unexplained. An answer written the live way (its points a list) is
 now held to it: three to five points of ten words at most that never copy the script, the
-same numbers in both, a script in the person's own spoken voice that opens on the point and
-ends on the thread into the first follow-up, follow-ups two or three, then three, then two,
+same numbers in both, a script in the person's own spoken voice that opens on the point,
+follow-ups two or three, then three, then two,
 at least one line of them three deep, a coding part with its steps, and a term for every hard
 word with plain words, what it means here and an everyday likeness. A prep written before,
 its answers one string, is held to the rules it was written for. Each check is run on the
 real prep the page draws (`interview_live_filled.json`, built and merged the way `live
 --fill` keeps it), broken one way at a time. Every person, employer and word is invented.
+
+The maintainer, 2026-11-12, on a real prep: "all the content could be better". Every script
+had to end on a sentence sharing words with the first follow-up and the last point had to lead
+into it, so unrelated answers ended on lines added only to name it; points could not share five words in a row with the script yet had to share most of
+its words, so they came out as pieces cut from its sentences ("Every new forecast gets"); and
+no two points could start alike. The page offers the follow-ups as choices, so an answer no
+longer sets one up and points may start alike. A point may share three words in a row with
+the script, never four, may sum it up in words of its own, and reads as a whole phrase, never
+stopping on a word like "gets", "under", "so" or "the".
 """
 from __future__ import annotations
 
@@ -88,18 +97,44 @@ def test_too_few_or_too_many_points_are_refused(kept):
          "1 point", "2 to 4")
 
 
-def test_a_point_is_short_with_no_full_stop_and_starts_its_own_way(kept):
+def test_a_point_is_short_with_no_full_stop(kept):
     long = "Return the SKUs with forecast error over the threshold they set"
     _has(_broken(kept, lambda d: _q(d)["simple"].__setitem__(0, long)), "runs to 11 words")
     _has(_broken(kept, lambda d: _q(d)["simple"].__setitem__(1, "Say it back: error as share of actual.")),
          "ends with a full stop")
-    _has(_broken(kept, lambda d: _q(d)["simple"].__setitem__(2, "Say: missing weeks, share or units")),
-         "two points start with \"say\"")
+
+
+def test_two_points_may_start_alike(kept):
+    # A rule of 2026-11-11 the maintainer took out on 2026-11-12: points made to start each its
+    # own way came out re-worded oddly, and the eye finds them by their place on the page.
+    assert _broken(kept, lambda d: _q(d)["simple"].__setitem__(2, "Say: missing weeks, share or units")) == []
 
 
 def test_a_point_lifted_from_the_script_is_refused(kept):
     _has(_broken(kept, lambda d: _q(d)["simple"].__setitem__(3, "skips any SKU with no actual demand")),
-         "repeats the script word for word")
+         "the point \"skips any SKU with no actual demand\" copies the script", "three in a row")
+    # Three words in a row from the script are a point's own, never a copy.
+    assert _broken(kept, lambda d: _q(d)["simple"].__setitem__(3, "A plain loop, no actual demand skipped")) == []
+
+
+@pytest.mark.parametrize("point, stop", [
+    ("All the hand-worked tests it gets", "gets"),
+    ("Used under, the threshold they set", "under"),
+    ("Plain loop first, and so", "so"),
+    ("Skip zero demand, then the", "the"),
+])
+def test_a_point_that_stops_mid_phrase_is_refused(kept, point, stop):
+    # Points cut from the script's sentences stopped on a word that needs more after it (a real
+    # prep, 2026-11-12, here invented: "Every new forecast gets", "Used under, the depot's sign-off rules").
+    _has(_broken(kept, lambda d: _q(d)["simple"].__setitem__(3, point)), "stops on \"%s\"" % stop,
+         "a whole phrase")
+
+
+def test_a_point_ending_on_a_word_a_phrase_ends_on_naturally_passes():
+    assert L.dangles("The teams I worked with") == ""
+    assert L.dangles("Where the risk is") == ""
+    assert L.dangles("Every new forecast gets") == "gets"
+    assert L.dangles("Used under, the depot's sign-off rules") == "under"
 
 
 def test_the_points_and_the_script_hold_the_same_numbers(kept):
@@ -107,16 +142,17 @@ def test_the_points_and_the_script_hold_the_same_numbers(kept):
          "different numbers")
 
 
-def test_points_that_say_what_the_script_does_not_are_refused(kept):
-    _has(_broken(kept, lambda d: _q(d).update(simple=[
-        "Return SKUs with forecast error over threshold", "Mention wholesale margins and pricing",
-        "Quote quarterly freight tariffs carefully", "Small hand-worked tests, so the flags are trusted"])),
-        "say what the script does not")
+def test_a_point_may_sum_the_script_up_in_words_of_its_own(kept):
+    # A rule of 2026-11-11 the maintainer took out on 2026-11-12: points made to share most of
+    # the script's words, never five in a row, came out as pieces of its sentences. A point is
+    # the idea in a few words; the numbers check and the profile's still hold it to the facts.
+    assert _broken(kept, lambda d: _q(d)["simple"].__setitem__(3, "Simple version before anything clever")) == []
 
 
-def test_the_last_point_leads_into_the_first_follow_up(kept):
-    _has(_broken(kept, lambda d: _q(d)["simple"].__setitem__(4, "Hand over once it all looks right")),
-         "last point does not lead into \"How would you test it?\"")
+def test_the_last_point_need_not_lead_into_the_first_follow_up(kept):
+    # A rule of 2026-11-11 the maintainer took out on 2026-11-12: the page offers the follow-ups
+    # as choices, so the last point no longer has to set one up.
+    assert _broken(kept, lambda d: _q(d)["simple"].__setitem__(4, "Hand over once it all looks right")) == []
 
 
 # ------------------------------------------------------------------ the script
@@ -144,10 +180,66 @@ def test_a_script_opens_on_the_point(kept):
          "does not open on the point")
 
 
-def test_a_script_ends_on_the_thread_into_the_first_follow_up(kept):
+def test_a_script_ends_where_the_answer_ends_and_sets_up_no_follow_up(kept):
+    # A rule of 2026-11-11 the maintainer took out on 2026-11-12: every script had to end on a
+    # sentence sharing words with the first follow-up, and a real prep ended unrelated answers
+    # on lines added only for that (here invented: "That's why the routing tool matters to me,
+    # and how it ties to my work is easy to explain"). An answer that
+    # ends on its own last point passes, with no hook to "How would you test it?".
+    def plain_end(d):
+        q = _q(d)
+        q["detailed"] = q["detailed"].replace(
+            " And I'd want a few small tests I can work out by hand, so we both trust what it flags.",
+            " Then I'd hand it over with a short note on what it skips and why, so nobody's "
+            "surprised later.")
+        assert q["detailed"].endswith("surprised later.")
+        q["simple"][4] = "Hand over with a note on what's skipped"
+    assert _broken(kept, plain_end) == []
+    # A follow-up's own answer is free the same way.
+    def follow_end(d):
+        f = _q(d)["follow"][0]
+        f["detailed"] = f["detailed"].replace(", because that's where it'd break.",
+                                              ", which is the case I'd most expect to go wrong.")
+        assert f["detailed"].endswith("go wrong.")
+    assert _broken(kept, follow_end) == []
+    # Still never an offer to say more: the answer ends, and they ask.
     _has(_broken(kept, lambda d: _q(d).update(detailed=_q(d)["detailed"] + " I'm happy to go into more "
                                                                            "detail if you'd like.")),
-         "end on the thread that leads to \"How would you test it?\"")
+         "ends on an offer to say more")
+
+
+# ------------------------------------------------------------------ the opening
+
+def test_the_opening_is_said_once_as_the_answer_to_tell_me_about_yourself(kept):
+    # The maintainer, 2026-11-12: a prep's first part said the introduction as its lines to say
+    # first, again as the answer to "Tell me about yourself", and the page showed it a third
+    # time at a glance. Where the opening holds that question, its answer is the opening.
+    doc, ctx = kept
+    opening = _part(doc, "p1")
+    intro = L.intro_question(doc, opening)
+    assert opening["kind"] == "opening" and intro and intro["q"] == "Tell me about yourself."
+    assert opening["say"] == [] and L._said(intro), "said once, as the answer"
+    assert not [w for w in _broken(kept, lambda d: None) if "nothing to say first" in w]
+    # The introduction written again as the part's lines is refused, in plain words.
+    def twice(d):
+        _part(d, "p1")["say"] = [{"t": "I'm an operations analyst with seven years turning warehouse "
+                                       "and supplier data into forecasts.", "prompts": [intro["id"]]}]
+    _has(_broken(kept, twice), "the answer to \"Tell me about yourself.\" is how you open",
+         "leave this part's lines to say first empty")
+    # A part that opens with no such question still needs its lines to say first.
+    assert L.intro_question(doc, _part(doc, "p2")) is None
+    _has(_broken(kept, lambda d: _part(d, "p2").update(say=[])), "nothing to say first yet")
+
+
+def test_a_known_tell_me_about_yourself_is_answered_by_the_opening():
+    ctx = _real_ctx()
+    with open(REAL, encoding="utf-8") as fh:
+        filled = json.load(fh)
+    filled["known"] = list(filled["known"]) + [{"text": "Tell me about yourself.", "from": "the recruiter"}]
+    doc = L.merge(L.build(ctx), filled)
+    k = next(k for k in doc["known"] if k["text"] == "Tell me about yourself.")
+    assert k["question"] == L.intro_question(doc, _part(doc, "p1"))["id"]
+    assert L.problems(doc, ctx) == [], "answering it is how the interview opens"
 
 
 # ------------------------------------------------------------------ the follow-ups
@@ -302,5 +394,5 @@ def test_the_command_refuses_a_point_copied_from_the_script_in_plain_words(tmp_p
         "detailed": script}}}), encoding="utf-8")
     got = run("live", COMPANY, "--role", ROLE, "--fill", str(words), "--write")
     assert got.returncode == 1
-    assert "repeats the script word for word" in got.stdout, got.stdout
-    _plain(got.stdout.split("repeats the script")[0][-200:])
+    assert "copies the script" in got.stdout, got.stdout
+    _plain(got.stdout.split("copies the script")[0][-200:])

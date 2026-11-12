@@ -298,7 +298,7 @@ def _rule_settings() -> dict:
     """The person's own numbers the inventory's words are filled from."""
     out = {"relist": 30, "dnt": 90, "empty": 30, "judged": 90, "set_aside": 182, "silence": 45, "override_points": 10, "app_nudges": 2,
            "reopen": 120, "per_employer": "2 people", "wait": "about two weeks after the last "
-           "message", "withdraw": 21, "cold": 90, "max_unanswered": 2, "follow_up": "6 weekdays", "quiet": 14,
+           "message, or once the follow-up then due has gone", "withdraw": 21, "cold": 90, "max_unanswered": 2, "follow_up": "6 weekdays", "quiet": 14,
            "prep": 7, "thanks": 7, "pause": 30, "news": 5}
     try:
         import throttle
@@ -329,10 +329,14 @@ def _rule_settings() -> dict:
         out["max_unanswered"] = schema.MAX_UNANSWERED
         out["follow_up"] = (f"{schema.FOLLOW_UP_DAYS} days" if schema.FOLLOW_UP_DAYS
                             else f"{schema.FOLLOWUP_BUSINESS_DAYS} weekdays")
-        out["wait"] = (f"{reading.EMPLOYER_WAIT_DAYS} days after the last message, as you set"
+        # A follow-up then due holds the place until it has gone (reading.follow_up_owed):
+        # "once a follow-up is due" said the place freed on the day the follow-up was offered,
+        # and new notes went beside it (issue 262).
+        out["wait"] = (f"{reading.EMPLOYER_WAIT_DAYS} days after the last message, as you set, "
+                       "or once the follow-up then due has gone"
                        if reading.EMPLOYER_WAIT_DAYS else
-                       f"about {reading.WAITING_DAYS} days after the last message, once a "
-                       "follow-up is due by your rule")
+                       f"about {reading.WAITING_DAYS} days after the last message, or once the "
+                       "follow-up then due by your rule has gone")
         import state
         out.update(withdraw=state.REQUEST_WITHDRAW_DAYS, cold=state.GONE_COLD_DAYS)
     except Exception:  # noqa: BLE001
@@ -405,7 +409,12 @@ def _hold(rule: str, what: str, line: str, until=None, say: str = "", lift: str 
 
 
 def _employer_waits(today, contacts, threads) -> list:
-    """Each employer at the person's number of people waiting: the day it opens again."""
+    """Each employer at the person's number of people waiting: the day it opens again, or the
+    follow-up that has to go first. Who holds a place is the one count every step reads
+    (reading.at_employer): someone within their wait, or owed a follow-up until it goes. This
+    list counted only the first, so an employer a follow-up held was missing here, and one
+    whose wait was ending read "opens again" on the day the follow-up fell due and held it
+    (issue 262)."""
     import reading
     import state
     by = state.by_contact(threads)
@@ -417,26 +426,71 @@ def _employer_waits(today, contacts, threads) -> list:
         msgs = by.get(str(c.get("contact_id") or "").strip(), [])
         if state.effective_status(c, msgs) not in reading.WAITING:
             continue
-        until = reading.waiting_until(c, msgs)
-        if until is None or until <= today:
-            continue
-        groups.setdefault(k, []).append((until, str(c.get("company") or "").strip()))
+        groups.setdefault(k, []).append(c)
     out = []
     for k, rows in sorted(groups.items()):
-        names = [n for _, n in rows if n]
+        names = [n for n in (str(c.get("company") or "").strip() for c in rows) if n]
         company = max(set(names), key=names.count) if names else k
         limit, _theirs = reading.employer_limit(company, today)
         if limit is None or len(rows) < limit:
             continue
-        opens = sorted(d for d, _ in rows)[len(rows) - limit]
+        until: dict = {}
+        owed: set = set()
+        waiting, _ = reading.at_employer(company, rows, today=today, threads=threads,
+                                         until=until, owed=owed)
+        if len(waiting) < limit:
+            continue
+        # The day each one stops holding a place by themselves: the end of their wait, unless
+        # a follow-up is owed to them then (or now), which holds it until it goes.
+        frees, chase = [], []
+        for c in waiting:
+            cid = str(c.get("contact_id") or "")
+            day = until.get(cid)
+            if cid in owed:
+                chase.append((today, c))
+            elif day is not None and reading.follow_up_owed(c, by.get(cid, []), day):
+                chase.append((day, c))
+            elif day is not None:
+                frees.append(day)
+        need = len(waiting) - limit + 1
         # Why, then the day: "2 people there are waiting on a reply" (the screen review,
         # 2026-11-09: the line said when, never why).
-        n = len(rows)
+        n = len(waiting)
         why = f"{n} people there are" if n != 1 else "1 person there is"
+        frees.sort()
+        if len(frees) >= need:
+            opens = frees[need - 1]
+            out.append(_hold("employer_wait", company,
+                             f"{company}: {why} waiting on a reply, so it opens again "
+                             f"{day_words(opens)}", opens, f"more at {company}", "Open it now"))
+            continue
+        chase.sort(key=lambda x: (x[0], str(x[1].get("name") or "")))
+        # The follow-ups that have to go, soonest due first, beside every wait that ends by
+        # itself; the day is when the last of them can. One follow-up frees a place: any of
+        # those due by then ("Ines or Bram"); more, all of them.
+        k_need = min(need - len(frees), len(chase))
+        due = chase[k_need - 1][0]
+        opens = max([due] + frees)
+        firsts = [_first(c) for d, c in chase if d <= due]
+        many = k_need > 1
+        who = firsts[0] if len(firsts) == 1 else (
+            ", ".join(firsts[:-1]) + (" and " if many else " or ") + firsts[-1])
+        when = f", from {day_words(opens)}" if opens > today else ""
         out.append(_hold("employer_wait", company,
-                         f"{company}: {why} waiting on a reply, so it opens again "
-                         f"{day_words(opens)}", opens, f"more at {company}", "Open it now"))
+                         f"{company}: {why} waiting on a reply, so it opens again once your "
+                         f"follow-up{'s' if many else ''} to {who} "
+                         f"{'have' if many else 'has'} gone{when}", opens, f"more at {company}",
+                         "Open it now"))
     return out
+
+
+def _first(contact) -> str:
+    """Whom a line names: their first name, or "someone"."""
+    try:
+        import tone
+        return tone.greeting_name((contact or {}).get("name")) or "someone"
+    except Exception:  # noqa: BLE001  an odd name is said as someone, never breaks the list
+        return "someone"
 
 
 def _applications(today) -> list:
@@ -517,7 +571,9 @@ def _nobody_fits(today) -> list:
     out = []
     for _k, places in sorted(candidates._where().items()):
         for place, rec in sorted((places or {}).items()) if isinstance(places, dict) else ():
-            if not isinstance(rec, dict) or rec.get("fit"):
+            # Only nobody who fits: people held back there (written to, the employer's limit of
+            # people waiting) are full for now, which a reply or a close lifts (#258).
+            if not candidates.nobody_fits(rec):
                 continue
             try:
                 when = dt.date.fromisoformat(str(rec.get("date") or "")[:10])
@@ -758,7 +814,9 @@ def _lift_employer_wait(h, today, words) -> str:
     import state
     contacts = state.load_contacts()
     threads = state.load_threads() if os.path.exists(state.THREADS_CSV) else []
-    waiting, _ = reading.at_employer(h["what"], contacts, today=today, threads=threads)
+    owed: set = set()
+    waiting, _ = reading.at_employer(h["what"], contacts, today=today, threads=threads,
+                                     owed=owed)
     # The limit counts the notes already drafted for people there as well as the people
     # waiting (reading.employer_full_line): room for the waiting alone left the next note
     # refused after the tap wherever one was drafted.
@@ -771,8 +829,12 @@ def _lift_employer_wait(h, today, words) -> str:
     # The room ends by itself once the waiting it was made beside has cleared: the last day
     # anyone waiting there now holds the employer (reading.waiting_until). Kept with no end,
     # it capped the employer for good, even below a number the person raised since.
+    # Someone owed a follow-up holds their place until it goes, a day nobody knows: the room
+    # beside them lasts one follow-up wait from today (issue 262). Their own wait ended
+    # already, and a room ending then ended before it was made.
     by = state.by_contact(threads)
-    ends = [reading.waiting_until(c, by.get(str(c.get("contact_id") or "").strip(), []))
+    ends = [state.follow_up_on(today) if str(c.get("contact_id") or "") in owed else
+            reading.waiting_until(c, by.get(str(c.get("contact_id") or "").strip(), []))
             for c in waiting]
     ends = [d for d in ends if d]
     until = max(ends) if ends else (dt.date.fromisoformat(h["until"]) if h.get("until")

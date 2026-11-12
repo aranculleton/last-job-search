@@ -49,6 +49,7 @@ import person  # noqa: E402
 import portals  # noqa: E402
 from hydrate import BODY_CAP  # noqa: E402
 from prefilter import annotate, age_days, stamp_copies  # noqa: E402
+from lookup_score import strip_language_tag  # noqa: E402
 
 # --------------------------------------------------------------- portal CLIs
 #
@@ -284,7 +285,8 @@ def _strip_place(title: str, location: str) -> str:
 
 
 def clean_title(title, location="") -> str:
-    """A board's title with the badges and the repeat of the row's own place cut off.
+    """A board's title with the badges, a language tag before it and the repeat of the
+    row's own place cut off.
 
     Rows from a card read as text carry what the card shows after the title ("New",
     "Promoted", "Actively hiring", the location again), and the title then failed every
@@ -297,6 +299,7 @@ def clean_title(title, location="") -> str:
     loc = str(location or "")
     for _ in range(6):
         before = t
+        t = strip_language_tag(t)
         if loc:
             t = _strip_place(t, loc)
         m = _BADGE.search(t)

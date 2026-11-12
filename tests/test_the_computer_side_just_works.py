@@ -153,7 +153,10 @@ def test_a_chat_already_started_is_not_started_twice_and_is_archived_when_over(t
     (60, {"linkedin": "out"}, BRIDGE, "signed_out"),
     (60, {"cookies": "off"}, BRIDGE, "forgets"),
     (60, {"read": "stopped"}, BRIDGE, "paused"),
-    (5 * 3600, {}, None, "off"),
+    # Decided 2026-11-12 (the maintainer's Mac): never "off" on an old check-in alone, only
+    # where a list of the person's computers shows none of theirs on.
+    (5 * 3600, {}, None, "checking"),
+    (5 * 3600, {}, {"environments": [dict(BRIDGE["environments"][1], state="inactive")]}, "off"),
     (5 * 3600, {}, {"environments": []}, "no_bridge"),
     (8 * 86400, {}, None, "gone"),
 ])
@@ -177,12 +180,16 @@ def test_the_card_names_what_waits_and_puts_its_one_step_on_its_face():
     st = computer.state(dict(_db(work), chats=_beat(linkedin="out")), T, envs=BRIDGE)
     card = computer.card(st)
     assert card["body"] == ("“People at Harbourline Bank” waits until you sign in to "
-                            "LinkedIn in Claude's browser. Open LinkedIn and sign in once.")
+                            "LinkedIn once in Claude's browser, in the Claude app on your "
+                            "computer. The steps are below.")
     assert card["body"].count(":") == 0 and card["body"].count("your computer") <= 1
-    assert card["browser"] == {"label": "Open LinkedIn", "url": "https://www.linkedin.com/login"}
+    # No LinkedIn link on it: one opened beside the page did not reach the chat on the Mac
+    # (decided 2026-11-12).
+    assert "browser" not in card
     assert [o["label"] for o in card["options"]] == ["Done"]
     # Off: Claude being open again is seen by itself, so there is nothing to confirm.
-    off = computer.state(dict(_db(work), chats=_beat(age_s=5 * 3600)), T)
+    asleep = {"environments": [dict(BRIDGE["environments"][1], state="inactive")]}
+    off = computer.state(dict(_db(work), chats=_beat(age_s=5 * 3600)), T, envs=asleep)
     assert off["state"] == "off"
     card = computer.card(off)
     assert card["body"].startswith("“People at Harbourline Bank” waits until Claude is open")
@@ -726,7 +733,8 @@ def test_the_page_draws_the_computer_once_under_linkedin_and_its_card_with_its_s
     assert page["row"] == "Claude on your computerSign in once", page
     assert page["steps"] and not any("Done" in x for x in page["steps"]), page
     assert card and card["body"].startswith("“People at Harbourline Bank” waits"), card
-    assert card["pills"][:2] == [["Open LinkedIn", True], ["Done", False]], card
+    # No LinkedIn link on its face (decided 2026-11-12): Done, with the steps under it.
+    assert card["pills"][:1] == [["Done", True]], card
 
 
 def test_the_computer_is_found_however_the_list_of_places_arrives():

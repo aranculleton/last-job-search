@@ -26,24 +26,7 @@
    "short": "Intro",
    "minutes": 5,
    "who": "manager",
-   "say": [
-    {
-     "t": "Thanks for making the time, I've been looking forward to talking about the planning work at Fernhill Freight.",
-     "prompts": []
-    },
-    {
-     "t": "I'm an operations analyst with seven years turning warehouse, transport and supplier data into forecasts and decisions that move stock and vans, most recently at Brindle & Hart Logistics.",
-     "prompts": [
-      "q11"
-     ]
-    },
-    {
-     "t": "The work I'm proudest of is a weekly [[demand-forecast|demand forecast]] I rebuilt there, which took [[forecast-error|forecast error]] from 22% to 14%, and it is the story I'd most like to walk you through today.",
-     "prompts": [
-      "q10"
-     ]
-    }
-   ],
+   "say": [],
    "bridge": "So that is the short version, and I'm happy to start wherever is most useful to you.",
    "questions": [
     "q11"
@@ -642,7 +625,7 @@
        "also": [],
        "simple": [
         "Zero demand: the share means nothing",
-        "Leave it out of the percentage",
+        "Kept out of the error share",
         "List apart for planners to see"
        ],
        "detailed": "If actual demand is zero, the error as a share has no meaning. So I'd leave that SKU out of the percentage, but I wouldn't drop it altogether. I'd list it apart, because a planner may still want to see those lines.",
@@ -653,7 +636,7 @@
          "also": [],
          "simple": [
           "Yes, planners want them",
-          "No sales can still mean stock tied up",
+          "Unsold lines can still hold stock",
           "Own short list, planners judge"
          ],
          "detailed": "Yes, planners would still want those lines. A line with no sales can still have stock sitting on it, and that's money tied up. So I'd show them in their own short list, for the planners to judge.",
@@ -668,7 +651,7 @@
      "q": "Can you make it faster?",
      "also": [],
      "simple": [
-      "Faster with pandas, whole columns at once",
+      "Faster in pandas, whole columns together",
       "Plain loop does for thousands of SKUs",
       "Right first, then fast"
      ],

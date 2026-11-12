@@ -70,16 +70,20 @@ def test_the_row_reads_the_list_kept_while_it_is_fresh(tmp_path, monkeypatch):
     _as(monkeypatch, "cloud", tmp_path)
     monkeypatch.setattr(computer, "_works_on", lambda: "computer")
     db = _beat(_db(WORK), 25)
-    # The case found: no list kept, a check-in 25 hours old: off.
-    assert computer.seen(db, T)["state"] == "off"
+    # The case found: no list kept, a check-in 25 hours old. Decided since (the maintainer's
+    # Mac, 2026-11-12): never off on a check-in alone, only where a list shows none on.
+    assert computer.seen(db, T)["state"] == "checking"
     # The list kept an hour ago shows it on: the row and the card never say off.
     fresh = _kept(db, BRIDGE, 1, tmp_path)
     st = computer.seen(fresh, T)
     assert st["state"] not in ("off", "gone", "no_bridge") and st["line"] != computer.SAY["off"]
     assert not st["card"] and computer.card(st) is None
-    # A list seven hours old is not known any more: the check-in decides again.
+    # A list seven hours old is not known any more, and it showed the computer on: never off.
     stale = _kept(db, BRIDGE, 7, tmp_path)
-    assert computer.seen(stale, T)["state"] == "off"
+    assert computer.seen(stale, T)["state"] == "checking"
+    # One seven hours old that showed it not on: off.
+    asleep = {"environments": [dict(BRIDGE["environments"][1], state="inactive")]}
+    assert computer.seen(_kept(db, asleep, 7, tmp_path), T)["state"] == "off"
 
 
 def test_a_list_that_shows_the_computer_not_on_says_off_not_switched_off(tmp_path):

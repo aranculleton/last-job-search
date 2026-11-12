@@ -74,13 +74,36 @@ def _live(ctx=None):
     return L.for_page(doc)
 
 
-def _model(ctx=None):
+# Part 1's lines to say first as a prep made before 2026-11-12 holds them: the opening said
+# there as well as in the answer to Tell me about yourself. A prep made since writes the
+# opening once, as that answer, and the check refuses these; one already made is kept as it
+# is (build_versions, interview 58), so the page still draws it with the opening once.
+OPENING_SAID_FIRST = [
+    {"t": "Thanks for making the time, I've been looking forward to talking about the planning work at Fernhill Freight.", "prompts": []},
+    {"t": "I'm an operations analyst with seven years turning warehouse, transport and supplier data into forecasts and decisions that move stock and vans, most recently at Brindle & Hart Logistics.", "prompts": ["q11"]},
+    {"t": "The work I'm proudest of is a weekly [[demand-forecast|demand forecast]] I rebuilt there, which took [[forecast-error|forecast error]] from 22% to 14%, and it is the story I'd most like to walk you through today.", "prompts": ["q10"]},
+]
+
+
+def _live_made_before():
+    """The kept prep as one saved before the opening was written once: Part 1 says the
+    opening first, and its checks passed on the day it was made."""
+    ctx = _real_ctx()
+    with open(REAL, encoding="utf-8") as fh:
+        filled = json.load(fh)
+    next(p for p in filled["parts"] if p["id"] == "p1")["say"] = json.loads(json.dumps(OPENING_SAID_FIRST))
+    doc = L.merge(L.build(ctx), filled)
+    doc["checked"] = {"on": ctx["today"], "problems": 0, "drafts": len(L.drafts(doc))}
+    return L.for_page(doc)
+
+
+def _model(ctx=None, live=None):
     """The sample page, its interview the one the prep is for: the same employer, role, round
     and person in the head as in the prep under it."""
     m = _sample()
     for iv in m["interviews"]:
         if iv["id"] == IV:
-            iv["live"] = _live()
+            iv["live"] = live or _live()
             iv.update(company=iv["live"]["company"], role=iv["live"]["role"], next_stage=STAGE,
                       format="Video", **{"with": "Shirin Example, Head of Planning"})
     return m
@@ -204,15 +227,30 @@ def test_points_written_as_one_string_are_drawn_once_not_again_under_the_script(
     assert one == {"scripts": 1, "points": 0}, one
 
 
-def test_a_likely_to_prompt_link_goes_to_its_answer_and_marks_it(run, tmp_path, vp):
+def test_the_questions_the_lines_may_bring_are_one_quiet_line_under_them_never_between_them(run, tmp_path, vp):
+    # The maintainer, 2026-11-12: "Likely to prompt" pills sat between the lines being read
+    # aloud. They are one quiet line under the whole Say first box, each a tap to its answer,
+    # and the one they are known to ask wears its gold dot.
+    look = _ev("const n = document.querySelector('[data-lpp=p2] .lp-narr'); const line = n.querySelector('.lp-next');"
+               " const beats = [...n.querySelectorAll('.lp-beat')];"
+               " return {inBeats: n.querySelectorAll('.lp-beat button, .lp-beat .lp-hook').length, pills: document.querySelectorAll('.lp-narr .lp-hook').length,"
+               " last: n.lastElementChild === line, below: line.__drawnRect().top >= beats[beats.length - 1].__drawnRect().bottom,"
+               " text: line.textContent, asks: [...line.querySelectorAll('.lp-next-q')].map((b) => b.textContent),"
+               " dots: line.querySelectorAll('.lp-next-q .lp-dot').length,"
+               " small: parseFloat(getComputedStyle(line).fontSize) < parseFloat(getComputedStyle(beats[0]).fontSize)};")
     got = _go(run, tmp_path, _model(_ctx()), [
-        OPEN,
-        {"click": "Full answer and follow-ups:", "within": "dialog.detail", "read": "dialog.detail",
+        dict(OPEN, eval=look),
+        {"click": "How do you get depot managers to trust a forecast?", "within": "dialog.detail [data-lpp=p2] .lp-next", "read": "dialog.detail",
          "ready": IN_VIEW,
          "eval": "(() => { const a = document.activeElement; const r = a.__drawnRect();"
                  " return {lpq: a.dataset.lpq || '', known: a.classList.contains('lp-q-known'), top: Math.round(r.top), vh: innerHeight}; })()"},
     ], vp)
-    at = got["after"][1]["eval"]
+    line, at = got["after"][0]["eval"], got["after"][1]["eval"]
+    assert line["inBeats"] == 0 and line["pills"] == 0, "nothing to tap sits between the lines to say"
+    assert line["last"] and line["below"] and line["small"], line
+    assert line["text"].startswith("They may follow with: ") and len(line["asks"]) == len(set(line["asks"])) > 1, line
+    assert "How do you get depot managers to trust a forecast?" in line["asks"] and line["dots"] == 1, line
+    assert "Likely to prompt" not in line["text"] and "Full answer" not in line["text"], line["text"]
     assert at["lpq"] and at["known"], at
     assert -2 <= at["top"] < at["vh"], "the answer is scrolled into view"
 
@@ -328,7 +366,7 @@ def test_a_term_opens_on_a_deliberate_hover_and_on_focus_never_under_a_resting_m
 
 def test_a_term_in_a_picked_follow_up_opens_and_the_pick_stays(run, tmp_path):
     # A term inside a follow-up that was picked opens beside it, and the pick stays.
-    pick = "(() => { const c = document.querySelector('[data-lpq=q13] .lp-choice'); c.click(); return document.querySelector('[data-lpq=q13] .lp-fu-q').textContent; })()"
+    pick = "(() => { const c = document.querySelector('[data-lpq=q13] .lp-choice'); c.click(); return document.querySelector('[data-lpq=q13] .lp-choice[aria-expanded=true]').textContent; })()"
     got = _go(run, tmp_path, _model(_ctx()), [
         OPEN,
         {"eval": pick},
@@ -393,39 +431,53 @@ def _deep(model):
     return model
 
 
-def test_the_follow_ups_are_choices_three_deep_with_the_way_back(run, tmp_path, vp):
-    # The maintainer, 2026-11-11: each question shows its follow-ups as choices; picking one
-    # shows its answer and its own follow-ups, three deep, with a way back. Nothing folds.
+def test_the_follow_ups_open_in_place_three_deep_the_path_filled_with_the_way_back_up(run, tmp_path, vp):
+    # The maintainer, 2026-11-12: the next likely questions as clear rows under the answer; the
+    # one tapped opens its script in place, under its own row, with its own follow-ups as rows
+    # below it, three deep, the other rows still there; the open path stays filled, and every
+    # open answer ends with the way back up. Nothing else folds.
     card = "[data-lpq=q13]"
-    look = _ev("const c = document.querySelector('%s'); const n = c.querySelector('.lp-fu-node');"
-               "return {choices: [...c.querySelectorAll('.lp-choice')].filter(vis).map((b) => b.textContent),"
-               " q: n ? n.querySelector('.lp-fu-q').textContent : '', depth: n ? n.dataset.depth : '0',"
-               " crumbs: [...c.querySelectorAll('.lp-trail .lp-crumb')].map((b) => b.textContent),"
-               " back: vis(c.querySelector('.lp-fu-back')), script: n ? vis(n.querySelector('.lp-script')) : false,"
-               " points: n ? vis(n.querySelector('.lp-cues')) : false, focus: document.activeElement.className};" % card)
-    pick = lambda text: {"click": text, "within": "dialog.detail " + card + " .lp-choices", "eval": look}  # noqa: E731
+    look = _ev("const c = document.querySelector('%s'); const ns = [...c.querySelectorAll('.lp-fu-node')]; const n = ns[ns.length - 1];"
+               " const rows = [...c.querySelectorAll('.lp-choice')].filter(vis); const open = rows.filter((b) => b.getAttribute('aria-expanded') === 'true');"
+               " const plain = rows.find((b) => b.getAttribute('aria-expanded') === 'false'); const bg = (b) => getComputedStyle(b).backgroundColor;"
+               " const name = (b) => b.firstChild.textContent.trim();"
+               "return {rows: rows.map(name), path: open.map(name), depth: n ? n.dataset.depth : '0',"
+               " under: n ? open.length > 0 && open[open.length - 1].nextElementSibling === n && n.__drawnRect().top >= open[open.length - 1].__drawnRect().bottom : false,"
+               " filled: open.every((b) => !plain || bg(b) !== bg(plain)), text: c.textContent,"
+               " backs: [...c.querySelectorAll('.lp-fu-back')].filter(vis).map((b) => b.textContent),"
+               " script: n ? vis(n.querySelector(':scope > .lp-ans .lp-script')) : false, points: n ? vis(n.querySelector(':scope > .lp-ans .lp-cues')) : false,"
+               " focus: document.activeElement.classList.contains('lp-choice') ? name(document.activeElement) : document.activeElement.className};" % card)
+    pick = lambda text: {"click": text, "within": "dialog.detail " + card + " .lp-fu", "eval": look}  # noqa: E731
     got = _go(run, tmp_path, _listed(_deep(_model(_ctx()))), [
         dict(OPEN, eval=look),
         pick("How would you test it?"),
         pick("What if the weeks are missing?"),
         pick("Who would notice the flag?"),
-        {"click": "Back", "exact": True, "within": "dialog.detail " + card + " .lp-trail", "eval": look},
-        {"click": "How would you test it?", "within": "dialog.detail " + card + " .lp-trail", "eval": look},
-        {"click": "Back", "exact": True, "within": "dialog.detail " + card + " .lp-trail", "eval": look},
+        {"click": "Back to “What if the weeks are missing?”", "exact": True, "within": "dialog.detail " + card, "eval": look},
+        {"click": "Close this answer", "exact": True, "within": "dialog.detail " + card, "eval": look},
+        pick("How would you test it?"),
+        pick("How would you test it?"),
     ], vp)
-    top, one, two, three, back2, crumb1, home = (a["eval"] for a in got["after"])
-    assert top["depth"] == "0" and any(c.startswith("How would you test it?") for c in top["choices"]), top
-    assert not top["back"]
-    assert one["depth"] == "1" and one["q"].startswith("How would you test it?") and one["back"], one
-    assert one["points"] and two["script"] and two["points"], "a picked follow-up shows both ways of its answer at once"
-    assert any(c.startswith("What if the weeks are missing?") for c in one["choices"]), one
-    assert two["depth"] == "2" and two["crumbs"] == ["How would you test it?"], two
-    assert three["depth"] == "3" and three["choices"] == [], "the third level has no more choices"
-    assert three["crumbs"] == ["How would you test it?", "What if the weeks are missing?"], three
-    assert "lp-fu-q" in three["focus"], "the picked question takes the focus, so a screen reader hears it"
-    assert back2["depth"] == "2" and back2["q"].startswith("What if the weeks are missing?"), back2
-    assert crumb1["depth"] == "1" and crumb1["q"].startswith("How would you test it?"), crumb1
-    assert home["depth"] == "0" and not home["back"] and len(home["choices"]) == len(top["choices"]), home
+    top, one, two, three, back2, closed, again, shut = (a["eval"] for a in got["after"])
+    assert top["depth"] == "0" and top["path"] == [] and "How would you test it?" in top["rows"] and not top["backs"], top
+    first = top["rows"]
+    # Opened in place: its answer under its own row, both ways at once, the other rows still there.
+    assert one["path"] == ["How would you test it?"] and one["depth"] == "1" and one["under"], one
+    assert one["script"] and one["points"], "a picked follow-up shows both ways of its answer at once"
+    assert all(r in one["rows"] for r in first) and "What if the weeks are missing?" in one["rows"], one["rows"]
+    assert one["filled"] and one["focus"] == "How would you test it?", one
+    assert one["backs"] == ["Close this answer"], one["backs"]
+    # Three deep, the whole path filled, and no fourth level.
+    assert two["path"] == ["How would you test it?", "What if the weeks are missing?"] and two["depth"] == "2" and two["under"], two
+    assert two["script"] and two["points"], two
+    assert three["path"] == ["How would you test it?", "What if the weeks are missing?", "Who would notice the flag?"], three
+    assert three["depth"] == "3" and three["filled"] and "A fourth level nobody draws?" not in three["text"], three
+    assert three["backs"] == ["Back to “What if the weeks are missing?”", "Back to “How would you test it?”", "Close this answer"], three["backs"]
+    # The way back up: one level at a time, the row closed taking the focus.
+    assert back2["path"] == two["path"] and back2["focus"] == "Who would notice the flag?", back2
+    assert closed["path"] == [] and closed["rows"] == first and closed["focus"] == "How would you test it?", closed
+    # A tap on a filled row closes it too.
+    assert again["path"] == ["How would you test it?"] and shut["path"] == [] and shut["rows"] == first, (again, shut)
 
 
 def test_practice_is_trying_an_answer_first_then_looking(run, tmp_path, vp):
@@ -556,8 +608,10 @@ def test_the_top_is_the_head_the_bar_and_what_to_say_first(run, tmp_path, vp):
     # One pill on the prep: Update my prep and the calendar stay on the card in Coming up.
     assert at["pills"] == ["Practise with Claude"], at["pills"]
     assert at["search"] == "They asked..."
-    # The bar stays at the top while the prep scrolls, and the lifelines at its foot.
-    assert at["sticky"] == ["lp-bar", "lp-life"], at["sticky"]
+    # The bar stays at the top while the prep scrolls, and the lifelines at its foot; on a wide
+    # screen what to say first also stays beside its part's questions while they pass.
+    assert [x for x in at["sticky"] if "lp-narr" not in x] == ["lp-bar", "lp-life"], at["sticky"]
+    assert vp is WIDE or at["sticky"] == ["lp-bar", "lp-life"], at["sticky"]
     # The pay and the notice are the person's own notes, last, never on the head.
     assert "If pay comes up:" in at["notes"] and "Your notice: One month." in at["notes"]
     assert "If pay comes up" not in at["head"]
@@ -651,8 +705,10 @@ def test_an_interview_with_no_live_prep_reads_as_before(run, tmp_path, vp):
 def test_it_opens_on_what_to_say_at_a_glance_and_nothing_needs_opening(run, tmp_path, vp):
     # The UX review of 2026-11-10 (U-5): the first phone screen was a 43-word introduction and
     # controls before Part 1. The maintainer, 2026-11-11: nothing should need opening before it
-    # can be read. It opens on the line to open with, what they are known to ask and two
-    # questions to ask them; find is in view; there is no fold anywhere in the prep.
+    # can be read. It opens on what they are known to ask and two questions to ask them; find is
+    # in view; there is no fold anywhere in the prep. The introduction is said once, as the
+    # answer to "Tell me about yourself", never again at a glance (the maintainer, 2026-11-12:
+    # it stood as the opening's lines, as that answer and here).
     look = _ev("const d = document.querySelector('dialog.detail'); const g = d.querySelector('.lp-glance');"
                " const top = (x) => Math.round(x.__drawnRect().top);"
                " return {glance: g && g.textContent, glanceIn: !!g && g.__drawnRect().bottom <= innerHeight + 1, gb: !!g && [Math.round(g.__drawnRect().top), Math.round(g.__drawnRect().bottom), innerHeight],"
@@ -665,7 +721,9 @@ def test_it_opens_on_what_to_say_at_a_glance_and_nothing_needs_opening(run, tmp_
                " left: Math.round(d.querySelector('.detail-title').__drawnRect().left)};" % (Q1, Q1))
     got = _go(run, tmp_path, _listed(_model(_ctx())), [dict(OPEN, eval=look)], vp)
     at = got["after"][0]["eval"]
-    assert "Open with" in at["glance"] and "I'm an operations analyst" in at["glance"], at["glance"]
+    # The line to open with is Part 1's Say first, right under it, never At a glance as well
+    # (the maintainer, 2026-11-12).
+    assert "Open with" not in at["glance"] and "I'm an operations analyst" not in at["glance"], at["glance"]
     assert "Known to ask" in at["glance"] and "How do you get depot managers to trust a forecast?" in at["glance"]
     assert "Ask them" in at["glance"] and "cross-dock in Warrington" in at["glance"]
     assert at["beforePart"] and (at["glanceIn"] or vp is not PHONE), ("the glance is on the first screen", at["gb"])
@@ -696,11 +754,12 @@ def test_a_test_taken_alone_reads_as_a_test_and_a_day_in_hours(run, tmp_path, vp
     look = _ev("const d = document.querySelector('dialog.detail');"
                "return {labels: [...d.querySelectorAll('.lp-narr > .lp-lbl')].map((x) => x.textContent),"
                " eyebrows: [...d.querySelectorAll('.lp-eyebrow')].map((x) => x.textContent).join(' | '),"
-               " lede: d.querySelector('.lp-bar').getAttribute('aria-label'), glance: d.querySelector('.lp-glance').textContent};")
+               " lede: d.querySelector('.lp-bar').getAttribute('aria-label'), glance: (d.querySelector('.lp-glance') || {}).textContent || ''};")
     at = _go(run, tmp_path, model, [dict(OPEN, eval=look)], vp)["after"][0]["eval"]
     assert at["labels"] and "Say first" not in at["labels"] and set(at["labels"]) == {"Keep in mind"}, at["labels"]
     assert "you talk" not in at["eyebrows"].lower(), at["eyebrows"]
-    assert "90 minutes" in at["lede"] and "Before you start" in at["glance"] and "Ask them" not in at["glance"]
+    # What to keep in mind first is Part 1's own box, never repeated at a glance (2026-11-12).
+    assert "90 minutes" in at["lede"] and "Before you start" not in at["glance"] and "Ask them" not in at["glance"]
     day, _doc = _shaped_model(dict(_ctx(), stage="Superday"), "")
     lede = _go(run, tmp_path, day, [dict(OPEN, eval=_ev("return document.querySelector('.lp-bar').getAttribute('aria-label');"))], vp)["after"][0]["eval"]
     assert "3 hours in 6 parts" in lede, lede
@@ -810,7 +869,7 @@ def test_on_a_phone_the_bar_is_one_row_once_the_prep_is_read_and_nothing_moves(r
         dict(OPEN, eval=look),
         {"eval": DOWN},
         {"ready": SETTLED, "eval": look},
-        {"click": "Again?", "exact": True, "within": "dialog.detail .lp-life", "eval": look},
+        {"click": "Could you repeat that?", "exact": True, "within": "dialog.detail .lp-life", "eval": look},
         {"eval": focus},
         {"ready": "!document.querySelector('.lp-bar').classList.contains('lp-tight')", "eval": look},
     ], PHONE)
@@ -906,15 +965,17 @@ def test_a_lifeline_says_one_line_over_its_own_row_and_it_goes_by_itself(run, tm
     tap = {"click": "Only for you", "within": "dialog.detail .lp-life", "eval": look}
     got = _go(run, tmp_path, _model(_ctx()), [
         dict(OPEN, eval=look),
-        {"click": "Again?", "exact": True, "within": "dialog.detail .lp-life", "eval": look},
+        {"click": "Could you repeat that?", "exact": True, "within": "dialog.detail .lp-life", "eval": look},
         tap,
-        {"click": "Notice", "exact": True, "within": "dialog.detail .lp-life", "eval": look},
+        {"click": "My notice", "exact": True, "within": "dialog.detail .lp-life", "eval": look},
         {"eval": esc}, {"eval": look},
-        {"click": "Moment", "exact": True, "within": "dialog.detail .lp-life", "eval": look},
+        {"click": "Give me a moment", "exact": True, "within": "dialog.detail .lp-life", "eval": look},
         {"tick": 9000, "eval": look},
     ], vp)
     before, again, shut, notice, _esc, gone, moment, faded = (a.get("eval") for a in got["after"])
-    assert before["buttons"][:3] == ["Moment", "Again?", "Don't know"] and "Notice" in before["buttons"], before
+    # Each labelled by what it gives, in full: "Moment", "Again?" and "Pay" were too terse under
+    # pressure (the maintainer, 2026-11-12).
+    assert before["buttons"] == ["Give me a moment", "Could you repeat that?", "Don't know it", "Salary", "My notice", "Where I'm based"], before
     assert not before["open"] and before["foot"], ("the row sits flush at the foot of the screen, its line shut", before)
     assert before["inside"] and before["rows"] <= 2, "every lifeline is on the screen, the row wrapping, never scrolling"
     assert again["open"] and "Sorry, could you say that again?" in again["said"] and "Only for you" in again["said"], again
@@ -1010,3 +1071,97 @@ def test_a_jump_lands_below_the_bar_not_behind_it(run, tmp_path, vp):
                "return {bar: bar, part: m('.lp-part'), q: m('.lp-q')};")
     at = _go(run, tmp_path, _model(_ctx()), [dict(OPEN, eval=look)], vp)["after"][0]["eval"]
     assert at["bar"] > 0 and at["part"] >= at["bar"] + 12 and at["q"] >= at["bar"] + 12, at
+
+
+# The longest line of words drawn in an element, in characters: its letters grouped by the line
+# they stand on.
+LONGEST = ("const longest = (el) => { const tops = new Map(); const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT); const r = document.createRange();"
+           " for (let t = w.nextNode(); t; t = w.nextNode()) for (let i = 0; i < t.length; i++) { r.setStart(t, i); r.setEnd(t, i + 1);"
+           "   const b = r.getClientRects()[0]; if (!b || !b.width) continue; const k = Math.round(b.top / 6); tops.set(k, (tops.get(k) || 0) + 1); }"
+           " return Math.max(0, ...tops.values()); };")
+
+
+def test_the_prep_uses_the_width_and_sets_what_to_say_first_beside_the_questions(run, tmp_path, vp):
+    # The maintainer, 2026-11-12, at a wide window on a Mac: the prep sat in a narrow column
+    # between wide empty margins. The column uses the width (960 to 1100 drawn at 1440), a part's
+    # Say first and its questions sit side by side, Say first stays beside them while they pass,
+    # and no line read aloud runs past about 95 characters. A phone keeps one column.
+    look = _ev(LONGEST + " const d = document.querySelector('dialog.detail'); const lp = d.querySelector('.lp').__drawnRect();"
+               " const p = d.querySelector('[data-lpp=p2]'); const n = p.querySelector('.lp-narr').__drawnRect(); const q = p.querySelector('.lp-part-qs').__drawnRect();"
+               " const said = [...d.querySelectorAll('.lp-script p, .lp-beat, .lp-bridge')].filter(vis);"
+               " return {wide: Math.round(lp.width), side: n.right <= q.left && Math.abs(n.top - q.top) < 40, stacked: n.bottom <= q.top,"
+               " most: Math.max(...said.map(longest)), n: said.length};")
+    # Down to Part 2's last question, its Say first still beside it under the bar.
+    down = _ev("const p = document.querySelector('[data-lpp=p2]'); const qs = p.querySelectorAll('.lp-part-qs .lp-q[data-lpq]');"
+               " qs[qs.length - 1].scrollIntoView({block: 'start', behavior: 'instant'}); return 1;")
+    held = _ev("const p = document.querySelector('[data-lpp=p2]'); const n = p.querySelector('.lp-narr'); const r = n.__drawnRect();"
+               " const bar = document.querySelector('.lp-bar').__drawnRect(); const life = document.querySelector('.lp-life').__drawnRect();"
+               " return {pinned: n.classList.contains('lp-pin'), top: Math.round(r.top - bar.bottom), inView: r.top >= bar.bottom - 1 && r.bottom <= life.top + 1};")
+    got = _go(run, tmp_path, _listed(_model(_ctx())), [dict(OPEN, eval=look), {"eval": down}, {"wait": 300, "eval": held}], vp)
+    at, kept = got["after"][0]["eval"], got["after"][2]["eval"]
+    assert at["n"] > 10 and at["most"] <= 95, ("no line read aloud past about 95 characters", at["most"])
+    if vp is WIDE:
+        assert 960 <= at["wide"] <= 1100, ("the column uses the width", at["wide"])
+        assert at["side"], ("Say first and the questions side by side", at)
+        assert kept["pinned"] and kept["inView"] and 0 <= kept["top"] <= 24, ("Say first stays beside the questions", kept)
+    else:
+        assert at["stacked"] and not at["side"], ("one column on a phone", at)
+        assert not kept["inView"] or not kept["pinned"], kept
+
+
+def test_what_is_read_aloud_is_large_and_what_is_round_it_small(run, tmp_path, vp):
+    # The maintainer, 2026-11-12: the line to say now is the big thing on the screen; who asks,
+    # the labels and the notes are smaller and quieter, and the points stay glanceable.
+    look = _ev("const d = document.querySelector('dialog.detail'); const cs = (s) => getComputedStyle(d.querySelector(s)); const fs = (s) => parseFloat(cs(s).fontSize);"
+               " const lh = (s) => parseFloat(cs(s).lineHeight) / fs(s);"
+               " return {body: fs('.lp'), beat: fs('.lp-beat'), script: fs('.lp-script p:not(.lp-said)'), bridge: fs('.lp-bridge'), lh: Math.min(lh('.lp-beat'), lh('.lp-script p:not(.lp-said)')),"
+               " small: [fs('.lp-narr > .lp-lbl'), fs('.lp-q-q .lp-who'), fs('.lp-also'), fs('.lp-qhead'), fs('.lp-eyebrow'), fs('.lp-points-h, .lp-lbl')],"
+               " quiet: [cs('.lp-narr > .lp-lbl').color, cs('.lp-also').color].every((c) => c !== cs('.lp-beat').color), cues: fs('.lp-cues > li:nth-child(2)')};")
+    at = _go(run, tmp_path, _listed(_model(_ctx())), [dict(OPEN, eval=look)], vp)["after"][0]["eval"]
+    big = 1.2 if vp is WIDE else 1.1
+    for k in ("beat", "script", "bridge"):
+        assert at[k] >= big * at["body"], (k, at)
+    assert at["lh"] >= 1.5, at
+    assert all(x < at["body"] for x in at["small"]) and at["quiet"], at
+    assert at["cues"] >= at["body"], "the points stay glanceable"
+
+
+def test_the_opening_is_on_the_screen_once(run, tmp_path, vp):
+    # The maintainer, 2026-11-12: At a glance's "Open with" repeated Part 1's first line to say,
+    # and Tell me about yourself's answer repeated it again. Say first holds it; the answer that
+    # opens the same way goes on from there, with the way back to it.
+    opening = "I'm an operations analyst with seven years"
+    look = _ev("const d = document.querySelector('dialog.detail'); const q = d.querySelector('[data-lpp=p1] .lp-q[data-lpq]');"
+               " const said = q.querySelector('.lp-said');"
+               " return {count: [...d.querySelectorAll('.lp-glance, .lp-beat, .lp-script')].filter(vis).map((x) => x.textContent).join(' | ').split(%r).length - 1,"
+               " glance: d.querySelector('.lp-glance').textContent, said: said ? said.textContent : '', script: q.querySelector('.lp-script').textContent,"
+               " others: [...d.querySelectorAll('.lp-said')].length};" % opening)
+    jumped = "(() => { const a = document.activeElement; return a.classList.contains('lp-narr') && !!a.closest('[data-lpp=p1]'); })()"
+    got = _go(run, tmp_path, _model(_ctx(), live=_live_made_before()), [
+        dict(OPEN, eval=look),
+        {"click": "Start with your lines above", "exact": True, "within": "dialog.detail [data-lpp=p1]", "ready": IN_VIEW, "eval": jumped},
+    ], vp)
+    at, went = got["after"][0]["eval"], got["after"][1]["eval"]
+    assert at["count"] == 1, ("the opening once on the screen", at)
+    assert "Open with" not in at["glance"], at["glance"]
+    assert at["said"] == "Start with your lines above, then:" and at["script"].startswith(at["said"] + "Most recently"), at["script"][:200]
+    # Only an answer that says the same thing as the lines said first loses its opening.
+    assert at["others"] == 1, at
+    assert went is True, "the way back goes to the lines said first"
+
+
+def test_the_questions_at_a_glance_are_plain_lines_not_links(run, tmp_path, vp):
+    # The maintainer, 2026-11-12: "Ask them" was underlined like links and hard to read long.
+    # Plain lines in the ink, a tap still going to the place.
+    look = _ev("const ink = getComputedStyle(document.querySelector('dialog.detail .lp-beat')).color;"
+               " return [...document.querySelectorAll('dialog.detail .lp-glance .lp-glance-q')].filter((b) => vis(b) && !b.matches(':hover')).map((b) => ({text: b.textContent,"
+               " line: getComputedStyle(b).textDecorationLine, ink: getComputedStyle(b).color === ink, link: b.classList.contains('link') || b.classList.contains('btn')}));")
+    went = "(() => { const a = document.activeElement; return a.dataset.lpa || ''; })()"
+    got = _go(run, tmp_path, _model(_ctx()), [
+        dict(OPEN, eval=look),
+        {"click": "I saw you opened a cross-dock in Warrington", "within": "dialog.detail .lp-glance", "ready": IN_VIEW, "eval": went},
+    ], vp)
+    lines, at = got["after"][0]["eval"], got["after"][1]["eval"]
+    assert any("cross-dock in Warrington" in x["text"] for x in lines), lines
+    assert lines and all(x["line"] == "none" and x["ink"] and not x["link"] for x in lines), lines
+    assert at, "a tap goes to the question in the last part"

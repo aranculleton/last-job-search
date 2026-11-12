@@ -566,22 +566,41 @@ PART_BYTES = 200_000
 PART_PREFIX = "part~"
 
 
-ADDR_BYTES = 120_000
+# What one record of addresses holds, about. Their count is kept while each stays between a
+# quarter of this and twice it: worked out afresh from the size, a few new people changed the
+# count and moved every address, and a record of 120 KB went again for each new person, so
+# eight new people rewrote every address there was (issue 254).
+ADDR_BYTES = 40_000
 
 
-def addr_docs(reach: dict) -> dict:
+def addr_docs(reach: dict, held: int = 0) -> dict:
     """Each contact's address (`app_model.reach_docs`) in `addr/part~<n>`, a contact always
-    in the same one while the count of documents holds, so a change rewrites one document."""
+    in the same one while the count of documents holds, so a change rewrites one document.
+    `held`: how many the database holds now (`addr_held`), kept while it fits."""
     import zlib
     if not reach:
         return {}
     size = len(json.dumps(reach, ensure_ascii=False).encode("utf-8"))
-    n = max(1, -(-size // ADDR_BYTES))
+    n = held if held > 0 and ADDR_BYTES // 4 <= size / held <= 2 * ADDR_BYTES else 0
+    if not n:
+        n = 1
+        while size / n > ADDR_BYTES:
+            n *= 2
     out: dict = {}
     for cid in sorted(reach):
         k = f"part~{zlib.crc32(str(cid).encode('utf-8')) % n + 1}"
-        out.setdefault(k, {"contacts": {}})["contacts"][str(cid)] = reach[cid]
+        out.setdefault(k, {"contacts": {}, "of": n})["contacts"][str(cid)] = reach[cid]
     return out
+
+
+def addr_held(addr: dict) -> int:
+    """How many records of addresses the database's `addr` (as load() gives it) holds: the
+    count they say they are of, else how many there are."""
+    for got in (addr or {}).values():
+        data = got.get("data") if isinstance(got, dict) else None
+        if isinstance(data, dict) and isinstance(data.get("of"), int) and data["of"] > 0:
+            return data["of"]
+    return len(addr or {})
 
 
 def stored_size(doc) -> int:
@@ -615,11 +634,12 @@ def _pieces(text: str, limit: int) -> list[str]:
 # rev: an update rewrote every part of a section that changed at all, 1.59 MB when 8 of 395
 # people had changed (the second audit, 2026-11-10, D6). A section is now cut between its own
 # items (each element of a big list, each value of a big object), after an item whose own text
-# says so (about one in PART_CUT, by its hash) once the part holds PART_MIN_BYTES; each part's
-# rev is a hash of what it holds, and the head lists them (`part_revs`), so a part that holds
-# what it held is never written again and still joins.
-PART_MIN_BYTES = 48_000
-PART_CUT = 16
+# says so, by its hash, with a chance in proportion to its size (about one cut each PART_SPAN
+# bytes); each part's rev is a hash of what it holds, and the head lists them (`part_revs`), so
+# a part that holds what it held is never written again and still joins. Cut only once a part
+# held 48 KB, eight people put in near the start moved the cuts after them, and parts holding
+# none of them went again (issue 254): a cut now rests on its item alone.
+PART_SPAN = 64_000
 _ITEM_MIN = 64                   # a piece this short (a comma, a bracket) never ends a part
 _OPEN_PAST = 4_096               # a list or object longer than this is cut between its items
 
@@ -653,7 +673,7 @@ def _items(value) -> list[str]:
 def _ends_part(piece: str) -> bool:
     import hashlib
     return len(piece) >= _ITEM_MIN and \
-        int(hashlib.sha1(piece.encode("utf-8")).hexdigest()[:8], 16) % PART_CUT == 0
+        int(hashlib.sha1(piece.encode("utf-8")).hexdigest()[:8], 16) % PART_SPAN < len(piece)
 
 
 def _part_texts(value, limit: int) -> list[str]:
@@ -676,7 +696,7 @@ def _part_texts(value, limit: int) -> list[str]:
             close()
         cur.append(piece)
         size += n - 200
-        if size >= PART_MIN_BYTES and _ends_part(piece):
+        if _ends_part(piece):
             close()
     close()
     return texts or [""]
@@ -2474,9 +2494,19 @@ def pin(db: dict, work_id: str, now: dt.datetime, out_dir: str, stage=None, line
             fields.update(stage=idx, stage_at=at, count=None, left_s=None, left_at=None)
     if line:
         fields["steps"] = (list(item.get("steps") or []) + [{"at": at, "text": line}])[-50:]
+    refused = ""
     if count and int(count.get("total") or 0) > 0:
-        fields["count"] = {"done": int(count.get("done") or 0), "total": int(count["total"]),
-                           **({"word": str(count["word"])} if count.get("word") else {})}
+        done, total = int(count.get("done") or 0), int(count["total"])
+        if done > total:
+            # "reading profiles, 14 of 12 done": the people found counted against the notes
+            # wanted (2026-11-12). A count is of one thing against how many of it there are.
+            refused = (f"the count says {done} of {total}, more done than there are: count a "
+                       "stage against its own whole (reading against the people being read, "
+                       "--done <read so far> --total <on the list to read> --word read; notes "
+                       "against the notes this run writes), and say the number asked in the line")
+        else:
+            fields["count"] = {"done": done, "total": total,
+                               **({"word": str(count["word"])} if count.get("word") else {})}
     if left_s is not None:
         fields.update(left_s=max(0, int(left_s)), left_at=at)
     w = Writes(out_dir)
@@ -2510,6 +2540,7 @@ def pin(db: dict, work_id: str, now: dt.datetime, out_dir: str, stage=None, line
     return {"work": work_id, "stop_asked": False, "stage": fields.get("stage", item.get("stage")),
             "count": fields.get("count", item.get("count")),
             "left_s": fields.get("left_s", item.get("left_s")),
+            **({"count_refused": refused} if refused else {}),
             **({"stopped": stopped} if stopped else {}), "batches": batches}
 
 
@@ -2687,12 +2718,76 @@ def search_unsaved(item: dict, work_id: str = "") -> str:
     return ""
 
 
+# A people run asked for a number (the page's Find people: 5, 10 or 20) finds and drafts that
+# many: the number is a target, not a cap. One asked for 20 read 10 profiles, kept 8, and was
+# finished as done at 8 with "8 recruiter notes ready", saying nothing of the other 12 (the
+# maintainer's page, 2026-11-12). Short of it, a run finishes only once it has run out of good
+# people within the person's rules, saying so, and is kept as part-done (`result.short`).
+
+
+def network_target(item: dict) -> int | None:
+    """How many people a people run was asked to find and draft (`args.count`), or None: work
+    that rewrites or reads people already named, or a run asked for no number (one employer's
+    own Find people, where the person's limit at one employer is the bound)."""
+    if str(item.get("kind") or "") != "network":
+        return None
+    args = item.get("args") if isinstance(item.get("args"), dict) else {}
+    if args.get("rewrite") or args.get("read_first") or args.get("contacts"):
+        return None
+    try:
+        n = int(str(args.get("count")).strip())
+    except (TypeError, ValueError):
+        return None
+    return n if n > 0 else None
+
+
+def short_of_target(item: dict, drafted: int | None, short: str,
+                    summary: str) -> tuple[dict | None, int | None, str]:
+    """For a people run finished as done: (its part-done mark, or None; how many it drafted,
+    or None where it asks for no number; why it may not finish, or ""). How many it drafted is
+    `drafted` as the finish says it, else the count the run last pinned. Short of the number
+    asked it is refused unless `short` says why no more could be found, and then its summary
+    says how many of how many ("12 of 20: ...")."""
+    target = network_target(item)
+    if target is None:
+        return None, None, ""
+    if drafted is None:
+        c = item.get("count") if isinstance(item.get("count"), dict) else {}
+        if int(c.get("total") or 0) > 0:
+            drafted = int(c.get("done") or 0)
+    if drafted is None:
+        return None, None, (f"say how many people this run drafted a note for (--drafted <n>): "
+                            f"it was asked for {target}")
+    drafted = max(0, int(drafted))
+    if drafted >= target:
+        return None, drafted, ""
+    why = " ".join(str(short or "").split()).rstrip(".")
+    rest = target - drafted
+    if not why:
+        return None, drafted, (
+            f"only {drafted} of the {target} people asked for have a note, and the number asked "
+            f"is a target, not a cap: keep finding the other {rest} (python3 "
+            "tools/network/candidates.py employers --place \"<their city>\" names the employers "
+            "to search next; candidates.py search \"<employer>\" ... --place \"<their city>\" "
+            "searches their whole area, and says which of its places still need a number; then "
+            f"candidates.py check ... --want {rest} --add --shortlist, and read and draft each), "
+            f"and finish once {target} have a note. Only when that wider search has no good "
+            "people left within the person's rules, finish it short, saying why: --drafted "
+            f"{drafted} --short \"<why, in plain words>\" --summary \"{drafted} of {target}: "
+            "<why>.\"")
+    if not re.search(rf"(?<!\d){drafted} of (?:the )?{target}(?!\d)", str(summary or "")):
+        return None, drafted, (f"the summary says how many of the {target} asked for are ready, "
+                               f"and why no more: --summary \"{drafted} of {target}: {why}.\"")
+    return {"done": drafted, "total": target, "why": why[:300]}, drafted, ""
+
+
 def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str = "",
            status: str = "done", error: str = "", links=(), reply: str = "", thread: str = "",
            chat_kind: str = "cloud", dump_dir: str = "", chat: str = "",
            question: str = "", about: str = "", answer: dict | None = None,
            answered=(), left_out: str = "", outcome: str = "", signin: str = "",
-           go=(), me: str = "", add: bool = False, whom=(), queue=()) -> dict:
+           go=(), me: str = "", add: bool = False, whom=(), queue=(),
+           drafted: int | None = None, short: str = "") -> dict:
     """The batch that finishes one work item (the app skill, step 5): the item `done` (or
     `failed`, with `error` in plain words, or `stopped` after their Stop), its one-sentence
     summary and links, pinned to the version read; each of its locks the dump holds, deleted
@@ -2714,6 +2809,9 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
     queued in the same batch, so the two reach the page together (a resume made for someone
     who asked for it, with the reply that says it is coming, #232). Kept with the finish, so
     one made again carries it, and an id already queued is never queued twice.
+    `drafted` and `short`: a people run asked for a number (`network_target`) says how many it
+    drafted, and is done only at that number; short of it, only with `short` saying why no more
+    good people were found, kept as part-done (`result.short`, short_of_target).
     {work, status, thread, message, locks, batches}. Raises ValueError, in plain words, for a
     summary that will not do or a reply with no thread; KeyError for an item not in the dump
     or already finished."""
@@ -2760,6 +2858,9 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
             reply = str(kept.get("reply") or "")
         thread = thread or str(kept.get("thread") or "")
         summary = summary or str(kept.get("summary") or "")
+        # A people run's count and its reason for stopping short, as the first finish said them.
+        drafted = drafted if drafted is not None else kept.get("drafted")
+        short = short or str(kept.get("short") or "")
         keep_mid = str(kept.get("message") or "")
     # Work nobody is doing may be withdrawn by any chat, with its reason on the card: work for
     # the computer nobody has started yet (a repeat of a read already done could only be called
@@ -2812,6 +2913,9 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
             problem = ("its drafts are still being written: finish each one as it is made "
                        "(app.py done --work <its id>), and the search finishes with the last, "
                        "once app.py search-drafts --last has run")
+    part_done, n_drafted = None, None
+    if not problem and status == "done":
+        part_done, n_drafted, problem = short_of_target(item, drafted, short, summary)
     if not problem and status == "done" and reply_defers(reply):
         problem = ("the reply says the answer comes later, so the work would show as finished "
                    "while it still runs: keep it running (python3 tools/app.py pin <dump> --work "
@@ -2854,6 +2958,17 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
         # on their computer to find the sign-in (the maintainer, 2026-11-10).
         if signin in SIGNINS:
             needs["signin"] = signin
+            # Met by a chat on the person's computer: signed in there, in that chat's own
+            # browser, which has the sign-in page open; the card opens that chat and never
+            # LinkedIn beside the page, where a sign-in did not reach it (the maintainer,
+            # 2026-11-12). Its words are the engine's (computer.signin_in_chat).
+            sess = item.get("computer_session") if isinstance(item.get("computer_session"),
+                                                              dict) else {}
+            if str(item.get("to") or "") == "computer" and sess.get("id") \
+                    and not sess.get("archived_at"):
+                import computer
+                needs["chat"] = str(sess["id"])
+                needs["say"] = computer.signin_in_chat(str(sess.get("computer") or ""))
         # The choices as pages before 4.10 read them: their words alone.
         fields = asked(question, needs, [c["label"] for c in (clean or {}).get("choices") or []]
                        if kind in ("choice", "yesno") else None, at)
@@ -2882,6 +2997,13 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
         # a change that will not come (a held change's spinner turned for good, 2026-11-09).
         if outcome:
             fields["result"]["outcome"] = outcome
+        # A people run asked for a number: how many of it were drafted, kept as its count, and
+        # where it ran out first, part-done with the reason, never plainly done.
+        if status == "done" and n_drafted is not None:
+            fields["count"] = {"done": n_drafted, "total": network_target(item),
+                               "word": DRAFTED}
+        if status == "done" and part_done:
+            fields["result"]["short"] = part_done
     go = [{"label": str(b["label"]), "to": str(b["to"])} for b in go or ()
           if isinstance(b, dict) and b.get("label") and str(b.get("to") or "").startswith("page:")]
     if go and status == "done":
@@ -2927,7 +3049,9 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
         _keep_finished(dump_dir, work_id, got, {
             "reply": str(reply or "").strip() if thread else answer_text,
             "go": go, "thread": thread, "message": mid, "whom": list(whom or ()),
-            "summary": summary, **({"queue": queue} if queue else {})})
+            "summary": summary, **({"queue": queue} if queue else {}),
+            **({"drafted": n_drafted} if n_drafted is not None else {}),
+            **({"short": part_done["why"]} if part_done else {})})
     return got
 
 
@@ -3250,14 +3374,6 @@ def ask(db: dict, kind: str, title: str, now: dt.datetime, out_dir: str, args: d
         raise ValueError("say what it is, in a few plain words (--title)")
     if args is not None and not isinstance(args, dict):
         raise ValueError("args is a JSON object, like {\"contact\": \"<contact id>\"}")
-    if kind in ONE_AT_A_TIME:
-        for d in (db.get("work") or {}).values():
-            w = d["data"]
-            if w.get("kind") == kind and str(w.get("status") or "") in ("queued",) + ACTIVE:
-                raise ValueError(f"one at a time: \"{w.get('title') or kind}\" is still going")
-    wid = safe_id(item_id) if item_id else work_id(kind, now)
-    if wid in (db.get("work") or {}):
-        raise ValueError(f"work {wid!r} is already there")
     sent = ""
     if kind in READS_ON_COMPUTER and chat_kind != "computer" and to in ("", "cloud", "either"):
         # A networking run asked for in a cloud chat goes to the person's computer when it is
@@ -3272,6 +3388,20 @@ def ask(db: dict, kind: str, title: str, now: dt.datetime, out_dir: str, args: d
     if to not in ("cloud", "computer", "either") or (
             to != "either" and to not in WORK_KINDS[kind]["can"]):
         raise ValueError(f"a {kind} runs in " + " or ".join(WORK_KINDS[kind]["can"]))
+    # The same work for the computer, still queued or running, is on its way: never a second
+    # (issue #255). Judged before "one at a time", which refuses another thing of its kind.
+    same = already_asked(db, kind, args, to if not here or chat_kind not in
+                         WORK_KINDS[kind]["can"] else chat_kind)
+    if same:
+        return on_its_way(*same, chat_kind=chat_kind)
+    if kind in ONE_AT_A_TIME:
+        for d in (db.get("work") or {}).values():
+            w = d["data"]
+            if w.get("kind") == kind and str(w.get("status") or "") in ("queued",) + ACTIVE:
+                raise ValueError(f"one at a time: \"{w.get('title') or kind}\" is still going")
+    wid = safe_id(item_id) if item_id else work_id(kind, now)
+    if wid in (db.get("work") or {}):
+        raise ValueError(f"work {wid!r} is already there")
     fields = {"kind": kind, "title": title[:140], "to": to, "args": dict(args or {}),
               "asked_at": app_model.stamp(now), "asked_from": {"tab": chat_id or "chat"},
               "priority": 0, "status": "queued", "stages": progress(kind)["stages"], "stage": 0,
@@ -3312,6 +3442,62 @@ def ask(db: dict, kind: str, title: str, now: dt.datetime, out_dir: str, args: d
 # computer instead.
 SENT_TO_COMPUTER_SAY = ("Finding people runs on your computer, where Claude reads each "
                         "profile before writing the note. Your page shows how it goes.")
+# What the person is told when the same work for their computer is asked for again while it is
+# still queued or running (issue #255: the same 12 people were queued twice, once by the page's
+# helper and once from the chat on the computer).
+ALREADY_SAY = "That's already on its way: “{title}”. Your page shows how it goes."
+ALREADY_THEN = ("Nothing new is queued and nothing is done twice: the same work is already {state} "
+                "({work}), so this chat does none of it{take}. Tell the person in one line: {say}")
+ALREADY_TAKE = (" unless it is handed to this chat: it waits for a chat on the computer, so "
+                "python3 tools/app.py next \"$D\" --chat <your id> --kind computer "
+                "--computer-only takes it here, as any work waiting there")
+
+
+def _same_args(args) -> str:
+    """`args` as two asks for the same thing write them alike: empty values left out, words in
+    any case or spacing, a number or the same number as text, keys in any order."""
+    def norm(v):
+        if isinstance(v, dict):
+            return {str(k): norm(x) for k, x in v.items() if x not in (None, "", [], {})}
+        if isinstance(v, (list, tuple)):
+            return [norm(x) for x in v]
+        if isinstance(v, bool):
+            return v
+        if isinstance(v, (int, float)):
+            return str(v)
+        if isinstance(v, str):
+            return " ".join(v.split()).casefold()
+        return v
+    return json.dumps(norm(dict(args or {})), sort_keys=True, ensure_ascii=False)
+
+
+def already_asked(db: dict, kind: str, args, to: str) -> tuple[str, dict] | None:
+    """(id, fields) of the work not finished that new work for the person's computer would
+    repeat: the same kind, for the same thing (its args alike, _same_args), queued, claimed,
+    running or waiting on the person, whoever asked for it. None where neither is work for the
+    computer (computer_only), or nothing matches."""
+    mine = {"kind": kind, "to": to, "args": dict(args or {})}
+    want = _same_args(args)
+    for wid, doc in sorted((db.get("work") or {}).items()):
+        d = (doc or {}).get("data") or {}
+        if str(d.get("kind") or "") != kind or str(d.get("status") or "queued") in FINISHED:
+            continue
+        if not (computer_only(mine, "cloud") or computer_only(d, "cloud")):
+            continue
+        if _same_args(d.get("args") if isinstance(d.get("args"), dict) else {}) == want:
+            return wid, d
+    return None
+
+
+def on_its_way(wid: str, item: dict, chat_kind: str = "cloud") -> dict:
+    """What `ask` answers for work already on its way: no write, the item it is, and the line
+    for the person."""
+    status = str(item.get("status") or "queued")
+    state = {"queued": "queued", "needs_you": "waiting on the person"}.get(status, "running")
+    say = ALREADY_SAY.format(title=" ".join(str(item.get("title") or "your work").split()))
+    take = ALREADY_TAKE if status == "queued" and chat_kind == "computer" else ""
+    return {"work": wid, "already": True, "status": status, "batches": [], "say": say,
+            "then": ALREADY_THEN.format(state=state, work=wid, take=take, say=say)}
 
 
 # Kinds of work whose finish leaves PDFs the page should hold: they run in a chat of their own,
