@@ -20,12 +20,11 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
-### Added
-
-- **The app's maker hears of its bugs without anyone passing them on.** A bug met in the maker's own copy is filed for the app by itself and fixed by a scheduled builder; nothing changes for you.
+## [4.16.0] - 2026-11-12
 
 ### Changed
 
+- **Interview preps open everywhere and read well during the call, questions in Chat are answered first, and the week's problems are fixed**
 - **In the app maker's own copy, a problem Claude works round is reported then, not only one pointed out.** When one of the app's commands refuses something and a chat gets round it another way, the refusal now hands it one command, `python3 tools/app_bug.py met`, which checks the words and reports it for the app (or adds to the same report), and a complaint that something was not reported is reported too (issue 240). Nothing changes in anyone else's copy.
 - **When someone offers to refer you, their employer's open roles are checked first.** Before a reply to an offer to refer, or a follow-up to someone at an employer, is drafted, that employer's careers board on file is read and scored against your search: a role that fits makes the message a referral ask naming it, with the job on the card; with none, the plain message says "No open role there fits yet", and someone who offered waits for a role there, written to when a search finds one; an employer with no board on file is said so (`tools/employer_roles.py`).
 - **A question you ask Claude on your page is answered first.** A question typed in Chat is answered on its own, so it never waits behind message changes, redrafts or drafts asked for before it, and an answer that changed nothing on your page shows as soon as it is written.
@@ -39,6 +38,10 @@ make sense to somebody whose repo just received it.
   snapshot a release wrote is gone, and with it `public_names.snapshot`, `public_names.stale`,
   `public_names.SNAPSHOT` and `release.names_kept`. `python3 tools/readme_pictures.py shoot`
   takes the README's four pictures from the sample page and names them.
+
+### Added
+
+- **The app's maker hears of its bugs without anyone passing them on.** A bug met in the maker's own copy is filed for the app by itself and fixed by a scheduled builder; nothing changes for you.
 
 ### Fixed
 
