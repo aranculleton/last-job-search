@@ -493,3 +493,26 @@ def test_a_brief_line_about_a_person_at_an_employer_opens_them_not_the_applicati
     assert app_model.brief_link(ctx, "Robin wrote about Larkspur Retail")["item"] == \
         app_model.tracker_ids(ctx.tracker)[0]
     assert app_model.brief_link(ctx, "Larkspur Retail is live")["section"] == "applications"
+
+
+def test_the_brief_gives_an_interview_in_the_persons_own_time_with_its_own_beside_it(where):
+    """Issue #247: an interview held at 19:00 Toronto time read "today at 19:00" in a brief
+    for someone in Berlin, where it starts at 01:00 the next day. What the person reads privately gives
+    their own time, the interview's beside it; what an employer sees keeps the employer's."""
+    routines_file = os.path.join(where.profile, "routines.json")
+    got = json.load(open(routines_file, encoding="utf-8"))
+    got["timezone"] = "Europe/Berlin"
+    json.dump(got, open(routines_file, "w", encoding="utf-8"))
+    person.reset()
+    _outcome(["- [ ] Recruiter screen (scheduled 2026-11-12 19:00 America/Toronto, 30 min)"])
+    lead = brief._lead({"processes": [_row()], "applications": 1}, [], [], True, [], {},
+                       dt.date(2026, 11, 12))
+    assert lead == ("Recruiter screen with %s is tomorrow at 01:00 (19:00 Toronto time). "
+                    "Your prep is on your page." % CO), lead
+    # The same zone as the person's: the time alone, as before.
+    got["timezone"] = "America/Toronto"
+    json.dump(got, open(routines_file, "w", encoding="utf-8"))
+    person.reset()
+    lead = brief._lead({"processes": [_row()], "applications": 1}, [], [], True, [], {},
+                       dt.date(2026, 11, 12))
+    assert lead == "Recruiter screen with %s is today at 19:00. Your prep is on your page." % CO

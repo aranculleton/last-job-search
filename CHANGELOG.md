@@ -22,6 +22,7 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **The morning brief gives an interview's time in your own time.** An interview booked in another time zone was given at its own clock time with no zone named, hours off for you. It now reads, for example, "tomorrow at 01:00 (19:00 Toronto time)". What an employer sees keeps their own time.
 - **A link to someone on hold opens straight on their card.** It landed on Contacts with the On hold group still folded, so their card could not be seen; the group now opens on them.
 
 ## [4.16.0] - 2026-11-12
