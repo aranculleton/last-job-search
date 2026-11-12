@@ -4,10 +4,9 @@ Written at the release of 4.16.0 (2026-11-12) by the weekly builder. This is bac
 a list of work: a builder starts only from the maintainer's notes (MAINTAINING.md, "Builder").
 
 ## Not tested at this release
-- The builder's task as `app_bug.py task` now prints it (a chat made with the app, the task
-  bound to it) has not fired yet; the old task, a fresh chat each run, has to be remade by hand.
-  A manual fire_trigger of a bound task starts a fresh chat (MAINTAINING.md), so a wake may
-  still meet the same missing tools.
+- The builder's task as `app_bug.py task` now prints it (its own chat with the app, the task
+  bound to it) has not fired yet; the old one, a fresh chat each run, is remade by hand. A
+  manual fire_trigger of a bound task starts a fresh chat, so a wake may still lack the tools.
 - The old brief chat archived at the next tidy-up is tested on invented chats only.
 - Windows and Linux computers with the desktop app were not used for real.
 
