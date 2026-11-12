@@ -68,6 +68,16 @@ or the app did what its docs say): one comment saying why in two lines and the l
 fix**: it stays open, with one comment saying why in two lines, never a second comment for the
 same reason in a later week.
 
+**One only the maintainer's hand can finish** (a permission rule in `.claude/settings.json`,
+which Auto never lets a chat change, or a check on their own computer): do all the rest of it
+on a branch of its own, with its test, pushed; then one comment naming the one step left in
+the words they act on: "Open the chat App builder (weekly fixes and release), switch it to
+Accept edits, and send: do the maintainer items." Label it `needs-maintainer`. When the
+maintainer sends "do the maintainer items" in this chat: for each such issue, make the step
+left on its branch, run its tests and the gate, merge it the usual way (no release unless
+step 5's exception applies), label it `fixed-unreleased`, take `needs-maintainer` off, and
+reply in one line; then they can switch the chat back to Auto.
+
 ## 4. Release it, only if everything is green
 
 1. Write `docs/NEXT_BUILDER.md` afresh and cut the version: `python3 tools/release.py cut
@@ -101,7 +111,8 @@ same reason in a later week.
 1. **One call**: rewrite the body of your report, the open issue labelled `builder-report`
    (issue_write, method update; none yet: create it, titled "Weekly builder report", with that
    label), to one line: "<today, YYYY-MM-DD>: released vX.Y.Z with N fixes." or "<today>:
-   nothing released: <why, in a few words>." The maintainer reads it on GitHub, with the
+   nothing released: <why, in a few words>.", with " N need you: see needs-maintainer."
+   added when any wait on the maintainer's hand. The maintainer reads it on GitHub, with the
    issues labelled `needs-maintainer` and the release notes; their brief never says it.
 2. **One call**: list the open issues again, as in step 1. One opened while you worked waits
    for next week's run: never a second release in one run (the maintainer, 2026-11-12: no
