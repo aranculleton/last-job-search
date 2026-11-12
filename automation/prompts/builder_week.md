@@ -82,6 +82,10 @@ same reason in a later week.
 4. While the checks run: `python3 tools/rehearse_sync.py <the maintainer's copy>` and `python3
    tools/try_personal_tests.py <the maintainer's copy>`.
 5. Subscribe to its activity (subscribe_pr_activity) and wait: GitHub wakes you; never poll.
+   GitHub's wake can be lost (2026-11-12: both runs finished and nothing woke the builder for
+   a quarter of an hour), so also start one background wait, Bash `run_in_background` with
+   `sleep 2400`, and when it ends read the pull request's checks once: still running, one
+   more such wait (four at most); finished, carry on as below.
    Red: read only the failing lines, fix, and push with the gate again; a fix you cannot make
    is taken out of the batch, its issue left as step 3 says.
 6. **Merge only when Fast checks, Everywhere, Platforms and both rehearsals are green**, and
