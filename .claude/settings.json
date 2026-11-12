@@ -29,7 +29,8 @@
       "ArtifactData",
       "ArtifactComments",
       "WebSearch",
-      "mcp__claude-code-remote__add_repo"
+      "mcp__claude-code-remote__add_repo",
+      "mcp__claude-code-remote__archive_session"
     ]
   },
   "hooks": {

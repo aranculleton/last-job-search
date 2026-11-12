@@ -14,3 +14,8 @@ ROOT = Path(__file__).resolve().parent.parent
 def test_add_repo_is_allowed_for_a_chat_nobody_is_watching():
     settings = json.loads((ROOT / ".claude" / "settings.json").read_text(encoding="utf-8"))
     assert "mcp__claude-code-remote__add_repo" in settings["permissions"]["allow"]
+
+
+def test_archive_session_is_allowed_so_finished_chats_are_put_away_unattended():
+    settings = json.loads((ROOT / ".claude" / "settings.json").read_text(encoding="utf-8"))
+    assert "mcp__claude-code-remote__archive_session" in settings["permissions"]["allow"]
