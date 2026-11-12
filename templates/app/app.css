@@ -662,6 +662,9 @@ p.count.tone-bad { color: var(--st-failed); }
 
 /* ------------------------------------------------------------------ work */
 .workp { display: grid; gap: 12px; }
+/* The queue over Claude's work: what runs now and what waits, in order, in two short lines. */
+.work-queue { display: grid; gap: 4px; color: var(--muted); }
+.work-queue strong { color: var(--ink); font-weight: 600; }
 .work-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px 16px; display: grid; gap: 8px; min-width: 0; }
 .work-card:focus { outline: none; }
 .work-card:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
@@ -998,7 +1001,9 @@ dialog.work-sheet { position: fixed; inset: auto 0 0 0; margin: 0; width: 100%; 
    wide and cut off at the card's edge (the screen review, 2026-11-11). */
 .set-body { padding: 0 16px 16px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
 .act-row { width: 100%; border: 0; border-top: 1px solid var(--line); background: none; text-align: left; color: var(--ink); font: inherit; cursor: pointer; }
-@media (hover: hover) { .act-row:hover { background: var(--raised); } }
+/* Its grey parts turn to ink on the hovered row, as a side list's count does: the grey arrow
+   read 4.44:1 on the hover colour under a pointer left on it (French, CI, 2026-11-11). */
+@media (hover: hover) { .act-row:hover { background: var(--raised); } .act-row:hover :is(.set-go, .hint) { color: var(--ink); } }
 .set-go { color: var(--muted); font-size: 1.125rem; }
 .look-row .segctl { flex: 0 1 auto; }
 .look-row .seg-opt { padding: 8px 12px; font-size: 0.875rem; }
@@ -1864,7 +1869,9 @@ body.has-fab .shell { padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-b
 /* Its words start a box of their own: the box keeps the dot's width at its end, so it never
    moves up beside what is before it with no dot between. */
 :has(> .sep-hold:first-child > .sep-lead), :has(> .sep-lead:first-child) { padding-right: 0.7em; }
-/* Nothing after it on its line: kept, out of sight, so nothing on the line below moves up. */
+/* Nothing after it on its line: kept, out of sight, so nothing on the line below moves up.
+   Drawn in no colour, never hidden: a hidden dot fell out of the line's own words (innerText),
+   which Safari's engine read as "Waiting for Claude Saved." (2026-11-12). */
 .sep-dot.sep-end { color: transparent; }
 .sep-before.sep-cut::before { content: none !important; }
 /* ... and keeps its width at its end, so the part never moves up beside what is before it. */
@@ -2449,30 +2456,31 @@ dialog.detail.full .detail-body > * { grid-column: 2; min-width: 0; }
    looks: a quiet head, the timing and what they are known to ask in two plain boxes, then each
    part under its own rule, what to say first in a box, its questions as cards; depth one tap
    away. Every rule here starts at .lp, so nothing reaches the rest of the page. */
-.d-live > .lp { margin-top: 8px; }
-.lp { display: flex; flex-direction: column; gap: 32px; min-width: 0; line-height: 1.55; }
+.d-live > .lp { margin-top: 8px; padding-bottom: 32px; }
+/* The prep's screen keeps no padding of its own above and below: a bar that stays at the top
+   stuck 16px under the header, and the lifelines 32px over the foot, with the text scrolling
+   past in the gaps (the live review, 2026-11-11). The title and the end keep their room. */
+dialog.detail .detail-body:has(> .d-live > .lp) { padding-top: 0; padding-bottom: 0; }
+dialog.detail .detail-body:has(> .d-live > .lp) > .detail-title { margin-top: 16px; }
+/* --lp-bar-h is the bar's height as drawn: the script sets it on the prep from the bar itself (a
+   part jumped to lands under the bar, never behind it); this is its value before it has measured. */
+.lp { --lp-bar-h: 0px; display: flex; flex-direction: column; gap: 32px; min-width: 0; line-height: 1.55; }
 .lp p, .lp h3, .lp h4, .lp ul, .lp ol, .lp dl { margin: 0; }
 .lp-head { display: flex; flex-direction: column; gap: 12px; }
-.lp-lede { color: var(--muted); max-width: 70ch; }
 .lp-lbl, .lp-eyebrow, .lp-qhead, .lp-kids-h { font-size: var(--t-sm); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
-.lp-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.lp-search { flex: 1 1 220px; min-width: 0; display: flex; }
+/* The bar: find and the parts stay at the top while the prep scrolls under it, two rows at most
+   on a phone, nothing folded behind it (the maintainer, 2026-11-11). One solid ground from the
+   header to under the chips, as wide as the screen's column and its gutters, so no word shows
+   through above find or under the chips (the live review, 2026-11-11). */
+.lp-bar { --lp-bar-pull: 16px; position: sticky; top: 0; z-index: 5; display: flex; flex-direction: column; gap: 8px; margin: -24px -16px calc(-1 * var(--lp-bar-pull)); padding: 8px 16px; background: var(--surface); border-bottom: 1px solid var(--line); }
+/* Find, and the order of each answer beside it: never after the chips, where a row that scrolls
+   sideways hid it past the screen's edge. */
+.lp-find-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.lp-search { flex: 1 1 auto; min-width: 0; display: flex; }
 .lp-search input { width: 100%; min-width: 0; min-height: var(--target); padding: 8px 16px; border: 1px solid var(--line-strong); border-radius: var(--r-sm); background: var(--surface); color: var(--ink); font: inherit; }
-.lp-global { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.lp-switch .seg-opt { padding: 4px 12px; font-size: var(--t-sm); }
-.lp-switch.small .seg-opt { padding: 2px 8px; }
-.lp-switch .seg-opt[aria-checked="true"] { background: var(--ink); color: var(--surface); }
 .lp-found { font-size: var(--t-sm); color: var(--muted); }
-/* Search and Open all, Close all, folded under one small row beside the answers switch; open,
-   they take the row under it. */
-.lp-toolfold { margin-left: auto; min-width: 0; }
-.lp-toolfold[open] { flex: 1 1 100%; margin-left: 0; }
-.lp-toolfold-sum { cursor: pointer; list-style: none; display: inline-flex; align-items: center; gap: 4px; min-height: var(--target); padding: 4px 12px; border: 1px solid var(--line-strong); border-radius: 999px; font-size: var(--t-sm); font-weight: 600; color: var(--ink); }
-.lp-toolfold-sum::-webkit-details-marker { display: none; }
-.lp-toolfold-sum::before { content: "+"; width: 12px; }
-.lp-toolfold[open] > .lp-toolfold-sum::before { content: "\2212"; }
-.lp-toolfold-sum:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
-.lp-toolfold > .lp-tools { margin-top: 8px; }
+.lp-drafts { font-size: var(--t-sm); color: var(--muted); }
+.lp-find-row > .lp-lead { flex: none; display: inline-flex; align-items: center; min-height: var(--target); padding: 0 8px; white-space: nowrap; font-size: var(--t-sm); }
 /* At a glance: a label and its line, stacked on a phone, side by side on a wide screen. */
 .lp-glance dl { margin: 0; display: flex; flex-direction: column; gap: 8px; }
 .lp-glance-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; }
@@ -2485,15 +2493,18 @@ dialog.detail.full .detail-body > * { grid-column: 2; min-width: 0; }
 /* On a phone the glance asks one question of them, the first; the second is in its part below.
    With both, the glance ran past the first screen in a wider font (GitHub's runner, 2026-11-11). */
 @media (max-width: 759px) { .lp-glance-ask > dd > p + p { display: none; } }
-/* Hidden: the answer behind a small pill, to say it first and then look. */
-.lp-reveal { margin-left: auto; }
-.lp-narr-show { display: none; }
-.lp[data-mode="hidden"] .lp-narr:not(.lp-shown) > .lp-narr-show { display: inline-flex; align-self: flex-start; }
-.lp[data-mode="hidden"] .lp-narr:not(.lp-shown) > .lp-beats,
-.lp[data-mode="hidden"] .lp-narr:not(.lp-shown) > .lp-bridge,
-.lp[data-mode="hidden"] .lp-glance-open { display: none; }
-/* A simple answer, a sentence a line. */
-.lp-lines { display: flex; flex-direction: column; gap: 8px; }
+/* A practice: the answer behind one pill, to say it first and then look. */
+.lp-reveal { align-self: flex-start; }
+/* Both ways of an answer at once: the script to read aloud and the same answer as points. Which
+   leads is the view's own order (data-lead), so a flip moves nothing but the two. */
+.lp-layers { display: flex; flex-direction: column; gap: 12px; }
+.lp-cues { padding-left: 20px; display: flex; flex-direction: column; gap: 4px; font-size: 17px; line-height: 1.35; }
+.lp-cues > li:first-child { font-size: 19px; font-weight: 700; }
+.lp-script { font-size: 17px; line-height: 1.5; max-width: 60ch; color: var(--ink); }
+.lp[data-lead="cues"] .lp-cues-w { order: -1; }
+.lp[data-lead="cues"] .lp-points-h { display: none; }
+.lp[data-lead="cues"] .lp-script { border-top: 1px solid var(--line); padding-top: 12px; }
+.lp[data-lead="script"] .lp-cues-w { border-top: 1px solid var(--line); padding-top: 8px; }
 .lp-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 /* On a phone the chips are one row that scrolls sideways inside itself, its far end fading:
    over three rows they pushed Part 1 more than a screen down (the screen review, 2026-11-11). */
@@ -2501,15 +2512,36 @@ dialog.detail.full .detail-body > * { grid-column: 2; min-width: 0; }
   .lp-chips { flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; padding-block: 2px;
     -webkit-mask-image: linear-gradient(to right, var(--ink) calc(100% - 32px), transparent); mask-image: linear-gradient(to right, var(--ink) calc(100% - 32px), transparent); }
   .lp-chips::-webkit-scrollbar { display: none; }
+  .lp-chips.lp-scrolled { -webkit-mask-image: linear-gradient(to right, transparent, var(--ink) 24px, var(--ink) calc(100% - 32px), transparent); mask-image: linear-gradient(to right, transparent, var(--ink) 24px, var(--ink) calc(100% - 32px), transparent); }
   .lp-chips > .btn { flex: none; }
 }
-.lp-chips .btn.lp-chip-known { background: var(--st-overdue-bg); color: var(--st-overdue); border-color: var(--st-overdue); }
-/* The mark's key at a glance: a known question's part in the same gold as its chip. */
-.lp-glance-part.lp-chip-known { background: var(--st-overdue-bg); color: var(--st-overdue); border: 1px solid var(--st-overdue); border-radius: 999px; padding: 0 8px; }
+/* The part on the screen is the chip filled, marked as the prep scrolls; a part with a question
+   they are known to ask wears a gold dot, keyed at a glance by the same dot. A chip filled gold
+   read as "you are here" (the live review, 2026-11-11). */
+.lp-chips .btn[aria-current="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+/* Only the current part looks filled: a chip under a mouse, or left hovered by a tap on a
+   phone, is underlined instead of shaded, which read as a second part being "here". */
+@media (hover: hover) {
+  .lp-chips .btn.secondary:not([aria-current="true"]):hover { background: var(--raised); border-color: var(--line-strong); text-decoration: underline; text-underline-offset: 3px; }
+  .lp-chips .btn[aria-current="true"]:hover { background: var(--ink); border-color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+}
+.lp-chip-dot { flex: none; width: 8px; height: 8px; margin-left: 4px; vertical-align: 1px; }
+/* On a phone, once the prep is read under the bar, find, the order and the chips are one row:
+   the parts that stay took about 30% of the screen (the live review, 2026-11-11). */
+@media (max-width: 759px) {
+  .lp-bar.lp-tight { flex-direction: row; align-items: center; padding-block: 4px; }
+  .lp-bar.lp-tight > .lp-find-row { flex: 0 1 auto; min-width: 0; }
+  .lp-bar.lp-tight .lp-search { flex: 0 1 8.5rem; min-width: 8.5rem; }
+  .lp-bar.lp-tight .lp-search input { padding: 8px; }
+  .lp-bar.lp-tight .lp-lead { padding: 0 4px; }
+  .lp-bar.lp-tight > .lp-chips { flex: 1 1 0; min-width: 7.5rem; }
+  .lp-bar.lp-tight > .lp-found { display: none; }
+}
+@media (min-width: 560px) and (max-width: 759px) { .lp-bar.lp-tight .lp-search { flex-basis: 14rem; } }
 .lp-box { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px 20px; display: flex; flex-direction: column; gap: 8px; }
 .lp-box ol { padding-left: 24px; display: flex; flex-direction: column; gap: 4px; }
 .lp-box .btn.link { text-align: left; }
-.lp-part { display: flex; flex-direction: column; gap: 16px; scroll-margin-top: 12px; }
+.lp-part { display: flex; flex-direction: column; gap: 16px; scroll-margin-top: calc(var(--lp-bar-h, 0px) + 12px); }
 .lp-part:focus { outline: none; }
 .lp-part-top { display: flex; flex-direction: column; gap: 4px; padding-bottom: 8px; border-bottom: 2px solid var(--mark); }
 .lp-part-h { font-size: var(--t-xl); font-weight: 700; line-height: 1.25; text-wrap: balance; }
@@ -2523,9 +2555,9 @@ dialog.detail.full .detail-body > * { grid-column: 2; min-width: 0; }
 .lp-hook:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .lp-bridge { font-style: italic; color: var(--muted); border-top: 1px dashed var(--line); padding-top: 8px; }
 .lp-group { display: flex; flex-direction: column; gap: 12px; }
-.lp-q { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px 20px; display: flex; flex-direction: column; gap: 12px; min-width: 0; scroll-margin-top: 12px; }
+.lp-q { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px 20px; display: flex; flex-direction: column; gap: 12px; min-width: 0; scroll-margin-top: calc(var(--lp-bar-h, 0px) + 12px); }
 .lp-q-known { border-left: 4px solid var(--st-overdue); }
-.lp-q:focus, .lp-notes:focus, .lp-glossary:focus { outline: none; }
+.lp-q:focus, .lp-notes:focus { outline: none; }
 .lp-q:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .lp-flash { box-shadow: 0 0 0 3px var(--mark); }
 .lp-q-q { font-size: var(--t-lg); font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
@@ -2539,52 +2571,87 @@ dialog.detail.full .detail-body > * { grid-column: 2; min-width: 0; }
 .lp-ans :is(.lp-lbl, .muted), .talk-msg.from-you :is(.talk-who, .muted) { color: var(--ink); }
 .lp-draft { background: var(--st-overdue-bg); border-left: 4px solid var(--st-overdue); border-radius: var(--r-sm); padding: 8px 12px; font-size: var(--t-sm); }
 .lp-kids { display: flex; flex-direction: column; gap: 8px; }
-.lp-f { border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--sunk); min-width: 0; }
-.lp-f-sum { cursor: pointer; list-style: none; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; min-height: var(--target); padding: 8px 12px; font-weight: 600; }
-.lp-f-sum::-webkit-details-marker { display: none; }
-.lp-f-sum::before { content: "+"; flex: none; width: 12px; color: var(--ink); }
-.lp-f[open] > .lp-f-sum::before { content: "\2212"; }
-.lp-f-q { min-width: 0; flex: 1 1 12em; }
-.lp-f-body { padding: 0 12px 12px 32px; display: flex; flex-direction: column; gap: 8px; }
-.lp-f .lp-ans { background: var(--surface); border: 1px solid var(--line); }
-.lp-f .lp-f .lp-ans { background: var(--accent-soft); border: 0; }
-@media (max-width: 759px) { .lp-box, .lp-narr, .lp-q { padding: 16px; } .lp-f-body { padding-left: 12px; } }
-/* On a phone who asks sits on its own line over the question, so a title never breaks after a
-   word or two beside it; the search box takes its row, and Open all and Close all share the
-   next (the review, 2026-11-10). */
-@media (max-width: 759px) { .lp-q-q > .lp-who { display: table; margin: 0 0 4px; } .lp-search { flex-basis: 100%; } .lp-toolfold { margin-left: 0; } }
-/* On a phone "All answers" heads its switch on a line of its own, so the switch and Tools share
-   the next row in any type: in a Mac's and Windows' type the three were wider than a phone
-   and Tools went to a row of its own (Everywhere, 4.15.0). */
-@media (max-width: 759px) { .lp-global > .lp-lbl { flex-basis: 100%; } }
+/* Follow-ups as choices: a pick shows its answer in the same place, with the way back above. */
+.lp-choices { display: flex; flex-direction: column; gap: 8px; }
+.lp-choice { font: inherit; text-align: left; color: var(--ink); background: var(--sunk); border: 1px solid var(--line-strong); border-radius: var(--r-sm); min-height: var(--target); padding: 8px 12px; cursor: pointer; overflow-wrap: anywhere; }
+.lp-choice::before { content: "\2192\00a0"; color: var(--muted); }
+@media (hover: hover) { .lp-choice:hover { background: var(--accent-soft); } }
+.lp-choice:focus-visible, .lp-crumb:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.lp-fu { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.lp-trail { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: var(--t-sm); color: var(--muted); }
+.lp-trail-path { flex: 1 1 12em; min-width: 0; }
+.lp-trail .btn.link { display: inline; min-height: 0; padding: 0; text-align: left; font-weight: 400; }
+.lp-fu-node { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: var(--r-sm); background: var(--sunk); scroll-margin-top: calc(var(--lp-bar-h, 0px) + 12px); }
+.lp-fu-q { font-weight: 600; }
+.lp-fu-q:focus { outline: none; }
+.lp-fu .lp-ans { background: var(--surface); border: 1px solid var(--line); }
+.lp-ifs, .lp-flags { padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }
+.lp-dot { display: inline-block; width: 10px; height: 10px; margin-left: 8px; border-radius: 50%; background: var(--st-overdue); vertical-align: 1px; }
+@media (max-width: 759px) { .lp-box, .lp-narr, .lp-q { padding: 16px; } }
+/* Who asks comes after the question, small, never ahead of it. */
+.lp-q-q > .lp-who, .lp-fu-q > .lp-who, .lp-choice > .lp-who { margin: 0 0 0 4px; font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; }
 .lp-star { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; }
 .lp-star dt { font-size: var(--t-sm); font-weight: 600; color: var(--muted); }
 .lp-star dd { margin: 0 0 8px; }
 @media (min-width: 760px) { .lp-star { grid-template-columns: 8em minmax(0, 1fr); column-gap: 16px; } .lp-star dd { margin: 0; } }
-.lp-az { display: flex; flex-wrap: wrap; gap: 8px 16px; }
 /* A term: a word of its sentence, wrapping with it, under a dotted line in the words' own
    muted tone. In the accent's red it read as a spelling mistake (the screen review,
    2026-11-11). */
 .lp-term { cursor: pointer; position: relative; border-radius: 2px;
-  text-decoration: underline dotted; text-decoration-color: var(--muted); text-decoration-thickness: 2px; text-underline-offset: 4px; }
+  text-decoration: underline dotted; text-decoration-color: var(--muted); text-decoration-thickness: 1px; text-underline-offset: 3px; }
 .lp-term:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .lp-term::after { content: ""; position: absolute; inset: -8px 0; }
 @media (hover: hover) { .lp-term:hover { background: var(--accent-soft); } }
 .lp-notes { background: var(--st-overdue-bg); border-left: 4px solid var(--st-overdue); border-radius: var(--r); padding: 16px 20px; display: flex; flex-direction: column; gap: 8px; }
 .lp-notes .lp-lbl { color: var(--st-overdue); }
 .lp-notes ul { padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }
-.lp-notes .lp-f { background: var(--surface); }
-.lp-scrim { position: fixed; inset: 0; z-index: 19; background: var(--bg); opacity: 0.8; }
-@media (min-width: 760px) { .lp-scrim { display: none; } }
-.lp-panel { position: fixed; z-index: 20; left: 0; right: 0; bottom: 0; max-height: 72dvh; overflow-y: auto; overscroll-behavior: contain; background: var(--surface); color: var(--ink);
-  border: 1px solid var(--line-strong); border-radius: var(--r) var(--r) 0 0; box-shadow: var(--shadow); padding: 16px 16px max(16px, env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 12px; line-height: 1.55; }
-@media (min-width: 760px) { .lp-panel { left: auto; top: 16px; right: 16px; bottom: auto; max-height: calc(100dvh - 32px); width: min(400px, calc(100vw - 32px)); border-radius: var(--r); } }
-.lp-panel-top { display: flex; align-items: center; gap: 8px; }
-.lp-panel-title { flex: 1 1 auto; min-width: 0; font-size: var(--t-lg); font-weight: 700; }
-.lp-panel-title:focus { outline: none; }
-.lp-panel-body { display: flex; flex-direction: column; gap: 12px; }
-.lp-tp { display: flex; flex-direction: column; gap: 4px; }
-.lp-tp-here { background: var(--accent-soft); border-radius: var(--r-sm); padding: 12px 16px; }
+/* Numbers in bold, everywhere in what to say. */
+.lp-num { font-weight: 700; }
+/* A coding part's cockpit: every step in view, ticked as it is done, the next one marked. */
+.lp-ck-steps, .lp-ck-list { padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }
+/* The steps a short checklist: a step's name and its line in one run of words, no box round
+   each, the next one marked. */
+.lp-ck-steps { gap: 2px; }
+.lp-ck-step { display: block; font: inherit; font-size: 16px; line-height: 1.35; text-align: left; color: var(--ink); background: none; border: 1px solid transparent; border-radius: var(--r-sm); min-height: var(--target); width: 100%; padding: 4px 8px; cursor: pointer; }
+.lp-ck-step.lp-ck-next { border-color: var(--line-strong); background: var(--accent-soft); }
+.lp-ck-step[aria-pressed="true"] { color: var(--muted); }
+.lp-ck-step[aria-pressed="true"] .lp-ck-t::before { content: "\2713\00a0"; }
+.lp-ck-t { font-weight: 700; }
+.lp-ck-say { font-size: var(--t-sm); }
+.lp-ck-first { font-size: 19px; font-weight: 700; }
+.lp-ck-edges { display: flex; flex-wrap: wrap; gap: 8px; }
+.lp-ck-edge { font: inherit; font-size: var(--t-sm); color: var(--ink); background: var(--surface); border: 1px solid var(--line-strong); border-radius: 999px; min-height: var(--target); padding: 4px 12px; cursor: pointer; }
+.lp-ck-edge[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
+.lp-ck-step:focus-visible, .lp-ck-edge:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.lp-ck-code { display: flex; flex-direction: column; gap: 8px; }
+.lp-ck-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
+.lp-ck-row > code { flex: 1 1 16em; min-width: 0; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: var(--t-sm); background: var(--sunk); border-radius: var(--r-sm); padding: 4px 8px; overflow-wrap: anywhere; }
+.lp-ck-row > .lp-also { flex-basis: 100%; }
+.lp-ck-copied { font-size: var(--t-sm); color: var(--muted); }
+/* Lifelines: a row at the foot of the screen, flush with it, wrapping to a second row on a phone
+   rather than scrolling one past the edge; a line said over the row itself, never above it over
+   the answers, fading after a while (the live review, 2026-11-11). */
+.lp-life { position: sticky; bottom: 0; z-index: 5; margin: 0 -16px; padding: 4px 16px max(4px, env(safe-area-inset-bottom, 0px)); background: var(--surface); border-top: 1px solid var(--line); }
+.lp-life-row { display: flex; flex-wrap: wrap; gap: 8px; }
+@media (max-width: 759px) { .lp-life-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(6.5rem, 1fr)); } }
+.lp-life-btn { font: inherit; font-size: var(--t-sm); color: var(--ink); background: var(--surface); border: 1px solid var(--line-strong); border-radius: 999px; min-height: var(--target); padding: 4px 12px; cursor: pointer; }
+.lp-life-btn[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
+.lp-life-btn:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.lp-life-line { position: absolute; inset: 0; z-index: 1; display: flex; flex-wrap: wrap; align-items: center; align-content: center; gap: 0 8px; margin: 0; padding: 4px 16px; border: 0; background: var(--accent-soft); color: var(--ink); font: inherit; text-align: left; cursor: pointer; overflow-y: auto; transition: opacity 0.6s ease; }
+.lp-life-line[hidden] { display: none; }
+.lp-life-line.lp-fading { opacity: 0; }
+.lp-life-line:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
+@media (prefers-reduced-motion: reduce) { .lp-life-line { transition: none; } }
+.lp-life-say { font-size: 17px; line-height: 1.3; color: var(--ink); }
+/* A term's meaning: a small box under the word's line (else over it), never on it, never a
+   panel or a dimmed page (the maintainer, 2026-11-11). */
+.lp-pop { position: fixed; z-index: 20; max-width: calc(100vw - 32px); max-height: 40dvh; overflow-y: auto; overscroll-behavior: contain;
+  background: var(--surface); color: var(--ink); border: 1px solid var(--line-strong); border-radius: var(--r-sm); box-shadow: var(--shadow);
+  padding: 8px 12px; display: flex; flex-direction: column; gap: 4px; font-size: var(--t-sm); line-height: 1.4; }
+.lp-pop[hidden] { display: none; }
+.lp-pop-name { font-weight: 700; }
+.lp-pop-btn { align-self: flex-start; }
+.lp-pop-more { display: flex; flex-direction: column; gap: 4px; }
 
 /* A phone drawn at its own size (2026-11-10) gets its density from less padding, never from
    smaller type: a card's edge 12px, a row of pills 8px apart with 12px either side of a pill's

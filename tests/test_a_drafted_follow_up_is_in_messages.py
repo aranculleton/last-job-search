@@ -54,22 +54,26 @@ APP_ROW = {"date": "2026-10-10", "company": "Quayside Foods", "sector": "Grocery
 
 
 @pytest.fixture
-def clean():
+def clean(tmp_path_factory):
     """Whatever this test drafts, packs or adds is taken away again: the state is shared by
-    every test in this worker."""
+    every test in this worker. The whole folder is put back as it was, not only its new
+    names: a person's folder another test had left (empty) kept the draft the first test here
+    wrote in it, and the next test found it waiting (CI, 2026-11-11)."""
     tracker = person.state("job_search_tracker.csv")
     kept = open(tracker, encoding="utf-8").read()
     folder = person.state("documents", "network")
-    before = set(os.listdir(folder)) if os.path.isdir(folder) else set()
+    copy = os.path.join(str(tmp_path_factory.mktemp("network_before")), "network")
+    had = os.path.isdir(folder)
+    if had:
+        shutil.copytree(folder, copy)
     try:
         yield
     finally:
         with open(tracker, "w", encoding="utf-8", newline="") as fh:
             fh.write(kept)
-        if os.path.isdir(folder):
-            for name in set(os.listdir(folder)) - before:
-                p = os.path.join(folder, name)
-                shutil.rmtree(p) if os.path.isdir(p) else os.remove(p)
+        shutil.rmtree(folder, ignore_errors=True)
+        if had:
+            shutil.copytree(copy, folder)
 
 
 def _run(argv) -> tuple[int, str]:

@@ -87,12 +87,14 @@ def test_a_question_asked_part_way_through_a_pass_is_answered_before_its_next_it
     # The first change is done; a question comes in before the second starts.
     look = ring.read("between1")
     quiet = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "app_listen.py"),
-                            "waiting", look, "--question"], capture_output=True, text=True)
+                            "waiting", look, "--question"], capture_output=True, text=True,
+                           encoding="utf-8")
     assert quiet.stdout.strip() == "waiting: no question", quiet
     ring.queue("talk~meanwhile", kind="talk", asked_at="2026-10-25T17:20:00Z")
     look = ring.read("between2")
     asked = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "app_listen.py"),
-                            "waiting", look, "--question"], capture_output=True, text=True)
+                            "waiting", look, "--question"], capture_output=True, text=True,
+                           encoding="utf-8")
     assert asked.stdout.strip() == "waiting: a question, talk~meanwhile", asked
     # The step the line names hands it out, claimed for this chat, the changes still its own.
     got = json.loads(ring.run("next", look, "--chat", CHAT, "--kind", "cloud", "--now", NOW,

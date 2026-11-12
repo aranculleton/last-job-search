@@ -25,7 +25,9 @@ APP = os.path.join(ROOT, "tools", "app.py")
 WID = "talk~cloud-c7~m4"
 DRAFTS = {
     LARKSPUR: "Thanks Juno, that is kind of you. I have sent my CV to your email.\n",
-    JUNO: "Thanks Juno, Wednesday at 2.30pm suits me well. See you then.\n",
+    # Juno at Thornbury writes by email: an email reply starts with its subject (#239).
+    JUNO: ("Subject: Wednesday\n\nThanks Juno, Wednesday at 2.30pm suits me well. See you "
+           "then.\n"),
     WREN: "Hi Wren, hope the week is going well. Thursday afternoon would suit me for a call.\n",
 }
 
@@ -54,7 +56,13 @@ def test_three_replies_then_the_real_answer_give_one_finish_naming_all_three(sea
         assert not got.get("again"), got
         firsts.append(got["batches"])
     assert firsts[0] == firsts[1] == firsts[2]          # one finish, made again each time
-    said, work, *locks = batch(firsts[-1][0])
+    said, work, *rest = batch(firsts[-1][0])
+    locks = [x for x in rest if x["collection"] != "work"]
+    # Juno at Larkspur asked for the CV and has none made for her: one is queued in the
+    # finish, once, and kept as each later finish is made again (#232).
+    assert [(x["doc_id"], x["body"]["kind"], x["body"]["args"]["contact"])
+            for x in rest if x["collection"] == "work"] == \
+        [(f"contact_resume~{LARKSPUR}~general", "resume_for_contact", LARKSPUR)]
     text = said["body"]["text"]
     assert "reply to Juno is drafted" in text and "follow-up to Wren is drafted" in text, text
     assert text.count("is drafted") == 3, text

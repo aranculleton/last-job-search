@@ -391,6 +391,7 @@ JSON_NAMES = {
     ".sent.json": "each view batch's records as they stood before it was sent, in the view's own folder, so a refused save can be put back and made again (page_db.keep_landed); never committed",
     ".refused.json": "the record a page save was refused for, in the view's own folder, read once by the next run; never committed",
     ".finished.json": "each finish made from a page dump, with its batches, in the dump's own scratch folder, so the same finish run again gives the same batch (page_db.finished_here); never committed",
+    "merged.json": "what a tweak round's own merges left, in that round's folder in the chat's scratch folder, so a second pass on the round starts from its own result (tweak.ROUND_RESULTS); never committed",
     ".versions.json": "the versions a read of the page listed, in the dump's own scratch folder (page_db.listed_here); never committed",
     "tools/app.py: .json": "a page message's own record in a dump's talk folder, read only for its words (app.talk_words), in the chat's scratch folder; never committed",
     # run_round reads every round's summary to find a job set aside while a search ran; the

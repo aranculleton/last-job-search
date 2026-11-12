@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import datetime as dt
 import os
+import shutil
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -111,6 +112,7 @@ def test_stock_lines_an_older_run_left_on_a_card_are_set_aside():
     wren = "fernhill_freight_halloway"
     path = reading.draft_path(wren)
     had = open(path, encoding="utf-8").read() if os.path.isfile(path) else None
+    made = not os.path.isdir(os.path.dirname(path))
     os.makedirs(os.path.dirname(path), exist_ok=True)
     try:
         with open(path, "w", encoding="utf-8") as fh:
@@ -126,6 +128,10 @@ def test_stock_lines_an_older_run_left_on_a_card_are_set_aside():
         else:
             with open(path, "w", encoding="utf-8") as fh:
                 fh.write(had)
+        # The folder it made goes too: left empty, a later test in this worker took it for
+        # one of the example's own and kept the draft it wrote there (CI, 2026-11-11).
+        if made:
+            shutil.rmtree(os.path.dirname(path), ignore_errors=True)
 
 
 # ------------------------------------------------------------------ a closed thread

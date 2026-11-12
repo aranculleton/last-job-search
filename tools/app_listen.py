@@ -1858,18 +1858,36 @@ def question_waiting(db: dict, now: dt.datetime | None = None) -> str:
     return got[0][1] if got else ""
 
 
+def job_waiting(db: dict, now: dt.datetime | None = None) -> str:
+    """The big job a cloud chat that answers the page would start next in a chat of its own
+    (page_db.next_item, big jobs alone, against the cloud's own limit), or "": a wake's pass
+    looks for one between its items too (app.py ASKED_BETWEEN, `--jobs`), so a resume asked for
+    meanwhile is started within a minute or two, never after every message change in the pass
+    (issue #231)."""
+    import page_db
+    now = now or dt.datetime.now(dt.timezone.utc)
+    got = page_db.next_item(db, "cloud", now, cap=page_db.HEAVY_CAP_CHATS, heavy_only=True)
+    return str(got["work"]) if got else ""
+
+
 def main(argv=None) -> int:
-    """python3 tools/app_listen.py waiting <dump> [--question]: whether work waits for a chat
-    in a read of the page's work (rings_meanwhile); with --question, whether a question the
-    person asked does (question_waiting)."""
+    """python3 tools/app_listen.py waiting <dump> [--question [--jobs]]: whether work waits for
+    a chat in a read of the page's work (rings_meanwhile); with --question, whether a question
+    the person asked does (question_waiting), and with --jobs as well, a big job to start in a
+    chat of its own (job_waiting)."""
     argv = sys.argv[1:] if argv is None else argv
-    if argv[:1] != ["waiting"] or len(argv) not in (2, 3) or argv[2:] not in ([], ["--question"]):
-        print("usage: python3 tools/app_listen.py waiting <dump> [--question]", file=sys.stderr)
+    if argv[:1] != ["waiting"] or len(argv) not in (2, 3, 4) \
+            or argv[2:] not in ([], ["--question"], ["--question", "--jobs"]):
+        print("usage: python3 tools/app_listen.py waiting <dump> [--question [--jobs]]",
+              file=sys.stderr)
         return 2
     import page_db
-    if argv[2:] == ["--question"]:
-        wid = question_waiting(page_db.load(argv[1]))
-        print(f"waiting: a question, {wid}" if wid else "waiting: no question")
+    if argv[2:3] == ["--question"]:
+        db = page_db.load(argv[1])
+        wid = question_waiting(db)
+        job = job_waiting(db) if not wid and argv[3:] == ["--jobs"] else ""
+        print(f"waiting: a question, {wid}" if wid else f"waiting: a big job to start, {job}"
+              if job else "waiting: no question")
         return 0
     since = waiting_since(page_db.load(argv[1]))
     print("waiting: work waits since %s" % since.strftime("%Y-%m-%dT%H:%M:%SZ") if since

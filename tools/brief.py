@@ -123,8 +123,7 @@ NEWS_HOLD = re.compile(r"\b(?:lay ?offs?|laid off|job cuts|cuts? \d+|hiring free
 _LINK = re.compile(r"https?://[^\s)>\]]+")
 _DATE_IN = re.compile(r"\b(\d{4}-\d{2}-\d{2})\b")
 
-WHAT_COUNTS = ("employers the person is in process with or has a live thread at, first; then "
-               "what they asked the brief to watch, in the order they gave")
+WHAT_COUNTS = "live processes and threads first, then their watch list in order"
 
 
 # ---------------------------------------------------------------- reading the state
@@ -1405,7 +1404,7 @@ def _owed_line(i: dict) -> dict:
     else:
         what = "follow-up %s" % ((i.get("what") or "").split(",")[0].replace("nudge ", "")) \
             + (" %s" % i["to"].replace("to: ", "to ").split(" (")[0] if i.get("to") else "")
-    status = {"ready": "draft ready", "check": "draft ready, check it first",
+    status = {"ready": "draft ready", "check": "draft to rewrite",
               "write": ("%s to write" % ("reply" if d.get("kind") == "reply" else "draft"))
               if d.get("who") == "here" else "needs you",
               "none": ""}[d["status"]]
@@ -1936,9 +1935,10 @@ def claude_lines(b: dict) -> list[str]:
     if b["write_here"]:
         import followup_drafts
         n, most = len(b["write_here"]), followup_drafts.WRITE_HERE_MAX
-        out.append("%d draft%s this run can write or rewrite from the thread%s: python3 "
-                   "tools/followup_drafts.py context --due, write them, then "
-                   "followup_drafts.py check - --pack" % (
+        # Short: the lines for Claude are never cut, so every word here is paid for in the
+        # message the person reads (TEXT_MAX).
+        out.append("%d draft%s to write from the thread%s: followup_drafts.py context --due, "
+                   "then check - --pack" % (
                        n, "" if n == 1 else "s",
                        " (the first %d; the rest wait in the pack)" % most if n > most else ""))
     if b["profile_line"]:
@@ -1971,18 +1971,19 @@ def claude_lines(b: dict) -> list[str]:
         # items dropped (review of fix/helpers, item 17).
         out.append("news, one round: today is %s; only these %d searches: every search at once, "
                    "in parallel, then %d to %d items, newest and most relevant first, each story "
-                   "once, each with its [n]; wider back to %s, then %s%s" % (
+                   "once, each with [n]; wider back to %s, then %s%s" % (
                        today.isoformat(), len(searches), NEWS_MIN, NEWS_MAX, week.isoformat(),
                        month.isoformat(), "; the wider: " + wide if wide else ""))
         if b.get("in_play"):
-            out.append("news, in play (for how to use each item, never searched): "
+            out.append("news, in play (to use with each item, never searched): "
                        + "; ".join(b["in_play"]))
     else:
         out.append("news: run no news search (%s)" % (
             "none in the message, by the person's setting" if not n else
             "the profile does not say enough yet for one"))
-    out.append("since %s; links already sent: %s" % (
-        b["since"], " ".join(b["skip_links"][-20:]) or "none"))
+    # The links already sent, only where there are some: "none" said nothing a run acts on.
+    sent = " ".join(b["skip_links"][-20:])
+    out.append("since %s%s" % (b["since"], "; links already sent: " + sent if sent else ""))
     out.append("what counts: " + b["what_counts"])
     if b.get("page"):
         behind = page_behind()

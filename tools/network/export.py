@@ -1960,7 +1960,7 @@ AS_REQUEST = "a connection request, as your LinkedIn download shows"
 # The ways a request's note can have been logged as a message: on LinkedIn, by message or with
 # no way named. An InMail, an email or an Open Profile message reaches someone with no
 # connection, so the same words sent that way are left as they were.
-NOTE_LOGGED_AS = frozenset({"", "message", "connection"})
+NOTE_LOGGED_AS = _st.NOTE_LOGGED_AS
 
 
 def could_be_the_note(row) -> bool:

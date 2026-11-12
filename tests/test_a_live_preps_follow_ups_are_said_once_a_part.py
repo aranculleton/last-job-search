@@ -128,8 +128,8 @@ def run():
 
 LOOK = ("(() => { const d = document.querySelector('dialog.detail'); return {"
         " parts: [...d.querySelectorAll('.lp-part[data-lpp]')].map((p) => ({id: p.dataset.lpp,"
-        "   under: [...p.querySelectorAll('.lp-q[data-lpq] .lp-f-q')].map((x) => x.textContent),"
-        "   once: [...p.querySelectorAll(':scope > .lp-group > .lp-part-follow .lp-f-sum .lp-f-q, :scope .lp-part-follow > .lp-kids > .lp-f > .lp-f-sum .lp-f-q')].map((x) => x.textContent),"
+        "   under: [...p.querySelectorAll('.lp-q[data-lpq] .lp-choice')].map((x) => x.firstChild.textContent.trim()),"
+        "   once: [...p.querySelectorAll('.lp-part-follow .lp-choice')].map((x) => x.firstChild.textContent.trim()),"
         "   head: (p.querySelector('.lp-part-follow .lp-kids-h') || {}).textContent || ''})),"
         " chips: [...d.querySelectorAll('.lp-chips .btn.lp-chip-known')].map((b) => ({name: b.getAttribute('aria-label') || '', title: b.title || '', text: b.textContent})),"
         " key: [...d.querySelectorAll('.lp-glance .lp-glance-part.lp-chip-known')].map((x) => x.textContent)}; })()")

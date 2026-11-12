@@ -1854,6 +1854,10 @@
     const begun = Math.min(tms(w.claimed_at) || Infinity, tms(w.stage_at) || Infinity, since);
     const usual = before + cur + after;
     out.over = (t - begun) / 1000 > Math.max(usual * 1.25, usual + 120);
+    // Past its estimate (the whole job's usual time, or its last step's): its card shows how
+    // long it has run, never a bar stuck at its end. A resume for a contact sat at the end of
+    // its bar for eight minutes of a fifteen-minute run (issue #238).
+    out.past = (t - begun) / 1000 > usual || (at >= n - 1 && inStage > cur);
     // A step past its own usual time gives no time left: "under a minute left" held for
     // minutes otherwise.
     out.stageOver = inStage > cur;
@@ -1862,7 +1866,7 @@
     return out;
   }
   function phaseOf(w, p) {
-    return [p.status, p.over, p.late, p.lapsed, p.stopping, p.i, limitHit(), p.status === "queued" && pickedUp(w) > 0, !!p.unsent, !!p.sentAt].join("|");
+    return [p.status, p.over, !!p.past, p.late, p.lapsed, p.stopping, p.i, limitHit(), p.status === "queued" && pickedUp(w) > 0, !!p.unsent, !!p.sentAt].join("|");
   }
   // Queued work Claude is already on: the chat that answers the page checks in first thing
   // on every wake (meta/listen answered_at, tools/app_listen.py), so a check-in after the
@@ -2308,6 +2312,11 @@
   async function stopWork(id) {
     const w = workDoc(id);
     if (!w || workWriting.has(id)) return;
+    // The second tap of a double tap on Try again lands on the Stop drawn where Try again had
+    // been, once the first tap's write is done: it stopped the work it had just asked for
+    // again (Safari's engine, CI, 2026-11-11). A Stop that close after this window's own Try
+    // again is that tap.
+    if (now() - (retriedAt.get(id) || 0) < SECOND_TAP_MS) return;
     workWriting.add(id);
     try {
       const db = await capReady("db");
@@ -2332,6 +2341,8 @@
   // Asked again in the last minute: a second Try again is the same tap.
   const justAsked = (w) => !!w && txt(w.status) === "queued" && now() - (tms(w.asked_at) || 0) < 60000;
   const retriedAt = new Map();
+  // How soon after a tap a tap on the control drawn in its place is the same double tap.
+  const SECOND_TAP_MS = 1000;
   // Why a job's draft ended with the job ruled out, from its result (app.py done --left-out),
   // or "" for any other ending.
   // A job left out before this field was kept says so in its summary ("Not drafted: ...").
@@ -7529,6 +7540,10 @@
   function resumeForThem(p, where) {
     const r = obj(p.resume_for_them);
     if (!txt(r.name)) return null;
+    // Made, and its file still being put on the page: on its way, never Get it (#237).
+    const coming = txt(r.asset) ? null : downloadableFor(p.id);
+    if (coming) return h("p", {class: "small", role: "status", "data-resume-for": txt(p.id), "data-resume-coming": coming[0]}, h("span", {class: "spin", "aria-hidden": "true"}),
+      " " + cap1(noun()) + " made for " + txt(p.first_name) + " · on its way, making it downloadable");
     const key = (where || "p") + "resfor:" + p.id;
     const fetchIt = getMadeFor(p, key);
     const get = fetchIt ? btn("Get it", fetchIt, {kind: "link", small: true, key}) : null;
@@ -7747,7 +7762,9 @@
     const madeFile = made ? arr(made.files).find((f) => f.kind === "resume") || null : null;
     if (madeFile ? !!madeFile.asset : !!txt(obj(obj(personById(txt(m.contact))).resume_for_them).asset)) return null;
     return [...allWork()].find(([, w]) => txt(w.kind) === "resume_for_contact" &&
-      txt(obj(w.args).contact) === txt(m.contact) && ACTIVE.has(txt(w.status) || "queued")) || null;
+      txt(obj(w.args).contact) === txt(m.contact) && ACTIVE.has(txt(w.status) || "queued")) ||
+      // Made, and its file still being put on the page: not ready to send with it yet (#237).
+      downloadableFor(txt(m.contact));
   }
   function sendsLine(m) {
     if (txt(m.sends) !== "resume") return null;
@@ -7772,7 +7789,8 @@
     const making = theirs ? null : sendsMaking(m);
     if (making) return h("div", {class: "sends-making", "data-sends-making": making[0]},
       h("div", {class: "sends-line"}, h("span", {class: "small muted"}, "Goes with it: the " + noun() + " for " + who + ", which Claude is making now. Send them together once it is ready.")),
-      workInline(making[0], making[1], {key: "sends:" + m.id}));
+      workInline(making[0], making[1], txt(making[1].kind) === "files" ? {key: "sends:" + m.id, lead: "Making it downloadable",
+        done: () => [h("span", {class: "spin", "aria-hidden": "true"}), " Making it downloadable: putting it on your page."]} : {key: "sends:" + m.id}));
     // Theirs, made but not yet in the page's store: the way to it, never the general file
     // under their name.
     const f = theirs || (hasTheirs ? null : cur.asset ? {kind: "resume", name: txt(cur.name), asset: cur.asset} : null);
@@ -7933,6 +7951,8 @@
         h("button", {type: "button", class: "btn secondary small copy icon-only", "data-k": "copy:" + sid, "aria-label": "Copy subject", title: "Copy subject",
           onclick: () => copyText(parts.subject, "subject", "copy:" + sid, sid)}, icon("copy"))) : null,
       parts.subject ? noteFor("copy:" + sid) : null,
+      // Where an email goes, beside it.
+      parts.subject || txt(m.channel) === "email" ? emailLine(m.contact, "memail:" + m.id) : null,
       h("div", {class: "sendbox"}, h("span", {class: "bubble-tools"}, ready ? copyBtn : null, penBtn), editing ? area : clippedBody(m, body, tid)),
       m.inmail ? inmailLine(m) : null,
       pen ? h("div", {class: "pen-tell"}, h("label", {class: "small pen-label", for: askId}, "What would you like changed?"), askField,
@@ -10915,6 +10935,17 @@
     return h("a", {href: url, target: "_blank", rel: "noopener noreferrer", class: "openlink", "data-k": "open:" + m.id},
       txt(o.label) || "Open profile", h("span", {class: "sr-only"}, " (opens " + txt(m.first_name) + "'s LinkedIn in a new tab)"));
   }
+  // Their email address, as a message of theirs gave it, with its own Copy (#239): kept in the
+  // owner-only reach/<contact> document, never in the page, and never guessed. It sat in the
+  // thread, and the person found and copied it by hand.
+  function emailLine(cid, key) {
+    const em = txt(obj(S.reach.get(txt(cid))).email);
+    if (!em) return null;
+    const k = "copy:" + key;
+    return [h("p", {class: "small addr", "data-k": key}, h("span", {class: "muted"}, "Email: "), h("span", {}, em), " ",
+      h("button", {type: "button", class: "btn secondary small copy icon-only", "data-k": k, "aria-label": "Copy email address", title: "Copy email address",
+        onclick: () => copyText(em, "email address", k, null)}, icon("copy"))), noteFor(k)];
+  }
   // The subject and the body apart, so each is pasted where it goes: the engine's own fields,
   // or a text that begins "Subject:" split here.
   function msgParts(m) {
@@ -11651,117 +11682,149 @@
       }
       parts = next;
     }
-    return parts.filter((x) => x !== "").map((x) => typeof x === "string" ? x
+    return parts.filter((x) => x !== "").map((x) => typeof x === "string" ? lpNum(x)
       : lpTermEl(x.key, x.label));
+  }
+  // Numbers in bold, to be found at a glance mid-sentence: "22%", "2,400", "£1.1M", "~5".
+  const LP_NUM = /(^|[\s(~])([£$€]?\d(?:[\d,.]*\d)?\s?(?:%|k|K|M|B|bn|x|pp)?\+?)(?=[\s.,;:)!?]|$)/g;
+  function lpNum(s) {
+    const out = [];
+    let at = 0;
+    let m;
+    LP_NUM.lastIndex = 0;
+    while ((m = LP_NUM.exec(s))) {
+      const from = m.index + m[1].length;
+      if (from > at) out.push(s.slice(at, from));
+      out.push(h("strong", {class: "lp-num"}, m[2]));
+      at = from + m[2].length;
+    }
+    if (!out.length) return s;
+    if (at < s.length) out.push(s.slice(at));
+    return out;
   }
   // A term is a word of its sentence, wrapping with it, and a control: a button never broke
   // across lines, so a long term left its line short (the screen review, 2026-11-11). Enter
   // and Space open it as a button's would (the root's keydown).
   function lpTermEl(key, label) {
-    return h("span", {class: "lp-term", role: "button", tabindex: "0", "data-term": key, "aria-haspopup": "dialog", "aria-label": label + ": what it means"}, label);
+    return h("span", {class: "lp-term", role: "button", tabindex: "0", "data-term": key, "aria-label": label + ": what it means"}, label);
   }
   function lpPlain(lv, s) {
     const terms = obj(lv.terms);
     return txt(s).replace(LP_TERM, (m0, k, label) => label || txt(obj(terms[k]).name) || k);
   }
-  // A simple answer as short lines to glance at, a sentence a line, a term dotted once in it
-  // (the UX review, 2026-11-10, U-5: sentences of 30 to 44 words could not be taken in at a
-  // glance). The detailed answer stays prose.
-  function lpLines(lv, s) {
-    const seen = new Set();
-    const lines = txt(s).replace(/([.!?]["\u201d\u2019']?)\s+(?=[A-Z0-9"\u201c\u2018'(\u00a3$\u20ac[])/g, "$1\u0000").split("\u0000").filter((x) => x.trim());
-    return lines.map((x) => h("p", {}, lpRich(lv, x, null, seen)));
+  // The points as lines: a list from the writer, or, in a prep written before the points were
+  // a list, the sentences of the one string (the UX review, 2026-11-10, U-5).
+  function lpCueList(s) {
+    if (Array.isArray(s)) return s.map(txt).filter((x) => x.trim());
+    return txt(s).replace(/([.!?]["”’']?)\s+(?=[A-Z0-9"“‘'(£$€[])/g, "$1\u0000").split("\u0000").filter((x) => x.trim());
   }
-  // Minutes as the call-prep page says them: "about 1.5 min", "about a minute".
-  function lpMin(n) { const x = Math.round(Number(n || 0) * 2) / 2; return x < 1 ? "under a minute" : x === 1 ? "about a minute" : "about " + x + " min"; }
-  function lpSwitch(label, mode, onPick, key, cls, hide) {
-    const g = h("div", {class: "segctl lp-switch" + (cls ? " " + cls : ""), role: "radiogroup", "aria-label": label});
-    for (const [v, l] of [["simple", "Simple"], ["detailed", "Detailed"]].concat(hide ? [["hidden", "Hidden"]] : [])) {
-      g.appendChild(h("button", {type: "button", class: "seg-opt", role: "radio", "data-k": key + ":" + v, "data-v": v, "aria-checked": String(v === mode),
-        onclick: () => { lpPress(g, v); onPick(v); }}, l));
-    }
-    return g;
+  // Which comes first, the script or the points: the person's own pick on this device, else the
+  // prep's (`lead`, from their interview notes), else the points: on a call the glanceable
+  // lines come first and the script sits under them (the live review, 2026-11-11).
+  function lpLead(lv) {
+    const p = pref("lp:lead", "");
+    return p === "cues" || p === "script" ? p : txt(lv.lead) === "script" ? "script" : "cues";
   }
-  function lpPress(group, v) {
-    if (!group) return;
-    for (const b of group.querySelectorAll(".seg-opt")) b.setAttribute("aria-checked", String(b.dataset.v === v));
-  }
-  // Simple, Detailed, or Hidden: the answer behind "Show the answer", to say it first and then
-  // look (the UX review, 2026-11-10, U-4: trying an answer, then checking it, beats rereading).
-  function lpSetMode(box, v) {
-    const d = box.querySelector(":scope > .lp-detailed");
-    const hide = v === "hidden";
-    const m = hide ? "hidden" : d && v === "detailed" ? "detailed" : "simple";
-    box.dataset.mode = m;
-    box.querySelector(":scope > .lp-simple").hidden = hide || m === "detailed";
-    if (d) d.hidden = m !== "detailed";
-    const sw = box.querySelector(":scope > .lp-ans-top .lp-switch");
-    if (sw) sw.hidden = hide;
-    const show = box.querySelector(":scope > .lp-ans-top > .lp-reveal");
-    if (show) show.hidden = !hide;
-    lpPress(sw, m);
-  }
-  // One answer: what to say, Simple or Detailed with its own switch where there is a detailed
-  // one, and the draft's line where it is one.
+  // One answer, both ways at once and nothing to open (the maintainer, 2026-11-11: Simple was
+  // Detailed in bullets, and a switch was one more thing to find mid-call): the script he can
+  // read aloud and the same answer as points. Which leads is the view's own order, so a flip
+  // never redraws. In a practice, one "Show the answer" stands in for both.
   function lpAnswer(lv, node, key, mode) {
-    const d = txt(node.detailed);
+    // A prep written before the points were a list holds them as one string: drawn once, as
+    // written, never cut into sentences under the same script (the live review, 2026-11-11).
+    const listed = Array.isArray(node.simple);
+    const d = listed ? txt(node.detailed) : txt(node.detailed) || txt(node.simple);
     const hide = mode === "hidden";
-    const m = hide ? "hidden" : d && mode === "detailed" ? "detailed" : "simple";
-    const box = h("div", {class: "lp-ans", "data-mode": m});
-    const sw = d ? lpSwitch("This answer: " + clip(lpPlain(lv, node.q), 60), m, (v) => lpSetMode(box, v), "lpa:" + key, "small") : null;
-    if (sw) sw.hidden = hide;
+    const cues = listed ? lpCueList(node.simple) : [];
+    const seen = new Set();
+    const layers = h("div", {class: "lp-layers", hidden: hide},
+      d ? h("div", {class: "lp-script lp-detailed"}, h("p", {}, lpRich(lv, d))) : null,
+      cues.length ? h("div", {class: "lp-cues-w"}, d ? h("p", {class: "lp-lbl lp-points-h"}, "Points") : null,
+        h("ul", {class: "lp-cues lp-simple"}, cues.map((x) => h("li", {}, lpRich(lv, x, null, seen))))) : null);
+    const box = h("div", {class: "lp-ans", "data-mode": hide ? "hidden" : "both"});
+    const show = hide ? h("button", {type: "button", class: "btn secondary small lp-reveal", "data-k": "lpshow:" + key,
+      onclick: (e) => { layers.hidden = false; box.dataset.mode = "both"; e.currentTarget.remove(); }}, "Show the answer") : null;
     put(box,
-      h("div", {class: "lp-ans-top"}, h("span", {class: "lp-lbl"}, "Say"), sw,
-        h("button", {type: "button", class: "btn secondary small lp-reveal", hidden: !hide, "data-k": "lpshow:" + key, onclick: () => lpSetMode(box, "simple")}, "Show the answer")),
       node.draft ? h("p", {class: "lp-draft"}, stateWord("Draft", "warn"), " You asked for this one: check it is true before you say it.") : null,
-      h("div", {class: "lp-simple lp-lines", hidden: m !== "simple"}, lpLines(lv, node.simple)),
-      d ? h("p", {class: "lp-detailed", hidden: m !== "detailed"}, lpRich(lv, d)) : null);
+      show, layers);
     return box;
   }
-  function lpAlso(lv, list) {
-    const also = arr(list).map(txt).filter(Boolean);
-    return also.length ? h("p", {class: "lp-also"}, "Also asked as: ", also.map((a, i) => [i ? " or " : "", "“" + lpPlain(lv, a) + "”"])) : null;
+  // The story an answer is told from, as a link to it.
+  function lpStoryLink(lv, st, key) {
+    return st ? h("p", {class: "lp-also"}, "From your story: ", h("button", {type: "button", class: "btn link", "data-k": "lpst:" + key, onclick: () => lpJump(lpId(lv, "s", st.id))}, txt(st.title))) : null;
   }
-  // A follow-up, by who asks it, with its own answer and what they may ask after it, three
-  // deep at most. Shut until tapped.
-  function lpFollow(lv, f, key, depth, mode) {
-    // One said once in a part answers from a story told there: it says which (the engine's
-    // `follow` on the part, interview_live._follow_once).
-    const st = f.story ? arr(lv.stories).find((s) => s.id === f.story) : null;
-    return det("lp:" + txt(lv.__iv) + ":" + key, false, {class: "lp-f"},
-      h("summary", {class: "lp-f-sum", "data-k": "lpf:" + key}, h("span", {class: "lp-who"}, lpWho(lv, f.who)), h("span", {class: "lp-f-q"}, lpPlain(lv, f.q))),
-      h("div", {class: "lp-f-body"}, lpAlso(lv, f.also), lpAnswer(lv, f, key, mode),
-        st ? h("p", {class: "lp-also"}, "From your story: ", h("button", {type: "button", class: "btn link", "data-k": "lpfst:" + key, onclick: () => lpJump(lpId(lv, "s", st.id))}, txt(st.title))) : null,
-        arr(f.follow).length && depth < 3 ? [h("p", {class: "lp-kids-h"}, "Then they may ask"),
-          h("div", {class: "lp-kids"}, arr(f.follow).map((g, i) => lpFollow(lv, g, key + "." + i, depth + 1, mode)))] : null));
+  // Follow-ups as choices, never folds (the maintainer, 2026-11-11): each question shows the ones
+  // it may bring; picking one shows its answer and its own follow-ups in the same place, three
+  // deep, with the way back above it. A pick lasts as long as the view and is never kept.
+  function lpFollows(lv, list, key, mode, label) {
+    const box = h("div", {class: "lp-fu", "data-fu": key});
+    box._path = [];
+    // Every follow-up under here at any depth, for search: it is in the prep, not on the screen.
+    box._find = [];
+    const walk = (l, p, depth) => arr(l).forEach((f, i) => {
+      const q = p.concat(i);
+      box._find.push([q, [lpPlain(lv, f.q), lpCueList(f.simple).join(" "), lpPlain(lv, f.detailed)].join(" ").toLowerCase()]);
+      if (depth < 3) walk(obj(f).follow, q, depth + 1);
+    });
+    walk(list, [], 1);
+    box._show = (p, focus) => { box._path = p; lpFuDraw(lv, box, list, key, mode, label, focus); };
+    lpFuDraw(lv, box, list, key, mode, label, false);
+    return box;
+  }
+  function lpFuDraw(lv, box, list, key, mode, label, focus) {
+    box.textContent = "";
+    const path = box._path;
+    const nodes = [];
+    let cur = list;
+    for (const i of path) { const n = obj(arr(cur)[i]); nodes.push(n); cur = n.follow; }
+    const go = (p) => box._show(p, true);
+    const at = nodes[nodes.length - 1];
+    if (at) {
+      const stories = arr(lv.stories);
+      put(box,
+        h("nav", {class: "lp-trail", "aria-label": "The follow-ups you picked"},
+          h("span", {class: "lp-trail-path"}, nodes.map((n, j) => [j ? h("span", {class: "lp-sep", "aria-hidden": "true"}, " › ") : null,
+            j < nodes.length - 1 ? h("button", {type: "button", class: "btn link lp-crumb", "data-k": "lpcr:" + key + ":" + j, onclick: () => go(path.slice(0, j + 1))}, clip(lpPlain(lv, n.q), 40))
+              : h("span", {class: "lp-crumb-now"}, clip(lpPlain(lv, n.q), 40))])),
+          h("button", {type: "button", class: "btn secondary small lp-fu-back", "data-k": "lpback:" + key, onclick: () => go(path.slice(0, -1))}, "Back")),
+        h("div", {class: "lp-fu-node", "data-depth": String(nodes.length)},
+          h("p", {class: "lp-fu-q", tabindex: "-1"}, lpRich(lv, at.q), " ", h("span", {class: "lp-who"}, lpWho(lv, at.who))),
+          lpAnswer(lv, at, key + "." + path.join("."), mode),
+          lpStoryLink(lv, at.story ? stories.find((s) => s.id === at.story) : null, key + "." + path.join("."))));
+    }
+    const kids = at ? (nodes.length < 3 ? arr(at.follow) : []) : arr(list);
+    if (kids.length) {
+      put(box, h("p", {class: "lp-kids-h"}, at ? "Then they may ask" : label),
+        h("div", {class: "lp-kids lp-choices"}, kids.map((f, i) => h("button", {type: "button", class: "lp-choice", "data-k": "lpf:" + key + "." + path.concat(i).join("."),
+          onclick: () => go(path.concat(i))}, lpPlain(lv, f.q), " ", h("span", {class: "lp-who"}, lpWho(lv, f.who))))));
+    }
+    if (focus) {
+      const t = box.querySelector(at ? ".lp-fu-q" : ".lp-choice");
+      if (t) try { t.focus({preventScroll: true}); } catch (e) { t.focus(); }
+    }
   }
   // A tap that goes somewhere in the prep: a "Likely to prompt" line, a known question, a
-  // story, a chip. Shown, its folds opened, and marked for a moment.
+  // story, a chip. Shown and marked for a moment.
   function lpHook(label, id, key) {
     return h("button", {type: "button", class: "lp-hook", "data-k": "lphook:" + key, onclick: () => lpJump(id)}, label);
   }
   function lpQuestion(lv, q, mode) {
     const st = q.story ? arr(lv.stories).find((s) => s.id === q.story) : null;
-    const k = q.known ? arr(lv.known).find((x) => x.id === q.known) : null;
     const hid = lpId(lv, "qh", q.id);
     return h("article", {class: "lp-q" + (q.known ? " lp-q-known" : ""), id: lpId(lv, "q", q.id), tabindex: "-1", "aria-labelledby": hid, "data-lpq": q.id},
-      q.known ? h("p", {class: "lp-badge"}, "Known question" + (k && txt(k.from) ? ", from " + txt(k.from) : "")) : null,
-      h("h4", {class: "lp-q-q", id: hid}, h("span", {class: "lp-who"}, lpWho(lv, q.who)), " ", lpPlain(lv, q.q)),
-      lpAlso(lv, q.also),
+      h("h4", {class: "lp-q-q", id: hid}, lpPlain(lv, q.q), " ", h("span", {class: "lp-who"}, lpWho(lv, q.who)),
+        q.known ? h("span", {class: "lp-dot", role: "img", "aria-label": "They are known to ask this", title: "They are known to ask this"}) : null),
       lpAnswer(lv, q, q.id, mode),
-      st ? h("p", {class: "lp-also"}, "From your story: ", h("button", {type: "button", class: "btn link", "data-k": "lpst:" + q.id, onclick: () => lpJump(lpId(lv, "s", st.id))}, txt(st.title))) : null,
-      arr(q.follow).length ? [h("p", {class: "lp-kids-h"}, "Follow-ups, by who might ask"),
-        h("div", {class: "lp-kids"}, arr(q.follow).map((f, i) => lpFollow(lv, f, q.id + "." + i, 1, mode)))] : null);
+      lpStoryLink(lv, st, q.id),
+      arr(q.follow).length ? lpFollows(lv, q.follow, q.id, mode, "They may ask next") : null);
   }
-  // A question to ask them, why it is worth asking, and what to ask next to each likely answer.
+  // A question to ask them, why it is worth asking, and what to ask next to each likely answer,
+  // all in view.
   function lpAsk(lv, a) {
     return h("article", {class: "lp-q lp-ask", id: lpId(lv, "a", a.id), tabindex: "-1", "data-lpa": a.id},
       h("h4", {class: "lp-q-q"}, lpRich(lv, a.q)),
       txt(a.why) ? h("p", {class: "lp-also"}, cap1(txt(a.why)).replace(/\.?$/, ".")) : null,
-      arr(a.follow).length ? [h("p", {class: "lp-kids-h"}, "If they answer"),
-        h("div", {class: "lp-kids"}, arr(a.follow).map((f, i) => det("lp:" + txt(lv.__iv) + ":" + a.id + "." + i, false, {class: "lp-f"},
-          h("summary", {class: "lp-f-sum", "data-k": "lpaf:" + a.id + "." + i}, h("span", {class: "lp-f-q"}, "If they say " + txt(obj(f).if))),
-          h("div", {class: "lp-f-body"}, h("p", {}, "Ask next: ", lpRich(lv, obj(f).then))))))] : null);
+      arr(a.follow).length ? h("ul", {class: "lp-ifs"}, arr(a.follow).map((f) => h("li", {}, "If they say " + txt(obj(f).if) + " → ask: ", lpRich(lv, obj(f).then)))) : null);
   }
   function lpJump(id) {
     const el = document.getElementById(id);
@@ -11770,6 +11833,9 @@
     if (root && (el.hidden || el.closest("[hidden]"))) { const f = root.querySelector(".lp-search input"); if (f) f.value = ""; lpSearch(root, ""); }
     for (let p = el.parentElement; p; p = p.parentElement) if (p.tagName === "DETAILS") p.open = true;
     if (el.tagName === "DETAILS") el.open = true;
+    if (root && root._toJump) root._toJump();
+    // The place tapped, for the end of the prep, where it may never reach the bar.
+    if (root) { root._tapped = el; root._tappedEnd = false; }
     el.scrollIntoView({behavior: lpReduced() ? "auto" : "smooth", block: "start"});
     // Marked until a moment after it arrives: a long smooth scroll took longer than the mark
     // lasted, and a story far down arrived unmarked.
@@ -11783,74 +11849,205 @@
     } else off();
     try { el.focus({preventScroll: true}); } catch (e) { el.focus(); }
   }
-  // Search: what to say first, the questions, every answer and follow-up, the questions to ask
-  // and the stories. What does not match steps aside; a fold that matches opens.
+  // Find: what to say first, the questions, both ways of every answer, every follow-up at any
+  // depth, the questions to ask and the stories. What does not match steps aside; a follow-up
+  // that matches is picked, so its answer is in view.
   function lpSearch(root, query) {
     const qy = txt(query).toLowerCase().trim();
     const has = (el) => !qy || el.textContent.toLowerCase().indexOf(qy) >= 0;
+    const fuHit = (el) => {
+      if (!qy) return false;
+      for (const b of el.querySelectorAll(".lp-fu")) {
+        const f = arr(b._find).find(([, t]) => t.indexOf(qy) >= 0);
+        if (f) { b._show(f[0], false); return true; }
+      }
+      return false;
+    };
     let n = 0;
     for (const sec of root.querySelectorAll(".lp-part")) {
       let any = false;
-      // A follow-up said once for the part is found as a card is (the screen review, 2026-11-11).
-      for (const c of sec.querySelectorAll(".lp-beat, .lp-bridge, .lp-q, .lp-part-follow > .lp-kids > .lp-f")) {
-        const hit = has(c);
+      for (const c of sec.querySelectorAll(".lp-beat, .lp-bridge, .lp-q, .lp-part-follow")) {
+        const hit = has(c) || fuHit(c);
         c.hidden = !hit;
         if (!hit) continue;
         any = true;
         if (qy) n++;
-        if (qy) for (const d of [c, ...c.querySelectorAll("details")]) if (d.tagName === "DETAILS" && has(d)) d.open = true;
       }
-      for (const g of sec.querySelectorAll(".lp-narr, .lp-group")) g.hidden = !!qy && !g.querySelector(".lp-beat:not([hidden]), .lp-bridge:not([hidden]), .lp-q:not([hidden]), .lp-part-follow > .lp-kids > .lp-f:not([hidden])");
+      for (const g of sec.querySelectorAll(".lp-narr, .lp-group:not(.lp-part-follow)")) g.hidden = !!qy && !g.querySelector(".lp-beat:not([hidden]), .lp-bridge:not([hidden]), .lp-q:not([hidden])");
       sec.hidden = !!qy && !any;
     }
     const said = root.querySelector(".lp-found");
     if (said) { said.textContent = qy ? (n ? plural(n, "place", "places") + " found" : "Nothing found: try fewer words") : ""; said.hidden = !qy; }
   }
-  // The term panel: at the side on a wide screen, a sheet from the bottom on a phone, Back
-  // through the terms opened inside it.
-  function lpTerm(root, lv, key, deeper) {
-    const panel = root.querySelector(".lp-panel");
-    if (!panel || !txt(obj(obj(lv.terms)[key]).name)) return;
-    if (!deeper) { panel._hist = []; panel._opener = document.activeElement; }
-    else if (panel._cur && panel._cur !== key) panel._hist.push(panel._cur);
-    panel._cur = key;
-    lpTermDraw(root, lv, panel);
-  }
-  function lpTermDraw(root, lv, panel) {
-    const key = panel._cur;
+  // A term's meaning, in a small box beside the word, never a panel over the page (the
+  // maintainer, 2026-11-11): what it means, what it means here, and what it is like, then a
+  // More for the example and the technical answer. Hover opens it after a moment on a screen
+  // with a mouse, focus at once, a tap anywhere; it never takes the focus, stays while the
+  // pointer is on the word or on it, and goes on Esc, a tap outside or a second tap.
+  function lpPop(root, lv, el, pinned) {
+    const pop = root.querySelector(".lp-pop");
+    const key = el && el.dataset.term;
     const t = obj(obj(lv.terms)[key]);
-    const body = panel.querySelector(".lp-panel-body");
-    body.textContent = "";
-    const part = (label, text, cls) => txt(text) ? h("div", {class: "lp-tp" + (cls ? " " + cls : "")}, h("p", {class: "lp-lbl"}, label), h("p", {}, lpRich(lv, text, key))) : null;
-    put(body, part("At " + txt(lv.company), t.here, "lp-tp-here"), part("A worked example", t.example), part("What it means", t.plain), part("If they want it technically", t.technical));
-    const hd = panel.querySelector(".lp-panel-title");
-    hd.textContent = txt(t.name);
-    panel.querySelector(".lp-back").hidden = !panel._hist.length;
-    panel.hidden = false;
-    root.classList.add("lp-panel-open");
-    const scrim = root.querySelector(".lp-scrim");
-    if (scrim) scrim.hidden = false;
-    panel.scrollTop = 0;
-    try { hd.focus({preventScroll: true}); } catch (e) { hd.focus(); }
+    if (!pop || !txt(t.name)) return;
+    clearTimeout(root._popOn);
+    if (root._popEl && root._popEl !== el) root._popEl.removeAttribute("aria-describedby");
+    root._popEl = el;
+    root._popPinned = !!pinned;
+    clearTimeout(root._popOff);
+    pop.textContent = "";
+    const line = (label, text) => txt(text) ? h("p", {}, h("strong", {}, label + " "), lpPlain(lv, text)) : null;
+    const more = [line("Example:", t.example), line("If they go technical:", t.technical)].filter(Boolean);
+    const extra = more.length ? h("div", {class: "lp-pop-more", hidden: true}, more) : null;
+    put(pop, h("p", {class: "lp-pop-name"}, txt(t.name)),
+      line("Means:", t.plain), line("Here:", t.here), line("Like:", t.like),
+      extra ? h("button", {type: "button", class: "btn link lp-pop-btn", "data-k": "lp-pop-more", onclick: (e) => { e.stopPropagation(); extra.hidden = false; e.currentTarget.remove(); root._popPinned = true; }}, "More") : null,
+      extra);
+    pop.hidden = false;
+    el.setAttribute("aria-describedby", pop.id);
+    lpPopPlace(pop, el);
+    // The box follows its word as the prep scrolls under it.
+    const sc = el.closest(".detail-body");
+    if (sc && root._popScroller !== sc) {
+      root._popScroller = sc;
+      sc.addEventListener("scroll", () => { if (!pop.hidden && root._popEl && root._popEl.isConnected) lpPopPlace(pop, root._popEl); }, {passive: true});
+    }
   }
-  function lpTermBack(root, lv) {
-    const panel = root.querySelector(".lp-panel");
-    if (!panel || !panel._hist.length) return;
-    panel._cur = panel._hist.pop();
-    lpTermDraw(root, lv, panel);
+  // Never on the line being read nor on the line after it (the live review, 2026-11-11: the
+  // box under the word covered the next line, the one about to be read): under that next line
+  // where it fits, else over the word's own first line, between the bar and the lifelines;
+  // with room on neither side, on the roomier one, no taller than its room.
+  function lpPopPlace(pop, el) {
+    const rs = el.getClientRects();
+    const r = rs.length ? rs[rs.length - 1] : el.getBoundingClientRect();
+    const first = rs.length ? rs[0] : r;
+    const vw = document.documentElement.clientWidth || innerWidth;
+    const w = Math.min(272, vw - 32);
+    pop.style.width = w + "px";
+    pop.style.left = Math.max(16, Math.min(r.left, vw - w - 16)) + "px";
+    pop.style.maxHeight = "";
+    const lh = parseFloat(getComputedStyle(el).lineHeight) || r.height * 1.5;
+    const lp = pop.closest(".lp");
+    const bar = lp && lp.querySelector(".lp-bar");
+    const life = lp && lp.querySelector(".lp-life");
+    const top0 = Math.max(8, bar ? bar.getBoundingClientRect().bottom + 4 : 8);
+    const bot0 = Math.min(innerHeight - 8, life ? life.getBoundingClientRect().top - 4 : innerHeight - 8);
+    const below = r.bottom + lh + 4;
+    const roomBelow = bot0 - below;
+    const roomAbove = first.top - 4 - top0;
+    let hgt = pop.offsetHeight;
+    if (hgt > roomBelow && hgt > roomAbove) { pop.style.maxHeight = Math.max(96, Math.max(roomBelow, roomAbove)) + "px"; hgt = pop.offsetHeight; }
+    pop.style.top = (hgt <= roomBelow || roomBelow >= roomAbove ? below : first.top - 4 - hgt) + "px";
   }
-  function lpTermClose(root) {
-    const panel = root.querySelector(".lp-panel");
-    if (!panel || panel.hidden) return false;
-    panel.hidden = true;
-    root.classList.remove("lp-panel-open");
-    const scrim = root.querySelector(".lp-scrim");
-    if (scrim) scrim.hidden = true;
-    const op = panel._opener;
-    panel._hist = [];
-    panel._cur = null;
-    if (op && op.isConnected) op.focus();
+  function lpPopClose(root) {
+    const pop = root.querySelector(".lp-pop");
+    clearTimeout(root._popOn);
+    clearTimeout(root._popOff);
+    if (!pop || pop.hidden) return false;
+    pop.hidden = true;
+    if (root._popEl) root._popEl.removeAttribute("aria-describedby");
+    root._popEl = null;
+    root._popPinned = false;
     return true;
+  }
+  // A coding part's cockpit, all in view: what to ask before typing, the steps to tick off
+  // (ticks kept only while the prep is open), what to say when stuck, the edge cases to name,
+  // handy lines of code to copy, and what to say you would do with more time.
+  function lpCockpit(lv, p) {
+    const steps = arr(p.steps).filter((x) => txt(obj(x).t));
+    if (!steps.length) return null;
+    const lbl = (x) => h("p", {class: "lp-lbl"}, x);
+    const list = (xs) => h("ul", {class: "lp-ck-list"}, xs.map((x) => h("li", {}, lpRich(lv, x))));
+    const first = steps[0];
+    const ol = h("ol", {class: "lp-ck-steps"});
+    const mark = () => {
+      let next = false;
+      for (const b of ol.querySelectorAll(".lp-ck-step")) {
+        const done = b.getAttribute("aria-pressed") === "true";
+        b.classList.toggle("lp-ck-next", !done && !next);
+        if (!done) next = true;
+      }
+    };
+    // A short checklist: each step's name and its line in one run of words, the next one
+    // marked; a step a box of its own stood a screen and a half tall on a phone (the live
+    // review, 2026-11-11).
+    steps.forEach((x, i) => ol.appendChild(h("li", {}, h("button", {type: "button", class: "lp-ck-step", "aria-pressed": "false", "data-k": "lp-ck:" + p.id + ":" + i,
+      onclick: (e) => { const b = e.currentTarget; b.setAttribute("aria-pressed", String(b.getAttribute("aria-pressed") !== "true")); mark(); }},
+      h("span", {class: "lp-ck-t"}, txt(x.t)), txt(x.say) ? [": ", h("span", {class: "lp-ck-say"}, lpRich(lv, x.say))] : null))));
+    mark();
+    const stuck = arr(p.stuck).map(txt).filter(Boolean);
+    const edges = arr(p.edges).map(txt).filter(Boolean);
+    const code = arr(p.code).filter((x) => txt(obj(x).c));
+    const more = arr(p.more).map(txt).filter(Boolean);
+    const copy = (c) => {
+      const said = h("span", {class: "lp-ck-copied", "aria-live": "polite"});
+      const b = h("button", {type: "button", class: "btn secondary small", "data-k": "lp-ck-copy",
+        onclick: () => {
+          const done = () => { said.textContent = "Copied"; clearTimeout(said._t); said._t = setTimeout(() => { said.textContent = ""; }, 2000); };
+          try { navigator.clipboard.writeText(c).then(done, () => { said.textContent = "Select the line to copy it"; }); } catch (e) { said.textContent = "Select the line to copy it"; }
+        }}, "Copy");
+      return [b, said];
+    };
+    return h("div", {class: "lp-box lp-cockpit"},
+      txt(first.say) ? [lbl("Ask before you type"), h("p", {class: "lp-ck-first"}, lpRich(lv, first.say))] : null,
+      lbl("Steps"), ol,
+      stuck.length ? [lbl("Stuck? say:"), list(stuck)] : null,
+      edges.length ? [lbl("Name these"), h("div", {class: "lp-ck-edges"}, edges.map((x, i) => h("button", {type: "button", class: "lp-ck-edge", "aria-pressed": "false", "data-k": "lp-ck-edge:" + p.id + ":" + i,
+        onclick: (e) => { const b = e.currentTarget; b.setAttribute("aria-pressed", String(b.getAttribute("aria-pressed") !== "true")); }}, x)))] : null,
+      code.length ? [lbl("Handy code"), h("div", {class: "lp-ck-code"}, code.map((x) => h("div", {class: "lp-ck-row"},
+        h("code", {}, txt(x.c)), copy(txt(x.c)), txt(x.means) ? h("p", {class: "lp-also"}, txt(x.means)) : null)))] : null,
+      more.length ? [lbl("With more time I'd..."), list(more)] : null);
+  }
+  // Lifelines: one tap for a line to say when the call goes sideways, or a private fact to
+  // glance at. The line shows over the row itself, never above it over the answers (the live
+  // review, 2026-11-11: on a phone it pushed over the reading area), and fades after a while so
+  // the row is back; a tap on it or Esc closes it at once, and the focus on it keeps it.
+  const LP_LIFE_MS = 8000;
+  function lpLife(lv) {
+    const priv = obj(lv.private);
+    const end = (x) => cap1(txt(x)).replace(/([^.!?”"])$/, "$1.");
+    const lines = [["Moment", "Good question, let me think about that for a second."],
+      ["Again?", "Sorry, could you say that again?"],
+      ["Don't know", "I haven't done that directly; the closest I've done is ..., and here's how I'd go about it."]];
+    if (txt(priv.pay)) lines.push(["Pay", "If pay comes up: " + end(moneyIn(priv.pay))]);
+    if (txt(priv.notice)) lines.push(["Notice", "Your notice: " + end(priv.notice)]);
+    if (txt(priv.based)) lines.push(["Based", "Where you are based: say " + txt(priv.based) + "."]);
+    const said = h("span", {class: "lp-life-say", "aria-live": "polite"});
+    const row = h("div", {class: "lp-life-row"});
+    const box = h("div", {class: "lp-life", role: "group", "aria-label": "Lines for when you need a moment"}, row);
+    const strip = h("button", {type: "button", class: "lp-life-line", hidden: true, "data-k": "lp-life-line", onclick: () => box._close()},
+      h("span", {class: "lp-lbl"}, "Only for you"), " ", said);
+    box.appendChild(strip);
+    box._close = () => {
+      clearTimeout(box._fade);
+      strip.classList.remove("lp-fading");
+      if (strip.hidden) return false;
+      strip.hidden = true;
+      box._on = null;
+      for (const b of row.children) b.setAttribute("aria-pressed", "false");
+      return true;
+    };
+    const arm = () => {
+      clearTimeout(box._fade);
+      box._fade = setTimeout(() => {
+        if (strip.matches(":focus-within")) { arm(); return; }
+        strip.classList.add("lp-fading");
+        box._fade = setTimeout(() => box._close(), lpReduced() ? 0 : 600);
+      }, LP_LIFE_MS);
+    };
+    for (const [label, line] of lines) {
+      const b = h("button", {type: "button", class: "lp-life-btn", "aria-pressed": "false", "data-k": "lp-life:" + label,
+        onclick: () => {
+          if (box._on === label) { box._close(); return; }
+          box._on = label;
+          said.textContent = line;
+          strip.classList.remove("lp-fading");
+          strip.hidden = false;
+          for (const x of row.children) x.setAttribute("aria-pressed", String(x === b));
+          arm();
+        }}, label);
+      row.appendChild(b);
+    }
+    return box;
   }
   // The notes that are the person's alone, last, as the call-prep page keeps them.
   function lpNotes(lv) {
@@ -11868,25 +12065,9 @@
     return h("aside", {class: "lp-notes", id: lpId(lv, "x", "notes"), tabindex: "-1", "aria-labelledby": lpId(lv, "x", "notes-h")},
       h("p", {class: "lp-lbl", id: lpId(lv, "x", "notes-h")}, "Your notes, not for saying"),
       h("ul", {}, items.map(([k, v]) => h("li", {}, k ? h("strong", {}, k) : null, v))),
-      flags.length ? det("lp:" + txt(lv.__iv) + ":flags", false, {class: "lp-f"}, h("summary", {class: "lp-f-sum", "data-k": "lpflags"}, h("span", {class: "lp-f-q"}, "Answers to avoid")),
-        h("div", {class: "lp-f-body"}, h("ul", {}, flags.map((x) => h("li", {}, x))))) : null);
+      flags.length ? [h("p", {class: "lp-lbl"}, "Answers to avoid"), h("ul", {class: "lp-flags"}, flags.map((x) => h("li", {}, x)))] : null);
   }
-  // How the time goes, said once, as the call-prep page says it.
-  function lpTiming(lv, parts) {
-    const tm = obj(lv.timing);
-    const total = Number(tm.minutes || lv.minutes) || 0;
-    const inParts = Number(tm.parts_minutes) || parts.reduce((n, p) => n + (Number(p.minutes) || 0), 0);
-    const talk = Math.round(Number(tm.talk) || 0);
-    const long = parts.reduce((a, p) => Number(p.minutes) > Number(a.minutes) ? p : a, parts[0]);
-    const close = parts.find((p) => p.kind === "close");
-    const hooks = parts.some((p) => arr(p.say).some((b) => arr(b.prompts).length));
-    return [plural(total, "minute", "minutes") + " in all, in " + plural(parts.length, "part", "parts") + (total > inParts ? ", leaving about " + (total - inParts) + " for hellos and running over" : "") + ".",
-      " What you say here takes " + (talk < 1 ? "under a minute" : talk === 1 ? "about a minute" : "about " + talk + " minutes") + " at your pace; the rest is their questions and the talk around your answers.",
-      parts.length > 1 ? " The longest stop is " + lc1(txt(long.title)) + ", about " + plural(Number(long.minutes) || 0, "minute", "minutes") + "." : "",
-      hooks ? " Lines marked “Likely to prompt” are where what you say sets up a question you have an answer ready for." : "",
-      close && close !== parts[0] ? " Keep the last " + plural(Number(close.minutes) || 0, "minute", "minutes") + " for your questions to them." : ""].join("");
-  }
-  // The timing in a line, on its fold: "60 minutes in 5 parts, the last 7 for your questions".
+  // The timing in a line, the bar's title for a screen reader: "60 minutes in 5 parts, the last 7 for your questions".
   function lpTimeLine(lv, parts) {
     const total = Number(obj(lv.timing).minutes || lv.minutes) || 0;
     const close = parts.find((p) => p.kind === "close");
@@ -11908,8 +12089,9 @@
     const open = beats.find((b) => arr(b.prompts).length) || beats[0];
     const partOf = (q) => parts.findIndex((p) => p.id === obj(q).part);
     const go = (q, key) => h("button", {type: "button", class: "btn link lp-glance-q", "data-k": "lpg:" + key, onclick: () => lpJump(lpId(lv, "q", q.id))}, lpPlain(lv, q.q),
-      // A known question's part in the gold its chip wears below: the mark's key.
-      partOf(q) >= 0 ? h("span", {class: "lp-glance-part" + (q.known ? " lp-chip-known" : ""), title: q.known ? LP_KNOWN_MARK : null}, " Part " + (partOf(q) + 1)) : null);
+      // A known question's part with the gold dot its chip wears in the bar: the mark's key.
+      partOf(q) >= 0 ? h("span", {class: "lp-glance-part" + (q.known ? " lp-chip-known" : ""), title: q.known ? LP_KNOWN_MARK : null}, " Part " + (partOf(q) + 1),
+        q.known ? h("span", {class: "lp-dot", "aria-hidden": "true"}) : null) : null);
     const known = arr(lv.known).map((k) => qById.get(k.question)).filter(Boolean);
     const likely = known.length ? known : arr(lv.likely).map((id) => qById.get(id)).filter(Boolean).filter((q) => partOf(q) > 0).slice(0, 1);
     const asks = arr(lv.ask).slice(0, 2);
@@ -11937,52 +12119,48 @@
     // under "Each told once, from the questions it answers", with none (2026-11-10).
     const asked = new Set(qs.map((q) => q.id));
     const stories = arr(lv.stories).filter((s) => arr(s.questions).some((x) => asked.has(x)));
-    const terms = obj(lv.terms);
     const qById = new Map(qs.map((q) => [q.id, q]));
     const parts = arr(lv.parts);
     // Hidden is for one practice, never kept: after Practise, Read your prep on the morning of
     // the interview opened with every answer hidden (the review of the fixes, 2026-11-10).
     const practise = lpPractise === txt(iv.id);
-    const mode = practise ? "hidden" : pref("lp:mode", "simple") === "detailed" ? "detailed" : "simple";
-    const root = h("div", {class: "lp", "data-mode": mode});
-    const setAll = (v) => {
-      setPref("lp:mode", v === "detailed" ? v : null);
-      root.dataset.mode = v;
-      for (const b of root.querySelectorAll(".lp-ans")) lpSetMode(b, v);
-      if (v === "hidden") for (const n of root.querySelectorAll(".lp-narr.lp-shown")) n.classList.remove("lp-shown");
-    };
+    const mode = practise ? "hidden" : "both";
+    const root = h("div", {class: "lp", "data-mode": mode, "data-lead": lpLead(lv)});
     const fid = lpId(lv, "x", "find");
     const company = txt(lv.company || iv.company);
     const drafts = Number(lv.drafts) || 0;
-    const termKeys = Object.keys(terms).filter((k) => txt(obj(terms[k]).name)).sort((a, b) => txt(terms[a].name).localeCompare(txt(terms[b].name)));
     const partEls = parts.map((p, i) => {
-      const t = obj(obj(obj(lv.timing).parts)[p.id]);
       const beats = lpBeats(p);
       const hid = lpId(lv, "ph", p.id);
       const pq = arr(p.questions).map((id) => qById.get(id)).filter(Boolean);
       const asks = p.kind === "close" ? arr(lv.ask) : [];
       const hook = (b, j, x) => lpHook((b.known && qById.get(x).known === b.known ? "Full answer and follow-ups: " : "Likely to prompt: ") + lpPlain(lv, qById.get(x).q),
         lpId(lv, "q", x), p.id + ":" + j + ":" + x);
+      // A coding part says first what to say, then the problem as they set it (the engine puts it
+      // first) and its answer, then the cockpit to follow while typing, then the rest: its
+      // steps once stood 1100px tall between "Say first" and the problem's answer on a phone
+      // (the live review, 2026-11-11).
+      const ck = lpCockpit(lv, p);
+      const lead = ck && pq.length ? pq[0] : null;
+      const rest = lead ? pq.slice(1) : pq;
       return h("section", {class: "lp-part", id: lpId(lv, "p", p.id), tabindex: "-1", "aria-labelledby": hid, "data-lpp": p.id},
         h("div", {class: "lp-part-top"},
-          h("p", {class: "lp-eyebrow"}, "Part " + (i + 1) + " · about " + (Number(p.minutes) || 0) + " min" + (Number(t.talk) && !LP_ALONE.has(p.kind) ? " · you talk " + (Number(t.talk) < 1 ? "for " : "") + lpMin(t.talk) : "")),
+          h("p", {class: "lp-eyebrow"}, "Part " + (i + 1) + " · about " + (Number(p.minutes) || 0) + " min"),
           h("h3", {class: "lp-part-h", id: hid}, txt(p.title))),
         beats.length || txt(p.bridge) ? h("div", {class: "lp-narr"}, h("p", {class: "lp-lbl"}, LP_ALONE.has(p.kind) ? "Keep in mind" : "Say first"),
-          // With the answers hidden, what to say first waits behind its own Show too.
-          h("button", {type: "button", class: "btn secondary small lp-narr-show", "data-k": "lpsay:" + p.id, onclick: (e) => e.currentTarget.closest(".lp-narr").classList.add("lp-shown")}, "Show what to say"),
           beats.length ? h("ul", {class: "lp-beats"}, beats.map((b, j) => {
             const hooks = arr(b.prompts).filter((x) => qById.has(x));
             return h("li", {class: "lp-beat"},
-              b.known ? h("span", {class: "lp-badge"}, "Known question") : null,
               lpRich(lv, b.t),
               hooks.length ? h("span", {class: "lp-hooks"}, hooks.map((x) => hook(b, j, x))) : null);
           })) : null,
           txt(p.bridge) ? h("p", {class: "lp-bridge"}, "End with: ", lpRich(lv, p.bridge)) : null) : null,
-        pq.length ? h("div", {class: "lp-group"}, h("p", {class: "lp-qhead"}, "Questions likely in this part"), pq.map((q) => lpQuestion(lv, q, mode))) : null,
+        lead ? h("div", {class: "lp-group"}, h("p", {class: "lp-qhead"}, "Questions likely in this part"), lpQuestion(lv, lead, mode)) : null,
+        ck,
+        rest.length ? h("div", {class: "lp-group"}, h("p", {class: "lp-qhead"}, lead ? "Other questions likely in this part" : "Questions likely in this part"), rest.map((q) => lpQuestion(lv, q, mode))) : null,
         // The follow-ups after any story here, said once for the part: the same three stood
         // under every question told with a story (the screen review, 2026-11-11).
-        arr(p.follow).length ? h("div", {class: "lp-group lp-part-follow"}, h("p", {class: "lp-kids-h"}, "After any story here, they may ask"),
-          h("div", {class: "lp-kids"}, arr(p.follow).map((f, j) => lpFollow(lv, f, p.id + ".f" + j, 1, mode)))) : null,
+        arr(p.follow).length ? h("div", {class: "lp-group lp-part-follow"}, lpFollows(lv, p.follow, p.id + ".f", mode, "After any story here, they may ask")) : null,
         asks.length ? h("div", {class: "lp-group"}, h("p", {class: "lp-qhead"}, "Questions to ask them"), asks.map((a) => lpAsk(lv, a))) : null);
     });
     // The story bank: each story once, with the questions it answers.
@@ -11997,62 +12175,185 @@
           h("dl", {class: "lp-star"}, [["S", "The situation"], ["T", "The task"], ["A", "What you did"], ["R", "The result"]].filter(([k]) => txt(obj(s.star)[k])).map(([k, l]) => [h("dt", {}, l), h("dd", {}, cap1(txt(s.star[k])).replace(/([^.!?])$/, "$1."))])),
           answers.length ? h("p", {class: "lp-hooks"}, answers.map((x) => lpHook("Answers: " + lpPlain(lv, qById.get(x).q), lpId(lv, "q", x), "st:" + s.id + ":" + x))) : null);
       }))) : null;
-    const az = termKeys.length ? det("lp:" + txt(iv.id) + ":az", false, {class: "lp-f lp-glossary", id: lpId(lv, "x", "words"), tabindex: "-1"},
-      h("summary", {class: "lp-f-sum", "data-k": "lpaz"}, h("span", {class: "lp-f-q"}, "Every word, A to Z")),
-      h("div", {class: "lp-f-body"}, h("p", {class: "lp-az"}, termKeys.map((k) => lpTermEl(k, txt(terms[k].name)))))) : null;
-    const back = btn("Back", () => lpTermBack(root, lv), {small: true, key: "lp-term-back"});
-    back.classList.add("lp-back");
-    const panel = h("aside", {class: "lp-panel", hidden: true, role: "dialog", "aria-modal": "false", "aria-labelledby": lpId(lv, "x", "panel-t")},
-      h("div", {class: "lp-panel-top"}, back,
-        h("h3", {class: "lp-panel-title", id: lpId(lv, "x", "panel-t"), tabindex: "-1"}, ""),
-        btn("Close", () => lpTermClose(root), {small: true, key: "lp-term-close"})),
-      h("div", {class: "lp-panel-body"}));
-    // The chips: every part, then the stories, the words and the notes. A part where they are
-    // known to ask something is marked, as the call-prep page marks a slide.
-    // Its mark says why, to a screen reader and on hover, and At a glance keys it: the part a
-    // known question is in wears the same gold there (the screen review, 2026-11-11: a chip was
-    // tinted for no reason anyone could see).
-    const chip = (label, id, key, cls) => { const b = btn(label, () => lpJump(id), {small: true, key: "lpchip:" + key, aria: cls ? label + ": " + LP_KNOWN_MARK.toLowerCase() : null});
-      if (cls) { b.classList.add(cls); b.title = LP_KNOWN_MARK; } return b; };
-    const chips = parts.map((p, i) => chip((i + 1) + " " + (txt(p.short) || txt(p.title)), lpId(lv, "p", p.id), p.id, arr(p.questions).some((x) => obj(qById.get(x)).known) ? "lp-chip-known" : null))
-      .concat(stories.length ? [chip("Stories", lpId(lv, "x", "stories"), "stories")] : [], termKeys.length ? [chip("Words", lpId(lv, "x", "words"), "words")] : [], [chip("Your notes", lpId(lv, "x", "notes"), "notes")]);
+    const pop = h("div", {class: "lp-pop", role: "tooltip", id: lpId(lv, "x", "pop"), hidden: true});
+    // The chips: every part, then the stories and the notes. The one filled is the part on the
+    // screen, marked as the prep scrolls; a part where they are known to ask something wears a
+    // gold dot, its mark saying why to a screen reader and on hover, and At a glance keys it
+    // with the same dot. A chip filled gold read as "you are here" (the live review, 2026-11-11).
+    const chip = (label, id, key, known) => { const b = btn(label, () => lpJump(id), {small: true, key: "lpchip:" + key, aria: known ? label + ": " + LP_KNOWN_MARK.toLowerCase() : null});
+      if (known) { b.classList.add("lp-chip-known"); b.title = LP_KNOWN_MARK; b.appendChild(h("span", {class: "lp-dot lp-chip-dot", "aria-hidden": "true"})); } return b; };
+    const chips = parts.map((p, i) => chip((i + 1) + " " + (txt(p.short) || txt(p.title)), lpId(lv, "p", p.id), p.id, arr(p.questions).some((x) => obj(qById.get(x)).known)))
+      .concat(stories.length ? [chip("Stories", lpId(lv, "x", "stories"), "stories")] : [], [chip("Your notes", lpId(lv, "x", "notes"), "notes")]);
+    // Script first or points first, on this device: one tap, nothing redrawn.
+    const leadBtn = h("button", {type: "button", class: "btn link lp-lead", "data-k": "lp-lead"});
+    const leadSay = () => { leadBtn.textContent = root.dataset.lead === "cues" ? "Script first" : "Points first"; };
+    leadBtn.onclick = () => { const v = root.dataset.lead === "cues" ? "script" : "cues"; root.dataset.lead = v; setPref("lp:lead", v); leadSay(); };
+    leadSay();
+    const glanceEl = lpGlance(iv, lv, qById);
+    const notesEl = lpNotes(lv);
+    // The bar stays at the top while the prep scrolls under it: find with the order of each
+    // answer beside it, then the parts, nothing folded and nothing to open first (the
+    // maintainer, 2026-11-11). The order never sits after the chips, where a row that scrolls
+    // sideways hid it past the screen's edge (the live review, 2026-11-11).
     put(root,
       h("div", {class: "lp-head"},
-        h("p", {class: "lp-lede"}, txt(lv.shape_name) + (txt(lv.role) ? " for the " + txt(lv.role) + " role" : "") + ", " + lpLength(lv.minutes) + " in " + plural(parts.length, "part", "parts") + ".",
-          drafts ? " " + (drafts === 1 ? "One answer is a draft" : drafts + " answers are drafts") + " you asked for." : ""),
         acts,
-        lpGlance(iv, lv, qById),
-        h("nav", {class: "lp-chips", "aria-label": "The parts of the interview, and your lists"}, chips),
-        h("div", {class: "lp-global"}, h("span", {class: "lp-lbl", "aria-hidden": "true"}, "All answers"), lpSwitch("All answers", mode, setAll, "lp-all", "lp-all", true),
-          // Search, and every fold open or shut, folded under one row: the first screen is what
-          // to say, not the controls (the UX review, 2026-11-10, U-5).
-          det("lp:" + txt(iv.id) + ":tools", false, {class: "lp-toolfold"},
-            h("summary", {class: "lp-toolfold-sum", "data-k": "lp-tools"}, "Tools"),
-            h("div", {class: "lp-tools"},
-              h("label", {class: "lp-search", for: fid}, h("span", {class: "sr-only"}, "Search the questions and answers"),
-                h("input", {type: "search", id: fid, "data-k": "lp-find", placeholder: "Search questions and answers", autocomplete: "off", oninput: (e) => lpSearch(root, e.target.value)})),
-              btn("Open all", () => { for (const d of root.querySelectorAll(".lp-part details")) d.open = true; }, {small: true, key: "lp-open-all"}),
-              btn("Close all", () => { for (const d of root.querySelectorAll("details:not(.lp-toolfold)")) d.open = false; }, {small: true, key: "lp-close-all"})))),
-        h("p", {class: "lp-found", "aria-live": "polite", hidden: true}, "")),
-      det("lp:" + txt(iv.id) + ":timing", false, {class: "lp-f lp-timing", "aria-labelledby": lpId(lv, "x", "time-h")},
-        h("summary", {class: "lp-f-sum", "data-k": "lp-timing"}, h("span", {class: "lp-f-q", id: lpId(lv, "x", "time-h")}, "Timing: " + lpTimeLine(lv, parts))),
-        h("div", {class: "lp-f-body"}, h("p", {}, lpTiming(lv, parts)))),
-      partEls, storyEls, az, lpNotes(lv), panel,
-      h("div", {class: "lp-scrim", hidden: true, "aria-hidden": "true", onclick: () => lpTermClose(root)}),
-      h("p", {class: "lp-also prep-live"}, "This is for before and after the interview: Claude doesn't join, listen in or record it."));
-    // One listener for every term, on the view's own root: inside the panel a term goes deeper,
-    // with Back; anywhere else it starts afresh. In a summary it never opens or shuts the fold.
+        drafts ? h("p", {class: "lp-drafts"}, (drafts === 1 ? "One answer is a draft" : drafts + " answers are drafts") + " you asked for.") : null),
+      h("div", {class: "lp-bar", role: "search", "aria-label": lpTimeLine(lv, parts)},
+        h("div", {class: "lp-find-row"},
+          h("label", {class: "lp-search", for: fid}, h("span", {class: "sr-only"}, "Find what they asked"),
+            h("input", {type: "search", id: fid, "data-k": "lp-find", placeholder: "They asked...", autocomplete: "off", enterkeyhint: "search", oninput: (e) => { lpSearch(root, e.target.value); lpSeen(); }})),
+          leadBtn),
+        h("p", {class: "lp-found", "aria-live": "polite", hidden: true}, ""),
+        // Scrolled sideways, its near end fades too, so a chip cut at the edge reads as more.
+        h("nav", {class: "lp-chips", "aria-label": "The parts of the interview, and your lists", onscroll: (e) => e.currentTarget.classList.toggle("lp-scrolled", e.currentTarget.scrollLeft > 0)}, chips)),
+      glanceEl,
+      partEls, storyEls, notesEl, pop, lpLife(lv),
+      h("p", {class: "lp-also prep-live"}, "Claude doesn't join, listen or record. This page is just for you to look at."));
+    // A jump lands under the bar, not behind it: every target's scroll margin is the bar's real
+    // height, kept as the bar grows or wraps (the live review, 2026-11-11).
+    const barEl = root.querySelector(".lp-bar");
+    const barH = () => { if (!barEl) return; root.style.setProperty("--lp-bar-h", barEl.offsetHeight + "px"); if (!barEl.classList.contains("lp-tight")) root._barFull = barEl.offsetHeight; };
+    barH();
+    if (barEl && window.ResizeObserver) new ResizeObserver(barH).observe(barEl);
+    // As the prep scrolls, the one thing that changes by itself: the chip of the part on the
+    // screen is marked, kept in view in its own row. On a phone, once the prep is read under
+    // the bar, find, the order and the chips are one row (the live review, 2026-11-11: the
+    // parts that stay took about 30% of the screen); the bar keeps its room in the flow, so
+    // nothing under it moves, and it is whole again near the top and while find is in use.
+    const marks = partEls.map((el, i) => [el, chips[i]]).concat(storyEls ? [[storyEls, chips[parts.length]]] : [], [[notesEl, chips[chips.length - 1]]]);
+    const phone = () => !!(window.matchMedia && window.matchMedia("(max-width: 759px)").matches);
+    const tight = (on) => {
+      if (!barEl || on === barEl.classList.contains("lp-tight")) return;
+      barEl.style.marginBottom = "";
+      const full = barEl.offsetHeight;
+      barEl.classList.toggle("lp-tight", on);
+      if (on) { root._barTight = barEl.offsetHeight; barEl.style.marginBottom = "calc(" + Math.max(0, full - root._barTight) + "px - var(--lp-bar-pull))"; }
+    };
+    // A jump on a phone lands under the bar as it will be once there, one row: landing under
+    // the whole bar left a part's heading short of the bar, and the part before it marked.
+    root._toJump = () => {
+      const find = root.querySelector(".lp-search input");
+      if (!barEl || !phone() || (find && find.value)) return;
+      if (!root._barTight) { const was = barEl.classList.contains("lp-tight"); barEl.classList.add("lp-tight"); root._barTight = barEl.offsetHeight; if (!was) barEl.classList.remove("lp-tight"); }
+      root.style.setProperty("--lp-bar-h", root._barTight + "px");
+    };
+    let raf = 0;
+    const seen = () => {
+      raf = 0;
+      const sc = root.closest(".detail-body");
+      if (!sc || !barEl) return;
+      const find = root.querySelector(".lp-search input");
+      const sr = sc.getBoundingClientRect();
+      const under = sc.scrollTop + (root._barFull || barEl.offsetHeight) - (glanceEl.getBoundingClientRect().top - sr.top + sc.scrollTop);
+      if (!phone() || document.activeElement === find || (find && find.value)) tight(false);
+      else if (under > 48) tight(true);
+      else if (under < 8) tight(false);
+      // The part whose heading was last scrolled up to the bar, and the first part until the
+      // next one's heading gets there: the top of the prep, At a glance and all, is read
+      // before Part 1 and nothing else (the live review, 2026-11-11: at the top "3 The
+      // problem" looked filled and, with Part 1 filling the screen, no chip was).
+      const line = barEl.getBoundingClientRect().bottom + 24;
+      let cur = null;
+      for (const [el, c] of marks) {
+        if (!el || el.hidden) continue;
+        if (!cur) cur = c;
+        const top = el.querySelector(".lp-part-top") || el;
+        if (top.getBoundingClientRect().top <= line) cur = c;
+      }
+      // At the end of the prep the last parts can never be scrolled up to the bar: there the
+      // one tapped is the one marked if it is in view (Your notes, tapped, filled Stories), else
+      // the last one in view. A tapped part whose heading did reach the bar has done its work,
+      // and one left behind once the prep is scrolled away from its end is forgotten.
+      const tapped = root._tapped ? marks.find(([el]) => el && el.contains(root._tapped)) : null;
+      const end = sc.scrollTop + sc.clientHeight >= sc.scrollHeight - 2;
+      if (tapped && (tapped[0].querySelector(".lp-part-top") || tapped[0]).getBoundingClientRect().top <= line) root._tapped = null;
+      else if (tapped && !end && root._tappedEnd) root._tapped = null;
+      if (end) {
+        const foot = (root.querySelector(".lp-life") || sc).getBoundingClientRect().top;
+        const seenNow = marks.filter(([el]) => el && !el.hidden && el.getBoundingClientRect().top < foot && el.getBoundingClientRect().bottom > line);
+        const pick = tapped && seenNow.includes(tapped) ? tapped : seenNow[seenNow.length - 1];
+        if (pick) cur = pick[1];
+        if (tapped) root._tappedEnd = true;
+      }
+      for (const [, c] of marks) { if (c === cur) c.setAttribute("aria-current", "true"); else c.removeAttribute("aria-current"); }
+      const row = cur && cur.parentElement;
+      if (row && row.scrollWidth > row.clientWidth) {
+        const a = cur.offsetLeft - row.offsetLeft;
+        if (a < row.scrollLeft || a + cur.offsetWidth > row.scrollLeft + row.clientWidth) row.scrollLeft = Math.max(0, a - 8);
+      }
+    };
+    const lpSeen = () => { if (!raf) raf = requestAnimationFrame(seen); };
+    const watch = (n) => {
+      const sc = root.closest(".detail-body");
+      if (!sc) { if (n < 60) requestAnimationFrame(() => watch(n + 1)); return; }
+      const on = () => {
+        if (!root.isConnected) { sc.removeEventListener("scroll", on); return; }
+        // A word's box waiting to open on a resting mouse never opens once the text moves.
+        if (root._popWait) { clearTimeout(root._popOn); root._popWait = null; }
+        lpSeen();
+      };
+      sc.addEventListener("scroll", on, {passive: true});
+      lpSeen();
+    };
+    requestAnimationFrame(() => watch(0));
+    // The terms, on the view's own root. A mouse moved onto a word and kept there 700ms opens it;
+    // a word the text scrolled under a mouse left resting never does, nor one passed over while
+    // reading (the live review, 2026-11-11: boxes popped open mid-read). Leaving both the word
+    // and the box closes it a moment later; focus opens it at once; a tap or a click opens it
+    // and keeps it until Esc, a tap outside or a second tap.
+    const hover = !!(window.matchMedia && window.matchMedia("(hover: hover) and (pointer: fine)").matches);
+    const termOf = (e) => { const t = e.target && e.target.closest ? e.target.closest(".lp-term") : null; return t && root.contains(t) ? t : null; };
+    const leave = () => { if (root._popPinned) return; clearTimeout(root._popOff); root._popOff = setTimeout(() => lpPopClose(root), 250); };
     root.addEventListener("click", (e) => {
-      const b = e.target && e.target.closest ? e.target.closest(".lp-term") : null;
-      if (!b || !root.contains(b)) return;
+      const t = termOf(e);
+      if (!t) {
+        if (!(e.target.closest && e.target.closest(".lp-pop"))) lpPopClose(root);
+        return;
+      }
       e.preventDefault();
       e.stopPropagation();
-      lpTerm(root, lv, b.dataset.term, !!b.closest(".lp-panel"));
+      if (root._popEl === t && (root._popPinned || !hover)) lpPopClose(root);
+      else lpPop(root, lv, t, true);
     });
+    if (hover) {
+      let last = null;
+      root.addEventListener("pointermove", (e) => {
+        if (e.pointerType && e.pointerType !== "mouse") return;
+        const moved = !last || Math.abs(e.clientX - last[0]) + Math.abs(e.clientY - last[1]) > 2;
+        last = [e.clientX, e.clientY];
+        const t = termOf(e);
+        if (t) {
+          clearTimeout(root._popOff);
+          if (moved && root._popEl !== t && root._popWait !== t) {
+            clearTimeout(root._popOn);
+            root._popWait = t;
+            root._popOn = setTimeout(() => { root._popWait = null; lpPop(root, lv, t, false); }, 700);
+          }
+        } else if (e.target.closest && e.target.closest(".lp-pop")) clearTimeout(root._popOff);
+      });
+      root.addEventListener("mouseout", (e) => {
+        if (!termOf(e) && !(e.target.closest && e.target.closest(".lp-pop"))) return;
+        const to = e.relatedTarget;
+        if (to && to.closest && (to.closest(".lp-pop") || to === root._popEl)) return;
+        clearTimeout(root._popOn);
+        root._popWait = null;
+        leave();
+      });
+    }
+    root.addEventListener("focusin", (e) => { if (e.target && e.target.matches && e.target.matches(".lp-search input")) lpSeen(); const t = termOf(e); if (t && root._popEl !== t) lpPop(root, lv, t, false); });
+    root.addEventListener("focusout", (e) => { if (e.target && e.target.matches && e.target.matches(".lp-search input")) lpSeen(); if (termOf(e) && !root._popPinned) leave(); });
     root.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && lpTermClose(root)) { e.preventDefault(); e.stopPropagation(); return; }
-      const t = (e.key === "Enter" || e.key === " ") && e.target && e.target.closest ? e.target.closest(".lp-term") : null;
-      if (t && root.contains(t)) { e.preventDefault(); e.stopPropagation(); lpTerm(root, lv, t.dataset.term, !!t.closest(".lp-panel")); }
+      if (e.key === "Escape" && lpPopClose(root)) { e.preventDefault(); e.stopPropagation(); return; }
+      const life = root.querySelector(".lp-life");
+      if (e.key === "Escape" && life && life._close()) { e.preventDefault(); e.stopPropagation(); return; }
+      const field = e.target && e.target.closest ? e.target.closest("input, textarea, select, [contenteditable]") : null;
+      const find = root.querySelector(".lp-search input");
+      // Esc in find clears it; "/" anywhere else in the prep goes to find.
+      if (e.key === "Escape" && field && field === find && find.value) { e.preventDefault(); e.stopPropagation(); find.value = ""; lpSearch(root, ""); return; }
+      if (e.key === "/" && !field && find) { e.preventDefault(); find.focus(); return; }
+      const t = (e.key === "Enter" || e.key === " ") ? termOf(e) : null;
+      if (t) { e.preventDefault(); e.stopPropagation(); lpPop(root, lv, t, true); }
     });
     if (practise) {
       lpPractise = null;
@@ -12113,6 +12414,7 @@
     const prep = obj(obj(p.call).prep);
     return h("div", {class: "d-stack d-person"},
       h("p", {}, stateWord(w, tone === "plain" ? null : tone), txt(p.came_through) ? h("span", {class: "muted"}, " · Came through " + txt(p.came_through)) : null),
+      emailLine(p.id, "pemail:" + p.id),
       resumeForThem(p, "d"),
       referralLine(p),
       asked ? h("p", {class: "d-next"}, h("strong", {}, "Asked for " + asked.what), personWhen(p) ? ", " + personWhen(p).day + "." : ".") :
@@ -14688,7 +14990,63 @@
         btn("", () => { workSeenAt.set(id, 0); scheduleRender(); }, {kind: "quiet icon-only", small: true, icon: "bin", key: "wput:" + id, aria: "Put away: " + txt(w.title)})),
       links.length ? h("p", {class: "wc-links"}, links) : null);
   }
+  // ------------------------------------------------------------------ making it downloadable
+
+  // Putting a resume's file in the page's store is a stage of making it, never an item of its
+  // own: "Resume for <name>" said ready and finished while "Make the files downloadable: the
+  // resume for <name>" still ran beside it, and the resume could not be had (issue #237). The
+  // files work names the work whose finish queued it (`part_of`, tools/page_db.py
+  // queue_files); one queued before it did is matched to the resume for the same person.
+  function filesParent(w) {
+    if (txt(obj(w).kind) !== "files") return "";
+    const named = txt(w.part_of);
+    if (named) return workDoc(named) ? named : "";
+    const who = resumeContact(w);
+    if (!who) return "";
+    const asked = tms(w.asked_at) || 0;
+    const made = [...allWork()].filter(([, x]) => txt(x.kind) === "resume_for_contact" && txt(x.status) === "done" && resumeContact(x) === who &&
+      (tms(x.finished_at || x.done_at) || 0) <= asked + 60000)
+      .sort((a, b) => (tms(b[1].finished_at || b[1].done_at) || 0) - (tms(a[1].finished_at || a[1].done_at) || 0));
+    return made.length ? made[0][0] : "";
+  }
+  // The files part still going: waiting, running, or finished but its file not on the page yet.
+  function filesGoing(fw) {
+    const st = txt(fw.status) || "queued";
+    return ACTIVE.has(st) || (st === "done" && notOnPageYet(fw));
+  }
+  // The finished work whose file is still being made downloadable: its files part, [id, work].
+  function makingDownloadable(id, w) {
+    if (txt(obj(w).status) !== "done") return null;
+    return [...allWork()].find(([, x]) => filesParent(x) === id && filesGoing(x)) || null;
+  }
+  // The resume made for this person, still being made downloadable: its files part, or null.
+  function downloadableFor(contact) {
+    if (!txt(contact)) return null;
+    return [...allWork()].find(([, x]) => txt(x.kind) === "files" && resumeContact(x) === txt(contact) && filesGoing(x)) || null;
+  }
+  // The one card for a resume still being made downloadable: its title, "On its way", and its
+  // stage "Making it downloadable" with the files part's own clock and Stop Claude. Its clock
+  // and phase are the files part's (`data-work`), so the card moves on when that does.
+  function downloadableCard(id, w, fid, fw) {
+    const fs = workSay(fid, fw);
+    const titleId = "w-" + seg(id);
+    const st = txt(fw.status) || "queued";
+    const waiting = st === "queued" && !fs.picked;
+    const state = st === "done" ? "putting it on your page" : waiting ? lc1(txt(fs.label) || "waiting for Claude") : "";
+    const clock = !waiting && st !== "done" ? h("span", {class: "wc-clock muted", "data-step": "1"}, clockText(stepSeconds(fs.v, st === "queued", undefined, fs.p.sentAt))) : null;
+    const pl = workPlace(w);
+    const there = pl.tab ? tabLink(pl.tab, pl.item) : null;
+    return card("article", {class: "work-card st-running", "data-work": fid, "data-part-of": id, "data-phase": phaseOf(fw, fs.p), "data-fold": String(workFolded(fid, fw)),
+      "aria-labelledby": titleId, "data-item": "work:" + id},
+      h("div", {class: "wc-head"}, h("span", {class: "spin", "aria-hidden": "true"}),
+        h("h3", {id: titleId, class: "wc-title"}, workName(w) || "Work"), stateWord("On its way", null)),
+      h("p", {class: "wc-now", role: "status"}, "Making it downloadable" + (state ? " · " + state : ""), clock),
+      h("div", {class: "wc-actions"}, there, ACTIVE.has(st) && st !== "needs_you" && !fs.p.stopping ? stopClaude(txt(fw.title), () => stopWork(fid), "stop:" + fid) : null));
+  }
   function workCard(id, w) {
+    // Made, and its file still being put on the page: one card, on its way (#237).
+    const part = makingDownloadable(id, w);
+    if (part) return downloadableCard(id, w, part[0], part[1]);
     const ws = workSay(id, w);
     // A change whose new words are not on the page yet says so, never "Finished" (#230).
     const coming = ws.st === "done" && tweakComing(w);
@@ -14725,10 +15083,16 @@
     const stepClock = (picked || waking || ((st === "running" || st === "claimed") && !slow)) && !p.stopping && !(Number(obj(w.count).total) > 0);
     if (now1) put(cardEl, h("p", {class: "wc-now" + (st === "failed" ? " tone-bad" : st === "needs_you" ? " tone-warn" : "")}, now1,
       stepClock ? h("span", {class: "wc-clock muted", "data-step": "1"}, clockText(stepSeconds(ws.v, st === "queued", undefined, p.sentAt))) : null));
-    if (ACTIVE.has(st)) {
+    // Past its estimate, no bar: its clock and "so far" say how long it has run (#238).
+    if (ACTIVE.has(st) && !((st === "running" || st === "claimed") && p.past)) {
       put(cardEl, h("div", {class: "bar" + (spinning ? " is-running" : ""), role: "progressbar", "aria-labelledby": titleId, "aria-valuemin": "0", "aria-valuemax": "100",
         "aria-valuenow": String(p.pct), "aria-valuetext": barText(p)}, h("span", {class: "fill", style: "width:" + p.pct + "%"})));
     }
+    // A big job says it runs in a chat of its own and waits for no light work, unless it is in
+    // line behind other big jobs, which its own line names (issue #238). Above the time line,
+    // so Stop Claude keeps its place at the end of the clock's line.
+    if (ACTIVE.has(st) && st !== "needs_you" && !ws.inLine && !toComputer && !obj(w.computer_session).id && ownChatWords(w, st === "queued"))
+      put(cardEl, h("p", {class: "wc-where small muted", "data-where": "own-chat"}, cap1(ownChatWords(w, st === "queued").replace(/^,\s*/, "")) + ", so it does not wait for other work."));
     put(cardEl, h("p", {class: "wc-time", "data-time": "1"}, ACTIVE.has(st) || TERMINAL.has(st) ? timeText(w, p, stepClock && !!now1 && sameSpan(ws.v, p)) : ""));
     // Started in a chat on their computer (tools/computer.py started): said while it runs, in
     // the engine's words, so the chat that appears there is no surprise (2026-11-10).
@@ -14817,7 +15181,7 @@
   // button that started it; none once it runs past its time or may have stopped (the screen
   // review, 2026-11-11: "about 5 min left", "About 8 minutes left" and "38 min" for one search).
   function leftWords(p) {
-    if (!p || p.status !== "running" && p.status !== "claimed" || p.lapsed || p.over || p.stageOver) return "";
+    if (!p || p.status !== "running" && p.status !== "claimed" || p.lapsed || p.over || p.stageOver || p.past) return "";
     return p.leftS < 60 ? "under a minute left" : "about " + dur(p.leftS).replace(/^about /, "") + " left";
   }
   function timeText(w, p, same) {
@@ -14833,7 +15197,7 @@
     const left = leftWords(p);
     // The step's own clock counts the same time while its step is the whole run: "Getting
     // started · 1m 59s" over "2 min so far" said it twice (the maintainer, 2026-11-04).
-    if (p.lapsed || p.over || p.stageOver) return same ? "" : so;
+    if (p.lapsed || p.over || p.stageOver || p.past) return same ? "" : so;
     return same ? left : so + " · " + left;
   }
   // Does the step's clock on this card count the same span as its "so far"? Then one says it.
@@ -14877,6 +15241,7 @@
       // Finished answers group too, as "5 answers done" (the maintainer, 2026-11-05: "we already
       // bulk some running tasks, why arent these ones grouped too?"); one waiting is a chat's.
       if ((st !== "queued" && st !== "done") || txt(w.kind) === "update" || (txt(w.kind) === "talk" && st !== "done")) continue;
+      if (st === "done" && makingDownloadable(id, w)) continue;
       if (st === "queued" && workSay(id, w).picked) continue;
       // Finished and folded away is grouped too, under "N finished": fifty-two answers listed one
       // card each when it was opened (the maintainer, 2026-11-05).
@@ -14927,8 +15292,41 @@
         done ? (notes ? tabLink("contacts", null) : null)
           : stopClaude(n + " " + words[1], () => { for (const [id] of list) stopWork(id); }, "run-stop:" + gid)));
   }
+  // The queue, in one small strip over the cards: what runs now, and what waits next in the
+  // order Claude takes it (tools/page_db.py next_item: urgent first, then a question or an
+  // update, then a big job, which starts in a chat of its own and waits for no light work, then
+  // the rest as asked), each big job said as running in a chat of its own. The person asked for
+  // several things in a row and could not tell what was queued, in what order, or why a resume
+  // seemed to sit behind small changes (issue #238).
+  const FIRST_KINDS = new Set(["talk", "update", "republish"]);
+  function queueRank(w) { return FIRST_KINDS.has(txt(w.kind)) ? 0 : HEAVY_KINDS.has(txt(w.kind)) && whereTo() === "cloud" ? 1 : 2; }
+  function queueOrder(a, b) {
+    return (Number(b[1].priority) || 0) - (Number(a[1].priority) || 0) || queueRank(a[1]) - queueRank(b[1]) || txt(a[1].asked_at).localeCompare(txt(b[1].asked_at));
+  }
+  function ownChatWords(w, waiting) {
+    if (!HEAVY_KINDS.has(txt(w.kind)) || txt(w.to) === "computer") return "";
+    if (whereTo() === "computer") return waiting ? ", starts on its own" : ", on its own";
+    return waiting ? ", starts in a chat of its own" : ", in a chat of its own";
+  }
+  function queueStrip(active) {
+    const run = active.filter(([, w]) => w.status === "running" || w.status === "claimed");
+    const wait = active.filter(([, w]) => txt(w.status || "queued") === "queued" && !w.stop_asked).sort(queueOrder);
+    if (run.length + wait.length < 2) return null;
+    const name = (w) => clipWords(workName(w) || "Work", 60).replace(/[.\s]+$/, "");
+    // A resume's files part is said as the resume, making it downloadable, never by its own
+    // name (#237).
+    const said = (w, waiting) => { const par = filesParent(w); return par ? name(workDoc(par)) + ", making it downloadable" : name(w) + ownChatWords(w, waiting); };
+    return h("div", {class: "work-queue small", "data-k": "work-queue", role: "status"},
+      run.length ? h("p", {"data-queue": "now"}, h("strong", {}, "Running now: "), run.map(([, w]) => said(w, false)).join("; ") + ".") : null,
+      wait.length ? h("p", {"data-queue": "next"}, h("strong", {}, "Waiting, in this order: "), wait.map(([, w], i) => (wait.length > 1 ? (i + 1) + ". " : "") + said(w, true) + ".").join(" ")) : null);
+  }
   function workPanel(where) {
-    const all = [...allWork()].filter(([, w]) => !TERMINAL.has(txt(w.status)) || now() - finishedAt(w) < 86400000);
+    // A resume's files part is a stage of the resume's own card, never a card of its own; one
+    // that failed or was stopped keeps its card, with Try again (#237).
+    const all = [...allWork()].filter(([, w]) => (!TERMINAL.has(txt(w.status)) || now() - finishedAt(w) < 86400000) &&
+      !(filesParent(w) && !["failed", "stopped"].includes(txt(w.status))));
+    const makingDl = (id, w) => !!makingDownloadable(id, w);
+    const stOf = ([id, w]) => (makingDl(id, w) ? "running" : w.status);
     const runs = workRuns(all);
     const items = all.filter(([id]) => !runs.members.has(id)).concat(runs.cards);
     const limit = limitHit();
@@ -14963,15 +15361,16 @@
       limit ? h("div", {class: "banner tone-warn"}, h("p", {}, "Claude has reached your plan's usage limit. Running work waits until it resets; nothing retries by itself."),
         active.length ? btn("Stop everything", () => { for (const [id] of active) stopWork(id); }, {small: true, key: "pause-all"}) : null) : null,
       limit ? null : quietBanner(active),
+      queueStrip(active),
       inChat ? h("article", {class: "work-card st-running", "data-chat-busy": "1"},
         h("div", {class: "wc-head"}, h("span", {class: "spin", "aria-hidden": "true"}), h("h3", {class: "wc-title"}, "Claude is busy in your chat: " + inChat))) : null,
       helperStartingCard(),
       tapCards(),
-      listView("work", {items, name: "work", live: ([, w]) => ACTIVE.has(txt(w.status) || "queued"),
-        fold: ([id, w]) => (w.run ? !!w.folded : workFolded(id, w)),
+      listView("work", {items, name: "work", live: ([id, w]) => ACTIVE.has(txt(w.status) || "queued") || (!w.run && makingDl(id, w)),
+        fold: ([id, w]) => (w.run ? !!w.folded : !makingDl(id, w) && workFolded(id, w)),
         foldLabel: (k) => k + " finished",
-        sort: (a, b) => ((WORK_ORDER[a[1].status] === undefined ? 3 : WORK_ORDER[a[1].status]) - (WORK_ORDER[b[1].status] === undefined ? 3 : WORK_ORDER[b[1].status])) ||
-          (TERMINAL.has(a[1].status) ? finishedAt(b[1]) - finishedAt(a[1]) : txt(a[1].asked_at).localeCompare(txt(b[1].asked_at))),
+        sort: (a, b) => ((WORK_ORDER[stOf(a)] === undefined ? 3 : WORK_ORDER[stOf(a)]) - (WORK_ORDER[stOf(b)] === undefined ? 3 : WORK_ORDER[stOf(b)])) ||
+          (TERMINAL.has(stOf(a)) ? finishedAt(b[1]) - finishedAt(a[1]) : txt(a[1].asked_at).localeCompare(txt(b[1].asked_at))),
         render: ([id, w]) => (w.run ? workRunCard(id, w) : workCard(id, w)), empty: () => null}));
   }
   // One banner over Claude's work for every job with no word from Claude for a while, with the
@@ -15101,7 +15500,9 @@
     const helperGoing = helperAsked() ? 1 : 0;
     if (!act.length && !recent.length && !helperGoing && !inChat) return null;
     // One thing running says what it is ("Finding jobs"); waiting work is counted after it.
-    const one = going === 1 ? txt((act.find(([, w]) => w.status !== "queued" && w.status !== "needs_you") || [null, {title: "Busy in your chat"}])[1].title) : "";
+    // A resume's files part is named as the resume it is part of (#237).
+    const runOne = going === 1 ? (act.find(([, w]) => w.status !== "queued" && w.status !== "needs_you") || [null, {title: "Busy in your chat"}])[1] : null;
+    const one = runOne ? txt(filesParent(runOne) ? obj(workDoc(filesParent(runOne))).title : runOne.title) : "";
     // A phone's top bar says the counts, waiting included: "3 running" hid three more that
     // were waiting (the audit, 2026-11-03), so there a name gives way to the count.
     const narrow = !wide();

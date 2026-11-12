@@ -70,7 +70,9 @@ def test_the_id_the_wake_prints_finds_the_item_the_read_saved(t):
     assert "No such file" not in json.dumps(got)
     (merge,) = [s for s in got["steps"] if "tweak.py merge" in s]
     assert "<this item>" not in merge
-    assert f'"{t.dump}" --work "{WID}" --round {got["round"]}' in merge
+    # Every path quoted: under a user folder with a space (Windows CI's "Zoë Quillfeather",
+    # 2026-11-11) a bare round folder split in two and the merge was refused as printed.
+    assert f'"{t.dump}" --work "{WID}" --round "{got["round"]}"' in merge
     # The merge runs as printed: the item is found again, whatever the redraft then says.
     again = _run(t, shlex.split(merge.split("python3 tools/tweak.py ", 1)[1]))
     assert "No work item" not in again.get("summary", "")

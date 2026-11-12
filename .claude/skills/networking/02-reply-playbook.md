@@ -7,7 +7,8 @@ This file is the reasoning behind each one.
 
 | Their message | The correct move | Length |
 |---|---|---|
-| **Asks for the resume, or gives an email** | Send it promptly, attached, with a short context paragraph. Reply once on the original channel to say it is sent. Do not wait to be asked twice. | Email: substantial. Thread reply: one line. |
+| **Asks for the resume, a CV or their background (or gives an email while a role is being discussed)** | Send it promptly, attached, with a short context paragraph. Reply once on the original channel to say it is sent. Do not wait to be asked twice. | Email: substantial. Thread reply: one line. |
+| **Gives an email, or "email me", to set up a call or a chat (`send_email`)** | Write the email: a subject line, a short note setting up the conversation with two specific times. Nothing attached: an address is never a resume ask. | Short. |
 | **Low effort: "sure", "absolutely", a thumbs up** | Not enthusiasm, not rejection. Move it forward with one concrete, low-friction step: offer the resume, or propose two specific times. | One or two sentences. Never a paragraph in reply to one word. |
 | **Detailed and generous** | Engage with the substance. Pick the two or three most useful specifics. Ask one genuine follow-up if there is a real question. | Match theirs, roughly. |
 | **Rejection, "not my market", "not hiring"** | Gracious, short close. One low-cost ask ("anyone in that space worth speaking to?") only if they engaged genuinely. | Two or three sentences. |
@@ -21,9 +22,11 @@ This file is the reasoning behind each one.
 
 ## Precedence
 
-An email address inside a long, substantive reply is **still `send_resume`**. The
-action is the point; the substance gets engaged with in the email itself. The
-classifier documents this ordering, and it is the one people get wrong by hand.
+An email address inside a long, substantive reply is **still an email to write**
+(`send_email`), and `send_resume` when their words ask for the resume, a CV or their
+background, or a role is being discussed. The action is the point; the substance gets
+engaged with in the email itself. An address alone never sends a resume. The classifier
+documents this ordering, and it is the one people get wrong by hand.
 
 ## The failure mode to watch
 

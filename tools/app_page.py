@@ -429,10 +429,12 @@ def js_parts() -> list[tuple[str, str]]:
                     continue
                 parts.append((_piece_name(name, piece, not parts or parts[-1][2] != name),
                               text, name))
-        if len(parts) <= room or part_cap >= PART_MAX:
+        if len(parts) <= room or part_min >= PART_MAX:
             break
-        # More files than a version may hold with the rest: bigger parts (FILES_MAX).
-        part_min, part_cap = part_min * 2, min(part_cap * 2, PART_MAX)
+        # More files than a version may hold with the rest: bigger parts (FILES_MAX), the
+        # smallest a part may end at as well as the biggest, both up to PART_MAX: a cap at
+        # its most with the floor still low left 280 parts of a page four times today's.
+        part_min, part_cap = min(part_min * 2, PART_MAX), min(part_cap * 2, PART_MAX)
     return _named("js", [(n, '"use strict";\n' + t + "\n") for n, t, _sec in parts], "js")
 
 

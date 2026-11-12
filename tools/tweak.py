@@ -2054,7 +2054,7 @@ def _stage_interview(work: dict, where: dict, p: dict) -> dict:
                 f"1. Write the answers {pfile} names into {where['file']}, on this session's "
                 "own model (never a smaller one).",
                 f"2. python3 tools/interview_pack.py check \"{company}\"",
-                f"3. python3 tools/tweak.py merge {THIS_ITEM} --round {round_dir}",
+                f"3. python3 tools/tweak.py merge {THIS_ITEM} --round \"{round_dir}\"",
             ] + (["The person's words went on the reaction list: record or skip them "
                   "(learned.py record or skip, --via \"page tweak\") before the turn ends."]
                  if p["words"] else [])}
@@ -2125,7 +2125,7 @@ def _stage_message(work: dict, where: dict, p: dict, why: str = "") -> dict:
                        "from the packet, then the message checks run.",
             "steps": [f"1. Write the message from {pfile} into {round_dir}/message.txt, on "
                       "this session's own model, with the networking skill.",
-                      f"2. python3 tools/tweak.py merge {THIS_ITEM} --round {round_dir}"]
+                      f"2. python3 tools/tweak.py merge {THIS_ITEM} --round \"{round_dir}\""]
             + (["The person's words went on the reaction list: record or skip them "
                 "(learned.py record or skip, --via \"page tweak\") before the turn ends."]
                if p["words"] else []),
@@ -2258,9 +2258,9 @@ def stage(work: dict, where: dict, p: dict, today: dt.date, why: str = "") -> di
                 "session's own model (never a smaller one).",
                 f"2. The model audit of that draft: the grounding-auditor, writing "
                 f"{round_dir}/model_audit_{slug}.json.",
-                f"3. python3 tools/stage_picks.py audit {round_dir}",
-                f"4. python3 tools/stage_picks.py assemble {round_dir}",
-                f"5. python3 tools/tweak.py merge {THIS_ITEM} --round {round_dir}",
+                f"3. python3 tools/stage_picks.py audit \"{round_dir}\"",
+                f"4. python3 tools/stage_picks.py assemble \"{round_dir}\"",
+                f"5. python3 tools/tweak.py merge {THIS_ITEM} --round \"{round_dir}\"",
             ] + (["The person's words went on the reaction list: record or skip them "
                   "(learned.py record or skip, --via \"page tweak\") before the turn ends."]
                  if p["words"] else []),

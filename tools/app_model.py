@@ -366,6 +366,20 @@ def _day_words(m) -> str:
     return f"{d.strftime('%a')} {d.day} {d.strftime('%b')}"
 
 
+def said_days(text, today: dt.date | None = None) -> str:
+    """`text` with each ISO date in it said in words, "15 Oct", with the year only when it is
+    not `today`'s: how a contact was found ("leaders search, 2026-10-15") read as a date on To
+    do, never as 2026-10-15 beside "you wrote 15 Oct" (issue 242)."""
+    def said(m):
+        try:
+            d = dt.date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        except ValueError:
+            return m.group(0)
+        out = f"{d.day} {d.strftime('%b')}"
+        return out if today is not None and d.year == today.year else f"{out} {d.year}"
+    return _ISO_DAY.sub(said, str(text or ""))
+
+
 def plain_action(text) -> str:
     """A contact's next step in plain words: the app's own wording turned into a short line,
     never a command; anything the person wrote is shown as they wrote it, with a date read as
@@ -2729,9 +2743,13 @@ def last_words(ctx, ids) -> dict:
     return out
 
 
-def reach_docs(contacts, ids) -> dict:
+def reach_docs(contacts, ids, by_contact=None) -> dict:
     """{contact id: {linkedin, email}} for the people the page has a message or a row for:
-    the owner-only documents `app.py view` writes, read by the page only for its owner."""
+    the owner-only documents `app.py view` writes, read by the page only for its owner.
+    `by_contact` (their thread rows): a record with no address takes the one a message of
+    theirs gave, newest first, however it was logged (#239: an address in a reply sat in the
+    thread, and the person copied it out by hand)."""
+    from network import state as net_state
     out = {}
     want = set(ids)
     for c in contacts:
@@ -2740,9 +2758,17 @@ def reach_docs(contacts, ids) -> dict:
             continue
         li = LINKEDIN_IN.search(str(c.get("linkedin_url") or ""))
         em = EMAIL.search(str(c.get("email") or ""))
-        if li or em:
+        given = ""
+        if not em and by_contact:
+            for r in reversed(by_contact.get(cid) or []):
+                if net_state._direction(r) == "in" and net_state.said_something(r):
+                    given = net_state.address_given(r.get("full_text") or "", c,
+                                                    r.get("scenario") or "")
+                    if given:
+                        break
+        if li or em or given:
             out[cid] = {"linkedin": li.group(0) if li else None,
-                        "email": em.group(0) if em else None}
+                        "email": em.group(0) if em else (given or None)}
     return out
 
 
@@ -3180,6 +3206,8 @@ STATUS_WORDS = {
     "referral_in_progress": "Referral", "converted_to_application": "Applied",
     "gone_cold": "Gone quiet", "closed": "Closed", "dropped": "Set aside",
 }
+# What a card says in its corner while a connection request waits to be accepted.
+REQUEST_WORD = "Request pending"
 # One word for each status, on every card, filter and person page: the page's own map
 # (templates/app/app.js PERSON_STATUS) says the same words, which a test holds. A row said
 # "Sent" where the person's page said "Waiting for a reply" (2026-11-03).
@@ -3708,8 +3736,12 @@ def _people(ctx: Ctx, targets: dict) -> list:
                               or (status in throttle_sent() and days is not None
                                   and days <= fold)))
         first = first_name(c.get("name"))
+        # A connection request nobody has accepted says so in its corner: "Waiting for a reply"
+        # sat over a note nobody could answer yet (issue 242).
+        word = REQUEST_WORD if hold and hold.get("why") == "request" \
+            else STATUS_WORDS.get(status, status.replace("_", " "))
         light = {"id": cid, "first_name": first, "employer": str(c.get("company") or ""),
-                 "status": status, "status_word": STATUS_WORDS.get(status, status.replace("_", " ")),
+                 "status": status, "status_word": word,
                  "group": group, "route": route_group(c.get("route")), "last": last,
                  "contacted": app_lists.bucket(days), "due": due or None,
                  "replied": any(state.said_something(t) for t in msgs), "live": live}
@@ -4007,7 +4039,7 @@ def _due(ctx: Ctx, targets: dict) -> list:
             co, role = str(c.get("company") or "").strip(), str(c.get("title") or "").strip()
             bits = [role + (f" at {co}" if co and co not in title else "")] if role else (
                 [co] if co and co not in title else [])
-            how = str(c.get("route_detail") or "").strip() or _ROUTE_WORDS.get(
+            how = said_days(str(c.get("route_detail") or "").strip(), ctx.today) or _ROUTE_WORDS.get(
                 str(c.get("route") or "").strip().lower(), "")
             # "Recruiter · recruiter": their route said again after a title that already says it.
             if how and how.lower() not in role.lower():

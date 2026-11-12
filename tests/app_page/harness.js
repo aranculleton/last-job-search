@@ -359,6 +359,10 @@ function a11yProbe() {
     const st = getComputedStyle(el);
     const fg = rgba(st.color);
     if (!fg) continue;
+    // Words in no colour at all are not drawn, as the drawing probe reads them (a dot kept out
+    // of sight at a line's end, app.css .sep-end): no contrast to have. In Windows' type a dot
+    // on To do ended its line and was read at 1.00:1 (CI, 2026-11-11).
+    if (fg[3] === 0) continue;
     const bg = bgOf(el);
     const c = blend(fg, bg, fg[3] * opacityOf(el));
     const l1 = lum(c); const l2 = lum(bg);
@@ -1352,6 +1356,8 @@ S.engine = async (a) => {
     // A box on the screen itself, not in a sheet (Contacts' "They replied", 2026-11-04).
     if (st.fillMain) for (const [label, value] of Object.entries(st.fillMain)) await page.locator("#main").getByLabel(label, {exact: false}).first().fill(value);
     if (st.then) { await page.getByRole("button", {name: st.then, exact: !!st.exact}).first().click(); await turn(page, 6); }
+    // The mouse moved onto a control and left there, as a person reading with a mouse does.
+    if (st.hover) { await page.locator(st.hover).first().hover(); await turn(page, 2); }
     // Taps one after another as fast as a person makes them: one turn between each, never a
     // wait for the one before (ten replies pasted in a row, 2026-11-04).
     for (const q of st.quick || []) {

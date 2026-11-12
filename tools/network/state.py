@@ -1063,18 +1063,58 @@ def dated_by_person(contact, msgs=None) -> bool:
     return msgs is not None and due.isoformat() not in _app_dates(msgs, action)
 
 
-def is_request(row) -> bool:
-    """An outbound connection request, with or without a note."""
+def is_request(row, contact=None) -> bool:
+    """An outbound connection request, with or without a note: typed as one, or a note
+    logged as a message that went as one (`went_as_request`, with the contact's row where
+    the caller has it)."""
     if _direction(row) != "out":
         return False
     raw = str(row.get("channel") or "").lower()
-    return _scenario(row) in REQUEST_SCENARIOS or "request" in raw or "invit" in raw
+    return (_scenario(row) in REQUEST_SCENARIOS or "request" in raw or "invit" in raw
+            or went_as_request(row, contact))
+
+
+# The ways a request's note can have been logged as a message: on LinkedIn, by message or with
+# no way named. An InMail, an email or an Open Profile message reaches someone with no
+# connection, so the same words sent that way are never a request (export.could_be_the_note).
+NOTE_LOGGED_AS = frozenset({"", "message", "connection"})
+# What a first note logged by hand as a message is called on its row.
+FIRST_NOTE_SCENARIOS = frozenset({"first_note", "first_message"})
+# A row's own words saying a connection request went: "Connection request with note sent".
+# Never one that says it was accepted, or that answers their request.
+_SAYS_REQUEST = re.compile(r"(?<!their )\bconnection request\b|\b(?:sent|send) (?:a |an |the |my )?"
+                           r"(?:connection )?(?:request|invit(?:e|ation))\b"
+                           r"|\binvit(?:e|ation) (?:with (?:a )?note )?sent\b", re.I)
+_SAYS_ACCEPTED = re.compile(r"\baccept|\btheir (?:connection )?(?:request|invit)", re.I)
+
+
+@functools.lru_cache(maxsize=1024)
+def _says_request(summary: str) -> bool:
+    return bool(_SAYS_REQUEST.search(summary)) and not _SAYS_ACCEPTED.search(summary)
+
+
+def went_as_request(row, contact=None) -> bool:
+    """A note of ours logged by hand as a message on LinkedIn that went as a connection
+    request: its own summary says so ("Connection request with note sent"), or it is the
+    first note to a contact whose channel is `connection`, the channel `sent` writes for a
+    request, whom LinkedIn's download does not list among the connections. It is read as the
+    request it went as, so nothing is owed them until they accept and the request's withdraw
+    clock runs, as the download's correction of such a row types it (export.as_requests, issue
+    220): a follow-up fell due on one fourteen days on, "Follow-up ready" (issue 242)."""
+    if _direction(row) != "out" or channel_of(row) not in NOTE_LOGGED_AS \
+            or _scenario(row) in WITHDRAWN_SCENARIOS or is_call(row):
+        return False
+    if _says_request(str(row.get("summary") or "")):
+        return True
+    return (contact is not None and _scenario(row) in FIRST_NOTE_SCENARIOS
+            and str(contact.get("channel") or "").strip().lower() == "connection"
+            and not connected(contact))
 
 
 def is_bare_request(row) -> bool:
     """A connection request that carried no note: it said nothing."""
     return (is_request(row) and not str(row.get("full_text") or "").strip()
-            and _scenario(row) != OUTSIDE_SCENARIO)
+            and _scenario(row) != OUTSIDE_SCENARIO and _scenario(row) not in FIRST_NOTE_SCENARIOS)
 
 
 # A connection request taken back (`withdraw`). Not a message: nothing reached them,
@@ -1416,15 +1456,21 @@ def they_spoke_last(rows) -> bool:
     return bool(spoken) and said_something(spoken[-1])
 
 
-def request_pending(rows) -> datetime.date | None:
+def request_pending(rows, contact=None) -> datetime.date | None:
     """The date of a connection request still waiting to be accepted, or None.
 
     The latest thing on the thread decides: an acceptance, anything they said,
     a call, or a message sent after the request (an InMail or an email reaches
-    them without one) all mean the request is no longer what is waiting.
+    them without one) all mean the request is no longer what is waiting. With the
+    contact's row, a first note logged as a message to someone whose channel is
+    `connection` is the request it went as (`went_as_request`), where nothing else on the
+    thread is one: a message after a request reaches someone who accepted it.
     """
-    for row in reversed(_ordered([r for r in rows if _direction(r) and not is_auto_reply(r)])):
-        if is_request(row):
+    real = _ordered([r for r in rows if _direction(r) and not is_auto_reply(r)])
+    if contact is not None and any(is_request(r) for r in real):
+        contact = None
+    for row in reversed(real):
+        if is_request(row, contact):
             return as_date(row.get("date")) or datetime.date.min
         return None
     return None
@@ -2182,6 +2228,37 @@ LEAVE_ALONE = re.compile(r"\s*(?:nothing owed|no action|keep warm|background cha
                          r"(?:chase|nudge|follow up)|don'?t (?:chase|nudge|follow up))\b", re.I)
 
 
+# A record that says nothing more goes to them, in the person's words or a chat's: "Follow-up
+# limit reached: no more messages unless they write", "no more follow-ups", "don't follow up",
+# "no check-in". The limit (at_limit), the due list (owed) and the follow-up drafter
+# (followup_drafts.leave_alone, issue 223) read it alike: a note saying so on the record
+# stopped none of them, and the card and To do offered "Draft the follow-up" (issue 242).
+TOLD_NO_MORE = re.compile(
+    r"\bfollow[- ]?ups? limit (?:is |was )?(?:reached|hit|met)\b"
+    r"|\bno (?:more |further )?(?:check[- ]?ins?|follow[- ]?ups?|nudges?|chasing)\b"
+    r"(?![^.;]*\b(?:until|till|before)\b)"
+    r"|\bno (?:more|further) (?:messages?|contact|outreach)\b"
+    r"|\b(?:don'?t|do not|never) (?:check in|follow up|chase|nudge)\b", re.I)
+
+
+def told_no_more(contact, msgs=None) -> str:
+    """The words on the contact's record, its next step or its notes, saying nothing more
+    goes to them (TOLD_NO_MORE), or "". Where those words carry a day, a message from them
+    since lifts them; a reply owed to them is never stopped by it (owed, surface.held)."""
+    said = [as_date(r.get("date")) for r in msgs or () if said_something(r)]
+    for field in ("next_action", "notes"):
+        text = str((contact or {}).get(field) or "")
+        m = TOLD_NO_MORE.search(text)
+        if not m:
+            continue
+        days = [as_date(d) for d in _DATE.findall(text[:m.end()])]
+        on = max((d for d in days if d), default=None)
+        if on is not None and any(d is not None and d > on for d in said):
+            continue
+        return m.group(0)
+    return ""
+
+
 def _written_since(action, msgs) -> bool:
     """Have they written again since the day a "nothing owed" row was written? The row is
     dated by its first date (`no_reply` writes it so); one with no date is read as before.
@@ -2383,7 +2460,7 @@ def owed(contacts, threads, today, index=None, live=None) -> list[dict]:
             continue
         # A request nobody has accepted cannot be nudged: there is nowhere to
         # write. It is worth withdrawing once it has sat REQUEST_WITHDRAW_DAYS.
-        pending = request_pending(msgs)
+        pending = request_pending(msgs, contact)
         if pending is not None:
             if (today - pending).days < REQUEST_WITHDRAW_DAYS:
                 # The app's own "Once they accept: ..." line is no job while nobody has: it
@@ -2398,6 +2475,13 @@ def owed(contacts, threads, today, index=None, live=None) -> list[dict]:
                               business_days=business_days_between(pending, today),
                               due=(pending + datetime.timedelta(days=REQUEST_WITHDRAW_DAYS)).isoformat(),
                               nudges_sent=0))
+            continue
+        # Their record says no more messages ("Follow-up limit reached: no more messages
+        # unless they write"): nothing is owed them, the app's own follow-up line on the row
+        # least of all; only a date the person put there themselves (issue 242).
+        if told_no_more(contact, msgs):
+            if cid in own_dated:
+                _action_row()
             continue
         # Only ever InMailed, no acceptance and no word back: a second would be a second
         # InMail, so no follow-up is owed (`inmail_only`).
@@ -2609,15 +2693,17 @@ UNDATED_WORDS = {
 def at_limit(contact, msgs, status=None) -> bool:
     """Has this thread had the person's limit of unanswered messages in a row from us
     (schema.MAX_UNANSWERED, the app's two where unset), counted from the log, or does its
-    row say so in the app's own words? Then nothing more goes to them unless they write.
-    One answer for the dates written here and for every screen (surface.held)."""
+    row say so in the app's own words, or its record in anyone's (`told_no_more`)? Then
+    nothing more goes to them unless they write. One answer for the dates written here and
+    for every screen (surface.held)."""
     msgs = [r for r in msgs or () if _direction(r)]
     status = effective_status(contact or {}, msgs) if status is None else status
     if status not in _LIMIT_STATUSES:
         return False
     schema.limits_now()                       # the person's rule as it is now
     return (_chases(msgs) >= schema.MAX_UNANSWERED
-            or bool(STOP_LINE.match(str((contact or {}).get("next_action") or ""))))
+            or bool(STOP_LINE.match(str((contact or {}).get("next_action") or "")))
+            or bool(told_no_more(contact, msgs)))
 
 
 def why_undated(contact, msgs) -> str:
@@ -3520,6 +3606,37 @@ RECEIVED_CHANNELS = ("message", "inmail", "email", "connection", "intro")
 SAME_WORDS_MIN = 6
 
 
+def address_given(text, contact=None, scenario="") -> str:
+    """The email address a message of theirs gives, the person's own taken out, or "": only
+    one seen in their words, never one made up from a name or an employer. One in a referral
+    ("talk to Wren, wren@...") is another person's unless it names them."""
+    try:
+        import reply as _reply
+    except ImportError:  # the reader is beside this file; never without it in the app
+        return ""
+    addr = _reply.extract_email(_reply.without_own_address(text))
+    if not addr:
+        return ""
+    if str(scenario or "") == "referral_offered" and contact is not None:
+        local = addr.split("@", 1)[0].lower()
+        names = [w.lower() for w in re.findall(r"[A-Za-z]{2,}", str(contact.get("name") or ""))]
+        if not any(w in local for w in names):
+            return ""
+    return addr
+
+
+def keep_address(contact, text, scenario="") -> str:
+    """Their address from a message of theirs, kept on their record (`email`), so their card
+    and the draft show it with its Copy (#239): it sat in the thread, and the person found and
+    copied it by hand. Never over an address the record holds already. The address kept, or ""."""
+    if contact is None or str(contact.get("email") or "").strip():
+        return ""
+    addr = address_given(text, contact, scenario)
+    if addr:
+        contact["email"] = addr
+    return addr
+
+
 def received(contacts, threads, contact_id, today, text="", date=None, channel="",
              scenario="", subject="") -> dict:
     """Record their message: what they wrote, the day it came, the way it came.
@@ -3594,6 +3711,12 @@ def received(contacts, threads, contact_id, today, text="", date=None, channel="
     elif not machine:
         said = (f"{name} is at {stored}, which the log does not decide: if this message "
                 f"changes that, state.py set {cid} --status <status>")
+    # The address their message gives, on their record (an automatic reply's names whoever
+    # stands in, never them).
+    kept = "" if machine else keep_address(contact, body, scen)
+    if kept:
+        said = "; ".join(x for x in (said, f"their email address, {kept}, is kept on their "
+                                           "record") if x)
     action = str(contact.get("next_action") or "").strip()
     if (not machine and str(contact.get("status") or "") in schema.OWED_BY_US
             and action and _APP_ACTION.fullmatch(action)):

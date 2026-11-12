@@ -639,6 +639,38 @@ def nudge_from_posting(contact: dict, posting: dict) -> str:
                          their=(company,), thread=str(contact.get("contact_id") or "") or None)
 
 
+# ---------------------------------------------------------------- their employer's board
+
+def roles_on_board(contact: dict, tracker=()) -> dict:
+    """Their employer's open roles against the person's search (employer_roles.check: the
+    board profile/boards.py names, read and scored the way a round does), or {} where it
+    cannot be asked. Never raises: a draft is still made without it."""
+    company = str((contact or {}).get("company") or "").strip()
+    if not company:
+        return {}
+    try:
+        import employer_roles
+        return employer_roles.check(company, contact_name=str(contact.get("name") or ""),
+                                    tracker=tracker)
+    except Exception:  # noqa: BLE001  no profile, no board reader: nothing was checked
+        return {}
+
+
+def _role_card(role: dict) -> dict:
+    """The job a referral ask is for, as the card shows it."""
+    return {k: role.get(k) for k in ("title", "company", "url", "fit", "from")
+            if role.get(k) not in (None, "")}
+
+
+def _said_checked(got: dict, said: str) -> dict:
+    """A plain follow-up that says its employer's board was looked at: "No open role there
+    fits yet", or that there is no board on file, so the person knows it was checked."""
+    if said:
+        got["roles_checked"] = said
+        got["why"] = ((got.get("why") or "") + ". " + said).lstrip(". ")
+    return got
+
+
 # ---------------------------------------------------------------- drafting
 
 def _new(status, kind="", text="", why="", who="", source="", warnings=(), findings=(),
@@ -756,19 +788,43 @@ def draft(item: dict, contacts_by_id: dict, threads_index: dict, tracker, earlie
         # hold until a role is posted (`hold_for_role`, state.ROLE_HOLD), and come back by
         # themselves.
         role = role_for_offer(contact, since, rows, tracker)
+        # None found by a search since: their employer's own board is read now, against the
+        # person's search, before anyone is put on hold (issue 233).
+        board = {} if role else roles_on_board(contact, tracker)
+        role = role or board.get("role") or {}
         if role:
-            return refused or _new(
+            got = refused or _new(
                 "write", kind=kind, who="here",
                 why="%s, since their offer of %s: write the referral ask for that one role, in "
                     "what they offered, with the posting's link (compose.referral_ask)"
                     % (role_said(role, company or "their employer"),
                        offer.get("date") or "an earlier day"))
+            got["role"] = _role_card(role)
+            return got
         got = _new("none", kind=kind, why=ROLE_WAIT_WHY % (company or "their employer"))
+        if board.get("said"):
+            got["why"] += ". " + board["said"]
+            got["roles_checked"] = board["said"]
         got["hold_role"] = True
         return got
     # A nudge needs something new to answer: a posting the search found at their employer,
     # said only to a reader allowed to hear the role (compose.SAY_THE_ROLE).
     posting = posting_reason(contact, since, rows, tracker) if compose.SAY_THE_ROLE.get(reader) else {}
+    checked = ""
+    if not posting and (their or compose.SAY_THE_ROLE.get(reader)):
+        # Nothing from a search: their employer's own board, read now. A role there that fits
+        # the person's search makes this follow-up a referral ask for it (issue 233), to
+        # someone who has replied (a referral is asked only then) or who may hear the role.
+        board = roles_on_board(contact, tracker)
+        checked = board.get("said") or ""
+        if board.get("role"):
+            got = refused or _new(
+                "write", kind=kind, who="here",
+                why="%s, open on its careers board now: make this follow-up a referral ask "
+                    "for that one role, with its link (compose.referral_ask)"
+                    % role_said(board["role"], company or "their employer"))
+            got["role"] = _role_card(board["role"])
+            return got
     if posting:
         try:
             text = nudge_from_posting(contact, posting)
@@ -782,21 +838,23 @@ def draft(item: dict, contacts_by_id: dict, threads_index: dict, tracker, earlie
             got["why"] = "new reason: %s posted %s" % (company, _clean_title(posting.get("title")))
         return got
     if refused:
-        return refused                      # their own words, to rewrite on its findings
+        return _said_checked(refused, checked)  # their own words, to rewrite on its findings
     # Nothing new to say: a short plain follow-up all the same, never a refusal that leaves
     # the page's Follow up doing nothing. Code wrote one for 1 of 19 due (2026-11-04).
     if not plain_nudge_allowed():
         # Claude looks for something new before anyone is asked anything (LOOK_FIRST); the
         # person is never asked to write it (2026-11-06).
-        return _new("write", kind=kind, who="here", look=True,
-                    why="nothing new to say on file, and your own rule is to follow up only "
-                        "with something new (a role they posted, news at %s, something you "
-                        "have done since)" % (company or "their employer"))
+        return _said_checked(_new(
+            "write", kind=kind, who="here", look=True,
+            why="nothing new to say on file, and your own rule is to follow up only "
+                "with something new (a role they posted, news at %s, something you "
+                "have done since)" % (company or "their employer")), checked)
     try:
         text = plain_nudge(contact or {"contact_id": cid, "name": name}, msgs, today=today)
     except ValueError as e:
-        return _new("write", kind=kind, who="here", look=True,
-                    why="the plain follow-up did not pass: " + _one_line(e))
+        return _said_checked(_new("write", kind=kind, who="here", look=True,
+                                  why="the plain follow-up did not pass: " + _one_line(e)),
+                             checked)
     got = _checked(text, kind, name=name, title=title, company=company, contact=cid,
                    their_message=their, source="code", today=today)
     if got["status"] != "write":
@@ -807,7 +865,7 @@ def draft(item: dict, contacts_by_id: dict, threads_index: dict, tracker, earlie
             # (2026-11-06: the plain follow-up left out what a newer rule asked for).
             got["status"] = "check"
             got["warnings"] = list(got.get("warnings") or []) + [RULES_TO_FIT]
-    return got
+    return _said_checked(got, checked)
 
 
 # Their words that point the person somewhere else: the careers site, applying online, someone
@@ -868,23 +926,17 @@ def closed_exchange(msgs) -> str:
             "for them, such as a referral for a role you applied to" % said)
 
 
-# Their own record saying not to check in: "no check-in, the conversation has moved to their
-# colleague", "don't follow up".
-_NO_CHECK_IN = re.compile(
-    r"\bno (?:more |further )?(?:check[- ]?ins?|follow[- ]?ups?|nudges?|chasing)\b"
-    r"|\b(?:don'?t|do not|never) (?:check in|follow up|chase|nudge)\b", re.I)
-
-
 def leave_alone(contact: dict, book: dict, tracker=()) -> str:
     """Why nobody follows this contact up, in plain words, or "": their own record says not to
     check in, or a process is running at their employer (an interview or an offer, a hiring
     process with no application, or a referral in progress through anyone there), which a
     check-in to someone else there can only get in the way of (issue 223)."""
     import throttle
-    for field in ("next_action", "notes"):
-        m = _NO_CHECK_IN.search(str((contact or {}).get(field) or ""))
-        if m:
-            return "their record says \"%s\"" % m.group(0)
+    from network import state
+    # The record's own words, read as the due list and the limit read them (issue 242).
+    said = state.told_no_more(contact)
+    if said:
+        return "their record says \"%s\"" % said
     k = company_key((contact or {}).get("company"))
     if not k:
         return ""
@@ -1127,6 +1179,11 @@ def drafts(items, contacts, threads, tracker, today: str) -> list[dict]:
     index = state.by_contact(threads) if threads else {}
     earlier = earlier_drafts(today)
     rows = newest_round_rows()
+    try:
+        import employer_roles
+        employer_roles.forget()      # each board read once in this run, and afresh in the next
+    except Exception:  # noqa: BLE001
+        pass
     out = []
     for i in sorted(items, key=open_actions._urgency):
         i = dict(i)
@@ -1182,6 +1239,8 @@ def render_pack(today: str, got: list[dict], contacts) -> str:
         out.append(line)
         if d["warnings"]:
             out.append("Check before it goes: " + "; ".join(d["warnings"]))
+        if d.get("roles_checked"):
+            out.append("Open roles: " + d["roles_checked"] + ".")
         out += ["<!-- draft id=%s kind=%s source=%s -->" % (i["id"], d["kind"], d["source"]),
                 _FENCE + "text", d["text"], _FENCE, log_line(i, d["kind"]), ""]
     if todo:
@@ -1190,8 +1249,19 @@ def render_pack(today: str, got: list[dict], contacts) -> str:
             d = i["draft"]
             who = "this chat can write it from the thread" if d["who"] == "here" else "needs you"
             out.append("- %s (%s): %s; %s." % (_title(i, by_id), _what(i), d["why"].rstrip("."), who))
+            out += ["  " + ln.strip() for ln in _job_line(d)]
         out.append("")
     return "\n".join(out)
+
+
+def _job_line(d: dict) -> list[str]:
+    """The job a referral ask is for, with its link, as the card and the chat carry it."""
+    role = d.get("role") or {}
+    if not role.get("title"):
+        return []
+    return ["    job: %s at %s%s%s" % (role["title"], role.get("company") or "their employer",
+                                       " (fit %s)" % role["fit"] if role.get("fit") else "",
+                                       ": " + role["url"] if role.get("url") else "")]
 
 
 def _time_for(cid, contacts) -> str:
@@ -1532,9 +1602,12 @@ def render(got: list[dict]) -> str:
                             " of %d" % d["limit"] if d["limit"] else ""))
             lines.append("    " + d["text"].replace("\n", "\n    "))
             lines += ["    check: " + w for w in d["warnings"]]
+            if d.get("roles_checked"):
+                lines.append("    open roles: " + d["roles_checked"])
         elif d["status"] == "write":
             lines.append(head + " [needs writing, %s: %s]"
                          % ("here" if d["who"] == "here" else "needs you", d["why"]))
+            lines += _job_line(d)
         else:
             lines.append(head + " [nothing to write: %s]" % (d["why"] or i.get("what") or ""))
     return "\n".join(lines) + ("\n" if lines else "nothing due\n")

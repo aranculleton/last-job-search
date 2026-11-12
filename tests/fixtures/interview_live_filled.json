@@ -121,6 +121,60 @@
     "q3",
     "q4",
     "q5"
+   ],
+   "steps": [
+    {
+     "t": "Say it back",
+     "say": "Can I say it back and check what the data looks like first?"
+    },
+    {
+     "t": "Agree the error",
+     "say": "I'll take the error as the gap over actual demand, as a share."
+    },
+    {
+     "t": "Write the plain loop",
+     "say": "I'll loop over each SKU and skip any with no actual demand."
+    },
+    {
+     "t": "Check by hand",
+     "say": "Let me run a few rows I can work out myself, to check it."
+    },
+    {
+     "t": "Tidy and speed up",
+     "say": "Now it's right, I'd move it into pandas if the data is large."
+    }
+   ],
+   "stuck": [
+    "Can I talk through what I'm thinking for a second?",
+    "Let me write the simplest version first, then improve it."
+   ],
+   "edges": [
+    "No actual demand in a week",
+    "A SKU missing a week",
+    "The same SKU and week twice",
+    "Forecast rows with no actual to match"
+   ],
+   "code": [
+    {
+     "c": "err = abs(fc - actual) / actual",
+     "means": "The gap as a share of actual demand"
+    },
+    {
+     "c": "if actual == 0: continue",
+     "means": "Skip a week with no demand, never divide by nothing"
+    },
+    {
+     "c": "df[\"err\"] = (df.fc - df.actual).abs() / df.actual",
+     "means": "The same sum over a whole column at once"
+    },
+    {
+     "c": "df[df.err > threshold].sku.unique()",
+     "means": "Each SKU over the threshold, once"
+    }
+   ],
+   "more": [
+    "With more time I'd add tests for the awkward weeks.",
+    "With more time I'd weight the error by how much each SKU sells."
    ]
   },
   {
@@ -178,8 +232,8 @@
    "also": [
     "How have you forecast demand before?"
    ],
-   "simple": "Forecasting is the centre of my work, and the clearest example is at Brindle & Hart Logistics. I rebuilt the weekly demand forecast in Python and SQL, with promotions and seasonality as features, and forecast error came down from 22% to 14% across 2,400 SKUs. That let the planners release about £1.1M of safety stock they had been holding to cover the gap.",
-   "detailed": "Forecasting is the centre of my work, and the clearest example is at Brindle & Hart Logistics. Forecast error sat at 22% across 2,400 SKUs and six distribution centres, and the planners were covering the gap with extra safety stock. I rebuilt the weekly forecast in Python and SQL, with promotions and seasonality as features, and tracked the error by distribution centre so the planners could see where it held. Error came down to 14%, about £1.1M of safety stock was released, and I learned that a forecast only counts once its users can check it themselves.",
+   "simple": "Forecasting is the centre of my work, and the clearest example is at Brindle & Hart Logistics. I rebuilt the weekly demand forecast in Python and SQL, with promotions and seasonality as features, and forecast error came down from 22% to 14% across 2,400 SKUs. That let the planners release about \u00a31.1M of safety stock they had been holding to cover the gap.",
+   "detailed": "Forecasting is the centre of my work, and the clearest example is at Brindle & Hart Logistics. Forecast error sat at 22% across 2,400 SKUs and six distribution centres, and the planners were covering the gap with extra safety stock. I rebuilt the weekly forecast in Python and SQL, with promotions and seasonality as features, and tracked the error by distribution centre so the planners could see where it held. Error came down to 14%, about \u00a31.1M of safety stock was released, and I learned that a forecast only counts once its users can check it themselves.",
    "story": "s1",
    "known": null,
    "draft": false,
@@ -198,9 +252,17 @@
     },
     {
      "who": "technical",
+     "q": "What didn't work?",
+     "also": [],
+     "simple": "The first version leaned too hard on last year's sales, and it missed the promotions badly. Once promotions went in as an input of their own, the error came down to where the planners could use it.",
+     "detailed": "",
+     "follow": []
+    },
+    {
+     "who": "technical",
      "q": "How did you know it had worked?",
      "also": [],
-     "simple": "I tracked the error by distribution centre every week against what actually sold, so it was measured rather than felt. It came down from 22% to 14%, and the planners released about £1.1M of safety stock on the strength of it.",
+     "simple": "I tracked the error by distribution centre every week against what actually sold, so it was measured rather than felt. It came down from 22% to 14%, and the planners released about \u00a31.1M of safety stock on the strength of it.",
      "detailed": "",
      "follow": [
       {
@@ -213,6 +275,14 @@
        "draft": true
       }
      ]
+    },
+    {
+     "who": "senior",
+     "q": "Who disagreed, and how did you handle it?",
+     "also": [],
+     "simple": "Some planners doubted it at first, because the old figures were the ones they knew. I showed them the error by distribution centre each week, so they could judge it for themselves.",
+     "detailed": "",
+     "follow": []
     },
     {
      "who": "senior",
@@ -325,9 +395,25 @@
     },
     {
      "who": "technical",
+     "q": "What didn't work?",
+     "also": [],
+     "simple": "My first try was to build the report and show it, and nobody moved over. It only worked once the managers had agreed the definitions with me, team by team.",
+     "detailed": "",
+     "follow": []
+    },
+    {
+     "who": "technical",
      "q": "How did you know it had worked?",
      "also": [],
      "simple": "I knew it had worked when the last of the eleven spreadsheets was retired and the 30+ managers were all reading the one report. The arguments about whose number was right stopped, because there was only one number.",
+     "detailed": "",
+     "follow": []
+    },
+    {
+     "who": "senior",
+     "q": "Who disagreed, and how did you handle it?",
+     "also": [],
+     "simple": "A couple of managers argued their own spreadsheet was the right one, and they had a point about how late orders were counted. I took their rule into the shared definition, and they moved over after that.",
      "detailed": "",
      "follow": []
     },
@@ -446,8 +532,8 @@
     "Tell me about the work you are proudest of.",
     "What has been your biggest impact?"
    ],
-   "simple": "The one I'd choose is the forecast I rebuilt at Brindle & Hart Logistics. Error was at 22% across 2,400 SKUs, and the planners were covering it with extra safety stock. I rebuilt the weekly forecast in Python and SQL and tracked the error by distribution centre. It came down to 14%, and about £1.1M of safety stock was released.",
-   "detailed": "The one I'd choose is the forecast I rebuilt at Brindle & Hart Logistics. Error was at 22% across 2,400 SKUs, and the planners were covering the gap with safety stock, so the task was a forecast they would trust. I rebuilt it in Python and SQL, with promotions and seasonality as features, and tracked the error by distribution centre so they could see where it held. It came down to 14%, about £1.1M of safety stock was released, and my lesson was to show the evidence every week, not ask for trust.",
+   "simple": "The one I'd choose is the forecast I rebuilt at Brindle & Hart Logistics. Error was at 22% across 2,400 SKUs, and the planners were covering it with extra safety stock. I rebuilt the weekly forecast in Python and SQL and tracked the error by distribution centre. It came down to 14%, and about \u00a31.1M of safety stock was released.",
+   "detailed": "The one I'd choose is the forecast I rebuilt at Brindle & Hart Logistics. Error was at 22% across 2,400 SKUs, and the planners were covering the gap with safety stock, so the task was a forecast they would trust. I rebuilt it in Python and SQL, with promotions and seasonality as features, and tracked the error by distribution centre so they could see where it held. It came down to 14%, about \u00a31.1M of safety stock was released, and my lesson was to show the evidence every week, not ask for trust.",
    "story": "s1",
    "known": null,
    "draft": false,
@@ -467,7 +553,7 @@
      "who": "technical",
      "q": "How did you know it had worked?",
      "also": [],
-     "simple": "The measure was forecast error against actual demand, by distribution centre, every week. When it had come down from 22% to 14% and stayed there, the planners released about £1.1M of safety stock.",
+     "simple": "The measure was forecast error against actual demand, by distribution centre, every week. When it had come down from 22% to 14% and stayed there, the planners released about \u00a31.1M of safety stock.",
      "detailed": "",
      "follow": []
     },
@@ -491,7 +577,7 @@
     "Give me the short version of your career."
    ],
    "simple": "I'm an operations analyst with seven years turning warehouse, transport and supplier data into forecasts and decisions that move stock and vans. Most recently, at Brindle & Hart Logistics, I rebuilt the weekly demand forecast and cut forecast error from 22% to 14% across 2,400 SKUs. I work in Python, SQL and dbt, and I'm looking for a planning role where the forecast is mine to own, which is what this one is.",
-   "detailed": "I'm an operations analyst with seven years turning warehouse, transport and supplier data into forecasts and decisions that move stock and vans. Most recently, at Brindle & Hart Logistics, I rebuilt the weekly demand forecast in Python and SQL and cut forecast error from 22% to 14% across 2,400 SKUs and six distribution centres, which released about £1.1M of safety stock. At Oakmere Foods I modelled shelf life and order patterns for the chilled lines, and write-offs fell 18% over two quarters. I work in Python, SQL and dbt, and I'm looking for a planning role where the forecast is mine to own, which is what this one is.",
+   "detailed": "I'm an operations analyst with seven years turning warehouse, transport and supplier data into forecasts and decisions that move stock and vans. Most recently, at Brindle & Hart Logistics, I rebuilt the weekly demand forecast in Python and SQL and cut forecast error from 22% to 14% across 2,400 SKUs and six distribution centres, which released about \u00a31.1M of safety stock. At Oakmere Foods I modelled shelf life and order patterns for the chilled lines, and write-offs fell 18% over two quarters. I work in Python, SQL and dbt, and I'm looking for a planning role where the forecast is mine to own, which is what this one is.",
    "story": null,
    "known": null,
    "draft": false,
@@ -526,8 +612,14 @@
    "also": [
     "Flag the lines where the forecast was furthest out."
    ],
-   "simple": "I'd start by saying it back: for each [[sku|SKU]] I need the gap between forecast and actual as a share of actual, and I return the ones above the threshold. I'd write it plainly first, as a loop that skips any SKU with no actual demand, so I never divide by zero. Then I'd check it by hand on a few rows, and ask how big the data is before deciding whether it needs pandas.",
-   "detailed": "I'd start by saying it back: for each [[sku|SKU]] I need the gap between forecast and actual as a share of actual, and I return the ones above the threshold. Before writing anything I'd ask what the data looks like, whether a SKU can be missing a week, and whether the threshold is a share or a number of units. I'd write it plainly first, as a loop that skips any SKU with no actual demand so that I never divide by zero, and check it by hand on a few rows. Then I'd ask how big the data is before deciding whether it needs pandas, and I'd say each of those choices out loud as I make it.",
+   "simple": [
+    "Return SKUs with forecast error over threshold",
+    "Say it back: error as share of actual",
+    "Ask: missing weeks, share or units",
+    "Plain loop first, skip zero demand",
+    "Small hand-worked tests, so the flags are trusted"
+   ],
+   "detailed": "So I'd return every [[sku|SKU]] whose forecast error is over the threshold. First I'll say it back, to check we agree. The error is the gap between forecast and actual, as a share of actual. Before I type, I'd ask what the data looks like. Can a SKU miss a week? Is the threshold a share or a number of units? Then I'll write it plainly, as a loop that skips any SKU with no actual demand, so I never divide by zero. Once that's right, I'll ask how big the data is, and if it's large I'd move it into pandas. And I'd want a few small tests I can work out by hand, so we both trust what it flags.",
    "story": null,
    "known": null,
    "draft": false,
@@ -537,16 +629,37 @@
      "who": "technical",
      "q": "How would you test it?",
      "also": [],
-     "simple": "I'd write a few small cases I can work out by hand: one SKU well under the threshold, one well over, one exactly on it, and one with no demand. If those pass, I'd run it on a real week and compare the number it flags with what I'd expect from the overall error.",
-     "detailed": "",
+     "simple": [
+      "Hand-checkable cases first",
+      "Under, over and on the threshold",
+      "Zero actual demand, where it breaks"
+     ],
+     "detailed": "I'd test it on a few cases I can work out by hand. One SKU well under the threshold, one well over, and one right on it. Then the awkward one, a SKU with zero actual demand, because that's where it'd break.",
      "follow": [
       {
        "who": "peer",
        "q": "What if actual demand is zero?",
        "also": [],
-       "simple": "Then the error as a share of actual has no meaning, so I'd leave that SKU out of the percentage and report it separately. I'd say that choice out loud, because a planner may well want to see those lines.",
-       "detailed": "",
-       "follow": []
+       "simple": [
+        "Zero demand: the share means nothing",
+        "Leave it out of the percentage",
+        "List apart for planners to see"
+       ],
+       "detailed": "If actual demand is zero, the error as a share has no meaning. So I'd leave that SKU out of the percentage, but I wouldn't drop it altogether. I'd list it apart, because a planner may still want to see those lines.",
+       "follow": [
+        {
+         "who": "manager",
+         "q": "Would planners still want to see those lines?",
+         "also": [],
+         "simple": [
+          "Yes, planners want them",
+          "No sales can still mean stock tied up",
+          "Own short list, planners judge"
+         ],
+         "detailed": "Yes, planners would still want those lines. A line with no sales can still have stock sitting on it, and that's money tied up. So I'd show them in their own short list, for the planners to judge.",
+         "follow": []
+        }
+       ]
       }
      ]
     },
@@ -554,8 +667,12 @@
      "who": "technical",
      "q": "Can you make it faster?",
      "also": [],
-     "simple": "Yes, the plain loop is fine for a few thousand SKUs, and for more I'd move it into pandas so the arithmetic runs over whole columns at once. I'd only do that once the simple version is right, because a fast wrong answer is no use to a planner.",
-     "detailed": "",
+     "simple": [
+      "Faster with pandas, whole columns at once",
+      "Plain loop does for thousands of SKUs",
+      "Right first, then fast"
+     ],
+     "detailed": "Yes, it can be faster. The plain loop is fine for a few thousand SKUs. For more than that, I'd move it into pandas, so the sums run over whole columns at once. But only once the simple version's right, because a fast wrong answer helps nobody.",
      "follow": []
     }
    ]
@@ -583,7 +700,7 @@
     "Why would a site manager believe your numbers?"
    ],
    "simple": "I show them the evidence rather than ask for their trust. At Brindle & Hart Logistics I tracked forecast error by distribution centre every week. Each planner could see where the forecast held for their own site, and where it did not. Once they could check it for themselves they used it, and the safety stock came down.",
-   "detailed": "I show them the evidence rather than ask for their trust. At Brindle & Hart Logistics I tracked forecast error by distribution centre every week, so each planner could see where the forecast held for their own site and where it did not. I never argued for the model in a meeting, I put the weekly error in front of the people who would live with it. Once they could check it for themselves they used it, error came down from 22% to 14%, and about £1.1M of safety stock was released.",
+   "detailed": "I show them the evidence rather than ask for their trust. At Brindle & Hart Logistics I tracked forecast error by distribution centre every week, so each planner could see where the forecast held for their own site and where it did not. I never argued for the model in a meeting, I put the weekly error in front of the people who would live with it. Once they could check it for themselves they used it, error came down from 22% to 14%, and about \u00a31.1M of safety stock was released.",
    "story": null,
    "known": "k1",
    "draft": false,
@@ -605,7 +722,7 @@
     "S": "forecast error at 22% across 2,400 SKUs and six distribution centres, and planners covering the gap with extra safety stock.",
     "T": "a weekly demand forecast the planners would trust.",
     "A": "rebuilt it in Python and SQL with promotions and seasonality as features, and tracked error by distribution centre so the planners could see where it held.",
-    "R": "error down to 14%, about £1.1M of safety stock released."
+    "R": "error down to 14%, about \u00a31.1M of safety stock released."
    },
    "questions": [
     "q1",
@@ -763,7 +880,8 @@
    "here": "At Fernhill Freight, the weekly estimate of how many pallets each [[cross-dock]] site will move, which is the forecast this role owns.",
    "example": "If the Warrington site moved 1,000 pallets last week and a customer's promotion starts on Monday, the forecast for next week might be 1,150.",
    "plain": "A best estimate of how much will be needed, made from what happened before.",
-   "technical": "A time-series model of volume by site and week."
+   "technical": "A time-series model of volume by site and week.",
+   "like": "Like guessing how many people will come to a party from how many came last year, and who said yes."
   },
   "forecast-error": {
    "name": "Forecast error",
@@ -773,7 +891,8 @@
    "here": "At Fernhill Freight, how far the pallets a site was forecast to move were from the pallets it actually moved, as a share of the actual.",
    "example": "If Warrington was forecast 1,100 pallets and moved 1,000, the error for that week is 10%.",
    "plain": "The gap between what was predicted and what happened.",
-   "technical": "Usually measured as mean absolute percentage error, by site and week."
+   "technical": "Usually measured as mean absolute percentage error, by site and week.",
+   "like": "Like a weather forecast that said ten millimetres of rain when five fell: the size of the miss."
   },
   "cross-dock": {
    "name": "Cross-dock",
@@ -783,7 +902,8 @@
    "here": "A Fernhill Freight site where pallets come off one lorry and go straight onto another, with little or no storage in between. Fernhill runs fourteen of them across the North of England.",
    "example": "Forty pallets arrive at Warrington at six, and by eight they are on three outbound lorries.",
    "plain": "A depot that moves goods straight through instead of storing them.",
-   "technical": ""
+   "technical": "",
+   "like": "Like a sorting room in a post office: parcels come in one door and leave by another the same morning."
   },
   "safety-stock": {
    "name": "Safety stock",
@@ -793,7 +913,8 @@
    "here": "At Fernhill Freight, the spare room a site keeps in case the [[demand-forecast|forecast]] is wrong, which a better forecast lets the planners reduce.",
    "example": "If Warrington expects 1,000 pallets and plans for 1,150 to be safe, the extra 150 is the safety margin.",
    "plain": "Extra stock or room kept in case demand is higher than expected.",
-   "technical": "Sized from forecast error and the service level wanted."
+   "technical": "Sized from forecast error and the service level wanted.",
+   "like": "Like keeping a spare loaf in the freezer in case guests turn up."
   },
   "sku": {
    "name": "SKU",
@@ -804,7 +925,8 @@
    "here": "One distinct product line in a Fernhill Freight customer's range, counted on its own when demand is forecast.",
    "example": "A customer's small and large bottles of the same drink are two SKUs, each with its own forecast at Fernhill.",
    "plain": "A single product, as a stock system counts it.",
-   "technical": "Stock keeping unit."
+   "technical": "Stock keeping unit.",
+   "like": "Like each size and colour of a shoe having its own barcode in a shop."
   },
   "dbt": {
    "name": "dbt",
@@ -814,7 +936,8 @@
    "here": "A tool for building tested data tables in SQL, which at Fernhill Freight could turn the raw feed from each cross-dock into the tables a forecast reads.",
    "example": "A dbt test stops the load if Warrington's pallets for a day come through blank, before any Fernhill report uses them.",
    "plain": "A way of writing the steps that clean data as code, with checks built in.",
-   "technical": "SQL models with schema and data tests, run in dependency order."
+   "technical": "SQL models with schema and data tests, run in dependency order.",
+   "like": "Like a recipe card for tidying the data, with a taste test after every step."
   },
   "service-level": {
    "name": "Service level",
@@ -825,6 +948,75 @@
    "here": "At Fernhill Freight, the share of pallets delivered on time and in full to the customer.",
    "example": "If 970 of 1,000 pallets leave Warrington on time and in full, the service level is 97%.",
    "plain": "How often the customer gets what was promised, when it was promised.",
+   "technical": "",
+   "like": "Like a pizza shop's promise to deliver within half an hour, and how often it keeps it."
+  },
+  "feature": {
+   "name": "Feature",
+   "match": [
+    "feature",
+    "features"
+   ],
+   "plain": "One piece of information a model learns from, such as the week of the year.",
+   "here": "At Fernhill Freight, what the pallet forecast would learn from: promotions, bank holidays and the season.",
+   "like": "Like the clues a detective weighs: each says little alone, and together they point to an answer.",
+   "example": "",
+   "technical": "An input column to the model."
+  },
+  "sql": {
+   "name": "SQL",
+   "match": [
+    "SQL"
+   ],
+   "plain": "The language used to ask a database for exactly the rows you want.",
+   "here": "At Fernhill Freight, how you'd pull each site's weekly pallets and forecasts out of their systems.",
+   "like": "Like asking a librarian for every book by one author from one year, and getting just those.",
+   "example": "",
+   "technical": ""
+  },
+  "sap": {
+   "name": "SAP",
+   "match": [
+    "SAP"
+   ],
+   "plain": "A large business system many firms use to run orders, stock and accounts in one place.",
+   "here": "At Fernhill Freight, it may be where each site's orders and stock are recorded, which a forecast would read from.",
+   "like": "Like the main ledger of a shop that every till and stockroom writes into.",
+   "example": "",
+   "technical": ""
+  },
+  "cips": {
+   "name": "CIPS",
+   "match": [
+    "CIPS"
+   ],
+   "plain": "The professional body for people who work in buying and supply.",
+   "here": "At Fernhill Freight, a membership some buying roles ask for; this role is about forecasting instead.",
+   "like": "Like a trade body for plumbers: membership shows you've met its standards.",
+   "example": "",
+   "technical": ""
+  },
+  "join": {
+   "name": "Join",
+   "match": [
+    "join",
+    "joins"
+   ],
+   "plain": "Lining up two tables row by row on something they share, such as a product code.",
+   "here": "At Fernhill Freight, lining up each week's forecast with what each site actually moved, before the error is worked out.",
+   "like": "Like matching each guest on a list to their name badge before handing them out.",
+   "example": "",
+   "technical": ""
+  },
+  "power-bi": {
+   "name": "Power BI",
+   "match": [
+    "Power BI"
+   ],
+   "plain": "A program for building charts and reports that update themselves from the data.",
+   "here": "At Fernhill Freight, the kind of report planners and site managers could read the forecast in.",
+   "like": "Like a car's dials: the numbers you need, in one place, kept current.",
+   "example": "",
    "technical": ""
   }
  },
@@ -849,7 +1041,7 @@
   "weaknesses": [
    {
     "what": "SAP",
-    "frame": "Say: “I have reported from SAP extracts and the warehouse system behind them.”"
+    "frame": "Say: \u201cI have reported from SAP extracts and the warehouse system behind them.\u201d"
    },
    {
     "what": "CIPS membership",
@@ -902,5 +1094,6 @@
   "on": "2026-03-11",
   "problems": 0,
   "drafts": 3
- }
+ },
+ "lead": "cues"
 }

@@ -237,7 +237,7 @@ def unread_why(cid: str, model: dict, now) -> str:
         msgs = [t for t in threads if str(t.get("contact_id") or "").strip() == cid]
         if state.effective_status(row, msgs) not in schema.NEVER_SENT:
             return "written to already"
-        if state.request_pending(msgs):
+        if state.request_pending(msgs, row):
             return "a connection request to them is waiting"
         if any(str(t.get("direction") or "") == "outbound" for t in msgs):
             return "written to already"
@@ -400,6 +400,60 @@ def self_fixes(db: dict | None, model: dict, out_dir: str, now, dump_dir: str = 
     return out
 
 
+# The sections that draw the same people, with the people's whole list (`list~people~*`): a card
+# read the people section kept from another chat's copy beside the short list and messages
+# written from this one, the old record beside the new answer (issue 242).
+PEOPLE_TOGETHER = ("people", "messages", "people_count", "due")
+
+
+def _changed_section(model: dict, views: dict, name: str) -> bool:
+    import page_db
+    return name in model and not (views and page_db.joined(views, name) == json.loads(
+        json.dumps(model[name], ensure_ascii=False)))
+
+
+def people_together(model, views, list_docs, as_they_are, why_newer, me, work="") -> dict:
+    """{doc id: True to keep, False to write} for the people section, its whole list, the
+    messages and To do, which draw the same people, wherever another chat's copy holds any of
+    them: one answer for all, never some kept from that copy and the rest written from this
+    one. Kept, where any was drawn from a copy newer than this one, or this chat changed none
+    of its people since (tools/touched.py); written, where only another chat's work not landed
+    yet holds them and this chat's own change touched its people since, so the change shows
+    on the card at once. {} where none is held."""
+    group = {n: views.get(n) for n in PEOPLE_TOGETHER if _changed_section(model, views, n)}
+    group.update({d: views.get(d) for d, doc in list_docs
+                  if doc.get("list") == "people" and d not in as_they_are})
+    why = {d: why_newer(old) for d, old in group.items()}
+    held = [d for d, w in why.items() if w]
+    if not held:
+        return {}
+    keep = "ahead" in why.values() or not _touched_people_since(
+        min(str(((group[d] or {}).get("data") or {}).get("made_at") or "") for d in held),
+        me, work)
+    return dict.fromkeys(group, keep)
+
+
+def _touched_people_since(since: str, me, work: str = "") -> bool:
+    """Has this chat (its ids `me`, or its piece of work) changed anyone in the contact book
+    since `since`, by tools/touched.py's record of this checkout?"""
+    try:
+        import touched
+        rows = touched.load()
+    except Exception:  # noqa: BLE001  no record: nothing of this chat's to show
+        return False
+    when = touched._when(since)
+    for r in rows:
+        if str(r.get("section") or "") != "contacts":
+            continue
+        if not (str(r.get("chat") or "") in me
+                or (work and touched._wid(r.get("work")) == touched._wid(work))):
+            continue
+        at = touched._when(r.get("at"))
+        if when is None or (at is not None and at >= when):
+            return True
+    return False
+
+
 def cmd_view(a) -> int:
     """The model as one document a section (`view/<section>`, in parts when it is too big for
     one: page_db.split) plus `meta/current` (stored as `meta/now`), so an open page updates live with no republish.
@@ -488,9 +542,14 @@ def cmd_view(a) -> int:
         history), and by the time only where it does not: by the time alone, a job chat's
         commit not landed yet, or a computer with a fast clock, kept the listener from ever
         writing its screens again."""
+        return bool(why_newer(old))
+
+    def why_newer(old) -> str:
+        """"ahead" (drawn from a copy newer than this one), "unlanded" (from one holding work
+        not landed yet, `holds_unlanded`) or "" (this copy may write over it)."""
         d = (old or {}).get("data") if isinstance(old, dict) else None
         if not isinstance(d, dict) or str(d.get("by") or "") in me:
-            return False
+            return ""
         theirs_sha = str(d.get("base_sha") or "")
         if theirs_sha and base_sha:
             if theirs_sha not in ahead_of_us:
@@ -498,9 +557,10 @@ def cmd_view(a) -> int:
                 ahead_of_us[theirs_sha] = commit_ahead(
                     theirs_sha, os.environ.get("LJS_BASIS_SHA") or "HEAD")
             if ahead_of_us[theirs_sha] is not None:
-                return ahead_of_us[theirs_sha] or holds_unlanded(d)
+                return "ahead" if ahead_of_us[theirs_sha] else (
+                    "unlanded" if holds_unlanded(d) else "")
         theirs = str(d.get("base") or "")
-        return bool(base) and bool(theirs) and theirs > base
+        return "ahead" if bool(base) and bool(theirs) and theirs > base else ""
 
     def holds_unlanded(d: dict) -> bool:
         """Was it drawn, a little while ago, from a copy holding work of its own not landed
@@ -556,11 +616,13 @@ def cmd_view(a) -> int:
     by_hold = app_page.joins_by_hold()
     list_docs = app_lists.docs(full, model["made_at"], model["rev"], by_hold=by_hold)
     as_they_are = app_lists.kept_as_they_are(list_docs, views, by_hold=by_hold)
+    together = people_together(model, views, list_docs, as_they_are, why_newer, me,
+                               getattr(a, "work", "") or "")
     for doc_id, doc in list_docs:
         old = views.get(doc_id)
         if doc_id in as_they_are:
             continue
-        if newer(old):
+        if together.get(doc_id, newer(old)):
             kept.append(doc_id)
             continue
         w.add("set", "view", doc_id, dict(doc, **stamp),
@@ -585,7 +647,7 @@ def cmd_view(a) -> int:
             n = head.get("in_parts") if isinstance(head.get("in_parts"), int) else 0
             written.extend([name] + [page_db.part_id(name, i) for i in range(1, n + 1)])
             continue
-        if newer(views.get(name)):
+        if together.get(name, newer(views.get(name))):
             # A section is kept or rewritten whole, so its parts never mix two copies.
             head = (views.get(name) or {}).get("data") or {}
             n = head.get("in_parts") if isinstance(head.get("in_parts"), int) else 0
@@ -609,7 +671,7 @@ def cmd_view(a) -> int:
          .get("queue") or []]
     try:
         ctx = app_model.Ctx(today, now)
-        reach = app_model.reach_docs(ctx.contacts, ids)
+        reach = app_model.reach_docs(ctx.contacts, ids, ctx.by_contact)
         # What each person waiting on a reply last said, beside their address, owner-only.
         owed = [str(d.get("item") or "") for d in model.get("due") or [] if d.get("item")]
         for cid, words in app_model.last_words(ctx, owed + ids).items():
@@ -1173,7 +1235,11 @@ def choose(db: dict, chat: str, kind: str, now, on: str = "", no_sessions: bool 
                                    to_only="computer" if computer_only else "",
                                    questions_only=questions,
                                    skip_questions=(sessions and not job_chat and not computer_only
-                                                   and page_db.question_chat_live(db, now)))
+                                                   and page_db.question_chat_live(db, now)),
+                                   # A big job is started first, in a chat of its own, so it
+                                   # never waits behind the light work done here (issue #231).
+                                   heavy_first=(kind == "cloud" and not job_chat
+                                                and not computer_only and not questions))
     if chosen is None:
         return None
     # Sent to the computer: a LinkedIn read. It runs in this chat, which has the browser,
@@ -2881,7 +2947,8 @@ def cmd_wake(a) -> int:
                                 "finish it as step 5 says.") + (
                                 " More is waiting: then read again into a new folder and wake "
                                 "once more (step 3 again)." if more else ""))
-                then += asked_first_lines([chosen] + also, a.dump, chat, url)
+                then += asked_first_lines([chosen] + also, a.dump, chat, url, kind,
+                                          bool(a.no_sessions))
         else:
             # Only what the call needs: its stages, locks, claim files and model were printed
             # in it, sent above or read by nothing, every one a line of the listener's (E-8).
@@ -2939,19 +3006,24 @@ ASKED_SHOWN = ("first: {which} {is_} the person's question{s}: answer {it} befor
                "show together.")
 # Between the other items of a pass, a question asked meanwhile is answered before the next
 # one, never after the whole pass: each item is the step boundary the app has.
+# In the cloud the look names a big job asked meanwhile too (app_listen.job_waiting), so its own
+# chat is started then, never after the whole pass (issue #231).
 ASKED_BETWEEN = ("between items: after each item but the last is finished, look once for a "
-                 "question asked meanwhile: ArtifactData query, url {url}, collection work, "
-                 "out_dir a fresh folder $E, limit 1000, then python3 tools/app_listen.py "
-                 "waiting \"$E\" --question. Where it names one: python3 tools/app.py next \"$E\" "
-                 "--chat {chat} --claim-out \"$E/claim\" hands it first; send its batch, then, "
-                 "where its `run` is child session, make its create_session call exactly as "
-                 "printed (the question's own chat; refused or failed, do what its `if_refused` "
-                 "says), and otherwise answer it here as step 4's row "
-                 "for a talk says and finish it with step 5's done over \"$E\"; then go on with "
-                 "the next item of this pass. It names none: go on, saying nothing.")
+                 "question asked meanwhile{or_job}: ArtifactData query, url {url}, collection "
+                 "work, out_dir a fresh folder $E, limit 1000, then python3 tools/app_listen.py "
+                 "waiting \"$E\" --question{jobs}. Where it names one: python3 tools/app.py next "
+                 "\"$E\" --chat {chat} --kind {kind}{flags} --claim-out \"$E/claim\" hands it "
+                 "first; send its batch, then, where its `run` is child session or background "
+                 "agent, make its create_session or Agent call exactly as printed and never wait "
+                 "for it (a question's own chat, or the big job's; refused or failed, do what its "
+                 "`if_refused` says), and otherwise do it "
+                 "here as step 4's row for its kind says (a talk: answer it) and finish it with "
+                 "step 5's done over \"$E\"; then go on with the next item of this pass. It names "
+                 "none: go on, saying nothing.")
 
 
-def asked_first_lines(items: list, dump: str, chat: str, url: str) -> list[str]:
+def asked_first_lines(items: list, dump: str, chat: str, url: str,
+                      kind: str = "cloud", no_sessions: bool = False) -> list[str]:
     """What a wake that claimed several small items says about the person's questions among
     them: answered first and shown before the next item (ASKED_SHOWN), and, where two or more
     other items follow, a look between them for one asked meanwhile (ASKED_BETWEEN)."""
@@ -2966,7 +3038,11 @@ def asked_first_lines(items: list, dump: str, chat: str, url: str) -> list[str]:
                                       s="" if n == 1 else "s", it="it" if n == 1 else "them",
                                       dump=dump, chat=chat))
     if len(rest) >= 2:
-        out.append(ASKED_BETWEEN.format(url=url, chat=chat))
+        cloud = kind == "cloud"
+        out.append(ASKED_BETWEEN.format(url=url, chat=chat, kind=kind or "cloud",
+                                        or_job=", or a big job asked for meanwhile" if cloud
+                                        else "", jobs=" --jobs" if cloud else "",
+                                        flags=" --no-sessions" if no_sessions else ""))
     return out
 
 
@@ -3631,7 +3707,8 @@ def cmd_done(a) -> int:
             missing = []
         queued = page_db.queue_files(page_db.load(a.dump), missing, now,
                                      os.path.join(a.out or os.path.join(a.dump, "out"), "files"),
-                                     dump_dir=a.dump, chat_id=app_listen.this_chat(a.chat)) \
+                                     dump_dir=a.dump, chat_id=app_listen.this_chat(a.chat),
+                                     part_of=a.work) \
             if missing else None
         if queued:
             got["files"] = {"work": queued["work"], "applications": queued["applications"]}

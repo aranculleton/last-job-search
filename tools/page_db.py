@@ -948,9 +948,12 @@ STAGES = {
     "draft": [("start", "Getting started", 60), ("research", "Employer research", 120),
               ("write", "Writing", 120), ("audit", "Checking every fact", 120),
               ("render", "Making the PDFs", 60), ("verify", "Final checks", 60)],
-    "resume_for_contact": [("start", "Getting started", 60), ("write", "Writing", 120),
-                           ("audit", "Checking every fact", 120),
-                           ("render", "Making the PDF", 45), ("verify", "Final checks", 45)],
+    # A resume made for a contact took about 15 minutes in a real run (2026-11-11) against the
+    # 6.5 these said, and its card sat at the end of its bar long before it finished (issue
+    # #238): the writing and the fact check are the long part, the rest as measured.
+    "resume_for_contact": [("start", "Getting started", 60), ("write", "Writing", 360),
+                           ("audit", "Checking every fact", 300),
+                           ("render", "Making the PDF", 90), ("verify", "Final checks", 90)],
     "prep": [("start", "Getting started", 60), ("research", "Research", 120),
              ("build", "Building the pack", 120), ("questions", "Likely questions", 60)],
     "network": [("start", "Getting started", 60), ("find", "Finding people", 900),
@@ -1490,12 +1493,17 @@ def chats_at_work(db: dict, now: dt.datetime) -> int:
 # or a republish is never put behind it (UPDATES_FIRST): it changes the code the answer runs on.
 ASKED_FIRST = ("talk",)
 UPDATES_FIRST = ("update", "republish")
+# A big job is handed out next, before the light work the chat that answers the page does
+# itself, wherever it starts in a chat of its own (`heavy_first`: a cloud chat that starts
+# them): starting it is one call, and it then runs beside that work. Taken oldest first with the
+# rest, a resume asked for after four message changes sat at "Getting started" for eight
+# minutes while each change was made (issue #231).
 
 
 def next_item(db: dict, chat_kind: str, now: dt.datetime,
               cap: int = HEAVY_CAP, heavy_only: bool = False,
               to_only: str = "", questions_only: bool = False,
-              skip_questions: bool = False) -> dict | None:
+              skip_questions: bool = False, heavy_first: bool = False) -> dict | None:
     """The queued work item this chat should claim, or None.
 
     A kind of work it can do (can_take), the most urgent first, a question before anything
@@ -1503,7 +1511,9 @@ def next_item(db: dict, chat_kind: str, now: dt.datetime,
     may take one more), and never one whose locks another live job holds. `to_only`
     ("computer"): only work sent there, for the chat the app started on the computer for it.
     `questions_only`: only a Chat question, for the Chat's own chat; `skip_questions`: none,
-    for the chat that answers the page while the Chat's own chat is at work (chat_question)."""
+    for the chat that answers the page while the Chat's own chat is at work (chat_question).
+    `heavy_first`: a big job before light work of the same urgency, after a question or an
+    update, for a chat that starts each big job in a chat of its own (issue #231)."""
     work = db.get("work") or {}
     held = held_locks(db, now)
     # A batch is one job: its other postings (`with` its leader) take no place of their own,
@@ -1550,7 +1560,8 @@ def next_item(db: dict, chat_kind: str, now: dt.datetime,
         if not can_take(item, chat_kind) or (to_only == "computer" and not computer_only(item, "cloud")):
             continue
         queued.append((-int(item.get("priority") or 0),
-                       0 if str(item.get("kind") or "") in ASKED_FIRST + UPDATES_FIRST else 1,
+                       0 if str(item.get("kind") or "") in ASKED_FIRST + UPDATES_FIRST else
+                       1 if heavy_first and kind.get("heavy") else 2,
                        str(item.get("asked_at") or ""), wid))
     # An update that changes how a record file is stored (args.migration) never interrupts
     # running work: it starts once nothing else is running, and work asked for meanwhile
@@ -2681,7 +2692,7 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
            chat_kind: str = "cloud", dump_dir: str = "", chat: str = "",
            question: str = "", about: str = "", answer: dict | None = None,
            answered=(), left_out: str = "", outcome: str = "", signin: str = "",
-           go=(), me: str = "", add: bool = False, whom=()) -> dict:
+           go=(), me: str = "", add: bool = False, whom=(), queue=()) -> dict:
     """The batch that finishes one work item (the app skill, step 5): the item `done` (or
     `failed`, with `error` in plain words, or `stopped` after their Stop), its one-sentence
     summary and links, pinned to the version read; each of its locks the dump holds, deleted
@@ -2699,6 +2710,10 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
     `add` keeps its answer too, the new one after it (several replies answered in one item).
     Made again from the same read, it carries the same version, so a finish that landed already
     has the new one refused whole by the store: it is never sent twice.
+    `queue` ([(id, fields)], fields as `queued` makes them): work that goes with this answer,
+    queued in the same batch, so the two reach the page together (a resume made for someone
+    who asked for it, with the reply that says it is coming, #232). Kept with the finish, so
+    one made again carries it, and an id already queued is never queued twice.
     {work, status, thread, message, locks, batches}. Raises ValueError, in plain words, for a
     summary that will not do or a reply with no thread; KeyError for an item not in the dump
     or already finished."""
@@ -2718,8 +2733,11 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
                   if isinstance(b, dict) and b.get("label") and b.get("to")]
         new_go = [b for b in new_go if b not in old_go]
         said = str(reply or "").strip()
-        fresh = bool(new_go) or (bool(said) and said != str(kept.get("reply") or "").strip()
-                                 and not (add and said in str(kept.get("reply") or "")))
+        old_q = [q for q in kept.get("queue") or [] if isinstance(q, list) and len(q) == 2]
+        new_q = [[str(i), f] for i, f in queue or () if str(i) not in {q[0] for q in old_q}]
+        fresh = bool(new_go) or bool(new_q) or (
+            bool(said) and said != str(kept.get("reply") or "").strip()
+            and not (add and said in str(kept.get("reply") or "")))
         if fresh and kept:
             # One item answering several replies (one message with three people's answers):
             # each finish after the first, and the answer given at the end, was handed back
@@ -2735,6 +2753,7 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
             # file, and the second refused the first as already finished, 2026-11-09).
             return made
         go = old_go + new_go
+        queue = old_q + new_q
         if add and said and str(kept.get("reply") or "").strip():
             reply = str(kept["reply"]).strip() + "\n\n" + said
         elif not said:
@@ -2885,6 +2904,11 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
         if str((lock.get("data") or {}).get("work") or "") == work_id and not lock.get("old"):
             w.add("delete", "locks", lid, if_version=lock["version"])
             freed.append(lid)
+    queue = [[str(i), dict(f)] for i, f in dict((str(i), f) for i, f in queue or ()).items()]
+    for qid, fields_q in queue:
+        had = (db.get("work") or {}).get(safe_id(qid))
+        w.add("set", "work", safe_id(qid), fields_q,
+              if_version=had["version"] if had else None)
     # A draft of a search that drafts what it finds: the search's card counts it, and the
     # last one finishes the search once it has found all it will.
     lead = _search_counted(db, item, work_id, status, now, w)
@@ -2903,7 +2927,7 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
         _keep_finished(dump_dir, work_id, got, {
             "reply": str(reply or "").strip() if thread else answer_text,
             "go": go, "thread": thread, "message": mid, "whom": list(whom or ()),
-            "summary": summary})
+            "summary": summary, **({"queue": queue} if queue else {})})
     return got
 
 
@@ -3299,12 +3323,17 @@ FILES_AFTER = ("draft", "resume_for_contact")
 
 
 def queue_files(db: dict, apps: list, now: dt.datetime, out_dir: str, dump_dir: str = "",
-                chat_id: str = "") -> dict | None:
+                chat_id: str = "", part_of: str = "") -> dict | None:
     """One `files` item for every drafted application in `apps` (app_model.files_missing)
     that no files work still going already covers, made as the page's own "Get my files
     ready" makes it (templates/app/app.js askFiles): for the chat that answers the page,
     which can upload, all of them in one piece of work. The page rings for it with the
-    person's next tap, like any work no chat was told of. None when nothing is left."""
+    person's next tap, like any work no chat was told of. None when nothing is left.
+
+    `part_of`: the work whose finish queued it (a resume made for a contact, a draft). The
+    page draws the two as one piece of work, "Making it downloadable" until the file can be
+    downloaded, and never this one as an item of its own: the resume said ready and finished
+    while "Make the files downloadable" still ran beside it (issue #237)."""
     import app_model
     work = db.get("work") or {}
     covered: set = set()
@@ -3336,6 +3365,8 @@ def queue_files(db: dict, apps: list, now: dt.datetime, out_dir: str, dump_dir: 
               "priority": 0, "status": "queued", "stages": progress("files")["stages"],
               "stage": 0, "stage_at": None, "steps": [], "claimed_by": None, "claimed_at": None,
               "stop_asked": False, "attempt": 1}
+    if part_of:
+        fields["part_of"] = safe_id(part_of)
     old = work.get(wid)
     w = Writes(out_dir)
     # One with this id already finished (an earlier upload of the first of them): asked

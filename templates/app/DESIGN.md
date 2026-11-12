@@ -89,10 +89,17 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   (empty chat tests)
 - In Claude's work, four or more of one kind waiting, or finished, are one card with their
   count and the first few names; Show lists them. Nobody scrolls past fifty cards. (run test)
+- Over Claude's work, with two or more things going, one short strip says what runs now and
+  what waits, in the order Claude takes it, a big job said as running in a chat of its own, and
+  a big job's card says it does not wait for other work. Why: with several things asked for in
+  a row nobody could tell what was queued, in what order, or why a resume seemed to sit behind
+  small changes (issue #238). Making a resume downloadable is a stage of the resume's own card,
+  "On its way", never a card of its own (#237). (queue test)
 - Claude's work says its count once, in the header's pill: no line under its title repeats
   it, and "Nothing is sent." is not said over the cards. Each running or waiting card has its
   title, one short state with its clock ("Waking Claude · 1m 4s", never a chip and a line
-  both saying it), its bar, and Stop Claude at the end of the clock's line, never on a line
+  both saying it), its bar (none once it runs past its estimate: its time so far says how long,
+  never a bar stuck at its end, #238), and Stop Claude at the end of the clock's line, never on a line
   of its own; in a narrow panel the state goes under the title rather than squeeze it. The
   sheet's Close and the panel's Hide are soft pills on the title's own line (2026-11-10). Its
   actions share the clock's line only while both fit, the words keeping a short line's width,
@@ -226,49 +233,73 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   claude thing going to happen?" (the maintainer, 2026-11-07). (waiting-note tests)
 - **An interview's live prep reads full screen, one interview in the order it runs**, laid out
   as the maintainer's call-prep page (2026-11-10: "this is what i want ... more tailored to
-  interviews"), on every screen. On screen is only what the moment needs; depth is one tap
-  away (the detailed answer, the follow-ups, a word's meaning, the A to Z), never all at once.
-  The head: the day, one muted line saying what it is ("A technical interview for the ...
-  role, 45 minutes in 4 parts", and the drafts the person asked for), one pill, Practise with
-  Claude (Update my prep and the calendar stay on its card in Coming up), then At a glance, in
-  a plain box, what the first screen is for (the UX review, 2026-11-10, U-5): the line to open
-  with, what they are known to ask (else the first likely question) with the part it is in,
-  and two questions to ask them, each a tap to its place, and a guessed kind of interview said
-  there with "Not this kind of interview?" one tap from the right one. Then a chip to every
-  part, then Stories, Words and Your notes, wrapping (on a phone one row that scrolls sideways inside itself, its far end fading: over three rows they put Part 1 more than a screen down, the screen review, 2026-11-11), the parts with a known question marked in
-  gold, the chip's name and hover saying why ("A question they are known to ask is in this
-  part") and At a glance's "Part 2" beside the known question in the same gold, its key (the
-  screen review, 2026-11-11: a tint nobody could read); "All answers" with the one Simple|Detailed|Hidden switch (the chosen side filled), and Tools
-  beside it, folded, holding search, Open all and Close all. Nothing stays on the screen over
-  the reading. Then the timing, one line on its fold ("Timing: 60 minutes in 5 parts, the last
-  7 minutes for your questions", a day of interviews in hours), the rest said in words inside it (the person's own talk at their
-  pace, the longest stop). A test taken alone has nothing to say first and no talk to time:
-  its parts keep in mind how it works, how to take each kind of item and the pacing, and At a
-  glance says what to know before you start. Each part: a small-capitals line (its number, its minutes, the
-  person's talk in it) and its title over a rule; "Say first" in a plain box, each line a bullet, a known question
-  answered there marked, its "Likely to prompt" or "Full answer and follow-ups" lines dashed
-  under it, going to the answer and marking it until a moment after it arrives, and the line
-  to end on in italics; then its questions as cards, each with who asks it in a pill (inline on a wide screen, over the
-  question on a phone, so a title never breaks beside it), the other
-  ways it is put, its answer in the soft accent box with its own switch (a simple answer a
-  sentence a line, to glance at; the detailed one prose), the story it comes from, and its own follow-ups folded by who asks, three deep at most; the follow-ups after any story said once, at the part's foot ("After any story here, they may ask"), never under each question (the screen review, 2026-11-11: the same three stood under every one); the questions to ask them in
-  the last part, each with what to ask next folded under its likely answers. Then the stories,
-  each once with the questions it answers; every word A to Z, folded; and the notes that are
-  the person's alone, pay and notice among them, last in a gold box. A term is a dotted word
-  inside its sentence, never a pill: it opens a panel at the side on a wide screen and a sheet
-  from the bottom on a phone over the page dimmed, with Back through a term inside a term, and
-  Close; on a wide screen the reading column keeps room for it at its right, so nothing moves
-  when it opens. Practice is Practise with Claude, and Hidden, the third side of the one
-  answers switch: each answer waits behind "Show the answer" beside its Say, and what to say
-  first behind "Show what to say", to be said first and then checked (the UX review,
-  2026-11-10, U-4); Hidden is for that opening only and never kept, so the prep read on the
-  morning of the interview shows every answer; never a Start or a timer on every card, which the
-  maintainer called cluttered. Every id
-  in it carries the interview's, and its listeners are on its own root. Two of the page's
-  rules give way here to the call-prep page: labels are small capitals (a letter-spaced
-  uppercase the rest of the page keeps for the Brief's day), and an answer is drawn at the size
-  of the words around it, not a step larger. The words, the order and the timing are the
-  engine's (`interview_live`). (live prep tests)
+  interviews"), on every screen, and kept open beside the call. **Nothing needs opening before
+  it can be read** (the maintainer, 2026-11-11): there is no fold, switch or "Show" in it. The
+  head: the day, one pill, Practise with Claude (Update my prep and the calendar stay on its card
+  in Coming up), and the drafts the person asked for in one muted line. Then the bar, the one
+  thing that stays at the top while the prep scrolls, one solid ground flush with the header
+  down to under its chips: find ("They asked..."; "/" goes to it, Esc clears it) with "Points
+  first" or "Script first" beside it, never after the chips, and under them a chip to every
+  part, then Stories and Your notes, one row on a phone that scrolls sideways inside itself, its
+  far end fading. One chip is filled, the part whose heading was last scrolled up to the bar
+  (the first part from the top of the prep until the next heading gets there; at the end of the
+  prep, where the last parts cannot get there, the one tapped, else the last in view), marked as the
+  prep scrolls (the one thing that changes by itself) and kept in view in its row; nothing else
+  looks filled, a chip under the mouse underlined instead of shaded; a part with a known
+  question wears a gold dot, the chip's name and hover saying why. A jump on a phone lands under
+  the bar as it will be once there. On a phone, once the prep is read
+  under the bar, find, the order and the chips are one row, the bar keeping its room in the
+  flow so nothing under it moves, whole again near the top and while find is in use. The
+  bar's name for a screen reader is the timing in a line ("60 minutes in 5 parts, the last 7
+  minutes for your questions", a day of interviews in hours). Then At a glance, in a plain box:
+  the line to open with, what they are known to ask (else the first likely question) with the
+  part it is in and its gold dot, two questions to ask them, each a tap to its place, and a guessed kind of
+  interview said there with "Not this kind of interview?" one tap from the right one. A test
+  taken alone has nothing to say first: its parts keep in mind how it works, and At a glance
+  says what to know before you start. Each part: a small-capitals line (its number and minutes)
+  and its title over a rule; "Say first" in a plain box, each line a bullet, its "Likely to
+  prompt" or "Full answer and follow-ups" lines dashed under it, going to the answer and marking
+  it until a moment after it arrives, and the line to end on in italics; then its questions as
+  cards, the question first and who asks after it, small, a gold dot on one they are known to
+  ask. **Every answer shows both ways at once**: the script to read aloud (17px, at most 60
+  characters a line, full ink) and the same answer as points (the first one bold and larger),
+  in the order the person picked, the second under a thin rule; nothing redraws when they flip
+  it. **Follow-ups are choices, never folds**: under an answer, "They may ask next" and a
+  button a follow-up; picking one shows its question, both ways of its answer and its own
+  follow-ups in the same place, three deep, the way back above it (each earlier pick a link,
+  and Back), the picked question taking the focus. The follow-ups after any story are said
+  once, at the part's foot ("After any story here, they may ask"), never under each question.
+  The questions to ask them sit in the last part, each with what to ask next to each likely
+  answer as a plain line ("If they say ... → ask: ..."). Find looks through what to say, both
+  ways of every answer and every follow-up at any depth, and a follow-up it finds is picked so
+  its answer is in view. Then the stories, each once with the questions it answers, and the
+  notes that are the person's alone, pay and notice among them, with the answers to avoid as a
+  plain list, last in a gold box; the last line says Claude does not join, listen or record. A
+  term is a dotted word inside its sentence, never a pill: it opens a small box (at most 272px
+  wide) under the line after its own, or over its own line where that would not fit, never
+  covering the line being read or the next one, between the bar and the lifelines, and never a
+  panel or a dimmed page, saying what it means, what it means here and what it is like, with
+  More for an example and the technical answer. A mouse moved onto the word and kept there 700ms
+  opens it, never a word the text scrolled under a mouse left resting; leaving the word and the
+  box closes it; focus opens it at once; a tap opens it until Esc, a tap outside or a second tap.
+  It never takes the focus, and nothing moves when it opens. Numbers in what to say are bold. At
+  the foot of the screen, flush with it as the prep scrolls, a row of lifelines (Moment, Again?,
+  Don't know, and Pay, Notice and Based where the notes hold them), wrapping to a second row on
+  a phone, never scrolling one past the edge: a tap says one line over the row itself, labelled
+  "Only for you", never above it over the answers; it fades after a while, and a tap on it or
+  Esc closes it at once. A coding part with steps says first what to say, then the problem as
+  they set it and its answer, then its cockpit, all in view: what to ask before typing, the
+  steps as a short checklist (a step's name and its line in one run of words, the next one
+  marked, ticks kept only while it is open), what to say when stuck, the edge cases to name,
+  handy code with Copy, and what to say you would do with more time; its other questions come
+  after. Practice opens only from Practise 3 questions: each
+  answer waits behind one "Show the answer" in place of both its ways, to be said first and
+  then checked (the UX review, 2026-11-10, U-4), for that opening only, so the prep read on the
+  morning of the interview shows every answer. Every id in it carries the interview's, and its
+  listeners are on its own root. Two of the page's rules give way here to the call-prep page:
+  labels are small capitals, and an answer is drawn larger than the words around it, to be read
+  at a glance mid-call. The words, the order and the timing are the engine's
+  (`interview_live`). (live prep tests)
 - Many of one small thing are one checklist card, a row an item: each row has its own next
   step and Done beside its trash, the trash keeping the rest (They replied, Tomorrow, Next week,
   the person's choices), and the card's own actions keep to the card's anatomy above.

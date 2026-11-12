@@ -259,6 +259,11 @@ def test_a_card_says_the_latest_exchange_and_its_more_how_it_began(run, page):  
 CORWIN = "teal_retail_nettle"
 LINE = ("(() => { const g = document.querySelector('%s .going'); return g ? g.innerText.replace(/\\s+/g, ' ').trim() : ''; })()"
         % _card(CORWIN))
+# A chat's write is drawn on the next frame when the screen before it was slow to draw (a burst
+# of writes drawn once, app.js liveRender): a step after one waits for what it reads, never a
+# set number of turns (CI, 2026-11-11: read before the frame, the draft not on the card yet).
+SHOWS = ("(() => { const c = document.querySelector('%s'); return !!c && c.innerText.includes('%%s'); })()"
+         % _card(CORWIN))
 BOX = ("(() => { const t = document.querySelector('%s .reply-box textarea'); return t ? [document.querySelector('%s .reply-label').textContent, t.value] : null; })()"
        % (_card(CORWIN), _card(CORWIN)))
 
@@ -306,7 +311,8 @@ def test_the_reply_line_says_each_state_and_can_be_called_off(run, page, model):
     got = run("engine", html=page, viewport=PHONE, clock=CLOCK, seed={"work/reply~" + CORWIN: running}, steps=[
         {"hash": "contacts", "eval": LINE},
         {"click": "Stop Claude's work on the message to Corwin", "eval": LINE},
-        {"write": {"work/reply~" + CORWIN: dict(running, stop_asked=True, status="stopped", finished_at="2026-10-25T18:30:30Z")}, "eval": LINE},
+        {"write": {"work/reply~" + CORWIN: dict(running, stop_asked=True, status="stopped", finished_at="2026-10-25T18:30:30Z")},
+         "ready": LINE + ".startsWith('Stopped')", "eval": LINE},
     ])
     assert not got["errors"], got["errors"]
     assert got["after"][0]["eval"].startswith("Claude is on it · Drafting your reply"), got["after"][0]["eval"]
@@ -318,7 +324,8 @@ def test_the_reply_line_says_each_state_and_can_be_called_off(run, page, model):
              "warnings": [], "blocked": [], "count": {}, "rev": "r-c"}
     got = run("engine", html=page, viewport=PHONE, clock=CLOCK, seed={"work/reply~" + CORWIN: _reply_work("done", finished_at="2026-10-25T18:30:00Z")}, steps=[
         {"hash": "contacts", "eval": LINE},
-        {"write": {"view/messages": {"made_at": "2026-10-25T18:31:00Z", "data": list(model["messages"]) + [reply]}}, "read": _card(CORWIN), "eval": LINE},
+        {"write": {"view/messages": {"made_at": "2026-10-25T18:31:00Z", "data": list(model["messages"]) + [reply]}},
+         "ready": SHOWS % "Thanks Corwin, next week works.", "read": _card(CORWIN), "eval": LINE},
     ])
     assert not got["errors"], got["errors"]
     assert got["after"][0]["eval"] == "Finished · Putting it on your page.", got["after"][0]["eval"]

@@ -234,6 +234,8 @@ def test_the_check_sees_words_drawn_over_words(run, pages):
 
 
 # One fault of each kind, laid on a screen as stood, each in a box of its own (`spoil-<kind>`).
+# Each is a fault in every type: More is put on a line of its own, where a box 220px wide left
+# it beside "Read your prep" in Windows' type, and no fault was there to find (CI, 2026-11-11).
 SPOIL = """(() => {
   const m = document.querySelector("#main .sec") || document.getElementById("main");
   const add = (html) => { const d = document.createElement("div"); d.innerHTML = html; m.appendChild(d.firstElementChild); };
@@ -243,7 +245,7 @@ SPOIL = """(() => {
   add('<p class="spoil-starts">Interview<br>\u00b7 Supply Chain Analyst</p>');
   add('<p class="spoil-ends">Interview \u00b7<br>Supply Chain Analyst</p>');
   add('<button type="button" class="spoil-small" style="width: 16px; height: 16px; padding: 0; border: 1px solid">?</button>');
-  add('<div class="card-actions spoil-alone" style="width: 220px"><button type="button" class="btn secondary small">Practise 3 questions</button><button type="button" class="btn secondary small">Read your prep</button><details class="more"><summary class="more-btn">More</summary></details></div>');
+  add('<div class="card-actions spoil-alone" style="width: 220px"><button type="button" class="btn secondary small">Practise 3 questions</button><button type="button" class="btn secondary small">Read your prep</button><details class="more" style="flex-basis: 100%"><summary class="more-btn">More</summary></details></div>');
   add('<p class="spoil-faint" style="color: #c8c8c8; background: #ffffff">Words too faint to read</p>');
   add('<svg class="spoil-piled" width="60" height="40" viewBox="0 0 60 40"><text x="10" y="20">300</text><text x="12" y="22">400</text></svg>');
   add('<p class="spoil-date">Paused 2026-10-20 with Harbourline Bank</p>');

@@ -78,7 +78,7 @@ def test_the_prep_opens_from_the_store_on_coming_up(run, tmp_path, vp, view, tap
     iv = next(i for i in model["interviews"] if i["id"] == IV)
     assert seen["open"] and iv["company"] in seen["title"], seen
     assert seen["parts"] == len(iv["live"]["parts"]), seen
-    assert seen["mode"] == ("hidden" if tap.startswith("Practise") else "simple"), seen
+    assert seen["mode"] == ("hidden" if tap.startswith("Practise") else "both"), seen
 
 
 def test_the_brief_and_to_do_draw_the_prep_from_the_store(run, tmp_path):

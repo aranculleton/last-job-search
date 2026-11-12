@@ -3204,7 +3204,7 @@ def waiting_until(contact, msgs, wait_days: int | None = -1) -> datetime.date | 
             return None
         return due + datetime.timedelta(days=wait_days) if wait_days else state.follow_up_on(due)
     until = sent + datetime.timedelta(days=wait_days) if wait_days else state.follow_up_on(sent)
-    pending = state.request_pending(msgs)
+    pending = state.request_pending(msgs, contact)
     if pending is not None and pending != datetime.date.min:
         until = min(until, pending + datetime.timedelta(days=state.REQUEST_WITHDRAW_DAYS))
     return until
@@ -4111,7 +4111,7 @@ def match_invitations(cards: list, contacts: list, threads: list | None = None,
         if cid in listed:
             continue
         rows = [r for r in state.threads_for(threads, cid) if state._direction(r)]
-        when = state.request_pending(rows)
+        when = state.request_pending(rows, c)
         if when is None:
             continue
         if complete or (edge is not None and when > edge):

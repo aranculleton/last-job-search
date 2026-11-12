@@ -142,6 +142,12 @@ def test_two_finishes_in_a_row_and_an_answer_mid_way_with_no_version_typed(ring)
     d = read(ring, "r1", "--full", now=LATER)
     said = T.wake(ring, d, now=LATER)
     assert all(land(ring, [p for p, _ in R.sends(said)])), said
+    # The redraft the view queued is a big job: started first, in a chat of its own, so it never
+    # waits behind the changes (issue #231); the changes are the same folder's next wake.
+    if R.next_item(said)["kind"] == "draft":
+        assert "More is waiting" in said, said
+        said = T.wake(ring, d, now=LATER)
+        assert all(land(ring, [p for p, _ in R.sends(said)])), said
     for wid in ("tweak~msg-a~1", "tweak~msg-b~1"):
         assert stored(ring, "work", wid)["data"]["status"] == "running", wid
     held = sorted(os.listdir(os.path.join(ring.db, "holds")))

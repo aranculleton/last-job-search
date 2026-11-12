@@ -39,6 +39,7 @@ import importlib.util
 import json
 import os
 import sys
+import threading
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import python_floor  # noqa: E402
@@ -419,6 +420,9 @@ _modules: dict = {}
 _data: dict = {}
 
 
+_NO_BYTECODE = threading.RLock()     # a profile module loading may load another
+
+
 def module(name: str):
     """Load profile/<name>.py by path and return it. Cached per file."""
     f = _need(name + ".py")
@@ -426,12 +430,15 @@ def module(name: str):
         spec = importlib.util.spec_from_file_location(f"ljs_profile_{name}", f)
         mod = importlib.util.module_from_spec(spec)
         # No compiled copy beside the profile: profile/__pycache__ is one more thing a forced
-        # add commits, and these files are read once a run.
-        was, sys.dont_write_bytecode = sys.dont_write_bytecode, True
-        try:
-            spec.loader.exec_module(mod)
-        finally:
-            sys.dont_write_bytecode = was
+        # add commits, and these files are read once a run. One load at a time: two threads
+        # loading at once each kept the other's True as the value to put back, and the switch
+        # stayed on for the rest of the run (CI, 2026-11-11).
+        with _NO_BYTECODE:
+            was, sys.dont_write_bytecode = sys.dont_write_bytecode, True
+            try:
+                spec.loader.exec_module(mod)
+            finally:
+                sys.dont_write_bytecode = was
         _modules[f] = mod
     return _modules[f]
 

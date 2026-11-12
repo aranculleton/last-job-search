@@ -178,11 +178,16 @@ def test_an_undo_in_another_window_takes_the_saved_line_off_this_one(run, tmp_pa
 # ------------------------------------------------------------------ 5. offline taps are kept
 
 
+NOT_SAVED = "[...document.querySelectorAll('.toast')].some((e) => /Not saved/.test(e.innerText))"
+
+
 def test_a_tap_made_while_the_store_refuses_is_saved_by_itself_once_back_online(run, tmp_path):
     html = _page(tmp_path)
     s = _script(run, html, [
         {"hash": "todo", "fake": {"failWrites": True}, "event": "offline"},
-        {"click": DONE},
+        # The refusal comes back from the store a moment after the tap: read once its toast is
+        # up, never a set number of turns later (Safari's engine, CI, 2026-11-11).
+        {"click": DONE, "ready": NOT_SAVED},
         {"fake": {"failWrites": False}, "event": "online", "run": 500},
     ])
     assert "Offline." in s[0]["conn"] and "if this page stays open" in s[0]["conn"]
