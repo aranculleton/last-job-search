@@ -20,8 +20,11 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+## [4.16.1] - 2026-11-12
+
 ### Changed
 
+- **Interview preps are easier to use in the call, Find people reaches the number you ask for, and computer jobs reach your page at once**
 - **Interview preps are easier to use during the call.** On a wide screen it uses the width, with each part's opening lines beside its likely questions and staying in view as you read them; the lines you say out loud are bigger and everything else quieter; your opening is shown once; the questions your opening may lead to sit in one line under it; a follow-up opens right under the question you tapped, three deep, with the way back; the quick lines at the foot say what each gives ("Give me a moment", "Could you repeat that?"); and the questions to ask them read as plain lines.
 - **Interview preps read the way you would really say them.** Answers no longer end on a line added to lead into the next question, short points are whole phrases in your own words instead of pieces cut from the answer, your introduction is written once as the answer to "Tell me about yourself", the questions to ask them are a short reason then the question with nothing pasted in brackets, and in a round with coding and a personal story the questions about the work sit in the coding part. A prep already made stays as it is, so nothing you are reading for an interview changes under you.
 - **The chats Claude makes are explained.** README.md, "The chats you'll see", says what each "Job search" chat in your list is for, which stay and which are put away by themselves, how many to expect, and the one time you open one: to let Claude use your computer, once. HELP.md and COMPUTER.md point to it.
@@ -29,6 +32,7 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **A read of your page just made is never called months old.** Where the computer's clock and the times on its files differed, a chat judged a fresh read of your page's work as stale and would not queue or report anything from it; it now measures both on the same clock.
 - **The morning brief gives an interview's time in your own time.** An interview booked in another time zone was given at its own clock time with no zone named, hours off for you. It now reads, for example, "tomorrow at 01:00 (19:00 Toronto time)". What an employer sees keeps their own time.
 - **A link to someone on hold opens straight on their card.** It landed on Contacts with the On hold group still folded, so their card could not be seen; the group now opens on them.
 - **A connection request nobody accepted in three weeks says to withdraw it.** It stopped counting against its employer then, but nothing told you to withdraw it: its card still said it had not been accepted yet, To do had nothing, and its date was the follow-up day for after they accept, so two requests sent one day showed two days. Now its card and To do say "Withdraw your request to Wren: it has waited 3 weeks", dated by that day (issue 261).

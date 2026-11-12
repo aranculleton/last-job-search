@@ -363,7 +363,7 @@ def test_the_parts_draw_what_the_whole_page_draws(tmp_path):
     assert r["parts"]["title"] == r["whole"]["title"]
     assert r["parts"]["broken"] is None            # every file arrived: no "did not load fully"
     for sid, text in r["whole"]["sections"].items():
-        assert text and r["parts"]["sections"][sid] == text, sid
+        assert text and r["parts"]["sections"][sid] == text, (sid, text, r["parts"]["sections"][sid])
 
 
 def _runner():
