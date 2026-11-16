@@ -1268,8 +1268,8 @@ dialog.tweak-sheet > .tweak-panel { height: auto; flex: 1 1 auto; }
 
 
 /* ------------------------------------------------------------------ dialogs and toasts */
-/* What floats is one family (the redesign, 2026-11-16): a sheet, a menu and the Chat panel
-   on the overlay colour with a hairline and the floating shadow, a sheet's corners 20px. On a
+/* What floats is one family (the redesign, 2026-11-16): a sheet and a menu on the overlay
+   colour with a hairline and the floating shadow, a sheet's corners 20px. On a
    phone a sheet rises from the foot of the screen, its top corners round and a small grabber
    at its top, as a phone's own sheets do. */
 dialog.sheet {

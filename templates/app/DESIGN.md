@@ -99,9 +99,8 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   in the side menu is the same soft clay fill, its name at 600 and its icon in clay, never a bar
   down its side; "Icons only" is a quiet grey control. The phone's header has one title (on
   the Brief its greeting) and Claude's labelled light at its right. On a phone a sheet rises
-  from the foot with round top corners and a small grabber; a sheet, a menu and the Chat panel
-  float on the overlay colour with a hairline and the floating shadow, a menu's rows a finger's
-  height (the redesign, 2026-11-16: a grey bar with a red line on top, a dot after the title
+  from the foot with round top corners and a small grabber; a sheet and a menu float on the
+  overlay colour with a hairline and the floating shadow, a menu's rows a finger's height (the redesign, 2026-11-16: a grey bar with a red line on top, a dot after the title
   that read as "unread" and a bare "5" read as dated). (layout 5 and 6, menu tests, sheet tests)
 - In Claude's work, four or more of one kind waiting, or finished, are one card with their
   count and the first few names; Show lists them. Nobody scrolls past fifty cards. (run test)
