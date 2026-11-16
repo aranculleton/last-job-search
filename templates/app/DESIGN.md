@@ -709,16 +709,22 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
 - An opened setting reads across a wide panel: its words on the left, its buttons at the right
   edge under the row's own value, and a tap's line under both with its Undo at the right; on a
   phone the buttons follow the words. One way to do each thing in it. A short single choice is
-  a row of chips, still a radio group, that wraps on a phone. (spaces-its-settings test)
+  a segmented control (a sunk track, the one chosen raised on it), still a radio group, that
+  wraps on a phone; a choice with more to say under each is a list of option rows; a setting
+  that is on or off is a switch, its state its knob's place as well as its colour. On a phone a
+  row's value goes under its name, at its left edge. Why: capsules with dots and ticked clay
+  squares read as a form, and values wrapped right-aligned into ragged columns (the redesign,
+  2026-11-16). (spaces-its-settings test)
 - File names (Settings > You) is the one place a file name is shown: its value is an example
-  from the person's own name and latest employer, and each chip shows its own, the one
+  from the person's own name and latest employer, and each choice shows its own, the one
   recommended for their country marked. It names only the copies they download and send; the
   files Claude keeps keep theirs. Default: the person, the employer, then the document, the
   word by their market (docpaths.FILE_NAME_PRESETS). (file names test)
 - Many of one kind in Settings are one row that opens them, never a row each: "Employers
   you've turned down (N)" with what they left out, each name with its small trash; what Claude
-  learned has one home, "What you have taught it", grouped by area, a rule a line with its day
-  small at the end; Your rules links to it. A long section (Your rules, Jobs you hid, each area
+  learned has one home, the row "Learned from you" in Your rules, grouped by area, a rule a line
+  with its day small at the end. Why one row: "Learned from you" in Your rules and "What you
+  have taught it" under Your data were the same rules twice (the redesign, 2026-11-16). A long section (Your rules, Jobs you hid, each area
   of what it learned, What's new) shows its first few with "Show all" or "Show more". Advanced,
   folded, holds only what can slow things down or use more of the Claude allowance, and says so
   in one line; everything harmless lives where it belongs (Look, This device). A reason is said

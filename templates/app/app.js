@@ -7336,8 +7336,11 @@
       if (!asks && SEARCH_ROW_RULES.has(txt(x.kind))) continue;
       (asks || Number(x.left_out) > 0 ? out : quiet).push(ruleRow(x));
     }
+    // What it learned is this one row, opening in place: "Learned from you" here and "What you
+    // have taught it" under Your data were the same rules twice (the redesign, 2026-11-16).
+    // Its colon is for a screen reader, which reads the row's name and value as one.
     const n = learnedLive().length;
-    if (n) out.push(actionRow("Learned from you: " + plural(n, "rule", "rules"), openLearned, "rules-learned"));
+    out.push(infoRow("learned", ["Learned from you", h("span", {class: "sr-only"}, ": ")], n ? plural(n, "rule", "rules") : "None yet", learnedRows()));
     return {rows: out.concat(quiet), first: out.length};
   }
   const SEARCH_ROW_RULES = new Set(["field", "place", "pay"]);
@@ -7375,11 +7378,6 @@
         all.length ? h("ul", {class: "plain held-rules small"}, shortList("held-rules", all, 0, "How long each kind of hold lasts")) : null]);
   }
   const HOLD_AREAS = {jobs: "Jobs", applications: "Applications", people: "People", messages: "Messages", interviews: "Interviews", page: "This page"};
-  function openLearned() {
-    openState.set("det:info:learned", true);
-    S.focusAfter = {key: "info-sum:learned"};
-    scheduleRender();
-  }
   function learnedLive() { return arr(M().learned).filter((x) => !x.retired && !effective(txt(x.id), ["learned.retire"])); }
   // "Employers you've turned down (N)", with what they left out in the last 30 days (each job
   // once); it opens the names, each
@@ -13224,7 +13222,7 @@
       [btn("Tidy these up", () => { askPlace("rules", "Tidy what I have taught you: find rules the app now does by itself, rules that say the same thing, and rules a later one replaced, and show me each before anything goes."); },
         {small: true, kind: "secondary", key: "learned-tidy", wakes: "talk"})], placeTalk("rules"), {class: "learned-intro"});
     const newest = (a, b) => txt(b.on).localeCompare(txt(a.on));
-    const lo = {items, name: "what you have taught it", one: "rule", many: "rules", sort: newest,
+    const lo = {items, name: "rules learned from you", one: "rule", many: "rules", sort: newest,
       search: (x) => [x.say, x.rule, x.said, x.area].map(txt).join(" "), searchLabel: "A word in a rule", render: learnedRow, box: (kids) => h("ul", {class: "plain l-list"}, kids)};
     const search = items.length > 5 ? controlRow([searchField("learned", lo)]) : null;
     if (txt(listState("learned").q).trim()) return [intro, search, listView("learned", lo)];
@@ -16962,7 +16960,7 @@
     // Only the app's own settings have a usual; the search is the person's own, so "All on the
     // usual settings" over a changed pay read false (the 3 November audit).
     const sum = changed.length ? nWord(changed.length, "setting", "settings") + " changed from how the app came: " + changed.map((s) => settingLabel(s).toLowerCase()).join(", ") + "." : "Your search, your brief and how the page looks and runs.";
-    const wrap = h("section", {class: "sec", "aria-labelledby": "h-settings" + (where ? "-" + where : "")}, screenHead("settings", "Settings", sum, null, where));
+    const wrap = h("section", {class: "sec settings-page", "aria-labelledby": "h-settings" + (where ? "-" + where : "")}, screenHead("settings", "Settings", sum, null, where));
     const byKey = new Map(all.map((s) => [txt(s.key), s]));
     const pick = (keys) => keys.map((k) => byKey.get(k)).filter(Boolean);
     const known = new Set(["suggestions", "app_updates", "tips", "linkedin_plan", "profile_reads", "prep_days", "calendar_reminder", "brief_push", "time_zone", "file_names"]);
@@ -16980,13 +16978,15 @@
     const search = searchRows().filter(Boolean);
     if (search.length) put(wrap, settingsGroup("Your search", search));
     const yours = yourRulesRows();
-    if (yours.rows.length) put(wrap, settingsGroup("Your rules", shortList("rules", yours.rows, Math.max(1, yours.first), "Show all")));
+    put(wrap, settingsGroup("Your rules", shortList("rules", yours.rows, Math.max(1, yours.first), "Show all")));
     // The phone notification only where the brief's own run sends it (model.schedule.push_here).
     put(wrap, settingsGroup("Your brief", briefRows().concat(pick(obj(M().schedule).push_here ? ["brief_push", "prep_days"] : ["prep_days"]).map(settingRow))));
     const cal = pick(["calendar_reminder"]).map(settingRow);
     if (cal.length) put(wrap, settingsGroup("Coming up", cal));
     // Look: how the page looks and is used here, harmless to change (the maintainer, 4.12).
-    put(wrap, settingsGroup("Look", [lookRow(), sizeRow(), window.innerWidth >= 760 ? sideRow() : null, touchOnly() ? null : keysRow()]));
+    // Keyboard shortcuts are not offered on a phone either, whatever it says it can do (the
+    // redesign, 2026-11-16): a row about keys on a phone was a row nobody there can use.
+    put(wrap, settingsGroup("Look", [lookRow(), sizeRow(), window.innerWidth >= 760 ? sideRow() : null, touchOnly() || phoneNow() ? null : keysRow()]));
     put(wrap, settingsGroup("LinkedIn", linkedinRows().concat(pick(["profile_reads"]).map((s) => settingRow(s, txt(settingValue(s)) === "paste" ? null : readingBody())), [computerRow()], pick(["linkedin_plan"]).map((s) => settingRow(s)))));
     put(wrap, settingsGroup("Help", [actionRow("Show me around", () => showTour(0), "help-tour"),
       // The chat bubble, where the person is, rather than taking them away to Chat (2026-10-30).
@@ -17002,8 +17002,7 @@
       infoRow("news", "What's new", [ver, waiting ? "" : "Up to date"].filter(Boolean).join(" · "), updatesBody()),
       // "How updates arrive" shows only to someone holding updates, so they can let them in
       // again (the maintainer, 2026-10-31); holding them is said in a chat.
-      ...pick(held ? ["app_updates"] : []).map(settingRow),
-      infoRow("learned", "What you have taught it", plural(learnedLive().length, "rule", "rules"), learnedRows())].concat(others.map(settingRow))));
+      ...pick(held ? ["app_updates"] : []).map(settingRow)].concat(others.map(settingRow))));
     put(wrap, settingsGroup("This device", [infoRow("device", "Check this device", null, deviceList())]));
     // Advanced, folded: only what can slow things down or use more of the Claude allowance
     // (the maintainer, 4.12); everything harmless lives where it belongs (Look, This device).
@@ -17070,7 +17069,9 @@
       // and the one recommended for the person's country says so.
       const ex = obj(s.examples);
       const withEx = arr(s.choices).some((c) => txt(ex[txt(c[0])]));
-      const chips = withEx || (arr(s.choices).length <= 5 && arr(s.choices).every((c) => !wordsOf(c)[1] && txt(wordsOf(c)[0]).length <= 24));
+      // Since the redesign (2026-11-16) the chips are a segmented control, and a choice with
+      // more to say under each (an example, a line of why) is a list of option rows.
+      const chips = !withEx && arr(s.choices).length <= 5 && arr(s.choices).every((c) => !wordsOf(c)[1] && txt(wordsOf(c)[0]).length <= 24);
       const opts = arr(s.choices).map((c, i) => {
         const words = wordsOf(c);
         const shown = txt(ex[txt(c[0])]);
@@ -17083,7 +17084,7 @@
           h("label", {for: sid + "-" + i}, words[0], rec, under ? h("span", {class: "hint block" + (shown ? " chip-ex" : ""), id: hid}, shown ? fileWords(shown) : under) : null));
       });
       body = h("fieldset", {class: "setting" + (chips ? " pills" : "")}, h("legend", {class: "sr-only"}, settingLabel(s)), copy.hint ? h("p", {class: "hint"}, copy.hint) : null,
-        chips ? h("div", {class: "pill-row"}, opts) : opts);
+        chips ? h("div", {class: "pill-row"}, opts) : h("div", {class: "opt-rows"}, opts));
     } else {
       const key = "set:" + s.key;
       const draft = draftGet(key);
@@ -17139,7 +17140,11 @@
     // Its own name too, so two switches never share one ("on") for a tool reading names.
     const said = [words].flat().find((w) => typeof w === "string");
     if (said && input && input.setAttribute && !input.getAttribute("aria-label")) input.setAttribute("aria-label", said);
-    return h("label", {for: id, class: "toggle-label"}, h("span", {class: "set-name"}, words), input);
+    // A switch is drawn as one, a track with a knob, beside the box that is its tap and its
+    // state (the redesign, 2026-11-16): a ticked clay square read as a form, not a setting.
+    const sw = input && input.getAttribute && input.getAttribute("role") === "switch";
+    return h("label", {for: id, class: "toggle-label"}, h("span", {class: "set-name"}, words),
+      sw ? h("span", {class: "switch"}, input, h("span", {class: "switch-ui", "aria-hidden": "true"})) : input);
   }
   // An opened fold: what it says, what it does, and the line a tap leaves. On a wide screen the
   // buttons stand at its right edge, under the row's own value, beside the words they belong
