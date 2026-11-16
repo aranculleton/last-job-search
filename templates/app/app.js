@@ -6354,7 +6354,7 @@
         heroKeys = queueKeys(first, face, named);
         // Its corner word, as on its card; a card with none says the heading it is under in To do.
         const kicker = face.ask && face.corner ? "Question " + face.corner : face.corner || (BANDS.find(([k]) => k === first.band) || [null, "First"])[1];
-        hero = h("div", {class: "bp-iv", "data-todo": first.key},
+        hero = h("div", {class: "bp-iv", "data-queue": first.key},
           kicker ? h("p", {class: "bp-iv-when"}, kicker) : null,
           h("p", {class: "bp-iv-what"}, face.title),
           queueAct(face, "bp-first"));
