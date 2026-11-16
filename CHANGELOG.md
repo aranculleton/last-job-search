@@ -20,6 +20,11 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Old chats leave your chat list the morning after, as they should.** Each morning the page's old chat and the brief's old chat stayed for two or three more days, so two "Job search page" and two "morning brief" chats sat side by side: the daily tidy-up could not see that their work was already saved on GitHub, and it waited for yesterday's page chat to put itself away, which it never did. It now checks GitHub itself, and puts each old chat away once its work is proven saved.
+- **An old "starts chats on your computer" chat is named once on your To do.** When a newer one replaced it, the old one stayed in your list for good: it holds your OK to use your computer, so only you can archive it. Your page now names it, with its day, until you tap Done.
+
 ## [4.16.1] - 2026-11-12
 
 ### Changed

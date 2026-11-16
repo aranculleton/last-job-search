@@ -236,6 +236,13 @@ routines-cloud`).
 These apply whenever the change is to the app, whichever repo the session started in. How it
 is pushed and merged is in "Builder", above.
 
+- **Anything the maintainer shows that looks wrong is a bug report, investigated unasked**
+  (the maintainer, 2026-11-16: "I need to know so I don't have to explicitly tell you to
+  investigate if I show you things that are clearly bugs"). A screenshot, a pasted message or
+  "this is wrong": find why from their real data first (the listing, the record, the
+  transcript), reproduce it with a test, fix it at the cause in the app, and only then tidy
+  what it left. Say the cause in a line or two, never only the clean-up.
+
 - **The page has one design language: `templates/app/DESIGN.md`.** Read it before changing
   anything a person sees. Its rules are tested on every screen (one bin, never an x; one "?"
   a card; soft cards with no side lines; plain words), so a page that breaks one fails.
