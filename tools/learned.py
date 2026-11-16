@@ -2887,6 +2887,18 @@ def _with_update(out: dict, due: str) -> dict:
     return out
 
 
+def _starter(event: dict) -> bool:
+    """Is this the chat that starts the chats on the person's computer (app_listen.starter_here,
+    from this hook's own transcript)? Its every turn is the same few steps of its own prompt;
+    held at its end until it started the improvements, saved or published the page, it was
+    told to do the work its prompt forbids (issue #282). Nothing is said or held there."""
+    try:
+        import app_listen
+        return app_listen.starter_here(transcript=str(event.get("transcript_path") or ""))
+    except Exception:  # noqa: BLE001  a hook must never break the chat it runs in
+        return False
+
+
 def _cli_hook() -> int:
     try:
         event = json.loads(sys.stdin.read() or "{}")
@@ -2898,6 +2910,8 @@ def _cli_hook() -> int:
             # in the file it saved (page_db.keep_listed). Says nothing, holds nothing.
             import page_db
             page_db.keep_listed_event(event)
+            return 0
+        if _starter(event):
             return 0
         due = "\n\n".join(x for x in (_update_due(event), _scheduled_start(event) or
                                        _wake_due(event) or _page_due(event)) if x)

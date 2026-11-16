@@ -3512,6 +3512,20 @@ def _main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
     if not person.exists():
         return 0                                    # the app, or a repo before /setup
+    if a.after and _in_starter():
+        # The chat that starts the chats on the person's computer takes the update and nothing
+        # else: told here to start the improvements and bring the page up to date, which its
+        # own prompt forbids, it was then held at the end of its turn until it did, and its
+        # claim on them kept every other chat from starting them (issue #282). The day's check
+        # is still recorded, and the merge driver set, as for any sync.
+        try:
+            import merge_state
+            import sync_app
+            merge_state.install(ROOT)
+            sync_app._record_check(ROOT)
+        except Exception:  # noqa: BLE001  never breaks the sync
+            pass
+        return 0
     if a.not_now is not None:
         not_now(a.not_now)
         print("profile_upgrades: noted for today; the next chat, or this one tomorrow, starts "
@@ -3687,6 +3701,16 @@ def _main(argv: list[str] | None = None) -> int:
     print(text or "Profile upgrades: none pending.")
     say_page()
     return 0
+
+
+def _in_starter() -> bool:
+    """Is this run in the chat that starts the chats on the computer (app_listen.starter_here)?
+    Read from the file the update brought in, so an older sync_app.py's run knows it too."""
+    try:
+        import app_listen
+        return app_listen.starter_here()
+    except Exception:  # noqa: BLE001  never breaks the sync
+        return False
 
 
 def _setup_unfinished() -> bool:
