@@ -732,7 +732,7 @@ dialog.work-sheet .rail-head { min-height: calc(var(--target) + 8px); padding-ri
 dialog.work-sheet { width: min(560px, calc(100vw - 16px)); }
 
 /* ------------------------------------------------------------------ progress */
-.chart { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px 20px; display: grid; gap: 12px; min-width: 0; }
+.chart { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow-card); padding: 16px 20px; display: grid; gap: 12px; min-width: 0; }
 .chart h3 { font-size: var(--t-md); font-weight: 600; }
 /* A fold in a chart's card says it opens, with the chevron Settings' rows use, turned when
    open: "Each week" and "Show as a table" read as headings over nothing (2026-11-10). */
@@ -740,12 +740,17 @@ dialog.work-sheet { width: min(560px, calc(100vw - 16px)); }
 .chart summary::-webkit-details-marker { display: none; }
 .chart summary::after { content: ""; width: 8px; height: 8px; flex: none; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg); margin-left: 4px; }
 .chart details[open] > summary::after, details.chart[open] > summary::after { transform: rotate(-135deg); }
-.funnel { display: grid; gap: 8px; }
-.fun-row { display: grid; grid-template-columns: 84px minmax(0, 1fr) auto; align-items: center; gap: 12px; }
+/* The funnel's bars are soft capsules in the mark on a sunk track (the redesign, 2026-11-16):
+   14px bars in the alarm colour read as a telling-off. A step not reached yet is its label and
+   "None yet" in grey over an empty track. */
+.funnel { display: grid; gap: 12px; }
+.fun-row { display: grid; grid-template-columns: 84px minmax(0, 1fr) minmax(72px, auto); align-items: center; gap: 12px; }
 .fun-label { font-weight: 600; }
-.fun-track { height: 14px; border-radius: 6px; background: var(--sunk); overflow: hidden; }
-.fun-fill { display: block; height: 100%; background: var(--chart-a); border-radius: 6px; }
-.fun-n { font: 600 var(--t-md) var(--font-data); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.fun-track { height: 8px; border-radius: 999px; background: var(--sunk); box-shadow: inset 0 0 0 1px var(--line); overflow: hidden; }
+.fun-fill { display: block; height: 100%; background: var(--chart-a); border-radius: 999px; }
+.fun-n { font: 600 var(--t-md) var(--font-data); font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
+.fun-none .fun-label, .fun-n.muted { color: var(--muted); }
+.fun-n.muted { font-weight: 400; font-size: var(--t-sm); }
 .reading { max-width: 64ch; }
 .legend { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; font-size: var(--t-sm); color: var(--muted); }
 .sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; }
@@ -1218,6 +1223,14 @@ p.count.tone-warn { color: var(--st-overdue); }
 .app-row-top { font-weight: 600; }
 /* Employer and role read as one line of words, never two wrapped columns. */
 .app-row-top .btn.link { display: inline-block; text-align: left; padding: 8px 0; white-space: normal; }
+/* A row that opens is a name, never underlined words (the redesign, 2026-11-16): the whole row
+   is its tap, with the chevron Settings' rows use to say it opens. */
+.app-row { position: relative; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; }
+.app-row > * { grid-column: 1; }
+.app-row::after { content: "\203a"; grid-column: 2; grid-row: 1 / span 2; align-self: center; color: var(--muted); font-size: var(--t-lg); }
+.app-row-top .btn.link, .data td .btn.link { text-decoration: none; color: var(--ink); font-weight: 600; }
+.app-row-top .btn.link::before { content: ""; position: absolute; inset: 0; }
+@media (hover: hover) { .app-row-top .btn.link:hover, .data td .btn.link:hover { text-decoration: underline; text-decoration-color: var(--link-line); } }
 
 @media (max-width: 759px) {
   .top { padding-block: 0; }
@@ -2056,8 +2069,9 @@ ul.bp-news { gap: 12px; }
 /* Your profile, a page of its own: its column is Settings' (above, after the settings rows). */
 .back-link { justify-self: start; font-size: var(--t-sm); color: var(--muted); text-decoration: none; }
 @media (hover: hover) { .back-link:hover { color: var(--ink); text-decoration: underline; } }
+/* One column of cards, read in order, in Settings' column (the redesign, 2026-11-16): two
+   columns left Skills short beside Education with a gap under it. */
 .prof-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
-@media (min-width: 900px) { .prof-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .prof-card.wide { grid-column: 1 / -1; } }
 .prof-card { display: flex; flex-direction: column; gap: 12px; }
 /* What is still to fill in reads as the card's own rows, at its edge: a Settings row's 16px
    inset and 52px height put each a step in from the card's title (2026-11-10). */
@@ -2228,6 +2242,15 @@ ul.bp-news { gap: 12px; }
    one quiet line. */
 .d-person .timeline .t-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .d-person .timeline .t-event .t-text { color: var(--muted); }
+/* A card's Next (app.js, dNext): the one thing to do there, first under its title, a soft clay
+   well with "Next" over it, its line in the ink, and its one filled button (the redesign,
+   2026-11-16). Rows and timelines follow. */
+.d-next-block { display: grid; gap: 8px; justify-items: start; padding: 12px 16px; border-radius: var(--r-sm); background: var(--accent-soft); }
+.d-next-k { margin: 0; font-size: var(--t-sm); font-weight: 600; color: var(--mark-ink); }
+.d-next-what { margin: 0; font-weight: 600; color: var(--ink); }
+.d-next-block .d-next-what a { font-weight: 400; }
+.d-next-block > .card-actions { margin: 0; }
+.d-next-block .when, .d-next-block .meta { color: var(--ink); }
 /* Every point on the Brief has the same small dot, centred on its first line whatever its
    size, in place of the browser's own bullet beside a dot of ours (the maintainer,
    2026-11-02: "the bullets ... look clunky and misspaced"). */
