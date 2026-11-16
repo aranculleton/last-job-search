@@ -23,6 +23,7 @@ make sense to somebody whose repo just received it.
 ### Fixed
 
 - **Old chats leave your chat list the morning after, as they should.** Each morning the page's old chat and the brief's old chat stayed for two or three more days, so two "Job search page" and two "morning brief" chats sat side by side: the daily tidy-up could not see that their work was already saved on GitHub, and it waited for yesterday's page chat to put itself away, which it never did. It now checks GitHub itself, and puts each old chat away once its work is proven saved. Chats already piled up are cleared by the first tidy-up after you update, and one whose work never reached your main copy is kept a week at most: its saved work stays on GitHub.
+- **A busy day with your page no longer costs ten times a quiet one.** The chat that answers your page was replaced by a fresh one only once a day, and every message it handles re-reads everything it has said so far, so on a day of many taps it grew huge and one day cost over ten times the day before. It now hands your page to a fresh chat as soon as it has grown long, at a quiet moment and never in the middle of a job, carrying what was in hand; nothing you asked for is lost.
 - **An old "starts chats on your computer" chat is named once on your To do.** When a newer one replaced it, the old one stayed in your list for good: it holds your OK to use your computer, so only you can archive it. Your page now names it, with its day, until you tap Done.
 
 ## [4.16.1] - 2026-11-12

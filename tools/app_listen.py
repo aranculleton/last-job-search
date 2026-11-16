@@ -127,6 +127,12 @@ RENEW_S = 20 * 3600
 # either renewed every new helper within minutes of its start or kept one for days. This is
 # the history's whole size, the last turn's input.
 RENEW_TOKENS = 700_000
+# ... and, the same day, once its history has grown this far past where its start-up left it
+# (grown_tokens): every step re-reads the whole history, so a busy day's helper at 560,000
+# tokens cost about USD 67 against about USD 5 the day before (issue #290). Counted from the
+# end of its start-up, which alone grew a new helper by 45,000 to 230,000 tokens, so a start-up
+# never renews it; with RENEW_MIN_S and the open hand-over, chats never multiply.
+RENEW_GROWTH = 150_000
 # The hand-over a fresh helper starts with: a few lines, never the brief or a list of work.
 HANDOVER_ITEMS = 3
 HANDOVER_CHARS = 400
@@ -690,9 +696,9 @@ def renew_line(renew: dict, now: dt.datetime | None = None) -> str:
     mid-brief took the page while the brief was still saving, the stranger audit, X-27).
     Where this chat can start none, it keeps answering and the brief's next run starts it
     (NESTED): never a dead end. `now` is kept for the callers' sake."""
-    return ("listen: renew: a new day (or this chat's history is near the most a chat can "
-            "hold), and it has no small job of its own in hand. Once this turn's work is "
-            "saved (python3 tools/land.py --detach started, or nothing to save), start its "
+    return ("listen: renew: a new day (or this chat's history has grown long, and every "
+            "step re-reads all of it), and it has no small job of its own in hand. Once this "
+            "turn's work is saved (python3 tools/land.py --detach started, or nothing to save), start its "
             "fresh helper from this chat yourself, unasked and saying nothing to the person: "
             "create_session " + json.dumps(renew, ensure_ascii=False) + "." +
             MODE_REFUSED + " Never through a scheduled task: the chat one starts has no copy "
@@ -952,6 +958,17 @@ def history_tokens() -> int:
     return last or 0
 
 
+def grown_tokens() -> int:
+    """How far this chat's history has grown since its start-up ended, from the same session
+    file (helper_usage.grown). 0 when that is not known: then only a new day or the limit
+    renews it."""
+    try:
+        import helper_usage
+        return helper_usage.grown(history_tokens())
+    except Exception:  # noqa: BLE001  never a reason for a check-in to stop
+        return 0
+
+
 def _turns() -> tuple:
     """(the first turn's input, the last turn's) from the newest session file, or (None,
     None)."""
@@ -1064,8 +1081,8 @@ def handover(db: dict) -> str:
 def renewal(rec: dict, db: dict, chat: str, now: dt.datetime, scheduled: bool = False,
             for_other: bool = False) -> dict | None:
     """The create_session call for a fresh helper, or None. Only a cloud chat on a later day
-    (the person's own) than the one it took the page on, or whose history is near the limit
-    (RENEW_TOKENS), on the page for RENEW_MIN_S at least, its own hand-over closed (the helper
+    (the person's own) than the one it took the page on, or whose history has grown
+    RENEW_GROWTH past its start-up or is near the limit (RENEW_TOKENS), on the page for RENEW_MIN_S at least, its own hand-over closed (the helper
     it took over from put away), with no small work of its own in hand, and not asked for in
     the last RENEW_RETRY_S. Work waiting in the queue moves with the page: the new helper
     takes it. Waiting on it kept one helper answering for three days, against a day, while a
@@ -1096,7 +1113,8 @@ def renewal(rec: dict, db: dict, chat: str, now: dt.datetime, scheduled: bool = 
                 return None                     # two chats already: never a third
         except Exception:  # noqa: BLE001  no record of what was put away: the rest decides
             pass
-        if not new_day(rec, now) and history_tokens() < RENEW_TOKENS:
+        if not new_day(rec, now) and history_tokens() < RENEW_TOKENS and \
+                grown_tokens() < RENEW_GROWTH:
             return None
     work = db.get("work") or {}
     for doc in work.values():
