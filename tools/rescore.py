@@ -104,12 +104,20 @@ def read_kept(name: str, where: str | None = None) -> dict:
 
 
 def _write(path: str, data, indent=None) -> None:
+    """`data` written whole or not at all, with plain line ends on every computer."""
     os.makedirs(os.path.dirname(path), exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path), suffix=".tmp")
-    with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as fh:
-        json.dump(data, fh, indent=indent, ensure_ascii=False)
-        fh.write("\n")
-    os.replace(tmp, path)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as fh:
+            json.dump(data, fh, indent=indent, ensure_ascii=False)
+            fh.write("\n")
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        raise
 
 
 def keep(where: str, name: str, rows: list[dict], scored_with: str | None = None) -> str:
@@ -125,7 +133,7 @@ def keep(where: str, name: str, rows: list[dict], scored_with: str | None = None
         elif u and isinstance(before.get(u), str):
             bodies[u] = before[u]
     path = bodies_path(name, where)
-    _write(path, {"scored_with": scored_with or fingerprint(), "bodies": bodies})
+    _write(path, {"scored_with": scored_with or fingerprint(), "bodies": bodies}, indent=1)
     return path
 
 
@@ -221,7 +229,8 @@ def _clean(row: dict) -> dict:
 
 def run(today: dt.date, fetch: bool = False) -> dict:
     """Score again every job the page lists whose text is kept (or found here, or with `fetch`
-    fetched), each in its place; {"searches", "scored", "changed", "unread"}."""
+    fetched), each in its place; {"searches", "scored", "changed", "unread"}. Every search's
+    jobs are blended in one go, so the contact book and the tracker are read once."""
     import app_model
     import bar
     import fit
@@ -229,10 +238,9 @@ def run(today: dt.date, fetch: bool = False) -> dict:
     fp = fingerprint()
     names = listed(today)
     done = {"searches": len(names), "scored": 0, "changed": 0, "unread": 0}
+    searches, todo = [], []
     for name in names:
         rows = _rows(name)
-        if not rows:
-            continue
         rec = read_kept(name)
         kept = {u: b for u, b in (rec.get("bodies") or {}).items() if isinstance(b, str)}
         links = [_norm(r.get("url")) if isinstance(r, dict) else "" for r in rows]
@@ -243,28 +251,32 @@ def run(today: dt.date, fetch: bool = False) -> dict:
             missing = [r for r, u in zip(rows, links) if u and u not in kept]
             if missing:
                 kept.update(_fetch(missing))
+        # As of the day the search ran: a job's age moves nothing, only the rules do.
         day = app_model.round_day(os.path.join(summary_dir(), f"{name}.json")) or today
-        todo = [(i, dict(r, desc=kept[u])) for i, (r, u) in enumerate(zip(rows, links))
-                if u in kept]
-        ranked = fit.blend([opportunity.score(j, day) for _, j in todo])
-        out = list(rows)
-        for (i, j), got in zip(todo, ranked):
-            verdict, why = bar.verdict(got.get("company"), j.get("desc") or "")
-            new = dict(rows[i])
-            for k, v in zip(SCORED, (got.get("opportunity"), got.get("fit"), got.get("fit_why"),
-                                     got.get("priority"), got.get("near"), verdict, why)):
-                new[k] = v
-            new = _clean(new)
-            if new != rows[i]:
-                out[i] = new
-                done["changed"] += 1
-            done["scored"] += 1
+        searches.append((name, rows, links, kept, rec))
+        todo += [(len(searches) - 1, i, opportunity.score(dict(r, desc=kept[u]), day))
+                 for i, (r, u) in enumerate(zip(rows, links)) if u in kept]
+    ranked = fit.blend([j for _, _, j in todo]) if todo else []
+    outs = [list(rows) for _, rows, _, _, _ in searches]
+    for (at, i, j), got in zip(todo, ranked):
+        rows = searches[at][1]
+        verdict, why = bar.verdict(got.get("company"), j.get("desc") or "")
+        new = dict(rows[i])
+        for k, v in zip(SCORED, (got.get("opportunity"), got.get("fit"), got.get("fit_why"),
+                                 got.get("priority"), got.get("near"), verdict, why)):
+            new[k] = v
+        new = _clean(new)
+        if new != rows[i]:
+            outs[at][i] = new
+            done["changed"] += 1
+        done["scored"] += 1
+    for (name, rows, links, kept, rec), out in zip(searches, outs):
         done["unread"] += sum(1 for u in links if u and u not in kept)
         if out != rows:
             _write(os.path.join(summary_dir(), f"{name}.json"), out, indent=1)
         bodies = {u: kept[u] for u in links if u in kept}
         if rec.get("scored_with") != fp or (rec.get("bodies") or {}) != bodies:
-            _write(bodies_path(name), {"scored_with": fp, "bodies": bodies})
+            _write(bodies_path(name), {"scored_with": fp, "bodies": bodies}, indent=1)
     prune(names)
     return done
 

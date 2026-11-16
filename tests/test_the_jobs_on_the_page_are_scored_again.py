@@ -176,3 +176,31 @@ def test_the_update_scores_an_existing_copys_page_by_itself(tmp_path, monkeypatc
     assert changed == ["documents/rounds/bodies/r2.json", "documents/rounds/r2.json"], changed
     person.reset()
     assert up.pending() == ""
+
+
+def test_two_chats_that_kept_text_for_one_search_merge_without_asking(tmp_path, monkeypatch):
+    """Two chats can score the page again at once after an update: the text each kept for one
+    search is kept from both, job by job, written as its writer writes it, and the scoring
+    each recorded settles quietly, since the page is scored again wherever it is not today's."""
+    import merge_state
+    _setup(tmp_path, monkeypatch)
+    import rescore
+    where = str(tmp_path / "rounds")
+
+    def kept(*ns, scored_with):
+        rescore.keep(where, "r4", [_row(n, f"Firm {n}", "2026-11-09") for n in ns],
+                     scored_with=scored_with)
+        with open(rescore.bodies_path("r4", where), encoding="utf-8") as fh:
+            return fh.read()
+    base = kept(7, scored_with="aaaa")
+    ours = kept(7, 8, scored_with="bbbb")
+    os.remove(rescore.bodies_path("r4", where))
+    theirs = kept(7, 9, scored_with="cccc")
+    settled, noted = [], []
+    text, problems = merge_state.merge(base, ours, theirs, "documents/rounds/bodies/r4.json",
+                                       settled=settled, noted=noted)
+    assert problems == [] and settled == [], (problems, settled)
+    got = json.loads(text)
+    assert set(got["bodies"]) == {norm(f"https://jobs.example/{n}") for n in (7, 8, 9)}
+    assert got["scored_with"] == "bbbb"
+    assert text == json.dumps(got, indent=1, ensure_ascii=False) + "\n"

@@ -236,6 +236,12 @@ JSON_FILES = {
     # (filtered.back): one row a posting, known by its link. Its two writers escape
     # differently, so the file's own way is kept.
     "documents/rounds/*.json": {"lists": {"": ("url",)}, "indent": 1, "ascii": "ours"},
+    # The posting text of the jobs on a search's list (tools/rescore.py keep and run): a job a
+    # key, known by its link, so text either side kept is kept; and the scoring they were
+    # scored with, the app's own record, where either side's stands, since the page's jobs are
+    # scored again wherever it is not today's (rescore.due).
+    "documents/rounds/bodies/*.json": {"pick": {"scored_with": "either_scoring"}, "quiet": True,
+                                       "indent": 1},
     # ---- networking
     # Their own LinkedIn profile, as looked at (own_profile.record, answer, dismiss): the
     # looks and the dismissals only ever added to, each answer dated.
@@ -484,6 +490,11 @@ JSON_NAMES = {
                     "company_research/*.json"),
     ".sweep.json": "documents/rounds/.sweep.json",
     "tools/run_round.py: %s.json": "documents/rounds/*.json",
+    # A search's list, read and written again with its scores, and the text of its jobs kept
+    # beside it (tools/rescore.py), each wired.
+    "tools/rescore.py: *.json": "documents/rounds/bodies/*.json",
+    "tools/rescore.py: .json": ("a suffix test on the files beside the lists, and each "
+                                "search's list itself, wired as documents/rounds/*.json"),
     # A search renamed when two took one name (land._round_clash): its summary and left-out
     # list under the new name, merged as the round files they are.
     "tools/land.py: r%d%s.json": "documents/rounds/*.json",
@@ -934,7 +945,15 @@ def _further(base, ours, theirs) -> tuple[str, str]:
     return "", ""
 
 
-PICKERS = {"higher_version": _higher_version, "further": _further}
+def _either_scoring(base, ours, theirs) -> tuple[str, str]:
+    """The scoring a search's jobs were scored with (tools/rescore.py): this side's stands.
+    Either is only a record, and where it is not today's the jobs are scored again by the
+    next sync (rescore.due), so it never needs a person."""
+    return "ours", "either scoring stands: the jobs are scored again where it is not today's"
+
+
+PICKERS = {"higher_version": _higher_version, "further": _further,
+           "either_scoring": _either_scoring}
 
 
 def newest_written(base, ours, theirs, rule: dict, settled: list | None = None) -> tuple:
