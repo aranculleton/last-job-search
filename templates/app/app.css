@@ -2140,7 +2140,7 @@ ul.bp-news { gap: 12px; }
 .d-employer { display: grid; gap: 16px; }
 .d-employer > p { margin: 0; }
 .d-employer .d-block { display: grid; gap: 8px; }
-.d-employer .d-block ul { display: grid; gap: 6px; }
+.d-employer .d-block ul { display: grid; gap: 8px; }
 .d-employer .d-block li { margin: 0; }
 .d-employer .d-block li > .btn.link { padding-inline: 0; text-align: start; }
 .d-person .timeline li { display: grid; gap: 2px; }

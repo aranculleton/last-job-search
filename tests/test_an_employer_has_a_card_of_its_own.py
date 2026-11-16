@@ -87,3 +87,20 @@ def test_an_employers_card_opens_from_its_address_and_each_row_opens_its_own_car
     assert _names(card["parts"]["People"]) == ["Tamsin", "Ash"], card
     # A row opens its own card: the interview's.
     assert "Copperleaf Pay" in got["after"][2]["eval"], got["after"][2]
+
+
+def test_a_persons_card_opens_their_employers_and_their_row_keeps_it_as_words(run, tmp_path, vp):
+    """On a phone their employer's link sat on the line under their name in their row, and the
+    two links' tap areas lay over each other: tapping the employer opened the person. Their
+    row says where they work; their card opens it."""
+    got = _go(run, tmp_path, [
+        {"hash": "contacts", "ready": "!!document.querySelector('[data-k=\"pname:row:copperleaf_pay_tamsin\"]')",
+         "eval": "document.querySelectorAll('#main a.emp-link').length"},
+        {"hash": "contacts/copperleaf_pay_tamsin/open",
+         "ready": "!!document.querySelector('dialog.detail[open] .d-person')", "eval": TAP % "emp:dperson:copperleaf_pay_tamsin"},
+        {"ready": "!!document.querySelector('dialog.detail[open] .d-employer')", "eval": CARD},
+    ], vp, model=_model())
+    assert got["after"][0]["eval"] == 0, "no employer link in a person's row"
+    assert got["after"][1]["eval"] is True, "their card links their employer"
+    card = got["after"][2]["eval"]
+    assert card and card["title"] == "Copperleaf Pay" and "Tamsin" in _names(card["parts"]["People"]), card

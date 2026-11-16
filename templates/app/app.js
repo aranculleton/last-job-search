@@ -6923,7 +6923,7 @@
     // things (the maintainer, 2026-11-04).
     const place = txt(r.place_short !== undefined && r.place_short !== null ? r.place_short : r.place);
     const style = REMOTE(r) && !place.toLowerCase().includes(REMOTE(r)) ? cap1(txt(r.remote)) : "";
-    const facts = [h("bdi", {class: "co"}, employerLink(r.company, "job:" + r.id))];
+    const facts = [h("bdi", {class: "co"}, employerLink(r.company, "job:" + r.id, r.title))];
     // The dot goes with the fact after it (a no-break space after it, a space before): a line
     // ending "Copperleaf Pay · Manchester ·" left it alone at the end (the screen review,
     // 2026-11-11).
@@ -7757,7 +7757,7 @@
         // Pay where it is known; "Pay not stated" on nearly every card said nothing (2026-11-03).
         j && j.score != null ? h("p", {class: "sr-only"}, "Fit " + txt(j.score) + " out of 100") : null,
         // The last fact, "Why" and the pencil keep together, as on a find's card (2026-11-10).
-        ((fs) => h("p", {class: "facts"}, h("bdi", {class: "co"}, employerLink(a.company, "app:" + a.id)), fs.slice(0, -1).map((x) => [" \u00b7\u00a0", h("span", {class: "fact"}, x)]), fs.length ? " " : null,
+        ((fs) => h("p", {class: "facts"}, h("bdi", {class: "co"}, employerLink(a.company, "app:" + a.id, a.role)), fs.slice(0, -1).map((x) => [" \u00b7\u00a0", h("span", {class: "fact"}, x)]), fs.length ? " " : null,
           h("span", {class: "facts-end"}, fs.length ? ["\u00b7\u00a0", h("span", {class: "fact"}, fs[fs.length - 1])] : null,
             fold.toggle(j && j.score != null ? "Why" : "Details", j && j.score != null ? "Why it scored " + txt(j.score) + ": " + about : "Details: " + about))))(
           [txt(a.place_short !== undefined && a.place_short !== null ? a.place_short : a.place),
@@ -9117,7 +9117,7 @@
       h("div", {class: "avatar", "aria-hidden": "true"}, name.slice(0, 1).toUpperCase()),
       h("div", {class: "person-main"},
         // The trash sits in the row's corner, as on a job, never alone on a line of its own.
-        h("div", {class: "job-top"}, h("h3", {id: hid}, personName(p.id, personName2(p), "row:" + p.id), txt(p.employer) ? [" at ", employerLink(p.employer, "person:" + p.id)] : null),
+        h("div", {class: "job-top"}, h("h3", {id: hid}, personName(p.id, personName2(p), "row:" + p.id), txt(p.employer) ? " at " + txt(p.employer) : null),
           h("span", {class: "top-end"}, stateWord(w, tone === "plain" ? null : tone),
             !["done"].includes(g) && !closedHere ? btn("", () => askRemovePerson(p.id, name, txt(p.employer), p.rev, {letGo, skip}), {kind: "quiet icon-only", small: true, icon: "bin", key: "pbin:" + p.id, aria: "Not " + whoAt(personName2(p), p.employer) + "?"}) : null)),
         role ? h("p", {class: "small muted"}, role) : null,
@@ -9696,7 +9696,7 @@
       // On a phone its pill leads the line of when, and the trash keeps beside the title: with
       // the title wrapping, both took a row of their own under it (the screen review,
       // 2026-11-11).
-      h("div", {class: "job-top"}, h("h3", {id: hid}, offer ? "Your offer from " : stageName(iv) + " with ", employerLink(iv.company, "iv:" + iv.id)),
+      h("div", {class: "job-top"}, h("h3", {id: hid}, offer ? "Your offer from " : stageName(iv) + " with ", employerLink(iv.company, "iv:" + iv.id, txt(iv.role) || stageName(iv))),
         // The bin is on what is still live: one that ended has nothing left to end.
         h("span", {class: "top-end"}, phoneNow() && !offer ? null : ivPill(iv), acts.bin)),
       ((when) => (offer ? null : phoneNow() && ivPill(iv) ? h("div", {class: "iv-when-line"}, ivPill(iv), when) : when))(h("p", {class: "when"}, offered.length ? "They offer " + daysWords(offered) + (txt(iv.reply_by) ? " · tell them by " + fmtDay(iv.reply_by) : "")
@@ -11360,7 +11360,7 @@
       h("div", {class: "job-top"}, h("h3", {id: hid}, breakable(a.role)), h("span", {class: "top-end"}, stateWord(word, tone),
         live ? btn("", () => askEndApplication(a, "your application to " + txt(a.company)), {kind: "quiet icon-only", small: true, icon: "bin", key: "recbin:" + a.id, aria: "It is over: " + about}) : null)),
       // One line of facts, as on a Found card: the employer, who referred you, and what is next.
-      h("p", {class: "facts"}, h("bdi", {class: "co"}, employerLink(a.company, "app:" + a.id)), a.referrer ? [" · ", h("span", {class: "fact"}, "Referred by ", itemLink("contacts", txt(obj(a.referrer).contact || obj(a.referrer).id), txt(obj(a.referrer).first_name), "recref:" + a.id))] : null,
+      h("p", {class: "facts"}, h("bdi", {class: "co"}, employerLink(a.company, "app:" + a.id, a.role)), a.referrer ? [" · ", h("span", {class: "fact"}, "Referred by ", itemLink("contacts", txt(obj(a.referrer).contact || obj(a.referrer).id), txt(obj(a.referrer).first_name), "recref:" + a.id))] : null,
         nextLine ? [" · ", h("span", {class: "fact next"}, nextLine)] : null, fold.toggle("Details", "Details: " + about)),
       fold.panel,
       live ? formLine(a) : null,
@@ -11420,11 +11420,14 @@
     return name ? {id: "emp~" + key, name, apps, jobs, people, ivs} : null;
   }
   // The employer's name, wherever a card shows it, as the way into its card.
-  function employerLink(name, key) {
+  // `about`: the item the employer is named on, said with it to a screen reader, so three
+  // roles at one employer are three links with three names, not one name three times.
+  function employerLink(name, key, about) {
     const k = employerKey(name);
     if (!k) return txt(name);
     const id = "emp~" + k;
     return h("a", {href: "#" + (SECTION_IDS.has(S.section) ? S.section : "jobs") + "/" + id + "/open", class: "name-link emp-link", "data-k": "emp:" + (key || k),
+      "aria-label": txt(about) ? txt(name) + ", employer for " + txt(about) : null,
       onclick: (e) => { e.preventDefault(); e.stopPropagation(); openDetail("employer", id); }}, h("bdi", {}, txt(name)));
   }
   function employerDetail(e) {
@@ -12646,7 +12649,10 @@
     const replyOut = !got && !sent && ["waiting", "talking", "follow", "leave"].includes(g) && steps[0][1] && st !== "replied_needs_response";
     const prep = obj(obj(p.call).prep);
     return h("div", {class: "d-stack d-person"},
-      h("p", {}, stateWord(w, tone === "plain" ? null : tone), txt(p.came_through) ? h("span", {class: "muted"}, " · Came through " + txt(p.came_through)) : null),
+      // Their employer opens its own card (issue #263): here, not on their row, where it sat on
+      // the line under their name and the two links' tap areas lay over each other on a phone.
+      h("p", {}, stateWord(w, tone === "plain" ? null : tone), employerKey(p.employer) ? [" · ", employerLink(p.employer, "dperson:" + p.id)] : null,
+        txt(p.came_through) ? h("span", {class: "muted"}, " · Came through " + txt(p.came_through)) : null),
       emailLine(p.id, "pemail:" + p.id),
       resumeForThem(p, "d"),
       referralLine(p),

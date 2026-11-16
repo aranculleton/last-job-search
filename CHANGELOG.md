@@ -22,7 +22,7 @@ make sense to somebody whose repo just received it.
 
 ### Added
 
-- **Every employer has a card of its own.** Tap an employer's name on a job, an application, a person or an interview: its card shows your roles there with where each stands, the people you know there and your interviews, and each opens its own card. The same employer is found however its name is written.
+- **Every employer has a card of its own.** Tap an employer's name on a job, an application, a person's card or an interview: its card shows your roles there with where each stands, the people you know there and your interviews, and each opens its own card. The same employer is found however its name is written.
 
 ### Fixed
 
