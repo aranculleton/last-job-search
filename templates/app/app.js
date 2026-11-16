@@ -6170,8 +6170,8 @@
   function queueFace(i) {
     const id = i.key.startsWith("iv:") ? i.key.slice(3) : "";
     const iv = id ? interviewItems().find((x) => x.id === id) : null;
-    if (iv) return {iv, title: stageName(iv) + " with " + txt(iv.company), corner: fmtDay(dayOf(iv.when)) + (timeOf(iv.when) ? ", " + timeOf(iv.when) : ""), item: "soon:" + iv.id, node: null};
     const node = guarded(() => i.node({where: "brief", section: "brief"}), () => null);
+    if (iv) return {iv, title: stageName(iv) + " with " + txt(iv.company), corner: fmtDay(dayOf(iv.when)) + (timeOf(iv.when) ? ", " + timeOf(iv.when) : ""), item: "soon:" + iv.id, node};
     const top = node && node.querySelector(":scope > .todo-top");
     const corner = top ? [...top.querySelectorAll(".chip, .state-word, :scope > .muted, .todo-state > .muted")].map((e) => txt(e.textContent).trim())
       .filter((w) => w && w !== "Draft ready" && !/ done$/.test(w)) : [];
@@ -6293,7 +6293,9 @@
       return out;
     };
     let hero = null, heroKeys = [], facts = [], heroIv = null, heroCounts = false;
-    const ivHero = (iv, whenWords) => {
+    // `act`: the button of To do's own card for it, where it leads To do ("Choose the day",
+    // "Practise 3 questions"); else its prep's.
+    const ivHero = (iv, whenWords, act) => {
       heroIv = iv;
       heroKeys = ["iv:" + iv.id];
       const heroUp = upcomingItems().find((u) => txt(obj(u.go).item) === iv.id && obj(u.cal).ics);
@@ -6302,8 +6304,8 @@
           heroUp ? btn("", () => calSheet([heroUp]), {kind: "quiet icon-only", small: true, icon: "cal-add", key: "bp-cal-hero", aria: "Add to your calendar: " + txt(heroUp.title)}) : null),
         h("p", {class: "bp-iv-what"}, stageName(iv) + " with ", h("bdi", {}, txt(iv.company))),
         txt(iv.role) ? h("p", {class: "bp-iv-role"}, txt(iv.role)) : null,
-        obj(iv.prep).updated ? btn("Read your prep", () => openDetail("interview", iv.id), {kind: "primary", small: true, key: "bp-prep:" + iv.id})
-          : btn("Prepare me", () => askPrep(iv), {kind: "primary", small: true, key: "bp-askprep:" + iv.id, wakes: "prep"}));
+        act || (obj(iv.prep).updated ? btn("Read your prep", () => openDetail("interview", iv.id), {kind: "primary", small: true, key: "bp-prep:" + iv.id})
+          : btn("Prepare me", () => askPrep(iv), {kind: "primary", small: true, key: "bp-askprep:" + iv.id, wakes: "prep"})));
     };
     const ivWhen = (iv) => fmtDay(dayOf(iv.when)) + (timeOf(iv.when) ? ", " + timeOf(iv.when) : "") + " · " + lc1(relWhen(iv.when));
 
@@ -6337,7 +6339,7 @@
     if (first) {
       const face = faceOf(first);
       heroCounts = counted(first);
-      if (face.iv) hero = ivHero(face.iv, ivWhen(face.iv));
+      if (face.iv) hero = ivHero(face.iv, ivWhen(face.iv), face.node ? queueAct(face, "bp-first") : null);
       else {
         const d = first.d || null;
         const who = d ? whoOf(dueContact(d)) : null;
