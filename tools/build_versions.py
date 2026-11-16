@@ -772,9 +772,9 @@ METHODS: dict[str, dict] = {
             (63, "2026-11-12", False, "a note is refused at an employer where a follow-up owed fills a place, the line saying which follow-up goes first; notes are written as before"),
             (64, "2026-11-12", False, "today's list read is not a run done: with fewer than the number asked drafted, reading.py next says to find the rest at the next employers and read on; a people search in the person's own city uses every location number kept for their area (the metro region, their city, the towns their job search covers) and place-ids says what a city's own number leaves out; a people search's mutual connections are never results of their own, each card read whole from its own name link; notes are written as before"),
             (65, "2026-11-16", False, "a first note to someone whose profile was not read is refused where the person's computer reads profiles (reading.reads_first), card-only and waiting alike, unless the person chose notes from search results today; a chat on the computer that met a sign-out tells the person nothing of a button, since the card names the chat"),
-            (66, "2026-11-16", False, "where the person's computer reads profiles, a chat without Claude's own browser is routed to queue the short list for the computer and save no note, and a refused note says so; notes are written as before"),
+            (66, "2026-11-16", False, "where the person's computer reads profiles, a chat without Claude's own browser is routed to queue the short list for the computer and save no note, and a refused note says so; notes are written as before; the person is told once where their profiles are read, as the page's own route tells them"),
         ),
-        "fingerprint": "ea66426be472dba7",
+        "fingerprint": "c3ae3798a808464a",
     },
     "screening": {
         "by": "round", "priority": 2,

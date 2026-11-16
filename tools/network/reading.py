@@ -2176,7 +2176,11 @@ def route(tools=(), consent: str | None = None, env=None, signed_in: bool | None
                        "(`reading.py from-search --said`). Never fetch linkedin.com over the "
                        "web (WebFetch, curl): it is read only in the signed-in browser on the "
                        "person's computer"),
-                "say": "", "signin": False}
+                # Told once, as the page's own route tells them, until the page has read.
+                "say": "" if place.page_reads() else
+                       "Their profiles are read in the Claude app on your computer before any "
+                       "note is written.",
+                "signin": False}
     if consent == "browser":
         return {"route": "page", "browser": "your page in the Claude desktop app",
                 "usable": True,
