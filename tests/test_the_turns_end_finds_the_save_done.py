@@ -157,7 +157,7 @@ def test_a_save_asked_while_one_is_busy_says_the_turns_end_needs_nothing(copy, c
         assert land.detach(root, "Notes", popen=_never) == 0
         out = " ".join(capsys.readouterr().out.split())
         assert git(chat, "rev-parse", "HEAD").stdout == head, "committed beside a busy landing"
-        assert land.BUSY_SAY in out, out
+        assert " ".join(land.BUSY_SAY.split()) in out, out
         assert "run no git command" in out and "end the turn" in out, out
         assert land._asked(root), "the running landing takes it when it ends"
     finally:

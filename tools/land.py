@@ -22,9 +22,10 @@ request, so the next landing anywhere brings it in.
 process of its own, started from an ordinary foreground call that returns in seconds, so its
 end wakes no chat. Before it returns, the turn's work is committed and pushed to this chat's
 branch (_save_first), beside a landing that only waits too (_save_beside), so the cloud's own
-check at the end of the turn finds nothing to ask about (a person's copy, 2026-11-16). A background command re-invokes the chat when it exits, and the app's hook
-held the turn again while a save still ran: each save cost the chat that answers the page a
-turn or two of its whole history (the maintainer, 2026-11-05). It marks the landing as asked
+check at the end of the turn finds nothing to ask about (a person's copy, 2026-11-16). A
+background command re-invokes the chat when it exits, and the app's hook held the turn again
+while a save still ran: each save cost the chat that answers the page a turn or two of its
+whole history (the maintainer, 2026-11-05). It marks the landing as asked
 for at once (WANTED_FILE, which the hook reads as a save in progress), opens the pull request
 and merges it itself through GitHub's REST interface (`gh api`) where this computer can,
 then moves the branch to master; it lands again once for work written while it ran, and a
@@ -2297,18 +2298,21 @@ def level(root: str = ROOT, create: bool = False, sleep=None) -> bool:
     if not name:
         return True                  # a detached HEAD: the cloud's check counts nothing
     there = _copy_lags(root, name, create)
-    if not there:
-        return True
-    if sleep is not None:
-        return _push(root, name, sleep)[1].returncode == 0
-    ref = "HEAD" if there == name else "HEAD:refs/heads/" + there
-    try:
-        r = subprocess.run(["git", "-C", root, "push", "-q", "-u", "origin", ref],
+    if there and sleep is not None:
+        _push(root, name, sleep)
+    elif there:
+        ref = "HEAD" if there == name else "HEAD:refs/heads/" + there
+        try:
+            subprocess.run(["git", "-C", root, "push", "-q", "-u", "origin", ref],
                            capture_output=True, text=True, encoding="utf-8", errors="replace",
                            timeout=QUICK_PUSH_S, stdin=subprocess.DEVNULL)
-    except (OSError, subprocess.TimeoutExpired):
-        return False
-    return r.returncode == 0
+        except (OSError, subprocess.TimeoutExpired):
+            return False
+    # What the cloud's check counts from: the branch's copy, else master.
+    copy = "refs/remotes/origin/" + name
+    if _git(root, "rev-parse", "-q", "--verify", copy).returncode != 0:
+        copy = "refs/remotes/origin/master"
+    return _git(root, "merge-base", "--is-ancestor", "HEAD", copy).returncode == 0
 
 
 READY: dict = {}            # what the last landing pushed, for its pull request
@@ -2382,10 +2386,12 @@ def _unmark(root: str, name: str) -> None:
 IDLE_FILE = "ljs-landing.idle"
 KEEPING_FILE = "ljs-keeping.lock"
 KEEP_WAIT_S = 2 * 60
-BUSY_SAY = ("It is still at work, so this turn's work is not committed yet: if the end of the "
-            "turn then says there are uncommitted changes, untracked files or unpushed commits, "
-            "that is this save, which takes them when it ends. Answer it with nothing: run no "
-            "git command, wait for nothing and end the turn with no text.")
+SAVING_SAY = ("If the end of the turn then says there are uncommitted changes, untracked files "
+              "or unpushed commits, that is this save, which takes them as it goes on: answer "
+              "it with nothing, run no git command, wait for nothing and end the turn with no "
+              "text.")
+BUSY_SAY = "The one running is still at work, so this turn's work is not on GitHub yet. " + \
+    SAVING_SAY
 
 
 def _save_first(root: str, message: str) -> bool:
@@ -2505,7 +2511,7 @@ def detach(root: str = ROOT, message: str = "", popen=subprocess.Popen) -> int:
             print("land: saving in the background (one already running saves this too). "
                   + BUSY_SAY)
         return 0
-    _save_first(root, message)
+    saved = _save_first(root, message)
     d = git_dir(root)
     log = os.path.join(d, LOG_FILE) if d else os.devnull
     try:
@@ -2526,7 +2532,8 @@ def detach(root: str = ROOT, message: str = "", popen=subprocess.Popen) -> int:
               "the background instead" % e)
         return 2
     _hand_over(root, token, getattr(child, "pid", 0))
-    print("land: saving in the background; nothing to wait for or say.")
+    print("land: saving in the background; nothing to wait for or say."
+          + ("" if saved else " " + SAVING_SAY))
     return 0
 
 
