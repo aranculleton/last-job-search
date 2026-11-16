@@ -294,22 +294,24 @@ def test_refresh_asks_claude_only_when_the_data_is_older_than_today(run, tmp_pat
     assert ("Up to date" in got["after"][4]["eval"]) is (not asks), got["after"][4]["eval"]
 
 
-# Today's card is what comes next today: a call this afternoon leads, ahead of an interview
-# three days out (the maintainer, 2026-11-02: "the most upcoming event"), and the strip
-# marks today's things red and tomorrow's amber, nothing else.
-def test_today_leads_with_what_is_on_today_and_the_strip_marks_today_and_tomorrow(run, tmp_path, vp):
+# A call this afternoon is Coming up's first row, and the strip marks today's things and
+# tomorrow's in their own colours, nothing else. Today's card led with the call until the
+# redesign (2026-11-16): since then Today is To do's first card, one answer to "what next?"
+# on both screens (DESIGN.md, One ranked list; test_the_brief_and_to_do_give_one_answer).
+def test_a_call_today_is_coming_ups_first_and_the_strip_marks_today_and_tomorrow(run, tmp_path, vp):
     model = copy.deepcopy(_sample())
     call = copy.deepcopy(next(u for u in model["upcoming"] if u["kind"] == "call"))
     call.update(id="up-call-today", day="2026-10-25", time="15:00", start="2026-10-25T15:00:00Z",
                 end="2026-10-25T15:30:00Z")
     model["upcoming"].insert(0, call)
     got = _go(run, tmp_path, [
-        {"hash": "brief", "eval": "document.querySelector('#main .bp-iv .bp-iv-what').textContent"},
+        {"hash": "brief", "eval": "[document.querySelector('#main .bp-iv .bp-iv-what').textContent, (document.querySelector('#main .bp-up > li') || {}).textContent || '']"},
         {"eval": "(() => { const d = (n) => document.querySelectorAll('#main .bp-day')[n]; const c = (n) => d(n).querySelector('.bp-day-dots i'); "
                  "return [d(0).classList.contains('is-today'), d(1).classList.contains('is-tomorrow'), "
                  "c(0) ? getComputedStyle(c(0)).backgroundColor : null, d(4).querySelector('.bp-day-dots i') ? getComputedStyle(d(4).querySelector('.bp-day-dots i')).backgroundColor : null]; })()"}],
         vp, model=model, clock=T)
-    assert got["after"][0]["eval"] == call["title"], got["after"][0]["eval"]
+    hero, first_up = got["after"][0]["eval"]
+    assert call["title"] in first_up and hero != call["title"], got["after"][0]["eval"]
     today, tomorrow, red, later = got["after"][1]["eval"]
     assert today and tomorrow and red and later and red != later      # today's dot is its own colour
 
@@ -318,6 +320,8 @@ def test_today_leads_with_what_is_on_today_and_the_strip_marks_today_and_tomorro
 # 2026-11-02): with no booked thing today and an interview whose prep is ready, what has rolled
 # over leads, with who it is and how late; Today's right half is never left empty, Coming up is
 # never a strip over nothing, and Today's thing is never in Next three as well (2026-11-03).
+# Since the redesign (2026-11-16) the most pressing thing is To do's first card: a follow-up
+# whose message is drafted is a row of To do's "Messages to send", so here Wren's has none.
 TODAY = ("(() => { const t = document.querySelector('#main .bp-today'); const u = document.querySelector('#main .bp-upcoming'); "
          "const side = t.querySelector('.bp-today-side'); "
          "return {when: t.querySelector('.bp-iv-when').textContent, what: t.querySelector('.bp-iv-what').textContent, "
@@ -338,7 +342,11 @@ def test_today_is_the_most_pressing_thing_with_what_matters_beside_it(run, tmp_p
     late = min((d for d in model["due"] if d.get("due", "9999") < "2026-10-25" and d.get("kind") not in ("request_pending", "withdraw", "hidden")),
                key=lambda d: ((d.get("kind") != "reply"), d["due"]))
     late["context"] = "Operations lead at Fernhill Freight \u00b7 met at a meetup"
-    got = _go(run, tmp_path, [{"hash": "brief", "eval": TODAY}], vp, model=model, clock=T)
+    alone = copy.deepcopy(model)
+    alone["due"] = [d for d in alone["due"] if d["id"] == late["id"] or d.get("due", "9999") >= "2026-10-25"]
+    alone["messages"] = [x for x in alone["messages"] if x["id"] != late.get("item")]
+    alone["to_send"] = {"n": len(alone["messages"]), "ids": [x["id"] for x in alone["messages"]]}
+    got = _go(run, tmp_path, [{"hash": "brief", "eval": TODAY}], vp, model=alone, clock=T)
     r = got["after"][0]["eval"]
     # One date a card, said one way (the walk-through, 2026-11-03): about someone, the corner
     # says it is ready and the facts lead with the day it is about; never "Rolled over · 2 days
@@ -414,27 +422,33 @@ def test_the_menu_folds_to_its_icons_and_back(run, tmp_path, vp):
     assert after["side"] == before["side"] and after["pressed"] == "false" and after["title"] is None, after
 
 
-# The release review and the walk-through (2026-11-02). A test due today is itself on Today,
-# never the interview it belongs to, and that interview stays in Coming up.
-def test_a_test_due_today_leads_as_itself_and_its_interview_stays_coming_up(run, tmp_path, vp):
+# The release review and the walk-through (2026-11-02). A test due today is itself, never the
+# interview it belongs to. Since the redesign (2026-11-16) Today is To do's first card: the
+# second interview two days off with no prep yet, Prepare me its button; the test due today is
+# Coming up's, by its own name.
+def test_a_test_due_today_is_itself_in_coming_up_and_its_interview_leads_today(run, tmp_path, vp):
     got = _go(run, tmp_path, [{"hash": "brief", "eval": "[document.querySelector('#main .bp-today .bp-iv-when').textContent, "
                                                        "document.querySelector('#main .bp-today .bp-iv-what').textContent, "
                                                        "document.querySelector('#main .bp-upcoming').textContent]"}],
               vp, clock="2026-11-02T08:30:00Z")
     when, what, coming = got["after"][0]["eval"]
-    assert when.startswith("Due today") and "Online test" in what, (when, what)
-    assert "Second interview" in coming, coming
+    assert "Second interview" in what and "Online test" not in what, (when, what)
+    assert "Online test" in coming, coming
 
 
-# A late reply or follow-up with a draft ready leads to the draft, not to the person's page,
-# which has no draft on it.
+# A late reply or follow-up with a draft ready leads to the drafts, not to a person's page,
+# which has no draft on it. Since the redesign (2026-11-16) Today is To do's first card with its
+# own button: with the thank-you done, the messages to send lead, Wren's two days late among
+# them, and Open Contacts opens them there, where each is.
 def test_todays_late_follow_up_opens_its_draft(run, tmp_path, vp):
-    got = _go(run, tmp_path, [{"hash": "brief", "eval": "document.querySelector('#main .bp-today .bp-iv .btn').textContent"},
-                              {"eval": "(() => { document.querySelector('#main .bp-today .bp-iv .btn').click(); return 1; })()"},
-                              {"eval": "location.hash"}], vp, clock=T)
-    assert got["after"][0]["eval"] == "See the draft", got["after"][0]["eval"]
-    # On the draft itself: Wren's card in Contacts, where it is (one page since 2026-11-04).
-    assert got["after"][2]["eval"] == "#contacts/fernhill_freight_halloway", got["after"][2]["eval"]
+    model = copy.deepcopy(_sample())
+    model["due"] = [d for d in model["due"] if d["id"] != "due-harbourline-thanks"]
+    got = _go(run, tmp_path, [{"hash": "brief", "eval": "[document.querySelector('#main .bp-today .bp-iv-what').textContent, document.querySelector('#main .bp-today .bp-iv .btn').textContent]"},
+                              {"eval": "(() => { document.querySelector('#main .bp-today .bp-iv .btn').click(); return 1; })()", "until": "location.hash.startsWith('#contacts')"},
+                              {"eval": "location.hash"}], vp, model=model, clock=T)
+    what, button = got["after"][0]["eval"]
+    assert what.startswith("Messages to send") and button == "Open Contacts", (what, button)
+    assert got["after"][2]["eval"].startswith("#contacts"), got["after"][2]["eval"]
 
 
 # Refresh with yesterday's data and the Claude allowance used up says so, never "Up to date".
@@ -505,15 +519,17 @@ def test_next_three_keeps_room_for_others_and_a_booked_interview_stays_in_coming
     assert not any(today.strip() in s for s in steps), (today, steps)
     assert any("Phone screen: Larkspur" in c and "28 Oct" in c and "13:00" in c for c in coming), coming
     assert not any("phone screen" in s for s in steps), steps
-    # A thank-you owed after a round is its own step, and is not given the next round's day.
-    assert any("Thank-you" in s for s in steps) and len(steps) == 3, steps
-    assert not any("Thank-you" in s and "4 Nov" in s for s in steps), steps
+    # A thank-you owed after a round is its own thing, and is not given the next round's day:
+    # To do's first since the redesign (2026-11-16), so Today's, and three steps after it.
+    assert "Thank-you" in today and "4 Nov" not in today and len(steps) == 3, (today, steps)
 
 
 # Set up with nothing found yet: Today's one thing is the first search, with a filled button.
 def test_a_person_with_nothing_yet_is_shown_the_first_search(run, tmp_path, vp):
     model = copy.deepcopy(_sample())
-    for k in ("due", "messages", "ready", "upcoming", "interviews", "people"):
+    # Nothing found yet asks nothing about a posting either: Today is To do's first card since the
+    # redesign (2026-11-16), and the sample's questions are about its postings.
+    for k in ("due", "messages", "ready", "upcoming", "interviews", "people", "needs_you"):
         if isinstance(model.get(k), list):
             model[k] = []
     model["jobs"]["rows"] = []
@@ -662,7 +678,9 @@ def test_i_sent_it_is_done_in_contacts_to_do_and_the_brief_at_once(run, tmp_path
         {"hash": "brief", "read": "#main .bp-next", "eval": "(document.querySelector('#main .bp-people') || {}).textContent || ''"},
     ], vp, clock=T)
     assert _one(got, "msg.sent")["item"] == "msg-juno-1"
-    assert "Reply to Juno" in got["after"][1]["text"], "the Brief asked for the reply before it went"
+    # Juno's reply is among the messages to send, named first (To do's own card, since the
+    # redesign of 2026-11-16).
+    assert "Juno" in got["after"][1]["text"], "the Brief asked for the reply before it went"
     assert "one of them a reply" not in got["after"][4]["text"], got["after"][4]["text"]
     row = got["after"][5]["text"]
     assert "Message sent" in row and "Replied: your turn" not in row and "Draft a reply" not in row, row

@@ -26,6 +26,16 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   answers", always among the five: one question at a time in its grey box with "1 of 4", each
   answered with its own control (answerBox), the next there the moment it is answered.
   (tired-person tests, quick answers test)
+- **One ranked list.** The Brief's Today is To do's first card and its Next the three after it,
+  in To do's own order (`todoQueue`: its bands, then each band's employers, then kinds), each in
+  its card's own words, Today with that card's own button, filled. Today says To do's own count
+  over it ("1 of 4", the badge's number) and Next's numbers go on from it (2, 3, 4); a step not
+  due yet has a dot in place of a number, and its day. The next interview goes to the top of
+  both from as many days before as the person chose (Settings, "Your next interview on the
+  Brief"). With nothing on To do, Today is what is booked today, else the first search; what is
+  booked always stays in Coming up. Why: the Brief's Today picked one thing, its Next three
+  another and To do a third, and their counts read 4, 1 and 3 over seven messages (the
+  redesign's reviews, 2026-11-16). (one-answer test)
 - What helps Claude do more (your profile, reading profiles, the LinkedIn download) is never
   counted among today's things: it is one soft card right after them, above "Not due yet", in
   To do's own style, under its own small heading, "When you have a minute" (under "Needs your
