@@ -87,10 +87,12 @@ bdi { unicode-bidi: isolate; }
 /* Claude's state is a small labelled light at the header's right, beside its tools: a dot
    straight after the screen's name read as "unread" (the redesign, 2026-11-16). */
 .conn { display: inline-flex; margin-left: auto; }
-.conn-btn { display: inline-flex; align-items: center; gap: 8px; flex: none; min-height: var(--target); padding: 0 8px; border: 0; background: none; border-radius: 999px;
+.conn-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; flex: none; min-width: var(--target); min-height: var(--target); padding: 0 8px; border: 0; background: none; border-radius: 999px;
   color: var(--muted); font-size: var(--t-sm); font-weight: 600; line-height: 1; cursor: pointer; }
 @media (hover: hover) { .conn-btn:hover { background: var(--raised); color: var(--ink); } }
 .conn-btn .dot { width: 8px; height: 8px; }
+/* Where the header is short of room its word goes, kept for a screen reader (fitTop). */
+.conn.tight .conn-word { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .dot.conn-live { background: var(--st-done); }
 .dot.conn-connecting, .dot.conn-reconnecting { background: var(--line-strong); }
 .dot.conn-offline, .dot.conn-readonly, .dot.conn-stopped, .dot.conn-unheard { background: var(--st-overdue); }

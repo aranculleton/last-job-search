@@ -15820,11 +15820,14 @@
       const hgt = Math.round(top.getBoundingClientRect().height / drawnPerPx()) + "px";
       if (document.documentElement.style.getPropertyValue("--top-real") !== hgt) document.documentElement.style.setProperty("--top-real", hgt);
     }
-    const screen = $("screen"), pill = $("pill");
-    if (!pill) return;
-    pill.classList.remove("tight");
-    if (!screen || !screen.getClientRects().length) return;
-    if (screen.scrollWidth > screen.clientWidth + 1) pill.classList.add("tight");
+    // Claude's light gives up its word first, then the pill its words, whenever the screen's
+    // name is cut or the row runs past the edge (at double text on the Brief, with no name
+    // shown, the light's word and the pill's ran 64px off a phone).
+    const screen = $("screen"), pill = $("pill"), conn = $("conn");
+    const row = top ? top.querySelector(".top-in") : null;
+    for (const el of [conn, pill]) if (el) el.classList.remove("tight");
+    const cut = () => (!!screen && screen.getClientRects().length > 0 && screen.scrollWidth > screen.clientWidth + 1) || (!!row && row.scrollWidth > row.clientWidth + 1);
+    for (const el of [conn, pill]) if (el && cut()) el.classList.add("tight");
   }
 
   // ------------------------------------------------------------------ Chat: one box
