@@ -56,10 +56,12 @@ HELPER_TITLE = "Job search helper"   # what the helper was called before 4.10; s
 # The helper's own name in their list of chats, and what it says when it starts: the one
 # thing a person needs to know about it (the maintainer, 2026-10-29: "some quick way of
 # explaining what it's for ... even if the user deletes it it's fine it'll start up again").
-# "Job search page" since 2026-11-04 (the maintainer: at most two such chats, the person's
+# "Job search page" from 2026-11-04 (the maintainer: at most two such chats, the person's
 # own and the live page helper, with distinct titles): a heavy user's renewals had stacked up
-# several identical "Job search helper" chats. The tidy-up still knows the old name.
-HELPER_CHAT_TITLE = "Job search page"   # short: what it is for is said, never in its name
+# several identical "Job search helper" chats. Since issue #289 every chat the app makes starts
+# with the app's name, then one plain word for what it is for. The tidy-up knows every old name,
+# and a helper under one takes this one at its next check-in.
+HELPER_CHAT_TITLE = "Last Job Search \u00b7 Page"   # short: what it is for is said, never in its name
 OLD_HELPER_TITLE = HELPER_CHAT_TITLE + " (finishing up)"   # the helper a new one took over from
 # Said once in a chat that does not answer the page, the first time it starts (the
 # maintainer, 2026-10-29: a heads-up about a new chat, "DO NOT MAKE THIS PERSIST").
