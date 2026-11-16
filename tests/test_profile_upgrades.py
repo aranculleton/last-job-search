@@ -894,6 +894,37 @@ def test_a_process_folder_with_no_posting_is_given_one(profile, tmp_path, monkey
     assert U.by_id("process-postings").pending() == ""
 
 
+def test_a_tracker_still_saying_an_interview_day_is_to_choose_is_given_the_day(profile, tmp_path,
+                                                                               monkeypatch):
+    """Issue 274: a day booked with `interview_pack.py book` went on outcome.md alone, and the
+    tracker kept its note that the day was still to choose. Invented employer and contact."""
+    import csv
+    st, folder = _process_state(tmp_path, monkeypatch)
+    ahead = (person.today() + dt.timedelta(days=5)).isoformat()
+    with open(os.path.join(folder, "outcome.md"), "a", encoding="utf-8", newline="\n") as fh:
+        fh.write("\n## Interview stages reached\n- [ ] Final round (scheduled %s, with the "
+                 "partner)\n" % ahead)
+    path = st / "job_search_tracker.csv"
+    with open(path, encoding="utf-8", newline="") as fh:
+        rows = list(csv.DictReader(fh))
+    rows[0]["notes"] += " | 2026-11-10: Final round booked, the day still to choose (page)"
+    with open(path, "w", encoding="utf-8", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=list(rows[0].keys()))
+        w.writeheader()
+        w.writerows(rows)
+    u = U.by_id("interview-days-noted")
+    assert "1 booked interview(s)" in u.pending()
+    cmd = list(u.command)
+    cmd[0] = sys.executable if cmd[0] == "python3" else cmd[0]
+    r = subprocess.run(cmd, cwd=ROOT, env=os.environ, capture_output=True, text=True,
+                       encoding="utf-8", errors="replace")
+    assert r.returncode == 0, r.stderr
+    with open(path, encoding="utf-8", newline="") as fh:
+        notes = next(csv.DictReader(fh))["notes"]
+    assert notes.endswith("Final round booked for %s (from its interview record)" % ahead), notes
+    assert u.pending() == ""
+
+
 def test_one_application_in_two_folders_is_made_one(profile, tmp_path, monkeypatch):
     """verify_batch.py kept an application's checks in a folder named without the
     abbreviation its note and documents were filed under. Invented employer."""
