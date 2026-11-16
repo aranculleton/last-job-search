@@ -1327,6 +1327,81 @@ def record_stage(folder, company, role, stage, date, with_="", today=None, time=
     return m.group(0) if m else ""
 
 
+# ------------------------------------------------------------------ the tracker says it too
+
+# The tracker's notes are what a chat reads first. A stage booked with no day was noted there
+# as "the day still to choose", and its day, booked later with `book`, went on outcome.md
+# alone, so a chat told the person the interview was not booked when it was (issue 274). A
+# day booked is now added to the notes as well, and the update puts right a tracker an older
+# version left that way (profile upgrade interview-days-noted).
+_NOTE_ENTRY = re.compile(r"\s*\|\s*|(?=\b\d{4}-\d{2}-\d{2}:)")
+_NOTE_DATED = re.compile(r"^\s*\d{4}-\d{2}-\d{2}:\s*")
+
+
+def booked_words(stage) -> str:
+    """A booked stage as the tracker's notes say it: "Final round booked for 2026-11-20 at
+    14:00 America/Toronto", or "Online test due by 2026-11-20" for one to finish by a day."""
+    label, date = _text(stage.get("label")), _text(stage.get("date"))
+    if stage.get("kind") == "test" and not stage.get("time"):
+        return "%s due by %s" % (label, date)
+    clock = _text(stage.get("time"))
+    return "%s booked for %s%s" % (label, date, " at %s%s" % (
+        clock, " " + _text(stage.get("zone")) if _text(stage.get("zone")) else "") if clock else "")
+
+
+def _day_untold(notes, stage, spoken_of=False) -> bool:
+    """Do these notes leave out the day this stage is booked for? Each entry is read without
+    the day it was written (a note written on the booked day is not that day booked). With
+    `spoken_of`, only where they speak of the stage and never with its day."""
+    entries = [_NOTE_DATED.sub("", e) for e in _NOTE_ENTRY.split(_text(notes)) if e.strip()]
+    if any(stage["date"] in e for e in entries):
+        return False
+    label = _text(stage.get("label")).lower()
+    return not spoken_of or bool(label and any(label in e.lower() for e in entries))
+
+
+def note_booked_days(today=None, company="", role="", stage="", spoken_of=False, by="chat",
+                     write=True) -> list:
+    """Every stage of a live application booked for a day from today on whose day its tracker
+    notes leave out, added to them as a dated note ("<today>: <stage> booked for <day> at
+    <time> (<by>)"). `company`, `role` and `stage` narrow it to one; `spoken_of` to notes that
+    speak of the stage without its day (what an older version left). Run twice, it adds
+    nothing. Returns [{company, role, stage, note}], written unless `write` is False."""
+    import confirm
+    import open_actions
+    import record_drafts
+    today = _text(today) or person.today().isoformat()
+    path = person.state("job_search_tracker.csv")
+    if not os.path.exists(path):
+        return []
+    rows = csv_store.read_rows(path, record_drafts.HEADER)
+    only = company_key(company) if _text(company) else ""
+    out = []
+    for row in rows:
+        if only and company_key(row.get("company")) != only:
+            continue
+        if _text(role) and not throttle._same_title(role, row.get("role")):
+            continue
+        status = _text(row.get("status")).lower()
+        if status in throttle.FINAL or status in throttle.UNSENT:
+            continue
+        _folder, _files, stages = open_actions.stages(row)
+        for s in stages:
+            if s["done"] or not s["date"] or s["date"] < today:
+                continue
+            if _text(stage) and s["label"].lower() != _text(stage).lower():
+                continue
+            if not _day_untold(row.get("notes"), s, spoken_of):
+                continue
+            note = "%s: %s (%s)" % (today, booked_words(s), by)
+            confirm.add_note(row, note)
+            out.append({"company": _text(row.get("company")), "role": _text(row.get("role")),
+                        "stage": s["label"], "note": note})
+    if out and write:
+        csv_store.write_rows(path, rows, csv_store.header(path) or record_drafts.HEADER)
+    return out
+
+
 # ------------------------------------------------------------------ a time said elsewhere
 
 # An interview's day and time as a note, an invite or a message says them: "Wednesday 28
@@ -6081,6 +6156,10 @@ def main(argv=None) -> int:
                                       "a message and not yet on its record: saved there")
     tm.add_argument("--company", default="")
     tm.add_argument("--today", type=_day)
+    bd = sub.add_parser("booked-days", help="every interview booked for a day its tracker "
+                                            "notes speak of without that day: the day added to "
+                                            "them (what an older version left)")
+    bd.add_argument("--today", type=_day)
     po = sub.add_parser("postings", help="give every process folder that has none a "
                                          "job_posting.md (registered before process wrote one)")
     po.add_argument("--today", type=_day)
@@ -6156,6 +6235,14 @@ def main(argv=None) -> int:
             print("kept in %s: every later pack, at every employer, uses it and checks it "
                   "against the employer" % _repo_rel(path))
             return 0
+        if a.cmd == "booked-days":
+            got = note_booked_days(today=a.today, spoken_of=True, by="from its interview record")
+            for g in got:
+                print("the tracker's notes for %s, %s now say: %s" % (g["company"], g["role"],
+                                                                      g["note"]))
+            if not got:
+                print("booked-days: every booked interview's day is on its tracker notes")
+            return 0
         if a.cmd == "times":
             got = take_times(today=a.today, company=a.company)
             for g in got:
@@ -6187,6 +6274,10 @@ def main(argv=None) -> int:
                                 time=a.time, zone=a.zone, minutes=a.minutes, due=a.due,
                                 format_=a.format_)
             print("saved in %s/outcome.md: %s" % (_rel(folder), line))
+            # The tracker's notes say it too, or a chat reading them first is told the day is
+            # still to choose (issue 274).
+            for g in note_booked_days(today, company=company, role=role, stage=label):
+                print("and on the tracker's notes: %s" % g["note"])
             _touched(company, role)
             print("The page shows it once it is brought up to date (python3 tools/app.py view).")
             return 0
@@ -6205,6 +6296,8 @@ def main(argv=None) -> int:
             print("%s: %s at %s, led by %s; its folder is %s.\n"
                   % ("registered" if added else "already registered", row["role"], row["company"],
                      row["contact_person"], _rel(folder)))
+            if a.stage and a.date:
+                note_booked_days(a.today, company=row["company"], role=row["role"], stage=a.stage)
             _touched(row["company"], row["role"])
             # One command from a booked call to its document: the prep is built and kept now.
             ctx = gather(row["company"], row["role"], a.stage, a.date, a.with_, a.today,
