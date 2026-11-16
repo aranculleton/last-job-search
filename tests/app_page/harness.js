@@ -713,7 +713,10 @@ function layoutMeasure() {
       // A More holding one action shows that action in its place (4.3): it fills the More's
       // slot, not a button's.
       // A card's details fold ("Why", "Details") opens it as a summary does: not an action.
-      buttons: own("button, a.btn").filter((b) => !b.closest("summary, .suggest, .alert, .warm, .g-row") && !b.classList.contains("answer") && !b.classList.contains("q") && !b.classList.contains("icon-only") && !b.classList.contains("info-toggle") && !b.hasAttribute("data-more")).length,
+      // A draft's own tools on its heading line, Copy beside the pencil, are the draft's, and its
+      // "Read it all" opens its words as a fold does: the card's actions are its row (the
+      // redesign, 2026-11-16: I sent it and They replied, DESIGN.md, Contacts).
+      buttons: own("button, a.btn").filter((b) => !b.closest("summary, .suggest, .alert, .warm, .g-row") && !b.classList.contains("answer") && !b.classList.contains("q") && !b.classList.contains("icon-only") && !b.classList.contains("info-toggle") && !b.classList.contains("bubble-copy") && !b.classList.contains("read-all") && !b.hasAttribute("data-more")).length,
       // A checklist card's rows are its items, each with its own one action beside its bin
       // (DESIGN.md, "Many of one small thing"): counted a row at a time, never as the card's.
       rowButtons: Math.max(0, ...own(".g-row").map((r) => [...r.querySelectorAll("button, a.btn")].filter((b) => vis(b) && !b.classList.contains("icon-only")).length)),

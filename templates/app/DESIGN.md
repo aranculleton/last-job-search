@@ -392,7 +392,13 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   sits beside the initial (a subject's Copy an icon at its line's end, never alone on a line);
   then one row of
   pills: one filled (I sent it once copied, or the one owed step), at most two soft ones
-  ("They replied"), and More. With a message on the card, "They replied" waits under More.
+  ("They replied"), and More. With a message on the card, "They replied" is the soft pill beside
+  I sent it, and waits under More only where Open their profile already stands there (the
+  redesign, 2026-11-16: under More it was not found when they wrote again before the message
+  went). The draft's Copy, on its heading line beside the pencil, is the draft's own tool, not
+  one of the row's. A long draft shows its first four lines and "Read it all", which opens it in
+  place (Copy copies every word); the first draft on the list is drawn whole (the redesign,
+  2026-11-16: ten drafts drawn whole were a wall of words).
   Why: five buttons a card read as five jobs, and three dates a card as none. Floated into
   the bubble's corner, Copy and the pencil bent a note's first lines round them, three words a
   line on a phone, under an indent that left it two thirds of the screen (the maintainer,
