@@ -129,7 +129,8 @@ def _plan(copy, tmp_path, monkeypatch, chats, renamed_before=None):
         {"key": "morning_brief", "name": routines.BRIEF_NAME, "trigger_id": "trig_EXAMPLEBRIEF",
          "cron": "CRON_TZ=Europe/London 0 8 * * *", "prompt_file": routines.BRIEF_FILE,
          "copy": True, "chat": {"session_id": BRIEF_CHAT, "own": True}}]}
-    monkeypatch.setattr(routines, "load", lambda p=None: reg)
+    # By its name in sys.modules: another test file may have loaded routines afresh.
+    monkeypatch.setattr("routines.load", lambda p=None: reg)
     triggers = [{"id": "trig_EXAMPLEBRIEF", "name": routines.BRIEF_NAME, "enabled": True,
                  "persistent_session_id": BRIEF_CHAT, "cron_expression": reg["routines"][0]["cron"],
                  "prompt": routines.with_copy(routines.stub(reg, "morning_brief", own_chat=True),
@@ -171,7 +172,11 @@ def test_an_existing_installs_chats_take_the_new_names_once(copy, tmp_path, monk
     assert all("set_session_title" in ln for ln in renames.values())
     assert any("say nothing" in ln for ln in out.splitlines() if ln.startswith("rename"))
     assert "nothing to tidy" not in out and "archive_session" not in out, out
-    # Once: a refused rename is never asked for again, and a renamed chat is left alone.
+    # Once: recorded when the plan's calls are done (made or refused), it is never asked for
+    # again, and a chat under its new name is left alone.
+    with contextlib.redirect_stdout(io.StringIO()):
+        assert tidy.main(["done", "--today", "2026-11-16"]) == 0
+    assert set(tidy.renamed()) == {BRIEF_CHAT, COMPUTER_CHAT, RUNS_CHAT}
     out = _plan(copy, tmp_path, monkeypatch, chats)
     assert not [ln for ln in out.splitlines() if ln.startswith("rename ")], out
     chats = [_chat(LIVE, APP + "Page"), _chat(BRIEF_CHAT, APP + "Brief"),

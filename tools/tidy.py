@@ -1322,6 +1322,38 @@ def renamed() -> dict:
         return {}
 
 
+RENAMES = "ljs-tidy-renames.json"   # in the git folder: the renames `plan` asked for, until `done`
+
+
+def _stash_renames(names: dict) -> None:
+    """Keep the renames this plan asked for until `done` records them: the plan itself never
+    writes the person's record (a plan run in the app's own checkout wrote into it)."""
+    d = _git_dir()
+    if not d or not names:
+        return
+    try:
+        with open(os.path.join(d, RENAMES), "w", encoding="utf-8", newline="\n") as fh:
+            json.dump(names, fh, ensure_ascii=False)
+            fh.write("\n")
+    except OSError:
+        pass
+
+
+def _take_renames() -> dict:
+    """The renames the last plan asked for, taken from the git folder (and gone from it)."""
+    d = _git_dir()
+    if not d:
+        return {}
+    path = os.path.join(d, RENAMES)
+    try:
+        with open(path, encoding="utf-8") as fh:
+            got = json.load(fh)
+        os.remove(path)
+    except (OSError, ValueError):
+        return {}
+    return {str(k): str(v) for k, v in got.items()} if isinstance(got, dict) else {}
+
+
 def _note_renamed(names: dict) -> None:
     if not names:
         return
@@ -1663,7 +1695,7 @@ def run_plan(a) -> int:
     if got.get("rename"):
         print("rename: make these, asking nobody and saying nothing about it; one refused is "
               "left as it is and never asked for again")
-        _note_renamed({c["id"]: c["to"] for c in got["rename"]})
+        _stash_renames({c["id"]: c["to"] for c in got["rename"]})
     for c in got["archive"]:
         print(f"archive {c['id']}: {c['title']} ({c['why']})")
     if got["archive"]:
@@ -1760,8 +1792,10 @@ def _record(ids: list[str], titles: dict, today: str, gone: bool = False) -> Non
 
 
 def run_done(ids: list[str], titles: dict, today: str) -> str:
-    """Record what was archived (profile/tidy.json) and that today's tidy-up ran."""
+    """Record what was archived (profile/tidy.json), the renames the plan asked for (once
+    each, made or refused) and that today's tidy-up ran."""
     _mark_checked(today)
+    _note_renamed(_take_renames())
     if not ids:
         return "tidy: done for today"
     _record(ids, titles, today)
