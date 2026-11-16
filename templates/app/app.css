@@ -2530,6 +2530,9 @@ a.bp-stat .bp-n { color: var(--ink); }
   html.dock-left .top-in > .chat-fab { order: 1; }
   html.dock-left .top-in > :is(.conn, .top-tools) { order: 2; }
 }
+/* A phone's one title, in the header: the large title's size (the redesign, 2026-11-16). It
+   follows the layout spec's header rules, so it is here, after them. */
+@media (max-width: 759px) { .top-in > .screen { font-size: 1.5rem; letter-spacing: -0.02em; } }
 .dock-top .btn { flex: none; }
 /* A toast's time left: a thin ring round its close that empties, still while it is held. */
 .toast-x { position: relative; }
