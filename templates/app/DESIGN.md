@@ -75,18 +75,34 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   opens and closes the panel on the right, as the menu's "Icons only" folds, remembered on the
   device (open beside every screen but the Brief until the person chooses); narrower, it opens
   as a panel on the right, and on a phone as a sheet from the bottom. (pill tests)
-- The Chat button and its panel sit at the right, or at the left where the person chose it (Settings >
-  Look, Chat button, or the panel's own arrow; the same choice, kept on the device), small or big.
+- On a computer the Chat button is the header's last control, a soft button with its icon and
+  "Chat", never floating over the page: bottom right it covered a bin, a Copy button and a value
+  in Settings (the redesign, 2026-11-16). Its panel opens under the header at the right, or the
+  button sits beside the page's name and the panel at the left where the person chose it
+  (Settings > Look, Chat button, or the panel's own arrow; the same choice, kept on the device),
+  small or big.
   The panel's controls are the page's own soft pills (Open in Chat, Close), never underlined words.
   The conversation opens on its last day; earlier messages come only by its Show, never by
   scrolling up (the maintainer, 2026-11-06). (chat panel tests) On a phone the Chat is as tall
   as the room under the header as it is drawn, so it opens with its first words in sight,
   never behind the header (taken as 56px, its first words slid under the Refresh pill,
   2026-11-11). (overlap test: chat opens)
-  With no messages yet the starters and the box sit under the header, with no subtitle; once
-  there are messages the box keeps to the foot. Why: an empty Chat stood its starters at the
-  foot of a blank screen and said "Ask anything" three ways (the screen review, 2026-11-11).
-  (empty chat tests)
+  The box keeps to the foot from the first look, so the first message never moves it; with no
+  messages its starters are chips just above it, a short intro sits in the room above them, and
+  there is no subtitle. Why: an empty Chat said "Ask anything" three ways (the screen review,
+  2026-11-11), and with its box under the header the box sat mid-screen on a phone and jumped to
+  the foot with the first message (the redesign, 2026-11-16). (empty chat tests)
+- The frame is calm. On a phone the tab bar is the card colour with a hairline on top: the tab
+  you are on has a soft clay capsule behind its icon, its icon in clay and its name in ink at
+  600, the others grey at 400; To do's count is a clay badge and every other count the same
+  capsule outlined in grey, so a "5" by Jobs reads as a count. On a computer the place you are on
+  in the side menu is the same soft clay fill, its name at 600 and its icon in clay, never a bar
+  down its side; "Icons only" is a quiet grey control. The phone's header has one title (on
+  the Brief its greeting) and Claude's labelled light at its right. On a phone a sheet rises
+  from the foot with round top corners and a small grabber; a sheet, a menu and the Chat panel
+  float on the overlay colour with a hairline and the floating shadow, a menu's rows a finger's
+  height (the redesign, 2026-11-16: a grey bar with a red line on top, a dot after the title
+  that read as "unread" and a bare "5" read as dated). (layout 5 and 6, menu tests, sheet tests)
 - In Claude's work, four or more of one kind waiting, or finished, are one card with their
   count and the first few names; Show lists them. Nobody scrolls past fifty cards. (run test)
 - Over Claude's work, with two or more things going, one short strip says what runs now and
@@ -112,7 +128,7 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   (the maintainer, 2026-11-05; Stop Claude tests, compact row test)
 - **A laptop's Brief is one screen.** From 960px wide the Brief's panels are two rows (Today,
   Coming up and Next; Waiting on you, Jobs, News and the numbers) that share the window's
-  height, with the privacy line and the tip on one last row beside the Chat button, so the
+  height, with the privacy line and the tip on one last row, so the
   page does not scroll at 1000 by 560, 1280 by 720 or 1440 by 900. Each list shows as many as
   its room holds and gives way below to one, its panel's own "All ..." opening the rest, at
   every width, two columns too: nothing is cut off inside a panel (Next three cut its third step
@@ -612,9 +628,10 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
 
 ## Colour, type and space
 
-- A state is never its colour alone (WCAG 1.4.1): the header's dot is filled when connected
-  and a ring while it waits, grey while it connects and amber while Claude is not listening;
-  offline, read only and stopped are said in words on the line under the header. (room test)
+- A state is never its colour alone (WCAG 1.4.1): the header's dot, labelled "Claude" at the
+  header's right, is filled when connected and a ring while it waits, grey while it connects and
+  amber while Claude is not listening; offline, read only and stopped are said in words on the
+  line under the header. (room test)
 - Colours are the tokens in `palettes.py`, never a raw value. Light: a near-white page, white
   cards, ink buttons with white text (7.3:1). Dark: the main Rosé Pine. (colour tests)
 - A character count is the quiet grey while within its limit and red over it; amber only while
