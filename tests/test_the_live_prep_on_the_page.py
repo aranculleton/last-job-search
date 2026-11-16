@@ -1097,7 +1097,11 @@ def test_the_prep_uses_the_width_and_sets_what_to_say_first_beside_the_questions
     held = _ev("const p = document.querySelector('[data-lpp=p2]'); const n = p.querySelector('.lp-narr'); const r = n.__drawnRect();"
                " const bar = document.querySelector('.lp-bar').__drawnRect(); const life = document.querySelector('.lp-life').__drawnRect();"
                " return {pinned: n.classList.contains('lp-pin'), top: Math.round(r.top - bar.bottom), inView: r.top >= bar.bottom - 1 && r.bottom <= life.top + 1};")
-    got = _go(run, tmp_path, _listed(_model(_ctx())), [dict(OPEN, eval=look), {"eval": down}, {"wait": 300, "eval": held}], vp)
+    # A 15-inch laptop's window for the wide look: at the redesign's 15px (2026-11-16) this
+    # sample's Say first is taller than a 1440 by 900 window leaves it, and scrolls with the
+    # questions there as a tall one always has; here it stays beside them.
+    size = {"width": 1680, "height": 1050} if vp is WIDE else vp
+    got = _go(run, tmp_path, _listed(_model(_ctx())), [dict(OPEN, eval=look), {"eval": down}, {"wait": 300, "eval": held}], size)
     at, kept = got["after"][0]["eval"], got["after"][2]["eval"]
     assert at["n"] > 10 and at["most"] <= 95, ("no line read aloud past about 95 characters", at["most"])
     if vp is WIDE:

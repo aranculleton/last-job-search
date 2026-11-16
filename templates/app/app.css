@@ -1609,7 +1609,7 @@ body.has-fab .shell { padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-b
 /* The larger bubble: about twice as wide, capped so the page behind still shows, and most of
    the window's height. A phone's bubble is the screen already, so there is no toggle. */
 @media (min-width: 760px) {
-  .chat-dock.is-big { width: min(840px, calc(100vw - 280px)); height: calc(100dvh - var(--top-h) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 32px - var(--dock-lift, 0px)); }
+  .chat-dock.is-big { width: min(760px, calc(100vw - 280px)); height: calc(100dvh - var(--top-h) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 32px - var(--dock-lift, 0px)); }
 }
 @media (max-width: 759px) { .dock-size { display: none; } }
 .dock-title { margin: 0 auto 0 0; font-size: var(--t-lg); font-weight: 600; outline: none; }
@@ -2500,7 +2500,7 @@ dialog.detail.full { top: 0; bottom: 0; height: auto; max-height: none; }
    at the page's standard size on a 1440 screen): at 920 with room kept beside it for a term's
    panel it was a narrow column between wide empty margins (the maintainer, 2026-11-12). A term
    opens in a small box beside its word, never a panel, so nothing needs the room. */
-dialog.detail.full .detail-body { grid-template-columns: minmax(0, 1fr) minmax(0, 1200px) minmax(0, 1fr); }
+dialog.detail.full .detail-body { grid-template-columns: minmax(0, 1fr) minmax(0, 1080px) minmax(0, 1fr); }
 dialog.detail.full .detail-body > * { grid-column: 2; min-width: 0; }
 /* Below the wide layout the side columns are empty, and the body's gap between them and the
    reading column was 16px more padding on each side: on a phone the prep's first lines took a
