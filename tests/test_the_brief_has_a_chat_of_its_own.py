@@ -163,7 +163,7 @@ def test_the_tidy_up_says_it_has_moved_only_once_the_listing_shows_its_own_chat(
     monkeypatch.setattr(tidy, "_listener", lambda d: {"chat": HELPER, "kind": "cloud", "helper": True})
     monkeypatch.setattr(tidy, "_repo", lambda: REPO)
     monkeypatch.setattr(tidy, "_campaign_chats", lambda: set())
-    monkeypatch.setattr(tidy, "unmerged", lambda: set())
+    monkeypatch.setattr(tidy, "unmerged", lambda *_: set())
     monkeypatch.setattr(tidy, "on_github", lambda: set(), raising=False)
     monkeypatch.setattr(routines, "load", lambda *a, **k: _reg({"session_id": OWN, "own": True}))
     sessions = tmp_path / "s.json"
@@ -269,7 +269,7 @@ def test_the_tidy_up_prints_no_reminder_when_an_old_helper_is_kept(monkeypatch, 
     monkeypatch.setattr(tidy, "_listener", lambda d: listener)
     monkeypatch.setattr(tidy, "_repo", lambda: REPO)
     monkeypatch.setattr(tidy, "_campaign_chats", lambda: set())
-    monkeypatch.setattr(tidy, "unmerged", lambda: set())
+    monkeypatch.setattr(tidy, "unmerged", lambda *_: set())
     monkeypatch.setattr(tidy, "on_github", lambda: set(), raising=False)
     monkeypatch.setattr(routines, "load", lambda *a, **k: _reg({"session_id": OWN, "own": True}))
     sessions = tmp_path / "s.json"

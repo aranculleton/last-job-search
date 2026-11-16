@@ -74,7 +74,7 @@ def _tidy(copy, tmp_path, monkeypatch, *, listed="idle", told="idle", used="2026
     monkeypatch.setattr(tidy, "_listener", lambda d: {"chat": LIVE, "kind": "cloud", "helper": True})
     monkeypatch.setattr(tidy, "_repo", lambda: REPO)
     monkeypatch.setattr(tidy, "_campaign_chats", lambda: set())
-    monkeypatch.setattr(tidy, "unmerged", lambda: set(unmerged))
+    monkeypatch.setattr(tidy, "unmerged", lambda *_: set(unmerged))
     monkeypatch.setattr(tidy, "on_github", lambda: set(github), raising=False)
     monkeypatch.setattr(routines, "load", lambda *a, **k: json.loads(json.dumps(reg or REG)))
     sessions = {"data": [{"id": LIVE, "title": "Job search page", "status": "idle"},
@@ -232,7 +232,7 @@ def test_a_brief_in_the_chat_that_handed_the_page_on_is_moved_never_nothing_to_t
                                                       "helper": True, "handed_by": old})
     monkeypatch.setattr(tidy, "_repo", lambda: REPO)
     monkeypatch.setattr(tidy, "_campaign_chats", lambda: set())
-    monkeypatch.setattr(tidy, "unmerged", lambda: set())
+    monkeypatch.setattr(tidy, "unmerged", lambda *_: set())
     monkeypatch.setattr(tidy, "on_github", lambda: set(), raising=False)
     monkeypatch.setattr(routines, "load", lambda *a, **k: json.loads(json.dumps(reg)))
     sessions = {"data": [{"id": LIVE, "title": "Job search page", "status": "idle"},

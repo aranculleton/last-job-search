@@ -651,22 +651,108 @@ def _branches_of(d: dict) -> list[str]:
     return sorted({b for b in out if b and b not in ("master", "main")})
 
 
-def unmerged() -> set[str] | None:
-    """Branches on GitHub that master does not hold, or None when git cannot say (then every
-    chat with a branch of its own is kept)."""
+def saved_since(d: dict | None, branches: set[str] | None, github: set[str] | None,
+                last: str) -> bool:
+    """Is all of a chat's work saved: a branch of its own, every one on GitHub and held by
+    master, the last committed within RECENT_S of the chat's last use, so nothing it did after
+    is only in its container? An earlier rule archived a helper whose save GitHub never held,
+    its work lost with it (review of fix/helpers item 2); one never proven saved is kept."""
+    import app_model
+    own = _branches_of(d or {})
+    if not own or branches is None or github is None:
+        return False
+    if any(b not in github or b in branches for b in own):
+        return False
+    used = app_model.parse_time(last)
+    tips = [TIPS[b] for b in own if b in TIPS]
+    if used is None or not tips:
+        return False
+    return max(tips) >= used.timestamp() - RECENT_S
+
+
+def own_branches(info: dict) -> set[str]:
+    """The branches of the chats read with get_session (`details`): the only ones the tidy-up
+    asks GitHub about, never every branch it holds."""
+    return {b for d in (info or {}).values() if isinstance(d, dict) for b in _branches_of(d)}
+
+
+def _git_out(root: str, *args: str, timeout: int = 60) -> tuple[int, str]:
+    try:
+        r = subprocess.run(["git", "-C", root, *args], capture_output=True, text=True,
+                           encoding="utf-8", timeout=timeout)
+    except (OSError, subprocess.SubprocessError):
+        return -1, ""
+    return r.returncode, r.stdout
+
+
+def _heads(root: str) -> dict[str, str] | None:
+    """Every branch GitHub holds for this copy, with its commit, asked of GitHub itself; None
+    when it cannot be asked. A chat's copy is a clone of master alone, so its own list of remote
+    branches named no other chat's branch (the maintainer's chat list, 2026-11-16)."""
+    code, out = _git_out(root, "ls-remote", "--heads", "origin", timeout=60)
+    if code != 0:
+        return None
+    heads = {}
+    for ln in out.splitlines():
+        sha, _, ref = ln.partition("\t")
+        if ref.startswith("refs/heads/") and sha:
+            heads[ref[len("refs/heads/"):]] = sha.strip()
+    return heads
+
+
+# When each branch unmerged() judged was last committed to (seconds since the epoch): a helper
+# just taken over from counts as saved only where its branch's last commit came after its last
+# use (saved_since).
+TIPS: dict[str, float] = {}
+
+
+def _merged(root: str, name: str, sha: str) -> bool | None:
+    """Does master hold `name` (at `sha`)? Its commits are fetched where this copy lacks them,
+    and a shallow master deepened back to them once; None where git cannot say."""
+    if _git_out(root, "cat-file", "-e", sha + "^{commit}")[0] != 0:
+        _git_out(root, "fetch", "--quiet", "origin", "refs/heads/" + name, timeout=120)
+    if _git_out(root, "cat-file", "-e", sha + "^{commit}")[0] != 0:
+        return None
+    code, at = _git_out(root, "log", "-1", "--format=%ct", sha)
+    if code == 0 and at.strip().isdigit():
+        TIPS[name] = float(at.strip())
+    code = _git_out(root, "merge-base", "--is-ancestor", sha, "origin/master")[0]
+    if code == 0:
+        return True
+    if code == 1 and _git_out(root, "rev-parse", "--is-shallow-repository")[1].strip() == "true":
+        # Merged before this copy's history begins: master deepened back to the branch's day.
+        code, when = _git_out(root, "log", "-1", "--format=%cs", sha)
+        if code == 0 and when.strip():
+            try:
+                since = (dt.date.fromisoformat(when.strip()) - dt.timedelta(days=2)).isoformat()
+            except ValueError:
+                since = ""
+            if since:
+                _git_out(root, "fetch", "--quiet", "--shallow-since=" + since, "origin",
+                         "master:refs/remotes/origin/master", timeout=180)
+                code = _git_out(root, "merge-base", "--is-ancestor", sha, "origin/master")[0]
+                if code == 0:
+                    return True
+    return False if code == 1 else None
+
+
+def unmerged(names: set[str] | None = None) -> set[str] | None:
+    """Of `names` (the old chats' own branches; every branch GitHub holds where None), those on
+    GitHub that master does not hold, or None when git cannot say (then every chat with a branch
+    of its own is kept). One git cannot judge counts as not held: its chat is kept."""
     import person
     root = person.state()
-    try:
-        subprocess.run(["git", "-C", root, "fetch", "--quiet", "origin"], capture_output=True,
-                       text=True, encoding="utf-8", timeout=120)
-        r = subprocess.run(["git", "-C", root, "branch", "-r", "--no-merged", "origin/master",
-                            "--format=%(refname:short)"], capture_output=True, text=True,
-                           encoding="utf-8", timeout=60)
-    except (OSError, subprocess.SubprocessError):
-        return None
-    if r.returncode != 0:
-        return None
-    return {ln.strip().removeprefix("origin/") for ln in r.stdout.splitlines() if ln.strip()}
+    _git_out(root, "fetch", "--quiet", "origin", timeout=120)
+    heads = _heads(root)
+    if heads is None:
+        code, out = _git_out(root, "branch", "-r", "--no-merged", "origin/master",
+                             "--format=%(refname:short)")
+        if code != 0:
+            return None
+        return {ln.strip().removeprefix("origin/") for ln in out.splitlines() if ln.strip()}
+    want = {n: heads[n] for n in (heads if names is None else names) if n in heads
+            and n not in ("master", "main")}
+    return {n for n, sha in want.items() if _merged(root, n, sha) is not True}
 
 
 def _status(s: dict, d: dict | None) -> str:
@@ -713,18 +799,16 @@ def _after(stamp, since) -> bool:
 
 
 def on_github() -> set[str] | None:
-    """Every branch GitHub holds for this copy, as the last fetch saw it (unmerged() fetches
-    first), or None when git cannot say."""
+    """Every branch GitHub holds for this copy, asked of GitHub (a chat's copy holds master
+    alone), else as this copy's last fetch saw it, or None when git cannot say."""
     import person
-    try:
-        r = subprocess.run(["git", "-C", person.state(), "branch", "-r",
-                            "--format=%(refname:short)"], capture_output=True, text=True,
-                           encoding="utf-8", timeout=60)
-    except (OSError, subprocess.SubprocessError):
+    heads = _heads(person.state())
+    if heads is not None:
+        return set(heads)
+    code, out = _git_out(person.state(), "branch", "-r", "--format=%(refname:short)")
+    if code != 0:
         return None
-    if r.returncode != 0:
-        return None
-    return {ln.strip().removeprefix("origin/") for ln in r.stdout.splitlines() if ln.strip()}
+    return {ln.strip().removeprefix("origin/") for ln in out.splitlines() if ln.strip()}
 
 
 def _days_since(stamp: str, today: dt.date) -> float:
@@ -1045,11 +1129,21 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
         quiet = _days_since(last, today)
         waits = "requires_action" in status or "blocked" in status
         if sid == ret and _ago_s(last, now) < RETIRE_QUIET_S:
-            # The helper just taken over from owns its own archive (decided, review of
-            # fix/helpers item 2): only it can see whether its work reached GitHub (app.py
-            # retired). Put away here only after a day of quiet.
-            keep("it puts itself away once its work is saved")
-            continue
+            # The helper just taken over from: put away once its work is proven saved
+            # (saved_since) and it has been quiet RETIRE_SAVED_S, else after a day of quiet.
+            # Nothing wakes it after the hand-over, so "it puts itself away" never happened, and
+            # the hand-over comes at the same time each morning, so a day of quiet was always a
+            # few seconds short: yesterday's helper stayed every day (the maintainer's chat
+            # list, 2026-11-16).
+            if _running(status) or _ago_s(last, now) < RETIRE_SAVED_S:
+                keep("it puts itself away once its work is saved")
+                continue
+            if d is None:
+                out["ask"].append(sid)
+                continue
+            if not saved_since(d, branches, on_github, last):
+                keep("it puts itself away once its work is saved")
+                continue
         if sid in old_helpers and waits:
             keep("it is waiting on the person")
             continue
@@ -1379,10 +1473,11 @@ def run_plan(a) -> int:
     elif now is not None and not a.today:
         today = now.date()
     me = app_listen.this_chat(a.chat)
-    got = plan(listed + extra, tasks,
-               details(_pages(a.details) + _as_pages(given.get("details"))), reg,
+    read = details(_pages(a.details) + _as_pages(given.get("details")))
+    got = plan(listed + extra, tasks, read, reg,
                listener, me, repo, today,
-               _campaign_chats(), unmerged(), done, jobs, now=now, on_github=on_github(),
+               _campaign_chats(), unmerged(own_branches(read)), done, jobs, now=now,
+               on_github=on_github(),
                saves=saves(), job_items=job_items(pagedb) if pagedb is not None else None,
                computer_chat=_computer_chat(pagedb))
     if got["ask"]:
@@ -1669,7 +1764,7 @@ def close(sid: str, work: str, db: dict, info: dict, listener: dict, this_chat: 
 
 
 def retire(old: str, d: dict | None, repo: str, branches: set[str] | None,
-           now: dt.datetime) -> tuple[str, str]:
+           now: dt.datetime, github: set[str] | None = None) -> tuple[str, str]:
     """The helper this chat took the page over from, judged from one get_session of it (`d`),
     never a listing typed back by hand (H-4; second audit A6, R3): ("read", why) without it,
     ("gone", title) where get_session cannot find it, ("archived", title) when put away
@@ -1690,12 +1785,15 @@ def retire(old: str, d: dict | None, repo: str, branches: set[str] | None,
     where = _repo_of(d)
     if where and where != repo.lower():
         return "keep", "it works on another copy"
-    if _ago_s(_last_used({}, d), now) < RETIRE_QUIET_S:
+    last = _last_used({}, d)
+    if _ago_s(last, now) < RETIRE_QUIET_S and not (
+            _ago_s(last, now) >= RETIRE_SAVED_S and saved_since(d, branches, github, last)):
         return "keep", "it puts itself away once its work is saved"
     return "archive", title
 
 
 RETIRE_QUIET_S = 24 * 3600     # an old helper quiet this long is put away by the new one
+RETIRE_SAVED_S = 3600          # sooner, once its work is proven saved (saved_since)
 
 
 def retire_due(now: dt.datetime) -> bool:
@@ -1725,7 +1823,8 @@ def run_retire(a) -> int:
         print("retire: no helper is waiting to be put away. Say nothing about it.")
         return 0
     got = details(_pages(a.details) + _as_pages(_given(a).get("details")))
-    what, said = retire(old, got.get(old), _repo(), unmerged(), now)
+    what, said = retire(old, got.get(old), _repo(), unmerged(own_branches(got)), now,
+                        on_github())
     if what != "read":
         mark_retire(now)          # asked about again only RETIRE_AGAIN_S on (due)
     if what == "read":
@@ -1765,8 +1864,9 @@ def run_close(a) -> int:
     listener = _listener(a.dump)
     me = app_listen.this_chat(a.chat)
     record = saves()
-    what, said = close(a.id, a.work, db, details(_pages(a.details)), listener, me, _repo(),
-                       unmerged(), on_github(), now=now, record=record,
+    read = details(_pages(a.details))
+    what, said = close(a.id, a.work, db, read, listener, me, _repo(),
+                       unmerged(own_branches(read)), on_github(), now=now, record=record,
                        fresh=bool(getattr(a, "fresh", False)))
     if what == "save":
         print(f"save {a.id}: {said}, and its job has finished: it is asked once to save it. "

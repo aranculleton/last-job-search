@@ -43,7 +43,7 @@ def setup(monkeypatch, tmp_path):
     monkeypatch.setattr(tidy, "_git_dir", lambda: str(tmp_path))
     monkeypatch.setattr(tidy, "_listener", lambda dump: LISTENER)
     monkeypatch.setattr(tidy, "_repo", lambda: REPO)
-    monkeypatch.setattr(tidy, "unmerged", lambda: {"claude/land-unsaved"})
+    monkeypatch.setattr(tidy, "unmerged", lambda *_: {"claude/land-unsaved"})
     return tmp_path
 
 
