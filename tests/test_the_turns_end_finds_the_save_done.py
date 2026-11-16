@@ -270,6 +270,27 @@ def test_a_save_pull_requests_events_never_reach_the_chat(person_copy, kind, dat
     assert "pull request" not in json.dumps(got).lower()
 
 
+def test_the_hook_claude_code_runs_stops_the_event_with_nothing_added(tmp_path):
+    """Run as Claude Code runs it (`learned.py hook`, the event on its input): the block is all
+    it prints, with nothing the day's checks would add beside a prompt that never arrives."""
+    repo, prof = tmp_path / "their-search", tmp_path / "profile"
+    git(tmp_path, "init", "-q", "-b", "master", str(repo))
+    git(repo, "remote", "add", "origin", "https://github.com/someone/their-search.git")
+    prof.mkdir()
+    (prof / "person.json").write_text("{}\n", encoding="utf-8")
+    env = dict(os.environ, LJS_STATE=str(repo), LJS_PROFILE=str(prof))
+    for k in ("LJS_CHAT", "CLAUDE_CODE_REMOTE"):
+        env.pop(k, None)
+    r = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "learned.py"), "hook"],
+                       input=json.dumps({"hook_event_name": "UserPromptSubmit", "session_id": "x",
+                                         "prompt": _event("pull_request.closed",
+                                                          '{"pr":"someone/their-search#3"}')}),
+                       env=env, capture_output=True, text=True, encoding="utf-8", timeout=60)
+    assert r.returncode == 0, r.stderr
+    assert json.loads(r.stdout) == {"decision": "block", "reason": "Saved.", "hookSpecificOutput": {
+        "hookEventName": "UserPromptSubmit", "suppressOriginalPrompt": True}}, r.stdout
+
+
 def test_another_repos_pull_request_is_never_taken_for_a_save(person_copy):
     """A chat watching a pull request somewhere else (the app's own, say) is woken by it as
     ever, and never told it is a save's."""

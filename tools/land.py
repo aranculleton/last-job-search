@@ -1915,6 +1915,9 @@ def _land(root: str, message: str, check, sleep) -> int:
 
     ahead =_git(root, "rev-list", "--count", "origin/master..HEAD").stdout.strip()
     if ahead in ("", "0"):
+        # Master taken in, and nothing of this chat's own: its branch's copy on GitHub moved
+        # with it, or the cloud's check counts master's commits as this chat's (_copy_lags).
+        level(root, sleep=sleep)
         print("land: nothing to land")
         return 0
 
@@ -2115,6 +2118,7 @@ def _keep(root: str, message: str, sleep) -> int:
             return 2
     _retried(root, "fetch", "-q", "origin", "master", sleep=sleep)
     if _git(root, "rev-list", "--count", "origin/master..HEAD").stdout.strip() in ("", "0"):
+        level(root, sleep=sleep)
         print("land: nothing to keep: this copy holds no work master lacks")
         return 0
     _wait_on_branch(root, "land: kept, not checked", sleep)
@@ -2238,18 +2242,71 @@ def _level(root: str, name: str, sleep) -> None:
     pushed, the branch stood one merge commit (master's own) ahead of its copy on GitHub, and
     a check for unpushed work held the chat for it until it was pushed by hand (a live
     session, 2026-11-05). Never forced; where it cannot be moved, one line says so."""
-    there = _remote_name(name)
-    theirs = _git(root, "rev-parse", "-q", "--verify", "refs/remotes/origin/" + there).stdout.strip()
-    head = _git(root, "rev-parse", "HEAD").stdout.strip()
-    if theirs == head:
+    there = _copy_lags(root, name, create=True)
+    if not there:
         return
-    if not theirs and head == _git(root, "rev-parse", "origin/master").stdout.strip():
-        return          # deleted once merged (_delete_merged): never pushed back at master
     _where, r = _push(root, name, sleep)
     if r.returncode != 0:
         print("land: GitHub's copy of %s stays where the landing pushed it (%s); nothing is "
               "lost, and the next landing moves it" % (there, _said(r)))
         _told(_trouble(r))
+
+
+# The cloud ends each turn of a chat with a check of its own on the checkout (a Stop hook the
+# cloud installs, outside the app): changes not committed, untracked files, or commits the
+# branch's copy on GitHub lacks, counted from origin/<branch>, or from origin/HEAD (master)
+# where the branch has none; any of them, and the chat is told to commit and push. The cloud
+# refuses to delete a branch on GitHub ("the proxy rejects branch deletions",
+# code.claude.com/docs/en/cloud-environments, GitHub proxy), so a landing's branch keeps its
+# copy there (_delete_merged), and every master taken in afterwards (a page update, the day's
+# first check, a landing with nothing of its own) moved the branch past it: the check counted
+# master's own commits, 53 where 2 were the chat's, three turns running (a person's copy,
+# 2026-11-16).
+QUICK_PUSH_S = 60
+
+
+def _copy_lags(root: str, name: str, create: bool = False) -> str:
+    """Where GitHub's copy of branch `name` is pushed to stand level with HEAD, or "" when
+    nothing need move: it is level already; it has moved apart from HEAD (a push would be
+    refused, and nothing is ever forced); or the branch has no copy and HEAD is on master
+    (nothing for the cloud's check to count), or has none and `create` is not asked."""
+    there = _remote_name(name)
+    theirs = _git(root, "rev-parse", "-q", "--verify",
+                  "refs/remotes/origin/" + there).stdout.strip()
+    head = _git(root, "rev-parse", "-q", "--verify", "HEAD").stdout.strip()
+    if not head or theirs == head:
+        return ""
+    if not theirs:
+        if not create or _git(root, "merge-base", "--is-ancestor", "HEAD",
+                              "origin/master").returncode == 0:
+            return ""
+    elif _git(root, "merge-base", "--is-ancestor", theirs, "HEAD").returncode != 0:
+        return ""
+    return there
+
+
+def level(root: str = ROOT, create: bool = False, sleep=None) -> bool:
+    """This branch's copy on GitHub brought level with HEAD, a plain fast-forward push, where it
+    lags: after master is taken in (only a copy GitHub already has is moved), or, with
+    `create`, this chat's own work saved to its branch. One try, cut off after QUICK_PUSH_S,
+    unless `sleep` is given (a landing in the background: a network failure tried again).
+    True when nothing is left for the cloud's check at the end of a turn to count."""
+    name = branch(root)
+    if not name:
+        return True                  # a detached HEAD: the cloud's check counts nothing
+    there = _copy_lags(root, name, create)
+    if not there:
+        return True
+    if sleep is not None:
+        return _push(root, name, sleep)[1].returncode == 0
+    ref = "HEAD" if there == name else "HEAD:refs/heads/" + there
+    try:
+        r = subprocess.run(["git", "-C", root, "push", "-q", "-u", "origin", ref],
+                           capture_output=True, text=True, encoding="utf-8", errors="replace",
+                           timeout=QUICK_PUSH_S, stdin=subprocess.DEVNULL)
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return r.returncode == 0
 
 
 READY: dict = {}            # what the last landing pushed, for its pull request
@@ -2309,11 +2366,129 @@ def _unmark(root: str, name: str) -> None:
             pass
 
 
+# The part of a save the cloud's check at the end of a turn reads (_copy_lags) is done before
+# the save goes to the background: the turn's work committed and on its branch's copy on
+# GitHub, in a few seconds. Done only in the background, every turn of the chat that answers
+# the page ended on work the check found uncommitted, and the chat landed again or waited
+# minutes on a save already under way (a person's copy, 2026-11-16).
+#
+# The save before it, waiting out SETTLE_S, holds the lock and touches nothing meanwhile: it
+# says so (IDLE_FILE, its lock's token), and a save asked for then is committed and pushed at
+# once beside it, under a lock of its own (KEEPING_FILE), which the waiting one lets go of
+# before it goes on. A landing at work (merging master, checking) is never saved beside: a
+# commit then could reach master unchecked; the chat is told what the cloud's words mean.
+IDLE_FILE = "ljs-landing.idle"
+KEEPING_FILE = "ljs-keeping.lock"
+KEEP_WAIT_S = 2 * 60
+BUSY_SAY = ("It is still at work, so this turn's work is not committed yet: if the end of the "
+            "turn then says there are uncommitted changes, untracked files or unpushed commits, "
+            "that is this save, which takes them when it ends. Answer it with nothing: run no "
+            "git command, wait for nothing and end the turn with no text.")
+
+
+def _save_first(root: str, message: str) -> bool:
+    """The person's files committed and this branch's copy on GitHub level with them (level,
+    one push, never forced), under a lock the caller holds, saying nothing. A push that
+    cannot be made here is the landing's, after. Files never saved and over a week old are
+    left to the landing, which names them for the person (_land). True when nothing is left
+    for the cloud's check at the end of the turn."""
+    if not git_dir(root):
+        return False
+    try:
+        import save_state
+        if save_state.old_unsaved(root):
+            return False
+    except Exception:  # noqa: BLE001  the landing stages and says as before
+        return False
+    with contextlib.redirect_stdout(io.StringIO()):
+        ok, _why = _stage(root)
+        if not ok:
+            return False
+        if _git(root, "diff", "--cached", "--quiet").returncode != 0 and _git(
+                root, "commit", "-q", "-m", message.strip() or DEFAULT_MESSAGE).returncode != 0:
+            return False
+        if branch(root) in ("master", "main") and _git(
+                root, "merge-base", "--is-ancestor", "HEAD", "origin/master").returncode != 0:
+            if not _own_branch(root)[0]:      # work is never pushed to master itself
+                return False
+        return level(root, create=True)
+
+
+def _save_beside(root: str, message: str) -> bool:
+    """This turn's work saved at once beside a landing that holds the lock and only waits
+    (IDLE_FILE names its lock): the keeping lock taken in one step, the wait checked again
+    under it, then _save_first. False, and nothing done, while it is at work."""
+    d = git_dir(root)
+    if not d:
+        return False
+    lock = _lock_words(os.path.join(d, LOCK_FILE))
+    idle = os.path.join(d, IDLE_FILE)
+
+    def waits() -> bool:
+        words = _lock_words(idle)
+        return len(lock) >= 3 and bool(words) and words[0] == lock[2]
+    if not waits():
+        return False
+    p = os.path.join(d, KEEPING_FILE)
+    for _ in range(2):
+        try:
+            fd = os.open(p, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+            break
+        except FileExistsError:
+            if _keeping(p):
+                return False           # another save beside it, this moment
+            try:
+                os.remove(p)
+            except OSError:
+                return False
+        except OSError:
+            return False
+    else:
+        return False
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write(lock_text())
+        # Still waiting, read after the keeping lock was taken: the waiting landing lets its
+        # mark go before it looks for this lock, so one of the two always sees the other.
+        return waits() and _save_first(root, message)
+    finally:
+        try:
+            os.remove(p)
+        except OSError:
+            pass
+
+
+def _kept_beside(root: str) -> None:
+    """A save made beside this landing while it waited, let finish before the landing goes
+    on (at most KEEP_WAIT_S)."""
+    d = git_dir(root)
+    if not d:
+        return
+    p = os.path.join(d, KEEPING_FILE)
+    until = time.monotonic() + KEEP_WAIT_S
+    while _keeping(p) and time.monotonic() < until:
+        time.sleep(0.05)
+
+
+def _keeping(p: str) -> bool:
+    """Is a save beside the landing running now: its keeping lock there, its process alive,
+    and stamped (on its own clock, as the landing's lock is) less than KEEP_WAIT_S ago."""
+    if not os.path.exists(p) or not _live(p):
+        return False
+    words = _lock_words(p)
+    try:
+        return time.time() - calendar.timegm(time.strptime(words[1], LOCK_STAMP)) < KEEP_WAIT_S
+    except (IndexError, ValueError):
+        return True                    # written this moment: its words follow
+
+
 def detach(root: str = ROOT, message: str = "", popen=subprocess.Popen) -> int:
-    """Start the landing in a process of its own and return at once: one line, nothing to
-    wait for. A landing already running is only asked to land again once it ends: the lock is
-    taken here, in one step, and handed to the process started, so two asked together never
-    start two (each started its own, and each ran the check, 2026-11-06)."""
+    """Commit and push this turn's work to its branch (_save_first, a few seconds), then start
+    the rest of the landing in a process of its own and return: one line, nothing to wait
+    for. A landing already running is only asked to land again once it ends, the work saved
+    beside it at once where it only waits (_save_beside): the lock is taken here, in one step,
+    and handed to the process started, so two asked together never start two (each started
+    its own, and each ran the check, 2026-11-06)."""
     if _the_app(root):
         print("land: this is the app itself, which lands through its own pull request and CI "
               "(MAINTAINING.md); nothing was pushed")
@@ -2321,8 +2496,14 @@ def detach(root: str = ROOT, message: str = "", popen=subprocess.Popen) -> int:
     _ask(root, message)
     token = _take_lock(root)
     if not token:
-        print("land: saving in the background (one already running saves this too).")
+        if _save_beside(root, message):
+            print("land: saving in the background (one already running saves this too); "
+                  "nothing to wait for or say.")
+        else:
+            print("land: saving in the background (one already running saves this too). "
+                  + BUSY_SAY)
         return 0
+    _save_first(root, message)
     d = git_dir(root)
     log = os.path.join(d, LOG_FILE) if d else os.devnull
     try:
@@ -2641,11 +2822,21 @@ def _settle(root: str, sleep, message: str = "") -> None:
         return
     with contextlib.redirect_stdout(io.StringIO()):
         _keep(root, message, sleep)
-    while left > 0:
-        step = min(left, BEAT_S)
-        sleep(step)
-        _beat(root)
-        left -= step
+    # Only waiting from here: a save asked for meanwhile is committed and pushed at once beside
+    # it (_save_beside), and let finish before this one goes on (_kept_beside).
+    d = git_dir(root)
+    token = _MINE.get(_lock_key(d)) if d else None
+    if token and token != "-":
+        _mark(root, IDLE_FILE, token + "\n")
+    try:
+        while left > 0:
+            step = min(left, BEAT_S)
+            sleep(step)
+            _beat(root)
+            left -= step
+    finally:
+        _unmark(root, IDLE_FILE)
+        _kept_beside(root)
 
 
 def _rounds(root: str, message: str, check, sleep, land_fn, finish) -> int:
