@@ -1376,7 +1376,9 @@ def test_every_screen_keeps_to_the_simplicity_budgets(run, pages, viewport, sche
             # his name").
             # A checklist row's own next step and Done are the row's, as an item's own card's
             # are (DESIGN.md, checklists): the card's budget is its own row of actions.
-            others = c["controls"] - c["answers"] - c.get("icons", 0) - c.get("names", 0) - c.get("rows", 0)
+            # What folds or opens a draft's own words (its heading, "Read it all") is the words'
+            # own, as a "?" is (the redesign, 2026-11-16: a long draft shows its first lines).
+            others = c["controls"] - c["answers"] - c.get("icons", 0) - c.get("names", 0) - c.get("rows", 0) - c.get("folds", 0)
             if not c["alerts"]:
                 assert others <= BUDGET["card_controls"], (sid, c)
             assert c["filled"] <= 1, (sid, c)

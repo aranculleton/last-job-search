@@ -501,6 +501,9 @@ function budgetProbe() {
     return {item: c.getAttribute("data-item"), words: wordsIn(c, false, true), controls: cs.length,
       answers: cs.filter((b) => b.classList.contains("answer")).length, icons: cs.filter((b) => b.classList.contains("icon-only") || b.classList.contains("q")).length, names: cs.filter((b) => b.classList.contains("name-link")).length, filled: cs.filter((b) => b.classList.contains("primary")).length,
       rows: cs.filter((b) => b.closest(".g-row") && !b.classList.contains("icon-only") && !b.classList.contains("name-link")).length,
+      // What folds or opens a draft's own words (its heading, "Read it all"), as "Why" opens a
+      // card's details: the words' own, never one of the card's actions (the redesign, 2026-11-16).
+      folds: cs.filter((b) => b.matches(".pdraft > summary, .read-all")).length,
       alerts: c.querySelectorAll(".alert, .suggest").length,
       labels: cs.map((b) => (b.getAttribute("aria-label") || b.textContent || "").replace(/\s+/g, " ").trim().slice(0, 24))};
   });
