@@ -6923,7 +6923,7 @@
     // things (the maintainer, 2026-11-04).
     const place = txt(r.place_short !== undefined && r.place_short !== null ? r.place_short : r.place);
     const style = REMOTE(r) && !place.toLowerCase().includes(REMOTE(r)) ? cap1(txt(r.remote)) : "";
-    const facts = [h("bdi", {class: "co"}, txt(r.company))];
+    const facts = [h("bdi", {class: "co"}, employerLink(r.company, "job:" + r.id))];
     // The dot goes with the fact after it (a no-break space after it, a space before): a line
     // ending "Copperleaf Pay · Manchester ·" left it alone at the end (the screen review,
     // 2026-11-11).
@@ -7757,7 +7757,7 @@
         // Pay where it is known; "Pay not stated" on nearly every card said nothing (2026-11-03).
         j && j.score != null ? h("p", {class: "sr-only"}, "Fit " + txt(j.score) + " out of 100") : null,
         // The last fact, "Why" and the pencil keep together, as on a find's card (2026-11-10).
-        ((fs) => h("p", {class: "facts"}, h("bdi", {class: "co"}, txt(a.company)), fs.slice(0, -1).map((x) => [" \u00b7\u00a0", h("span", {class: "fact"}, x)]), fs.length ? " " : null,
+        ((fs) => h("p", {class: "facts"}, h("bdi", {class: "co"}, employerLink(a.company, "app:" + a.id)), fs.slice(0, -1).map((x) => [" \u00b7\u00a0", h("span", {class: "fact"}, x)]), fs.length ? " " : null,
           h("span", {class: "facts-end"}, fs.length ? ["\u00b7\u00a0", h("span", {class: "fact"}, fs[fs.length - 1])] : null,
             fold.toggle(j && j.score != null ? "Why" : "Details", j && j.score != null ? "Why it scored " + txt(j.score) + ": " + about : "Details: " + about))))(
           [txt(a.place_short !== undefined && a.place_short !== null ? a.place_short : a.place),
@@ -9117,7 +9117,7 @@
       h("div", {class: "avatar", "aria-hidden": "true"}, name.slice(0, 1).toUpperCase()),
       h("div", {class: "person-main"},
         // The trash sits in the row's corner, as on a job, never alone on a line of its own.
-        h("div", {class: "job-top"}, h("h3", {id: hid}, personName(p.id, personName2(p), "row:" + p.id), txt(p.employer) ? [" at ", h("bdi", {}, txt(p.employer))] : null),
+        h("div", {class: "job-top"}, h("h3", {id: hid}, personName(p.id, personName2(p), "row:" + p.id), txt(p.employer) ? [" at ", employerLink(p.employer, "person:" + p.id)] : null),
           h("span", {class: "top-end"}, stateWord(w, tone === "plain" ? null : tone),
             !["done"].includes(g) && !closedHere ? btn("", () => askRemovePerson(p.id, name, txt(p.employer), p.rev, {letGo, skip}), {kind: "quiet icon-only", small: true, icon: "bin", key: "pbin:" + p.id, aria: "Not " + whoAt(personName2(p), p.employer) + "?"}) : null)),
         role ? h("p", {class: "small muted"}, role) : null,
@@ -9696,7 +9696,7 @@
       // On a phone its pill leads the line of when, and the trash keeps beside the title: with
       // the title wrapping, both took a row of their own under it (the screen review,
       // 2026-11-11).
-      h("div", {class: "job-top"}, h("h3", {id: hid}, offer ? "Your offer from " : stageName(iv) + " with ", h("bdi", {}, txt(iv.company))),
+      h("div", {class: "job-top"}, h("h3", {id: hid}, offer ? "Your offer from " : stageName(iv) + " with ", employerLink(iv.company, "iv:" + iv.id)),
         // The bin is on what is still live: one that ended has nothing left to end.
         h("span", {class: "top-end"}, phoneNow() && !offer ? null : ivPill(iv), acts.bin)),
       ((when) => (offer ? null : phoneNow() && ivPill(iv) ? h("div", {class: "iv-when-line"}, ivPill(iv), when) : when))(h("p", {class: "when"}, offered.length ? "They offer " + daysWords(offered) + (txt(iv.reply_by) ? " · tell them by " + fmtDay(iv.reply_by) : "")
@@ -11315,6 +11315,11 @@
     const n = dayDiff(nx.date || nx.on);
     return appLive(a) && txt(nx.kind) === "follow_up" && n !== null && n <= 0 ? -n : null;
   }
+  // An application's state in a word, as its card says it (and an employer's card, the same).
+  function appWord(a, iv, nudge, late) {
+    if (iv === undefined) { iv = appInterview(a); nudge = appNudge(a); late = nudge ? null : appLate(a); }
+    return iv && !isPast(iv.when) ? ["Interview " + fmtDay(iv.when), "info"] : nudge || late !== null ? ["Follow-up ready", "info"] : APP_STATE[txt(a.status)] ? [APP_STATE[txt(a.status)][0] === null ? null : txt(a.status_word) || APP_STATE[txt(a.status)][0], APP_STATE[txt(a.status)][1]] : [txt(a.status_word) || cap1(txt(a.status)), null];
+  }
   function appRecordCard(a) {
     const hid = "rec-" + seg(a.id);
     const about = txt(a.company) + ", " + txt(a.role);
@@ -11322,7 +11327,7 @@
     const nudge = appNudge(a);
     const next = obj(a.next);
     const late = nudge ? null : appLate(a);
-    const [word, tone] = iv && !isPast(iv.when) ? ["Interview " + fmtDay(iv.when), "info"] : nudge || late !== null ? ["Follow-up ready", "info"] : APP_STATE[txt(a.status)] ? [APP_STATE[txt(a.status)][0] === null ? null : txt(a.status_word) || APP_STATE[txt(a.status)][0], APP_STATE[txt(a.status)][1]] : [txt(a.status_word) || cap1(txt(a.status)), null];
+    const [word, tone] = appWord(a, iv, nudge, late);
     const live = appLive(a);
     // What is next, saying only what the pill and the title do not: "Interview Wed 4 Nov" over
     // "Next: second interview on Wed 4 Nov", and a follow-up's line naming the card's own
@@ -11355,7 +11360,7 @@
       h("div", {class: "job-top"}, h("h3", {id: hid}, breakable(a.role)), h("span", {class: "top-end"}, stateWord(word, tone),
         live ? btn("", () => askEndApplication(a, "your application to " + txt(a.company)), {kind: "quiet icon-only", small: true, icon: "bin", key: "recbin:" + a.id, aria: "It is over: " + about}) : null)),
       // One line of facts, as on a Found card: the employer, who referred you, and what is next.
-      h("p", {class: "facts"}, h("bdi", {class: "co"}, txt(a.company)), a.referrer ? [" · ", h("span", {class: "fact"}, "Referred by ", itemLink("contacts", txt(obj(a.referrer).contact || obj(a.referrer).id), txt(obj(a.referrer).first_name), "recref:" + a.id))] : null,
+      h("p", {class: "facts"}, h("bdi", {class: "co"}, employerLink(a.company, "app:" + a.id)), a.referrer ? [" · ", h("span", {class: "fact"}, "Referred by ", itemLink("contacts", txt(obj(a.referrer).contact || obj(a.referrer).id), txt(obj(a.referrer).first_name), "recref:" + a.id))] : null,
         nextLine ? [" · ", h("span", {class: "fact next"}, nextLine)] : null, fold.toggle("Details", "Details: " + about)),
       fold.panel,
       live ? formLine(a) : null,
@@ -11393,7 +11398,53 @@
     if (!fromHistory && /\/open$/.test(location.hash)) { try { history.back(); } catch (e) { /* the frame refuses */ } }
     focusBack(d._opener);
   }
+  // ------------------------------------------------------------------ an employer's own card
+  // Everything the page holds about one employer, in one card: its roles, the people there and
+  // its interviews, each opening its own card. A person's name opened their card, an
+  // employer's opened nothing (issue #263). One employer however its name is written: "Example
+  // Co Ltd" and "Example Co" are the same.
+  const CO_TAIL = /\b(?:inc|incorporated|ltd|limited|llc|plc|corp|corporation|co|company|group|holdings)\b\.?/g;
+  function employerKey(name) {
+    return txt(name).toLowerCase().replace(/&/g, " and ").replace(CO_TAIL, " ").replace(/[^a-z0-9]+/g, " ").trim().replace(/ /g, "-");
+  }
+  function employerOf(id) {
+    const key = /^emp~/.test(txt(id)) ? txt(id).slice(4) : "";
+    if (!key) return null;
+    const same = (n) => employerKey(n) === key;
+    const apps = applicationItems().filter((a) => same(a.company));
+    const applied = new Set(apps.map((a) => txt(a.role).toLowerCase()));
+    const jobs = jobRows().filter((r) => same(r.company) && !applied.has(txt(r.title).toLowerCase()));
+    const people = peopleItems().filter((p) => same(p.employer));
+    const ivs = allInterviews().filter((iv) => same(iv.company));
+    const name = txt(obj(apps[0]).company) || txt(obj(jobs[0]).company) || txt(obj(people[0]).employer) || txt(obj(ivs[0]).company);
+    return name ? {id: "emp~" + key, name, apps, jobs, people, ivs} : null;
+  }
+  // The employer's name, wherever a card shows it, as the way into its card.
+  function employerLink(name, key) {
+    const k = employerKey(name);
+    if (!k) return txt(name);
+    const id = "emp~" + k;
+    return h("a", {href: "#" + (SECTION_IDS.has(S.section) ? S.section : "jobs") + "/" + id + "/open", class: "name-link emp-link", "data-k": "emp:" + (key || k),
+      onclick: (e) => { e.preventDefault(); e.stopPropagation(); openDetail("employer", id); }}, h("bdi", {}, txt(name)));
+  }
+  function employerDetail(e) {
+    const row = (label, sub, open, key) => h("li", {}, h("button", {type: "button", class: "btn link", "data-k": key, onclick: open}, label),
+      sub ? h("span", {class: "muted small"}, " · " + sub) : null);
+    const part = (title, items) => (items.length ? h("section", {class: "d-block"}, h("h3", {class: "group"}, title), h("ul", {class: "plain"}, items)) : null);
+    const roles = e.apps.map((a) => row(txt(a.role) || "A role", [txt(appWord(a)[0]), a.applied_on ? "applied " + fmtDay(txt(a.applied_on)) : ""].filter(Boolean).join(", "),
+      () => openDetail("application", a.id), "emp-app:" + a.id))
+      .concat(e.jobs.map((r) => row(txt(r.title) || "A role", r.found_on ? "found " + fmtDay(txt(r.found_on)) : "",
+        () => { closeDetail(true); go("jobs", {item: r.id}); }, "emp-job:" + r.id)));
+    const people = e.people.map((p) => row(txt(p.first_name) || "Someone", txt(statusWord(p)[0]), () => openDetail("person", p.id), "emp-person:" + p.id));
+    const ivs = e.ivs.map((iv) => row(ivTitle(iv), iv.when ? fmtDay(txt(iv.when)) : "", () => openDetail("interview", iv.id), "emp-iv:" + iv.id));
+    const said = [roles.length ? plural(roles.length, "role", "roles") : "", people.length ? plural(people.length, "person", "people") : "",
+      ivs.length ? plural(ivs.length, "interview", "interviews") : ""].filter(Boolean).join(" · ");
+    return h("div", {class: "d-stack d-employer", "data-employer": e.id},
+      said ? h("p", {class: "muted"}, said) : null,
+      part("Roles", roles), part("People", people), part("Interviews", ivs));
+  }
   function detailOf(kind, id) {
+    if (kind === "employer") { const e = employerOf(id); return e ? [e.name, employerDetail(e), "jobs", ""] : null; }
     // A live prep is read full screen on every screen: the parts, its term panel beside them.
     if (kind === "interview") { const iv = allInterviews().find((x) => x.id === id); return iv ? [ivTitle(iv), interviewDetail(iv), "interviews", obj(iv.prep).updated && livePrep(iv) ? "wide full" : "wide"] : null; }
     if (kind === "person") { const p = peopleItems().find((x) => x.id === id); return p ? [whoAt(p.first_name, p.employer), personDetail(p), "contacts", ""] : null; }
@@ -17406,7 +17457,7 @@
     // An old address of Messages (a view until 2026-11-04) is put right: Contacts, on the person.
     if (/^#(drafts-messages|messages)(\/|$)/.test(location.hash)) keepAddress(true);
     if (opened) {
-      const kind = ["interview", "person", "application"].find((k) => detailOf(k, opened));
+      const kind = ["interview", "person", "application", "employer"].find((k) => detailOf(k, opened));
       if (kind) openDetail(kind, opened, {fromHistory: true});
     }
   }

@@ -2135,6 +2135,14 @@ ul.bp-news { gap: 12px; }
 .d-person { display: grid; gap: 16px; }
 .d-person .d-block { display: grid; gap: 8px; }
 .d-person .timeline { display: grid; gap: 12px; }
+/* An employer's page as a person's: each block apart, its rows a list with room between,
+   each row's first word where the row starts (issue #263). */
+.d-employer { display: grid; gap: 16px; }
+.d-employer > p { margin: 0; }
+.d-employer .d-block { display: grid; gap: 8px; }
+.d-employer .d-block ul { display: grid; gap: 6px; }
+.d-employer .d-block li { margin: 0; }
+.d-employer .d-block li > .btn.link { padding-inline: 0; text-align: start; }
 .d-person .timeline li { display: grid; gap: 2px; }
 .d-person .t-draft .t-text { white-space: pre-wrap; background: var(--sunk); border-radius: var(--r-sm); padding: 12px 16px; }
 /* Their words and yours keep their lines; what was not a message (an acceptance, a call) is

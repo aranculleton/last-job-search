@@ -20,6 +20,10 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Added
+
+- **Every employer has a card of its own.** Tap an employer's name on a job, an application, a person or an interview: its card shows your roles there with where each stands, the people you know there and your interviews, and each opens its own card. The same employer is found however its name is written.
+
 ### Fixed
 
 - **Chat's answers read cleanly and never end at "I can't".** The page's own quick answers showed markdown raw, with asterisks around names and "- " before list items, and sometimes said what they could not do instead of passing the question on. Lists and bold now show as they should in every answer, and a question the page cannot answer goes to Claude by itself.
