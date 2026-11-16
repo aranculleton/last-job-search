@@ -1350,8 +1350,10 @@ a.navlink, .applylink, .btn.link, .fold .btn.link, .bp-foot a { text-decoration-
    a finger's height on a phone and a comfortable 40px with a mouse, rounded inside its edge. */
 .menu-panel { background: var(--overlay); border-color: var(--line); border-radius: var(--r-sm); padding: 4px; gap: 2px; }
 .menu-item { display: flex; align-items: center; min-height: max(var(--target), 40px); padding: 8px 12px; border-radius: 8px; font-weight: 400; }
-/* A message after a tap: charcoal, rounded as a card, its words beside its buttons. */
+/* A message after a tap: in inverse, rounded as a card, its words beside its buttons; Undo and
+   its kind are small soft buttons, never underlined words (the redesign, 2026-11-16). */
 .toast { min-height: 48px; border-radius: var(--r-sm); }
+.toast .btn.quiet:not(.toast-x) { text-decoration: none; background: var(--toast-hover); }
 
 /* ------------------------------------------------------------------ phones: every control a 44px target (WCAG 2.5.5, Apple's 44pt) */
 @media (max-width: 759px), (pointer: coarse) {
