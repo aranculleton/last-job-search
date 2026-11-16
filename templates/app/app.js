@@ -498,7 +498,9 @@
   // Standard, and Smaller is one step smaller again; the old Larger ("comically large") is
   // gone. Kept under a new key, so every choice made before starts on the new Standard.
   const SIZE_KEY = "ljs:size2";
-  const SIZES = {smaller: 0.8, standard: 0.9, larger: 1};
+  // On a computer Standard is the page's own size, 15px: drawn at 0.9 of 14px its words were
+  // 12.6px, hard to read for long (the redesign's review, 2026-11-16).
+  const SIZES = {smaller: 0.9, standard: 1, larger: 1.1};
   // A phone's Standard is the page's own size: drawn at 85% its body was 13.6px and its small
   // words 11.9px in muted grey, under the 16px body a phone needs (the review, 2026-11-10,
   // GOV.UK's smallest). "1 job posting per screen" (the maintainer, 2026-10-29) is answered by
@@ -527,9 +529,12 @@
     const sy = window.scrollY || 0;
     return (y + sy) * d - sy;
   }
+  // A short laptop window (under 700px tall) draws as the page did before (0.9 of 14px, app.css):
+  // at the page's own size the Brief's last row went out of a 1000 by 560 window.
+  function shortWindow() { return window.innerWidth >= 760 && window.innerHeight < 700; }
   function applySize(z) {
     const phone = window.innerWidth < 760;
-    const f = (phone ? PHONE_SIZES : SIZES)[z] || (phone ? PHONE_SIZES : SIZES).standard;
+    const f = ((phone ? PHONE_SIZES : SIZES)[z] || (phone ? PHONE_SIZES : SIZES).standard) * (shortWindow() ? 0.9 : 1);
     // A finger on a tablet needs its 44px as much as on a phone: drawn at 0.9 with no make-up,
     // its targets were 40px (the 3 November audit, an iPad in the Claude app).
     let touch = false;
@@ -18251,7 +18256,9 @@
     let lastWide = wide();
     // Re-laid out where the frame changes: the phone below 760px, the rail from 1280px.
     let lastBand = window.innerWidth < 760 ? 0 : wide() ? 2 : 1;
-    window.addEventListener("resize", () => { const w = wide(); const band = window.innerWidth < 760 ? 0 : w ? 2 : 1; if (w !== lastWide || band !== lastBand) { if ((band === 0) !== (lastBand === 0)) applySize(S.size); lastWide = w; lastBand = band; if (w) closeWork(); render(); } });
+    let lastShort = shortWindow();
+    window.addEventListener("resize", () => { if (shortWindow() !== lastShort) { lastShort = shortWindow(); applySize(S.size); } });
+    window.addEventListener("resize", () => { const w = wide(); const band = window.innerWidth < 760 ? 0 : w ? 2 : 1; if (w !== lastWide || band !== lastBand) { if ((band === 0) !== (lastBand === 0)) applySize(S.size); lastWide = w; lastBand = band; lastShort = shortWindow(); if (w) closeWork(); render(); } });
     window.addEventListener("blur", leftPage);
     window.addEventListener("focus", () => { backToPage(); refreshCanSend(); recheckReading().catch(() => {}); freshen(false); });
     document.addEventListener("visibilitychange", () => { if (document.hidden) leftPage(); else { backToPage(); refreshCanSend(); liveRender(); recheckReading().catch(() => {}); freshen(false); } });

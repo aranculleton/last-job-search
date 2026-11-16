@@ -16,8 +16,11 @@
   --t-lg: 1.125rem;
   --t-xl: 1.375rem;
   --t-2xl: 1.75rem;
-  --r: 14px;
-  --r-sm: 10px;
+  /* Shape (the redesign, 2026-11-16): a card 16, a well or a row list 12, a button 12 (a
+     rounded rectangle: something to do), a state or a filter fully round (a capsule). */
+  --r: 16px;
+  --r-sm: 12px;
+  --r-btn: 12px;
   --tabs-h: 64px;
   /* The header's height as drawn: the script sets it from the header itself (Chat's first words
      under the header, never behind it); this is its value before the script has measured. */
@@ -48,8 +51,8 @@ body {
 body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
 h1, h2, h3, h4 { line-height: 1.25; text-wrap: balance; margin: 0; }
 p { margin: 0; }
-a { color: var(--link); text-decoration-color: var(--link-line); text-decoration-thickness: 2px; text-underline-offset: 3px; }
-@media (hover: hover) { a:hover { text-decoration-thickness: 3px; } }
+a { color: var(--link); text-decoration-color: var(--link-line); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+@media (hover: hover) { a:hover { text-decoration-color: var(--ink); } }
 :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: 6px; }
 button, input, select, textarea { font: inherit; color: inherit; }
 .sr-only { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
@@ -254,7 +257,7 @@ bdi { unicode-bidi: isolate; }
 .empty-title { color: var(--ink); font-weight: 600; font-size: var(--t-lg); }
 
 
-.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; display: grid; gap: 8px; min-width: 0; box-shadow: none; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; display: grid; gap: 8px; min-width: 0; box-shadow: var(--shadow-card); }
 .card:focus { outline: none; }
 .card:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .card.flash { box-shadow: 0 0 0 3px var(--mark); }
@@ -352,19 +355,19 @@ bdi { unicode-bidi: isolate; }
 /* ------------------------------------------------------------------ controls */
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-  min-height: var(--target); padding: 8px 20px; border-radius: 999px; border: 1px solid transparent;
+  min-height: var(--target); padding: 8px 20px; border-radius: var(--r-btn); border: 1px solid transparent;
   font-weight: 600; font-size: var(--t-md); line-height: 1.2; cursor: pointer; text-decoration: none; text-align: center;
 }
 .btn.small { min-height: 38px; padding: 8px 16px; font-size: var(--t-sm); }
 .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 @media (hover: hover) { .btn.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); color: var(--accent-ink); } }
-.btn.secondary, .btn.answer { background: var(--raised); color: var(--ink); border-color: var(--line-strong); }
+.btn.secondary, .btn.answer { background: var(--raised); color: var(--ink); border-color: var(--line); }
 @media (hover: hover) { .btn.secondary:hover, .btn.answer:hover { background: var(--raised-hover); border-color: var(--raised-hover); } }
 .btn.answer[aria-pressed="true"] { background: var(--surface); border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
 .btn.answer[aria-pressed="true"]::before { content: "✓"; }
 .btn.quiet { background: transparent; color: var(--ink); border-color: transparent; text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 3px; }
 @media (hover: hover) { .btn.quiet:hover { background: var(--raised); } }
-.btn.link { min-height: 0; padding: 0 4px; background: none; border: 0; border-radius: 4px; color: var(--link); text-decoration: underline; text-decoration-color: var(--link-line); text-decoration-thickness: 2px; text-underline-offset: 3px; font-weight: 600; font-size: inherit; }
+.btn.link { min-height: 0; padding: 0 4px; background: none; border: 0; border-radius: 4px; color: var(--link); text-decoration: underline; text-decoration-color: var(--link-line); text-decoration-thickness: 1px; text-underline-offset: 3px; font-weight: 600; font-size: inherit; }
 .btn.icon { min-width: 38px; padding: 4px 12px; font-size: 1.125rem; text-decoration: none; }
 .btn.filter { background: var(--surface); color: var(--ink); border-color: var(--line-strong); font-weight: 600; }
 .btn.filter[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
@@ -375,16 +378,16 @@ bdi { unicode-bidi: isolate; }
    other control in the row (a quiet or a link button, a link that acts) is the soft grey
    pill at the regular weight, its edge 3:1 on the card; More is a soft pill too. Text
    buttons beside pills read as clutter (the maintainer, 2026-11-05). */
-.btn.secondary { font-weight: 400; }
+.btn.secondary { font-weight: 600; }
 :is(.card-actions, .wc-actions, .suggest-acts, .more-acts, .g-acts, .fix, .bp-foot, .sheet-actions) > :is(.btn, a):not(.icon-only),
 :is(.card-actions, .wc-actions, .suggest-acts, .g-acts) > details.more > .more-btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px; box-sizing: border-box;
-  min-height: 38px; margin: 0; padding: 8px 16px; border-radius: 999px; border: 1px solid var(--line-strong);
+  min-height: 38px; margin: 0; padding: 8px 16px; border-radius: var(--r-btn); border: 1px solid var(--line);
   font-size: var(--t-sm); line-height: 1.2; text-decoration: none; text-align: center; cursor: pointer;
 }
 :is(.card-actions, .wc-actions, .suggest-acts, .more-acts, .g-acts, .fix, .bp-foot, .sheet-actions) > :is(.btn, a):not(.icon-only):not(.primary),
 :is(.card-actions, .wc-actions, .suggest-acts, .g-acts) > details.more > .more-btn {
-  background: var(--raised); color: var(--ink); font-weight: 400;
+  background: var(--raised); color: var(--ink); font-weight: 600;
 }
 :is(.card-actions, .wc-actions, .suggest-acts, .more-acts, .g-acts, .fix, .bp-foot, .sheet-actions) > .btn.primary {
   background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600;
@@ -393,17 +396,17 @@ bdi { unicode-bidi: isolate; }
 .btn.secondary.next, :is(.card-actions, .wc-actions, .suggest-acts, .more-acts, .g-acts, .fix, .bp-foot, .sheet-actions) > .btn.next:not(.primary):not(.icon-only) { font-weight: 600; }
 @media (hover: hover) {
   :is(.card-actions, .wc-actions, .suggest-acts, .more-acts, .g-acts, .fix, .bp-foot, .sheet-actions) > :is(.btn, a):not(.icon-only):not(.primary):hover,
-  :is(.card-actions, .wc-actions, .suggest-acts, .g-acts) > details.more > .more-btn:hover { background: var(--raised-hover); border-color: var(--line-strong); }
+  :is(.card-actions, .wc-actions, .suggest-acts, .g-acts) > details.more > .more-btn:hover { background: var(--raised-hover); border-color: var(--line); }
   :is(.card-actions, .wc-actions, .suggest-acts, .more-acts, .g-acts, .fix, .bp-foot, .sheet-actions) > .btn.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); color: var(--accent-ink); }
 }
 /* Stop Claude: a quiet pill, faintly red, so it reads as stopping Claude's work and never as
    putting the job or the message away (the maintainer, 2026-11-05). */
 .btn.stop-claude, :is(.card-actions, .wc-actions, .suggest-acts, .more-acts, .g-acts, .fix, .bp-foot, .sheet-actions) > .btn.stop-claude:not(.icon-only) {
-  color: var(--st-failed); background: var(--st-failed-bg); border: 1px solid var(--st-failed-bg); border-radius: 999px; text-decoration: none; }
+  color: var(--st-failed); background: var(--st-failed-bg); border: 1px solid var(--st-failed-bg); border-radius: var(--r-btn); text-decoration: none; }
 .btn.stop-claude { padding: 2px 8px; }
 @media (hover: hover) { .btn.stop-claude:hover, :is(.card-actions, .wc-actions) > .btn.stop-claude:not(.icon-only):hover { border-color: var(--st-failed); background: var(--st-failed-bg); } }
 /* More, wherever it is, is a soft pill. */
-.more-btn { background: var(--raised); border: 1px solid var(--line-strong); font-weight: 400; }
+.more-btn { background: var(--raised); border: 1px solid var(--line); font-weight: 600; }
 .fbar, .seg { display: inline-flex; align-items: center; gap: 4px; min-height: 38px; font-weight: 600; font-size: var(--t-sm); }
 .filters { display: grid; gap: 12px; min-width: 0; }
 .fwrap { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
@@ -473,7 +476,7 @@ p.tone-bad, .note.tone-bad, .state.tone-bad { color: var(--st-failed); }
 .alert-text { font-weight: 600; }
 
 .alert .cost { color: inherit; }
-.suggest { display: grid; gap: 8px; padding: 12px 12px; border-radius: var(--r-sm); background: var(--st-running-bg); color: var(--st-running); }
+.suggest { display: grid; gap: 8px; padding: 12px 12px; border-radius: var(--r-sm); background: var(--sunk); color: var(--ink); }
 .suggest-text { font-weight: 400; }
 .suggest .hint, .suggest .cost { color: inherit; }
 .why-aside { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
@@ -560,7 +563,7 @@ details.more.split[open] { flex-basis: auto; }
 :is(.card.job, .card.app) .suggest { padding: 8px 12px; gap: 4px; }
 :is(.card.job, .card.app) .suggest-text { font-size: var(--t-sm); }
 :is(.card.job, .card.app) .suggest-acts { gap: 4px 12px; }
-:is(.card.job, .card.app) .suggest .btn.secondary { background: var(--surface); border-color: var(--muted); }
+:is(.card.job, .card.app) .suggest .btn.secondary { background: var(--surface); border-color: var(--line-strong); }
 .filtered { border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); padding: 4px 16px 12px; }
 .wc-more summary { cursor: pointer; font-size: var(--t-sm); font-weight: 600; color: var(--muted); min-height: 36px; display: flex; align-items: center; }
 .filtered summary, .gone summary, details.send summary, .chart summary, .recent summary, .brief summary {
@@ -1540,10 +1543,15 @@ dialog.work-sheet :is(select, input, textarea) { width: 100%; max-width: 100%; m
    no mouse it can see) is a computer, not a phone: drawn at 16px its Brief scrolled and its
    job cards' facts took two lines (4.12's Firefox run). Touch screens alone keep the full size. */
 @media (pointer: fine) and (min-width: 760px), (pointer: none) and (min-width: 760px) {
-  html { font-size: 87.5%; }
+  html { font-size: 93.75%; }
   :root { --target: 36px; --top-h: 52px; }
   .card { padding: 12px 16px; }
   .sec-head .screen-title { font-size: 1.375rem; }
+}
+/* A short laptop window keeps the page's earlier size, 14px drawn at 0.9 (app.js shortWindow):
+   the Brief is made to fit a window without scrolling. */
+@media (pointer: fine) and (min-width: 760px) and (max-height: 699px), (pointer: none) and (min-width: 760px) and (max-height: 699px) {
+  html { font-size: 87.5%; }
 }
 
 /* ------------------------------------------------------------------ the chat from any section, and pictures in it
@@ -2041,7 +2049,7 @@ ul.bp-news { gap: 12px; }
 .kind-application { --kc: var(--st-done); --kcbg: var(--st-done-bg); }
 .kind-search { --kc: var(--st-done); --kcbg: var(--st-done-bg); }
 .kind-setup, .kind-update { --kc: var(--mark); --kcbg: var(--accent-soft); }
-@media (min-width: 760px) { .sec-head .screen-title { font-size: 1.625rem; letter-spacing: -0.01em; } }
+@media (min-width: 760px) { .sec-head .screen-title { font-size: 1.875rem; letter-spacing: -0.02em; } }
 
 /* An interview's prep: a reading column and, on a wide screen, what was sent and the stages
    beside it. */

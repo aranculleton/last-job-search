@@ -48,7 +48,7 @@ def _docs() -> dict:
 
 
 LIGHT = {
-    "bg": ("#f7f6f3", "[D] warm paper: the page around the cards"),
+    "bg": ("#f9f8f5", "[D] warm paper, near-white (the maintainer, 2026-10-29): the page around the cards"),
     "surface": ("#ffffff", "[D] white: every card, its edge drawn by line"),
     "overlay": ("#ffffff", "[D] white: what floats, a sheet, a menu, the Chat panel"),
     "sunk": ("#f2f0eb", "[D] paper a step deeper: wells, tracks, a segmented control's track"),
@@ -177,7 +177,8 @@ def pairs() -> list:
         out += [("muted", s, 4.5, "secondary text on " + s), ("focus", s, 3.0, "focus ring on " + s)]
     out += [("mark-ink", s, 4.5, "clay as text") for s in SURFACES + ("accent-soft",)]
     out += [("mark-on", "mark", 4.5, "text on a clay fill"), ("mark", "raised", 3.0, "a mark on a button"),
-            ("danger-ink", "danger", 4.5, "text on the removal fill"), ("ink", "overlay", 4.5, "text on what floats")]
+            ("danger-ink", "danger", 4.5, "text on the removal fill"), ("ink", "overlay", 4.5, "text on what floats"),
+            ("line-strong", "sunk", 3.0, "a button's edge in a card's soft box")]
     for st in STATUSES:
         out += [(f"st-{st}", f"st-{st}-bg", 4.5, f"{st}: a status word on its tint"), ("muted", f"st-{st}-bg", 4.5, f"secondary text on {st}'s tint")]
         out += [(f"st-{st}", s, 4.5, f"{st}: a status line") for s in SURFACES]
