@@ -720,7 +720,8 @@ function layoutMeasure() {
       // A person's name that opens them is the card's title, not one of its links.
       links: own("a:not(.btn)").filter((x) => !x.closest(".suggest, .alert, .warm") && !x.classList.contains("name-link")).length, more: own("details.more, details.more-menu, summary.more-btn, [data-more]").length,
       own: c.matches(OWN_STEP), primary: own(".btn.primary, .btn.next").length,
-      factLines: c.matches(OWN_STEP) ? lines(own(":scope > .job-main > .org, :scope > .job-main > .facts, :scope > .app-main > .org, :scope > .app-main > .facts, :scope > .org, :scope > .facts, :scope > .meta")) : 0};
+      factLines: c.matches(OWN_STEP) ? lines(own(":scope > .job-main > .org, :scope > .job-main > .facts, :scope > .app-main > .org, :scope > .app-main > .facts, :scope > .org, :scope > .facts, :scope > .meta")) : 0,
+      w: Math.round(c.getBoundingClientRect().width)};
   });
   const named = [...main.querySelectorAll("button, a, input, select, summary")].filter(vis).map(name).filter(Boolean);
   const dupNames = named.filter((n, i) => named.indexOf(n) !== i);
@@ -2152,7 +2153,10 @@ S.fixes_1031 = async (a) => {
     status: "queued", stages: [], stage: 0, steps: [], stop_asked: false, attempt: 1}, extra);
   const r = {};
   // 1. The Brief on a wide screen, the data three days old.
-  let o = await open({html: a.html, hash: "brief", viewport: {width: 1440, height: 900}, clock: T, fake: {canSend: "available"}, seed: {
+  // A 15-inch laptop's window: with Claude's work beside it, a 1440 window's Brief says its
+  // numbers in one line under the greeting since the redesign's 15px words (2026-11-16), and the
+  // chart this step points at is the panel's.
+  let o = await open({html: a.html, hash: "brief", viewport: {width: 1680, height: 1050}, clock: T, fake: {canSend: "available"}, seed: {
     "work/draft~started": doc({status: "running", claimed_by: "cloud-1", claimed_at: at(-60), stage_at: at(-60), steps: [{at: at(-60), text: "Starting"}]}),
     "meta/listen": {chat: "cloud-1", kind: "cloud", since: at(-7200), answered_at: at(-30), watching: true}}});
   let {page} = o;

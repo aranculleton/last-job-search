@@ -1662,8 +1662,19 @@ def test_the_page_offers_the_pin_on_the_brief_and_while_the_first_search_runs(ru
 def test_the_numbers_on_the_brief_are_never_cut_off(run, pages):
     """At 1280 by 800 the panel's last line was half hidden, and opening it showed nothing
     more (seen on the README's own picture, 2026-10-30). Its last line is now Since your last
-    brief, and it holds at every size."""
+    brief, and it holds at every size. Where the window is too short for the panel, the Brief
+    says the numbers in one line under the greeting instead (the maintainer, 2026-11-05), and
+    since the redesign's 15px words (2026-11-16) a 1280 by 800 window is one of those: every
+    number is in that line, whole."""
+    where = ("(() => { const p = document.querySelector('.bp-numbers'); const l = document.querySelector('.bp-head-numbers');"
+             " const vis = (e) => !!e && e.getClientRects().length > 0 && e.getBoundingClientRect().height > 0;"
+             " return {panel: vis(p), line: vis(l) ? l.textContent : '', whole: vis(l) && l.scrollWidth <= l.clientWidth + 1}; })()")
     for vp in ({"width": 1280, "height": 800}, {"width": 1440, "height": 900}, {"width": 800, "height": 900}):
+        shown = run("engine", html=pages["sample"], viewport=vp, clock="2026-10-25T09:00:00Z", steps=[{"hash": "brief", "eval": where}])
+        got = shown["after"][0]["eval"]
+        if not got["panel"]:
+            assert got["whole"] and all(w in got["line"] for w in ("applied", "replied", "interview", "offer")), (vp, got)
+            continue
         r = run("inside", html=pages["sample"], viewport=vp, clock="2026-10-25T09:00:00Z",
                 inner='[data-k="bp-since"]', box=".bp-numbers", tap='[data-k="bp-since"]')
         _clean(r)

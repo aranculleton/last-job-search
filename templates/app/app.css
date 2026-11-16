@@ -328,6 +328,8 @@ bdi { unicode-bidi: isolate; }
 @media (max-width: 759px) {
   .summary .head-tools { row-gap: 2px; }
   .summary .head-tools > .cost { order: 9; flex-basis: 100%; }
+  /* Semibold, a phone's three header buttons keep one row at 12px a side (the redesign). */
+  .summary .head-tools > .btn:not(.icon-only) { padding-inline: 12px; }
 }
 .btn > .ic { width: 18px; height: 18px; margin-right: 8px; flex: none; }
 .btn.icon-only { padding-left: 12px; padding-right: 12px; }
@@ -1822,7 +1824,7 @@ body.has-fab .shell { padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-b
   /* A short window's panels keep 8px above and below their words, not 12: the drafts' line
      said in full took one line more and ran the Brief 9px past a 960 by 600 window (4.15.0). */
   html.brief-short .brief-grid .bpanel { padding-block: 8px; }
-  html.brief-short .brief-grid .bp-foot > :is(.btn, html.brief-short a):not(.icon-only) { padding-inline: 8px; }
+  html.brief-short .brief-grid .bp-foot > :is(.btn, html.brief-short a):not(.icon-only) { padding-inline: 8px; font-weight: 400; }
   /* The greeting, its day and the numbers on one line. */
   html.brief-short .brief-hello { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 12px; }
   html.brief-short .brief-hello .summary { display: flex; flex-wrap: wrap; gap: 0 12px; }
@@ -2221,7 +2223,7 @@ ul.bp-news { gap: 12px; }
 .up-days { display: grid; gap: 16px; }
 .up-day { display: grid; gap: 8px; }
 .up-list { display: grid; gap: 8px; }
-.up-row { display: grid; grid-template-columns: 7rem minmax(0, 1fr) auto; align-items: center; gap: 8px 12px; padding: 12px 16px;
+.up-row { display: grid; grid-template-columns: 8rem minmax(0, 1fr) auto; align-items: center; gap: 8px 12px; padding: 12px 16px;
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); }
 .up-when { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .up-when > .btn { padding-inline: 12px; }

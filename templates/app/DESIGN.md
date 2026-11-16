@@ -169,7 +169,9 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   a search runs, Find jobs is the soft pill of it, "Finding jobs · about 5 min left" in its
   card's own words, with no gauge: "38 min of Claude" beside it read as the wait (the screen
   review, 2026-11-11). (going-on tests)
-- A Jobs card says its facts on one line (the employer, the town, never its region and country,
+- A Jobs card says its facts on one line where its column is 840px or wider, and in at most two,
+  broken between facts, beside Claude's work on a laptop (the redesign, 2026-11-16: at 15px seven
+  facts do not fit there) (the employer, the town, never its region and country,
   when it was posted and found, the pay where stated) ending with its details fold: "Why"
   where it has a score, else "Details", short labelled rows in one size and one tone (why it
   scored, a watch-out apart, worth knowing, skills, the posting, "Also at" the employer by kind,
