@@ -27,7 +27,7 @@ ENV = dict(os.environ, GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@example.com",
 
 def _git(where, *args):
     return subprocess.run(["git", "-C", str(where), *args], check=True, capture_output=True,
-                          text=True, env=ENV).stdout.strip()
+                          text=True, encoding="utf-8", env=ENV).stdout.strip()
 
 
 def _commit(where, name, text):
