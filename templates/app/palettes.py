@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The page's colours: rose pine, dawn for light and the main flavour for dark, Rose the accent.
+"""The page's colours: warm paper and charcoal, with clay the one mark, in light and dark.
 
 Every colour the page shows is a token defined here, and nowhere else: templates/app/app.css
 only names tokens. tools/app_page.py writes css() into the page ahead of the stylesheet,
@@ -7,166 +7,151 @@ and tests/test_the_page_colours_pass_contrast.py checks every pair below against
 
     python3 templates/app/palettes.py    # both palettes and their contrast, as a table
 
-The person chose it (2026-10-25): "switch to rose pine please just to get it a tiny bit warmer
-in light mode ... similar to claude colours ... and make it look sleek and dark in the dark
-mode", light and dark only, following the device. Employer-facing documents keep their own
-designs; this is the app's own look only.
+The redesign of 2026-11-16 (the maintainer: "its starting to look dated, not modern, and hard
+to use or look at for a while ... feel free to change ANYTHING ... colours"). The rose pine
+palette chosen on 2026-10-25 drew titles, body, links, focus and the filled button all in one
+purple-grey (#575279), with its quiet text only 1.34:1 away from it, so nothing led the eye;
+and its filled button was purple ink in light and pink in dark. The person had asked for
+something "a tiny bit warmer ... similar to claude colours ... sleek and dark in the dark mode";
+Claude's own look is warm paper and charcoal with a clay accent, not violet, so:
 
-Each role follows rose pine's own usage (the palette's README, "Roles", and the role pages of
-rosepinetheme.com/palette, read 2026-10-25): base is the primary background, so it is the page
-around the cards; surface is the low-contrast background atop base for panels, so it is every
-card; overlay is the medium-contrast background for inputs and active tabs; text is the
-high-contrast foreground, subtle the medium (labels) and muted the low (decoration only here);
-highlight med is the selection background paired with text; highlight high and the low
-foregrounds are for borders. The accents keep their meaning: love for errors, gold for
-warnings, foam for information, iris for links and hints, pine for the terminal's green. Five
-deviations follow from legibility and from the person:
+  - Text is warm charcoal on near-white paper in light (16.8:1 on a card) and warm off-white on
+    near-black in dark (14.8:1), never pure black or white. Quiet text is a warm grey at least
+    4.8:1 on every background it can sit on, 2.9 times quieter than the text in light.
+  - The filled button is the text colour itself, the same in both looks (charcoal with white in
+    light, off-white with charcoal in dark): calm, and the strongest thing on a screen.
+  - Clay is the one mark: badges, the selected place's icon, progress, a score's ring, a link's
+    hover. As a fill it carries white (light) or charcoal (dark); as text it is mark-ink.
+  - Focus is blue, which no state and no mark uses, so a keyboard's ring is never mistaken for
+    either.
+  - States keep their meanings: green done, blue running or information, amber late, red
+    failed or removing, warm grey waiting, violet held. Today and tomorrow keep their green and
+    gold (the maintainer, 2026-11-02: never red for today).
+  - Cards are white on paper with a hairline and, in light only, the faintest shadow; in the
+    dark a card is a step lighter than the page and carries its hairline alone.
 
-  - Rose is the one accent in both looks, as a fill with near-black ink on it (main's base):
-    6.2:1 on dawn's rose, 10.4:1 on main's. It is the rose pine colour nearest Claude's own
-    #d97757: dawn's rose is 18.6 apart from it (CIE76), and for the dark look main's rose
-    was chosen over its gold. Gold is a little nearer by that sum (34.0 against 38.3) only
-    because it is more saturated; its hue is yellow (77 degrees in CIELAB, rose 24, Claude's
-    44), it is rose pine's warning colour, which the page shows for anything overdue, and
-    rose keeps one accent across both looks. Both pass with the same ink (10.8 and 10.4).
-  - Dawn's rose is too light to be seen against dawn's own panes, so a mark that must be seen
-    there (a progress bar, the selected tab, a link's underline, a chart's bar) is that rose
-    moved toward main's base only as far as 3:1 needs (WCAG 1.4.11); in the dark it is the
-    rose itself. Focus is iris in both, the hint colour.
-  - Dawn's base is near-white and its surface white, as light as Claude's own page beside it:
-    the maintainer found dawn too warm (2026-10-26) and then the page "unnecessarily dark"
-    next to Claude (2026-10-29). Cards are drawn by their edge, not by a darker page. The
-    accent stays rose; the tints are dawn's own.
-  - Links are in the text colour with an underline in the accent: the person asked for no
-    coloured link text, and the underline is what marks a link.
-  - Where a dawn colour is too faint for text (subtle, love, gold, foam, iris), the text
-    token is that colour moved toward main's base only as far as 4.5:1 needs (WCAG 1.4.3);
-    in the dark, main's pine is moved toward text for the same reason. The pure colour stays
-    in fills and tints. Each value says which.
-  - Main has nothing darker than its base, so the depths inside a card (tracks, wells) and
-    the bar of tabs are base too, and a box that sits on the page carries a border.
-
-Sources:
-  [P] rose pine, github.com/rose-pine/palette (MIT), the published package v4.0.1
-      (dist/index.js and dist/css/rose-pine-media.css, whose media file pairs dawn for light
-      with main for dark), in the roles above. The repository's palette.json gives dawn's
-      text as #464261 where the package and its CSS give #575279; the package is what themes
-      are built from, so #575279 is used.
-  [D] Derived here, as the note says: no source beyond the colours it starts from.
-
-Only the colours are taken. The page carries no logo or name of rose pine, Anthropic or
-Claude in its own interface.
+Sources: every value is derived here ([D]); the resume colours are the documents' own.
 """
 from __future__ import annotations
 
 import sys
 
 # Each token: (value, where it comes from). Order is the order written into the CSS.
-DAWN = {
-    "bg": ("#faf9f7", "[D] near-white with a trace of dawn's warmth, as light as Claude's own page beside it (the maintainer, 2026-10-29: the old base was \"unnecessarily dark\"): the page around the cards"),
-    "surface": ("#ffffff", "[D] white: a panel atop base, every card, its edge drawn by line"),
-    "sunk": ("#f3f1ee", "[D] dawn overlay with most of its warmth taken out: the depths, tracks and wells"),
-    "raised": ("#ebe8e6", "[D] dawn highlight med lightened halfway to base: buttons and chips"),
-    "raised-hover": ("#dfdad9", "[P] dawn highlight med: a button, hovered"),
-    "ink": ("#575279", "[P] dawn text"),
-    "muted": ("#6b6688", "[D] dawn subtle moved 42% toward text: labels, 4.5:1 on overlay"),
-    "line": ("#dfdad9", "[P] dawn highlight med: the edge of a card, decoration only"),
-    "line-strong": ("#797593", "[P] dawn subtle: a control's border, 4:1 on base and surface"),
-    "accent": ("#575279", "[P] dawn text: a filled button is the page's own ink, with white on it, 7.3:1 (the maintainer, 2026-10-29: the peach with dark text was hard to read, and a deeper rose looked worse); rose stays for marks"),
-    "accent-hover": ("#433e60", "[D] the ink fill a step deeper: white on it, 10:1"),
-    "accent-ink": ("#ffffff", "[D] white on the ink fill, 7.3:1"),
-    "accent-soft": ("#f9e7e0", "[D] dawn rose 16% on surface"),
-    "mark": ("#c27674", "[D] dawn rose moved 11% toward main base: 3:1 on the depths, for bars and marks"),
-    "link": ("#575279", "[P] dawn text: a link is the text colour, underlined"),
-    "link-line": ("#c27674", "[D] the mark: a link's underline"),
-    "focus": ("#907aa9", "[P] dawn iris: links and hints, 3.2:1 on overlay"),
-    "chart-a": ("#c27674", "[D] the mark"),
-    "chart-b": ("#286983", "[P] dawn pine: 5.1:1 on overlay"),
-    "st-done": ("#286983", "[P] dawn pine"),
-    "st-done-bg": ("#dde3e1", "[D] pine 16% on surface"),
-    "st-running": ("#446e7a", "[D] dawn foam #56949f 30% toward main base"),
-    "st-running-bg": ("#e4eae6", "[D] foam 16% on surface"),
-    "st-waiting": ("#6b6688", "[D] the muted label colour"),
-    "st-waiting-bg": ("#f2e9e1", "[P] dawn overlay"),
-    "st-failed": ("#935368", "[D] dawn love #b4637a 21% toward main base"),
-    "st-failed-bg": ("#f3e2e0", "[D] love 16% on surface"),
-    "st-overdue": ("#8c612d", "[D] dawn gold #ea9d34 45% toward main base"),
-    "st-overdue-bg": ("#fcebd4", "[D] gold 16% on surface"),
-    "st-held": ("#726188", "[D] dawn iris #907aa9 25% toward main base"),
-    "st-held-bg": ("#ede6e7", "[D] iris 16% on surface"),
-    "toast-bg": ("#575279", "[P] dawn text: a message sits in inverse"),
-    "toast-ink": ("#fffaf3", "[P] dawn surface"),
-    "toast-hover": ("#75708f", "[D] surface 18% on text"),
-    "selection": ("#dfdad9", "[P] dawn highlight med: the selection, paired with text"),
-    "shadow": ("0 1px 2px rgb(87 82 121 / 0.08), 0 4px 16px rgb(87 82 121 / 0.08)", "[D] text, faint"),
-    "doc-black": ("#000000", "[D] the black a resume can take (templates/doc_style.py STYLES), shown as itself"),
-    "doc-navy": ("#1f3a5f", "[D] the navy a resume can take (templates/doc_style.py STYLES), shown as itself"),
-    "doc-burgundy": ("#7a1f3d", "[D] the burgundy a resume can take (templates/doc_style.py STYLES), shown as itself"),
-    "doc-forest": ("#22543c", "[D] the forest a resume can take (templates/doc_style.py STYLES), shown as itself"),
-    "doc-teal": ("#1d5c63", "[D] the teal a resume can take (templates/doc_style.py STYLES), shown as itself"),
-    "doc-plum": ("#4b2a6b", "[D] the plum a resume can take (templates/doc_style.py STYLES), shown as itself"),
-    "doc-slate": ("#2f4858", "[D] the slate a resume can take (templates/doc_style.py STYLES), shown as itself"),
-    "doc-blue": ("#3873b2", "[D] the blue a resume can take (templates/doc_style.py STYLES), shown as itself"),
+_DOCS = {
+    "doc-black": "#000000", "doc-navy": "#1f3a5f", "doc-burgundy": "#7a1f3d", "doc-forest": "#22543c",
+    "doc-teal": "#1d5c63", "doc-plum": "#4b2a6b", "doc-slate": "#2f4858", "doc-blue": "#3873b2",
+}
+
+
+def _docs() -> dict:
+    return {k: (v, "[D] the colour a resume can take (templates/doc_style.py STYLES), shown as itself") for k, v in _DOCS.items()}
+
+
+LIGHT = {
+    "bg": ("#f7f6f3", "[D] warm paper: the page around the cards"),
+    "surface": ("#ffffff", "[D] white: every card, its edge drawn by line"),
+    "overlay": ("#ffffff", "[D] white: what floats, a sheet, a menu, the Chat panel"),
+    "sunk": ("#f2f0eb", "[D] paper a step deeper: wells, tracks, a segmented control's track"),
+    "raised": ("#efece6", "[D] a secondary button's fill"),
+    "raised-hover": ("#e6e2da", "[D] a secondary button, hovered"),
+    "ink": ("#1f1d1a", "[D] warm charcoal: all text that matters, 16.8:1 on a card"),
+    "muted": ("#6b665e", "[D] warm grey: facts, times, labels, 4.8:1 at worst"),
+    "line": ("#e7e3dc", "[D] a hairline: a card's edge, a row's divider, decoration only"),
+    "line-strong": ("#8c867c", "[D] an input's, a switch's or a checkbox's edge, 3:1 on paper and card"),
+    "accent": ("#1f1d1a", "[D] the filled button is the text colour, with white on it, 16.8:1"),
+    "accent-hover": ("#3a3631", "[D] the filled button, hovered: white on it, 12:1"),
+    "accent-ink": ("#ffffff", "[D] white on the filled button"),
+    "accent-soft": ("#f8ebe4", "[D] clay at 12% on white: the selected place, the Today card's wash"),
+    "mark": ("#b4532f", "[D] clay: badges, the selected icon, progress, a score's ring, 4.4:1 at worst"),
+    "mark-on": ("#ffffff", "[D] white on a clay fill, 5:1"),
+    "mark-ink": ("#a34a29", "[D] clay as text, 5:1 at worst"),
+    "link": ("#1f1d1a", "[D] a link is the text colour, underlined only inside a sentence"),
+    "link-line": ("#8c867c", "[D] a link's underline inside a sentence: the control edge, 3:1 on paper and card"),
+    "focus": ("#2563eb", "[D] blue, which no state uses: a keyboard's ring, 4.4:1 at worst"),
+    "danger": ("#b42318", "[D] a removal's confirming fill, white on it 6.6:1"),
+    "danger-ink": ("#ffffff", "[D] white on the removal fill"),
+    "chart-a": ("#b4532f", "[D] the mark"),
+    "chart-b": ("#1d6589", "[D] the running blue"),
+    "st-done": ("#1f7a4d", "[D] green"),
+    "st-done-bg": ("#e5f3ea", "[D] green's tint"),
+    "st-running": ("#1d6589", "[D] blue: running, information"),
+    "st-running-bg": ("#e3f0f5", "[D] blue's tint"),
+    "st-waiting": ("#5f5a52", "[D] warm grey: waiting"),
+    "st-waiting-bg": ("#f0ede8", "[D] warm grey's tint"),
+    "st-failed": ("#b42318", "[D] red: failed"),
+    "st-failed-bg": ("#fde9e6", "[D] red's tint"),
+    "st-overdue": ("#875700", "[D] amber: late"),
+    "st-overdue-bg": ("#fbefd6", "[D] amber's tint"),
+    "st-held": ("#6b4fa0", "[D] violet: on hold"),
+    "st-held-bg": ("#efe9f7", "[D] violet's tint"),
+    "toast-bg": ("#1f1d1a", "[D] charcoal: a message sits in inverse"),
+    "toast-ink": ("#f7f6f3", "[D] paper on charcoal"),
+    "toast-hover": ("#3a3631", "[D] a message's button, hovered"),
+    "selection": ("#f3d9cc", "[D] clay's tint: selected text"),
+    "shadow": ("0 12px 32px rgb(31 29 26 / 0.14), 0 2px 6px rgb(31 29 26 / 0.06)", "[D] what floats: a sheet, a menu, the Chat panel"),
+    "shadow-card": ("0 1px 2px rgb(31 29 26 / 0.05)", "[D] a card's faintest lift, light only"),
+    **_docs(),
     # Today and tomorrow on the strip and Coming up: seen at a glance, never red (the
     # maintainer, 2026-11-02: red "promotes alarmism", pine and iris were too faint).
     "day-today": ("#16a34a", "[D] a clear green for today, 3.3:1 on surface"),
     "day-tomorrow": ("#b7791f", "[D] a clear gold for tomorrow, 3.6:1 on surface"),
 }
-MAIN = {
-    "bg": ("#191724", "[P] main base: the primary background, the page around the cards"),
-    "surface": ("#1f1d2e", "[P] main surface: a panel atop base, every card"),
-    "sunk": ("#191724", "[P] main base: the depths inside a card, and the bar of tabs"),
-    "raised": ("#26233a", "[P] main overlay: buttons and chips"),
-    "raised-hover": ("#403d52", "[P] main highlight med"),
-    "ink": ("#e0def4", "[P] main text"),
-    "muted": ("#908caa", "[P] main subtle: labels"),
-    "line": ("#403d52", "[P] main highlight med: the edge of a card, decoration only"),
-    "line-strong": ("#6e6a86", "[P] main muted: a control's border, 3.2:1 on surface"),
-    "accent": ("#ebbcba", "[P] main rose: a filled button, with near-black ink on it"),
-    "accent-hover": ("#e9c1c3", "[D] main rose 15% toward text"),
-    "accent-ink": ("#191724", "[P] main base: near-black ink on rose, 10.4:1"),
-    "accent-soft": ("#403644", "[D] main rose 16% on surface"),
-    "mark": ("#ebbcba", "[P] main rose: bars and marks"),
-    "link": ("#e0def4", "[P] main text: a link is the text colour, underlined"),
-    "link-line": ("#ebbcba", "[P] main rose: a link's underline"),
-    "focus": ("#c4a7e7", "[P] main iris: links and hints"),
-    "chart-a": ("#ebbcba", "[P] main rose"),
-    "chart-b": ("#9ccfd8", "[P] main foam"),
-    "st-done": ("#6b97b0", "[D] main pine #31748f moved 33% toward text, for 4.5:1"),
-    "st-done-bg": ("#222b3e", "[D] pine 16% on surface"),
-    "st-running": ("#9ccfd8", "[P] main foam"),
-    "st-running-bg": ("#333949", "[D] foam 16% on surface"),
-    "st-waiting": ("#908caa", "[P] main subtle"),
-    "st-waiting-bg": ("#26233a", "[P] main overlay"),
-    "st-failed": ("#eb6f92", "[P] main love"),
-    "st-failed-bg": ("#3c293d", "[D] love 14% on surface"),
-    "st-overdue": ("#f6c177", "[P] main gold"),
-    "st-overdue-bg": ("#41373a", "[D] gold 16% on surface"),
-    "st-held": ("#c4a7e7", "[P] main iris"),
-    "st-held-bg": ("#39334c", "[D] iris 16% on surface"),
-    "toast-bg": ("#e0def4", "[P] main text: inverse"),
-    "toast-ink": ("#191724", "[P] main base"),
-    "toast-hover": ("#c2c0d5", "[D] base 15% on text"),
-    "selection": ("#403d52", "[P] main highlight med: the selection, paired with text"),
-    "shadow": ("none", "[D] borders carry the edges in the dark, not shadows"),
-    "doc-black": ("#000000", "[D] the black a resume can take (templates/doc_style.py STYLES), shown as itself"),
-    "doc-navy": ("#1f3a5f", "[D] the navy a resume can take (templates/doc_style.py STYLES), shown as itself"),
-    "doc-burgundy": ("#7a1f3d", "[D] the burgundy a resume can take (templates/doc_style.py STYLES), shown as itself"),
-    "doc-forest": ("#22543c", "[D] the forest a resume can take (templates/doc_style.py STYLES), shown as itself"),
-    "doc-teal": ("#1d5c63", "[D] the teal a resume can take (templates/doc_style.py STYLES), shown as itself"),
-    "doc-plum": ("#4b2a6b", "[D] the plum a resume can take (templates/doc_style.py STYLES), shown as itself"),
-    "doc-slate": ("#2f4858", "[D] the slate a resume can take (templates/doc_style.py STYLES), shown as itself"),
-    "doc-blue": ("#3873b2", "[D] the blue a resume can take (templates/doc_style.py STYLES), shown as itself"),
+DARK = {
+    "bg": ("#141312", "[D] warm near-black: the page, never pure black"),
+    "surface": ("#1d1c1a", "[D] a card, a step lighter than the page"),
+    "overlay": ("#252321", "[D] what floats, a step lighter again"),
+    "sunk": ("#131211", "[D] the depths inside a card"),
+    "raised": ("#2a2825", "[D] a secondary button's fill"),
+    "raised-hover": ("#34322e", "[D] a secondary button, hovered"),
+    "ink": ("#f2efe9", "[D] warm off-white, never pure white: 14.8:1 on a card"),
+    "muted": ("#a9a39a", "[D] warm grey: 5.5:1 at worst"),
+    "line": ("#2e2c29", "[D] a hairline"),
+    "line-strong": ("#7a746b", "[D] an input's, a switch's or a checkbox's edge, 3.7:1 on a card"),
+    "accent": ("#f2efe9", "[D] the filled button is the text colour, with charcoal on it"),
+    "accent-hover": ("#ffffff", "[D] the filled button, hovered"),
+    "accent-ink": ("#1a1917", "[D] charcoal on the filled button, 15.3:1"),
+    "accent-soft": ("#3a2922", "[D] clay at 16% on a card: the selected place"),
+    "mark": ("#e48a6b", "[D] clay, lifted for the dark: 5.4:1 at worst"),
+    "mark-on": ("#1a1917", "[D] charcoal on a clay fill, 6.8:1"),
+    "mark-ink": ("#f0a68b", "[D] clay as text, 6.9:1 at worst"),
+    "link": ("#f2efe9", "[D] a link is the text colour"),
+    "link-line": ("#7a746b", "[D] a link's underline inside a sentence: the control edge, 3.7:1 on a card"),
+    "focus": ("#8ab4ff", "[D] blue: a keyboard's ring, 6.6:1 at worst"),
+    "danger": ("#ff8f84", "[D] a removal's confirming fill, charcoal on it"),
+    "danger-ink": ("#1a1917", "[D] charcoal on the removal fill"),
+    "chart-a": ("#e48a6b", "[D] the mark"),
+    "chart-b": ("#7fc6e2", "[D] the running blue"),
+    "st-done": ("#6fd39b", "[D] green"),
+    "st-done-bg": ("#18301f", "[D] green's tint"),
+    "st-running": ("#7fc6e2", "[D] blue"),
+    "st-running-bg": ("#162b35", "[D] blue's tint"),
+    "st-waiting": ("#b8b2a8", "[D] warm grey"),
+    "st-waiting-bg": ("#2a2825", "[D] warm grey's tint"),
+    "st-failed": ("#ff8f84", "[D] red"),
+    "st-failed-bg": ("#3b1d1b", "[D] red's tint"),
+    "st-overdue": ("#f2c25c", "[D] amber"),
+    "st-overdue-bg": ("#352a12", "[D] amber's tint"),
+    "st-held": ("#c9aef2", "[D] violet"),
+    "st-held-bg": ("#2c2440", "[D] violet's tint"),
+    "toast-bg": ("#f2efe9", "[D] inverse"),
+    "toast-ink": ("#1a1917", "[D] charcoal"),
+    "toast-hover": ("#d9d4cc", "[D] a message's button, hovered"),
+    "selection": ("#4a3328", "[D] clay's tint: selected text"),
+    "shadow": ("0 16px 40px rgb(0 0 0 / 0.55)", "[D] what floats"),
+    "shadow-card": ("none", "[D] a card in the dark carries its hairline alone"),
+    **_docs(),
     "day-today": ("#4ade80", "[D] a bright green for today, 9.5:1 on surface"),
     "day-tomorrow": ("#facc15", "[D] a bright yellow for tomorrow, 10.8:1 on surface"),
 }
+# The names the tests and older notes use for the two looks.
+DAWN, MAIN = LIGHT, DARK
 
-PALETTES = {"light": DAWN, "dark": MAIN}
+PALETTES = {"light": LIGHT, "dark": DARK}
 LOOKS = (("auto", "Match my device"), ("light", "Light"), ("dark", "Dark"))
 
 # The pairs the page draws, and the ratio each must reach (WCAG 2.2: 1.4.3 text 4.5:1,
 # 1.4.11 non-text 3:1). Large text never appears in a colour that body text does not.
-SURFACES = ("bg", "surface", "sunk")
+SURFACES = ("bg", "surface", "sunk", "overlay")
 STATUSES = ("done", "running", "waiting", "failed", "overdue", "held")
 
 
@@ -178,7 +163,6 @@ def pairs() -> list:
         out += [("focus", s, 3.0, "focus ring"), ("mark", s, 3.0, "bars, the selected tab, a link's underline")]
     out += [("ink", "raised", 4.5, "a button or chip"), ("ink", "raised-hover", 4.5, "a button, hovered"),
             ("line-strong", "bg", 3.0, "input and control borders"), ("line-strong", "surface", 3.0, "input and control borders"),
-            ("muted", "st-running-bg", 3.0, "a soft pill's edge in a card's suggestion box"),
             ("link-line", "surface", 3.0, "a link's underline"), ("link-line", "bg", 3.0, "a link's underline"),
             ("ink", "accent-soft", 4.5, "the current section in the list"), ("accent-ink", "accent", 4.5, "text on a filled button"),
             ("accent-ink", "accent-hover", 4.5, "text on a filled button, hovered"), ("surface", "ink", 4.5, "a pressed filter"),
@@ -188,8 +172,14 @@ def pairs() -> list:
             ("chart-b", "sunk", 3.0, "a slow bar on its track"), ("mark", "sunk", 3.0, "progress on its track"),
             ("day-today", "surface", 3.0, "today's dots"), ("day-today", "bg", 3.0, "today's mark on Coming up"),
             ("day-tomorrow", "surface", 3.0, "tomorrow's dots"), ("day-tomorrow", "bg", 3.0, "tomorrow's mark on Coming up")]
+    # Quiet text and the clay as text wherever they can sit, and the ring on a button.
+    for s in ("raised", "accent-soft"):
+        out += [("muted", s, 4.5, "secondary text on " + s), ("focus", s, 3.0, "focus ring on " + s)]
+    out += [("mark-ink", s, 4.5, "clay as text") for s in SURFACES + ("accent-soft",)]
+    out += [("mark-on", "mark", 4.5, "text on a clay fill"), ("mark", "raised", 3.0, "a mark on a button"),
+            ("danger-ink", "danger", 4.5, "text on the removal fill"), ("ink", "overlay", 4.5, "text on what floats")]
     for st in STATUSES:
-        out += [(f"st-{st}", f"st-{st}-bg", 4.5, f"{st}: a status word on its tint")]
+        out += [(f"st-{st}", f"st-{st}-bg", 4.5, f"{st}: a status word on its tint"), ("muted", f"st-{st}-bg", 4.5, f"secondary text on {st}'s tint")]
         out += [(f"st-{st}", s, 4.5, f"{st}: a status line") for s in SURFACES]
     return out
 
@@ -239,21 +229,21 @@ def css() -> str:
     device. The person's choice on the page (data-look, kept on their device) wins over
     both. The order matters where two rules are equally specific.
     """
-    dark = _block(MAIN, "dark")
+    dark = _block(DARK, "dark")
     return "\n".join([
         "/* The palettes: generated by templates/app/palettes.py, with each colour's source. */",
-        ":root {\n  color-scheme: light dark;\n" + _block(DAWN) + "\n}",
+        ":root {\n  color-scheme: light dark;\n" + _block(LIGHT) + "\n}",
         ':root[data-theme="light"], :root[data-look="light"] { color-scheme: light; }',
         '@media (prefers-color-scheme: dark) {\n:root:not([data-theme="light"]):not([data-look="light"]) {\n' + dark + "\n}\n}",
         ':root[data-theme="dark"]:not([data-look="light"]), :root[data-look="dark"] {\n' + dark + "\n}",
-        "dialog::backdrop { background: rgb(25 23 36 / 0.55); }  /* [D] main base as a scrim, in both */",
+        "dialog::backdrop { background: rgb(20 19 18 / 0.45); }  /* [D] warm near-black as a scrim, in both */",
         "::selection { background: var(--selection); color: var(--ink); }",
     ])
 
 
 def table() -> str:
     """Both palettes as a table, with the lowest ratio among the pairs each token is in."""
-    keys = list(DAWN)
+    keys = list(LIGHT)
     rows = ["| token | " + " | ".join(PALETTES) + " |", "|---" * (len(PALETTES) + 1) + "|"]
     for k in keys:
         cells = []
