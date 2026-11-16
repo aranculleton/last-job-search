@@ -15888,7 +15888,7 @@
     return h("li", {class: "talk-msg from-" + seg(m.from === "you" ? "you" : m.from === "note" ? "note" : "claude")},
       m.from === "note" ? null : h("p", {class: "talk-who"}, m.from === "you" ? "You" : "Claude", h("span", {class: "muted small"}, " " + ago(m.at))),
       imgs.length ? h("div", {class: "talk-pics"}, imgs.map((id, i) => threadPic(id, i, imgs.length))) : null,
-      txt(m.text) || !imgs.length ? h("p", {class: "talk-text"}, pageText(m.text)) : null,
+      txt(m.text) || !imgs.length ? (m.from === "you" ? h("p", {class: "talk-text"}, pageText(m.text)) : talkText(m.text)) : null,
       // Where what it changed is, each a button opening that card (tools/touched.py).
       m.from !== "you" ? pageButtons(m.go, "talk:" + txt(m.id)) : null,
       state ? h("p", {class: "small muted talk-state", role: "status"}, h("span", {class: "spin", "aria-hidden": "true"}), " " + state) :
@@ -16308,6 +16308,8 @@
       " Write plain, short answers: two or three sentences or a short list, in everyday words. Never invent a job, a person, a date, a number or a fact. " +
       "You cannot browse, send or change anything, or write " + noun() + "s or letters. If the question needs any of that, or files, the web or work done, " +
       (withTools ? "call needs_chat with a one-line reason and say nothing else." : "answer only with NEEDS CHAT: and a one-line reason.") +
+      " Never tell them what you cannot do, that something is not in the page's data, or how you worked something out: where the page's data does not fully answer it, " +
+      (withTools ? "call needs_chat instead." : "answer only with NEEDS CHAT: instead.") +
       " Today is " + todayIso() + "." +
       " How this page works, for questions about using it: " + tourSteps().map((t) => t[1] + " (section " + t[0] + "): " + t[2]).join(" ") +
       " Your profile, help and the tour are in Settings. When the question is how to use the page or where something is, answer from that, then end with a last line SHOW: and the one section it is about.";
@@ -16341,6 +16343,7 @@
     askQuick("Please start the practice interview.", true);
   }
   const QUICK_MS = 45000;
+  const QUICK_CANNOT = /\bI\s+(?:can(?:no|['\u2019])t|cannot|am unable|am not able|don['\u2019]t have)\b|\bI['\u2019]m (?:unable|not able)\b|\b(?:is|are)n['\u2019]t in (?:the|your) page|\bnot in (?:the|your) page['\u2019]?s? data/i;
   // A question kept in the quick chat with no answer after it (the page closed while it was
   // answered, or an older page dropped it) goes to Claude once, on this visit.
   function rescueQuick() {
@@ -16407,6 +16410,9 @@
       if (r === "timeout") { try { S.quick.ctl.abort(); } catch (e) { /* gone */ } throw Object.assign(new Error("timeout"), {code: "timeout"}); }
       answer = txt(r && r.text);
       if (!withTools && /^\s*NEEDS CHAT:/i.test(answer)) handoff = clip(answer.replace(/^\s*NEEDS CHAT:\s*/i, "").split(/[.\n]/)[0], 160);
+      // An answer that says it cannot is a dead end, never shown: the question goes to Claude,
+      // as needs_chat does (issue #267: "Replying to her is something I can't do here").
+      else if (!S.quick.mode && QUICK_CANNOT.test(answer)) handoff = "the page's own data could not answer it";
     } catch (e) {
       const code = (e && e.code) || "upstream_error";
       answer = txt(e && e.text);
@@ -17317,6 +17323,38 @@
     }));
   }
   // A place written into an answer's words is a link that opens it, never its address.
+  // Claude's words in the Chat drawn as the formatted text they are, from text nodes only: its
+  // lists as lists and its bold as bold, with the page's own links kept. The page's own answer
+  // showed "**Example Co**" with its asterisks and its list as "- " lines (issue #267).
+  const TALK_MD = /\*\*|__|`|\]\(|^\s*(?:[-*\u2022]|\d+[.)])\s+/m;
+  function talkInline(s) {
+    const parts = pageText(s);
+    return (Array.isArray(parts) ? parts : [parts]).flatMap((x) => (typeof x === "string" ? inlineMd(x) : [x]));
+  }
+  function talkText(s) {
+    s = txt(s);
+    if (!TALK_MD.test(s)) return h("p", {class: "talk-text"}, pageText(s));
+    const blocks = [];
+    let list = null;
+    let para = [];
+    const flush = () => { if (para.length) { blocks.push(h("p", {}, talkInline(para.join("\n")))); para = []; } };
+    for (const raw of s.replace(/\r/g, "").split("\n")) {
+      const ln = raw.trim();
+      const b = /^(?:[-*\u2022]|(\d+)[.)])\s+(.*)$/.exec(ln);
+      if (b) {
+        flush();
+        const tag = b[1] ? "OL" : "UL";
+        if (!list || list.tagName !== tag) { list = h(tag.toLowerCase(), {}); blocks.push(list); }
+        list.appendChild(h("li", {}, talkInline(b[2])));
+        continue;
+      }
+      list = null;
+      if (!ln) { flush(); continue; }
+      para.push(ln);
+    }
+    flush();
+    return h("div", {class: "talk-text talk-rich"}, blocks);
+  }
   function pageText(s) {
     s = txt(s);
     if (s.indexOf("page:") < 0) return s;
