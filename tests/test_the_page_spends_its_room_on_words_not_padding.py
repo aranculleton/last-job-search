@@ -213,8 +213,10 @@ def test_a_checklist_rows_buttons_sit_together_at_its_end_one_column_down_the_ca
             # On the name's line, never under it, on a wide screen.
             assert r["top"] < r["nameTop"] + 24, (c["card"], r)
             if r["bin"] is not None:
-                # Just before the trash: a gap between pills, and what a shorter button leaves.
-                assert 0 < r["bin"] - r["right"] <= 16, (c["card"], r)
+                # Just before the trash, and 16px from it so a tap meant for the button never
+                # puts someone away (the accessibility review, 2026-11-16: 8px was one slip),
+                # with what a shorter button leaves.
+                assert 16 <= r["bin"] - r["right"] <= 24, (c["card"], r)
             else:
                 # No trash: the buttons end where the row does.
                 assert r["end"] - r["right"] <= 16, (c["card"], r)

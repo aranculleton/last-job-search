@@ -610,7 +610,7 @@ details.more.split[open] { flex-basis: auto; }
    with a chevron that turns when open, never underlined words (the redesign, 2026-11-16). */
 .facts .info-toggle { color: var(--ink); text-decoration: none; }
 @media (hover: hover) { .facts .info-toggle:hover { text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 3px; } }
-.info-toggle > .chev { display: inline-block; width: 6px; height: 6px; margin: 0 2px 0 4px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: translateY(-3px) rotate(45deg); }
+.info-toggle > .chev { display: inline-block; width: 5px; height: 5px; margin: 0 0 0 4px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: translateY(-3px) rotate(45deg); }
 .info-toggle[aria-expanded="true"] > .chev { transform: translateY(0) rotate(-135deg); }
 /* The "?" goes with the last word of its line, never onto a line of its own (a word joiner
    after the words, which no line breaks after). */

@@ -334,7 +334,9 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   On a wide screen a row is one line, its name and how it stands side by side; the row spans
   the card, its trash at the card's edge (rows stopping short left the trash a column in
   mid-card, the screen review, 2026-11-11), and its buttons sit together at its end, just
-  before the trash, every row's starting at one edge (the rows share the list's columns). Why:
+  before the trash and 16px from it (the redesign, 2026-11-16: 8px from "See the draft" was
+  one slip from putting someone away), every row's starting at one edge (the rows share the
+  list's columns). Why:
   held a reading width from the name (the review, 2026-11-10: the button sat 650px from it),
   the buttons stood in a column halfway across the card with empty room after them and the
   trash alone at the edge, two places to look (the maintainer, 2026-11-12). A row's line of
