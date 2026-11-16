@@ -189,6 +189,7 @@ def test_the_chat_on_the_computer_is_told_the_card_names_it():
 TODO = r"""(() => {
   const boxes = [...document.querySelectorAll('#main [data-signin="linkedin-chat"]')];
   return {boxes: boxes.length,
+          own: document.querySelectorAll('#main [data-signin="linkedin"]').length,
           links: boxes.reduce((n, b) => n + b.querySelectorAll('a[href*="claude.ai/code"]').length, 0),
           steps: boxes.length ? [...boxes[0].querySelectorAll('li')].map((li) => li.textContent) : [],
           text: boxes.length ? boxes[0].textContent.replace(/\s+/g, ' ') : ''};
@@ -220,8 +221,16 @@ def test_the_page_shows_one_sign_in_card_and_its_tap_sends_every_read_back(run, 
     path = os.path.join(str(tmp_path), "page.html")
     with open(path, "w", encoding="utf-8") as fh:
         fh.write(app_page.standalone(app_page.render(m)))
+    # A sign-in in this page's own browser is another sign-in: its own card, never answered
+    # by the computer's.
+    own = dict(_w("network", "Northgate Insurance", title="Reading Wren's profile",
+                  status="needs_you", note="LinkedIn is signed out.",
+                  asked_you_at=app_model.stamp(T - dt.timedelta(minutes=10))),
+               needs={"question": "LinkedIn is signed out in Claude's browser.",
+                      "signin": "linkedin", "answer": {"key": "answer", "kind": "text"}}, _v=3)
     seed = {f"work/{READ_A}": waiting("Reading 3 profiles", 20),
-            f"work/{READ_B}": waiting("Reading 2 profiles", 5)}
+            f"work/{READ_B}": waiting("Reading 2 profiles", 5),
+            "work/network~read~3": own}
     got = run("engine", html=path, viewport=journeys.WIDE,
               steps=[{"hash": "todo", "eval": TODO},
                      {"click": "I've signed in", "within": "#main", "exact": True}],
@@ -229,9 +238,11 @@ def test_the_page_shows_one_sign_in_card_and_its_tap_sends_every_read_back(run, 
     assert not got["errors"], got["errors"]
     seen = got["after"][0]["eval"]
     assert seen["boxes"] == 1, seen                      # one card for the one sign-in
+    assert seen["own"] == 1, seen                        # the page's own keeps its card
     assert seen["links"] == 0, seen                      # nothing opens the chat's link
     assert CHAT_TITLE in seen["text"] and "Open the chat" not in seen["text"], seen
     assert any("Keep cookies" in s for s in seen["steps"]), seen
     # Its one tap sends both reads back to Claude, not only the one the card was drawn for.
     after = {w["id"]: w for w in got["after"][1]["work"]}
     assert after[READ_A]["status"] == "queued" and after[READ_B]["status"] == "queued", after
+    assert after["network~read~3"]["status"] == "needs_you", after

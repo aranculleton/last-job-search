@@ -1183,8 +1183,9 @@ METHODS: dict[str, dict] = {
             (206, "2026-11-12", True, "To do draws the card for connection requests nobody accepted in three weeks again, each request a line of what to do (\"Withdraw your request to Wren: it has waited 3 weeks\") as on its card in Contacts; a first note at an employer where a follow-up is owed waits behind it, saying which to send first"),
             (207, "2026-11-12", True, "each item's links to the rest at its employer are kept apart from the item in the page's database, a record an employer or so, and put back as the page reads them: on the items, one new note at an employer rewrote every colleague's card, and bringing the page up to date after eight new people rewrote most of a long People section"),
             (208, "2026-11-16", True, "a LinkedIn sign-in in a chat on the person's computer is one To do card that names that chat and gives the steps to open it from the Claude app's list of chats there and sign in, keeping the sign-in among them, with no link to the chat, which opened it without its browser; its I've signed in sends back every read waiting on that sign-in"),
+            (209, "2026-11-16", True, "the one card for a sign-in in a chat on the person's computer covers only reads waiting on that chat's sign-in: a sign-in in the page's own browser keeps its own card, and the computer's I've signed in no longer sends it back"),
         ),
-        "fingerprint": "b1ff5bf5fbcf6afa",
+        "fingerprint": "db52851ff29edd9d",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

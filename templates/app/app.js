@@ -3970,15 +3970,16 @@
     // Asked first to keep the LinkedIn sign-in (the computer's card, keep_signin): a sign-in
     // waits behind it, never beside it, so the next one lasts (the maintainer's Mac, 2026-11-11).
     const keepFirst = needsItems().some((n) => txt(n.id) === "q-setup-computer" && txt(obj(n.about).say) === "keep_signin" && !effective(n.id));
-    // One card for one LinkedIn sign-in, however many reads wait on it: the newest, whose chat
-    // is likeliest still open; its tap sends them all back (signinBox). Two cards asked for the
-    // same sign-in (issue 285).
-    const signinCard = [...allWork()].filter(([, w]) => txt(w.status) === "needs_you" && signinNeeded(w))
+    // One card for one LinkedIn sign-in in a chat on the computer, however many reads wait on
+    // it: the newest, whose chat is likeliest still open; its tap sends them all back
+    // (signinBox). Two cards asked for the same sign-in (issue 285). A sign-in on this page's
+    // own browser is another sign-in, and keeps its own card.
+    const signinCard = [...allWork()].filter(([, w]) => txt(w.status) === "needs_you" && chatSignin(w))
       .sort(([, a], [, b]) => txt(b.asked_you_at).localeCompare(txt(a.asked_you_at))).map(([id]) => id)[0];
     for (const [id, w] of allWork()) {
       if (txt(w.status) !== "needs_you") continue;
       if (keepFirst && signinNeeded(w)) continue;
-      if (signinNeeded(w) && id !== signinCard) continue;
+      if (chatSignin(w) && id !== signinCard) continue;
       const it = {key: "work:" + id, kind: WORK_KIND[txt(w.kind)] || "setup", band: "answer", employer: txt(obj(w.args).company) || employerIn(w.title),
         tab: null, counts: true, node: (ctx) => workTodo(id, w, ctx)};
       if (!each && quickWork(w) && !todoHidden(it)) quick.push({id, kind: it.kind, w}); else out.push(it);
@@ -5032,6 +5033,10 @@
     // Asked before the page knew the kind (4.14): a read on the computer that stopped there.
     return txt(obj(w).to) === "computer" && /signed out/i.test(txt(obj(w).note));
   }
+  // Waiting on a sign-in in a chat on the person's computer (needs.chat, from the engine).
+  function chatSignin(w) {
+    return signinNeeded(w) && /^session_[\w-]+$/.test(txt(obj(obj(w).needs).chat));
+  }
   function signinBox(id, w, key) {
     if (!signinNeeded(w)) return null;
     // Met by a chat on the person's computer (needs.chat, the engine's words in needs.say and
@@ -5048,7 +5053,7 @@
         h("p", {class: "tone-warn"}, txt(n.say)),
         steps.length ? h("ol", {class: "setup-steps"}, steps.map((s) => h("li", {}, s))) : null,
         h("div", {class: "wc-actions"},
-          btn("I've signed in", () => { for (const [wid, w2] of allWork()) if (txt(w2.status) === "needs_you" && signinNeeded(w2)) answerWork(wid, "Signed in to LinkedIn", "signed in"); },
+          btn("I've signed in", () => { for (const [wid, w2] of allWork()) if (txt(w2.status) === "needs_you" && chatSignin(w2)) answerWork(wid, "Signed in to LinkedIn", "signed in"); },
             {kind: "primary", small: true, key: key + ":signed"})));
     }
     const tried = S.signinFor === id;
