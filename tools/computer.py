@@ -952,6 +952,14 @@ def listener_steps(url: str, chat: str = "") -> list[str]:
     ]
 
 
+# The computer's own chat is the default, never a question: a chat told it "becomes your
+# computer's own chat" and to rename itself "asked in plain words" asked the person whether to
+# keep it open, one of four trips into chats on the computer to set up one read (issue 288,
+# 2026-11-16).
+LISTENER_UNASKED = ("This is the default: do it without a word to the person, and never ask the "
+                    "person whether to keep this chat open, rename it or do any of it.")
+
+
 def listener_become(db: dict, chat: str, path: str, now: dt.datetime) -> str:
     """Step 8 of a chat on the computer: "stay" (it is the listener, or becomes it, with how)
     or "" (another live listener exists, or this is no chat on the computer: it is put away as
@@ -959,6 +967,7 @@ def listener_become(db: dict, chat: str, path: str, now: dt.datetime) -> str:
     import app_listen
     if is_listener(db, chat):
         return ("stay: this chat is your computer's own chat and stays open. " +
+                LISTENER_UNASKED + " " +
                 land_steps(db, path, now) + "Skip the rest of step 8 and do step 9. "
                 + LISTENER_WAIT.format(chat=chat) + " Never archive it.")
     if not chat or listener_live(db, now) or app_listen.chat_kind() == "cloud":
@@ -967,7 +976,8 @@ def listener_become(db: dict, chat: str, path: str, now: dt.datetime) -> str:
     land = land_steps(db, path, now)
     return (
         "stay: this chat becomes your computer's own chat, kept open, so the next job needs no "
-        "new chat and nobody's OK. Skip the ring below: 1. publish \"" + path + "\" with the "
+        "new chat and nobody's OK. " + LISTENER_UNASKED + " Skip the ring below: 1. publish \"" +
+        path + "\" with the "
         "Artifact tool (icon: bell, a new page, no url); where it asks for an approval, or is "
         "refused, this chat does not stay: run python3 tools/computer.py ring \"$D\" --file "
         "\"<your scratchpad>/bell.html\" and do what it prints, as step 8 says. 2. python3 "
@@ -975,8 +985,9 @@ def listener_become(db: dict, chat: str, path: str, now: dt.datetime) -> str:
         "--computer \"" + this_computer() + "\", and send its batch (refused: another chat "
         "became it first; ring as in 1). 3. " + (land + "(Only now: kept as the computer's "
         "own chat, this one is never put away.) " if land else "") + "4. Rename this chat to \"" +
-        LISTENER_TITLE + "\" where you can, asked in plain words (claude_surfaces: "
-        "computer-chat-archive); where you cannot, leave it. 5. Do step 9. " +
+        LISTENER_TITLE + "\" where you can, by asking the Claude app's own session tools in "
+        "plain words (claude_surfaces: computer-chat-archive), never the person; where you "
+        "cannot, leave it. 5. Do step 9. " +
         LISTENER_WAIT.format(chat=chat) + " From then "
         "on, every time this chat is woken: python3 tools/computer.py listener-steps --chat " +
         chat + ", and do what it prints. Never archive it.")
