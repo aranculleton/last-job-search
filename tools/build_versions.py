@@ -941,8 +941,10 @@ METHODS: dict[str, dict] = {
             (87, "2026-11-11", False, "the steps for making the brief in the cloud and the note on its phone notification follow Claude's own pages as read on 2026-11-11: a new scheduled task may first offer Set up manually and its form ends on Create, and the phone notification is documented from a cloud chat too; wording only"),
             (88, "2026-11-12", False, "the tidy-up puts away a brief chat the brief left for a fresh one at its next run, not two quiet days on, so two morning brief chats never show side by side; nothing made before needs making again"),
             (89, "2026-11-12", False, "the tidy-up keeps the chat on your computer that takes its LinkedIn work (\"Job search: on your computer\"), by its name or the page's record of it, so later jobs there need no new chat and nobody's OK; nothing made before needs making again"),
+            (90, "2026-11-16", False, "the tidy-up asks GitHub itself which branches it holds and whether master holds an old chat's branch, so the page's and the brief's old chats go the morning after, and yesterday's page chat goes once its work is proven saved; nothing made before needs making again"),
+            (91, "2026-11-16", False, "a chat whose work is on GitHub but never reached master is kept a week of quiet at most, so the first tidy-up after an update clears an install's whole backlog and nothing stays for good; nothing made before needs making again"),
         ),
-        "fingerprint": "a7861071fc9d4d18",
+        "fingerprint": "65d7d5dac141bd04",
     },
     "expand": {
         "by": "upgrade", "priority": 4, "time": "~15 min",

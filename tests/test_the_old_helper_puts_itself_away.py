@@ -58,7 +58,7 @@ def run(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(tidy, "_git_dir", lambda: str(tmp_path))
     monkeypatch.setattr(tidy, "_listener", lambda dump: LISTENER)
     monkeypatch.setattr(tidy, "_repo", lambda: REPO)
-    monkeypatch.setattr(tidy, "unmerged", lambda: set())
+    monkeypatch.setattr(tidy, "unmerged", lambda *_: set())
     import app_listen
     monkeypatch.setattr(app_listen, "new_day", lambda rec, now: False)
 

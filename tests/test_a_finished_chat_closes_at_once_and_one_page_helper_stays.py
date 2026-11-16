@@ -147,7 +147,7 @@ def test_the_chat_that_started_it_closes_it_only_when_it_is_done_and_on_master(c
     (dump / "work" / name).write_text(json.dumps(db["work"]["prep~1"]), encoding="utf-8")
     monkeypatch.setattr(tidy, "_listener", lambda d: listener)
     monkeypatch.setattr(tidy, "_repo", lambda: REPO)
-    monkeypatch.setattr(tidy, "unmerged", lambda: set())
+    monkeypatch.setattr(tidy, "unmerged", lambda *_: set())
     tidy._mark_checked("2026-11-05", "2026-11-05T08:00:00Z")
     args = ["close", PREP, "--work", "prep~1", "--dump", str(dump), "--chat", LIVE,
             "--details", _json(tmp_path, "d.json", det[PREP])]
@@ -224,7 +224,7 @@ def _plan_here(copy, tmp_path, monkeypatch, chats, details, listener=None):
     monkeypatch.setattr(tidy, "_listener", lambda d: listener or {"chat": LIVE, "kind": "cloud",
                                                                   "helper": True})
     monkeypatch.setattr(tidy, "_repo", lambda: REPO)
-    monkeypatch.setattr(tidy, "unmerged", lambda: set())
+    monkeypatch.setattr(tidy, "unmerged", lambda *_: set())
     monkeypatch.setattr(tidy, "_campaign_chats", lambda: set())
     monkeypatch.setattr(routines, "load", lambda *a, **k: {})
     args = ["plan", "--chat", LIVE, "--today", TODAY.isoformat(),

@@ -40,7 +40,7 @@ def test_the_read_line_asks_for_the_fresh_run(tmp_path, monkeypatch, capsys):
     import argparse
     monkeypatch.setattr(tidy, "_listener", lambda dump: {"chat": LIVE})
     monkeypatch.setattr(tidy, "_repo", lambda: REPO)
-    monkeypatch.setattr(tidy, "unmerged", lambda: set())
+    monkeypatch.setattr(tidy, "unmerged", lambda *_: set())
     monkeypatch.setattr(tidy, "on_github", lambda: set())
     monkeypatch.setattr(tidy, "details", lambda pages: _detail())
     monkeypatch.setattr(tidy, "saves", lambda: {})

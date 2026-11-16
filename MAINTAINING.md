@@ -20,9 +20,9 @@ when the work needs it. One chat builds one version, from the builder prompt (ne
   gets set up, says in one line that it is ready, and waits for the notes; with none, it
   builds nothing. `docs/NEXT_BUILDER.md` is background, worked on only when the notes say so.
 - Bugs filed from the maintainer's copy: "Bugs from the maintainer's copy", below.
-- **Decide, never ask.** Choose the soundest option, do it, and say in one line what and why;
-  ask the maintainer only what is theirs (their data, money, a release). Where a safety check
-  refuses an action, say so plainly and take the next best way that keeps its intent.
+- **Decide, never ask.** The maintainer's call, a release included, is always yours (2026-11-16):
+  do the soundest thing, say what in one line; ask only for money, credentials, personal data
+  or a step only their hand can make. Refused: say so, take the next best way with its intent.
 - **Cheap and still certain.** Every step re-reads the chat, so take few. A fix's test that
   fails without it is the check: no sceptic per finding, scripts for coverage, one push per
   round, and a long wait is a background run that wakes the chat, never polling. Speak when
@@ -208,8 +208,8 @@ again, fixes and releases everything at once, and no Actions workflow runs Claud
    merges it, the release, only with Fast checks, Everywhere, Platforms and both rehearsals
    green, before 07:30 so the maintainer's 07:56 brief takes it. Its pull request says "Closes
    #N" for each issue it fixed, so the release closes them. One it could not fix stays open
-   with one comment why; one that is the maintainer's to decide, or no bug, gets one comment and
-   `needs-maintainer`. With nothing open it ends in a few calls. Only a bug the person says
+   with one comment why; no bug, or a choice about what the app does, it decides and fixes or
+   closes itself (`needs-maintainer` only for a step only the maintainer's hand can make). With nothing open it ends in a few calls. Only a bug the person says
    stops their search pokes the same task at once (`app_bug.py wake`, once an hour at most).
 3. **What it did stays on GitHub.** The run ends by rewriting its report issue
    (`builder-report`) to one dated line; the release notes and the issues say the rest. The
@@ -235,6 +235,18 @@ routines-cloud`).
 
 These apply whenever the change is to the app, whichever repo the session started in. How it
 is pushed and merged is in "Builder", above.
+
+- **Anything the maintainer shows that looks wrong is a bug report, investigated unasked**
+  (the maintainer, 2026-11-16: "I need to know so I don't have to explicitly tell you to
+  investigate if I show you things that are clearly bugs"). A screenshot, a pasted message or
+  "this is wrong": find why from their real data first (the listing, the record, the
+  transcript), reproduce it with a test, fix it at the cause in the app, and only then tidy
+  what it left. Say the cause in a line or two, never only the clean-up. **A fix is done only
+  when it is checked for everyone, unasked**: existing installs on older versions and the
+  backlog they already hold (does the first run after the update clear it all, and can any of
+  it be kept for good?), a rule the fix switches on that never ran before, and Windows and Mac
+  (start Platforms and Everywhere on the branch by hand). The maintainer, the same day: "why am
+  I having to ask you to investigate these things... a lot of this is common sense".
 
 - **The page has one design language: `templates/app/DESIGN.md`.** Read it before changing
   anything a person sees. Its rules are tested on every screen (one bin, never an x; one "?"

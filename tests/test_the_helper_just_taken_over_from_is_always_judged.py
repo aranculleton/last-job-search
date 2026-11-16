@@ -60,7 +60,7 @@ def test_kept_for_now_it_is_said_never_nothing_to_tidy(monkeypatch, tmp_path, ca
     monkeypatch.setattr(tidy, "archived", lambda: [])
     monkeypatch.setattr(tidy, "_listener", lambda dump: LISTENER)
     monkeypatch.setattr(tidy, "_repo", lambda: REPO)
-    monkeypatch.setattr(tidy, "unmerged", lambda: set())
+    monkeypatch.setattr(tidy, "unmerged", lambda *_: set())
     monkeypatch.setattr(tidy, "on_github", lambda: set())
     monkeypatch.setattr(tidy, "_campaign_chats", lambda: set())
     import app_listen

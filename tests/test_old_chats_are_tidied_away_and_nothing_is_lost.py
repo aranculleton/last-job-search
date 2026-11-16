@@ -51,7 +51,9 @@ CHATS = [
     chat("session_EXAMPLEBRIEFCHAT", "Job search: morning brief"),      # brief in its own chat
     chat("session_EXAMPLEROUNDCHAT", "Job search: shortlist"),          # job round, still on
     chat("session_EXAMPLEDRAFTS", "Job search: drafts"),                # a child chat, finished
-    chat("session_EXAMPLEUNSAVED", "Job search: searches"),             # its branch not on master
+    # Its branch not on master, quiet three days: kept for the next landing. Past a week of
+    # quiet it goes, its branch kept on GitHub (test_the_tidy_up_sees_github_from_a_chats_copy).
+    chat("session_EXAMPLEUNSAVED", "Job search: searches", updated="2026-10-26T08:00:00Z"),
     chat("session_EXAMPLEFRESH", "Job search: research", updated="2026-10-28T20:00:00Z"),
     chat("session_EXAMPLEOTHERCOPY", "Job search: drafts"),             # another copy's chat
     chat("session_EXAMPLEOWN", "Last job search with Robin"),           # the person's own chat

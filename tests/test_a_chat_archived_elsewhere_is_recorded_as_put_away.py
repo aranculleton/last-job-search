@@ -35,7 +35,7 @@ def test_an_old_helper_archived_elsewhere_is_recorded_and_the_tidy_up_rests(
     monkeypatch.setattr(tidy, "_git_dir", lambda: str(tmp_path))
     monkeypatch.setattr(tidy, "_listener", lambda dump: LISTENER)
     monkeypatch.setattr(tidy, "_repo", lambda: REPO)
-    monkeypatch.setattr(tidy, "unmerged", lambda: set())
+    monkeypatch.setattr(tidy, "unmerged", lambda *_: set())
     monkeypatch.setattr(tidy, "on_github", lambda: set())
     monkeypatch.setattr(tidy, "_campaign_chats", lambda: set())
     import app_listen

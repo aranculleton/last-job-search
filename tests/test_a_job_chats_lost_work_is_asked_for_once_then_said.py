@@ -56,7 +56,7 @@ def _tidy(argv):
 def _never_on_github(monkeypatch):
     monkeypatch.setattr(tidy, "_listener", lambda d: LISTENER)
     monkeypatch.setattr(tidy, "_repo", lambda: REPO)
-    monkeypatch.setattr(tidy, "unmerged", lambda: set())
+    monkeypatch.setattr(tidy, "unmerged", lambda *_: set())
     monkeypatch.setattr(tidy, "on_github", lambda: {"master"})
 
 
@@ -110,7 +110,7 @@ def test_work_that_reached_github_after_the_ask_is_kept_waiting(copy, tmp_path, 
     _never_on_github(monkeypatch)
     dump = _dump(tmp_path)
     _close(tmp_path, dump, "2026-11-06T08:05:00Z")
-    monkeypatch.setattr(tidy, "unmerged", lambda: {BRANCH})
+    monkeypatch.setattr(tidy, "unmerged", lambda *_: {BRANCH})
     monkeypatch.setattr(tidy, "on_github", lambda: {"master", BRANCH})
     out = _close(tmp_path, dump, "2026-11-06T08:09:00Z")
     assert out.startswith(f"keep {JOB}: its work is not on master yet"), out

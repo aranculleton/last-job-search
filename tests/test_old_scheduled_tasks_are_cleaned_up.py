@@ -98,7 +98,7 @@ def test_the_plan_prints_them_to_make_saying_nothing(monkeypatch, tmp_path, caps
     monkeypatch.setattr(tidy, "archived", lambda: [])
     monkeypatch.setattr(tidy, "_listener", lambda dump: {"chat": LIVE, "helper": True})
     monkeypatch.setattr(tidy, "_repo", lambda: REPO)
-    monkeypatch.setattr(tidy, "unmerged", lambda: set())
+    monkeypatch.setattr(tidy, "unmerged", lambda *_: set())
     monkeypatch.setattr(tidy, "on_github", lambda: set())
     monkeypatch.setattr(tidy, "_campaign_chats", lambda: set())
     monkeypatch.setattr(app_listen, "this_chat", lambda chat="": LIVE)
