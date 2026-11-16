@@ -1051,6 +1051,7 @@ def _needs_you(ctx: Ctx, targets: dict) -> list:
         out += _tweak_offers(ctx, targets)
         out += _remade_cards(ctx, targets)
         out += _computer_card(ctx, targets)
+        out += _old_starter_card(ctx, targets)
         out += _unsaved_cards(ctx, targets)
     except person.NoProfile:
         pass
@@ -1099,6 +1100,31 @@ def _computer_card(ctx: Ctx, targets: dict) -> list:
     # (app_actions, keep_signin).
     targets[item["id"]] = {"kind": "outside", "key": "computer", "rev": item["rev"],
                            "say": item["about"].get("say") or ""}
+    return [item]
+
+
+def _old_starter_card(ctx: Ctx, targets: dict) -> list:
+    """Once for each computer starter a newer one replaced, until they say they archived it:
+    no chat may archive it (tools/computer.py old_starter), so it sat in their chat list for
+    good beside the new one (the maintainer's chat list, 2026-11-16)."""
+    import app_setup
+    import computer
+    old = (ctx._got.get("computer") or {}).get("old_starter")
+    if not old or not old.get("chat"):
+        return []
+    key = computer.OLD_STARTER_SAID + old["chat"]
+    if app_setup.said_once().get(key):
+        return []
+    day = parse_time(old.get("at"))
+    when = (" from " + day.strftime("%a ") + str(day.day) + day.strftime(" %b")) if day else ""
+    body = ("An older chat called “" + computer.STARTER_TITLE + "”" + when + " is not used "
+            "any more: a newer one took its place. Claude can't archive it, because it holds "
+            "your OK to use your computer. Archive it in your chat list, then tap Done.")
+    item = {"id": "q-old-starter", "kind": "setup", "title": "One old chat to archive",
+            "body": body, "steps": [], "options": [{"label": "Done", "action": "setup.done"}],
+            "about": {"step": "old-starter", "chat": old["chat"]},
+            "rev": rev_of("old-starter", old["chat"], body)}
+    targets[item["id"]] = {"kind": "outside", "key": key, "rev": item["rev"]}
     return [item]
 
 

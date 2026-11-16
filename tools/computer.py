@@ -402,6 +402,22 @@ def starter(db: dict) -> dict:
     return dict(doc.get("data") or {}) if isinstance(doc, dict) else {}
 
 
+def old_starter(rec: dict) -> dict | None:
+    """The starter a newer one replaced ({"chat", "at"}), from the starter's own record, or
+    None. It holds the person's OK to use their computer, so no chat may archive it
+    (archive_session: "only accepts requests made from one of its owner's trusted devices",
+    tried on the maintainer's, 2026-11-16): it stayed in their chat list for good, and their
+    page asks them once instead (app_model, the old-chat card)."""
+    gone = (rec or {}).get("gone") or {}
+    chat = str(gone.get("chat") or "")
+    if not chat or chat == str((rec or {}).get("chat") or ""):
+        return None
+    return {"chat": chat, "at": str(gone.get("at") or "")}
+
+
+OLD_STARTER_SAID = "old-chat:"     # said_once key, with the chat's id: archived, by their word
+
+
 def is_starter(db: dict, chat: str) -> bool:
     return bool(chat) and str(starter(db).get("chat") or "") == chat
 
@@ -2169,6 +2185,8 @@ def state(db: dict, now: dt.datetime, envs=None, version: str = "",
             # named no chat and gave no way there (the local review, 2026-11-11, 7).
             "starter": ({"chat": str(rec.get("chat") or ""), "title": STARTER_TITLE}
                         if key == "starter_waits" and rec.get("chat") else None),
+            # A starter replaced by a newer one: only the person can archive it (old_starter).
+            "old_starter": old_starter(rec),
             "computer": beat_.get("computer") or "", "seen_at": beat_.get("seen_at"),
             # The computer's system, as it reported it (system_seen): "" where not known.
             "system": system,
