@@ -436,9 +436,9 @@ def page_set_asides(dump_dir) -> tuple[set, set]:
 
 def declined_now() -> dict:
     """The employers turned down by name as the profile holds them now (search.py
-    BAR_DECLINED, keyed as bar.py looks them up), read from the file: bar.py keeps the copy
-    the round read when it started, so a "No more roles from them" said on the page while it
-    ran was never seen by its cut (2026-11-04)."""
+    BAR_DECLINED, each entry by its employer key, as bar.py reads it), read from the file:
+    bar.py keeps the copy the round read when it started, so a "No more roles from them" said
+    on the page while it ran was never seen by its cut (2026-11-04)."""
     try:
         import profile_set
         got = profile_set.get("search.py", "BAR_DECLINED")
@@ -448,7 +448,10 @@ def declined_now() -> dict:
     # setting, it turned down an employer called Missing and named it in Your rules.
     if got is profile_set.MISSING or not isinstance(got, dict):
         return {}
-    return {str(k): str(v) for k, v in got.items() if isinstance(v, str)}
+    # Each entry read through the employer key, however it is written: one written by hand
+    # ("north-shore mutual", "acme insurance") cut nothing (2026-11-16).
+    from company_key import keyed
+    return keyed({str(k): str(v) for k, v in got.items() if isinstance(v, str)})
 
 
 def family(name: str) -> set:
