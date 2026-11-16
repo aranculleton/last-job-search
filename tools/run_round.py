@@ -1109,6 +1109,14 @@ def write_summary(shortlist_path, out_dir, name, scraped_path=None, show=None, r
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(out, fh, indent=1)
         fh.write("\n")
+    # And the posting text of every job on it, beside it (tools/rescore.py), so a change to how
+    # jobs are scored scores them again in any chat: the round's own folder keeps only its top
+    # 60, and no later chat has it (2026-11-16).
+    try:
+        import rescore
+        rescore.keep(out_dir, name, kept)
+    except Exception as e:  # noqa: BLE001  the list stands without it; scored again when fetched
+        print(f"round: the text of the jobs on its list was not kept ({e})", file=sys.stderr)
     return path
 
 
@@ -1915,6 +1923,13 @@ def main():
     # cut then dropped, and never widened (the release review, 2026-11-03).
     good, strong = yield_of(summary) if summary else (0, 0)
     want, want_75 = targets(a.show, names)
+    if summary and not a.summary_dir:
+        # The kept text of searches the page no longer lists goes (tools/rescore.py).
+        try:
+            import rescore
+            rescore.prune(rescore.listed(datetime.date.fromisoformat(a.today)))
+        except Exception:  # noqa: BLE001  kept a while longer; the next round or rescore prunes it
+            pass
     met =good >= want and strong >= want_75
     print(f"yield: {good} scoring 60+ (target {want}), "
           f"{strong} scoring 75+ (target {want_75}) -> {'MET' if met else 'MISSED'}")
