@@ -29,7 +29,7 @@ sys.path.insert(0, os.path.join(ROOT, "tests"))
 import app_listen  # noqa: E402
 import app_model  # noqa: E402
 import computer  # noqa: E402
-from test_a_computer_chat_is_seen_to_its_end import NOW, T, URL, _apply, _as  # noqa: E402
+from test_a_computer_chat_is_seen_to_its_end import NOW, T, URL, _apply  # noqa: E402
 from test_a_tick_on_the_page_is_applied_once import _db, _w  # noqa: E402
 from test_the_computer_side_just_works import BRIDGE  # noqa: E402
 from test_the_computers_own_chat_takes_work_with_no_tap import (  # noqa: E402
