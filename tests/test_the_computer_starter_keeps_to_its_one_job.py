@@ -226,7 +226,7 @@ def test_the_starter_never_asks_the_person_to_delete_a_chat(tmp_path):
 
 def test_a_starter_is_known_by_its_word_its_record_or_its_first_message(tmp_path, monkeypatch):
     monkeypatch.setenv("LJS_STATE", str(tmp_path))
-    monkeypatch.delenv(app_listen.ROLE_ENV, raising=False)
+    monkeypatch.setenv(app_listen.ROLE_ENV, "")
     old = _transcript(tmp_path / "old.jsonl", OLD_PROMPT)
     new = _transcript(tmp_path / "new.jsonl", computer.starter_prompt(URL, COPY))
     page = _transcript(tmp_path / "page.jsonl", "Open my job search page and answer it.")
@@ -253,7 +253,7 @@ def test_the_update_check_gives_the_starter_the_update_and_nothing_else(
         sync_steps, monkeypatch, tmp_path, capsys):
     import sync_app
     monkeypatch.setenv("LJS_STATE", str(tmp_path))
-    monkeypatch.delenv(app_listen.ROLE_ENV, raising=False)
+    monkeypatch.setenv(app_listen.ROLE_ENV, "")
     said = []
     for name in ("say_page", "app_watch_said", "setting_line", "plain_state_endings",
                  "lf_checkout"):
@@ -263,7 +263,7 @@ def test_the_update_check_gives_the_starter_the_update_and_nothing_else(
     assert rc == 0 and "sync" in steps and steps[-1] == "upgrades", steps
     assert not {"app_watch", "network_check", "model_check", "place_check"} & set(steps), steps
     assert not {"say_page", "app_watch_said", "setting_line"} & set(said), said
-    monkeypatch.delenv(app_listen.ROLE_ENV, raising=False)
+    monkeypatch.setenv(app_listen.ROLE_ENV, "")
     # Already checked today, in a starter made before it said so (known by its first message).
     monkeypatch.setattr(app_listen, "starter_here", lambda *a, **k: True)
     said.clear()
@@ -271,7 +271,7 @@ def test_the_update_check_gives_the_starter_the_update_and_nothing_else(
     assert rc == 0 and not {"network_check", "place_check"} & set(steps), steps
     assert not {"say_page", "app_watch_said"} & set(said), said
     assert os.environ.get(app_listen.ROLE_ENV) == "starter"      # its processes know it too
-    monkeypatch.delenv(app_listen.ROLE_ENV, raising=False)
+    monkeypatch.setenv(app_listen.ROLE_ENV, "")
     # Any other chat hears the rest, as ever.
     monkeypatch.setattr(app_listen, "starter_here", lambda *a, **k: False)
     said.clear()
@@ -301,7 +301,7 @@ def test_nothing_of_the_pages_work_reaches_the_starter_from_the_files_an_update_
     monkeypatch.setattr(app_setup, "set_up", lambda: True)
     monkeypatch.setattr(app_setup, "_page_current", lambda: True)
     assert app_setup.page_line(landed=True) == ""
-    monkeypatch.delenv(app_listen.ROLE_ENV, raising=False)
+    monkeypatch.setenv(app_listen.ROLE_ENV, "")
     assert "Bring the person's page up to date now" in app_setup.page_line(landed=True)
     # The hook: the day's check line, a held turn, anything, for any chat but the starter.
     monkeypatch.setattr(learned, "_path", lambda: str(tmp_path / "learned.json"))

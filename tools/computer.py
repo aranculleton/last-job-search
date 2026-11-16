@@ -473,9 +473,10 @@ def starter_prompt(url: str, copy: str) -> str:
         # The person opens this chat only to switch its mode, and asked it about the chats in
         # their list: it said one was closed and that the other could be deleted, leaving the
         # tidying to them (issue #278).
-        "Where I write in this chat, answer in one plain line, and only about what this chat "
-        "does; never tell me to delete, archive or close a chat, and never say one was closed: "
-        "Claude puts away the chats it no longer needs by itself.",
+        "Where I write in this chat, answer plainly and briefly, only about what this chat does "
+        "(where a command here gives the words, those words); never tell me to delete, archive "
+        "or close a chat, and never say one was closed: Claude puts away the chats it no longer "
+        "needs by itself.",
     ])
 
 
