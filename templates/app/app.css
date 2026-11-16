@@ -253,7 +253,14 @@ bdi { unicode-bidi: isolate; }
 .todo-employer { font-size: var(--t-sm); font-weight: 600; color: var(--muted); }
 .stack { display: grid; gap: 16px; }
 .banner { padding: 12px 16px; border-radius: var(--r-sm); background: var(--st-overdue-bg); color: var(--st-overdue); display: grid; gap: 8px; justify-items: start; }
-.empty { padding: 24px 20px; border: 1px dashed var(--line-strong); border-radius: var(--r); display: grid; gap: 8px; color: var(--muted); }
+/* An empty place (app.js, empty): a soft clay circle with the screen's icon, a short heading,
+   one grey line and one button, centred, with no box round it (the redesign, 2026-11-16): a
+   dashed box read as something missing or broken. */
+.empty { padding: 32px 20px; border: 0; border-radius: var(--r); display: grid; justify-items: center; text-align: center; gap: 8px; color: var(--muted); }
+.empty > p { max-width: 44ch; }
+.empty-ic { display: grid; place-items: center; width: 64px; height: 64px; margin-bottom: 8px; border-radius: 50%; background: var(--accent-soft); color: var(--mark); }
+.empty-ic .ic { width: 28px; height: 28px; }
+.empty .card-actions { justify-content: center; }
 .empty-title { color: var(--ink); font-weight: 600; font-size: var(--t-lg); }
 
 
@@ -784,7 +791,7 @@ dialog.work-sheet { width: min(560px, calc(100vw - 16px)); }
    segment's. A row of outlined capsules each with a dot read as a form. */
 .pills .pill-row { display: flex; flex-wrap: wrap; gap: 2px; padding: 2px; border-radius: var(--r-sm); background: var(--sunk); box-shadow: inset 0 0 0 1px var(--line); width: fit-content; max-width: 100%; }
 .pills .choice { align-items: center; justify-content: center; gap: 8px; min-height: 0; padding: 8px 12px; border: 0; border-radius: calc(var(--r-sm) - 2px); color: var(--muted); font-weight: 600; }
-.pills .choice:has(input:checked) { background: var(--surface); color: var(--ink); box-shadow: var(--shadow-card), 0 0 0 1px var(--line); }
+.pills .choice:has(input:checked) { background: var(--overlay); color: var(--ink); box-shadow: var(--shadow-card), 0 0 0 1px var(--line); }
 .setting.pills .choice > input, .field.pills .choice > input { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; margin: 0 !important; opacity: 0; cursor: pointer; }
 .pills .choice:has(input:focus-visible) { outline: 3px solid var(--focus); outline-offset: 2px; }
 /* A choice with more to say under each (an example, a line of why) is a list of option rows:
@@ -1044,7 +1051,7 @@ dialog.work-sheet { position: fixed; inset: auto 0 0 0; margin: 0; width: 100%; 
    short choice (above): a sunk track, the one chosen raised on it (the redesign, 2026-11-16). */
 .look-row .segctl { border: 0; border-radius: var(--r-sm); background: var(--sunk); box-shadow: inset 0 0 0 1px var(--line); }
 .look-row .seg-opt { border-radius: calc(var(--r-sm) - 2px); color: var(--muted); }
-.look-row .look-choice:has(input:checked) { background: var(--surface); color: var(--ink); box-shadow: var(--shadow-card), 0 0 0 1px var(--line); }
+.look-row .look-choice:has(input:checked) { background: var(--overlay); color: var(--ink); box-shadow: var(--shadow-card), 0 0 0 1px var(--line); }
 /* A card's title that opens it elsewhere (an interview in To do opens in Coming up): the card's
    own tap, drawn as its title, underlined only under a pointer. */
 .title-link { color: inherit; text-decoration: none; position: relative; display: inline-block; }

@@ -3236,7 +3236,14 @@
   function stopClaude(what, run, key) {
     return btn("Stop Claude", run, {kind: "quiet stop-claude", small: true, key, aria: "Stop Claude's work on " + txt(what || "this")});
   }
-  function empty(title, body, extra) { return h("div", {class: "empty"}, h("p", {class: "empty-title"}, title), body ? h("p", {}, body) : null, extra || null); }
+  // An empty place says what will come there, calmly: a soft circle with the screen's own
+  // icon, a short heading, one grey line and at most one button, never a dashed box (the
+  // redesign, 2026-11-16). A list a filter or a search emptied wears the magnifier.
+  const EMPTY_ICON = {todo: "todo", brief: "brief", jobs: "jobs", drafts: "jobs", contacts: "contacts", interviews: "interviews", progress: "progress", chat: "chat", settings: "settings", profile: "contacts"};
+  function empty(title, body, extra, ic) {
+    const name = ic || (/^Nothing (matches|to show)/.test(txt(title)) ? "k-search" : EMPTY_ICON[S.section] || "todo");
+    return h("div", {class: "empty"}, h("span", {class: "empty-ic", "aria-hidden": "true"}, icon(name)), h("p", {class: "empty-title"}, title), body ? h("p", {}, body) : null, extra || null);
+  }
   function btn(label, onclick, o) {
     o = o || {};
     return h("button", {type: "button", class: "btn " + (o.kind || "secondary") + (o.small ? " small" : ""), "data-k": o.key || null,
@@ -9748,10 +9755,12 @@
     // got comes second, beside what is usual: "Offer 0 of 24" first, with no base rate, read
     // as a verdict, and the week's effort was folded away (the UX review, 2026-11-10, U-7).
     const wk = thisWeek(weeks);
-    const sum = nothing ? "Nothing counted yet." : "This week: " + (Number(wk.applied) || 0) + " applied" +
+    // Empty, the header says what the screen is for and the empty state below says what comes:
+    // "Nothing counted yet." over "Nothing counted yet." said it twice (the redesign, 2026-11-16).
+    const sum = nothing ? "Your applications, replies and interviews, counted as they happen." : "This week: " + (Number(wk.applied) || 0) + " applied" +
       (wk.sent !== undefined ? ", " + nWord(Number(wk.sent) || 0, "message sent", "messages sent") : "") + ".";
     // The next step, from how far applications got; else what is working (the Brief's own line).
-    const small = nothing ? "Each application you mark as sent is counted here." : funnelReading(funnel) || txt(obj(d.glance).working);
+    const small = nothing ? null : funnelReading(funnel) || txt(obj(d.glance).working);
     const wrap = h("section", {class: "sec", "aria-labelledby": "h-progress" + (where ? "-" + where : "")}, screenHead("progress", "Progress", sum, small, where));
     if (nothing) { put(wrap, empty("Nothing counted yet.", "Each application you mark as sent is counted here, with every reply and interview after it.",
       h("div", {class: "card-actions"}, btn("Go to Jobs", () => go("jobs", {focus: true}), {kind: "secondary", small: true, key: "progress-go-jobs"})))); return wrap; }
@@ -13591,7 +13600,7 @@
     const back = h("a", {href: "#settings", class: "back-link", "data-k": "profile-back", onclick: (e) => { e.preventDefault(); go("settings", {focus: true}); }}, "‹ Settings");
     const wrap = h("section", {class: "sec profile-page", "aria-labelledby": "h-profile" + (where ? "-" + where : "")}, back,
       screenHead("profile", "Your profile", "Everything Claude knows about you. Each application uses only what fits the job.", null, where));
-    if (!Object.keys(y).length) { put(wrap, empty("Nothing here yet.", "Your profile fills in as you answer the setup questions.")); return wrap; }
+    if (!Object.keys(y).length) { put(wrap, empty("Nothing here yet.", "Your profile fills in as you answer the setup questions.", null, "contacts")); return wrap; }
     const busy = profileBusy();
     if (busy) put(wrap, busy);
     const missing = arr(y.missing);
