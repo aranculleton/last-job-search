@@ -3132,7 +3132,7 @@
     // Its dot goes with it ("Why" and its dot never part at a line's end; the screen review,
     // 2026-11-11).
     return {panel, toggle: (label, aria) => ["\u00a0\u00b7\u00a0", h("button", {type: "button", class: "btn link info-toggle", "aria-expanded": String(open), "aria-controls": pid,
-      "aria-label": aria || null, "data-k": "info:" + key, onclick: flip}, label)]};
+      "aria-label": aria || null, "data-k": "info:" + key, onclick: flip}, label, h("span", {class: "chev", "aria-hidden": "true"}))]};
   }
   // The pencil beside the resume or the letter on a draft's card: the one Tweak panel, its
   // quick choices, what to change in words and its cost, opened in place. Never "Edit" under
@@ -7064,7 +7064,7 @@
       h("div", {class: "job-main"},
         // The number is a small badge beside the title, coloured by how strong a fit it is: a
         // column of its own pushed every line in (the maintainer, 2026-10-29: "the indents").
-        h("div", {class: "job-top"}, h("span", {class: "score-pill tone-" + bandTone, "aria-hidden": "true", title: SCORE_MEANS + (band ? " This one is " + band + "." : "")}, txt(r.score)),
+        h("div", {class: "job-top"}, h("span", {class: "score-pill tone-" + bandTone + fitClass(r.score), "aria-hidden": "true", title: SCORE_MEANS + (band ? " This one is " + band + "." : "")}, txt(r.score)),
           h("h3", {id: hid}, breakable(r.title)), h("span", {class: "top-end"}, stateWord(word[0], word[1]),
           live && !pending ? btn("", () => askRemoveJob(r), {kind: "quiet icon-only", small: true, key: "bin:" + r.id, icon: "bin", aria: "Not for me: " + about}) : null)),
         h("p", {class: "sr-only"}, scoreWords),
@@ -7140,6 +7140,12 @@
   // What a job's number means, on hover and in the Jobs part of the tour (the maintainer,
   // 2026-10-29: "a few ppl asked me what is out of 100").
   const SCORE_MEANS = "How well this job fits you, out of 100. 75 or more is a strong fit; 60 or more is worth a look.";
+  // How far round its ring a job's number goes, to the nearest tenth (the redesign,
+  // 2026-11-16): the ring is the fit at a glance, the number beside it to the point.
+  function fitClass(score) {
+    const n = Number(score);
+    return Number.isFinite(n) && score !== null && score !== "" ? " fit-" + Math.max(0, Math.min(10, Math.round(n / 10))) * 10 : "";
+  }
   // Why a job or a draft goes in the bin: each reason its own button, done at once (the
   // walk-through, 2026-11-03: a sheet of choices with one already picked, then a button, took
   // two taps to put one thing away). Pay, place and field teach the next ranking; only the
@@ -7505,7 +7511,23 @@
       {kind: "quiet", small: true, key: "chan:" + m.id, aria: txt(sw.label) + " to " + txt(m.first_name)}) : null;
     return said || swBtn ? h("p", {class: "small hint-line msg-inmail"}, said ? h("span", {class: "muted"}, said) : null, said && swBtn ? " " : null, swBtn) : null;
   }
-  function clippedBody(m, body, tid) {
+  // On Contacts' list (`clamp`) a long draft shows its first four lines and a quiet "Read it
+  // all" that opens it in place, Copy staying on its heading line and copying all of it: ten
+  // drafts drawn whole were a wall of words to scroll past (the redesign, 2026-11-16). The
+  // first draft on the list is drawn whole all the same (app.css).
+  const DRAFT_LINES = 4;
+  function clippedBody(m, body, tid, clamp) {
+    if (clamp && txt(m.channel) !== "inmail") {
+      const long = body.length > 60 * DRAFT_LINES || body.split(/\n/).length > DRAFT_LINES;
+      if (!long) return h("p", {class: "sendtext big", id: tid}, body);
+      const open = bodyOpen.has(m.id);
+      // The words clipped inside the box, never at its edge: clipped at its edge, the fifth
+      // line showed through the box's own padding.
+      return [h("p", {class: "sendtext big" + (open ? "" : " is-clamped"), id: tid}, h("span", {class: "sendtext-in"}, body)),
+        h("button", {type: "button", class: "btn link small read-all", "aria-expanded": String(open), "aria-controls": tid, "data-k": "readall:" + m.id,
+          "aria-label": (open ? "Show less of the " : "Read all of the ") + (txt(m.kind) === "first_note" ? "note" : "message") + " to " + txt(m.first_name),
+          onclick: () => { if (bodyOpen.has(m.id)) bodyOpen.delete(m.id); else bodyOpen.add(m.id); scheduleRender(); }}, open ? "Show less" : "Read it all", h("span", {class: "chev", "aria-hidden": "true"}))];
+    }
     if (!(txt(m.channel) === "inmail" && body.length > INMAIL_CLIP + 40) || bodyOpen.has(m.id)) return h("p", {class: "sendtext big", id: tid}, body);
     const cut = body.slice(0, INMAIL_CLIP).replace(/\s+\S*$/, "") + "\u2026";
     return h("p", {class: "sendtext big", id: tid}, cut, " ",
@@ -7775,7 +7797,7 @@
     return card("article", {class: "card app st-" + seg(st) + (S.selectingReady ? " selecting" : "") + edge, "aria-labelledby": hid, "data-item": a.id},
       S.selectingReady && live && !a.for_contact ? selBox(S.sel.ready, a.id, about, scheduleRender) : null,
       h("div", {class: "app-main"},
-        h("div", {class: "job-top"}, j && j.score != null ? h("span", {class: "score-pill tone-" + ({strong: "ok", good: "info"}[txt(j.band)] || "plain"), "aria-hidden": "true", title: SCORE_MEANS}, txt(j.score)) : null,
+        h("div", {class: "job-top"}, j && j.score != null ? h("span", {class: "score-pill tone-" + ({strong: "ok", good: "info"}[txt(j.band)] || "plain") + fitClass(j.score), "aria-hidden": "true", title: SCORE_MEANS}, txt(j.score)) : null,
           h("h3", {id: hid}, breakable(a.role)), h("span", {class: "top-end"}, stateWord(word[0], word[1]),
           live && !forWho ? btn("", () => askRemoveDraft(a), {kind: "quiet icon-only", small: true, icon: "bin", key: "dbin:" + a.id, aria: "Not sending: " + about}) : null)),
         // Pay where it is known; "Pay not stated" on nearly every card said nothing (2026-11-03).
@@ -7808,12 +7830,12 @@
         // right length:" on every card (the maintainer, 2026-11-05).
         live && !checkAlert && !asks.length && checks.passed && checks.line ? h("p", {class: "checks"},
           !forWho && arr(checks.parts).length
-            ? [txt(checks.lead), arr(checks.parts).map((p, i) => [i ? " " : null, h("span", {class: "doc-part"}, h("span", {class: "doc-words"}, i ? txt(obj(p).words) : cap1(txt(obj(p).words))),
+            ? [txt(checks.lead), arr(checks.parts).map((p, i) => [i ? " " : null, h("span", {class: "doc-part"}, icon("k-application"), h("span", {class: "doc-words"}, i ? txt(obj(p).words) : cap1(txt(obj(p).words))),
               txt(obj(p).kind) === "letter" ? (letter.length ? docPencil(a, "letter") : null) : txt(obj(p).kind) === "resume" ? docPencil(a, "resume") : null)])]
             // With no parts from the engine, each pencil still beside its own document's word:
             // "All checks passed ✎ ✎" said nothing of which was which (the review, 2026-11-05).
-            : [txt(checks.line).replace(/\.$/, ""), !forWho ? [": ", h("span", {class: "doc-part"}, h("span", {class: "doc-words"}, noun()), docPencil(a, "resume")),
-              letter.length ? [" ", h("span", {class: "doc-part"}, h("span", {class: "doc-words"}, "letter"), docPencil(a, "letter"))] : null] : null]) : null,
+            : [txt(checks.line).replace(/\.$/, ""), !forWho ? [": ", h("span", {class: "doc-part"}, icon("k-application"), h("span", {class: "doc-words"}, noun()), docPencil(a, "resume")),
+              letter.length ? [" ", h("span", {class: "doc-part"}, icon("k-application"), h("span", {class: "doc-words"}, "letter"), docPencil(a, "letter"))] : null] : null]) : null,
         live ? tweakResult(a) : null,
         live && !checkAlert && !asks.length && !checks.passed && checks.line ? h("p", {class: "checks tone-warn"}, txt(checks.line)) : null,
         noteFor("dl:" + a.id), noteFor("files:" + a.id),
@@ -8051,7 +8073,7 @@
       parts.subject ? noteFor("copy:" + sid) : null,
       // Where an email goes, beside it.
       parts.subject || txt(m.channel) === "email" ? emailLine(m.contact, "memail:" + m.id) : null,
-      h("div", {class: "sendbox"}, h("span", {class: "bubble-tools"}, ready ? copyBtn : null, penBtn), editing ? area : clippedBody(m, body, tid)),
+      h("div", {class: "sendbox"}, h("span", {class: "bubble-tools"}, ready ? copyBtn : null, penBtn), editing ? area : clippedBody(m, body, tid, !!o.clamp)),
       m.inmail ? inmailLine(m) : null,
       pen ? h("div", {class: "pen-tell"}, h("label", {class: "small pen-label", for: askId}, "What would you like changed?"), askField,
         // A quick choice fills the box, so one Ask Claude (and one gauge) sends whatever is asked.
@@ -9037,7 +9059,7 @@
     const pm = personMessage(p.id);
     // The message drafted to them, shown under their name until "I sent it" (2026-11-04).
     const draft = personDraft(p);
-    const d = draft ? draftParts(draft) : null;
+    const d = draft ? draftParts(draft, {clamp: true}) : null;
     // Marked sent here: done on the row at once, never "Replied: your turn" until Claude catches
     // up, and still after the message has left the list while their record lags (personSentTap).
     const sentTap = draft ? null : personSentTap(p);
@@ -9104,6 +9126,10 @@
     // With a message on the card, Copy and I sent it are its row, and They replied (they wrote
     // again before it went) waits under More.
     const theyReplied = replyOut ? theyRepliedBtn(p, "plog:" + p.id, replyHere, owed || d || onHold ? "secondary" : "primary") : null;
+    // With a message on the card, They replied is its soft pill beside I sent it, where the row
+    // has room (Open their profile not on its face): under More it was not found when they wrote
+    // again before the message went (the redesign, 2026-11-16).
+    const replyFace = !!(theyReplied && d && !onHold && [].concat(d.act || []).filter(Boolean).length < 2);
     // Let it go: one of the trash's answers for someone who has not written back, never a row of
     // buttons of its own (2026-11-03: "Let it go" changed nothing that could be seen).
     const letGo = ["waiting", "leave"].includes(g) && !sent ? () => act([{item: p.id, action: "person.status", value: {status: "gone_cold", why: "no reply, let go on the page"}, rev: p.rev}], "Let go: " + name) : null;
@@ -9111,7 +9137,7 @@
     const skip = draft && txt(draft.kind) === "first_note" ? () => act([{item: draft.id, action: "msg.skip", rev: draft.rev}], "Set aside: the note to " + name) : null;
     // Rare, so under More: the message's own (edit or rewrite, their profile link, words changed
     // before sending, why them), then the person's (a call, a job they sent, a referral).
-    const extra = [(d || onHold) && theyReplied ? h("div", {class: "more-acts"}, theyReplied) : null, d ? h("div", {class: "more-acts"}, d.extra) : null,
+    const extra = [(d || onHold) && theyReplied && !replyFace ? h("div", {class: "more-acts"}, theyReplied) : null, d ? h("div", {class: "more-acts"}, d.extra) : null,
       h("div", {class: "more-acts"}, personActions(p, p.id, false), closedHere || g === "done" ? null : elseBtn("person", p.id, whoAt(name, p.employer), "person:" + p.id)), relatedLinks(p.employer, p.id, p)];
     const step = stepWords(p.next);
     const ex = exchangeWords(p);
@@ -9158,7 +9184,7 @@
         box ? replyBox(p) : null,
         // The gauge only beside what wakes Claude: a draft's own act (I sent it, Copy) is the
         // page's alone, and carried a follow-up's two minutes (the review, 2026-11-05).
-        h("div", {class: "card-actions"}, owed, d && owed === d.act ? d.cost : owedCost(p, d ? null : owed, going || box), d || onHold ? null : theyReplied, more("person:" + p.id, whoAt(name, p.employer), extra)),
+        h("div", {class: "card-actions"}, owed, d && owed === d.act ? d.cost : owedCost(p, d ? null : owed, going || box), (d || onHold) && !replyFace ? null : theyReplied, more("person:" + p.id, whoAt(name, p.employer), extra)),
         cardTalk("person", p.id, whoAt(name, p.employer)),
         noteFor("reply:" + p.id), due ? stateLine(due.id, "pdue:" + p.id) : null, d ? d.line : done1 ? stateLine(done1.id, "msg:" + done1.id) : null,
         going ? null : stateLine(p.id, "person:" + p.id)));
@@ -9385,11 +9411,16 @@
     if (brief) return h("li", {class: "bp-up-row"},
       h("span", {class: "up-main"}, h("span", {class: "up-when"}, [upDayLabel(u.day), upWhen(u)].filter(Boolean).join(" · ")), h("span", {class: "up-title"}, upGo(u)), maybe, prep), add);
     const sub = [UP_WORDS[txt(u.kind)] || "", txt(u.note), txt(u.place)].filter(Boolean).join(" \u00b7\u00a0");
-    return h("li", {class: "up-row", "data-item": u.id, "data-card": "1", tabindex: "-1"},
-      h("span", {class: "up-when"}, upWhen(u) ? upWhenRow(u) : (u.own || u.pending ? "" : addTimeBtn(u))),
+    // What it is first, then when, then its tools (the redesign, 2026-11-16): read in that order,
+    // drawn with the time in a steady column of its own (app.css). Its tools are one tidy
+    // group, the calendar first, so it stands in one place down the list, then the pencil; the
+    // trash keeps its own place at the row's end, apart from them.
+    const off = rm || callOff(u);
+    return h("li", {class: "up-row" + (off ? " has-bin" : ""), "data-item": u.id, "data-card": "1", tabindex: "-1"},
       h("span", {class: "up-main"}, h("span", {class: "up-title"}, upGo(u)), maybe, sub ? h("span", {class: "up-note small muted"}, sub) : null, prep,
         upTimeForm(u), upDayForm(u), upTimed.has(u.id) ? stateLine(txt(obj(upTimeTarget(u)).item), "up:" + u.id) : null),
-      h("span", {class: "up-acts"}, upDayBtn(u), add, rm || callOff(u)));
+      h("span", {class: "up-when"}, upWhen(u) ? upWhenRow(u) : (u.own || u.pending ? "" : addTimeBtn(u))),
+      h("span", {class: "up-acts"}, add, upDayBtn(u)), off ? h("span", {class: "up-bin"}, off) : null);
   }
   // A booked call called off: the trash on its row, one answer, done at once with Undo. The
   // person stays in the conversation; the row leaves Coming up at once (upcomingItems).
