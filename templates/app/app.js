@@ -4019,11 +4019,14 @@
     // wrong with one (no prep yet) is said on that card and counted there.
     // The soonest leads To do only when it is today or tomorrow, or has no prep yet: one three
     // days off with its prep ready took the screen's one filled button from a thank-you two
-    // days late (the UX review, 2026-11-05).
+    // days late (the UX review, 2026-11-05). With no prep yet it leads from as many days before
+    // as the person chose (Settings, "Your next interview on the Brief"): To do's order is the
+    // Brief's since the redesign (todoQueue, 2026-11-16), so the one setting moves it in both.
+    const prepDays = Number(settingOf("prep_days", "7")) || 7;
     ivs.forEach((iv, i) => {
       const n = dayDiff(iv.when);
       const list = alertsOf(iv);
-      const lead = i === 0 && (n <= 1 || !obj(iv.prep).updated);
+      const lead = i === 0 && (n <= 1 || (!obj(iv.prep).updated && n <= prepDays));
       out.push({key: "iv:" + iv.id, kind: "interview", band: lead ? "top" : n <= 7 ? "week" : "later", employer: txt(iv.company), due: dayOf(iv.when), item: iv.id,
         home: "interviews", weight: list.filter(alertCounts).length, counts: list.some(alertCounts), node: (ctx) => comingUp(iv, ctx)});
     });
@@ -6119,6 +6122,81 @@
     return h("p", {class: "small muted", "data-k": "news-asof"},
       (n === 0 ? "Gathered this morning" : n === -1 ? "Gathered yesterday" : "Gathered " + fmtDay(d)) + ".");
   }
+  // ---- One ranked list (the redesign, 2026-11-16). Three places answered "what do I do
+  // next?" each its own way: the Brief's Today picked one thing, its Next three another and To
+  // do a third, and their counts disagreed (4 on To do's badge, 1, 3, and "4 things today" over
+  // seven messages; the usability and interaction reviews). The engine gives the lists and To
+  // do puts them in order (todoItems, its bands, bandGroups); the Brief takes that order as it
+  // is: Today is To do's first card and Next its next three, in the card's own words, with its
+  // own button and To do's own count. Step for step as renderTodo draws them, so the one-answer
+  // test (test_the_brief_and_to_do_give_one_answer) holds the two together.
+  function todoQueue() {
+    const every = todoItems();
+    const su = obj(M().setup);
+    const settingUp = (txt(su.state) && txt(su.state) !== "done" || emptyModel()) && !!setupCard();
+    const helpOnly = (i) => HELP_KEYS.has(i.key) && !i.counts && !settingUpNow();
+    const all = every.filter((i) => !todoHidden(i) && !helpOnly(i));
+    const out = all.filter((i) => i.band === "first");
+    const top = all.find((i) => i.band === "top");
+    if (top && !settingUp) out.push(top);
+    const order = settingUp ? BANDS : TODAY_FIRST.map((b) => BANDS.find(([k]) => k === b));
+    const quick = settingUp ? null : all.find((i) => i.quick) || null;
+    const rest = [];
+    const soon = [];
+    let shown = 0;
+    for (const [band] of order) {
+      const items = all.filter((i) => i.band === band && i !== quick);
+      const quickHere = !!quick && band === quick.band;
+      if ((!items.length && !quickHere) || settingUp && band !== "answer") continue;
+      const today = settingUp || band === "answer" || band === "now";
+      if (quickHere) { out.push(quick); shown++; }
+      const room = TODO_FIRST - (quick && !quickHere && band !== "answer" && order.findIndex(([k]) => k === band) < order.findIndex(([k]) => k === quick.band) ? 1 : 0);
+      for (const g of bandGroups(items)) {
+        const setupOnly = !settingUp && g.list.every((i) => i.kind === "setup");
+        if (today && (settingUp || shown < room) && !setupOnly) { out.push(...g.list); shown += g.list.length; } else (today ? rest : soon).push(...g.list);
+      }
+    }
+    // One of today's alone past the five is shown in its own band, never behind a fold.
+    if (rest.length === 1) {
+      const at = out.map((i) => i.band).lastIndexOf(rest[0].band);
+      if (at >= 0) out.splice(at + 1, 0, rest.pop());
+    }
+    return out.concat(rest, soon);
+  }
+  // What the Brief says of one of To do's cards, drawn once by the card's own builder so the two
+  // never say it two ways: its title, the word in its corner ("2 days late", "Today", "1 of 4"),
+  // the card's own data-item for opening it in To do, and the card itself, whose button the
+  // Brief's Today takes.
+  function queueFace(i) {
+    const id = i.key.startsWith("iv:") ? i.key.slice(3) : "";
+    const iv = id ? interviewItems().find((x) => x.id === id) : null;
+    if (iv) return {iv, title: stageName(iv) + " with " + txt(iv.company), corner: fmtDay(dayOf(iv.when)) + (timeOf(iv.when) ? ", " + timeOf(iv.when) : ""), item: "soon:" + iv.id, node: null};
+    const node = guarded(() => i.node({where: "brief", section: "brief"}), () => null);
+    const top = node && node.querySelector(":scope > .todo-top");
+    const corner = top ? [...top.querySelectorAll(".chip, .state-word, :scope > .muted, .todo-state > .muted")].map((e) => txt(e.textContent).trim())
+      .filter((w) => w && w !== "Draft ready" && !/ done$/.test(w)) : [];
+    const title = node ? txt((node.querySelector(".card-title, h3") || {}).textContent).trim() : "";
+    // The quick answers say the question they are on: "4 quick answers · 1 of 4" under Today's own
+    // "1 of 4" read as the same count.
+    const q = node && node.classList.contains("quick-card") ? node.querySelector(".ask-q") : null;
+    return {iv: null, title: title || cap1(todoWhat(i)), corner: corner[0] || "", ask: q ? txt(q.textContent).trim() : "", item: node ? txt(node.getAttribute("data-item")) || null : null, node};
+  }
+  // The card's one way to do it, for Today: its filled button, else its first, drawn filled;
+  // the quick answers' question with its answers; else a way to the card in To do.
+  function queueAct(face, key) {
+    const node = face.node;
+    const ask = node && node.classList.contains("quick-card") ? node.querySelector(".ask-box") : null;
+    if (ask) return ask;
+    const acts = node ? node.querySelector(":scope > .card-actions") : null;
+    const b = acts ? acts.querySelector(":scope > .btn.primary") || acts.querySelector(":scope > .btn:not(.icon-only):not(.quiet):not(.link)") : null;
+    if (b) {
+      b.classList.remove("secondary");
+      b.classList.add("primary");
+      b.setAttribute("data-primary", "1");
+      return b;
+    }
+    return btn("Open it in To do", () => go("todo", {focus: true, item: face.item}), {kind: "primary", small: true, key: key});
+  }
   function renderBrief(where) {
     const b = obj(M().brief);
     const lead = briefSecs("lead")[0];
@@ -6133,6 +6211,17 @@
     const dayLine = fmtDay(todayIso()) + (b.date ? (dayDiff(b.date) === 0 ? " · this morning's brief" : " · brief from " + fmtDay(b.date)) : "");
     const tweak = tweakButton("brief", b, "Edit the brief");
     const bell = briefBell();
+    // The bell says what it is (the redesign, 2026-11-16: an unlabelled bell was found by nobody):
+    // "When it comes", as its row in Settings is named, the day and time in its name. A phone
+    // shows it as its icon beside the greeting, its name on a long press and to a screen reader.
+    if (bell) {
+      const st = briefState();
+      const sr = bell.querySelector(".sr-only");
+      const say = !st.setUp ? (st.asked ? ["Your brief: ", "Being set up", ""] : ["", "Get a brief", " each morning"]) : ["", "When it comes", ": " + briefWord(st)];
+      if (sr) sr.remove();
+      put(bell, say[0] ? h("span", {class: "sr-only"}, say[0]) : null, h("span", {class: "bell-word"}, say[1]), say[2] ? h("span", {class: "sr-only"}, say[2]) : null);
+      bell.classList.remove("icon-only");
+    }
     // The greeting heads the page; "Brief" is its name in the nav and for a screen reader.
     const wrap = h("section", {class: "sec brief-page", "aria-label": "Brief"},
       h("header", {class: "brief-head"},
@@ -6176,7 +6265,6 @@
       if (peopleItems().some((x) => x.id === id)) return ["p:" + id];
       return ["j:" + id];
     };
-    const stepKeys = (l) => itemKeys(obj(l).item, obj(l).section, obj(l).text);
     // A test or a closing day booked for an interview is a thing of its own: keyed as the
     // interview, the test due today led Today as "Second interview" and took that interview out
     // of Coming up (the release review, 2026-11-02).
@@ -6184,61 +6272,8 @@
     const need = todoBadge();
     // When something is due, in two words: "today", "2 days late", "Thursday".
     const dueWord = (day) => { const n = dayDiff(day); return n === null ? "" : n < 0 ? plural(-n, "day late", "days late") : n === 0 ? "today" : n === 1 ? "tomorrow" : fmtDay(day).split(/[ ,]/)[0]; };
-
-    // Today: the one thing to get right. An interview within the week leads, with its prep a
-    // tap away: a week is how long good prep takes, and a day's notice is too late for it (the
-    // maintainer: "what if we have an important interview that needs more than one day to
-    // prepare"). With none, the first of the steps leads, with the way to it.
-    const prepDays = Number(settingOf("prep_days", "7")) || 7;          // Settings: the person's own
-    const weekIv = interviewItems().filter((i) => { const n = dayDiff(dayOf(i.when)); return n !== null && n >= 0 && n <= prepDays && !isPast(i.when) && txt(i.status) !== "done"; })
-      .sort((x, y) => txt(x.when).localeCompare(txt(y.when)))[0];
-    const jobsShown = jobRows().some(jobToLook);
-    // A message marked sent here is done on the Brief too: its step, its due row and its
-    // person leave at once, as they do in To do and Contacts.
     const stoppedNow = stoppedPeople();
-    const sentStep = (id) => {
-      id = txt(id);
-      if (!id) return false;
-      const m = messageItems().find((x) => x.id === id);
-      if (m) return sentHere(m) || stoppedNow(txt(m.contact), txt(m.company));
-      const d = dueItems().find((x) => x.id === id);
-      if (d) return dueSentHere(d) || stoppedNow(dueContact(d), dueEmployer(d), txt(d.kind));
-      const p = peopleItems().find((x) => x.id === id);
-      // Sent, or put away here (Don't contact, closed, their employer turned down): gone from
-      // the Brief at once, as from every other screen, before Claude has caught up (the
-      // maintainer, 2026-11-05).
-      return !!p && (personSentHere(p) || personClosedHere(p) || stoppedNow(p.id, txt(p.employer)));
-    };
-    const stepsFrom = (next.length ? next : owed).filter((l) => !(jobsShown && !txt(obj(l).item) && txt(obj(l).section) === "jobs") && !sentStep(obj(l).item))
-      .map((l, i) => ({keys: stepKeys(l), node: () => briefRow(l, "next:" + i), l}));
-    const DUE_SKIP = new Set(["request_pending", "withdraw", "hidden"]);
-    // A step about someone says the one date it is about, as their To do card does; anything
-    // else says when it is due. What they asked for leads where the record says it.
-    const dueStepWhen = (d) => { const pw = dueWhen(d); return pw ? (dueAsk(d) ? pw.day : pw.text) : selfSetDue(d) && dayDiff(d.due) !== null && dayDiff(d.due) < 0 ? readyWords(d) : dueWord(d.due); };
-    const dueSteps = dueItems().filter((d) => !DUE_SKIP.has(txt(d.kind)) && dayDiff(d.due) !== null && !dueSentHere(d) && !dueOff(d)
-      && !stoppedNow(dueContact(d), dueEmployer(d), txt(d.kind)))
-      .sort((x, y) => txt(x.due).localeCompare(txt(y.due)))
-      .map((d) => ({keys: dueKeys(d), d, node: () => h("li", {}, h("a", {href: "#todo/" + d.id, class: "bp-text bp-link", "data-k": "bp-due:" + d.id, onclick: (e) => { e.preventDefault(); go("todo", {focus: true, item: d.id}); }},
-        h("span", {}, dueAsk(d) ? dueAsk(d).title : txt(d.title), h("span", {class: "bp-when"}, " · " + dueStepWhen(d)))))}));
-    let hero = null, heroKeys = [], facts = [], heroIv = null;
-    // Today is the one most pressing thing, with what matters about it beside it (the
-    // maintainer, 2026-11-02: "the most pressing task ... things that have rolled over or are
-    // urgent ... if there are multiple things today then the most important one like an
-    // interview or a call"). In order: what is happening today (an interview, a call, a test,
-    // anything else booked, by time); an interview tomorrow; an interview inside the prep
-    // window (Settings) with no prep yet; what has rolled over (a reply someone is waiting on
-    // first, then the longest late); what is due today; that interview with its prep ready;
-    // the brief's first step. It can be in Next three too.
-    const upAt = (u) => (txt(u.start) ? tms(u.start) : null) ?? (tms(txt(u.day) + "T23:59:00") || Infinity);
-    const KIND_RANK = {interview: 0, call: 1, test: 2, deadline: 3, event: 4};
-    const todayUp = upcomingItems().filter((u) => txt(u.day) === todayIso() && !(txt(u.end) && isPast(u.end)))
-      .sort((x, y) => (KIND_RANK[txt(x.kind)] ?? 5) - (KIND_RANK[txt(y.kind)] ?? 5) || upAt(x) - upAt(y));
-    const ivOf = (u) => txt(obj(u.go).to) === "interviews" && (txt(u.kind) === "interview" || !txt(u.kind)) ? interviewItems().find((x) => x.id === txt(obj(u.go).item)) : null;
     const whoOf = (id) => (isPerson(txt(id)) ? personById(id) : null);
-    const lateSteps = dueSteps.filter((x) => (dayDiff(x.d.due) ?? 0) < 0)
-      .sort((x, y) => (txt(x.d.kind) === "reply" ? 0 : 1) - (txt(y.d.kind) === "reply" ? 0 : 1) || txt(x.d.due).localeCompare(txt(y.d.due)));
-    const todaySteps = dueSteps.filter((x) => dayDiff(x.d.due) === 0);
-    const tomorrowIv = weekIv && dayDiff(dayOf(weekIv.when)) === 1 ? weekIv : null;
     // Facts about a person, in a few words each: who they are, where it stands, a draft.
     // What they last said comes first: "first wrote 4 Oct" and "30 days since it was due"
     // beside "30 days late" told the person nothing (the maintainer, 2026-11-03).
@@ -6257,6 +6292,7 @@
       if (p && messageItems().some((m) => txt(m.contact) === p.id)) out.push("A draft is ready to send");
       return out;
     };
+    let hero = null, heroKeys = [], facts = [], heroIv = null, heroCounts = false;
     const ivHero = (iv, whenWords) => {
       heroIv = iv;
       heroKeys = ["iv:" + iv.id];
@@ -6270,56 +6306,59 @@
           : btn("Prepare me", () => askPrep(iv), {kind: "primary", small: true, key: "bp-askprep:" + iv.id, wakes: "prep"}));
     };
     const ivWhen = (iv) => fmtDay(dayOf(iv.when)) + (timeOf(iv.when) ? ", " + timeOf(iv.when) : "") + " · " + lc1(relWhen(iv.when));
-    const dueHero = (x, when) => {
-      heroKeys = x.keys;
-      const pid = x.keys.find((k) => k.startsWith("p:"));
-      const who = pid ? whoOf(pid.slice(2)) : null;
-      // Never a fact the title already says ("Fernhill Freight" beside "Follow up with Fernhill
-      // Freight", the walk-through, 2026-11-02).
-      facts = personFacts(who, x.d).filter((f) => f !== "A draft is ready to send" && !txt(x.d.title).toLowerCase().includes(txt(f).toLowerCase()));
-      // A draft ready for them is where the work is: "Open Wren" led to their page, which has no
-      // draft on it (the walk-through, 2026-11-02).
-      const draft = who ? messageItems().find((m) => txt(m.contact) === who.id) : null;
-      // What they asked for leads, and the button makes it (the walk-through, 2026-11-03:
-      // "Reply to Juno" and "Open Juno" over a request for a CV).
-      const asked = !draft ? dueAsk(x.d) : null;
-      return h("div", {class: "bp-iv"},
-        h("p", {class: "bp-iv-when"}, when),
-        h("p", {class: "bp-iv-what"}, asked ? asked.title : inlineMd(txt(x.d.title))),
-        asked && asked.ask.doc ? askBtn(asked.p, asked.ask, "bp-first") :
-        btn(draft ? "See the draft" : who ? "Open " + txt(who.first_name) : "Open in To do",
-          () => (draft ? seeDraft(draft) : who ? openDetail("person", who.id) : go("todo", {focus: true, item: x.d.id})), {kind: "primary", small: true, key: "bp-first"}));
+
+    // Today and Next are To do's own list in its own order (todoQueue): Today its first card,
+    // with that card's own button, and Next the three after it, each in the card's own words
+    // (the redesign, 2026-11-16). What To do counts among today's things is numbered, Today
+    // first: "1 of 4" over Today, 2, 3 and 4 down Next, the same four To do's badge says.
+    const queue = todoQueue();
+    const faces = new Map();
+    const faceOf = (i) => { if (!faces.has(i)) faces.set(i, queueFace(i)); return faces.get(i); };
+    const counted = (i) => TODAY_BANDS.has(i.band) && !!i.counts;
+    // The messages to send, said by the first few names on them.
+    const sendNames = (n) => sendList().slice(0, n).map((m) => { const p = isPerson(txt(m.contact)) ? personById(txt(m.contact)) : null; return {cid: p ? p.id : "", name: txt(p ? p.first_name : m.first_name), at: whoAt(p ? p.first_name : m.first_name, p ? p.employer : m.employer)}; });
+    // What each card is about, so a panel after it leaves it out (each thing once): a dated
+    // row its person, interview and item; a person's card or a checklist every row; the
+    // messages to send the people they name; anything else the card itself.
+    const queueKeys = (i, face, named) => {
+      if (face.iv) return ["iv:" + face.iv.id];
+      const ds = i.ds || (i.d ? [i.d] : arr(i.rows).map((r) => r.d).filter(Boolean));
+      if (ds.length) return ds.flatMap(dueKeys);
+      if (i.key === "send") return arr(named).filter((x) => x.cid).map((x) => "p:" + x.cid);
+      if (i.item) return itemKeys(i.item);
+      return ["t:" + i.key];
     };
+    const upAt = (u) => (txt(u.start) ? tms(u.start) : null) ?? (tms(txt(u.day) + "T23:59:00") || Infinity);
+    const KIND_RANK = {interview: 0, call: 1, test: 2, deadline: 3, event: 4};
+    const todayUp = upcomingItems().filter((u) => txt(u.day) === todayIso() && !(txt(u.end) && isPast(u.end)))
+      .sort((x, y) => (KIND_RANK[txt(x.kind)] ?? 5) - (KIND_RANK[txt(y.kind)] ?? 5) || upAt(x) - upAt(y));
+    const first = queue[0];
     const upNow = todayUp[0];
-    if (upNow && ivOf(upNow)) {
-      hero = ivHero(ivOf(upNow), "Today" + (timeOf(upNow.start) ? ", " + timeOf(upNow.start) : ""));
-      heroKeys = heroKeys.concat(upKeys(upNow));
-    } else if (upNow) {
-      heroKeys = upKeys(upNow);
-      const g = obj(upNow.go);
-      const who = txt(g.to) === "contacts" ? whoOf(g.item) : null;
-      const ofIv = txt(g.to) === "interviews" ? interviewItems().find((x) => x.id === txt(g.item)) : null;
-      const open = who ? () => openDetail("person", who.id) : ofIv ? () => openDetail("interview", ofIv.id) : null;
-      facts = (txt(upNow.note) ? [txt(upNow.note)] : []).concat(who ? personFacts(who, dueItems().find((d) => txt(d.item) === who.id)) : []);
-      hero = h("div", {class: "bp-iv"},
-        h("p", {class: "bp-iv-when"}, h("span", {}, (txt(upNow.kind) === "test" ? "Due today" : "Today") + (timeOf(upNow.start) ? ", " + timeOf(upNow.start) : "")),
-          obj(upNow.cal).ics ? btn("", () => calSheet([upNow]), {kind: "quiet icon-only", small: true, icon: "cal-add", key: "bp-cal-hero", aria: "Add to your calendar: " + txt(upNow.title)}) : null),
-        h("p", {class: "bp-iv-what"}, h("bdi", {}, txt(upNow.title))),
-        open ? btn(who ? "Open " + txt(who.first_name) : "Open it", open, {kind: "primary", small: true, key: "bp-up:" + upNow.id}) : null);
-    } else if (tomorrowIv) {
-      hero = ivHero(tomorrowIv, ivWhen(tomorrowIv));
-    } else if (weekIv && !obj(weekIv.prep).updated) {
-      hero = ivHero(weekIv, ivWhen(weekIv));
-    } else if (lateSteps.length) {
-      // "5 days late", never "Rolled over · 5 days late"; a step about someone says "Overdue"
-      // and its one date beside it, in the facts (2026-11-03).
-      const ld = lateSteps[0].d;
-      hero = dueHero(lateSteps[0], selfSetDue(ld) ? readyWords(ld) : dueWhen(ld) ? "Overdue" : cap1(dueWord(ld.due)));
-    } else if (todaySteps.length) {
-      hero = dueHero(todaySteps[0], "Due today");
-    } else if (weekIv) {
-      hero = ivHero(weekIv, ivWhen(weekIv));
-    } else if (!stepsFrom.length && !dueSteps.length && !jobRows().length && (!txt(obj(M().setup).state) || txt(obj(M().setup).state) === "done")) {
+    if (first) {
+      const face = faceOf(first);
+      heroCounts = counted(first);
+      if (face.iv) hero = ivHero(face.iv, ivWhen(face.iv));
+      else {
+        const d = first.d || null;
+        const who = d ? whoOf(dueContact(d)) : null;
+        let named = [];
+        // Beside it, what matters about it: about someone, who they are and where it stands
+        // (never a fact its title already says); the messages to send, whose they are; any
+        // other card, the one line under its title.
+        if (who) facts = personFacts(who, d).filter((f) => f !== "A draft is ready to send" && !face.title.toLowerCase().includes(txt(f).toLowerCase()));
+        else if (first.key === "send") { named = sendNames(3); facts = named.map((x) => x.at).concat(sendList().length > 3 ? [(sendList().length - 3) + " more"] : []); }
+        else if (face.node && !face.node.classList.contains("quick-card")) {
+          const line = face.node.querySelector(":scope > .due-context, :scope > .hold-box .ask-q, :scope > p.small:not(.card-title)");
+          if (line && txt(line.textContent).trim()) facts = [txt(line.textContent).trim()];
+        }
+        heroKeys = queueKeys(first, face, named);
+        const kicker = face.ask && face.corner ? "Question " + face.corner : face.corner;
+        hero = h("div", {class: "bp-iv", "data-todo": first.key},
+          kicker ? h("p", {class: "bp-iv-when"}, kicker) : null,
+          h("p", {class: "bp-iv-what"}, face.title),
+          queueAct(face, "bp-first"));
+      }
+    } else if (!jobRows().length && (!txt(obj(M().setup).state) || txt(obj(M().setup).state) === "done")) {
       // Set up, with nothing found yet: the first search is the one thing to do, not five cards
       // saying "Nothing" (the walk-through, 2026-11-02).
       const busy = [...allWork()].some(([, w]) => w.kind === "search" && ACTIVE.has(w.status));
@@ -6327,58 +6366,54 @@
         h("p", {class: "bp-iv-when"}, busy ? "Searching now" : "First"),
         h("p", {class: "bp-iv-what"}, busy ? "Claude is finding your first jobs. They show here when the search is done." : "Find your first jobs"),
         busy ? null : btn("Start the search", () => askSearch(), {kind: "primary", small: true, key: "bp-first-search"}));
-    } else {
-      const first = stepsFrom[0];
-      if (first) {
-        heroKeys = first.keys;
-        const it = obj(first.l);
-        const pid = first.keys.find((k) => k.startsWith("p:"));
-        const person = pid ? whoOf(pid.slice(2)) : null;
-        facts = person ? personFacts(person, dueItems().find((d) => txt(d.item) === person.id)) : [];
-        const open = () => (person ? openDetail("person", person.id) : go(resolveSection(txt(it.section)) ? resolveSection(txt(it.section)).section : "todo", {focus: true, item: txt(it.item) || null}));
+    } else if (upNow) {
+      // Nothing on To do, and something booked today: that, by the time it starts, with the way
+      // to it.
+      heroKeys = upKeys(upNow);
+      const g = obj(upNow.go);
+      const ofIv = txt(g.to) === "interviews" && (txt(upNow.kind) === "interview" || !txt(upNow.kind)) ? interviewItems().find((x) => x.id === txt(g.item)) : null;
+      if (ofIv) {
+        hero = ivHero(ofIv, "Today" + (timeOf(upNow.start) ? ", " + timeOf(upNow.start) : ""));
+        heroKeys = heroKeys.concat(upKeys(upNow));
+      } else {
+        const who = txt(g.to) === "contacts" ? whoOf(g.item) : null;
+        const of = txt(g.to) === "interviews" ? interviewItems().find((x) => x.id === txt(g.item)) : null;
+        const open = who ? () => openDetail("person", who.id) : of ? () => openDetail("interview", of.id) : null;
+        facts = (txt(upNow.note) ? [txt(upNow.note)] : []).concat(who ? personFacts(who, dueItems().find((d) => txt(d.item) === who.id)) : []);
         hero = h("div", {class: "bp-iv"},
-          h("p", {class: "bp-iv-when"}, "First"),
-          h("p", {class: "bp-iv-what"}, inlineMd(txt(it.text))),
-          btn(person ? "Open " + txt(person.first_name) : "Open it", open, {kind: "primary", small: true, key: "bp-first"}));
+          h("p", {class: "bp-iv-when"}, h("span", {}, (txt(upNow.kind) === "test" ? "Due today" : "Today") + (timeOf(upNow.start) ? ", " + timeOf(upNow.start) : "")),
+            obj(upNow.cal).ics ? btn("", () => calSheet([upNow]), {kind: "quiet icon-only", small: true, icon: "cal-add", key: "bp-cal-hero", aria: "Add to your calendar: " + txt(upNow.title)}) : null),
+          h("p", {class: "bp-iv-what"}, h("bdi", {}, txt(upNow.title))),
+          open ? btn(who ? "Open " + txt(who.first_name) : "Open it", open, {kind: "primary", small: true, key: "bp-up:" + upNow.id}) : null);
       }
     }
 
-    // Next three: what to do next, the brief's steps first, then To do's, each once, and
-    // never Today's thing again.
-    const steps = [];
-    const isHero = (x) => x.keys.some((k) => heroKeys.includes(k));
-    const stepNode = (x) => {
-      const node = x.node();
-      // An interview a step names says when it is: the Brief never said Wednesday's phone screen
-      // was Wednesday at 13:00 (the walk-through, 2026-11-02).
-      // Only a step that is about the interview itself: a thank-you note owed after the first
-      // round was given the second round's day.
-      const ivk = x.d ? null : x.keys.find((k) => k.startsWith("iv:"));
-      const iv = ivk ? interviewItems().find((i) => i.id === ivk.slice(3)) : null;
-      if (iv && txt(iv.when) && !isPast(iv.when) && node && node.appendChild) {
-        // Inside the step's own words, as a due step's day is, never a column of its own.
-        const into = (node.querySelector && (node.querySelector(".bp-text > span:first-child") || node.querySelector(".bp-text, a"))) || node;
-        into.appendChild(h("span", {class: "bp-when"}, " \u00b7 " + fmtDay(dayOf(iv.when)) + (timeOf(iv.when) ? ", " + timeOf(iv.when) : "")));
-      }
-      return node;
-    };
     // A booked interview in Coming up's first rows is never taken from it by a step: the week
     // strip marked Wednesday while its list skipped Wednesday's phone screen, which "Read the
-    // prep" in Next three had claimed (the screen review, 2026-11-11). A step that is only that
-    // interview's prep is its row, said once there; a step of its own about it (a thank-you
-    // note after the last round) stays in Next three, and the row stays too.
+    // prep" in Next three had claimed (the screen review, 2026-11-11).
     const allUp = upcomingItems();
     const kept = new Set(allUp.filter((u) => !upKeys(u).some((k) => heroKeys.includes(k))).slice(0, 4).map(upKeys).flat().filter((k) => k.startsWith("iv:")));
-    const isPrepOf = (x) => x.keys.some((k) => kept.has(k)) && (x.d ? ["prep", "interview"].includes(txt(x.d.kind)) && !dueAsk(x.d) : x.keys.every((k) => kept.has(k)));
-    // Today's thing is never said again under it: Next was "Reply to Juno" twice over the
-    // same reply (the walk-through, 2026-11-03).
-    const pool = stepsFrom.concat(dueSteps);
-    for (const x of pool.filter((y) => !isHero(y))) {
-      if (steps.length >= 3) break;
-      if (!isFree(x.keys) || isPrepOf(x)) continue;
-      take(x.keys.filter((k) => !kept.has(k)));
-      steps.push(stepNode(x));
-    }
+    // Next: the three after Today, in To do's order, each opening its own card in To do, where
+    // its button is. What To do counts today carries its number; what is not due yet its day.
+    let place = heroCounts ? 1 : 0;
+    let stepsCounted = 0;
+    const steps = (first ? queue.slice(1, 4) : []).map((i) => {
+      const face = faceOf(i);
+      const n = counted(i) ? ++place : 0;
+      if (n) stepsCounted++;
+      let detail = face.ask || face.corner;
+      let named = [];
+      if (i.key === "send") {
+        const all = sendList().length;
+        named = sendNames(2);
+        detail = named.map((x) => x.name).join(all > 2 ? ", " : " and ") + (all > 2 ? " and " + plural(all - 2, "more", "more") : "");
+      }
+      take(queueKeys(i, face, named).filter((k) => !kept.has(k)));
+      const to = face.item || null;
+      return h("li", {"data-n": n ? String(n) : null, class: n ? null : "bp-step-soon"},
+        h("a", {href: "#todo" + (to ? "/" + to : ""), class: "bp-text bp-link", "data-k": "bp-next:" + i.key, onclick: (e) => { e.preventDefault(); go("todo", {focus: true, item: to}); }},
+          h("span", {}, face.title, detail ? h("span", {class: "bp-when"}, " · " + detail) : null)));
+    });
     take(heroKeys);
     // Coming up: the next things booked that no panel above shows.
     const upCards = allUp.filter((u) => isFree(upKeys(u))).slice(0, 4);
@@ -6420,10 +6455,11 @@
     // and the card takes the width (Today's right half sat empty, 2026-11-02).
     const factList = facts.length ? h("ul", {class: "bp-lead bp-lead-list bp-facts", "data-fit": "1,3,1"}, facts.slice(0, 3).map((f) => h("li", {}, f))) : null;
     const side = leadList || ready || factList ? h("div", {class: "bp-today-side"}, factList, leadList, ready) : null;
+    // Its count is To do's own (todoBadge), said over the first of them: "1 of 4".
     put(grid, briefPanel("today", "Today", [hero,
       hero ? side : leadList || (legacy.length ? briefItems(legacy, "legacy", 5) : null),
       !hero && !parts.length && !legacy.length ? h("p", {class: "muted"}, "Nothing booked or owed today.") : null],
-      null, {icon: "todo", w: 4, m: 2}));
+      null, {icon: "todo", w: 4, m: 2, count: heroCounts && need > 1 ? "1 of " + need : null}));
     // Booked things only: a follow-up 45 days late is To do's, never Coming up's, and the line
     // says what the strip shows (the audit, 2026-11-03).
     put(grid, briefPanel("upcoming", "Coming up", [weekStrip(allUp), upCards.length ? (() => { const seen = new Set(); return h("ul", {class: "plain bp-up", "data-fit": "2,2"}, upCards.map((u) => upRow(u, "brief", seen))); })()
@@ -6432,11 +6468,12 @@
       [navLink("interviews", allUp.length > 1 && allUp.length > upCards.length ? "All " + allUp.length + " coming up" : "Coming up"),
         h("button", {type: "button", class: "btn link", "data-k": "bp-up-add", onclick: () => askAddSomething()}, "Add something")],
       {icon: "interviews", w: 4, m: 2}));
-    put(grid, briefPanel("next", steps.length === 3 ? "Next three" : "Next", steps.length ? h("ol", {class: "plain bp-list bp-steps", "data-fit": "3,3,2"}, steps) : h("p", {class: "muted"}, "Nothing else needs you today."),
-      // A count only where To do holds more than the panel shows: To do counts its cards, a
-      // checklist of people as one, so "All 2 in To do" sat under three steps (the maintainer's
-      // page, 2026-11-10).
-      navLink("todo", need > steps.length ? "All " + need + " in To do" : steps.length ? "To do" : "All of it in To do"), {icon: "k-update", w: 4}));
+    // A count only where To do holds more today than the Brief shows of it, Today's included:
+    // To do counts its cards, a checklist of people as one, so "All 2 in To do" sat under three
+    // steps (the maintainer's page, 2026-11-10).
+    const shownToday = (heroCounts ? 1 : 0) + stepsCounted;
+    put(grid, briefPanel("next", steps.length === 3 ? "Next three" : "Next", steps.length ? h("ol", {class: "plain bp-list bp-steps", "data-fit": "3,3,2"}, steps) : h("p", {class: "muted"}, first ? "Nothing else on To do." : "Nothing else needs you today."),
+      navLink("todo", need > shownToday && need > steps.length ? "All " + need + " in To do" : steps.length ? "To do" : "All of it in To do"), {icon: "k-update", w: 4}));
     put(grid, briefPanel("people", "Waiting on you", ppl.length ? h("ul", {class: "plain bp-list bp-people", "data-fit": "2,3,3"}, ppl.map((p) => {
       const move = txt(p.next_action) && txt(p.next_action).length <= 28 ? txt(p.next_action) : (BRIEF_PERSON_WORD[txt(p.status)] || "Follow up");
       return h("li", {}, h("a", {href: "#contacts/" + p.id, class: "bp-text bp-link", "data-k": "bp-person:" + p.id, onclick: (e) => { e.preventDefault(); openDetail("person", p.id); }},

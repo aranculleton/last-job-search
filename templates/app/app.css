@@ -1842,9 +1842,12 @@ body.has-fab .shell { padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-b
   html.brief-short .bp-bottom .foot-line.open { flex: 1 1 auto; }
   html.brief-short .bp-bottom:has(.foot-line.open) .bp-tip { display: none; }
 }
-.bpanel { --pc: var(--accent); --pcbg: var(--accent-soft); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; box-shadow: var(--shadow); }
-.bp-today { --pc: var(--mark); --pcbg: var(--accent-soft); background: linear-gradient(135deg, var(--accent-soft), var(--surface) 70%); }
-.bp-next { --pc: var(--st-held); --pcbg: var(--st-held-bg); }
+.bpanel { --pc: var(--accent); --pcbg: var(--accent-soft); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; box-shadow: var(--shadow-card); }
+/* Today leads (the redesign, 2026-11-16): a flat clay tint, never a gradient behind its words, so
+   every word on it has one background its contrast is measured against; the one thing to do
+   on white inside it. Next carries the same clay: its numbers go on from Today's "1 of 4". */
+.bp-today { --pc: var(--mark-ink); --pcbg: var(--surface); background: var(--accent-soft); }
+.bp-next { --pc: var(--mark-ink); --pcbg: var(--accent-soft); }
 .bp-people { --pc: var(--st-running); --pcbg: var(--st-running-bg); }
 .bp-jobs { --pc: var(--st-done); --pcbg: var(--st-done-bg); }
 .bp-news { --pc: var(--st-overdue); --pcbg: var(--st-overdue-bg); }
@@ -1909,8 +1912,10 @@ body.has-fab .shell { padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-b
 .paren > a { white-space: normal; }
 .bp-go { flex: none; font-size: var(--t-sm); }
 .bp-steps li { align-items: baseline; }
-.bp-steps { counter-reset: step; }
-.bp-steps li::before { counter-increment: step; content: counter(step); flex: none; width: 20px; height: 20px; border-radius: 50%; color: var(--pc); background: var(--pcbg); font-size: 0.75rem; font-weight: 700; display: inline-grid; place-items: center; }
+/* Each step's number is its place among To do's things for today (data-n), Today the first; one
+   not due yet has a small dot in its place. */
+.bp-steps li::before { content: attr(data-n); flex: none; width: 20px; height: 20px; border-radius: 50%; color: var(--pc); background: var(--pcbg); font-size: 0.75rem; font-weight: 700; display: inline-grid; place-items: center; }
+.bp-steps li.bp-step-soon::before { content: ""; width: 6px; height: 6px; margin-inline: 8px; background: var(--line-strong); align-self: center; }
 .bp-people .bp-link, .bp-jobs .bp-link { display: flex; align-items: center; gap: 8px; -webkit-line-clamp: unset; }
 .bp-avatar { flex: none; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-size: var(--t-sm); font-weight: 600; color: var(--pc); background: var(--pcbg); }
 .bp-who, .bp-jobs .bp-link { display: flex; flex-direction: column; min-width: 0; flex: 1; align-items: flex-start; gap: 0; }
@@ -1973,11 +1978,13 @@ body.has-fab .shell { padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-b
 .bp-n { font-size: 1.375rem; font-weight: 700; line-height: 1.15; font-variant-numeric: tabular-nums; }
 .bp-l { font-size: var(--t-sm); color: var(--muted); overflow-wrap: normal; word-break: normal; hyphens: none; }
 .bp-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: auto; padding-top: 8px; font-size: var(--t-sm); }
+/* The one thing to do: when it is in clay (never the error red: "Ready to send" is good news),
+   what it is in the Brief's largest words after the greeting, and its one filled button. */
 .bp-iv { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 12px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-sm); }
 .bp-iv p { margin: 0; }
-.bp-iv-when { font-size: var(--t-sm); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--st-failed); }
-.bp-iv-what { font-weight: 600; font-size: 1rem; }
-.bp-iv .btn { margin-top: 4px; }
+.bp-iv-when { font-size: var(--t-sm); font-weight: 600; color: var(--mark-ink); }
+.bp-iv-what { font-weight: 700; font-size: var(--t-lg); line-height: 1.3; letter-spacing: -0.01em; }
+.bp-iv .btn { margin-top: 8px; }
 /* The top row, Today and Coming up, is as tall as what they hold: never cut. */
 @media (min-width: 760px) { .bpanel.bp-today, .bpanel.bp-upcoming, .bpanel.bp-news { max-height: none; } }
 /* A news point: what happened, what to do with it, where it is from. Never cut by the panel's
@@ -2383,6 +2390,13 @@ ul.bp-news { max-width: 80ch; }
 .bp-iv-when { display: flex; align-items: center; justify-content: space-between; gap: 8px; text-transform: none; letter-spacing: 0; }
 /* A phone shows two of the likely questions; the prep holds the rest. */
 @media (max-width: 759px) { .bp-qs > li:nth-child(n+3) { display: none; } }
+/* Today leads and the rest stand back (the redesign, 2026-11-16): only Today's icon carries a
+   colour, every other panel's the quiet grey, so the panels read as equals under it; News and
+   Your progress, read last, sit on the page itself with their edge alone. */
+.bpanel:not(.bp-today) > .bp-title .bp-ic { color: var(--muted); background: var(--sunk); }
+.bp-today > .bp-title .bp-count { color: var(--mark-ink); }
+.bpanel.bp-news, .bpanel.bp-numbers { background: transparent; box-shadow: none; }
+.bp-news > .bp-title, .bp-numbers > .bp-title { color: var(--muted); }
 .cal-file { display: grid; gap: 4px; }
 .cal-file .hint { margin: 0; }
 
