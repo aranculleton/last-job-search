@@ -62,7 +62,7 @@ def test_the_small_questions_are_one_card_among_the_first_five_one_at_a_time(run
     assert q1["q"] == "Have you used Looker?" and q1["buttons"] == ["Yes, I have", "No"], q1
     # No card of its own for any of them, nor the checklist "Did these notes go?".
     text = got["after"][0]["text"]
-    for gone in ("Did these notes go?", "Two answers about Quayside Foods"):
+    for gone in ("Did these notes go?", "Did you apply to Quayside Foods?"):
         assert text.count(gone) <= (1 if gone in q1["q"] else 0), (gone, text)
     a = [x for x in got["actions"] if x["item"] == "q-larkspur-data-looker"]
     assert a and a[-1]["action"] == "consent.yes", got["actions"]

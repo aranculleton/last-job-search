@@ -416,7 +416,10 @@ def test_every_section_full_shows_its_items_in_plain_words(run, pages):
     assert "1 closed: Show" in jobs and "This posting has closed." not in jobs and "41 left out by the search" in jobs
     assert "Tamsin has put your name forward at Copperleaf Pay" in jobs
     drafts = r["drafts"]["text"]
-    assert "Two answers about Quayside Foods" in drafts, "a draft's question is on its card, ahead of its other notes"
+    # Asked as one plain question since the redesign of 2026-11-16: "Two answers about Quayside
+    # Foods: Your phone said applied at 09:12 ... Which is right?" read as an error.
+    assert "Did you apply to Quayside Foods?" in drafts, "a draft's question is on its card, ahead of its other notes"
+    assert "Which is right?" not in drafts and "Your phone said applied" not in drafts, "two devices that disagreed are one plain question"
     assert "Made for Tamsin, who asked for it." in drafts and "I sent it to Tamsin" in drafts
     assert "put your name forward here" not in drafts, "the referrer's own resume carries no hold"
     # Drafts are cards in Jobs' one list, in their jobs' places: its switch, To apply and

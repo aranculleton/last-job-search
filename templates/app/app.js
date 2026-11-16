@@ -663,7 +663,24 @@
   const tz = () => txt(person().time_zone) || undefined;
   const jobsBlock = () => obj(M().jobs);
   const jobRows = () => arr(jobsBlock().rows);
-  const needsItems = () => arr(M().needs_you);
+  // Two devices that said different things about an application are one plain question, "Did
+  // you apply to Quayside Foods?" with "Yes, I applied" and "Not yet": "Two answers about
+  // Quayside Foods: Your phone said applied at 09:12 ... Which is right?" read as an error
+  // (the redesign, 2026-11-16). Only the words change: the id, the rev and each answer's
+  // action (conflict.applied, conflict.not_yet) are the engine's, sent as they were. One copy
+  // a need, so a card drawn twice holds the same object.
+  const plainKept = new WeakMap();
+  function plainNeed(n) {
+    if (!n || typeof n !== "object" || txt(n.kind) !== "conflict" || !txt(obj(n.about).company)) return n;
+    const ops = arr(n.options);
+    const yes = ops.find((op) => txt(obj(op).action) === "conflict.applied"), no = ops.find((op) => txt(obj(op).action) === "conflict.not_yet");
+    if (!yes || !no) return n;
+    if (!plainKept.has(n)) plainKept.set(n, Object.assign({}, n, {title: "Did you apply to " + txt(n.about.company) + "?",
+      body: "Your phone and your laptop said different things.",
+      options: ops.map((op) => (op === yes ? Object.assign({}, op, {label: "Yes, I applied"}) : op === no ? Object.assign({}, op, {label: "Not yet"}) : op))}));
+    return plainKept.get(n);
+  }
+  const needsItems = () => arr(M().needs_you).map(plainNeed);
   const readyItems = () => arr(M().ready);
   const messageItems = () => arr(M().messages);
   const dueItems = () => arr(M().due);

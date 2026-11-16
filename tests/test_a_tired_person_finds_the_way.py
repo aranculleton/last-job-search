@@ -170,7 +170,9 @@ def test_a_draft_that_needs_a_fix_says_so_on_its_card_with_its_state_by_the_titl
     # the card, and Claude makes it again once its question is answered.
     # The check's own finding leads, capitalised, since the UX review of 2026-11-10 (U-19).
     assert "The CV runs to a second page by two lines" in card and "Make it again" not in card, card
-    assert "Two answers about Quayside Foods" in card, "its question stays first"
+    # Two devices that disagreed are asked as one plain question since the redesign of
+    # 2026-11-16 ("Two answers about Quayside Foods ... Which is right?" read as an error).
+    assert "Did you apply to Quayside Foods?" in card and "Two answers about" not in card, "its question stays first, in plain words"
     assert r["onRow"] or (r["atStart"] and r["gap"] <= 8), ("the state stays by the title, never pushed off to the right below it", r)
 
 
