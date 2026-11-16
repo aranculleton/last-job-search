@@ -170,8 +170,11 @@ neither the steps say all three in one line. Never pass on a Mac's keys to anyon
    computer, in that chat's own browser: being signed in beside the page did not reach it, seen
    twice on 2026-11-12, so the two are treated as separate. A chat on the computer that finds
    LinkedIn signed out opens the sign-in page in its own browser with its panel up and puts one
-   card on To do, "Sign in to LinkedIn once, in the chat on <the computer>", whose one button
-   opens that chat; no LinkedIn link is offered anywhere else. Check: a chat already at work on the computer says what
+   card on To do, "Sign in to LinkedIn once, in the chat on <the computer>", which names that
+   chat and gives the steps to open it from the list of chats in the Claude app there
+   (`computer-chat-signin`): its own link opens it without its browser (2026-11-16). One card
+   covers every read waiting on that sign-in, and its steps keep the sign-in too; no LinkedIn
+   link is offered anywhere else. Check: a chat already at work on the computer says what
    its own tab shows in its heartbeat (`computer.py beat --linkedin in`), and opens nothing
    extra for it; who looks in each case is the table below. No chat can read whether the
    browser keeps sign-ins, so it is judged by its effect: a sign-in lost by the next look, one

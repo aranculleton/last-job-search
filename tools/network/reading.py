@@ -1568,10 +1568,10 @@ def computer_signin_steps(wid: str) -> list:
     return [
         f"open {SIGNIN_URL} in Claude's browser, in a tab of its own, and show Claude's browser "
         "in this chat (its panel up), so the sign-in page is in front of them when they open "
-        "this chat from their page",
+        "this chat in the Claude app on this computer",
         f"put it on their page, never in this chat: python3 tools/app.py done \"$D\" --work {wid} "
         "--chat <your id> --kind computer --signin linkedin --question \"LinkedIn is signed out "
-        "in Claude's browser.\" and send its batch (its card's one button opens this chat)",
+        "in Claude's browser.\" and send its batch (its card names this chat and how to open it)",
         HEARTBEAT_OUT,
         "wait for it one wait at a time: ArtifactData query of the page's work into \"$D\" (as "
         f"it is now), then python3 tools/computer.py signin-wait \"$D\" --work {wid} (a Bash "

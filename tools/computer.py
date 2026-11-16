@@ -283,7 +283,8 @@ SIGNED_OUT_ON_PAGE = (
     "LinkedIn signed out (now, or at any profile later) goes on their page, and only there: "
     "do what reading.py prints for it, which opens LinkedIn's sign-in page in this chat's own "
     "browser with its panel up (a sign-in beside their page does not reach it) and puts one "
-    "Sign in to LinkedIn card on their To do, whose one button opens this chat "
+    "Sign in to LinkedIn card on their To do, which names this chat and says how to open it "
+    "in the Claude app on this computer "
     "(python3 tools/app.py done \"$D\" --work <its id> --chat <your id> --kind computer --signin "
     "linkedin --question \"LinkedIn is signed out in Claude's browser.\") and leaves the read "
     "waiting on that card, queued for their Done there or their sign-in in this chat, either of "
@@ -293,19 +294,55 @@ SIGNED_OUT_ON_PAGE = (
 
 # LinkedIn signed out where a chat on the computer reads: the sign-in is made in that chat's own
 # browser, which it has opened on LinkedIn's sign-in page with its browser panel up, and the
-# card's one button opens that chat. Signed in in the browser beside the page, the person was
+# card names that chat. Signed in in the browser beside the page, the person was
 # still signed out in the chat on their Mac, twice, and signed in again there (the maintainer,
 # 2026-11-12): the two are treated as separate, and no LinkedIn link is offered anywhere else.
+#
+# That chat is named, never linked: its claude.ai link opens a view of it whose browser is not
+# available (claude_surfaces `computer-chat-signin`), so "tap Open the chat" led to a sign-in
+# that could not happen; opened from the list of chats in the Claude app on the computer, the
+# same chat had its browser and the sign-in worked (issues 285 and 286, 2026-11-16). No link
+# opens a chat in the desktop app (`deep-links`). The steps are the registry's (SIGNIN_STEPS),
+# keeping the sign-in among them, so one card asks for the sign-in and for keeping it.
 SIGNIN_IN_CHAT_TITLE = "Sign in to LinkedIn once, in the chat on {where}"
-SIGNIN_IN_CHAT = ("Sign in to LinkedIn once, in the chat on {where}: tap Open the chat, then sign "
-                  "in on the page already open there. Being signed in beside your page does not "
-                  "count.")
+SIGNIN_IN_CHAT = ("Sign in to LinkedIn once, in the chat{chat} on {where}. Open that chat from "
+                  "the list of chats in the Claude app there: a link to it opens it without "
+                  "Claude's browser. Being signed in beside your page does not count.")
+# Kept for a person's own tests that name it: the card has no such button any more.
 OPEN_THE_CHAT = "Open the chat"
+# The card's one button, the work's own and the computer's alike (the page's signinBox).
+SIGNED_IN_LABEL = "I've signed in"
+# The registry entry whose page steps the card shows, for the computer's own system.
+SIGNIN_STEPS = "computer-chat-signin"
 
 
-def signin_in_chat(computer: str) -> str:
-    """The words for a sign-in in the chat on the person's computer, by its own name."""
-    return SIGNIN_IN_CHAT.format(where=_yours(computer, start=False))
+def signin_in_chat(computer: str, chat_title: str = "") -> str:
+    """The words for a sign-in in the chat on the person's computer, by its own name and the
+    chat's, as their list of chats shows it (chat_title)."""
+    title = " ".join(str(chat_title or "").split())
+    return SIGNIN_IN_CHAT.format(where=_yours(computer, start=False),
+                                 chat=f" “{title}”" if title else "")
+
+
+def signin_steps(system: str = "") -> list:
+    """The numbered page steps of a sign-in in the chat on the computer, for its own system
+    (darwin, win32, linux; "" says all three)."""
+    import claude_surfaces
+    eid = claude_surfaces.for_system(SIGNIN_STEPS, system)
+    return [ln for ln in claude_surfaces.steps(eid, page=True) if ln[:1].isdigit()]
+
+
+def chat_title(db: dict, chat: str) -> str:
+    """The title a chat the app started on the computer was given (SESSION_TITLE), from the
+    work it was started for, or "" where it is not known. A chat that took more work after
+    its first (`own`: it claimed it) keeps the first one's title."""
+    for doc in (db.get("work") or {}).values():
+        d = (doc or {}).get("data") or {}
+        for s in [d.get("computer_session")] + list(d.get("computer_earlier") or []):
+            if isinstance(s, dict) and s.get("id") == chat and not s.get("own") \
+                    and s.get("computer"):
+                return session_title(d.get("title") or d.get("kind"), s["computer"])
+    return ""
 
 
 def waiting_words(titles: list) -> str:
@@ -2126,28 +2163,30 @@ def state(db: dict, now: dt.datetime, envs=None, version: str = "",
         beat_.get("keep_cookies") != "on" and not keep_said
     if keep_ask and key == "signin_unsure":
         key = "signed_out"
-    say = ("keep_signin" if key == "signed_out" and keep_ask else
-           "signed_out_lost" if key == "signed_out" and lost else
-           "starter_" + asks if key == "starter_waits" and asks else key)
     # Work waiting on its own Sign in to LinkedIn card: asked to keep the sign-in first, at
     # once, on a card of its own above it (the page holds the sign-in card back till then).
     on_signin = [d for d in ((doc or {}).get("data") or {} for doc in
                              (db.get("work") or {}).values()) if waits_on_signin(d)]
+    # The chat on the computer that met the sign-out, while it is still there: the card names
+    # it, where LinkedIn's sign-in is already open in its own browser.
+    signin_chat = ""
+    if key == "signed_out":
+        for d in [d for _, d in held] + on_signin:
+            sess = d.get("computer_session") if isinstance(d.get("computer_session"), dict) else {}
+            if sess.get("id") and not sess.get("archived_at"):
+                signin_chat = str(sess["id"])
+                break
+    # Signed in in a chat there, the card's steps keep the sign-in too (signin_steps): no
+    # card of its own first, which asked for the same sign-in again in other words (issue 285).
+    say = ("keep_signin" if key == "signed_out" and keep_ask and not signin_chat else
+           "signed_out_lost" if key == "signed_out" and lost else
+           "starter_" + asks if key == "starter_waits" and asks else key)
     if say == "keep_signin":
         asked += [(str(d.get("asked_at") or ""), str(d.get("title") or "").strip())
                   for d in on_signin]
     if key == "working" and all(not_come(db, wid, sid, now) for wid, sid in w["started"].items()):
         # A chat started there that has not come yet (local review 9): never "reading now".
         say = "starting"
-    # The chat on the computer that met the sign-out, while it is still there: the card opens
-    # it, where LinkedIn's sign-in is already open in its own browser.
-    signin_chat = ""
-    if key == "signed_out" and say != "keep_signin":
-        for d in [d for _, d in held] + on_signin:
-            sess = d.get("computer_session") if isinstance(d.get("computer_session"), dict) else {}
-            if sess.get("id") and not sess.get("archived_at"):
-                signin_chat = str(sess["id"])
-                break
     act = None if signin_chat else ACTION.get(say)
     action = None
     system = system_seen(db, envs, folders)
@@ -2173,14 +2212,19 @@ def state(db: dict, now: dt.datetime, envs=None, version: str = "",
             # The starter's own ask: its card at once, work waiting or not (setup connects the
             # computer before any), since nothing moves until the person does it.
             "asks": asks,
-            # The chat on the computer to sign in in (signed out there), by its own id.
+            # The chat on the computer to sign in in (signed out there), by its own id, and by
+            # the title the person's list of chats shows it under (chat_title).
             "signin_chat": signin_chat,
+            "signin_title": chat_title(db, signin_chat) if signin_chat else "",
             # The line of work queued behind a chat at work there ("Waiting its turn on ...").
             "queued_line": queued_line,
-            "card": needs_them and (bool(asks) or (bool(w["queued"]) and waited >= CARD_AFTER_S) or
-                                    (bool(held) and held_waited >= CARD_AFTER_S) or
-                                    (say == "keep_signin" and bool(w["queued"] or held or
-                                                                   on_signin))),
+            # A read already waiting on its own sign-in card is the one card for that sign-in:
+            # every read queued or held behind it waits on the same one (issue 285: a second
+            # card asked for it again).
+            "card": needs_them and not (say in ("signed_out", "signed_out_lost") and on_signin)
+                    and (bool(asks) or (bool(w["queued"]) and waited >= CARD_AFTER_S) or
+                         (bool(held) and held_waited >= CARD_AFTER_S) or
+                         (say == "keep_signin" and bool(w["queued"] or held or on_signin))),
             # The chat the person approves in, linked from the card (card): "open that chat"
             # named no chat and gave no way there (the local review, 2026-11-11, 7).
             "starter": ({"chat": str(rec.get("chat") or ""), "title": STARTER_TITLE}
@@ -2308,12 +2352,20 @@ def card(st: dict) -> dict | None:
         # (code.claude.com/docs/en/cloud-environments, "Link output back to the session").
         item["open"] = {"label": "Open it", "url": CHAT_URL + st["starter"]["chat"]}
     if st.get("signin_chat"):
-        # Signed out in the chat on the computer: its one button opens that chat, where the
-        # sign-in page is open in its own browser; nothing opens LinkedIn anywhere else.
+        # Signed out in the chat on the computer: the card names that chat, where the sign-in
+        # page is open in its own browser, and gives the steps to open it in the Claude app
+        # there. Never its link, which opens it without that browser (issue 286), and nothing
+        # opens LinkedIn anywhere else.
+        import claude_surfaces
         where = _yours(st.get("computer") or "", start=False)
+        item.pop("open", None)
         item.update(title=SIGNIN_IN_CHAT_TITLE.format(where=where),
-                    body=signin_in_chat(st.get("computer") or ""), steps=[], options=[],
-                    open={"label": OPEN_THE_CHAT, "url": CHAT_URL + st["signin_chat"]})
+                    body=signin_in_chat(st.get("computer") or "", st.get("signin_title") or ""),
+                    steps=signin_steps(st.get("system") or ""),
+                    options=[{"label": SIGNED_IN_LABEL, "action": "setup.done"}])
+        e = claude_surfaces.entry(claude_surfaces.for_system(SIGNIN_STEPS, st.get("system") or ""))
+        item["link"] = claude_surfaces.official(e)
+        item["checked"] = e.get("verified_on", "")
         item["rev"] = app_model.rev_of("computer", st["state"], item["body"], st["signin_chat"])
     if st.get("action"):
         import claude_surfaces
@@ -2384,7 +2436,7 @@ def session_prompt(wid: str, title: str, url: str, copy: str) -> str:
         "so the sign-in page is in front of them when they open this chat; put it on their page "
         "with python3 tools/app.py done \"$D\" --work <its id> --chat <your id> --kind computer "
         "--signin linkedin --question \"LinkedIn is signed out in Claude's browser.\" and send "
-        "its batch (one card on their To do, whose one button opens this chat, where they sign "
+        "its batch (one card on their To do, which names this chat, where they sign "
         "in, in this chat's own browser: a sign-in beside their page did not reach it). The read "
         "now waits on that card, queued for their Done there or their sign-in here, either of "
         "which sends it on; it is never kept in this conversation instead, and nothing of the "
