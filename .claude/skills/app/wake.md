@@ -195,13 +195,14 @@ Then, the answer out, the work lands on master without holding this chat (the la
 took minutes and the page waited on every tap, 2026-10-29), once a batch: `--end` starts
 `python3 tools/land.py --detach` (it saves, commits, merges master and runs
 `./tools/ci_local.sh --quick`, then opens the pull request and merges it itself) in a
-process of its own, from an ordinary call that returns at once, so its end wakes no chat and
-the hook never holds a turn while it runs (each background save cost the listener a turn or
+process of its own, from an ordinary call that returns in seconds, once the batch's work is
+committed and pushed to this chat's branch (so the cloud's own check at the end of the turn
+finds nothing unsaved), so its end wakes no chat and the hook never holds a turn while it runs (each background save cost the listener a turn or
 two, 2026-11-05). Never start a save after each message, and never `run_in_background` one
 here. What it could not do on GitHub is said once by the next `app.py reads`: make those
 calls then (CLAUDE.md, "Saving"). Not green or a conflict: the work waits where it is, and
 the next landing brings it in; say nothing but a line it gives for the person. Outside a
 wake (a chat the person writes in), `python3 tools/land.py --detach --message "<what
-changed>"`, as CLAUDE.md says: it returns at once and its end wakes no chat, so clear any
+changed>"`, as CLAUDE.md says: it returns in seconds and its end wakes no chat, so clear any
 "Saving your work" there and then (`python3 tools/app.py busy "$D" --done`), the save going
 on by itself. Run in the background, its end cost the chat a turn of its whole history.

@@ -19,8 +19,10 @@ saved and pushed to this chat's own branch in seconds, with no check, no merge a
 request, so the next landing anywhere brings it in.
 
 --detach (the chat that answers the page, once per batch of its work): the same landing in a
-process of its own, started from an ordinary foreground call that returns at once, so its end
-wakes no chat. A background command re-invokes the chat when it exits, and the app's hook
+process of its own, started from an ordinary foreground call that returns in seconds, so its
+end wakes no chat. Before it returns, the turn's work is committed and pushed to this chat's
+branch (_save_first), beside a landing that only waits too (_save_beside), so the cloud's own
+check at the end of the turn finds nothing to ask about (a person's copy, 2026-11-16). A background command re-invokes the chat when it exits, and the app's hook
 held the turn again while a save still ran: each save cost the chat that answers the page a
 turn or two of its whole history (the maintainer, 2026-11-05). It marks the landing as asked
 for at once (WANTED_FILE, which the hook reads as a save in progress), opens the pull request

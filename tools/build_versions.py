@@ -411,8 +411,9 @@ METHODS: dict[str, dict] = {
             (102, "2026-11-11", False, "in the app maker's own copy an app bug a chat meets is filed for the app by itself, said to nobody (tools/app_bug.py); the full local check is said to take as long as CI"),
             (103, "2026-11-11", False, "RUNBOOK.md says the person's update setting wins over anything earlier in a chat or its memory, and that a new chat's start takes what moved in the app (sync_app.py --if-moved)"),
             (104, "2026-11-11", False, "the general resume's plain-text copy and its short copy to paste read \"AWS\" whole, as the PDF does, never \"A WS\": a kern in a field reads as the one word TeX prints (issue 236); a copy kept before reads right once the general resume is made again"),
+            (105, "2026-11-16", False, "RUNBOOK.md says land.py --detach commits and pushes the turn's work to the chat's branch before it returns, and that the cloud's message at the end of a turn about a save still at work is answered with nothing; nothing made changes"),
         ),
-        "fingerprint": "8c79097823420f6e",
+        "fingerprint": "c696e135afcce31a",
     },
     "interview": {
         # Only a process with a round still to come is prepared again: a prep for a round
