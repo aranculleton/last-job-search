@@ -231,7 +231,7 @@ bridge by the computer starter, woken by its bell, in Auto, titled `Job search Â
 <computer>`, its prompt complete, its results back through the page and the copy and never
 `send_message`, archived by the starter once its work is finished or waits on the person: a
 chat that finds LinkedIn signed out opens its sign-in page in its own browser, puts the Sign
-in to LinkedIn card on the page (its button opens that chat) and looks again by itself for a
+in to LinkedIn card on the page (it names that chat, never links it) and looks again by itself for a
 quarter of an hour (`computer.py signin-wait`, then `signin-seen` on the feed opened afresh),
 carrying on the moment they are signed in; only after that does
 it ring the bell, its chat is put away, and a fresh one starts once they sign in; the person

@@ -141,6 +141,39 @@ def test_a_sign_in_that_did_not_last_is_kept_on_that_same_card(tmp_path):
     assert any("Keep cookies" in s for s in asked["needs"]["steps"])
 
 
+def test_a_card_written_before_the_update_is_made_again_by_the_update_itself(tmp_path):
+    # A read already waiting when the update arrives holds the words of the card before it:
+    # "tap Open the chat", over a button the page no longer draws. The first page update after
+    # the update makes its words and steps again, once, with nobody asked.
+    import app
+    old_say = ("Sign in to LinkedIn once, in the chat on your Studio Laptop: tap Open the chat, "
+               "then sign in on the page already open there. Being signed in beside your page "
+               "does not count.")
+    waiting = dict(_running(), status="needs_you", note="LinkedIn is signed out in Claude's "
+                   "browser.", needs={"question": "LinkedIn is signed out in Claude's browser.",
+                                      "signin": "linkedin", "chat": CHAT, "say": old_say,
+                                      "answer": {"key": "answer", "kind": "text"}})
+    db = _db((READ_A, waiting), chats=_beat())
+    db["work"][READ_A]["version"] = 7
+    out = []
+    for path in app.self_fixes(db, {"ready": []}, str(tmp_path / "self"), T):
+        with open(path, encoding="utf-8") as fh:
+            out += [e for e in json.load(fh) if e["collection"] == "work"]
+    entry = next(e for e in out if e["doc_id"] == READ_A)
+    assert entry["op"] == "update" and entry["if_version"] == 7, entry
+    fields = entry.get("data")
+    if fields is None:
+        fields = json.load(open(entry["file_path"], encoding="utf-8"))
+    needs = fields["needs"]
+    assert "Open the chat" not in needs["say"] and "“" + CHAT_TITLE + "”" in needs["say"], needs
+    assert needs["steps"] == _mac_steps()
+    assert needs["chat"] == CHAT and needs["signin"] == "linkedin"
+    assert needs["answer"] == {"key": "answer", "kind": "text"}
+    # Once: a card that has its steps is never written again.
+    db["work"][READ_A]["data"] = dict(waiting, needs=needs)
+    assert computer.signin_cards_to_renew(db) == []
+
+
 def test_the_chat_on_the_computer_is_told_the_card_names_it():
     # Its own prompt and the steps it prints say what the card does, so it never tells the
     # person to tap a button that opens it.

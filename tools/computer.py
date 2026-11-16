@@ -345,6 +345,30 @@ def chat_title(db: dict, chat: str) -> str:
     return ""
 
 
+def signin_cards_to_renew(db: dict) -> list:
+    """(work id, its version, its `needs` made again) for each piece of work waiting on a
+    LinkedIn sign-in in a chat on the computer whose card was written before it named that
+    chat (no `steps`): its words said "tap Open the chat" over a button the page no longer
+    draws, and that button opened the chat without its browser (issues 285 and 286). Made
+    again once, by the update itself (app.py self_fixes): a card with steps is never
+    rewritten, so a view run again writes nothing more."""
+    out = []
+    system = system_seen(db)
+    for wid, doc in sorted((db.get("work") or {}).items()):
+        d = (doc or {}).get("data") or {}
+        needs = d.get("needs") if isinstance(d.get("needs"), dict) else {}
+        chat = str(needs.get("chat") or "")
+        if not waits_on_signin(d) or not re.fullmatch(r"session_[\w-]+", chat) \
+                or "steps" in needs:
+            continue
+        sess = d.get("computer_session") if isinstance(d.get("computer_session"), dict) else {}
+        where = str(sess.get("computer") or "") if sess.get("id") == chat else ""
+        out.append((wid, (doc or {}).get("version"),
+                    dict(needs, say=signin_in_chat(where, chat_title(db, chat)),
+                         steps=signin_steps(system))))
+    return out
+
+
 def waiting_words(titles: list) -> str:
     """'“People at Harbourline Bank” waits', '“...” and 2 more wait', or
     'Your LinkedIn work waits' where the work has no title."""

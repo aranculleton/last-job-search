@@ -405,6 +405,12 @@ def self_fixes(db: dict | None, model: dict, out_dir: str, now, dump_dir: str = 
     got = computer_reads(model, work, now)
     if got:
         w.add("set", "work", got[0], got[1], if_version=None)
+    # A sign-in card written before it named the chat on the computer said "tap Open the
+    # chat" over a button the page no longer draws (issues 285 and 286): its words and steps
+    # made again by the update itself, once, so a read already waiting on it is not stuck.
+    import computer
+    for wid, version, needs in computer.signin_cards_to_renew(db):
+        w.add("update", "work", wid, {"needs": needs}, if_version=version)
     out = w.save("self") if w.entries else []
     ever = set()
     for d in work.values():

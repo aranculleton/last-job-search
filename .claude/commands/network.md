@@ -402,7 +402,10 @@ this chat does none of it but what `then` says. Otherwise it is this chat's, as 
       `python3 tools/network/reading.py queue-page <ids, best first>`, then write each note
       from what is known now (the card, the public findings) with `reading.py draft <id> -
       --wait-for-read` (step 7): saved under `WAITS ON A READ`, shown to the person as
-      waiting on their profile, and never sent as it stands. Nothing is waited for. LinkedIn
+      waiting on their profile, and never sent as it stands. Nothing is waited for. Where the
+      person's computer reads profiles (`reading.reads_first()`, and `route` says so), queue
+      them and save no note: the computer reads each by itself and writes the note from what
+      it read (`args.read_first`), and nobody is shown before then. LinkedIn
       is never fetched over the web (WebFetch, curl): it is read only in the signed-in browser
       on the person's computer, and a cloud chat queues the reads for the page, which reads
       them for nothing (a chat reading profiles puts each page into its own context, the

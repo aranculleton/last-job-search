@@ -2160,6 +2160,23 @@ def route(tools=(), consent: str | None = None, env=None, signed_in: bool | None
                        "the page, and never fetch linkedin.com over the web (WebFetch, curl): "
                        "it is read only in the signed-in browser on the person's computer"),
                 "say": "", "signin": True}
+    if consent == "browser" and reads_first():
+        # The person's computer reads profiles: nobody is shown and no note is saved before
+        # their profile is read there (issue 287). The reads go to the computer by themselves
+        # (app.py computer_reads, args.read_first), which writes each note from what it read.
+        return {"route": "page", "browser": "Claude's browser on your computer",
+                "usable": True,
+                "do": ("put the best on today's short list (`reading.py shortlist`) and queue "
+                       "them (`reading.py queue-page <contact>...`), and save no note and show "
+                       "nobody yet: with the person's computer set up to read profiles, each "
+                       "is read there first, by itself, and their note is written from what "
+                       "was read, a recruiter's included. Say in one line that their computer "
+                       "reads these profiles before any note is written. Notes from search "
+                       "results only if the person chooses that, in their own words "
+                       "(`reading.py from-search --said`). Never fetch linkedin.com over the "
+                       "web (WebFetch, curl): it is read only in the signed-in browser on the "
+                       "person's computer"),
+                "say": "", "signin": False}
     if consent == "browser":
         return {"route": "page", "browser": "your page in the Claude desktop app",
                 "usable": True,
@@ -3886,10 +3903,12 @@ def reads_first(today: datetime.date | None = None) -> bool:
 READ_FIRST_SAVE = (
     "not saved. {who}'s profile has not been read, and with the person's computer set up to "
     "read profiles, nobody is shown or written to before their profile is read. Read it in "
-    "Claude's browser (reading.py next). LinkedIn signed out, or the computer not ready: stop "
-    "the run there and ask for that one thing on their page (reading.py signin prints how), "
-    "showing nobody meanwhile. Notes from search results only if the person chooses that, in "
-    "their own words: python3 tools/network/reading.py from-search --said \"<their words>\"")
+    "Claude's browser (reading.py next); a chat without that browser queues it for the "
+    "computer instead (reading.py queue-page), which reads it and writes the note by itself. "
+    "LinkedIn signed out, or the computer not ready: stop the run there and ask for that one "
+    "thing on their page (reading.py signin prints how), showing nobody meanwhile. Notes from "
+    "search results only if the person chooses that, in their own words: python3 "
+    "tools/network/reading.py from-search --said \"<their words>\"")
 
 
 def draft_text(contact_id: str, note: str, name: str = "", card_only: bool = False) -> str:

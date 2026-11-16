@@ -141,6 +141,24 @@ def test_without_a_computer_set_up_for_reads_the_run_is_as_before(book, capsys):
     assert reading.waits_on_read("kestrel_achterberg")
 
 
+def test_a_chat_without_the_browser_queues_the_reads_and_saves_no_note(book, capsys):
+    # A people search in a chat with no browser of its own (a cloud chat) was told to save each
+    # note from search results under WAITS ON A READ: with the computer reading profiles that
+    # is refused, so it queues them and the computer reads each and writes its note.
+    book.computer()
+    got = reading.route(tools=(), consent="browser", env={})
+    assert got["route"] == "page", got
+    assert "--wait-for-read" not in got["do"] and "save no note" in got["do"], got
+    assert "queue-page" in got["do"] and "a recruiter's included" in got["do"]
+    book.put(_row("kestrel_achterberg", "Rosalind Achterberg"))
+    assert reading.main(["draft", "kestrel_achterberg", _note(book), "--wait-for-read"]) == \
+        reading.EXIT["error"]
+    assert "queue-page" in capsys.readouterr().out
+    # Without a computer set up for reads, the page reads them and notes wait on it, as before.
+    book.computer(ready=False)
+    assert "--wait-for-read" in reading.route(tools=(), consent="browser", env={})["do"]
+
+
 def test_the_run_on_the_computer_is_told_to_wait_for_the_sign_in_and_draft_nothing():
     got = reading.route(tools=("browser",), consent="browser", env={})
     assert got["route"] == "here", got

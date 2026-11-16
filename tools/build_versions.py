@@ -689,8 +689,9 @@ METHODS: dict[str, dict] = {
             (133, "2026-11-12", False, "someone owed a follow-up holds their place at their employer until it goes, as one within their wait does: a run picks nobody new there and the line says which follow-up to send first; a connection request nobody accepted in three weeks says to withdraw it, dated by that day; read each time, so nothing made before needs making again"),
             (134, "2026-11-12", False, "a people run asked for a number finishes with how many it drafted (app.py done --drafted), is done only at that number, and short of it only once no good people are left, saying why (--short) and kept as part-done; its progress count is never more done than its total; an employer whose people who fit were all held back (written to, its limit of people waiting) is full for now, searched again as soon as a reply or a close frees a place, never nobody who fits for a month, and an empty search through a city's own number is never recorded as nobody there; someone a read of their own page ruled out stays out until their headline or employer is new; a contact a run adds, and the employers it names to search next, carry the employer's proper name, never its lower-case key; notes are written as before"),
             (135, "2026-11-16", False, "with the person's computer set up to read LinkedIn profiles, a people search shows nobody and drafts no first note, a recruiter's included, before that person's profile is read: LinkedIn signed out stops the run on the one card asking for the sign-in, and notes from search results are the person's own choice for the day (reading.py from-search --said); notes already waiting keep their standing"),
+            (136, "2026-11-16", False, "with the person's computer set up to read LinkedIn profiles, a people search in a chat without Claude's own browser queues its short list for the computer and saves no note: the computer reads each and writes the note from what it read; notes already waiting keep their standing"),
         ),
-        "fingerprint": "09685ed485041836",
+        "fingerprint": "bb71de2bfbfa9ab8",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
@@ -771,8 +772,9 @@ METHODS: dict[str, dict] = {
             (63, "2026-11-12", False, "a note is refused at an employer where a follow-up owed fills a place, the line saying which follow-up goes first; notes are written as before"),
             (64, "2026-11-12", False, "today's list read is not a run done: with fewer than the number asked drafted, reading.py next says to find the rest at the next employers and read on; a people search in the person's own city uses every location number kept for their area (the metro region, their city, the towns their job search covers) and place-ids says what a city's own number leaves out; a people search's mutual connections are never results of their own, each card read whole from its own name link; notes are written as before"),
             (65, "2026-11-16", False, "a first note to someone whose profile was not read is refused where the person's computer reads profiles (reading.reads_first), card-only and waiting alike, unless the person chose notes from search results today; a chat on the computer that met a sign-out tells the person nothing of a button, since the card names the chat"),
+            (66, "2026-11-16", False, "where the person's computer reads profiles, a chat without Claude's own browser is routed to queue the short list for the computer and save no note, and a refused note says so; notes are written as before"),
         ),
-        "fingerprint": "67e77e50f524ae48",
+        "fingerprint": "ea66426be472dba7",
     },
     "screening": {
         "by": "round", "priority": 2,
