@@ -141,3 +141,39 @@ def test_the_helper_just_taken_over_from_goes_once_its_work_is_proven_saved(chat
     assert judged(open_, tip + dt.timedelta(minutes=2)) == "keep"
     assert tidy.retire("session_EXAMPLEOLDHELPER", helper(merged, tip), "example-owner/my-job-search",
                        branches, now) == ("keep", "it puts itself away once its work is saved")
+
+
+def test_a_backlog_of_old_chats_goes_in_one_tidy_up_and_none_stays_for_good(chat_copy):
+    """An existing install's backlog: weeks of old page and brief chats, every one put away by
+    the first tidy-up after the update. One whose branch never reached master is kept a week of
+    quiet for the next landing to bring it in, then put away too: its branch stays on GitHub."""
+    import datetime as dt
+    repo = "example-owner/my-job-search"
+    helper = "session_EXAMPLEPAGEHELPER"
+    reg = {"setup": "chat_per_briefing", "timezone": "Europe/London", "routines": []}
+    now = dt.datetime(2026, 11, 16, 10, 0, tzinfo=dt.timezone.utc)
+
+    def chat(sid, title, days_ago, branch=""):
+        at = (now - dt.timedelta(days=days_ago)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        s = {"id": sid, "title": title, "updated_at": at, "created_at": at,
+             "origin": "claude_code_mcp_seed", "session_status": "SESSION_STATUS_IDLE"}
+        d = dict(s, session_context={"sources": [{"git_repository": {
+            "url": "https://github.com/" + repo}}]},
+            external_metadata={"current_branches": {"": branch}} if branch else {})
+        return s, d
+
+    rows = [chat(helper, "Job search page", 0)]
+    rows += [chat("session_EXAMPLEOLD%02d" % n, "Job search page (finishing up)", 2 + n,
+                  "claude/land-20261114-082234") for n in range(8)]
+    rows += [chat("session_EXAMPLEOPENRECENT", "Job search page (finishing up)", 3, "claude/open-work"),
+             chat("session_EXAMPLEOPENOLD", "Job search page (finishing up)", 9, "claude/open-work")]
+    chats, info = [s for s, _ in rows], {s["id"]: d for s, d in rows}
+    names = tidy.own_branches(info)
+    got = tidy.plan(chats, [], info, reg, {"chat": helper, "helper": True}, helper, repo,
+                    now.date(), set(), tidy.unmerged(names), set(), now=now,
+                    on_github=tidy.on_github())
+    gone = {a["id"] for a in got["archive"]}
+    assert {"session_EXAMPLEOLD%02d" % n for n in range(8)} <= gone, got
+    assert "session_EXAMPLEOPENOLD" in gone, got                 # a week of quiet: put away
+    assert "session_EXAMPLEOPENRECENT" not in gone               # the next landing may bring it in
+    assert helper not in gone and not got["ask"]

@@ -241,7 +241,12 @@ is pushed and merged is in "Builder", above.
   investigate if I show you things that are clearly bugs"). A screenshot, a pasted message or
   "this is wrong": find why from their real data first (the listing, the record, the
   transcript), reproduce it with a test, fix it at the cause in the app, and only then tidy
-  what it left. Say the cause in a line or two, never only the clean-up.
+  what it left. Say the cause in a line or two, never only the clean-up. **A fix is done only
+  when it is checked for everyone, unasked**: existing installs on older versions and the
+  backlog they already hold (does the first run after the update clear it all, and can any of
+  it be kept for good?), a rule the fix switches on that never ran before, and Windows and Mac
+  (start Platforms and Everywhere on the branch by hand). The maintainer, the same day: "why am
+  I having to ask you to investigate these things... a lot of this is common sense".
 
 - **The page has one design language: `templates/app/DESIGN.md`.** Read it before changing
   anything a person sees. Its rules are tested on every screen (one bin, never an x; one "?"

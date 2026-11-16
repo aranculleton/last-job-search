@@ -1179,7 +1179,11 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
             keep("git could not say whether its work is on master")
             continue
         left = [b for b in own if branches is not None and b in branches]
-        if left:
+        if left and quiet < WAITING_DAYS:
+            # Its work is on GitHub and the next landing may yet bring it in: kept a week of
+            # quiet at most. Never landed by then, it never will be by itself, and the branch
+            # stays on GitHub when the chat goes; kept for good, such chats piled up once the
+            # tidy-up could see GitHub (5 of 201 branches in the maintainer's copy, 2026-11-16).
             keep("its work is not on master yet (" + ", ".join(left) + ")")
             continue
         # A branch GitHub has never held: its work may be only where that chat ran (a chat
