@@ -6449,7 +6449,8 @@
       }
       return txt(it.item) || resolveSection(txt(it.section)) ? briefRow(it, "lead:" + i) : h("li", {}, inlineMd(txt(it.text)));
     };
-    const leadList = parts.length ? h("ul", {class: "bp-lead bp-lead-list", "data-fit": (ready || facts.length ? "0" : "1") + ",3,1"}, parts.slice(0, ready || facts.length ? 1 : 3).map(leadRow)) : null;
+    // Under Today's one thing they are its background, and give way first on a small window.
+    const leadList = parts.length ? h("ul", {class: "bp-lead bp-lead-list", "data-fit": (hero || ready || facts.length ? "0" : "1") + ",3,1"}, parts.slice(0, ready || facts.length ? 1 : 3).map(leadRow)) : null;
     // Beside it, what matters about it: the likely questions for an interview, else a few
     // facts (who they are, how late, a draft ready). With nothing to say, no half is drawn
     // and the card takes the width (Today's right half sat empty, 2026-11-02).
