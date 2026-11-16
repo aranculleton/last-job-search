@@ -15849,6 +15849,9 @@
   let talkAttach = null;
   let talkAddBtn = null;
   let talkFile = null;
+  // What an empty Chat says, in the room above the box: the box stays at the foot from the
+  // first look, so the first message never moves it (the redesign, 2026-11-16).
+  let talkHello = null;
   // Room for a whole LinkedIn thread or job posting: 3,500 cut a 6,720-character paste
   // without a word (the audit, 2026-11-03). Past it, the box says so (countTalk, onTalkPaste).
   const TALK_MAX = 20000;
@@ -15889,6 +15892,7 @@
     talkList = h("ol", {class: "talk-list plain", role: "log", "aria-label": "Conversation", "aria-live": "polite"});
     talkStatus = h("p", {class: "talk-status muted small"});
     talkExamples = h("div", {class: "talk-examples"});
+    talkHello = h("div", {class: "talk-hello", hidden: true});
     talkEarlier = h("div", {class: "talk-earlier"});
     talkCount = h("p", {class: "talk-count muted small", id: "talk-count", hidden: true});
     talkInput = h("textarea", {id: "talk-text", rows: 1, maxlength: TALK_MAX, "data-k": "talk-text", placeholder: talkPlaceholder(), "aria-describedby": "talk-count",
@@ -15915,7 +15919,7 @@
     // The way back down sits in the box's own sticky area, just above the field, so it is on
     // screen wherever the box is: below it, a phone's screen hid it (the review, 2026-11-05).
     talkForm.prepend(buildTalkJump());
-    talkBody = h("div", {class: "talk-body"}, talkEarlier, talkList, talkStatus, talkForm);
+    talkBody = h("div", {class: "talk-body"}, talkEarlier, talkHello, talkList, talkStatus, talkForm);
     talkEl = h("section", {class: "talk sec", id: "talk-box", "aria-labelledby": "h-chat"},
       h("header", {class: "sec-head"}, h("h2", {id: "h-chat", tabindex: "-1", class: "screen-title"}, "Chat"),
         h("div", {class: "summary with-tool"}, h("div", {class: "sum-words"}, talkSum), talkMenu)),
@@ -16108,15 +16112,23 @@
     talkList.setAttribute("aria-busy", S.quick.busy ? "true" : "false");
     talkList.replaceChildren(...items);
     talkExamples.replaceChildren();
-    if (!items.length && !viewing && !S.quick.mode) put(talkExamples, talkIntro());
+    talkHello.replaceChildren();
+    // An empty Chat: its few words in the room above, its ways to start as chips just over the box.
+    if (!items.length && !viewing && !S.quick.mode) {
+      const [intro, chips] = talkIntro();
+      put(talkHello, [h("span", {class: "talk-hello-mark", "aria-hidden": "true"}, icon("chat")), intro]);
+      put(talkExamples, chips);
+    }
+    talkHello.hidden = !talkHello.childNodes.length;
     talkInput.placeholder = talkPlaceholder();
     growTalk();
     renderPics();
     talkSum.textContent = S.quick.busy ? "Claude is answering." : "Ask anything about your search.";
-    // With no messages yet the starters and the box sit under the header, and the subtitle is
-    // not drawn: they stood at the foot of a blank screen, and "Ask anything" was said three
-    // ways, the subtitle, the starters' line and the box's hint (the screen review, 2026-11-11).
-    // Once there are messages the box keeps to the foot, as in any chat.
+    // With no messages yet the subtitle is not drawn: "Ask anything" was said three ways, the
+    // subtitle, the starters' line and the box's hint (the screen review, 2026-11-11). The box
+    // keeps to the foot either way, as in any chat, its starters as chips just above it, and
+    // the intro in the room above them (the redesign, 2026-11-16: an empty Chat's box sat
+    // mid-screen and jumped to the foot with the first message).
     const bare = !items.length && !viewing;
     talkEl.classList.toggle("talk-empty", bare);
     talkBody.classList.toggle("talk-empty", bare);
@@ -16803,7 +16815,10 @@
       svg("svg", {viewBox: "0 0 24 24", class: "ic", "aria-hidden": "true", focusable: "false"}, [svg("path", {d: "M4 5h16v11H9l-5 4z", fill: "none", stroke: "currentColor", "stroke-width": "2", "stroke-linecap": "round", "stroke-linejoin": "round"})]),
       h("span", {class: "fab-word", "aria-hidden": "true"}, "Chat"));
     document.body.appendChild(dockEl);
-    document.body.appendChild(fabEl);
+    // The Chat button sits in the header on a computer, never floating over the cards: floating,
+    // it covered a bin, a Copy button and a value in Settings (the redesign, 2026-11-16).
+    const topIn = $("top") ? $("top").querySelector(".top-in") : null;
+    (topIn || document.body).appendChild(fabEl);
     dockSizeSay();
     dockSideSay();
   }
@@ -16848,11 +16863,10 @@
     const home = dockOpen ? dockBox : talkEl;
     if (talkBody.parentNode !== home) home.appendChild(talkBody);
     dockEl.hidden = !dockOpen;
-    // Out of the way of a selection's own bar, and lifted over Claude's browser panel.
-    const bulk = !!document.querySelector("#main .bulk");
     // On a phone the Chat tab is the one way in: a floating button as well was two buttons
-    // for one thing (the maintainer, 2026-10-28).
-    fabEl.hidden = shown || dockOpen || bulk || window.innerWidth < 760;
+    // for one thing (the maintainer, 2026-10-28). In the header it is never in a selection's
+    // way; the panel is lifted over Claude's browser panel.
+    fabEl.hidden = shown || dockOpen || window.innerWidth < 760;
     fabEl.setAttribute("aria-expanded", String(dockOpen));
     document.body.classList.toggle("has-fab", !fabEl.hidden);
     const bp = $("browser-panel");
@@ -17642,7 +17656,7 @@
     const tabs = $("tabs");
     if (tabs) {
       patch(tabs, [h("ul", {class: "plain tab-list"}, NAV.map((id) => h("li", {}, h("a", {href: "#" + id, class: "tab", "data-k": "tab:" + id, "aria-current": navOwner(S.section) === id ? "page" : null,
-        onclick: (e) => { e.preventDefault(); go(id, {focus: true}); }}, icon(id), h("span", {class: "tab-label"}, labelOf(id)), id === "todo" ? badgeEl() : navCount(id)))))]);
+        onclick: (e) => { e.preventDefault(); go(id, {focus: true}); }}, h("span", {class: "tab-ic", "aria-hidden": "true"}, icon(id)), h("span", {class: "tab-label"}, labelOf(id)), id === "todo" ? badgeEl() : navCount(id)))))]);
     }
   }
   function connState() {
@@ -17759,11 +17773,16 @@
     const phone = window.innerWidth < 760;
     const screen = $("screen");
     // The header names the tab a screen belongs to: Messages are Contacts, Drafts are Jobs.
-    if (screen) screen.textContent = S.section === "drafts" ? labelOf(navOwner("drafts")) : labelOf(S.section);
+    if (screen) {
+      screen.textContent = S.section === "drafts" ? labelOf(navOwner("drafts")) : labelOf(S.section);
+      // The Brief's greeting is its one title on a phone (app.css, .screen.is-home).
+      screen.classList.toggle("is-home", S.section === "brief" && !settingUp());
+    }
     const conn = $("conn");
     if (conn) {
       patch(conn, [h("button", {type: "button", class: "conn-btn", "data-k": "conn", "aria-expanded": String(!!S.connOpen), "aria-controls": "pulse", "data-state": state,
-        onclick: () => { S.connOpen = !S.connOpen; render(); }}, h("span", {class: "dot conn-" + state, "aria-hidden": "true"}), h("span", {class: "sr-only"}, words + (age ? " Updated " + age + "." : "")))]);
+        onclick: () => { S.connOpen = !S.connOpen; render(); }}, h("span", {class: "dot conn-" + state, "aria-hidden": "true"}), h("span", {class: "conn-word"}, "Claude"),
+        h("span", {class: "sr-only"}, ": " + words + (age ? " Updated " + age + "." : "")))]);
       conn.setAttribute("data-state", state);
     }
     const pulse = $("pulse");
