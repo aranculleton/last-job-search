@@ -2712,6 +2712,14 @@ S.talk = async (a) => {
   await turn(page, 12);
   // With the state said under the question (issue #234).
   r.quick = await T(page, "#main .talk-msg .talk-text, #main .talk-msg .talk-state");
+  // How Claude's answer is drawn: its list items and bold words, and any markdown left raw.
+  r.drawn = await page.evaluate(() => {
+    const msgs = [...document.querySelectorAll("#main .talk-msg.from-claude .talk-text")];
+    const last = msgs[msgs.length - 1];
+    return last ? {items: [...last.querySelectorAll("li")].map((e) => e.textContent.trim()),
+      bold: [...last.querySelectorAll("strong")].map((e) => e.textContent.trim()),
+      text: last.textContent} : null;
+  });
   // Handed on to Claude, the note's one button sends it, from the person's own tap.
   const send = page.locator("#main .talk-msg").getByRole("button", {name: "Send to Claude"});
   if (await send.count()) { await send.first().click(); await turn(page, 6); r.afterSend = await T(page, "#main .talk-msg .talk-text"); }
