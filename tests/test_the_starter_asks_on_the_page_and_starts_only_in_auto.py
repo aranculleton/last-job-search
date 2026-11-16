@@ -98,12 +98,15 @@ def test_the_lost_auto_is_one_card_and_the_works_line_with_the_chat_named(tmp_pa
     db = _asks(_with_starter(_db(WORK)), "mode", T, tmp_path)
     st = computer.state(db, T, envs=BRIDGE)
     assert st["state"] == "starter_waits" and st["say"] == "starter_mode" and st["asks"] == "mode"
-    assert st["line"] == ("Claude needs your OK once: open the chat “Job search: starts chats on "
-                          "your computer” and switch it to Accept edits and then back to Auto.")
+    # A setting to change, never an OK to give: "Claude needs your OK" sent the person looking
+    # for a question that was never there (issue #275).
+    assert st["line"] == ("Waiting for you to switch the chat “Job search: starts chats on your "
+                          "computer” back to Auto: a setting in that chat, so nothing pops up "
+                          "there.")
     # On To do at once, nothing to wait out first: nothing moves until they do it.
     assert st["card"]
     card = computer.card(st)
-    assert card["title"] == "Claude needs your OK once"
+    assert card["title"] == "Switch one chat back to Auto"
     assert card["open"] == {"label": "Open it",
                             "url": "https://claude.ai/code/session_starterEXAMPLE"}
     assert computer.STARTER_TITLE in card["body"] and "People at Harbourline Bank" in card["body"]
@@ -212,7 +215,7 @@ def test_the_starters_ask_reaches_to_do_wherever_the_page_is_drawn(tmp_path, mon
         person._modules.clear()
         person._data.clear()
     card = next(c for c in built["needs_you"] if c["id"] == "q-setup-computer")
-    assert card["title"] == "Claude needs your OK once" and card["open"]["url"].endswith(
+    assert card["title"] == "Switch one chat back to Auto" and card["open"]["url"].endswith(
         STARTER["chat"])
     row = built["where"]["computer"]
     assert row["say"] == computer.SAY["starter_mode"] and row["asks"] == "mode"

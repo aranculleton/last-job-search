@@ -108,8 +108,9 @@ def test_the_chain_picks_the_best_place_there_is_in_order():
     assert "network~people" in call["prompt"] and "Never message another chat" in call["prompt"]
     assert "send_message" not in call["prompt"]
     assert "confirm_repository_trust" in got["then"] and "computer.py started" in got["then"]
-    # Said up front, in plain words, that it runs in a chat there they can delete (2026-11-10).
-    assert got["line"] == "This runs in a chat on your Studio Laptop, which you can delete when it's done."
+    # Said up front, in plain words, that it runs in a chat there, which Claude looks after: never
+    # that they can delete it (issue #278).
+    assert got["line"] == "This runs in a chat on your Studio Laptop, which Claude looks after."
     # 3. With no way to start one, the computer's scheduled task takes it.
     with_task = dict(db, chats=_beat(age_s=600))
     assert computer.route(with_task, T, envs={"environments": []}, tools=[])["route"] == "computer task"
@@ -135,10 +136,10 @@ def test_a_chat_already_started_is_not_started_twice_and_is_archived_when_over(t
     sess = json.load(open(entry["file_path"], encoding="utf-8")) if entry.get("file_path") else entry["data"]
     db["work"]["network~people"]["data"].update(computer_session=sess["computer_session"])
     # Its card says where it runs, as its newest step and kept on the record while it runs.
-    said = "This runs in a chat on your Studio Laptop, which you can delete when it's done."
+    said = "This runs in a chat on your Studio Laptop, which Claude looks after."
     assert sess["steps"][-1]["text"] == said and sess["computer_session"]["say"] == said
     # A computer with no name is "your computer", never "your your computer".
-    assert computer.runs_there("") == "This runs in a chat on your computer, which you can delete when it's done."
+    assert computer.runs_there("") == "This runs in a chat on your computer, which Claude looks after."
     assert computer.waiting(db, T)["started"] == {"network~people": "session_x1"}
     assert computer.route(db, T, envs=BRIDGE, tools=["create_session"])["route"] == "none"
     db["work"]["network~people"]["data"]["status"] = "done"

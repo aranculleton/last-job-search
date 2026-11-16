@@ -138,7 +138,7 @@ SIGNIN_SEEN = ("open " + FEED_URL + " in Claude's browser (navigate a tab of you
                "its address and title as they are now (tabs_context), then python3 "
                "tools/computer.py signin-seen \"$D\" --work {wid} --url \"<that address>\" "
                "--title \"<that title>\"")
-# The name of every chat the app starts on the computer: recognisable, and safe to delete.
+# The name of every chat the app starts on the computer: recognisable, and put away by Claude.
 SESSION_TITLE = "Job search · {job} · {computer}"
 # The scheduled task on the computer that takes waiting work while no cloud chat is awake
 # (claude_surfaces: routines-local): a fresh chat each run, in the copy's folder, in Auto. It
@@ -267,9 +267,9 @@ WAITING_SAY = {
                       "answering. Open that chat in the Claude app once.",
     "starter_allow": "{what} until you give Claude your OK once, in the chat “{title}”. Open "
                      "it from here and do the steps below.",
-    "starter_mode": "{what} until the chat “{title}” is back in Auto. Nothing pops up to ask "
-                    "you: it is a setting in that chat, and Claude starts chats on your computer "
-                    "only from a chat in Auto. Open it from here and do the steps below.",
+    "starter_mode": "{what} until the chat “{title}” is back in Auto, which Claude needs to "
+                    "start chats on your computer, and nothing pops up to ask you, since it is a "
+                    "setting in that chat. Open it from here and do the steps below.",
     "no_folder": "{what} until Claude can start in the folder that holds your job search. Add "
                  "the folder {folder} once in the Claude app on your computer.",
 }
@@ -355,9 +355,11 @@ def _yours(computer: str, start: bool = True) -> str:
 def runs_there(computer: str) -> str:
     """Said up front where a chat is started on the person's computer for a job: the route's
     line and the step its work card shows while it runs (the maintainer, 2026-11-10: a chat
-    appeared on the computer with nothing on the page saying so)."""
+    appeared on the computer with nothing on the page saying so). Never that they can delete
+    it: the person was left to tidy up, and the starter repeated it (issue #278); Claude puts its
+    chats away, or keeps one as the computer's own chat."""
     where = _yours(computer, start=False)
-    return f"This runs in a chat on {where}, which you can delete when it's done."
+    return f"This runs in a chat on {where}, which Claude looks after."
 
 
 # ------------------------------------------------------------------ the computer starter
@@ -453,8 +455,8 @@ def starter_prompt(url: str, copy: str) -> str:
         "of its own ending, or a message from me): read the page's work, beats and meta into a "
         "fresh folder $D (one ArtifactData query each, out_dir $D, limit 1000). python3 "
         "tools/computer.py starter-woke \"$D\" and send its batch (it says this chat answered); "
-        "then do its `then`, before anything below: it reads this chat's own mode, which "
-        "decides whether this wake starts anything. python3 "
+        "where it prints a `then`, do that too, before anything below: it reads this chat's "
+        "own mode, which decides whether this wake starts anything. python3 "
         "tools/computer.py waiting \"$D\": under `finished`, "
         "archive_session each session (get_session on it first: archived already, it is done, "
         "never archived again), then python3 tools/computer.py archived \"$D\" --work "
