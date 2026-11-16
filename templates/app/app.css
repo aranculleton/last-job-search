@@ -793,7 +793,14 @@ dialog.work-sheet { width: min(560px, calc(100vw - 16px)); }
 .pills .choice { align-items: center; justify-content: center; gap: 8px; min-height: 0; padding: 8px 12px; border: 0; border-radius: calc(var(--r-sm) - 2px); color: var(--muted); font-weight: 600; }
 .pills .choice:has(input:checked) { background: var(--overlay); color: var(--ink); box-shadow: var(--shadow-card), 0 0 0 1px var(--line); }
 .setting.pills .choice > input, .field.pills .choice > input { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; margin: 0 !important; opacity: 0; cursor: pointer; }
+/* The chosen one also carries an outline in no colour, which forced colours (Windows high
+   contrast) draw in the text colour: there the fill and the shadow are gone, and with the
+   radio unseen nothing else would say which is chosen. */
+.pills .choice:has(input:checked) { outline: 2px solid transparent; outline-offset: -2px; }
 .pills .choice:has(input:focus-visible) { outline: 3px solid var(--focus); outline-offset: 2px; }
+/* A box ticked in a sheet (the brief's days) is ticked in the ink, as a filter chip that is on
+   is, never in the clay that marks what needs the person (the redesign, 2026-11-16). */
+.field .choice input[type="checkbox"] { accent-color: var(--ink); }
 /* A choice with more to say under each (an example, a line of why) is a list of option rows:
    a row each, its round mark filled when chosen (a ring when not, never its colour alone). */
 .opt-rows { display: grid; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); overflow: hidden; }

@@ -918,8 +918,14 @@ function drawnProbe(allow) {
     if (s.position !== "fixed" && el.parentElement && el.parentElement !== document.documentElement) { const up = clipOf(el.parentElement); r = Object.assign({}, up, {by: Object.assign({}, up.by)}); }
     if (s.overflowX !== "visible" || s.overflowY !== "visible") {
       const b = el.getBoundingClientRect();
-      if (s.overflowX !== "visible") { if (b.left > r.l) { r.l = b.left; r.by.l = el; } if (b.right < r.r) { r.r = b.right; r.by.r = el; } }
-      if (s.overflowY !== "visible") { if (b.top > r.t) { r.t = b.top; r.by.t = el; } if (b.bottom < r.b) { r.b = b.bottom; r.by.b = el; } }
+      // Where a box that scrolls ends at the same edge as the box round it that hides (a card's
+      // body inside its dialog, both ending at the foot of a phone's screen), what is cut there
+      // is the scroller's to scroll to: the outer box was named, and a row half past a long
+      // card's foot read as cut off for good (the redesign, 2026-11-16).
+      const sx = s.overflowX === "auto" || s.overflowX === "scroll", sy = s.overflowY === "auto" || s.overflowY === "scroll";
+      const tie = (x, y) => Math.abs(x - y) < 0.5;
+      if (s.overflowX !== "visible") { if (b.left > r.l || (sx && tie(b.left, r.l))) { r.l = b.left; r.by.l = el; } if (b.right < r.r || (sx && tie(b.right, r.r))) { r.r = b.right; r.by.r = el; } }
+      if (s.overflowY !== "visible") { if (b.top > r.t || (sy && tie(b.top, r.t))) { r.t = b.top; r.by.t = el; } if (b.bottom < r.b || (sy && tie(b.bottom, r.b))) { r.b = b.bottom; r.by.b = el; } }
     }
     clipCache.set(el, r);
     return r;
