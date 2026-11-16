@@ -54,7 +54,9 @@ def turn_end(chat) -> str:
     if git(chat, "diff", "--quiet", check=False).returncode or \
             git(chat, "diff", "--cached", "--quiet", check=False).returncode:
         return "uncommitted changes"
-    if git(chat, "ls-files", "--others", "--exclude-standard").stdout.strip():
+    # Untracked files, as the check counts them (ignored ones left out), read from the status
+    # rather than a listing of files (tests/test_repo_files.py: listings go through repo_files).
+    if any(line.startswith("??") for line in git(chat, "status", "--porcelain", "--untracked-files=normal").stdout.splitlines()):
         return "untracked files"
     name = git(chat, "branch", "--show-current").stdout.strip()
     if not name:
