@@ -164,7 +164,7 @@ def is_recruiter(title: str) -> bool:
 # Strategy". A partner of a function ("Talent Partner", "HR Business Partner", "Client
 # Partner") or of a programme ("Partner Solutions Architect") and a principal of a craft
 # ("Principal Engineer", "Principal Consultant") stay what they were.
-_HEADLINE_PARTS = re.compile(r"\s*(?:[|·•/;,]|\s[-–—]\s)\s*")
+_HEADLINE_PARTS = re.compile(r"\s*(?:[|\u00b7\u2022/;,]|\s[-\u2013\u2014]\s)\s*")
 _PARTNER_TITLE = re.compile(
     r"^(?:(?:senior|equity|salaried|associate|founding|managing|executive|deputy|global|"
     r"regional|national|practice)\s+)*(?:partner|principal)(?:\s*$|\s+(?:at|@|of|in|for|with)\b|"

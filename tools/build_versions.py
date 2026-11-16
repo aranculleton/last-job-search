@@ -411,8 +411,9 @@ METHODS: dict[str, dict] = {
             (102, "2026-11-11", False, "in the app maker's own copy an app bug a chat meets is filed for the app by itself, said to nobody (tools/app_bug.py); the full local check is said to take as long as CI"),
             (103, "2026-11-11", False, "RUNBOOK.md says the person's update setting wins over anything earlier in a chat or its memory, and that a new chat's start takes what moved in the app (sync_app.py --if-moved)"),
             (104, "2026-11-11", False, "the general resume's plain-text copy and its short copy to paste read \"AWS\" whole, as the PDF does, never \"A WS\": a kern in a field reads as the one word TeX prints (issue 236); a copy kept before reads right once the general resume is made again"),
+            (105, "2026-11-16", False, "RUNBOOK's map of what goes where says upcoming.py add takes --zone for something booked on another clock than the person's; nothing made changes"),
         ),
-        "fingerprint": "8c79097823420f6e",
+        "fingerprint": "6c1cf0797222cade",
     },
     "interview": {
         # Only a process with a round still to come is prepared again: a prep for a round
@@ -486,8 +487,9 @@ METHODS: dict[str, dict] = {
             (56, "2026-11-11", True, "a live prep is written to be read during the call: each answer's points are three to five short cue lines that never copy the script and hold the same numbers, the script is said in your own voice, opens on the point and ends on the thread into the first follow-up, follow-ups go two or three, then three, then two, with a line three deep, a story brings five probes, a coding part carries its steps, lines for when stuck, cases to name, handy code and what next, and every hard word is explained with plain words, what it means here and an everyday likeness; preps for interviews still ahead are made again"),
             (57, "2026-11-11", False, "each answer in a live prep shows its points first and the script under them unless you say you would rather have the script first, and a change to that setting reaches the page without the prep being made again"),
             (58, "2026-11-12", False, "a live prep reads as you would say it: an answer ends where it ends, never on a line added to lead into a follow-up, and its points are whole phrases in your own words that may sum the script up, never pieces cut from it; the introduction is said once, as the answer to Tell me about yourself; the questions to ask them are a short reason and then the question, with nothing pasted in brackets; and a question about the work in a mixed round is asked in its coding part, never in the story part or the hello; a prep already made is kept as it is"),
+            (59, "2026-11-16", False, "booking an interview's day (interview_pack.py book or process) adds it to the application's tracker notes too, so a note saying the day was still to choose is never the last word (issue 274); booked-days, an instant profile upgrade, puts right a tracker an older version left so; no prep changes"),
         ),
-        "fingerprint": "a79718c134dd4ac7",
+        "fingerprint": "59cc176ca7e5cd21",
     },
     "research": {
         "by": "upgrade", "priority": 3, "applies": "live_applications", "time": "~5 min each",
@@ -688,8 +690,9 @@ METHODS: dict[str, dict] = {
             (132, "2026-11-11", False, "the reply playbook names an address given to set up a call or a chat, in words that never read as asking anyone to connect their mail; nothing a reply does changes"),
             (133, "2026-11-12", False, "someone owed a follow-up holds their place at their employer until it goes, as one within their wait does: a run picks nobody new there and the line says which follow-up to send first; a connection request nobody accepted in three weeks says to withdraw it, dated by that day; read each time, so nothing made before needs making again"),
             (134, "2026-11-12", False, "a people run asked for a number finishes with how many it drafted (app.py done --drafted), is done only at that number, and short of it only once no good people are left, saying why (--short) and kept as part-done; its progress count is never more done than its total; an employer whose people who fit were all held back (written to, its limit of people waiting) is full for now, searched again as soon as a reply or a close frees a place, never nobody who fits for a month, and an empty search through a city's own number is never recorded as nobody there; someone a read of their own page ruled out stays out until their headline or employer is new; a contact a run adds, and the employers it names to search next, carry the employer's proper name, never its lower-case key; notes are written as before"),
+            (135, "2026-11-16", False, "a partner or a principal of the firm reads as a hiring leader, never a peer held back (issue 283), while a partner of a function or a principal of a craft stays as it was; a people run asked in a chat is on the page's work list first, its own card (issue 276); people already found stay as they were"),
         ),
-        "fingerprint": "cdf80d7e6c1c661e",
+        "fingerprint": "686462e71dd61e7d",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
