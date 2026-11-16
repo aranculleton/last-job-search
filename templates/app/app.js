@@ -9820,7 +9820,7 @@
     // every 100 reach an interview, so three in fourteen is a good run, and says so.
     const a = Number(funnel[0].n) || 0;
     const iv = Number((funnel.find((f) => f.stage === "interview") || {}).n) || 0;
-    const ahead = a > 0 && iv / a >= 0.1 ? " You're well ahead of that." : "";
+    const ahead = a > 0 && iv / a >= 0.1 ? " You're ahead." : "";
     // The counts in words, and that most get no reply and a referral helps, one tap down: the
     // card stays within its words (DESIGN.md's budget) with what is usual on its face.
     return card("section", {class: "chart", "aria-labelledby": "h-funnel"}, h("h3", {id: "h-funnel", class: "card-title"}, "How far applications got"),
