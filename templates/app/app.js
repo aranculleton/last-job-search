@@ -13507,7 +13507,7 @@
       const pid = "portal-" + seg(txt(p.name));
       if (p.key) {
         return h("li", {class: "site-key", "data-item": item}, det("site-key:" + pid, false, {class: "site-key-fold"},
-          h("summary", {class: "set-sum", "data-k": "site-key-sum:" + pid}, h("span", {class: "set-name"}, label, note(p)), h("span", {class: "set-value", "data-k": "site-needs:" + pid}, needs(p))),
+          sumFit(h("summary", {class: "set-sum", "data-k": "site-key-sum:" + pid}, h("span", {class: "set-name"}, label, note(p)), h("span", {class: "set-value", "data-k": "site-needs:" + pid}, needs(p)))),
           h("div", {class: "set-body"}, h("p", {}, "To get one:"), h("ol", {class: "setup-steps", "data-k": "site-steps:" + pid}, arr(obj(p.key).steps).map((x) => h("li", {}, txt(x)))))),
           stateLine(item, "site:" + pid), nextSearchBtn(item, pid));
       }
@@ -17186,7 +17186,7 @@
         btn("Save", () => { const val = inp.value; draftSet(key, null); act([{item, action: "setting.set", value: s.kind === "number" ? Number(val) : val, rev: s.rev}], settingLabel(s) + ": " + val); }, {small: true, key: "save:" + s.key, aria: "Save " + settingLabel(s)})));
     }
     return det("set:" + s.key, false, {class: "setting-row"},
-      h("summary", {class: "set-sum", "data-k": "set-sum:" + s.key}, h("span", {class: "set-name"}, settingLabel(s)), h("span", {class: "set-value"}, valueWord(s))),
+      sumFit(h("summary", {class: "set-sum", "data-k": "set-sum:" + s.key}, h("span", {class: "set-name"}, settingLabel(s)), h("span", {class: "set-value"}, valueWord(s)))),
       h("div", {class: "set-body"}, body, s.help ? h("p", {class: "hint"}, txt(s.help)) : null, more && more.nodeType ? more : null), stateLine(item, setId(s)));
   }
   function lookRow() {
@@ -17251,8 +17251,15 @@
       h("div", {class: "fb-say"}, say), a.length ? h("div", {class: "fb-acts"}, a) : null, after);
   }
   function infoRow(key, name, value, body) {
-    return det("info:" + key, false, {class: "setting-row"}, h("summary", {class: "set-sum", "data-k": "info-sum:" + key}, h("span", {class: "set-name"}, name), value ? h("span", {class: "set-value"}, value) : null),
+    return det("info:" + key, false, {class: "setting-row"}, sumFit(h("summary", {class: "set-sum", "data-k": "info-sum:" + key}, h("span", {class: "set-name"}, name), value ? h("span", {class: "set-value"}, value) : null)),
       h("div", {class: "set-body"}, body));
+  }
+  // A row whose name and value run past a phone's one line says its value under its name
+  // (app.css, .set-long): about 32 letters fit beside each other at a phone's size.
+  function sumFit(sum) {
+    const v = sum.querySelector(".set-value");
+    if (v && txt(sum.textContent).replace(/\s+/g, " ").trim().length > 32) sum.classList.add("set-long");
+    return sum;
   }
   function actionRow(name, fn, key) {
     return h("button", {type: "button", class: "setting-row act-row", "data-k": key, onclick: fn}, h("span", {class: "set-name"}, name), h("span", {class: "set-go", "aria-hidden": "true"}, "›"));

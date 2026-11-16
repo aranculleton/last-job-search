@@ -1084,14 +1084,15 @@ dialog.work-sheet { position: fixed; inset: auto 0 0 0; margin: 0; width: 100%; 
 .checks-list li.site-key { display: block; }
 .checks-list li.site-key > .state, .checks-list li.site-key > .state-wrap { padding: 0 16px; }
 .site-key-fold[open] > .set-sum::after { transform: rotate(-135deg); }
-/* On a phone a row's value goes under its name, at its left edge, in grey: a long value beside
-   its name wrapped right-aligned into a ragged column ("Greater Manchester, Leeds, / remote in
-   the UK"), and a long name wrapped as "When it / comes" (the redesign, 2026-11-16). */
+/* On a phone a long value goes under its name, at its left edge, in grey: beside its name it
+   wrapped right-aligned into a ragged column ("Greater Manchester, Leeds, / remote in the UK"),
+   and a long name wrapped as "When it / comes" (the redesign, 2026-11-16). A row whose name and
+   value fit one line keeps them on it, a 44px row (app.js, sumFit). */
 @media (max-width: 759px) {
-  .set-sum { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; row-gap: 2px; justify-content: stretch; }
-  .set-sum > .set-name { grid-column: 1; margin-right: 0; }
-  .set-sum > .set-value { grid-column: 1; text-align: left; }
-  .set-sum::after { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
+  .set-sum.set-long { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; row-gap: 2px; justify-content: stretch; }
+  .set-sum.set-long > .set-name { grid-column: 1; margin-right: 0; }
+  .set-sum.set-long > .set-value { grid-column: 1; text-align: left; }
+  .set-sum.set-long::after { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
 }
 /* Settings and Your profile read as one column of rows, at the same left edge as every other
    screen: Your profile stood centred, 165px right of every other screen's edge on a laptop,
