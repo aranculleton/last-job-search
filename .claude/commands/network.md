@@ -27,7 +27,12 @@ first:
    where they chose to paste profiles ("I paste them" in the page's Settings). It is never
    how the list is made, and never asked for everyone.
 
-The run presents the whole ranked list from rungs 1 to 3 without waiting for any read.
+The run presents the whole ranked list from rungs 1 to 3 without waiting for any read, except
+where the person's computer is set up to read profiles (`reading.reads_first()`): there nobody
+is shown and no note drafted, a recruiter's included, before that person's profile is read, and
+LinkedIn signed out or the computer not ready stops the run on the one card that asks for it.
+Notes from search results are then the person's own choice, in their words (`reading.py
+from-search --said "<their words>"`), never the default (issue 287, 2026-11-16).
 Rungs 1 to 3 use no LinkedIn account at all (a web search engine and their own file), so
 they cannot get anyone restricted; that is what makes the list faster than searching
 LinkedIn by hand without adding any risk. Only rung 4 uses their account, in the signed-in
@@ -350,7 +355,9 @@ this chat does none of it but what `then` says. Otherwise it is this chat's, as 
    nobody past it, unless the person said they want more there (`reading.py more-at`). A
    recruiter whose card names them a recruiter at the employer and places them in the
    person's market needs no read (`reading.card_enough`): `shortlist` leaves them off and
-   their note is drafted from the card, saved marked CARD ONLY. Give each candidate its id
+   their note is drafted from the card, saved marked CARD ONLY. Not where the person's
+   computer reads profiles (`reading.reads_first()`): there a recruiter is read like anyone,
+   and `reading.py draft` saves no first note before a read. Give each candidate its id
    first (`state.unique_contact_id()`), and record what is read with
    `tools/network/reading.py`, which keeps only what a note could rest on, under
    `documents/network/<contact_id>/reading.json`.
