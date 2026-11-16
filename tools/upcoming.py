@@ -10,7 +10,7 @@ with what the person adds themselves, and nothing else: follow-ups and replies o
 do's, never the calendar's.
 
     python3 tools/upcoming.py list [--today D]       # the list, as the page gets it
-    python3 tools/upcoming.py add "<what>" <day> [<HH:MM>] [--note "..."]
+    python3 tools/upcoming.py add "<what>" <day> [<HH:MM>] [--zone <zone>] [--note "..."]
     python3 tools/upcoming.py remove <id>
 
 A calendar is never connected and nothing is ever sent (CLAUDE.md: it never sends anything).
@@ -668,16 +668,34 @@ def main(argv=None) -> int:
     a_.add_argument("day")
     a_.add_argument("time", nargs="?", default="")
     a_.add_argument("--note", default="")
+    # A call booked on another country's clock (issue 273): "America/Vancouver", or the words
+    # a person writes ("Pacific", "UK time", ET). Without it, the person's own zone.
+    a_.add_argument("--zone", default="")
     r_ = sub.add_parser("remove")
     r_.add_argument("id")
     a = ap.parse_args(argv)
     if a.cmd == "add":
+        zone = ""
+        if a.zone.strip():
+            # A zone named and dropped would keep the time on the wrong clock without a word:
+            # one this cannot place, or one with no time to put in it, is refused out loud.
+            if not a.time:
+                print("upcoming: a zone goes with a time: give a time like 14:30")
+                return 1
+            home = person.home_zone_named(os.path.dirname(person.path("person.json")))
+            zone = person.zone_in(a.zone, home)
+            if not zone:
+                print(f"upcoming: {a.zone} is not a zone this computer knows: "
+                      "give a zone like America/Toronto")
+                return 1
         try:
-            row = add(a.title, a.day, a.time, a.note)
+            row = add(a.title, a.day, a.time, a.note, zone=zone)
         except ValueError as e:
             print(f"upcoming: {e}")
             return 1
-        print(f"upcoming: kept {row['title']} on {row['day']}" + (f" at {row['time']}" if row.get("time") else ""))
+        print(f"upcoming: kept {row['title']} on {row['day']}"
+              + (f" at {row['time']}" if row.get("time") else "")
+              + (f" ({row['zone']} time)" if row.get("zone") else ""))
         return 0
     if a.cmd == "remove":
         gone = remove(a.id)
