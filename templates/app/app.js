@@ -3719,7 +3719,9 @@
       const extra = Number(item.people_more) || 0;
       if (!links.length) return null;
       return h("p", {class: "related"}, h("span", {class: "muted"}, "Also at ", h("bdi", {}, c), ": "),
-        links.map(([sec, id, label], i) => [i ? ", " : null, itemLink(sec, id, label, "rel:" + (except || "") + ":" + sec + ":" + id)]),
+        // Each link keeps its comma on its own line: a comma started the next line (", your
+        // draft") wherever a link ended one (the screen review, 2026-11-16).
+        links.map(([sec, id, label], i) => [i ? " " : null, h("span", {class: "rel-one"}, itemLink(sec, id, label, "rel:" + (except || "") + ":" + sec + ":" + id), i < links.length - 1 ? "," : null)]),
         extra ? " and " + plural(extra, "other person", "other people") : null);
     }
     return null;
@@ -11431,20 +11433,24 @@
       onclick: (e) => { e.preventDefault(); e.stopPropagation(); openDetail("employer", id); }}, h("bdi", {}, txt(name)));
   }
   function employerDetail(e) {
-    const row = (label, sub, open, key) => h("li", {}, h("button", {type: "button", class: "btn link", "data-k": key, onclick: open}, label),
-      sub ? h("span", {class: "muted small"}, " · " + sub) : null);
-    const part = (title, items) => (items.length ? h("section", {class: "d-block"}, h("h3", {class: "group"}, title), h("ul", {class: "plain"}, items)) : null);
-    const roles = e.apps.map((a) => row(txt(a.role) || "A role", [txt(appWord(a)[0]), a.applied_on ? "applied " + fmtDay(txt(a.applied_on)) : ""].filter(Boolean).join(", "),
-      () => openDetail("application", a.id), "emp-app:" + a.id))
-      .concat(e.jobs.map((r) => row(txt(r.title) || "A role", r.found_on ? "found " + fmtDay(txt(r.found_on)) : "",
-        () => { closeDetail(true); go("jobs", {item: r.id}); }, "emp-job:" + r.id)));
-    const people = e.people.map((p) => row(txt(p.first_name) || "Someone", txt(statusWord(p)[0]), () => openDetail("person", p.id), "emp-person:" + p.id));
-    const ivs = e.ivs.map((iv) => row(ivTitle(iv), iv.when ? fmtDay(txt(iv.when)) : "", () => openDetail("interview", iv.id), "emp-iv:" + iv.id));
+    // Applications first, where each stands in its own card's words; then the jobs found there,
+    // with their fit; its people with where each stands and their next step; its interviews.
+    const roles = e.apps.map((a) => dRow({label: txt(a.role) || "A role", state: appWord(a), sub: a.applied_on ? "Applied " + fmtDay(txt(a.applied_on)) : "",
+      open: () => openDetail("application", a.id), key: "emp-app:" + a.id}))
+      .concat(e.jobs.map((r) => dRow({label: txt(r.title) || "A role", state: ["Not applied", null],
+        sub: [Number.isFinite(Number(r.score)) && r.score !== null && r.score !== "" ? "Scored " + Number(r.score) : "", r.found_on ? "found " + fmtDay(txt(r.found_on)) : "", txt(r.place)].filter(Boolean).join(" \u00b7 "),
+        open: () => { closeDetail(true); go("jobs", {item: r.id}); }, key: "emp-job:" + r.id})));
+    // Under each person, when you were last in touch: their next step's own words ("Reply",
+    // "First note") said nothing their state did not.
+    const people = e.people.map((p) => dRow({label: txt(p.first_name) || "Someone", state: statusWord(p), sub: p.last ? "Last in touch " + fmtDayMonth(p.last) : "",
+      open: () => openDetail("person", p.id), key: "emp-person:" + p.id}));
+    const ivs = e.ivs.map((iv) => dRow({label: ivTitle(iv), sub: iv.when ? (isPast(iv.when) ? fmtDay(txt(iv.when)) : fmtWhen(iv.when)) : "No day yet",
+      state: iv.when && !isPast(iv.when) ? [cap1(relWhen(iv.when)), "info"] : null, open: () => openDetail("interview", iv.id), key: "emp-iv:" + iv.id}));
     const said = [roles.length ? plural(roles.length, "role", "roles") : "", people.length ? plural(people.length, "person", "people") : "",
       ivs.length ? plural(ivs.length, "interview", "interviews") : ""].filter(Boolean).join(" · ");
     return h("div", {class: "d-stack d-employer", "data-employer": e.id},
       said ? h("p", {class: "muted"}, said) : null,
-      part("Roles", roles), part("People", people), part("Interviews", ivs));
+      dRows("Roles", roles), dRows("People", people), dRows("Interviews", ivs));
   }
   function detailOf(kind, id) {
     if (kind === "employer") { const e = employerOf(id); return e ? [e.name, employerDetail(e), "jobs", ""] : null; }
@@ -11488,6 +11494,37 @@
   function block(title, kids) {
     const list = arr(kids).filter(Boolean);
     return list.length ? h("section", {class: "d-block"}, h("h3", {class: "group"}, title), list) : null;
+  }
+  // A card's list of things that open, drawn as Settings' rows (4.10): each a whole-width tap
+  // with its name, where it stands as a pill, one quiet line under it and the › that says it
+  // opens. A card's lists were bare underlined links with grey words trailing after them, and
+  // nothing said a row opened anything (the maintainer, 2026-11-16: "genuinely polished").
+  function dRow(o) {
+    const st = o.state && txt(o.state[0]) ? stateWord(txt(o.state[0]), o.state[1] === "plain" ? null : o.state[1]) : null;
+    return h("button", {type: "button", class: "setting-row act-row d-row", "data-k": o.key, onclick: o.open},
+      h("span", {class: "d-row-main"}, h("span", {class: "d-row-name"}, h("bdi", {}, o.label)), o.sub ? h("span", {class: "d-row-sub"}, o.sub) : null),
+      st, h("span", {class: "set-go", "aria-hidden": "true"}, "\u203a"));
+  }
+  function dRows(title, rows) {
+    const list = arr(rows).filter(Boolean);
+    return list.length ? h("section", {class: "d-block"}, h("h3", {class: "group"}, title), h("div", {class: "set-rows d-rows"}, list)) : null;
+  }
+  // What has happened and what is to come, in order: a dot a step on one thread, filled once it
+  // has happened and a ring while it is to come (its shape, never its colour alone), and said
+  // in words to a screen reader. It was a list of "Fri 2 Oct: Applied" lines.
+  function dTimeline(title, steps) {
+    const list = arr(steps).filter((x) => x && x.label);
+    return list.length ? h("section", {class: "d-block"}, h("h3", {class: "group"}, title),
+      h("ol", {class: "plain d-time"}, list.map((x) => h("li", {class: x.done ? "done" : "to-come"},
+        h("span", {class: "d-time-dot", "aria-hidden": "true"}),
+        h("span", {class: "d-time-main"}, x.day ? h("span", {class: "d-time-day"}, x.day) : null,
+          h("span", {class: "d-time-what"}, x.label, h("span", {class: "sr-only"}, x.done ? " (done)" : " (to come)"))))))) : null;
+  }
+  // A step happened once its day has come, unless the record says otherwise.
+  function stepDone(x) {
+    if (typeof x.done === "boolean") return x.done;
+    const n = dayDiff(txt(x.date || x.on));
+    return n === null || n <= 0;
   }
   // The prep, as the engine reads it for the page (interview_pack.reading): the few things for
   // the minutes before in big type, then each likely question with its answer and the rest
@@ -11747,7 +11784,7 @@
             : h("p", {class: "muted"}, "No prep yet. Prepare me builds it: what to say, the questions they are likely to ask, and what to ask them.")),
         h("aside", {class: "prep-side"},
           block("What you sent", arr(iv.sent_files).filter((f) => txt(f.name) || txt(f.kind)).map((f) => h("p", {}, sentWords(f)))),
-          block("Stages", arr(iv.stages).filter((s) => txt(s.label || s.name)).map((s) => h("p", {class: s.done ? "muted" : ""}, h("span", {class: "muted"}, (s.date || s.on) ? fmtDay(s.date || s.on) + ": " : ""), txt(s.label || s.name), s.done ? " (done)" : ""))),
+          dTimeline("Stages", arr(iv.stages).filter((s) => txt(s.label || s.name)).map((s) => ({day: s.date || s.on ? fmtDay(s.date || s.on) : "", label: txt(s.label || s.name), done: stepDone(s)}))),
           relatedLinks(iv.company, iv.id, iv))));
   }
   // ------------------------------------------------------------------ the live prep (tools/interview_live.py)
@@ -12681,17 +12718,24 @@
       txt(prep.text) ? prepFold("cprep:" + p.id, "Your call prep", null, txt(prep.text).split(/\n{2,}/).map((para) => h("p", {}, para)), false) : null,
       // The role and the ask on lines of their own: the role's title and "Ask ... for a
       // referral" ran together as one word where the role had a warm note (2026-11-03).
-      block("Roles at " + txt(p.employer), jobsThere.map((r) => h("div", {class: "d-role"}, h("p", {}, itemLink("jobs", r.id, txt(r.title), "dpjob:" + r.id)), !p.is_process_stage && g !== "held" && (st === "replied_needs_response" || st === "in_conversation" || st === "call_booked") ? h("p", {}, btn("Ask " + txt(p.first_name) + " for a referral for this role", () => askReferral(p, r), {kind: "link", key: "dask:" + r.id})) : null))),
+      dRows("Roles at " + txt(p.employer), jobsThere.map((r) => {
+        const row = dRow({label: txt(r.title), sub: [Number.isFinite(Number(r.score)) && r.score !== null && r.score !== "" ? "Scored " + Number(r.score) : "", txt(r.place)].filter(Boolean).join(" \u00b7 "),
+          open: () => { const to = resolveSection("jobs") || {section: "jobs"}; go(to.section, {focus: true, drafts: to.drafts, item: r.id}); }, key: "dpjob:" + r.id});
+        const ask = !p.is_process_stage && g !== "held" && (st === "replied_needs_response" || st === "in_conversation" || st === "call_booked");
+        return ask ? h("div", {class: "d-row-with"}, row, h("p", {class: "d-row-more"}, btn("Ask " + txt(p.first_name) + " for a referral for this role", () => askReferral(p, r), {kind: "link", key: "dask:" + r.id}))) : row;
+      })),
       stateLine(p.id, "dperson:" + p.id));
   }
   function applicationDetail(a) {
     // An application only sent has no word of its own: its line is when it went, with no dot
     // before it ("· Applied Sun 20 Sept", the screen review, 2026-11-11).
     const word = stateWord((APP_STATE[txt(a.status)] || [cap1(txt(a.status))])[0], (APP_STATE[txt(a.status)] || [0, null])[1]);
-    return h("div", {class: "d-stack"},
-      h("p", {}, word, a.applied_on ? h("span", {class: "muted"}, (word ? " · " : "") + "Applied " + fmtDay(a.applied_on)) : null),
+    return h("div", {class: "d-stack d-app"},
+      // Its employer opens its own card, as on a person's (issue #263).
+      h("p", {}, word, employerKey(a.company) ? [word ? " · " : null, employerLink(a.company, "dapp:" + a.id)] : null,
+        a.applied_on ? h("span", {class: "muted"}, (word || employerKey(a.company) ? " · " : "") + "Applied " + fmtDay(a.applied_on)) : null),
       appLive(a) ? h("div", {class: "card-actions"}, btn("I heard back", () => heardBack(a), {kind: "primary", small: true, key: "dheard:" + a.id})) : null,
-      block("What has happened", arr(a.stages).map((s) => h("p", {}, h("span", {class: "muted"}, s.date || s.on ? fmtDay(s.date || s.on) + ": " : ""), txt(s.label || s.name)))),
+      dTimeline("Stages", arr(a.stages).map((s) => ({day: s.date || s.on ? fmtDay(s.date || s.on) : "", label: txt(s.label || s.name), done: stepDone(s)}))),
       block("What went", arr(a.sent_files).map((f) => h("p", {}, typeof f === "string" ? h("bdi", {}, f) : [(f.kind === "letter" ? "Cover letter" : Noun()) + ": ", h("bdi", {}, txt(f.name))]))),
       relatedLinks(a.company, a.id, a));
   }

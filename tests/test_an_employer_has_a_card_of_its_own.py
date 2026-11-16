@@ -39,7 +39,9 @@ CARD = r"""(() => {
   if (!d) return null;
   const parts = {};
   for (const s of d.querySelectorAll('.d-employer section.d-block')) {
-    parts[s.querySelector('h3').textContent.trim()] = [...s.querySelectorAll('li')].map((li) => li.textContent.replace(/\s+/g, ' ').trim());
+    // Each row as "name · where it stands · its line", read from its own parts.
+    parts[s.querySelector('h3').textContent.trim()] = [...s.querySelectorAll('.d-row')].map((r) => ['.d-row-name', '.state-word', '.d-row-sub']
+      .map((c) => (r.querySelector(c) || {textContent: ''}).textContent.replace(/\s+/g, ' ').trim()).filter(Boolean).join(' · '));
   }
   const r = d.getBoundingClientRect();
   return {title: d.querySelector('.detail-title').textContent.trim(), parts,
@@ -65,7 +67,9 @@ def test_an_employer_on_a_job_card_opens_its_card_with_its_roles_and_people(run,
     # Its applications first, each with where it stands and when, then the job found there.
     assert _names(card["parts"]["Roles"]) == ["Senior Supply Chain Analyst", "Stock Analyst",
                                               "Supply Chain Data Analyst"], card
-    assert "applied Fri 2 Oct" in card["parts"]["Roles"][0], card
+    assert card["parts"]["Roles"][0] == "Senior Supply Chain Analyst · Interview Wed 28 Oct · Applied Fri 2 Oct", card
+    # A job found there and not applied to says so, with its fit.
+    assert card["parts"]["Roles"][2].startswith("Supply Chain Data Analyst · Not applied · Scored "), card
     # The same employer however it is written: Kit is at "Larkspur Retail Ltd".
     assert _names(card["parts"]["People"]) == ["Juno", "Kit"], card
     assert len(card["parts"]["Interviews"]) == 1, card

@@ -1179,9 +1179,9 @@ METHODS: dict[str, dict] = {
             (206, "2026-11-12", True, "To do draws the card for connection requests nobody accepted in three weeks again, each request a line of what to do (\"Withdraw your request to Wren: it has waited 3 weeks\") as on its card in Contacts; a first note at an employer where a follow-up is owed waits behind it, saying which to send first"),
             (207, "2026-11-12", True, "each item's links to the rest at its employer are kept apart from the item in the page's database, a record an employer or so, and put back as the page reads them: on the items, one new note at an employer rewrote every colleague's card, and bringing the page up to date after eight new people rewrote most of a long People section"),
             (208, "2026-11-16", True, "Claude's answers in Chat show their lists and bold as formatted text, never raw markdown, and the page's own answer that says it cannot is handed to Claude instead of shown"),
-            (209, "2026-11-16", True, "an employer's name on a job, an application, a person's card or an interview opens its own card: its roles with where each stands, its people and its interviews, each opening its own card"),
+            (209, "2026-11-16", True, "an employer's name on a job, an application, a person's card or an interview opens its own card: its roles with where each stands, its people and its interviews, each opening its own card; every card that opens from a name draws its lists as Settings' rows (a pill for where each stands, a › that says it opens) and its stages on a timeline, is as tall as what it holds on a laptop, and has no box round its title"),
         ),
-        "fingerprint": "781579d620ba6449",
+        "fingerprint": "77ed3dbea3b83347",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

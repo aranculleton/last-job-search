@@ -30,6 +30,10 @@ make sense to somebody whose repo just received it.
 - **Old chats leave your chat list the morning after, as they should.** Each morning the page's old chat and the brief's old chat stayed for two or three more days, so two "Job search page" and two "morning brief" chats sat side by side: the daily tidy-up could not see that their work was already saved on GitHub, and it waited for yesterday's page chat to put itself away, which it never did. It now checks GitHub itself, and puts each old chat away once its work is proven saved. Chats already piled up are cleared by the first tidy-up after you update, and one whose work never reached your main copy is kept a week at most: its saved work stays on GitHub.
 - **An old "starts chats on your computer" chat is named once on your To do.** When a newer one replaced it, the old one stayed in your list for good: it holds your OK to use your computer, so only you can archive it. Your page now names it, with its day, until you tap Done.
 
+### Changed
+
+- **The cards that open from a name are cleaner and easier to read.** An employer's, a person's, an application's and an interview's card now list what they hold as tidy rows: each says where it stands and opens with one tap, the arrow at its end saying so. An application's and an interview's stages run down a timeline, filled once done. On a laptop a card is as tall as what it holds, and its title no longer has a box drawn round it.
+
 ## [4.16.1] - 2026-11-12
 
 ### Changed
