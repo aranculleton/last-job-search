@@ -22,6 +22,10 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **Signing in to LinkedIn on your computer is one card that says where.** Its "Open the chat" button opened a view of that chat without Claude's browser, so the sign-in could not happen there. The card now names the chat to open from your list of chats in the Claude app on your computer and gives the steps, keeping you signed in among them, and one card covers every read waiting on that sign-in.
+- **A people search reads each profile before showing anyone.** With your computer set up to read LinkedIn, it showed people and drafted notes, recruiters' included, from search results while you were signed out, without asking. Now it waits for your sign-in and shows nobody until their profile is read; notes from search results only if you choose them.
+- **Claude's own chat on your computer stays open without asking you.** It asked whether to keep it open as your computer's chat; that is now simply how it works.
+
 - **Old chats leave your chat list the morning after, as they should.** Each morning the page's old chat and the brief's old chat stayed for two or three more days, so two "Job search page" and two "morning brief" chats sat side by side: the daily tidy-up could not see that their work was already saved on GitHub, and it waited for yesterday's page chat to put itself away, which it never did. It now checks GitHub itself, and puts each old chat away once its work is proven saved. Chats already piled up are cleared by the first tidy-up after you update, and one whose work never reached your main copy is kept a week at most: its saved work stays on GitHub.
 - **An old "starts chats on your computer" chat is named once on your To do.** When a newer one replaced it, the old one stayed in your list for good: it holds your OK to use your computer, so only you can archive it. Your page now names it, with its day, until you tap Done.
 

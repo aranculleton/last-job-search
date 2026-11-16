@@ -688,8 +688,9 @@ METHODS: dict[str, dict] = {
             (132, "2026-11-11", False, "the reply playbook names an address given to set up a call or a chat, in words that never read as asking anyone to connect their mail; nothing a reply does changes"),
             (133, "2026-11-12", False, "someone owed a follow-up holds their place at their employer until it goes, as one within their wait does: a run picks nobody new there and the line says which follow-up to send first; a connection request nobody accepted in three weeks says to withdraw it, dated by that day; read each time, so nothing made before needs making again"),
             (134, "2026-11-12", False, "a people run asked for a number finishes with how many it drafted (app.py done --drafted), is done only at that number, and short of it only once no good people are left, saying why (--short) and kept as part-done; its progress count is never more done than its total; an employer whose people who fit were all held back (written to, its limit of people waiting) is full for now, searched again as soon as a reply or a close frees a place, never nobody who fits for a month, and an empty search through a city's own number is never recorded as nobody there; someone a read of their own page ruled out stays out until their headline or employer is new; a contact a run adds, and the employers it names to search next, carry the employer's proper name, never its lower-case key; notes are written as before"),
+            (135, "2026-11-16", False, "with the person's computer set up to read LinkedIn profiles, a people search shows nobody and drafts no first note, a recruiter's included, before that person's profile is read: LinkedIn signed out stops the run on the one card asking for the sign-in, and notes from search results are the person's own choice for the day (reading.py from-search --said); notes already waiting keep their standing"),
         ),
-        "fingerprint": "cdf80d7e6c1c661e",
+        "fingerprint": "09685ed485041836",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
@@ -769,8 +770,9 @@ METHODS: dict[str, dict] = {
             (62, "2026-11-12", False, "a chat the app started on the computer that met a sign-out opens the sign-in in its own browser with its panel up, waits, then looks at LinkedIn's feed opened afresh (computer.py signin-seen), never at an address read before the wait; notes are written as before"),
             (63, "2026-11-12", False, "a note is refused at an employer where a follow-up owed fills a place, the line saying which follow-up goes first; notes are written as before"),
             (64, "2026-11-12", False, "today's list read is not a run done: with fewer than the number asked drafted, reading.py next says to find the rest at the next employers and read on; a people search in the person's own city uses every location number kept for their area (the metro region, their city, the towns their job search covers) and place-ids says what a city's own number leaves out; a people search's mutual connections are never results of their own, each card read whole from its own name link; notes are written as before"),
+            (65, "2026-11-16", False, "a first note to someone whose profile was not read is refused where the person's computer reads profiles (reading.reads_first), card-only and waiting alike, unless the person chose notes from search results today; a chat on the computer that met a sign-out tells the person nothing of a button, since the card names the chat"),
         ),
-        "fingerprint": "dbdc13b9d8860968",
+        "fingerprint": "67e77e50f524ae48",
     },
     "screening": {
         "by": "round", "priority": 2,
@@ -1178,8 +1180,9 @@ METHODS: dict[str, dict] = {
             (205, "2026-11-12", True, "the live prep is easy to use in a live interview: on a wide screen it uses the width and sets a part's Say first beside its questions, Say first staying in view as they pass; the lines said first and the script are a quarter larger and the labels quieter; the opening is on the screen once; the questions Say first may bring are one quiet line under it, never pills between its lines; a follow-up opens in place under its own row, three deep, the path filled, with the way back up; the lifelines say in full what each gives; At a glance's questions are plain lines, not links"),
             (206, "2026-11-12", True, "To do draws the card for connection requests nobody accepted in three weeks again, each request a line of what to do (\"Withdraw your request to Wren: it has waited 3 weeks\") as on its card in Contacts; a first note at an employer where a follow-up is owed waits behind it, saying which to send first"),
             (207, "2026-11-12", True, "each item's links to the rest at its employer are kept apart from the item in the page's database, a record an employer or so, and put back as the page reads them: on the items, one new note at an employer rewrote every colleague's card, and bringing the page up to date after eight new people rewrote most of a long People section"),
+            (208, "2026-11-16", True, "a LinkedIn sign-in in a chat on the person's computer is one To do card that names that chat and gives the steps to open it from the Claude app's list of chats there and sign in, keeping the sign-in among them, with no link to the chat, which opened it without its browser; its I've signed in sends back every read waiting on that sign-in"),
         ),
-        "fingerprint": "f642d120913bfc81",
+        "fingerprint": "b1ff5bf5fbcf6afa",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",
