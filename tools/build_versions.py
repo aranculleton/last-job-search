@@ -1178,9 +1178,9 @@ METHODS: dict[str, dict] = {
             (205, "2026-11-12", True, "the live prep is easy to use in a live interview: on a wide screen it uses the width and sets a part's Say first beside its questions, Say first staying in view as they pass; the lines said first and the script are a quarter larger and the labels quieter; the opening is on the screen once; the questions Say first may bring are one quiet line under it, never pills between its lines; a follow-up opens in place under its own row, three deep, the path filled, with the way back up; the lifelines say in full what each gives; At a glance's questions are plain lines, not links"),
             (206, "2026-11-12", True, "To do draws the card for connection requests nobody accepted in three weeks again, each request a line of what to do (\"Withdraw your request to Wren: it has waited 3 weeks\") as on its card in Contacts; a first note at an employer where a follow-up is owed waits behind it, saying which to send first"),
             (207, "2026-11-12", True, "each item's links to the rest at its employer are kept apart from the item in the page's database, a record an employer or so, and put back as the page reads them: on the items, one new note at an employer rewrote every colleague's card, and bringing the page up to date after eight new people rewrote most of a long People section"),
-            (208, "2026-11-16", True, "Claude's answers in Chat show their lists and bold as formatted text, never raw markdown, and the page's own answer that says it cannot is handed to Claude instead of shown"),
+            (208, "2026-11-16", True, "Claude's answers in Chat show their lists and bold as formatted text, never raw markdown, and the page's own answer that says it cannot is handed to Claude instead of shown; Chat's Latest button is decided once Chat is on the screen, never drawn for a moment over a conversation with nothing below"),
         ),
-        "fingerprint": "cd51494890494550",
+        "fingerprint": "67b2c2de8882a08d",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",
