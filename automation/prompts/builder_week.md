@@ -51,7 +51,7 @@ ones: go straight to step 4, the release. This one run takes all the rest, as on
    app, then only the lines around it.
 2. Reproduce first: a test that fails without the fix, on the app's own path, with invented
    names only. Nothing reproduces: one comment saying what you tried and that it did not
-   happen here, the label `needs-maintainer` added, and leave it.
+   happen here, and close it (not planned); a later report of the same reopens it.
 3. Fix at the cause, never the symptom. Run only the test files you touched and those that
    name a file you changed: CI runs the whole suite, free.
 4. Commit, one commit an issue, saying what was wrong and what happens now. A line under
@@ -62,9 +62,13 @@ the weekly watch (re-read each page it lists, correct the entry, set `verified_o
 `checked_version`, run `claude_surfaces.py sync-docs`). For "Upstream sync watch", port each
 commit worth porting by hand, with its test, and leave the rest.
 
-**Not a bug, or the maintainer's to decide** (their data, their money, what the app is for,
-or the app did what its docs say): one comment saying why in two lines and the label
-`needs-maintainer` added (issue_write, method update), and leave it. **One you could not
+**The maintainer's call is always yours to make** (the maintainer, 2026-11-12 and 2026-11-16:
+"IN FUTURE MAINTAINERS CALL IS ALWAYS YOUR CALL TO MAKE. STOP ASKING THE MAINTAINER UNLESS
+ABSOLUTELY NECESSARY"). What the app should do, a design choice, a default, an issue that is
+no bug: decide it the soundest way, do it (fix it, or close it with one comment saying why in
+two lines), and never hand it back. `needs-maintainer` is only for what truly cannot be done
+without them: their money, their credentials or personal data, or a step only their hand can
+make (below). **One you could not
 fix**: it stays open, with one comment saying why in two lines, never a second comment for the
 same reason in a later week.
 
@@ -102,8 +106,12 @@ reply in one line; then they can switch the chat back to Auto.
    before 07:30 UK time, so the maintainer's brief takes it (`python3 tools/app_bug.py window
    <the maintainer's copy>` says how long to wait where a merge would fall in the window of
    their own scheduled tasks: wait that long with a background run, Bash `run_in_background`).
-   Not green by then: merge once it is, clear of that window. Merge it (squash) and
-   unsubscribe: `release.yml` then tags it, and `tools/release.py publish` closes every
+   Not green by then: merge once it is, clear of that window. **A red Everywhere or Platforms
+   leg is your call too, never theirs:** one this batch did not cause (no file it changed is
+   one the failing test runs) that fails again on its one re-run, or fails a different test
+   each time, does not hold the release once Fast checks and both rehearsals are green: merge,
+   and say in one comment on the pull request what failed and why it did not hold it.
+   Merge it (squash) and unsubscribe: `release.yml` then tags it, and `tools/release.py publish` closes every
    `fixed-unreleased` issue with "Fixed in vX.Y.Z".
 
 ## 5. Report, look once more, and stop
