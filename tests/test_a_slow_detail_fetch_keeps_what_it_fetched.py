@@ -25,7 +25,7 @@ def _slow_linkedin(monkeypatch, secs):
     monkeypatch.setattr(hydrate.portals, "runtime", lambda: ("node",))
     monkeypatch.setattr(hydrate, "pace", lambda skill: True)
 
-    def run_cli(cmd, timeout=60, empty=None):
+    def run_cli(cmd, timeout=60, empty=None, started=None):
         time.sleep(secs)
         return {"description": f"The posting for {cmd[-3]}."}, None
     monkeypatch.setattr(hydrate.portals, "run_cli", run_cli)

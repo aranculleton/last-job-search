@@ -119,8 +119,9 @@ METHODS: dict[str, dict] = {
             (30, "2026-11-11", False, "openroles 0.5.1 reads the boards: a robots.txt with a byte-order mark or a percent-encoded rule is obeyed and one with a rule that cannot be read is a no, a host that says slow down is sent nothing until its pause has passed, a Greenhouse or Gem posting is where its own location says, not where its office tags are, a posting listed on two pages comes back once, and what a description left out is counted for every part of it, text hidden by an inline style of any kind included"),
             (31, "2026-11-17", False, "an employer's job site that asks to slow down is read once more after its pause, a Workday data centre is read two sites at a time, each site's robots.txt is kept a day, a posting whose page failed goes on without its body for the fetch stage, and the round says which sites it could not read; nothing to build again"),
             (32, "2026-11-17", False, "the portals' notes say how long a round searches one of the person's own boards and that profile/search.py PORTAL_MINUTES gives one minutes of the person's own; no board is built differently"),
+            (33, "2026-11-17", False, "a board's crawl-delay runs from when each detail request really starts, after its command is made (hydrate.started, issue 343); what a board is asked for is the same, so nothing made changes"),
         ),
-        "fingerprint": "865950692698adcf",
+        "fingerprint": "dc4be669dacb7db1",
     },
     "search": {
         "setup": True, "by": "upgrade", "priority": 2, "time": "~20 min",
