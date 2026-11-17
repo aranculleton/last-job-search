@@ -79,6 +79,36 @@ YC_AND_BACKED = set(getattr(_E, "YC_AND_BACKED", ())) | _IN["YC_AND_BACKED"]
 TIER_2 = set(getattr(_E, "TIER_2", ())) | _IN["TIER_2"]
 TIER_3 = set(getattr(_E, "TIER_3", ())) | _IN["TIER_3"]
 AGENCY = getattr(_E, "AGENCY", None) or re.compile(r"(?!x)x")
+# A "no" the person said only ranks down (tools/wants.py decline or sector-out with --soft,
+# kept with hard false in profile/wants.json, issue 327): a job at that employer, or at one of
+# that kind, loses this much and says why, and nothing cuts it. Every other "no" is a cut.
+SOFT_NO = -20
+# Read once, at the first job scored, as the tier sets are read once (sector, which reads a
+# kind, imports this module, so it cannot be read while this module loads).
+_SOFT: dict = {}
+
+
+def soft_no(company: str | None, posting: str = "") -> str:
+    """Why a job at this employer is ranked down by a "no" the person said only ranks down
+    (wants.held_soft), or "": by its name, by what the person's own catalogue calls it, or, for
+    an employer the catalogue does not hold, by its posting saying so of itself (as the bar
+    reads a kind turned down, bar.kind_out)."""
+    if not _SOFT:
+        _SOFT.update(_wants.held_soft())
+    if not company or not (_SOFT["employers"] or _SOFT["kinds"]):
+        return ""
+    k = company_key(str(company))
+    if k in _SOFT["employers"]:
+        return f"an employer you would rather not work for: {_SOFT['employers'][k]}"
+    if _SOFT["kinds"]:
+        import sector  # it imports this module, so it is read here, at call time
+        what = sector.kind_key(sector.kind(company))
+        if not what and posting:
+            what = sector.said_kind(posting, company, _SOFT["kinds"])
+        if what in _SOFT["kinds"]:
+            return (f"a kind of employer you would rather not work for ({what}): "
+                    f"{_SOFT['kinds'][what]}")
+    return ""
 
 
 # --------------------------------------------------------------------------
@@ -478,6 +508,10 @@ def score(job: dict, today: dt.date | None = None) -> dict:
     if t:
         pts += t
         why.append(f"{t:+d} {treason}")
+    rather_not = soft_no(job.get("company"), body)
+    if rather_not:
+        pts += SOFT_NO
+        why.append(f"{SOFT_NO:+d} {rather_not} (ranked down, never left out)")
 
     core = [p for pat, p in CORE if pat.search(hay)]      # each pattern searched once
     pts += sum(core)

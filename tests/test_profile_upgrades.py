@@ -1577,3 +1577,25 @@ def test_settings_on_employers_wanted_or_turned_down_move_into_one_record_in_the
     got = json.loads((profile / "wants.json").read_text(encoding="utf-8"))
     assert got["employers"]["Harrow Bank"]["want"] == "out"
     assert got["employers"]["oakmere foods"]["tiers"] == ["TIER_2"]
+
+
+def test_where_you_search_your_pay_and_the_patterns_you_weigh_are_kept_in_the_record(profile):
+    """Issue 327: the places, the remote rule, the pay floor and the cut line, and the
+    work-life signs and kinds of role written as patterns, are kept in profile/wants.json as
+    they are now, with "moved" as who wrote them, and no setting changes. Invented words."""
+    (profile / "wants.json").unlink()
+    with open(profile / "search.py", "a", encoding="utf-8") as fh:
+        fh.write('\nOPP_TITLE_FAMILY = [(re.compile(r"\\bsales\\b", re.I), -15)]\n')
+    search = (profile / "search.py").read_text(encoding="utf-8")
+    person.reset()
+    u = U.by_id("wants-seeded")
+    assert u.cost == "instant" and u.command == ("python3", "tools/wants.py", "seed")
+    assert u.paths == ("profile/wants.json",)
+    assert u.pending().startswith("5 of your settings")
+    _tool("wants.py", "seed")
+    person.reset()
+    assert u.pending() == ""
+    assert (profile / "search.py").read_text(encoding="utf-8") == search
+    got = json.loads((profile / "wants.json").read_text(encoding="utf-8"))
+    assert got["settings"]["places"]["by"] == "moved"
+    assert got["families"]["\\bsales\\b"]["words"] == ""

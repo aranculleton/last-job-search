@@ -2228,11 +2228,16 @@ def cmd_check(a) -> int:
     bad = app_model.check(model)
     # And the person's settings against what they turned down (tools/wants.py): an employer or
     # a kind of employer turned down that a list still searches or lifts (issue 307).
-    drift = []
+    drift, notes = [], []
     if person.exists():
         try:
             import wants
-            drift = [wants.say(f) for f in wants.drift()]
+            found = wants.drift()
+            drift = [wants.say(f) for f in found if f["about"] == "out"]
+            # The rest (a setting and the record of what the person wants that differ, a
+            # pattern with no words kept for it) are said for a chat to put right, never a
+            # failure: the search follows the settings meanwhile (issue 327).
+            notes = [wants.say(f) for f in found if f["about"] != "out"]
         except Exception as e:  # noqa: BLE001  a profile that does not load is said, not raised
             drift = [f"what you turned down could not be checked ({type(e).__name__}: {e})"]
     if bad:
@@ -2244,10 +2249,14 @@ def cmd_check(a) -> int:
         print(f"app: {len(drift)} setting(s) still search or lift what you turned down:")
         for line in drift:
             print(f"  {line}")
-    if bad or drift:
-        return 1
-    print(f"app: the model keeps the contract (rev {model.get('rev')})")
-    return 0
+    if not (bad or drift):
+        print(f"app: the model keeps the contract (rev {model.get('rev')})")
+    if notes:
+        print(f"app: {len(notes)} line(s) where your settings and your record of what you want "
+              "differ, for a chat to put right:")
+        for line in notes:
+            print(f"  {line}")
+    return 1 if bad or drift else 0
 
 
 def paste_line(owner: str, name: str) -> str:

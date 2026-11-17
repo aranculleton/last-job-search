@@ -150,6 +150,7 @@ def test_the_old_settings_move_into_one_record_and_every_verdict_is_as_before(
 def test_a_move_that_would_change_what_the_settings_decide_puts_every_file_back(
         tmp_path, monkeypatch):
     prof = _profile(tmp_path, monkeypatch, DECLINED, SECTORS)
+    os.remove(os.path.join(prof, "wants.json"))     # an install from before the record
     kept = _files(prof)
     import wants
     seen = iter([("before",), ("after",)])
@@ -281,3 +282,230 @@ def test_two_chats_each_turning_one_employer_down_keep_both(tmp_path):
     assert code == 0
     got = json.loads(open(paths[1], encoding="utf-8").read())
     assert set(got["employers"]) == {"harrow bank", "quorlan media"}
+
+
+# ------------------------------------------------------------------ wants that are one setting
+
+def test_where_you_search_and_your_pay_are_kept_with_your_words_and_a_hand_edit_is_named(
+        tmp_path, monkeypatch):
+    """The places, the remote rule, the pay floor and the cut line stay settings the code
+    reads; the record keeps each with the person's words. An existing install's are kept as
+    they are by an upgrade that changes no setting; `set` writes the setting and the record in
+    one step; a setting changed by hand since is named, never put right by guess."""
+    prof = _profile(tmp_path, monkeypatch)
+    os.remove(os.path.join(prof, "wants.json"))     # an install from before the record
+    search = _files(prof)["search.py"]
+    import profile_upgrades
+    up = profile_upgrades.by_id("wants-seeded")
+    assert up.cost == "instant" and up.needs == "nobody"
+    assert up.pending().startswith("4 of your settings on where you search, your pay")
+    got = _run(prof, tmp_path, *up.command[1:])
+    assert got.returncode == 0, got.stdout + got.stderr
+    person.reset()
+    assert up.pending() == "" and _files(prof)["search.py"] == search      # no setting changed
+    with open(os.path.join(prof, "wants.json"), encoding="utf-8") as fh:
+        kept = json.load(fh)["settings"]
+    assert kept["places"]["value"][0] == "Manchester, England, United Kingdom"
+    assert (kept["pay floor"]["value"], kept["pay floor"]["hard"], kept["pay floor"]["by"]) == (
+        42000, False, "moved")
+    assert (kept["pay cut"]["value"], kept["pay cut"]["hard"]) == (32000, True)
+
+    wants_py = os.path.join("tools", "wants.py")
+    got = _run(prof, tmp_path, wants_py, "set", "pay-floor", "45,000", "--said",
+               "nothing under 45k", "--today", TODAY)
+    assert got.returncode == 0 and "45,000 from now on" in got.stdout, got.stdout + got.stderr
+    got = _run(prof, tmp_path, "-c", "import sys; sys.path.insert(0, 'tools'); "
+               "import text_screen, score_posting; print(text_screen.SALARY_FLOOR, "
+               "score_posting.SALARY_FLOOR)")
+    assert got.stdout.split() == ["45000", "45000"], got.stdout + got.stderr
+    got = _run(prof, tmp_path, wants_py, "set", "places", "--add",
+               "Wigan, England, United Kingdom", "--said", "Wigan is close enough")
+    assert got.returncode == 0, got.stdout + got.stderr
+    person.reset()
+    assert "Wigan, England, United Kingdom" in profile_set.get("search.py", "SCRAPE_LOCATIONS")
+    assert "wigan" in profile_set.get("search.py", "GREATER_MANCHESTER")  # the filter keeps it
+    # A floor under the cut line is refused, as the page refuses it, and nothing is written.
+    got = _run(prof, tmp_path, wants_py, "set", "pay-floor", "20000")
+    assert got.returncode == 2 and "cut line" in got.stdout, got.stdout
+    got = _run(prof, tmp_path, wants_py, "check")
+    assert got.returncode == 0 and "SALARY" not in got.stdout, got.stdout
+    got = _run(prof, tmp_path, wants_py, "show")
+    assert "your pay floor: 45,000, only ranks, never leaves out (your words \"nothing under " \
+           "45k\", 2026-11-17)" in got.stdout, got.stdout
+
+    # Changed by hand: named with its line, the record's words and the command, and the check
+    # still passes (the search follows the setting meanwhile).
+    path = os.path.join(prof, "search.py")
+    with open(path, encoding="utf-8") as fh:
+        text = fh.read()
+    with open(path, "w", encoding="utf-8", newline="") as fh:
+        fh.write(text.replace("SALARY_CUT_BELOW = 32_000", "SALARY_CUT_BELOW = 30_000"))
+    got = _run(prof, tmp_path, wants_py, "check")
+    assert got.returncode == 0, got.stdout
+    assert ("SALARY_CUT_BELOW: your pay cut line read 30,000, though your record of what you "
+            "want keeps 32,000") in got.stdout, got.stdout
+    assert "wants.py set pay-cut" in got.stdout
+    # Your rules says the person's words beside the rule.
+    import rules_view
+    person.reset()
+    import datetime as dt
+    rows = {r["id"]: r for r in rules_view.your_rules(dt.date(2026, 11, 17), {})}
+    assert rows["rule~pay"]["words"] == "nothing under 45k"
+    assert rows["rule~places"]["words"] == "Wigan is close enough"
+
+
+# ------------------------------------------------------------------ wants written as patterns
+
+PATTERNS = '''
+OPP_LEVERAGE = [
+    (re.compile(r"\\b(flexible hours|flexible working)\\b", re.I), 8, "flexible hours"),
+    (re.compile(r"\\b(long hours|weekend work)\\b", re.I), -10, "long hours"),
+    (re.compile(r"\\b(supply chain|logistics)\\b", re.I), 10, "logistics work"),
+    (re.compile(r"\\bpension\\w*", re.I), 6, "pensions experience", "employer"),
+]
+OPP_TITLE_FAMILY = [
+    (re.compile(r"\\bsoftware engineer\\b", re.I), -20, "software engineering, a different job"),
+    (re.compile(r"\\bsales\\b", re.I), -15),
+]
+'''
+
+
+def test_work_life_signs_and_kinds_of_role_are_kept_in_words_linked_to_their_patterns(
+        tmp_path, monkeypatch):
+    prof = _profile(tmp_path, monkeypatch)
+    with open(os.path.join(prof, "search.py"), "a", encoding="utf-8") as fh:
+        fh.write(PATTERNS)
+    person.reset()
+    wants_py = os.path.join("tools", "wants.py")
+    # Before the record keeps them, each is named: the work-life signs and every kind of role,
+    # never a lift for the work or for what the employer is.
+    got = _run(prof, tmp_path, wants_py, "check")
+    assert got.returncode == 0, got.stdout
+    for named in ('OPP_LEVERAGE: "flexible hours" weighs a sign of work-life balance (+8)',
+                  'OPP_LEVERAGE: "long hours" weighs a sign of work-life balance (-10)',
+                  'OPP_TITLE_FAMILY: "software engineering, a different job" weighs a kind of '
+                  'role (-20)', 'OPP_TITLE_FAMILY: "\\bsales\\b" weighs a kind of role (-15)'):
+        assert named in got.stdout, (named, got.stdout)
+    assert "logistics work" not in got.stdout and "pensions experience" not in got.stdout
+
+    import profile_upgrades
+    up = profile_upgrades.by_id("wants-seeded")
+    got = _run(prof, tmp_path, *up.command[1:])
+    assert got.returncode == 0, got.stdout + got.stderr
+    person.reset()
+    assert up.pending() == ""
+    with open(os.path.join(prof, "wants.json"), encoding="utf-8") as fh:
+        rec = json.load(fh)
+    assert rec["signals"]["flexible hours"]["words"] == "flexible hours"   # its own reason
+    assert rec["signals"]["flexible hours"]["patterns"] == [
+        {"setting": "OPP_LEVERAGE", "match": "flexible hours"}]
+    assert set(rec["signals"]) == {"flexible hours", "long hours"}
+    sales = rec["families"]["\\bsales\\b"]
+    assert sales["words"] == "" and sales["by"] == "moved"                 # never guessed
+    got = _run(prof, tmp_path, wants_py, "show")
+    assert ("needs your words: a kind of role (-15) written only as OPP_TITLE_FAMILY "
+            "`\\bsales\\b`") in got.stdout, got.stdout
+    assert _run(prof, tmp_path, wants_py, "check").stdout.startswith("wants: nothing")
+
+    got = _run(prof, tmp_path, wants_py, "words", "\\bsales\\b", "no sales roles", "--said",
+               "I won't carry a quota")
+    assert got.returncode == 0, got.stdout + got.stderr
+    assert "needs your words" not in _run(prof, tmp_path, wants_py, "show").stdout
+
+    # A pattern rewritten by hand: its words in the record are left with nothing carrying
+    # them, and the new entry has none; both are named, and linking puts it right.
+    path = os.path.join(prof, "search.py")
+    with open(path, encoding="utf-8") as fh:
+        text = fh.read()
+    with open(path, "w", encoding="utf-8", newline="") as fh:
+        fh.write(text.replace('-10, "long hours")', '-10, "long hours or weekends")'))
+    got = _run(prof, tmp_path, wants_py, "check")
+    assert ('your record keeps "long hours" as a sign of work-life balance, but no pattern '
+            'carries it any more') in got.stdout, got.stdout
+    assert 'OPP_LEVERAGE: "long hours or weekends" weighs a sign' in got.stdout
+    got = _run(prof, tmp_path, wants_py, "link", "long hours", "OPP_LEVERAGE",
+               "long hours or weekends")
+    assert got.returncode == 0, got.stdout + got.stderr
+    got = _run(prof, tmp_path, wants_py, "check")
+    assert got.stdout.startswith("wants: nothing") and "line(s)" not in got.stdout, got.stdout
+    got = _run(prof, tmp_path, wants_py, "forget", "no sales roles")
+    assert got.returncode == 0 and "taken off" in got.stdout, got.stdout + got.stderr
+    assert '"\\bsales\\b" weighs a kind of role' in _run(prof, tmp_path, wants_py,
+                                                          "check").stdout
+
+
+# ------------------------------------------------------------------ hard and soft
+
+def test_a_soft_no_ranks_a_job_down_and_never_cuts_it_and_every_no_before_stays_hard(
+        tmp_path, monkeypatch):
+    prof = _profile(tmp_path, monkeypatch, DECLINED, SECTORS)
+    import wants
+    wants.move(TODAY)
+    person.reset()
+    rec = wants.load()
+    assert all(v["hard"] is True for v in rec["employers"].values() if v["want"] == "out")
+    assert all(v["hard"] is True for v in rec["kinds"].values())
+    wants_py = os.path.join("tools", "wants.py")
+    # Without the flag a "no" cuts; only --soft writes one that ranks down.
+    got = _run(prof, tmp_path, wants_py, "decline", "Quorlan Media", "--said",
+               "rather not, they work late", "--soft", "--today", TODAY)
+    assert got.returncode == 0 and "ranked down from now on, never left out" in got.stdout, \
+        got.stdout + got.stderr
+    got = _run(prof, tmp_path, wants_py, "decline", "Oakmere Foods", "--soft", "--said",
+               "only if it is great", "--today", TODAY)
+    # A lift works against it, so its lifts come off, as turning it down hard takes them.
+    for lift in ("TIER_2", "YC_AND_BACKED"):
+        assert f"took 'oakmere foods' off profile/wants.json {lift}" in got.stdout, got.stdout
+    person.reset()
+    decides = _decides(prof, tmp_path)
+    for n in ("Quorlan Media", "Oakmere Foods"):
+        assert decides["verdict"][n][0] != "excluded" and not decides["out_fn"][n], n
+        assert decides["by_name"][n] == ""
+    assert decides["tier"]["Oakmere Foods"][0] == 0
+    assert decides["verdict"]["Kestrel Mutual"][0] == "excluded"
+    import run_round
+    seen = tmp_path / "seen_jobs.json"
+    seen.write_text('{"seen": {}}', encoding="utf-8")
+    cut = run_round.hard_rules(14, TODAY, str(seen))
+    row = {"title": "Data Analyst", "company": "Quorlan Media", "date": TODAY,
+           "first_seen": TODAY, "desc": "SQL.", "location": "Manchester, England, United Kingdom",
+           "url": "https://jobs.example/9", "fit": 80, "priority": 80}
+    assert "Quorlan" not in cut(row) and "rather not" not in cut(row)
+    # Ranked down, said why in --explain, on the scorer's own command.
+    jobs = tmp_path / "jobs.json"
+    jobs.write_text(json.dumps([dict(row), dict(row, company="Saltmarsh Analytics",
+                                                url="https://jobs.example/10")]),
+                    encoding="utf-8")
+    got = _run(prof, tmp_path, os.path.join("tools", "opportunity.py"), str(jobs), "--explain",
+               "--today", TODAY)
+    assert got.returncode == 0, got.stdout + got.stderr
+    quorlan = got.stdout.split("Quorlan Media", 1)[1].split("Saltmarsh Analytics", 1)[0]
+    assert ("-20 an employer you would rather not work for: rather not, they work late "
+            "(ranked down, never left out)") in quorlan, got.stdout
+    saltmarsh = got.stdout.split("Saltmarsh Analytics", 1)[1].split("Quorlan Media", 1)[0]
+    assert "rather not" not in saltmarsh, got.stdout
+    # A soft no is shown in Your rules as ranked down, counting nothing left out.
+    import rules_view
+    import datetime as dt
+    person.reset()
+    soft = [r for r in rules_view.your_rules(dt.date(2026, 11, 17), {}) if r["kind"] == "soft"]
+    assert [r["sentence"] for r in soft] == [
+        "Roles at Oakmere Foods are ranked down (-20), never left out: Only if it is great.",
+        "Roles at Quorlan Media are ranked down (-20), never left out: Rather not, they work "
+        "late."]
+    assert all(r["left_out"] is None and r["drop"] is None for r in soft)
+    # Said again without the flag, it cuts; taken back, the lift it took off is back.
+    wants.decline("Oakmere Foods", "no, never", TODAY)
+    person.reset()
+    assert _decides(prof, tmp_path)["verdict"]["Oakmere Foods"][0] == "excluded"
+    wants.undecline("Oakmere Foods")
+    person.reset()
+    assert _decides(prof, tmp_path)["tier"]["Oakmere Foods"][0] == 20
+
+
+def test_a_sector_rule_still_written_as_a_pattern_is_said_so(tmp_path, monkeypatch):
+    prof = _profile(tmp_path, monkeypatch)
+    got = _run(prof, tmp_path, os.path.join("tools", "wants.py"), "show")
+    assert ("still written as a pattern (profile/search.py BAR_EXCLUDED), not yet as a kind of "
+            "employer, which needs a chat: a sector the candidate will not work in (gambling and "
+            "tobacco)") in got.stdout, got.stdout

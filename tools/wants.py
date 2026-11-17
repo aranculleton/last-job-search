@@ -21,27 +21,55 @@ whether it cuts (hard) or only ranks (soft):
                    "<employer as written>": {"want": "in", "hard": false, "tiers": ["TIER_2"],
                     "said": "...", "date": "...", "by": "moved"}},
      "kinds": {"<kind of employer>": {"want": "out", "hard": true, "why": "...", "said": "...",
-                "date": "...", "by": "chat"}}}
+                "date": "...", "by": "chat"}},
+     "settings": {"places": {"setting": "search.py SCRAPE_LOCATIONS", "value": [...],
+                   "hard": true, "said": "...", "date": "...", "by": "chat"}},
+     "signals": {"<its name>": {"words": "<what it is, in plain words, or empty until a chat
+                  asks>", "hard": false, "said": "...", "date": "...", "by": "moved",
+                  "patterns": [{"setting": "OPP_LEVERAGE", "match": "<the entry's reason>"}]}},
+     "families": {...the same, for the kinds of role...}}
 
-An employer or a kind out is a cut by the bar (hard); an employer in is lifted by its tier
-(soft: TIER_1 +30, TIER_2 +20, YC_AND_BACKED +14, TIER_3 +10). Every "no" the writers keep is
-hard and every "yes" soft: a no that only ranks down, or a yes that cuts everything else, is
-not one the search reads yet. This file compiles the record: the bar's employers and kinds
-out (bar.DECLINED, bar.SECTORS_OUT, run_round.declined_now, `sectors_out`) and the tier sets
-(opportunity.TIER_1 and the rest) are read from it, together with anything still written in
-the old settings, and what is searched by name and whose job sites are read are checked
-against it (`drift`). `move` takes the old settings into it, each entry's effect unchanged (the
-profile upgrade wants-moved runs it by itself). A sector pattern (BAR_EXCLUDED) stays where it
-is: which kind it means needs a chat.
+An employer or a kind out is a cut by the bar (hard), unless it was written soft on purpose
+(`--soft`): then a job there is only ranked down (opportunity.SOFT_NO), never cut. Every "no"
+written before, and every one written without the flag, is hard. An employer in is lifted by
+its tier (soft: TIER_1 +30, TIER_2 +20, YC_AND_BACKED +14, TIER_3 +10). This file compiles the
+record: the bar's employers and kinds out (bar.DECLINED, bar.SECTORS_OUT, run_round.
+declined_now, `sectors_out`) and the tier sets (opportunity.TIER_1 and the rest) are read from
+it, together with anything still written in the old settings, and what is searched by name and
+whose job sites are read are checked against it (`drift`). `move` takes the old settings into
+it, each entry's effect unchanged (the profile upgrade wants-moved runs it by itself).
 
-    python3 tools/wants.py decline "<employer>" --said "<their words>"
+**Wants that stay single settings** (`SETTINGS`): where the person searches, where they search
+for remote work, the pay floor and the pay cut line are each one setting many modules read
+(search.py SCRAPE_LOCATIONS, SCRAPE_REMOTE_LOCATIONS, SALARY_FLOOR, SALARY_CUT_BELOW). The
+setting stays what the code reads; the record keeps the person's words for it, and `set`
+changes both in one step (profile_set, and the page's own Settings through tools/tweak.py).
+Hard or soft follows what the setting does: the places, the remote rule and the cut line
+leave jobs out, the floor only ranks a job stating less down.
+
+**Wants written as patterns** (`PATTERN_SETTINGS`): the work-life signs among the leverage
+lifts (OPP_LEVERAGE) and the kinds of role the scoring weighs (OPP_TITLE_FAMILY,
+OPP_WRONG_FAMILY, FIT_WRONG_FAMILY) stay patterns, since a pattern is what reads a posting. The
+record keeps each in plain words, linked to the pattern entries that carry it by the entry's
+own reason (or its pattern, where it gives none). `seed` writes what is not kept yet, with the
+entry's reason as its words, or none where it has no reason: a chat asks the person and writes
+theirs with `words`, never guessed. A sector pattern (BAR_EXCLUDED) stays where it is: which
+kind it means needs a chat, and `show` and Your rules say which are still written that way.
+
+    python3 tools/wants.py decline "<employer>" --said "<their words>" [--soft]
     python3 tools/wants.py undecline "<employer>"
-    python3 tools/wants.py sector-out "<kind of employer>" --said "<their words>"
+    python3 tools/wants.py sector-out "<kind of employer>" --said "<their words>" [--soft]
     python3 tools/wants.py sector-back "<kind of employer>"
     python3 tools/wants.py want "<employer>" --tier 1|2|3|backed --said "<their words>"
     python3 tools/wants.py unwant "<employer>"
+    python3 tools/wants.py set places|remote|pay-floor|pay-cut [<value>...] [--add X] [--drop X]
+                               --said "<their words>"
+    python3 tools/wants.py words "<signal or family>" "<plain words>" --said "<their words>"
+    python3 tools/wants.py link "<signal or family>" <SETTING> "<the entry's reason or pattern>"
+    python3 tools/wants.py forget "<signal or family>"
     python3 tools/wants.py show      what the record holds, in plain words
     python3 tools/wants.py move      the old settings taken into the record, effect unchanged
+    python3 tools/wants.py seed      the single settings and the patterns kept in the record
     python3 tools/wants.py check     exit 1 while anything turned down is still searched or lifted
     python3 tools/wants.py tidy      takes every employer turned down off what searches or lifts it
     python3 tools/wants.py header    what a search searches with, as a round prints it first
@@ -49,7 +77,8 @@ is: which kind it means needs a chat.
 `decline` turns the employer down by name (in the record, keyed as the bar reads it), takes it
 off every list that lifts or searches it (the tier sets, SCRAPE_EMPLOYERS, SCRAPE_QUERIES,
 boards.py), keeps the person's words and the day, and notes it under Deal-breakers in
-profile/CLAUDE.md. It refuses a form the bar would never match (a pattern, a kind of employer,
+profile/CLAUDE.md; with `--soft` it is only ranked down, so it comes off the lists that lift it
+and nothing else. It refuses a form the bar would never match (a pattern, a kind of employer,
 two employers at once). `sector-out` does the same for a kind of employer, one rule on what
 the employer is (tools/sector.py: the person's catalogue, employers.py NOT_TECH, or the
 posting saying it of itself), never a list of names. A lift written as a pattern
@@ -99,6 +128,32 @@ WANTS_FILE = "wants.json"
 POINTS = dict(TIERS)
 # How a person names a tier in `want`, and the tier set it compiles into.
 TIER_WORDS = {"1": "TIER_1", "2": "TIER_2", "3": "TIER_3", "backed": "YC_AND_BACKED"}
+# Every part of the record (issue 327): the employers and kinds of employer in and out, the
+# single settings a want lives in, and the work-life signs and kinds of role the scoring weighs.
+SECTIONS = ("employers", "kinds", "settings", "signals", "families")
+# The wants that are one setting each, in search.py: {want: (setting, hard, what it is)}. Hard
+# or soft follows what the setting does: a place not searched, a remote rule and the cut line
+# leave a job out; the floor only ranks a job stating less down ("a decision input, never a
+# cut", score_posting.py).
+SETTINGS = {
+    "places": ("SCRAPE_LOCATIONS", True, "the places you search"),
+    "remote": ("SCRAPE_REMOTE_LOCATIONS", True, "where you search for remote work"),
+    "pay floor": ("SALARY_FLOOR", False, "your pay floor"),
+    "pay cut": ("SALARY_CUT_BELOW", True, "your pay cut line"),
+}
+# The settings whose pattern entries carry the wants written as patterns, by section.
+PATTERN_SETTINGS = {"signals": ("OPP_LEVERAGE",),
+                    "families": ("OPP_TITLE_FAMILY", "OPP_WRONG_FAMILY", "FIT_WRONG_FAMILY")}
+SECTION_WORD = {"signals": "sign of work-life balance", "families": "kind of role"}
+# A leverage entry reads a work-life sign where it reads working terms ("terms", opportunity.
+# SCOPES) or its reason or pattern names one; travel and a commute only as a cost (a lift on
+# "travel" is the travel trade, a penalty on it is the travel asked of the person). Never one
+# that reads what the employer is.
+WORK_LIFE = re.compile(r"work[- ]?life|flexib\w*|\bhours\b|overtime|on[- ]call|weekends?|"
+                       r"evenings?|remote|hybrid|in[- ]office|office days?|(?:four|4)[- ]day|"
+                       r"compressed|crunch|burn[- ]?out|\bshifts?\b|balance", re.I)
+WORK_LIFE_COST = re.compile(r"\btravel\w*|commut\w*", re.I)
+_NONE = object()
 _wants_cache: dict = {}
 
 
@@ -107,15 +162,15 @@ def _wants_path() -> str:
 
 
 def load() -> dict:
-    """The record as stored ({"employers": {...}, "kinds": {...}}), each part {} where there is
-    none. Read again whenever the file changes, by its time and its size (MAINTAINING.md, a
+    """The record as stored ({"employers": {...}, "kinds": {...}, ...}, every part of SECTIONS),
+    each part {} where there is none. Read again whenever the file changes, by its time and its size (MAINTAINING.md, a
     cache is keyed on what it reads). A file that cannot be read is said once, on stderr, and
     read as empty: every setting still written the old way goes on working meanwhile."""
     try:
         p = _wants_path()
         st = os.stat(p)
     except (OSError, person.NoProfile):
-        return {"employers": {}, "kinds": {}}
+        return {s: {} for s in SECTIONS}
     at = (p, st.st_mtime_ns, st.st_size)
     if _wants_cache.get("at") != at:
         try:
@@ -131,17 +186,14 @@ def load() -> dict:
             got = {}
         _wants_cache.update(at=at, rec=got)
     got = _wants_cache["rec"]
-    return {"employers": {str(k): v for k, v in dict(got.get("employers") or {}).items()
-                          if isinstance(v, dict)},
-            "kinds": {str(k): v for k, v in dict(got.get("kinds") or {}).items()
-                      if isinstance(v, dict)}}
+    return {s: {str(k): v for k, v in dict(got.get(s) or {}).items() if isinstance(v, dict)}
+            for s in SECTIONS}
 
 
 def _save(rec: dict) -> None:
     """Write the record whole, sorted, as merge_state merges it (profile/wants.json)."""
     p = _wants_path()
-    out = {"employers": dict(sorted(rec.get("employers", {}).items())),
-           "kinds": dict(sorted(rec.get("kinds", {}).items()))}
+    out = {s: dict(sorted(rec.get(s, {}).items())) for s in SECTIONS}
     tmp = p + ".tmp"
     with open(tmp, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(out, fh, indent=2, ensure_ascii=False, sort_keys=True)
@@ -150,20 +202,48 @@ def _save(rec: dict) -> None:
     _wants_cache.clear()
 
 
+def _hard(v: dict) -> bool:
+    """Whether a "no" in the record cuts: every one does but one written soft on purpose."""
+    return v.get("hard") is not False
+
+
 def held_declined() -> dict:
-    """{employer key: what the bar says} for every employer the record turns down, read
-    through the employer key as the bar reads its list (company_key.keyed)."""
+    """{employer key: what the bar says} for every employer the record turns down (hard),
+    read through the employer key as the bar reads its list (company_key.keyed)."""
     from company_key import keyed
     return keyed({k: str(v.get("why") or v.get("said") or "turned down")
-                  for k, v in load()["employers"].items() if v.get("want") == "out"})
+                  for k, v in load()["employers"].items()
+                  if v.get("want") == "out" and _hard(v)})
 
 
 def held_kinds() -> dict:
-    """{kind, as sector.kind_key: what the bar says} for every kind the record turns down."""
+    """{kind, as sector.kind_key: what the bar says} for every kind the record turns down
+    (hard)."""
     import sector
     return {sector.kind_key(k): str(v.get("why") or v.get("said") or "turned down")
             for k, v in load()["kinds"].items()
-            if v.get("want") == "out" and sector.kind_key(k)}
+            if v.get("want") == "out" and _hard(v) and sector.kind_key(k)}
+
+
+def held_soft() -> dict:
+    """{"employers": {employer key: their words}, "kinds": {kind: their words}} for every "no"
+    the person said only ranks down (written with `--soft`): opportunity.py ranks a job there
+    down by SOFT_NO and says why, and nothing cuts it. An employer or a kind also turned down
+    hard is not here: the cut stands."""
+    import sector
+    from company_key import keyed
+    rec = load()
+    hard_e, hard_k = held_declined(), held_kinds()
+    emp = {k: v for k, v in keyed({e: str(v.get("said") or v.get("why") or "you would rather "
+                                          "not work there")
+                                   for e, v in rec["employers"].items()
+                                   if v.get("want") == "out" and not _hard(v)}).items()
+           if k not in hard_e}
+    kinds = {sector.kind_key(k): str(v.get("said") or v.get("why") or "you would rather not "
+                                     "work at one")
+             for k, v in rec["kinds"].items()
+             if v.get("want") == "out" and not _hard(v) and sector.kind_key(k)}
+    return {"employers": emp, "kinds": {k: w for k, w in kinds.items() if k not in hard_k}}
 
 
 def held_tiers() -> dict:
@@ -191,12 +271,12 @@ def _words(why: str) -> tuple[str, str]:
 
 
 def _set_out(rec: dict, section: str, entry: str, why: str, said: str, day: str, by: str,
-             name: str = "") -> None:
+             name: str = "", hard: bool = True) -> None:
     """One "out" written into the record, keeping a lift it already carries (a drifted lift
     stays until `tidy`, so its effect is unchanged until then)."""
     old = rec[section].get(entry) or {}
     rec[section][entry] = {**{k: v for k, v in old.items() if k in ("tiers", "name")},
-                           "want": "out", "hard": True, "why": why, "said": said,
+                           "want": "out", "hard": bool(hard), "why": why, "said": said,
                            "date": day, "by": by, **({"name": name} if name else {})}
 
 
@@ -316,8 +396,10 @@ def out_fn():
     return out
 
 
-def _out_key(name, declined: dict, kinds: dict, cat: dict) -> tuple[str, str, str]:
-    """(employer key, kind, why) for an employer out, or ("", "", "")."""
+def _out_key(name, declined: dict, kinds: dict, cat: dict,
+             soft: bool = False) -> tuple[str, str, str]:
+    """(employer key, kind, why) for an employer out, or ("", "", ""); with `soft`, out only
+    as a "no" that ranks down."""
     import bar
     import sector
     from company_key import entry_key
@@ -327,15 +409,22 @@ def _out_key(name, declined: dict, kinds: dict, cat: dict) -> tuple[str, str, st
     if kinds:
         what = sector.kind_key(sector.kind(str(name or ""), cat))
         if what in kinds:
-            return "", what, bar.kind_why(what, kinds[what])
+            return "", what, (f"a kind of employer you would rather not work for ({what}): "
+                              f"{kinds[what]}" if soft else bar.kind_why(what, kinds[what]))
     return "", "", ""
 
 
 # ------------------------------------------------------------------ the check
 
-def _finding(file, line, setting, entry, does, why, key="", kind="", plain=True, fix="") -> dict:
+def _finding(file, line, setting, entry, does, why, key="", kind="", plain=True, fix="",
+             about="out") -> dict:
+    """One place a setting disagrees with what the person wants. `about`: "out" (something
+    turned down still searched or lifted, which `check` fails on), "soft" (one they would
+    rather not work for still lifted), "setting" (a single setting the record keeps otherwise)
+    or "link" (a pattern and the record's words for it, one without the other)."""
     return {"file": f"profile/{file}", "line": line, "setting": setting, "entry": entry,
             "does": does, "why": why, "key": key, "kind": kind, "tidy": bool(plain),
+            "about": about,
             "fix": fix or ("take it off: `python3 tools/wants.py tidy`" if plain
                            else "change that line by hand")}
 
@@ -349,55 +438,78 @@ def _names(pattern, text: str) -> bool:
 
 
 def drift() -> list[dict]:
-    """Every place an employer or a kind of employer the person turned down is still searched,
-    read from its own job site or lifted, each with the line to change."""
+    """Every place a setting disagrees with what the person wants, each with the line to
+    change: an employer or a kind of employer turned down that is still searched, read from its
+    own job site or lifted ("out"); one they would only rather not work for that is still
+    lifted ("soft"); a single setting holding other than what the record keeps for it
+    ("setting"); and a work-life sign or a kind of role that a pattern weighs with no words in
+    the record, or words in the record that no pattern carries any more ("link")."""
+    return _turned_down() + _settings_drift() + _links_drift()
+
+
+def _turned_down() -> list[dict]:
     from opportunity import _names_in, _scoped
     declined, kinds, cat = declined_now(), sectors_out(), catalogue()
-    if not declined and not kinds:
+    soft = held_soft()
+    soft_e, soft_k = soft["employers"], soft["kinds"]
+    if not declined and not kinds and not soft_e and not soft_k:
         return []
     out: list[dict] = []
 
-    def look(file, setting, does):
+    def hit(entry, lifts: bool) -> tuple:
+        k, kind, why = _out_key(entry, declined, kinds, cat)
+        if why:
+            return k, kind, why, "out"
+        if lifts and (soft_e or soft_k):
+            k, kind, why = _out_key(entry, soft_e, soft_k, cat, soft=True)
+            if why:
+                return k, kind, why, "soft"
+        return "", "", "", ""
+
+    def look(file, setting, does, lifts=False):
         for entry, line, plain in _entries(file, setting):
             if not isinstance(entry, str):
                 continue
-            k, kind, why = _out_key(entry, declined, kinds, cat)
+            k, kind, why, about = hit(entry, lifts)
             if why:
-                out.append(_finding(file, line, setting, entry, does, why, k, kind, plain))
+                out.append(_finding(file, line, setting, entry, does, why, k, kind, plain,
+                                    about=about))
 
     look("search.py", "SCRAPE_EMPLOYERS", "is searched by name every round")
     for entry, line, plain in _entries("search.py", "SCRAPE_QUERIES"):
         c = " %s " % " ".join(str(entry or "").lower().split())
-        hit = _names_in(c, set(declined)) if isinstance(entry, str) else None
-        if hit:
+        hit_ = _names_in(c, set(declined)) if isinstance(entry, str) and declined else None
+        if hit_:
             out.append(_finding("search.py", line, "SCRAPE_QUERIES", entry,
-                                "is a search for it by name", declined[hit], hit, "", plain))
+                                "is a search for it by name", declined[hit_], hit_, "", plain))
     if person.exists("boards.py"):
         look("boards.py", "BOARDS", "has its own job site read every round")
+    # A lift is wrong for a "no" either way: a soft one ranks the employer down, and a lift
+    # working against that is what turning it down soft takes off.
     if person.exists("employers.py"):
         for setting, pts in TIERS:
-            look("employers.py", setting, f"is lifted +{pts} on every job there")
+            look("employers.py", setting, f"is lifted +{pts} on every job there", lifts=True)
     # A lift the record itself still carries for an employer turned down (a merge of two
     # chats, or a lift it kept when it was moved): taken off the record by `tidy`.
     for entry, v in sorted(load()["employers"].items()):
         for setting in v.get("tiers") or ():
             if setting not in POINTS:
                 continue
-            k, kind, why = _out_key(entry, declined, kinds, cat)
+            k, kind, why, about = hit(entry, True)
             if why:
                 out.append(_finding(WANTS_FILE, None, setting, entry,
                                     f"is lifted +{POINTS[setting]} on every job there", why,
-                                    k, kind, True))
+                                    k, kind, True, about=about))
     # A lift written as a pattern: one naming the employer whole, or, for a kind turned down,
     # one reading what the employer is (scope "employer") that names the kind.
     lev = _plain("search.py", "OPP_LEVERAGE", []) or []
     lines = [ln for _v, ln, _ok in _entries("search.py", "OPP_LEVERAGE")]
     written = dict(_plain("search.py", "BAR_DECLINED", {}) or {})
     from company_key import entry_key
-    names = {}
+    names: dict = {}
     for e in written:
         names.setdefault(entry_key(e), []).append(str(e))
-    for k in declined:
+    for k in (*declined, *soft_e):
         names.setdefault(k, []).append(k)
     for i, e in enumerate(lev):
         try:
@@ -408,22 +520,167 @@ def drift() -> list[dict]:
             continue
         line = lines[i] if i < len(lines) else None
         for k, said in names.items():
-            if k in declined and any(_names(pat, s) for s in said):
+            why, about = ((declined[k], "out") if k in declined
+                          else (soft_e[k], "soft") if k in soft_e else ("", ""))
+            if why and any(_names(pat, x) for x in said):
                 out.append(_finding("search.py", line, "OPP_LEVERAGE", str(reason),
-                                    f"lifts {said[0]} +{pts} by name", declined[k], k, "",
-                                    False, "take its name out of that pattern by hand"))
-        for kind, why in kinds.items():
-            if scope == "employer" and pat.search(kind):
-                out.append(_finding("search.py", line, "OPP_LEVERAGE", str(reason),
-                                    f"lifts every {kind} +{pts}", why, "", kind, False,
-                                    "take that kind out of the pattern by hand"))
+                                    f"lifts {said[0]} +{pts} by name", why, k, "", False,
+                                    "take its name out of that pattern by hand", about))
+        for pool, about in ((kinds, "out"), (soft_k, "soft")):
+            for kind, why in pool.items():
+                if scope == "employer" and pat.search(kind):
+                    out.append(_finding("search.py", line, "OPP_LEVERAGE", str(reason),
+                                        f"lifts every {kind} +{pts}", why, "", kind, False,
+                                        "take that kind out of the pattern by hand", about))
+    return out
+
+
+def _shown(value) -> str:
+    """A setting's value as a line says it."""
+    if isinstance(value, (list, tuple)):
+        return "[" + "; ".join(str(x) for x in value) + "]" if value else "nothing"
+    if isinstance(value, int) and not isinstance(value, bool):
+        return f"{value:,}"
+    return str(value)
+
+
+def _who(v: dict) -> str:
+    """Who wrote a record entry, and when, as a line says it."""
+    day = v.get("date") or "no date"
+    if v.get("said"):
+        return f"your words \"{v['said']}\", {day}"
+    if v.get("by") == "moved":
+        return f"kept from your settings as they were on {day}"
+    if v.get("by") == "page":
+        return f"set on your page, {day}"
+    return f"set by a chat, {day}"
+
+
+def _same(a, b) -> bool:
+    """Equal as a setting and a record keep it: a tuple and a list holding the same alike."""
+    norm = (lambda x: list(x) if isinstance(x, (list, tuple)) else x)
+    return norm(a) == norm(b)
+
+
+def _line(file: str, key: str):
+    import profile_set
+    _text, tree = _source(file)
+    n = profile_set._node(tree, key) if tree is not None else None
+    return n.lineno if n is not None else None
+
+
+def setting_now(want: str):
+    """What a single-setting want's setting holds now, or _NONE where it is not set."""
+    return _plain("search.py", SETTINGS[want][0], _NONE)
+
+
+def _settings_drift() -> list[dict]:
+    """Each single setting holding other than what the record keeps for it: changed by hand
+    since, or taken out. Never put right by itself: which is right is the person's to say."""
+    out = []
+    for want, v in sorted(load()["settings"].items()):
+        if want not in SETTINGS:
+            continue                     # a want a later version knows: kept, never read here
+        key, _hard_, what = SETTINGS[want]
+        now = setting_now(want)
+        if _same(None if now is _NONE else now, v.get("value")):
+            continue
+        does = (f"{what} {'is not set' if now is _NONE else 'read ' + _shown(now)}, though "
+                f"your record of what you want keeps {_shown(v.get('value'))} ({_who(v)})")
+        out.append(_finding("search.py", _line("search.py", key), key, want, does, "",
+                            plain=False, about="setting",
+                            fix=("write the one that is right with `python3 tools/wants.py set "
+                                 f"{want.replace(' ', '-')} <value> --said \"<their words>\"`")))
+    return out
+
+
+def patterns(section: str) -> list[dict]:
+    """Every pattern entry of the settings `section` links to (PATTERN_SETTINGS), each
+    {"setting", "match", "why", "points", "pattern", "line", "record"}: "match" is what the
+    record links it by (its own reason, or its pattern where it gives none), and "record"
+    whether its words belong in the record (every kind of role; a leverage entry only where it
+    reads a work-life sign)."""
+    out = []
+    for setting in PATTERN_SETTINGS[section]:
+        for entry, line, _ok in _entries("search.py", setting):
+            if not isinstance(entry, (tuple, list)) or len(entry) < 2:
+                continue
+            pat, pts = entry[0], entry[1]
+            why = " ".join(entry[2].split()) if len(entry) > 2 and isinstance(entry[2], str) \
+                else ""
+            src = getattr(pat, "pattern", pat if isinstance(pat, str) else "")
+            if not isinstance(src, str) or not (why or src):
+                continue
+            out.append({"setting": setting, "match": why or src, "why": why,
+                        "points": int(pts) if isinstance(pts, (int, float)) else 0,
+                        "pattern": src,
+                        "line": line,
+                        "record": setting != "OPP_LEVERAGE" or _work_life(entry)})
+    return out
+
+
+def _work_life(entry) -> bool:
+    """Whether a leverage entry reads a work-life sign (WORK_LIFE): one reading working terms,
+    or one whose reason or pattern names a sign, never one reading what the employer is."""
+    from opportunity import _scoped
+    try:
+        pat, pts, reason, scope, _aside = _scoped(entry)
+    except (TypeError, ValueError):
+        return False
+    if scope == "employer":
+        return False
+    if scope == "terms":
+        return True
+    text = f"{reason} {getattr(pat, 'pattern', '')}"
+    return bool(WORK_LIFE.search(text) or ((pts or 0) < 0 and WORK_LIFE_COST.search(text)))
+
+
+def _links(v: dict) -> list[tuple[str, str]]:
+    return [(str(x.get("setting") or ""), " ".join(str(x.get("match") or "").split()))
+            for x in v.get("patterns") or () if isinstance(x, dict)]
+
+
+def _links_drift() -> list[dict]:
+    """A record entry no pattern carries any more, and a pattern the record keeps no words
+    for."""
+    rec = load()
+    out = []
+    for section in PATTERN_SETTINGS:
+        found = patterns(section)
+        have = {(p["setting"], p["match"]) for p in found}
+        linked: set = set()
+        for name, v in sorted(rec[section].items()):
+            links = _links(v)
+            linked |= set(links)
+            gone = [f"{s} \"{m}\"" for s, m in links if (s, m) not in have]
+            if gone or not links:
+                said = v.get("words") or name
+                out.append(_finding(
+                    WANTS_FILE, None, section, name,
+                    f"your record keeps \"{said}\" as a {SECTION_WORD[section]}, but "
+                    + (f"no pattern carries it any more ({', '.join(gone)})" if gone
+                       else "no pattern is linked to it"), "", plain=False, about="link",
+                    fix=("link it to the pattern that carries it now with `python3 tools/wants.py "
+                         f"link \"{name}\" <SETTING> \"<its reason>\"`, or take it off with "
+                         f"`python3 tools/wants.py forget \"{name}\"`")))
+        for p in found:
+            if p["record"] and (p["setting"], p["match"]) not in linked:
+                out.append(_finding(
+                    "search.py", p["line"], p["setting"], p["match"],
+                    f"\"{p['match']}\" weighs a {SECTION_WORD[section]} ({p['points']:+d}) your "
+                    "record of what you want has no words for", "", plain=False, about="link",
+                    fix="`python3 tools/wants.py seed` keeps it there with its own reason"))
     return out
 
 
 def say(f: dict) -> str:
     """One finding as a line: where, what, why it is out, and what to do."""
     where = f"{f['file']}" + (f" line {f['line']}" if f.get("line") else "") + f", {f['setting']}"
-    return f"{where}: {f['entry']!r} {f['does']}, though you turned it down ({f['why']}): {f['fix']}"
+    if f.get("about") in ("setting", "link"):
+        return f"{where}: {f['does']}: {f['fix']}"
+    though = ("though you would rather not work there" if f.get("about") == "soft"
+              else "though you turned it down")
+    return f"{where}: {f['entry']!r} {f['does']}, {though} ({f['why']}): {f['fix']}"
 
 
 # ------------------------------------------------------------------ the one writer
@@ -469,7 +726,7 @@ def tidy(keys=None, kinds=None) -> dict:
     for an employer the person did not turn down. {"removed": [what came off, each with its
     text as written, which `put_back` restores], "by_hand": [the findings left]}."""
     import profile_set
-    found = drift()
+    found = _turned_down()
     pick = [f for f in found if f["tidy"] and (
         (keys is None and kinds is None)
         or (f["key"] and f["key"] in set(keys or ()))
@@ -608,12 +865,25 @@ def _unnote(mark: str) -> None:
             fh.write("".join(kept))
 
 
-def decline(company: str, said: str = "", day: str | None = None, by: str = "chat") -> dict:
+def _old_setting(setting: str) -> dict:
+    """search.py BAR_DECLINED or BAR_SECTORS_OUT as still written the old way, {} where not."""
+    import profile_set
+    try:
+        got = profile_set.get("search.py", setting)
+    except Exception:  # noqa: BLE001  no profile file: nothing written there
+        return {}
+    return got if isinstance(got, dict) and got is not profile_set.MISSING else {}
+
+
+def decline(company: str, said: str = "", day: str | None = None, by: str = "chat",
+            hard: bool = True) -> dict:
     """Turn one employer down by name, everywhere at once: kept in the record of what the
     person wants, with their words and the day. {"key", "added" (False where it was turned
-    down already, however written), "removed", "by_hand"}. Refused for a form the bar would
-    never match."""
+    down already, however written), "hard", "removed", "by_hand"}. Refused for a form the bar
+    would never match. With `hard` False (`--soft`, only ever on purpose) a job there is
+    ranked down and never cut, and only the lists that lift it are changed."""
     import rules_view
+    from company_key import entry_key
     from company_key import key as company_key
     name = " ".join(str(company or "").split())
     # A name the page passes is a posting's own employer, never a list or a pattern a chat
@@ -625,19 +895,35 @@ def decline(company: str, said: str = "", day: str | None = None, by: str = "cha
         raise Refused(why_not)
     day = day or person.today().isoformat()
     k = company_key(name)
-    added = k not in declined_now()
+    if hard:
+        added = k not in declined_now()
+    else:
+        if k in {entry_key(e) for e in _old_setting("BAR_DECLINED")}:
+            raise Refused(f"{name} is turned down in profile/search.py BAR_DECLINED, still "
+                          "written the old way: `python3 tools/wants.py move` takes it into "
+                          "your record first")
+        added = k not in held_soft()["employers"]
     why = _why(said, day, by)
     if added:
         rec = load()
-        _set_out(rec, "employers", k, why, " ".join(str(said or "").split()), day, by, name)
+        same = [e for e, v in rec["employers"].items()
+                if v.get("want") == "out" and entry_key(e) == k]
+        _set_out(rec, "employers", same[0] if same else k, why,
+                 " ".join(str(said or "").split()), day, by, name, hard)
         _save(rec)
     done = tidy(keys={k})
     if added:
+        # A "no" said again harder or softer keeps what the first took off, so taking it back
+        # puts everything back.
+        before = (rules_view.set_record().get(f"rule~declined~{k}") or {}).get("tidied") or []
         rules_view.note_set(f"rule~declined~{k}", said or ("no more roles from them"
                                                           if by == "page" else ""),
-                            day, name=name, tidied=done["removed"])
-        _note(NOTE_MARK.format(k), f"- No roles at {name}: {why}.")
-    return {"key": k, "added": added, **done}
+                            day, name=name, tidied=[*before, *done["removed"]])
+        if hard:
+            _note(NOTE_MARK.format(k), f"- No roles at {name}: {why}.")
+        else:
+            _unnote(NOTE_MARK.format(k))      # ranked down is no deal-breaker
+    return {"key": k, "added": added, "hard": bool(hard), **done}
 
 
 def put_out(key: str, why: str) -> None:
@@ -705,7 +991,7 @@ def want(company: str, tier: str, said: str = "", day: str | None = None,
     if not setting:
         raise Refused(f"\"{tier}\" is not a tier: say 1, 2, 3 or backed")
     k = entry_key(name)
-    if k in declined_now():
+    if k in declined_now() or k in held_soft()["employers"]:
         raise Refused(f"{name} is turned down: take that back first with `python3 "
                       f"tools/wants.py undecline \"{name}\"`")
     entry = name.lower()
@@ -757,11 +1043,13 @@ def kind_refusal(kind: str) -> str:
     return ""
 
 
-def sector_out(kind: str, said: str = "", day: str | None = None, by: str = "chat") -> dict:
+def sector_out(kind: str, said: str = "", day: str | None = None, by: str = "chat",
+               hard: bool = True) -> dict:
     """Turn a kind of employer down: one rule on what the employer is, kept in the record of
     what the person wants, and every employer of that kind taken off what searches or lifts
-    it. {"kind", "added", "covers": [employers the catalogue files under it], "kinds": [every
-    kind it files], ...}."""
+    it. {"kind", "added", "hard", "covers": [employers the catalogue files under it], "kinds":
+    [every kind it files], ...}. With `hard` False (`--soft`, only ever on purpose) a job at one
+    is ranked down and never cut, and only the lists that lift one are changed."""
     import rules_view
     import sector
     why_not = kind_refusal(kind)
@@ -769,20 +1057,36 @@ def sector_out(kind: str, said: str = "", day: str | None = None, by: str = "cha
         raise Refused(why_not)
     day = day or person.today().isoformat()
     k = sector.kind_key(kind)
-    added = k not in sectors_out()
+    if hard:
+        added = k not in sectors_out()
+    else:
+        if k in {sector.kind_key(x) for x in _old_setting("BAR_SECTORS_OUT")}:
+            raise Refused(f"every {k} is turned down in profile/search.py BAR_SECTORS_OUT, "
+                          "still written the old way: `python3 tools/wants.py move` takes it "
+                          "into your record first")
+        added = k not in held_soft()["kinds"]
     why = _why(said, day, by)
     if added:
         rec = load()
-        _set_out(rec, "kinds", k, why, " ".join(str(said or "").split()), day, by)
+        same = [x for x in rec["kinds"] if sector.kind_key(x) == k]
+        for x in same[1:]:
+            rec["kinds"].pop(x)
+        _set_out(rec, "kinds", same[0] if same else k, why, " ".join(str(said or "").split()),
+                 day, by, hard=hard)
         _save(rec)
     done = tidy(kinds={k})
     cat = catalogue()
     covers = sorted(n for n, what in cat.items() if sector.kind_key(what) == k)
     if added:
+        before = ((rules_view.set_record().get(f"rule~sector_out~{_slug(k)}") or {})
+                  .get("tidied") or [])
         rules_view.note_set(f"rule~sector_out~{_slug(k)}", said, day, name=k,
-                            tidied=done["removed"])
-        _note(KIND_MARK.format(k), f"- No roles at any {k}: {why}.")
-    return {"kind": k, "added": added, "covers": covers,
+                            tidied=[*before, *done["removed"]])
+        if hard:
+            _note(KIND_MARK.format(k), f"- No roles at any {k}: {why}.")
+        else:
+            _unnote(KIND_MARK.format(k))
+    return {"kind": k, "added": added, "hard": bool(hard), "covers": covers,
             "kinds": sorted({sector.kind_key(v) for v in cat.values()} - {""}), **done}
 
 
@@ -826,6 +1130,250 @@ def sector_back(kind: str, restore=None) -> dict:
         rules_view.drop_set(rid)
     _unnote(KIND_MARK.format(k))
     return {"kind": k, "taken": taken, "restored": back}
+
+
+# ------------------------------------------------------------------ wants that are one setting
+
+# How a person or a chat names a single-setting want on the command line.
+SETTING_WORDS = {"places": "places", "place": "places", "where": "places",
+                 "remote": "remote", "pay-floor": "pay floor", "pay floor": "pay floor",
+                 "floor": "pay floor", "pay-cut": "pay cut", "pay cut": "pay cut",
+                 "cut": "pay cut"}
+
+
+def setting_entry(want: str) -> dict:
+    """What the record keeps for a single-setting want (SETTINGS), or {}."""
+    return dict(load()["settings"].get(want) or {})
+
+
+def keep_setting(want: str, value, said: str = "", day: str | None = None,
+                 by: str = "chat") -> dict:
+    """The record's entry for a single-setting want written, the setting itself left to the
+    caller (`set_want`, or the page's Settings, tools/tweak.py, which writes it beside this).
+    {"want", "before": the entry it replaced, or None}, which `put_setting` restores."""
+    if want not in SETTINGS:
+        raise Refused(f"\"{want}\" is not one of the wants kept as a setting: say places, "
+                      "remote, pay-floor or pay-cut")
+    key, hard, _what = SETTINGS[want]
+    rec = load()
+    before = rec["settings"].get(want)
+    rec["settings"][want] = {"setting": f"search.py {key}",
+                             "value": list(value) if isinstance(value, tuple) else value,
+                             "hard": hard, "said": " ".join(str(said or "").split()),
+                             "date": day or person.today().isoformat(), "by": by}
+    _save(rec)
+    return {"want": want, "before": before}
+
+
+def put_setting(want: str, before) -> None:
+    """The record's entry for a want put back as `keep_setting` found it (None: none)."""
+    rec = load()
+    if isinstance(before, dict):
+        rec["settings"][want] = before
+    else:
+        rec["settings"].pop(want, None)
+    _save(rec)
+
+
+def _setting_writes(want: str, values, add, drop) -> list[tuple]:
+    """The settings lines a want's change writes, each ("line", file, key, value): a place
+    added or taken off the page's own way (tools/tweak.py, row J7), so the location filter
+    keeps the town it searches; the floor never under the cut line (row J12)."""
+    import tweak
+    key = SETTINGS[want][0]
+    now = setting_now(want)
+    have = list(now) if isinstance(now, (list, tuple)) else []
+    lines = (lambda ws: [w for w in ws if w[0] == "line"])  # noqa: E731  the record is ours
+    try:
+        if want == "places":
+            if not (add or drop):
+                raise Refused("add a place or take one off, one at a time (--add or --drop), "
+                              "so the location filter keeps each place searched")
+            writes, _then, _said = tweak._writes(
+                {"p": "J7", "v": {"add": add} if add else {"drop": drop}}, {}, True)
+            return lines(writes)
+        if want == "remote":
+            if add:
+                return [] if add in have else [("line", "search.py", key, have + [add])]
+            if drop:
+                return [("line", "search.py", key, [x for x in have if x != drop])] \
+                    if drop in have else []
+            new = [" ".join(str(v).split()) for v in values or () if str(v).strip()]
+            return [] if _same(now, new) else [("line", "search.py", key, new)]
+        if add or drop or len(values or ()) != 1:
+            raise Refused(f"say your {want} as one number")
+        try:
+            n = int(str(values[0]).replace(",", "").replace("_", ""))
+        except ValueError:
+            raise Refused(f"\"{values[0]}\" is not a number") from None
+        if want == "pay floor":
+            writes, _then, _said = tweak._writes({"p": "J12", "v": n}, {}, True)
+            return [] if _same(now, n) else lines(writes)
+        floor = _plain("search.py", "SALARY_FLOOR", 0) or 0
+        if floor and n > floor:
+            raise Refused(f"That is over your pay floor ({floor:,}): a cut line leaves out "
+                          "what tops out under it, so it sits at or below the floor")
+        return [] if _same(now, n) else [("line", "search.py", key, n)]
+    except tweak.Refused as e:
+        raise Refused(str(e)) from None
+
+
+def set_want(what: str, values=(), add: str = "", drop: str = "", said: str = "",
+             day: str | None = None, by: str = "chat") -> dict:
+    """A single-setting want changed in one step: the setting written through the settings
+    writer (profile_set), with what a place needs beside it, and the record kept with the
+    person's words; every write taken back if one fails. {"want", "value", "changed"}."""
+    import profile_set
+    want = SETTING_WORDS.get(" ".join(str(what or "").lower().split()))
+    if not want:
+        raise Refused(f"\"{what}\" is not one of the wants kept as a setting: say places, "
+                      "remote, pay-floor or pay-cut")
+    if want == "places" and add and drop:
+        raise Refused("add a place or take one off, one at a time")
+    writes = _setting_writes(want, list(values or ()), " ".join(str(add or "").split()),
+                             " ".join(str(drop or "").split()))
+    now = setting_now(want)
+    if not writes and not str(said or "").strip() and setting_entry(want) and \
+            _same(setting_entry(want).get("value"), None if now is _NONE else now):
+        return {"want": want, "value": setting_entry(want).get("value"), "changed": False}
+    done = []
+    try:
+        for w in writes:
+            done.append(profile_set.set_line(w[1], w[2], w[3]))
+        now = setting_now(want)
+        keep_setting(want, None if now is _NONE else now, said, day, by)
+    except Exception as e:
+        for r in reversed(done):
+            profile_set.restore(r)
+        if isinstance(e, profile_set.Refused):
+            raise Refused(str(e)) from None
+        raise
+    return {"want": want, "value": setting_entry(want).get("value"), "changed": bool(writes)}
+
+
+# ------------------------------------------------------------------ wants written as patterns
+
+def _section_of(name: str) -> tuple[str, str]:
+    """(section, the entry's name as kept) for a work-life sign or a kind of role, by its name
+    or its words, or Refused."""
+    n = " ".join(str(name or "").split()).lower()
+    rec = load()
+    for section in PATTERN_SETTINGS:
+        for e, v in rec[section].items():
+            if n in (e.lower(), " ".join(str(v.get("words") or "").split()).lower()):
+                return section, e
+    raise Refused(f"\"{name}\" is not in your record as a sign of work-life balance or a kind "
+                  "of role: `python3 tools/wants.py show` lists them")
+
+
+def words(name: str, plain: str, said: str = "", day: str | None = None,
+          by: str = "chat") -> dict:
+    """A work-life sign or a kind of role given the person's plain words (and their own, where
+    said): the words a pattern weighs it by, which a seed from the pattern could not invent."""
+    plain = " ".join(str(plain or "").split())
+    if not plain:
+        raise Refused("say what it is in plain words")
+    section, e = _section_of(name)
+    rec = load()
+    rec[section][e] = dict(rec[section][e], words=plain,
+                           said=" ".join(str(said or "").split()),
+                           date=day or person.today().isoformat(), by=by)
+    _save(rec)
+    return {"section": section, "name": e, "words": plain}
+
+
+def link(name: str, setting: str, match: str, day: str | None = None) -> dict:
+    """A work-life sign or a kind of role linked to the pattern entry that carries it now (by
+    the entry's reason, or its pattern where it gives none): its links to patterns gone are
+    dropped, and an entry seeded for the same pattern with no words of the person's goes."""
+    section, e = _section_of(name)
+    match = " ".join(str(match or "").split())
+    found = {(p["setting"], p["match"]) for p in patterns(section)}
+    if (setting, match) not in found:
+        raise Refused(f"no entry of profile/search.py {setting} reads \"{match}\": give its "
+                      "reason as written, or its pattern where it has none")
+    rec = load()
+    for other, v in list(rec[section].items()):
+        if other != e and (setting, match) in _links(v):
+            keep = [x for x in v.get("patterns") or ()
+                    if isinstance(x, dict) and (x.get("setting"), x.get("match")) !=
+                    (setting, match)]
+            if not keep and not v.get("said") and v.get("by") == "moved":
+                rec[section].pop(other)
+            else:
+                rec[section][other] = dict(v, patterns=keep)
+    v = rec[section][e]
+    kept = [{"setting": s, "match": m} for s, m in _links(v) if (s, m) in found]
+    if (setting, match) not in {(x["setting"], x["match"]) for x in kept}:
+        kept.append({"setting": setting, "match": match})
+    rec[section][e] = dict(v, patterns=kept, date=day or person.today().isoformat())
+    _save(rec)
+    return {"section": section, "name": e, "patterns": kept}
+
+
+def forget(name: str) -> dict:
+    """A work-life sign or a kind of role taken off the record. A pattern still carrying it is
+    kept again by the next seed, with its own reason."""
+    section, e = _section_of(name)
+    rec = load()
+    rec[section].pop(e)
+    _save(rec)
+    return {"section": section, "name": e}
+
+
+# ------------------------------------------------------------------ what the record keeps by itself
+
+def to_seed() -> dict:
+    """{"settings": [wants], "signals": [names], "families": [names]}: each single setting set
+    now, and each pattern a want is written as, that the record keeps nothing for yet."""
+    rec = load()
+    out = {"settings": [w for w in SETTINGS
+                        if w not in rec["settings"] and setting_now(w) is not _NONE]}
+    for section in PATTERN_SETTINGS:
+        linked = {x for v in rec[section].values() for x in _links(v)}
+        out[section] = list(dict.fromkeys(p["match"] for p in patterns(section)
+                                          if p["record"]
+                                          and (p["setting"], p["match"]) not in linked))
+    return out
+
+
+def seed(day: str | None = None) -> dict:
+    """Keep in the record what it holds nothing for yet: each single setting as it is now, and
+    each work-life sign and kind of role a pattern weighs, with the entry's own reason as its
+    words, or none where it has no reason (`show` asks for a chat's), never guessed. "moved"
+    is who wrote each; no setting is changed. Safe to run again. {section: n kept}."""
+    todo = to_seed()
+    if not any(todo.values()):
+        return {}
+    day = day or person.today().isoformat()
+    rec = load()
+    got: dict = {}
+    for want in todo["settings"]:
+        key, hard, _what = SETTINGS[want]
+        now = setting_now(want)
+        rec["settings"][want] = {"setting": f"search.py {key}",
+                                 "value": list(now) if isinstance(now, tuple) else now,
+                                 "hard": hard, "said": "", "date": day, "by": "moved"}
+        got["settings"] = got.get("settings", 0) + 1
+    for section in PATTERN_SETTINGS:
+        linked = {x for v in rec[section].values() for x in _links(v)}
+        for p in patterns(section):
+            link_ = (p["setting"], p["match"])
+            if not p["record"] or link_ in linked:
+                continue
+            linked.add(link_)
+            v = rec[section].get(p["match"])
+            if v is None:
+                rec[section][p["match"]] = {"words": p["why"], "hard": False, "said": "",
+                                            "date": day, "by": "moved",
+                                            "patterns": [{"setting": p["setting"],
+                                                          "match": p["match"]}]}
+            else:                        # the same reason in another setting: one want
+                rec[section][p["match"]] = dict(v, patterns=list(v.get("patterns") or ())
+                                            + [{"setting": p["setting"], "match": p["match"]}])
+            got[section] = got.get(section, 0) + 1
+    _save(rec)
+    return got
 
 
 # ------------------------------------------------------------------ the old settings, moved in
@@ -953,27 +1501,70 @@ def _entry_notes(text: str) -> dict:
 
 
 def show() -> list[str]:
-    """The record, a line a want, in plain words: what is out, what is lifted, and anything
-    still written the old way."""
+    """The record, a line a want, in plain words: what is out, what is only ranked down, what
+    is lifted, the single settings, the work-life signs and kinds of role (each needing a
+    chat's words said so), and anything still written the old way or as a pattern."""
+    try:
+        from opportunity import SOFT_NO
+        down = f"ranked down {SOFT_NO:+d}"
+    except Exception:  # noqa: BLE001  a profile the scorer cannot read: said without the points
+        down = "ranked down"
     rec = load()
     lines = []
+
+    def no(name, v):
+        said = f"{v.get('said') or v.get('why') or ''} ({v.get('date') or 'no date'})"
+        if _hard(v):
+            return f"no {name}: {said}"
+        return f"rather not {name}, {down} and never left out: {said}"
     for k, v in sorted(rec["kinds"].items()):
-        lines.append(f"no {k}: {v.get('said') or v.get('why') or ''} ({v.get('date') or 'no date'})")
+        lines.append(no(k, v))
     for e, v in sorted(rec["employers"].items()):
         if v.get("want") == "out":
-            lines.append(f"no {v.get('name') or e}: {v.get('said') or v.get('why') or ''} "
-                         f"({v.get('date') or 'no date'})")
+            lines.append(no(v.get("name") or e, v))
     for e, v in sorted(rec["employers"].items()):
         for t in v.get("tiers") or ():
             lines.append(f"wanted, +{POINTS.get(t, 0)}: {e}"
                          + (f": {v['said']}" if v.get("said") else "")
                          + f" ({v.get('date') or 'no date'})")
+    for want, v in sorted(rec["settings"].items()):
+        if want in SETTINGS:
+            lines.append(f"{SETTINGS[want][2]}: {_shown(v.get('value'))}, "
+                         + ("leaves jobs out" if _hard(v) else "only ranks, never leaves out")
+                         + f" ({_who(v)})")
+    for section in PATTERN_SETTINGS:
+        points = {(p["setting"], p["match"]): p["points"] for p in patterns(section)}
+        for name, v in sorted(rec[section].items()):
+            pts = [points[x] for x in _links(v) if x in points]
+            weighs = ", ".join(f"{p:+d}" for p in pts) or "no pattern"
+            if v.get("words"):
+                lines.append(f"{SECTION_WORD[section]} ({weighs}): {v['words']} ({_who(v)})")
+            else:
+                where = ", ".join(f"{s_} `{m}`" for s_, m in _links(v)) or name
+                lines.append(f"needs your words: a {SECTION_WORD[section]} ({weighs}) written "
+                             f"only as {where}: a chat asks what it is for and keeps it with "
+                             f"`python3 tools/wants.py words \"{name}\" \"<their words>\"`")
+    for why in excluded_patterns():
+        lines.append("still written as a pattern (profile/search.py BAR_EXCLUDED), not yet as a "
+                     f"kind of employer, which needs a chat: {why}")
     left = to_move()
     if left:
         lines.append("still written the old way, read all the same (`python3 tools/wants.py "
                      "move` takes them in): " + ", ".join(f"{s} {len(v)}"
                                                          for s, v in sorted(left.items())))
+    todo = to_seed()
+    if any(todo.values()):
+        lines.append("not kept in your record yet (`python3 tools/wants.py seed` keeps them): "
+                     + ", ".join(f"{k} {len(v)}" for k, v in sorted(todo.items()) if v))
     return lines
+
+
+def excluded_patterns() -> list[str]:
+    """The reason of each sector rule still written as a pattern (search.py BAR_EXCLUDED, those
+    not set aside in BAR_EXCLUDED_OFF): which kind of employer each means needs a chat."""
+    off = {str(x) for x in _plain("search.py", "BAR_EXCLUDED_OFF", []) or []}
+    return [str(r[1]) for r in _plain("search.py", "BAR_EXCLUDED", []) or []
+            if isinstance(r, (list, tuple)) and len(r) > 1 and str(r[1]) not in off]
 
 
 def _slug(text: str) -> str:
@@ -988,10 +1579,7 @@ def snapshot(window: int) -> dict:
             "places": [str(x) for x in _plain("search.py", "SCRAPE_LOCATIONS", []) or []],
             "remote": [str(x) for x in _plain("search.py", "SCRAPE_REMOTE_LOCATIONS", []) or []],
             "kinds_out": sorted(sectors_out()),
-            "excluded": [str(r[1]) for r in _plain("search.py", "BAR_EXCLUDED", []) or []
-                         if isinstance(r, (list, tuple)) and len(r) > 1
-                         and str(r[1]) not in set(_plain("search.py", "BAR_EXCLUDED_OFF", [])
-                                                  or [])],
+            "excluded": excluded_patterns(),
             "employers_out": sorted(declined_now())}
 
 
@@ -1118,9 +1706,13 @@ def header(window_line: str, window: int, name: str = "", today: str = "",
             bits.append("the job sites of " + _listed(skipped["boards"]))
         lines.append("  turned down, so not asked for this round: " + "; ".join(bits))
     found = drift()
-    if found:
-        lines.append(f"  {len(found)} setting(s) still name what you turned down "
+    out = [f for f in found if f["about"] == "out"]
+    if out:
+        lines.append(f"  {len(out)} setting(s) still name what you turned down "
                      "(`python3 tools/wants.py check` names each; `tidy` fixes the plain ones)")
+    if len(found) > len(out):
+        lines.append(f"  {len(found) - len(out)} line(s) where your settings and your record of "
+                     "what you want differ (`python3 tools/wants.py check` names each)")
     if keep and name:
         try:
             record(name, snap, today or person.today().isoformat())
@@ -1153,8 +1745,29 @@ def main(argv=None) -> int:
         p.add_argument("--said", default="", help="the person's own words, kept with the rule")
         p.add_argument("--by", default="chat", choices=("chat", "page"))
         p.add_argument("--today", default=None)
-    for c in ("undecline", "sector-back", "unwant"):
+        p.add_argument("--soft", action="store_true",
+                       help="only rank a job there down, never leave it out: only where the "
+                            "person said so")
+    for c in ("undecline", "sector-back", "unwant", "forget"):
         sub.add_parser(c).add_argument("what")
+    p = sub.add_parser("set")
+    p.add_argument("what", help="places, remote, pay-floor or pay-cut")
+    p.add_argument("values", nargs="*", help="the places searched for remote work, or a number")
+    p.add_argument("--add", default="", help="a place to search, as the job sites write it")
+    p.add_argument("--drop", default="", help="a place to stop searching")
+    p.add_argument("--said", default="", help="the person's own words, kept with the want")
+    p.add_argument("--today", default=None)
+    p = sub.add_parser("words")
+    p.add_argument("what", help="the sign or kind of role, as `show` names it")
+    p.add_argument("plain", help="what it is, in plain words")
+    p.add_argument("--said", default="", help="the person's own words, kept with it")
+    p.add_argument("--today", default=None)
+    p = sub.add_parser("link")
+    p.add_argument("what", help="the sign or kind of role, as `show` names it")
+    p.add_argument("setting", help="OPP_LEVERAGE, OPP_TITLE_FAMILY, OPP_WRONG_FAMILY or "
+                                   "FIT_WRONG_FAMILY")
+    p.add_argument("match", help="the entry's reason as written, or its pattern")
+    sub.add_parser("seed")
     p = sub.add_parser("want")
     p.add_argument("what")
     p.add_argument("--tier", required=True, help="1 (+30), 2 (+20), 3 (+10) or backed (+14)")
@@ -1172,13 +1785,15 @@ def main(argv=None) -> int:
         return 0
     try:
         if a.cmd == "decline":
-            got = decline(a.what, a.said, a.today, a.by)
-            print(f"{a.what}: " + ("turned down from now on" if got["added"]
-                                   else "already turned down"))
+            got = decline(a.what, a.said, a.today, a.by, hard=not a.soft)
+            print(f"{a.what}: " + (("turned down from now on" if got["hard"] else
+                                    "ranked down from now on, never left out")
+                                   if got["added"] else "already turned down"))
         elif a.cmd == "sector-out":
-            got = sector_out(a.what, a.said, a.today, a.by)
-            print(f"every {got['kind']}: " + ("turned down from now on" if got["added"]
-                                              else "already turned down"))
+            got = sector_out(a.what, a.said, a.today, a.by, hard=not a.soft)
+            print(f"every {got['kind']}: " + (("turned down from now on" if got["hard"] else
+                                               "ranked down from now on, never left out")
+                                              if got["added"] else "already turned down"))
             if got["covers"]:
                 print(f"  your lists file {len(got['covers'])} employers as one: "
                       + _listed(got["covers"], 10))
@@ -1204,6 +1819,32 @@ def main(argv=None) -> int:
             print(f"{a.what}: " + ("no longer lifted from now on" if got["taken"]
                                    else "was not lifted by your record"))
             return 0
+        elif a.cmd == "set":
+            got = set_want(a.what, a.values, a.add, a.drop, a.said, a.today)
+            print(f"{SETTINGS[got['want']][2]}: {_shown(got['value'])}"
+                  + (" from now on" if got["changed"] else ", as it was")
+                  + (", kept with your words" if a.said else ""))
+            return 0
+        elif a.cmd == "words":
+            got = words(a.what, a.plain, a.said, a.today)
+            print(f"{got['name']}: kept as \"{got['words']}\"")
+            return 0
+        elif a.cmd == "link":
+            got = link(a.what, a.setting, a.match)
+            print(f"{got['name']}: carried by " + ", ".join(
+                f"{x['setting']} \"{x['match']}\"" for x in got["patterns"]))
+            return 0
+        elif a.cmd == "forget":
+            got = forget(a.what)
+            print(f"{got['name']}: taken off your record")
+            return 0
+        elif a.cmd == "seed":
+            got = seed()
+            if not got:
+                print("wants: your record keeps every setting and pattern already")
+            for section, n in sorted(got.items()):
+                print(f"kept {n} of your {section} in profile/{WANTS_FILE}, each as it is now")
+            return 0
         elif a.cmd == "show":
             lines = show()
             print("\n".join(lines) if lines else "wants: your record holds nothing yet")
@@ -1228,11 +1869,13 @@ def main(argv=None) -> int:
             found = drift()
             for f in found:
                 print(say(f))
-            if found:
-                print(f"wants: {len(found)} setting(s) still search or lift what you turned "
+            out = [f for f in found if f["about"] == "out"]
+            if out:
+                print(f"wants: {len(out)} setting(s) still search or lift what you turned "
                       "down; a round skips their searches and job sites meanwhile")
                 return 1
-            print("wants: nothing you turned down is still searched or lifted")
+            print("wants: nothing you turned down is still searched or lifted"
+                  + (f"; {len(found)} line(s) above for a chat to put right" if found else ""))
             return 0
         elif a.cmd == "header":
             import run_round

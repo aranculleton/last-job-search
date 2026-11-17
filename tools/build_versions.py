@@ -427,8 +427,9 @@ METHODS: dict[str, dict] = {
             (114, "2026-11-17", False, "RUNBOOK says an employer or a kind of employer the person turns down goes through one command (tools/wants.py decline or sector-out) that changes every setting it touches, and is taken back the same way; nothing made changes"),
             (115, "2026-11-17", False, "RUNBOOK says every want is kept with the person's words in profile/wants.json and an employer they want ranked up goes through one command (tools/wants.py want); nothing made changes"),
             (116, "2026-11-17", False, "RUNBOOK says a round's employers nobody has judged are judged inside it by the employer-judge agent, on the small model, and the round is cut again with --judged, which waits for the answer three minutes at most; nothing made changes"),
+            (117, "2026-11-17", False, "RUNBOOK says where the person searches and their pay floor and cut line change through tools/wants.py set, the words for a work-life sign or a kind of role through wants.py words, and a no that only ranks down is written with --soft only where they say so; nothing made changes"),
         ),
-        "fingerprint": "75caa1727d50814b",
+        "fingerprint": "077383424c376b96",
     },
     "interview": {
         # Only a process with a round still to come is prepared again: a prep for a round
@@ -875,8 +876,9 @@ METHODS: dict[str, dict] = {
             (65, "2026-11-17", False, "several brand-leverage lifts on one posting count strongest first, the next at half, the next at a quarter and so on, still +30 at most, so one strong reason to want a job is not outweighed by many small ones; a penalty still counts in full and --explain says what each lift counted; nothing ruled out needs looking at again, and the jobs on the page are scored again by the jobs-rescored upgrade"),
             (66, "2026-11-17", False, "the employers and kinds of employer turned down and the employers lifted are read from the person's one record of what they want (profile/wants.json) as well as from the old settings, each deciding as before; nothing ruled out needs looking at again"),
             (67, "2026-11-17", False, "a round writes a brief from which a small agent judges the employers nobody has judged against the bar (bar.judge_brief), and the round's cut keeps each judgement for good, marked as the round's; nothing ruled out needs looking at again"),
+            (68, "2026-11-17", False, "a no the person said only ranks down (profile/wants.json, hard false, written only with --soft) takes 20 off a job's opportunity score and says why, and is never cut; every no written before stays a cut, so nothing scored before changes and nothing ruled out needs looking at again"),
         ),
-        "fingerprint": "e862d15cd71be6a9",
+        "fingerprint": "d926fa6f63f9ae3f",
     },
     "routines": {
         "by": "you", "priority": 3, "applies": "routines",
@@ -1380,9 +1382,10 @@ KEEPS_NOTHING: dict[str, str] = {
     "tools/scrape_wide.py": "runs every round afresh",
     "tools/wants.py": "writes the person's record of what they want (profile/wants.json) the "
                       "moment they say it and checks the settings against it on every run; "
-                      "settings written before are moved into it by the wants-moved upgrade "
-                      "and a list it missed is put right by the declined-tidied upgrade, so "
-                      "nothing waits on a version",
+                      "settings written before are moved into it by the wants-moved upgrade, "
+                      "the single settings and the patterns are kept in it by the wants-seeded "
+                      "upgrade, and a list it missed is put right by the declined-tidied "
+                      "upgrade, so nothing waits on a version",
     "tools/hydrate.py": "runs every round afresh",
     "tools/lookup_score.py": "a lookup run on demand",
     "salary_lookup.py": "a lookup run on demand",
