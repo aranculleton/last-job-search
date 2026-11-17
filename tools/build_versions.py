@@ -418,8 +418,9 @@ METHODS: dict[str, dict] = {
             (108, "2026-11-17", False, "RUNBOOK says a round runs the rules a posting decides before one role per employer is chosen, keeps a reserve with its top rows, and keeps five files when it misses; nothing made changes"),
             (109, "2026-11-17", False, "RUNBOOK's round command passes no window of its own: a round searches the person's own (JOB_AGE_DAYS) and says so first; nothing made changes"),
             (110, "2026-11-17", False, "RUNBOOK says an employer nobody has judged waits below judged ones and a round's batch of them is judged in one go (bar.py judge --file), then the round is cut again; nothing made changes"),
+            (111, "2026-11-17", False, "RUNBOOK says every round prints what each source read and what failed, and a failed source is passed on in plain words; nothing made changes"),
         ),
-        "fingerprint": "bf87d4044301c9cd",
+        "fingerprint": "bba4c231ddefca6f",
     },
     "interview": {
         # Only a process with a round still to come is prepared again: a prep for a round

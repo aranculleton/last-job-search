@@ -1518,6 +1518,61 @@ def _health_file(out_dir: str) -> dict:
     return {}
 
 
+def _sources(out_dir: str) -> dict:
+    try:
+        with open(os.path.join(out_dir, SCRAPED, "sources.json"), encoding="utf-8") as fh:
+            got = json.load(fh)
+        return got if isinstance(got, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def say_sources(out_dir: str) -> list[str]:
+    """What each source read and what failed this round (scrape_wide.py SOURCES): every site
+    searched, the employer boards read and each that returned nothing and why, and what cut
+    the scrape short. A round said a quarter of the portal requests failed when one in 5,760
+    had, and nothing of the 17 employer boards it never read (2026-11-16)."""
+    got = _sources(out_dir)
+    if not got:
+        return []
+    lines = ["sources: what each read and what failed"]
+    for s in got.get("sites") or []:
+        line = (f"  {s.get('source')}: {s.get('requests', 0)} searches, "
+                f"{s.get('failed', 0)} failed; {s.get('found', 0)} postings, "
+                f"{s.get('kept', 0)} past the search's own gates")
+        if s.get("why"):
+            line += " (" + "; ".join(s["why"]) + ")"
+        lines.append(line)
+    b = got.get("boards") or {}
+    quiet, partial = b.get("quiet") or {}, b.get("partial") or {}
+    found = sum((b.get("found") or {}).values())
+    if b.get("read") or quiet:
+        lines.append(f"  employer boards: {b.get('read', 0)} tried, {found} postings; "
+                     f"{len(quiet)} returned nothing")
+        by: dict = {}
+        for employer, why in sorted(quiet.items()):
+            by.setdefault(str(why)[:90], []).append(employer)
+        for why, who in sorted(by.items(), key=lambda kv: -len(kv[1]))[:6]:
+            lines.append(f"    {len(who)} {why}: " + ", ".join(who[:8])
+                         + (f" and {len(who) - 8} more" if len(who) > 8 else ""))
+        for employer, why in sorted(partial.items())[:6]:
+            lines.append(f"    {employer} left some out: {str(why)[:90]}")
+    if got.get("stopped"):
+        lines.append(f"  stopped short: {got['stopped']}")
+    return lines
+
+
+def failed_sources(out_dir: str) -> list[str]:
+    """The sources this round could not fully read: a site with a failed search or one it
+    stopped, and each employer board that returned nothing for an error rather than for
+    having nothing in the person's places."""
+    got = _sources(out_dir)
+    out = [str(s.get("source")) for s in got.get("sites") or [] if s.get("failed")]
+    out += [str(e) for e, why in ((got.get("boards") or {}).get("quiet") or {}).items()
+            if not str(why).startswith("resolved, but nothing")]
+    return out
+
+
 def _portals_down(out_dir: str) -> list[str]:
     """Portals the pre-flight probe found silent or refusing, if scrape_wide wrote the file.
 
@@ -2239,6 +2294,10 @@ def main():
     down = _portals_down(a.out)
     for name in down:
         print(f"portal health: {name} DOWN ({_down_detail(a.out, name)})")
+    for line in say_sources(a.out):
+        print(line)
+        log.write(line + "\n")
+    log.flush()
     blocked = str(_health_file(a.out).get("say") or "")
     if blocked:
         # The cloud chat's own settings block the sites: what fixes it is the person's,

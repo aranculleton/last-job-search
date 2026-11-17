@@ -272,6 +272,11 @@ It exits 2 and keeps five files it otherwise deletes, with the posting bodies st
 | `05_ruled_out.json` | what the rules a posting decides removed before the throttle (place, the bar, already yours) |
 | `06_skipped.json` | what the company throttle and the one-role-per-employer rule removed |
 
+Every round also prints what each source read and what failed (`sources:`): each site's
+searches, failures and postings, the employer boards that returned nothing and why, and what
+cut the scrape short. Pass on a failed source in plain words; a quiet board is not a thin
+market.
+
 Those are the places a posting can vanish. `--expand` re-runs wider automatically,
 up to three rounds in all, each with more pages per search (from the default 5, then 10,
 then 30) and the same freshness window, which is a gate and never widens. Each wider round
