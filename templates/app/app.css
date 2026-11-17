@@ -2680,7 +2680,9 @@ ul.bp-news { gap: 12px; }
 .up-days:has(.up-here) .up-row { grid-template-columns: 10rem minmax(0, 1fr) auto; }
 .up-main { display: grid; gap: 2px; min-width: 0; }
 .up-title { overflow-wrap: anywhere; }
-.up-row .up-title { font-size: var(--t-lg); line-height: 1.35; font-weight: 600; }
+.up-row .up-title { font-size: var(--t-lg); line-height: 1.45; font-weight: 600; }
+/* Its link is its line's own height, a computer's 24px target at least (WCAG 2.5.8). */
+.up-row .up-title > .up-link { display: inline-block; }
 .up-row .up-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: var(--t-sm); color: var(--muted); }
 .up-row .up-sub > .up-note { min-width: 0; }
 .up-row .up-prep { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 8px; }
@@ -2708,7 +2710,7 @@ ul.bp-news { gap: 12px; }
 .bp-up-row .up-when { font-size: var(--t-sm); color: var(--muted); white-space: normal; }
 .bp-up-row .up-title { overflow-wrap: anywhere; }
 .bp-up-when { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 2px 8px; min-width: 0; }
-.bp-up-when > .up-prep { flex: none; }
+.bp-up-when > .up-prep { flex: 0 1 auto; min-width: 0; justify-content: flex-end; }
 .bp-up-when > .up-prep > .btn.small { min-height: 24px; padding: 2px 12px; }
 .bp-upcoming { --pc: var(--st-running); --pcbg: var(--st-running-bg); }
 dialog.sheet .sheet-body { display: grid; gap: 16px; }
