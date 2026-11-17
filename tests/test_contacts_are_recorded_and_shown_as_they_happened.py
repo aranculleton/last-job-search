@@ -145,9 +145,11 @@ def test_contacts_says_what_to_do_once_and_agrees_with_to_do(run, page, vp, sche
     assert "Sam at" not in contacts and not sam.split("\n")[2].endswith(" at")
     assert "Find more people at\n" not in sam + "\n"
     # Their words are on their page, and someone who wrote first was not "written to". Read as
-    # words: Chrome's engine breaks the line before the hidden "(not yet)" and Safari's does not
-    # (2026-11-04), while both show and read out the same.
-    assert "open to a chat" in sam and "Written to (not yet)" in " ".join(sam.split()), sam
+    # words: Chrome's engine breaks the line before the hidden "(next)" and Safari's does not
+    # (2026-11-04), while both show and read out the same. Since the redesign's second round
+    # (2026-11-17) the first step not done is the one ringed and said as "(next)", never
+    # "(done)" (DESIGN.md, "A person's card").
+    assert "open to a chat" in sam and "Written to (next)" in " ".join(sam.split()), sam
     assert "Accepted your connection request." in dev
     # Dev's limit is reached: Close, never a third message, on the row and in To do.
     row = contacts.split("Dev at Copperleaf Pay")[1].split("More")[0]
@@ -166,9 +168,11 @@ def test_contacts_says_what_to_do_once_and_agrees_with_to_do(run, page, vp, sche
     assert contacts.count("Draft the follow-up") == 2 and "follow-ups you could send" not in contacts, contacts.split("\n")[2]
     assert "nothing owed to them now" not in contacts
     # The run's first notes are rows of To do's one card of messages to send (the UX review,
-    # 2026-11-05), and its count is the one Contacts says: the engine's own.
+    # 2026-11-05), and its count is the one Contacts says: the engine's own, in the header's
+    # words since the redesign's second round ("7 messages to send", DESIGN.md, Contacts).
     sent = re.search(r"Messages to send \((\d+)\)", todo)
     assert sent, todo
-    assert re.search(r"\b%s to send\b" % sent.group(1), contacts), (sent.group(0), contacts[:300])
+    said = "%s %s to send" % (sent.group(1), "message" if sent.group(1) == "1" else "messages")
+    assert re.search(r"\b%s\b" % said, contacts), (sent.group(0), contacts[:300])
     card = todo.split(sent.group(0), 1)[1].split("Open Contacts", 1)[0]
     assert "notes ready." not in card and card.count("sent this week") <= 1, card     # "3 notes ready. 3 notes ready." said it twice

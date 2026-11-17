@@ -2489,11 +2489,17 @@ S.last_used = async (a) => {
   const {page} = o;
   await page.$$eval("#main details:not([open])", (ds) => ds.forEach((d) => { if (d.querySelector(".pdraft, [data-card]") || d.classList.contains("band-more")) d.open = true; }));
   await turn(page, 4);
-  const ids = await page.$$eval("#main .pdraft[data-msg]", (xs) => xs.filter((x) => x.querySelector(".bubble-copy") && x.closest("[data-card]").getClientRects().length).map((x) => x.getAttribute("data-msg")));
+  // A draft's Copy is its card's step beside I sent it, under the draft, since the redesign's
+  // second round (2026-11-17), keyed by the draft's words (app.js draftParts: "copy:msgt-<id>").
+  const copyKey = (id) => "copy:msgt-" + String(id).replace(/[^A-Za-z0-9_\-.~:@+]/g, "-").slice(0, 150);
+  const drafts = await page.$$eval("#main .pdraft[data-msg]", (xs) => xs.filter((x) => { const c = x.closest("[data-card]"); return c && c.getClientRects().length; }).map((x) => x.getAttribute("data-msg")));
+  const ids = [];
+  for (const id of drafts) if (await page.locator('#main [data-card] .bubble-copy[data-k="' + copyKey(id) + '"]').count()) ids.push(id);
   const first = a.first || ids[0];
   const second = a.second || ids[ids.length - 1];
   const box = (id) => '#main .pdraft[data-msg="' + id + '"]';
   const cardOf = (id) => page.locator(box(id)).locator("xpath=ancestor::*[@data-card][1]");
+  const copyOf = (id) => cardOf(id).locator('.bubble-copy[data-k="' + copyKey(id) + '"]');
   const leave = async (how) => {
     await page.evaluate(() => { const se = document.scrollingElement || document.documentElement; se.scrollTop = 0; window.scrollTo(0, 0); });
     await page.evaluate((w) => {
@@ -2530,7 +2536,7 @@ S.last_used = async (a) => {
       kept};
   }, [box(id), id]);
   const r = {ids, first, second};
-  await page.locator(box(first) + " .bubble-copy").click();
+  await copyOf(first).click();
   await turn(page, 4);
   r.afterCopy = await read(first);
   await leave(a.how || "hidden");
@@ -2541,7 +2547,7 @@ S.last_used = async (a) => {
   await turn(page, 4);
   r.later = await read(first);
   // A second card's Copy moves the mark.
-  await page.locator(box(second) + " .bubble-copy").click();
+  await copyOf(second).click();
   await turn(page, 4);
   await leave(a.how || "hidden");
   r.moved = await read(second);

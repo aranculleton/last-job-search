@@ -65,8 +65,11 @@ def test_not_confirmed_yet_is_a_small_pill(run, tmp_path):
     m = copy.deepcopy(_sample())
     m["upcoming"][1]["tentative"] = True
     html = _write(tmp_path, "tent", m)
-    probe = ("[...document.querySelectorAll('#main .up-main > .state-word')].filter((e) => /Not confirmed/.test(e.textContent))"
-             ".map((e) => e.getBoundingClientRect().width / e.parentElement.getBoundingClientRect().width)")
+    # Since the redesign (2026-11-17) the pill sits on the line under the row's title, beside
+    # what kind it is (DESIGN.md, "Coming up is a card a day"); still measured against the
+    # row's whole text column, so a pill stretched across that line still fails.
+    probe = ("[...document.querySelectorAll('#main .up-main > .up-sub > .state-word')].filter((e) => /Not confirmed/.test(e.textContent))"
+             ".map((e) => e.getBoundingClientRect().width / e.closest('.up-main').getBoundingClientRect().width)")
     got = run("engine", html=html, viewport=PHONE, clock=CLOCK, steps=[{"hash": "interviews", "eval": probe}])
     assert not got["errors"], got["errors"]
     ratios = got["after"][0]["eval"]

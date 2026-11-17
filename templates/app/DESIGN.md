@@ -382,7 +382,7 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   replies and follow-ups, the week's first notes and the ones to check first together, a row a
   person, each opening their draft in Contacts, and one button opening Contacts. A row Claude
   is fixing says so; one only the person can settle says "Check first". N is the engine's one
-  count (`app_model.to_send`), the same as Contacts' "N to send". Why: three cards (drafted,
+  count (`app_model.to_send`), the same as Contacts' "N messages to send". Why: three cards (drafted,
   first notes, to check) said one thing, and their counts disagreed with Contacts. (drafted
   messages tests)
 - A note waiting for its person's profile is not ready to send, so it is not on that card:
