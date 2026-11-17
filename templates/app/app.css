@@ -477,7 +477,15 @@ bdi { unicode-bidi: isolate; }
 /* A suggestion's Dismiss as well as its Use: both one soft look in its box (the redesign's
    second round, 2026-11-17: "Add Power BI" and "Dismiss" were two looks side by side). */
 :is(.question, .suggest, .ask-box, .well) :is(.btn.secondary, .btn.answer, .card-actions > .btn:not(.primary), .fix > .btn:not(.primary), .opts > .btn:not(.primary), .suggest-acts > .btn:not(.primary):not(.stop-claude)) {
-  background: var(--overlay); border-color: transparent; box-shadow: var(--shadow-card); }
+  background: var(--well-btn); border-color: transparent; box-shadow: var(--shadow-card); }
+/* On the clay Next of a person's or an application's sheet a soft button is the card colour,
+   lifted in the light and a step under the clay in the dark: the raised grey was muddy there. */
+.d-next-block :is(.btn.secondary, .card-actions > .btn:not(.primary), .card-actions > details.more > .more-btn) { background: var(--surface); border-color: transparent; box-shadow: var(--shadow-card); }
+@media (hover: hover) { .d-next-block :is(.btn.secondary, .card-actions > .btn:not(.primary), .card-actions > details.more > .more-btn):hover { background: var(--raised-hover); } }
+/* A tip, a pin offer and your resume's own card sit on the page, not in a card: their well is
+   the track's colour (raised in the dark, where a sunk one vanished into the page), and a soft
+   button on it is the thumb's, lifted as the chosen segment is. */
+:is(.bp-tip, .pin-offer, .quiet-card) :is(.btn.secondary, .card-actions > .btn:not(.primary):not(.icon-only), .card-actions > details.more > .more-btn) { background: var(--thumb); border-color: transparent; box-shadow: var(--shadow-card); }
 @media (hover: hover) { :is(.question, .suggest, .ask-box, .well) :is(.btn.secondary, .btn.answer, .card-actions > .btn:not(.primary), .fix > .btn:not(.primary), .opts > .btn:not(.primary), .suggest-acts > .btn:not(.primary):not(.stop-claude)):hover { background: var(--raised-hover); } }
 .fbar, .seg { display: inline-flex; align-items: center; gap: 4px; min-height: 38px; font-weight: 600; font-size: var(--t-sm); }
 .filters { display: grid; gap: 12px; min-width: 0; }
@@ -655,7 +663,7 @@ details.more.split[open] { flex-basis: auto; }
 :is(.card.job, .card.app) .suggest { padding: 8px 12px; gap: 4px; }
 :is(.card.job, .card.app) .suggest-text { font-size: var(--t-sm); }
 :is(.card.job, .card.app) .suggest-acts { gap: 4px 12px; }
-:is(.card.job, .card.app) .suggest .btn.secondary { background: var(--overlay); border-color: transparent; box-shadow: var(--shadow-card); }
+:is(.card.job, .card.app) .suggest .btn.secondary { background: var(--well-btn); border-color: transparent; box-shadow: var(--shadow-card); }
 .filtered { border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); padding: 4px 16px 12px; }
 .wc-more summary { cursor: pointer; font-size: var(--t-sm); font-weight: 600; color: var(--muted); min-height: 36px; display: flex; align-items: center; }
 .filtered summary, .gone summary, details.send summary, .chart summary, .recent summary, .brief summary {
@@ -714,10 +722,11 @@ details.more.split[open] { flex-basis: auto; }
 /* The "?" goes with the last word of its line, never onto a line of its own (a word joiner
    after the words, which no line breaks after). */
 :is(.suggest, .alert, .question) .hint-line > p::after { content: "\2060"; }
-/* A suggestion's pills are one kind in its grey box: each the card's own colour with the 3:1
-   edge, so "Add Power BI" and Dismiss read as a pair, never one white among grey ones. */
-.suggest :is(.suggest-acts, .fix) > .btn:not(.icon-only):not(.primary) { background: var(--surface); border-color: var(--line-strong); color: var(--ink); }
-@media (hover: hover) { .suggest :is(.suggest-acts, .fix) > .btn:not(.icon-only):not(.primary):hover { background: var(--raised); border-color: var(--line-strong); } }
+/* A suggestion's pills are one kind in its grey box, the well's soft button with no edge, so
+   "Add Power BI" and Dismiss read as "Yes, I have" and "No" do (the redesign's second round,
+   2026-11-17: an edge of their own made a third, outlined look). */
+.suggest :is(.suggest-acts, .fix) > .btn:not(.icon-only):not(.primary) { background: var(--well-btn); border-color: transparent; box-shadow: var(--shadow-card); color: var(--ink); }
+@media (hover: hover) { .suggest :is(.suggest-acts, .fix) > .btn:not(.icon-only):not(.primary):hover { background: var(--raised-hover); border-color: transparent; } }
 /* What was checked, said as the documents themselves: on the card made for a person a tick and
    its words; on a draft a row a document in a soft well ("CV", "1 page · checked", Open, the
    pencil), a hairline between, inset 16 (the redesign, phase 2, 2026-11-17: grey capsules
@@ -774,7 +783,8 @@ details.send { border-top: 1px solid var(--line); }
 .stack.jobs, ul.people, .stack.list-panel { gap: 8px; background: transparent; border: 0; box-shadow: none; }
 .stack.jobs > .card.job, ul.people > li.person, .stack.list-panel > .card { border: 1px solid var(--line); border-radius: var(--r); box-shadow: none; background: var(--surface); padding: 16px; }
 
-.stack.list-panel > .card.is-marked, .stack.list-panel > .card.quiet-card { background: var(--sunk); }
+.stack.list-panel > .card.is-marked { background: var(--sunk); }
+.stack.list-panel > .card.quiet-card { background: var(--seg-track); }
 .after-list { margin-top: 8px; }
 .stack.jobs > .card.job.st-dismissed, .stack.jobs > .card.job.st-applied { background: var(--sunk); }
 @media (hover: hover) { .stack.jobs > .card.job:hover, ul.people > li.person:hover { background: var(--bg); } }
@@ -990,9 +1000,9 @@ dialog.work-sheet { width: min(560px, calc(100vw - 16px)); }
    the one chosen raised on it in the ink, the others in grey. Each is still a radio, laid over
    its whole segment unseen, so it reads, taps and arrows as a choice; its ring is the
    segment's. A row of outlined capsules each with a dot read as a form. */
-.pills .pill-row { display: flex; flex-wrap: wrap; gap: 2px; padding: 2px; border-radius: var(--r-ctl); background: var(--sunk); width: fit-content; max-width: 100%; }
-.pills .choice { align-items: center; justify-content: center; gap: 8px; min-height: 32px; padding: 4px 12px; border: 1px solid transparent; border-radius: 8px; color: var(--muted); font-weight: 600; font-size: var(--t-sm); }
-.pills .choice:has(input:checked) { background: var(--thumb); color: var(--ink); border-color: var(--line-strong); box-shadow: var(--shadow-card); }
+.pills .pill-row { display: flex; flex-wrap: wrap; gap: 2px; padding: 2px; border-radius: var(--r-ctl); background: var(--seg-track); width: fit-content; max-width: 100%; }
+.pills .choice { align-items: center; justify-content: center; gap: 8px; min-height: 32px; padding: 4px 12px; border: 1px solid transparent; border-radius: 8px; color: var(--muted); font-weight: 500; font-size: var(--t-sm); }
+.pills .choice:has(input:checked) { background: var(--thumb); color: var(--ink); font-weight: 600; border-color: transparent; box-shadow: var(--shadow-card); }
 .setting.pills .choice > input, .field.pills .choice > input { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; margin: 0 !important; opacity: 0; cursor: pointer; }
 /* The chosen one also carries an outline in no colour, which forced colours (Windows high
    contrast) draw in the text colour: there the fill and the shadow are gone, and with the
@@ -1151,10 +1161,10 @@ textarea { width: 100%; resize: vertical; line-height: 1.45; }
    in the light and ringed in the control edge, its words in the ink, the others grey, all 600.
    The ring is what says which is chosen: the fill alone was 1.1:1 from the track (WCAG 1.4.11,
    the accessibility review). 36px tall with a mouse, 44 on touch, full width on a phone. */
-.segctl { display: inline-flex; align-items: stretch; gap: 2px; border: 0; border-radius: var(--r-ctl); padding: 2px; background: var(--sunk); min-width: 0; flex: 0 1 auto; }
+.segctl { display: inline-flex; align-items: stretch; gap: 2px; border: 0; border-radius: var(--r-ctl); padding: 2px; background: var(--seg-track); min-width: 0; flex: 0 1 auto; }
 .seg-opt { flex: 1 1 0; display: inline-flex; align-items: center; justify-content: center; min-height: 32px; padding: 4px 12px; border: 1px solid transparent; border-radius: 8px; background: none; color: var(--muted);
-  font-weight: 600; font-size: var(--t-sm); line-height: 1.2; cursor: pointer; white-space: nowrap; min-width: 0; }
-.seg-opt[aria-pressed="true"], .seg-opt:has(input:checked) { background: var(--thumb); color: var(--ink); border-color: var(--line-strong); box-shadow: var(--shadow-card); }
+  font-weight: 500; font-size: var(--t-sm); line-height: 1.2; cursor: pointer; white-space: nowrap; min-width: 0; }
+.seg-opt[aria-pressed="true"], .seg-opt:has(input:checked) { background: var(--thumb); color: var(--ink); font-weight: 600; border-color: transparent; box-shadow: var(--shadow-card); }
 @media (hover: hover) { .seg-opt:not([aria-pressed="true"]):not(:has(input:checked)):hover { color: var(--ink); } }
 .seg-n { margin-left: 4px; font-variant-numeric: tabular-nums; color: var(--muted); font-weight: 600; white-space: pre; }
 @media (max-width: 759px) { .controls > .segctl { flex: 1 1 auto; } }
@@ -1794,7 +1804,7 @@ label.pick { display: flex; align-items: flex-start; justify-content: center; wi
 }
 
 
-.quiet-card { background: var(--sunk); }
+.quiet-card { background: var(--seg-track); }
 /* The page's address wraps only at its slashes and dots (app.js, addressWords), each part
    kept whole; a part too long for any line still breaks rather than run off the card. */
 .page-url { overflow-wrap: break-word; }
@@ -2434,10 +2444,10 @@ ul.bp-news { gap: 12px; }
 .bp-all > summary::after, .brief-earlier > summary::after { content: ""; width: 7px; height: 7px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg) translateY(-2px); }
 .bp-all[open] > summary::after, .brief-earlier[open] > summary::after { transform: rotate(-135deg) translateY(-1px); }
 .bp-all[open] > summary { margin-bottom: 8px; }
-.bp-tip { display: flex; align-items: baseline; gap: 8px 12px; flex-wrap: wrap; margin: 0; padding: 12px 16px; border-radius: var(--r-sm); background: var(--sunk); font-size: var(--t-sm); }
+.bp-tip { display: flex; align-items: baseline; gap: 8px 12px; flex-wrap: wrap; margin: 0; padding: 12px 16px; border-radius: var(--r-sm); background: var(--seg-track); font-size: var(--t-sm); }
 .bp-tip-k { font-weight: 600; color: var(--ink); }
 .bp-tip-t { min-width: 0; }
-.pin-offer { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; margin: 0; padding: 12px 16px; border-radius: var(--r-sm); background: var(--sunk); font-size: var(--t-sm); }
+.pin-offer { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; margin: 0; padding: 12px 16px; border-radius: var(--r-sm); background: var(--seg-track); font-size: var(--t-sm); }
 .pin-t { min-width: 0; }
 .pin-acts { display: inline-flex; gap: 8px; margin-left: auto; }
 .setup .pin-offer { margin-top: 12px; }

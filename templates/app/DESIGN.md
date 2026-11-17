@@ -689,9 +689,13 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   the accent fill with its own ink, semibold, once a screen (its first); every other card's
   next step is the soft pill in the semibold weight. Every other action beside it is the soft
   pill (the raised fill with no edge, its words in the ink at 600), and More is a soft pill too:
-  one soft look, and in a sunk box (a question, a suggestion, a document well) the colour of
-  what floats, lifted by the card's shadow, never an outlined pill (the redesign's second round,
-  2026-11-17). The quiet look is its words alone, the raised fill under a pointer, never
+  one soft look, and in a sunk box (a question, a suggestion, a document well) the well's own
+  button colour (`--well-btn`: white lifted by the card's shadow in the light, raised in the
+  dark), never an outlined pill, "Add Power BI" and Dismiss as "Yes, I have" and No; on the clay
+  Next of a sheet the card colour, lifted; on a tip, a pin offer and your resume's own card,
+  which sit on the page in the track's colour, the chosen segment's thumb colour (the redesign's
+  second round, 2026-11-17: "Add Power BI" kept an edge of its own, More vanished on your
+  resume's card and "I sent it" was a muddy grey on the clay). The quiet look is its words alone, the raised fill under a pointer, never
   underlined. At
   most three before More: the next step and one or two others; rarer actions go under More,
   and a duplicate or a dead button goes. Why: text buttons beside pills read as clutter and
@@ -728,10 +732,13 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   which read as calling something off. (the maintainer, 2026-11-05)
 - The shared parts are drawn once and look the same wherever they are (the redesign's second
   round, 2026-11-17). A **segmented control** (`.segctl`, a view switch and a setting's short
-  choice alike) is a sunk track at radius 10 with 2px round its options, the chosen one the thumb
-  colour ringed in the control edge and lifted by the card's shadow, its words in the ink, the
-  others grey, all 600, 36px tall with a mouse and 44 on touch, a count after its name ("To
-  apply · 5"). A **search** is a field at radius 10 with its magnifier inside at the left, 40px
+  choice alike) is a track at radius 10 with 2px round its options, the chosen one the thumb
+  colour lifted by the card's shadow with no edge, its words in the ink at 600, the others grey
+  at 500, 36px tall with a mouse and 44 on touch, a count after its name ("To apply · 5"). Its
+  track is the track colour (`--seg-track`: sunk in the light, raised in the dark), as is a tip,
+  a pin offer and your resume's own card on the page: a sunk track vanished into the dark page
+  and "Applied" floated as loose words beside a lone thumb (the redesign's second round,
+  2026-11-17). A **search** is a field at radius 10 with its magnifier inside at the left, 40px
   tall (44 on touch), never a capsule. **Filter** is a soft button with the sliders, its count of
   filters on a small clay badge. The **"?"** is one 20px i in a circle in the quiet grey, no ring
   of its own, 4px after the last word, the raised fill under a pointer, a 44px target on touch.
@@ -825,9 +832,12 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
 - Text on a pill reads at 4.5:1 in both looks, and a soft pill is told by its fill and its
   words, with no edge: WCAG 1.4.11 asks no edge of a button its words name, and an edge of its
   own made a second, outlined family (the redesign's second round, 2026-11-17). A chosen or
-  pressed state is never its fill alone: the chosen segment, the chosen place in the side menu
-  and the phone's chosen tab each carry a ring that reaches 3:1 (the accessibility review,
-  2026-11-17); every control shows its focus ring. Words on the soft accent (an answer's box,
+  pressed state is never its fill alone: the chosen place in the side menu and the phone's
+  chosen tab each carry a ring that reaches 3:1 (the accessibility review, 2026-11-17), and the
+  chosen segment is told by its words as well as its thumb, in the ink at 600 against the
+  others' grey at 500, with no edge (an edge of its own read as a second, outlined family, the
+  redesign's second round, 2026-11-17), forced colours drawing it in Highlight; every control
+  shows its focus ring. Words on the soft accent (an answer's box,
   your own message in a chat) are in the ink, as they were when the muted grey was 3.56:1 there
   in the dark (2026-11-11).
   Every word on every screen is checked in both looks (overlap test: faint). (colour tests, layout 14)

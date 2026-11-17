@@ -51,9 +51,16 @@ LIGHT = {
     "bg": ("#f9f8f5", "[D] warm paper, near-white (the maintainer, 2026-10-29): the page around the cards"),
     "surface": ("#ffffff", "[D] white: every card, its edge drawn by line"),
     "overlay": ("#ffffff", "[D] white: what floats, a sheet, a menu, the Chat panel"),
-    "sunk": ("#f2f0eb", "[D] paper a step deeper: wells, tracks, a segmented control's track"),
+    "sunk": ("#f2f0eb", "[D] paper a step deeper: wells and tracks inside a card"),
+    # A well or a track that sits on the page itself, not in a card: sunk in the light, raised
+    # in the dark, where the page is already the darkest step and a sunk track on it vanished
+    # (the redesign's second round, 2026-11-17: "Applied" floated as loose text by a lone thumb).
+    "seg-track": ("#f2f0eb", "[D] a segmented control's track, a tip, a well on the page: paper a step deeper, 1.07:1 under the page, its ink 14.8:1"),
     "raised": ("#efece6", "[D] a secondary button's fill"),
     "raised-hover": ("#e9e5de", "[D] a secondary button, hovered: quiet text 4.5:1 on it (the accessibility review, 2026-11-17)"),
+    # A soft button inside a well (a card's question or suggestion, a document well): the card's
+    # white lifted by its shadow, never the raised grey, 1.04:1 on the well.
+    "well-btn": ("#ffffff", "[D] a soft button in a well: white, lifted by the card's shadow"),
     "tile": ("#f2f0eb", "[D] a number's tile on the Brief: the well's paper, a step under the card"),
     "today-wash": ("#f8ebe4", "[D] the Brief's Today: clay at 12% on white, as the selected place"),
     # A person's initial sits on one of six soft fills, picked by their id, so one person is
@@ -115,8 +122,10 @@ DARK = {
     "surface": ("#1d1c1a", "[D] a card, a step lighter than the page"),
     "overlay": ("#252321", "[D] what floats, a step lighter again"),
     "sunk": ("#131211", "[D] the depths inside a card"),
+    "seg-track": ("#2a2825", "[D] a segmented control's track, a tip, a well on the page: raised, since the page is already the deepest step (1.26:1 over it, its ink 12.8:1)"),
     "raised": ("#2a2825", "[D] a secondary button's fill"),
     "raised-hover": ("#34322e", "[D] a secondary button, hovered"),
+    "well-btn": ("#2a2825", "[D] a soft button in a well: raised, as every soft button (1.27:1 over the well)"),
     "tile": ("#2a2825", "[D] a number's tile on the Brief, raised: the depths vanished into a dark card"),
     "today-wash": ("#1d1c1a", "[D] the Brief's Today: a card like the rest under its clay strip, never a brown block"),
     "avatar-1": ("#3d2b22", "[D] sand clay, deepened: an initial's fill, ink over 11:1 on each of the six"),
@@ -175,7 +184,7 @@ LOOKS = (("auto", "Match my device"), ("light", "Light"), ("dark", "Dark"))
 
 # The pairs the page draws, and the ratio each must reach (WCAG 2.2: 1.4.3 text 4.5:1,
 # 1.4.11 non-text 3:1). Large text never appears in a colour that body text does not.
-SURFACES = ("bg", "surface", "sunk", "overlay")
+SURFACES = ("bg", "surface", "sunk", "overlay", "seg-track")
 STATUSES = ("done", "running", "waiting", "failed", "overdue", "held")
 
 
@@ -186,6 +195,7 @@ def pairs() -> list:
         out += [("ink", s, 4.5, "body text"), ("muted", s, 4.5, "secondary text"), ("link", s, 4.5, "links")]
         out += [("focus", s, 3.0, "focus ring"), ("mark", s, 3.0, "bars, the selected tab, a link's underline")]
     out += [("ink", "raised", 4.5, "a button or chip"), ("ink", "raised-hover", 4.5, "a button, hovered"),
+            ("ink", "well-btn", 4.5, "a soft button's words in a well"),
             ("line-strong", "bg", 3.0, "input and control borders"), ("line-strong", "surface", 3.0, "input and control borders"),
             ("link-line", "surface", 3.0, "a link's underline"), ("link-line", "bg", 3.0, "a link's underline"),
             ("ink", "accent-soft", 4.5, "the current section in the list"), ("accent-ink", "accent", 4.5, "text on a filled button"),
@@ -202,7 +212,7 @@ def pairs() -> list:
     out += [("mark-ink", s, 4.5, "clay as text") for s in SURFACES + ("accent-soft",)]
     out += [("mark-on", "mark", 4.5, "text on a clay fill"), ("mark", "raised", 3.0, "a mark on a button"),
             ("danger-ink", "danger", 4.5, "text on the removal fill"), ("ink", "overlay", 4.5, "text on what floats"),
-            ("line-strong", "sunk", 3.0, "a chosen segment's ring on its track"),
+            ("line-strong", "sunk", 3.0, "a field's edge in a well"),
             # The pairs the selected states and the soft clay draw (the accessibility review,
             # 2026-11-17): a ring that says which is chosen, words on a hovered button.
             ("ink", "thumb", 4.5, "the chosen segment's words"), ("line-strong", "thumb", 3.0, "the chosen segment's ring"),
