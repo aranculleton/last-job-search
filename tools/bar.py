@@ -77,7 +77,9 @@ _NEVER = re.compile(r"(?!x)x")
 # (search.py BAR_EXCLUDED_OFF, a plain list) and the rule stops applying (2026-11-05).
 EXCLUDED_OFF = set(getattr(_S, "BAR_EXCLUDED_OFF", ()) or ())
 EXCLUDED_RULES = [r for r in getattr(_S, "BAR_EXCLUDED", []) if r[1] not in EXCLUDED_OFF]
-DECLINED = dict(getattr(_S, "BAR_DECLINED", {}))
+# Read through the employer key, as every lookup is (company_key.keyed): an entry written by
+# hand in any other form ("north-shore mutual", "acme insurance") matched nothing (2026-11-16).
+DECLINED = _ck.keyed(getattr(_S, "BAR_DECLINED", {}) or {})
 PUBLIC_PRESTIGE, _PRESTIGE_WHY = getattr(_S, "BAR_PUBLIC_PRESTIGE", (_NEVER, ""))
 PENSIONS, _TARGETS_WHY = getattr(_S, "BAR_PUBLIC_TARGETS", (_NEVER, ""))
 NAMED_PUBLIC, _NAMED_WHY = getattr(_S, "BAR_NAMED_PUBLIC", (_NEVER, ""))

@@ -438,9 +438,9 @@ def page_set_asides(dump_dir) -> tuple[set, set]:
 
 def declined_now() -> dict:
     """The employers turned down by name as the profile holds them now (search.py
-    BAR_DECLINED, keyed as bar.py looks them up), read from the file: bar.py keeps the copy
-    the round read when it started, so a "No more roles from them" said on the page while it
-    ran was never seen by its cut (2026-11-04)."""
+    BAR_DECLINED, each entry by its employer key, as bar.py reads it), read from the file:
+    bar.py keeps the copy the round read when it started, so a "No more roles from them" said
+    on the page while it ran was never seen by its cut (2026-11-04)."""
     try:
         import profile_set
         got = profile_set.get("search.py", "BAR_DECLINED")
@@ -450,7 +450,10 @@ def declined_now() -> dict:
     # setting, it turned down an employer called Missing and named it in Your rules.
     if got is profile_set.MISSING or not isinstance(got, dict):
         return {}
-    return {str(k): str(v) for k, v in got.items() if isinstance(v, str)}
+    # Each entry read through the employer key, however it is written: one written by hand
+    # ("north-shore mutual", "acme insurance") cut nothing (2026-11-16).
+    from company_key import keyed
+    return keyed({str(k): str(v) for k, v in got.items() if isinstance(v, str)})
 
 
 def family(name: str) -> set:
@@ -1297,6 +1300,14 @@ def write_summary(shortlist_path, out_dir, name, scraped_path=None, show=None, r
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(out, fh, indent=1)
         fh.write("\n")
+    # And the posting text of every job on it, beside it (tools/rescore.py), so a change to how
+    # jobs are scored scores them again in any chat: the round's own folder keeps only its top
+    # 60, and no later chat has it (2026-11-16).
+    try:
+        import rescore
+        rescore.keep(out_dir, name, kept)
+    except Exception as e:  # noqa: BLE001  the list stands without it; scored again when fetched
+        print(f"round: the text of the jobs on its list was not kept ({e})", file=sys.stderr)
     return path
 
 
@@ -2182,6 +2193,13 @@ def main():
     # cut then dropped, and never widened (the release review, 2026-11-03).
     good, strong = yield_of(summary) if summary else (0, 0)
     want, want_75 = targets(a.show, names)
+    if summary and not a.summary_dir:
+        # The kept text of searches the page no longer lists goes (tools/rescore.py).
+        try:
+            import rescore
+            rescore.prune(rescore.listed(datetime.date.fromisoformat(a.today)))
+        except Exception:  # noqa: BLE001  kept a while longer; the next round or rescore prunes it
+            pass
     met =good >= want and strong >= want_75
     print(f"yield: {good} scoring 60+ (target {want}), "
           f"{strong} scoring 75+ (target {want_75}) -> {'MET' if met else 'MISSED'}")

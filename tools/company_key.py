@@ -56,10 +56,14 @@ TRAILING_FORM = re.compile(
     r"bv|b v|nv|n v|oy|ab|se|spa|s p a|sas|s a s|srl|s r l|s a|p l c|kk|co)$")
 # Trailing qualifiers that name where or what the employer is, not who:
 # "Acme UK", "Acme Financial Group", "Acme Insurance", "Acme Concession
-# Company Limited". Stripped only when a name remains.
+# Company Limited". Stripped only when a name remains. And their French forms where a
+# bilingual employer posts under its French name: "Acme Assurance et services financiers"
+# is Acme, and keyed whole it missed an employer turned down as "acme" (2026-11-16).
+# "Assurance" alone stays part of a name, as it is in English.
 TRAILING = re.compile(
     r"\s+(" + "".join(re.escape(c) + "|" for c in _COUNTRY)
-    + r"north america|americas|usa|u\.?s\.?|uk|international|global|"
+    + r"assurances? et services financiers|services financiers|"
+    r"north america|americas|usa|u\.?s\.?|uk|international|global|"
     r"financial group|financial corporation|financial services|financial|"
     r"insurance|concession|technologies|technology|software|solutions|"
     r"services|pension plan|pension fund|internal only|internal)$", re.I)
@@ -439,6 +443,26 @@ def _resolve(k: str) -> str:
             elif " " not in head and _joined(head):
                 out = _joined(head)
     known["resolved"][k] = out
+    return out
+
+
+def entry_key(name) -> str:
+    """The employer an entry in one of the person's lists stands for, however it was written
+    ("north-shore mutual", "Acme Insurance", "acme"): its key, or the entry itself in lower case
+    where no key comes out of it."""
+    return key(str(name or "")) or " ".join(str(name or "").lower().split())
+
+
+def keyed(entries) -> dict:
+    """{key: value} for a mapping whose keys are employers as a person or a chat wrote them
+    (search.py BAR_DECLINED), each read through `entry_key`, the one way an employer is looked
+    up, the first entry's value kept where two name one employer. The list was looked up as
+    written, and an entry not already in key form matched nothing, silently (2026-11-16)."""
+    out: dict = {}
+    for name, value in dict(entries or {}).items():
+        k = entry_key(name)
+        if k and k not in out:
+            out[k] = value
     return out
 
 

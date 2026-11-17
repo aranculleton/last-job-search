@@ -810,3 +810,4 @@ Vintry Labs AI          # invented employer, the same test
 Ambleside Freight       # invented employer, the same test
 Bellingham Foods        # invented employer, the same test
 Carrow Retail           # invented employer, the same test
+North-Shore Mutual          # invented employer, tests/test_an_employer_turned_down_is_matched_however_it_is_written.py

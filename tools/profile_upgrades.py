@@ -1513,6 +1513,13 @@ def _employer_names() -> str:
     return ("%d contact(s) with their employer in lower case" % n) if n else ""
 
 
+def _jobs_rescored() -> str:
+    """The jobs the page lists, scored by other rules than today's (tools/rescore.py due): a
+    change to how jobs are scored, the person's own or an update's, reached none of them, and
+    the page kept each search's scores for as long as it listed its jobs (2026-11-16)."""
+    return _probe("import rescore; print(rescore.due())")
+
+
 def _readings_linked() -> str:
     """Contacts with no employer whose saved profile read names one: every check made per
     employer passed them by (the audit's NW-6, NW-28 and PD-20)."""
@@ -2226,6 +2233,13 @@ REGISTRY: tuple[Upgrade, ...] = (
             _employer_names, "python3 tools/network/state.py employer-names --apply", "instant",
             command=("python3", "tools/network/state.py", "employer-names", "--apply"),
             paths=("network_contacts.csv",), priority=2, conditional=True),
+    Upgrade("jobs-rescored", "2026-11-16",
+            "the jobs on your page scored again whenever how jobs are scored changes, by you "
+            "or by an update",
+            _jobs_rescored, "python3 tools/rescore.py", "instant",
+            command=("python3", "tools/rescore.py"),
+            paths=("documents/rounds/*.json", "documents/rounds/bodies/*.json"),
+            priority=2, conditional=True),
     Upgrade("readings-linked", "2026-11-11",
             "every contact whose profile was read has the employer it names",
             _readings_linked, "python3 tools/network/reading.py link-all", "instant",
