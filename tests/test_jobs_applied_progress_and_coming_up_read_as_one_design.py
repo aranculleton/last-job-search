@@ -239,11 +239,12 @@ COMING = r"""(() => { const days = [...document.querySelectorAll('#main [data-k=
 
 
 # On a device in the person's own zone each time is said once, in a steady 64px column (56 on a
-# phone). On a device in another zone each time says both ("13:00 London time (3:00 here)") and
-# the column is wider on every row alike, 10rem (6rem on a phone), so the rows still line up
-# (DESIGN.md, "A time from another zone"). The device's zone is set both ways: taken from the
-# machine, the far zones of Everywhere drew the design's own wider column, 90 and 150px, against
-# the home zone's 56 and 64, and the test failed there with nothing wrong (2026-11-17).
+# phone). On a device in another zone each time says both ("13:00 London time (Thu 3:00 here)")
+# and the column is wider on every row alike, 10rem (8rem on a phone, as wide as the time here
+# with its day, issue 334), so the rows still line up (DESIGN.md, "A time from another zone").
+# The device's zone is set both ways: taken from the machine, the far zones of Everywhere drew
+# the design's own wider column, 90 and 150px, against the home zone's 56 and 64, and the test
+# failed there with nothing wrong (2026-11-17).
 @pytest.mark.parametrize("zone", [PERSON_ZONE, "Pacific/Kiritimati"], ids=["home", "far"])
 @pytest.mark.parametrize("vp", [PHONE, WIDE], ids=["phone", "wide"])
 def test_coming_up_is_a_card_a_day_each_row_its_time_what_it_is_and_one_more(run, tmp_path, vp, zone):
@@ -255,7 +256,7 @@ def test_coming_up_is_a_card_a_day_each_row_its_time_what_it_is_and_one_more(run
     times = {tuple(r["when"]) for r in seen["rows"] if r["when"]}
     home = zone == PERSON_ZONE
     assert (seen["here"] == 0) == home, (zone, seen["here"])
-    want = (64 if vp is WIDE else 56) if home else round((10 if vp is WIDE else 6) * seen["rem"])
+    want = (64 if vp is WIDE else 56) if home else round((10 if vp is WIDE else 8) * seen["rem"])
     assert len(times) == 1 and next(iter(times))[1] == want, (times, want)
     # A title in a card title's size (To do's), semibold; one More, no bare icons beside it.
     for r in seen["rows"]:

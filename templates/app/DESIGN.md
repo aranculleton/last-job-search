@@ -466,6 +466,14 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   the list alike, so the rows still line up. Why: held to one line it ran under the title, over
   the row's line of facts and into its pill on a laptop (the maintainer, 2026-11-11).
   (overlap test)
+  The time here names its day where the device's day is not the one the time is under, on
+  Coming up's rows, the Brief's Coming up and an interview's card alike ("13:00 London time (Thu
+  3:00 here)"); on the same day it is the clock alone. The column is as wide as that needs: 8rem
+  on a phone, 10rem on a computer, where "(Wed 23:00 here)" is 7.6rem in the widest type the
+  checks draw. A 12-hour clock's "(Wed 11:00 PM here)", wider than a phone's column, breaks after
+  its day, never through its clock or out of the column. Why: 13:00 London time on Wed 28 Oct is
+  3:00 on Thursday in Kiritimati, and under "Wed 28 Oct" a bare "(3:00 here)" read as Wednesday
+  there; in 6rem the day ran 25px into the title (issue 334). (here-day test)
 - Every message drafted and waiting is one card, "Messages to send (N)": the drafted
   replies and follow-ups, the week's first notes and the ones to check first together, a row a
   person, each opening their draft in Contacts, and one button opening Contacts. A row Claude
