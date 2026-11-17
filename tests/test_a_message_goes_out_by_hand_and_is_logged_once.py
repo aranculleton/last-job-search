@@ -74,10 +74,13 @@ def test_a_first_note_gives_the_words_to_copy_its_count_and_where_it_goes(search
     (msg,) = m["messages"]
     assert (msg["type"], msg["subject"]) == ("first_note", None)
     assert msg["body"] == msg["text"]
-    assert msg["count"] == {"chars": len(msg["body"]), "limit": 300, "near_at": 285, "show": True,
+    # Said only within 30 letters of the limit (the redesign's second round, 2026-11-17): this
+    # short note shows none, and says what is left when it does.
+    assert len(msg["body"]) < 270
+    assert msg["count"] == {"chars": len(msg["body"]), "limit": 300, "near_at": 285, "show": False,
                             "near": False, "over": False, "tone": "muted",
                             "label": f"{len(msg['body'])} of 300 characters",
-                            "short": f"{len(msg['body'])}/300"}
+                            "short": f"{300 - len(msg['body'])} letters to spare"}
     assert msg["open"] == {"kind": "profile", "doc": f"reach/{PELL}",
                            "label": "Open their profile"}
     assert isinstance(msg["warnings"], list)
@@ -407,7 +410,8 @@ def test_a_message_kind_for_each_of_the_seven(search):
 def test_where_a_note_goes_is_on_its_cards_face_beside_i_sent_it():
     """Copied, a note goes nowhere until their profile is open, and under More "Open their
     profile" was not found (the maintainer, 2026-11-09). A ready message carries it on its
-    face as a pill, beside I sent it; a held one keeps Paste as its one pill."""
+    face as a pill, beside I sent it, after Copy (its row since 2026-11-17); a held one keeps
+    Paste as its one pill."""
     import os
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     with open(os.path.join(root, "templates", "app", "app.js"), encoding="utf-8") as fh:
@@ -415,5 +419,5 @@ def test_where_a_note_goes_is_on_its_cards_face_beside_i_sent_it():
     assert "const onFace = !!(link && ready && !held);" in js
     # A held one keeps Paste, except a note Claude or the person held on purpose (its record
     # says so), whose own line carries its one way on (HELD_SENDABLE).
-    assert 'act: held ? (HELD_SENDABLE.has(txt(m.hold_why)) ? null : paste) : (onFace ? [sentBtn, link] : sentBtn)' in js
+    assert 'const row = held ? (HELD_SENDABLE.has(txt(m.hold_why)) ? null : paste) : [ready ? copyBtn : null, sentBtn, onFace ? link : null].filter(Boolean);' in js
     assert "const extra = [onFace ? null : link," in js
