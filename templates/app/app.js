@@ -7708,11 +7708,12 @@
       {kind: "quiet", small: true, key: "chan:" + m.id, aria: txt(sw.label) + " to " + txt(m.first_name)}) : null;
     return said || swBtn ? h("p", {class: "small hint-line msg-inmail"}, said ? h("span", {class: "muted"}, said) : null, said && swBtn ? " " : null, swBtn) : null;
   }
-  // On Contacts' list (`clamp`) a long draft shows its first four lines and a quiet "Read it
-  // all" that opens it in place, Copy staying on its heading line and copying all of it: ten
-  // drafts drawn whole were a wall of words to scroll past (the redesign, 2026-11-16). The
-  // first draft on the list is drawn whole all the same (app.css).
-  const DRAFT_LINES = 4;
+  // On Contacts' list (`clamp`) a long draft shows its first two lines and a quiet "Show all"
+  // that opens it in place, Copy under it copying all of it: ten drafts drawn whole were a wall
+  // of words to scroll past (the redesign, 2026-11-16), and four lines each still 3350px on a
+  // phone (the redesign's second round, 2026-11-17). The first draft on the list is drawn whole
+  // all the same (app.css).
+  const DRAFT_LINES = 2;
   function clippedBody(m, body, tid, clamp) {
     if (clamp && txt(m.channel) !== "inmail") {
       const long = body.length > 60 * DRAFT_LINES || body.split(/\n/).length > DRAFT_LINES;
@@ -7722,8 +7723,8 @@
       // line showed through the box's own padding.
       return [h("p", {class: "sendtext big" + (open ? "" : " is-clamped"), id: tid}, h("span", {class: "sendtext-in"}, body)),
         h("button", {type: "button", class: "btn link small read-all", "aria-expanded": String(open), "aria-controls": tid, "data-k": "readall:" + m.id,
-          "aria-label": (open ? "Show less of the " : "Read all of the ") + (txt(m.kind) === "first_note" ? "note" : "message") + " to " + txt(m.first_name),
-          onclick: () => { if (bodyOpen.has(m.id)) bodyOpen.delete(m.id); else bodyOpen.add(m.id); scheduleRender(); }}, open ? "Show less" : "Read it all", h("span", {class: "chev", "aria-hidden": "true"}))];
+          "aria-label": (open ? "Show less of the " : "Show all of the ") + (txt(m.kind) === "first_note" ? "note" : "message") + " to " + txt(m.first_name),
+          onclick: () => { if (bodyOpen.has(m.id)) bodyOpen.delete(m.id); else bodyOpen.add(m.id); scheduleRender(); }}, open ? "Show less" : "Show all", h("span", {class: "chev", "aria-hidden": "true"}))];
     }
     if (!(txt(m.channel) === "inmail" && body.length > INMAIL_CLIP + 40) || bodyOpen.has(m.id)) return h("p", {class: "sendtext big", id: tid}, body);
     const cut = body.slice(0, INMAIL_CLIP).replace(/\s+\S*$/, "") + "\u2026";
@@ -8217,9 +8218,16 @@
     // mark as sent, and the line under the draft says why (tweakResult, #230).
     const td = tweakDone(m);
     const ready = !held && !fixing && !(td && tweakComing(td[1], m.rev));
-    const copyBtn = h("button", {type: "button", class: "btn small copy bubble-copy" + (copied ? "" : " primary"), "data-k": "copy:" + tid, "data-primary": copied ? null : "1",
+    // Copy is one soft pill under the draft, beside I sent it, the two steps of one task
+    // together (the redesign's second round, 2026-11-17: filled on the first card and outlined
+    // on the rest, and 1000px from I sent it on a laptop).
+    const copyBtn = h("button", {type: "button", class: "btn secondary small copy bubble-copy", "data-k": "copy:" + tid,
       "aria-label": copied ? null : copyName, onclick: () => { S.copied.add(m.id); useLast(m.id); copyText(txt(draftGet(penKey)) || parts.body, (parts.subject ? "message" : what) + " to " + name, "copy:" + tid, tid); }},
       icon("copy"), copied ? (fresh ? "Copied" : "Copy again") : "Copy");
+    // Once copied, where to paste it, until it is sent; a copy that failed says so instead.
+    const failedCopy = !!(cn && cn.tone === "warn");
+    const copiedLine = copied && !failedCopy && ready ? h("p", {class: "small copied-line", role: "status", "data-k": "copied:" + m.id},
+      "Copied. Paste it in " + (txt(m.channel) === "email" || parts.subject ? "your email" : "LinkedIn") + ".") : null;
     // The pencil: the words changed in place, or Claude asked to change them.
     const penBtn = btn("", () => { if (S.penOpen.has(m.id)) S.penOpen.delete(m.id); else { S.penOpen.add(m.id); S.focusAfter = {key: "penask:" + m.id}; } scheduleRender(); },
       {kind: "quiet icon-only", small: true, icon: "tweak", key: "pen:" + m.id, aria: (pen ? "Done changing the " : "Change the ") + what + " to " + name, pressed: pen});
@@ -8270,7 +8278,7 @@
       parts.subject ? noteFor("copy:" + sid) : null,
       // Where an email goes, beside it.
       parts.subject || txt(m.channel) === "email" ? emailLine(m.contact, "memail:" + m.id) : null,
-      h("div", {class: "sendbox"}, h("span", {class: "bubble-tools"}, ready ? copyBtn : null, penBtn), editing ? area : clippedBody(m, body, tid, !!o.clamp)),
+      h("div", {class: "sendbox"}, h("span", {class: "bubble-tools"}, penBtn), editing ? area : clippedBody(m, body, tid, !!o.clamp)),
       m.inmail ? inmailLine(m) : null,
       pen ? h("div", {class: "pen-tell"}, h("label", {class: "small pen-label", for: askId}, "What would you like changed?"), askField,
         // A quick choice fills the box, so one Ask Claude (and one gauge) sends whatever is asked.
@@ -8299,7 +8307,7 @@
       factsLine(m, body, editing, held && !txt(m.hold_why)),
       sendsLine(m),
       fixing === "failed" ? h("p", {class: "small hint-line msg-check msg-blocked"}, "Claude could not fix this by itself: " + lc1(txt(arr(obj(m.fix).reasons)[0])) + ". Change it with the pencil.") : null,
-      noteFor("copy:" + tid),
+      failedCopy ? noteFor("copy:" + tid) : null,
       // A change asked with the pencil, or a fix Claude queued itself: the card says it is
       // being changed and where it waits, until the new words are on it (2026-11-04).
       tweakResult(m));
@@ -8325,7 +8333,10 @@
     // why and when, and Paste is its row's one pill.
     // Its gauge is the engine's, one note's rewrite (app_alerts.paste_profile), never a run's.
     const pasteCost = held && paste && !HELD_SENDABLE.has(txt(m.hold_why)) && Number(obj(obj(m.paste).cost).state) > 0 ? costEl(obj(m.paste).cost, null, "cost-paste-" + seg(m.id)) : null;
-    return {box, notes: null, act: held ? (HELD_SENDABLE.has(txt(m.hold_why)) ? null : paste) : (onFace ? [sentBtn, link] : sentBtn), cost: pasteCost, extra, blocked: fixing === "failed", fixing: fixing === "going", line: stateLine(m.id, "msg:" + m.id)};
+    // Its row: Copy and I sent it side by side, then where it goes (Open their profile).
+    const act = held ? (HELD_SENDABLE.has(txt(m.hold_why)) ? null : paste) : [ready ? copyBtn : null, sentBtn, onFace ? link : null].filter(Boolean);
+    return {box, notes: null, act: act && act.length === 0 ? null : act, steps: held ? 0 : [sentBtn, onFace ? link : null].filter(Boolean).length, copied: copiedLine,
+      cost: pasteCost, extra, blocked: fixing === "failed", fixing: fixing === "going", line: stateLine(m.id, "msg:" + m.id)};
   }
   // Where reading LinkedIn stands for this opening of the page: readingState, except that a
   // read that worked lately elsewhere is no read here unless this page is open in the Claude
@@ -8450,6 +8461,7 @@
         m.why ? h("p", {class: "meta"}, txt(m.why) + ".") : null,
         d.box, d.notes,
         h("div", {class: "card-actions"}, d.act, d.cost, more("msg:" + m.id, "the message to " + txt(m.first_name), [h("div", {class: "more-acts"}, d.extra, elseBtn("message", m.id, "the message to " + txt(m.first_name), "msg:" + m.id)), relatedLinks(m.employer, m.id, m)], true)),
+        d.copied,
         cardTalk("message", m.id, "the message to " + txt(m.first_name)),
         d.line));
   }
@@ -9089,9 +9101,9 @@
       // A note waiting for their profile is not ready: its own card says why and when.
       if (txt(m.hold)) return null;
       const d = draftParts(m, {noWhy: true});
-      const copy = d.box && d.box.querySelector ? d.box.querySelector(".bubble-copy") : null;
+      // Copy and I sent it, its own row's (draftParts).
       return h("div", {class: "ts-row", "data-ts": m.id}, h("p", {class: "small ts-what"}, "The message to ", who, " is ready"),
-        h("div", {class: "card-actions"}, copy, d.act));
+        h("div", {class: "card-actions"}, d.act), d.copied);
     }).filter(Boolean);
     return rows.length ? h("div", {class: "ct-steps"}, rows) : null;
   }
@@ -9340,7 +9352,7 @@
     // With a message on the card, They replied is its soft pill beside I sent it, where the row
     // has room (Open their profile not on its face): under More it was not found when they wrote
     // again before the message went (the redesign, 2026-11-16).
-    const replyFace = !!(theyReplied && d && !onHold && [].concat(d.act || []).filter(Boolean).length < 2);
+    const replyFace = !!(theyReplied && d && !onHold && d.steps < 2);
     // Let it go: one of the trash's answers for someone who has not written back, never a row of
     // buttons of its own (2026-11-03: "Let it go" changed nothing that could be seen).
     const letGo = ["waiting", "leave"].includes(g) && !sent ? () => act([{item: p.id, action: "person.status", value: {status: "gone_cold", why: "no reply, let go on the page"}, rev: p.rev}], "Let go: " + name) : null;
@@ -9398,6 +9410,7 @@
         h("div", {class: "card-actions"}, owed, d && owed === d.act ? d.cost : owedCost(p, d ? null : owed, going || box),
           asked && asked.doc && owed && !d && !busy ? askSentBtn(p, asked, "p:" + p.id) : null,
           (d || onHold) && !replyFace ? null : theyReplied, more("person:" + p.id, whoAt(name, p.employer), extra)),
+        d ? d.copied : null,
         cardTalk("person", p.id, whoAt(name, p.employer)),
         noteFor("reply:" + p.id), due ? stateLine(due.id, "pdue:" + p.id) : null, d ? d.line : done1 ? stateLine(done1.id, "msg:" + done1.id) : null,
         going ? null : stateLine(p.id, "person:" + p.id)));
