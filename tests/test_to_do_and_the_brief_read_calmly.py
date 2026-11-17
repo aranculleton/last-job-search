@@ -243,3 +243,14 @@ def test_linkedins_steps_wait_one_tap_away(run, tmp_path):
     h = got["after"][0]["eval"]
     assert h and h["open"] is False and h["words"] == "How to get it" and h["steps"] is False, h
     assert [b.startswith("Open LinkedIn's download page") for b in h["button"]] == [True], h
+
+
+RING = r"""(() => [...document.querySelectorAll('#main [data-k="bp:jobs"] li')].filter((l) => l.getClientRects().length).map((l) => {
+  const r = l.querySelector('.score-pill'); return r ? {ring: getComputedStyle(r, '::before').backgroundImage.startsWith('conic-gradient'), said: l.textContent.includes('Fit 84 out of 100') || /Fit \d+ out of 100/.test(l.textContent), w: Math.round(r.getBoundingClientRect().width)} : null; }))()"""
+
+
+def test_a_jobs_fit_on_the_brief_is_the_ring_jobs_wears(run, tmp_path):
+    """The redesign's second round, 2026-11-17: a green "84" pill on the Brief, a ring on Jobs."""
+    got = _go(run, tmp_path, [{"hash": "brief", "eval": RING}], WIDE, clock=T)
+    rows = got["after"][0]["eval"]
+    assert rows and all(r and r["ring"] and r["said"] and r["w"] == 32 for r in rows), rows

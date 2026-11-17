@@ -215,7 +215,8 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   of errors (the redesign, 2026-11-16). (action-row test: a link inside a sentence)
 - A job's fit is a ring round its number, drawn as far round as the fit goes in its band's
   colour (green strong, blue good, grey below), the number in the ink and "Fit 84 out of 100"
-  said to a screen reader; never red. Why: a bare "84" in a tinted blob was read as nothing
+  said to a screen reader; never red. The same ring wherever a fit is shown, the Brief's Jobs a
+  step smaller (32px), never a tinted "84" pill (the redesign's second round, 2026-11-17; calm test). Why: a bare "84" in a tinted blob was read as nothing
   (the usability review, 2026-11-16).
 - Two devices that said different things about an application are asked as one plain
   question, "Did you apply to Quayside Foods?" with "Yes, I applied" and "Not yet", each

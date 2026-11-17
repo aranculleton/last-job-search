@@ -2169,9 +2169,8 @@ dialog.work-sheet :is(select, input, textarea) { width: 100%; max-width: 100%; m
     ul.bp-people .bp-state { grid-column: 2; white-space: normal; }
   }
 }
-.bp-score { flex: none; min-width: 32px; text-align: center; padding: 2px 8px; border-radius: 999px; font-variant-numeric: tabular-nums; font-weight: 600; font-size: var(--t-sm); color: var(--st-done); background: var(--st-done-bg); }
-.bp-score.tone-good { color: var(--st-running); background: var(--st-running-bg); }
-.bp-score.tone-fair { color: var(--st-waiting); background: var(--st-waiting-bg); }
+/* A job's fit on the Brief: Jobs' own ring, a step smaller. */
+.bp-jobs .score-pill.bp-fit { flex: none; width: 32px; height: 32px; min-width: 32px; }
 /* The counts never stretch: where their panel is wide (a day with no news) they keep their size. */
 /* Your progress fits its panel at any width, by the panel's own width rather than the
    window's (the maintainer, 2026-11-02: "leaves white space or gets weirdly cramped"): two by

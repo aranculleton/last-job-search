@@ -6628,7 +6628,10 @@
     const jobLi = (id, title, company, score, band) => h("li", {},
       h("a", {href: "#jobs/" + id, class: "bp-text bp-link", "data-k": "bp-job:" + id, onclick: (e) => { e.preventDefault(); go("jobs", {focus: true, item: id}); }},
         h("strong", {}, txt(title)), h("span", {class: "bp-at"}, txt(company))),
-      score != null ? h("span", {class: "bp-score tone-" + (txt(band) || "plain"), title: SCORE_MEANS}, String(score)) : null);
+      // Its fit is the one ring every job wears (the redesign's second round, 2026-11-17: a green
+      // "84" pill here, a ring on Jobs, "Scored 79" in a sheet), its words said to a screen reader.
+      score != null ? h("span", {class: "score-pill bp-fit tone-" + ({strong: "ok", good: "info"}[txt(band)] || "plain") + fitClass(score), title: SCORE_MEANS},
+        h("span", {"aria-hidden": "true"}, String(score)), h("span", {class: "sr-only"}, "Fit " + score + " out of 100")) : null);
     // Up to eight, as many as the panel has room for at their own spacing (fitBrief): five at
     // most left half of a tall panel empty (the maintainer, 2026-11-06: "list a couple more,
     // but dont cramp them"); "All N" opens the rest on Jobs.
