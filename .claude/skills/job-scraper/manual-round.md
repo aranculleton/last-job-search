@@ -188,8 +188,9 @@ only job is to shrink what reaches the one below it. The rule that governs all o
 run a stage on a posting that stage cannot change the fate of.** Full-scoring a posting you will
 never surface is waste no matter how good the scoring is.
 
-**Freshness is a hard rule.** Nothing older than **14 days** is in scope, no exceptions and no
-matter how good the fit looks. Pass `--jobage 14` to every portal search, and let
+**Freshness is a hard rule.** Nothing older than the person's own window (`JOB_AGE_DAYS` in
+`profile/search.py`, **14 days** unless they set another) is in scope, no exceptions and no
+matter how good the fit looks. Pass that window as `--jobage <days>` to every portal search, and let
 `tools/prefilter.py` enforce it again on the returned dates: a portal filter is a request, not a
 guarantee, and a stale posting is the most expensive false positive this pipeline has - it
 survives every tier, gets fully scored, gets drafted for, and the role was filled a month ago.

@@ -419,7 +419,12 @@ JSON_NAMES = {
                      "06_skipped.json", "kept.json", "dropped.json", "scraped.json",
                      "sent.json", "partial_rows.json", "tools/run_round.py: .json",
                      # a search limited to named employers: its names and the rows at them
-                     "employers.json", "named.json"), _ROUND),
+                     "employers.json", "named.json",
+                     # the rows the hard rules pass and leave out, before the throttle; the
+                     # shortlist's size before its cut; the employers left to judge; and what
+                     # each site searched read and failed (00_scrape/sources.json)
+                     "05_ruled.json", "05_ruled_out.json", "06_trimmed.json", "unjudged.json",
+                     "sources.json"), _ROUND),
     **dict.fromkeys(("apps_in.json", "picks.json", "draft_args.json", "pack.json", "held.json",
                      "staged_roles.json", "packet.json", "drafts.json",
                      "tools/draft_audit.py: outreach_*.json",
@@ -469,6 +474,9 @@ JSON_NAMES = {
                      "rule_map.json", "remote.json", "design_draft.json",
                      "tools/leak_scan.py: **.json", "tools/markets.py: *.json",
                      "tools/markets.py: .json", "tools/locale_rules.py: .json",
+                     # the market tables (tools/markets/<cc>.json), read for a neighbour's
+                     # status words, and the suffix test that lists them
+                     "tools/text_screen.py: *.json", "tools/text_screen.py: .json",
                      "tools/profile_upgrades.py: *.json"), _APP),
     **dict.fromkeys(("reading-ledger.json", "budget.json",
                      # a state folder outside git (a test's): the ledger in the computer's

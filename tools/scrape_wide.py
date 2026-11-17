@@ -1377,8 +1377,42 @@ def before(folder: str | None) -> tuple[list[dict], set[str]]:
     return rows, {k for k in sent if isinstance(k, str)} if isinstance(sent, list) else set()
 
 
+# What each source read and what failed, beside the scrape's files, for the round to report
+# (run_round.say_sources). A round said "a quarter of portal requests failed" when one portal
+# request in 5,760 had, and said nothing of 17 employer boards it never read (2026-11-16).
+SOURCES = "sources.json"
+
+
+def write_sources(out: str, rows: list, kept: list, sent: dict, failed: dict,
+                  partial: str = "", boards: dict | None = None) -> None:
+    """SOURCES: each site searched (requests sent and failed, with the commonest reasons,
+    postings found and kept by the search's own gates), the employer boards (how many were
+    read, and each that returned nothing with why, or left something out), and what stopped
+    the scrape short."""
+    from collections import Counter
+    found = Counter(r.get("portal") for r in rows)
+    passed = Counter(r.get("portal") for r in kept)
+    boards = boards or {}
+    systems = set(boards.get("systems") or ())
+    sites = []
+    for name in sorted(set(sent) | {p for p in found if p and p not in systems}):
+        errs = failed.get(name, [])
+        sites.append({"source": name, "requests": sent.get(name, 0), "failed": len(errs),
+                      "why": [f"{n}x {w}" for w, n in Counter(e[:60] for e in errs).most_common(2)],
+                      "found": found.get(name, 0), "kept": passed.get(name, 0)})
+    report = {"sites": sites,
+              "boards": {"read": int(boards.get("read") or 0),
+                         "found": {p: found.get(p, 0) for p in sorted(systems)},
+                         "quiet": dict(boards.get("quiet") or {}),
+                         "partial": dict(boards.get("partial") or {})},
+              "stopped": partial}
+    with open(os.path.join(out, SOURCES), "w", encoding="utf-8", newline="\n") as fh:
+        json.dump(report, fh, indent=1, ensure_ascii=False)
+        fh.write("\n")
+
+
 def finish(out: str, seen: dict, today: dt.date, jobage: int, n_tasks: int,
-           sent: dict, failed: dict, partial: str = "") -> int:
+           sent: dict, failed: dict, partial: str = "", boards: dict | None = None) -> int:
     """The scrape's files from what was found: scraped, kept and dropped. Exit 2 when
     more than a quarter of the requests failed, or when the scrape was cut short."""
     # Copies of one posting from several sources are as old as the oldest of them.
@@ -1412,6 +1446,10 @@ def finish(out: str, seen: dict, today: dt.date, jobage: int, n_tasks: int,
               f"or every one of them reaches the model blind.")
     json.dump(dropped, open(f"{out}/dropped.json", "w", encoding="utf-8", newline="\n"), indent=1)
     json.dump(rows, open(f"{out}/scraped.json", "w", encoding="utf-8", newline="\n"), indent=1)
+    try:
+        write_sources(out, rows, kept, sent, failed, partial, boards)
+    except (OSError, TypeError, ValueError) as e:     # a report must never break a round
+        print(f"sources: not written ({e})", file=sys.stderr)
     try:
         os.remove(os.path.join(out, PARTIAL))
     except OSError:
@@ -1743,9 +1781,13 @@ def main() -> int:
     # spent its budget: minutes of a round spent waiting for requests that need
     # nothing from the portals. Their rows still join here, after every portal's, so
     # where one posting comes from two sources the portal's copy is still the one kept.
+    boards: dict = {}
     try:
         waiting = time.monotonic()
         ats_rows, ats_quiet, ats_notes = employer_boards.result()
+        boards = {"quiet": ats_quiet, "partial": ats_notes,
+                  "systems": sorted({r.get("portal") for r in ats_rows if r.get("portal")}),
+                  "read": len({r.get("company") for r in ats_rows}) + len(ats_quiet)}
         _say(f"timing: the employer boards finished after {took(boards_took[0])}, "
              f"waited for {took(time.monotonic() - waiting)} here", a.log)
         landed(ats_rows)
@@ -1767,7 +1809,8 @@ def main() -> int:
     notes += [f"{name} not searched (it refused the probe: {why})"
               for name, why in sorted(skipped.items())]
     partial = "; ".join(notes)
-    return finish(a.out, seen, today, a.jobage, len(tasks), sent, failed, partial=partial)
+    return finish(a.out, seen, today, a.jobage, len(tasks), sent, failed, partial=partial,
+                  boards=boards)
 
 if __name__ == "__main__":
     raise SystemExit(main())

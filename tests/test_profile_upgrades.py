@@ -438,6 +438,30 @@ def test_statement_templates_scoring_and_role_headings_read_the_profile(profile)
     assert U.by_id("role-headings").pending()
 
 
+def test_a_scoring_lift_that_says_nothing_of_where_it_reads(profile):
+    """A lift written before an entry could say where it reads is named until it says so; a
+    penalty is never asked about (issue 306). Invented words."""
+    path = profile / "search.py"
+    base = path.read_text(encoding="utf-8")
+    lifts = ('\nOPP_LEVERAGE = [\n'
+             '    (re.compile(r"\\bmedia\\b", re.I), 14, "a media employer"{one}),\n'
+             '    (re.compile(r"\\bpricing\\b", re.I), 12, "pricing is the work",\n'
+             '     "set_aside_self_portrait"{two}),\n'
+             '    (re.compile(r"\\blong hours\\b", re.I), -12, "long hours"),\n'
+             ']\n')
+    path.write_text(base + lifts.format(one="", two=""), encoding="utf-8")
+    person._modules.clear()
+    u = U.by_id("leverage-scopes")
+    assert u.pending() == "2 scoring lifts in profile/search.py do not say where they read"
+    assert u.every() == ["a media employer", "pricing is the work"]
+    path.write_text(base + lifts.format(one=', "employer"', two=""), encoding="utf-8")
+    person._modules.clear()
+    assert u.pending() == "1 scoring lift in profile/search.py does not say where it reads"
+    path.write_text(base + lifts.format(one=', "employer"', two=', "work"'), encoding="utf-8")
+    person._modules.clear()
+    assert u.pending() == "" and u.needs == "nobody"
+
+
 def test_a_field_the_scoring_vocabulary_was_not_written_for(profile):
     path = profile / "search.py"
     text = path.read_text(encoding="utf-8")

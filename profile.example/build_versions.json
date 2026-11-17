@@ -9,7 +9,7 @@
   },
   "drafts": {
     "date": "2026-11-17",
-    "version": 108
+    "version": 113
   },
   "expand": {
     "date": "2026-10-15",
@@ -24,8 +24,8 @@
     "version": 59
   },
   "market": {
-    "date": "2026-11-11",
-    "version": 11
+    "date": "2026-11-17",
+    "version": 12
   },
   "network-notes": {
     "date": "2026-11-16",
@@ -52,12 +52,12 @@
     "version": 93
   },
   "screening": {
-    "date": "2026-11-16",
-    "version": 58
+    "date": "2026-11-17",
+    "version": 62
   },
   "search": {
-    "date": "2026-11-03",
-    "version": 12
+    "date": "2026-11-17",
+    "version": 13
   },
   "upskill": {
     "date": "2026-10-21",

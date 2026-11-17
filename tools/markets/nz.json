@@ -252,5 +252,19 @@
       "verified": false,
       "why": "the sentence found on the page does not say it"
     }
-  ]
+  ],
+  "status_words": {
+    "citizenship": {
+      "says": "New Zealand citizen",
+      "words": "\\b(?:new zealand|nz)\\s+(?:citizen\\w*|nationals?|nationality)\\b|\\bcitizens? of new zealand\\b"
+    },
+    "residence": {
+      "says": "New Zealand resident",
+      "words": "\\b(?:new zealand|nz)\\s+(?:permanent\\s+)?residen(?:t|ts|cy|ce)\\b"
+    },
+    "clearance": {
+      "says": "security clearance",
+      "words": "\\bsecurity clearance\\b|\\bnzsis\\b"
+    }
+  }
 }

@@ -12,6 +12,8 @@ Checks:
 - .claude/settings.json is valid JSON with a permissions.allow list
 - Every .claude/agents/*.md has frontmatter whose `name` matches its filename and
   whose `description` is non-empty, and any `model` is one the Agent tool accepts
+- No skill, command, RUNBOOK.md or routine prompt gives a search window of its own
+  (`--jobage <a number>`): the window is the person's (JOB_AGE_DAYS)
 
 Exit code 0 on success, 1 with a failure list otherwise.
 """
@@ -131,6 +133,31 @@ def check_agent(path: Path) -> None:
         errors.append(f"{rel(path)}: model {model!r} is not one of {sorted(AGENT_MODELS)}")
 
 
+# A documented round or search command that names a window of its own overrides the
+# person's (profile/search.py JOB_AGE_DAYS, which run_round.py reads when --jobage is left
+# off): their window was 10 days, the skill's one command said 14, RUNBOOK.md and the job
+# round's prompt said 7, and a round asked for in a chat ranked postings up to 14 days old
+# (2026-11-16). A placeholder ("--jobage <days>") is fine; a number is not.
+WINDOW = re.compile(r"--jobage[ =]\d+")
+WINDOW_DOCS = (".claude/skills/**/*.md", ".claude/commands/*.md", "RUNBOOK.md",
+               "automation/prompts/*.md")
+
+
+def round_window_problems(text: str) -> list[str]:
+    """Each search window a document gives in place of the person's own."""
+    return [m.group(0) for m in WINDOW.finditer(text)]
+
+
+def check_round_windows() -> None:
+    for pattern in WINDOW_DOCS:
+        for path in sorted(ROOT.glob(pattern)):
+            for hit in round_window_problems(path.read_text(encoding="utf-8")):
+                errors.append(
+                    f"{rel(path)}: `{hit}` gives a search window of its own, which overrides "
+                    "the person's (JOB_AGE_DAYS in profile/search.py): leave --jobage off, or "
+                    "write `--jobage <days>` for a window the person asked for one search")
+
+
 def main() -> int:
     skills = sorted(ROOT.glob(".claude/skills/*/SKILL.md")) + sorted(ROOT.glob(".agents/skills/*/SKILL.md"))
     commands = sorted((ROOT / ".claude" / "commands").glob("*.md"))
@@ -147,6 +174,7 @@ def main() -> int:
     for command in commands:
         check_command(command)
     check_settings()
+    check_round_windows()
 
     if errors:
         print(f"lint_skills: {len(errors)} failure(s)")

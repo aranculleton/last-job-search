@@ -197,7 +197,7 @@ Only draft unprompted if the user has explicitly said to in that request.
 
 ## One command
 
-`python3 tools/run_round.py --jobage 14` runs every stage of a round in order and stops at the ranked shortlist; asked in the chat, add `--table` and it ends by printing the table to show (Step 5). When the person names employers ("search these 20 employers"), add `--employers "A, B, C"`: only those are searched (their own boards and searches by their names), the list holds only them with a place for each, and the round names any with no open roles ("No open roles found at X, Y"), which you pass on (RUNBOOK.md step 1). Leave `--out` off: the round names itself, `r` and the next number, and prints its folder (`round: r12, its files in ...`), which is the folder `--recut` and a progress pin name. See `RUNBOOK.md`. When it cannot run, `manual-round.md` beside this file has every stage written out to do by hand: read it only then. Its step numbers are the ones cited below.
+`python3 tools/run_round.py` runs every stage of a round in order and stops at the ranked shortlist, searching the person's own window (`JOB_AGE_DAYS` in `profile/search.py`; pass `--jobage <days>` only when they ask for another window for this one search, and the round's first line says which it used); asked in the chat, add `--table` and it ends by printing the table to show (Step 5). When the person names employers ("search these 20 employers"), add `--employers "A, B, C"`: only those are searched (their own boards and searches by their names), the list holds only them with a place for each, and the round names any with no open roles ("No open roles found at X, Y"), which you pass on (RUNBOOK.md step 1). Leave `--out` off: the round names itself, `r` and the next number, and prints its folder (`round: r12, its files in ...`), which is the folder `--recut` and a progress pin name. See `RUNBOOK.md`. When it cannot run, `manual-round.md` beside this file has every stage written out to do by hand: read it only then. Its step numbers are the ones cited below.
 
 **Asked in a chat, the search is on the page's work list first, as its own card**, so the person sees it start, go and finish (asked on the page, its item is there already). Before the round: `python3 tools/app.py ask "$D" --kind search --title "<a few plain words>" --here --chat <your chat id>` (`work` and `holds` read into `$D` first; over an older read it names the read to make, then run it again), and send its batch. Give the round its id (`--work <its id>`), pin it while it runs (`python3 tools/app.py pin "$D" --work <its id> --chat <your chat id> --stage scrape --log <the round's folder>/round.log`, every ten minutes or so), and end with `app.py done "$D" --work <its id> --summary "<one sentence>"` once the shortlist is saved. A people search asked with it is a second ask, its own card (`/network`), never one busy line for both.
 
@@ -233,7 +233,7 @@ for what is off. Never more. Asked on the page, the chat says only the counts li
 it is.
 
 **The round prints the table; never build it from the JSON.** Asked in the chat, run the round
-with `--table` (`python3 tools/run_round.py --jobage 14 --table`; `--recut --out <the round's
+with `--table` (`python3 tools/run_round.py --table`; `--recut --out <the round's
 folder> --table` prints it again after a recut). Under `table for the person` it prints the
 counts line and the table, columns `# | Score | Verdict | Title | Company | Location | Salary |
 Deadline | Check | Apply`, each row's warm route already in Check. Pass both on exactly as

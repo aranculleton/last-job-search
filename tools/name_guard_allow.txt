@@ -787,4 +787,30 @@ Rufus Penhallow             # invented partner, the same test
 Odile Sarrow                # invented director, the same test
 Examplewood Consulting      # invented employer, the same test
 Regional Chair              # a title, not a person
+Northfield Bank         # invented employer, tests/test_an_employer_named_by_its_careers_site_is_the_employer.py
+Lowmoor Lending         # invented employer, the same test
+Tamberlin Engineering   # invented employer, the same test
+Tamberlin Science       # invented employer, the same test
+Wexcombe Engineering    # invented employer, the same test
+Wexcombe Insurance      # invented employer, the same test
+Ashgrove Analytics      # invented employer, tests/test_the_rules_a_posting_decides_run_before_one_role_per_employer.py
+Birchmoor Lending       # invented employer, the same test
+Cobbledale Insurance    # invented employer, the same test
+Dunholme Foods          # invented employer, the same test
+Eskdale Freight         # invented employer, the same test
+Fellbeck Retail         # invented employer, the same test
+Gorsefield Employer     # invented employer, the same test
+Harwood Systems         # invented employer, tests/test_a_job_brought_back_stays_through_every_cut.py
+Brantwood Foods         # invented employer, the same test
+Ashby Freight           # invented employer, the same test
+Coldwell Retail         # invented employer, the same test
+Quorlan Media           # invented employer, tests/test_unjudged_employers_wait_below_judged_ones.py
+Tessaly Consulting      # invented employer, the same test
+Vintry Labs AI          # invented employer, the same test
+Ambleside Freight       # invented employer, the same test
+Bellingham Foods        # invented employer, the same test
+Carrow Retail           # invented employer, the same test
 North-Shore Mutual          # invented employer, tests/test_an_employer_turned_down_is_matched_however_it_is_written.py
+Quarrelwood Bank        # invented employer, tests/test_a_round_says_what_each_source_read.py
+Skyrail Holidays        # invented employer, tests/test_a_sector_lift_reads_the_employer_not_its_boilerplate.py
+Fenmoor Advisory        # invented employer, the same test

@@ -180,8 +180,19 @@ account uses. Its progress prints a line a portal a minute, to the screen and `r
 ## 1. Find jobs
 
 ```bash
-python3 tools/run_round.py --jobage 7
+python3 tools/run_round.py
 ```
+
+**The window is the person's own** (`JOB_AGE_DAYS` in `profile/search.py`, 14 days unless they
+set another); the round's first line says it (`window: 10 days (your setting)`). Pass
+`--jobage <days>` only when they ask for a different window for this one search.
+
+**Employers nobody has judged wait below judged ones.** Where the person's profile states a
+bar (pay, prestige or signal), an employer no list names and nobody has judged is ranked down
+until judged, and the round prints `unjudged:` with the file listing them (each with what its
+posting says about it). Judge them in one batch, never one call each: fill each verdict and a
+few words why (one small-model agent can do the whole file from the person's bar and those
+lines), run `python3 tools/bar.py judge --file <that file>`, then `--recut` the round.
 
 **Leave `--out` off.** The round names itself, `r` and the next number, and prints its
 folder (`round: r12, its files in rounds/r12`), which is the folder `--recut` and a
@@ -193,13 +204,19 @@ written over.
 The round handles the keeping and the deleting itself. It writes the top 60 of the
 shortlist, without the posting bodies, to `documents/rounds/<round>.json` at about 30KB,
 then deletes the stage files and prints how much it freed. It keeps `06_shortlist.json`, cut
-to the same 60 with their bodies, because drafting is staged from it; in a later session,
+to the same 60 and a reserve of three times the number asked for, with their bodies, because
+drafting is staged from it and a `--recut` refills from it; in a later session,
 when `rounds/` is gone, `stage_picks.py` reads `documents/rounds/` and fetches the bodies again. That summary file is the one
 to commit, and it takes a plain `git add`: it sits outside `rounds/` deliberately,
 because a keeper inside an ignored tree would need a `!` negation and
 `tools/security_guards.py` rejects negations outside its reviewed allowlist.
 
-Stages, in order: scrape, prefilter, hydrate, screen, opportunity, fit, throttle. The
+Stages, in order: scrape, prefilter, hydrate, screen, opportunity, fit, rules, throttle.
+The rules stage applies every hard rule the posting decides (the place, with "never says it
+hires from home" for a remote role in the neighbouring country, the bar, an agency, an
+employer turned down or judged none, and a job already yours) before one role per employer
+is chosen, so the throttle keeps the best role that can be shown and every row the round keeps
+can be; what it leaves out is on the round's left-out list. The
 shortlist is ranked by fit x opportunity. A fit under 65 (`fit.FIT_FLOOR`) is held low in that
 order, unless a warm route exempts it, and never cut: the yield target counts fit, so a
 posting at 60 to 64 still counts toward it. `tools/throttle.py` has
@@ -245,14 +262,23 @@ python3 tools/run_round.py --from-scraped rounds/<the round it printed>/00_scrap
 
 ### When the round misses
 
-It exits 2 and keeps four files it otherwise deletes, with the posting bodies stripped:
+It exits 2 and keeps five files it otherwise deletes, with the posting bodies stripped:
 
 | File | Answers |
 |---|---|
 | `00_scrape/dropped.json` | what the age, location and title gates removed (the scrape applies them) |
 | `01_dropped.json` | what was already ruled out in `seen_jobs.json`, and relists first seen too long ago |
 | `03_screened_all.json` | what the stated-fact knockouts removed, with the quote |
+| `05_ruled_out.json` | what the rules a posting decides removed before the throttle (place, the bar, already yours) |
 | `06_skipped.json` | what the company throttle and the one-role-per-employer rule removed |
+
+Every round also prints what each source read and what failed (`sources:`): each site's
+searches, failures and postings, the employer boards that returned nothing and why, and what
+cut the scrape short. Pass on a failed source in plain words; a quiet board is not a thin
+market. A round asked for a number (`--show`) that finds fewer checks itself before it
+reports (`self-check:`): it has read every ranked row that passes every rule, it names the
+sources a new search would read again, and it searches wider by itself when the search's own
+hour can hold another scrape as long as the first, saying so either way.
 
 Those are the places a posting can vanish. `--expand` re-runs wider automatically,
 up to three rounds in all, each with more pages per search (from the default 5, then 10,
@@ -958,7 +984,7 @@ slash command** are the table below, each with what it does, its flags and its e
 
 | Command | What it does |
 |---|---|
-| `python3 tools/run_round.py --out rounds/rN [--expand]` | The whole free pipeline, portals to ranked shortlist. It checks the yield target and prints MET or MISSED with the counts. **Exit 0 met, exit 2 missed, exit 1 a stage actually broke** - a thin market and a broken pipeline are different answers. `--expand` re-runs wider up to the 3 rounds the rule allows. It **prunes itself**: `rounds/` is gitignored and its ~55MB of stage files are deleted, except `06_shortlist.json` cut to the top 60 with their bodies, which is what drafting is staged from; the same 60 rows, minus the posting bodies, are written to `documents/rounds/<round>.json` and **are** committed, beside what it filtered out and why (`documents/rounds/filtered/<round>.json`, read by `tools/filtered.py`). `--keep-intermediates` retains the stage files for debugging a round that went wrong, and a round that **missed** keeps `00_scrape/dropped.json`, `01_dropped.json`, `03_screened_all.json` and `06_skipped.json` automatically, with the posting bodies stripped, because those are the files the MISSED message tells you to read. |
+| `python3 tools/run_round.py --out rounds/rN [--expand]` | The whole free pipeline, portals to ranked shortlist. It checks the yield target and prints MET or MISSED with the counts. **Exit 0 met, exit 2 missed, exit 1 a stage actually broke** - a thin market and a broken pipeline are different answers. `--expand` re-runs wider up to the 3 rounds the rule allows. It **prunes itself**: `rounds/` is gitignored and its ~55MB of stage files are deleted, except `06_shortlist.json` cut to the top 60 and a reserve of three times the number asked for, with their bodies, which is what drafting is staged from and a `--recut` refills from; the same 60 rows, minus the posting bodies, are written to `documents/rounds/<round>.json` and **are** committed, beside what it filtered out and why (`documents/rounds/filtered/<round>.json`, read by `tools/filtered.py`). `--keep-intermediates` retains the stage files for debugging a round that went wrong, and a round that **missed** keeps `00_scrape/dropped.json`, `01_dropped.json`, `03_screened_all.json`, `05_ruled_out.json` and `06_skipped.json` automatically, with the posting bodies stripped, because those are the files the MISSED message tells you to read. |
 | `python3 tools/rescore.py` | The jobs the page lists, from the newest search and the earlier ones it carries, scored again by the round's own path from the posting text each search keeps beside its list (`documents/rounds/bodies/<round>.json`, only while the page lists them), each row in its place and as of the day its search ran. Run it after changing how jobs are scored, then `app.py view`; after an update that changes scoring, the sync runs it by itself (the `jobs-rescored` upgrade). `--fetch` fetches the text of a job kept nowhere (one found before this kept it), `--check` says whether it is due. |
 | `python3 tools/network/prep.py --all` | Rewrites every contact's prep document. Without it a fix to `prep.py` reaches whichever one somebody runs next and no others. Each document's last line says which prep wrote it: `--stale-only` rewrites only the documents an older prep wrote or written before the contact's row or thread changed (and never writes one for a contact who has none), keeping answers already rewritten to be said, and `--dry-run` lists what would be written and writes nothing. `"<contact>" --check` exits 1 while an answer is raw profile wording or reads as written. |
 | `python3 tools/network/export.py` | LinkedIn's data export, read, only the files it names. **Given one, `take <zip|folder>` first** (`take --find` looks in Downloads, Desktop and Documents): it saves every file the app reads into documents/linkedin/, in the main folder on a computer, and imports the history into network_threads.csv in one step. `files` (no argument) says plainly when messages.csv or Invitations.csv was never saved; `files <zip>` says what a download holds and what is missing, `history --from <zip>` lists the messages and invitations it would add to network_threads.csv (joined by profile address, else a careful name match, else listed as not in the contact book) and `--apply` writes them, twice adding nothing; `pending` lists the invitations sent and never accepted for three weeks, oldest first, for the person to withdraw on LinkedIn, and `withdrawn <name>...` records the ones they did. Nothing is sent. |
@@ -978,7 +1004,7 @@ slash command** are the table below, each with what it does, its flags and its e
 | `python3 tools/stage_picks.py stage <round_dir> <pick>...` | The step between a shortlist and a draft. A pick is a shortlist rank or `Company::title words`. In a later session, when `rounds/` is gone, it reads `documents/rounds/<round>.json` instead and fetches each pick's body from its board, or reads `<round_dir>/postings/<slug>.txt` when the board will not give it. `single <dir> --company --role --posting-file` stages one posting from no round, which is how `/apply` enters the same pipeline. Writes each posting fenced by `tools/untrusted.py`, `picks.json` (the `draft-applications` workflow's args) and `apps_in.json`, and picks each filename: **a name another application was sent under is never reused**, so a second role at an employer gets a role token (`Acme_DemandPlanning`). It prints what code read from each posting (contract or permanent and when it ends, the pay and whose place it is for, years, degree, where and how it is worked, a repost, what is already running at the employer) and holds a pick with a surprise in it (a fixed-term contract, pay for another place, an application already in, a referral in flight, a second role at one employer unless `--both`) in `held.json` until `consent <round_dir> <slug> --draft` or `--skip`. It prints one short question per pick about the skills the posting names that the profile does not hold (never one it covers under another name: a held part such as Azure Data Factory covers Azure, a listed synonym such as model serving covers model deployment), and `consent <round_dir> <slug> --yes ... --no ...` records the answers the person gives, one per skill for every application (`tools/skill_answers.py`): one nobody has answered is put on their page once and the pick is drafted without it meanwhile, never recorded as a no; a yes prints on that resume's skills line, and both answers go into the documents' header. `assemble <round_dir>` turns the audited drafts into `drafts.json` and names any pick with no draft. |
 | `tools/verify_batch.sh <drafts.json>` | Every rendered application: pages, chronology, section layout, text layer, claims, letters. Exits non-zero on any finding. |
 | `python3 tools/record_drafts.py <drafts.json> <apps_in.json> --round rN` | The tracker rows for a rendered batch, by `/apply` Step 6b's rules, plus `screening_answers.md` for each. It writes **fit** in `fit_rating`, never the shortlist's priority, which can exceed 100 on a 0-100 column. |
-| `python3 tools/bar.py "<company>"` | The candidate's bar in code: pay, prestige, signal, or none, with the reason. The throttle applies it every round: the sectors and employers `profile/search.py` excludes are skipped with the reason recorded, every other row carries its verdict into the shortlist and `documents/rounds/`, and "none" is a flag, never a cut. An employer on none of the profile's lists says so ("not on your employer lists yet"): `bar.py unjudged` lists them in the newest shortlist, and `bar.py judge "<company>" <pay\|prestige\|signal\|none> "<why>"` records a judgement once (`profile/employers_judged.json`), which every later verdict reads; the profile's own lists and hard rules outrank it. |
+| `python3 tools/bar.py "<company>"` | The candidate's bar in code: pay, prestige, signal, or none, with the reason. The throttle applies it every round: the sectors and employers `profile/search.py` excludes are skipped with the reason recorded, every other row carries its verdict into the shortlist and `documents/rounds/`, and "none" is a flag, never a cut. An employer on none of the profile's lists says so ("not on your employer lists yet"): `bar.py unjudged` lists them in the newest shortlist, and `bar.py judge "<company>" <pay\|prestige\|signal\|none> "<why>"` records a judgement once (`profile/employers_judged.json`), which every later verdict reads (`bar.py judge --file <file>` records a round's batch, its `unjudged.json`, in one write); the profile's own lists and hard rules outrank it. |
 | `python3 tools/network/reading.py` | What was read about one person before writing to them: `read <contact_id> <file\|->` takes their profile page (pasted, read in the person's own browser, LinkedIn's Save to PDF, or transcribed screenshots), `add` one public finding (a talk, an article, a post), `show` what a note can rest on, best first, and `queue` the waiting drafts with no fresh reading, offering a paste for the best three only. `paste <file\|->` reads several profiles pasted at once, a line of `---` between them, each matched to a waiting note by name and employer. `draft <contact_id> <file\|->` writes a first note to its `draft.md`, refused when nothing was read about them unless `--card-only` (saved under `CARD ONLY`, shown as card-only), refused past the company limit, and checked with the notes waiting for one frame, opening or close (exit 11); `drafts <file.json>` saves a batch checked together. `estimate [N]` says how long N reads take today, before they start; `meanwhile` lists the notes to write while a page waits. `people <file>` with no `--company` groups a search by title across employers by employer. `shortlist <ids>` puts the run's best ten on the day's short list, and a browser read refuses anyone not on it. `verdict <contact_id>` is KEEP or SKIP after a read, `route --tools <...>` says how this session reads profiles and the one line to tell the person, `gate` says whether a browser read may go now, `linkedin-check` whether today's look at LinkedIn's sign-in is passed, signed-out or due (once a day, on the person's own day; passed, nothing opens LinkedIn to look again), and `stop "<what LinkedIn showed>"` halts browser reads for the day. Keeps only what a note could rest on, never their whole profile. |
 | `python3 tools/network/sources.py ["<employer>"...]` | Where to look for people. Alone, this person's plan of source kinds, ranked by what has drawn replies; with employers, the run's exact searches inside the budget (at most four per employer and five shared by the whole run), and none for an employer the job search ruled out. `ladder --tools <...>` prints what this chat can use, from their connections export to a read in their browser, and the one line to say when it has no browser; `connections "<employer>"` lists who they already know there; `harvest <results.json> --company "<employer>"` turns a search's results into a ranked list of people, each with its evidence, profile status (verified, likely or unconfirmed) and route, nothing fetched; with no `--company`, one search by title feeds every employer it found, grouped by employer, those the search ruled out left out. |
 | `python3 tools/claude_surfaces.py` | What the Claude app and Claude Code can do, and how to reach each part, dated and sourced (`tools/claude_surfaces.json`): `show <id>`, `say <id>` (the words a person sees), `check` (entries older than 60 days, as warnings), `sync-docs` (the docs' marked blocks), and `watch`, the maintainer's check of every quote against its page and of the latest release, run weekly in the app only. |

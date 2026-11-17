@@ -66,7 +66,7 @@ TRAILING = re.compile(
     r"north america|americas|usa|u\.?s\.?|uk|international|global|"
     r"financial group|financial corporation|financial services|financial|"
     r"insurance|concession|technologies|technology|software|solutions|"
-    r"services|pension plan|pension fund)$", re.I)
+    r"services|pension plan|pension fund|internal only|internal)$", re.I)
 # "Bank of England", "Universite de Lyon": a preposition before the
 # qualifier means it is part of the name.
 KEEP_TRAILING = re.compile(r"\b(of|de|du|des|for)\s+\w+$", re.I)
@@ -116,12 +116,70 @@ DUAL = re.compile(r"\s*[|/]\s*")
 # employer's own postings under that name keyed apart from everything else there.
 DOMAIN = re.compile(r"(?<=[a-z0-9])\.(?:com|net|org|io|ai|co(?:\.uk)?|ca|de|fr|in)(?![a-z0-9])")
 
+# A whole web address given as the employer. An aggregator that read a posting off the
+# employer's own careers site names it by that site: "jobs.<employer>.com",
+# "careers.<employer>.group", or an applicant system's address with the employer as its
+# first part ("<employer>.taleo.net/1", "<employer>.jobs2web.com"). Keyed as words they
+# were "jobs <employer>", so an open application there held nothing back and a role
+# already applied for came back as new (2026-11-16). The site's own name is the employer.
+_HOST = re.compile(r"^(?:https?://)?((?:[a-z0-9-]+\.)+[a-z]{2,})(?:[/:?#]\S*)?$")
+# The endings an address may have. Only an address ending in one of these is read as an
+# address: "Kestrel.Commerce" is a name.
+_TLDS = frozenset((
+    "com net org io ai co ca uk us de fr in au nz ie eu es it nl be ch at se no dk fi pl pt "
+    "jp sg hk za br mx group jobs careers app dev tech global info biz me hr").split())
+# The parts in front of an employer's own name on its careers site.
+_SITE_PART = frozenset("www jobs job careers career apply work join hire talent recruiting "
+                       "recruit en fr".split())
+# Applicant systems whose address names the employer in its first part.
+_APPLY_SYSTEMS = frozenset((
+    "myworkdayjobs myworkdaysite workday taleo jobs2web successfactors bamboohr breezy "
+    "greenhouse lever smartrecruiters workable ashbyhq freshteam pinpointhq dayforcehcm icims "
+    "recruitee teamtailor jobvite applytojob oraclecloud").split())
+_WORKDAY_PART = re.compile(r"^wd\d+$")
+# A careers site's slug with a number on the end: "<employer>1" and "<employer>2" are the
+# second and third site one employer made on an applicant system, never another employer.
+# Lower case only (a slug), one or two digits, so a name such as "<Name>360" keeps its own.
+_SLUG_NUMBER = re.compile(r"^([a-z][a-z-]*[a-z])\d{1,2}$")
+
+
+def _site_name(s: str) -> str:
+    """The employer a web address names, or "" when `s` is not a web address."""
+    m = _HOST.match(s)
+    if not m:
+        return ""
+    labels = m.group(1).split(".")
+    if labels[-1] not in _TLDS:
+        return ""
+    while len(labels) > 1 and labels[-1] in _TLDS:
+        labels.pop()
+    if any(p in _APPLY_SYSTEMS for p in labels):
+        own = [p for p in labels if p not in _APPLY_SYSTEMS and p not in _SITE_PART
+               and not _WORKDAY_PART.match(p)]
+        return own[0] if own else ""
+    own = [p for p in labels if p not in _SITE_PART]
+    return own[-1] if own else labels[-1]
+
+
+def _as_site(raw: str, s: str) -> str:
+    """`s` (the name folded and lower-cased) as the employer it names when it is a web address
+    or an applicant system's slug, else as it is."""
+    if " " in s:
+        return s
+    site = _site_name(s)
+    if site:
+        return site
+    m = _SLUG_NUMBER.match(s)
+    if m and raw.strip() == raw.strip().lower():
+        return m.group(1)
+    return s
+
 
 # Pure, and called for every tracker row by every prep a brief rebuilds: 46,769 times on
 # one large invented state, most of a Windows brief's two seconds (2026-10-25).
 @functools.lru_cache(maxsize=65536)
 def _norm(s: str) -> str:
-    s = PAREN.sub(" ", fold(s).strip().lower())
+    s = PAREN.sub(" ", _as_site(str(s or ""), fold(s).strip().lower()))
     s = DOMAIN.sub("", s)
     halves = [h for h in DUAL.split(s) if h.strip()]
     if len(halves) > 1:
@@ -260,8 +318,132 @@ def key(name: str | None) -> str:
     k = _key(name)
     if short:
         _SHORT.setdefault(short, k)
+        return _resolve(k)
+    return _resolve(_SHORT.get(k, k))
+
+
+# ------------------------------------------------------------- the employers already known
+#
+# An aggregator names an employer the way its applicant system does: run together
+# ("<name>bank" for "<Name> Bank"), with its country and legal form run on
+# ("<name>canadaltd"), or by a team ("<Name> Engineering" for a role at <Name>). Each keyed
+# apart from the employer the person's records hold, so an open application there held
+# nothing back, a role already applied for came back as new and one role came back twice
+# (2026-11-16). Only an employer the records already name is joined to: the tracker, the
+# contact book, the profile's employer lists and boards, its aliases and the employers
+# judged. A name no record holds is left as it is.
+
+# A team or line of work after an employer's name: "<Name> Engineering" is <Name> where
+# <Name> is known. A separately incorporated one is the profile's SEPARATE.
+UNITS = frozenset("engineering science sciences research labs lab technology tech digital".split())
+# What may be run on to the end of an employer's name in a slug, taken off one at a time
+# while what is left is not yet a known employer.
+_RUN_ON = ("corporation", "international", "holdings", "limited", "careers", "america",
+           "canada", "global", "group", "jobs", "corp", "inc", "llc", "ltd", "plc", "usa")
+_KNOWN: dict = {}
+
+
+def know(names) -> None:
+    """Add employers to the ones a run-together, slugged or team name is joined to: the
+    tracker, contact book and records a caller reads from a file of its own."""
+    got = _known()
+    added = False
+    for n in names or ():
+        k = _SHORT.get(_key(str(n)), _key(str(n))) if n else ""
+        if k and k not in got["keys"]:
+            got["keys"].add(k)
+            got["joined"].setdefault(k.replace(" ", ""), set()).add(k)
+            added = True
+    if added:
+        got["resolved"].clear()
+
+
+def _names_on_record() -> list[str]:
+    """Every employer name the person's own records hold."""
+    import json
+    out: list[str] = list(ALIASES.values()) + list(_PARENTS)
+    for attr in ("TIER_1", "TIER_2", "TIER_3", "YC_AND_BACKED"):
+        out += [str(n) for n in (getattr(_EMP, attr, None) or ()) if isinstance(n, str)]
+    try:
+        if person.exists("boards.py"):
+            out += [str(n) for n in getattr(person.module("boards"), "BOARDS", {}) or {}]
+    except Exception:  # noqa: BLE001  a profile with no boards names none
+        pass
+    try:
+        s = person.module("search")
+        out += [str(n) for n in (getattr(s, "BAR_DECLINED", None) or {})]
+        out += [str(n) for n in (getattr(s, "BAR_FRONTIER", None) or ()) if isinstance(n, str)]
+    except Exception:  # noqa: BLE001  no search settings: no names there
+        pass
+    try:
+        with open(person.path("employers_judged.json"), encoding="utf-8") as fh:
+            judged = json.load(fh)
+        out += [str((r or {}).get("name") or k) for k, r in judged.items() if isinstance(r, dict)]
+    except Exception:  # noqa: BLE001  no judgements yet, or a file that cannot be read
+        pass
+    import csv
+    import csv_store
+    for f in ("job_search_tracker.csv", "network_contacts.csv"):
+        try:
+            out += [str(r.get("company") or "")
+                    for r in csv_store.dict_rows(person.state(f), refuse=False)]
+        except (OSError, ValueError, csv.Error):
+            pass
+    return out
+
+
+def _known() -> dict:
+    if not _KNOWN:
+        _KNOWN.update(keys=set(), joined={}, resolved={})
+        try:
+            names = _names_on_record()
+        except Exception:  # noqa: BLE001  no profile here: nothing known yet
+            names = []
+        know(names)
+    return _KNOWN
+
+
+def _joined(s: str) -> str:
+    """The one known employer whose name, run together, is `s`, or ""."""
+    got = _known()["joined"].get(s)
+    if not got:
+        return ""
+    spaced = [k for k in got if " " in k]
+    if len(spaced) == 1:
+        return spaced[0]
+    return next(iter(got)) if len(got) == 1 else ""
+
+
+def _resolve(k: str) -> str:
+    """The key of the known employer `k` is a run-together, slugged or team form of, else
+    `k` itself."""
+    if not k:
         return k
-    return _SHORT.get(k, k)
+    known = _known()
+    done = known["resolved"].get(k)
+    if done is not None:
+        return done
+    out = k
+    if " " not in k:
+        s = k
+        for _ in range(4):
+            hit = _joined(s)
+            if hit:
+                out = hit
+                break
+            cut = next((w for w in _RUN_ON if s.endswith(w) and len(s) - len(w) >= 3), "")
+            if not cut:
+                break
+            s = s[:-len(cut)]
+    else:
+        head, _, last = k.rpartition(" ")
+        if last in UNITS and not SEPARATE.match(k):
+            if head in known["keys"]:
+                out = head
+            elif " " not in head and _joined(head):
+                out = _joined(head)
+    known["resolved"][k] = out
+    return out
 
 
 def entry_key(name) -> str:
