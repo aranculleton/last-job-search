@@ -869,8 +869,12 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
 - Colours are the tokens in `palettes.py`, never a raw value. Light: warm near-white paper and
   white cards, the filled button the text colour with white on it. Dark: warm near-black, a card
   a step lighter. Clay means it is the person's move and nothing else: "Needs your answer",
-  "Your turn", "Ready to do" and "Ready to send" are clay chips (the soft clay with clay words, app.js `moveTone`),
-  never the late amber or the running blue; blue is for work in progress and for focus. Behind a
+  "Your turn", "Ready to do", "Ready to send", "Follow-up ready" and an application not sent yet
+  are clay chips (the soft clay with clay words, app.js `moveTone`),
+  never the late amber or the running blue; blue is for work in progress and for focus. A day
+  away ("In 3 days", "Tomorrow") is one neutral capsule wherever it is said, and the Brief's week
+  strip draws a day's dots in the clay ink (the redesign's second round, 2026-11-17: "In 3 days"
+  was blue on an employer's card and grey on To do, and the strip's dots blue). Behind a
   sheet the page steps back under the scrim, a warm near-black at 45% in both looks. (colour
   tests)
 - A character count is said only within 30 letters of its limit or over it, as what is left

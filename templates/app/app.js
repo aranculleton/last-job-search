@@ -3288,7 +3288,9 @@
   // Clay means it is the person's move, and nothing else does (the redesign's second round,
   // 2026-11-17): "Needs your answer" in the late amber read as late, and "Ready to do" in blue
   // as running. The words say it, so every chip and state that says one is drawn so.
-  const YOUR_MOVE = /^(Needs your answer|Replied: your turn|Your turn|Ready to do|Ready to send|\d+ questions? for you)$/;
+  // "Follow-up ready" is the person's move too: in blue it read as work going on (the redesign's
+  // second round, 2026-11-17).
+  const YOUR_MOVE = /^(Needs your answer|Replied: your turn|Your turn|Ready to do|Ready to send|Follow-up ready|\d+ questions? for you)$/;
   const moveTone = (text, tone) => (YOUR_MOVE.test(txt(text).trim()) ? "you" : tone);
   function chip(text, tone) { return h("span", {class: "chip tone-" + (moveTone(text, tone) || "plain")}, text); }
   // The one control that calls off Claude's work, wherever it shows (Claude's work, a card's
@@ -10270,7 +10272,7 @@
   // ------------------------------------------------------------------ Progress
 
   const APP_GROUP = {applied: "waiting", interview: "progress", offer: "progress", rejected: "closed", withdrawn: "closed", closed: "closed", drafted: "unsent", hired: "progress"};
-  const APP_WORD = {applied: ["Applied", "info"], interview: ["Interviewing", "ok"], offer: ["Offer", "ok"], hired: ["Hired", "ok"], rejected: ["Not this time", "plain"], withdrawn: ["Withdrawn", "plain"], closed: ["Closed", "plain"], drafted: ["Not sent yet", "warn"]};
+  const APP_WORD = {applied: ["Applied", "info"], interview: ["Interviewing", "ok"], offer: ["Offer", "ok"], hired: ["Hired", "ok"], rejected: ["Not this time", "plain"], withdrawn: ["Withdrawn", "plain"], closed: ["Closed", "plain"], drafted: ["Not sent yet", "you"]};
   const APP_LIVE = new Set(["applied", "interview", "offer", "drafted"]);
   // The last 30 days first, all time one tap away (the maintainer, 2026-10-26).
   function renderProgress(where) {
@@ -12041,7 +12043,8 @@
     const people = e.people.map((p) => dRow({label: txt(p.first_name) || "Someone", state: statusWord(p), sub: p.last ? "Last in touch " + fmtDayMonth(p.last) : "",
       lead: avatar(p, "av-sm"), open: () => openDetail("person", p.id), key: "emp-person:" + p.id}));
     const ivs = e.ivs.map((iv) => dRow({label: ivTitle(iv), sub: iv.when ? (isPast(iv.when) ? fmtDay(txt(iv.when)) : fmtWhen(iv.when)) : "No day yet",
-      state: iv.when && !isPast(iv.when) ? [cap1(relWhen(iv.when)), "info"] : null, open: () => openDetail("interview", iv.id), key: "emp-iv:" + iv.id}));
+      // A day away is said in the one neutral capsule, as on To do: in blue it read as work going on.
+      state: iv.when && !isPast(iv.when) ? [cap1(relWhen(iv.when)), "plain"] : null, open: () => openDetail("interview", iv.id), key: "emp-iv:" + iv.id}));
     const said = [roles.length ? plural(roles.length, "role", "roles") : "", people.length ? plural(people.length, "person", "people") : "",
       ivs.length ? plural(ivs.length, "interview", "interviews") : ""].filter(Boolean).join(" · ");
     // Whether it clears the person's bar, a state beside what the card holds, its sentence
