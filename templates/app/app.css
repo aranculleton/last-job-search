@@ -673,7 +673,7 @@ details.more.split[open] { flex-basis: auto; }
 .fit-ring.is-good { --sc: var(--muted); }
 .fit-ring::before { content: ""; position: absolute; inset: 0; border-radius: 50%; background: conic-gradient(var(--sc) var(--fit), var(--line) 0);
   -webkit-mask: radial-gradient(closest-side, transparent calc(100% - 3px), var(--ink) calc(100% - 2.5px)); mask: radial-gradient(closest-side, transparent calc(100% - 3px), var(--ink) calc(100% - 2.5px)); }
-.fit-ring.sm { width: 28px; height: 28px; font-size: 0.75rem; }
+.fit-ring.sm { width: 28px; height: 28px; }
 .fit-ring.sm::before { -webkit-mask: radial-gradient(closest-side, transparent calc(100% - 2.5px), var(--ink) calc(100% - 2px)); mask: radial-gradient(closest-side, transparent calc(100% - 2.5px), var(--ink) calc(100% - 2px)); }
 .fit-ring.fit-10 { --fit: 10%; } .fit-ring.fit-20 { --fit: 20%; } .fit-ring.fit-30 { --fit: 30%; } .fit-ring.fit-40 { --fit: 40%; } .fit-ring.fit-50 { --fit: 50%; }
 .fit-ring.fit-60 { --fit: 60%; } .fit-ring.fit-70 { --fit: 70%; } .fit-ring.fit-80 { --fit: 80%; } .fit-ring.fit-90 { --fit: 90%; } .fit-ring.fit-100 { --fit: 100%; }
@@ -735,9 +735,9 @@ details.more.split[open] { flex-basis: auto; }
 .card.app-record .card-actions > .btn.quiet { background: transparent; border-color: transparent; text-decoration: none; font-weight: 600; }
 @media (hover: hover) { .card.app-record .card-actions > .btn.quiet:hover { background: var(--raised); } }
 /* Jobs in its stages: a small heading over each once there are two (Ready to send, Being
-   written, New), the label's size and tone, 24 above and 8 below, 8 above the first. */
+   written, New), the section label (.group), 24 above and 8 below, 8 above the first. */
 .job-groups { display: grid; }
-.job-group > .list-head { margin: 24px 0 8px; font-size: 0.8125rem; line-height: 18px; font-weight: 600; letter-spacing: 0.01em; color: var(--muted); }
+.job-group > .list-head { margin: 24px 0 8px; }
 .job-group:first-child > .list-head { margin-top: 8px; }
 /* "2 jobs to confirm": one quiet row at the head of the list, its cards under it once open. */
 .confirm-fold > summary { color: var(--ink); }
@@ -2696,8 +2696,9 @@ ul.bp-news { gap: 12px; }
    the calendar beside it and out of the panel at a tablet's width (2026-11-11). */
 .bp-up-row .up-when { font-size: var(--t-sm); color: var(--muted); white-space: normal; }
 .bp-up-row .up-title { overflow-wrap: anywhere; }
-.bp-up-row > .up-prep { flex: none; align-self: center; }
-.bp-up-row > .up-prep > .btn.small { min-height: 32px; padding: 4px 12px; }
+.bp-up-when { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 2px 8px; min-width: 0; }
+.bp-up-when > .up-prep { flex: none; }
+.bp-up-when > .up-prep > .btn.small { min-height: 24px; padding: 2px 12px; }
 .bp-upcoming { --pc: var(--st-running); --pcbg: var(--st-running-bg); }
 dialog.sheet .sheet-body { display: grid; gap: 16px; }
 .cal-choices { display: grid; gap: 8px; }

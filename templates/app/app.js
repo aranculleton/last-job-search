@@ -7102,14 +7102,14 @@
     put(wrap, activeFilters(key, lo, f));
     const onCards = new Set(inThis.flatMap((r) => jobQuestions(r).map((n) => "need:" + n.id)));
     for (const a of inThis.map(listDraft).filter(Boolean)) for (const q of readyQuestions(a)) onCards.add("need:" + q.id);
-    // "2 jobs to confirm": every "Did you apply to ...?" in one fold, closed until opened, its
-    // cards the same cards they are anywhere (a question on its own card, a draft with its
-    // question), so they never lead the list.
+    // "2 jobs to confirm": every "Did you apply to ...?" in one fold under the list, closed until
+    // opened, its cards the same cards they are anywhere (a question on its own card, a draft
+    // with its question), so they never lead the list; To do asks them too.
     const askTodos = selecting ? [] : todoItems({each: true}).filter((i) => (i.tab === "jobs" || i.tab === "drafts") && !onCards.has(i.key) && applyAsk(i.need));
     const nAsk = askTodos.length + confirming.length;
-    if (nAsk) put(wrap, det("jobs-confirm", false, {class: "band-more confirm-fold"},
+    const askFold = nAsk ? det("jobs-confirm", false, {class: "band-more confirm-fold"},
       h("summary", {class: "band-more-sum", "data-k": "jobs-confirm"}, h("span", {}, plural(nAsk, "job to confirm", "jobs to confirm"), h("span", {class: "band-more-why"}, ": did you apply?"))),
-      h("div", {class: "stack jobs"}, askTodos.map((i) => i.node({where: i.tab, section: i.tab})).concat(confirming.map(lo.render)))));
+      h("div", {class: "stack jobs"}, askTodos.map((i) => i.node({where: i.tab, section: i.tab})).concat(confirming.map(lo.render)))) : null;
     put(wrap, tabTodos("jobs", onCards, (i) => selecting || !applyAsk(i.need)));
     put(wrap, tabTodos("drafts", onCards, (i) => selecting || !applyAsk(i.need)));
     // One Select several for the whole list: a draft's card takes its box too, its mark
@@ -7120,6 +7120,7 @@
     for (const id of [...S.sel.jobs]) if (visibleIds.indexOf(id) < 0) S.sel.jobs.delete(id);
     if (selecting && visibleIds.length > 1) put(wrap, selectAll(S.sel.jobs, visibleIds, "Select all " + visibleIds.length + " shown", "jobs"));
     put(wrap, list);
+    put(wrap, askFold);
     if (cvCard) put(wrap, h("div", {class: "after-list"}, cvCard));
     if (shut.length) {
       const st = listState("jobs:closed");
@@ -9671,10 +9672,12 @@
     const prep = brief ? upPrep(u, prepped || new Set(), true, nextPrep) : null;
     // Asked for and not confirmed by them yet: said on its row, here and on the Brief.
     const maybe = u.tentative ? stateWord(NOT_CONFIRMED, null) : null;
-    // Its prep's pill at the row's end beside its calendar, never a line of its own: under the
-    // title it took the room the Brief's other panels list in (2026-11-11).
+    // Its prep's pill on its day's line, at its end, never a line of its own: under the title it
+    // took the room the Brief's other panels list in (2026-11-11), and beside the title it
+    // squeezed the day onto two lines.
     if (brief) return h("li", {class: "bp-up-row"},
-      h("span", {class: "up-main"}, h("span", {class: "up-when"}, [upDayLabel(u.day), upWhen(u)].filter(Boolean).join(" · ")), h("span", {class: "up-title"}, upGo(u)), maybe), prep, add);
+      h("span", {class: "up-main"}, h("span", {class: "bp-up-when"}, h("span", {class: "up-when"}, [upDayLabel(u.day), upWhen(u)].filter(Boolean).join(" · ")), prep),
+        h("span", {class: "up-title"}, upGo(u)), maybe), add);
     const sub = [UP_WORDS[txt(u.kind)] || "", txt(u.note), txt(u.place)].filter(Boolean).join(" \u00b7\u00a0");
     // A row of a day's card (the redesign, phase 2, 2026-11-17): its time in a steady column, what
     // it is in the title's size, what kind and whether its prep is ready on the line under it
@@ -11342,7 +11345,7 @@
   function jobQuestions(r) { return needsAbout(r.company, r.title).filter((n) => needTab(n) === "jobs" || (needTab(n) === "drafts" && !listDraft(r))); }
   // "Did you apply to Quayside Foods?": a question only the person can answer about whether an
   // application went, from a confirm or from two devices that disagreed. On Jobs these wait
-  // together in one fold at the top, "2 jobs to confirm", never leading the list (the UX review
+  // together in one fold under the list, "2 jobs to confirm", never leading it (the UX review
   // of the redesign, 2026-11-17: the first screen was two of them, ahead of the best fit).
   function applyAsk(n) {
     const ab = obj(obj(n).about);

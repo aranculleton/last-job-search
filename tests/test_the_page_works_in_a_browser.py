@@ -1164,7 +1164,7 @@ def test_keyboard_alone_reaches_and_works_everything_and_the_shortcuts_can_be_sw
     # The sample's application question is about Pennick Haulage since the screen review of
     # 2026-11-11 (row 40): it asked about the Fernhill Freight application, which Applied
     # listed as sent. Since the redesign's phase 2 (2026-11-17) every "Did you apply" waits in
-    # the one fold at the head of the list, so j reaches the first card shown, the first draft
+    # the one fold under the list, so j reaches the first card shown, the first draft
     # ready to send.
     assert r["cardFocus"] == "app-copperleaf-payments", r["cardFocus"]
     assert r["moreClosed"], "Esc closes a card's More"

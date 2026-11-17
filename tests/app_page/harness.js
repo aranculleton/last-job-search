@@ -2438,7 +2438,7 @@ S.downloads = async (a) => {
   r.saves = (await calls(page)).filter((c) => c.cap === "downloads");
   r.note = await T(page, '#main [data-item="app-ellerwick-insight"] .note');
   // Its question answered and done: then the draft asks for its files. A "Did you apply"
-  // question waits in Jobs' one fold at the head of the list (the redesign, phase 2).
+  // question waits in Jobs' one fold under the list (the redesign, phase 2).
   await page.locator('[data-k="jobs-confirm"]').click();
   await turn(page, 2);
   await page.locator('#main [data-item="app-quayside-demand"]').getByRole("button", {name: "Not yet"}).click();
@@ -3330,7 +3330,7 @@ S.motion = async (a) => {
     await goto(o.page, "jobs");
     await o.page.waitForSelector("#main .card .btn", {timeout: 5000}).catch(() => null);
     r[m].drawn = await o.page.evaluate(() => {
-      // The first in sight: a "Did you apply" card waits folded at the head of Jobs.
+      // The first in sight: a "Did you apply" card waits folded under Jobs' list.
       const b = [...document.querySelectorAll("#main .card .btn")].find((x) => x.getClientRects().length); const c = document.querySelector("#main .card");
       return {btn: b ? getComputedStyle(b).transitionDuration : null, card: c ? getComputedStyle(c).transitionDuration : null,
         fading: [...document.querySelectorAll("#main .btn, #main .chip, #main .card")].reduce((n, e) => n + e.getAnimations().filter((x) => x.transitionProperty).length, 0)};

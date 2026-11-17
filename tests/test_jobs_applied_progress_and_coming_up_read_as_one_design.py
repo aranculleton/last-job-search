@@ -69,7 +69,7 @@ LIST = r"""(() => { const m = document.querySelector('#main');
   return {fold: fold ? fold.querySelector(':scope > summary').textContent.trim() : null,
     inFold: asks.filter((c) => c.closest('details.confirm-fold')).length,
     outside: asks.filter((c) => !c.closest('details.confirm-fold')).map((c) => c.textContent.slice(0, 60)),
-    foldFirst: !!(fold && first && (fold.compareDocumentPosition(first) & Node.DOCUMENT_POSITION_FOLLOWING)),
+    foldAfter: !!(fold && first && (first.compareDocumentPosition(fold) & Node.DOCUMENT_POSITION_FOLLOWING)),
     apply: fold ? fold.querySelectorAll('.applylink').length : -1,
     groups: [...m.querySelectorAll('.job-group')].map((g) => [g.querySelector('.list-head').textContent.trim(),
       [...g.querySelectorAll('.card .job-top .fit-ring')].map((r) => Number(r.textContent))]),
@@ -78,10 +78,10 @@ LIST = r"""(() => { const m = document.querySelector('#main');
 
 def test_jobs_leads_with_what_to_apply_to_in_its_stages_best_fit_first(run, tmp_path):
     seen = _eval(run, tmp_path, "jobs", LIST, WIDE)
-    # Every "Did you apply" question waits in one fold at the head of the list, and a draft
-    # asking it offers no "Apply on their site" while it is open.
+    # Every "Did you apply" question waits in one fold straight under the list, never ahead of
+    # it, and a draft asking it offers no "Apply on their site" while it is open.
     assert seen["fold"] == "2 jobs to confirm: did you apply?", seen["fold"]
-    assert seen["inFold"] == 2 and seen["outside"] == [] and seen["foldFirst"], seen
+    assert seen["inFold"] == 2 and seen["outside"] == [] and seen["foldAfter"], seen
     assert seen["apply"] == 0, seen
     # The stages each under a small heading, best fit first within each.
     heads = [g[0] for g in seen["groups"]]

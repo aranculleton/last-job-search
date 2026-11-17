@@ -249,7 +249,8 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   its progress, and a find offers Draft this. The list reads in its stages, each under a small
   heading once there are two (Ready to send, Being written, New), best fit first within each;
   the tab, the summary, the menu and the Brief count the same two things, drafts to send and
-  jobs to look at. Every "Did you apply to ...?" waits in one fold at the head of the list,
+  jobs to look at. Every "Did you apply to ...?" waits in one fold straight under the list
+  (To do asks them too; above the list it would stand between the switch and the first card),
   closed until opened, "2 jobs to confirm: did you apply?", its cards the cards they are
   anywhere (in the list while several are being selected, to be ticked), and a draft asking it offers no "Apply on their site" while it is open. A posting
   that has closed waits under the list ("1 closed: Show"), as do the jobs you hid ("1 you hid:
