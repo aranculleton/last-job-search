@@ -406,7 +406,7 @@ def _load_state():
     """The contact book and log, read only: `due` never writes, and loading a file that is
     not there would create it."""
     import state
-    if not (os.path.exists(state.CONTACTS_CSV) and os.path.exists(state.THREADS_CSV)):
+    if not (os.path.exists(state.contacts_csv()) and os.path.exists(state.threads_csv())):
         return [], []
     try:
         return state.load_contacts(), state.load_threads()
@@ -1169,3 +1169,9 @@ def main(argv=None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+
+# One module, imported by its own name or from network (issue 339; state.py says why).
+_MODULE_NAME = os.path.splitext(os.path.basename(__file__))[0]
+if __name__ in (_MODULE_NAME, "network." + _MODULE_NAME):
+    sys.modules[_MODULE_NAME] = sys.modules["network." + _MODULE_NAME] = sys.modules[__name__]

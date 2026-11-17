@@ -3337,8 +3337,8 @@ def at_employer(company: str, contacts, also=(), today: datetime.date | None = N
     today = today or person.today()
     if threads is None:
         try:
-            threads = (state.load_threads(state.THREADS_CSV)
-                       if os.path.exists(state.THREADS_CSV) else [])
+            threads = (state.load_threads(state.threads_csv())
+                       if os.path.exists(state.threads_csv()) else [])
         except Exception as e:  # noqa: BLE001  any reason it cannot be read: said, never guessed
             raise LogUnreadable(LOG_UNREADABLE.format(
                 why=" ".join(str(e).split())[:160] or type(e).__name__,
@@ -3788,15 +3788,15 @@ def talked_with(contact_id: str) -> bool:
         return False
     try:
         import state
-        paths = (state.THREADS_CSV, state.CONTACTS_CSV)
+        paths = (state.threads_csv(), state.contacts_csv())
         key = tuple((p, os.stat(p).st_mtime_ns, os.stat(p).st_size) if os.path.exists(p)
                     else (p, 0, 0) for p in paths)
         got = _TALKED.get(key)
         if got is None:
             ids = {str(r.get("contact_id") or "").strip()
-                   for r in state.load_threads(state.THREADS_CSV)}
+                   for r in state.load_threads(state.threads_csv())}
             ids |= {str(c.get("contact_id") or "").strip()
-                    for c in state.load_contacts(state.CONTACTS_CSV)
+                    for c in state.load_contacts(state.contacts_csv())
                     if str(c.get("first_contacted") or "").strip()}
             got = ids - {""}
             _TALKED.clear()
@@ -4272,7 +4272,7 @@ def match_invitations(cards: list, contacts: list, threads: list | None = None,
         if (c.get("status") or "not_contacted") in ("not_contacted", "dropped"):
             pending.append((card, c))
     if threads is None:
-        threads = state.load_threads() if os.path.exists(state.THREADS_CSV) else []
+        threads = state.load_threads() if os.path.exists(state.threads_csv()) else []
     oldest = min((c["sent"] for c in cards if c.get("sent")), default="")
     complete = total is not None and total <= len(cards)
     edge = datetime.date.fromisoformat(oldest) if oldest else None
@@ -7913,3 +7913,9 @@ def _cli_people(a) -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+# One module, imported by its own name or from network (issue 339; state.py says why).
+_MODULE_NAME = os.path.splitext(os.path.basename(__file__))[0]
+if __name__ in (_MODULE_NAME, "network." + _MODULE_NAME):
+    sys.modules[_MODULE_NAME] = sys.modules["network." + _MODULE_NAME] = sys.modules[__name__]

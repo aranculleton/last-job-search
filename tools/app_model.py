@@ -3045,7 +3045,7 @@ def _messages(ctx: Ctx, targets: dict) -> list:
         # they look, a request nobody accepted. A draft to such a person is never offered.
         if surface.held(c, ctx.by_contact.get(cid) or [], live,
                         replying=live == "replied_needs_response",
-                        memo=ctx._got.setdefault("held_memo", {})):
+                        memo=ctx._got.setdefault("held_memo", {}), today=ctx.today):
             continue
         # A draft written before their newest message answers an older one (times offered
         # that have passed, a request it never saw): never offered, and their message is
@@ -6461,7 +6461,7 @@ def _rules(ctx: Ctx, targets: dict) -> dict:
     # and nothing said so or when it would open (the maintainer, 2026-11-09).
     import holds
     out["held"] = [{k: h[k] for k in ("id", "rule", "what", "until", "line", "say", "lift")}
-                   for h in holds.live(ctx.today)]
+                   for h in holds.live(ctx.today, contacts=ctx.contacts, threads=ctx.threads)]
     out["every_hold"] = [{"id": r["id"], "area": r["area"], "line": r["line"]}
                          for r in holds.rules() if holds.applies(r["id"])]
     out["rev"] = rev_of(out["id"], line, out["still_right"])

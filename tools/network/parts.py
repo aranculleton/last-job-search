@@ -17,6 +17,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import sys
 
 PARTS = "draft.parts.json"
 PENDING = ".composed"            # its old place in the copy; parts now wait in the ledger (_pending)
@@ -179,3 +180,9 @@ def save(contact_id: str, record: dict) -> str | None:
     with open(p, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(record, fh, ensure_ascii=False, indent=1, sort_keys=True)
     return p
+
+
+# One module, imported by its own name or from network (issue 339; state.py says why).
+_MODULE_NAME = os.path.splitext(os.path.basename(__file__))[0]
+if __name__ in (_MODULE_NAME, "network." + _MODULE_NAME):
+    sys.modules[_MODULE_NAME] = sys.modules["network." + _MODULE_NAME] = sys.modules[__name__]

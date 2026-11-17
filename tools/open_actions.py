@@ -678,7 +678,7 @@ def due_items(contacts, threads, tracker, today, docs=None, network=None, now=No
             "quiet": False, "kind": "resume", "status": c.get("status", ""),
             "contact_id": r["contact_id"], "old": old,
             **({"lapsed_on": lapsed.isoformat(), "asked": r["asked"]} if lapsed else {})})
-    _hold_by_rule(items, by_id, threads, index)
+    _hold_by_rule(items, by_id, threads, index, today=today)
     _, warm, holds = network or _network(contacts, threads, today=today)
     for n in followups.review(tracker, today, warm, holds, docs or followups.DOCS):
         quiet = n["state"] == "quiet" and n["notice"]
@@ -708,14 +708,16 @@ def due_items(contacts, threads, tracker, today, docs=None, network=None, now=No
     return items
 
 
-def _hold_by_rule(items, by_id, threads, index=None) -> None:
+def _hold_by_rule(items, by_id, threads, index=None, today=None) -> None:
     """Every contact item the person's own surface rules stop (surface.held: their limit of
     unanswered messages, an employer their bar turns down, somewhere outside where they
     look, a request nobody accepted, a thread closed) is held with the reason, and carries
     `rule` ({"why", "said"}) so a screen can say it: one check, so To do, Contacts, Messages
     and the brief never disagree about who may be written to (2026-11-03: the brief's due
     list and the page offered a third and a fourth message, and follow-ups at employers the
-    person had turned down)."""
+    person had turned down). Judged on `today`, the day the list is made for: with no day
+    passed it read the computer's, and a page built for another day held someone on
+    Contacts and offered them on To do (issue 341)."""
     import surface
     if index is None:
         index = state.by_contact(threads) if threads else {}
@@ -725,7 +727,8 @@ def _hold_by_rule(items, by_id, threads, index=None) -> None:
             continue
         c = by_id.get(i.get("contact_id") or "") or {"contact_id": i.get("contact_id")}
         got = surface.held(c, index.get(i.get("contact_id") or "", ()), i.get("status") or "",
-                           replying=i.get("kind") in ("reply", "resume"), memo=memo)
+                           replying=i.get("kind") in ("reply", "resume"), memo=memo,
+                           today=today)
         if got:
             i["rule"] = got
             i["held"] = list(i.get("held") or []) + [got["said"] or "closed"]
