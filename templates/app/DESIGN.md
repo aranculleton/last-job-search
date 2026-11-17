@@ -436,7 +436,11 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   wherever its day is given, and booked again without it, it is confirmed. Why: a day only
   asked for read as fixed (the maintainer, 2026-11-05). (not-confirmed tests)
 - Coming up is a card a day: under the day ("Wed 28 Oct", with a "Today" or "Tomorrow" capsule
-  beside it) one card of its rows, a hairline between them inset 16. A row is its time in a
+  beside it) one card of its rows, 8px under the day's line as a Jobs stage's card is under its
+  label, the line its words' own height (the capsule's where it has one), a hairline between
+  the rows inset 16. Why the line's own height: held at 24px for a capsule most days do not
+  have, it put Coming up's first card past a phone's first-item line in Firefox (Everywhere,
+  2026-11-17; layout 1). A row is its time in a
   steady 64px column (tabular, semibold; "End of day" and "All day" in the quiet small words),
   what it is in a card title's size, one line under it saying what kind it is with a chip for
   its prep ("Prep ready" green, "No prep yet" grey), and one More at its end (36px, 44 on touch)

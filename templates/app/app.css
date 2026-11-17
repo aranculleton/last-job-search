@@ -2858,7 +2858,10 @@ ul.bp-news { gap: 12px; }
 .up-agenda { display: grid; gap: 12px; }
 .up-days { display: grid; gap: 20px; }
 .up-day { display: grid; gap: 8px; }
-.up-day-head { display: flex; align-items: center; gap: 8px; min-height: 24px; }
+/* The day's line is its words' own height (the capsule's where it has one), its card 8px under it
+   as a Jobs stage's is under its label: held at 24px for a capsule most days do not have, it
+   put the first card past a phone's first-item line in Firefox (Everywhere, 2026-11-17). */
+.up-day-head { display: flex; align-items: center; gap: 8px; }
 .up-day-head > .group { margin: 0; }
 .day-cap { display: inline-flex; align-items: center; gap: 4px; padding: 0 8px; border-radius: 999px; background: var(--raised); color: var(--ink); font-size: var(--t-sm); font-weight: 600; line-height: 22px; }
 .day-cap::before { content: ""; flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--day-today); }
