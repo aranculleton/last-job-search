@@ -59,7 +59,7 @@ def test_linkedins_type_reaches_the_shortlist(monkeypatch):
     monkeypatch.setattr(hydrate.portals, "is_enabled", lambda skill: True)
     monkeypatch.setattr(hydrate.portals, "runtime", lambda: ("node",))
     monkeypatch.setattr(hydrate, "pace", lambda skill: True)
-    monkeypatch.setattr(hydrate.portals, "run_cli", lambda cmd, timeout=60, empty=None: (
+    monkeypatch.setattr(hydrate.portals, "run_cli", lambda cmd, timeout=60, empty=None, started=None: (
         {"id": "4012345678", "description": SILENT, "employmentType": "Contract"}, None))
     got = hydrate.fetch({"portal": "linkedin", "id": "4012345678", "url": "u"})
     assert got["employment_type"] == "Contract" and got["desc"] == SILENT

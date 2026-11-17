@@ -36,7 +36,7 @@ def _linkedin(monkeypatch, detail):
     monkeypatch.setattr(hydrate.portals, "is_enabled", lambda skill: True)
     monkeypatch.setattr(hydrate.portals, "runtime", lambda: ("node",))
     monkeypatch.setattr(hydrate, "pace", lambda skill: True)
-    monkeypatch.setattr(hydrate.portals, "run_cli", lambda cmd, timeout=60, empty=None: (detail, None))
+    monkeypatch.setattr(hydrate.portals, "run_cli", lambda cmd, timeout=60, empty=None, started=None: (detail, None))
 
 
 def test_a_linkedin_detail_page_is_read_without_what_it_hides(monkeypatch):
