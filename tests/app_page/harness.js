@@ -3696,7 +3696,10 @@ S.walk = async (a) => {
 // where a finding is a double tap, a held key, a second window, a store that refuses or never
 // answers, or a chat landing between two taps.
 S.script = async (a) => {
-  const o = await open({html: a.html, viewport: a.viewport, hash: a.hash, seed: a.seed || {}, fake: a.fake, clock: a.clock, tabs: a.tabs || 1, noStorage: a.noStorage, timezoneId: a.timezoneId});
+  // `still`: the page's clock stopped at `clock`, so nothing the page set going by a timer runs
+  // unless a step moves the clock on (a step that sets state by hand, which a timer would set
+  // back, reads it as set).
+  const o = await open({html: a.html, viewport: a.viewport, hash: a.hash, seed: a.seed || {}, fake: a.fake, clock: a.clock, tabs: a.tabs || 1, noStorage: a.noStorage, timezoneId: a.timezoneId, still: a.still});
   const {store} = o;
   const out = [];
   const read = async (page, st) => ({

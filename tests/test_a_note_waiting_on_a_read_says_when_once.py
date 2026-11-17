@@ -215,7 +215,11 @@ def test_in_the_claude_app_it_reads_by_itself_and_the_card_says_reading(run, tmp
     m, kit = _model()
     html = _write(tmp_path, "held-app", m)
     cid = kit["contact"]
-    got = run("script", html=html, viewport={"width": 1280, "height": 900}, clock=CLOCK, steps=[
+    # The clock stopped: each step sets the reading's state by hand, and the read the page
+    # starts by itself once it knows it is in the Claude app (maybeAutoRead, on a timer) found
+    # no tab of its own and set "open a tab" back between two steps (Safari, the everywhere
+    # check, 2026-11-17).
+    got = run("script", html=html, viewport={"width": 1280, "height": 900}, clock=CLOCK, still=True, steps=[
         {"hash": "contacts", "eval": IN_APP.replace("{more}", "r.busy = false; r.cur = null;")},
         {"eval": "[" + LINE + ", " + FACTS + "]"},
         {"hash": "todo", "eval": QUEUE},
