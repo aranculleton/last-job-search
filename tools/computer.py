@@ -139,7 +139,9 @@ SIGNIN_SEEN = ("open " + FEED_URL + " in Claude's browser (navigate a tab of you
                "tools/computer.py signin-seen \"$D\" --work {wid} --url \"<that address>\" "
                "--title \"<that title>\"")
 # The name of every chat the app starts on the computer: recognisable, and put away by Claude.
-SESSION_TITLE = "Job search · {job} · {computer}"
+# The app's name, then the job, and no computer's name, so it reads the same on a Mac, Windows
+# or Linux (issue #289); "Job search · <job> · <computer>" before, which APP_CHAT still knows.
+SESSION_TITLE = "Last Job Search \u00b7 {job}"
 # The scheduled task on the computer that takes waiting work while no cloud chat is awake
 # (claude_surfaces: routines-local): a fresh chat each run, in the copy's folder, in Auto. It
 # is the fallback, not the way: a chat started from the cloud takes work within a minute, so
@@ -825,7 +827,7 @@ def ring_steps(bell: str, path: str, rung_cmd: str = "rung") -> str:
 LISTENER_DOC = ("meta", "computer_listener")
 # Its name in the person's list of chats, where it can be renamed (claude_surfaces:
 # computer-chat-archive): kept open, never put away by the app.
-LISTENER_TITLE = "Job search: on your computer"
+LISTENER_TITLE = "Last Job Search \u00b7 Your computer"   # "Job search: on your computer" before #289
 LISTENER_BELL_TITLE = "Job search computer chat bell"
 # A ring not answered this long, or this many rings in a row: stale, and the next route goes to
 # the starter, whose chat on the computer then becomes the listener.
@@ -2566,7 +2568,8 @@ def session_prompt(wid: str, title: str, url: str, copy: str) -> str:
 # person pasted into it ("Open my job search on this computer...", place.computer_paste). The
 # one on a Mac on 2026-11-10 found none: the person had deleted the earlier chat by hand, and
 # that one, the setup chat, did not carry the app's name either.
-APP_CHAT = re.compile(r"^\s*Job search\s+\u00b7\s+\S.*\s+\u00b7\s+\S.*$", re.I)
+APP_CHAT = re.compile(r"^\s*(?:Job search\s+\u00b7\s+\S.*\s+\u00b7\s+\S.*|Last Job Search\s+\u00b7\s+"
+                      r"(?!(?:Your computer|Brief|Page|Scheduled runs)\s*$)\S.*)$", re.I)
 _RUNNING = ("running", "working", "busy", "active", "progress", "streaming", "waiting",
             "requires", "blocked", "paused", "input", "permission")
 # The states that say a chat has finished, as whole words ("incomplete" is not "complete").
@@ -2633,6 +2636,7 @@ def archivable(listing, set_up: bool, now: dt.datetime | None = None, keep=(),
     and its titles (listener), never put away. `old_listener`: one named as the computer's own
     chat is an earlier one, replaced (keep_listener), and goes too."""
     import app_model
+    import tidy
     now = now or dt.datetime.now(dt.timezone.utc)
     keep = {str(k).strip() for k in keep or () if k}
     out = []
@@ -2646,8 +2650,10 @@ def archivable(listing, set_up: bool, now: dt.datetime | None = None, keep=(),
         used = app_model.parse_time(r.get("used"))
         if used is not None and (now - used).total_seconds() < ARCHIVE_QUIET_S:
             continue
+        # The computer's own chat by either of its names: "Job search: on your computer" before
+        # the chats were named Last Job Search (#289), so an older one replaced still goes.
         if APP_CHAT.match(t) or (set_up and _setup_title(t)) or \
-                (old_listener and t == LISTENER_TITLE):
+                (old_listener and (t == LISTENER_TITLE or tidy.LISTENER_NAME.match(t))):
             out.append(r)
     return out
 
@@ -3514,7 +3520,7 @@ def trust_check(chat: str, triggers) -> list[str]:
     # The brief's own chat (routines.brief_chat_call), which the rest join: one chat made.
     home = routines.brief_chat_call()
     if not brief:
-        home = dict(home, title="Job search: scheduled runs",
+        home = dict(home, title="Last Job Search \u00b7 Scheduled runs",
                     prompt="This chat runs the job search's scheduled tasks. Nothing to do now.")
     out = [f"first, once: create_session {json.dumps(home, ensure_ascii=False)}; its id is "
            "<home> below (a chat of its own with the copy attached, never the one approving "

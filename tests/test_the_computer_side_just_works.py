@@ -104,7 +104,8 @@ def test_the_chain_picks_the_best_place_there_is_in_order():
     assert got["route"] == "computer session"
     call = got["call"]
     assert call["environment_id"] == "env_bridge1" and call["permission_mode"] == "auto"
-    assert call["title"] == "Job search · People at Harbourline Bank · Studio Laptop"
+    # The app's name, then the job: no computer's name, the same on any system (issue #289).
+    assert call["title"] == "Last Job Search · People at Harbourline Bank"
     assert "network~people" in call["prompt"] and "Never message another chat" in call["prompt"]
     assert "send_message" not in call["prompt"]
     assert "confirm_repository_trust" in got["then"] and "computer.py started" in got["then"]
@@ -485,7 +486,7 @@ def test_a_network_run_with_no_pin_is_split_by_its_own_steps(tmp_path):
 def test_the_chats_it_starts_are_known_as_the_apps_by_their_name():
     import tidy
     title = computer.session_title("People at Harbourline Bank", "Studio Laptop:Documents:ab12")
-    assert title == "Job search · People at Harbourline Bank · Studio Laptop"
+    assert title == "Last Job Search · People at Harbourline Bank"
     assert tidy.APP_TITLE.match(title)
     assert not tidy.APP_TITLE.match("Holiday plans · Studio Laptop")
 
@@ -518,7 +519,8 @@ def test_computer_access_is_never_approved_where_a_scheduled_task_fires():
     assert call["cron_expression"].startswith("CRON_TZ=") and call["persistent_session_id"] == "<home>"
     assert '"enabled": false' in moves[0] and "--setup routines_screen" not in moves[0]
     # The brief's own chat, recorded as made for it alone, so the daily tidy-up keeps it so.
-    assert home["title"] == "Job search: morning brief" and "--own-chat" in moves[0]
+    import routines
+    assert home["title"] == routines.BRIEF_CHAT_TITLE and "--own-chat" in moves[0]
     assert "--session <home>" in moves[0]
     assert computer.trust_check("session_fresh", TRIGGERS) == [
         "trust: ok, no scheduled task fires into this chat"]
