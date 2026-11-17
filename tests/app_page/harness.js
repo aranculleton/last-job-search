@@ -2368,14 +2368,18 @@ S.you = async (a) => {
   await goto(page, "settings");
   await page.locator('[data-k="open-profile"]').first().click();
   await turn(page, 3);
-  await page.getByRole("button", {name: "Add or take off"}).first().click();
+  await page.getByRole("button", {name: "Change skills"}).first().click();
   await turn(page, 3);
   dlg = page.locator("dialog.sheet");
   await dlg.getByLabel("Power BI").uncheck();
   await dlg.getByLabel(/^Add skills/).fill("Looker, SQL");
   await dlg.getByRole("button", {name: "Save"}).click();
   await turn(page, 6);
-  await page.getByRole("button", {name: "Take Graduate Analyst at Saltmarsh Analytics off"}).first().click();
+  // A past job is a row that opens its own sheet, where taking it off is the last thing (the
+  // redesign's second round, 2026-11-17).
+  await page.getByRole("button", {name: "Change Graduate Analyst at Saltmarsh Analytics"}).first().click();
+  await turn(page, 3);
+  await page.locator("dialog.sheet").getByRole("button", {name: "Take Graduate Analyst at Saltmarsh Analytics off"}).click();
   await turn(page, 3);
   await page.locator("dialog.sheet").getByRole("button", {name: "Take it off"}).click();
   await turn(page, 6);
