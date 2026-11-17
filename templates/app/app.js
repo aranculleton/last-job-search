@@ -687,7 +687,9 @@
   // Two devices that said different things about an application are one plain question, "Did
   // you apply to Quayside Foods?" with "Yes, I applied" and "Not yet": "Two answers about
   // Quayside Foods: Your phone said applied at 09:12 ... Which is right?" read as an error
-  // (the redesign, 2026-11-16). Only the words change: the id, the rev and each answer's
+  // (the redesign, 2026-11-16), and "Your phone and your laptop said different things." under it
+  // named a fault nobody could act on (the redesign's second round, 2026-11-17), so it says
+  // nothing more. Only the words change: the id, the rev and each answer's
   // action (conflict.applied, conflict.not_yet) are the engine's, sent as they were. One copy
   // a need, so a card drawn twice holds the same object.
   const plainKept = new WeakMap();
@@ -697,7 +699,7 @@
     const yes = ops.find((op) => txt(obj(op).action) === "conflict.applied"), no = ops.find((op) => txt(obj(op).action) === "conflict.not_yet");
     if (!yes || !no) return n;
     if (!plainKept.has(n)) plainKept.set(n, Object.assign({}, n, {title: "Did you apply to " + txt(n.about.company) + "?",
-      body: "Your phone and your laptop said different things.",
+      body: null,
       options: ops.map((op) => (op === yes ? Object.assign({}, op, {label: "Yes, I applied"}) : op === no ? Object.assign({}, op, {label: "Not yet"}) : op))}));
     return plainKept.get(n);
   }
@@ -3165,17 +3167,15 @@
     if (b) b.classList.add("icon-only", "quiet");
     return b;
   }
-  // The pencil on a job's line of facts: its title, pay and place as the person corrects them,
-  // in place, saved at once (job.edit, code only: no gauge). What a search read can be wrong
-  // (the maintainer, 2026-11-05).
-  function jobPencil(r, worded) {
+  // "Change the details" in a job's details: its title, pay and place as the person corrects
+  // them, in place, saved at once (job.edit, code only: no gauge). What a search read can be
+  // wrong (the maintainer, 2026-11-05).
+  function jobPencil(r) {
     const key = "job:" + r.id;
     const open = S.penOpen.has(key);
     const flip = () => { if (S.penOpen.has(key)) S.penOpen.delete(key); else S.penOpen.add(key); scheduleRender(); };
-    if (worded) return btn(open ? "Done changing" : "Change the title, pay or place", flip, {kind: "secondary", small: true, icon: "tweak", key: "jobpen:" + r.id, pressed: open,
-      aria: (open ? "Done changing " : "Change the details of ") + txt(r.company) + ", " + txt(r.title)});
-    return btn("", flip,
-      {kind: "quiet icon-only", small: true, icon: "tweak", key: "jobpen:" + r.id, pressed: open, aria: (open ? "Done changing " : "Change the details of ") + txt(r.company) + ", " + txt(r.title)});
+    return btn(open ? "Done changing" : "Change the details", flip, {kind: "secondary", small: true, key: "jobpen:" + r.id, pressed: open,
+      aria: (open ? "Done changing: " : "Change the details: ") + txt(r.company) + ", " + txt(r.title)});
   }
   function jobPen(r) {
     const key = "job:" + r.id;
@@ -3436,43 +3436,10 @@
   // What "To apply" counts, everywhere it is said: every draft still to send, every job being
   // drafted (jobDrafting) and every job still to look at (jobToLook), never one twice.
   function toApplyCount() { return readyItems().filter(readyLive).length + jobRows().filter((r) => jobToLook(r) || jobDrafting(r)).length; }
-  // The drafts to send, counted once for Jobs' summary and the Brief: every live draft and
-  // every job being drafted; `making`, those whose files are not made yet (a job being drafted
-  // among them), and `ready`, the rest. The Brief said "2 drafts ready to apply" beside Jobs'
-  // "2 to send, 1 still to make" (the review, 2026-11-05).
-  function draftTally(rows) {
-    const send = readyItems().filter(readyLive);
-    const drafting = (rows || jobRows()).filter(jobDrafting);
-    const n = send.length + drafting.length;
-    const making = send.filter(draftUnmade).length + drafting.length;
-    return {send, drafting, n, making, ready: n - making};
-  }
-  // To apply's drafts and jobs, each counted once, where it is, for Jobs' line and the Brief's:
-  // ready only when nothing waits on it; waiting on you when it has a question or a fix (or
-  // its job asks before drafting); being made only while its draft work is going; still to
-  // make when nothing is making it (never started, or stopped) (the review, 2026-11-11). The
-  // Brief said "3 drafts ready" over Jobs' "2 ready, 1 waiting on you" (the screen review,
-  // 2026-11-11). `live`: the jobs still to look at; one that asks you something is waiting on
-  // you, counted there once ("1 waiting on you, 1 to look at. One needs your answer." said
-  // one thing twice, 2026-11-11). `draftsOnYou` leaves those jobs out, for the Brief's line
-  // about drafts.
-  function applyTally(rows, live) {
-    const tally = draftTally(rows);
-    const send = tally.send;
-    const going = (a) => [...allWork()].some(([, w]) => txt(w.kind) === "draft" && ["queued", "claimed", "running"].includes(txt(w.status)) &&
-      (txt(obj(w.args).application) === txt(a.id) || (txt(obj(w.args).company) === txt(a.company) && txt(obj(w.args).role) === txt(a.role))));
-    const waits = (a) => readyQuestions(a).length > 0 || alertsOf(a).some((x) => x.kind === "checks");
-    const unmade = send.filter(draftUnmade);
-    const asking = tally.drafting.filter((r) => jobStatus(r) === "asking").length;
-    const making = tally.drafting.length - asking + unmade.filter(going).length;
-    const toMake = unmade.length - unmade.filter(going).length;
-    const made = send.filter((a) => !draftUnmade(a));
-    live = arr(live);
-    const asksYou = live.filter((r) => openQuestions([r]) > 0).length;
-    const draftsOnYou = made.filter(waits).length + asking;
-    return {tally, ready: made.length - made.filter(waits).length, draftsOnYou, onYou: draftsOnYou + asksYou, making, toMake,
-      look: live.length - asksYou, total: tally.n + live.length};
-  }
+  // Each of them counted at its stage, for Jobs' summary and the Brief: applyStages, with the
+  // job's stages. The Brief said "2 drafts ready to apply" beside Jobs' "2 to send, 1 still to
+  // make" (the review, 2026-11-05), and "3 drafts ready" over Jobs' "2 ready, 1 waiting on you"
+  // (the screen review, 2026-11-11): one count, one word for each stage.
   // A job's draft, where it is one to show in the list in the job's place: still to send, or
   // sent today, so its mark can be undone where it was made.
   // A draft applied to leaves To apply at once, its Undo in the toast: kept there a day,
@@ -3756,7 +3723,15 @@
   function relLabel(sec, id) {
     const find = (list) => list.find((x) => txt(x.id) === id);
     if (sec === "jobs") { const r = find(jobRows()); return r ? "the role: " + txt(r.title) : null; }
-    if (sec === "ready") return find(readyItems()) ? "your draft" : null;
+    // A draft says what it is: "Your draft" named no object (the UX review of the redesign's second
+    // round, 2026-11-17). The one made for someone is theirs ("your CV for Tamsin"), else it is
+    // the application for its role.
+    if (sec === "ready") {
+      const a = find(readyItems());
+      if (!a) return null;
+      const who = a.for_contact ? personOf(txt(obj(a.for_contact).id || a.for_contact)) : null;
+      return who && txt(who.first_name) ? "your " + noun() + " for " + txt(who.first_name) : "your application" + (txt(a.role) ? ": " + txt(a.role) : "");
+    }
     if (sec === "messages") { const m = find(messageItems()); return m ? (txt(m.kind) === "first_note" ? "the note to " : "the message to ") + txt(m.first_name) : null; }
     if (sec === "people") { const p = find(peopleItems()); return p ? txt(p.first_name) : null; }
     // The interview by its role, never a bare stage word ("Also at Acme: the round 2").
@@ -4256,7 +4231,7 @@
         (got) => answerWork(cur.id, got.value + (got.time ? " at " + got.time : ""), got.words));
     return card("article", {class: "card todo quick-card", "aria-labelledby": hid, "data-item": "quick", "data-q": cur.id},
       h("div", {class: "todo-top"}, kindMark(cur.kind), h("span", {class: "todo-state"}, h("span", {class: "chip tone-plain", "data-k": "qa-at:" + where}, (done + 1) + " of " + total))),
-      h("p", {class: "card-title", id: hid}, nWord(total, "quick answer", "quick answers")),
+      h("p", {class: "card-title", id: hid}, "Answer " + nWord(total, "quick question", "quick questions")),
       box, n ? stateLine(n.id, "qa:" + where + ":" + n.id) : null);
   }
   // Which like items a due row is grouped with, two or more in a band making one checklist
@@ -4375,12 +4350,16 @@
   const HELP_KEYS = new Set(["reading", "export"]);
   // What each way of helping Claude gives, in a line, for the fold that holds it.
   // The help card's one pill: what starting the first one is, in its own words.
-  const HELP_START = {"you-finish": "Finish your profile", reading: "Set it up", export: "Add your download"};
+  // The LinkedIn task is said one way wherever it is offered, "Add your LinkedIn messages": To
+  // do, Contacts and Settings said "Bring in your LinkedIn messages", "Add your LinkedIn
+  // download" and "Your LinkedIn download", and "download" said neither of what nor to where (the
+  // UX review of the redesign's second round, 2026-11-17).
+  const HELP_START = {"you-finish": "Finish your profile", reading: "Set it up", export: "Add your LinkedIn messages"};
   function helpWhy(i) {
     const k = txt(obj(i).key);
     return k === "you-finish" ? "Your profile: every " + noun() + " and letter is built from it"
       : k === "reading" ? "Let Claude read profiles before it writes to people"
-      : k === "export" ? "Your LinkedIn download keeps who you know up to date" : "";
+      : k === "export" ? "Your LinkedIn messages keep who you know up to date" : "";
   }
   function settingUpNow() { const su = obj(M().setup); return !!txt(su.state) && txt(su.state) !== "done"; }
   // Anything on To do can be hidden for a week (the maintainer, 2026-10-29: everything shown
@@ -5747,12 +5726,12 @@
   // A small tip for the Brief: the engine's own when it has one, else one of these, a new
   // one each day. Each says where to find something; none is a sales line.
   const BRIEF_TIPS = [
-    "Tap a person's name anywhere to see everything about them: what was said, what is owed, where they work.",
-    "Paste a job link into Add a job on Jobs, and Claude scores it against your profile in a couple of minutes.",
-    "Not interested in someone or something? Tap the trash on its card to put it away.",
-    "Tap Read your prep to open an interview prep full screen.",
+    "A person's name, anywhere, opens everything about them: what was said, what is owed, where they work.",
+    "Paste a job link into Add a job you found on Jobs, and Claude scores it against your profile in a couple of minutes.",
+    "Not interested in someone or something? The trash on its card puts it away.",
+    "Read your prep opens an interview prep full screen.",
     "Got a message from someone? Paste it in Contacts, under Got a message, and Claude drafts the reply.",
-    "Tap Edit the brief, above, to change what it covers or which days it comes.",
+    "Edit the brief, above, changes what it covers or which days it comes.",
     "Claude checks everything it writes against your profile, and never sends anything for you.",
   ];
   function briefTip() {
@@ -6723,19 +6702,19 @@
     // Ready means its files are made: one still being made is said apart, as Jobs says it
     // ("2 to send, 1 still to make"), never "2 drafts ready to apply" over it (the review,
     // 2026-11-05).
-    const at = applyTally();
-    const tally = at.tally;
-    const toSend = tally.n;
-    // Counted as Jobs counts them (applyTally): the drafts' part of its line, a noun first.
-    // What is owed, in Jobs' own numbers; one Claude is making is its work, said in the work pill,
-    // and named here only when nothing else is: "2 drafts ready to apply, 1 waiting on you, 1
-    // being made" took three lines of a small laptop's panel and ran the Brief past the window
-    // (4.15.0).
+    const at = applyStages().drafts;
+    const toSend = at.answer + at.ready + at.writing + at.confirm;
+    // Counted as Jobs counts them (applyStages), in its words: the drafts' part of its line, a
+    // noun first. What is owed, in Jobs' own numbers; one Claude is writing is its work, said in
+    // the work pill, and named here only when nothing else is: "2 drafts ready to apply, 1
+    // waiting on you, 1 being made" took three lines of a small laptop's panel and ran the Brief
+    // past the window (4.15.0).
     // "2 applications ready to send": the person sends them, and "drafts ready to apply" said it
-    // in the page's words, not theirs (the UX review of the redesign, 2026-11-17).
-    const owedParts = [[at.ready, "ready to send"], [at.draftsOnYou, "waiting on you"], [at.toMake, "still to make"]].filter(([n]) => n);
-    const sendWords = (owedParts.length ? owedParts : [[at.making, "being made"]].filter(([n]) => n))
-      .map(([n, w], i) => (i ? n + " " + w : w === "ready to send" ? nWord(n, "application", "applications") + " " + w : nWord(n, "draft", "drafts") + " " + w)).join(", ");
+    // in the page's words, not theirs (the UX review of the redesign, 2026-11-17). Each stage in
+    // the word Jobs' heading gives it (the redesign's second round, 2026-11-17).
+    const owedParts = [[at.ready, "ready to send"], [at.answer, at.answer === 1 ? "needs your answer" : "need your answer"], [at.confirm, "to confirm"]].filter(([n]) => n);
+    const sendWords = (owedParts.length ? owedParts : [[at.writing, "being written"]].filter(([n]) => n))
+      .map(([n, w], i) => (i ? n + " " + w : nWord(n, "application", "applications") + " " + w)).join(", ");
     const sendLine = toSend ? h("p", {class: "bp-lead bp-send"}, h("a", {href: "#drafts", class: "bp-text bp-link", "data-k": "bp-drafts",
       onclick: (e) => { e.preventDefault(); setPref("drafts:view", "apps"); go("drafts", {focus: true}); }}, h("strong", {}, sendWords))) : null;
     // With nothing new found, the drafts ready to apply are the list, best fit first: the panel
@@ -6746,7 +6725,7 @@
     const jobLi = (id, title, company, score, band) => h("li", {},
       h("a", {href: "#jobs/" + id, class: "bp-text bp-link", "data-k": "bp-job:" + id, onclick: (e) => { e.preventDefault(); go("jobs", {focus: true, item: id}); }},
         h("strong", {}, txt(title)), h("span", {class: "bp-at"}, txt(company))),
-      score != null ? fitRing(score, band, {size: "sm"}) : null);
+      score != null ? fitRing(score, band, {size: "sm", word: true}) : null);
     // Up to eight, as many as the panel has room for at their own spacing (fitBrief): five at
     // most left half of a tall panel empty (the maintainer, 2026-11-06: "list a couple more,
     // but dont cramp them"); "All N" opens the rest on Jobs.
@@ -6992,7 +6971,51 @@
   // Whether they applied is the first thing a list of jobs answers (the maintainer, 2026-10-26).
   const JOB_TABS = [["new", "Not applied yet"], ["applied", "Applied"]];
   const inTab = (st, t) => (t === "new" ? st === "new" || st === "drafting" || st === "asking" || st === "ready" : st === t);
-  const JOB_STATUS = {drafting: ["Drafting", "info"], asking: ["Needs your answer", "warn"], ready: ["Draft ready", "ok"], applied: ["Applied", "ok"], dismissed: ["Set aside", "held"]};
+  const JOB_STATUS = {drafting: ["Being written", "info"], asking: ["Needs your answer", "warn"], ready: ["Ready to send", "ok"], applied: ["Applied", "ok"], dismissed: ["Set aside", "held"]};
+  // One name for each stage of a job you might apply for, said the same way everywhere: Jobs'
+  // headings, its summary, a card's pill, an employer's card, Coming up and the Brief. One job
+  // was "waiting on you" in the summary, under "Being written" with a "Drafting" pill, and "Not
+  // applied" on its employer's card (the UX review of the redesign's second round, 2026-11-17).
+  // 0 needs your answer, 1 ready to send, 2 a draft just marked sent (in its place until it
+  // moves), 3 being written (a job being drafted, or a draft whose files are still to come),
+  // 4 new.
+  const JOB_STAGE_WORDS = ["Needs your answer", "Ready to send", "Ready to send", "Being written", "New"];
+  // One never made is Claude's to make next, by itself, before any check of it is the person's.
+  function draftStage(a) { return readyLive(a) ? (readyQuestions(a).length ? 0 : draftUnmade(a) ? 3 : alertsOf(a).some((x) => x.kind === "checks") ? 0 : 1) : 2; }
+  function jobStage(r) { const d = listDraft(r); if (d) return draftStage(d); const st = jobStatus(r); return st === "asking" ? 0 : st === "drafting" ? 3 : 4; }
+  // A draft asking whether it was sent waits with the other "Did you apply?" questions.
+  function draftAsksApplied(a) { const qs = readyLive(a) ? readyQuestions(a) : []; return qs.length > 0 && applyAsk(qs[0]); }
+  // Every job to apply for (toApplyCount), each counted once at its stage, the questions about
+  // whether one was sent apart: Jobs' summary and the Brief say these numbers, in these words.
+  function applyStages(rows) {
+    const n = {answer: 0, ready: 0, writing: 0, fresh: 0, confirm: 0, total: 0, drafts: {answer: 0, ready: 0, writing: 0, confirm: 0}};
+    const key = ["answer", "ready", "ready", "writing", "fresh"];
+    for (const a of readyItems().filter(readyLive)) {
+      const k = draftAsksApplied(a) ? "confirm" : key[draftStage(a)];
+      n[k]++; n.drafts[k]++; n.total++;
+    }
+    for (const r of arr(rows || jobRows()).filter((x) => jobToLook(x) || jobDrafting(x))) {
+      const st = jobStatus(r);
+      const k = asksApplied(r) ? "confirm" : st === "asking" ? "answer" : st === "drafting" ? "writing" : "fresh";
+      n[k]++; n.total++;
+      if (jobDrafting(r)) n.drafts[k]++;
+    }
+    return n;
+  }
+  // The stages in their words, in the list's order: "2 ready to send, 1 being written, 1 new".
+  function stageParts(n, fresh) {
+    return [n.answer ? n.answer + " " + (n.answer === 1 ? "needs" : "need") + " your answer" : "", n.ready ? n.ready + " ready to send" : "",
+      n.writing ? n.writing + " being written" : "", fresh && n.fresh ? n.fresh + " new" : ""].filter(Boolean);
+  }
+  // A job's state in its stage's word, wherever a job is named (an employer's card, Coming up):
+  // [word, tone], or nulls once it is out of To apply.
+  function jobStateWord(r) {
+    const st = jobStatus(r);
+    if (st === "applied" || st === "dismissed") return JOB_STATUS[st];
+    if (asksApplied(r)) return ["Did you apply?", "you"];
+    const s = jobStage(r);
+    return [JOB_STAGE_WORDS[s], s === 3 ? "info" : s === 4 ? null : "you"];
+  }
   const REMOTE = (r) => txt(r.remote).toLowerCase().replace(/[-_]/g, " ");
   const payStated = (r) => obj(r.pay).stated !== false && !!txt(obj(r.pay).text) && txt(obj(r.pay).text) !== "not stated";
   // Every filter a person would reach for (the maintainer, 2026-10-29: "surely we can have far
@@ -7066,8 +7089,9 @@
   // The list in its stages, each said by a small heading once there are two or more, and best
   // fit first within each: "71, 66, 79, 84" read as a mistake with nothing to say the first two
   // were drafts ready to send and the last a new find (the UX review of the redesign,
-  // 2026-11-17). One stack a stage, so every card is still a card in `.stack.jobs`.
-  const JOB_STAGE_WORDS = ["Needs your answer", "Ready to send", "Ready to send", "Being written", "New"];
+  // 2026-11-17). One stack a stage, so every card is still a card in `.stack.jobs`. Under its
+  // heading a card's pill no longer repeats the heading's word ("Drafting" under "Being
+  // written" said one state twice, in two words); with one stage and no heading, it says it.
   function jobGroups(kids) {
     const groups = [];
     for (const k of kids) {
@@ -7076,6 +7100,10 @@
       if (last && last[0] === w) last[1].push(k); else groups.push([w, [k]]);
     }
     if (groups.length < 2) return h("div", {class: "stack jobs"}, kids);
+    for (const [w, ks] of groups) for (const k of ks) {
+      const said = k && k.querySelector ? k.querySelector(".job-top .top-end > .state-word") : null;
+      if (said && txt(said.textContent).trim().toLowerCase() === w.toLowerCase()) said.remove();
+    }
     return h("div", {class: "job-groups"}, groups.map(([w, ks]) => h("section", {class: "job-group", "aria-label": w},
       h("h3", {class: "group list-head"}, w), h("div", {class: "stack jobs"}, ks))));
   }
@@ -7123,20 +7151,29 @@
     // message beside Find people (2026-11-05). The line under the summary says when it searched.
     let small = searching || !jb.made_at ? null : "Searched " + ago(jb.made_at) + ".";
     if (jb.met === false && rows.length && !searching) small = "Fewer good matches than usual." + (small ? " " + small : "");
+    const onCards = new Set(inThis.flatMap((r) => jobQuestions(r).map((n) => "need:" + n.id)));
+    for (const a of inThis.map(listDraft).filter(Boolean)) for (const q of readyQuestions(a)) onCards.add("need:" + q.id);
+    // "2 jobs to confirm": every "Did you apply to ...?" in one fold under the list, closed until
+    // opened, its cards the same cards they are anywhere (a question on its own card, a draft
+    // with its question), so they never lead the list; To do asks them too.
+    const askTodos = selecting ? [] : todoItems({each: true}).filter((i) => (i.tab === "jobs" || i.tab === "drafts") && !onCards.has(i.key) && applyAsk(i.need));
+    const nAsk = askTodos.length + confirming.length;
     let sum;
     if (!rows.length && !jb.made_at) sum = "No search yet.";
     else if (tab === "new") {
-      // The same two numbers as the tab and the menu: drafts to send, and jobs to look at.
-      const live = inThis.filter(jobToLook);
       // One sentence whose total is the tab's ("To apply 5"): "4 to send, 1 still to make, 1 to
       // look at, 1 strong" added up to nothing on screen, and "send" read against "nothing is
-      // ever sent" (the UX review, 2026-11-10, U-9).
-      const {ready, onYou, making, toMake, look, total} = applyTally(rows, live);
-      const parts = [ready ? ready + " ready" : "", onYou ? onYou + " waiting on you" : "", making ? making + " being made" : "",
-        toMake ? toMake + " still to make" : "", look ? look + " to look at" : ""].filter(Boolean);
+      // ever sent" (the UX review, 2026-11-10, U-9). Its parts are the list's own headings, in
+      // their order, and the questions about what was sent are the fold's own count: "5 to apply
+      // for: 2 ready to send, 1 being written, 1 new. 2 to confirm." (the UX review of the
+      // redesign's second round, 2026-11-17: "2 ready, 1 waiting on you, 1 being made, 1 to look
+      // at" matched none of the headings).
+      const n = applyStages(rows);
+      const parts = stageParts(n, true);
       // One line: what is closing soon is said on its own card, in the ink, "Closes Sat 31 Oct (in
       // 6 days)", never as a second sentence that wrapped the line (the redesign, phase 2).
-      sum = parts.length ? total + " to apply to: " + parts.join(", ") + "." : "Nothing new to look at.";
+      sum = [n.total ? n.total + " to apply for" + (parts.length ? ": " + parts.join(", ") : "") + "." : "", nAsk ? nAsk + " to confirm." : ""]
+        .filter(Boolean).join(" ") || "Nothing new to look at.";
     } else {
       const ivs = inThis.filter((r) => relatedInterview(r)).length;
       const nudge = inThis.filter((r) => dueItems().some((d) => txt(d.kind) === "follow_up" && employerIn(d.title) === txt(r.company))).length;
@@ -7161,7 +7198,7 @@
     }
     // Drafts first: one needing your answer or a fix, then those ready to send, then one being
     // written, then the finds by the sort chosen.
-    const stageNow = (r) => { const d = listDraft(r); if (d) return readyLive(d) ? (readyQuestions(d).length || alertsOf(d).some((x) => x.kind === "checks") ? 0 : 1) : 2; const st = jobStatus(r); return st === "asking" ? 0 : st === "drafting" ? 3 : 4; };
+    const stageNow = jobStage;
     // A card keeps the place it had when Jobs was opened, for as long as the person stays: a
     // job tapped Draft this jumped to the top among the drafts, and had to be found again (the
     // maintainer, 2026-11-06). The next visit to Jobs draws each in its stage.
@@ -7188,16 +7225,9 @@
     // maintainer, 2026-11-05: "the search bar is in contacts page but not jobs").
     put(wrap, controlRow([jobsSwitch("found"), inThis.length > 8 ? searchField(key, lo) : h("span", {class: "grow"}), filterButton(key, lo, f), menu]));
     put(wrap, activeFilters(key, lo, f));
-    const onCards = new Set(inThis.flatMap((r) => jobQuestions(r).map((n) => "need:" + n.id)));
-    for (const a of inThis.map(listDraft).filter(Boolean)) for (const q of readyQuestions(a)) onCards.add("need:" + q.id);
-    // "2 jobs to confirm": every "Did you apply to ...?" in one fold under the list, closed until
-    // opened, its cards the same cards they are anywhere (a question on its own card, a draft
-    // with its question), so they never lead the list; To do asks them too.
-    const askTodos = selecting ? [] : todoItems({each: true}).filter((i) => (i.tab === "jobs" || i.tab === "drafts") && !onCards.has(i.key) && applyAsk(i.need));
-    const nAsk = askTodos.length + confirming.length;
     const askFold = nAsk ? det("jobs-confirm", false, {class: "band-more confirm-fold"},
       h("summary", {class: "band-more-sum", "data-k": "jobs-confirm"}, h("span", {}, plural(nAsk, "job to confirm", "jobs to confirm"), h("span", {class: "band-more-why"}, ": did you apply?"))),
-      h("div", {class: "stack jobs"}, askTodos.map((i) => i.node({where: i.tab, section: i.tab})).concat(confirming.map(lo.render)))) : null;
+      h("div", {class: "stack jobs"}, askTodos.map((i) => confirmCard(i.need)).concat(confirming.map((r) => { const d = listDraft(r); return confirmCard((d ? readyQuestions(d) : jobQuestions(r))[0], r); })))) : null;
     put(wrap, tabTodos("jobs", onCards, (i) => selecting || !applyAsk(i.need)));
     put(wrap, tabTodos("drafts", onCards, (i) => selecting || !applyAsk(i.need)));
     // One Select several for the whole list: a draft's card takes its box too, its mark
@@ -7361,7 +7391,11 @@
         live && !closed ? elseBtn("job", r.id, about, "job:" + r.id) : null,
         st === "applied" ? btn("Not applied after all", () => act([{item: r.id, action: "job.not_applied", rev: r.rev}], "Marked as not applied: " + txt(r.company)), {small: true, key: "notapplied:" + r.id}) : null),
     ];
-    const word = iv ? ["Interview " + fmtDay(iv.when), "info"] : nudge ? ["Follow-up ready", "info"] : st === "applied" || draftLine ? [null, null] : JOB_STATUS[st] || [null, null];
+    // A question waiting on you is the card's state, in the words To do and the Brief use ("1
+    // question for you"): over a job being written, "Drafting" hid that it was your move (the
+    // UX review of the redesign's second round, 2026-11-17).
+    const word = iv ? ["Interview " + fmtDay(iv.when), "info"] : nudge ? followWord(nudge) : asks.length && st !== "asking" ? [plural(asks.length, "question for you", "questions for you"), "you"]
+      : st === "applied" || draftLine ? [null, null] : JOB_STATUS[st] || [null, null];
     const dismissing = pending && st === "dismissed" ? effective(r.id, ["job.dismiss"]) : null;
     const given = dismissing && txt(obj(dismissing.doc.value).why || "");
     // Why is asked once, in the bin's own sheet, never again on the card.
@@ -7369,10 +7403,13 @@
     // The rows about the job are its details, a fold of their own from the end of its line of
     // facts ("Why": the score is already beside the title, and a card holds 30 words at most);
     // More is the last part, the rarer actions (2026-11-05).
-    // On a phone the pencil that corrects its title, pay or place is the last line of its
-    // details, in words: at the end of the facts it took the room the closing day needed and
-    // pushed the line to three (the redesign, phase 2, 2026-11-17).
-    const penRow = live && !pending && phoneNow() ? h("div", {class: "m-pen"}, jobPencil(r, true)) : null;
+    // What corrects its title, pay or place is the last line of its details, in words, "Change
+    // the details", on every screen: at the end of the facts a pencil took the room the closing
+    // day needed on a phone (the redesign, phase 2, 2026-11-17), and the pencil is for asking
+    // Claude to rewrite what it wrote, so one that changed a job's facts read as a rewrite (the
+    // UX review of the redesign's second round, 2026-11-17). Never under More, which holds no
+    // way to edit (the maintainer, 2026-11-05).
+    const penRow = live && !pending ? h("div", {class: "m-pen"}, jobPencil(r)) : null;
     const fold = infoFold("job:" + r.id, extra.slice(0, -1).concat([penRow]));
     const m = moreSplit("job:" + r.id, about, extra.slice(-1), true);
     const notesTone = asks.length ? "warn" : closedAlert ? "bad" : alertsOf(r).length && live && !pending ? (ALERT_TONE[txt(alertsOf(r)[0].kind)] || "warn") : word[1] && word[1] !== "ok" && word[1] !== "info" ? word[1] : null;
@@ -7381,7 +7418,7 @@
       h("div", {class: "job-main"},
         // The number is a small badge beside the title, coloured by how strong a fit it is: a
         // column of its own pushed every line in (the maintainer, 2026-10-29: "the indents").
-        h("div", {class: "job-top"}, fitRing(r.score, band),
+        h("div", {class: "job-top"}, fitRing(r.score, band, {word: true}),
           h("h3", {id: hid}, breakable(r.title)), h("span", {class: "top-end"}, stateWord(word[0], word[1]),
           live && !pending ? btn("", () => askRemoveJob(r), {kind: "quiet icon-only", small: true, key: "bin:" + r.id, icon: "bin", aria: "Not for me: " + about}) : null)),
         // The last fact, "Why" and the pencil keep together at the line's end: a pencil, or
@@ -7390,8 +7427,7 @@
         // Its dot goes inside with it, and "Why" keeps its pencil: a box after a dot left the
         // dot ending the line before (the screen review, 2026-11-11).
         jobFactsLine(h("bdi", {class: "co"}, employerLink(r.company, "job:" + r.id, r.title)), where, rest,
-          h("span", {class: "why-pen"}, r.score != null ? fold.toggle("Why", "Why it scored " + txt(r.score) + ": " + about) : fold.toggle("Details", "Details: " + about),
-          live && !pending && !phoneNow() ? jobPencil(r) : null)),
+          h("span", {class: "why-pen"}, r.score != null ? fold.toggle("Why", "Why it scored " + txt(r.score) + ": " + about) : fold.toggle("Details", "Details: " + about))),
         live && !pending ? jobPen(r) : null,
         fold.panel,
         failedNote, draftLine,
@@ -7455,7 +7491,7 @@
   }
   // What a job's number means, on hover and in the Jobs part of the tour (the maintainer,
   // 2026-10-29: "a few ppl asked me what is out of 100").
-  const SCORE_MEANS = "How well this job fits you, out of 100. 75 or more is a strong fit; 60 or more is worth a look.";
+  const SCORE_MEANS = "How well this job matches what you want, out of 100. 75 or more is a strong fit; 60 or more is worth a look.";
   // How far round its ring a job's number goes, to the nearest tenth (the redesign,
   // 2026-11-16): the ring is the fit at a glance, the number beside it to the point.
   function fitClass(score) {
@@ -8002,7 +8038,9 @@
       " " + cap1(noun()) + " made for " + txt(p.first_name) + " · on its way, making it downloadable");
     const key = (where || "p") + "resfor:" + p.id;
     const fetchIt = getMadeFor(p, key);
-    const get = fetchIt ? btn("Get it", fetchIt, {kind: "link", small: true, key}) : null;
+    // "Download", the word for what it does: "Get it" was vague (the UX review of the redesign's
+    // second round, 2026-11-17).
+    const get = fetchIt ? btn("Download", fetchIt, {kind: "link", small: true, key}) : null;
     return h("p", {class: "small", "data-resume-for": txt(p.id)}, cap1(noun()) + " made for " + txt(p.first_name) + (txt(r.made_on) ? ", " + fmtDay(r.made_on) : ""), get ? [" · ", get] : null);
   }
   // Getting the resume made for them: saved at once from the page's own store, where its
@@ -8173,7 +8211,7 @@
     return card("article", {class: "card app st-" + seg(st) + (S.selectingReady ? " selecting" : "") + edge, "aria-labelledby": hid, "data-item": a.id},
       S.selectingReady && live && !a.for_contact ? selBox(S.sel.ready, a.id, about, scheduleRender) : null,
       h("div", {class: "app-main"},
-        h("div", {class: "job-top"}, j && j.score != null ? fitRing(j.score, j.band) : null,
+        h("div", {class: "job-top"}, j && j.score != null ? fitRing(j.score, j.band, {word: true}) : null,
           h("h3", {id: hid}, breakable(a.role)), h("span", {class: "top-end"}, stateWord(word[0], word[1]),
           live && !forWho ? btn("", () => askRemoveDraft(a), {kind: "quiet icon-only", small: true, icon: "bin", key: "dbin:" + a.id, aria: "Not sending: " + about}) : null)),
         // Pay where it is known; "Pay not stated" on nearly every card said nothing (2026-11-03).
@@ -9369,7 +9407,9 @@
     // The role their hold waited for is posted: the referral ask for that one role.
     if (k === "referral") return btn(txt(o.label) || "Draft the referral ask", () => requestWork([{id: txt(o.id) || "reply~" + seg(p.id) + "~ref", kind: "reply", to: "either", title: "Referral ask to " + whoAt(name, p.employer), args: Object.assign({contact: txt(p.id), kind: "referral_ask"}, obj(o.args)), redo: true}]),
       {kind: "primary", small: true, key: "pref:" + key, aria: "Draft the referral ask to " + name});
-    if (k === "prep") return btn(txt(o.label) || "Prepare for the call", () => askCallPrep(p), {kind: "primary", small: true, key: "callprep:" + key, aria: "Prepare for the call with " + name});
+    // "Prepare me", as every prep is offered (the UX review of the redesign's second round,
+    // 2026-11-17: Bea's alone said "Prepare for the call"); whose call is in its name.
+    if (k === "prep") return btn("Prepare me", () => askCallPrep(p), {kind: "primary", small: true, key: "callprep:" + key, aria: "Prepare me for the call with " + name});
     if (k === "close") return btn("Close", () => (due ? act([{item: due.id, action: "due.done", value: {on: todayIso()}, rev: due.rev}], "Closed: " + name)
       : act([{item: p.id, action: "person.status", value: Object.assign({status: "gone_cold", why: "no reply, closed on the page"}, obj(o.value)), rev: p.rev}], "Closed: " + name)),
       {kind: "secondary", small: true, key: "pdone:" + key, aria: "Close: " + whoAt(name, p.employer)});
@@ -9566,8 +9606,9 @@
         resumeForThem(p),
         referralLine(p),
         going ? goingLine(p, going) : nextLine ? h("p", {class: "meta"}, nextLine,
-          // The call's day is theirs to correct: the pencil beside it, as on a draft.
-          st === "call_booked" && callDay ? [" ", btn("", () => askCall(p), {kind: "quiet icon-only", small: true, icon: "tweak", key: "pcallpen:" + p.id, aria: "Change the call with " + name})] : null,
+          // The call's day is theirs to correct, in words beside it: a pencil there read as asking
+          // Claude to rewrite something (the UX review of the redesign's second round, 2026-11-17).
+          st === "call_booked" && callDay ? [" ", btn("Change the time", () => askCall(p), {kind: "quiet", small: true, key: "pcallpen:" + p.id, aria: "Change the time: the call with " + name})] : null,
           null) : null,
         asking ? needsBox(p, asking[0], asking[1]) : d ? d.box : null, d && !asking ? d.notes : null,
         box ? replyBox(p) : null,
@@ -9804,7 +9845,7 @@
     // words on the others, so the rows keep their height wherever the panel is drawn.
     if (brief) return h("li", {class: "bp-up-row"},
       h("span", {class: "up-main"}, h("span", {class: "up-when"}, [upDayLabel(u.day), upWhen(u)].filter(Boolean).join(" · ")), h("span", {class: "up-title"}, upGo(u)), maybe, prep), add);
-    const sub = [UP_WORDS[txt(u.kind)] || "", txt(u.note), txt(u.place)].filter(Boolean).join(" \u00b7\u00a0");
+    const sub = [UP_WORDS[txt(u.kind)] || "", upNote(u), txt(u.place)].filter(Boolean).join(" \u00b7\u00a0");
     // A row of a day's card (the redesign, phase 2, 2026-11-17): its time in a steady column, what
     // it is in the title's size, what kind and whether its prep is ready on the line under it
     // (a chip: "Prep ready", "No prep yet"), and one More at its end holding the calendar, a new
@@ -9828,6 +9869,15 @@
         sub || maybe || chip ? h("span", {class: "up-sub"}, sub ? h("span", {class: "up-note"}, sub) : null, maybe, chip) : null, step,
         upTimeForm(u), upDayForm(u), upTimed.has(u.id) ? stateLine(txt(obj(upTimeTarget(u)).item), "up:" + u.id) : null),
       u.pending ? h("span", {class: "up-end"}, add) : menu ? h("span", {class: "up-end"}, menu) : null);
+  }
+  // A closing day's line says where its application stands in Jobs' own words: "The application is
+  // drafted and not sent yet" stood beside Jobs asking "Did you apply?" about the same one (the UX
+  // review of the redesign's second round, 2026-11-17). Else the engine's own note.
+  function upNote(u) {
+    const id = txt(obj(u.go).item);
+    const a = txt(u.kind) === "deadline" && id ? readyItems().find((x) => txt(x.id) === id) : null;
+    if (!a || !readyLive(a)) return txt(u.note);
+    return draftAsksApplied(a) ? "Did you apply? Answer in Jobs." : JOB_STAGE_WORDS[draftStage(a)];
   }
   // A row's one More: a small menu of what is rare for it, each a line in words.
   function upMenuItem(label, fn, key, aria) {
@@ -10292,7 +10342,11 @@
       // there drew as an empty pill the width of the card (the review, 2026-11-11).
       put(wrap, h("p", {class: "small muted fun-sum"}, outcomes + "Most applications get no reply, and that is usual; someone to refer you raises the odds."));
     }
-    if (apps.length) put(wrap, appsTable(apps));
+    // Every application is one that went: a draft not sent yet lives in Jobs' To apply, and in
+    // amber here it read as an application gone wrong (the UX review of the redesign's second
+    // round, 2026-11-17).
+    const sentApps = apps.filter((a) => txt(a.status) !== "drafted" && txt(a.status) !== "not_applying");
+    if (sentApps.length) put(wrap, appsTable(sentApps));
     if (weeks.filter((w) => Number(w.applied) || Number(w.sent) || Number(w.replies)).length >= 2) put(wrap, weeksChart(weeks));
     return wrap;
   }
@@ -10415,7 +10469,7 @@
       fold: (a) => !appLive(a) && daysSince(a.last || a.applied_on) !== null && daysSince(a.last || a.applied_on) > 30,
       sort: (a, b) => (appLive(a) ? 0 : 1) - (appLive(b) ? 0 : 1) || txt(b.last || b.applied_on).localeCompare(txt(a.last || a.applied_on)),
       chips: [{key: "group", label: "Where it stands", options: [["waiting", "Waiting on them", (a) => APP_GROUP[txt(a.status)] === "waiting"], ["progress", "In progress", (a) => APP_GROUP[txt(a.status)] === "progress"],
-        ["closed", "Closed", (a) => APP_GROUP[txt(a.status)] === "closed"], ["unsent", "Not sent", (a) => APP_GROUP[txt(a.status)] === "unsent"]]}],
+        ["closed", "Closed", (a) => APP_GROUP[txt(a.status)] === "closed"]]}],
       search: (a) => [a.company, a.role].join(" "), searchLabel: "Employer or role"};
     const f = listFacets("progress:apps", lo);
     const phone = window.innerWidth < 760;
@@ -11477,6 +11531,30 @@
     const ab = obj(obj(n).about);
     return (txt(obj(n).kind) === "confirm" || txt(obj(n).kind) === "conflict") && !!txt(ab.company) && !txt(ab.contact);
   }
+  // "Did you apply?" in Jobs' fold: one card for each, whatever asks it (a draft two devices
+  // disagreed about, an application ready weeks ago and not marked sent), as a job's card is
+  // drawn: its fit where the job is known, the role, the employer and the place, then the
+  // question and its answers in the grey box. One was a To do card and the other a whole draft
+  // card with a trash, More and other answers (the UX review of the redesign's second round,
+  // 2026-11-17). Its draft or job is its item, so an answer acts where the card stands.
+  function confirmCard(n, r) {
+    if (!n) return null;
+    const ab = obj(n.about);
+    const d = r ? listDraft(r) : null;
+    const j = d ? sameJob(d) : r || jobRows().find((x) => sameKey(x.company, x.title) === sameKey(ab.company, ab.role)) || null;
+    const src = d || r || {};
+    const id = txt(src.id) || txt(n.id);
+    const hid = "cf-" + seg(id);
+    const role = txt(ab.role) || txt(src.role || src.title);
+    const company = txt(ab.company) || txt(src.company);
+    const at = (x) => txt(x.place_short !== undefined && x.place_short !== null ? x.place_short : x.place);
+    const place = at(src) || (j ? at(j) : "");
+    return card("article", {class: "card job confirm-card", "aria-labelledby": hid, "data-item": id},
+      h("div", {class: "job-main"},
+        h("div", {class: "job-top"}, j ? fitRing(j.score, j.band, {word: true}) : null, h("h3", {id: hid}, breakable(role || company))),
+        company ? jobFactsLine(h("bdi", {class: "co"}, employerLink(company, "cf:" + id, role)), place ? [place] : [], [], null) : null,
+        questionBlock(n, {where: "jobs", item: id})));
+  }
   function asksApplied(r) {
     const d = listDraft(r);
     const qs = d ? (readyLive(d) ? readyQuestions(d) : []) : (jobLive(r) && !jobPending(r) ? jobQuestions(r) : []);
@@ -11879,10 +11957,21 @@
     const n = dayDiff(nx.date || nx.on);
     return appLive(a) && txt(nx.kind) === "follow_up" && n !== null && n <= 0 ? -n : null;
   }
+  // An application's follow-up as its state (the redesign's second round, 2026-11-17): "Follow-up
+  // ready" only once a follow-up is written to send; until then it is your move and by when, in
+  // clay, "Follow up by Wed 28 Oct". "Follow-up ready" in blue beside "Draft the follow-up · 2 min
+  // of Claude" said something was ready that was not. `d`: its row in To do, else `day`, the
+  // day the application's record gives it.
+  function followWord(d, day) {
+    if (d && dueDraft(d)) return ["Follow-up ready", "info"];
+    const on = txt(obj(d).due) || txt(day);
+    const n = dayDiff(on);
+    return [on && n !== null && n > 0 ? "Follow up by " + fmtDay(on) : "Follow up now", "you"];
+  }
   // An application's state in a word, as its card says it (and an employer's card, the same).
   function appWord(a, iv, nudge, late) {
     if (iv === undefined) { iv = appInterview(a); nudge = appNudge(a); late = nudge ? null : appLate(a); }
-    return iv && !isPast(iv.when) ? ["Interview " + fmtDay(iv.when), "info"] : nudge || late !== null ? ["Follow-up ready", "info"] : APP_STATE[txt(a.status)] ? [APP_STATE[txt(a.status)][0] === null ? null : txt(a.status_word) || APP_STATE[txt(a.status)][0], APP_STATE[txt(a.status)][1]] : [txt(a.status_word) || cap1(txt(a.status)), null];
+    return iv && !isPast(iv.when) ? ["Interview " + fmtDay(iv.when), "info"] : nudge || late !== null ? followWord(nudge, obj(a.next).date || obj(a.next).on) : APP_STATE[txt(a.status)] ? [APP_STATE[txt(a.status)][0] === null ? null : txt(a.status_word) || APP_STATE[txt(a.status)][0], APP_STATE[txt(a.status)][1]] : [txt(a.status_word) || cap1(txt(a.status)), null];
   }
   function appRecordCard(a) {
     const hid = "rec-" + seg(a.id);
@@ -11900,8 +11989,10 @@
     const STEP = {follow_up: "follow up", nudge: "follow up", thank_you: "send a thank-you", status_note: "send a status note"};
     const step = (t, k) => (own(t) && STEP[txt(k)] ? STEP[txt(k)] : lc1(txt(t)));
     const nextLine = iv && !isPast(iv.when) ? "Next: " + lc1(stageName(iv)) + (timeOf(iv.when) ? " at " + timeOf(iv.when) : "")
-      : nudge ? "Next: " + step(nudge.title, txt(nudge.sub) || txt(nudge.kind)) + (Number(nudge.overdue_days) > 0 ? ", ready now" : nudge.due ? ", " + dayWords(nudge.due) : "")
-        : late ? "Next: " + lc1(txt(next.label || next.title) || "follow up") + ", ready now"
+      // Its day come: "now", never "ready now", which said a follow-up was written when none was
+      // (the redesign's second round, 2026-11-17).
+      : nudge ? "Next: " + step(nudge.title, txt(nudge.sub) || txt(nudge.kind)) + (Number(nudge.overdue_days) > 0 ? " now" : nudge.due ? ", " + dayWords(nudge.due) : "")
+        : late ? "Next: " + lc1(txt(next.label || next.title) || "follow up") + " now"
           : txt(next.label || next.title) ? "Next: " + step(next.label || next.title, next.kind) + (next.date || next.on ? ", " + dayWords(next.date || next.on) : "") : a.applied_on ? "Applied " + fmtDay(a.applied_on) : "";
     const primary = !live ? null : iv && !isPast(iv.when) ? btn(obj(iv.prep).updated ? "Read your prep" : "Prepare me", () => (obj(iv.prep).updated ? openDetail("interview", iv.id) : askPrep(iv)), {kind: "primary", small: true, key: "recprep:" + a.id, wakes: obj(iv.prep).updated ? null : "prep", aria: (obj(iv.prep).updated ? "Read your prep for " : "Prepare me for ") + txt(a.company)})
       : nudge ? btn("Draft the follow-up", () => askDue(nudge), {kind: "primary", small: true, key: "recnudge:" + a.id, wakes: dueWakes(nudge), aria: "Draft the follow-up: " + about}) : null;
@@ -12001,7 +12092,7 @@
     // with their fit; its people with where each stands and their next step; its interviews.
     const roles = e.apps.map((a) => dRow({label: txt(a.role) || "A role", state: appWord(a), sub: a.applied_on ? "Applied " + fmtDay(txt(a.applied_on)) : "",
       open: () => openDetail("application", a.id), key: "emp-app:" + a.id}))
-      .concat(e.jobs.map((r) => dRow({label: txt(r.title) || "A role", state: ["Not applied", null], lead: fitRing(r.score, r.band, {size: "sm", word: true}),
+      .concat(e.jobs.map((r) => dRow({label: txt(r.title) || "A role", state: jobStateWord(r), lead: fitRing(r.score, r.band, {size: "sm", word: true}),
         sub: cap1([r.found_on ? "found " + fmtDay(txt(r.found_on)) : "", txt(r.place)].filter(Boolean).join(" \u00b7 ")),
         open: () => { closeDetail(true); go("jobs", {item: r.id}); }, key: "emp-job:" + r.id})));
     // Under each person, when you were last in touch: their next step's own words ("Reply",
@@ -12031,8 +12122,10 @@
   }
   // The bar's verdict as a state: one that clears in green, one below in the waiting grey, one
   // the person's own rules rule out in red. Its reason is the engine's sentence behind the "?".
-  const BAR_WORDS = {pay: ["Clears your bar", "ok"], prestige: ["Clears your bar", "ok"], signal: ["Clears your bar", "ok"],
-    none: ["Below your bar", null], excluded: ["Ruled out by your rules", "bad"]};
+  // In the person's words: "Clears your bar" was the app's own word for what they asked for (the
+  // UX review of the redesign's second round, 2026-11-17).
+  const BAR_WORDS = {pay: ["Meets what you asked for", "ok"], prestige: ["Meets what you asked for", "ok"], signal: ["Meets what you asked for", "ok"],
+    none: ["Below what you asked for", null], excluded: ["Ruled out by your rules", "bad"]};
   // What Claude found: each fact a short row, the page it came from a quiet link under it with
   // the day it was checked. Nothing found, no block: an empty heading reads as something lost.
   function foundBlock(about, key) {
@@ -12060,6 +12153,12 @@
     const owed = e.people.find((p) => personGroup(p) === "now");
     const iv = soon || (owed ? null : ahead[0]);
     if (iv) return ivNext(iv, "emp-next:" + iv.id);
+    // A reply already written is opened, never asked for again: "Reply to Juno" here and "Help
+    // me reply to Juno" in Chat offered to write what To do and Contacts held ready to send, at
+    // a second cost in Claude's time (the UX review of the redesign's second round, 2026-11-17).
+    const written = owed ? draftReady(personMessage(owed.id)) : null;
+    if (owed && written && !msgStopped(written)) return dNext(txt(owed.first_name) + " replied: your reply is ready to send.",
+      btn("See your reply to " + txt(owed.first_name), () => seeDraft(written), {kind: "primary", small: true, key: "emp-next:" + owed.id}));
     if (owed) return dNext(txt(owed.first_name) + " replied: it's your turn.",
       btn("Reply to " + txt(owed.first_name), () => openDetail("person", owed.id), {kind: "primary", small: true, key: "emp-next:" + owed.id}));
     for (const p of e.people) {
@@ -12195,12 +12294,22 @@
         const open = who ? () => openDetail("person", who.id) : ivx ? () => openDetail("interview", ivx.id)
           : () => { closeDetail(true); const r = resolveSection(REL_SECTION[sec]) || {section: "todo"}; go(r.section, {focus: true, drafts: r.drafts, item: id}); };
         rows.push(dRow({label: cap1(l.replace(/^the role: /, "")), state: who && sec === "people" ? statusWord(who) : null,
-          sub: sec === "jobs" ? "A role found there" : ivx && ivx.when ? (isPast(ivx.when) ? fmtDay(txt(ivx.when)) : fmtWhen(ivx.when)) : "",
+          sub: sec === "jobs" ? alsoJobLine(id) : ivx && ivx.when ? (isPast(ivx.when) ? fmtDay(txt(ivx.when)) : fmtWhen(ivx.when)) : "",
           open, key: "rel:" + (except || "") + ":" + sec + ":" + id}));
       }
     }
     const extra = Number(item.people_more) || 0;
     return dRows("Also at " + c, rows, extra ? h("p", {class: "small muted"}, "And " + plural(extra, "other person", "other people") + ".") : null);
+  }
+  // A role found at the employer, said as Jobs says it: "71 fit · Manchester · not applied yet".
+  // "A role found there" said nothing the row did not (the UX review of the redesign's second
+  // round, 2026-11-17). Its state is its stage's word, a new one "not applied yet".
+  function alsoJobLine(id) {
+    const r = jobRows().find((x) => txt(x.id) === txt(id));
+    if (!r) return "";
+    const [w] = jobStateWord(r);
+    const place = txt(r.place_short !== undefined && r.place_short !== null ? r.place_short : r.place);
+    return [r.score != null && txt(r.score) !== "" ? txt(r.score) + " fit" : "", place, jobStage(r) === 4 && !asksApplied(r) && jobLive(r) ? "not applied yet" : lc1(txt(w))].filter(Boolean).join(" \u00b7 ");
   }
   // What has happened and what is to come, in order: a dot a step on one thread, filled once it
   // has happened and a ring while it is to come (its shape, never its colour alone), and said
@@ -13361,7 +13470,7 @@
     // Someone who wrote first has not been written to until a message went back (p.wrote), and
     // a call booked for Thursday is not a talk had until Thursday has passed.
     const steps = [["Written to", typeof p.wrote === "boolean" ? p.wrote : st !== "not_contacted"], ["Replied", !!p.replied || ["replied_needs_response", "in_conversation", "call_booked", "referral_in_progress"].includes(st)],
-      ["Talked", ["in_conversation", "referral_in_progress"].includes(st) || (st === "call_booked" && (callPast(p) || !txt(obj(p.call).day || obj(p.call).on)))], ["Referral", st === "referral_in_progress"]];
+      ["Talked", ["in_conversation", "referral_in_progress"].includes(st) || (st === "call_booked" && (callPast(p) || !txt(obj(p.call).day || obj(p.call).on)))], ["Referral", st === "referral_in_progress" && !asked]];
     const callDay = st === "call_booked" ? txt(obj(p.call).day || obj(p.call).on) : "";
     // The step and its day as the row says them: a day gone by reads as late, never as one to
     // come (2026-11-03: "on Tue 27 Oct" for a step seven days late).
@@ -13388,8 +13497,12 @@
     // The rarer updates in one menu, Don't contact again last in red (updateMenu).
     const stop = g !== "done" ? btn("Don't contact again", () => askRemovePerson(p.id, txt(p.first_name), txt(p.employer), p.rev), {kind: "quiet", small: true, key: "dstop:" + p.id}) : null;
     const update = updateMenu("dupd:" + p.id, whoAt(txt(p.first_name), p.employer), personActions(p, p.id, true), stop);
-    // The next step to happen is the one ringed: the first not done, after those done.
+    // The next step to happen is the one ringed: the first not done, after those done. A referral
+    // waiting on what they asked for is that step, said under it ("Waiting on your CV") until I
+    // sent it: four green dots, Referral's among them, read as finished while Next still said to
+    // send the CV (the UX review of the redesign's second round, 2026-11-17).
     const nowAt = steps.findIndex(([, done]) => !done);
+    const waitsOn = asked && st === "referral_in_progress" && nowAt === 3 ? "Waiting on " + asked.what : "";
     return h("div", {class: "d-stack d-person"},
       // Their employer opens its own card (issue #263): here, not on their row, where it sat on
       // the line under their name and the two links' tap areas lay over each other on a phone.
@@ -13411,7 +13524,8 @@
       // never pills, which read as buttons beside the real ones and did nothing (2026-11-02).
       h("ol", {class: "plain d-steps", "aria-label": "Where it stands"}, steps.map(([l, done], i) =>
         h("li", {class: "d-step" + (done ? " done" : i === nowAt ? " now" : "")}, h("span", {class: "d-step-dot", "aria-hidden": "true"}),
-          h("span", {class: "d-step-l"}, l), h("span", {class: "sr-only"}, done ? " (done)" : i === nowAt ? " (next)" : " (not yet)")))),
+          h("span", {class: "d-step-l"}, l), h("span", {class: "sr-only"}, done ? " (done)" : i === nowAt ? " (next)" : " (not yet)"),
+          i === nowAt && waitsOn ? h("span", {class: "d-step-sub"}, waitsOn) : null))),
       // How it began, where their conversation is: on the card it was a "?" on every person,
       // past the three a first screen may have (2026-11-04).
       exchangeHistory(p) ? h("p", {class: "small muted", "data-k": "pex:" + p.id}, exchangeHistory(p) + ".") : null,
@@ -13492,9 +13606,11 @@
   // hunt: the maintainer, 2026-10-26), then Add a job and your resume as soft pills beside it,
   // as Contacts' Paste a message beside Find people. Never a small underlined line, and never a
   // line about Claude's work: the header's pill and each card say that (2026-11-05).
-  function jobsHeadTools(rows) {
-    const findBtn = !arr(rows).length ? null : runBtn("search", "Find jobs", () => askSearch(), {small: true, key: "head-find-jobs", icon: "k-search", wakes: "search"});
-    const addJob = h("button", {type: "button", class: "btn secondary small", "data-k": "add-job", onclick: () => askAddJob()}, "Add a job");
+  // Applied has no Find jobs: a search does nothing for applications already sent (the UX review
+  // of the redesign's second round, 2026-11-17). `applied`: drawn for Applied.
+  function jobsHeadTools(rows, applied) {
+    const findBtn = !arr(rows).length || applied ? null : runBtn("search", "Find jobs", () => askSearch(), {small: true, key: "head-find-jobs", icon: "k-search", wakes: "search"});
+    const addJob = h("button", {type: "button", class: "btn secondary small", "data-k": "add-job", onclick: () => askAddJob()}, "Add a job you found");
     // The header's own link to your resume on every Jobs tab (the maintainer, 2026-10-31: "it's
     // hidden atm"), beside the card under the list on To apply.
     const cv = resumeLink();
@@ -13522,9 +13638,13 @@
     const sum = live.length ? live.length + " still open" + (booked ? ", " + booked + " with an interview booked" : "") +
       (undated ? ", " + nWord(undated, "interview", "interviews") + " with no day yet" : "") + (nudge ? ", " + nudge + " due a follow-up" : "") + "."
       : "Nothing applied yet. Roles you apply to move here.";
-    const wrap = h("section", {class: "sec", "aria-labelledby": "h-jobs" + (where ? "-" + where : "")}, screenHead("jobs", "Jobs", sum, null, where, jobsHeadTools(jobRows()), {quiet: true}));
+    const wrap = h("section", {class: "sec", "aria-labelledby": "h-jobs" + (where ? "-" + where : "")}, screenHead("jobs", "Jobs", sum, null, where, jobsHeadTools(jobRows(), true), {quiet: true}));
+    // What has finished (not this time, closed, withdrawn) waits in the fold under the list, "9
+    // finished: Show", once a day has gone by: "Not this time" and "Closed" sat in the live list
+    // above "7 earlier, finished" (the UX review of the redesign's second round, 2026-11-17). One
+    // that finished today stays in sight, with its Undo.
     const lo = {items, name: "applications", one: "application", many: "applications", live: appLive, remote: "applications",
-      fold: (a) => !appLive(a) && daysSince(a.last || a.applied_on) !== null && daysSince(a.last || a.applied_on) > 30, foldLabel: (k) => k + " earlier, finished",
+      fold: (a) => !appLive(a) && !(daysSince(a.last || a.applied_on) !== null && daysSince(a.last || a.applied_on) < 1), foldLabel: (k) => k + " finished",
       // By what comes next, the nearest first: an interview by its day, then a follow-up by its
       // day, then the rest newest first. The nearest interview (Wed 28 Oct) stood under a later
       // one (Wed 4 Nov), the applications ordered by when they were sent (the UX review of the
@@ -13860,7 +13980,7 @@
     const p = from && from.id ? from : null;
     const who = p ? txt(p.first_name) : "";
     const people = peopleItems().filter((x) => txt(x.first_name)).sort((a, b) => txt(a.first_name).localeCompare(txt(b.first_name)));
-    sheet({title: p ? "The job " + who + " sent you" : "Add a job",
+    sheet({title: p ? "The job " + who + " sent you" : "Add a job you found",
       intro: p ? "Paste its link or the posting. Claude checks how well it fits you, links it to " + who + " as your way in, and writes your " + noun() + " and cover letter."
         : "Paste the job's link or the posting. Claude checks how well it fits you and adds it to your jobs with its score.",
       cost: costLine(p ? "draft" : "evaluate"),
@@ -14153,7 +14273,7 @@
   const you = () => obj(M().you);
   const askProfile = (args, title) => requestWork([{kind: "profile", title, args}]);
   function jobSheet(j, need) {
-    sheet({title: j ? (need ? "What you did at " + txt(j.employer) : "Change this job") : "Add a job",
+    sheet({title: j ? (need ? "What you did at " + txt(j.employer) : "Change this job") : "Add a past job",
       intro: j && !need ? null : "Claude writes your " + noun() + " lines from what you say here, and only that.",
       fields: [
         {id: "title", type: "text", label: "Job title", value: j ? txt(j.title) : "", required: true, max: 120},
@@ -14203,7 +14323,7 @@
   function missingFix(m) {
     const part = txt(m.part);
     const j = arr(you().jobs).find((x) => txt(x.id) === txt(m.job));
-    if (part === "jobs") return btn("Add a job", () => jobSheet(null), {kind: "secondary", small: true, key: "you-fix-jobs"});
+    if (part === "jobs") return btn("Add a past job", () => jobSheet(null), {kind: "secondary", small: true, key: "you-fix-jobs"});
     if (part === "lines" && j) return btn("Add what you did", () => jobSheet(j, true), {kind: "secondary", small: true, key: "you-fix:" + txt(m.job)});
     if (part === "skills") return btn("Add skills", skillsSheet, {kind: "secondary", small: true, key: "you-fix-skills"});
     if (part === "confirm") return btn("Check them", () => go("todo", {focus: true}), {kind: "secondary", small: true, key: "you-fix-confirm"});
@@ -14250,7 +14370,7 @@
     if (missing.length) put(grid, part("pf-missing", "Still to fill in", null, h("ul", {class: "plain set-rows prof-missing checks-list"},
       missing.map((m) => h("li", {class: "toggle-row", "data-card": "1", "data-item": "missing:" + txt(m.part || m.say)}, h("span", {}, txt(m.say)), missingFix(m))))));
     const jobs = arr(y.jobs);
-    put(grid, part("pf-jobs", "Experience", btn("Add a job", () => jobSheet(null), {kind: "secondary", small: true, key: "you-add-job"}),
+    put(grid, part("pf-jobs", "Experience", btn("Add a past job", () => jobSheet(null), {kind: "secondary", small: true, key: "you-add-job"}),
       jobs.length ? h("ul", {class: "plain set-rows prof-jobs"}, jobs.map((j) => {
         const what = txt(j.title) + " at " + txt(j.employer);
         return h("li", {class: "prof-job", "data-item": txt(j.id), "data-card": "1"},
@@ -14318,9 +14438,9 @@
     // fresh one and this one can still be had; otherwise the first button gets it. Getting
     // it ready again is never "already done" while there is nothing to download.
     const fresh = (primary) => btn("Make a fresh one", () => requestWork([{id: txt(w.id) || "general_resume~" + todayIso(), kind: txt(w.kind) || "general_resume", title: "A fresh " + noun(), args: obj(w.args), redo: true}]), {kind: primary ? "primary" : "secondary", small: true, key: "gen-fresh"});
-    const getLabel = r.stale ? "Get this one anyway" : "Get it";
-    const get = breaks.length ? null : file.asset ? btn(r.stale ? getLabel : "Get it", () => getFiles({id: txt(r.id) || "resume-general", company: ""}, [file]), {kind: r.stale ? "quiet" : "primary", small: true, key: "gen-get"}) :
-      g.kind ? btn(r.stale ? getLabel : "Get it", () => requestWork([{id: "files~" + seg(txt(r.id) || "resume"), kind: txt(g.kind), title: "Your " + noun() + ", ready to download", args: Object.assign({files: [file.name]}, obj(g.args)), redo: true}]), {kind: r.stale ? "quiet" : "primary", small: true, key: "gen-ready"}) : null;
+    const getLabel = r.stale ? "Download this one anyway" : "Download";
+    const get = breaks.length ? null : file.asset ? btn(getLabel, () => getFiles({id: txt(r.id) || "resume-general", company: ""}, [file]), {kind: r.stale ? "quiet" : "primary", small: true, key: "gen-get"}) :
+      g.kind ? btn(getLabel, () => requestWork([{id: "files~" + seg(txt(r.id) || "resume"), kind: txt(g.kind), title: "Your " + noun() + ", ready to download", args: Object.assign({files: [file.name]}, obj(g.args)), redo: true}]), {kind: r.stale ? "quiet" : "primary", small: true, key: "gen-ready"}) : null;
     // Its pencil, where its draft is kept: the Tweak panel changes its bullets, its look and its
     // summary, as a resume made for a posting (DESIGN.md, "Cards and lists").
     const pencil = !breaks.length && arr(r.bullets).length ? tweakIcon("resume", {id: txt(r.id), rev: r.rev, bullets: arr(r.bullets), general: true, company: ""}) : null;
@@ -14725,7 +14845,7 @@
       const late = hours !== null && hours >= 24;
       const ending = hours !== null && hours >= 60;
       const opened = !!sget("local", "ljs:export-opened");
-      body = [h("p", {class: "card-title", id: "export-title"}, asked ? "Your LinkedIn download" : "Bring in your LinkedIn messages"),
+      body = [h("p", {class: "card-title", id: "export-title"}, "Add your LinkedIn messages"),
         changed.length ? h("p", {class: "small muted"}, changed.join(" ")) : null,
         asked ? h("p", {}, ending ? "Its link stops working after about three days: add it soon." : late ? "It should be in your email by now." :
           "LinkedIn emails you when it's ready: usually minutes for messages and connections, up to a day for the full copy. Its link stops working after about three days.") :
@@ -14912,7 +15032,7 @@
     // Add beside it was a second way to do what was already done (2026-11-04).
     const waiting = !!obj(exportTaken()).pending;
     return [
-      infoRow("linkedin-download", "Your LinkedIn download", value, foldBody([
+      infoRow("linkedin-download", "Your LinkedIn messages", value, foldBody([
         h("p", {}, "So Claude knows who you have talked to, and never writes to someone twice. Add the zip from LinkedIn's email, or the files inside it."),
         det("export-how", false, {class: "how"}, h("summary", {"data-k": "export-how"}, "How to get it"),
           steps.length ? h("ol", {class: "steps"}, steps.map((s) => h("li", {}, s))) : h("p", {class: "muted"}, "The steps arrive with the next update of this page."),
@@ -14978,7 +15098,7 @@
     const old = typeof x.due === "boolean" ? x.due : txt(x.state) === "missing" || !txt(x.taken_on) || Number(x.age_days) > 14;
     if (!old || exportTaken()) return null;
     // A soft pill, never underlined text alone at the foot of the list (the review, 2026-11-05).
-    return h("div", {class: "card-actions export-foot"}, btn("Add your LinkedIn download", () => { openState.set("det:info:linkedin-download", true); go("settings", {focus: false}); },
+    return h("div", {class: "card-actions export-foot"}, btn("Add your LinkedIn messages", () => { openState.set("det:info:linkedin-download", true); go("settings", {focus: false}); },
       {kind: "secondary", small: true, key: "export-foot"}));
   }
 
@@ -16755,7 +16875,10 @@
   // (the person, 2026-10-26: "i have literally no idea how to add that role").
   function starters() {
     const ppl = peopleItems();
-    const owed = ppl.find((p) => txt(p.status) === "replied_needs_response") || ppl.find((p) => txt(p.status) === "in_conversation");
+    // Someone whose reply is already written is not offered again: its draft is in To do and
+    // Contacts, and asking here would write it twice (the redesign's second round, 2026-11-17).
+    const unwritten = (p) => !draftReady(personMessage(p.id));
+    const owed = ppl.find((p) => txt(p.status) === "replied_needs_response" && unwritten(p)) || ppl.find((p) => txt(p.status) === "in_conversation" && unwritten(p));
     const call = ppl.find((p) => txt(p.status) === "call_booked" && !callPast(p));
     const iv = interviewItems().find((i) => !isPast(i.when));
     const owedName = owed ? txt(owed.first_name) : "";

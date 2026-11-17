@@ -5,7 +5,7 @@ The review, read as a tired person on a phone with dozens of things owed:
 - Someone was on three cards at once: their follow-up, what they asked for and a job's "do not
   apply cold". One card for them, the referral its grey box; a referral with no row about
   them, and a closed posting, are notes on their own cards, never To do cards.
-- Four small yes-or-no questions were four cards. One card, "4 quick answers", among the
+- Four small yes-or-no questions were four cards. One card, "Answer 4 quick questions", among the
   first five, one question at a time with "1 of 4", each answered with its own control, the
   next there at once.
 - A checklist row had one button: a follow-up done some other way could only be put off. Each
@@ -58,7 +58,7 @@ def test_the_small_questions_are_one_card_among_the_first_five_one_at_a_time(run
     ], vp, clock=T)
     first, q1 = got["after"][0]["eval"]
     assert "quick" in first and len(first) <= 5, first
-    assert q1["title"] == "4 quick answers" and q1["at"] == "1 of 4", q1
+    assert q1["title"] == "Answer 4 quick questions" and q1["at"] == "1 of 4", q1
     assert q1["q"] == "Have you used Looker?" and q1["buttons"] == ["Yes, I have", "No"], q1
     # No card of its own for any of them, nor the checklist "Did these notes go?".
     text = got["after"][0]["text"]

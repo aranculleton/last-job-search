@@ -487,20 +487,20 @@ def test_every_count_of_jobs_to_look_at_agrees_and_leaves_out_a_closed_one(run, 
     # drafts ready apart. Every number agrees with the Jobs summary.
     import re
     # One sentence whose total is the tab's since the UX review of 2026-11-10 (U-9).
-    total = int((re.search(r"(\d+) to apply to", jobs_line) or [0, 0])[1])
-    look = int((re.search(r"(\d+) to look at", jobs_line) or [0, 0])[1])
+    total = int((re.search(r"(\d+) to apply for", jobs_line) or [0, 0])[1])
+    look = int((re.search(r"(\d+) new", jobs_line) or [0, 0])[1])
     send = total - look
-    assert a["nav"] == total and a["brief"] == look, (a, jobs_line)
-    # The drafts ready, waiting on you, being made and still to make, said apart as Jobs says
-    # them, add up to the summary's drafts (the review, 2026-11-05: "2 drafts ready to apply"
-    # beside "2 to send, 1 still to make"; the screen review, 2026-11-11: a draft with a
-    # question "ready" on the Brief and "waiting on you" on Jobs).
-    # What Claude is making is its own work, said in the work pill: the Brief's line leaves it out
-    # when anything else is owed, so a small laptop's panel holds the line whole (4.15.0).
-    making = int((re.search(r"(\d+) being made", jobs_line) or [0, 0])[1])
-    # The ready ones are "applications ready to send" since the redesign's phase 2 (2026-11-17).
-    parts = [int((re.search(r"(\d+) (?:drafts? |applications? )?" + w, panel) or [0, 0])[1]) for w in ("ready to send", "waiting on you", "being made", "still to make")]
-    assert (not send) or sum(parts) == send or (sum(parts) == send - making and not parts[2]), (panel, jobs_line)
+    assert total and a["nav"] == total and a["brief"] == look, (a, jobs_line)
+    # The drafts ready to send, needing your answer, to confirm and being written, said apart in
+    # the words of Jobs' headings, add up to the summary's drafts (the review, 2026-11-05: "2
+    # drafts ready to apply" beside "2 to send, 1 still to make"; the screen review, 2026-11-11:
+    # a draft with a question "ready" on the Brief and "waiting on you" on Jobs; the redesign's
+    # second round, 2026-11-17: one name for each stage).
+    # What Claude is writing is its own work, said in the work pill: the Brief's line leaves it
+    # out when anything else is owed, so a small laptop's panel holds the line whole (4.15.0).
+    writing = int((re.search(r"(\d+) being written", jobs_line) or [0, 0])[1])
+    parts = [int((re.search(r"(\d+) (?:applications? )?" + w, panel) or [0, 0])[1]) for w in ("ready to send", "needs? your answer", "to confirm", "being written")]
+    assert (not send) or sum(parts) == send or (sum(parts) == send - writing and not parts[3]), (panel, jobs_line)
     assert (not todo_line) or todo_line.startswith("%d new" % look), todo_line
     assert "Analytics Consultant" not in panel, panel      # its posting has closed
 

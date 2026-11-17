@@ -76,10 +76,10 @@ def test_a_job_being_drafted_says_where_its_draft_stands_with_cancel_and_stays_c
     assert tab == before and tab2 == before, (before, tab, tab2)
     # One sentence whose total is the tab's since the UX review of 2026-11-10 (U-9): it said
     # "3 to send, 2 still to make".
-    # Being made only while its work goes, still to make where nothing makes it (the review of
-    # 2026-11-11): the job just asked for is being made; the draft never made is still to make.
-    # A job still to look at that asks a question is waiting on you, counted there once (2026-11-11).
-    assert "to apply to: 1 ready, 1 waiting on you, 1 being made, 1 still to make" in summary, summary
+    # Each stage in its heading's word (the redesign's second round, 2026-11-17): the job just
+    # asked for and the draft never made, which Claude makes next by itself, are both being
+    # written; the job asking whether it was applied to waits in the fold, counted there once.
+    assert "5 to apply for: 1 ready to send, 2 being written, 1 new. 1 to confirm." in summary, summary
     assert ("Claude is on it" in going or "Draft" in going) and "Stop Claude" in going, going
     assert "Finished: putting it on your page" in finished, finished
     assert "Draft ready" not in finished and "See the draft" not in finished, finished
@@ -102,10 +102,12 @@ def test_a_question_about_a_job_is_asked_on_that_jobs_card_and_holds_draft_this(
     assert card["count"] == 0, "the question is never a card of its own above the job"
     assert "Did you apply to Dovecote Freight?" in card["text"], card["text"]
     assert "Draft this" not in card["text"], card["text"]
-    # Counted with what waits on the person, once (2026-11-11): "One needs your answer." after
-    # "1 waiting on you" said one thing twice. Moved with the rule.
-    assert "waiting on you" in got["after"][1]["text"], got["after"][1]["text"]
-    assert "needs your answer" not in got["after"][1]["text"], got["after"][1]["text"]
+    # Counted once (2026-11-11): "One needs your answer." after "1 waiting on you" said one
+    # thing twice. Since the redesign's second round (2026-11-17) a "Did you apply?" question
+    # is the fold's, "1 to confirm.", and nowhere else in the line.
+    summary = got["after"][1]["text"]
+    assert "1 to confirm." in summary and summary.count("confirm") == 1, summary
+    assert "needs your answer" not in summary and "waiting on you" not in summary, summary
 
 
 # ------------------------------------------------------------------ 7: the Brief and a draft not made
@@ -120,10 +122,11 @@ def test_the_brief_counts_drafts_ready_apart_from_those_being_made_and_apply_wai
         {"hash": "jobs", "read": '#main [data-item="app-fernhill_freight_operations_analyst"]'},
     ], WIDE, model=m)
     brief, card = got["after"][0]["text"], got["after"][1]["text"]
-    # In Jobs' own words, from its one tally: a draft nothing is making is "still to make"
-    # there, and the Brief called it "being made" (the screen review, 2026-11-11). A ready one
-    # is an application ready to send (the redesign, phase 2, 2026-11-17).
-    assert "1 application ready to send, 1 still to make" in brief, brief
+    # In Jobs' own words, from its one tally (the screen review, 2026-11-11). A ready one is an
+    # application ready to send (the redesign, phase 2, 2026-11-17); one never made is being
+    # written, Claude's own work, named on the Brief only when nothing else is owed, and never
+    # counted as ready (the redesign's second round, 2026-11-17).
+    assert brief.strip() == "1 application ready to send", brief
     assert "Apply on" not in card, card
     assert "Not made yet" in card or "Claude" in card, card
 
@@ -468,7 +471,7 @@ def test_not_now_open_in_coming_up_and_the_linkedin_download_are_never_underline
     brief, todo, contacts = got["after"]
     assert "Not now" in brief["text"] and brief["eval"] == [], brief["eval"]
     assert "Open in Coming up" not in todo["text"] and todo["eval"] == [], (todo["text"], todo["eval"])
-    assert "Add your LinkedIn download" in contacts["text"] and contacts["eval"] == [], contacts["eval"]
+    assert "Add your LinkedIn messages" in contacts["text"] and contacts["eval"] == [], contacts["eval"]
 
 
 # ------------------------------------------------------------------ 11: Your rules, as the example's engine made them

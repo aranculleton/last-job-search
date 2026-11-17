@@ -271,7 +271,7 @@ def test_the_resume_that_breaks_the_persons_rules_offers_only_a_fresh_one(run, t
     got = _go(run, tmp_path, [{"hash": "drafts", "read": card}], PHONE, model=m, clock=T)
     text = got["after"][0]["text"]
     assert "Not to send" in text and "Make a fresh one" in text and "dashes your documents never use" in text
-    assert "Get it" not in text and "Get this one anyway" not in text
+    assert "Download" not in text and "Download this one anyway" not in text
 
 
 def test_applied_says_what_it_counts_and_flags_a_late_follow_up(run, tmp_path):
@@ -288,9 +288,29 @@ def test_applied_says_what_it_counts_and_flags_a_late_follow_up(run, tmp_path):
     text = got["after"][0]["text"]
     assert " still open" in text and " applied," not in text.split("\n")[0], text[:300]
     assert "1 interview with no day yet" in text, text[:300]
-    # A follow-up the person set is ready, never late (the UX review of 2026-11-10, U-6, and the
-    # review of 2026-11-11): it said "Follow-up due" and "Next: follow up, 2 days late".
-    assert "Next: follow up, ready now" in text and "Follow-up ready" in text and "days late" not in text
+    # A follow-up the person set is due now, never late (the UX review of 2026-11-10, U-6, and the
+    # review of 2026-11-11): it said "Follow-up due" and "Next: follow up, 2 days late". Its pill
+    # is the person's move in clay, and "ready" only once one is written (the redesign's second
+    # round, 2026-11-17): "Follow-up ready" stood beside "Draft the follow-up".
+    assert "Next: follow up now" in text and "Follow up now" in text and "days late" not in text
+    assert "Follow up by Wed 28 Oct" in text and "Follow-up ready" not in text and "ready now" not in text, text
+
+
+def test_an_applications_follow_up_is_ready_only_once_it_is_written(run, tmp_path):
+    """"Follow-up ready" in blue stood beside "Draft the follow-up · 2 min of Claude": nothing was
+    ready. Until a follow-up is written the card says whose move it is and by when, in clay; once
+    one is written, it is ready (the UX review of the redesign's second round, 2026-11-17)."""
+    m = _sample()
+    look = ("(() => { const c = document.querySelector('#main [data-item=\"app-quayside-ops\"]');"
+            " const w = c && c.querySelector('.state-word'); return w ? [w.textContent.trim(), w.className] : null; })()")
+    got = _go(run, tmp_path, [{"hash": "jobs", "click": "Applied", "eval": look}], PHONE, model=m, clock=T, seed={"pref:jobs:tab": "applied"})
+    word, cls = got["after"][0]["eval"]
+    assert word == "Follow up by Wed 28 Oct" and "tone-you" in cls, (word, cls)
+    msg = dict(m["messages"][0], id="msg-quayside-follow", contact="", first_name="", employer="Quayside Foods", kind="follow_up",
+               application="app-quayside-ops", text="Hello, I wanted to follow up on my application for the Operations Analyst role.", rev="mq1")
+    m["messages"].append(msg)
+    got = _go(run, tmp_path, [{"hash": "jobs", "click": "Applied", "eval": look}], PHONE, model=m, clock=T, seed={"pref:jobs:tab": "applied"})
+    assert got["after"][0]["eval"][0] == "Follow-up ready", got["after"][0]["eval"]
 
 
 def test_the_weeks_say_their_average_and_progress_says_applied_once(run, tmp_path):
@@ -382,12 +402,14 @@ def test_the_briefs_jobs_tile_leads_with_the_drafts_ready_to_apply(run, tmp_path
     # Counted as Jobs counts them: the draft with a question waits on you (the screen
     # review, 2026-11-11), in the person's words: applications ready to send (the UX review of
     # the redesign, 2026-11-17).
-    assert "2 applications ready to send, 1 waiting on you" in tile and "Nothing new to look at." not in tile, tile
+    # Since the redesign's second round (2026-11-17), in the words Jobs' headings use: the draft
+    # asking whether it went is "to confirm", the fold's own word.
+    assert "2 applications ready to send, 1 to confirm" in tile and "Nothing new to look at." not in tile, tile
     assert "drafts ready to apply" not in tile, tile
     # One sentence whose total is the tab's since the UX review of 2026-11-10 (U-9).
     # The tab's total first (U-9); what makes it up is test_the_jobs_line_adds_up_to_its_tab's.
-    assert drafts.startswith("3 to apply to: "), ("the same count as Jobs' one list", drafts[:120])
-    got = _go(run, tmp_path, [{"hash": "brief", "click": "2 applications ready to send, 1 waiting on you", "role": "link",
+    assert drafts.startswith("3 to apply for: "), ("the same count as Jobs' one list", drafts[:120])
+    got = _go(run, tmp_path, [{"hash": "brief", "click": "2 applications ready to send, 1 to confirm", "role": "link",
                                "until": "location.hash.startsWith('#drafts')"}], WIDE, model=m, clock=T)
     assert got["after"][0]["hash"].startswith("#drafts"), got["after"][0]["hash"]
     m["ready"] = []

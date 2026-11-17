@@ -513,7 +513,7 @@ def test_contacts_shows_each_person_as_the_engine_says(run, page, model, vp):
     assert "Your connection request has not been accepted yet." in rhian and "Draft" not in rhian, rhian
     # A booked call stays booked; one gone by asks how it went.
     riley = _row(top, "Riley at Vale Health")
-    assert "Call booked" in riley and "Prepare for the call" in riley and "Replied" not in riley, riley
+    assert "Call booked" in riley and "Prepare me" in riley and "Replied" not in riley, riley
     robin = _row(top, "Robin at Wren Logistics")
     assert "How did it go?" in robin and "Draft the thank-you" in robin, robin
     # The step the person set is the button's own; no note to Claude, id or "None".

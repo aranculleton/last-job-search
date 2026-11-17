@@ -61,7 +61,7 @@ def test_a_surname_finds_the_person_whose_name_it_is(run, tmp_path):
 
 
 def test_a_resume_made_for_someone_is_on_their_card(run, tmp_path):
-    """A resume made for Juno when she asked for one says so on her card, with Get it
+    """A resume made for Juno when she asked for one says so on her card, with Download
     (tests/test_a_resume_made_for_someone_is_theirs.py has the engine's half)."""
     m = journeys._sample()
     juno = next(p for p in m["people"] if p["id"] == "larkspur_retail_castellan")
@@ -74,4 +74,4 @@ def test_a_resume_made_for_someone_is_on_their_card(run, tmp_path):
     ], WIDE, model=m)
     lines = got["after"][0]["eval"]
     assert len(lines) == 1 and lines[0][0] == "larkspur_retail_castellan", lines
-    assert lines[0][1].startswith("CV made for Juno") and "Get it" in lines[0][1], lines
+    assert lines[0][1].startswith("CV made for Juno") and "Download" in lines[0][1], lines

@@ -266,7 +266,7 @@ def test_a_note_marked_sent_is_no_longer_asked_about(run, tmp_path, vp):
     got = _go(run, tmp_path, [{"hash": "todo", "eval": UNFOLD}, {"eval": ASKED},
                               {"hash": "messages", "eval": "(() => { document.querySelector('[data-k=\"sent:msg-wren-2\"]').click(); return 1; })()"},
                               {"hash": "todo", "eval": UNFOLD}, {"eval": ASKED}], vp, clock=T)
-    assert got["after"][1]["eval"] == "4 quick answers" and got["after"][4]["eval"] == "3 quick answers", [a["eval"] for a in got["after"]]
+    assert got["after"][1]["eval"] == "Answer 4 quick questions" and got["after"][4]["eval"] == "Answer 3 quick questions", [a["eval"] for a in got["after"]]
 
 
 def test_a_message_ranks_first_in_its_group_and_a_text_box_asks_to_be_filled_in():

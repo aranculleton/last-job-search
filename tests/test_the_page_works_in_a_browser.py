@@ -565,7 +565,7 @@ def test_to_do_groups_by_when_then_by_employer_in_the_order_things_are_done(run,
             assert g["employer"] is None or len(g["titles"]) >= 2, ("an employer heads only two or more", b["band"], g)
     answer = next(b for b in r["bands"] if b["band"] == "Needs your answer")["groups"]
     # The small questions are one card, asked one at a time (the UX review, 2026-11-05).
-    assert [g["titles"] for g in answer] == [["4 quick answers"]], answer
+    assert [g["titles"] for g in answer] == [["Answer 4 quick questions"]], answer
     late = next(b for b in r["bands"] if b["band"] == "Due or late")["groups"]
     # The late things first: the follow-up and the thank-you, both two days late. The
     # follow-up is a row of the one card of messages to send (the UX review, 2026-11-05;
@@ -1462,7 +1462,7 @@ def test_a_busy_week_is_a_few_checklists_not_a_card_each(run, pages):
     assert "No reply to 2 messages" not in r["text"] and "answered two messages" not in r["text"]
     # The two "Did your note go?" are among the quick answers, one at a time (the UX review,
     # 2026-11-05), never a checklist of their own.
-    assert "grp:sent" not in r["groups"] and r["quick"]["title"].endswith("quick answers"), (r["groups"].keys(), r["quick"])
+    assert "grp:sent" not in r["groups"] and r["quick"]["title"].endswith("quick questions"), (r["groups"].keys(), r["quick"])
     # The three to check before they go are rows of the one messages card, each saying so.
     send = r["groups"]["grp:send"]
     assert not [k for k in r["groups"] if k.startswith("grp:read_first")], r["groups"]

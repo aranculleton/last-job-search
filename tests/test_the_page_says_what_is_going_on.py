@@ -241,7 +241,7 @@ def test_the_bin_for_one_person_leaves_the_rest_of_their_employer(run, tmp_path)
     assert a["value"]["scope"] == "person", a["value"]
     # The application question about the same employer is not the person's, so it stays: three
     # quick answers left of four ("Did you apply to Fernhill Freight?" among them).
-    assert got["after"][3]["eval"] == "3 quick answers", got["after"][3]["eval"]
+    assert got["after"][3]["eval"] == "Answer 3 quick questions", got["after"][3]["eval"]
 
 
 def test_contacts_counts_only_who_needs_the_person_and_the_follow_ups_apart(run, tmp_path):

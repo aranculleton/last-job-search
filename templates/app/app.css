@@ -689,7 +689,7 @@ details.more.split[open] { flex-basis: auto; }
 .fit-word { font-size: var(--t-sm); color: var(--muted); }
 /* It reaches above and below the title's line without making it taller, so the facts sit as
    close under a title with a ring as under one without. */
-.job-top > .fit-ring { align-self: center; margin-block: -4px; }
+.job-top > .fit-ring, .job-top > .fit-with-word { align-self: center; margin-block: -4px; }
 /* In a row (the Brief's jobs) the small ring reaches past the row's line the same way, so a
    row with a fit is no taller than one without and the panel lists as many. */
 .bp-list .fit-ring.sm { align-self: center; margin-block: -4px; }
@@ -2332,10 +2332,9 @@ html.tips-off .has-tip::after { content: none; }
 .bp-steps li:has(> .bp-link:focus-visible) { outline: 2px solid var(--focus); outline-offset: -2px; border-radius: var(--r-sm); }
 .bp-steps li::after { content: ""; flex: none; align-self: center; width: 8px; height: 8px; margin: 0 4px 0 auto; box-sizing: border-box; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(-45deg); pointer-events: none; }
 @media (hover: hover) { .bp-steps li:hover { background: var(--raised); border-radius: var(--r-sm); } }
-/* Each step's number is its place among To do's things for today (data-n), Today the first; one
-   not due yet has a small dot in its place. */
-.bp-steps li::before { content: attr(data-n); flex: none; width: 20px; height: 20px; border-radius: 50%; color: var(--pc); background: var(--pcbg); font-size: 0.75rem; font-weight: 700; display: inline-grid; place-items: center; }
-.bp-steps li.bp-step-soon::before { content: ""; width: 6px; height: 6px; margin-inline: 8px; background: var(--line-strong); align-self: center; }
+/* A step carries no number: its order says it, and "4" before "4 quick answers" read as a count
+   (the UX review of the redesign's second round, 2026-11-17). Its place among To do's things for
+   today stays in data-n, for the page's own checks; one not due yet says its day. */
 .bp-people .bp-link, .bp-jobs .bp-link { display: flex; align-items: center; gap: 8px; -webkit-line-clamp: unset; }
 .bp-avatar { flex: none; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-size: var(--t-sm); font-weight: 600; color: var(--pc); background: var(--pcbg); }
 .bp-who, .bp-jobs .bp-link { display: flex; flex-direction: column; min-width: 0; flex: 1; align-items: flex-start; gap: 0; }
@@ -2594,6 +2593,8 @@ ul.bp-news { gap: 12px; }
 .d-step.now { color: var(--ink); }
 .d-step.now .d-step-dot { background: var(--surface); box-shadow: 0 0 0 2px var(--mark); }
 .d-step-l { overflow-wrap: anywhere; }
+/* What the step waits on, under its name ("Waiting on your CV"): quiet, never a second state. */
+.d-step-sub { margin-top: -6px; font-weight: 400; color: var(--muted); overflow-wrap: anywhere; }
 .d-next { margin: 0; }
 /* A person's page: each block apart, as cards are, never run together (2026-11-02). */
 .d-person { display: grid; gap: 16px; }

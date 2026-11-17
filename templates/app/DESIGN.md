@@ -31,21 +31,24 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   do says so as good news: a soft clay circle with a tick, "Nothing left today", one quiet line
   and one quiet "See what's coming up" (the Brief's Today the same when it has nothing). Every
   fold on To do is the one disclosure: its words in the ink at 14/600, a 16px chevron pointing
-  right while shut and down once open, a finger's height on touch. (calm test) The small questions (a yes or a no, a choice of a few) are one card, "4 quick
-  answers", always among the five: one question at a time in its grey box with "1 of 4", each
-  answered with its own control (answerBox), the next there the moment it is answered.
+  right while shut and down once open, a finger's height on touch. (calm test) The small questions (a yes or a no, a choice of a few) are one card, "Answer 4 quick
+  questions", always among the five: one question at a time in its grey box with "1 of 4", each
+  answered with its own control (answerBox), the next there the moment it is answered. Its
+  title says what to do: "4 quick answers" read as a count, after the Brief's "4" before it (the
+  UX review of the redesign's second round, 2026-11-17).
   (tired-person tests, quick answers test)
 - **One ranked list.** The Brief's Today is To do's first card and its Next the three after it,
   in To do's own order (`todoQueue`: its bands, then each band's employers, then kinds), each in
   its card's own words, Today with that card's own button, filled. Today says To do's own count
-  over it ("1 of 4", the badge's number) and Next's numbers go on from it (2, 3, 4); a step not
-  due yet has a dot in place of a number, and its day. The next interview goes to the top of
+  over it ("1 of 4", the badge's number); Next's rows carry no number, their order says it, and
+  a step not due yet says its day ("2  4 quick answers" read as a count, the UX review of the
+  redesign's second round, 2026-11-17). The next interview goes to the top of
   both from as many days before as the person chose (Settings, "Your next interview on the
   Brief"). The one exception: something booked today and not over leads Today, an interview
   first, then a call, a test, a deadline, anything else, then by its time, as the maintainer
   set it (2026-11-02: "the most upcoming event"; "if there are multiple things today then the
   most important one like an interview or a call"); it has no count over it, being none of To
-  do's cards, and Next is then To do's first three, numbered from one, an interview today that
+  do's cards, and Next is then To do's first three, an interview today that
   is To do's first card said once. With nothing on To do or booked today, Today is the first
   search; what else is booked stays in Coming up. Why: the Brief's Today picked one thing, its
   Next three another and To do a third, and their counts read 4, 1 and 3 over seven messages
@@ -282,18 +285,32 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   2026-11-17). (fit ring test, calm test)
 - Two devices that said different things about an application are asked as one plain
   question, "Did you apply to Quayside Foods?" with "Yes, I applied" and "Not yet", each
-  answer the engine's own action. Why: "Two answers about Quayside Foods: Your phone said
-  applied at 09:12 ... Which is right?" read as an error (the redesign, 2026-11-16).
+  answer the engine's own action, and nothing under it about the devices. Why: "Two answers
+  about Quayside Foods: Your phone said applied at 09:12 ... Which is right?" read as an error
+  (the redesign, 2026-11-16), and "Your phone and your laptop said different things." named a
+  fault nobody could act on (the redesign's second round, 2026-11-17).
 - Jobs is one list of the jobs you might apply to, each once at its own stage, and Applied beside
   it. A drafted job stood in Found and again in Drafts, and acting on it meant flipping tabs: now a
   drafted job is its draft's card, carrying the job's fit and reasons, a job being drafted shows
   its progress, and a find offers Draft this. The list reads in its stages, each under a small
-  heading once there are two (Ready to send, Being written, New), best fit first within each;
-  the tab, the summary, the menu and the Brief count the same two things, drafts to send and
-  jobs to look at. Every "Did you apply to ...?" waits in one fold straight under the list
+  heading once there are two (Needs your answer, Ready to send, Being written, New), best fit
+  first within each; the tab, the summary, the menu and the Brief count the same two things,
+  drafts to send and jobs to look at. **Each stage has one name everywhere** (app.js
+  `JOB_STAGE_WORDS`, `applyStages`, `jobStateWord`): the summary says the headings' words in
+  their order, then the fold's count, "5 to apply for: 2 ready to send, 1 being written, 1 new.
+  2 to confirm."; a card's pill is the same word, left off under a heading that already says
+  it, and a question waiting on you is the card's pill, "1 question for you"; an employer's
+  card says a role's stage ("Being written", "Did you apply?"), and a closing day in Coming up
+  the same ("Did you apply? Answer in Jobs."). A draft whose files are still to come is being
+  written, never ready. Why: one job was "waiting on you" in the summary, under "Being written"
+  with a "Drafting" pill, and "Not applied" on its employer's card (the redesign's second
+  round, 2026-11-17). Every "Did you apply to ...?" waits in one fold straight under the list
   (To do asks them too; above the list it would stand between the switch and the first card),
-  closed until opened, "2 jobs to confirm: did you apply?", its cards the cards they are
-  anywhere (in the list while several are being selected, to be ticked), and a draft asking it offers no "Apply on their site" while it is open. A posting
+  closed until opened, "2 jobs to confirm: did you apply?", each one the same card whatever
+  asks it (`confirmCard`): the role with its fit ring where the job is known, the employer and
+  the place, the question and its answers in the grey box, no trash and no More (one was a To
+  do card and one a whole draft card, the redesign's second round, 2026-11-17); in the list
+  while several are being selected, to be ticked; and a draft asking it offers no "Apply on their site" while it is open. A posting
   that has closed waits under the list ("1 closed: Show"), as do the jobs you hid ("1 you hid:
   Show") and what the search's rules left out ("41 that did not fit: Show"). Why: the first
   screen was two "Did you apply" questions, then cards scored 71, 66, 79 and 84 with nothing to
@@ -303,13 +320,22 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   follow-up by its day, then the rest newest first; "I heard back" is a quiet control beside a
   card's next step. Why: the nearest interview (Wed 28 Oct) stood under a later one (Wed 4 Nov),
   and five cards each ended in an equal grey "I heard back" (the UX review of the redesign,
-  2026-11-17). (applied tests)
+  2026-11-17). An application owing a follow-up says so in clay, "Follow up by Wed 28 Oct"
+  ("Follow up now" once its day has come), and "Follow-up ready" only once a follow-up is
+  written to send (`followWord`): "Follow-up ready" in blue beside "Draft the follow-up · 2 min
+  of Claude" said something was ready that was not. What has finished (not this time, closed,
+  withdrawn) waits in the fold under the list, "9 finished: Show", once a day has gone by, one
+  finished today staying in sight with its Undo; "Not this time" and "Closed" sat in the live
+  list (the redesign's second round, 2026-11-17). (applied tests)
 - On a phone, Jobs' search takes its own row under the To apply / Applied switch once the list
   is long: beside it the switch was squeezed unreadable (the review, 2026-11-05). Every other
   control row stays one row.
 - Jobs' header is the same on both tabs: its title, its one short line (one line on a computer:
   what closes soon is said on its own card, never a second sentence) and when it searched, with
-  Find jobs and then "Add a job" and your resume as soft pills beside it, as Contacts'. What
+  Find jobs and then "Add a job you found" and your resume as soft pills beside it, as Contacts'.
+  Applied leaves out Find jobs, which does nothing for applications already sent; and "Add a
+  job you found" is never only "Add a job", which Your profile says of a past job ("Add a past
+  job") (the redesign's second round, 2026-11-17). What
   Claude is doing is the header's work pill and each card's own line, never a line here. While
   a search runs, Find jobs is the soft pill of it, "Finding jobs · about 5 min left" in its
   card's own words, with no gauge: "38 min of Claude" beside it read as the wait (the screen
@@ -975,7 +1001,7 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   settings fold test)
 - Your profile reads as Settings does: each part (Still to fill in, Experience, Skills,
   Education, Certificates) a small label with its one way to add or change at its right
-  ("Add a job", "Change skills", "Change"), over one card of rows. A past job is a row that opens
+  ("Add a past job", "Change skills", "Change"), over one card of rows. A past job is a row that opens
   its sheet, its title and employer on one line cut short with an ellipsis, its dates, place and
   what Claude has on it a quiet line under, and a chevron; taking it off is the last thing in its
   sheet, never a trash beside a Change on its row. Why: beside "Change" and a trash, "Senior

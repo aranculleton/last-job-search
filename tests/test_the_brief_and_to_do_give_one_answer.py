@@ -51,7 +51,8 @@ BRIEF = r"""(() => {
   const btn = t && t.querySelector('.bp-iv .btn.primary');
   return {today: what ? what.textContent.trim() : null, count: ((t && t.querySelector('.bp-count')) || {}).textContent || null,
     button: btn ? btn.textContent.trim() : null,
-    next: [...document.querySelectorAll('#main .bp-next .bp-steps > li')].map((li) => ({text: li.textContent.trim(), n: li.getAttribute('data-n')})),
+    next: [...document.querySelectorAll('#main .bp-next .bp-steps > li')].map((li) => ({text: li.textContent.trim(), n: li.getAttribute('data-n'),
+      drawn: getComputedStyle(li, '::before').content})),
     upcoming: [...document.querySelectorAll('#main .bp-upcoming .bp-up > li')].map((li) => li.textContent)};
 })()"""
 
@@ -78,7 +79,10 @@ def _agree(todo, brief):
     got = [s["text"] for s in brief["next"]]
     assert len(got) == len(want), (got, want)
     assert all(g.startswith(w) for g, w in zip(got, want)), (got, want)
-    # One count: the badge, To do's summary, and "1 of N" over Today, Next's numbers going on.
+    # Next's rows carry no number badge: "4  4 quick answers" read as a count (the UX review of
+    # the redesign's second round, 2026-11-17). Their place is kept for this check alone.
+    assert all(s["drawn"] in ("none", "normal") for s in brief["next"]), brief["next"]
+    # One count: the badge, To do's summary, and "1 of N" over Today, Next's places going on.
     n = todo["badge"]
     assert _today_count(todo) == n, (todo["summary"], n)
     nums = [int(s["n"]) for s in brief["next"] if s["n"]]

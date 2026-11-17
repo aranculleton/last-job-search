@@ -178,7 +178,7 @@ def test_the_card_says_what_was_found_with_its_sources_and_the_bar(run, tmp_path
     assert not any(f["underlined"] for f in card["facts"]), "a source standing alone is never underlined"
     assert card["more"] == "And 2 more facts Claude keeps for your letters and preps.", card
     # The bar as a state, in green, its reason behind the "?".
-    assert card["bar"] == "Clears your bar" and "tone-ok" in card["tone"], card
+    assert card["bar"] == "Meets what you asked for" and "tone-ok" in card["tone"], card
     assert got["after"][1]["eval"] == "A major brand with a strong pay band.", got["after"][1]
 
 
@@ -189,6 +189,6 @@ def test_an_employer_with_no_research_has_no_block_and_one_with_nothing_says_not
     ], WIDE, model=journeys._sample())
     cop = got["after"][0]["eval"]
     assert cop["facts"] is None and "What Claude found" not in cop["order"], cop
-    assert cop["bar"] == "Clears your bar", cop
+    assert cop["bar"] == "Meets what you asked for", cop
     fern = got["after"][1]["eval"]
     assert fern["facts"] is None and fern["bar"] is None, fern
