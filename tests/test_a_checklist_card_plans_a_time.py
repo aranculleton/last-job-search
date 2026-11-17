@@ -1,9 +1,9 @@
-"""A checklist card in To do offers Plan a time, which puts the work in the person's calendar.
+"""A checklist card in To do offers a time for it, which puts the work in the person's calendar.
 
 The UX review of 2026-11-10 (U-18): only interviews could be added to a calendar, and To do
 never helped to plan when the rest would be done; a plan of when is what turns an intention into
-the thing done (Gollwitzer and Sheeran, 2006). Each checklist card now has Plan a time: a day
-and a time, then the calendar sheet Coming up uses (Google Calendar, Outlook, a file, or the
+the thing done (Gollwitzer and Sheeran, 2006). Each checklist card now has Set a time ("Set a time to
+send" for messages, the UX review of 2026-11-17): a day and a time, then the calendar sheet Coming up uses (Google Calendar, Outlook, a file, or the
 details to copy), with nothing sent. Every person and employer is invented.
 """
 from __future__ import annotations
@@ -43,7 +43,7 @@ def run():
 @pytest.mark.parametrize("vp", [PHONE, WIDE], ids=["phone", "wide"])
 def test_plan_a_time_puts_the_checklist_in_the_calendar(run, tmp_path, vp):
     got = _go(run, tmp_path, [
-        {"hash": "todo", "click": "Plan a time"},
+        {"hash": "todo", "click": "Set a time", "exact": True},
         {"fill": {"The day": "2026-10-27", "The time": "09:30"}, "then": "Add it to my calendar", "eval": SHEET},
     ], vp, model=_checklist(), clock=T)
     seen = got["after"][1]["eval"]
@@ -57,7 +57,7 @@ def test_plan_a_time_puts_the_checklist_in_the_calendar(run, tmp_path, vp):
 
 
 def _plan(run, tmp_path, vp, within=None, zone=None, file=False):
-    click = {"hash": "todo", "click": "Plan a time"}
+    click = {"hash": "todo", "click": "Set a time", "exact": True}
     if within:
         click["within"] = within
     steps = [click, {"fill": {"The day": "2026-10-27", "The time": "09:30"}, "then": "Add it to my calendar", "eval": SHEET}]
@@ -76,7 +76,9 @@ def test_the_time_is_the_persons_own_whatever_zone_the_device_is_in(run, tmp_pat
 
 def test_messages_to_send_can_be_planned_too(run, tmp_path):
     got = _go(run, tmp_path, [
-        {"hash": "todo", "click": "Plan a time", "within": '#main [data-item="grp:send"]'},
+        # "Set a time to send", under the messages card's More since the redesign's second round
+        # (2026-11-17): the card's face is its next step and one more.
+        {"hash": "todo", "more": "grp:send", "click": "Set a time to send", "exact": True, "within": '#main [data-item="grp:send"]'},
         {"fill": {"The day": "2026-10-27", "The time": "09:30"}, "then": "Add it to my calendar", "eval": SHEET},
     ], WIDE, clock=T)
     seen = got["after"][1]["eval"]

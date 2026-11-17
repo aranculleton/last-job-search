@@ -234,7 +234,10 @@ NAMES = r"""(() => [...document.querySelectorAll('#main .bp-people .bp-who stron
 def test_waiting_on_you_says_each_name_whole(run, tmp_path, size):
     # At 960 wide "Mari..." and "Ellerw..." stood beside "Thank-you note": the step kept its
     # width and the name gave way. In a narrow panel the step goes under the name.
-    html = _write(tmp_path, "sample", MODELS["sample"]())
+    # Two people waiting whom no other panel names: the panel is drawn only for them (the
+    # redesign's second round, 2026-11-17).
+    from test_the_page_keeps_one_listener_and_the_brief import _two_waiting
+    html = _write(tmp_path, "sample", _two_waiting(MODELS["sample"]()))
     got = run("engine", html=html, viewport=size, clock=T, timezoneId=PERSON_ZONE, fake={"canSend": "available"},
               steps=[{"hash": "brief", "ready": READY, "eval": NAMES}])
     names = got["after"][0]["eval"]

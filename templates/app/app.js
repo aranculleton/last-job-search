@@ -275,16 +275,35 @@
   // drawn by the row, app.css). Three pills too wide for a phone left More alone under
   // "Practise 3 questions" and "Read your prep" (the screen review, 2026-11-11).
   const MORE_ROWS = ":is(.card-actions, .wc-actions, .suggest-acts, .g-acts)";
+  // A gauge is one with the button that spends its minutes (the maintainer's gauge, kept by the
+  // redesign's second round, 2026-11-17): a row wraps between a button with its gauge and the
+  // next pill, never between the two. "6 min of Claude" went down with More, under the "Prepare
+  // me" it belonged to.
+  const shownIn = (e) => !!(e && e.getClientRects().length && e.getBoundingClientRect().width > 0);
+  const gaugeOf = (b) => (b && b.matches("[data-wakes]") && b.nextElementSibling && b.nextElementSibling.matches(".cost") ? b.nextElementSibling : null);
   function moreFit() {
     for (const r of document.querySelectorAll(".more-wrap")) r.classList.remove("more-wrap");
     for (const m of document.querySelectorAll(".more-mate")) m.classList.remove("more-mate");
     const wrap = [];
+    const first = (row) => [...row.children].find(shownIn);
+    // A gauge alone at a line's start: its button goes down with it.
+    for (const g of document.querySelectorAll(MORE_ROWS + " > [data-wakes] + .cost")) {
+      const b = g.previousElementSibling;
+      if (!shownIn(g) || !shownIn(b) || first(b.parentElement) === b) continue;
+      if (g.getBoundingClientRect().top >= b.getBoundingClientRect().bottom - 1) wrap.push([b.parentElement, b]);
+    }
+    const marked = new Set(wrap.map(([row]) => row));
     for (const sum of document.querySelectorAll(MORE_ROWS + " > details.more > summary.more-btn")) {
       const d = sum.parentElement;
+      if (marked.has(d.parentElement)) continue;
       let prev = d.previousElementSibling;
-      while (prev && !(prev.getClientRects().length && prev.getBoundingClientRect().width > 0)) prev = prev.previousElementSibling;
+      while (prev && !shownIn(prev)) prev = prev.previousElementSibling;
       if (!prev || !sum.getClientRects().length) continue;
-      if (sum.getBoundingClientRect().top >= prev.getBoundingClientRect().bottom - 1) wrap.push([d.parentElement, prev]);
+      // The pill before More is a gauge: the two go down as one, its button and it; where that
+      // button starts the row, nothing can go with More, which takes the next line by itself.
+      const mate = prev.matches(".cost") && gaugeOf(prev.previousElementSibling) === prev ? prev.previousElementSibling : prev;
+      if (mate !== prev && first(d.parentElement) === mate) continue;
+      if (sum.getBoundingClientRect().top >= prev.getBoundingClientRect().bottom - 1) wrap.push([d.parentElement, mate]);
     }
     for (const [row, prev] of wrap) { row.classList.add("more-wrap"); prev.classList.add("more-mate"); }
   }

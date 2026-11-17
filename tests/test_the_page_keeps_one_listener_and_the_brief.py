@@ -560,10 +560,22 @@ FITS = ("[...document.querySelectorAll('#main [data-fit]')].map((l) => [l.classN
         "[...l.children].filter((li) => li.hidden).length, [...l.children].filter((li) => !li.hidden).length])")
 
 
+def _two_waiting(model):
+    """Two people waiting on the person whom no other panel names: Waiting on you is drawn only
+    for who Today and Next leave out (the redesign's second round, 2026-11-17), and the
+    sample's one, Marisol, is a row of the messages card in Next. Both invented."""
+    one = next(p for p in model["people"] if p["id"] == "ellerwick_trust_priya")
+    model["people"].append(dict(one, id="quayside_foods_odette", first_name="Odette", employer="Quayside Foods", rev="p-odette",
+                                next_action="Ask about the demand planning team", owed={"kind": "reply", "label": "Draft a reply", "reply": True}, related={}))
+    model["people"].append(dict(one, id="kestrel_mutual_linus", first_name="Linus", employer="Kestrel Mutual", rev="p-linus",
+                                next_action="Say thanks", owed={"kind": "reply", "label": "Draft a reply", "reply": True}, related={}))
+    return model
+
+
 @pytest.mark.parametrize("size", [{"width": 1440, "height": 1400}, {"width": 1280, "height": 700},
                                   {"width": 1100, "height": 620}])
 def test_fitting_the_brief_takes_what_saves_most_and_keeps_today_useful(run, tmp_path, size):
-    got = _go(run, tmp_path, [{"hash": "brief", "eval": FITS}], size, clock=T)
+    got = _go(run, tmp_path, [{"hash": "brief", "eval": FITS}], size, model=_two_waiting(copy.deepcopy(_sample())), clock=T)
     lists = {c: (f, hidden, shown) for c, f, hidden, shown in got["after"][0]["eval"]}
     q = next((v for c, v in lists.items() if "bp-qs" in c), None)
     people, jobs = lists["plain bp-list bp-people"], lists["plain bp-list"]
@@ -581,12 +593,10 @@ def test_fitting_the_brief_takes_what_saves_most_and_keeps_today_useful(run, tmp
 # Each person's next step sits in one column: every step, and the day under it, starts at the
 # same edge, so steps of different lengths never jut out (the maintainer, 2026-11-02).
 def test_every_persons_step_and_day_start_at_one_edge(run, tmp_path, vp):
-    # A second person waiting on a move of a different length: Tamsin, the sample's other, is
-    # a step in Next three since the phone screen's prep stays with its row in Coming up.
-    model = copy.deepcopy(_sample())
-    one = next(p for p in model["people"] if p["id"] == "ellerwick_trust_priya")
-    model["people"].append(dict(one, id="quayside_foods_odette", first_name="Odette", employer="Quayside Foods", rev="p-odette",
-                                next_action="Ask about the demand planning team", owed={"kind": "reply", "label": "Draft a reply", "reply": True}, related={}))
+    # Two people waiting on moves of different lengths: Tamsin, the sample's other, is a step in
+    # Next three since the phone screen's prep stays with its row in Coming up, and Marisol a row
+    # of the messages card there.
+    model = _two_waiting(copy.deepcopy(_sample()))
     got = _go(run, tmp_path, [{"hash": "brief", "eval": "[...document.querySelectorAll('#main .bp-people .bp-state')].map((s) => { "
                                                        "const w = s.querySelector('.bp-when'); const r = document.createRange(); r.selectNodeContents(s.firstChild); "
                                                        "return [Math.round(r.getBoundingClientRect().left), w ? Math.round(w.getBoundingClientRect().left) : null]; })"}], vp, model=model, clock=T)

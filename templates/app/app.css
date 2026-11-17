@@ -2127,7 +2127,7 @@ dialog.work-sheet :is(select, input, textarea) { width: 100%; max-width: 100%; m
 .bp-steps li > .bp-link::before { content: ""; position: absolute; inset: 0; border-radius: var(--r-sm); }
 .bp-steps li > .bp-link:focus-visible { outline: none; }
 .bp-steps li:has(> .bp-link:focus-visible) { outline: 2px solid var(--focus); outline-offset: -2px; border-radius: var(--r-sm); }
-.bp-steps li::after { content: ""; flex: none; align-self: center; width: 8px; height: 8px; margin: 0 4px 0 auto; box-sizing: border-box; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(-45deg); }
+.bp-steps li::after { content: ""; flex: none; align-self: center; width: 8px; height: 8px; margin: 0 4px 0 auto; box-sizing: border-box; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(-45deg); pointer-events: none; }
 @media (hover: hover) { .bp-steps li:hover { background: var(--raised); border-radius: var(--r-sm); } }
 /* Each step's number is its place among To do's things for today (data-n), Today the first; one
    not due yet has a small dot in its place. */
