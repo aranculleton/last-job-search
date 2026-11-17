@@ -472,9 +472,11 @@ bdi { unicode-bidi: isolate; }
 .more-btn { background: var(--raised); border: 1px solid transparent; font-weight: 600; }
 /* Inside a sunk box (a card's question, its suggestion, a document well) a soft pill is the card
    colour lifted by the card's shadow, with no edge: the raised fill was 1.04:1 on the box. */
-:is(.question, .suggest, .ask-box, .well) :is(.btn.secondary, .btn.answer, .card-actions > .btn:not(.primary), .fix > .btn:not(.primary), .opts > .btn:not(.primary)) {
+/* A suggestion's Dismiss as well as its Use: both one soft look in its box (the redesign's
+   second round, 2026-11-17: "Add Power BI" and "Dismiss" were two looks side by side). */
+:is(.question, .suggest, .ask-box, .well) :is(.btn.secondary, .btn.answer, .card-actions > .btn:not(.primary), .fix > .btn:not(.primary), .opts > .btn:not(.primary), .suggest-acts > .btn:not(.primary):not(.stop-claude)) {
   background: var(--overlay); border-color: transparent; box-shadow: var(--shadow-card); }
-@media (hover: hover) { :is(.question, .suggest, .ask-box, .well) :is(.btn.secondary, .btn.answer, .card-actions > .btn:not(.primary), .fix > .btn:not(.primary), .opts > .btn:not(.primary)):hover { background: var(--raised-hover); } }
+@media (hover: hover) { :is(.question, .suggest, .ask-box, .well) :is(.btn.secondary, .btn.answer, .card-actions > .btn:not(.primary), .fix > .btn:not(.primary), .opts > .btn:not(.primary), .suggest-acts > .btn:not(.primary):not(.stop-claude)):hover { background: var(--raised-hover); } }
 .fbar, .seg { display: inline-flex; align-items: center; gap: 4px; min-height: 38px; font-weight: 600; font-size: var(--t-sm); }
 .filters { display: grid; gap: 12px; min-width: 0; }
 .fwrap { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
@@ -812,9 +814,9 @@ details.send { border-top: 1px solid var(--line); }
    card under the pointer (the screen review, 2026-11-11). */
 .sendtext { white-space: pre-wrap; background: var(--sunk); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 12px 16px; user-select: text; -webkit-user-select: text; }
 .sendtext.big { font-size: var(--t-lg); line-height: 1.5; }
-/* A draft on a person's card keeps a reading measure: at 1440 its lines ran to 140 letters
-   (the accessibility review, 2026-11-17). */
-.pdraft .sendtext { max-width: 72ch; }
+/* A draft on a person's card keeps a reading measure, its heading's pencil at the words' own
+   edge: at 1440 its lines ran to 140 letters (the accessibility review, 2026-11-17). */
+li.person .pdraft { max-width: 640px; }
 .qa { margin: 0; display: grid; gap: 16px; }
 .qa dt { font-weight: 600; }
 .qa dd { margin: 4px 0 0; display: grid; gap: 8px; justify-items: start; }
@@ -855,8 +857,10 @@ p.count.tone-bad { color: var(--st-failed); }
    place; Copy under it copies every word. The first draft on the list, the one to send first,
    is drawn whole (the redesign, 2026-11-16: ten drafts drawn whole were a wall of words; its
    second round, 2026-11-17: four lines each were still 3350px of a phone). */
-.sendtext.is-clamped > .sendtext-in { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
-ul.people > li.person.has-draft:not(li.person.has-draft ~ li) .sendtext.is-clamped > .sendtext-in { display: inline; -webkit-line-clamp: none; overflow: visible; }
+/* Folded, its line breaks run on, so its two lines are two lines of words, never "Hi Marisol,"
+   over an empty one; opened, every break is back. */
+.sendtext.is-clamped > .sendtext-in { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; white-space: normal; }
+ul.people > li.person.has-draft:not(li.person.has-draft ~ li) .sendtext.is-clamped > .sendtext-in { display: inline; -webkit-line-clamp: none; overflow: visible; white-space: pre-wrap; }
 ul.people > li.person.has-draft:not(li.person.has-draft ~ li) .sendbox > .read-all { display: none; }
 .sendbox > .btn.read-all { display: inline-flex; align-items: center; gap: 0; min-height: 24px; margin: 4px 0 0; padding: 0 2px; color: var(--ink); font-weight: 600; font-size: var(--t-sm);
   text-decoration: none; }
@@ -2443,24 +2447,34 @@ ul.bp-news { gap: 12px; }
    name gives way (app.js, renderTop), as the Brief's does to its greeting. */
 .top-in > .screen.is-sub { display: none; }
 @media (max-width: 759px) { .sub-page > .sec-head .screen-title { position: static; width: auto; height: auto; overflow: visible; clip: auto; white-space: normal; font-size: 1.5rem; letter-spacing: -0.02em; } }
-/* One column of cards, read in order, in Settings' column (the redesign, 2026-11-16): two
-   columns left Skills short beside Education with a gap under it. */
-.prof-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+/* One column, read in order, in Settings' rhythm (the redesign, 2026-11-16: two columns left
+   Skills short beside Education): each part a small label, its way to add or change at its
+   right, over one card of rows (the redesign's second round, 2026-11-17). */
+.prof-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 32px; }
+.prof-sec { display: grid; gap: 8px; min-width: 0; }
 .prof-card { display: flex; flex-direction: column; gap: 12px; }
-/* What is still to fill in reads as the card's own rows, at its edge: a Settings row's 16px
-   inset and 52px height put each a step in from the card's title (2026-11-10). */
-.prof-missing .checks-list > li.toggle-row { padding: 0; min-height: 0; }
-.prof-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.prof-h { margin: 0; font-size: var(--t-sm); font-weight: 600; }
-.prof-jobs { display: flex; flex-direction: column; margin: 0; padding: 0; }
-.prof-jobs > li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); }
-.prof-jobs > li:first-child { border-top: 0; padding-top: 0; }
-.prof-job-main { min-width: 0; }
-.prof-job-main p { margin: 0; }
-.prof-job-acts { display: flex; gap: 4px; flex: none; }
+.prof-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 36px; }
+.prof-top > .group { margin: 0; }
+/* What is still to fill in: a Settings row each, its fix at the row's end. */
+.prof-missing > li.toggle-row { border-top: 1px solid var(--line); }
+.prof-missing > li.toggle-row:first-child { border-top: 0; }
+/* A past job: a row that opens its sheet, its title and employer one line cut short, its dates
+   and what Claude has on it a quiet line under, the chevron, then its trash at the row's end. */
+.prof-jobs { margin: 0; padding: 0; }
+.prof-job { display: flex; align-items: center; border-top: 1px solid var(--line); }
+.prof-job:first-child { border-top: 0; }
+.prof-job > .act-row { flex: 1 1 auto; min-width: 0; border-top: 0; }
+.prof-job-main { display: grid; gap: 2px; min-width: 0; margin-right: auto; }
+.prof-job-t { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.prof-job-t > .muted { font-weight: 400; }
+.prof-job-sub { font-size: var(--t-sm); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sheet-also { margin: 0; }
 .prof-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; }
 .prof-chip { padding: 4px 12px; border-radius: 999px; background: var(--sunk); font-size: var(--t-sm); }
-.prof-lines { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; }
+.prof-lines { margin: 0; padding: 0; }
+.prof-line { padding: 12px 16px; border-top: 1px solid var(--line); }
+.prof-line:first-child { border-top: 0; }
+@media (max-width: 759px) { .prof-line { padding-inline: 12px; } }
 /* How the app runs: a row that opens, drawn like the settings above it, never a bare heading. */
 .set-advanced > summary { cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: var(--target);
   padding: 8px 16px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); font-weight: 600; }

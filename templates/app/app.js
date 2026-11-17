@@ -14104,6 +14104,12 @@
           label: j && !need ? "Anything else to change" : "What you did there, and what came of it",
           hint: j && !need ? null : "A few lines in your own words. Numbers help: how many, how much, how often."}],
       submit: j && !need ? "Save" : "Add it", cost: costLine("profile"),
+      // Taking a job off is in its own sheet, last, never a trash on its row in Your profile.
+      after: j && !need ? h("p", {class: "sheet-also"}, btn("Take this job off", () => {
+        const d = document.querySelector("dialog.sheet[open]");
+        if (d) { try { d.close(); } catch (e) { /* already closed */ } }
+        removeJob(j);
+      }, {kind: "quiet", small: true, icon: "bin", key: "you-rm:" + txt(j.id), aria: "Take " + txt(j.title) + " at " + txt(j.employer) + " off"})) : null,
       onSubmit: (v) => { askProfile(Object.assign({part: "job", change: j ? "edit" : "add", was: j ? {employer: txt(j.employer), title: txt(j.title), dates: txt(j.dates)} : null}, v), (j ? "Update " : "Add ") + v.title + " at " + v.employer); }});
   }
   function removeJob(j) {
@@ -14172,29 +14178,36 @@
     if (!Object.keys(y).length) { put(wrap, empty("Nothing here yet.", "Your profile fills in as you answer the setup questions.", null, "contacts")); return wrap; }
     const busy = profileBusy();
     if (busy) put(wrap, busy);
+    // Grouped rows as Settings' (the redesign's second round, 2026-11-17): each part a small
+    // label with its one way to add or change beside it, over one card of rows; a past job a row
+    // that opens its sheet, its title and employer on one line cut short with an ellipsis, its
+    // dates under it, a chevron; taking it off is in its sheet. Beside "Change" and a trash,
+    // "Senior Operations Analyst at Brindle & Hart Logistics" ran to six lines on a phone.
+    const part = (id, label, action, body) => h("section", {class: "prof-sec", "aria-labelledby": id},
+      h("div", {class: "prof-top"}, h("h3", {id, class: "group"}, label), action || null), body);
     const missing = arr(y.missing);
-    if (missing.length) put(wrap, h("section", {class: "card prof-card prof-missing", "aria-labelledby": "pf-missing"}, h("h3", {id: "pf-missing", class: "prof-h"}, "Still to fill in"),
-      h("ul", {class: "plain checks-list"}, missing.map((m) => h("li", {class: "toggle-row", "data-card": "1", "data-item": "missing:" + txt(m.part || m.say)}, h("span", {}, txt(m.say)), missingFix(m))))));
     const grid = h("div", {class: "prof-grid"});
+    if (missing.length) put(grid, part("pf-missing", "Still to fill in", null, h("ul", {class: "plain set-rows prof-missing checks-list"},
+      missing.map((m) => h("li", {class: "toggle-row", "data-card": "1", "data-item": "missing:" + txt(m.part || m.say)}, h("span", {}, txt(m.say)), missingFix(m))))));
     const jobs = arr(y.jobs);
-    put(grid, h("section", {class: "card prof-card wide", "aria-labelledby": "pf-jobs"},
-      h("div", {class: "prof-top"}, h("h3", {id: "pf-jobs", class: "prof-h"}, "Experience"), btn("Add a job", () => jobSheet(null), {kind: "secondary", small: true, key: "you-add-job"})),
-      jobs.length ? h("ol", {class: "plain prof-jobs"}, jobs.map((j) => h("li", {"data-item": txt(j.id), "data-card": "1"},
-        h("div", {class: "prof-job-main"}, h("p", {class: "prof-job-t"}, h("strong", {}, txt(j.title)), h("span", {class: "muted"}, " at "), h("bdi", {}, txt(j.employer))),
-          h("p", {class: "small muted"}, [txt(j.dates), txt(j.place), Number(j.lines) ? plural(Number(j.lines), "line", "lines") + " Claude can choose from" : "nothing yet on what you did"].filter(Boolean).join(" · "))),
-        h("div", {class: "prof-job-acts"}, btn("Change", () => jobSheet(j), {kind: "secondary", small: true, key: "you-edit:" + txt(j.id), aria: "Change " + txt(j.title) + " at " + txt(j.employer)}),
-          btn("", () => removeJob(j), {kind: "quiet icon-only", small: true, icon: "bin", key: "you-rm:" + txt(j.id), aria: "Take " + txt(j.title) + " at " + txt(j.employer) + " off"}))))) : h("p", {class: "muted"}, "No jobs yet.")));
+    put(grid, part("pf-jobs", "Experience", btn("Add a job", () => jobSheet(null), {kind: "secondary", small: true, key: "you-add-job"}),
+      jobs.length ? h("ul", {class: "plain set-rows prof-jobs"}, jobs.map((j) => {
+        const what = txt(j.title) + " at " + txt(j.employer);
+        return h("li", {class: "prof-job", "data-item": txt(j.id), "data-card": "1"},
+          h("button", {type: "button", class: "act-row prof-job-row", "data-k": "you-job:" + txt(j.id), "aria-label": "Change " + what, onclick: () => jobSheet(j)},
+            h("span", {class: "prof-job-main"}, h("span", {class: "prof-job-t"}, h("bdi", {}, txt(j.title)), h("span", {class: "muted"}, " at "), h("bdi", {}, txt(j.employer))),
+              h("span", {class: "prof-job-sub"}, [txt(j.dates), txt(j.place), Number(j.lines) ? plural(Number(j.lines), "point", "points") + " Claude can use" : "nothing yet on what you did"].filter(Boolean).join(" \u00b7 "))),
+            h("span", {class: "set-go", "aria-hidden": "true"}, "\u203a")));
+      })) : h("p", {class: "muted"}, "No jobs yet.")));
     const skills = arr(y.skills).map(txt);
-    put(grid, h("section", {class: "card prof-card", "aria-labelledby": "pf-skills"},
-      h("div", {class: "prof-top"}, h("h3", {id: "pf-skills", class: "prof-h"}, "Skills"), btn(skills.length ? "Add or take off" : "Add skills", skillsSheet, {kind: "secondary", small: true, key: "you-skills"})),
-      skills.length ? h("ul", {class: "plain prof-chips"}, skills.map((x) => h("li", {class: "prof-chip"}, x))) : h("p", {class: "muted"}, "None yet.")));
+    put(grid, part("pf-skills", "Skills", btn(skills.length ? "Change skills" : "Add skills", skillsSheet, {kind: "secondary", small: true, key: "you-skills"}),
+      skills.length ? h("div", {class: "card prof-card"}, h("ul", {class: "plain prof-chips"}, skills.map((x) => h("li", {class: "prof-chip"}, x)))) : h("p", {class: "muted"}, "None yet.")));
     const edu = arr(y.education).map(txt);
     const certs = arr(y.certificates).map(txt);
-    put(grid, h("section", {class: "card prof-card", "aria-labelledby": "pf-edu"},
-      h("div", {class: "prof-top"}, h("h3", {id: "pf-edu", class: "prof-h"}, "Education"), btn(edu.length ? "Change" : "Add", () => listSheet("education", "Education", edu, "For example: BSc Mathematics, University of Leeds (2016-2019)"), {kind: "secondary", small: true, key: "you-edu", aria: (edu.length ? "Change" : "Add") + " your education"})),
-      edu.length ? h("ul", {class: "plain prof-lines"}, edu.map((x) => h("li", {}, x))) : h("p", {class: "muted"}, "Nothing yet."),
-      h("div", {class: "prof-top"}, h("h3", {class: "prof-h"}, "Certificates"), btn(certs.length ? "Change" : "Add", () => listSheet("certificates", "Certificates", certs, "Only ones you hold. Write (in progress) after one you are still taking."), {kind: "secondary", small: true, key: "you-certs", aria: (certs.length ? "Change" : "Add") + " your certificates"})),
-      certs.length ? h("ul", {class: "plain prof-lines"}, certs.map((x) => h("li", {}, x))) : h("p", {class: "muted"}, "None.")));
+    put(grid, part("pf-edu", "Education", btn(edu.length ? "Change" : "Add", () => listSheet("education", "Education", edu, "For example: BSc Mathematics, University of Leeds (2016-2019)"), {kind: "secondary", small: true, key: "you-edu", aria: (edu.length ? "Change" : "Add") + " your education"}),
+      edu.length ? h("ul", {class: "plain set-rows prof-lines"}, edu.map((x) => h("li", {class: "prof-line"}, x))) : h("p", {class: "muted"}, "Nothing yet.")));
+    put(grid, part("pf-certs", "Certificates", btn(certs.length ? "Change" : "Add", () => listSheet("certificates", "Certificates", certs, "Only ones you hold. Write (in progress) after one you are still taking."), {kind: "secondary", small: true, key: "you-certs", aria: (certs.length ? "Change" : "Add") + " your certificates"}),
+      certs.length ? h("ul", {class: "plain set-rows prof-lines"}, certs.map((x) => h("li", {class: "prof-line"}, x))) : h("p", {class: "muted"}, "None yet.")));
     const r = generalResumeCard();
     if (r) put(grid, r);
     put(wrap, grid);
