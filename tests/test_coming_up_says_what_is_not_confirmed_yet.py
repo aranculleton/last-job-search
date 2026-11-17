@@ -70,7 +70,7 @@ def test_a_new_day_and_a_call_can_each_be_marked_not_confirmed_yet(run, tmp_path
     page = _write(tmp_path, "page", _model())
     got = run("engine", html=page, viewport=WIDE, clock=CLOCK, fake={"canSend": "available"}, steps=[
         {"hash": "interviews", "open": "up-more:" + SCREEN, "click": "Change the day: Phone screen: Larkspur Retail", "eval": SUBMIT_DAY},
-        {"hash": "contacts", "click": "Change the call with Bea",
+        {"hash": "contacts", "click": "Change the time: the call with Bea",
          "eval": "(() => { const d = document.querySelector('dialog[open]'); const c = [...d.querySelectorAll('label')].find((l) => l.textContent === 'Not confirmed yet');"
                  " const box = document.getElementById(c.htmlFor); const was = box.checked; box.click(); return was; })()"},
         {"submit": True},

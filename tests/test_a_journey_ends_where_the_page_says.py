@@ -248,9 +248,13 @@ def test_a_draft_waiting_on_an_answer_says_so_on_its_job(run, tmp_path):
     r["draft_work"] = {"id": "draft~r12-1"}
     html = _write(tmp_path, "ask", m)
     s = _script(run, html, [{"hash": "jobs"}], seed=_draft_work("needs_you", note="Which of your two resumes should it start from?"))
-    card = s[-1]["main"].split("Pricing Analyst", 1)[1].split("More", 1)[0]
-    assert card.lstrip().startswith("Needs your answer"), card
-    assert "\nAnswer\n" in card and "Drafting" not in card
+    before, after = s[-1]["main"].split("Pricing Analyst", 1)
+    card = after.split("More", 1)[0]
+    # Said by the heading it waits under since the redesign's second round (2026-11-17), its
+    # pill left off there so the one state is said once, in one word.
+    heads = {w: before.rfind("\n" + w + "\n") for w in ("Needs your answer", "Ready to send", "Being written", "New")}
+    assert max(heads, key=heads.get) == "Needs your answer" and heads["Needs your answer"] >= 0, (heads, before[-200:])
+    assert "\nAnswer\n" in card and "Drafting" not in card and "Needs your answer" not in card, card
 
 
 def test_a_draft_that_did_not_finish_says_why_on_its_job(run, tmp_path):

@@ -262,8 +262,9 @@ def test_every_section_shows_the_engines_items_in_plain_words(run, built):
     assert "Made, right length" not in t["drafts"], t["drafts"]
     fern = t["drafts"].split("Operations Analyst", 1)[1].split("Claims Forecasting Analyst", 1)[0]
     assert "Get the files" not in fern and "Get my files ready" not in fern, "a file not made yet is not offered"
-    # Still to make where nothing is making it (the review of 2026-11-11).
-    assert "Needs a fix" not in fern and "still to make" in t["drafts"], "a draft never made is still to make, never a fix"
+    # Never made: Claude makes it next by itself, so it is being written, in the word of Jobs'
+    # heading (the review of 2026-11-11; the redesign's second round, 2026-11-17).
+    assert "Needs a fix" not in fern and "being written" in t["drafts"], "a draft never made is being written, never a fix"
     kestrel = t["drafts"].split("Claims Forecasting Analyst", 1)[1]
     # Files not on the page yet are Claude's to put there by itself (the view queues them,
     # 2026-11-05): no "Get my files ready" to tap, and nothing about files until they are there.
