@@ -619,13 +619,22 @@ _BRIEF_TITLE = re.compile(r"^(?:[^\w\s]{1,3}\s*)?(?:Job search:.*\bbrief\b|Last 
 
 
 def _copy_of(detail: dict) -> str:
-    """The copy a chat works on, "owner/name" in small letters, from get_session's sources."""
+    """The copy a chat works on, "owner/name" in small letters, from get_session's sources.
+    In the maintainer's own copy a chat has the app attached beside it (app_bug.attach_app):
+    the app is never the copy, whichever is listed first, so it is taken only when it is the
+    one source (the builder's own chat, issue 245)."""
+    found = []
     for src in (((detail or {}).get("session_context") or {}).get("sources") or []):
         url = str(((src or {}).get("git_repository") or {}).get("url") or "")
         m = re.search(r"github\.com[/:]([^/]+/[^/.]+)", url)
         if m:
-            return m.group(1).lower()
-    return ""
+            found.append(m.group(1).lower())
+    try:
+        import app_setup
+        app = app_setup.APP_REPO.lower()
+    except Exception:  # noqa: BLE001  the app's address not known: the first, as before
+        app = ""
+    return next((r for r in found if r != app), found[0] if found else "")
 
 
 def old_ops_shape(reg: dict) -> bool:
