@@ -1248,12 +1248,15 @@ def renewal(rec: dict, db: dict, chat: str, now: dt.datetime, scheduled: bool = 
 
 
 def helper_call(db: dict, owner: str, name: str) -> dict:
-    """The create_session call that starts a fresh helper from the person's copy."""
+    """The create_session call that starts a fresh helper from the person's copy (in the
+    maintainer's own, with the app attached as well: app_bug.attach_app, issue 318)."""
+    import app_bug
     note = handover(db or {})
-    return {"title": HELPER_CHAT_TITLE, "prompt": WAKE_PROMPT + (f"\n\n{note}" if note else ""),
-            "source_url": f"https://github.com/{owner}/{name}",
-            "extra_allowed_tools": ["ArtifactData", "ArtifactComments"],
-            "permission_mode": SESSION_MODE}
+    return app_bug.attach_app({
+        "title": HELPER_CHAT_TITLE, "prompt": WAKE_PROMPT + (f"\n\n{note}" if note else ""),
+        "source_url": f"https://github.com/{owner}/{name}",
+        "extra_allowed_tools": ["ArtifactData", "ArtifactComments"],
+        "permission_mode": SESSION_MODE})
 
 
 def first_claim(chat: str, out_dir: str, now: dt.datetime | None = None,

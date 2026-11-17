@@ -561,12 +561,15 @@ COMPUTER_MODE_REFUSED = (
 
 
 def starter_call(url: str, copy: str, owner: str, name: str) -> dict:
-    """The create_session that makes the computer starter, from the person's copy."""
+    """The create_session that makes the computer starter, from the person's copy (in the
+    maintainer's own, with the app attached as well: app_bug.attach_app, issue 318)."""
+    import app_bug
     import app_listen
-    return {"title": STARTER_TITLE, "prompt": starter_prompt(url, copy),
-            "source_url": f"https://github.com/{owner}/{name}",
-            "extra_allowed_tools": list(STARTER_TOOLS),
-            "permission_mode": app_listen.SESSION_MODE}
+    return app_bug.attach_app({
+        "title": STARTER_TITLE, "prompt": starter_prompt(url, copy),
+        "source_url": f"https://github.com/{owner}/{name}",
+        "extra_allowed_tools": list(STARTER_TOOLS),
+        "permission_mode": app_listen.SESSION_MODE})
 
 
 def bell_html(now: dt.datetime, of: str = "starter") -> str:
