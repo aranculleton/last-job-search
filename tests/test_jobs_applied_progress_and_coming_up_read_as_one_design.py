@@ -177,7 +177,7 @@ COMING = r"""(() => { const days = [...document.querySelectorAll('#main [data-k=
       return {id: r.dataset.item, when: w.querySelector('.btn') ? null : [Math.round(wr.left), Math.round(wr.width)], size: parseFloat(getComputedStyle(t).fontSize), weight: getComputedStyle(t).fontWeight,
         menus: r.querySelectorAll('.up-menu').length, loose: [...r.querySelectorAll('.btn.icon-only')].filter((b) => !b.closest('.up-menu')).length,
         items: [...r.querySelectorAll('.up-menu .menu-item')].map((b) => b.textContent), chip: [...r.querySelectorAll('.up-sub .state-word')].map((s) => s.textContent),
-        opens: link ? getComputedStyle(link, '::before').position === 'absolute' : null}; }),
+        opens: link ? r.classList.contains('opens') && getComputedStyle(r).cursor === 'pointer' : null}; }),
     prep: [...document.querySelectorAll('#main [data-k^="up-prep:"], #main [data-k^="up-read:"]')].map((b) => b.dataset.k + '=' + b.textContent),
     lg: (() => { const p = document.createElement('span'); p.style.fontSize = 'var(--t-lg)'; document.querySelector('#main').append(p);
       const v = parseFloat(getComputedStyle(p).fontSize); p.remove(); return v; })()}; })()"""
@@ -203,3 +203,17 @@ def test_coming_up_is_a_card_a_day_each_row_its_time_what_it_is_and_one_more(run
     assert rows["up-app-copperleaf-payments-recruiter-call-2026-10-30"]["chip"] == ["No prep yet"]
     # Only the next interview with no prep carries "Prepare me"; reading a prep is the row's own tap.
     assert seen["prep"] == ["up-prep:up-app-copperleaf-payments-recruiter-call-2026-10-30=Prepare me"], seen["prep"]
+
+
+def test_a_coming_up_row_opens_what_it_is_from_anywhere_on_it(run, tmp_path):
+    # A tap on the row's second line, not its title, opens the interview's prep; one on its
+    # More opens the menu and nothing else.
+    row = '#main [data-item="up-app-larkspur-supply-phone-screen-2026-10-28"]'
+    got = _go(run, tmp_path, [
+        {"hash": "interviews", "eval": "(() => { document.querySelector('" + row + " .up-note').click(); return true; })()"},
+        {"ready": "!!document.querySelector('dialog.detail[open]')"},
+    ], PHONE, clock=T)
+    assert "Larkspur Retail" in got["after"][1]["dialog"], got["after"][1]["dialog"][:300]
+    got = _go(run, tmp_path, [{"hash": "interviews", "open": "up-more:up-app-larkspur-supply-phone-screen-2026-10-28",
+                               "eval": "!!document.querySelector('dialog.detail[open]')"}], PHONE, clock=T)
+    assert got["after"][0]["eval"] is False

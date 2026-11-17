@@ -2505,8 +2505,8 @@ ul.bp-news { gap: 12px; }
 .up-row:first-child { border-radius: var(--r) var(--r) 0 0; }
 .up-row:last-child { border-radius: 0 0 var(--r) var(--r); }
 .up-row:only-child { border-radius: var(--r); }
-@media (hover: hover) { .up-row:has(.up-link):hover { background: var(--sunk); } }
-.up-row:has(.up-link:focus-visible) { outline: 2px solid var(--focus); outline-offset: -2px; }
+.up-row.opens { cursor: pointer; }
+@media (hover: hover) { .up-row.opens:hover { background: var(--sunk); } }
 .up-row > .up-when { grid-area: when; padding-top: 2px; }
 .up-row > .up-main { grid-area: main; }
 .up-row > .up-end { grid-area: end; align-self: center; display: flex; align-items: center; }
@@ -2531,10 +2531,6 @@ ul.bp-news { gap: 12px; }
 .up-main { display: grid; gap: 2px; min-width: 0; }
 .up-title { overflow-wrap: anywhere; }
 .up-row .up-title { font-size: var(--t-lg); line-height: 1.35; font-weight: 600; }
-.up-row .up-title > .up-link { position: static; }
-.up-row .up-title > .up-link::before { content: ""; position: absolute; inset: 0; border-radius: inherit; }
-/* Every control in a row is drawn over the row's own tap. */
-.up-row > .up-when > *, .up-row > .up-end, .up-row > .up-main > :not(.up-title) { position: relative; z-index: 1; }
 .up-row .up-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: var(--t-sm); color: var(--muted); }
 .up-row .up-sub > .up-note { min-width: 0; }
 .up-row .up-prep { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 8px; }

@@ -9577,9 +9577,14 @@
       upDayBtn(u) ? upMenuItem("Change the day", () => { S.upEdit = S.upEdit === u.id ? null : u.id; S.upTime = null; scheduleRender(); }, "up-day:" + u.id, "Change the day: " + txt(u.title)) : null,
       rm ? upMenuItem("Take it off", () => rm.click(), "up-rm:" + u.id, "Take off: " + txt(u.title)) : null,
       callOff(u) ? upMenuItem("The call is off", () => callOff(u).click(), "up-off:" + u.id, "The call is off: " + txt(u.title)) : null]);
-    return h("li", {class: "up-row", "data-item": u.id, "data-card": "1", tabindex: "-1"},
+    const go = upGo(u);
+    // The whole row opens what it is: a tap anywhere but on one of its own controls is its
+    // title's tap (the title stays the link a keyboard and a screen reader reach).
+    const opens = go.tagName === "A";
+    return h("li", {class: "up-row" + (opens ? " opens" : ""), "data-item": u.id, "data-card": "1", tabindex: "-1",
+      onclick: opens ? (e) => { if (e.target.closest("a, button, summary, input, select, textarea, label, details, form, .menu-panel")) return; go.click(); } : null},
       h("span", {class: "up-when" + (!u.start && !u.time ? " is-word" : "")}, upWhen(u) ? upWhenRow(u) : (u.own || u.pending ? "" : addTimeBtn(u))),
-      h("span", {class: "up-main"}, h("span", {class: "up-title"}, upGo(u)),
+      h("span", {class: "up-main"}, h("span", {class: "up-title"}, go),
         sub || maybe || chip ? h("span", {class: "up-sub"}, sub ? h("span", {class: "up-note"}, sub) : null, maybe, chip) : null, step,
         upTimeForm(u), upDayForm(u), upTimed.has(u.id) ? stateLine(txt(obj(upTimeTarget(u)).item), "up:" + u.id) : null),
       u.pending ? h("span", {class: "up-end"}, add) : menu ? h("span", {class: "up-end"}, menu) : null);
