@@ -416,8 +416,9 @@ METHODS: dict[str, dict] = {
             (106, "2026-11-16", False, "RUNBOOK.md says land.py --detach commits and pushes the turn's work to the chat's branch before it returns, and that the cloud's message at the end of a turn about a save still at work is answered with nothing; nothing made changes"),
             (107, "2026-11-17", False, "RUNBOOK says a round runs the rules a posting decides before one role per employer is chosen, keeps a reserve with its top rows, and keeps five files when it misses; nothing made changes"),
             (108, "2026-11-17", False, "RUNBOOK's round command passes no window of its own: a round searches the person's own (JOB_AGE_DAYS) and says so first; nothing made changes"),
+            (109, "2026-11-17", False, "RUNBOOK says an employer nobody has judged waits below judged ones and a round's batch of them is judged in one go (bar.py judge --file), then the round is cut again; nothing made changes"),
         ),
-        "fingerprint": "3e480c0830eca8e8",
+        "fingerprint": "018ce540a6301ab2",
     },
     "interview": {
         # Only a process with a round still to come is prepared again: a prep for a round
@@ -851,8 +852,9 @@ METHODS: dict[str, dict] = {
             (57, "2026-11-11", False, "a role set aside with no day holds as if set aside the day it is first read, and the next save of the seen jobs, a search's included, writes that day on it, so it still ends"),
             (58, "2026-11-17", False, "an employer a job feed names by its careers site, run together, with a number on its slug or by a team is the employer the person's records hold (company_key), so the company throttle, the role already applied for and one role per employer hold for it; a listing marked internal in its employer field is cut as internal-only; nothing needs redoing: the throttle decides these every round"),
             (59, "2026-11-17", False, "the eligibility gate reads the market's own wording for citizenship, residence and a clearance beside the person's pattern: the neighbouring country's citizenship and residence always, and each other status the person's own pattern names; nothing needs redoing: it only cuts more"),
+            (60, "2026-11-17", False, "bar.py judge --file records a round's batch of employers nobody had judged in one write, each marked by the round with its day, so a person or a chat can overturn it; nothing is screened differently"),
         ),
-        "fingerprint": "bbf711be13383a67",
+        "fingerprint": "7698f7587f9068aa",
     },
     "routines": {
         "by": "you", "priority": 3, "applies": "routines",

@@ -341,6 +341,62 @@ def judge(company: str, what: str, why: str, today: str | None = None) -> str:
     return f"{company}: {what} ({why}), kept in profile/{JUDGED_FILE}"
 
 
+def judge_many(entries, today: str | None = None, by: str = "round") -> tuple[list, list]:
+    """Record many judgements in one write: each entry {company, verdict, why}, marked `by`
+    (who judged: "round" for a round's batch, which a person or a chat may overturn) with the
+    day. ([the lines said], [(company, why it was skipped)]). An entry with no verdict yet is
+    skipped, never guessed. A round's employers were judged one call at a time after it,
+    each a turn of a chat (2026-11-16)."""
+    day = today or person.today().isoformat()
+    good, skipped = [], []
+    for e in entries or ():
+        company = str((e or {}).get("company") or "").strip() if isinstance(e, dict) else ""
+        what = str((e or {}).get("verdict") or "").strip().lower() if isinstance(e, dict) else ""
+        why = " ".join(str((e or {}).get("why") or "").split()) if isinstance(e, dict) else ""
+        if not company:
+            skipped.append(("?", "no employer named"))
+        elif not what:
+            skipped.append((company, "no verdict given yet"))
+        elif what not in (PAY, PRESTIGE, SIGNAL, NONE):
+            skipped.append((company, f"{what!r} is not pay, prestige, signal or none"))
+        elif not why:
+            skipped.append((company, "no reason given"))
+        elif not own_name(company) or not company_key(company):
+            skipped.append((company, "no employer name to judge"))
+        else:
+            good.append((company, what, why))
+    if not good:
+        return [], skipped
+    p = _judged_path()
+    with _one_writer(p):
+        rows = _read_judged(p)
+        for company, what, why in good:
+            name = own_name(company)
+            rows = {k: r for k, r in rows.items()
+                    if not (isinstance(r, dict) and own_name(r.get("name") or k) == name)}
+            rows[name] = {"name": company, "verdict": what, "why": why, "date": day,
+                          **({"by": by} if by else {})}
+        tmp = tempfile.NamedTemporaryFile("w", newline="\n", dir=os.path.dirname(p) or ".",
+                                          delete=False, encoding="utf-8", suffix=".tmp")
+        with tmp:
+            json.dump(dict(sorted(rows.items())), tmp, indent=2, ensure_ascii=False)
+            tmp.write("\n")
+        os.replace(tmp.name, p)
+    _judged_cache.clear()
+    return [f"{c}: {w} ({y})" for c, w, y in good], skipped
+
+
+def _batch(path: str) -> list:
+    """A batch of judgements from a file: a JSON list, or one JSON object a line."""
+    with open(path, encoding="utf-8") as fh:
+        text = fh.read()
+    try:
+        got = json.loads(text)
+        return got if isinstance(got, list) else [got]
+    except ValueError:
+        return [json.loads(ln) for ln in text.splitlines() if ln.strip()]
+
+
 def unjudge(company: str) -> bool:
     """Take back the judgement of this employer, by its own name: it is unjudged again, and
     judged again before anything is cut or hidden for it. True when one was there. Held back
@@ -589,10 +645,27 @@ def main(argv: list[str]) -> int:
     if not argv or argv[0] in ("-h", "--help"):
         print('usage: python3 tools/bar.py "<company>" ["<company>" ...]\n'
               '       python3 tools/bar.py judge "<company>" <pay|prestige|signal|none> "<why>"\n'
+              '       python3 tools/bar.py judge --file <a round\'s unjudged.json, verdicts filled>\n'
               '       python3 tools/bar.py unjudged [documents/rounds/<round>.json]\n'
               '       python3 tools/bar.py unjudged --contacts\n\n'
               + __doc__.strip().split("\n\n")[0])
         return 0 if argv else 2
+    if argv[0] == "judge" and argv[1:2] == ["--file"]:
+        if len(argv) != 3:
+            print("usage: python3 tools/bar.py judge --file <file>")
+            return 2
+        try:
+            said, skipped = judge_many(_batch(argv[2]))
+        except (OSError, ValueError) as e:       # Unreadable among them
+            print(f"bar: {e}")
+            return 2
+        for line in said:
+            print(line)
+        for company, why in skipped:
+            print(f"not judged: {company}: {why}")
+        print(f"{len(said)} judged, kept in profile/{JUDGED_FILE}"
+              + (f"; {len(skipped)} not judged" if skipped else ""))
+        return 0 if said or not skipped else 2
     if argv[0] == "judge":
         if len(argv) != 4:
             print('usage: python3 tools/bar.py judge "<company>" <pay|prestige|signal|none> "<why>"')

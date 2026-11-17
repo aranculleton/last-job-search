@@ -1127,8 +1127,96 @@ def say_ruled(gone, ranked: int) -> str:
             + ")")
 
 
+# Employers nobody has judged against the person's bar (pay, prestige or signal), among the
+# best rows: ranked down until judged, and listed for a chat to judge in one batch. A round
+# did no judging, so the top of a fresh list was employers nobody had judged, ranked by
+# keywords above the person's own targets, and a chat judged them one at a time after the
+# round, each "none" taking a row off the list rather than refilling it (2026-11-16).
+UNJUDGED = "unjudged.json"
+UNJUDGED_TOP = 150
+UNJUDGED_DOWN = 20
+
+
+def _unjudged_check(today=None):
+    """A function from an employer to whether nobody has judged it against the person's bar
+    (no list names it, no judgement stands for it, and nothing in its posting already clears
+    it), worked out once an employer; None where the profile states no bar."""
+    import bar
+    if not bar.applies():
+        return None
+    day = datetime.date.fromisoformat(today) if isinstance(today, str) else today
+    memo: dict = {}
+
+    def check(row) -> bool:
+        company = str(row.get("company") or "")
+        if not company:
+            return False
+        if company not in memo:
+            memo[company] = (not bar.listed(company, day)
+                             and bar.verdict(company, row.get("desc") or "", day)[0] == bar.NONE)
+        return memo[company]
+    return check
+
+
+def about(text: str, company: str = "") -> str:
+    """What a posting says about its employer, for judging it: the first sentences naming it or
+    saying who "we" are, else the posting's opening."""
+    import text_screen
+    first = (company or "").split()[0].lower() if (company or "").split() else ""
+    said = [s for s in text_screen.sentences(text or "")
+            if re.search(r"\b(?:about us|who we are|we are|we're|our mission|founded)\b", s, re.I)
+            or (first and first in s.lower())]
+    got = " ".join(said[:3]) if said else " ".join(str(text or "").split())
+    return got[:400]
+
+
+def unjudged(rows, today=None, top=UNJUDGED_TOP) -> list[dict]:
+    """Each employer among the best `top` rows that nobody has judged against the person's
+    bar, once, best first, with what its own posting says about it: the batch a chat judges
+    (python3 tools/bar.py judge --file)."""
+    check = _unjudged_check(today)
+    if check is None:
+        return []
+    from company_key import key as company_key
+    out, seen = [], set()
+    for r in sorted((r for r in rows if isinstance(r, dict)),
+                    key=lambda r: -(r.get("priority") or 0))[:top]:
+        k = company_key(str(r.get("company") or ""))
+        if not k or k in seen or not check(r):
+            continue
+        seen.add(k)
+        out.append({"company": r["company"], "about": about(r.get("desc") or "", r["company"]),
+                    "title": r.get("title") or "", "url": r.get("url") or "",
+                    "verdict": "", "why": ""})
+    return out
+
+
+def say_unjudged(out_dir: str, rows, today) -> list[str]:
+    """Write the batch to judge in the round's folder (UNJUDGED) and the lines that say it."""
+    batch = unjudged(rows, today)
+    path = os.path.join(out_dir, UNJUDGED)
+    if not batch:
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+        return []
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
+        json.dump(batch, fh, indent=1, ensure_ascii=False)
+        fh.write("\n")
+    names = [b["company"] for b in batch]
+    shown_names = ", ".join(names[:12]) + (f" and {len(names) - 12} more" if len(names) > 12
+                                           else "")
+    return [f"unjudged: {len(names)} employers among the best {UNJUDGED_TOP} rows that nobody has "
+            f"judged yet against your bar, ranked down until judged: {shown_names}",
+            f"  judge them in one batch: give each a verdict (pay, prestige, signal or none) and "
+            f"a few words why in {local_path.rel(path, ROOT)}, run python3 tools/bar.py judge "
+            f"--file {local_path.rel(path, ROOT)}, then cut the round again (--recut --out "
+            f"{local_path.rel(out_dir, ROOT)})"]
+
+
 def write_summary(shortlist_path, out_dir, name, scraped_path=None, show=None, rules=None,
-                  report=None, links=None, named=None):
+                  report=None, links=None, named=None, today=None):
     """The compact shortlist, and where it was written. With `scraped_path` (the round's
     scrape), each kept row's apply link is checked against what the round read
     (link_checks), so a card says where to apply and whether it is still listed; `links`
@@ -1150,7 +1238,12 @@ def write_summary(shortlist_path, out_dir, name, scraped_path=None, show=None, r
     except Exception:
         return None
     rows = rows if isinstance(rows, list) else list(rows.values())
-    rows.sort(key=lambda r: -(r.get("priority") or 0))
+    # An employer nobody has judged against the person's bar waits UNJUDGED_DOWN below its
+    # priority until it is judged: a cut made again after the judging puts it where its
+    # judgement says.
+    waits = _unjudged_check(today or person.today())
+    rows.sort(key=lambda r: -((r.get("priority") or 0)
+                              - (UNJUDGED_DOWN if waits and waits(r) else 0)))
     want = shown(show)
     keys = named_keys(named) if named else {}
     taken: set = set()
@@ -1320,7 +1413,7 @@ def prune(out_dir, keep=(), hold=(), top=KEEP_TOP):
     """
     freed = 0
     for name in os.listdir(out_dir):
-        if name in ("round.log", NAMED_FILE, TRIMMED) or name in hold:
+        if name in ("round.log", NAMED_FILE, TRIMMED, UNJUDGED) or name in hold:
             continue
         path = os.path.join(out_dir, name)
         if name == SHORTLIST:
@@ -1732,9 +1825,17 @@ def recut(a) -> int:
                        tracker=a.tracker, own=links)
     path = write_summary(short, where, name,
                          scraped_path=scraped if os.path.isfile(scraped) else None,
-                         show=a.show, rules=rules, report=report, links=links, named=names)
+                         show=a.show, rules=rules, report=report, links=links, named=names,
+                         today=a.today)
     report["kept"], report["not_kept"] = not_kept(a.out)
     for line in say_cut(report, None if names else a.show):
+        print(line)
+    try:
+        surfaced = _read_json(short)
+    except Exception:  # noqa: BLE001  read above; a file gone since names nobody
+        surfaced = []
+    for line in say_unjudged(a.out, [r for r in surfaced if isinstance(r, dict) and not rules(r)],
+                             a.today):
         print(line)
     if names and path:
         for line in say_named(names, _read_json(path), found, a.jobage):
@@ -2075,7 +2176,7 @@ def main():
     summary = write_summary(f("06_shortlist.json"),
                             a.summary_dir or person.state(SUMMARY_DIR),
                             os.path.basename(os.path.abspath(a.out)), scraped_path=scraped,
-                            show=a.show, rules=rules, report=cut, named=names)
+                            show=a.show, rules=rules, report=cut, named=names, today=a.today)
     # Counted on the list the person is shown, after the hard rules cut it: counted on the
     # ranked rows before the cut, 60 and more of them, a round met its target with rows the
     # cut then dropped, and never widened (the release review, 2026-11-03).
@@ -2091,6 +2192,14 @@ def main():
     if names and summary:
         for line in say_named(names, _read_json(summary), read_named(a.out)[1], a.jobage):
             print(line)
+    try:
+        surfaced = _read_json(f("06_shortlist.json"))
+    except Exception:  # noqa: BLE001  no shortlist written: nobody to judge
+        surfaced = []
+    for line in say_unjudged(a.out, [r for r in surfaced if isinstance(r, dict)
+                                     and not rules(r)], a.today):
+        print(line)
+        log.write(line + "\n")
     if summary:
         print(f"shortlist summary: {local_path.rel(summary, ROOT)} "
               f"(top {KEEP_TOP}, no posting bodies) - commit this one")

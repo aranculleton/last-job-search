@@ -804,3 +804,9 @@ Harwood Systems         # invented employer, tests/test_a_job_brought_back_stays
 Brantwood Foods         # invented employer, the same test
 Ashby Freight           # invented employer, the same test
 Coldwell Retail         # invented employer, the same test
+Quorlan Media           # invented employer, tests/test_unjudged_employers_wait_below_judged_ones.py
+Tessaly Consulting      # invented employer, the same test
+Vintry Labs AI          # invented employer, the same test
+Ambleside Freight       # invented employer, the same test
+Bellingham Foods        # invented employer, the same test
+Carrow Retail           # invented employer, the same test
