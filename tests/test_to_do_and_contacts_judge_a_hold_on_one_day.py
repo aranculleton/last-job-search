@@ -19,7 +19,10 @@ import os
 import sys
 
 import pytest
-import time_machine
+
+# The CI installs it; a person's own copy (the person check on macOS) may not, and skips
+# this file as every other test that moves the clock does.
+time_machine = pytest.importorskip("time_machine")
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 for _p in (os.path.join(ROOT, "tools", "network"), os.path.join(ROOT, "tools"),
