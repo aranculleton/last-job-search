@@ -22,6 +22,8 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **Chat's answers read cleanly and never end at "I can't".** The page's own quick answers showed markdown raw, with asterisks around names and "- " before list items, and sometimes said what they could not do instead of passing the question on. Lists and bold now show as they should in every answer, and a question the page cannot answer goes to Claude by itself.
+- **Chat's Latest button only shows when there is something below.** Opening Chat from a long screen showed "Latest" for a moment over a conversation that already ended on the screen. It now waits until Chat is drawn before deciding.
 - **A booked interview day is on your tracker too.** When an interview's day was booked after it had been noted as still to choose, the tracker kept saying the day was not chosen, so a chat reading it first could tell you the interview was not booked when it was. Booking a day now adds it to the tracker as well, and the update puts right any already booked. Profile upgrade: `interview-days-noted`.
 - **Something booked on another country's clock keeps its time zone.** A call added to Coming up from a chat could not say which time zone it was set in, so a time in another country's zone was read as yours; it now keeps the zone it was booked in, and a zone it cannot place is refused out loud rather than dropped.
 - **Partners and principals at consulting firms are found as the people who hire.** A people search held them back as ordinary colleagues and went on to other employers, saying nobody on the hiring side was found at that firm; they now count as hiring leaders, like a director or a head of a team.

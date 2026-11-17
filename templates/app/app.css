@@ -809,6 +809,10 @@ textarea { width: 100%; resize: vertical; line-height: 1.45; }
 .talk-state .spin { width: 11px; height: 11px; border-width: 2px; vertical-align: -1px; }
 .talk-who { font-size: var(--t-sm); font-weight: 600; color: var(--muted); }
 .talk-text { white-space: pre-wrap; }
+.talk-rich { white-space: normal; }
+.talk-rich p { margin: 0 0 .4em; white-space: pre-wrap; }
+.talk-rich ul, .talk-rich ol { margin: .2em 0 .4em; padding-left: 1.2em; }
+.talk-rich li { margin: .1em 0; }
 .talk-examples { display: grid; gap: 8px; }
 .talk-form { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
 .talk-row textarea { min-width: 0; }

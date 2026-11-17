@@ -152,3 +152,27 @@ def test_a_queued_question_says_so_under_itself_until_its_answer_is_drawn(run, t
     assert not answered["errors"], answered["errors"]
     got = answered["after"][0]["eval"]
     assert got["claude"] == ["Two came in today, both in York."] and got["states"] == ["Waiting its turn"], got
+
+
+# Every time the "Latest" button is drawn, and what was below the field when it was: it may
+# show only when there is more below than the field.
+LATEST_WATCH = ("(() => { window.__latest = []; const seen = () => { const j = document.querySelector('[data-k=\"talk-jump\"]');"
+                " if (j && !j.hidden && j.isConnected) { const sc = document.scrollingElement; window.__latest.push({at: location.hash,"
+                " below: sc.scrollHeight - sc.scrollTop - sc.clientHeight}); } };"
+                " new MutationObserver(seen).observe(document, {subtree: true, childList: true, attributes: true, attributeFilter: ['hidden']}); return 1; })()")
+
+
+@pytest.mark.parametrize("vp", [{"width": 375, "height": 812}, WIDE], ids=["phone", "wide"])
+def test_latest_is_never_drawn_on_a_chat_that_ends_on_screen(run, tmp_path, vp):
+    """Opening Chat from a long screen measured "at the end?" against that screen, before Chat
+    was on the page: Latest was drawn on a conversation with nothing below, until the next frame
+    took it away (a slow machine read the page in that frame: the Fast checks, 2026-11-16)."""
+    html = _write(tmp_path, "talk-short", _sample())
+    got = run("engine", html=html, viewport=vp, clock=CLOCK, steps=[
+        {"hash": "contacts", "eval": LATEST_WATCH},
+        {"hash": "chat", "ready": "!!document.querySelector('#main #talk-text')", "wait": 200,
+         "eval": "window.__latest"},
+    ])
+    assert not got["errors"], got["errors"]
+    assert got["after"][0]["eval"] == 1
+    assert got["after"][1]["eval"] == [], got["after"][1]["eval"]
