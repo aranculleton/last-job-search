@@ -134,9 +134,11 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   on in the side menu is the same soft clay fill ringed in clay, its name at 600 and its icon
   in clay, never a bar down its side; "Icons only" is a quiet grey control. A chosen place is
   never its fill alone: the fill is 1.1:1 from the page, so its ring reaches 3:1 (WCAG 1.4.11,
-  1.4.1 in Icons only; the accessibility review, 2026-11-17). The phone's header has one title
+  1.4.1 in Icons only; the accessibility review, 2026-11-17), the gear's on Settings and your
+  profile included, where a phone marks no tab. The phone's header has one title
   (on the Brief its greeting) and at its right the gear and the Chat button, which carries
-  Claude's light as a small dot on its icon's corner, its state said in its name; on a computer
+  Claude's light as a small dot on its icon's corner, its state said in its name, a light that is
+  a ring keeping its ring under the button's halo on the Chat screen too; on a computer
   the light keeps its own labelled place beside the Chat button. On a phone a sheet rises
   from the foot with round top corners and a small grabber; a sheet and a menu float on the
   overlay colour with a hairline and the floating shadow, a menu's rows a finger's height (the redesign, 2026-11-16: a grey bar with a red line on top, a dot after the title
@@ -260,8 +262,11 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   line of facts; its Next the one task in its own words ("Send Tamsin your CV", who asked and
   when after it) with its one filled button and, where the task has one, its second step beside
   it (I sent it); where it stands as four steps on one thread (Written to, Replied, Talked,
-  Referral), an 8px dot a step joined by a 2px hairline, green once done and the next one ringed
-  in clay, its name under it and said in words to a screen reader; then They replied where it can
+  Referral), an 8px dot a step joined by a 2px hairline, filled green once done with a green join
+  after it and its name in the ink at 600, the next one ringed in clay, one not yet reached a
+  hollow ring with its name grey at 400 (done was told from not yet by colour alone, and forced
+  colours drew all four alike: the accessibility review, 2026-11-17), its name under it and said
+  in words to a screen reader; then They replied where it can
   be said, and one soft "Update" with its chevron opening their rarer updates as a menu, a
   finger's height a row on the overlay (a call booked, the referral is over, they sent me a job),
   "Don't contact again" last and in red. Escape closes the menu, never the card under it. Why:

@@ -159,7 +159,9 @@ bdi { unicode-bidi: isolate; }
 .top-in > .screen.is-home { display: none; }
 .gear { display: inline-grid; place-items: center; flex: none; width: var(--target); height: var(--target); border-radius: 50%; color: var(--ink); }
 @media (hover: hover) { .gear:hover { background: var(--raised); } }
-.gear[aria-current="page"] { background: var(--raised); color: var(--accent); }
+/* "You are here" as the phone's chosen tab is: the soft clay with a clay ring, never the raised
+   fill alone, which was its hover too (the accessibility review, 2026-11-17: 1.11:1). */
+.gear[aria-current="page"] { background: var(--accent-soft); color: var(--mark); box-shadow: inset 0 0 0 1px var(--mark); }
 
 
 .main { grid-area: main; min-width: 0; outline: none; padding-top: 8px; }
@@ -1781,6 +1783,11 @@ label.pick { display: flex; align-items: flex-start; justify-content: center; wi
   .navdot, .bp-day-dots i { forced-color-adjust: none; background: CanvasText; }
   .bp-day-dots i.due { background: Canvas; box-shadow: inset 0 0 0 2px CanvasText; }
   .bp-day.is-today { outline: 2px solid CanvasText; outline-offset: -2px; }
+  .d-step-dot, .d-step::before { forced-color-adjust: none; }
+  .d-step::before { background: CanvasText; }
+  .d-step.done .d-step-dot { background: CanvasText; }
+  .d-step:not(.done) .d-step-dot { background: Canvas; box-shadow: inset 0 0 0 1.5px CanvasText; }
+  .d-step.now .d-step-dot { box-shadow: inset 0 0 0 1.5px CanvasText, 0 0 0 2px Highlight; }
   .chat-fab, .seg-opt, .conn-btn, .gear, .sheet-x, .back-btn { border: 1px solid ButtonText; }
   .weeks-svg .tick { fill: CanvasText; }
   .weeks-svg .grid, .weeks-svg .axis { stroke: GrayText; }
@@ -1969,6 +1976,13 @@ dialog.work-sheet :is(select, input, textarea) { width: 100%; max-width: 100%; m
 .chat-fab .fab-new { margin-left: -4px; }
 .chat-fab[aria-current="page"] { background: var(--accent-soft); color: var(--ink); box-shadow: inset 0 0 0 1px var(--mark); }
 .chat-fab[aria-current="page"] .fab-dot { box-shadow: 0 0 0 2px var(--accent-soft); }
+/* A light that is a ring (connecting, not listening) keeps its ring under the halo, on the Chat
+   screen too: the halo alone left a clear dot on the clay button, nothing to see (the
+   accessibility review, 2026-11-17: WCAG 1.4.11). */
+.fab-dot:is(.conn-connecting, .conn-reconnecting) { box-shadow: inset 0 0 0 2px var(--line-strong), 0 0 0 2px var(--raised); }
+.chat-fab[aria-current="page"] .fab-dot:is(.conn-connecting, .conn-reconnecting) { box-shadow: inset 0 0 0 2px var(--line-strong), 0 0 0 2px var(--accent-soft); }
+.fab-dot.conn-unheard { box-shadow: inset 0 0 0 3px var(--st-overdue), 0 0 0 2px var(--raised); }
+.chat-fab[aria-current="page"] .fab-dot.conn-unheard { box-shadow: inset 0 0 0 3px var(--st-overdue), 0 0 0 2px var(--accent-soft); }
 /* A computer keeps Claude's light in its own place in the header. */
 @media (min-width: 760px) { .fab-dot { display: none; } }
 /* Where the header is short of room the word goes, its name still saying it (app.js, fitTop). */
@@ -2614,8 +2628,14 @@ ul.bp-news { gap: 12px; }
 .d-step { position: relative; display: grid; justify-items: center; gap: 8px; text-align: center; font-size: 0.8125rem; line-height: 18px; font-weight: 600; color: var(--muted); min-width: 0; }
 .d-step:not(:first-child)::before { content: ""; position: absolute; top: 3px; right: calc(50% + 8px); left: calc(-50% + 8px); height: 2px; border-radius: 1px; background: var(--line); }
 .d-step-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line-strong); }
+/* A step not yet reached is a hollow ring, its word grey at 400; a done one filled in green, its
+   word in the ink at 600, the join after it green: done was told from not yet by colour alone
+   (the accessibility review, 2026-11-17: WCAG 1.4.1, 1.4.11). */
+.d-step:not(.done):not(.now) { font-weight: 400; }
+.d-step:not(.done):not(.now) .d-step-dot { background: var(--surface); box-shadow: inset 0 0 0 1.5px var(--line-strong); }
 .d-step.done { color: var(--ink); }
 .d-step.done .d-step-dot { background: var(--st-done); }
+.d-step.done + .d-step::before { background: var(--st-done); }
 .d-step.now { color: var(--ink); }
 .d-step.now .d-step-dot { background: var(--surface); box-shadow: 0 0 0 2px var(--mark); }
 .d-step-l { overflow-wrap: anywhere; }

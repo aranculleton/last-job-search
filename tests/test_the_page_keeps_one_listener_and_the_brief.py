@@ -698,7 +698,7 @@ def test_i_sent_it_is_done_in_contacts_to_do_and_the_brief_at_once(run, tmp_path
 STEPS = ("(() => { const p = document.querySelector('dialog.detail .d-steps'); if (!p) return null; "
          "const steps = [...p.querySelectorAll(':scope > li')].map((li) => { const dot = getComputedStyle(li.querySelector('.d-step-dot')); "
          "return [li.querySelector('.d-step-l').textContent.trim(), li.querySelector('.sr-only').textContent.trim(), "
-         "dot.backgroundColor, dot.boxShadow !== 'none', Math.round(li.querySelector('.d-step-dot').getBoundingClientRect().width)]; }); "
+         "dot.backgroundColor, dot.boxShadow === 'none' ? 'none' : /inset/.test(dot.boxShadow) ? 'hollow' : 'ringed', Math.round(li.querySelector('.d-step-dot').getBoundingClientRect().width), getComputedStyle(li).fontWeight]; }); "
          "const done = getComputedStyle(document.documentElement).getPropertyValue('--st-done').trim(); "
          "const probe = document.createElement('span'); probe.style.color = done; document.body.appendChild(probe); const green = getComputedStyle(probe).color; probe.remove(); "
          "return [steps, green, p.tagName, p.getAttribute('aria-label'), "
@@ -720,10 +720,13 @@ def test_a_persons_page_says_where_it_stands_in_words_and_back_names_where_it_ca
     assert [x[0] for x in steps] == ["Written to", "Replied", "Talked", "Referral"], steps
     # Said in words, never by colour alone: done, the next one, and the rest.
     assert [x[1] for x in steps] == ["(done)", "(done)", "(next)", "(not yet)"], steps
-    # 8px dots: the done ones green, the next one ringed, the rest neither.
+    # 8px dots: the done ones filled green, the next one ringed, the rest a hollow ring with a
+    # lighter word, so done and not yet differ by more than colour (the accessibility review,
+    # 2026-11-17).
     assert all(x[4] == 8 for x in steps), steps
     assert [x[2] == green for x in steps] == [True, True, False, False], (steps, green)
-    assert [x[3] for x in steps] == [False, False, True, False], steps
+    assert [x[3] for x in steps] == ["none", "none", "ringed", "hollow"], steps
+    assert [x[5] for x in steps] == ["600", "600", "600", "400"], steps
     assert not bordered and not buttons, "no stage is drawn as a pill or is a button"
     assert got["after"][1]["eval"] >= 12, "the page's blocks stand apart: %r" % got["after"][1]["eval"]
     assert got["after"][2]["eval"] == 0

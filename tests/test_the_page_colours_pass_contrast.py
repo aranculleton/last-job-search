@@ -100,8 +100,10 @@ def test_a_chosen_state_is_never_its_fill_alone():
         for look, pal in palettes.PALETTES.items():
             assert palettes.ratio(pal[fill][0], pal["seg-track"][0]) >= 1.1, (look, name, "the thumb lifted off its track")
     assert re.search(r"\.seg-opt\[aria-pressed=\"true\"\], \.seg-opt:has\(input:checked\), \.pills \.choice:has\(input:checked\) \{ forced-color-adjust: none; background: Highlight", css), "forced colours"
-    for sel in (r"\.side-list a\[aria-current=\"page\"\] \{", r"\.tab\[aria-current=\"page\"\] \.tab-ic \{"):
-        rule = re.search(sel + r"([^}]*)\}", css)
+    # The gear's "you are here" too: its raised fill was its hover as well, 1.11:1 (the
+    # accessibility review, 2026-11-17), and on a phone Settings has no tab to mark it.
+    for sel in (r"\.side-list a\[aria-current=\"page\"\] \{", r"\.tab\[aria-current=\"page\"\] \.tab-ic \{", r"^\.gear\[aria-current=\"page\"\] \{"):
+        rule = re.search(sel + r"([^}]*)\}", css, re.M)
         assert rule and "inset 0 0 0 1px var(--mark)" in rule.group(1), sel
     want = {("line-strong", "thumb"), ("mark", "accent-soft"), ("mark", "surface"), ("mark", "bg")}
     held = {(f, b) for f, b, n, _w in palettes.pairs() if n >= 3.0}
@@ -249,3 +251,17 @@ def test_the_generated_css_follows_the_hosts_contract_and_the_persons_choice():
     assert ':root[data-theme="dark"]:not([data-look="light"]), :root[data-look="dark"]' in css
     assert "data-palette" not in css, "no theme to pick"
     assert "::selection { background: var(--selection)" in css
+
+
+def test_the_chat_buttons_light_keeps_its_ring_on_the_chat_screen():
+    """On a phone the Chat button's light while Claude connects or is not listening is a ring, and
+    on the Chat screen the button's halo rule drew over it: a clear dot with a clay halo on a clay
+    button, nothing to see (the accessibility review, 2026-11-17: WCAG 1.4.11). Each ring state
+    carries its ring and the halo, on the button and on the chosen one."""
+    css = open(CSS, encoding="utf-8").read()
+    for state, ring in (("connecting", "inset 0 0 0 2px var(--line-strong)"), ("unheard", "inset 0 0 0 3px var(--st-overdue)")):
+        for halo in ("var(--raised)", "var(--accent-soft)"):
+            rules = [m.group(1) for m in re.finditer(r"([^{}]*\.fab-dot[^{}]*conn-" + state + r"[^{}]*)\{([^}]*)\}", css)
+                     if ring in m.group(2) and "0 0 0 2px " + halo in m.group(2)]
+            assert rules, (state, halo)
+    assert any("aria-current" in r for r in [m.group(1) for m in re.finditer(r"([^{}]*\.fab-dot[^{}]*conn-unheard[^{}]*)\{[^}]*accent-soft", css)])
