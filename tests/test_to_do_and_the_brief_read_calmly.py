@@ -51,7 +51,8 @@ FACES = r"""(() => [...document.querySelectorAll('#main [data-card]')].filter((c
     return mid > r.top && mid < r.bottom && q.left >= r.right - 1;
   }).filter((x) => x !== null) : [];
   return {card: c.getAttribute('data-item'), pills, more: !!(row && row.querySelector(':scope > details.more')), glued,
-    kind: ((c.querySelector(':scope > .todo-top .kind') || {}).textContent || '').trim(), title: ((c.querySelector('.card-title') || {}).textContent || '').trim()};
+    kind: ((c.querySelector(':scope > .todo-top .kind') || {}).textContent || '').trim(), title: ((c.querySelector('.card-title') || {}).textContent || '').trim(),
+    chips: [...c.querySelectorAll(':scope > .todo-top .chip')].map((x) => [x.textContent.trim(), x.className])};
 }))()"""
 
 
@@ -85,6 +86,9 @@ def test_a_thank_you_is_tagged_as_the_message_it_is(run, tmp_path):
     got = _go(run, tmp_path, [{"hash": "todo", "eval": FACES}], PHONE, clock=T)
     thanks = [c for c in got["after"][0]["eval"] if c["title"].startswith("Thank-you note")]
     assert thanks and all(c["kind"] == "Thank-you" for c in thanks), thanks
+    # Its "Ready to do" is the person's move, in clay, never the blue of work in progress.
+    ready = [cls for c in thanks for words, cls in c["chips"] if words == "Ready to do"]
+    assert ready and all("tone-you" in cls for cls in ready), thanks
 
 
 HEADS = r"""(() => {
@@ -129,7 +133,7 @@ def test_not_due_yet_waits_shut_under_its_one_disclosure(run, tmp_path, vp):
     got = _go(run, tmp_path, [{"hash": "todo", "eval": FOLD}], vp, clock=T)
     f = got["after"][0]["eval"]
     # The one disclosure: its words in the ink at 600, with its chevron.
-    assert f and f["words"].startswith("Not due yet (") and f["ink"] and f["weight"] == "600" and f["chevron"] == "8px", f
+    assert f and f["words"].startswith("Not due yet (") and f["ink"] and f["weight"] == "600" and f["chevron"] == "7px", f
 
 
 def _nothing_today():
