@@ -785,6 +785,15 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   makes it look quite cluttered"), and one filled pill a screen, with each card's next step
   in the semibold weight, says at a glance what to do.
   (action-row test, layout 7)
+- **A menu closes once it is left, and the focus never falls to nothing.** A floating menu (a
+  person's Update, a list's ⋯, a Coming up row's More) closes on Escape with the focus on its
+  own button, when the focus moves on to something outside it, and on a tap beside it: left
+  open, a row's menu covered the next row's ⋯, and Tab from its last item put the focus under
+  it (WCAG 2.4.11). Choosing an item closes its menu and puts the focus on the menu's button
+  before the item does anything, so a sheet the item opens hands the focus back there. Wherever
+  the control that opened something is no longer drawn, the focus goes to the button of the
+  menu, fold or More it is hidden in, else to its card, never to nothing (WCAG 2.4.3; the
+  accessibility review of the redesign's second round, 2026-11-17). (sheets-and-menus test)
 - **On To do a card's face is its next step and one more**, then More for the rest: a way to
   where it lives ("Open in Coming up", "Open in Contacts"), Add to calendar, a time to send it,
   They replied beside a Done (the redesign's second round, 2026-11-17: "Choose the role · 15 min
@@ -1009,6 +1018,11 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   up and then on its card, in words that name what to tap ("Not saved. Tap I sent it again.")
   with Try again. Why: a store that never answered left "I sent it" gone from its card with
   nothing said (the maintainer, 2026-11-05). (send-tap test)
+- What the page says aloud (its polite line and its urgent one) and its toasts are in the top
+  open sheet while a sheet is open, and on the page once none is. A sheet makes the rest of the
+  page out of reach: inside a person's card "No longer waiting for Tamsin" was said to no one and
+  its Undo could not be reached (WCAG 4.1.3 and 2.1.1; the accessibility review of the
+  redesign's second round, 2026-11-17). (sheets-and-menus test)
 - A tap is "Saved" once written and "Done" once Claude's receipt says so. Saved says what it
   waits for and where it shows: "Claude makes the change next, and this line says Done when it
   has", what it waits behind ("after “Reply to Juno”", light work running in the chat that
