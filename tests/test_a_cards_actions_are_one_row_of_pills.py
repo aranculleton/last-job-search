@@ -146,12 +146,18 @@ def test_the_menu_foot_is_one_rule_with_equal_space_round_it_and_settings_last(r
         assert r["first"] == 0 and abs(r["headAbove"] - r["headBelow"]) <= 1 and abs(r["headAbove"] - r["above"]) <= 1, ("Icons only, its own section", r)
 
 
-def test_a_more_panels_pills_have_the_soft_pills_edge(run, tmp_path):
-    # The pills inside a card's More had no edge, unlike every other soft pill (the screen
-    # review, 2026-11-11; DESIGN.md: the raised fill with its 3:1 edge).
+def test_a_more_panels_pills_are_the_cards_own_soft_pills(run, tmp_path):
+    # The pills inside a card's More were drawn unlike every other soft pill (the screen review,
+    # 2026-11-11), then given an outlined look of their own. One soft look (DESIGN.md: the raised
+    # fill with no edge, the redesign's second round, 2026-11-17): More's pills have the same
+    # fill and edge as the soft pills in the card's own row, and a fill the card does not have.
     import test_the_page_journeys as J
     look = ("(() => { const b = [...document.querySelectorAll('#main .m-rows .more-acts .btn.secondary')].find((x) => x.getClientRects().length); if (!b) return null;"
-            " const s = getComputedStyle(b), card = getComputedStyle(b.closest('.card')); return {edge: s.borderTopColor, width: parseFloat(s.borderTopWidth), card: card.backgroundColor, fill: s.backgroundColor}; })()")
+            " const c = b.closest('.card'), r = c.querySelector('.card-actions > details.more > .more-btn, .card-actions > .btn:not(.primary):not(.icon-only)');"
+            " const s = getComputedStyle(b), t = r ? getComputedStyle(r) : null;"
+            " return {edge: s.borderTopColor, fill: s.backgroundColor, card: getComputedStyle(c).backgroundColor, row: t ? {edge: t.borderTopColor, fill: t.backgroundColor} : null}; })()")
     got = J._go(run, tmp_path, [{"hash": "jobs", "more": "r12-1", "eval": look}], J.WIDE, clock="2026-10-25T09:00:00Z")
     seen = got["after"][0]["eval"]
-    assert seen and seen["width"] >= 1 and seen["edge"] not in (seen["card"], seen["fill"], "rgba(0, 0, 0, 0)"), seen
+    assert seen and seen["row"], seen
+    assert seen["fill"] == seen["row"]["fill"] and seen["edge"] == seen["row"]["edge"], ("one soft look", seen)
+    assert seen["fill"] != seen["card"], ("a fill of its own on the card", seen)
