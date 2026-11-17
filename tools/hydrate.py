@@ -603,13 +603,34 @@ class Kept:
             entries = list(os.scandir(self.folder))
         except OSError:
             return
-        now = self.clock()
+        # A file's age is read on the clock that dated it, the file system's, never on
+        # `clock`, which dates what is kept and can stand apart from it: read against a clock
+        # 30 days ahead, every answer was a month old and taken out as soon as the folder was
+        # opened, so a search run again a minute later asked everything again (the everywhere
+        # check's 30-days, 2026-11-17). What is kept is still served by its own date (`get`).
+        now = _files_now(self.folder)
+        if now is None:
+            return
         for e in entries:
             try:
                 if e.name.endswith(".tmp") or now - e.stat().st_mtime > self.oldest:
                     os.remove(e.path)
             except OSError:
                 pass
+
+
+def _files_now(folder: str) -> float | None:
+    """The file system's own time in `folder`: a file made there and read back, or None."""
+    import tempfile
+    try:
+        fd, p = tempfile.mkstemp(dir=folder, suffix=".tmp")
+        os.close(fd)
+        try:
+            return os.stat(p).st_mtime
+        finally:
+            os.remove(p)
+    except OSError:
+        return None
 
 
 def _kept_key(job: dict) -> str:
