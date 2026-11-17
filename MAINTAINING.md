@@ -461,6 +461,13 @@ here. A new one is added the day it is made.
   Claude is making shows in Claude's work, on the Brief only when nothing else is owed.
 - **The platform report prints on any console** (`platform_check._say`), and "no git" is
   judged only where git is not in a folder the app adds to the PATH (`local_path.extend`).
+- **The posting text of the jobs the page lists is committed; a round's working files are
+  not.** Each search keeps the text of the jobs on its list beside it
+  (`documents/rounds/bodies/<round>.json`), only while the page lists them (`rescore.prune`),
+  so a change to how jobs are scored scores them again in any chat (`tools/rescore.py`, run
+  after a sync by the `jobs-rescored` upgrade while `rescore.fingerprint` has moved: the app's
+  scoring files and the person's scoring settings). A list's rows keep their order, since a
+  draft is asked for by its rank.
 
 ## Commit state at the moment it changes
 

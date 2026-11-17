@@ -67,6 +67,7 @@ profile/consistency_reviewed.json merge=ljs-state text eol=lf
 profile/tests/fixtures/score_baseline.json merge=ljs-state text eol=lf
 job_scraper/do_not_target.json merge=ljs-state text eol=lf
 documents/rounds/*.json merge=ljs-state text eol=lf
+documents/rounds/bodies/*.json merge=ljs-state text eol=lf
 documents/rounds/.sweep/cursor.json merge=ljs-state text eol=lf
 documents/rounds/added/jobs.json merge=ljs-state text eol=lf
 documents/rounds/kept/jobs.json merge=ljs-state text eol=lf

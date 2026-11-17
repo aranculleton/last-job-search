@@ -1231,6 +1231,19 @@ def test_employer_names_waits_only_on_a_contact_with_its_employer_in_lower_case(
     assert u.pending() == ""
 
 
+def test_the_jobs_on_the_page_are_scored_again_only_where_there_are_some(profile, tmp_path,
+                                                                        monkeypatch):
+    """jobs-rescored (2026-11-16): pending only while a search the page lists was scored by
+    other rules than today's. With no search saved there is nothing to score; the run, the
+    files it may touch and an existing copy's page are in
+    tests/test_the_jobs_on_the_page_are_scored_again.py."""
+    u = U.by_id("jobs-rescored")
+    assert u.cost == "instant" and u.needs == "nobody"
+    assert u.paths == ("documents/rounds/*.json", "documents/rounds/bodies/*.json")
+    monkeypatch.setenv(person.STATE_ENV, str(tmp_path / "state"))
+    assert u.pending() == ""
+
+
 def test_a_rule_about_updates_written_the_wrong_way_round_is_asked_about_once(profile):
     """Audit SV-1 and PD-5's app side (2026-11-11): "App updates come by themselves; never ask
     him again" was written as when_asked. The upgrade reads the newest such rule again with
