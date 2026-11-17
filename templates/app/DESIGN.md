@@ -809,7 +809,11 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   Brief's Today, a sheet): a button that wakes Claude is drawn at the phone's 12px a side with
   its gauge 6px from it at 420px and under; Jobs' and Contacts' header put Find jobs (Find
   people) and its gauge on a row of their own, the other buttons on the row under them; Coming
-  up's step (Prepare me) is a row of the card's own, from under the time; and a To do card's
+  up's step (Prepare me) is a row of the card's own, from under the time; Jobs' header on a
+  phone is two rows under its line: Find jobs and its gauge, then "Add a job" with when it
+  searched beside it, your CV's own button going there since Jobs' card under the list and Your
+  profile both have it (the first job stayed within the first screen's promise, layout test 1);
+  and a To do card's
   Done, where on its line it would stand alone under its next step and that step's gauge, goes
   under More. In a narrow Brief panel (Today's card, the Jobs panel's foot) the gauge's words
   wrap beside the button, and the button's own words only where even then the pair would not

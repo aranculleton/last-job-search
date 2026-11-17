@@ -391,6 +391,15 @@ bdi { unicode-bidi: isolate; }
   .summary .head-tools { row-gap: 4px; }
   .summary .head-tools:has(> [data-wakes] + .cost)::after { content: ""; flex-basis: 100%; height: 0; order: 1; }
   .summary .head-tools > [data-wakes] + .cost ~ * { order: 2; }
+  /* Jobs' header in two rows, not four: Find jobs and its gauge, then "Add a job you found" with
+     when it searched beside it; your CV is on Jobs' own card under the list and in Your profile,
+     so the header's goes. With the summary on two lines, four rows put the first job past the
+     first screen's promise (the redesign's second round, 2026-11-17). */
+  .summary.with-tool:has(> .head-tools > [data-k="add-job"]) { flex-wrap: wrap; align-items: center; column-gap: 8px; row-gap: 4px; }
+  .summary.with-tool:has(> .head-tools > [data-k="add-job"]) > :is(.sum-words, .head-tools) { display: contents; }
+  .summary.with-tool:has(> .head-tools > [data-k="add-job"]) > .sum-words > * { flex: 1 0 100%; }
+  .summary.with-tool:has(> .head-tools > [data-k="add-job"]) > .sum-words > p.sum-small { flex: 0 1 auto; order: 3; }
+  .summary.with-tool > .head-tools > [data-k="jobs-resume"] { display: none; }
   /* Semibold, a phone's three header buttons keep one row at 12px a side (the redesign). */
   .summary .head-tools > .btn:not(.icon-only) { padding-inline: 12px; }
 }
