@@ -2696,6 +2696,8 @@ ul.bp-news { gap: 12px; }
    the calendar beside it and out of the panel at a tablet's width (2026-11-11). */
 .bp-up-row .up-when { font-size: var(--t-sm); color: var(--muted); white-space: normal; }
 .bp-up-row .up-title { overflow-wrap: anywhere; }
+.bp-up-row > .up-prep { flex: none; align-self: center; }
+.bp-up-row > .up-prep > .btn.small { min-height: 32px; padding: 4px 12px; }
 .bp-upcoming { --pc: var(--st-running); --pcbg: var(--st-running-bg); }
 dialog.sheet .sheet-body { display: grid; gap: 16px; }
 .cal-choices { display: grid; gap: 8px; }
