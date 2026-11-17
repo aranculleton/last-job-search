@@ -782,7 +782,16 @@ p.count.tone-bad { color: var(--st-failed); }
 .person:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .person h3 { font-size: var(--t-lg); }
 .person-main { display: grid; gap: 8px; min-width: 0; }
-.avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--accent-soft); color: var(--ink); display: grid; place-items: center; font-weight: 600; }
+.avatar { flex: none; width: 40px; height: 40px; border-radius: 50%; background: var(--avatar-6); color: var(--ink); display: grid; place-items: center; font-weight: 600; }
+/* One person, one colour: their id picks one of six soft fills (app.js avatarFill), the same on
+   the Brief, in Contacts and on every card; two classes, so a panel's own colours never win. */
+.avatar.av-1 { background: var(--avatar-1); color: var(--ink); }
+.avatar.av-2 { background: var(--avatar-2); color: var(--ink); }
+.avatar.av-3 { background: var(--avatar-3); color: var(--ink); }
+.avatar.av-4 { background: var(--avatar-4); color: var(--ink); }
+.avatar.av-5 { background: var(--avatar-5); color: var(--ink); }
+.avatar.av-6 { background: var(--avatar-6); color: var(--ink); }
+.avatar.av-sm { width: 32px; height: 32px; font-size: var(--t-sm); }
 /* A card with no one to draw (a message to a hiring team) is one column, never its words
    squeezed into the avatar's 40px. */
 .person:not(:has(> .avatar)) { grid-template-columns: minmax(0, 1fr); }
@@ -2513,6 +2522,22 @@ ul.bp-news { gap: 12px; }
 .d-person .timeline { display: grid; gap: 12px; }
 /* An employer's page as a person's: each block apart, its lists Settings' rows (issue 263). */
 .d-employer > p { margin: 0; }
+/* Its summary line: what it holds, quiet, and whether it clears the person's bar as a state
+   with its "?" (issue 263, part 2). */
+.d-sum { display: flex; flex-wrap: wrap; align-items: center; column-gap: 12px; row-gap: 4px; color: var(--muted); }
+.d-bar { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.d-sum .q-hint:not([hidden]) { flex-basis: 100%; }
+/* What Claude found: a fact a row in one grouped card, the words in the ink, the page it came
+   from a quiet link under them; never a tap of its own, so no chevron. */
+.d-facts > .d-fact { padding: 12px 16px; border-top: 1px solid var(--line); display: grid; gap: 4px; }
+.d-facts > .d-fact:first-child { border-top: 0; }
+.d-fact > p { margin: 0; }
+.d-fact-text { max-width: 68ch; }
+.d-fact-src { font-size: var(--t-sm); color: var(--muted); }
+.d-fact-link { position: relative; color: var(--muted); text-decoration: none; overflow-wrap: anywhere; }
+.d-fact-link::after { content: ""; position: absolute; inset: -4px -4px; }
+@media (hover: hover) { .d-fact-link:hover { color: var(--ink); text-decoration: underline; text-decoration-color: var(--line-strong); text-decoration-thickness: 1px; text-underline-offset: 3px; } }
+@media (max-width: 759px) { .d-facts > .d-fact { padding-inline: 12px; } }
 /* A card is drawn as one rhythm: its parts 16px apart, a part's heading 8px over what it heads
    (2026-11-16: an application's "I heard back" sat on the heading under it). */
 .d-stack:not(.d-live) { display: grid; gap: 16px; align-content: start; }

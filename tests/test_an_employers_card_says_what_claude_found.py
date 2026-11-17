@@ -125,3 +125,70 @@ def test_the_model_carries_each_named_employers_facts_and_no_one_elses(tmp_path)
     # Nothing said is nothing carried: an employer with no facts and no bar is not listed.
     assert all(e.get("facts") or e.get("bar") for e in m["employers"]), m["employers"]
     assert app_model.check(m) == []
+
+
+# ------------------------------------------------------------------ the card
+
+sys.path.insert(0, os.path.join(ROOT, "tests"))
+import test_the_page_journeys as journeys  # noqa: E402
+from test_the_page_journeys import PHONE, WIDE, _go  # noqa: E402
+
+
+@pytest.fixture(scope="module")
+def run():
+    yield from journeys.browser()
+
+
+FOUND = r"""(() => {
+  const d = document.querySelector('dialog.detail[open] .d-employer');
+  if (!d) return null;
+  const block = [...d.querySelectorAll('section.d-block')].find((s) => s.querySelector('h3').textContent.trim() === 'What Claude found');
+  const facts = block ? [...block.querySelectorAll('.d-fact')].map((f) => {
+    const a = f.querySelector('.d-fact-src a');
+    return {text: f.querySelector('.d-fact-text').textContent.trim(), src: f.querySelector('.d-fact-src').textContent.replace(/\s+/g, ' ').trim(),
+      href: a ? a.getAttribute('href') : null, blank: a ? a.target === '_blank' && /noopener/.test(a.rel) : null,
+      underlined: a ? getComputedStyle(a).textDecorationLine.includes('underline') : null};
+  }) : null;
+  const bar = d.querySelector('.d-sum .d-bar');
+  const q = bar ? bar.querySelector('button.q') : null;
+  if (q) q.click();
+  return {facts, more: block ? (block.querySelector(':scope > p') || {textContent: ''}).textContent.trim() : null,
+    bar: bar ? bar.querySelector('.state-word').textContent.trim() : null, tone: bar ? bar.querySelector('.state-word').className : null,
+    order: [...d.querySelectorAll('section.d-block > h3')].map((h) => h.textContent.trim())};
+})()"""
+HINT = "(() => { const h = document.querySelector('dialog.detail[open] .d-sum .q-hint'); return h && !h.hidden ? h.textContent.trim() : null; })()"
+
+
+@pytest.mark.parametrize("vp", [PHONE, WIDE], ids=["phone", "wide"])
+def test_the_card_says_what_was_found_with_its_sources_and_the_bar(run, tmp_path, vp):
+    got = _go(run, tmp_path, [
+        {"hash": "jobs/emp~larkspur-retail/open", "ready": "!!document.querySelector('dialog.detail[open] .d-employer')", "eval": FOUND},
+        {"wait": 50, "eval": HINT},
+    ], vp, model=journeys._sample())
+    card = got["after"][0]["eval"]
+    assert card and card["order"] == ["Roles", "People", "Interviews", "What Claude found"], card
+    # Each fact in its few words, its page a quiet link opening apart, with when it was checked.
+    assert [f["text"] for f in card["facts"]] == [
+        "Opened a second distribution centre, in Wakefield, in March.",
+        "Its planners moved weekly forecasting from spreadsheets to Python last year.",
+        "Runs 140 stores across the north of England, with its head office in Leeds."], card
+    assert card["facts"][0]["src"] == "larkspur.example (opens in a new tab) · Checked 21 Oct", card
+    assert card["facts"][2]["src"].endswith("· Seen 30 Sept") or card["facts"][2]["src"].endswith("· Seen 30 Sep"), card
+    assert all(f["href"].startswith("https://") and f["blank"] for f in card["facts"]), card
+    assert not any(f["underlined"] for f in card["facts"]), "a source standing alone is never underlined"
+    assert card["more"] == "And 2 more facts Claude keeps for your letters and preps.", card
+    # The bar as a state, in green, its reason behind the "?".
+    assert card["bar"] == "Clears your bar" and "tone-ok" in card["tone"], card
+    assert got["after"][1]["eval"] == "A major brand with a strong pay band.", got["after"][1]
+
+
+def test_an_employer_with_no_research_has_no_block_and_one_with_nothing_says_nothing(run, tmp_path):
+    got = _go(run, tmp_path, [
+        {"hash": "interviews/emp~copperleaf-pay/open", "ready": "!!document.querySelector('dialog.detail[open] .d-employer')", "eval": FOUND},
+        {"hash": "contacts/emp~fernhill-freight/open", "ready": "!!document.querySelector('dialog.detail[open] .detail-title') && document.querySelector('dialog.detail[open] .detail-title').textContent.includes('Fernhill')", "eval": FOUND},
+    ], WIDE, model=journeys._sample())
+    cop = got["after"][0]["eval"]
+    assert cop["facts"] is None and "What Claude found" not in cop["order"], cop
+    assert cop["bar"] == "Clears your bar", cop
+    fern = got["after"][1]["eval"]
+    assert fern["facts"] is None and fern["bar"] is None, fern

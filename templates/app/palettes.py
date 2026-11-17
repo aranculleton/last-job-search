@@ -56,6 +56,16 @@ LIGHT = {
     "raised-hover": ("#e9e5de", "[D] a secondary button, hovered: quiet text 4.5:1 on it (the accessibility review, 2026-11-17)"),
     "tile": ("#f2f0eb", "[D] a number's tile on the Brief: the well's paper, a step under the card"),
     "today-wash": ("#f8ebe4", "[D] the Brief's Today: clay at 12% on white, as the selected place"),
+    # A person's initial sits on one of six soft fills, picked by their id, so one person is
+    # one colour on every screen (the redesign's second round, 2026-11-17: Marisol was blue on
+    # the Brief and clay in Contacts, and every Contacts avatar the same clay). Low in chroma
+    # and none a state's own tint, so a colour never reads as where someone stands.
+    "avatar-1": ("#f3e4da", "[D] sand clay: an initial's fill, ink over 13:1 on each of the six"),
+    "avatar-2": ("#e2ebe0", "[D] sage: an initial's fill"),
+    "avatar-3": ("#dfe7ed", "[D] mist: an initial's fill"),
+    "avatar-4": ("#efe6cf", "[D] wheat: an initial's fill"),
+    "avatar-5": ("#eee2e2", "[D] rose stone: an initial's fill"),
+    "avatar-6": ("#e6e3dc", "[D] stone: an initial's fill"),
     "ink": ("#1f1d1a", "[D] warm charcoal: all text that matters, 16.8:1 on a card"),
     "muted": ("#6b665e", "[D] warm grey: facts, times, labels, 4.8:1 at worst"),
     "line": ("#e7e3dc", "[D] a hairline: a card's edge, a row's divider, decoration only"),
@@ -109,6 +119,12 @@ DARK = {
     "raised-hover": ("#34322e", "[D] a secondary button, hovered"),
     "tile": ("#2a2825", "[D] a number's tile on the Brief, raised: the depths vanished into a dark card"),
     "today-wash": ("#1d1c1a", "[D] the Brief's Today: a card like the rest under its clay strip, never a brown block"),
+    "avatar-1": ("#3d2b22", "[D] sand clay, deepened: an initial's fill, ink over 11:1 on each of the six"),
+    "avatar-2": ("#26332a", "[D] sage, deepened"),
+    "avatar-3": ("#24303a", "[D] mist, deepened"),
+    "avatar-4": ("#383020", "[D] wheat, deepened"),
+    "avatar-5": ("#3a2a2c", "[D] rose stone, deepened"),
+    "avatar-6": ("#302e2a", "[D] stone, deepened"),
     "ink": ("#f2efe9", "[D] warm off-white, never pure white: 14.8:1 on a card"),
     "muted": ("#a9a39a", "[D] warm grey: 5.5:1 at worst"),
     "line": ("#2e2c29", "[D] a hairline"),
@@ -198,6 +214,8 @@ def pairs() -> list:
     for s in ("tile", "today-wash"):
         out += [("ink", s, 4.5, "body text on " + s), ("muted", s, 4.5, "secondary text on " + s), ("mark-ink", s, 4.5, "clay as text on " + s),
                 ("focus", s, 3.0, "focus ring on " + s)]
+    # A person's initial on its fill, wherever an avatar is drawn.
+    out += [("ink", f"avatar-{n}", 4.5, "an initial on its avatar") for n in range(1, 7)]
     for st in STATUSES:
         out += [(f"st-{st}", f"st-{st}-bg", 4.5, f"{st}: a status word on its tint"), ("muted", f"st-{st}-bg", 4.5, f"secondary text on {st}'s tint")]
         out += [(f"st-{st}", s, 4.5, f"{st}: a status line") for s in SURFACES]

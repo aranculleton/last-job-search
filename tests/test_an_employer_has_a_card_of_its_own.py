@@ -45,7 +45,7 @@ CARD = r"""(() => {
   }
   const r = d.getBoundingClientRect();
   return {title: d.querySelector('.detail-title').textContent.trim(), parts,
-    said: (d.querySelector('.d-employer > p') || {textContent: ''}).textContent.trim(),
+    said: (d.querySelector('.d-employer > p .d-sum-words') || {textContent: ''}).textContent.trim(),
     fits: r.width <= window.innerWidth + 1, address: location.hash};
 })()"""
 TAP = "(() => { const b = document.querySelector('[data-k=\"%s\"]'); if (b) b.click(); return !!b; })()"

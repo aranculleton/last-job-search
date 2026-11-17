@@ -6620,7 +6620,7 @@
     if (ppl.length) put(grid, briefPanel("people", "Waiting on you", h("ul", {class: "plain bp-list bp-people", "data-fit": "2,3,3"}, ppl.map((p) => {
       const move = txt(p.next_action) && txt(p.next_action).length <= 28 ? txt(p.next_action) : (BRIEF_PERSON_WORD[txt(p.status)] || "Follow up");
       return h("li", {}, h("a", {href: "#contacts/" + p.id, class: "bp-text bp-link", "data-k": "bp-person:" + p.id, onclick: (e) => { e.preventDefault(); openDetail("person", p.id); }},
-        h("span", {class: "bp-avatar", "aria-hidden": "true"}, txt(p.first_name).slice(0, 1).toUpperCase()),
+        avatar(p, "bp-avatar"),
         h("span", {class: "bp-who"}, h("strong", {}, txt(p.first_name)), h("span", {class: "bp-at"}, txt(p.employer))),
         h("span", {class: "bp-state"}, personAsk(p) ? "Asked for " + personAsk(p).what : move,
           personWhen(p) ? h("span", {class: "bp-when"}, personWhen(p).day) : p.due ? h("span", {class: "bp-when"}, dayDiff(p.due) !== null && dayDiff(p.due) < 0 ? "Ready" : dueWord(p.due)) : null)));
@@ -8483,6 +8483,20 @@
   const APP_STEP = /^(Reply|Follow up|Send your |Write to them|Your request)/;
   function stepWords(s) { s = txt(s).replace(/[.\s]+$/, ""); return APP_STEP.test(s) ? lc1(s) : s; }
   function personName2(p) { return txt(p.first_name) + (txt(p.initial) ? " " + txt(p.initial) + "." : ""); }
+  // A person's initial on one of six soft fills, picked by their id, so one person is one colour
+  // on the Brief, in Contacts and on every card (the redesign's second round, 2026-11-17:
+  // Marisol was blue on the Brief and clay in Contacts, and every Contacts avatar the same clay).
+  const AVATAR_FILLS = 6;
+  function avatarFill(id) {
+    let n = 0;
+    for (const c of txt(id)) n = (Math.imul(n, 31) + c.codePointAt(0)) >>> 0;
+    return 1 + (n % AVATAR_FILLS);
+  }
+  function avatar(p, cls) {
+    p = obj(p);
+    return h("span", {class: "avatar av-" + avatarFill(txt(p.id) || txt(p.first_name)) + (cls ? " " + cls : ""), "aria-hidden": "true"},
+      txt(p.first_name).slice(0, 1).toUpperCase() || "?");
+  }
   // The message drafted to them and waiting to go, if any: shown on their card until "I sent it".
   function personDraft(p) {
     const m = draftReady(personMessage(p.id));
@@ -9329,7 +9343,7 @@
     // Who they are where the name alone cannot say: their job title when no employer is known.
     const role = !txt(p.employer) && txt(p.title) ? txt(p.title) : "";
     return card("li", {class: "person" + (d ? " has-draft" : "") + ((g === "now" && Number(p.late) > 0) || tone === "warn" ? " edge-warn" : "") + (sent ? " is-marked" : ""), "aria-labelledby": hid, "data-item": p.id},
-      h("div", {class: "avatar", "aria-hidden": "true"}, name.slice(0, 1).toUpperCase()),
+      avatar(p),
       h("div", {class: "person-main"},
         // The trash sits in the row's corner, as on a job, never alone on a line of its own.
         h("div", {class: "job-top"}, h("h3", {id: hid}, personName(p.id, personName2(p), "row:" + p.id), txt(p.employer) ? " at " + txt(p.employer) : null),
@@ -11284,7 +11298,9 @@
     const id = "hq-" + seg(key);
     const open = !!S.hintOpen && S.hintOpen.has(key);
     return [h("button", {type: "button", class: "q", "aria-expanded": String(open), "aria-controls": id, "data-k": "hq:" + key, "aria-label": label || "Why",
-      onclick: () => { S.hintOpen = S.hintOpen || new Set(); if (S.hintOpen.has(key)) S.hintOpen.delete(key); else S.hintOpen.add(key); scheduleRender(); }}, icon("info")),
+      // Flipped in place as well: a card's sheet is drawn once, and is not redrawn by a render.
+      onclick: (e) => { S.hintOpen = S.hintOpen || new Set(); const on = !S.hintOpen.has(key); if (on) S.hintOpen.add(key); else S.hintOpen.delete(key);
+        const hint = $(id); if (hint) hint.hidden = !on; e.currentTarget.setAttribute("aria-expanded", String(on)); scheduleRender(); }}, icon("info")),
     h("span", {class: "hint q-hint", id, hidden: !open}, " " + text + ".")];
   }
   // A search over a long list, filling the control row.
@@ -11680,15 +11696,48 @@
     // Under each person, when you were last in touch: their next step's own words ("Reply",
     // "First note") said nothing their state did not.
     const people = e.people.map((p) => dRow({label: txt(p.first_name) || "Someone", state: statusWord(p), sub: p.last ? "Last in touch " + fmtDayMonth(p.last) : "",
-      open: () => openDetail("person", p.id), key: "emp-person:" + p.id}));
+      lead: avatar(p, "av-sm"), open: () => openDetail("person", p.id), key: "emp-person:" + p.id}));
     const ivs = e.ivs.map((iv) => dRow({label: ivTitle(iv), sub: iv.when ? (isPast(iv.when) ? fmtDay(txt(iv.when)) : fmtWhen(iv.when)) : "No day yet",
       state: iv.when && !isPast(iv.when) ? [cap1(relWhen(iv.when)), "info"] : null, open: () => openDetail("interview", iv.id), key: "emp-iv:" + iv.id}));
     const said = [roles.length ? plural(roles.length, "role", "roles") : "", people.length ? plural(people.length, "person", "people") : "",
       ivs.length ? plural(ivs.length, "interview", "interviews") : ""].filter(Boolean).join(" · ");
+    // Whether it clears the person's bar, a state beside what the card holds, its sentence
+    // behind the "?" (issue #263).
+    const about = employerAbout(e);
+    const bar = about && BAR_WORDS[txt(about.bar)];
     return h("div", {class: "d-stack d-employer", "data-employer": e.id},
-      said ? h("p", {class: "muted"}, said) : null,
+      said || bar ? h("p", {class: "d-sum"}, said ? h("span", {class: "d-sum-words"}, said) : null,
+        bar ? h("span", {class: "d-bar", "data-bar": txt(about.bar)}, stateWord(bar[0], bar[1]), hintQ("bar:" + e.id, txt(about.said).replace(/[.\s]+$/, ""), "Why: " + bar[0].toLowerCase())) : null) : null,
       employerNext(e),
-      dRows("Roles", roles), dRows("People", people), dRows("Interviews", ivs));
+      dRows("Roles", roles), dRows("People", people), dRows("Interviews", ivs), foundBlock(about, e.id));
+  }
+  // What the engine says of the employer itself (app_model employers, issue #263): a few facts
+  // Claude's research saved, and the person's bar's verdict. One employer however its name is
+  // written, as its card is.
+  function employerAbout(e) {
+    const k = txt(e.id).replace(/^emp~/, "");
+    return arr(M().employers).find((x) => employerKey(obj(x).name) === k) || null;
+  }
+  // The bar's verdict as a state: one that clears in green, one below in the waiting grey, one
+  // the person's own rules rule out in red. Its reason is the engine's sentence behind the "?".
+  const BAR_WORDS = {pay: ["Clears your bar", "ok"], prestige: ["Clears your bar", "ok"], signal: ["Clears your bar", "ok"],
+    none: ["Below your bar", null], excluded: ["Ruled out by your rules", "bad"]};
+  // What Claude found: each fact a short row, the page it came from a quiet link under it with
+  // the day it was checked. Nothing found, no block: an empty heading reads as something lost.
+  function foundBlock(about, key) {
+    const facts = arr(obj(about).facts).filter((f) => txt(obj(f).text));
+    if (!facts.length) return null;
+    const more = Number(obj(about).more) || 0;
+    return h("section", {class: "d-block d-found"}, h("h3", {class: "group"}, "What Claude found"),
+      h("ul", {class: "plain set-rows d-facts"}, facts.map((f, i) => {
+        const u = safeUrl(f.url);
+        const day = f.on ? fmtDayMonth(f.on) : "";
+        return h("li", {class: "d-fact"}, h("p", {class: "d-fact-text"}, txt(f.text)),
+          h("p", {class: "d-fact-src"}, u ? h("a", {href: u, target: "_blank", rel: "noopener noreferrer", class: "d-fact-link", "data-k": "fact:" + key + ":" + i},
+            h("bdi", {}, txt(f.source)), h("span", {class: "sr-only"}, " (opens in a new tab)")) : h("bdi", {}, txt(f.source)),
+            day ? [h("span", {class: "sep", "aria-hidden": "true"}, " \u00b7 "), h("span", {class: "nowrap"}, (f.checked ? "Checked " : "Seen ") + day)] : null));
+      })),
+      more ? h("p", {class: "small muted"}, "And " + plural(more, "more fact", "more facts") + " Claude keeps for your letters and preps.") : null);
   }
   // The one thing to do at an employer, first on its card, with its one filled button (the
   // redesign, 2026-11-16): an interview in the next two days, else someone waiting on a reply,
@@ -11781,7 +11830,7 @@
   // nothing said a row opened anything (the maintainer, 2026-11-16: "genuinely polished").
   function dRow(o) {
     const st = o.state && txt(o.state[0]) ? stateWord(txt(o.state[0]), o.state[1] === "plain" ? null : o.state[1]) : null;
-    return h("button", {type: "button", class: "setting-row act-row d-row", "data-k": o.key, onclick: o.open},
+    return h("button", {type: "button", class: "setting-row act-row d-row", "data-k": o.key, onclick: o.open}, o.lead || null,
       h("span", {class: "d-row-main"}, h("span", {class: "d-row-name"}, h("bdi", {}, o.label)), o.sub ? h("span", {class: "d-row-sub"}, o.sub) : null),
       st, h("span", {class: "set-go", "aria-hidden": "true"}, "\u203a"));
   }

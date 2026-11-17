@@ -226,6 +226,21 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   Tamsin") keeps its underline. "Why" and "Details" are quiet disclosures, the word in the ink
   with a chevron that turns when open. Why: underlines on every name and fold read as a page
   of errors (the redesign, 2026-11-16). (action-row test: a link inside a sentence)
+- A person's initial sits on one of six soft fills that their id picks (`avatarFill`), the
+  same on the Brief, in Contacts, in their card's header and in an employer card's People: one
+  person is one colour everywhere, and no fill is a state's tint. Why: Marisol was blue on the
+  Brief and clay in Contacts, every Contacts avatar the same clay, and the cards had none (the
+  redesign's second round, 2026-11-17). (name cards test)
+- An employer's card is everything the page holds about it: one summary line (its roles,
+  people and interviews) with the person's bar's verdict as a state ("Clears your bar", "Below
+  your bar", "Ruled out by your rules") and the reason behind its "?"; its Next; its roles,
+  people and interviews as rows that open; and last "What Claude found": at most three facts
+  Claude's research saved, those checked against their page first and the newest first, each a
+  short row in the ink with its page a quiet link under it and the day it was checked (the
+  engine's `employers`, `app_model.employer_facts`). No research, no block; where the bar says
+  nothing about it (no bar in the profile, or a name nobody has judged), no state. Why: an
+  employer's name opened nothing, and then a card with none of what the app knew of the
+  employer itself (issue #263). (employer card tests)
 - A job's fit is a ring round its number, drawn as far round as the fit goes in its band's
   colour (green strong, blue good, grey below), the number in the ink and "Fit 84 out of 100"
   said to a screen reader; never red. The same ring wherever a fit is shown, the Brief's Jobs a
