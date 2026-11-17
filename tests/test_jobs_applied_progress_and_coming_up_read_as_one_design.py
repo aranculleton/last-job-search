@@ -217,3 +217,15 @@ def test_a_coming_up_row_opens_what_it_is_from_anywhere_on_it(run, tmp_path):
     got = _go(run, tmp_path, [{"hash": "interviews", "open": "up-more:up-app-larkspur-supply-phone-screen-2026-10-28",
                                "eval": "!!document.querySelector('dialog.detail[open]')"}], PHONE, clock=T)
     assert got["after"][0]["eval"] is False
+
+
+BRIEF_PREP = r"""[...document.querySelectorAll('#main .bp-up-row .up-prep')].filter((p) => p.getClientRects().length)
+  .map((p) => { const b = p.querySelector('.btn'); return b ? [b.textContent.trim(), b.classList.contains('link'), getComputedStyle(b).textDecorationLine] : [p.textContent.trim()]; })"""
+
+
+@pytest.mark.parametrize("vp", [PHONE, WIDE], ids=["phone", "wide"])
+def test_the_briefs_coming_up_says_its_prep_in_soft_pills_as_coming_up_does(run, tmp_path, vp):
+    rows = _eval(run, tmp_path, "brief", BRIEF_PREP, vp)
+    assert rows and all(len(r) == 1 or (not r[1] and r[2] == "none") for r in rows), rows
+    said = [r[0] for r in rows]
+    assert "Read your prep" in said and said.count("Prepare me") <= 1, said
