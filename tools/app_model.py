@@ -1515,7 +1515,11 @@ def apply_link(row: dict) -> dict:
 
 
 def _company_rows(rows) -> dict:
+    import company_key
     from company_key import key
+    # The tracker's employers are what a careers-site or run-together name on a posting is
+    # joined to (company_key.know): "jobs.<name>bank.com" is the <Name> Bank applied to.
+    company_key.know(r.get("company") for r in rows)
     out: dict = {}
     for i, r in enumerate(rows):
         out.setdefault(key(r.get("company")), []).append(i)

@@ -845,8 +845,9 @@ METHODS: dict[str, dict] = {
             (55, "2026-11-10", False, "C++, C# and C in a job title are three roles: an application, a ruling or a sighting of one no longer stands for another at the same employer; rulings are read from their titles each round, so nothing needs looking at again"),
             (56, "2026-11-11", False, "rank.md names the page fetcher for a posting a 403 refused (tools/fetch_page.py); a draft a chat stopped because the job is not one the person can take holds that posting alone, as a role they set aside does (about six months, then shown once more), never judged again against the rules"),
             (57, "2026-11-11", False, "a role set aside with no day holds as if set aside the day it is first read, and the next save of the seen jobs, a search's included, writes that day on it, so it still ends"),
+            (58, "2026-11-17", False, "an employer a job feed names by its careers site, run together, with a number on its slug or by a team is the employer the person's records hold (company_key), so the company throttle, the role already applied for and one role per employer hold for it; a listing marked internal in its employer field is cut as internal-only; nothing needs redoing: the throttle decides these every round"),
         ),
-        "fingerprint": "77a04152d8211502",
+        "fingerprint": "2568aa8f3f83d09e",
     },
     "routines": {
         "by": "you", "priority": 3, "applies": "routines",

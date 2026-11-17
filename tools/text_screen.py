@@ -1490,10 +1490,21 @@ INTERNAL_ONLY = getattr(_S, "INTERNAL_ONLY", None) or re.compile(
 _RESTRICTS = re.compile(r"\bonly\b|\brestricted\b|\blimited to\b", re.I)
 
 
-def internal_only(title: str, text: str) -> str | None:
-    """The title or sentence that restricts a vacancy to the employer's own staff."""
+# The employer field marking a listing as internal: "<Employer> - Internal",
+# "<Employer> (Internal)". An aggregator copies it from the employer's internal careers site,
+# and the gate read only the title and the body, so one was ranked (2026-11-16).
+INTERNAL_EMPLOYER = re.compile(
+    r"(?:\s[-\u2013\u2014|:,]\s*|\(\s*|\s)internal(?:\s+(?:only|postings?|jobs|careers?|"
+    r"candidates?(?:\s+only)?))?\s*\)?\s*$", re.I)
+
+
+def internal_only(title: str, text: str, company: str = "") -> str | None:
+    """The title, employer field or sentence that restricts a vacancy to the employer's own
+    staff."""
     if INTERNAL_ONLY_TITLE.search(title or ""):
         return (title or "")[:200]
+    if INTERNAL_EMPLOYER.search(company or ""):
+        return f"listed under {company}"[:200]
     for s in sentences(text):
         m = INTERNAL_ONLY.search(s)
         if m and _RESTRICTS.search(m.group(0)):
@@ -1925,7 +1936,7 @@ def screen(job: dict) -> dict:
         if w:
             cuts.append(f'{CUTS["residence"][0]}: "{w}"')
 
-    i = internal_only(job.get("title") or "", text)
+    i = internal_only(job.get("title") or "", text, str(job.get("company") or ""))
     if i:
         cuts.append(f'{CUTS["internal_only"][0]}: "{i}"')
 

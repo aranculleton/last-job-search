@@ -787,3 +787,9 @@ Rufus Penhallow             # invented partner, the same test
 Odile Sarrow                # invented director, the same test
 Examplewood Consulting      # invented employer, the same test
 Regional Chair              # a title, not a person
+Northfield Bank         # invented employer, tests/test_an_employer_named_by_its_careers_site_is_the_employer.py
+Lowmoor Lending         # invented employer, the same test
+Tamberlin Engineering   # invented employer, the same test
+Tamberlin Science       # invented employer, the same test
+Wexcombe Engineering    # invented employer, the same test
+Wexcombe Insurance      # invented employer, the same test

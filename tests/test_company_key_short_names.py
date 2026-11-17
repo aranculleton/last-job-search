@@ -10,6 +10,18 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
 import company_key  # noqa: E402
+import pytest  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _forget_what_was_learned():
+    """What these tests teach the join is put back after each: "Brindle Hart" taught as the
+    short name of a longer one keyed every later test's "Brindle Hart" in the same worker as
+    that longer name (2026-11-17)."""
+    before = dict(company_key._SHORT)
+    yield
+    company_key._SHORT.clear()
+    company_key._SHORT.update(before)
 
 
 def test_a_bracketed_initialism_counts_small_words_either_way():

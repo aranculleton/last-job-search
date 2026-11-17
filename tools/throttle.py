@@ -1686,6 +1686,10 @@ def main() -> int:
     today = as_date(a.today, iso_only=True)
     tracker = _tracker_rows(a.tracker)
     contacts = _contact_rows(a.contacts)
+    # The employers these records name are what a feed's run-together, careers-site or team
+    # name is joined to, so an open application under "<Name> Bank" holds back a role listed
+    # as "jobs.<name>bank.com" (company_key.know).
+    company_key.know(r.get("company") for r in [*tracker, *contacts])
     live = _derived_statuses(contacts, a.threads or threads_beside(a.contacts)) if contacts else {}
     dnt = _read_do_not_target(a.do_not_target) or {}
     open_apps = open_applications(a.tracker, today, rows=tracker)

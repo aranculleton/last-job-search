@@ -485,17 +485,20 @@ def already_had(name: str = "", today=None, tracker: str | None = None, own=(),
     import throttle
     from company_key import key as company_key
     from lookup_score import norm
+    import company_key as _ck
     by_url: dict = {}
     by_role: dict = {}
     records = None
+    # Keyed once every record is read: an employer one record names is what a run-together
+    # or careers-site name in another is joined to (company_key.know).
+    roles: list = []
 
     def note(url, company, role, why):
         u = norm(str(url or ""))
         if u:
             by_url.setdefault(u, why)
-        k = company_key(str(company or ""))
-        if k and str(role or "").strip():
-            by_role.setdefault(k, []).append((str(role), why))
+        if str(company or "").strip() and str(role or "").strip():
+            roles.append((str(company), str(role), why))
 
     try:
         rows = throttle._tracker_rows(tracker or person.state("job_search_tracker.csv"))
@@ -538,6 +541,11 @@ def already_had(name: str = "", today=None, tracker: str | None = None, own=(),
         pass
     if records is None:
         records = set(by_url)
+    _ck.know(c for c, _, _ in roles)
+    for company, role, why in roles:
+        k = company_key(company)
+        if k:
+            by_role.setdefault(k, []).append((role, why))
     mine = {norm(str(u or "")) for u in own} - {None, ""}
 
     def check(row) -> str:
