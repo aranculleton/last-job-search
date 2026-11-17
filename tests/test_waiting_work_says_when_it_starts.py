@@ -105,3 +105,18 @@ def test_beside_claudes_work_a_cards_line_says_its_state_and_the_panel_the_rest(
         assert "Waiting for Claude" in seen["card"] or "waiting for Claude" in seen["card"], seen
     else:
         assert "helper for this page" in seen["card"], seen
+
+
+PILL = ("(() => { const p = document.querySelector('#pill'); const r = p.getBoundingClientRect();"
+        " return {tight: p.classList.contains('tight'), w: r.width, min: getComputedStyle(p).minWidth}; })()")
+
+
+@pytest.mark.parametrize("where", ["contacts", "interviews"])
+def test_on_a_phone_the_work_pill_with_its_count_alone_is_a_targets_width(run, tmp_path, where):
+    # Where its words would cut the screen's name the pill says its count alone, and its reach is
+    # above and below only: its width is its own rule, 44px, never its words' width. In a Mac's
+    # type its spinner and "1" were 41px (Everywhere, 2026-11-17).
+    got = _go(run, tmp_path, [{"hash": where, "wait": 200, "eval": PILL}], PHONE, seed=BUSY, clock=T)
+    seen = got["after"][0]["eval"]
+    assert seen["tight"], seen
+    assert seen["min"] == "44px" and seen["w"] >= 43.5, seen

@@ -22,6 +22,7 @@ from test_the_chat_opens_on_its_latest import _talk  # noqa: E402
 PHONE = {"width": 390, "height": 844}
 WIDE = {"width": 1400, "height": 900}
 CLOCK = "2026-10-25T18:30:00Z"
+PERSON_ZONE = _sample()["person"]["time_zone"]
 
 
 @pytest.fixture(scope="module")
@@ -61,19 +62,29 @@ def test_on_a_phone_the_jobs_switch_is_whole_beside_the_search(run, tmp_path):
     assert e.get("whole") and e.get("apart"), e
 
 
-def test_not_confirmed_yet_is_a_small_pill(run, tmp_path):
+# On a device in the person's own zone, and on one in another, where every time says both and
+# the time's column is wider by design (DESIGN.md, "A time from another zone"): the device's zone
+# is set, since the far zones of Everywhere left the row's words 190px of a phone against 224 and
+# the same pill read as 0.79 of them (2026-11-17).
+@pytest.mark.parametrize("zone", [PERSON_ZONE, "Pacific/Kiritimati"], ids=["home", "far"])
+def test_not_confirmed_yet_is_a_small_pill(run, tmp_path, zone):
     m = copy.deepcopy(_sample())
     m["upcoming"][1]["tentative"] = True
     html = _write(tmp_path, "tent", m)
     # Since the redesign (2026-11-17) the pill sits on the line under the row's title, beside
     # what kind it is (DESIGN.md, "Coming up is a card a day"); still measured against the
-    # row's whole text column, so a pill stretched across that line still fails.
+    # row's whole text column, so a pill stretched across that line still fails. In every zone
+    # it is its words' own width and its padding, never more.
     probe = ("[...document.querySelectorAll('#main .up-main > .up-sub > .state-word')].filter((e) => /Not confirmed/.test(e.textContent))"
-             ".map((e) => e.getBoundingClientRect().width / e.closest('.up-main').getBoundingClientRect().width)")
-    got = run("engine", html=html, viewport=PHONE, clock=CLOCK, steps=[{"hash": "interviews", "eval": probe}])
+             ".map((e) => { const g = document.createRange(); g.selectNodeContents(e); const s = getComputedStyle(e), w = e.getBoundingClientRect().width;"
+             " const own = g.getBoundingClientRect().width + ['paddingLeft', 'paddingRight', 'borderLeftWidth', 'borderRightWidth'].reduce((a, k) => a + parseFloat(s[k]), 0);"
+             " return {ratio: w / e.closest('.up-main').getBoundingClientRect().width, spare: w - own}; })")
+    got = run("engine", html=html, viewport=PHONE, clock=CLOCK, timezoneId=zone, steps=[{"hash": "interviews", "eval": probe}])
     assert not got["errors"], got["errors"]
-    ratios = got["after"][0]["eval"]
-    assert ratios and all(r < 0.7 for r in ratios), ratios
+    pills = got["after"][0]["eval"]
+    assert pills and all(p["spare"] < 0.5 for p in pills), pills
+    if zone == PERSON_ZONE:
+        assert all(p["ratio"] < 0.7 for p in pills), pills
 
 
 def test_the_pencil_puts_the_cursor_in_its_box(run, page):

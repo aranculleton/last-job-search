@@ -408,10 +408,14 @@ next?" in its first lines, and nothing asks for a decision a default could make.
 - A dot between facts never starts or ends a line, and a day said in words ("Sun 20 Sept") is
   never broken over two: a dot is held to the word after it, and one a line would still start
   or end with goes out of sight (app.js `wordsAdd`, `sepFit`). A file's name or the page's
-  address wraps only after an underscore, a slash or a dot, never inside a word. Why: "·
+  address wraps only after an underscore, a slash or a dot, never inside a word: a part that
+  does not fit after the rest goes to the next line whole, and only a part longer than a whole
+  line breaks inside itself, at its hyphens. Why: "·
   Applied 3 Nov" with nothing before it, "Interview · Supply Chain Analyst ·" over a pill, a
   row's "· Recruiter" under its name, and a name broken after its 41st letter (the screen
-  review, 2026-11-11). (overlap test: separator, crushed)
+  review, 2026-11-11); the page's 36-letter id broken at a hyphen in Chrome where it fitted a
+  line of its own, and between two digits in Firefox (Everywhere, 2026-11-17). (overlap test:
+  separator, crushed; settings link test)
 - A Jobs card's actions are the one row of pills of Buttons, below: one filled next step, two soft
   pills at most, then More. What was checked is the documents themselves, a row each in a soft
   well, a hairline between: its icon, its name ("CV", "Cover letter"), "1 page · checked", then
@@ -436,7 +440,11 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   wherever its day is given, and booked again without it, it is confirmed. Why: a day only
   asked for read as fixed (the maintainer, 2026-11-05). (not-confirmed tests)
 - Coming up is a card a day: under the day ("Wed 28 Oct", with a "Today" or "Tomorrow" capsule
-  beside it) one card of its rows, a hairline between them inset 16. A row is its time in a
+  beside it) one card of its rows, 8px under the day's line as a Jobs stage's card is under its
+  label, the line its words' own height (the capsule's where it has one), a hairline between
+  the rows inset 16. Why the line's own height: held at 24px for a capsule most days do not
+  have, it put Coming up's first card past a phone's first-item line in Firefox (Everywhere,
+  2026-11-17; layout 1). A row is its time in a
   steady 64px column (tabular, semibold; "End of day" and "All day" in the quiet small words),
   what it is in a card title's size, one line under it saying what kind it is with a chip for
   its prep ("Prep ready" green, "No prep yet" grey), and one More at its end (36px, 44 on touch)
@@ -957,7 +965,12 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   words to send in the body's size, a one-line setting a 44px row. Why: drawn at 85% a phone's body was 12.8px and its small
   words 11.2px in grey (the review, 2026-11-10); "1 job posting per screen" (the maintainer,
   2026-10-29) is answered by the padding. (room test, target probe) A switch or a checkbox is reached
-  through its whole row, its label. (target probe, layout 14)
+  through its whole row, its label. (target probe, layout 14) A target's size is its own rule,
+  never its words' size: a control showing only a count or an icon is 44px wide, and a box to
+  type in 44px tall however many lines its hint takes (Chat's box on a phone is 54px around one
+  line, as it was beside its picture button). Why: the header's work pill with its count alone was 41px wide in a Mac's
+  type, and Chat's box, its hint one line in Windows' type, 40px tall (Everywhere, 2026-11-17;
+  target probe, work pill test, chat box test).
 - On a computer every control is at least 24px each way where it is reached (WCAG 2.2, 2.5.8),
   at any of the page's sizes: a small one keeps its drawn look and reaches the rest through its
   `::after`; a row that is a link, and a fold's heading, are that tall; a setting's pill is its
@@ -1095,7 +1108,10 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   only the brief needs the cloud). (place and routing tests)
 - An opened setting reads across a wide panel: its words on the left, its buttons at the right
   edge under the row's own value, and a tap's line under both with its Undo at the right; on a
-  phone the buttons follow the words. One way to do each thing in it. A short single choice is
+  phone the buttons follow the words. The page's own address is the one row whose words take
+  the whole width, its Copy link under it at the right edge: beside the button its 36-letter id
+  had 291 to 327px of a two-column Settings and was 327px long (Everywhere, 2026-11-17;
+  settings link test). One way to do each thing in it. A short single choice is
   a segmented control (a sunk track, the one chosen raised on it), still a radio group, that
   wraps on a phone; a choice with more to say under each is a list of option rows; a setting
   that is on or off is a switch, its state its knob's place as well as its colour. On a phone a

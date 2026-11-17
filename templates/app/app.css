@@ -1415,6 +1415,10 @@ dialog.work-sheet { position: fixed; inset: auto 0 0 0; margin: 0; width: 100%; 
 @media (hover: hover) { .talk-send:not(.is-empty):hover { background: var(--accent-hover); } }
 .talk-send:disabled { cursor: not-allowed; }
 @media (max-width: 759px), (pointer: coarse) { .talk-send { position: relative; } .talk-send::after { content: ""; position: absolute; inset: -4px; } }
+/* On touch the box itself is a 44px target, however many lines its hint takes: one line of
+   Windows' type left it 40px (Everywhere, 2026-11-17). Its words stay where they were, and the
+   row around one line is 54px, as it already was beside the picture button. */
+@media (max-width: 759px), (pointer: coarse) { .talk-row textarea { min-height: var(--target); } }
 .examples { display: flex; flex-wrap: wrap; gap: 8px; }
 .talk-who { font-weight: 600; }
 
@@ -1743,6 +1747,10 @@ a.navlink, .applylink, .btn.link, .fold .btn.link, .bp-foot a { text-decoration-
   .seg-opt::after { content: ""; position: absolute; inset: calc(-6px * var(--tz)) 0; }
   .pill, .menu-btn, .af-chip { min-height: calc(36px * var(--tz)); position: relative; }
   .pill::after, .menu-btn::after, .af-chip::after { content: ""; position: absolute; inset: calc(-4px * var(--tz)) 0; }
+  /* Its reach is above and below only, so the work pill with its count alone is a target's
+     width by its own rule: in a Mac's type its spinner and "1" were 41px (Everywhere,
+     2026-11-17). */
+  .pill { min-width: var(--target); justify-content: center; }
   .active-filters { min-height: calc(36px * var(--tz)); }
   .btn, .btn.small, .btn.icon { min-width: var(--target); }
   /* A link inside a sentence keeps the sentence's line: its 44px target reaches above and
@@ -1880,9 +1888,12 @@ label.pick { display: flex; align-items: flex-start; justify-content: center; wi
 /* The page's address wraps only at its slashes and dots (app.js, addressWords), each part
    kept whole; a part too long for any line still breaks rather than run off the card. */
 .page-url { overflow-wrap: break-word; }
-/* A part longer than its line (a page's long id in Settings' narrower column) breaks inside
-   itself, never runs under Copy link beside it (the redesign's second round, 2026-11-17). */
-.page-url > .nowrap { white-space: normal; overflow-wrap: anywhere; }
+/* Each part a box of its own: one that does not fit after the rest goes to the next line whole,
+   and only one longer than a whole line breaks inside itself, at its hyphens (addressWords)
+   and then anywhere, never running under Copy link (the redesign's second round). Wrapped as
+   words, the page's id broke at a hyphen in Chrome where it fitted a line of its own, and
+   between two digits in Firefox (Everywhere, 2026-11-17). */
+.page-url > .nowrap { display: inline-block; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
 .add-download { display: inline-flex; gap: 8px; flex-wrap: wrap; }
 /* An opened fold (foldBody): its words, then what they do, then the line a tap leaves. On a
    wide screen the words and the buttons stand side by side, the buttons at the right edge
@@ -1899,6 +1910,11 @@ li:first-child > .fb-row, .fb-row:first-child { border-top: 0; }
   .fbody.has-acts > .fb-acts { grid-column: 2; grid-row: 1; justify-content: flex-end; }
   .fbody > :not(.fb-say):not(.fb-acts) { grid-column: 1 / -1; }
   .fbody > .state { justify-content: space-between; }
+  /* The page's address takes the row's whole width, its Copy link under it at the right edge:
+     beside the button its 36-letter id had 291 to 327px of a two-column Settings and was 327px
+     long (Everywhere, 2026-11-17). */
+  .fbody.has-acts.fb-whole { grid-template-columns: minmax(0, 1fr); }
+  .fbody.has-acts.fb-whole > .fb-acts { grid-column: 1; grid-row: auto; }
 }
 /* A short single choice in Settings sits side by side and wraps on a phone: four choices stood
    down the left of a wide panel with a gap after each (the maintainer, 2026-11-04: "this could
@@ -2850,7 +2866,10 @@ ul.bp-news { gap: 12px; }
 .up-agenda { display: grid; gap: 12px; }
 .up-days { display: grid; gap: 20px; }
 .up-day { display: grid; gap: 8px; }
-.up-day-head { display: flex; align-items: center; gap: 8px; min-height: 24px; }
+/* The day's line is its words' own height (the capsule's where it has one), its card 8px under it
+   as a Jobs stage's is under its label: held at 24px for a capsule most days do not have, it
+   put the first card past a phone's first-item line in Firefox (Everywhere, 2026-11-17). */
+.up-day-head { display: flex; align-items: center; gap: 8px; }
 .up-day-head > .group { margin: 0; }
 .day-cap { display: inline-flex; align-items: center; gap: 4px; padding: 0 8px; border-radius: 999px; background: var(--raised); color: var(--ink); font-size: var(--t-sm); font-weight: 600; line-height: 22px; }
 .day-cap::before { content: ""; flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--day-today); }
