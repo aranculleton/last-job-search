@@ -178,7 +178,8 @@ def test_two_job_chats_at_work_never_share_a_name(monkeypatch, tmp_path):
     title = "Interview prep: Larkspur Retail, Data Analyst"   # a second round asked for
     db = {"work": {
         "prep~a": {"data": {"kind": "prep", "status": "running", "title": title,
-                              "chat_title": f"Job search: {title}", "claimed_by": LIVE,
+                              "chat_title": f"Last Job Search \u00b7 {title}, 5 Nov",
+                              "claimed_by": LIVE,
                               "claimed_at": "2026-11-05T11:55:00Z",
                               "lease_until": "2026-11-05T12:25:00Z"}, "version": 2},
         "prep~b": {"data": {"kind": "prep", "status": "queued", "to": "cloud", "title": title,
@@ -186,10 +187,10 @@ def test_two_job_chats_at_work_never_share_a_name(monkeypatch, tmp_path):
     got = app.choose(db, LIVE, "cloud", now, claim_out=str(tmp_path / "claim"))
     assert got["work"] == "prep~b"
     named = got["create_session"]["title"]
-    assert named == f"Job search: {title} (2)" and tidy.APP_TITLE.match(named)
+    assert named == f"Last Job Search \u00b7 {title}, 5 Nov (2)" and tidy.APP_TITLE.match(named)
     files = [os.path.join(d, f) for d, _, fs in os.walk(tmp_path / "claim") for f in fs]
     written = [json.load(open(f, encoding="utf-8")) for f in files if "prep@b" in f]
-    assert written and written[0]["chat_title"] == f"Job search: {title} (2)", written
+    assert written and written[0]["chat_title"] == named, written
     assert app.distinct_title("Job search: x", {"Job search: x", "Job search: x (2)"}) == \
         "Job search: x (3)"
     long = "Job search: " + "An analyst role at Kestrel Mutual " * 3
@@ -279,7 +280,7 @@ def _own_chat_move(calls, old_id):
     access (the maintainer, 2026-11-10)."""
     assert [c.get("tool") or "run" for c in calls] == [
         "create_session", "create_trigger", "run", "update_trigger"], calls
-    assert calls[0]["args"]["title"] == routines.BRIEF_NAME
+    assert calls[0]["args"]["title"] == routines.BRIEF_CHAT_TITLE
     assert calls[0]["args"]["source_url"] == f"https://github.com/{REPO}"
     assert calls[1]["args"]["persistent_session_id"] == routines.NEW_CHAT
     assert "--own-chat" in calls[2]["run"] and routines.NEW_CHAT in calls[2]["run"]
@@ -384,18 +385,19 @@ def test_the_first_tidy_up_after_the_update_runs_even_if_one_ran_today(copy):
     assert tidy.due("2026-11-05") is False
 
 
-def test_the_live_helper_is_called_job_search_page_and_takes_the_name_once(copy, monkeypatch):
-    """The live helper is "Job search page", a name no other chat has; one from before, still
-    "Job search helper", takes it at its next check-in, once. The tidy-up knows both names."""
+def test_the_live_helper_has_the_pages_own_name_and_takes_it_once(copy, monkeypatch):
+    """The live helper is "Last Job Search · Page" since issue #289 ("Job search page" from
+    4 November), a name no other chat has; one from before, still "Job search helper", takes
+    it at its next check-in, once. The tidy-up knows every name."""
     monkeypatch.setattr(app_listen, "chat_kind", lambda: "cloud")
-    assert app_listen.HELPER_CHAT_TITLE == "Job search page"
+    assert app_listen.HELPER_CHAT_TITLE == "Last Job Search \u00b7 Page"
     rec = {"chat": LIVE, "title": "Job search helper", "kind": "cloud", "helper": True,
            "since": "2026-11-05T08:00:00Z", "answered_at": "2026-11-05T08:30:00Z"}
     db = {"meta": {"listener": {"data": rec, "version": 3}}, "work": {}}
     got = app_listen.decide(db, LIVE, str(copy.root) + "/a", NOW)
-    rename = f'set_session_title (session_id {LIVE}, title "Job search page")'
+    rename = f'set_session_title (session_id {LIVE}, title "{app_listen.HELPER_CHAT_TITLE}")'
     assert any(rename in ln for ln in got["lines"]), got["lines"]
-    assert got["record"]["title"] == "Job search page"
+    assert got["record"]["title"] == app_listen.HELPER_CHAT_TITLE
     db2 = {"meta": {"listener": {"data": got["record"], "version": 4}}, "work": {}}
     assert not any("set_session_title" in ln for ln in app_listen.decide(db2, LIVE, str(copy.root) + "/b", NOW)["lines"])
     # The person's own chat answering the page keeps its own name.
