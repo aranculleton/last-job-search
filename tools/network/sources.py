@@ -1009,7 +1009,7 @@ def from_people_paste(text: str, company: str, degree: str = "", contacts=None) 
     import state
     got = [p for p in people_paste(text, company, degree) if p["name"]]
     if contacts is None:
-        contacts = state.load_contacts() if os.path.exists(state.CONTACTS_CSV) else []
+        contacts = state.load_contacts() if os.path.exists(state.contacts_csv()) else []
     first = [dict(p, company=company) for p in got if p["degree"] == "1st"]
     ranked = [dict(p, evidence="your paste of LinkedIn's people search, 1st-degree")
               for p in from_connections(company, connections=first, contacts=contacts)]
@@ -1065,9 +1065,9 @@ def harvest(results, company: str, kind: str = "title_search", query: str = "",
                 p["evidence"] = f"{known['evidence']}; then {p['evidence']}"
     t = discovery.triage(people, today=today, target_company=company)
     if contacts is None:
-        contacts = state.load_contacts() if os.path.exists(state.CONTACTS_CSV) else []
+        contacts = state.load_contacts() if os.path.exists(state.contacts_csv()) else []
     conns = state.first_degree() if connections is None else connections
-    threads = state.load_threads() if os.path.exists(state.THREADS_CSV) else []
+    threads = state.load_threads() if os.path.exists(state.threads_csv()) else []
     import surface
     ctx = surface.context(contacts=contacts, threads=threads, connections=conns, today=today)
     keep, dropped = [], list(t["dropped"])

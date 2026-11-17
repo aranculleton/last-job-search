@@ -551,7 +551,7 @@ def messaging(today, threads=None) -> bool:
     st = _state()
     today = st._need_date(today, "today")
     if threads is None:
-        threads = st.load_threads() if os.path.exists(st.THREADS_CSV) else []
+        threads = st.load_threads() if os.path.exists(st.threads_csv()) else []
     for r in threads:
         if st.direction(r) != "out" or st.is_call(r):
             continue
@@ -648,7 +648,7 @@ def last_taken(threads=None) -> tuple:
         return datetime.date.fromisoformat(max(kept.values())), "the newest day in it"
     st = _state()
     if threads is None:
-        threads = st.load_threads() if os.path.exists(st.THREADS_CSV) else []
+        threads = st.load_threads() if os.path.exists(st.threads_csv()) else []
     days = [st.as_date(r.get("date")) for r in threads
             if EXPORT_NOTE.lower() in str(r.get("summary") or "").lower()]
     days = [d for d in days if d]
@@ -879,7 +879,7 @@ def take(srcs, contacts_path: str | None = None, threads_path: str | None = None
     recorded for the brief's fortnightly ask (`due`)."""
     st = _state()
     today = person.today()
-    cp, tp = contacts_path or st.CONTACTS_CSV, threads_path or st.THREADS_CSV
+    cp, tp = contacts_path or st.contacts_csv(), threads_path or st.threads_csv()
     held = read("connections", default_folder())
     taken, _how = last_taken(st.load_threads(tp) if os.path.exists(tp) else [])
     before = (held["rows"] if held["usable"] else None, taken)
@@ -933,7 +933,7 @@ def again(contacts_path: str | None = None, threads_path: str | None = None) -> 
     (the maintainer, 2026-11-04). The day it was taken and what changed since the one
     before stay as the first take recorded them. {"imported", "filled", "lines"}."""
     st = _state()
-    cp, tp = contacts_path or st.CONTACTS_CSV, threads_path or st.THREADS_CSV
+    cp, tp = contacts_path or st.contacts_csv(), threads_path or st.threads_csv()
     contacts, threads = st.load_contacts(cp), st.load_threads(tp)
     plan = plan_history(contacts, threads, home())
     if plan["problem"]:
@@ -1432,7 +1432,7 @@ def tidy(contacts_path: str | None = None, threads_path: str | None = None, dry:
     from their log (`settle`). {"removed": n, "reordered": n, "settled": [(id, old, new)],
     "retyped": n}."""
     st = _state()
-    cp, tp = contacts_path or st.CONTACTS_CSV, threads_path or st.THREADS_CSV
+    cp, tp = contacts_path or st.contacts_csv(), threads_path or st.threads_csv()
     threads = st.load_threads(tp)
     contacts = st.load_contacts(cp)
     pairs = _twice(threads)
@@ -2232,7 +2232,7 @@ def one_record(contacts_path: str | None = None, threads_path: str | None = None
 
     {"joined": [(kept id, [closed ids])], "filled": [(contact id, [fields])]}."""
     st = _state()
-    cp, tp = contacts_path or st.CONTACTS_CSV, threads_path or st.THREADS_CSV
+    cp, tp = contacts_path or st.contacts_csv(), threads_path or st.threads_csv()
     contacts = st.load_contacts(cp)
     threads = st.load_threads(tp)
     day = (today or person.today()).isoformat()
@@ -2688,8 +2688,8 @@ def main(argv=None) -> int:
     t = sub.add_parser("take", help="save the export and import its history, in one step")
     t.add_argument("srcs", nargs="*")
     t.add_argument("--find", action="store_true")
-    t.add_argument("--contacts", default=st.CONTACTS_CSV)
-    t.add_argument("--threads", default=st.THREADS_CSV)
+    t.add_argument("--contacts", default=st.contacts_csv())
+    t.add_argument("--threads", default=st.threads_csv())
     d = sub.add_parser("due", help="one line once the last download is due again (every_days)")
     d.add_argument("--today", default=person.today().isoformat())
     stt = sub.add_parser("status", help="the next step for the download: request, waiting, "
@@ -2709,8 +2709,8 @@ def main(argv=None) -> int:
                            ("withdrawn", "record invitations withdrawn on LinkedIn")):
         p = sub.add_parser(name, help=helptext)
         p.add_argument("--from", dest="src", default=None)
-        p.add_argument("--contacts", default=st.CONTACTS_CSV)
-        p.add_argument("--threads", default=st.THREADS_CSV)
+        p.add_argument("--contacts", default=st.contacts_csv())
+        p.add_argument("--threads", default=st.threads_csv())
         p.add_argument("--today", default=person.today().isoformat())
         if name == "history":
             p.add_argument("--apply", action="store_true")
@@ -2723,14 +2723,14 @@ def main(argv=None) -> int:
             p.add_argument("--reason", default="")
     td = sub.add_parser("tidy", help="messages the export logged twice taken out, and the "
                                      "statuses they changed set again")
-    td.add_argument("--contacts", default=st.CONTACTS_CSV)
-    td.add_argument("--threads", default=st.THREADS_CSV)
+    td.add_argument("--contacts", default=st.contacts_csv())
+    td.add_argument("--threads", default=st.threads_csv())
     td.add_argument("--dry", action="store_true")
     one = sub.add_parser("one-record", help="rows the message log shows are one person joined, "
                                             "and first-name-only rows filled from Connections.csv "
                                             "where exactly one connection is them")
-    one.add_argument("--contacts", default=st.CONTACTS_CSV)
-    one.add_argument("--threads", default=st.THREADS_CSV)
+    one.add_argument("--contacts", default=st.contacts_csv())
+    one.add_argument("--threads", default=st.threads_csv())
     one.add_argument("--from", dest="src", default=None)
     one.add_argument("--dry", action="store_true")
     a = ap.parse_args(argv)

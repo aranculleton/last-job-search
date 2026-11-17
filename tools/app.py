@@ -306,11 +306,11 @@ def unread_why(cid: str, model: dict, now) -> str:
             return "held back while their employer has enough people waiting"
     try:
         from network import schema, state
-        rows = state.load_contacts(state.CONTACTS_CSV)
+        rows = state.load_contacts(state.contacts_csv())
         row = next((r for r in rows if str(r.get("contact_id") or "").strip() == cid), None)
         if row is None:
             return ""
-        threads = state.load_threads(state.THREADS_CSV) if os.path.exists(state.THREADS_CSV) \
+        threads = state.load_threads(state.threads_csv()) if os.path.exists(state.threads_csv()) \
             else []
         msgs = [t for t in threads if str(t.get("contact_id") or "").strip() == cid]
         if state.effective_status(row, msgs) not in schema.NEVER_SENT:
@@ -4000,7 +4000,7 @@ def hold_on_record(db: dict, work_id: str, summary: str, until: str, now) -> str
         action = (f"Hold until {until}" if until else "Hold") + (f": {why}" if why else "")
     # With the day it was made: what they write after it is owed an answer, hold or no hold.
     contacts = state.load_contacts()
-    threads = state.load_threads() if os.path.exists(state.THREADS_CSV) else []
+    threads = state.load_threads() if os.path.exists(state.threads_csv()) else []
     action = state.hold_since(action, person.today(now),
                               [r for r in threads if str(r.get("contact_id") or "").strip() == cid])
     before = state.already_contacted(contacts, contact_id=cid) or {}

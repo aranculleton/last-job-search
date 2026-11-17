@@ -91,11 +91,13 @@ for _p in (os.path.join(ROOT, "tools", "network"), os.path.join(ROOT, "tools")):
 import schema as _schema  # noqa: E402,F401
 from network import schema as _network_schema  # noqa: E402,F401
 # The message log's module is reached by two names as well (`state`, and `network.state` from
-# followup_drafts and the page's model), and each fixes its file paths when first imported.
-# Imported here, under the tests' own state, so a test that points LJS_STATE at a folder of its
-# own for a moment cannot leave one name reading that folder, deleted, for every test after it
-# in the same worker (the review, 2026-11-10: the referral-ask tests failed after the interview
-# pack's, which first imported network.state inside a fixture of its own).
+# followup_drafts and the page's model). Its loads and saves read the state at each call (issue
+# 340), but its CONTACTS_CSV, THREADS_CSV and TRACKER_CSV still say where the files were when
+# it was first imported, and a test may read them. Imported here, under the tests' own state,
+# so a test that points LJS_STATE at a folder of its own for a moment cannot leave those names
+# saying that folder, deleted, for every test after it in the same worker (the review,
+# 2026-11-10: the referral-ask tests failed after the interview pack's, which first imported
+# network.state inside a fixture of its own).
 import state as _state_module  # noqa: E402,F401
 from network import state as _network_state  # noqa: E402,F401
 

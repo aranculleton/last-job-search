@@ -252,10 +252,10 @@ def ranked(contacts: list, today: dt.date | None = None, tracker=None, threads=N
     import reading as _reading
     import state
     if tracker is None:
-        tracker = state.load_tracker() if os.path.exists(state.TRACKER_CSV) else []
+        tracker = state.load_tracker() if os.path.exists(state.tracker_csv()) else []
     apps = {l["contact_id"]: l["applications"] for l in state.link_to_applications(contacts, tracker)}
     if threads is None:
-        threads = state.load_threads() if os.path.exists(state.THREADS_CSV) else []
+        threads = state.load_threads() if os.path.exists(state.threads_csv()) else []
     odds = route_odds(contacts, threads, today) if threads else {}
     out = []
     for c in contacts:
@@ -295,7 +295,7 @@ def main(argv: list | None = None) -> int:
     everyone = "--all" in args
     ids = {a for a in args if a != "--all"}
     contacts = [c for c in state.load_contacts() if not ids or c.get("contact_id") in ids]
-    threads = state.load_threads() if os.path.exists(state.THREADS_CSV) else []
+    threads = state.load_threads() if os.path.exists(state.threads_csv()) else []
     import surface
     ctx = surface.context(contacts=state.load_contacts(), threads=threads)
     left_out = 0

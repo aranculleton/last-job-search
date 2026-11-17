@@ -84,9 +84,9 @@ def context(contacts=None, threads=None, connections=None, today=None, index=Non
     by_contact groups it where `index` is something else (state.pooled's), for the employer
     limit (reading.at_employer), which reads the log as it is."""
     if contacts is None:
-        contacts = state.load_contacts() if os.path.exists(state.CONTACTS_CSV) else []
+        contacts = state.load_contacts() if os.path.exists(state.contacts_csv()) else []
     if threads is None:
-        threads = state.load_threads() if os.path.exists(state.THREADS_CSV) else []
+        threads = state.load_threads() if os.path.exists(state.threads_csv()) else []
     if connections is None:
         connections = state.first_degree()
     today = state.as_date(today) or state.person.today()

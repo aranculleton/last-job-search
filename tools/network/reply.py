@@ -1933,8 +1933,8 @@ def prepare(argv) -> int:
                     help="default: the way the thread runs (a message on LinkedIn)")
     ap.add_argument("--scenario", default="", help="what it is, where the reading here is wrong")
     ap.add_argument("--subject", default="")
-    ap.add_argument("--contacts", default=state.CONTACTS_CSV)
-    ap.add_argument("--threads", default=state.THREADS_CSV)
+    ap.add_argument("--contacts", default=state.contacts_csv())
+    ap.add_argument("--threads", default=state.threads_csv())
     ap.add_argument("--today", default=person.today().isoformat())
     a = ap.parse_args(argv)
     text = _words(a.text_file, "prepare") if a.text_file else ""
@@ -2326,8 +2326,8 @@ def finish(argv) -> int:
                          "referral ask work, and a draft ending with the posting's link on its "
                          "own line after the ask, are read as one without it")
     ap.add_argument("--out", default="", help="where the batch goes (default <dump>/out)")
-    ap.add_argument("--contacts", default=state.CONTACTS_CSV)
-    ap.add_argument("--threads", default=state.THREADS_CSV)
+    ap.add_argument("--contacts", default=state.contacts_csv())
+    ap.add_argument("--threads", default=state.threads_csv())
     ap.add_argument("--today", default=person.today().isoformat())
     ap.add_argument("--now", default=None)
     a = ap.parse_args(argv)

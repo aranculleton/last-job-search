@@ -2509,9 +2509,9 @@ def main(argv=None) -> int:
     ap.add_argument("--check", action="store_true",
                     help="are the answers in this contact's prep fit to say aloud? Exits 1 "
                          "while any is profile wording or reads as written")
-    ap.add_argument("--contacts", default=state.CONTACTS_CSV)
-    ap.add_argument("--threads", default=state.THREADS_CSV)
-    ap.add_argument("--tracker", default=state.TRACKER_CSV)
+    ap.add_argument("--contacts", default=state.contacts_csv())
+    ap.add_argument("--threads", default=state.threads_csv())
+    ap.add_argument("--tracker", default=state.tracker_csv())
     ap.add_argument("--profile-facts", default="",
                     help="JSON of facts drawn from 01-candidate-profile.md. Nothing is "
                          "invented when this is absent; the section says so instead.")

@@ -89,9 +89,40 @@ try:
     WEEKEND = frozenset(getattr(person.module("search"), "WEEKEND", (5, 6)))
 except person.NoProfile:
     WEEKEND = frozenset((5, 6))
+# Where the contact book, the message log and the tracker are: read from the state at each
+# load and save (contacts_csv, threads_csv, tracker_csv), never fixed when this module was
+# first loaded. Fixed then, a process that moved LJS_STATE afterwards (a page built for a
+# second state in the same process, a test) read and wrote the first state's book: the
+# second page showed the first one's holds (issue 340). The three names are kept for the
+# scripts and tests that name them: as loaded they say where the files were then, and one set
+# over (a test pointing the book at a file of its own) is where that file is read and written
+# for as long as it is set.
 CONTACTS_CSV = person.state("network_contacts.csv")
 THREADS_CSV = person.state("network_threads.csv")
 TRACKER_CSV = person.state("job_search_tracker.csv")
+_AS_LOADED = {"CONTACTS_CSV": CONTACTS_CSV, "THREADS_CSV": THREADS_CSV, "TRACKER_CSV": TRACKER_CSV}
+
+
+def _state_file(name: str, file: str) -> str:
+    """The path one of the names above gives now: the value set over it, else the state's."""
+    here = globals()[name]
+    return here if here is not _AS_LOADED[name] else person.state(file)
+
+
+def contacts_csv() -> str:
+    """Where the contact book is now (CONTACTS_CSV above says how it is read)."""
+    return _state_file("CONTACTS_CSV", "network_contacts.csv")
+
+
+def threads_csv() -> str:
+    """Where the message log is now."""
+    return _state_file("THREADS_CSV", "network_threads.csv")
+
+
+def tracker_csv() -> str:
+    """Where the application tracker is now."""
+    return _state_file("TRACKER_CSV", "job_search_tracker.csv")
+
 
 # The statuses the log is the authority on: it knows who spoke last. A stored
 # value in this set that disagrees with the log is drift. `call_booked`,
@@ -242,11 +273,12 @@ def _read_csv(path: str, columns) -> list[dict]:
     return csv_store.read_rows(path, columns)
 
 
-def load_contacts(path: str = CONTACTS_CSV) -> list[dict]:
-    return _read_csv(path, schema.CONTACT_COLUMNS)
+def load_contacts(path: str | None = None) -> list[dict]:
+    return _read_csv(path or contacts_csv(), schema.CONTACT_COLUMNS)
 
 
-def save_contacts(rows, path: str = CONTACTS_CSV) -> None:
+def save_contacts(rows, path: str | None = None) -> None:
+    path = path or contacts_csv()
     _write_csv(path, rows, schema.CONTACT_COLUMNS)
     _unqueue_closed(rows, path)
 
@@ -272,19 +304,19 @@ def _unqueue_closed(rows, path: str) -> None:
         pass
 
 
-def load_threads(path: str = THREADS_CSV) -> list[dict]:
-    return _read_csv(path, schema.THREAD_COLUMNS)
+def load_threads(path: str | None = None) -> list[dict]:
+    return _read_csv(path or threads_csv(), schema.THREAD_COLUMNS)
 
 
-def save_threads(rows, path: str = THREADS_CSV) -> None:
-    _write_csv(path, rows, schema.THREAD_COLUMNS)
+def save_threads(rows, path: str | None = None) -> None:
+    _write_csv(path or threads_csv(), rows, schema.THREAD_COLUMNS)
 
 
-def load_tracker(path: str = TRACKER_CSV) -> list[dict]:
+def load_tracker(path: str | None = None) -> list[dict]:
     """The application tracker, read only. Nothing here ever writes it (read the way a
     spreadsheet saved it: csv_store.read_text)."""
     import csv_store
-    return csv_store.tracker(path, refuse=False)
+    return csv_store.tracker(path or tracker_csv(), refuse=False)
 
 
 # ---------------------------------------------------------------- identity
@@ -3066,8 +3098,8 @@ def _cli_withdraw(argv) -> int:
     ap.add_argument("--all-due", action="store_true",
                     help="every request /threads lists as one to withdraw")
     ap.add_argument("--reason", default="")
-    ap.add_argument("--contacts", default=CONTACTS_CSV)
-    ap.add_argument("--threads", default=THREADS_CSV)
+    ap.add_argument("--contacts", default=contacts_csv())
+    ap.add_argument("--threads", default=threads_csv())
     ap.add_argument("--today", default=person.today().isoformat())
     a = ap.parse_args(argv)
     contacts, threads = load_contacts(a.contacts), load_threads(a.threads)
@@ -3206,7 +3238,7 @@ def _cli_add(argv) -> int:
     ap.add_argument("--note", default="")
     ap.add_argument("--new", action="store_true",
                     help="someone else with a name like one already in the book")
-    ap.add_argument("--contacts", default=CONTACTS_CSV)
+    ap.add_argument("--contacts", default=contacts_csv())
     ap.add_argument("--today", default=person.today().isoformat())
     a = ap.parse_args(argv)
     contacts = load_contacts(a.contacts)
@@ -3297,8 +3329,8 @@ def _cli_accepted(argv) -> int:
         description="Record that they accepted a connection request (not a message).")
     ap.add_argument("contact_ids", nargs="+", help="who accepted, by contact id or name")
     ap.add_argument("--date", default="", help="the day they accepted (default today)")
-    ap.add_argument("--contacts", default=CONTACTS_CSV)
-    ap.add_argument("--threads", default=THREADS_CSV)
+    ap.add_argument("--contacts", default=contacts_csv())
+    ap.add_argument("--threads", default=threads_csv())
     ap.add_argument("--today", default=person.today().isoformat())
     a = ap.parse_args(argv)
     contacts, threads = load_contacts(a.contacts), load_threads(a.threads)
@@ -3818,8 +3850,8 @@ def _cli_received(argv) -> int:
     ap.add_argument("--scenario", default="",
                     help="what /reply read it as (default: read here, the same way)")
     ap.add_argument("--subject", default="")
-    ap.add_argument("--contacts", default=CONTACTS_CSV)
-    ap.add_argument("--threads", default=THREADS_CSV)
+    ap.add_argument("--contacts", default=contacts_csv())
+    ap.add_argument("--threads", default=threads_csv())
     ap.add_argument("--today", default=person.today().isoformat())
     a = ap.parse_args(argv)
     text = _words_from(a.text_file, "received")
@@ -3996,7 +4028,7 @@ def _cli_hold(argv) -> int:
     ap.add_argument("--until", default="", help="the condition, in words: \"she answers the "
                                                 "email\", \"after the interview on Friday\"")
     ap.add_argument("--release", action="store_true", help="put the held draft back")
-    ap.add_argument("--contacts", default=CONTACTS_CSV)
+    ap.add_argument("--contacts", default=contacts_csv())
     ap.add_argument("--today", default=person.today().isoformat())
     a = ap.parse_args(argv)
     contacts = load_contacts(a.contacts)
@@ -4043,7 +4075,7 @@ def note_draft_answers(contact_id: str, msgs=None, threads_path: str | None = No
     if not folder or not os.path.isdir(folder):
         return
     if msgs is None:
-        path = threads_path or THREADS_CSV
+        path = threads_path or threads_csv()
         msgs = threads_for(load_threads(path), contact_id) if os.path.exists(path) else []
     day, n = _their_newest(msgs)
     with open(os.path.join(folder, ANSWERS), "w", encoding="utf-8", newline="\n") as fh:
@@ -4488,7 +4520,7 @@ def _spellings(key: str, contacts=None, also=()) -> list:
         if _proper(n) and company_key(n) == key:
             seen[n] += 1
     try:
-        for r in load_tracker() if os.path.exists(TRACKER_CSV) else ():
+        for r in load_tracker() if os.path.exists(tracker_csv()) else ():
             n = str(r.get("company") or "").strip()
             if _proper(n) and company_key(n) == key:
                 seen[n] += 1
@@ -4716,8 +4748,8 @@ def _cli_sent(argv) -> int:
     ap.add_argument("--attached", default="", metavar="FILE",
                     help="a file that went with it, as it sits in the repo (a resume: "
                          "cv/<name>.pdf or documents/cv/<name>.pdf)")
-    ap.add_argument("--contacts", default=CONTACTS_CSV)
-    ap.add_argument("--threads", default=THREADS_CSV)
+    ap.add_argument("--contacts", default=contacts_csv())
+    ap.add_argument("--threads", default=threads_csv())
     ap.add_argument("--today", default=person.today().isoformat())
     a = ap.parse_args(argv)
     if a.text_file and len(a.contact_ids) > 1:
@@ -4822,8 +4854,8 @@ def _cli_followed_up(argv, kind) -> int:
     ap.add_argument("--answers", action="store_true",
                     help="written as an answer to them (a new day for a call they offered): "
                          "never counted as a follow-up")
-    ap.add_argument("--contacts", default=CONTACTS_CSV)
-    ap.add_argument("--threads", default=THREADS_CSV)
+    ap.add_argument("--contacts", default=contacts_csv())
+    ap.add_argument("--threads", default=threads_csv())
     ap.add_argument("--today", default=person.today().isoformat())
     a = ap.parse_args(argv)
     if a.text_file and len(a.contact_ids) > 1:
@@ -4899,8 +4931,8 @@ def _cli_inmail_credits(argv) -> int:
                     "with no number, say what is left and where that number came from.")
     ap.add_argument("balance", nargs="?", type=int, default=None,
                     help="the InMail credits LinkedIn shows now")
-    ap.add_argument("--contacts", default=CONTACTS_CSV)
-    ap.add_argument("--threads", default=THREADS_CSV)
+    ap.add_argument("--contacts", default=contacts_csv())
+    ap.add_argument("--threads", default=threads_csv())
     ap.add_argument("--today", default=person.today().isoformat())
     a = ap.parse_args(argv)
     contacts, threads = load_contacts(a.contacts), load_threads(a.threads)
@@ -4962,8 +4994,8 @@ def _cli_resent(argv) -> int:
     ap.add_argument("--text-file", default="", help="the words as they went")
     ap.add_argument("--date", default="", help="the day it went")
     ap.add_argument("--subject", default="")
-    ap.add_argument("--contacts", default=CONTACTS_CSV)
-    ap.add_argument("--threads", default=THREADS_CSV)
+    ap.add_argument("--contacts", default=contacts_csv())
+    ap.add_argument("--threads", default=threads_csv())
     ap.add_argument("--today", default=person.today().isoformat())
     a = ap.parse_args(argv)
     text = _words_from(a.text_file, "resent") if a.text_file else ""
@@ -4989,8 +5021,8 @@ def _cli_unsend(argv) -> int:
         prog="state.py unsend",
         description="It did not go: take the last message to them off the log, note back to draft.")
     ap.add_argument("contact_id")
-    ap.add_argument("--contacts", default=CONTACTS_CSV)
-    ap.add_argument("--threads", default=THREADS_CSV)
+    ap.add_argument("--contacts", default=contacts_csv())
+    ap.add_argument("--threads", default=threads_csv())
     ap.add_argument("--today", default=person.today().isoformat())
     a = ap.parse_args(argv)
     contacts, threads = load_contacts(a.contacts), load_threads(a.threads)
@@ -5020,8 +5052,8 @@ def _cli_reopen_or_drop(argv, verb) -> int:
         ap.add_argument("--until", default="", help="YYYY-MM-DD: set aside for now, offered "
                                                     "again on that day; none: until reopened")
     ap.add_argument("--dry-run", action="store_true")
-    ap.add_argument("--contacts", default=CONTACTS_CSV)
-    ap.add_argument("--threads", default=THREADS_CSV)
+    ap.add_argument("--contacts", default=contacts_csv())
+    ap.add_argument("--threads", default=threads_csv())
     ap.add_argument("--today", default=person.today().isoformat())
     a = ap.parse_args(argv)
     contacts, threads = load_contacts(a.contacts), load_threads(a.threads)
@@ -5192,8 +5224,8 @@ def _cli_set(argv) -> int:
     ap.add_argument("--next-action", dest="next_action")
     ap.add_argument("--due", help="YYYY-MM-DD, or \"\" to clear it")
     ap.add_argument("--note", default="", help="added to their notes with today's date")
-    ap.add_argument("--contacts", default=CONTACTS_CSV)
-    ap.add_argument("--threads", default=THREADS_CSV)
+    ap.add_argument("--contacts", default=contacts_csv())
+    ap.add_argument("--threads", default=threads_csv())
     ap.add_argument("--today", default=person.today().isoformat())
     a = ap.parse_args(argv)
     contacts = load_contacts(a.contacts)
@@ -5238,8 +5270,8 @@ def _cli_no_reply(argv) -> int:
     ap.add_argument("--why", required=True, help="why not, e.g. what they said")
     ap.add_argument("--look-again", dest="look_again", default="",
                     help="YYYY-MM-DD (default: the person's own follow-up rule)")
-    ap.add_argument("--contacts", default=CONTACTS_CSV)
-    ap.add_argument("--threads", default=THREADS_CSV)
+    ap.add_argument("--contacts", default=contacts_csv())
+    ap.add_argument("--threads", default=threads_csv())
     ap.add_argument("--today", default=person.today().isoformat())
     a = ap.parse_args(argv)
     contacts, threads = load_contacts(a.contacts), load_threads(a.threads)
@@ -5950,7 +5982,7 @@ def _cli_attach(argv) -> int:
     ap.add_argument("--date", default="",
                     help="the day it went, as logged (default: the newest message of ours to them)")
     ap.add_argument("--file", dest="file_opt", default="", help="the same as the file above")
-    ap.add_argument("--threads", default=THREADS_CSV)
+    ap.add_argument("--threads", default=threads_csv())
     a = ap.parse_args(argv)
     path = a.file or a.file_opt
     if not path:
@@ -6070,7 +6102,7 @@ def end_role_hold(contact_id: str, path: str | None = None) -> bool:
     (role_hold), the wait is over, and the row says so no more. The referral ask written once
     a role was posted would otherwise be held, and set aside, as one written before it. True
     when the row changed."""
-    path = path or CONTACTS_CSV
+    path = path or contacts_csv()
     if not os.path.exists(path):
         return False
     contacts = load_contacts(path)
@@ -6093,7 +6125,7 @@ def hold_for_role(contacts, contact_id, why: str = "", today=None) -> bool:
     company = str(row.get("company") or "").strip() or "their employer"
     was = {"status": row.get("status") or "", "next_action": row.get("next_action") or ""}
     cid = str(row.get("contact_id") or "").strip()
-    msgs = [r for r in (load_threads() if os.path.exists(THREADS_CSV) else [])
+    msgs = [r for r in (load_threads() if os.path.exists(threads_csv()) else [])
             if str(r.get("contact_id") or "").strip() == cid]
     row["next_action"] = hold_since(
         ROLE_HOLD % company + (": " + " ".join(str(why).split()) if why else ""), today, msgs)
@@ -6651,9 +6683,9 @@ def main(argv=None) -> int:
     except Exception:
         pass
     ap = argparse.ArgumentParser(description="Networking pipeline state.")
-    ap.add_argument("--contacts", default=CONTACTS_CSV)
-    ap.add_argument("--threads", default=THREADS_CSV)
-    ap.add_argument("--tracker", default=TRACKER_CSV)
+    ap.add_argument("--contacts", default=contacts_csv())
+    ap.add_argument("--threads", default=threads_csv())
+    ap.add_argument("--tracker", default=tracker_csv())
     ap.add_argument("--today", default=person.today().isoformat())
     ap.add_argument("--all", action="store_true",
                     help="list every item owed, the ones owed over OLD_OWED_DAYS days too")
