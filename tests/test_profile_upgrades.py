@@ -1526,3 +1526,27 @@ def test_left_out_lists_written_before_are_slimmed_in_the_background(profile):
     assert u.pending().startswith("1 search(es)'")
     _tool("filtered.py", "slim")
     assert u.pending() == ""
+
+
+def test_lists_still_lifting_an_employer_turned_down_are_tidied_in_the_background(profile):
+    """Issue 307: employers turned down by name were still lifted by the tier sets, searched
+    by name and read from their own job site. Each plain entry for one comes off at once, and
+    nothing the person did not turn down. Invented employers."""
+    with open(profile / "employers.py", "a", encoding="utf-8") as fh:
+        fh.write('\nTIER_2 = {"kestrel mutual", "oakmere foods"}\n')
+    search = (profile / "search.py").read_text(encoding="utf-8")
+    (profile / "search.py").write_text(
+        search.replace("SCRAPE_EMPLOYERS = []",
+                       'SCRAPE_EMPLOYERS = ["Kestrel Mutual", "Oakmere Foods"]')
+        + '\nBAR_DECLINED = {"Kestrel Mutual Ltd": "candidate declined it 2026-11-01"}\n',
+        encoding="utf-8")
+    person.reset()
+    u = U.by_id("declined-tidied")
+    assert u.pending().startswith("2 list entries still lift or search employers you turned "
+                                  "down: Kestrel Mutual, kestrel mutual")
+    _tool("wants.py", "tidy")
+    person.reset()
+    assert u.pending() == ""
+    import profile_set
+    assert profile_set.get("employers.py", "TIER_2") == {"oakmere foods"}
+    assert profile_set.get("search.py", "SCRAPE_EMPLOYERS") == ["Oakmere Foods"]

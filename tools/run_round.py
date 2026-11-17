@@ -678,6 +678,13 @@ def hard_rules(jobage, today, seen=None, keep_ruled_out=False, dump=None, name="
         mine = prefilter.already_ruled_out(seen, False, day, entries=theirs) if theirs else mine
     waiting, revs = page_set_asides(dump)
     declined = declined_now()
+    # The kinds of employer turned down, read from the file as it stands, as declined_now is:
+    # bar.py keeps the copy read when the round started.
+    try:
+        import wants
+        kinds_out, catalogue = wants.sectors_out(), wants.catalogue()
+    except Exception:  # noqa: BLE001  no profile to read: no kind turned down
+        kinds_out, catalogue = {}, {}
     had = already_had(name, day, tracker, own, listed=listed, drafts=drafts)
     from company_key import key as company_key
     from lookup_score import norm
@@ -714,6 +721,10 @@ def hard_rules(jobage, today, seen=None, keep_ruled_out=False, dump=None, name="
         k = company_key(str(row.get("company") or "")) if declined else ""
         if k and k in declined:
             return f"candidate's bar: {declined[k]}"
+        kind = (bar.kind_out(row.get("company"), row.get("desc") or "", kinds_out, catalogue)
+                if kinds_out else "")
+        if kind:
+            return f"candidate's bar: {kind}"
         if sector.is_agency(row.get("company")):
             return f"candidate's bar: {AGENCY_WHY}"
         place = place_rule(row)
@@ -1543,6 +1554,10 @@ def say_sources(out_dir: str) -> list[str]:
         if s.get("why"):
             line += " (" + "; ".join(s["why"]) + ")"
         lines.append(line)
+        if s.get("time"):
+            # One of the person's own boards: its time this round and why
+            # (scrape_wide.board_share, issue 327).
+            lines.append(f"  {s.get('source')}'s time: {s['time']}")
     b = got.get("boards") or {}
     quiet, partial = b.get("quiet") or {}, b.get("partial") or {}
     found = sum((b.get("found") or {}).values())
@@ -1560,6 +1575,36 @@ def say_sources(out_dir: str) -> list[str]:
     if got.get("stopped"):
         lines.append(f"  stopped short: {got['stopped']}")
     return lines
+
+
+def record_board_yield(out_dir: str, today: str, name: str, rules=None) -> None:
+    """Keep how many of each of the person's own boards' jobs reached this round's list
+    (06_shortlist.json), scoring scrape_wide.LISTED_AT or more and passing every hard rule
+    (`rules`), for the time each board is given in the rounds after (scrape_wide.record_yield,
+    board_share). Every site the round searched (SOURCES) is counted, none found too. Fails
+    open: a round never stops over what it keeps for the next."""
+    sites = {str(s.get("source")) for s in _sources(out_dir).get("sites") or []
+             if s.get("source")}
+    if not sites:
+        return
+    import scrape_wide
+    try:
+        rows = _read_json(os.path.join(out_dir, SHORTLIST))
+    except Exception:  # noqa: BLE001  no list written: nothing reached it
+        rows = []
+    rows = rows if isinstance(rows, list) else list(rows.values())
+    got: dict = dict.fromkeys(sites, 0)
+    for r in rows:
+        if not isinstance(r, dict) or r.get("portal") not in got:
+            continue
+        score = r.get("fit") if r.get("fit") is not None else r.get("priority")
+        if (score or 0) >= scrape_wide.LISTED_AT and not (rules and rules(r)):
+            got[r["portal"]] += 1
+    try:
+        scrape_wide.record_yield(got, today, name)
+    except Exception as e:  # noqa: BLE001
+        print(f"sources: what each board found for the list was not kept ({e})",
+              file=sys.stderr)
 
 
 def failed_sources(out_dir: str) -> list[str]:
@@ -1940,22 +1985,19 @@ JOB_AGE_MAX = 365
 
 
 def job_age_ok(days) -> bool:
-    """Whether `days` is a search window a person may set: a whole number of days, 1 to a
-    year. The page offers 7, 14 and 30, and a person may ask for any other in their own
-    words: 10 written to search.py was read as 14, silently (2026-11-03)."""
-    return isinstance(days, int) and not isinstance(days, bool) and 1 <= days <= JOB_AGE_MAX
+    """Whether `days` is a search window a person may set (prefilter.window_ok)."""
+    import prefilter
+    return prefilter.window_ok(days)
 
 
 def _job_age_days() -> int:
     """How old a posting may be: the person's own search window (JOB_AGE_DAYS, any whole
     number of days from 1 to a year: 7, 14 and 30 on the page, any other asked for in
-    words), else the app's rule of 14. A 10 they asked for was read as 14, silently, and an
-    11-day-old posting came back as fresh (engine audit 25, jobs_brief 1, 2026-11-03)."""
-    try:
-        got = int(getattr(person.module("search"), "JOB_AGE_DAYS", 14) or 14)
-    except Exception:  # noqa: BLE001  no profile here, or a value that is not a number
-        return 14
-    return got if job_age_ok(got) else 14
+    words), else the app's rule of 14 (prefilter.own_window, which the scrape and the filter
+    run alone read too). A 10 they asked for was read as 14, silently, and an 11-day-old
+    posting came back as fresh (engine audit 25, jobs_brief 1, 2026-11-03)."""
+    import prefilter
+    return prefilter.own_window()
 
 
 def window_line(days: int, own: int, given) -> str:
@@ -2126,8 +2168,23 @@ def main():
     # The window, and whose it is, before anything is searched: a round asked for in a chat
     # ran the skill's 14 over the person's 10 and nothing said so (2026-11-16).
     line = window_line(a.jobage, own_window, given_window)
-    print(line, flush=True)
-    log.write(line + "\n")
+    # And what else it searches with, before anything is searched: the places, the kinds and
+    # employers turned down, the person's own steps that clear the list, what changed since the
+    # last round, and anything turned down still on a list that searches or lifts it, whose
+    # requests this round skips. A round started before a "no" was written down spent its
+    # requests on six declined employers' boards, and nothing showed the settings were stale
+    # (issue 307).
+    lines = [line]
+    try:
+        import wants
+        lines = wants.header(line, a.jobage, name=os.path.basename(os.path.abspath(a.out)),
+                             today=a.today, keep=a.round == 1, skipped=wants.skipped_now())
+        lines += ["  " + wants.say(f) for f in wants.drift()]
+    except Exception as e:  # noqa: BLE001  the window alone, and the round goes on
+        lines.append(f"searching with: the rest could not be read ({type(e).__name__}: {e})")
+    for ln in lines:
+        print(ln, flush=True)
+        log.write(ln + "\n")
     log.flush()
     if names:
         write_named(a.out, names)
@@ -2344,6 +2401,12 @@ def main():
                                      and not rules(r)], a.today):
         print(line)
         log.write(line + "\n")
+    # What each of the person's own boards put on this list, for its time in the rounds after
+    # (issue 327): a round that searched live, the whole search, its first pass. A widening
+    # finds again what the pass before it listed, and a search of named employers asks each
+    # board for them alone; neither is what the board brings to a round.
+    if not a.from_scraped and not names and a.round == 1:
+        record_board_yield(a.out, a.today, os.path.basename(os.path.abspath(a.out)), rules)
     if summary:
         print(f"shortlist summary: {local_path.rel(summary, ROOT)} "
               f"(top {KEEP_TOP}, no posting bodies) - commit this one")

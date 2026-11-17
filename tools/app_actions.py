@@ -120,8 +120,8 @@ ACTIONS = {
                              "employer off do_not_target.json", "rule.restore"),
     "rule.restore": (("rule",), "the rulings back as they were", "rule.lift"),
     "rule.drop": (("your_rule",), "a rule taken off from Your rules by its own writer: "
-                                  "BAR_DECLINED, BAR_EXCLUDED_OFF in search.py, or learned.py "
-                                  "retire", "rule.undrop"),
+                                  "tools/wants.py undecline or sector-back, BAR_EXCLUDED_OFF "
+                                  "in search.py, or learned.py retire", "rule.undrop"),
     "rule.undrop": (("your_rule",), "the rule back as it was", "rule.drop"),
     "rule.keep": (("your_rule",), "rules_view.keep_rule: Still right? answered yes, not asked "
                                   "again for three months", ""),
@@ -1924,46 +1924,29 @@ def _set_contact(r: Run, status: str, action: str, due: str, note: str) -> dict:
 
 
 def _decline_employer(company: str, why: str, day: str) -> str:
-    """The employer joins the ones turned down by name (profile/search.py BAR_DECLINED, read
-    by bar.py, every round and discovery), keyed the way bar.py looks it up; "" when it was
-    already there, so an undo never takes away a ruling the person made before."""
-    import profile_set
-    from company_key import key as _ckey, keyed
+    """The employer turned down by name through the one writer a chat uses too (tools/wants.py
+    decline): BAR_DECLINED, keyed the way bar.py looks it up, and every list that lifts or
+    searches it (the tier sets, SCRAPE_EMPLOYERS, boards.py), with the person's words and the
+    day. Its key, or "" when it was already there, so an undo never takes away a ruling the
+    person made before; "" too for a name the bar could never match."""
+    import wants
     try:
-        have = dict(profile_set.get("search.py", "BAR_DECLINED") or {})
-    except Exception:  # noqa: BLE001  no setting yet: start one
-        have = {}
-    k = _ckey(company) or company
-    # Already there however it was written: one written by hand as "north-shore mutual" got a
-    # second entry, and its undo took the person's own away with it.
-    if not k or k in keyed(have):
+        got = wants.decline(company, why, day, by="page")
+    except wants.Refused:
         return ""
-    have[k] = f"turned down on the page, {day}: {why}"
-    profile_set.set_line("search.py", "BAR_DECLINED", have)
-    try:
-        import rules_view
-        rules_view.note_set(f"rule~declined~{k}", why, day, name=" ".join(company.split()))
-    except Exception:  # noqa: BLE001  the day is kept in the setting's own words too
-        pass
-    return k
+    return got["key"] if got["added"] else ""
 
 
 def _undecline(k: str) -> None:
     """Every entry turned down that stands for the employer keyed `k`, however it was written,
-    taken off: the list is read by key (company_key.keyed), so an entry left in another form
+    taken off, and what turning it down took off the lists put back (tools/wants.py
+    undecline): the list is read by key (company_key.keyed), so an entry left in another form
     still turned the employer down."""
-    import profile_set
-    from company_key import entry_key
+    import wants
     try:
-        got = profile_set.get("search.py", "BAR_DECLINED")
-    except Exception:  # noqa: BLE001
-        return
-    if not isinstance(got, dict) or got is profile_set.MISSING:
-        return
-    have = dict(got)
-    kept = {e: why for e, why in have.items() if e != k and entry_key(e) != entry_key(k)}
-    if len(kept) != len(have):
-        profile_set.set_line("search.py", "BAR_DECLINED", kept)
+        wants.undecline(k)
+    except Exception:  # noqa: BLE001  no setting to change: nothing turned down
+        pass
 
 
 PARKED = "draft.not-needed.md"     # a note nobody will send, kept beside its folder's draft
@@ -2534,6 +2517,17 @@ def _rule_drop(r: Run) -> dict:
         _undecline(k)
         undo = {"kind": "declined", "key": k, "why": why}
         said = "Their roles are shown again from now on."
+    elif kind == "sector_out":
+        import wants
+        what = str(drop.get("sector") or "")
+        if what not in wants.sectors_out():
+            raise Refused("That kind of employer is not turned down any more.")
+        why = wants.sectors_out()[what]
+        rec = rules_view.set_record().get(str(t.get("id") or "")) or {}
+        wants.sector_back(what)
+        undo = {"kind": "sector_out", "sector": what, "why": why,
+                "tidied": rec.get("tidied") or []}
+        said = "Those employers are shown again from now on."
     elif kind == "sector":
         why = str(drop.get("why") or "")
         off = _got_list("BAR_EXCLUDED_OFF")
@@ -2594,6 +2588,17 @@ def _rule_undrop(r: Run) -> dict:
         have = dict(got) if isinstance(got, dict) and got is not profile_set.MISSING else {}
         have[str(v["key"])] = str(v.get("why") or "turned down on the page")
         profile_set.set_line("search.py", "BAR_DECLINED", have)
+        # Off every list that lifts or searches it again, as turning it down took it.
+        import wants
+        wants.tidy(keys={str(v["key"])})
+    elif v.get("kind") == "sector_out":
+        import profile_set
+        import wants
+        got = profile_set.get("search.py", "BAR_SECTORS_OUT")
+        have = dict(got) if isinstance(got, dict) and got is not profile_set.MISSING else {}
+        have[str(v["sector"])] = str(v.get("why") or "turned down on the page")
+        profile_set.set_line("search.py", "BAR_SECTORS_OUT", have)
+        wants.tidy(kinds={str(v["sector"])})
     elif v.get("kind") == "sector":
         _set_list("BAR_EXCLUDED_OFF", [x for x in _got_list("BAR_EXCLUDED_OFF")
                                        if x != v.get("why")])

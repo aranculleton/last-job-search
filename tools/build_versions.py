@@ -118,8 +118,9 @@ METHODS: dict[str, dict] = {
             (29, "2026-11-11", False, "the robots.txt check names the new page fetcher it gates (tools/fetch_page.py); no board changes"),
             (30, "2026-11-11", False, "openroles 0.5.1 reads the boards: a robots.txt with a byte-order mark or a percent-encoded rule is obeyed and one with a rule that cannot be read is a no, a host that says slow down is sent nothing until its pause has passed, a Greenhouse or Gem posting is where its own location says, not where its office tags are, a posting listed on two pages comes back once, and what a description left out is counted for every part of it, text hidden by an inline style of any kind included"),
             (31, "2026-11-17", False, "an employer's job site that asks to slow down is read once more after its pause, a Workday data centre is read two sites at a time, each site's robots.txt is kept a day, a posting whose page failed goes on without its body for the fetch stage, and the round says which sites it could not read; nothing to build again"),
+            (32, "2026-11-17", False, "the portals' notes say how long a round searches one of the person's own boards and that profile/search.py PORTAL_MINUTES gives one minutes of the person's own; no board is built differently"),
         ),
-        "fingerprint": "e27bafc12a3a42ee",
+        "fingerprint": "865950692698adcf",
     },
     "search": {
         "setup": True, "by": "upgrade", "priority": 2, "time": "~20 min",
@@ -423,9 +424,10 @@ METHODS: dict[str, dict] = {
             (111, "2026-11-17", False, "RUNBOOK says an employer nobody has judged waits below judged ones and a round's batch of them is judged in one go (bar.py judge --file), then the round is cut again; nothing made changes"),
             (112, "2026-11-17", False, "RUNBOOK says every round prints what each source read and what failed, and a failed source is passed on in plain words; nothing made changes"),
             (113, "2026-11-17", False, "RUNBOOK says a round asked for a number that finds fewer checks itself before it reports and searches wider by itself when the search's own hour allows; nothing made changes"),
-            (114, "2026-11-17", False, "the page's colours are redone in templates/app/palettes.py, which this method's templates pattern also reads; nothing a draft prints changes"),
+            (114, "2026-11-17", False, "RUNBOOK says an employer or a kind of employer the person turns down goes through one command (tools/wants.py decline or sector-out) that changes every setting it touches, and is taken back the same way; nothing made changes"),
+            (115, "2026-11-17", False, "the page's colours are redone in templates/app/palettes.py, which this method's templates pattern also reads; nothing a draft prints changes"),
         ),
-        "fingerprint": "820e3417b53d4a1f",
+        "fingerprint": "c3848ea432345e95",
     },
     "interview": {
         # Only a process with a round still to come is prepared again: a prep for a round
@@ -868,8 +870,10 @@ METHODS: dict[str, dict] = {
             (61, "2026-11-17", False, "bar.py judge --file records a round's batch of employers nobody had judged in one write, each marked by the round with its day, so a person or a chat can overturn it; nothing is screened differently"),
             (62, "2026-11-17", False, "a brand-leverage lift reads the posting with its boilerplate set aside (benefits, the equal-opportunity paragraph, travel asked of the person, the work model, stakeholder engagement), a lift for working terms ignores a bare hybrid, and one that says employer reads only what the employer is, so a travel requirement no longer lifts a job as a travel employer; opportunity.py --leverage-words says what each lift fired on; nothing ruled out needs looking at again, and the jobs on the page are scored again by the jobs-rescored upgrade"),
             (63, "2026-11-17", False, "the record of jobs only seen keeps what a later search reads (when each was seen, and its title, employer and place while it can be relisted), and each search's list of what it left out keeps a few of its own checks' rows and counts the rest; nothing screened differently"),
+            (64, "2026-11-17", False, "a kind of employer turned down as a kind (search.py BAR_SECTORS_OUT) is cut by what the person's catalogue calls the employer, or its posting says of itself, and the filter run alone reads the person's own window; nothing ruled out needs looking at again: it only cuts more"),
+            (65, "2026-11-17", False, "several brand-leverage lifts on one posting count strongest first, the next at half, the next at a quarter and so on, still +30 at most, so one strong reason to want a job is not outweighed by many small ones; a penalty still counts in full and --explain says what each lift counted; nothing ruled out needs looking at again, and the jobs on the page are scored again by the jobs-rescored upgrade"),
         ),
-        "fingerprint": "48c3a85878046e06",
+        "fingerprint": "5a3fb2976a84b213",
     },
     "routines": {
         "by": "you", "priority": 3, "applies": "routines",
@@ -1212,7 +1216,7 @@ METHODS: dict[str, dict] = {
             (211, "2026-11-16", True, "the one card for a sign-in in a chat on the person's computer covers only reads waiting on that chat's sign-in: a sign-in in the page's own browser keeps its own card, and the computer's I've signed in no longer sends it back"),
             (212, "2026-11-17", True, "the page is redesigned: warm paper and charcoal with a clay mark, one type scale, one family of buttons, tabs and folds; Coming up joins the phone's tabs and Chat is a header button; To do and the Brief give one ranked answer with a call booked today leading; Jobs by stage and best match, Coming up a card a day, Contacts sending from under each draft; the four cards share rows, an Update menu and a stepper, and an employer's card says what Claude found and whether it clears the person's bar"),
         ),
-        "fingerprint": "75903fd2dae676c9",
+        "fingerprint": "1fc475914c480a1d",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",
@@ -1369,6 +1373,9 @@ KEEPS_NOTHING: dict[str, str] = {
     "tools/run_round.py": "runs every round afresh; its shortlists are dated records of one round",
     "tools/rescore.py": "scores the jobs on the page again by itself whenever it or how jobs are scored changes (its own fingerprint, read by the jobs-rescored upgrade), so nothing it wrote waits on a version",
     "tools/scrape_wide.py": "runs every round afresh",
+    "tools/wants.py": "writes the person's settings the moment they turn something down and "
+                      "checks them against each other on every run; a list it missed before is "
+                      "put right by the declined-tidied upgrade, so nothing waits on a version",
     "tools/hydrate.py": "runs every round afresh",
     "tools/lookup_score.py": "a lookup run on demand",
     "salary_lookup.py": "a lookup run on demand",
