@@ -36,11 +36,22 @@ ENTRY_POINTS = ("app_model", "app", "app_actions", "open_actions", "followup_dra
                 "record_drafts", "voice_check")
 
 
+# A name under `tools.` is a test's own import (tests/test_verify_pdf.py imports
+# `tools.verify_pdf`): the app puts tools/ itself on the path and never loads a tool so. Left
+# in, the check read whichever test ran before it in the same worker (CI, 2026-11-17:
+# `tools.verify_pdf` and `verify_pdf`), never the build.
+def _app_name(name: str) -> bool:
+    return not name.startswith("tools.")
+
+
 def _loaded_twice() -> dict:
-    """{file under tools/: its names} for each file sys.modules holds as two modules or more."""
+    """{file under tools/: its names} for each file sys.modules holds as two modules or more,
+    under the names the app imports by."""
     tools = os.path.realpath(TOOLS) + os.sep
     by_file: dict = {}
     for name, mod in list(sys.modules.items()):
+        if not _app_name(name):
+            continue
         f = getattr(mod, "__file__", None)
         if f and os.path.realpath(f).startswith(tools):
             by_file.setdefault(os.path.realpath(f), {}).setdefault(id(mod), []).append(name)
@@ -53,7 +64,9 @@ def _held_copies() -> list:
     module sys.modules has for that file: a copy loaded by the other name and kept."""
     tools = os.path.realpath(TOOLS) + os.sep
     by_file = {}
-    for mod in list(sys.modules.values()):
+    for name, mod in list(sys.modules.items()):
+        if not _app_name(name):
+            continue
         f = getattr(mod, "__file__", None)
         if f and os.path.realpath(f).startswith(tools):
             by_file.setdefault(os.path.realpath(f), mod)
