@@ -143,7 +143,9 @@ def test_5_the_top_bar_is_small_and_the_pill_opens_and_closes_the_rail(layouts, 
     # panel"), where before it gave way to the rail and the rail could not be put away.
     bad = []
     for m, s, _, f in _sections(layouts):
-        if vp == "phone" and (f["topH"] > 56 or set(f["topKids"]) - {"brand", "screen", "conn", "conn-btn", "pill", "gear"}):
+        # The Chat button is the header's on a phone too (the redesign's second round,
+        # 2026-11-17), carrying Claude's light.
+        if vp == "phone" and (f["topH"] > 56 or set(f["topKids"]) - {"brand", "screen", "conn", "conn-btn", "pill", "gear", "chat-fab"}):
             bad.append((m, s, f["topH"], f["topKids"]))
         if vp == "wide" and f["rail"] and not f["pill"]:
             bad.append((m, s, "an open rail with no pill to close it"))

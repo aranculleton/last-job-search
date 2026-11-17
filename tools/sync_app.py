@@ -734,7 +734,7 @@ def _sync() -> int:
     # change the app ever made, twenty headlines about things they never used.
     new = (headlines(_changelog(old), maintainer=mine)
            if os.path.isdir(os.path.join(ROOT, "profile")) else [])
-    if new:
+    if new and not _STARTER[0]:      # the starter tells the person nothing (#282)
         print("What changed (for the person, in one plain line):")
         for ln in new[:20]:
             print(f"  - {ln}")
@@ -1117,7 +1117,8 @@ def look() -> int:
         print(f"sync_app: the update waiting is {TAG or sha[:12]}; none of it was taken.")
     if sha and os.path.isdir(os.path.join(ROOT, "profile")):
         # Nothing for someone not set up yet: setting up takes the first update.
-        say_waiting(sha, waiting_line(installed(), maintainers()))
+        if not _STARTER[0]:          # the starter tells the person nothing (#282)
+            say_waiting(sha, waiting_line(installed(), maintainers()))
     return rc
 
 
@@ -1515,14 +1516,39 @@ _NOT_THE_CHECK = ("--check", "--adopt", "--own-tests", "--own-test-risks", "--ow
                   "--worktree", "--app-watch-run", "-h", "--help")
 
 
+def starter_role(role: str = "") -> bool:
+    """Is this the chat that starts the chats on the person's computer (tools/computer.py, the
+    starter)? By its word (`--role starter`), or, for one made before it said so, as
+    app_listen.starter_here knows it. Its processes are told too (app_listen.ROLE_ENV), so the
+    improvements' check that runs from the file an update brought in knows it. The starter was
+    told by this check to bring the page up to date, start the improvements and file app
+    reports, all of which its own prompt forbids, and the end-of-turn hook held it until it
+    started them (issue #282). Never breaks the run."""
+    try:
+        import app_listen
+        here = role == "starter" or app_listen.starter_here()
+        if here:
+            os.environ[app_listen.ROLE_ENV] = "starter"
+            app_listen.remember_starter()
+        return here
+    except Exception:  # noqa: BLE001  never a reason for the check to stop
+        return role == "starter"
+
+
+# Set by a run in the starter (starter_role): it hears the update itself and nothing else.
+_STARTER = [False]
+
+
 def main(argv: list[str]) -> int:
+    _STARTER[0] = False
     rc = _main(argv)
     if rc != 0 and not any(a in _NOT_THE_CHECK for a in argv) and not is_the_app():
         # A check that could not finish: when it was tried (the hook waits RETRY_HOURS before
         # asking again), and the page's steps all the same (X-46), from what is on disk.
         _record_tried()
-        say_page()
-    if not any(a in _NOT_THE_CHECK for a in argv):
+        if not _STARTER[0]:
+            say_page()
+    if not any(a in _NOT_THE_CHECK for a in argv) and not _STARTER[0]:
         # Last, whatever the run did: the setting a chat follows over its own history.
         line = setting_line()
         if line:
@@ -1565,10 +1591,16 @@ def _main(argv: list[str]) -> int:
     ap.add_argument("--tools", default=None, metavar="LIST",
                     help="the browser tools this chat has (browser, chrome, chrome-off, enable, "
                          "none): the place check says what to do, once in a chat")
+    ap.add_argument("--role", default="", choices=("", "starter"),
+                    help="starter: the chat that starts the chats on the person's computer, "
+                         "which takes the update and hears nothing else of the check")
     if argv[:1] == ["--own-tests-check"]:
         # The check's own run (tools/ci_local.sh): what follows is the landing's set-aside list.
         return own_tests_check(ROOT, argv[1:])
     a = ap.parse_args(argv)
+    if a.role or not any(x in _NOT_THE_CHECK for x in argv):
+        _STARTER[0] = starter_role(a.role)
+    starter = _STARTER[0]
     if run_git(ROOT, "--version").returncode == 127:
         print(NO_GIT)
         return 1
@@ -1606,6 +1638,8 @@ def _main(argv: list[str]) -> int:
     if a.if_stale or a.if_moved:
         if not stale() and not (a.if_moved and moved()):
             print("sync_app: already checked today.")
+            if starter:
+                return 0
             # A new chat on a day already checked still hears these: each chat runs on its
             # own cloud computer, so blocked job sites are checked for every chat. The page
             # first: a chat kept open for days heard about it only from the day's first
@@ -1647,6 +1681,12 @@ def _main(argv: list[str]) -> int:
         if not _STEPPED_ASIDE:
             _record_check()
         landed = git("rev-parse", "HEAD", check=False).stdout.strip() != before
+        if starter:
+            # The update is in; nothing else of the check is the starter's (issue #282). The
+            # improvements' check runs for its record of the day alone (profile_upgrades.py
+            # reads the role this process was given).
+            upgrades("--after-sync", landed=landed)
+            return rc
         if landed:
             own_tests_later()
         app_watch(landed)

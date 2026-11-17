@@ -265,6 +265,99 @@ def _remember(listener: dict | None, now: dt.datetime, confirmed: bool = True) -
     _save_seen(got)
 
 
+# ------------------------------------------------------------------ the computer starter
+
+# The chat that starts the chats on the person's computer (tools/computer.py, the starter) runs
+# the same day's check and the same end-of-turn hook as every chat, which told it to bring the
+# page up to date, start the improvements and file app reports: work its own prompt forbids it,
+# and the hook held its turn until it did (issue #282). So the check, the improvements and the
+# hook ask first whether this is the starter (`starter_here`) and give it none of that. Known
+# by its own word (`sync_app.py --role starter`, LJS_ROLE for the processes it starts), by this
+# checkout's record of it (`remember_starter`, from its wake), or, for one made before either
+# existed, in a fresh cloud computer, by the first message of its own conversation, which is the
+# prompt it was made with and begins STARTER_OPENING.
+STARTER_OPENING = ("This chat starts the chats on my computer for my job search, and "
+                   "nothing else.")
+STARTER_FILE = "ljs-computer-starter.json"
+ROLE_ENV = "LJS_ROLE"
+# How much of the start of a conversation's file is read for its first message, and how far
+# into that message its opening may sit (a cloud chat's first message can carry a line before
+# the prompt it was made with).
+_FIRST_BYTES = 256 * 1024
+_OPENING_WITHIN = 1000
+
+
+def remember_starter(chat: str = "") -> None:
+    """This checkout's chat is the computer starter: kept in its git folder, never committed.
+    Never breaks the step that calls it."""
+    me = this_chat(chat)
+    if not me:
+        return
+    try:
+        path = checkout_file(STARTER_FILE)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8", newline="\n") as fh:
+            json.dump({"chat": me}, fh)
+            fh.write("\n")
+    except OSError:
+        pass
+
+
+def _first_message(path: str) -> str:
+    """The first message a conversation's file holds from outside the chat (the prompt it was
+    started with), or ""."""
+    try:
+        with open(path, "rb") as fh:
+            head = fh.read(_FIRST_BYTES)
+    except (OSError, TypeError, ValueError):
+        return ""
+    for raw in head.split(b"\n"):
+        try:
+            d = json.loads(raw.decode("utf-8", "replace"))
+        except ValueError:
+            continue
+        if not isinstance(d, dict) or d.get("type") != "user" or d.get("isMeta"):
+            continue
+        msg = d.get("message") if isinstance(d.get("message"), dict) else {}
+        content = msg.get("content")
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            texts = [c.get("text", "") for c in content
+                     if isinstance(c, dict) and c.get("type") == "text"]
+            if texts:
+                return "\n".join(texts)
+    return ""
+
+
+def starter_here(chat: str = "", transcript: str = "") -> bool:
+    """Is this chat the computer starter? `transcript`: its conversation's file, where the
+    caller has it (a hook's transcript_path); else, in a cloud chat, the newest one on this
+    computer, which there is this chat's own."""
+    if str(os.environ.get(ROLE_ENV) or "").strip().lower() == "starter":
+        return True
+    me = this_chat(chat)
+    if me:
+        try:
+            with open(checkout_file(STARTER_FILE), encoding="utf-8") as fh:
+                rec = json.load(fh)
+            if isinstance(rec, dict) and rec.get("chat") == me:
+                return True
+        except (OSError, ValueError):
+            pass
+    path = transcript
+    if not path:
+        try:
+            if chat_kind() != "cloud":
+                return False
+            import helper_usage
+            path = helper_usage.session_file()
+        except Exception:  # noqa: BLE001  never a reason for a check or a hook to stop
+            return False
+    first = " ".join(_first_message(path).split())
+    return STARTER_OPENING in first[:_OPENING_WITHIN + len(STARTER_OPENING)]
+
+
 def role(chat: str, listen: bool = False, url: str = "") -> str:
     """What start tells this chat: "first" (no page yet: it publishes and listens),
     "listener" (it answered last time this checkout looked), "claim" (ask the page: it

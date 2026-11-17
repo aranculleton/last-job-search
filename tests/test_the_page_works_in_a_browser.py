@@ -974,7 +974,8 @@ def test_copy_is_the_first_step_then_i_sent_it_and_it_falls_back_to_selecting(ru
 def test_chat_is_one_box_and_quick_answers_read_the_page(run, pages):
     r = run("talk", html=pages["sample"], shot="phone-talk" if SHOTS else "")
     _clean(r)
-    assert r["label"] == "Ask Claude anything" and r["placeholder"] == "Ask anything, or paste a screenshot of a message you got"
+    # One short line, so the box stays one line on a phone (the redesign's second round, 2026-11-17).
+    assert r["label"] == "Ask Claude anything" and r["placeholder"] == "Ask Claude, or paste a screenshot"
     # Four ways in and the box: two example questions as well made six buttons before the box
     # (the audit, 2026-11-03).
     assert r["examples"][0] == "Someone sent me a job" and len(r["examples"]) == 4, r["examples"]
@@ -1040,9 +1041,11 @@ def test_the_chat_opens_from_any_section_in_a_panel_with_the_same_thread(run, pa
     r = run("chat_dock", html=pages["sample"], viewport=vp)
     _clean(r)
     if vp is PHONE:
-        # One way into the chat on a phone, its tab: no floating button and no panel over it
-        # (the maintainer, 2026-10-28).
-        assert not r["fab"] and not r["dockBefore"]
+        # One way into the chat on a phone, the header's Chat button, never a panel over the
+        # page (the maintainer, 2026-10-28); its name says Claude's light (the redesign's
+        # second round, 2026-11-17).
+        assert r["fab"] and not r["dockBefore"]
+        assert r["fabName"].startswith("Chat with Claude. Claude: "), r["fabName"]
         # Paste a message opens its box under Contacts' header, never the Chat (2026-11-05).
         assert r["phone"]["hash"].startswith("#contacts") and not r["phone"]["dock"]
         assert r["phone"]["box"] and r["phone"]["focus"] == "ct-text:card-place-paste", r["phone"]
@@ -1086,7 +1089,7 @@ PNG = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4
 def test_a_pasted_screenshot_goes_with_the_message_as_its_id(run, pages):
     r = run("chat_pics", html=pages["sample"])
     _clean(r)
-    assert r["add"] and r["placeholder"] == "Ask anything, or paste a screenshot of a message you got"
+    assert r["add"] and r["placeholder"] == "Ask Claude, or paste a screenshot"
     assert r["intro"].startswith("Paste a screenshot or a link and say what you want: reply to someone, add a job someone sent you")
     # Three to do things, and one for help with the page itself (2026-10-28).
     assert r["starters"][0] == "Someone sent me a job" and len(r["starters"]) == 4, r["starters"]
@@ -1115,7 +1118,7 @@ def test_with_no_file_store_there_is_no_picture_button_and_no_promise_of_one(run
     r = run("chat_pics", html=pages["sample"], noAssets=True)
     _clean(r)
     assert not r["add"]
-    assert r["placeholder"] == "Ask anything, or paste a message you got"
+    assert r["placeholder"] == "Ask Claude, or paste a message"
     assert "screenshot" not in r["intro"] and r["intro"].startswith("Paste a message or a link")
 
 

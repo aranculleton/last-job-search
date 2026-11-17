@@ -10,8 +10,11 @@ next?" in its first lines, and nothing asks for a decision a default could make.
 - Seven places: **Brief** (the home screen), **To do**, **Jobs** (To apply, Applied),
   **Contacts** (one list, each person with what to send them), **Coming up** and **Chat**
   together in the side menu, and **Settings** alone at its foot. Five sit in the phone's tab
-  bar (Brief, To do, Jobs, Contacts, Chat); To do alone carries a coloured badge, and Chat a
-  small grey dot while an answer waits unseen. (layout 6, nav order test; contacts rules test)
+  bar (Brief, To do, Jobs, Contacts, Coming up), and Chat is the header's button on a phone as
+  on a computer: on a phone Coming up opened only through the Brief, and Progress lit the Brief
+  with no way back (the redesign's second round, 2026-11-17). To do alone carries a badge, and
+  no other tab a count; the Chat button a small grey dot after its word while an answer waits
+  unseen. (layout 6, nav order test; contacts rules test)
 - Each screen: its title, one plain summary line, at most three blocks before the first item.
   A way to somewhere else (the new jobs, Start again, Paste a message) is a soft pill beside
   the summary, centred on its line, never an underlined line under it; what Claude is doing is the header's work
@@ -96,12 +99,14 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   opens and closes the panel on the right, as the menu's "Icons only" folds, remembered on the
   device (open beside every screen but the Brief until the person chooses); narrower, it opens
   as a panel on the right, and on a phone as a sheet from the bottom. (pill tests)
-- On a computer the Chat button is the header's last control, a soft button with its icon and
-  "Chat", never floating over the page: bottom right it covered a bin, a Copy button and a value
+- On a computer and on a phone the Chat button is the header's last control, a soft button
+  with its icon and "Chat", never floating over the page: bottom right it covered a bin, a Copy button and a value
   in Settings (the redesign, 2026-11-16). Its panel opens under the header at the right, or the
   button sits beside the page's name and the panel at the left where the person chose it
-  (Settings > Look, Chat button, or the panel's own arrow; the same choice, kept on the device),
-  small or big.
+  (Settings > Look, Chat panel, or the panel's own arrow; the same choice, kept on the device),
+  small or big. While the panel is open on a computer the page keeps its width clear of it,
+  and Escape anywhere on the page closes it, so nothing the keyboard reaches sits under it
+  (WCAG 2.4.11, the accessibility review, 2026-11-17).
   The panel's controls are the page's own soft pills (Open in Chat, Close), never underlined words.
   The conversation opens on its last day; earlier messages come only by its Show, never by
   scrolling up (the maintainer, 2026-11-06). (chat panel tests) On a phone the Chat is as tall
@@ -109,17 +114,25 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   never behind the header (taken as 56px, its first words slid under the Refresh pill,
   2026-11-11). (overlap test: chat opens)
   The box keeps to the foot from the first look, so the first message never moves it; with no
-  messages its starters are chips just above it, a short intro sits in the room above them, and
-  there is no subtitle. Why: an empty Chat said "Ask anything" three ways (the screen review,
+  messages its starters are soft buttons just above it, a heading ("What can Claude do for
+  you?") and a short intro sit in the room above them, and there is no subtitle. The box is a
+  rounded rectangle, never a pill, its hint one short line ("Ask Claude, or paste a screenshot"),
+  Send a round filled button with an arrow, grey while there is nothing to send, and a message's
+  words keep a reading measure of about 70 characters (the redesign's second round, 2026-11-17:
+  a three-line hint made the box a block on a phone). Why: an empty Chat said "Ask anything" three ways (the screen review,
   2026-11-11), and with its box under the header the box sat mid-screen on a phone and jumped to
   the foot with the first message (the redesign, 2026-11-16). (empty chat tests)
 - The frame is calm. On a phone the tab bar is the card colour with a hairline on top: the tab
-  you are on has a soft clay capsule behind its icon, its icon in clay and its name in ink at
-  600, the others grey at 400; To do's count is a clay badge and every other count the same
-  capsule outlined in grey, so a "5" by Jobs reads as a count. On a computer the place you are on
-  in the side menu is the same soft clay fill, its name at 600 and its icon in clay, never a bar
-  down its side; "Icons only" is a quiet grey control. The phone's header has one title (on
-  the Brief its greeting) and Claude's labelled light at its right. On a phone a sheet rises
+  you are on has a soft clay capsule behind its icon, ringed in clay, its icon in clay and its
+  name in ink at 600, the others grey at 400; To do's count is a clay badge at its icon's top
+  right corner, past the glyph, and no other tab has a count. On a computer the place you are
+  on in the side menu is the same soft clay fill ringed in clay, its name at 600 and its icon
+  in clay, never a bar down its side; "Icons only" is a quiet grey control. A chosen place is
+  never its fill alone: the fill is 1.1:1 from the page, so its ring reaches 3:1 (WCAG 1.4.11,
+  1.4.1 in Icons only; the accessibility review, 2026-11-17). The phone's header has one title
+  (on the Brief its greeting) and at its right the gear and the Chat button, which carries
+  Claude's light as a small dot on its icon's corner, its state said in its name; on a computer
+  the light keeps its own labelled place beside the Chat button. On a phone a sheet rises
   from the foot with round top corners and a small grabber; a sheet and a menu float on the
   overlay colour with a hairline and the floating shadow, a menu's rows a finger's height (the redesign, 2026-11-16: a grey bar with a red line on top, a dot after the title
   that read as "unread" and a bare "5" read as dated). (layout 5 and 6, menu tests, sheet tests)
@@ -592,7 +605,11 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   between them. The one next step (Draft this, See the draft, Copy, Send) is the filled pill:
   the accent fill with its own ink, semibold, once a screen (its first); every other card's
   next step is the soft pill in the semibold weight. Every other action beside it is the soft
-  grey pill (the raised fill with its 3:1 edge, regular weight), and More is a soft pill too. At
+  pill (the raised fill with no edge, its words in the ink at 600), and More is a soft pill too:
+  one soft look, and in a sunk box (a question, a suggestion, a document well) the colour of
+  what floats, lifted by the card's shadow, never an outlined pill (the redesign's second round,
+  2026-11-17). The quiet look is its words alone, the raised fill under a pointer, never
+  underlined. At
   most three before More: the next step and one or two others; rarer actions go under More,
   and a duplicate or a dead button goes. Why: text buttons beside pills read as clutter and
   as less tappable (the maintainer, 2026-11-05: "some things are just text buttons which
@@ -626,11 +643,30 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   (the maintainer, 2026-11-05: "Don't do it" and "Cancel" were ambiguous; Stop Claude test)
 - A suggestion's way to say no is **Dismiss** ("Dismiss this suggestion"), never "No thanks",
   which read as calling something off. (the maintainer, 2026-11-05)
+- The shared parts are drawn once and look the same wherever they are (the redesign's second
+  round, 2026-11-17). A **segmented control** (`.segctl`, a view switch and a setting's short
+  choice alike) is a sunk track at radius 10 with 2px round its options, the chosen one the thumb
+  colour ringed in the control edge and lifted by the card's shadow, its words in the ink, the
+  others grey, all 600, 36px tall with a mouse and 44 on touch, a count after its name ("To
+  apply · 5"). A **search** is a field at radius 10 with its magnifier inside at the left, 40px
+  tall (44 on touch), never a capsule. **Filter** is a soft button with the sliders, its count of
+  filters on a small clay badge. The **"?"** is one 20px i in a circle in the quiet grey, no ring
+  of its own, 4px after the last word, the raised fill under a pointer, a 44px target on touch.
+  A **fold** (`.band-more`, `.disclose`) is a quiet row, its words at 14/600 in the ink, a 16px
+  chevron pointing right while folded and down once open, as a Settings row's is, 44px tall on
+  touch. A **section's header** (`.group`) is a small label, 13/18 at 600 in the quiet grey, 32px
+  from the group before it and 8 to what it heads. The **way back** (`backBtn`) is a chevron and
+  the place's name at 15/600 in the ink, never underlined, above the title on a phone and a
+  computer: Your profile goes back to Settings, Progress to the Brief, a card's sheet to where it
+  was opened. A **kind** is a neutral 28px tile, its icon grey: four hues said nothing the word
+  beside it did not. (design language test, colours test, layout promises)
 - Underlined text is only a link inside a sentence ("3 more: Show them", a name in a line),
   never a control in a row of actions, nor a control standing on its own: a tip's Got it,
   Add all to your calendar, Add the time, the work panel's Hide, its sheet's Close and Your
-  profile's Change are soft pills, on a computer a tip's drawn to its own line's height (the review, 2026-11-10). Rose is
-  for links inside a sentence. (action-row test, room test)
+  profile's Change are soft pills, on a computer a tip's drawn to its own line's height (the review, 2026-11-10). A
+  name standing alone (an employer, a person heading a sheet) is the ink at 600, underlined only
+  under a pointer; a link inside a sentence is the ink, underlined in the control edge. (action-row
+  test, room test)
 - More holds only what is genuinely rare for that card: five at most, a short list grouped by
   kind with no long explanations. Never an action people use often, never a pencil or a way to
   edit, never a fact that belongs on the card's line of facts or its "?"; a card with nothing
@@ -683,7 +719,9 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   was linked there").
 - Every control that wakes Claude carries the gauge beside it: the same bars, size and place,
   with its minutes shown as Claude's ("2 min of Claude": a bare "38 min" beside Find jobs read
-  as a wait, the review, 2026-11-10), and its "?" or a long press says it in one line ("About 3 minutes of
+  as a wait, the review, 2026-11-10), and under the pointer it says it in words that can be
+  hovered and go with Escape, read aloud with the gauge, with no keyboard stop of their own
+  (WCAG 1.4.13, the accessibility review, 2026-11-17), in one line ("About 3 minutes of
   Claude's time, from your Claude allowance"). A control that only runs code (marking sent, a
   date, the trash, a word changed in place) has none, so what is free can be seen. The minutes
   are the engine's, from this copy's own finished work of that kind and size where it has any,
@@ -692,9 +730,14 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   employer research it never runs (the screen review, 2026-11-11: it said the CV and letter's 9
   minutes). (the maintainer,
   2026-11-05: the gauge "is meant to deter someone from spending tokens unnecessarily")
-- Text on a pill reads at 4.5:1 and a soft pill's edge at 3:1 against its card, in both looks;
-  every control shows its focus ring. Words on the soft accent (an answer's box, your own
-  message in a chat) are in the ink: the muted grey is 3.56:1 there in the dark (2026-11-11).
+- Text on a pill reads at 4.5:1 in both looks, and a soft pill is told by its fill and its
+  words, with no edge: WCAG 1.4.11 asks no edge of a button its words name, and an edge of its
+  own made a second, outlined family (the redesign's second round, 2026-11-17). A chosen or
+  pressed state is never its fill alone: the chosen segment, the chosen place in the side menu
+  and the phone's chosen tab each carry a ring that reaches 3:1 (the accessibility review,
+  2026-11-17); every control shows its focus ring. Words on the soft accent (an answer's box,
+  your own message in a chat) are in the ink, as they were when the muted grey was 3.56:1 there
+  in the dark (2026-11-11).
   Every word on every screen is checked in both looks (overlap test: faint). (colour tests, layout 14)
 - On a phone everything is drawn at the page's own size with a full-size tap area (44px), and
   hover styles apply only on devices that hover, so nothing needs two taps. A phone's density
@@ -721,8 +764,13 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   header's right, is filled when connected and a ring while it waits, grey while it connects and
   amber while Claude is not listening; offline, read only and stopped are said in words on the
   line under the header. (room test)
-- Colours are the tokens in `palettes.py`, never a raw value. Light: a near-white page, white
-  cards, ink buttons with white text (7.3:1). Dark: the main Rosé Pine. (colour tests)
+- Colours are the tokens in `palettes.py`, never a raw value. Light: warm near-white paper and
+  white cards, the filled button the text colour with white on it. Dark: warm near-black, a card
+  a step lighter. Clay means it is the person's move and nothing else: "Needs your answer",
+  "Your turn" and "Ready to do" are clay chips (the soft clay with clay words, app.js `moveTone`),
+  never the late amber or the running blue; blue is for work in progress and for focus. Behind a
+  sheet the page steps back under the scrim, a warm near-black at 45% in both looks. (colour
+  tests)
 - A character count is the quiet grey while within its limit and red over it; amber only while
   the words are being changed and are in the last twentieth of the limit, where an edit could
   take them over (`app_model.count_of`, `near_at`). One rule for every count of a message: a

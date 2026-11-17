@@ -655,7 +655,27 @@ def main() -> int:
     a = ap.parse_args()
     data = json.load(open(a.infile, encoding="utf-8"))
     jobs = list(data.values()) if isinstance(data, dict) else list(data)
+    out = blend(jobs, tracker=a.tracker, contacts=a.contacts, threads=a.threads)
+    out.sort(key=lambda x: (-x["priority"], -x.get("priority_exact", 0),
+                            -(x.get("fit") or 0), -(x.get("opportunity") or 0)))
+    if a.out:
+        json.dump(out, open(a.out, "w", encoding="utf-8", newline="\n"), indent=1)
+    for j in out[:a.top]:
+        print(f"  pri{j['priority']:>4} fit{j['fit']:>4} opp{str(j.get('opportunity')):>4}  "
+              f"{(j.get('company') or '')[:28]:28} {(j.get('title') or '')[:46]}")
+        if a.explain:
+            for w in j["fit_why"]:
+                print(f"          {w}")
+    print(f"\n{len(out)} ranked (0 model tokens)", file=sys.stderr)
+    return 0
 
+
+def blend(jobs, tracker: str | None = None, contacts: str | None = None,
+          threads: str | None = None) -> list[dict]:
+    """Each job scored for fit and its priority worked out from fit and its opportunity, in the
+    order given: the round's fit stage (main), and tools/rescore.py scoring the jobs a page
+    lists again by the same path. `tracker`, `contacts` and `threads` are the round's own state
+    files, as tools/throttle.py takes them; None reads the repo's."""
     # A live conversation at the employer changes the odds more than any line in
     # the posting does. The floor exists because "below it the application is a
     # lottery ticket", and a referral is precisely what stops it being one: the
@@ -664,10 +684,10 @@ def main() -> int:
     try:
         import throttle
         from company_key import key as _ckey
-        if a.contacts or a.threads:
-            contacts = a.contacts or throttle.CONTACTS
+        if contacts or threads:
+            contacts = contacts or throttle.CONTACTS
             rows = throttle._contact_rows(contacts)
-            tp = a.threads or throttle.threads_beside(contacts)
+            tp = threads or throttle.threads_beside(contacts)
             import csv_store
             log = csv_store.read_rows(tp) if tp and os.path.exists(tp) else []
             warm = throttle.warm_routes(contacts, rows=rows, live=throttle._derived_statuses(
@@ -679,7 +699,7 @@ def main() -> int:
         if isinstance(e, csv_store.Conflicted):
             raise                       # refused, never read as contacts: say which file
         warm, _ckey = {}, None
-    interviewed = ((interviewed_at(a.tracker) if a.tracker else interviewed_at())
+    interviewed = ((interviewed_at(tracker) if tracker else interviewed_at())
                    if _ckey else {})
 
     out = []
@@ -725,18 +745,7 @@ def main() -> int:
         # real to break on, rather than falling back to scrape order.
         out.append({**j, **f, "priority": pri,
                     "priority_exact": round(f["fit"] * o_rank / 100, 3)})
-    out.sort(key=lambda x: (-x["priority"], -x.get("priority_exact", 0),
-                            -(x.get("fit") or 0), -(x.get("opportunity") or 0)))
-    if a.out:
-        json.dump(out, open(a.out, "w", encoding="utf-8", newline="\n"), indent=1)
-    for j in out[:a.top]:
-        print(f"  pri{j['priority']:>4} fit{j['fit']:>4} opp{str(j.get('opportunity')):>4}  "
-              f"{(j.get('company') or '')[:28]:28} {(j.get('title') or '')[:46]}")
-        if a.explain:
-            for w in j["fit_why"]:
-                print(f"          {w}")
-    print(f"\n{len(out)} ranked (0 model tokens)", file=sys.stderr)
-    return 0
+    return out
 
 
 if __name__ == "__main__":
