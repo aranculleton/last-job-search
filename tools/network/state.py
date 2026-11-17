@@ -77,6 +77,7 @@ from company_key import key as company_key, fold as _ck_fold, row_key as _ck_row
 from throttle import (FINAL as _THROTTLE_FINAL, SENT_NO_REPLY as _THROTTLE_SENT_NO_REPLY,  # noqa: E402
                       SILENCE_DAYS as _THROTTLE_SILENCE_DAYS, UNSENT as _THROTTLE_UNSENT)
 import person  # noqa: E402
+import remembered  # noqa: E402
 from safe_name import windows_safe  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(_HERE))
@@ -1112,8 +1113,10 @@ def went_as_request(row, contact=None) -> bool:
 
 
 def is_bare_request(row) -> bool:
-    """A connection request that carried no note: it said nothing."""
-    return (is_request(row) and not str(row.get("full_text") or "").strip()
+    """A connection request that carried no note: it said nothing. Its words are looked at
+    first: most rows have some, and asking each whether it was a request first was most of
+    what every count of a thread cost (issue 336)."""
+    return (not str(row.get("full_text") or "").strip() and is_request(row)
             and _scenario(row) != OUTSIDE_SCENARIO and _scenario(row) not in FIRST_NOTE_SCENARIOS)
 
 
@@ -1464,8 +1467,13 @@ def request_pending(rows, contact=None) -> datetime.date | None:
     them without one) all mean the request is no longer what is waiting. With the
     contact's row, a first note logged as a message to someone whose channel is
     `connection` is the request it went as (`went_as_request`), where nothing else on the
-    thread is one: a message after a request reaches someone who accepted it.
+    thread is one: a message after a request reaches someone who accepted it. Read once a
+    page build for a thread and contact row (`_per_build`).
     """
+    return _per_build("request_pending", rows, _request_pending, contact)
+
+
+def _request_pending(rows, contact=None) -> datetime.date | None:
     real = _ordered([r for r in rows if _direction(r) and not is_auto_reply(r)])
     if contact is not None and any(is_request(r) for r in real):
         contact = None
@@ -1588,8 +1596,12 @@ def _ordered(rows) -> list[dict]:
     contact's status on its own; `reconcile` reports it.
     """
     rows = list(rows)
-    keys = [(as_date(r.get("date")) or datetime.date.min, 0 if is_request(r) else 1)
-            for r in rows]
+    days = [as_date(r.get("date")) or datetime.date.min for r in rows]
+    # Each on a later day than the one before: in order whatever is a request, so nobody's
+    # thread is asked what each row is (a page build asked 35,000 times, issue 336).
+    if all(a < b for a, b in zip(days, days[1:])):
+        return rows
+    keys = [(d, 0 if is_request(r) else 1) for d, r in zip(days, rows)]
     # Most often in order already (by_contact leaves every thread so): then as they are.
     if all(a <= b for a, b in zip(keys, keys[1:])):
         return rows
@@ -2129,8 +2141,10 @@ def _one_send(a, b, same_only: bool = False) -> bool:
     if da is None or db is None:
         return False
     days = abs((da - db).days)
+    if days > ONE_SEND_DAYS:
+        return False
     wa, wb = _said_words(a), _said_words(b)
-    if not wa or not wb or days > ONE_SEND_DAYS:
+    if not wa or not wb:
         return False
     exp_a = _FROM_EXPORT in str(a.get("summary") or "").lower()
     exp_b = _FROM_EXPORT in str(b.get("summary") or "").lower()
@@ -2151,6 +2165,27 @@ def _one_send(a, b, same_only: bool = False) -> bool:
         None, words_a, words_b, autojunk=False).ratio() >= EDITED_SHARE
 
 
+def _per_build(kind: str, rows, work, *also):
+    """`work(rows, *also)`, worked out once a page build for these very message rows (and the
+    contact row in `also`): a build asked each thread the same question again for every list
+    it drew, the owed list, the holds on it, Contacts and each employer's limit (issue 336).
+    Within a build nothing is written to a row (tools/remembered.py), and the rows are kept
+    with the answer, so no other row can come to stand at their address. Outside a build, and
+    for no rows at all, it is worked out every time, as before."""
+    if rows is None or not remembered.active():
+        return work(rows, *also)
+    if not isinstance(rows, (list, tuple)):
+        rows = list(rows)
+    # One table a kind; within it every key has the same number of contact rows after the
+    # message rows, so no two calls share a key unless they share every row.
+    memo = remembered.get(kind, None, dict)
+    key = (*map(id, rows), *map(id, also)) if also else tuple(map(id, rows))
+    got = memo.get(key)
+    if got is None:
+        got = memo[key] = (tuple(rows), also, work(rows, *also))
+    return got[2]
+
+
 def once_each(msgs) -> list[dict]:
     """A contact's message rows, in order, as every limit counts them: each message of ours
     once (`_one_send`: the request and its note, a message and the download's copy of it), the
@@ -2158,7 +2193,11 @@ def once_each(msgs) -> list[dict]:
     day's rows have no time, and the note's copy sat after the reply to it in the log. An
     edited copy is one only with nothing from them between. The one view of what went to
     them that `_chases`, `_trailing_outbound` and `follow_up_due` read, so no count reads the
-    raw rows."""
+    raw rows. Each caller gets a list of its own."""
+    return list(_per_build("once_each", msgs, _once_each))
+
+
+def _once_each(msgs) -> list[dict]:
     out, ours = [], []
     for row in msgs or ():
         way = _direction(row)
@@ -2200,7 +2239,12 @@ def _chases(msgs) -> int:
     offered, then the resume they asked for, are one answer). The reschedule sent to someone
     who had offered the day was counted as a second unanswered message, and they were marked
     "no more follow-ups" (the maintainer, 2026-11-05). Each message once (`once_each`): a note
-    logged as a request and as a message is one."""
+    logged as a request and as a message is one. Counted once a page build for a thread
+    (`_per_build`)."""
+    return _per_build("chases", msgs, _count_chases)
+
+
+def _count_chases(msgs) -> int:
     chased, answered = 0, False
     for row in reversed(once_each(msgs)):
         if is_acceptance(row) or is_bare_request(row) or is_withdrawal(row) \
@@ -2704,7 +2748,13 @@ def at_limit(contact, msgs, status=None) -> bool:
     (schema.MAX_UNANSWERED, the app's two where unset), counted from the log, or does its
     row say so in the app's own words, or its record in anyone's (`told_no_more`)? Then
     nothing more goes to them unless they write. One answer for the dates written here and
-    for every screen (surface.held)."""
+    for every screen (surface.held). Read once a page build for a thread, contact row and
+    status (`_per_build`): the holds on To do and Contacts and each employer's limit asked
+    again for the same people (issue 336)."""
+    return _per_build("at_limit", msgs, _at_limit, contact, status)
+
+
+def _at_limit(msgs, contact, status) -> bool:
     msgs = [r for r in msgs or () if _direction(r)]
     status = effective_status(contact or {}, msgs) if status is None else status
     if status not in _LIMIT_STATUSES:

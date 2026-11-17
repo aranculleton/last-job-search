@@ -213,7 +213,10 @@ def limits_now() -> dict:
     audit, 2026-11-10). Returns LIMITS; compose brings its copies (KIND_LIMITS) in line from
     it at every check."""
     global FOLLOW_UP_DAYS, MAX_UNANSWERED, CONTACT_NUDGES, MAX_NUDGES, GONE_COLD_DAYS
-    mark = _settings_mark()
+    # Looked at once a page build (tools/remembered.py), where every limit counted for every
+    # contact looked at the file again (issue 336); every time outside one.
+    import remembered
+    mark = remembered.get("networking_settings", None, _settings_mark)
     if mark == _READ_AT[0]:
         return LIMITS
     _READ_AT[0] = mark

@@ -3313,7 +3313,8 @@ LOG_UNREADABLE = ("your message log could not be read ({why}), so who is waiting
 
 
 def at_employer(company: str, contacts, also=(), today: datetime.date | None = None,
-                threads=None, until: dict | None = None, owed: set | None = None) -> tuple:
+                threads=None, until: dict | None = None, owed: set | None = None,
+                index: dict | None = None) -> tuple:
     """(who at this employer is waiting on a reply, who of `also` is there too), by
     company_key, so an employer under another of its names is the same employer. Someone
     waiting holds the employer until `waiting_until` (the person's follow-up rule, from
@@ -3326,7 +3327,8 @@ def at_employer(company: str, contacts, also=(), today: datetime.date | None = N
     alone: someone who had replied was counted, and named, as waiting (2026-10-21).
     `threads` is the message log; None reads it. A log that cannot be read raises
     LogUnreadable, in plain words: read as empty, it said nobody was waiting, and every
-    note at the employer went through (the audit, 2026-11-10)."""
+    note at the employer went through (the audit, 2026-11-10). `index` is
+    `state.by_contact(threads)` when the caller has it already."""
     from company_key import key as company_key
     import state
     k = company_key(company)
@@ -3342,7 +3344,7 @@ def at_employer(company: str, contacts, also=(), today: datetime.date | None = N
                 why=" ".join(str(e).split())[:160] or type(e).__name__,
                 company=company)) from None
 
-    index = _threads_index(threads)
+    index = _threads_index(threads) if index is None else index
 
     def msgs(c) -> list:
         return list(index.get(str(c.get("contact_id") or "").strip(), ()))
@@ -3524,6 +3526,15 @@ def employer_full_line(company: str, contacts, also=(), today: datetime.date | N
     owed: set = set()
     waiting, there = at_employer(company, contacts, also, today=today, threads=threads,
                                  owed=owed)
+    return full_line(company, waiting, there, owed, limit, theirs, also_is)
+
+
+def full_line(company: str, waiting, there, owed, limit: int, theirs: dict,
+              also_is: str = "with a note waiting to send") -> str:
+    """`employer_full_line`'s words from what `at_employer` found at this employer (`waiting`,
+    `there`, and the `owed` it filled) and `employer_limit`'s (`limit`, `theirs`), for a
+    caller that has read the employer once already: the check before anyone is shown read
+    every employer twice, once to count and once to say why (issue 336)."""
     if len(waiting) + len(there) < limit:
         return ""
 

@@ -77,9 +77,12 @@ def _book_index(contacts) -> dict:
             "handle": handle, "name": named}
 
 
-def context(contacts=None, threads=None, connections=None, today=None, index=None) -> dict:
+def context(contacts=None, threads=None, connections=None, today=None, index=None,
+            log_index=None) -> dict:
     """What `check` reads, loaded and indexed once for a whole list. `index` is
-    `state.by_contact(threads)` when the caller has it already."""
+    `state.by_contact(threads)` when the caller has it already, and `log_index` the log as
+    by_contact groups it where `index` is something else (state.pooled's), for the employer
+    limit (reading.at_employer), which reads the log as it is."""
     if contacts is None:
         contacts = state.load_contacts() if os.path.exists(state.CONTACTS_CSV) else []
     if threads is None:
@@ -96,8 +99,10 @@ def context(contacts=None, threads=None, connections=None, today=None, index=Non
         k = state._match_name(c.get("name"))
         if k:
             by_name.setdefault(k, []).append(c)
+    grouped = state.by_contact(threads) if index is None else index
     return {"contacts": contacts, "book": _book_index(contacts),
-            "threads": state.by_contact(threads) if index is None else index, "today": today,
+            "threads": grouped, "today": today,
+            "log_index": grouped if index is None else log_index,
             "connections": connections or [], "conn_by_handle": by_handle,
             "conn_by_name": by_name, "employers": {}, "thread_rows": threads,
             "waiting_at": {}, "shown": {}, "count_list": False}
@@ -373,23 +378,40 @@ def employer_full(company: str, ctx: dict, key: str = "") -> str:
     company = str(company or "").strip()
     if not company:
         return ""
-    limit, _theirs = reading.employer_limit(company)
+    limit, theirs = reading.employer_limit(company)
     if limit is None:
         return ""
     k = state.company_key(company)
     memo = ctx.setdefault("waiting_at", {})
     if k not in memo:
-        memo[k] = reading.at_employer(company, ctx["contacts"], (), today=ctx["today"],
-                                      threads=ctx.get("thread_rows"))[0]
+        # Who is waiting there, and which of them a follow-up is owed, read once an employer
+        # and from the book's own rows there: each check scanned the whole book twice, to count
+        # and again to say why, and a big contact book spent most of a page build on it
+        # (issue 336).
+        owed: set = set()
+        waiting = reading.at_employer(company, _rows_at(ctx, k), (), today=ctx["today"],
+                                      threads=ctx.get("thread_rows"), owed=owed,
+                                      index=ctx.get("log_index"))[0]
+        memo[k] = (waiting, owed)
+    waiting, owed = memo[k]
     there = [v for kk, v in ctx.setdefault("shown", {}).items()
              if kk != key and state.company_key(v.get("company")) == k] \
         if ctx.get("count_list") else []
-    if len(memo[k]) + len(there) < limit:
+    if len(waiting) + len(there) < limit:
         return ""
-    return reading.employer_full_line(company, ctx["contacts"], there, today=ctx["today"],
-                                      also_is="already on this list",
-                                      threads=ctx.get("thread_rows")) or (
+    return reading.full_line(company, waiting, there, owed, limit, theirs,
+                             also_is="already on this list") or (
         f"{company} already has {limit} waiting or on this list")
+
+
+def _rows_at(ctx: dict, k: str) -> list:
+    """The contact book's rows at the employer keyed `k`, in the book's order: the rows
+    `reading.at_employer` counts there (state.row_company_key), keyed once a list
+    (_book_index) rather than once an employer."""
+    ix = ctx.get("book")
+    if ix is None:
+        ix = ctx["book"] = _book_index(ctx["contacts"])
+    return ix["by_key"].get(k, [])
 
 
 # ------------------------------------------------------------------ someone already written to
@@ -415,10 +437,26 @@ def turned_down(company, agency=False) -> str:
 
     `agency`: the contact is a recruiter at an agency, which is not where the person would
     work. Then only what the person said of that employer by name counts (an exclusion, a
-    decline, the do-not-target list), never that it clears none of pay, prestige or signal."""
+    decline, the do-not-target list), never that it clears none of pay, prestige or signal.
+    Worked out once a page build for each employer (tools/remembered.py), and kept by the
+    state of the judgements file as bar.verdict is: the holds on To do and Contacts each asked
+    again for every employer in the book (issue 336)."""
     company = str(company or "").strip()
     if not company:
         return ""
+    import remembered
+    if not remembered.active():
+        return _turned_down(company, agency)
+    try:
+        import bar
+        at = bar.judged_at()
+    except Exception:  # noqa: BLE001  a bar that cannot be read: worked out as it says
+        return _turned_down(company, agency)
+    return remembered.get("turned_down", (company, bool(agency), at),
+                          lambda: _turned_down(company, agency))
+
+
+def _turned_down(company: str, agency=False) -> str:
     try:
         import bar
         import throttle
@@ -463,6 +501,14 @@ def where_they_live(contact) -> str:
     cid = str(c.get("contact_id") or "").strip()
     if not cid:
         return ""
+    # Read once a page build for each person: the holds, To do and Contacts each looked for
+    # their profile's read on disk again (issue 336).
+    import remembered
+    return remembered.get("where_they_live", cid, lambda: _read_where(cid))
+
+
+def _read_where(cid: str) -> str:
+    """The location their profile showed when it was read (reading.json), or ""."""
     try:
         import reading
         p = reading.path(cid)
@@ -541,8 +587,9 @@ def held(contact, msgs, status, replying=False, memo=None, today=None) -> dict |
         return {"why": "request", "said": HELD_WORDS["request"]}
     # Their limit, the one answer the dates written on a row also read (state.at_limit).
     if state.at_limit(c, msgs, status):
-        n = max(state._chases(msgs) if msgs else 0, state.schema.MAX_UNANSWERED)
-        if state._chases(msgs) < state.schema.MAX_UNANSWERED and state.told_no_more(c, msgs):
+        chases = state._chases(msgs)
+        n = max(chases if msgs else 0, state.schema.MAX_UNANSWERED)
+        if chases < state.schema.MAX_UNANSWERED and state.told_no_more(c, msgs):
             # Their record says so, not the count: "No reply to 2 messages" after one was false.
             return {"why": "limit", "said": HELD_WORDS["told"], "n": n}
         return {"why": "limit", "said": HELD_WORDS["limit"].format(n=n), "n": n}

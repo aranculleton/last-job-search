@@ -137,8 +137,13 @@ CHUNK_SPAN = 64_000
 def _ends_chunk(item, n: int) -> bool:
     """Does `item` (`n` bytes as stored) end its part, by its own text alone?"""
     import hashlib
-    text = json.dumps(item, ensure_ascii=False, sort_keys=True)
+    text = _HASHED.encode(item)
     return int(hashlib.sha1(text.encode("utf-8")).hexdigest()[:8], 16) % CHUNK_SPAN < n
+
+
+# json.dumps(item, ensure_ascii=False, sort_keys=True), made once: dumps builds an encoder a
+# call, and a big search's lists cut some 3,000 items a build (issue 336).
+_HASHED = json.JSONEncoder(ensure_ascii=False, sort_keys=True)
 
 
 def chunks(items: list[dict], limit: int = CHUNK_BYTES) -> list[list[dict]]:

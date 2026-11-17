@@ -1001,7 +1001,10 @@ def load_do_not_target(path: str = DO_NOT_TARGET, today: str = "",
     data = _read_do_not_target(path) if data is None else data
     if not data:
         return {}
-    today = today or person.today().isoformat()
+    # The person's own day, read once a page build (remembered.day): asked once an employer,
+    # it read their profile's zone again each time (issue 336).
+    import remembered
+    today = today or remembered.day().isoformat()
     out = {}
     for name, e in (data.get("companies") or {}).items():
         if not isinstance(e, dict):

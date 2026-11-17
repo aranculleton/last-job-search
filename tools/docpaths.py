@@ -740,7 +740,20 @@ def app_folder(company, role, abbr=""):
     A role carrying its requisition number, "Data Scientist II (R_1234567)", is also
     looked for without it: the folder was named before the number was written into the
     tracker, and the interview pack built itself from an empty folder.
+
+    Found once a page build for each application (tools/remembered.py): Applications, its
+    stages and the campaign chats each looked for every application's folder again
+    (issue 336). Outside a build, every time.
     """
+    import remembered
+    if not remembered.active():
+        return _app_folder(company, role, abbr)
+    return remembered.get("app_folder", (repr(company), repr(role), repr(abbr),
+                                         person.state()),
+                          lambda: _app_folder(company, role, abbr))
+
+
+def _app_folder(company, role, abbr=""):
     base = person.state("documents", "applications")
     given = bool(abbr)
     abbr = abbr or _abbr_on_file(company, role)
