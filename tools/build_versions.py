@@ -419,8 +419,9 @@ METHODS: dict[str, dict] = {
             (109, "2026-11-17", False, "RUNBOOK's round command passes no window of its own: a round searches the person's own (JOB_AGE_DAYS) and says so first; nothing made changes"),
             (110, "2026-11-17", False, "RUNBOOK says an employer nobody has judged waits below judged ones and a round's batch of them is judged in one go (bar.py judge --file), then the round is cut again; nothing made changes"),
             (111, "2026-11-17", False, "RUNBOOK says every round prints what each source read and what failed, and a failed source is passed on in plain words; nothing made changes"),
+            (112, "2026-11-17", False, "RUNBOOK says a round asked for a number that finds fewer checks itself before it reports and searches wider by itself when the search's own hour allows; nothing made changes"),
         ),
-        "fingerprint": "bba4c231ddefca6f",
+        "fingerprint": "36500ebd9e5c5a29",
     },
     "interview": {
         # Only a process with a round still to come is prepared again: a prep for a round

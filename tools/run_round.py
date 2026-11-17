@@ -1947,6 +1947,48 @@ def window_line(days: int, own: int, given) -> str:
     return f"window: {days} days (given for this search; your setting is {own})"
 
 
+# A round asked for N that comes up short checks itself before it reports (2026-11-16, #299):
+# a person asked for 10 and got 7, again and again, with the round saying the market had no
+# more. In order: every ranked row that passes every rule has been read (the rules run before
+# the throttle, and a cut made again refills from the reserve); employers nobody has judged
+# are on the list already, ranked down, so judging them adds none; the sources that failed
+# are named, for a new search to read again; and the round widens by itself, more pages of
+# each search, when the search's own time can hold another scrape as long as this one was.
+WIDEN_MARGIN_SEC = 5 * 60
+
+
+def self_check(cut: dict, short: bool, unread, a, started: float) -> dict:
+    """{"lines": what the check says, "widen": whether to go wider now, "until": the end of
+    the search's own time, as a wall-clock time a wider round is given}."""
+    left = (started + ROUND_BUDGET_SEC) - time.monotonic()
+    until = a.until or (time.time() + left)
+    left = min(left, until - time.time())
+    out = {"lines": [], "widen": False, "until": round(until, 1)}
+    if not short:
+        return out
+    lines = out["lines"]
+    lines.append(f"self-check: found {cut.get('found', 0)} of the {cut.get('asked', 0)} asked "
+                 "for, after reading every ranked row that passes every rule")
+    if unread:
+        lines.append(f"self-check: {len(unread)} sources could not be read in full this round "
+                     "(above); a new search reads them again: " + ", ".join(unread[:8])
+                     + (f" and {len(unread) - 8} more" if len(unread) > 8 else ""))
+    scrape = sum(secs for name, secs in TIMES if name == "scrape_wide.py")
+    if a.round >= MAX_ROUNDS:
+        lines.append(f"self-check: no wider search: this is round {a.round} of {MAX_ROUNDS}")
+    elif a.from_scraped or not scrape:
+        lines.append("self-check: no wider search by itself: this round read a saved scrape, "
+                     "so how long a live one takes is not known (--expand runs one)")
+    elif left < scrape + WIDEN_MARGIN_SEC:
+        lines.append(f"self-check: no wider search: {took(max(0, left))} of the search's time "
+                     f"is left and this round's scrape took {took(scrape)}")
+    else:
+        out["widen"] = True
+        lines.append(f"self-check: searching wider by itself, {took(left)} of the search's time "
+                     "left")
+    return out
+
+
 def main():
     try:  # a chat that carried on into a new day has not checked the app since
         import sync_app
@@ -1992,6 +2034,7 @@ def main():
     ap.add_argument("--round", type=int, default=1, help=argparse.SUPPRESS)
     ap.add_argument("--first-pages", dest="first_pages", type=int, default=None,
                     help=argparse.SUPPRESS)
+    ap.add_argument("--until", type=float, default=None, help=argparse.SUPPRESS)
     ap.add_argument("--hydrate-cache", dest="hydrate_cache", default=None,
                     help=argparse.SUPPRESS)
     ap.add_argument("--scrape-before", dest="scrape_before", default=None,
@@ -2073,6 +2116,9 @@ def main():
     # smaller of its own budget and what is left of this.
     started = time.monotonic()
     deadline = started + ROUND_BUDGET_SEC
+    if a.until:
+        # A wider round goes on in the time the first one started: one budget for the search.
+        deadline = min(deadline, started + max(0.0, a.until - time.time()))
     TIMES.clear()
     RESUME.clear()
     scrape_dir = f(SCRAPED)
@@ -2297,6 +2343,7 @@ def main():
     for line in say_sources(a.out):
         print(line)
         log.write(line + "\n")
+    unread = failed_sources(a.out)
     log.flush()
     blocked = str(_health_file(a.out).get("say") or "")
     if blocked:
@@ -2308,7 +2355,14 @@ def main():
     # scrape it scrapes live. --expand is the asking: a round resumed from a timeout's kept
     # scrape (--from-scraped) is exactly the round that still owes its widening, and one
     # that never widened missed the yield rule's three rounds. It is said before it runs.
-    widen = not met and a.expand and a.round < MAX_ROUNDS
+    short = (not names and a.show is not None and int(a.show) > 0
+              and cut.get("found", 0) < cut.get("asked", 0))
+    check = self_check(cut, short, unread, a, started)
+    for line in check["lines"]:
+        print(line)
+        log.write(line + "\n")
+    log.flush()
+    widen = (not met and a.expand or check["widen"]) and a.round < MAX_ROUNDS
     if a.table and summary and not widen:
         # Read before the prune: the round's own shortlist holds each posting's deadline.
         # A round about to widen prints none; the widest one prints the table.
@@ -2350,6 +2404,7 @@ def main():
         code = subprocess.call(
             [sys.executable, __file__, "--out", nxt,
              "--pages", str(pages), "--first-pages", str(first),
+             "--until", str(check["until"]),
              "--jobage", str(a.jobage),
              "--workers", str(a.workers), "--top", str(a.top), "--today", a.today,
              "--require", a.require, "--expand", "--round", str(a.round + 1)]

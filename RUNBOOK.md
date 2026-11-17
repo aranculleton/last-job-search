@@ -275,7 +275,10 @@ It exits 2 and keeps five files it otherwise deletes, with the posting bodies st
 Every round also prints what each source read and what failed (`sources:`): each site's
 searches, failures and postings, the employer boards that returned nothing and why, and what
 cut the scrape short. Pass on a failed source in plain words; a quiet board is not a thin
-market.
+market. A round asked for a number (`--show`) that finds fewer checks itself before it
+reports (`self-check:`): it has read every ranked row that passes every rule, it names the
+sources a new search would read again, and it searches wider by itself when the search's own
+hour can hold another scrape as long as the first, saying so either way.
 
 Those are the places a posting can vanish. `--expand` re-runs wider automatically,
 up to three rounds in all, each with more pages per search (from the default 5, then 10,
