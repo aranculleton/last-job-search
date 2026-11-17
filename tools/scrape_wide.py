@@ -26,8 +26,10 @@ Usage:
     python3 tools/scrape_wide.py --out DIR [--pages 5] [--jobage 14]
 
 `--out` is a DIRECTORY: it receives scraped.json (everything), kept.json (past
-the prefilter) and dropped.json. Exit 2 when more than a quarter of the portal
-requests failed, after the files are written.
+the prefilter), dropped.json and sources.json (what each source read and what failed, the
+employers' own job sites it could not read among them). Exit 2 when more than a quarter
+of the portal requests failed, or more than a quarter of those job sites could not be
+read, after the files are written.
 """
 
 from __future__ import annotations
@@ -519,7 +521,8 @@ class PageWalk:
 
 def sweep(skill: str, tasks: list[tuple], jobage: int, sleep=time.sleep,
           clock=time.monotonic, tally: "Tally | None" = None,
-          on_rows=None, log=None, requests=None) -> tuple[list[dict], int, list[str]]:
+          on_rows=None, log=None, requests=None,
+          covered=None) -> tuple[list[dict], int, list[str]]:
     """Every request for one person's portal, one at a time, `crawl-delay` apart.
 
     Its own thread, so a board that asks for five seconds between requests
@@ -534,6 +537,9 @@ def sweep(skill: str, tasks: list[tuple], jobage: int, sleep=time.sleep,
 
     `requests`, a file, gets one line per request (request_line), with how many of
     its rows were new to the round when `on_rows` says so by returning a count.
+
+    `covered`, given an employer's key, says whether that employer's own board was read this
+    round: its search here (NAMED) is then not sent, and counts as gone through.
     """
     delay, rows, failed = portals.crawl_delay(skill), [], []
     start, streak, sent, last, why = clock(), 0, 0, "", ""
@@ -543,7 +549,7 @@ def sweep(skill: str, tasks: list[tuple], jobage: int, sleep=time.sleep,
         _say(plan, log)
     if tally is not None:
         tally.ends = start + SWEEP_BUDGET
-    walk, at, ended = PageWalk(), 0, 0
+    walk, at, ended, skipped = PageWalk(), 0, 0, 0
     for at, task in enumerate(tasks):
         q, loc, pg = task[1:4]
         remote = len(task) > 4 and task[4]
@@ -552,6 +558,12 @@ def sweep(skill: str, tasks: list[tuple], jobage: int, sleep=time.sleep,
             ended += 1                        # its search ran out on an earlier page
             if tally is not None:
                 tally.ended = ended
+            continue
+        employer = NAMED.get((skill, q))
+        if employer and covered is not None and covered(employer):
+            skipped += 1                      # its own board was read this round
+            if tally is not None:
+                tally.covered = skipped
             continue
         if streak >= SWEEP_MAX_FAILS:
             why = f"{streak} failures in a row ({last})"
@@ -620,6 +632,10 @@ def sweep(skill: str, tasks: list[tuple], jobage: int, sleep=time.sleep,
 # (progress_lines), so a chat can tell a slow round from a hung one.
 POOL_BUDGET = 20 * 60
 POOL_MAX_LIMITED = 3
+# How long after the scrape starts an employer board whose site asked to slow down is waited
+# for, to be read once more (ats_boards.fetch_all, issue 302): a host that answers 429 with no
+# Retry-After is held ten minutes, and the stage then ends a few minutes after the rest.
+BOARD_RETRY_SECONDS = 15 * 60
 # A portal that gives the same failure this many times running, with no success
 # between, is stopped: freehire answered 403 Forbidden to all 300 of one round's
 # requests and the pool sent every one. Five, where a paced board stops at three
@@ -656,6 +672,7 @@ class Tally:
         self.stopped = ""
         self.capped = 0
         self.ended = 0                    # deeper pages not sent: their search had run out
+        self.covered = 0                  # employer searches not sent: its own site was read
         # Failed requests, counted as they land with their causes. `failed` also
         # carries the note a stopped portal leaves, which is not a request.
         self.errors = 0
@@ -697,6 +714,9 @@ class Tally:
             bits.append(f"{self.capped} deeper page(s) left by the round's cap")
         if self.ended:
             bits.append(f"{self.ended} deeper page(s) not needed, their search had run out")
+        if self.covered:
+            bits.append(f"{self.covered} employer search(es) not needed, the employer's own "
+                        "job site was read")
         if self.stopped:
             bits.append(f"stopped: {self.stopped}")
         elif self.finished:
@@ -1088,6 +1108,9 @@ def _sweep_paths() -> tuple[str, str]:
 
 # This round's plan per person portal: (mode, core requests, rotating length, offset).
 PLAN: dict[str, tuple[str, int, int, int]] = {}
+# This round's employer searches on a person's portal for an employer whose own board is on
+# file: {(portal, query): the employer's key}. Sent only if that board was not read (`sweep`).
+NAMED: dict[tuple[str, str], str] = {}
 
 
 def _covered_by_ats() -> set:
@@ -1227,9 +1250,15 @@ def build_tasks(on: dict[str, bool], pages: int) -> list[tuple]:
     # places further out last, each in the order the person lists them. It was every
     # page of the first search before page one of the second, so a board whose budget
     # held about 150 of its 243 requests lost whole searches to an accident of order.
+    #
+    # An employer whose own board is on file is still planned here, and its search is passed
+    # over when it comes up only if that board was read this round (`sweep`'s `covered`): it
+    # was left out of the plan up front, so a board the site asked to slow down lost its
+    # employer both ways (issue 302).
     covered = _covered_by_ats()
     cursor = _cursor()
     PLAN.clear()
+    NAMED.clear()
     try:
         from company_key import key as _key
     except Exception:  # pragma: no cover
@@ -1241,7 +1270,9 @@ def build_tasks(on: dict[str, bool], pages: int) -> list[tuple]:
         qs = broadest(QUERIES)
         core = [(skill, q, places[0], pg) for pg in range(1, depth + 1) for q in qs]
         tail = [(skill, f"{emp} {t}", places[0], 1) for emp in EMPLOYERS
-                if _key(emp) not in covered for t in EMPLOYER_QUERIES]
+                for t in EMPLOYER_QUERIES]
+        NAMED.update({(skill, f"{emp} {t}"): _key(emp) for emp in EMPLOYERS
+                      for t in EMPLOYER_QUERIES if _key(emp) in covered})
         for pg in range(1, min(depth, 2) + 1):
             if portals.takes_remote(skill):
                 tail += [(skill, q, None, pg, True) for q in qs]
@@ -1285,6 +1316,7 @@ def named_tasks(on: dict[str, bool], pages: int, employers) -> list[tuple]:
         if fh:
             tasks.append(("fh", q, None, 1))
     covered = _covered_by_ats()
+    NAMED.clear()
     try:
         from company_key import key as _key
     except Exception:  # pragma: no cover
@@ -1292,8 +1324,12 @@ def named_tasks(on: dict[str, bool], pages: int, employers) -> list[tuple]:
             return x
     for skill in contract_portals(on):
         first = portal_locations(skill)[0]
-        tasks += [(skill, f"{emp} {t}" if t else emp, first, 1)
-                  for emp in names if _key(emp) not in covered for t in (asks or [""])]
+        for emp in names:
+            for t in (asks or [""]):
+                q = f"{emp} {t}" if t else emp
+                tasks.append((skill, q, first, 1))
+                if _key(emp) in covered:
+                    NAMED[(skill, q)] = _key(emp)
     return tasks
 
 
@@ -1404,7 +1440,11 @@ def write_sources(out: str, rows: list, kept: list, sent: dict, failed: dict,
               "boards": {"read": int(boards.get("read") or 0),
                          "found": {p: found.get(p, 0) for p in sorted(systems)},
                          "quiet": dict(boards.get("quiet") or {}),
-                         "partial": dict(boards.get("partial") or {})},
+                         "partial": dict(boards.get("partial") or {}),
+                         # which could not be read, which were asked again (boards_unread)
+                         **{k: boards[k] for k in ("boards", "not_read", "slowed", "retried",
+                                                   "recovered", "line", "cut_short")
+                            if k in boards}},
               "stopped": partial}
     with open(os.path.join(out, SOURCES), "w", encoding="utf-8", newline="\n") as fh:
         json.dump(report, fh, indent=1, ensure_ascii=False)
@@ -1464,18 +1504,23 @@ def finish(out: str, seen: dict, today: dt.date, jobage: int, n_tasks: int,
 
 
 def _employer_boards(today: dt.date, seen: str | None = None,
-                     keep_ruled_out: bool = False,
-                     employers=None) -> tuple[list[dict], dict[str, str], dict[str, str]]:
+                     keep_ruled_out: bool = False, employers=None, report: dict | None = None,
+                     cache_dir: str | None = None, retry_until: float | None = None,
+                     ) -> tuple[list[dict], dict[str, str], dict[str, str]]:
     """(rows, {employer: why it was quiet}, {employer: what it left out}) from every
     employer board in profile/boards.py (tools/ats_boards.py). An error is raised to
     whoever waits for the answer, which reports it and carries on. `seen` and
     `keep_ruled_out` are the round's own: a replayed round, or one run with
     --no-seen-read, judged careers-site pages against the repo's file instead. With
-    `employers` (a search limited to them), only their boards are read."""
-    from ats_boards import fetch_all as _ats_fetch
+    `employers` (a search limited to them), only their boards are read. `report`,
+    `cache_dir` and `retry_until` are fetch_all's own: what was read and retried, where a
+    host's robots.txt is kept for a day, and how long a board asked to slow down is waited
+    for."""
+    import ats_boards
+    _ats_fetch = ats_boards.fetch_all
     notes: dict[str, str] = {}
-    # Passed only when given, so a stand-in for fetch_all written before they existed (a
-    # person's own tests have one) still works for an ordinary round.
+    # Passed only when given, and only where the reader takes it, so a stand-in for fetch_all
+    # written before they existed (a person's own tests have one) still works for a round.
     extra = dict(({"seen": seen} if seen else {}),
                  **({"keep_ruled_out": True} if keep_ruled_out else {}))
     if employers is not None:
@@ -1483,8 +1528,58 @@ def _employer_boards(today: dt.date, seen: str | None = None,
         if not mine:
             return [], {}, {}
         extra["boards"] = mine
+    newer = {"report": report, "cache_dir": cache_dir, "retry_until": retry_until}
+    try:
+        import inspect
+        takes = inspect.signature(_ats_fetch).parameters
+        anything = any(p.kind is p.VAR_KEYWORD for p in takes.values())
+    except (TypeError, ValueError):
+        takes, anything = {}, False
+    extra.update({k: v for k, v in newer.items()
+                  if v is not None and (anything or k in takes)})
     rows, quiet = _ats_fetch(notes=notes, today=today, **extra)
     return rows, quiet, notes
+
+
+# The employer boards a round could not read, in SOURCES, for the round to say before its
+# prune (run_round._boards_unread). A "quiet:" line deep in round.log was all that said 17 of
+# the person's target employers were never read, and the scrape still ended as complete
+# (issue 302). A board counts as not read when its site asked to slow down, did not answer or
+# answered with an error; not when it was read and had nothing in range, nor where its
+# robots.txt says no (a standing rule `ats_boards.py --probe` names, not news of a round).
+UNREAD = re.compile(r"\bHTTP (?:429|5\d\d)\b|\bslow down\b|\bno answer\b|\btimed? ?out\b|"
+                    r"\b\w*(?:Error|Disconnected|IncompleteRead)\b|\bconnection\b", re.I)
+MAX_UNREAD_FRACTION = 0.25
+
+
+def boards_unread(quiet: dict, total: int, report: dict | None = None) -> dict:
+    """What the round's own employer boards came to: how many there were, which could not be
+    read and why, which the site asked to slow down, which were asked again and read then,
+    and the line the round says (`line`, "" when every board was read)."""
+    import ats_boards
+    report = report or {}
+    unread = {e: why for e, why in sorted(quiet.items()) if UNREAD.search(str(why or ""))}
+    slowed = [e for e in unread if ats_boards.SLOWED.search(unread[e])]
+    retried, recovered = list(report.get("retried") or ()), list(report.get("recovered") or ())
+    line = ""
+    if unread:
+        names = ", ".join(list(unread)[:6]) + (f" and {len(unread) - 6} more"
+                                               if len(unread) > 6 else "")
+        why = []
+        if slowed:
+            why.append(f"{len(slowed)} asked us to slow down")
+        if len(unread) > len(slowed):
+            why.append(f"{len(unread) - len(slowed)} did not answer")
+        line = (f"employer job sites not read: {len(unread)} of {total} ({names}): "
+                + " and ".join(why)
+                + f"; tried again after the pause they asked for: {len(retried)}, "
+                  f"read then: {len(recovered)}")
+    elif recovered:
+        line = (f"employer job sites: every one read; {len(recovered)} asked us to slow down "
+                "and were read once their pause was over")
+    return {"boards": total, "not_read": unread, "slowed": slowed, "retried": retried,
+            "recovered": recovered, "line": line,
+            "cut_short": bool(total) and len(unread) / total > MAX_UNREAD_FRACTION}
 
 
 def main() -> int:
@@ -1521,6 +1616,10 @@ def main() -> int:
     ap.add_argument("--before", default=None,
                     help="a widening: the round before's scrape folder; its postings are "
                          "carried over and the requests it had answered are not sent again")
+    ap.add_argument("--cache", default=None,
+                    help="a folder beside the rounds, never saved with the person's files, "
+                         "where what the search was answered is kept a short while: each "
+                         "employer site's robots.txt for a day")
     ap.add_argument("--employers-file", dest="employers_file", default=None,
                     help="a search limited to these employers (run_round.py --employers writes "
                          "the file): their own boards and searches by their names alone")
@@ -1662,9 +1761,17 @@ def main() -> int:
             mine.setdefault(task[0], []).append(task)
     tallies: dict[str, Tally] = {portals.short(k): Tally(portals.short(k), len(ts))
                                  for k, ts in mine.items()}
+    # What the employer boards have read so far, filled as each is read: a person's portal
+    # searches an employer by name only while that employer's own board has not been read.
+    board_report: dict = {"read": set()}
+    from company_key import key as _ckey
+
+    def covered(employer_key: str) -> bool:
+        return any(_ckey(e) == employer_key for e in list(board_report["read"]))
     paced = ThreadPoolExecutor(max_workers=max(1, len(mine)))
     sweeps = {paced.submit(sweep, skill, ts, a.jobage, tally=tallies[portals.short(skill)],
-                           on_rows=landed, log=a.log, requests=a.request_log):
+                           on_rows=landed, log=a.log, requests=a.request_log,
+                           covered=covered):
               portals.short(skill)
               for skill, ts in mine.items()}
     jobs = []
@@ -1713,10 +1820,12 @@ def main() -> int:
     boards_took: list = []
 
     def read_boards():
+        newer = {"report": board_report, "cache_dir": a.cache,
+                 "retry_until": searching + BOARD_RETRY_SECONDS}
         try:
             if employers is not None:
-                return _employer_boards(today, a.seen, a.keep_ruled_out, employers)
-            return _employer_boards(today, a.seen, a.keep_ruled_out)
+                return _employer_boards(today, a.seen, a.keep_ruled_out, employers, **newer)
+            return _employer_boards(today, a.seen, a.keep_ruled_out, **newer)
         finally:
             boards_took.append(time.monotonic() - searching)
     employer_boards = boards.submit(read_boards)
@@ -1737,7 +1846,8 @@ def main() -> int:
         sent[portal] = n
         # Where the next round's tail starts: past every task gone through, a page not
         # needed because its search had run out included.
-        swept.update({k: n + tallies[portal].ended for k in mine if portals.short(k) == portal})
+        swept.update({k: n + tallies[portal].ended + tallies[portal].covered
+                      for k in mine if portals.short(k) == portal})
         if errs:
             failed.setdefault(portal, []).extend(errs)
         landed(rows_)
@@ -1782,6 +1892,7 @@ def main() -> int:
     # nothing from the portals. Their rows still join here, after every portal's, so
     # where one posting comes from two sources the portal's copy is still the one kept.
     boards: dict = {}
+    boards_cut = ""
     try:
         waiting = time.monotonic()
         ats_rows, ats_quiet, ats_notes = employer_boards.result()
@@ -1800,12 +1911,24 @@ def main() -> int:
             print(f"  quiet: {employer}: {why}")
         for employer, why in sorted(ats_notes.items()):
             print(f"  partial: {employer}: {why}")
+        import ats_boards
+        total = (len(named_boards(employers)[0]) if employers is not None
+                 else len(ats_boards.BOARDS))
+        unread = boards_unread(ats_quiet, total, board_report)
+        boards.update(unread)                 # into SOURCES, for the round to say
+        if unread["line"]:
+            _say(unread["line"], a.log)
+        if unread["cut_short"]:
+            boards_cut = (f"{len(unread['not_read'])} of {total} employer job sites were not "
+                          "read")
     except Exception as e:            # a new source must never break a round
         print(f"ats boards: skipped ({type(e).__name__}: {e})", file=sys.stderr)
 
     cut = [t for t in pool_tallies.values() if t.stopped and t.name in ("linkedin", "freehire")]
     notes = [f"{t.name} stopped ({t.stopped}) with {t.total - t.sent} of its "
              f"{t.total} requests unsent" for t in cut]
+    if boards_cut:
+        notes.append(boards_cut)
     notes += [f"{name} not searched (it refused the probe: {why})"
               for name, why in sorted(skipped.items())]
     partial = "; ".join(notes)

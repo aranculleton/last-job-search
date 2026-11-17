@@ -1583,6 +1583,24 @@ def _portals_down(out_dir: str) -> list[str]:
     return list(_health_file(out_dir).get("portals_down") or [])
 
 
+def _boards_unread(out_dir: str) -> str:
+    """The line the scrape wrote about the employers' own job sites it could not read
+    (scrape_wide.boards_unread, in its sources), or "". Fails open, as the portals' health
+    does."""
+    return str(((_sources(out_dir) or {}).get("boards") or {}).get("line") or "")
+
+
+# Kept a short while beside the rounds, never committed (rounds/ is the person's working
+# folder, which git ignores): what the search was answered, so a round run again soon after
+# asks the sites for nothing they have just answered.
+CACHE = ".cache"
+
+
+def cache_dir(out: str) -> str:
+    """The folder kept beside a round's own: rounds/.cache for rounds/r12."""
+    return os.path.join(os.path.dirname(os.path.abspath(out)), CACHE)
+
+
 def _down_detail(out_dir: str, name: str) -> str:
     """What the probe found for one portal that is down: silent, or what it said when it
     refused. Every down portal used to be reported as "0 results", the 403 ones too."""
@@ -2161,7 +2179,8 @@ def main():
             pass
         code = run([sys.executable, f"{T}/scrape_wide.py", "--out", scrape_dir,
                     "--pages", str(a.pages), "--jobage", str(a.jobage), "--today", a.today,
-                    "--workers", str(a.workers), "--request-log", requests]
+                    "--workers", str(a.workers), "--request-log", requests,
+                    "--cache", cache_dir(a.out)]
                    # The employer boards read the repo's own seen file unless the round
                    # was given another.
                    + (["--seen", a.seen] if a.seen else [])
@@ -2176,9 +2195,10 @@ def main():
         if code == SCRAPE_PARTIAL:
             partial = ("the scrape stage ran out of time and kept only what had arrived"
                        if nonlocal_partial else
-                       "more than a quarter of the portal requests failed, or a portal was "
-                       "stopped short or refused the pre-flight probe (round.log names the "
-                       "portals and why), so this round is not a full picture of the market")
+                       "more than a quarter of the portal requests failed, a portal was "
+                       "stopped short or refused the pre-flight probe, or more than a quarter "
+                       "of the employers' own job sites could not be read (round.log names "
+                       "them and why), so this round is not a full picture of the market")
     scraped = os.path.join(scrape_dir, "kept.json")
     RESUME["scrape"] = scraped
     # A search limited to named employers goes on with their postings alone, before anything
@@ -2345,6 +2365,13 @@ def main():
         log.write(line + "\n")
     unread = failed_sources(a.out)
     log.flush()
+    # The employers' own job sites the scrape could not read, in a line of its own for the
+    # chat to pass on: the person's named targets are most of them, and a "quiet:" line in
+    # round.log was all that said so (issue 302).
+    not_read = _boards_unread(a.out)
+    if not_read:
+        print(not_read)
+        log.write(not_read + "\n")
     blocked = str(_health_file(a.out).get("say") or "")
     if blocked:
         # The cloud chat's own settings block the sites: what fixes it is the person's,

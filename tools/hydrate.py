@@ -456,9 +456,36 @@ def _from_employer_board(job: dict) -> dict:
     return {**job, "desc": hit.description[:BODY_CAP]}
 
 
+def _from_own_board(job: dict) -> dict:
+    """A posting the employer-board pass kept without its body, its page having failed to
+    load while the board was read (the board asked to slow down): read from that board now
+    (ats_boards.posting_body), paced and held off by openroles as the pass was (issue 302)."""
+    import ats_boards
+    try:
+        body, why = ats_boards.posting_body(job)
+    except Exception as e:  # noqa: BLE001  a board that will not answer is said, never raised
+        body, why = None, f"{type(e).__name__}: {str(e)[:120]}"
+    if body:
+        return {**job, "desc": body[:BODY_CAP]}
+    return {**job, "hydrate_error": f"employer board: {why}"}
+
+
+def _board_portal(portal: str) -> bool:
+    """Is `portal` an employer-board system the board pass reads (workday, rippling...)?"""
+    if not portal or portal in CLI:
+        return False
+    try:
+        from openroles.providers import READERS
+    except Exception:  # noqa: BLE001
+        return False
+    return portal in READERS
+
+
 def _fetch(job: dict, timeout: int) -> dict:
     portal = job.get("portal") or ""
     ident = str(job.get("id") or "")
+    if _board_portal(portal):
+        return _from_own_board(job)
     if portal == "freehire" and (not ident or ident == "None" or not _FREEHIRE_SLUG.search(ident)):
         url = str(job.get("url") or "")
         if not _FREEHIRE_SLUG.search(url) or "freehire" not in url:

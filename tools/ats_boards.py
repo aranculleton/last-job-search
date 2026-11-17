@@ -35,8 +35,9 @@ this would read, and SmartRecruiters' robots.txt closes its posting API to every
 crawler except LinkedIn's: see REFUSED. This adds a source; it does not replace one.
 
 ROBOTS. A board is read only where the host's robots.txt allows it, re-checked
-on every run, because a policy is a fact that changes and a board added last
-quarter should stop being read the week its owner says no. Where the vendor
+at least daily (each answer is kept a day, as RFC 9309 allows: ROBOTS_KEEP), because a
+policy is a fact that changes and a board added last quarter should stop being read
+the week its owner says no. Where the vendor
 documents the endpoint as a public API an explicit Disallow stops the read;
 elsewhere (Workday, Ashby, Homerun, ClearCompany, a careers site) the policy
 must be readable and must allow it. Each reader in tools/openroles/providers/
@@ -65,8 +66,11 @@ import argparse
 import datetime as dt
 import json
 import os
+import random
 import re
 import sys
+import tempfile
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -393,9 +397,10 @@ def _read(kind: str):
         except BoardError as e:
             return [], str(e).split(": ", 1)[-1]
         failed = report.get("detail_errors") or {}
-        out = _rows(employer, jobs, failed)
-        note = (f"{len(failed)} of {report.get('details_asked', 0)} posting bodies failed "
-                f"({_summarise(failed.values())}) and those postings were left out") if failed else None
+        # A posting whose own record would not load goes on without its body, for the
+        # round's fetch stage (hydrate.py) to read: it was left out (issue 302).
+        out = _rows(employer, jobs)
+        note = _bodies_failed(failed, report.get("details_asked", 0)) if failed else None
         return out, note
     read.__name__ = kind
     return read
@@ -498,6 +503,11 @@ def _summarise(errors) -> str:
     return ", ".join(f"{n}x {e}" for e, n in sorted(counts.items(), key=lambda x: -x[1])[:3])
 
 
+def _bodies_failed(failed: dict, asked: int) -> str:
+    return (f"{len(failed)} of {asked} posting bodies failed ({_summarise(failed.values())}); "
+            "those postings go on without one, for the round's fetch stage to read")
+
+
 def workday(employer: str, token: str, queries=None,
             today: dt.date | None = None) -> tuple[list[dict], str | None]:
     """A Workday board, reading a posting's body only where the free gates say it could
@@ -537,8 +547,13 @@ def workday(employer: str, token: str, queries=None,
     rows = []
     for job in jobs:
         if job.id in failed:
-            continue
-        if job.id in asked:
+            # Its page would not load (the board asked to slow down, most often): it goes on
+            # without its body, for the round's fetch stage to read, where it was left out of
+            # the round (issue 302). Where its own listing names no place the person wants, it
+            # goes on with the listing's words, for the search's place gate to rule on.
+            location, _ = _choose(_labels(job), job.title, job.workplace == "remote")
+            rows.append(_row(employer, job, location or job.location, None))
+        elif job.id in asked:
             location, _ = _choose(_labels(job), job.title, job.workplace == "remote")
             if location:
                 rows.append(_row(employer, job, location, _desc(job)))
@@ -551,8 +566,7 @@ def workday(employer: str, token: str, queries=None,
         errs = report["listing_errors"]
         notes.append(f"{len(errs)} listing page(s) failed ({_summarise(errs)})")
     if failed:
-        notes.append(f"{len(failed)} of {report.get('details_asked', 0)} posting bodies failed "
-                     f"({_summarise(failed.values())}) and those postings were left out")
+        notes.append(_bodies_failed(failed, report.get("details_asked", 0)))
     return rows, "; ".join(notes) or None
 
 
@@ -563,34 +577,222 @@ FETCH["careersite"] = careersite
 greenhouse, lever, ashby = FETCH["greenhouse"], FETCH["lever"], FETCH["ashby"]
 
 
+# ------------------------------------------------------- a board asked to slow down
+#
+# Every Workday tenant is a host of its own on one of a few data centres (wd1, wd3, wd5...),
+# so openroles' two requests at a time per host held nothing back: sixteen workers asked one
+# data centre for sixteen tenants' robots.txt at once, it answered 429, and 21 boards (17 the
+# next round, every Workday board that round) were skipped whole, the person's named targets
+# among them, with a "quiet:" line in round.log the only word of it (issue 302). So a data
+# centre takes WORKDAY_PER_DC boards at a time; a board the site asked to pause is read once
+# more when that pause is over, one board at a time a data centre with RETRY_GAP between them,
+# as long as the round's time allows (`retry_until`); and each robots.txt answer is kept on
+# disk for a day (ROBOTS_KEEP), so the next round does not ask a tenant again an hour later.
+WORKDAY_PER_DC = 2
+SLOWED = re.compile(r"\bHTTP (?:429|503)\b|\bslow down\b", re.I)
+RETRY_GAP = (1.0, 3.0)
+# How long after the first pass a retry may wait for a pause, where the caller names no end of
+# its own: openroles holds a host that said 429 with no Retry-After for ten minutes.
+RETRY_WAIT = 12 * 60
+
+
+def _dc(kind: str, token: str) -> str:
+    """The Workday data centre a board is on ("wd3"), or "" for any other board."""
+    m = _wd.TOKEN.match(token or "") if kind == "workday" else None
+    return m["dc"] if m else ""
+
+
+def _hosts(kind: str, token: str) -> list[str]:
+    try:
+        return list(READERS[kind].hosts(token))
+    except Exception:  # noqa: BLE001  a board whose hosts are not known waits for nobody
+        return []
+
+
+def _held(host: str) -> bool:
+    """Has `host` asked for a pause that has not passed (openroles' own hold)?"""
+    from openroles import _http
+    try:
+        return bool(_http.held_off(host))
+    except Exception:  # noqa: BLE001
+        return False
+
+
+# robots.txt as each host last answered it, beside the rounds, never committed: RFC 9309
+# section 2.4 allows a robots.txt to be used for 24 hours. Only an answer is kept (a policy,
+# or none published): a pause (429, 503) or no answer at all is asked again next time.
+ROBOTS_FILE = "robots.json"
+ROBOTS_KEEP = 24 * 3600
+_KEPT_STATUSES = (200, 401, 404, 410)
+
+
+def _robots_path(cache_dir: str) -> str:
+    return os.path.join(cache_dir, ROBOTS_FILE)
+
+
+def _robots_kept(cache_dir: str, now: float) -> dict:
+    try:
+        with open(_robots_path(cache_dir), encoding="utf-8") as fh:
+            got = json.load(fh)
+    except (OSError, ValueError):
+        return {}
+    out = {}
+    for host, e in (got.items() if isinstance(got, dict) else ()):
+        try:
+            at, status, body = float(e["at"]), int(e["status"]), str(e.get("body") or "")
+        except (KeyError, TypeError, ValueError):
+            continue
+        if 0 <= now - at < ROBOTS_KEEP and status in _KEPT_STATUSES:
+            out[str(host).lower()] = {"at": at, "status": status, "body": body}
+    return out
+
+
+def prime_robots(cache_dir: str | None, now: float | None = None) -> int:
+    """Give openroles the robots.txt answers kept on disk in the last day, as if it had read
+    them itself (with each host's Crawl-delay). How many it was given."""
+    if not cache_dir:
+        return 0
+    from openroles import _http
+    from openroles.robots import crawl_delay, is_robots_body
+    now = time.time() if now is None else now
+    kept = _robots_kept(cache_dir, now)
+    mono = time.monotonic()
+    try:
+        with _http._ROBOTS_LOCK:
+            for host, e in kept.items():
+                _http._ROBOTS[host] = (mono - (now - e["at"]), (e["status"], e["body"]))
+        for host, e in kept.items():
+            if e["status"] == 200 and is_robots_body(e["body"]):
+                _http._DELAYS[host] = max(crawl_delay(e["body"], a) for a in _http.AGENTS)
+    except AttributeError:            # an openroles that keeps them otherwise: read afresh
+        return 0
+    return len(kept)
+
+
+def keep_robots(cache_dir: str | None, now: float | None = None) -> None:
+    """Write the robots.txt answers openroles holds (and those still kept from before) to
+    disk, for the next round. Never fails a round."""
+    if not cache_dir:
+        return
+    from openroles import _http
+    now = time.time() if now is None else now
+    mono = time.monotonic()
+    kept = _robots_kept(cache_dir, now)
+    try:
+        with _http._ROBOTS_LOCK:
+            held = dict(_http._ROBOTS)
+    except AttributeError:
+        return
+    for host, (stamp, (status, body)) in held.items():
+        if status in _KEPT_STATUSES:
+            kept[str(host).lower()] = {"at": now - (mono - stamp), "status": status, "body": body}
+        else:
+            kept.pop(str(host).lower(), None)
+    try:
+        os.makedirs(cache_dir, exist_ok=True)
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=cache_dir, delete=False,
+                                         suffix=".tmp", newline="\n") as fh:
+            json.dump(kept, fh, indent=1, sort_keys=True)
+        os.replace(fh.name, _robots_path(cache_dir))
+    except OSError:
+        pass
+
+
+def _retry(slowed: list[str], boards: dict, read_one, until: float, clock, sleep) -> dict:
+    """{employer: (rows, why)} for each board in `slowed` read once more, after the pause its
+    host asked for. One board at a time a data centre (any other board's host is its own
+    group), RETRY_GAP apart; a board whose pause outlasts `until` is not read."""
+    groups: dict[str, list[str]] = {}
+    for employer in slowed:
+        kind, token = boards[employer]
+        groups.setdefault(_dc(kind, token) or ",".join(_hosts(kind, token)) or employer,
+                          []).append(employer)
+    out: dict = {}
+
+    def run(names: list[str]) -> None:
+        for i, employer in enumerate(names):
+            kind, token = boards[employer]
+            hosts = _hosts(kind, token)
+            while any(_held(h) for h in hosts):
+                left = until - clock()
+                if left <= 0:
+                    return
+                sleep(min(5.0, left))
+            if clock() >= until:
+                return
+            if i:
+                sleep(random.uniform(*RETRY_GAP))
+            try:
+                out[employer] = read_one(employer, kind, token)
+            except Exception as exc:  # noqa: BLE001
+                out[employer] = ([], f"{type(exc).__name__}: {exc}")
+    with ThreadPoolExecutor(max_workers=max(1, len(groups))) as ex:
+        list(ex.map(run, groups.values()))
+    return out
+
+
 def fetch_all(boards=None, workers: int = 16, notes: dict | None = None,
               today: dt.date | None = None, seen: str | None = None,
-              keep_ruled_out: bool = False) -> tuple[list[dict], dict[str, str]]:
+              keep_ruled_out: bool = False, report: dict | None = None,
+              cache_dir: str | None = None, retry_until: float | None = None,
+              clock=time.monotonic, sleep=time.sleep) -> tuple[list[dict], dict[str, str]]:
     """(rows, {employer: why it returned nothing}) across every board.
 
     `notes`, when given, collects what a board that DID return rows left out,
     a Workday body that would not fetch, which is worth saying and is not the
-    same thing as a board gone quiet. The worker count is across boards; the
-    politeness budget per host is held by openroles. `today` dates Workday's
-    "Posted N days ago", so a replayed round (scrape_wide.py --today) dates its
-    postings from its own day and not the day it is replayed. `seen` and
-    `keep_ruled_out` are the round's seen_jobs.json and its --no-seen-read, for the
-    careers-site pages already ruled out.
+    same thing as a board gone quiet. The worker count is across boards, and a Workday
+    data centre takes WORKDAY_PER_DC of them at a time; the politeness budget per host is
+    held by openroles. `today` dates Workday's "Posted N days ago", so a replayed round
+    (scrape_wide.py --today) dates its postings from its own day and not the day it is
+    replayed. `seen` and `keep_ruled_out` are the round's seen_jobs.json and its
+    --no-seen-read, for the careers-site pages already ruled out.
+
+    A board whose site asked to slow down (HTTP 429 or 503) is read once more after the
+    pause it asked for, until `retry_until` on `clock` (RETRY_WAIT after the first pass by
+    default). `report`, when given, is filled in: "read" (each employer whose board was
+    read, added as it is), "slowed" (asked to slow down in the first pass), "retried" and
+    "recovered" (read on the retry). `cache_dir` keeps each host's robots.txt for a day.
     """
     boards = BOARDS if boards is None else boards
+    report = {} if report is None else report
+    report.setdefault("read", set())
     rows: list[dict] = []
     quiet: dict[str, str] = {}
+    prime_robots(cache_dir)
     pages = (_ruled_out_pages(seen, keep_ruled_out, today)
              if any(kind == "careersite" for kind, _ in boards.values()) else None)
-    with ThreadPoolExecutor(max_workers=workers) as ex:
-        def submit(employer, kind, token):
-            if kind == "workday":
-                return ex.submit(FETCH[kind], employer, token, today=today)
-            if kind == "careersite":
-                return ex.submit(FETCH[kind], employer, token, skip=pages(employer))
-            return ex.submit(FETCH[kind], employer, token)
-        futs = {submit(employer, kind, token): employer
-                for employer, (kind, token) in boards.items() if kind in FETCH}
+
+    def read_one(employer, kind, token):
+        if kind == "workday":
+            return FETCH[kind](employer, token, today=today)
+        if kind == "careersite":
+            return FETCH[kind](employer, token, skip=pages(employer))
+        return FETCH[kind](employer, token)
+
+    def take(employer, got, err):
+        if err and got:
+            if notes is not None:
+                notes[employer] = err
+        elif err:
+            quiet[employer] = err
+        elif not got:
+            quiet[employer] = "resolved, but nothing matching the location filter"
+        if got or not err:
+            report["read"].add(employer)
+        rows.extend(got)
+
+    main = ThreadPoolExecutor(max_workers=max(1, workers))
+    by_dc: dict[str, ThreadPoolExecutor] = {}
+    try:
+        futs = {}
+        # Interleaved by data centre, so one centre's queue never holds the rest back.
+        order = sorted(((e, k, t) for e, (k, t) in boards.items() if k in FETCH),
+                       key=lambda x: (_dc(x[1], x[2]), x[0]))
+        for employer, kind, token in order:
+            dc = _dc(kind, token)
+            ex = main if not dc else by_dc.setdefault(
+                dc, ThreadPoolExecutor(max_workers=WORKDAY_PER_DC))
+            futs[ex.submit(read_one, employer, kind, token)] = employer
         for employer, (kind, _token) in boards.items():
             if kind not in FETCH:
                 quiet[employer] = f"no reader for {kind!r}"
@@ -600,15 +802,68 @@ def fetch_all(boards=None, workers: int = 16, notes: dict | None = None,
                 got, err = f.result()
             except Exception as exc:                    # noqa: BLE001
                 got, err = [], f"{type(exc).__name__}: {exc}"
-            if err and got:
-                if notes is not None:
-                    notes[employer] = err
-            elif err:
+            take(employer, got, err)
+    finally:
+        main.shutdown(wait=True)
+        for ex in by_dc.values():
+            ex.shutdown(wait=True)
+    slowed = sorted(e for e, why in quiet.items() if SLOWED.search(why or ""))
+    report["slowed"], report["retried"], report["recovered"] = slowed, [], []
+    if slowed:
+        until = clock() + RETRY_WAIT if retry_until is None else retry_until
+        again = _retry(slowed, boards, read_one, until, clock, sleep)
+        report["retried"] = sorted(again)
+        for employer in sorted(again):
+            got, err = again[employer]
+            if got or not err:
+                report["recovered"].append(employer)
+                quiet.pop(employer, None)
+                take(employer, got, err)
+            else:
                 quiet[employer] = err
-            elif not got:
-                quiet[employer] = "resolved, but nothing matching the location filter"
-            rows.extend(got)
+    keep_robots(cache_dir)
     return rows, quiet
+
+
+# A board's own posting, read for the round's fetch stage (hydrate.py) where the board pass
+# kept it without its body: its page would not load while the board was read.
+def posting_body(row: dict) -> tuple[str | None, str | None]:
+    """(the body, why there is none) of one employer-board posting kept without its body,
+    read from the employer's own board, paced and held off by openroles as a round is."""
+    from openroles.discover import parse
+    from openroles.models import html_to_text
+    url = str(row.get("url") or "")
+    kind = str(row.get("portal") or "")
+    if kind == "workday":
+        token = workday_token(url)
+        path = re.search(r"(/job/[^?#]+)", url)
+        if not token or not path:
+            return None, "not a Workday posting's address"
+        board = _wd.WorkdayBoard(token)
+        ok, why = robots_allows(board.host, board.robots_paths())
+        if not ok:
+            return None, why
+        data, err = board.detail(path.group(1))
+        if err:
+            return None, f"its page on the employer's board did not load ({err})"
+        info = data.get("jobPostingInfo") if isinstance(data, dict) else None
+        text = html_to_text(info.get("jobDescription")) if isinstance(info, dict) else ""
+        return (text[:BODY_CAP], None) if text.strip() else (
+            None, "its page on the employer's board held no description")
+    board = parse(url)
+    if board is None or board.ats not in READERS:
+        return None, "not a posting on an employer's board this app reads"
+    want = str(row.get("id") or "") or openroles.job_id(url)
+    try:
+        if board.ats in DETAILED:
+            jobs = READERS[board.ats].fetch(board.token, details=lambda j: j.id == want)
+        else:
+            jobs = READERS[board.ats].fetch(board.token)
+    except BoardError as e:
+        return None, f"the employer's board could not be read ({str(e).split(': ', 1)[-1]})"
+    hit = next((j for j in jobs if j.id == want or (j.url and j.url == url)), None)
+    body = _desc(hit) if hit is not None else None
+    return (body, None) if body else (None, "the employer's board no longer lists it")
 
 
 # -------------------------------------------------------------------- probe
