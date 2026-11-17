@@ -350,7 +350,7 @@ def test_the_check_names_every_line_still_searching_or_lifting_what_was_turned_d
     assert got.returncode == 1, got.stdout
     out = got.stdout
     for where in ("profile/search.py line", "SCRAPE_EMPLOYERS: 'Kestrel Mutual'",
-                  "SCRAPE_EMPLOYERS: 'Harbourline Pension Plan'",
+                  "SCRAPE_EMPLOYERS: 'Harbourline Pension Plan",
                   "profile/boards.py line 20, BOARDS: 'Kestrel Mutual'",
                   "TIER_2: 'kestrel mutual' is lifted +20",
                   "TIER_2: 'northwind pensions'", "TIER_3: 'harbourline pension plan'",

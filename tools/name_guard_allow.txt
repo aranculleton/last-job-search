@@ -814,3 +814,6 @@ North-Shore Mutual          # invented employer, tests/test_an_employer_turned_d
 Quarrelwood Bank        # invented employer, tests/test_a_round_says_what_each_source_read.py
 Skyrail Holidays        # invented employer, tests/test_a_sector_lift_reads_the_employer_not_its_boilerplate.py
 Fenmoor Advisory        # invented employer, the same test
+Northwind Pensions      # invented employer, tests/test_what_the_person_turned_down_is_followed_everywhere.py
+Pension Funds           # a kind of employer, not a person: tools/sector.py and the same test
+Harbourline Pension Plan  # invented employer, tests/test_what_the_person_turned_down_is_followed_everywhere.py
