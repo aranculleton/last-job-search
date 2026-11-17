@@ -44,9 +44,15 @@ def test_a_count_within_the_limit_is_quiet_and_near_only_in_the_last_twentieth()
     assert app_model.count_of(284, 300, "first_note")["near"] is False
     over = app_model.count_of(301, 300, "first_note")
     assert over["tone"] == "bad" and over["over"] is True and over["near"] is False, over
-    # A reply's long limit: said only near or over it, by the same rule.
+    # Said only within 30 letters of the limit or over it, on any message, as what is left
+    # (the redesign's second round, 2026-11-17: "205/300" on every note).
     assert app_model.count_of(7000, 8000, "reply")["show"] is False
-    assert app_model.count_of(7700, 8000, "reply")["show"] is True
+    assert app_model.count_of(7700, 8000, "reply")["show"] is False
+    assert app_model.count_of(7975, 8000, "reply")["show"] is True
+    assert app_model.count_of(269, 300, "first_note")["show"] is False
+    assert app_model.count_of(270, 300, "first_note")["short"] == "30 letters to spare"
+    assert app_model.count_of(299, 300, "first_note")["short"] == "1 letter to spare"
+    assert over["show"] is True and over["short"] == "1 letter over", over
 
 
 def test_a_held_note_is_not_to_send_and_is_on_the_one_reading_list():

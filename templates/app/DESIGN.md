@@ -550,19 +550,24 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   first wrote and how many messages each way, the engine's `exchange`, are on their page); in
   the corner what is next for you: "Ready to send" while a draft to them can go, whatever its
   kind, else where things stand ("Not written to", "Talking"), the same on their page (the
-  screen review, 2026-11-11: Wren's said Ready to send and Ash's, as ready, Not written to); the draft with Copy
-  and the pencil at the right end of its heading line ("Connection note", "Reply · LinkedIn": one line beside them on a phone, the screen review, 2026-11-11),
-  the words taking the bubble's whole width, and on a phone the whole card's: only the name
+  screen review, 2026-11-11: Wren's said Ready to send and Ash's, as ready, Not written to); the draft with
+  the pencil at the right end of its heading line ("Connection note", "Reply · LinkedIn": one line beside it on a phone, the screen review, 2026-11-11),
+  the words taking the bubble's whole width up to a reading measure, and on a phone the whole card's: only the name
   sits beside the initial (a subject's Copy an icon at its line's end, never alone on a line);
   then one row of
-  pills: one filled (I sent it once copied, or the one owed step), at most two soft ones
-  ("They replied"), and More. With a message on the card, "They replied" is the soft pill beside
-  I sent it, and waits under More only where Open their profile already stands there (the
-  redesign, 2026-11-16: under More it was not found when they wrote again before the message
-  went). The draft's Copy, on its heading line beside the pencil, is the draft's own tool, not
-  one of the row's. A long draft shows its first four lines and "Read it all", which opens it in
-  place (Copy copies every word); the first draft on the list is drawn whole (the redesign,
-  2026-11-16: ten drafts drawn whole were a wall of words).
+  pills under the draft: Copy and I sent it side by side, the two steps of one task, Copy the
+  card's next step drawn as every card's is (the screen's first filled, every other the one soft
+  look, never outlined); once copied I sent it is the filled pill and one line under the
+  row says where to paste it ("Copied. Paste it in LinkedIn."), a copy that failed saying so
+  instead; at most one more soft pill ("They replied", or Open their profile), and More. With a
+  message on the card, "They replied" is the soft pill beside I sent it, and waits under More
+  only where Open their profile already stands there (the redesign, 2026-11-16: under More it
+  was not found when they wrote again before the message went). Copy is the draft's own tool,
+  never counted against the row's two soft pills. A long draft after the first shows its first
+  two lines and "Show all", which opens it in place (Copy copies every word); the first draft
+  on the list is drawn whole (the redesign, 2026-11-16: ten drafts drawn whole were a wall of
+  words; its second round, 2026-11-17: Copy filled on the first card and outlined on the rest,
+  1000px from I sent it on a laptop, and four lines a draft still 3350px of a phone).
   Why: five buttons a card read as five jobs, and three dates a card as none. Floated into
   the bubble's corner, Copy and the pencil bent a note's first lines round them, three words a
   line on a phone, under an indent that left it two thirds of the screen (the maintainer,
@@ -586,7 +591,7 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   fact only the person knows is asked through the one rare question. Why: where there is
   clearly a recommended option, the app does it.
 - A draft's facts are one quiet line under it, in one tone, each in a few words from the
-  engine: its count ("290/300", `count.short`), why it waits for their profile ("Waiting for
+  engine: its count only near the limit ("12 letters to spare", `count.short`), why it waits for their profile ("Waiting for
   their profile", `linkedin.reading.hold_short`, for where reading stands where the page is
   open: "Their profile is read next", "Reading their profile…" with the spinner in the app) and
   "Location not on record". What each means, in a sentence, is behind the line's one "?"
@@ -618,7 +623,8 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
 - What wakes Claude carries its cost beside it (the gauge: "Draft my reply", "Ask Claude",
   "Draft the follow-up"; the pencil box's chips only fill it); what only the page does (I sent it, an edit in place,
   the trash) carries none, and wakes nothing. (`data-wakes` marks the first kind.)
-- The header is its title and one short line, "4 to send · 8 need you", with Find people and
+- The header is its title and one short line, the one count of what is written to send ("7
+  messages to send"; who needs you only when nothing is), with Find people and
   "Paste a message" (a message from someone not on the list) as soft pills beside it. What
   Claude is doing is the header's work pill and each card's own line, never a third line.
 - Rarely, Claude cannot write a reply honestly without asking (their message is unclear, a
@@ -841,7 +847,10 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   never the late amber or the running blue; blue is for work in progress and for focus. Behind a
   sheet the page steps back under the scrim, a warm near-black at 45% in both looks. (colour
   tests)
-- A character count is the quiet grey while within its limit and red over it; amber only while
+- A character count is said only within 30 letters of its limit or over it, as what is left
+  ("12 letters to spare", "5 letters over"), and always while the words are being changed: on
+  every note "205/300" said nothing a person could use (the redesign's second round,
+  2026-11-17). It is the quiet grey while within its limit and red over it; amber only while
   the words are being changed and are in the last twentieth of the limit, where an edit could
   take them over (`app_model.count_of`, `near_at`). One rule for every count of a message: a
   draft, a reply, the pencil's field and "I changed it first". Why: 291 of 300 in amber read as

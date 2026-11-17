@@ -778,18 +778,19 @@ details.send { border-top: 1px solid var(--line); }
    wrap round it, so it never covers them and the bubble keeps its width. */
 .sendbox { display: flow-root; }
 .sendbox > .bubble-tools { float: right; display: inline-flex; flex-direction: row-reverse; align-items: center; gap: 4px; margin: 4px 4px 0 8px; }
-.bubble-tools > .btn.bubble-copy { padding: 4px 12px; gap: 4px; }
-.bubble-tools > .btn.bubble-copy:not(.primary) { background: var(--surface); border-color: var(--line); color: var(--ink); }
-@media (hover: hover) { .bubble-tools > .btn.bubble-copy:not(.primary):hover { background: var(--raised); } }
-/* On a person's card the Copy and the pencil sit at the right end of the draft's own heading
-   line ("Your note · LinkedIn connection note"), a line that was empty there, so the words take
-   the bubble's whole width. Floated into the bubble, they bent its first lines round them: on a
+/* A draft's Copy is a soft pill in its card's row, beside I sent it (the redesign's second
+   round, 2026-11-17); once copied a line says where to paste it, in the done green. */
+.btn.bubble-copy { gap: 4px; }
+.copied-line { margin: 0; color: var(--st-done); }
+/* On a person's card the pencil sits at the right end of the draft's own heading line ("Reply ·
+   LinkedIn"), a line that was empty there, so the words take the bubble's whole width; Copy is
+   under the draft beside I sent it. Floated into the bubble, they bent its first lines round them: on a
    phone "Hi Juno, thank you / for coming back to / me so quickly" (the maintainer, 2026-11-10:
    "not super padded eyesore"). An email's subject keeps its own Copy, an icon at its line's
    end that never wraps alone onto a line of its own. */
 .pdraft { position: relative; }
 .pdraft > .sendbox > .bubble-tools { position: absolute; top: 0; right: 0; min-height: var(--target); margin: 0; float: none; }
-.pdraft > summary { padding-right: calc(var(--target) * 3); }
+.pdraft > summary { padding-right: calc(var(--target) + 8px); }
 /* At least as tall as the Copy and pencil on its line: in Firefox the heading drew 2px shorter
    and they reached into the words (Everywhere, 2026-11-11). */
 .pdraft > summary { min-height: var(--target); box-sizing: border-box; }
@@ -811,6 +812,9 @@ details.send { border-top: 1px solid var(--line); }
    card under the pointer (the screen review, 2026-11-11). */
 .sendtext { white-space: pre-wrap; background: var(--sunk); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 12px 16px; user-select: text; -webkit-user-select: text; }
 .sendtext.big { font-size: var(--t-lg); line-height: 1.5; }
+/* A draft on a person's card keeps a reading measure: at 1440 its lines ran to 140 letters
+   (the accessibility review, 2026-11-17). */
+.pdraft .sendtext { max-width: 72ch; }
 .qa { margin: 0; display: grid; gap: 16px; }
 .qa dt { font-weight: 600; }
 .qa dd { margin: 4px 0 0; display: grid; gap: 8px; justify-items: start; }
@@ -847,11 +851,11 @@ p.count.tone-bad { color: var(--st-failed); }
    title's weight, underlined only under the pointer (the redesign, 2026-11-16). */
 .person h3 .name-link { color: var(--ink); font-weight: 600; text-decoration: none; }
 @media (hover: hover) { .person h3 .name-link:hover { text-decoration: underline; text-decoration-color: var(--line-strong); text-decoration-thickness: 1px; text-underline-offset: 3px; } }
-/* A long draft on Contacts' list shows its first four lines and "Read it all", which opens it in
-   place; Copy stays on its heading line and copies every word. The first draft on the list,
-   the one to send first, is drawn whole (the redesign, 2026-11-16: ten drafts drawn whole were
-   a wall of words). */
-.sendtext.is-clamped > .sendtext-in { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; }
+/* A long draft on Contacts' list shows its first two lines and "Show all", which opens it in
+   place; Copy under it copies every word. The first draft on the list, the one to send first,
+   is drawn whole (the redesign, 2026-11-16: ten drafts drawn whole were a wall of words; its
+   second round, 2026-11-17: four lines each were still 3350px of a phone). */
+.sendtext.is-clamped > .sendtext-in { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 ul.people > li.person.has-draft:not(li.person.has-draft ~ li) .sendtext.is-clamped > .sendtext-in { display: inline; -webkit-line-clamp: none; overflow: visible; }
 ul.people > li.person.has-draft:not(li.person.has-draft ~ li) .sendbox > .read-all { display: none; }
 .sendbox > .btn.read-all { display: inline-flex; align-items: center; gap: 0; min-height: 24px; margin: 4px 0 0; padding: 0 2px; color: var(--ink); font-weight: 600; font-size: var(--t-sm);

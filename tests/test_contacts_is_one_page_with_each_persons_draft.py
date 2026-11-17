@@ -462,6 +462,7 @@ MORE = r"""(() => {
   const panel = sum && document.getElementById(sum.getAttribute('aria-controls'));
   const top = (e) => Math.round(e.getBoundingClientRect().top);
   return {sum: !!sum, sameLine: !!(sum && first) && Math.abs(top(sum) - top(first)) <= 2, first: first ? first.textContent.trim() : '',
+    face: [...row.querySelectorAll(':scope > .btn, :scope > a')].map((b) => b.textContent.trim()),
     after: !!panel && row.nextElementSibling === panel, shown: !!panel && !panel.hidden && panel.getClientRects().length > 0,
     rows: panel ? [...panel.querySelectorAll(':scope > .more-acts')].map((r) => [...r.children].filter((b) => b.matches('button, .btn, a')).map((b) => [b.textContent.trim(), top(b)])) : []};
 })()"""
@@ -481,7 +482,9 @@ def test_more_opens_under_its_row_and_its_buttons_are_one_row(run, page, model, 
     assert not got["errors"], got["errors"]
     shut, opened = got["after"][0]["eval"], got["after"][1]["eval"]
     assert shut["sum"] and shut["sameLine"] and not shut["shown"], shut
-    assert opened["first"] == "I sent it" and opened["sameLine"], opened
+    # Copy and I sent it side by side under the draft, the two steps of one task (the
+    # redesign's second round, 2026-11-17).
+    assert opened["face"][:2] == ["Copy", "I sent it"] and opened["sameLine"], opened
     assert opened["after"] and opened["shown"], opened
     assert len(opened["rows"]) == 1, opened["rows"]
     labels = [b[0] for b in opened["rows"][0]]

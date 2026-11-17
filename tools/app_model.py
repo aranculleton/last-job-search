@@ -2777,21 +2777,37 @@ def message_type(kind: str, channel: str, contact: dict, text: str = "") -> str:
 COUNT_NEAR = 0.05
 
 
+# A count is said only this close to the limit, or over it: "205/300" on every note said
+# nothing a person could use, and a note far inside its limit needs no count at all (the
+# redesign's second round, 2026-11-17).
+COUNT_SHOWN = 30
+
+
+def spare_words(chars: int, limit) -> str:
+    """A count as the page says it: what is left, "12 letters to spare", or how far over,
+    "5 letters over"."""
+    if not limit:
+        return f"{chars} letters"
+    n = abs(limit - chars)
+    return f"{n} letter{'' if n == 1 else 's'} " + ("over" if chars > limit else "to spare")
+
+
 def count_of(chars: int, limit, mtype: str) -> dict:
-    """The character count the page shows: always on a first note, where the limit is that
-    type's hard rule, and on the rest only near or over it (LAYOUT_SPEC 4.15). `tone` is its
-    colour at rest ("bad" over the limit, else "muted"); `near_at` is the count from which the
-    page says it in amber while the words are being changed, by the same rule (COUNT_NEAR)."""
+    """The character count the page shows, on any message: only within COUNT_SHOWN letters
+    of its limit or over it, said as what is left (LAYOUT_SPEC 4.15; the redesign's second
+    round, 2026-11-17: on every first note it was "205/300"). `tone` is its colour at rest
+    ("bad" over the limit, else "muted"); `near_at` is the count from which the page says it
+    in amber while the words are being changed (COUNT_NEAR). `mtype` is kept for callers."""
     near_at = math.ceil(limit * (1 - COUNT_NEAR)) if limit else None
     over = bool(limit) and chars > limit
     near = bool(limit) and not over and chars >= near_at
     return {"chars": chars, "limit": limit, "near_at": near_at,
-            "show": mtype == "first_note" or near or over, "near": near, "over": over,
+            "show": bool(limit) and (over or limit - chars <= COUNT_SHOWN), "near": near, "over": over,
             "tone": "bad" if over else "muted",
             "label": f"{chars} of {limit} characters" if limit else f"{chars} characters",
-            # As the note's one line of facts says it ("290/300 · Waiting for their profile"),
-            # the label read aloud and behind its "?" (the maintainer, 2026-11-09).
-            "short": f"{chars}/{limit}" if limit else f"{chars} characters"}
+            # As the note's one line of facts says it ("12 letters to spare · Waiting for their
+            # profile"); the label is read aloud and is behind its "?".
+            "short": spare_words(chars, limit)}
 
 
 # advise()'s rules, said the way the person would say them. Any other is said as its fix.

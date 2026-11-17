@@ -428,7 +428,7 @@ def test_every_section_full_shows_its_items_in_plain_words(run, pages):
     assert "To apply" in drafts and "Applied" in drafts
     # Each message on its person's card, and one short summary line (2026-11-04).
     msgs = r["contacts"]["text"]
-    assert "7 to send · " in msgs and "sent this week" not in msgs, msgs[:400]
+    assert "7 messages to send" in msgs and "need you" not in "\n".join(msgs.split("\n")[:4]) and "sent this week" not in msgs, msgs[:400]
     # "Paid LinkedIn message", never LinkedIn's own "InMail" (the UX review, 2026-11-17).
     assert "Paid LinkedIn message" in msgs and "InMail" not in msgs and "Subject:" in msgs, msgs[:400]
     assert "Every application" in r["progress"]["text"] and "earlier, finished" in r["progress"]["text"]

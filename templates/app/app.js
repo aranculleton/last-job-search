@@ -8320,10 +8320,12 @@
     // mark as sent, and the line under the draft says why (tweakResult, #230).
     const td = tweakDone(m);
     const ready = !held && !fixing && !(td && tweakComing(td[1], m.rev));
-    // Copy is one soft pill under the draft, beside I sent it, the two steps of one task
-    // together (the redesign's second round, 2026-11-17: filled on the first card and outlined
-    // on the rest, and 1000px from I sent it on a laptop).
-    const copyBtn = h("button", {type: "button", class: "btn secondary small copy bubble-copy", "data-k": "copy:" + tid,
+    // Copy is the card's next step under the draft, beside I sent it, the two steps of one task
+    // together, drawn as every card's next step is: the screen's first filled, the rest the one
+    // soft look (demotePrimaries); once copied it is soft and I sent it the step (the redesign's
+    // second round, 2026-11-17: outlined white on every card but the first, and 1000px from I
+    // sent it on a laptop).
+    const copyBtn = h("button", {type: "button", class: "btn small copy bubble-copy " + (copied ? "secondary" : "primary"), "data-k": "copy:" + tid, "data-primary": copied ? null : "1",
       "aria-label": copied ? null : copyName, onclick: () => { S.copied.add(m.id); useLast(m.id); copyText(txt(draftGet(penKey)) || parts.body, (parts.subject ? "message" : what) + " to " + name, "copy:" + tid, tid); }},
       icon("copy"), copied ? (fresh ? "Copied" : "Copy again") : "Copy");
     // Once copied, where to paste it, until it is sent; a copy that failed says so instead.
@@ -8436,8 +8438,8 @@
     // Its gauge is the engine's, one note's rewrite (app_alerts.paste_profile), never a run's.
     const pasteCost = held && paste && !HELD_SENDABLE.has(txt(m.hold_why)) && Number(obj(obj(m.paste).cost).state) > 0 ? costEl(obj(m.paste).cost, null, "cost-paste-" + seg(m.id)) : null;
     // Its row: Copy and I sent it side by side, then where it goes (Open their profile).
-    const act = held ? (HELD_SENDABLE.has(txt(m.hold_why)) ? null : paste) : [ready ? copyBtn : null, sentBtn, onFace ? link : null].filter(Boolean);
-    return {box, notes: null, act: act && act.length === 0 ? null : act, steps: held ? 0 : [sentBtn, onFace ? link : null].filter(Boolean).length, copied: copiedLine,
+    const row = held ? (HELD_SENDABLE.has(txt(m.hold_why)) ? null : paste) : [ready ? copyBtn : null, sentBtn, onFace ? link : null].filter(Boolean);
+    return {box, notes: null, act: row && row.length === 0 ? null : row, steps: held ? 0 : [sentBtn, onFace ? link : null].filter(Boolean).length, copied: copiedLine,
       cost: pasteCost, extra, blocked: fixing === "failed", fixing: fixing === "going", line: stateLine(m.id, "msg:" + m.id)};
   }
   // Where reading LinkedIn stands for this opening of the page: readingState, except that a
@@ -8711,8 +8713,10 @@
     // One short line of what matters (the maintainer, 2026-11-04: the header was "quite
     // cluttered"): what is written to send, and who needs you. The follow-ups, the replies
     // among them and the week's first notes are each on their cards, and in To do.
+    // One count (the redesign's second round, 2026-11-17: "7 to send · 4 need you" was not the
+    // same 4 as To do's): the messages written to send; who needs you only when none is.
     const sum = !total && !lone.length ? "No contacts yet."
-      : [drafted.length ? drafted.length + " to send" : "", need ? nWord(need, "needs", "need") + " you" : ""].filter(Boolean).join(" · ") || "Nobody is waiting on you.";
+      : drafted.length ? plural(drafted.length, "message to send", "messages to send") : need ? nWord(need, "needs", "need") + " you" : "Nobody is waiting on you.";
     const front = contactsFront(items);
     const anyUp = items.some(front) && front !== personLive;
     // People with a message drafted first, then who needs you, in the engine's own order
@@ -11461,6 +11465,7 @@
   // within the limit, red over it, and amber only while the words are being changed and are
   // within the engine's `near_at` of it, where an edit could take them over. 291 of 300 in amber
   // at rest read as a warning about a note that was fine (the maintainer, 2026-11-07).
+  const COUNT_SHOWN = 30;
   function countWords(m, n, editing) {
     const ec = obj(m.count);
     const limit = Number(ec.limit) || Number(m.limit) || 0;
@@ -11468,10 +11473,12 @@
     const nearAt = Number(ec.near_at) || limit;
     const over = n > limit;
     const near = !over && n >= nearAt;
+    const left = Math.abs(limit - n);
     return {text: n + " of " + limit + " characters" + (over ? ": " + (n - limit) + " over the limit" : near && editing ? ": close to the limit" : ""),
-      // As the line of facts says it: "290/300", "305/300, 5 over".
-      short: n + "/" + limit + (over ? ", " + (n - limit) + " over" : ""),
-      tone: over ? "bad" : near && editing ? "warn" : "muted", show: txt(m.kind) === "first_note" || over || near};
+      // As the line of facts says it, the engine's words (app_model.spare_words): "12 letters to
+      // spare", "5 letters over"; said only near the limit (COUNT_SHOWN) or while being changed.
+      short: left + " letter" + (left === 1 ? "" : "s") + (over ? " over" : " to spare"),
+      tone: over ? "bad" : near && editing ? "warn" : "muted", show: over || limit - n <= COUNT_SHOWN};
   }
   // The count in the line of facts, redrawn as the words are typed.
   function paintCount(el, c) {

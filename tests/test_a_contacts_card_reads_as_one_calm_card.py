@@ -7,8 +7,9 @@ this note.", "290 of 300 characters", "Where they live is not on record: check t
 before you send.", "You asked says waiting for profilie, can u action on all the ones
 waiting? ..." and "Changing it next · starting in a moment · 1m 53s" with Stop Claude. Now:
 
-- the note's facts are one quiet line, "290/300 · Waiting for their profile · Location not on
-  record", the sentences behind its one "?"; a note held back on purpose keeps its own line,
+- the note's facts are one quiet line, "10 letters to spare · Waiting for their profile ·
+  Location not on record" (its count only near the limit since 2026-11-17), the sentences
+  behind its one "?"; a note held back on purpose keeps its own line,
   with its one way on (tests/test_a_note_held_for_its_employer_says_so.py);
 - a change asked with the pencil is one soft grey block under the draft: what was asked, then
   its state with Stop Claude beside the words;
@@ -52,7 +53,7 @@ ASKS = "says waiting for profile, can u action on all the ones waiting? lea, ana
 
 
 def test_the_count_and_the_location_have_their_few_words_from_the_engine():
-    assert app_model.count_of(290, 300, "first_note")["short"] == "290/300"
+    assert app_model.count_of(290, 300, "first_note")["short"] == "10 letters to spare"
     assert app_page.tables()["facts"]["where_unknown"] == list(app_model.WHERE_UNKNOWN)
     assert set(app_model.READ_HOLD_SHORT) == set(app_model.READ_HOLD)
     assert all(len(w) <= 30 for w in app_model.READ_HOLD_SHORT.values()), app_model.READ_HOLD_SHORT
@@ -191,7 +192,7 @@ def test_the_notes_facts_are_one_quiet_line_with_one_question_mark(run, tmp_path
     got, kit = _look(run, tmp_path, WIDE, {})
     look = got["steps"][0]["eval"]
     n = len(kit["body"])
-    assert look["line"] == f"{n}/300 · Waiting for their profile · Location not on record", look
+    assert n >= 270 and look["line"] == f"{300 - n} letters to spare · Waiting for their profile · Location not on record", look
     # The sentences are behind its one "?", never three lines of their own: the example
     # person's computer reads LinkedIn by itself, so the engine's line for that.
     assert app_model.READ_HOLD["computer"] in look["facts"], look

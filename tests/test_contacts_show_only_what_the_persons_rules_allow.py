@@ -487,11 +487,13 @@ def test_contacts_shows_each_person_as_the_engine_says(run, page, model, vp):
     top, all_ = got["after"][0]["text"], got["after"][1]["text"]
     pc = model["people_count"]
     head = "\n".join(top.split("\n")[:6])
-    # One short line: what is written to send, and who needs you (2026-11-04); the follow-ups
-    # and replies among them are on their cards.
+    # One short line, one count: what is written to send (the redesign's second round,
+    # 2026-11-17: "7 to send · 4 need you" was not the same 4 as To do's); the follow-ups and
+    # replies among them are on their cards.
     # "To send" is the engine's one count (to_send), To do's the same: a note waiting for their
     # profile is drafted but not ready, so not counted (2026-11-07).
-    assert f"{model['to_send']['n']} to send · {pc['need']} need you" in head, head
+    n = model['to_send']['n']
+    assert f"{n} {'message' if n == 1 else 'messages'} to send" in head and "need you" not in head, head
     held = [x for x in model["messages"] if x.get("hold")]
     assert held and model["to_send"]["n"] == pc["drafted"] - len(held), (model["to_send"], pc, held)
     assert "waiting to hear back" not in top
@@ -822,7 +824,8 @@ def test_at_scale_the_counts_are_the_engines_and_a_message_past_five_opens(run, 
          "eval": "!!document.querySelector('[data-item=\"%s\"] details.pdraft[open]')" % whose}])
     assert not got["errors"], got["errors"]
     head = "\n".join(got["after"][0]["text"].split("\n")[:6])
-    assert f"{pc['need']} need you" in head, head
+    # Its one count is the engine's (to_send), however many need you.
+    assert f"{m['to_send']['n']} messages to send" in head, head
     assert got["after"][1]["eval"] is True, "a draft past the first five is shown when opened"
     light = [x for x in _whole(crowd, m) if x["id"] not in {p["id"] for p in m["people"]}]
     assert light, "the crowd reaches past the page's own list"
