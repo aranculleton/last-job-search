@@ -78,14 +78,17 @@ def _cursor(path, listed: dict) -> None:
     Path(path).write_text(json.dumps(state), encoding="utf-8")
 
 
-def _answers(calls, slow=0.0):
+def _answers(calls, slow=0.0, stamps=None):
     """Every search answered with one posting; each of the person's boards' requests taking
-    `slow` seconds, LinkedIn's and freehire's none."""
+    `slow` seconds, LinkedIn's and freehire's none. `stamps`, when given, keeps when each
+    board's requests were sent, by board."""
     def fake_run(cmd, timeout=90):
         skill = Path(cmd[2]).parts[-4]
         q = cmd[cmd.index("-q") + 1] if "-q" in cmd else ""
         page = cmd[cmd.index("--page") + 1] if "--page" in cmd else "1"
         calls.append((skill, q, page))
+        if stamps is not None:
+            stamps.setdefault(skill, []).append(time.monotonic())
         if skill not in ("linkedin-search", "freehire-search") and slow:
             time.sleep(slow)
         n = f"{skill}-{q}-{page}"
@@ -104,6 +107,19 @@ def _scrape(out, monkeypatch, today="2026-11-17"):
 
 def _sent(calls, board):
     return [q for s, q, _ in calls if s == f"{board}-search"]
+
+
+# What stops a board is time, so what it was given is read in time, from when its first and
+# last requests were sent, never from how many fitted: a slow machine fits fewer in the same
+# time (CI's macOS, 2026-11-17: 4, 13 and 18 requests where Linux sent 9, 39 and 68). A
+# request is sent a moment after the check that let it go, so a board's last one may start a
+# little past its time: LAG.
+LAG = 0.15
+
+
+def _span(stamps, board):
+    got = stamps.get(f"{board}-search") or [0.0]
+    return got[-1] - got[0]
 
 
 # ------------------------------------------------------------------ what each board is given
@@ -159,14 +175,18 @@ def test_a_board_whose_jobs_never_reach_the_list_is_tried_for_its_first_minute_o
     # person gave it a time of their own (a fiftieth of a minute, 1.2 seconds).
     _cursor(boards / "cursor.json", {"townboard": [4, 0, 0, 0], "ownboard": [0, 0, 0]})
     monkeypatch.setattr(scrape_wide, "PORTAL_MINUTES", {"ownboard-search": 0.02})
-    calls = []
-    monkeypatch.setattr(scrape_wide, "run", _answers(calls, slow=0.03))
+    calls, stamps = [], {}
+    monkeypatch.setattr(scrape_wide, "run", _answers(calls, slow=0.03, stamps=stamps))
     _scrape(boards / "r1" / "00_scrape", monkeypatch)
-    town, own, new = (_sent(calls, b) for b in ("townboard", "ownboard", "newboard"))
+    town = _sent(calls, "townboard")
     # Its first requests, the most valuable, still go: one that starts paying is noticed.
     assert town and town == [f"role {n}" for n in range(len(town))]
-    assert len(town) + 15 < len(own) and len(town) + 15 < len(new), (len(town), len(own),
-                                                                      len(new))
+    # townboard its first 0.3 seconds, ownboard the 1.2 the person set, newboard 2 after
+    # LinkedIn and freehire.
+    span = {b: round(_span(stamps, b), 2) for b in ("townboard", "ownboard", "newboard")}
+    assert span["townboard"] < 0.3 + LAG, span
+    assert 0.6 < span["ownboard"] < 1.2 + LAG, span
+    assert span["newboard"] > 1.2, span
     err = capsys.readouterr().err
     assert ("portals: townboard stopped, its first minute was up: none of its jobs reached "
             "your list in its last 3 searches") in err, err
@@ -186,11 +206,16 @@ def test_a_board_whose_jobs_reach_the_list_goes_on_longer_after_linkedin_and_fre
     # cityboard put three jobs on the list in each of its last three searches: 0.3 seconds
     # after LinkedIn and freehire, and 3 more. newboard has no searches to judge it by.
     _cursor(boards / "cursor.json", {"cityboard": [3, 3, 3]})
-    calls = []
-    monkeypatch.setattr(scrape_wide, "run", _answers(calls, slow=0.03))
+    calls, stamps = [], {}
+    monkeypatch.setattr(scrape_wide, "run", _answers(calls, slow=0.03, stamps=stamps))
     _scrape(boards / "r1" / "00_scrape", monkeypatch)
-    city, new = _sent(calls, "cityboard"), _sent(calls, "newboard")
-    assert len(new) > 0 and len(city) > len(new) + 40, (len(city), len(new))
+    assert _sent(calls, "newboard") and _sent(calls, "cityboard")
+    # How long each went on after LinkedIn's and freehire's last request: newboard 0.3
+    # seconds, cityboard 3.3.
+    pool = max(stamps["linkedin-search"][-1], stamps["freehire-search"][-1])
+    after = {b: round(stamps[f"{b}-search"][-1] - pool, 2) for b in ("cityboard", "newboard")}
+    assert after["newboard"] < 0.3 + LAG + 0.3, after
+    assert after["cityboard"] > 0.3 + 1.5, after
     err = capsys.readouterr().err
     assert ("portals: cityboard stopped, LinkedIn and freehire had finished, and the time its "
             "jobs on your list earn it was up") in err, err
