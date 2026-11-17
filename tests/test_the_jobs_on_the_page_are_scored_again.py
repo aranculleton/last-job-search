@@ -29,6 +29,7 @@ import app_state  # noqa: E402
 import person  # noqa: E402
 import run_round  # noqa: E402
 from lookup_score import norm  # noqa: E402
+import repo_files  # noqa: E402
 
 TODAY = "2026-11-10"
 BODY = ("{company} prices freight for carriers across the North West. You will build demand "
@@ -160,7 +161,7 @@ def test_the_update_scores_an_existing_copys_page_by_itself(tmp_path, monkeypatc
     import profile_upgrades
     up = profile_upgrades.by_id("jobs-rescored")
     assert up.cost == "instant" and up.needs == "nobody" and up.command
-    before = {p: p.stat().st_mtime_ns for p in state.rglob("*") if p.is_file()}
+    before = {p: p.stat().st_mtime_ns for p in repo_files.files("**/*", root=state)}
     assert up.pending(), "an existing copy's page is due to be scored again"
     env = dict(os.environ, LJS_STATE=str(state), LJS_PROFILE=str(prof), PYTHONUTF8="1")
     run = subprocess.run([sys.executable if up.command[0] == "python3" else up.command[0],
@@ -171,8 +172,8 @@ def test_the_update_scores_an_existing_copys_page_by_itself(tmp_path, monkeypatc
     rows = {r["url"]: r for r in _list(state, "r2")}
     assert rows["https://jobs.example/5"]["fit"] != 11               # scored again
     assert rows["https://jobs.example/6"]["fit"] == 12               # no text anywhere: as it was
-    changed = sorted(os.path.relpath(p, state).replace(os.sep, "/") for p in state.rglob("*")
-                     if p.is_file() and before.get(p) != p.stat().st_mtime_ns)
+    changed = sorted(os.path.relpath(p, state).replace(os.sep, "/") for p in repo_files.files("**/*", root=state)
+                     if before.get(p) != p.stat().st_mtime_ns)
     assert changed == ["documents/rounds/bodies/r2.json", "documents/rounds/r2.json"], changed
     person.reset()
     assert up.pending() == ""
