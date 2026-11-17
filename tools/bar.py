@@ -288,6 +288,18 @@ def judged() -> dict:
     return _judged_cache["rows"]
 
 
+def judged_at():
+    """The judgements file as (path, (time, size)), or None with no file: the key a page build
+    keeps an answer that reads the judgements by (surface.turned_down), as `verdict` keeps
+    its own, so a judgement made meanwhile is read at once."""
+    try:
+        p = _judged_path()
+        st = os.stat(p)
+    except (OSError, person.NoProfile):
+        return None
+    return (p, (st.st_mtime_ns, st.st_size))
+
+
 # A judgement that an employer clears none of pay, prestige or signal is a chat's reading of
 # what it found that day, not a rule the person set: kept for good, it cut every job there and
 # hid everyone there, new people and follow-ups alike, though a company raises money, opens a

@@ -584,6 +584,7 @@ def due_items(contacts, threads, tracker, today, docs=None, network=None, now=No
     today = state.as_date(today)
     by_id = {str(c.get("contact_id") or "").strip(): c for c in contacts}
     index = (state.by_contact(threads) if threads else {}) if index is None else index
+    log_index = index                   # the log as it is, for each employer's limit
     # One person kept on two rows, one closed as the other: their whole thread (state.pooled).
     index = state.pooled(index, contacts)
     items = []
@@ -630,7 +631,8 @@ def due_items(contacts, threads, tracker, today, docs=None, network=None, now=No
     queued = [i for i in items if i["status"] == "not_contacted"]
     if queued:
         import surface
-        ctx = surface.context(contacts=contacts, threads=threads, today=today, index=index)
+        ctx = surface.context(contacts=contacts, threads=threads, today=today, index=index,
+                              log_index=log_index)
         for i in queued:
             got = surface.check(by_id.get(i["contact_id"]) or {"contact_id": i["contact_id"]},
                                 ctx, queued=True)
