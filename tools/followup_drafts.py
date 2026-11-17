@@ -1468,8 +1468,11 @@ def check(entries, contacts, threads, today: str, got=None) -> list[dict]:
             continue
         # Held as the due list holds it: by what is owed (a reply to someone who wrote, or a
         # follow-up), never by the kind a draft was checked as, which a held item has none of.
-        owed = "reply" if (it.get("kind") in ("reply", "resume") if it else kind == "reply") \
-            else "nudge"
+        # The caller may say it (`owed`): a referral ask is checked as one whoever wrote last,
+        # and held as the reply or the follow-up it is (reply.py finish, issue 315).
+        owed = e.get("owed") or (
+            "reply" if (it.get("kind") in ("reply", "resume") if it else kind == "reply")
+            else "nudge")
         stop = held_by_rule(c, index.get(iid, ()), owed) if c else None
         if stop:
             # The person's own rules stop anything going to them (where they live, their limit,

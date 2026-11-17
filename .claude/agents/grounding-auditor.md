@@ -71,6 +71,12 @@ the move was complete.
    (`rewordings_refused`), so code never asks for it again; a held skill you judge no bullet
    on this resume plausibly used, with no rewording written, goes in your verdict's
    `refused_rewordings` by name, the same way.
+7. **A role printed under another title** (`role_titles` in the draft, for this resume only)
+   is one the person agreed: `profile/roles.py` lists it in that role's `titles`, with the
+   kind of posting it is for, and code refuses any title not listed there. So it is never an
+   ungrounded title. Yours is the judgment left: whether this posting is the kind its rule
+   names. Where it is not, take the role out of `role_titles`, and the profile's own title
+   prints.
 
 ## Audit a fixed version
 

@@ -2104,6 +2104,21 @@ def prepare(argv) -> int:
     return 0
 
 
+def _work_kind(dump: str, work: str) -> str:
+    """The page's work item's own `args.kind` ("referral_ask" for the card's "Draft the
+    referral ask"), or "" without one."""
+    if not (dump and work):
+        return ""
+    try:
+        import page_db
+        item = ((page_db.load(dump).get("work") or {}).get(page_db.safe_id(work)) or {}) \
+            .get("data") or {}
+    except Exception:  # noqa: BLE001  read as the thread says, as before
+        return ""
+    args = item.get("args") if isinstance(item.get("args"), dict) else {}
+    return str(args.get("kind") or "").strip()
+
+
 def _refused(cmd: str, said: str, code: int, what: str = "") -> int:
     """A refusal a chat may recover from, and beneath it, in the maintainer's own copy, the one
     command that files it the moment the chat works round it instead (a draft saved by hand, a
@@ -2305,6 +2320,11 @@ def finish(argv) -> int:
                     help="they asked to see the draft in the page's conversation: it goes there "
                          "too (by default the answer is one line and a button to their card)")
     ap.add_argument("--kind", default="", choices=("", "cloud", "computer"))
+    ap.add_argument("--referral-ask", dest="referral_ask", action="store_true",
+                    help="the draft is the referral ask for one role (compose.referral_ask): "
+                         "checked as one, by its own limit, whoever wrote last. The page's "
+                         "referral ask work, and a draft ending with the posting's link on its "
+                         "own line after the ask, are read as one without it")
     ap.add_argument("--out", default="", help="where the batch goes (default <dump>/out)")
     ap.add_argument("--contacts", default=state.CONTACTS_CSV)
     ap.add_argument("--threads", default=state.THREADS_CSV)
@@ -2347,6 +2367,12 @@ def finish(argv) -> int:
     kind = "reply"
     if compose.unanswered_ours(rows) is not None:
         kind = "message" if state.channel_of(c) == "email" else "nudge"
+    # A referral ask is checked as one, by the limit compose.referral_ask() keeps, whoever
+    # wrote last: checked as a follow-up, the composer's own ask was refused at 280 characters
+    # while it allowed 90 words (issue 315). Held as the reply or follow-up it is.
+    ask = (a.referral_ask or _work_kind(a.dump, a.work) == "referral_ask"
+           or compose.is_referral_ask(draft))
+    owed = "reply" if kind == "reply" else "nudge"
     if kind == "reply":
         by_email, theirs_subject = email_reply(c, rows)
         if by_email and not state.split_subject(draft)[0]:
@@ -2359,7 +2385,8 @@ def finish(argv) -> int:
                        else "Re: " + theirs_subject)
             draft = f"Subject: {subject}\n\n{draft}"
             print(f"subject: {subject} (theirs, as a reply in their email keeps it)")
-    got = followup_drafts.check([{"id": cid, "text": draft, "kind": kind}], contacts,
+    got = followup_drafts.check([{"id": cid, "text": draft, "owed": owed,
+                                  "kind": "referral_ask" if ask else kind}], contacts,
                                 threads, a.today)[0]
     if got["findings"]:
         print("finish: REFUSED, nothing saved: the draft check found what must change first.")
@@ -2423,7 +2450,7 @@ def finish(argv) -> int:
     import page_db
     _, now = app_model.clock(None, a.now)
     db = page_db.load(a.dump)
-    what = "reply" if kind == "reply" else "follow-up"
+    what = "referral ask" if ask else "reply" if kind == "reply" else "follow-up"
     queue = []
     if why:
         making = resume_making(db, cid)

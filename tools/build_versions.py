@@ -414,8 +414,9 @@ METHODS: dict[str, dict] = {
             (105, "2026-11-16", False, "RUNBOOK's map of what goes where says upcoming.py add takes --zone for something booked on another clock than the person's; nothing made changes"),
             (106, "2026-11-16", False, "RUNBOOK.md says land.py --detach commits and pushes the turn's work to the chat's branch before it returns, and that the cloud's message at the end of a turn about a save still at work is answered with nothing; nothing made changes"),
             (107, "2026-11-16", False, "the run book says a change to how jobs are scored is followed in the same turn by tools/rescore.py, which scores the jobs on the page again, and names it among the tools; no document changes"),
+            (108, "2026-11-17", False, "the letter writer is given the employer's newest facts whose words were checked on the page first, never the six oldest, and none the page no longer says (issue 314); a role may print another title the person agreed for a kind of posting (roles.py titles), picked per draft in role_titles and kept by the render, the round trip and a re-render from the kept draft.json, a role with one title printing as before, and the grounding auditor told such a title is one the person agreed (issue 316); nothing made before changes"),
         ),
-        "fingerprint": "67bac0e7553d3a7a",
+        "fingerprint": "4467771a22e79c49",
     },
     "interview": {
         # Only a process with a round still to come is prepared again: a prep for a round
@@ -695,8 +696,9 @@ METHODS: dict[str, dict] = {
             (135, "2026-11-16", False, "a partner or a principal of the firm reads as a hiring leader, never a peer held back (issue 283), while a partner of a function or a principal of a craft stays as it was; a people run asked in a chat is on the page's work list first, its own card (issue 276); people already found stay as they were"),
             (136, "2026-11-16", False, "with the person's computer set up to read LinkedIn profiles, a people search shows nobody and drafts no first note, a recruiter's included, before that person's profile is read: LinkedIn signed out stops the run on the one card asking for the sign-in, and notes from search results are the person's own choice for the day (reading.py from-search --said); notes already waiting keep their standing"),
             (137, "2026-11-16", False, "with the person's computer set up to read LinkedIn profiles, a people search in a chat without Claude's own browser queues its short list for the computer and saves no note: the computer reads each and writes the note from what it read; notes already waiting keep their standing"),
+            (138, "2026-11-17", False, "reply.py finish checks a referral ask as one, by the limit compose.referral_ask keeps, whoever wrote last (the page's referral ask work, --referral-ask, or the ask's own shape), and the default close is shorter (issue 315); drafts already saved stay as they are"),
         ),
-        "fingerprint": "50157cfae5f97571",
+        "fingerprint": "1689b9071b43d930",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
