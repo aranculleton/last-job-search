@@ -749,8 +749,7 @@ details.more.split[open] { flex-basis: auto; }
 .job-group:first-child > .list-head { margin-top: 8px; }
 /* "2 jobs to confirm": one quiet row at the head of the list, its cards under it once open. */
 .confirm-fold > summary { color: var(--ink); }
-.confirm-fold > summary .band-more-why { color: var(--muted); }
-.confirm-fold[open] > summary::after { transform: rotate(90deg); }
+.confirm-fold > summary .band-more-why { color: var(--muted); font-weight: 400; }
 
 /* ------------------------------------------------------------------ drafts */
 .card.app { grid-template-columns: minmax(0, 1fr); }
@@ -2645,7 +2644,7 @@ ul.bp-news { gap: 12px; }
 .up-row > .up-when:has(> .btn[data-k^="up-time:"]) { grid-column: 2; grid-row: 2; padding-top: 8px; }
 .up-row > .up-end { grid-row: 1 / span 2; }
 .up-when > .btn[data-k^="up-time:"] { min-height: 36px; padding: 8px 12px; border: 0; border-radius: var(--r-btn); background: var(--raised); color: var(--ink); font-size: var(--t-sm); font-weight: 600; text-decoration: none; }
-.up-when > .btn[data-k^="up-time:"]::before { content: "+"; margin-right: 4px; color: var(--muted); font-weight: 600; }
+.up-when > .btn[data-k^="up-time:"] > .ic { width: 16px; height: 16px; color: var(--muted); }
 @media (hover: hover) { .up-when > .btn[data-k^="up-time:"]:hover { background: var(--raised-hover); } }
 /* A time read from another zone says both ("15:00 Toronto time (20:00 here)"): it wraps in its
    own column, the time here kept whole under the person's clock, and the column is wider on

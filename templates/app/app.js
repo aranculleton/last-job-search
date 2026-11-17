@@ -9494,7 +9494,7 @@
   }
   function addTimeBtn(u) {
     if (!upTimeTarget(u)) return "";
-    return btn("Add the time", () => { S.upTime = u.id; scheduleRender(); }, {kind: "secondary", small: true, key: "up-time:" + u.id, aria: "Add the time: " + txt(u.title)});
+    return btn("Add the time", () => { S.upTime = u.id; scheduleRender(); }, {kind: "secondary", small: true, icon: "plus", key: "up-time:" + u.id, aria: "Add the time: " + txt(u.title)});
   }
   // A booked interview or call moved: the pencil on its row opens the day and time in place
   // (DESIGN.md, the pencil), sent as the same booking on its new day. To do could move an
