@@ -6287,12 +6287,12 @@
     const tweak = tweakButton("brief", b, "Edit the brief");
     const bell = briefBell();
     // The bell says what it is (the redesign, 2026-11-16: an unlabelled bell was found by nobody):
-    // "When it comes", as its row in Settings is named, the day and time in its name. A phone
+    // "When your brief arrives", as its row in Settings is named, the day and time in its name. A phone
     // shows it as its icon beside the greeting, its name on a long press and to a screen reader.
     if (bell) {
       const st = briefState();
       const sr = bell.querySelector(".sr-only");
-      const say = !st.setUp ? (st.asked ? ["Your brief: ", "Being set up", ""] : ["", "Get a brief", " each morning"]) : ["", "When it comes", ": " + briefWord(st)];
+      const say = !st.setUp ? (st.asked ? ["Your brief: ", "Being set up", ""] : ["", "Get a brief", " each morning"]) : ["", "When your brief arrives", ": " + briefWord(st)];
       if (sr) sr.remove();
       put(bell, say[0] ? h("span", {class: "sr-only"}, say[0]) : null, h("span", {class: "bell-word"}, say[1]), say[2] ? h("span", {class: "sr-only"}, say[2]) : null);
       bell.classList.remove("icon-only");
@@ -6377,7 +6377,7 @@
       return h("div", {class: "bp-iv"},
         h("p", {class: "bp-iv-when"}, h("span", {}, whenWords),
           heroUp ? btn("", () => calSheet([heroUp]), {kind: "quiet icon-only", small: true, icon: "cal-add", key: "bp-cal-hero", aria: "Add to your calendar: " + txt(heroUp.title)}) : null),
-        h("p", {class: "bp-iv-what"}, stageName(iv) + " with ", h("bdi", {}, txt(iv.company))),
+        h("h4", {class: "bp-iv-what"}, stageName(iv) + " with ", h("bdi", {}, txt(iv.company))),
         txt(iv.role) ? h("p", {class: "bp-iv-role"}, txt(iv.role)) : null,
         act || (obj(iv.prep).updated ? btn("Read your prep", () => openDetail("interview", iv.id), {kind: "primary", small: true, key: "bp-prep:" + iv.id})
           : btn("Prepare me", () => askPrep(iv), {kind: "primary", small: true, key: "bp-askprep:" + iv.id, wakes: "prep"})));
@@ -6401,7 +6401,9 @@
       if (face.iv) return ["iv:" + face.iv.id];
       const ds = i.ds || (i.d ? [i.d] : arr(i.rows).map((r) => r.d).filter(Boolean));
       if (ds.length) return ds.flatMap(dueKeys);
-      if (i.key === "send") return arr(named).filter((x) => x.cid).map((x) => "p:" + x.cid);
+      // Every person on the messages card, named or among its "5 more": Waiting on you said
+      // Marisol again, a row of that card (the UX review, 2026-11-17).
+      if (i.key === "send") return sendList().map((m) => txt(m.contact)).filter((c) => isPerson(c)).map((c) => "p:" + c);
       if (i.item) return itemKeys(i.item);
       return ["t:" + i.key];
     };
@@ -6431,7 +6433,7 @@
         hero = h("div", {class: "bp-iv"},
           h("p", {class: "bp-iv-when"}, h("span", {}, (txt(upNow.kind) === "test" ? "Due today" : "Today") + (timeOf(upNow.start) ? ", " + timeOf(upNow.start) : "")),
             obj(upNow.cal).ics ? btn("", () => calSheet([upNow]), {kind: "quiet icon-only", small: true, icon: "cal-add", key: "bp-cal-hero", aria: "Add to your calendar: " + txt(upNow.title)}) : null),
-          h("p", {class: "bp-iv-what"}, h("bdi", {}, txt(upNow.title))),
+          h("h4", {class: "bp-iv-what"}, h("bdi", {}, txt(upNow.title))),
           open ? btn(who ? "Open " + txt(who.first_name) : "Open it", open, {kind: "primary", small: true, key: "bp-up:" + upNow.id}) : null);
       }
       // An interview today that is To do's own first card is said once, on Today.
@@ -6458,7 +6460,7 @@
         const kicker = face.ask && face.corner ? "Question " + face.corner : face.corner || (BANDS.find(([k]) => k === first.band) || [null, "First"])[1];
         hero = h("div", {class: "bp-iv", "data-queue": first.key},
           kicker ? h("p", {class: "bp-iv-when"}, kicker) : null,
-          h("p", {class: "bp-iv-what"}, face.title),
+          h("h4", {class: "bp-iv-what"}, face.title),
           queueAct(face, "bp-first"));
       }
     } else if (!jobRows().length && (!txt(obj(M().setup).state) || txt(obj(M().setup).state) === "done")) {
@@ -6467,7 +6469,7 @@
       const busy = [...allWork()].some(([, w]) => w.kind === "search" && ACTIVE.has(w.status));
       hero = h("div", {class: "bp-iv"},
         h("p", {class: "bp-iv-when"}, busy ? "Searching now" : "First"),
-        h("p", {class: "bp-iv-what"}, busy ? "Claude is finding your first jobs. They show here when the search is done." : "Find your first jobs"),
+        h("h4", {class: "bp-iv-what"}, busy ? "Claude is finding your first jobs. They show here when the search is done." : "Find your first jobs"),
         busy ? null : btn("Start the search", () => askSearch(), {kind: "primary", small: true, key: "bp-first-search"}));
     }
 
@@ -6544,9 +6546,10 @@
     const factList = facts.length ? h("ul", {class: "bp-lead bp-lead-list bp-facts", "data-fit": "1,3,1"}, facts.slice(0, 3).map((f) => h("li", {}, f))) : null;
     const side = leadList || ready || factList ? h("div", {class: "bp-today-side"}, factList, leadList, ready) : null;
     // Its count is To do's own (todoBadge), said over the first of them: "1 of 4".
-    put(grid, briefPanel("today", "Today", [hero,
-      hero ? side : leadList || (legacy.length ? briefItems(legacy, "legacy", 5) : null),
-      !hero && !parts.length && !legacy.length ? h("p", {class: "muted"}, "Nothing booked or owed today.") : null],
+    // Nothing booked or owed: the all clear, To do's own, as good news (the redesign's second
+    // round, 2026-11-17), the brief's opening under it where it has one.
+    put(grid, briefPanel("today", "Today", [hero || allClear("brief", "h4"),
+      hero ? side : leadList || (legacy.length ? briefItems(legacy, "legacy", 5) : null)],
       null, {icon: "todo", w: 4, m: 2, count: heroCounts && need > 1 ? "1 of " + need : null}));
     // Booked things only: a follow-up 45 days late is To do's, never Coming up's, and the line
     // says what the strip shows (the audit, 2026-11-03).
@@ -6554,23 +6557,30 @@
       : h("p", {class: "muted"}, (allUp.length ? "Nothing else booked." : "Nothing booked yet.") + briefWaiting())],
       // "All 1 coming up" said nothing the panel did not: a count only where there is more.
       [navLink("interviews", allUp.length > 1 && allUp.length > upCards.length ? "All " + allUp.length + " coming up" : "Coming up"),
-        h("button", {type: "button", class: "btn link", "data-k": "bp-up-add", onclick: () => askAddSomething()}, "Add something")],
+        h("button", {type: "button", class: "btn link", "data-k": "bp-up-add", onclick: () => askAddSomething()}, "Add a date")],
       {icon: "interviews", w: 4, m: 2}));
     // A count only where To do holds more today than the Brief shows of it, Today's included:
     // To do counts its cards, a checklist of people as one, so "All 2 in To do" sat under three
     // steps (the maintainer's page, 2026-11-10).
     const shownToday = (heroCounts ? 1 : 0) + stepsCounted;
     put(grid, briefPanel("next", steps.length === 3 ? "Next three" : "Next", steps.length ? h("ol", {class: "plain bp-list bp-steps", "data-fit": "3,3,2"}, steps) : h("p", {class: "muted"}, first ? "Nothing else on To do." : "Nothing else needs you today."),
-      navLink("todo", need > shownToday && need > steps.length ? "All " + need + " in To do" : steps.length ? "To do" : "All of it in To do"), {icon: "k-update", w: 4}));
-    put(grid, briefPanel("people", "Waiting on you", ppl.length ? h("ul", {class: "plain bp-list bp-people", "data-fit": "2,3,3"}, ppl.map((p) => {
+      // "See all 4": To do's own count today, said only where it is at least what the Brief
+      // shows of it (a count under the steps it lists read as fewer, the maintainer's page,
+      // 2026-11-10); else plainly where it goes.
+      navLink("todo", need > 1 && need >= shownToday && need > steps.length ? "See all " + need : "Open To do"), {icon: "k-update", w: 4}));
+    // Waiting on you: only who no panel above names, and no panel at all when that is nobody
+    // (the redesign's second round, 2026-11-17: it said again who Next had, as a fourth list
+    // of what to do next). The row it leaves gives its room to the rest, three columns that
+    // line up with the row above.
+    const w2 = ppl.length ? 3 : 4;
+    if (ppl.length) put(grid, briefPanel("people", "Waiting on you", h("ul", {class: "plain bp-list bp-people", "data-fit": "2,3,3"}, ppl.map((p) => {
       const move = txt(p.next_action) && txt(p.next_action).length <= 28 ? txt(p.next_action) : (BRIEF_PERSON_WORD[txt(p.status)] || "Follow up");
       return h("li", {}, h("a", {href: "#contacts/" + p.id, class: "bp-text bp-link", "data-k": "bp-person:" + p.id, onclick: (e) => { e.preventDefault(); openDetail("person", p.id); }},
         h("span", {class: "bp-avatar", "aria-hidden": "true"}, txt(p.first_name).slice(0, 1).toUpperCase()),
         h("span", {class: "bp-who"}, h("strong", {}, txt(p.first_name)), h("span", {class: "bp-at"}, txt(p.employer))),
         h("span", {class: "bp-state"}, personAsk(p) ? "Asked for " + personAsk(p).what : move,
           personWhen(p) ? h("span", {class: "bp-when"}, personWhen(p).day) : p.due ? h("span", {class: "bp-when"}, dayDiff(p.due) !== null && dayDiff(p.due) < 0 ? "Ready" : dueWord(p.due)) : null)));
-    })) : h("p", {class: "muted"}, "Nobody else is waiting on you."),
-      navLink("contacts", "Everyone in Contacts"), {icon: "contacts", w: 3, ws: 4}));
+    })), navLink("contacts", "Everyone in Contacts"), {icon: "contacts", w: 3, ws: 4}));
     const searching = [...allWork()].some(([, w]) => w.kind === "search" && ACTIVE.has(w.status));
     // What is owed leads: drafts made and not yet sent, the same count as Drafts' own, opening
     // them; then the new finds; "Nothing new" only when there is neither (the maintainer,
@@ -6615,7 +6625,7 @@
       // "All 1 new" under one job said nothing (the screen review, 2026-11-11): a count from two.
       [best.length ? navLink("jobs", best.length > 1 ? "All " + best.length + " new" : "Open Jobs") : readyRows.length > 1 ? navLink("drafts", "All " + readyRows.length + " drafts") : null,
         !searching ? h("button", {type: "button", class: "btn link", "data-k": "bp-search", onclick: () => askSearch()}, "Find jobs") : null],
-      {icon: "jobs", w: 3, ws: 4}));
+      {icon: "jobs", w: w2, ws: 4}));
     // News that matters to the search, in points (the maintainer, 2026-10-31).
     // Each point: what happened, then what to do with it, then where it is from, so a point
     // reads at a glance rather than as a paragraph (the maintainer, 2026-11-02).
@@ -6641,7 +6651,7 @@
       // What the window had no room for opens in place: News has no screen of its own.
       [h("button", {type: "button", class: "btn link", "data-k": "bp-news-more", "data-fit-more": "news", hidden: true, onclick: (e) => fitOpenFrom(e.currentTarget)}, ""),
         newsAsOf(b.news_date || b.date, b.news_searched)],
-      {icon: "k-message", w: 3, m: 2, ws: 4}));
+      {icon: "k-message", w: w2, m: 2, ws: 4}));
     // Your progress: at most four numbers, chosen for this person by the engine from jobs and
     // people both (app_model._glance), one line on what is working when their own numbers say
     // something, and the weeks. A nought is never shown beside real work (the maintainer,
@@ -6682,7 +6692,7 @@
       // A fold that keeps its place across redraws (det): a plain one closed again on the next
       // redraw, so a tap on it could come to nothing (Safari's engine, CI, 2026-11-04).
       since && arr(since.items).length ? det("bp-since", false, {class: "bp-all"}, h("summary", {"data-k": "bp-since"}, "Since your last brief"), briefItems(since.items, "since", 6)) : null],
-      null, {icon: "progress", w: 3}));
+      null, {icon: "progress", w: w2}));
     fillRows(grid);
     const su = txt(obj(M().setup).state);
     const pin = !su || su === "done" ? pinOffer("brief") : null;
@@ -13985,7 +13995,7 @@
     const line = !st.setUp ? (st.asked ? "Claude is setting it up in the chat that answers this page. It shows as on here once it is." : "A short note each morning: what is due today, and news that matters. Turn it on here.")
       : !st.on ? "Off. Your days and time are kept for when you turn it back on." : st.when + (txt(sc.zone) ? ", " + zoneName(txt(sc.zone)) + " time" : "") + ".";
     return [
-      infoRow("brief-when", "When it comes", briefWord(st), foldBody([h("p", {}, line),
+      infoRow("brief-when", "When your brief arrives", briefWord(st), foldBody([h("p", {}, line),
         st.setUp && st.on && st.why ? h("p", {class: "hint brief-why"}, st.why) : null,
         arr(sc.waiting).length || Number(sc.waiting) > 0 ? h("p", {class: "hint"}, "Claude makes the change next time it works on your search.") : null],
         st.asked ? btn("See its progress", openWork, {small: true, key: "brief-see"}) :
