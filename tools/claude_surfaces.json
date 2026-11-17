@@ -1132,6 +1132,36 @@
       "ui_sensitive": false
     },
     {
+      "id": "background-command-limit",
+      "claim": "A background command a chat starts keeps running after the chat's reply and wakes the chat when it ends. In the desktop app, a terminal or VS Code it has no time limit; in a session that runs unattended (a cloud chat, a -p run, the Agent SDK, CI) it is stopped at its timeout, two hours at most, and that stop wakes the chat too. So the computer's own chat waits for work in one background command of code (computer.py listener-wait) that ends only when work is rung for it, costing nothing meanwhile, and where a limit stops it the chat starts it again in one step. Whether a chat the cloud started on the computer counts as unattended is not documented.",
+      "sources": [
+        {
+          "url": "https://code.claude.com/docs/en/tools-reference",
+          "quote": "has no time limit on background commands"
+        },
+        {
+          "url": "https://code.claude.com/docs/en/tools-reference",
+          "quote": "background Bash and PowerShell commands have a time limit"
+        },
+        {
+          "url": "https://code.claude.com/docs/en/tools-reference",
+          "quote": "up to a maximum of 2 hours"
+        },
+        {
+          "url": "https://code.claude.com/docs/en/tools-reference",
+          "quote": "keeps running after a final response, until it exits, is stopped, or reaches its"
+        },
+        {
+          "url": "tool:Bash",
+          "quote": "it keeps running across turns and re-invokes you when it exits"
+        }
+      ],
+      "status": "documented",
+      "verified_on": "2026-11-17",
+      "verified_against": "code.claude.com/docs/en/tools-reference (\"When a background command stops\", \"Time limit for background commands\") read 2026-11-17, and the Bash tool's own description in a cloud chat that day; whether a chat started on the computer from the cloud runs unattended is not said",
+      "ui_sensitive": false
+    },
+    {
       "id": "page-share",
       "claim": "A page is visible only to the person who published it until they share it from the Share control in the page's header. A page carries what it shows inside itself, so anyone it is shared with can read that, even where the page then shows them only a notice: the job search page holds first names, employers, the person's drafts and their setup answers.",
       "line": "Only you can open this page unless you share it. It holds first names, employers, your drafts and your setup answers, so keep it unshared.",

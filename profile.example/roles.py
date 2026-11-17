@@ -6,7 +6,12 @@ tools/allocate.py, render_application.py and verify_batch.sh read them.
 """
 
 ROLES = [
+    # titles (optional): other titles this role may print under on one resume, as the
+    # person agreed them, each with the kind of posting that gets it. `title` prints on
+    # every other. The drafter picks one per application (role_titles in its draft), and
+    # the render, the checks and a re-render from the kept draft.json all read it there.
     dict(employer="Brindle & Hart Logistics", title="Senior Operations Analyst",
+         titles={"Senior Data Analyst": "data and analytics postings"},
          dates="Mar 2023 - Present", loc="Manchester, UK", short="BH",
          tenure_months=31, floor=2, cap=4),
     # known_as: the name people use for the employer, when it is not the one

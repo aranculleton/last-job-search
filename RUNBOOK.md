@@ -436,6 +436,14 @@ model auditor rules on whether the work plausibly used it. A rewording lives in 
 and its kept `draft.json`, and is never written back to `profile/bullets.py`; a refused one
 renders as the profile's own bullet.
 
+**A role can print another title the person agreed, on that resume only.** Where
+`profile/roles.py` gives a role `titles` (each other title with the kind of posting it is
+for), `role_titles` (optional, `{"<role>": "<title>"}`) picks the one this posting gets;
+section 1 of the pack lists them with their rule. Left out, every role prints its own
+`title`. The render, `verify_batch.sh`'s round trip and a re-render from the kept
+`draft.json` all read it from the draft, and a title the profile does not allow that role
+is refused by the code audit and the renderer. Never edit `title` between renders for it.
+
 **A held skill goes into the work too, without asking.** A skill the profile holds
 (`skills.py` `ITEMS`) that the posting names is the person's standing yes: where no bullet
 on the page names it, the pack lists the bullets it may go in and the drafter names it in
@@ -762,6 +770,7 @@ chat has lost it.
 | An employer turns out to have no relevant presence at all | `job_scraper/do_not_target.json`, with a `review_after` |
 | A posting was ruled out | `job_scraper/seen_jobs.json`, through `tools/exclude.py add` (a reason, and what it rests on) |
 | A fact about the candidate: a skill, a gap, a date, a constraint | `01-candidate-profile.md`, and `profile/CLAUDE.md` if it belongs in the summary |
+| A role may show another title for a kind of job ("Data Scientist is fine on data science roles") | `profile/roles.py`, that role's `titles`, the title with the kind of posting it is for; each draft then picks it (`role_titles`) |
 | They want the brief's news to watch something, or stop ("watch the visa news", "no more rate news") | `python3 tools/brief.py watch add "<their words>" --every day\|week\|month`, or `watch drop "<what>"` (person.json `brief.watch`); never a kind of news decided for them |
 | They told one employer a different place from the profile's | `python3 tools/told.py "<Employer>" "<place>"` (person.json `identity.places_told`) |
 | A reaction or preference: a message, a person, a job, the voice, the questions | the setting it governs, and `profile/learned.json` via `tools/learned.py record` ("Learning the person", below) |

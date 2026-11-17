@@ -186,9 +186,12 @@ _WORK_AUTH_CLAUSE = getattr(_NET, "WORK_AUTH_CLAUSE", None) or re.compile(r"(?!)
 GREETING = str(getattr(_NET, "GREETING", "") or "Hi").strip()
 REFERRAL_LINE = str(getattr(_NET, "REFERRAL_LINE", "") or
                     "The {role} looks like a strong fit for what we talked about")
+# The close is short: the ask, the offer of the document and the easy no. "and a couple of
+# lines you can forward" put the usual ask with its link past what reply.py finish then
+# allowed, and the person cut it by hand every time (issue 315).
 REFERRAL_CLOSE = str(getattr(_NET, "REFERRAL_CLOSE", "") or
-                     "Would you be comfortable referring me for it? Happy to send my {noun} "
-                     "and a couple of lines you can forward, and no problem at all if not.")
+                     "Would you be comfortable referring me for it? Happy to send my {noun}, "
+                     "and no problem at all if not.")
 
 _SALUTATION = re.compile(
     r"^(?:hi|hey|hello|dear|good (?:morning|afternoon|evening)|" + re.escape(GREETING) +
@@ -2040,6 +2043,22 @@ def referral_ask(name, context, role, link, close=None, work_auth=None,
         raise Refused("referral ask: " + swapped + " (pass line=, the sentence about the role "
                       "written for this reader)")
     return _gate("referral_ask", text, "referral ask", name=name, seniority=seniority)
+
+
+# What every referral ask referral_ask() writes ends with: an ask to refer, then the posting's
+# link alone on the last line. `reply.py finish` reads a draft of that shape as a referral ask
+# and checks it by the kind's own limit, the one referral_ask() keeps: checked as a follow-up
+# whenever the person's own message was the last in the thread, the composer's ask was refused
+# at 280 characters while it allowed 90 words (issue 315).
+_ASKS_TO_REFER = re.compile(r"\brefer(?:ring|ral)?\b", re.I)
+
+
+def is_referral_ask(text) -> bool:
+    """Whether `text` has the referral ask's shape: a request to refer, then the posting's
+    link alone on its last line."""
+    lines = [ln.strip() for ln in str(text or "").strip().splitlines() if ln.strip()]
+    return (len(lines) >= 2 and re.fullmatch(r"https?://\S+", lines[-1]) is not None
+            and _ASKS_TO_REFER.search(" ".join(lines[:-1])) is not None)
 
 
 # Ways to open a follow-up on the person's own last message, each saying which one ("my note
