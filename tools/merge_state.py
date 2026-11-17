@@ -432,10 +432,11 @@ JSON_NAMES = {
                      # a search limited to named employers: its names and the rows at them
                      "employers.json", "named.json",
                      # the rows the hard rules pass and leave out, before the throttle; the
-                     # shortlist's size before its cut; the employers left to judge; and what
+                     # shortlist's size before its cut; the employers left to judge, and the
+                     # employer judge's answer, taken once by the cut that reads it; and what
                      # each site searched read and failed (00_scrape/sources.json)
                      "05_ruled.json", "05_ruled_out.json", "06_trimmed.json", "unjudged.json",
-                     "sources.json"), _ROUND),
+                     "judged.json", "sources.json"), _ROUND),
     # each employer site's robots.txt as last answered, kept a day (ats_boards.keep_robots)
     "robots.json": _CACHE,
     **dict.fromkeys(("apps_in.json", "picks.json", "draft_args.json", "pack.json", "held.json",

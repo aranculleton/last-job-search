@@ -187,12 +187,15 @@ python3 tools/run_round.py
 set another); the round's first line says it (`window: 10 days (your setting)`). Pass
 `--jobage <days>` only when they ask for a different window for this one search.
 
-**Employers nobody has judged wait below judged ones.** Where the person's profile states a
-bar (pay, prestige or signal), an employer no list names and nobody has judged is ranked down
-until judged, and the round prints `unjudged:` with the file listing them (each with what its
-posting says about it). Judge them in one batch, never one call each: fill each verdict and a
-few words why (one small-model agent can do the whole file from the person's bar and those
-lines), run `python3 tools/bar.py judge --file <that file>`, then `--recut` the round.
+**Employers nobody has judged are judged inside the round.** Where the person's profile
+states a bar (pay, prestige or signal), an employer no list names and nobody has judged is
+ranked down until judged, and the round prints `unjudged:` with a brief for judging them (the
+bar and what each posting says about its employer). Start the `employer-judge` agent (on the
+small model, in the background) with that brief, then run `python3 tools/run_round.py --recut
+--out <the round's folder> --judged`: it waits for the answer for at most three minutes, keeps
+each judgement for good (marked as the round's, so a person or a chat can overturn it) and cuts
+again. Pass on that cut. With no agent to start, fill the batch file by hand and run `python3
+tools/bar.py judge --file <that file>`, then `--recut`.
 
 **Leave `--out` off.** The round names itself, `r` and the next number, and prints its
 folder (`round: r12, its files in rounds/r12`), which is the folder `--recut` and a

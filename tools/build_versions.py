@@ -426,8 +426,9 @@ METHODS: dict[str, dict] = {
             (113, "2026-11-17", False, "RUNBOOK says a round asked for a number that finds fewer checks itself before it reports and searches wider by itself when the search's own hour allows; nothing made changes"),
             (114, "2026-11-17", False, "RUNBOOK says an employer or a kind of employer the person turns down goes through one command (tools/wants.py decline or sector-out) that changes every setting it touches, and is taken back the same way; nothing made changes"),
             (115, "2026-11-17", False, "RUNBOOK says every want is kept with the person's words in profile/wants.json and an employer they want ranked up goes through one command (tools/wants.py want); nothing made changes"),
+            (116, "2026-11-17", False, "RUNBOOK says a round's employers nobody has judged are judged inside it by the employer-judge agent, on the small model, and the round is cut again with --judged, which waits for the answer three minutes at most; nothing made changes"),
         ),
-        "fingerprint": "6a4f46e18bc1efc3",
+        "fingerprint": "75caa1727d50814b",
     },
     "interview": {
         # Only a process with a round still to come is prepared again: a prep for a round
@@ -873,8 +874,9 @@ METHODS: dict[str, dict] = {
             (64, "2026-11-17", False, "a kind of employer turned down as a kind (search.py BAR_SECTORS_OUT) is cut by what the person's catalogue calls the employer, or its posting says of itself, and the filter run alone reads the person's own window; nothing ruled out needs looking at again: it only cuts more"),
             (65, "2026-11-17", False, "several brand-leverage lifts on one posting count strongest first, the next at half, the next at a quarter and so on, still +30 at most, so one strong reason to want a job is not outweighed by many small ones; a penalty still counts in full and --explain says what each lift counted; nothing ruled out needs looking at again, and the jobs on the page are scored again by the jobs-rescored upgrade"),
             (66, "2026-11-17", False, "the employers and kinds of employer turned down and the employers lifted are read from the person's one record of what they want (profile/wants.json) as well as from the old settings, each deciding as before; nothing ruled out needs looking at again"),
+            (67, "2026-11-17", False, "a round writes a brief from which a small agent judges the employers nobody has judged against the bar (bar.judge_brief), and the round's cut keeps each judgement for good, marked as the round's; nothing ruled out needs looking at again"),
         ),
-        "fingerprint": "c77695e32f2d197f",
+        "fingerprint": "e862d15cd71be6a9",
     },
     "routines": {
         "by": "you", "priority": 3, "applies": "routines",
@@ -1316,6 +1318,9 @@ KEEPS_NOTHING: dict[str, str] = {
                                 "each person; a pack is the day's",
     "tools/cost_meter.py": "development tooling: measures what a run reads, keeps nothing",
     ".claude/agents/news-reader.md": "searches afresh for each brief; keeps nothing",
+    ".claude/agents/employer-judge.md": "judges a round's batch afresh, each round; the "
+                                        "judgements are the person's own record "
+                                        "(profile/employers_judged.json), never remade",
     "tools/app.py": "the page's view, derived from the state files on every run",
     "tools/tweak.py": "applies a change the person asked for, on demand; the record it keeps of their changes (tweaks.json) is theirs and is never remade",
     "tools/app_setup.py": "builds the setup steps the page shows from the profile, on every run; keeps nothing",
