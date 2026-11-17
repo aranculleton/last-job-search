@@ -273,7 +273,10 @@ def test_a_first_note_is_copied_exactly_opened_and_logged_with_the_words_that_we
     ], vp)
     note = _item(m, "msg-ash-1")
     assert got["after"][0]["clip"] == note["text"], "exactly the words, no label, no count"
-    assert "Copied" in got["after"][0]["text"] and "of 300 characters" in got["after"][0]["text"]
+    # Copied, it says where to paste it; a note far inside its limit (205 of 300) shows no count
+    # (the redesign's second round, 2026-11-17: a count only within 30 letters of the limit).
+    assert "Copied. Paste it in LinkedIn." in got["after"][0]["text"] and "characters" not in got["after"][0]["text"] \
+        and "to spare" not in got["after"][0]["text"], got["after"][0]["text"]
     a = _one(got, "msg.sent")
     assert a["item"] == "msg-ash-1" and a["value"]["text"] == note["text"] and a["value"]["on"]
     _rev_is_the_items(m, a)
@@ -415,7 +418,9 @@ def test_a_resume_asked_for_is_made_for_that_person_and_logged_with_its_file(run
     got = _go(run, tmp_path, [
         # The choices read from the options themselves: Firefox and Safari leave a select's
         # options out of the dialog's text (the Everywhere check, 2026-10-29).
-        {"hash": "todo", "click": "Choose the role", "read": "dialog",
+        # Its card's button gets the CV made for her (one task, one wording, the redesign's second
+        # round, 2026-11-17); choosing another role is the lesser choice under its More.
+        {"hash": "todo", "more": "due-tamsin-resume", "click": "Choose the role", "read": "dialog",
          "eval": "[...document.querySelectorAll('dialog option')].map((o) => o.textContent).join('\\n')"},
         {"click": "Cancel", "exact": True},
         {"hash": "drafts", "click": "I sent it to Tamsin"},

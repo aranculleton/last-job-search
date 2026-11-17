@@ -237,12 +237,14 @@ def test_to_do_opens_on_what_is_late_or_due_today_and_folds_the_setup(run, tmp_p
     titles = [c["title"] for c in r["cards"]]
     # The Fernhill Freight follow-up and the reply to Juno are drafted, so they are rows of the
     # one card of messages to send, which opens Contacts at them (the UX review, 2026-11-05).
-    for owed in ("Thank-you note after your Harbourline Bank first interview", "Messages to send (7)", "Send your CV to Tamsin"):
+    # What Tamsin asked for is one task in one wording on every screen (the redesign's second
+    # round, 2026-11-17): "Send Tamsin your CV".
+    for owed in ("Thank-you note after your Harbourline Bank first interview", "Messages to send (7)", "Send Tamsin your CV"):
         assert owed in titles, (owed, titles)
     bands = [c["band"] for c in r["cards"]]
     assert bands[0] == "Due or late", bands
     if "Needs your answer" in bands:
-        last_owed = max(titles.index(t) for t in titles if t.startswith(("Thank-you", "Follow up with", "Reply to", "Send your", "Messages to send")))
+        last_owed = max(titles.index(t) for t in titles if t.startswith(("Thank-you", "Follow up with", "Reply to", "Send your", "Send Tamsin", "Messages to send")))
         assert bands.index("Needs your answer") > last_owed, ("questions come after what is owed", r["cards"])
     assert r["youFolded"], "Finish your profile waits behind the fold while today's things show"
     # Four cards today all show (one card an act and a person, 2026-11-05): the first fold is

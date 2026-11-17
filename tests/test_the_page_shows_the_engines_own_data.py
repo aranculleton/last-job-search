@@ -233,8 +233,9 @@ def test_every_section_shows_the_engines_items_in_plain_words(run, built):
     t = {k: v.replace("\u00a0", " ") for k, v in got["texts"].items()}
     assert "Panel interview with Thornbury Bank" in t["todo"] and "Did you apply to Dovecote Freight?" in t["todo"]
     # What Juno asked for leads, with its button, and the one day it is about (the walk-through,
-    # 2026-11-03: "Reply to Juno" with "Draft a reply" over a request for the CV).
-    assert "Juno at Larkspur Retail asked for your CV" in t["todo"] and "Make a CV for Juno" in t["todo"], t["todo"]
+    # 2026-11-03: "Reply to Juno" with "Draft a reply" over a request for the CV), said as the
+    # one task it is on every screen (the redesign's second round, 2026-11-17).
+    assert "Send Juno your CV" in t["todo"] and "Make a CV for Juno" in t["todo"], t["todo"]
     # A draft never made is Claude's to make by itself (tools/app.py self_fixes): said on its
     # card in Drafts, never a To do (the UX review, 2026-11-05).
     assert "asked 12 Sep" in t["todo"] and "first wrote" not in t["todo"] and "Not made yet" not in t["todo"] and "Not made yet" in t["drafts"]

@@ -575,11 +575,13 @@ def test_to_do_groups_by_when_then_by_employer_in_the_order_things_are_done(run,
     assert "Prepare for the Larkspur Retail phone screen" not in titles, "the interview's own card is its prep, never a second card"
     assert "Thank-you note after your Harbourline Bank first interview" in titles
     assert r["dueButtons"]["Thank-you note after your Harbourline Bank first interview"][0] == "Draft the thank-you"
-    assert r["dueButtons"]["Send your CV to Tamsin"][0] == "Choose the role"
+    # What Tamsin asked for, one task in one wording: the CV made for her, then I sent it (the
+    # redesign's second round, 2026-11-17).
+    assert r["dueButtons"]["Send Tamsin your CV"][:2] == ["Get the CV for Tamsin", "I sent it"], r["dueButtons"]
     # The reply is drafted already: its row is on the drafted card, which opens it and never
     # drafts it again (2026-11-02), and no card of its own offers to.
     assert "Reply to Juno at Larkspur Retail" not in r["dueButtons"], r["dueButtons"]
-    assert all("Done" in b for b in r["dueButtons"].values()), "every due row can be marked done"
+    assert all("Done" in b or "I sent it" in b for b in r["dueButtons"].values()), "every due row can be marked done"
     assert not [t for t in titles if "first notes ready to send" in t], "the week's first notes are rows of the messages card"
     assert r["chips"] == 0, "no kind chips on To do"
     assert r["filled"] == 0 and r["answers"] >= 2, "a question never fills one of its answers"
