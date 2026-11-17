@@ -11,6 +11,7 @@ each verdict marked as the round's, and cuts with them. Every employer is invent
 """
 from __future__ import annotations
 
+import datetime
 import json
 import os
 import re
@@ -29,6 +30,10 @@ import bar  # noqa: E402
 import run_round  # noqa: E402
 
 TODAY = "2026-11-16"
+# Every judgement is read on the round's own day: a "none" lasts JUDGED_NONE_DAYS from the day it
+# was made, and read on the machine's clock moved 90 days on it had lapsed (the everywhere
+# check's 90-days, 2026-11-17).
+DAY = datetime.date.fromisoformat(TODAY)
 LEEDS = "Leeds, England, United Kingdom"
 UNKNOWN = ("Quorlan Media", "Tessaly Consulting", "Vintry Labs AI")
 KNOWN = ("Ambleside Freight", "Bellingham Foods", "Carrow Retail")
@@ -138,7 +143,7 @@ def test_the_round_writes_a_brief_a_small_agent_judges_and_its_cut_keeps_each_ve
     assert not answer.exists()
     bar.judge("Vintry Labs AI", "signal", "a person said it is backed", today=TODAY)
     assert _main(monkeypatch, ["--out", str(folder), "--recut", *a_round["common"]]) == 0
-    assert bar.judgement("Vintry Labs AI")["verdict"] == "signal"
+    assert bar.judgement("Vintry Labs AI", today=DAY)["verdict"] == "signal"
 
 
 def test_an_answer_never_writes_over_a_judgement_made_while_the_round_waited(
@@ -151,8 +156,8 @@ def test_an_answer_never_writes_over_a_judgement_made_while_the_round_waited(
     out = capsys.readouterr().out
     assert "judged in the round: 2 employer(s)" in out
     assert "already judged or on your lists, left as they are: 1" in out
-    assert bar.judgement("Tessaly Consulting")["why"] == "a chat looked it up meanwhile"
-    assert bar.judgement("Quorlan Media")["by"] == "round"
+    assert bar.judgement("Tessaly Consulting", today=DAY)["why"] == "a chat looked it up meanwhile"
+    assert bar.judgement("Quorlan Media", today=DAY)["by"] == "round"
 
 
 def test_an_employer_the_answer_leaves_empty_still_waits_below_judged_ones(
@@ -166,7 +171,7 @@ def test_an_employer_the_answer_leaves_empty_still_waits_below_judged_ones(
     again = json.loads((a_round["rounds"] / "r7.json").read_text(encoding="utf-8"))
     assert [r["company"] for r in again] == ["Quorlan Media", "Ambleside Freight",
                                              "Bellingham Foods"]
-    assert bar.judgement("Tessaly Consulting") is None
+    assert bar.judgement("Tessaly Consulting", today=DAY) is None
 
 
 @pytest.mark.timing
