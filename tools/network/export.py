@@ -2792,3 +2792,9 @@ if __name__ == "__main__":
     except csv_store.Conflicted as e:
         print(f"export: {e}", file=sys.stderr)
         raise SystemExit(1) from None
+
+
+# One module, imported by its own name or from network (issue 339; state.py says why).
+_MODULE_NAME = os.path.splitext(os.path.basename(__file__))[0]
+if __name__ in (_MODULE_NAME, "network." + _MODULE_NAME):
+    sys.modules[_MODULE_NAME] = sys.modules["network." + _MODULE_NAME] = sys.modules[__name__]

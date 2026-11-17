@@ -267,8 +267,9 @@ METHODS: dict[str, dict] = {
             (25, "2026-11-03", True, "a call prep says a reason to ask you first in plain words (Claude asks you first), with no command in it, and a document an older version wrote is still read; a stock answer naming a place that employer did not hear, or a pay figure beside another band, is left out, never offered as prepared; the check fails on a gap to fill under any heading, a number the profile does not hold and a place the profile no longer says; months are counted as said; one line per resume sent; a skill held under another name (Azure Data Factory is Azure) is never offered as a near match; a manager's leadership answer leads with the team they ran; asked for in a chat, a call prep is given in the chat in full as well as on the page"),
             (26, "2026-11-07", False, "a label on a line of its own above the words to say (\"SAY.\", \"Say this:\") is never said, never shown as a line of its own, and fails the check; a line opening \"Note to you, not to say:\" is a note; documents are written as before"),
             (27, "2026-11-17", False, "the contact book, the message log and the tracker are read where the state is at each read (state.contacts_csv), never where it was when the code first loaded (issue 340); preps are written as before"),
+            (28, "2026-11-17", False, "each networking module is one module whether it is imported by its own name or from network (issue 339); preps are written as before"),
         ),
-        "fingerprint": "539b9f26f83844fe",
+        "fingerprint": "d459055a3d935fd5",
     },
     "drafts": {
         "by": "upgrade", "priority": 2, "applies": "unsent_drafts", "time": "~5 min",
@@ -714,8 +715,9 @@ METHODS: dict[str, dict] = {
             (138, "2026-11-17", False, "reply.py finish checks a referral ask as one, by the limit compose.referral_ask keeps, whoever wrote last (the page's referral ask work, --referral-ask, or the ask's own shape), and the default close is shorter (issue 315); drafts already saved stay as they are"),
             (139, "2026-11-17", False, "a page build counts each employer's people waiting once, from the contact book's own rows there, and reads each person's place, the bar on their employer and the person's limits once, where the holds, To do and Contacts each asked again (issue 336); every answer is the same, so nothing made changes"),
             (140, "2026-11-17", False, "every load and save of the contact book and the message log reads the state at that moment (state.contacts_csv, threads_csv, tracker_csv), never where it was when the code first loaded, so a page built for a second state in one process shows that state's holds and a save lands in its book (issue 340); nothing a run makes changes"),
+            (141, "2026-11-17", False, "each networking module (state, surface, schema, compose, tone and the rest) is one module whether a tool imports it by its own name or from network, where a page build kept five of them twice with two sets of caches and settings (issue 339); nothing a run makes changes"),
         ),
-        "fingerprint": "307a5031050c74bc",
+        "fingerprint": "c9f156030428723a",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
@@ -799,8 +801,9 @@ METHODS: dict[str, dict] = {
             (66, "2026-11-16", False, "where the person's computer reads profiles, a chat without Claude's own browser is routed to queue the short list for the computer and save no note, and a refused note says so; notes are written as before; the person is told once where their profiles are read, as the page's own route tells them"),
             (67, "2026-11-17", False, "who is waiting at an employer is counted once and its line said from that count (reading.full_line), and the message log is grouped once for it, where each check counted the whole book twice (issue 336); the same people are counted, so notes are written as before"),
             (68, "2026-11-17", False, "the contact book and the message log a note is checked against are read where the state is at each read, never where it was when the code first loaded (issue 340); notes are written as before"),
+            (69, "2026-11-17", False, "each networking module is one module whether it is imported by its own name or from network (issue 339); notes are written as before"),
         ),
-        "fingerprint": "f1c4f31c254f0af4",
+        "fingerprint": "98cde23898c2a38e",
     },
     "screening": {
         "by": "round", "priority": 2,

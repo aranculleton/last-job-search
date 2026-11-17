@@ -1205,3 +1205,9 @@ def short_batch(found: int, wanted: int, tried: dict, have_connections: bool = F
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+# One module, imported by its own name or from network (issue 339; state.py says why).
+_MODULE_NAME = os.path.splitext(os.path.basename(__file__))[0]
+if __name__ in (_MODULE_NAME, "network." + _MODULE_NAME):
+    sys.modules[_MODULE_NAME] = sys.modules["network." + _MODULE_NAME] = sys.modules[__name__]

@@ -6792,3 +6792,14 @@ if __name__ == "__main__":
     except csv_store.Conflicted as e:  # a merge left markers: say which file, read nothing
         print(f"state: {e}", file=sys.stderr)
         raise SystemExit(1) from None
+
+
+# One module by both of its names: `import state` (tools/network on the path) and `from
+# network import state` (tools/ on the path) loaded this file twice, as two modules with two
+# sets of caches and settings, and a test that patched one left the other as it was
+# (issue 339). Set last, once everything above has loaded: set first, an import that
+# failed part way (a copy with no profile yet) left the other name holding half a module,
+# and every later import by that name was given it.
+_MODULE_NAME = os.path.splitext(os.path.basename(__file__))[0]
+if __name__ in (_MODULE_NAME, "network." + _MODULE_NAME):
+    sys.modules[_MODULE_NAME] = sys.modules["network." + _MODULE_NAME] = sys.modules[__name__]

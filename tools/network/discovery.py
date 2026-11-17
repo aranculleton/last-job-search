@@ -2126,3 +2126,9 @@ if __name__ == "__main__":
     print("\nallowed_domains=%r" % (SEARCH_DOMAINS,))
     print("Filter every result through resolve_result(); it drops listings and "
           "turns a post permalink into a profile url plus an exact date.")
+
+
+# One module, imported by its own name or from network (issue 339; state.py says why).
+_MODULE_NAME = os.path.splitext(os.path.basename(__file__))[0]
+if __name__ in (_MODULE_NAME, "network." + _MODULE_NAME):
+    sys.modules[_MODULE_NAME] = sys.modules["network." + _MODULE_NAME] = sys.modules[__name__]
