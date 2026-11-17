@@ -439,7 +439,7 @@ JSON_NAMES = {
                      "ljs-job-chats.json", "ljs-tidy-planned.json", "ljs-versions.json",
                      "ljs-save-held.json", "ljs-land-result.json", ".mirror.json",
                      "ljs-touched.json", "ljs-pdf-pages.json", "ljs-claims.json",
-                     "ljs-retired-saves.json", "ljs-app-bug.json",
+                     "ljs-retired-saves.json", "ljs-app-bug.json", "ljs-computer-starter.json",
                      "ljs-tidy-renames.json"), _GITDIR),
     # A bug a chat in the maintainer's copy checked but could not file (no GitHub tools there),
     # one file a bug under handoff/app_bugs/, named by its key: two chats that held the same bug

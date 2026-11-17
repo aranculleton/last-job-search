@@ -2226,9 +2226,13 @@ def page_line(today: dt.date | None = None, landed: bool = False) -> str:
     the page still brings it up to date: once a page is published, the steps after an update
     (app_listen.after_update: republish when its own code changed, else refresh its data when
     an update `landed`); before that, start publishes it. Quiet for a month after a chat said
-    it cannot publish."""
+    it cannot publish, and always in the chat that starts the chats on the person's computer,
+    which never touches the page (issue #282)."""
     try:
         if not os.path.isdir(profile_dir()):
+            return ""
+        import app_listen
+        if app_listen.starter_here():
             return ""
         if page_record().get("url"):
             import app_listen

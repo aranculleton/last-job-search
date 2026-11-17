@@ -401,6 +401,16 @@ def main(argv: list[str] | None = None) -> int:
         # check's own look (--today), so a block that appears or is fixed mid-day is never
         # misreported (the review of E-17, 2026-11-11).
         names = blocked_today() if "--today" in argv[1:] else blocked_names()
+        if names and "--today" in argv[1:]:
+            # The chat that starts the chats on the computer searches nothing and tells the
+            # person nothing: told by the update check to stop and tell them, it would have
+            # (issue #282).
+            try:
+                import app_listen
+                if app_listen.starter_here():
+                    names = []
+            except Exception:  # noqa: BLE001  said as ever
+                pass
         if names:
             print(blocked_say(names))
             # For Claude: the official page to check today before passing the steps on, as
