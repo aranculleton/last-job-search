@@ -152,6 +152,28 @@ def test_applied_is_ordered_by_what_comes_next_and_i_heard_back_is_quiet(run, tm
     assert len(heard) >= 4 and all(q and bg in ("rgba(0, 0, 0, 0)", "transparent") for q, bg in heard), heard
 
 
+HEARD = r"""(() => [...document.querySelectorAll('#main .card.app-record')].map((c) => {
+  const b = c.querySelector('.card-actions > [data-k^="heard:"]'); if (!b || !b.getClientRects().length) return null;
+  const row = b.parentElement.getBoundingClientRect(), q = b.getBoundingClientRect();
+  const g = document.createRange(); g.selectNodeContents(b); const words = g.getClientRects()[0];
+  const t = document.createRange(); t.selectNodeContents(c.querySelector('h3')); const title = t.getClientRects()[0];
+  const prev = b.previousElementSibling;
+  const after = prev && prev.matches('.cost') && Math.abs((prev.getBoundingClientRect().top + prev.getBoundingClientRect().bottom) / 2 - (q.top + q.bottom) / 2) < 8 ? Math.round(q.left - prev.getBoundingClientRect().right) : null;
+  return {title: c.querySelector('h3').textContent.trim(), leads: Math.abs(q.left - row.left) < 20 && words.left - title.left < 20, off: Math.round(words.left - title.left), after};
+}).filter(Boolean))()"""
+
+
+@pytest.mark.parametrize("vp", [PHONE, WIDE], ids=["phone", "wide"])
+def test_i_heard_back_leading_a_line_starts_under_the_title_and_keeps_apart_from_a_gauge(run, tmp_path, vp):
+    # "I heard back" leading a row stood 17px in from the card's words, and after a gauge read as
+    # its words ("6 min of Claude  I heard back") (the redesign's second round, 2026-11-17).
+    rows = _eval(run, tmp_path, "applied", HEARD, vp)
+    assert rows, "Applied has I heard back"
+    assert [r for r in rows if r["leads"]], rows
+    assert all(abs(r["off"]) <= 1 for r in rows if r["leads"]), rows
+    assert all(r["after"] >= 16 for r in rows if r["after"] is not None), rows
+
+
 # ------------------------------------------------------------------ Progress
 
 PROGRESS = r"""(() => { const t = document.querySelector('#main .apps .listv > .scroll-x, #main .apps .app-rows');

@@ -754,6 +754,13 @@ details.more.split[open] { flex-basis: auto; }
 /* Applied: "I heard back" is a quiet control, its words in the ink, the soft fill under the
    pointer only, beside the card's one next step (the UX review of the redesign, 2026-11-17). */
 .card.app-record .card-actions > .btn.quiet { background: transparent; border-color: transparent; text-decoration: none; font-weight: 600; }
+/* Leading a line of its row, a quiet button's words line up with the card's own (app.js,
+   quietFit); after a button and its gauge it keeps 16px from the gauge, so "I heard back" is
+   never read as the gauge's words (the redesign's second round, 2026-11-17). */
+:is(.card-actions, .wc-actions, .suggest-acts, .g-acts, .fix, .fb-acts, .bp-foot, .sheet-actions) > .btn.quiet.lead-quiet { margin-inline-start: -17px !important; }
+@media (max-width: 759px) { :is(.card-actions, .wc-actions, .suggest-acts, .g-acts, .fix, .fb-acts, .bp-foot, .sheet-actions) > .btn.quiet.lead-quiet { margin-inline-start: -13px !important; } }
+.card-actions > [data-wakes] + .cost + .btn.quiet { margin-inline-start: 4px; }
+@media (max-width: 759px) { .card-actions > [data-wakes] + .cost + .btn.quiet { margin-inline-start: 8px; } }
 @media (hover: hover) { .card.app-record .card-actions > .btn.quiet:hover { background: var(--raised); } }
 /* Jobs in its stages: a small heading over each once there are two (Ready to send, Being
    written, New), the section label (.group), 24 above and 8 below, 8 above the first. */

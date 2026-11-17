@@ -333,6 +333,7 @@
     const lr = live.querySelectorAll(GLUE_ROWS);
     if (pr.length && lr.length === pr.length) lr.forEach((r, i) => {
       if (r.classList.contains("fold-on")) pr[i].classList.add("fold-on");
+      [...r.children].forEach((k, j) => { if (k.classList.contains("lead-quiet") && pr[i].children[j]) pr[i].children[j].classList.add("lead-quiet"); });
       if (!r.classList.contains("more-wrap")) return;
       pr[i].classList.add("more-wrap");
       const at = [...r.children].findIndex((k) => k.classList.contains("more-mate"));
@@ -351,7 +352,18 @@
       if (whole) p.previousElementSibling.classList.add("fits");
     }
   }
-  function lineFit() { moreFit(); sepFit(); clampFit(); }
+  // A quiet button that starts a line of its row has its words, not its box, under the card's
+  // own words: "I heard back" leading a row stood 17px in from them (the redesign's second
+  // round, 2026-11-17).
+  function quietFit() {
+    for (const b of document.querySelectorAll(".lead-quiet")) b.classList.remove("lead-quiet");
+    for (const b of document.querySelectorAll(GLUE_ROWS + " > .btn.quiet:not(.icon-only):not(.stop-claude)")) {
+      if (!shownIn(b)) continue;
+      const row = b.parentElement.getBoundingClientRect(), q = b.getBoundingClientRect();
+      if (Math.abs(q.left - row.left) < 2) b.classList.add("lead-quiet");
+    }
+  }
+  function lineFit() { moreFit(); quietFit(); sepFit(); clampFit(); }
   function svg(tag, attrs, kids) {
     const el = document.createElementNS("http://www.w3.org/2000/svg", tag);
     for (const k of Object.keys(attrs || {})) if (attrs[k] !== null && attrs[k] !== undefined) el.setAttribute(k, String(attrs[k]));

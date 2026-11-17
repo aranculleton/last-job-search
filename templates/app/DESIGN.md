@@ -310,7 +310,10 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   doing (the UX review of the redesign, 2026-11-17). (jobs page tests, jobs fold test)
 - Applied is ordered by what comes next, the nearest first: an interview by its day, then a
   follow-up by its day, then the rest newest first; "I heard back" is a quiet control beside a
-  card's next step. Why: the nearest interview (Wed 28 Oct) stood under a later one (Wed 4 Nov),
+  card's next step, its words under the card's own where it leads a line and 16px from a gauge
+  before it (a quiet button leading a line was 17px in from the card's words, and after "6 min
+  of Claude" read as the gauge's words: the redesign's second round, 2026-11-17; applied tests:
+  I heard back). Why: the nearest interview (Wed 28 Oct) stood under a later one (Wed 4 Nov),
   and five cards each ended in an equal grey "I heard back" (the UX review of the redesign,
   2026-11-17). (applied tests)
 - On a phone, Jobs' search takes its own row under the To apply / Applied switch once the list
