@@ -126,7 +126,11 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   words keep a reading measure of about 70 characters (the redesign's second round, 2026-11-17:
   a three-line hint made the box a block on a phone). Why: an empty Chat said "Ask anything" three ways (the screen review,
   2026-11-11), and with its box under the header the box sat mid-screen on a phone and jumped to
-  the foot with the first message (the redesign, 2026-11-16). (empty chat tests)
+  the foot with the first message (the redesign, 2026-11-16). (empty chat tests) On a phone the
+  Chat reaches the tab bar exactly, its box above it, and the page's foot ("Private to you")
+  starts under the first screen, never behind the tab bar (the redesign's second round,
+  2026-11-17: an empty Chat ran 945px in an 844px window, its foot behind the tab bar; tired
+  person test: the Chat footer).
 - The frame is calm. On a phone the tab bar is the card colour with a hairline on top: the tab
   you are on has a soft clay capsule behind its icon, ringed in clay, its icon in clay and its
   name in ink at 600, the others grey at 400; To do's count is a clay badge at its icon's top

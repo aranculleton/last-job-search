@@ -1342,6 +1342,10 @@ dialog.work-sheet { position: fixed; inset: auto 0 0 0; margin: 0; width: 100%; 
 /* As tall as the window under the header as it is drawn (app.js, fitTop), never taller: opened
    at its end, a Chat taller than that slid its first words under the header. */
 .talk { display: flex; flex-direction: column; gap: 12px; min-height: calc(100dvh * var(--tz) - var(--top-real, 56px) - var(--tabs-h) - 48px - env(safe-area-inset-bottom, 0px)); }
+/* On a phone it reaches the tab bar exactly, so the page's foot starts under the first screen,
+   never under the tab bar on it: "Private to you" sat behind the tab bar and its tail peeked out
+   (the redesign's second round, 2026-11-17). */
+@media (max-width: 759px) { .talk.sec { min-height: calc(100dvh * var(--tz) - var(--top-real, 56px) - var(--tabs-h) - 8px - env(safe-area-inset-bottom, 0px)); } }
 .talk-form { margin-top: auto; position: sticky; bottom: calc(var(--tabs-h) + env(safe-area-inset-bottom, 0px) + 8px); z-index: 5; background: var(--bg); padding-block: 8px; display: grid; gap: 8px; }
 @media (min-width: 760px) { .talk { min-height: calc(100dvh - 120px); } .talk-form { bottom: 0; padding-bottom: 16px; } }
 /* No messages yet: the box at the foot where it stays once there are messages, its starters
