@@ -47,7 +47,7 @@ def test_a_booking_not_confirmed_says_so_and_a_call_called_off_goes_at_once(run,
         {"hash": "interviews", "read": _row(CALL)},
         {"hash": "interviews", "read": _row(SCREEN)},
         {"hash": "brief", "eval": "[...document.querySelectorAll('#main .bp-up-row')].map((r) => r.innerText)"},
-        {"hash": "interviews", "click": "The call is off: Call with Bea (Harbourline Bank)",
+        {"hash": "interviews", "open": "up-more:" + CALL, "click": "The call is off: Call with Bea (Harbourline Bank)",
          "eval": "!!document.querySelector('#main [data-item=\"%s\"]')" % CALL},
     ])
     assert not got["errors"], got["errors"]
@@ -69,7 +69,7 @@ SUBMIT_DAY = ("(() => { const f = document.querySelector('#main [data-k=\"fix-in
 def test_a_new_day_and_a_call_can_each_be_marked_not_confirmed_yet(run, tmp_path):
     page = _write(tmp_path, "page", _model())
     got = run("engine", html=page, viewport=WIDE, clock=CLOCK, fake={"canSend": "available"}, steps=[
-        {"hash": "interviews", "click": "Change the day: Phone screen: Larkspur Retail", "eval": SUBMIT_DAY},
+        {"hash": "interviews", "open": "up-more:" + SCREEN, "click": "Change the day: Phone screen: Larkspur Retail", "eval": SUBMIT_DAY},
         {"hash": "contacts", "click": "Change the call with Bea",
          "eval": "(() => { const d = document.querySelector('dialog[open]'); const c = [...d.querySelectorAll('label')].find((l) => l.textContent === 'Not confirmed yet');"
                  " const box = document.getElementById(c.htmlFor); const was = box.checked; box.click(); return was; })()"},

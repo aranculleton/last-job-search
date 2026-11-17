@@ -45,7 +45,9 @@ def _busy_week():
 def test_this_weeks_work_leads_and_the_funnel_is_said_with_what_is_usual(run, tmp_path, vp):
     got = _go(run, tmp_path, [{"hash": "progress", "eval": LOOK}], vp, model=_busy_week(), clock=T)
     seen = got["after"][0]["eval"]
-    assert seen["sum"] == "This week: 5 applied, 3 messages sent.", seen
+    # What was done so far leads, this week's own work after it (the UX review of the redesign,
+    # 2026-11-17: "This week: 0 applied." led fourteen applications and three interviews).
+    assert seen["sum"] == "14 applied, 3 interviews so far. This week: 5 applied, 3 messages sent.", seen
     assert seen["small"].startswith("Next step:"), seen
     assert "a few in every 100 reach an interview" in seen["funnel"], seen
     # What is usual, under the funnel; its numbers are the funnel's own, said once there:

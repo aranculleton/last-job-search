@@ -157,7 +157,8 @@ next?" in its first lines, and nothing asks for a decision a default could make.
 - **A panel uses the room its row gives it**, never content packed at the top over a hole
   before its pills. Worked out from what is drawn (`fitAir`), never a height tuned to one
   window, and only room the panel already has: a list's own small heading where it fits
-  (Jobs' "New, best fit first" under its drafts' line), a short list's rows each in a soft box
+  (Jobs' "Best match" under its line of applications ready to send, "2 applications ready to
+  send", the person's words rather than "drafts ready to apply"), a short list's rows each in a soft box
   as Coming up's are, the rows a step of the spacing scale further apart up to 24px, and past
   that the pills a step under what they open, the spare room at the panel's foot. Your
   progress's chart grows into its room, up to 160px. (the maintainer, 2026-11-07: "u see how
@@ -171,7 +172,10 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   said as counts, never a cause. The weeks are applications and messages sent, the two chart
   colours, each named by a swatch in the line under them; one series where the person only
   does one. Its axis steps by 1, 2 or 5 times a power of ten, five lines at most, whatever a week
-  holds (a week of 400 drew 42 numbers on top of each other, 2026-11-11). Progress says the same, its "Each week" card open on its chart, every fold in it
+  holds (a week of 400 drew 42 numbers on top of each other, 2026-11-11). Progress leads with what the person has done so far ("14 applied, 3 interviews so far."), this
+  week's own work after it once there is some ("This week: 5 applied, 3 messages sent."), never
+  "This week: 0 applied." over fourteen applications (the UX review of the redesign, 2026-11-17),
+  and its every application sits in a card on a computer as on a phone. It says the same, its "Each week" card open on its chart, every fold in it
   with the chevron Settings' rows use (folded, it read as a heading over an empty box, the
   review, 2026-11-10). (the maintainer, 2026-11-10: "not make it look like im
   doing nothing"; progress glance tests)
@@ -189,10 +193,15 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   Tamsin") keeps its underline. "Why" and "Details" are quiet disclosures, the word in the ink
   with a chevron that turns when open. Why: underlines on every name and fold read as a page
   of errors (the redesign, 2026-11-16). (action-row test: a link inside a sentence)
-- A job's fit is a ring round its number, drawn as far round as the fit goes in its band's
-  colour (green strong, blue good, grey below), the number in the ink and "Fit 84 out of 100"
-  said to a screen reader; never red. Why: a bare "84" in a tinted blob was read as nothing
-  (the usability review, 2026-11-16).
+- A job's fit is one ring wherever a fit is shown (a job's card, the Brief's jobs, a sheet's
+  rows; app.js `fitRing`, app.css `.fit-ring`): its number in the ink inside, drawn as far round
+  as the fit goes, green for a strong fit and grey below it (the muted grey for good, the edge
+  grey under that), never blue, which is for work in progress and focus, and never red; 36px on
+  a card, 28px (`.sm`) in a row with "fit" after it ("79 fit", never "Scored 79"); "Fit 84 out
+  of 100, strong" is its own name to a screen reader. Why: a bare "84" in a tinted blob was read
+  as nothing (the usability review, 2026-11-16), and the Brief's green pill, the card's ring and
+  the sheets' "Scored 79" were three ways to say one number (the redesign, phase 2,
+  2026-11-17). (fit ring test)
 - Two devices that said different things about an application are asked as one plain
   question, "Did you apply to Quayside Foods?" with "Yes, I applied" and "Not yet", each
   answer the engine's own action. Why: "Two answers about Quayside Foods: Your phone said
@@ -200,13 +209,27 @@ next?" in its first lines, and nothing asks for a decision a default could make.
 - Jobs is one list of the jobs you might apply to, each once at its own stage, and Applied beside
   it. A drafted job stood in Found and again in Drafts, and acting on it meant flipping tabs: now a
   drafted job is its draft's card, carrying the job's fit and reasons, a job being drafted shows
-  its progress, and a find offers Draft this; drafts first, then finds by fit; the tab, the
-  summary, the menu and the Brief count the same two things, drafts to send and jobs to look at.
-  A posting that has closed waits under the list ("1 closed: Show"). (jobs page tests)
+  its progress, and a find offers Draft this. The list reads in its stages, each under a small
+  heading once there are two (Ready to send, Being written, New), best fit first within each;
+  the tab, the summary, the menu and the Brief count the same two things, drafts to send and
+  jobs to look at. Every "Did you apply to ...?" waits in one fold at the head of the list,
+  closed until opened, "2 jobs to confirm: did you apply?", its cards the cards they are
+  anywhere, and a draft asking it offers no "Apply on their site" while it is open. A posting
+  that has closed waits under the list ("1 closed: Show"), as do the jobs you hid ("1 you hid:
+  Show") and what the search's rules left out ("41 that did not fit: Show"). Why: the first
+  screen was two "Did you apply" questions, then cards scored 71, 66, 79 and 84 with nothing to
+  say the first were drafts, and "set aside" and "left out by the search" read as the page's
+  doing (the UX review of the redesign, 2026-11-17). (jobs page tests, jobs fold test)
+- Applied is ordered by what comes next, the nearest first: an interview by its day, then a
+  follow-up by its day, then the rest newest first; "I heard back" is a quiet control beside a
+  card's next step. Why: the nearest interview (Wed 28 Oct) stood under a later one (Wed 4 Nov),
+  and five cards each ended in an equal grey "I heard back" (the UX review of the redesign,
+  2026-11-17). (applied tests)
 - On a phone, Jobs' search takes its own row under the To apply / Applied switch once the list
   is long: beside it the switch was squeezed unreadable (the review, 2026-11-05). Every other
   control row stays one row.
-- Jobs' header is the same on both tabs: its title, its one short line and when it searched, with
+- Jobs' header is the same on both tabs: its title, its one short line (one line on a computer:
+  what closes soon is said on its own card, never a second sentence) and when it searched, with
   Find jobs and then "Add a job" and your resume as soft pills beside it, as Contacts'. What
   Claude is doing is the header's work pill and each card's own line, never a line here. While
   a search runs, Find jobs is the soft pill of it, "Finding jobs · about 5 min left" in its
@@ -221,8 +244,14 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   each link naming what it opens). More holds only the rare actions; a card with none has no More.
   The last fact, "Why" and the pencil keep together at the line's end, never "Why" or the
   pencil alone on a line, and a
-  draft's lines are a card's 8px apart, as a find's are (2026-11-10). (jobs page tests, layout
-  16, room test)
+  draft's lines are a card's 8px apart, as a find's are (2026-11-10). Each fact is kept whole, a
+  line breaking only at a dot ("Posted 5 / days ago" broke mid-phrase). On a phone the facts are
+  two lines at most: where it is (the employer, the town, how it is worked), cut short with "..."
+  if it must be, then the pay and the closing day, "Why" at the end; when it was found, and when
+  it was posted where it has a closing day, are its details' "When" row, and the pencil that
+  corrects its title, pay or place is its details' last line, in words ("Change the title, pay or
+  place"). Why: three and four lines of facts on a phone (the redesign, phase 2, 2026-11-17).
+  (jobs page tests, layout 16, room test)
 - A dot between facts never starts or ends a line, and a day said in words ("Sun 20 Sept") is
   never broken over two: a dot is held to the word after it, and one a line would still start
   or end with goes out of sight (app.js `wordsAdd`, `sepFit`). A file's name or the page's
@@ -231,10 +260,12 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   row's "· Recruiter" under its name, and a name broken after its 41st letter (the screen
   review, 2026-11-11). (overlap test: separator, crushed)
 - A Jobs card's actions are the one row of pills of Buttons, below: one filled next step, two soft
-  pills at most, then More. What was checked is a tick and the documents as small chips, each
-  with its pencil ("All checks passed: [CV 1 page ✎] [letter 1 page ✎]", the engine's own parts,
-  kept whole each, under the words on a phone; the redesign, 2026-11-16: bare pencils on the
-  line read as stray marks); the pencils open the Tweak panel; the
+  pills at most, then More. What was checked is the documents themselves, a row each in a soft
+  well, a hairline between: its icon, its name ("CV", "Cover letter"), "1 page · checked", then
+  Open (the file, where it is on the page) and its pencil, 36px (the redesign, phase 2,
+  2026-11-17: grey capsules "CV ✎ letter ✎" after "All checks passed:" read as tags, and before
+  them bare pencils on the line read as stray marks); the one made for a person says only that
+  its checks passed. The pencils open the Tweak panel; the
   pencil at the end of a job's facts corrects its title, pay or place, code only. What Claude can
   do by itself is never a button: a draft's remake after a check with its fix in hand, and its
   files, are queued by the view, and the card says what Claude is doing. Every control that wakes
@@ -251,19 +282,20 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   a grey pill on its row in Coming up and on the Brief; the box of the same words is there
   wherever its day is given, and booked again without it, it is confirmed. Why: a day only
   asked for read as fixed (the maintainer, 2026-11-05). (not-confirmed tests)
-- A Coming up row is what it is first, read before its time (its title semibold), one line
-  under it saying what it is and whether its prep is ready ("Interview · Supply Chain Analyst ·
-  Prep ready"), its time in a steady column of its own (on the left on a computer, a small line
-  over the title on a phone), and its tools as one group, the calendar first so it lines up down
-  the list, then the pencil, the trash in its own place at the row's end 16px from them. A row
-  with no time yet says so in the time's column as a quiet dashed capsule, "Add the time", an
-  empty slot to fill rather than a button squeezed in. Why: rows led with "13:00", icons floated
-  with gaps where one was missing, and the trash sat 4px from the calendar (the redesign,
-  2026-11-16).
-  On a phone the title is drawn its own height and reaches its tap down into that line, whose
-  own link is drawn over the reach. Why: a line each, each its own 44px, made a row of three
-  short lines 190px tall, and the calendar moved a place on every row with a trash (the
-  maintainer, 2026-11-10: "inline and things are good"). (room test)
+- Coming up is a card a day: under the day ("Wed 28 Oct", with a "Today" or "Tomorrow" capsule
+  beside it) one card of its rows, a hairline between them inset 16. A row is its time in a
+  steady 64px column (tabular, semibold; "End of day" and "All day" in the quiet small words),
+  what it is in a card title's size, one line under it saying what kind it is with a chip for
+  its prep ("Prep ready" green, "No prep yet" grey), and one More at its end (36px, 44 on touch)
+  holding Add to your calendar, Change the day and taking it off: nothing reserves room for a
+  tool a row does not have. The whole row opens what it is. Only the next interview whose prep
+  is missing carries "Prepare me" on its row (a practice day leads with "Practise 3 questions",
+  as To do does); a row with no time yet has a soft "+ Add the time" under what it is. Why:
+  seven cards under day headers, icons floating mid-card where a missing trash left its slot
+  empty, rows 87px tall with an inline pill against 68, and titles smaller than the same
+  interview's on To do (the redesign, phase 2, 2026-11-17). On a phone what a row is and its
+  chip share the line under its title where they fit (the maintainer, 2026-11-10: "inline and
+  things are good"). (room test, coming up tests)
   A time from another zone ("15:00 Toronto time (20:00 here)") wraps inside its own column,
   the time here kept whole under the person's clock, and the column is wider on every row of
   the list alike, so the rows still line up. Why: held to one line it ran under the title, over

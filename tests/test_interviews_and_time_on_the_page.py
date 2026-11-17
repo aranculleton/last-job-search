@@ -214,7 +214,7 @@ def test_settings_says_your_time_zone_apart_from_the_brief(run, tmp_path):
 
 def test_something_added_stays_in_coming_up_once_claude_has_saved_it(run, tmp_path):
     got = _go(run, tmp_path, [
-        {"hash": "interviews", "click": "Add something", "exact": True},
+        {"hash": "interviews", "click": "Add a date", "exact": True},
         {"click": "Something else: a call, a test, a careers fair", "exact": True},
         {"fill": {"What it is": "Coffee with Ivo", "The time": "14:00"}, "submit": True, "read": "#main"},
         {"receipts": True, "read": "#main"},
@@ -227,7 +227,7 @@ def test_something_added_stays_in_coming_up_once_claude_has_saved_it(run, tmp_pa
 
 def test_an_interview_booked_here_is_in_coming_up_at_once(run, tmp_path):
     got = _go(run, tmp_path, [
-        {"hash": "interviews", "click": "Add something", "exact": True},
+        {"hash": "interviews", "click": "Add a date", "exact": True},
         {"click": "An interview", "exact": True},
         # A few applications: a button each, the one tapped going straight on (DESIGN.md).
         {"click": "Senior Supply Chain Analyst at Larkspur Retail", "within": "dialog", "exact": True},
@@ -307,7 +307,7 @@ def test_i_have_an_interview_lists_those_interviewing_first_in_one_list(run, tmp
                  status="applied", rev="m%d" % n) for n in range(60)]
     model["applications"] = model["applications"] + apps
     got = _go(run, tmp_path, [
-        {"hash": "interviews", "click": "Add something", "exact": True},
+        {"hash": "interviews", "click": "Add a date", "exact": True},
         {"click": "An interview", "exact": True, "read": "dialog",
          "eval": "(() => { const s = document.querySelector('dialog select'); return s ? [s.querySelectorAll('option').length, s.querySelector('optgroup').label, document.querySelectorAll('dialog input[type=radio]').length] : null; })()"},
     ], model=model)
@@ -318,7 +318,9 @@ def test_i_have_an_interview_lists_those_interviewing_first_in_one_list(run, tmp
 def test_the_calendar_sheet_says_a_phone_gets_a_zip_and_what_is_quicker(run, tmp_path):
     # Interviews 27: a page may save a zip, never an .ics, and a phone shows it as a zip.
     got = _go(run, tmp_path, [
-        {"hash": "interviews", "click": "Add to your calendar: Phone screen: Larkspur Retail", "exact": True, "read": "dialog"},
+        # Under the row's one More (the redesign, phase 2, 2026-11-17).
+        {"hash": "interviews", "open": "up-more:up-app-larkspur-supply-phone-screen-2026-10-28",
+         "click": "Add to your calendar: Phone screen: Larkspur Retail", "exact": True, "read": "dialog"},
     ])
     assert "On a phone it arrives as a zip, so Google Calendar or Copy the details is quicker there." in got["after"][0]["dialog"]
 

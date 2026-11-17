@@ -3145,10 +3145,13 @@
   // The pencil on a job's line of facts: its title, pay and place as the person corrects them,
   // in place, saved at once (job.edit, code only: no gauge). What a search read can be wrong
   // (the maintainer, 2026-11-05).
-  function jobPencil(r) {
+  function jobPencil(r, worded) {
     const key = "job:" + r.id;
     const open = S.penOpen.has(key);
-    return btn("", () => { if (S.penOpen.has(key)) S.penOpen.delete(key); else S.penOpen.add(key); scheduleRender(); },
+    const flip = () => { if (S.penOpen.has(key)) S.penOpen.delete(key); else S.penOpen.add(key); scheduleRender(); };
+    if (worded) return btn(open ? "Done changing" : "Change the title, pay or place", flip, {kind: "secondary", small: true, icon: "tweak", key: "jobpen:" + r.id, pressed: open,
+      aria: (open ? "Done changing " : "Change the details of ") + txt(r.company) + ", " + txt(r.title)});
+    return btn("", flip,
       {kind: "quiet icon-only", small: true, icon: "tweak", key: "jobpen:" + r.id, pressed: open, aria: (open ? "Done changing " : "Change the details of ") + txt(r.company) + ", " + txt(r.title)});
   }
   function jobPen(r) {
@@ -7082,7 +7085,9 @@
     if (r.deadline) {
       const d = dayDiff(r.deadline);
       const soon = d !== null && d <= 7;
-      rest.push([["Closes " + fmtDay(r.deadline), soon && d >= 0 ? h("span", {class: "f-rel"}, " (" + relDay(r.deadline) + ")") : null], "f-close" + (soon ? " soon" : "")]);
+      // On a phone without its weekday ("Closes 31 Oct"), so the pay and the day share a line.
+      rest.push([["Closes ", h("span", {class: "f-long"}, fmtDay(r.deadline)), h("span", {class: "f-short"}, fmtDayMonth(r.deadline)),
+        soon && d >= 0 ? h("span", {class: "f-rel"}, " (" + relDay(r.deadline) + ")") : null], "f-close" + (soon ? " soon" : "")]);
     }
     const ref = referralAt(r.company, r);
     const draft = () => (ref ? confirmApplied([r], () => askDraft([r]), "draft") : askDraft([r]));
@@ -7166,7 +7171,11 @@
     // The rows about the job are its details, a fold of their own from the end of its line of
     // facts ("Why": the score is already beside the title, and a card holds 30 words at most);
     // More is the last part, the rarer actions (2026-11-05).
-    const fold = infoFold("job:" + r.id, extra.slice(0, -1));
+    // On a phone the pencil that corrects its title, pay or place is the last line of its
+    // details, in words: at the end of the facts it took the room the closing day needed and
+    // pushed the line to three (the redesign, phase 2, 2026-11-17).
+    const penRow = live && !pending && phoneNow() ? h("div", {class: "m-pen"}, jobPencil(r, true)) : null;
+    const fold = infoFold("job:" + r.id, extra.slice(0, -1).concat([penRow]));
     const m = moreSplit("job:" + r.id, about, extra.slice(-1), true);
     const notesTone = asks.length ? "warn" : closedAlert ? "bad" : alertsOf(r).length && live && !pending ? (ALERT_TONE[txt(alertsOf(r)[0].kind)] || "warn") : word[1] && word[1] !== "ok" && word[1] !== "info" ? word[1] : null;
     return card("article", {class: "card job st-" + seg(st) + (pending ? " is-marked" : "") + (S.selecting ? " selecting" : "") + (notesTone ? " edge-" + notesTone : ""), "aria-labelledby": hid, "data-item": r.id},
@@ -7184,7 +7193,7 @@
         // dot ending the line before (the screen review, 2026-11-11).
         jobFactsLine(h("bdi", {class: "co"}, employerLink(r.company, "job:" + r.id, r.title)), where, rest,
           h("span", {class: "why-pen"}, r.score != null ? fold.toggle("Why", "Why it scored " + txt(r.score) + ": " + about) : fold.toggle("Details", "Details: " + about),
-          live && !pending ? jobPencil(r) : null)),
+          live && !pending && !phoneNow() ? jobPencil(r) : null)),
         live && !pending ? jobPen(r) : null,
         fold.panel,
         failedNote, draftLine,
@@ -7827,7 +7836,7 @@
       const n = pagesOf(k);
       const key = "doc-open:" + a.id + ":" + k;
       return h("li", {class: "doc-row", "data-doc": k}, icon("k-application"),
-        h("span", {class: "doc-words"}, h("span", {class: "doc-name"}, name), h("span", {class: "doc-meta"}, [n ? plural(n, "page", "pages") : "", "checked"].filter(Boolean).join(" \u00b7 "))),
+        h("span", {class: "doc-words"}, h("span", {class: "doc-name"}, name), " ", h("span", {class: "doc-meta"}, [n ? plural(n, "page", "pages") : "", "checked"].filter(Boolean).join(" \u00b7 "))),
         h("span", {class: "doc-acts"}, f && f.asset ? btn("Open", () => download(f, key), {kind: "quiet", small: true, key, aria: "Open " + lc1(name) + ": " + txt(f.name)}) : null,
           docPencil(a, k)), noteFor(key));
     }));

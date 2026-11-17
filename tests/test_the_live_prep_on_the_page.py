@@ -119,7 +119,8 @@ def _go(run, tmp_path, model, steps, vp, scheme=None, touch=False):
     return got
 
 
-OPEN = {"hash": "interviews", "click": "Read your prep", "read": "dialog.detail"}
+# Coming up's row is its own tap to the prep (the redesign, phase 2, 2026-11-17).
+OPEN = {"hash": "interviews", "open": "up-go:up-app-larkspur-supply-phone-screen-2026-10-28", "read": "dialog.detail"}
 VISIBLE = "(el) => !!el && el.checkVisibility() && el.getClientRects().length > 0"
 Q1 = '[data-lpq="q1"]'
 # Where a tap went, once its smooth scroll has brought it to the top of the screen.

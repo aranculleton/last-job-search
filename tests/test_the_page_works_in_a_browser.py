@@ -413,7 +413,8 @@ def test_every_section_full_shows_its_items_in_plain_words(run, pages):
     # question it waits under More: never a rose "Before you apply:" line (2026-11-05).
     assert "Before you apply:" not in jobs and "Juno at Larkspur Retail replied last week" not in jobs
     # A posting that has closed waits under the list, one tap away (2026-11-05).
-    assert "1 closed: Show" in jobs and "This posting has closed." not in jobs and "41 left out by the search" in jobs
+    # What the search's rules left out is said in the person's words (the redesign, phase 2).
+    assert "1 closed: Show" in jobs and "This posting has closed." not in jobs and "41 that did not fit: Show" in jobs
     assert "Tamsin has put your name forward at Copperleaf Pay" in jobs
     drafts = r["drafts"]["text"]
     # Asked as one plain question since the redesign of 2026-11-16: "Two answers about Quayside
@@ -1466,7 +1467,9 @@ def test_a_busy_week_is_a_few_checklists_not_a_card_each(run, pages):
     # The switch changes what the funnel counts; its numbers are said once, in it, and the
     # line under it says what is usual (the screen review, 2026-11-11).
     assert r["progress"]["recent"].startswith("How far applications got") and r["progress"]["recent"] != r["progress"]["all"], r["progress"]
-    assert r["progress"]["head"].startswith("This week:"), r["progress"]    # U-7, 2026-11-10
+    # What was done so far leads, this week's own work after it once there is some (U-7,
+    # 2026-11-10; the UX review of the redesign, 2026-11-17: never "This week: 0 applied.").
+    assert re.match(r"\d+ applied(, \d+ interviews?)? so far\.", r["progress"]["head"]) and "This week: 0 applied" not in r["progress"]["head"], r["progress"]
     assert "Most applications get no reply" in r["progress"]["usual"] and not re.search(r"\d+ applied", r["progress"]["usual"]), r["progress"]
     assert r["bin"]["title"] == "Not for you?" and "No more from Harbourline Bank" in r["bin"]["options"]
     assert r["gauge"] >= 1, "a cost is a gauge of bars, its words on hover"
@@ -1768,11 +1771,10 @@ def test_everything_booked_is_one_tap_from_any_calendar_and_the_brief_shows_the_
     assert all(("here)" in w) == (" time (" in w) for w in r["when"][:3]), r["when"]
     assert "Time not set" not in r["when"], r["when"]
     # Each interview says whether its prep is ready, on its own row only (never on a test
-    # due in the same process): read it from there, or ask for it.
-    # Read your prep is the row's pill, in To do's words (the UX review, 2026-11-10, U-12).
-    assert r["prep"] == ["up-read:up-app-larkspur-supply-phone-screen-2026-10-28=Read your prep",
-                         "up-prep:up-app-copperleaf-payments-recruiter-call-2026-10-30=Prepare me",
-                         "up-prep:up-app-harbourline-risk-second-interview-2026-11-04=Prepare me"], r["prep"]
+    # due in the same process), as a chip; the row is its own tap to the prep, and only the
+    # next interview with none carries "Prepare me" (the redesign, phase 2, 2026-11-17).
+    assert r["prep"] == ["up-prep:up-app-copperleaf-payments-recruiter-call-2026-10-30=Prepare me"], r["prep"]
+    assert r["chips"] == ["Prep ready", "No prep yet", "No prep yet"], r["chips"]
     # One count in the nav, the screen and the Brief.
     assert r["nav"].startswith("7") and r["sum"].startswith("7 things booked or due"), (r["nav"], r["sum"])
     assert "All 7 coming up" in r["upFoot"], r["upFoot"]

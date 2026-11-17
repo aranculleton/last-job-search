@@ -2055,9 +2055,13 @@ S.coming_up = async (a) => {
   r.rows = await page.$$eval('[data-k="up-days"] .up-row', (x) => x.map((e) => e.getAttribute("data-item")));
   r.when = await page.$$eval('[data-k="up-days"] .up-row .up-when', (x) => x.map((e) => e.textContent));
   r.prep = await page.$$eval('[data-k^="up-prep:"], [data-k^="up-read:"]', (x) => x.map((e) => e.getAttribute("data-k") + "=" + e.textContent));
+  r.chips = await page.$$eval('[data-k="up-days"] .up-row .up-sub .state-word', (x) => x.map((e) => e.textContent));
   r.nav = await txt('[data-k="side:interviews"] .navcount');
   r.sum = await txt("#main .summary");
-  // One item into a calendar: the choices, Google's link, the file, and the choice kept.
+  // One item into a calendar: the choices, Google's link, the file, and the choice kept. It is
+  // under the row's one More (the redesign, phase 2, 2026-11-17).
+  await page.locator('[data-k="up-more:up-app-larkspur-supply-phone-screen-2026-10-28"]').click();
+  await turn(page, 2);
   await page.locator('[data-k="cal:up-app-larkspur-supply-phone-screen-2026-10-28"]').click();
   await turn(page, 2);
   const keys = (sel) => page.$$eval(sel, (x) => x.map((e) => e.getAttribute("data-k") || (e.querySelector("[data-k]") || {getAttribute: () => ""}).getAttribute("data-k")));
@@ -2071,6 +2075,8 @@ S.coming_up = async (a) => {
   await page.locator('[data-k="cal-close"]').click();
   await turn(page, 2);
   r.closed = await page.evaluate(() => !document.querySelector("dialog.cal-sheet"));
+  await page.locator('[data-k="up-more:up-call-harbourline-bank-bea-2026-10-29"]').click();
+  await turn(page, 2);
   await page.locator('[data-k="cal:up-call-harbourline-bank-bea-2026-10-29"]').click();
   await turn(page, 2);
   r.firstAfter = (await keys("dialog.cal-sheet .cal-choices > *"))[0] || "";
@@ -2103,6 +2109,8 @@ S.coming_up = async (a) => {
   r.added = store.list("actions/").map((k) => store.get(k)).filter((d) => d.action === "upcoming.add");
   r.saving = await page.$$eval('[data-k="up-days"] .up-row', (x) => x.map((e) => e.textContent).filter((t) => t.includes("Coffee with")));
   // The person's own one taken off.
+  await page.locator('[data-k="up-more:up-ev20261020120000"]').click();
+  await turn(page, 2);
   await page.locator('[data-k="up-rm:up-ev20261020120000"]').click();
   await turn(page, 6);
   r.removed = store.list("actions/").map((k) => store.get(k)).filter((d) => d.action === "upcoming.remove");
@@ -2676,7 +2684,7 @@ S.busy = async (a) => {
   r.settings = await page.evaluate(() => document.getElementById("main").innerText);
   await goto(page, "progress");
   // How far applications got is said in its own card since the UX review of 2026-11-10 (U-7):
-  // the screen's line leads with this week's own work.
+  // the screen's line leads with what was done so far, this week's own work after it.
   // The period's counts are the funnel's own, said once there (the screen review, 2026-11-11):
   // the switch changes what it counts, and the line under it says what is usual.
   const funnel = () => page.evaluate(() => { const f = document.querySelector("#h-funnel"); return f ? f.closest(".chart").textContent : ""; });

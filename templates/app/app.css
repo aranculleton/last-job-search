@@ -581,9 +581,13 @@ details.more.split[open] { flex-basis: auto; }
 .facts .fact, .facts .fact-w { white-space: nowrap; }
 @media (max-width: 759px) {
   .facts.two-part > .facts-a { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .facts.two-part .f-drop, .facts.two-part .f-rel { display: none; }
+  .facts.two-part .f-drop, .facts.two-part .f-rel, .facts.two-part .f-long { display: none; }
+  /* The second line starts at the card's edge: its first dot is out of sight with no room kept
+     for it, as the first line above it is a block of its own and nothing can move up beside it. */
+  .facts.two-part .facts-b .words:has(> .sep-lead:first-child) { padding-right: 0; }
 }
-@media (min-width: 760px) { .m-row.m-narrow { display: none; } }
+.m-pen { display: flex; padding-top: 4px; }
+@media (min-width: 760px) { .m-row.m-narrow, .facts .f-short { display: none; } }
 .warm { background: var(--st-running-bg); color: var(--st-running); border-radius: var(--r-sm); padding: 12px 12px; }
 .warm a { color: inherit; font-weight: 600; }
 .warm-k { font-weight: 600; }
