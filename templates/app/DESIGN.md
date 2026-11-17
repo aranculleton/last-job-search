@@ -629,7 +629,9 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
 - From then the card says where its reply stands, in one line in Claude's work words, read
   the way its work card reads it (Saved, Waiting for Claude, Next, Waiting its turn, Claude is on it
   with the spinner and, after a few seconds, its clock). Read from the tap and its work item,
-  never from this tab's memory, so it is the same after a reload or a live update. Claude's
+  never from this tab's memory, so it is the same after a reload or a live update. A reply not
+  yet made into work joins the end of the line: "Next" only with nothing waiting ahead of it,
+  else "Waiting its turn", as its work item will say. Claude's
   draft lands in that same card, ready to Copy and "I sent it". Why: with ten queued, each
   card shows which are waiting, which is running and which are done.
 - The line has one quiet control. Cancel, while it waits or runs: a tap Claude has not taken

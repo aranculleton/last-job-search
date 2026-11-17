@@ -9037,6 +9037,19 @@
     const next = UNCHANGED_NEXT[o] || "";
     return {words, next, why, line: next || why};
   }
+  // A reply asked for joins the end of the line once its tap is taken (msg.received queues its
+  // work then), so the light work already waiting goes first and the card counts it, as the
+  // reply's own work item will (lightAhead): the tenth of ten replies read "Next" until its work
+  // item reached the page, then "Waiting its turn" (Firefox, the everywhere check, 2026-11-17).
+  // A tap that is work in itself (TAP_WORK) is taken on the chat's next look, ahead of the line.
+  function replyAhead(at) {
+    const a = tapAhead(at);
+    if (!a.after) return a;
+    const here = txt(obj(S.listener).kind) || "cloud";
+    const line = activeWork().filter(([, w]) => txt(w.status) === "queued" && !HEAVY_KINDS.has(txt(w.kind)) &&
+      ((txt(w.to) || "cloud") === here || txt(w.to) === "either"));
+    return line.length ? {after: workName(line[line.length - 1][1]) || a.after, pos: line.length + 1} : {after: a.after, pos: 1};
+  }
   function personGoing(p) {
     const t = replyTap(p);
     const tapAt = t ? txt(t.doc.at).slice(0, 19) : "";
@@ -9086,8 +9099,8 @@
     if (!t || personDraft(p) || personSentHere(p)) return null;
     // Saved here and not yet taken by Claude: shown at once, before Claude has it.
     if (t.state === "saving" || t.state === "saved" || t.state === "claimed") {
-      const ahead = t.state === "claimed" ? {picked: true} : tapAhead(t.doc.at);
-      return {tap: t, words: ahead.picked ? "Starting" : ahead.after ? "Next" : ahead.away ? "No answer yet" : "Waiting for Claude",
+      const ahead = t.state === "claimed" ? {picked: true} : replyAhead(t.doc.at);
+      return {tap: t, words: ahead.picked ? "Starting" : ahead.after ? (ahead.pos > 1 ? "Waiting its turn" : "Next") : ahead.away ? "No answer yet" : "Waiting for Claude",
         line: ahead.picked ? "Claude has picked this up." : ahead.after ? "Saved, after " + quoted(ahead.after) + "." : ahead.away ? "Saved. Claude's helper is not answering, so it waits." : "Saved. Claude drafts your reply next.",
         spin: !!ahead.picked, tone: ahead.away ? "warn" : null,
         // Not taken yet: called off at once, as if never asked.
@@ -9097,7 +9110,12 @@
     // is still yours and the tap is recent, so an old tap says nothing.
     const fresh = now() - (tms(t.doc.at) || 0) < 2 * 3600000;
     const past = ["in_conversation", "call_booked", "referral_in_progress", "converted_to_application", "gone_cold", "closed", "dropped", "stopped"].includes(txt(p.status));
-    if (t.state === "applied" && fresh && !past && !mine) return {words: "Waiting for Claude", line: "Claude drafts your reply next.", spin: false, tone: null};
+    if (t.state === "applied" && fresh && !past && !mine) {
+      // Taken, its work not here yet: behind what runs and waits, said as its work will say it.
+      const ahead = replyAhead(t.doc.at);
+      if (ahead.after) return {words: ahead.pos > 1 ? "Waiting its turn" : "Next", line: "Claude drafts your reply after " + quoted(ahead.after) + ".", spin: false, tone: null};
+      return {words: "Waiting for Claude", line: "Claude drafts your reply next.", spin: false, tone: null};
+    }
     return null;
   }
   // Calling off a reply opens the box under them again: with the words pasted, when Claude never

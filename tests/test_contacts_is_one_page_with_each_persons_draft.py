@@ -128,6 +128,38 @@ def _waiting(model, n=10):
     return out[:n]
 
 
+def test_a_reply_asked_while_others_wait_says_it_waits_its_turn(run, page, model):
+    """A reply asked for while other replies already wait in line joins the end of that line,
+    so its card says "Waiting its turn", never "Next", from the tap to its work item: the tenth
+    of ten read "Next" until its work item reached the page, then "Waiting its turn" (Firefox,
+    the everywhere check, 2026-11-17)."""
+    running, waiting, mine = _waiting(model)[:3]
+    first = mine["first_name"]
+    states = ("(() => { const out = {}; for (const c of document.querySelectorAll('#main ul.people > li[data-item]')) {"
+              " const g = c.querySelector('.going'); if (g) out[c.dataset.item] = g.querySelector('.going-word').textContent; } return out; })()")
+    work = {}
+    for i, (p, st) in enumerate(((running, "running"), (waiting, "queued"))):
+        work["work/reply~" + p["id"]] = {
+            "kind": "reply", "title": "Reply to " + p["first_name"], "to": "either", "args": {"contact": p["id"]},
+            "asked_at": "2026-10-25T18:29:%02dZ" % i, "status": st,
+            "stages": [{"name": "Reading what they said", "est_s": 30}, {"name": "Drafting your reply", "est_s": 60}],
+            "stage": 1 if st == "running" else 0, "stage_at": "2026-10-25T18:29:30Z",
+            **({"claimed_by": "cloud-1", "claimed_at": "2026-10-25T18:29:30Z", "lease_until": "2026-10-25T20:00:00Z"} if st == "running" else {})}
+    got = run("engine", html=page, viewport=WIDE, clock=CLOCK, steps=[
+        {"hash": "contacts", "write": work, "quick": [
+            {"within": _card(mine["id"]), "click": "They replied: paste what %s sent" % first},
+            {"within": _card(mine["id"]), "fill": {"Paste what %s sent" % first: "Thanks %s here, happy to talk." % first}},
+            {"within": _card(mine["id"]), "click": "Draft my reply to %s" % first}], "eval": states},
+        # Its tap taken and its work not on the page yet: still behind the one waiting.
+        {"receipts": True, "eval": states},
+    ])
+    assert not got["errors"], got["errors"]
+    saved, taken = got["after"][0]["eval"], got["after"][1]["eval"]
+    assert saved[waiting["id"]] == "Next", saved
+    assert saved[mine["id"]] == "Waiting its turn", saved
+    assert taken[mine["id"]] == "Waiting its turn", taken
+
+
 def test_ten_replies_pasted_in_a_row_each_show_on_their_own_card(run, page, model):
     """Ten pastes in quick succession: none waits for the one before, each card says where its
     own reply stands (from the tap, then its work item, the same after a reload), and each
