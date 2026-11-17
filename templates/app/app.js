@@ -9997,7 +9997,9 @@
   }
   // A row's one More: a small menu of what is rare for it, each a line in words.
   function upMenuItem(label, fn, key, aria) {
-    return h("button", {type: "button", class: "menu-item", "data-k": key, "aria-label": aria,
+    // In the Tab order in Safari too, which leaves a button out of it unless told (the everywhere
+    // check, 2026-11-17: Tab stayed on the menu's own button and never reached its first item).
+    return h("button", {type: "button", class: "menu-item", tabindex: "0", "data-k": key, "aria-label": aria,
       onclick: (e) => { shutMenu(e.currentTarget.closest("details")); fn(); }}, label);
   }
   function upMenu(u, items) {
@@ -11452,7 +11454,7 @@
     return det("menu:" + key, false, {class: "menu" + (label ? " worded" : "")},
       h("summary", {class: "menu-btn", "data-k": "menu:" + key, "aria-label": label ? null : "More for " + about}, label ? h("span", {}, label) : h("span", {"aria-hidden": "true"}, "⋯")),
       h("div", {class: "menu-panel", role: "group", "aria-label": "More for " + about}, list.map(([label, fn, k]) =>
-        h("button", {type: "button", class: "menu-item", "data-k": "mi:" + key + ":" + (k || label), onclick: (e) => { shutMenu(e.currentTarget.closest("details")); fn(); }}, label))));
+        h("button", {type: "button", class: "menu-item", tabindex: "0", "data-k": "mi:" + key + ":" + (k || label), onclick: (e) => { shutMenu(e.currentTarget.closest("details")); fn(); }}, label))));
   }
   // A menu's item closes its menu and puts the focus on the menu's own button before it does
   // anything: hidden with its menu, the item chosen dropped the focus to nothing, and a sheet it
@@ -12457,7 +12459,7 @@
     const list = arr(items).flat().filter(Boolean);
     if (!list.length && !last) return null;
     if (last) list.push(last);
-    for (const b of list) b.className = "menu-item" + (b === last ? " menu-stop" : "");
+    for (const b of list) { b.className = "menu-item" + (b === last ? " menu-stop" : ""); b.setAttribute("tabindex", "0"); }
     const d = det("menu:" + key, false, {class: "menu worded upd-menu"},
       h("summary", {class: "menu-btn", "data-k": "menu:" + key}, h("span", {}, "Update"), h("span", {class: "sr-only"}, ": " + about), icon("chev-down")),
       h("div", {class: "menu-panel", role: "group", "aria-label": "Update " + about}, list));
