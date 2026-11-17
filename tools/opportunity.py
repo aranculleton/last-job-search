@@ -56,6 +56,7 @@ from company_key import key as company_key  # noqa: E402
 from text_screen import _PAY_LOCAL, entry_years, money_values, salary_range  # noqa: E402
 from prefilter import age_days as _age_days, posted_age  # noqa: E402
 import person  # noqa: E402
+import wants as _wants  # noqa: E402
 
 # --------------------------------------------------------------------------
 # Employer tiers. The point is to spend the candidate's applications on places
@@ -69,10 +70,14 @@ import person  # noqa: E402
 # --------------------------------------------------------------------------
 _E = person.module("employers") if person.exists("employers.py") else None
 _S = person.module("search")
-TIER_1 = set(getattr(_E, "TIER_1", ()))
-YC_AND_BACKED = set(getattr(_E, "YC_AND_BACKED", ()))
-TIER_2 = set(getattr(_E, "TIER_2", ()))
-TIER_3 = set(getattr(_E, "TIER_3", ()))
+# Each set is the one in employers.py joined to the employers the record of what the person
+# wants lifts (profile/wants.json, tools/wants.py, issue 327), which the profile upgrade
+# wants-moved takes the sets into, every entry's lift unchanged.
+_IN = _wants.held_tiers()
+TIER_1 = set(getattr(_E, "TIER_1", ())) | _IN["TIER_1"]
+YC_AND_BACKED = set(getattr(_E, "YC_AND_BACKED", ())) | _IN["YC_AND_BACKED"]
+TIER_2 = set(getattr(_E, "TIER_2", ())) | _IN["TIER_2"]
+TIER_3 = set(getattr(_E, "TIER_3", ())) | _IN["TIER_3"]
 AGENCY = getattr(_E, "AGENCY", None) or re.compile(r"(?!x)x")
 
 

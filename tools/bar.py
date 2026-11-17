@@ -80,14 +80,23 @@ EXCLUDED_OFF = set(getattr(_S, "BAR_EXCLUDED_OFF", ()) or ())
 EXCLUDED_RULES = [r for r in getattr(_S, "BAR_EXCLUDED", []) if r[1] not in EXCLUDED_OFF]
 # Read through the employer key, as every lookup is (company_key.keyed): an entry written by
 # hand in any other form ("north-shore mutual", "acme insurance") matched nothing (2026-11-16).
+# The employers and kinds turned down are compiled from the record of what the person wants
+# (profile/wants.json, tools/wants.py, issue 327) and whatever is still written in the old
+# settings, which reads first, as it did before it was moved.
+import wants as _wants  # noqa: E402
+
 DECLINED = _ck.keyed(getattr(_S, "BAR_DECLINED", {}) or {})
-# Kinds of employer turned down as kinds (search.py BAR_SECTORS_OUT, {kind: the person's words
-# and the day}): one rule on what the employer is, by the person's own catalogue (sector.kind)
-# or by its posting saying so of itself (sector.said_kind), never a list of names. One "no" to
-# a whole sector became about 40 names written by hand into BAR_DECLINED, and an employer of
-# that kind on none of them was never cut (issue 307). tools/wants.py writes it.
-SECTORS_OUT = {_sector.kind_key(k): str(v) for k, v in
-               dict(getattr(_S, "BAR_SECTORS_OUT", {}) or {}).items() if _sector.kind_key(k)}
+for _k, _v in _wants.held_declined().items():
+    DECLINED.setdefault(_k, _v)
+# Kinds of employer turned down as kinds ({kind: the person's words and the day}): one rule on
+# what the employer is, by the person's own catalogue (sector.kind) or by its posting saying so
+# of itself (sector.said_kind), never a list of names. One "no" to a whole sector became about
+# 40 names written by hand into BAR_DECLINED, and an employer of that kind on none of them was
+# never cut (issue 307). tools/wants.py writes it.
+SECTORS_OUT = _wants.held_kinds()
+SECTORS_OUT.update({_sector.kind_key(k): str(v) for k, v in
+                    dict(getattr(_S, "BAR_SECTORS_OUT", {}) or {}).items()
+                    if _sector.kind_key(k)})
 PUBLIC_PRESTIGE, _PRESTIGE_WHY = getattr(_S, "BAR_PUBLIC_PRESTIGE", (_NEVER, ""))
 PENSIONS, _TARGETS_WHY = getattr(_S, "BAR_PUBLIC_TARGETS", (_NEVER, ""))
 NAMED_PUBLIC, _NAMED_WHY = getattr(_S, "BAR_NAMED_PUBLIC", (_NEVER, ""))

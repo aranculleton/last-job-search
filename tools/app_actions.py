@@ -1925,9 +1925,9 @@ def _set_contact(r: Run, status: str, action: str, due: str, note: str) -> dict:
 
 def _decline_employer(company: str, why: str, day: str) -> str:
     """The employer turned down by name through the one writer a chat uses too (tools/wants.py
-    decline): BAR_DECLINED, keyed the way bar.py looks it up, and every list that lifts or
-    searches it (the tier sets, SCRAPE_EMPLOYERS, boards.py), with the person's words and the
-    day. Its key, or "" when it was already there, so an undo never takes away a ruling the
+    decline): the record of what the person wants (profile/wants.json), keyed the way bar.py
+    looks it up, and every list that lifts or searches it (the tier sets, SCRAPE_EMPLOYERS,
+    boards.py), with the person's words and the day. Its key, or "" when it was already there, so an undo never takes away a ruling the
     person made before; "" too for a name the bar could never match."""
     import wants
     try:
@@ -2502,7 +2502,8 @@ def _got_list(key: str) -> list:
 
 def _rule_drop(r: Run) -> dict:
     """A rule taken off from Your rules, through its own writer: an employer turned down by
-    name comes off BAR_DECLINED; a kind of employer ruled out is named in BAR_EXCLUDED_OFF
+    name comes off the record of what the person wants (and BAR_DECLINED, where it is still
+    written the old way); a kind of employer ruled out is named in BAR_EXCLUDED_OFF
     (its patterns are code no page writes); a learned rule is retired (learned.py, kept as
     history). Each holds from the next read of the rules: Jobs at once, a search from the next."""
     import rules_view
@@ -2581,24 +2582,14 @@ def run_round_declined() -> dict:
 def _rule_undrop(r: Run) -> dict:
     v = r.value
     if v.get("kind") == "declined":
-        import profile_set
-        # The setting as written, the employer added back by its key: written back from the
-        # keyed reading (run_round.declined_now), every other entry would be rewritten too.
-        got = profile_set.get("search.py", "BAR_DECLINED")
-        have = dict(got) if isinstance(got, dict) and got is not profile_set.MISSING else {}
-        have[str(v["key"])] = str(v.get("why") or "turned down on the page")
-        profile_set.set_line("search.py", "BAR_DECLINED", have)
-        # Off every list that lifts or searches it again, as turning it down took it.
+        # Back in the record of what the person wants (profile/wants.json), by its key, with
+        # what the bar said before, and off every list that lifts or searches it again, as
+        # turning it down took it.
         import wants
-        wants.tidy(keys={str(v["key"])})
+        wants.put_out(str(v["key"]), str(v.get("why") or "turned down on the page"))
     elif v.get("kind") == "sector_out":
-        import profile_set
         import wants
-        got = profile_set.get("search.py", "BAR_SECTORS_OUT")
-        have = dict(got) if isinstance(got, dict) and got is not profile_set.MISSING else {}
-        have[str(v["sector"])] = str(v.get("why") or "turned down on the page")
-        profile_set.set_line("search.py", "BAR_SECTORS_OUT", have)
-        wants.tidy(kinds={str(v["sector"])})
+        wants.put_kind(str(v["sector"]), str(v.get("why") or "turned down on the page"))
     elif v.get("kind") == "sector":
         _set_list("BAR_EXCLUDED_OFF", [x for x in _got_list("BAR_EXCLUDED_OFF")
                                        if x != v.get("why")])

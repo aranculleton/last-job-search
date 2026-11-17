@@ -817,3 +817,4 @@ Fenmoor Advisory        # invented employer, the same test
 Northwind Pensions      # invented employer, tests/test_what_the_person_turned_down_is_followed_everywhere.py
 Pension Funds           # a kind of employer, not a person: tools/sector.py and the same test
 Harbourline Pension Plan  # invented employer, tests/test_what_the_person_turned_down_is_followed_everywhere.py
+Wexford Capital         # invented employer, tests/test_what_the_person_wants_is_one_record.py

@@ -437,23 +437,34 @@ def page_set_asides(dump_dir) -> tuple[set, set]:
 
 
 def declined_now() -> dict:
-    """The employers turned down by name as the profile holds them now (search.py
-    BAR_DECLINED, each entry by its employer key, as bar.py reads it), read from the file:
+    """The employers turned down by name as the profile holds them now (the record of what the
+    person wants, profile/wants.json, and search.py BAR_DECLINED, each entry by its employer
+    key, as bar.py reads it), read from the files:
     bar.py keeps the copy the round read when it started, so a "No more roles from them" said
     on the page while it ran was never seen by its cut (2026-11-04)."""
+    try:
+        import wants
+        held = wants.held_declined()
+    except Exception:  # noqa: BLE001  no profile, or a record that cannot be read: the setting
+        held = {}
     try:
         import profile_set
         got = profile_set.get("search.py", "BAR_DECLINED")
     except Exception:  # noqa: BLE001  no profile, or no such setting: none
-        return {}
+        return held
     # Not set at all is profile_set.MISSING, itself a dict ({"missing": True}): read as the
     # setting, it turned down an employer called Missing and named it in Your rules.
     if got is profile_set.MISSING or not isinstance(got, dict):
-        return {}
+        return held
     # Each entry read through the employer key, however it is written: one written by hand
-    # ("north-shore mutual", "acme insurance") cut nothing (2026-11-16).
+    # ("north-shore mutual", "acme insurance") cut nothing (2026-11-16). The record of what the
+    # person wants (profile/wants.json, issue 327) holds the rest: an entry still in the
+    # setting reads first, as it did before it was moved.
     from company_key import keyed
-    return keyed({str(k): str(v) for k, v in got.items() if isinstance(v, str)})
+    out = keyed({str(k): str(v) for k, v in got.items() if isinstance(v, str)})
+    for k, v in held.items():
+        out.setdefault(k, v)
+    return out
 
 
 def family(name: str) -> set:

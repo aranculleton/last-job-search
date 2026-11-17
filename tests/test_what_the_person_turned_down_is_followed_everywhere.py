@@ -98,6 +98,18 @@ def _read(prof, name) -> str:
 HAND = {"kestrel mutual": "candidate declined it 2026-11-01: \"not Kestrel\""}
 
 
+def _declined() -> dict:
+    """The employers turned down, as the record of what the person wants holds them (issue 327):
+    the one place a "no" is written now."""
+    import wants
+    return wants.held_declined()
+
+
+def _kinds() -> dict:
+    import wants
+    return wants.held_kinds()
+
+
 def _was(text: str, setting: str):
     """A setting's value in a profile file's text as it was."""
     import ast
@@ -217,8 +229,12 @@ def test_one_command_turns_an_employer_down_everywhere_and_undo_puts_every_part_
                "--said", "not Kestrel, ever", "--today", TODAY, state=str(tmp_path / "state"))
     assert got.returncode == 0, got.stdout + got.stderr
     person.reset()
-    assert profile_set.get("search.py", "BAR_DECLINED") == {
+    assert _declined() == {
         "kestrel mutual": "turned down in a chat, 2026-11-17: \"not Kestrel, ever\""}
+    # Kept in the one record, with the person's words and the day; never in the old setting.
+    import wants
+    assert wants.load()["employers"]["kestrel mutual"]["said"] == "not Kestrel, ever"
+    assert profile_set.get("search.py", "BAR_DECLINED") is profile_set.MISSING
     assert "kestrel mutual" not in profile_set.get("search.py", "SCRAPE_EMPLOYERS")
     assert "Kestrel Mutual" not in profile_set.get("search.py", "SCRAPE_EMPLOYERS")
     assert "Kestrel Mutual" not in profile_set.get("boards.py", "BOARDS")
@@ -238,7 +254,7 @@ def test_one_command_turns_an_employer_down_everywhere_and_undo_puts_every_part_
                state=str(tmp_path / "state"))
     assert got.returncode == 0, got.stdout + got.stderr
     person.reset()
-    assert profile_set.get("search.py", "BAR_DECLINED") == {}
+    assert _declined() == {}
     for name, setting in (("employers.py", "TIER_2"), ("boards.py", "BOARDS"),
                           ("search.py", "SCRAPE_EMPLOYERS")):
         assert set(profile_set.get(name, setting)) == set(
@@ -253,7 +269,7 @@ def test_the_pages_turn_down_goes_through_the_same_command(tmp_path, monkeypatch
     k = app_actions._decline_employer("Kestrel Mutual", "no more roles from them", TODAY)
     assert k == "kestrel mutual"
     person.reset()
-    assert profile_set.get("search.py", "BAR_DECLINED") == {
+    assert _declined() == {
         "kestrel mutual": "turned down on the page, 2026-11-17: no more roles from them"}
     assert "Kestrel Mutual" not in profile_set.get("boards.py", "BOARDS")
     assert "\"kestrel mutual\"," not in _read(prof, "employers.py").split("NOT_TECH")[0]
@@ -274,7 +290,7 @@ def test_a_kind_turned_down_takes_its_employers_off_the_lists_and_comes_off_your
     assert got["kind"] == "pension fund" and got["added"]
     assert got["covers"] == ["harbourline pension plan", "northwind pensions"]
     person.reset()
-    assert profile_set.get("search.py", "BAR_SECTORS_OUT") == {
+    assert _kinds() == {
         "pension fund": "turned down in a chat, 2026-11-17: \"no pension funds\""}
     assert "Harbourline Pension Plan" not in profile_set.get("search.py", "SCRAPE_EMPLOYERS")
     employers = _read(prof, "employers.py").split("NOT_TECH")[0]
@@ -287,11 +303,11 @@ def test_a_kind_turned_down_takes_its_employers_off_the_lists_and_comes_off_your
     done = app_actions._rule_drop(act("rule.drop", {"kind": "your_rule", "id": rows[0]["id"],
                                                     "drop": rows[0]["drop"]}))
     person.reset()
-    assert profile_set.get("search.py", "BAR_SECTORS_OUT") == {}
+    assert _kinds() == {}
     assert "northwind pensions" in _read(prof, "employers.py").split("NOT_TECH")[0]
     app_actions._rule_undrop(act("rule.undrop", {}, done["undo"]["value"]))
     person.reset()
-    assert list(profile_set.get("search.py", "BAR_SECTORS_OUT")) == ["pension fund"]
+    assert list(_kinds()) == ["pension fund"]
     assert "northwind pensions" not in _read(prof, "employers.py").split("NOT_TECH")[0]
 
 
@@ -306,6 +322,7 @@ def test_a_form_the_bar_would_never_match_is_refused(tmp_path, monkeypatch, said
         wants.decline(said, "no", TODAY)
     assert why in str(e.value) or (why == "no employer" and "employer" in str(e.value)), e.value
     assert profile_set.get("search.py", "BAR_DECLINED") is profile_set.MISSING
+    assert _declined() == {}
 
 
 def test_a_name_with_its_legal_form_is_one_employer_and_a_kind_named_as_an_employer_is_refused(
@@ -328,7 +345,7 @@ def test_a_posting_employer_turned_down_on_the_page_is_one_employer_whatever_its
     assert app_actions._decline_employer("Smith, Jones and Partners", "no more roles from them",
                                          TODAY)
     assert wants.decline("Brackwater Assurance / Brackwater Insurance", "no", TODAY)["added"]
-    assert len(profile_set.get("search.py", "BAR_DECLINED")) == 2
+    assert len(_declined()) == 2
 
 
 # ------------------------------------------------------------------ the check

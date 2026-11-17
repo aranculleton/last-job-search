@@ -54,6 +54,7 @@ documents/rounds/tweaks/tweaks.json merge=ljs-state text eol=lf
 # app writes that need none are listed there too (JSON_NAMES), each with why.
 profile/build_versions.json merge=ljs-state text eol=lf
 profile/employers_judged.json merge=ljs-state text eol=lf
+profile/wants.json merge=ljs-state text eol=lf
 profile/asked.json merge=ljs-state text eol=lf
 profile/place.json merge=ljs-state text eol=lf
 profile/routines.json merge=ljs-state text eol=lf

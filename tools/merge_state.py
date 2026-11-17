@@ -166,6 +166,10 @@ JSON_FILES = {
                                     "indent": 2, "sort": "top", "ascii": True},
     # Employers judged against the person's bar (bar.judge): one record an employer, dated.
     "profile/employers_judged.json": {"stamps": ("date",), "indent": 2, "sort": "top"},
+    # What the person wants from a search (wants._save, issue 327): one record an employer and
+    # one a kind of employer, each dated, so two chats each turning one down keep both, and
+    # one taken back on one side stays taken back.
+    "profile/wants.json": {"stamps": ("date",), "indent": 2, "sort": "all"},
     # Every no to a question, dated (profile_upgrades.record_no).
     "profile/asked.json": {"stamps": ("no",), "indent": 2, "sort": "all", "ascii": True},
     # Where the person works, dated when asked (place.record); the day a chat first ran on

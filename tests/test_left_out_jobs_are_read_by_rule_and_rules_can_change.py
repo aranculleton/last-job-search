@@ -308,13 +308,16 @@ def _run(action, target, value=None):
 
 def test_a_rule_is_dropped_or_changed_through_its_own_writer(state, profile):
     rows = {r["id"]: r for r in rules_view.your_rules(TODAY, {})}
-    # An employer turned down comes off BAR_DECLINED, and the undo puts it back.
+    # An employer turned down comes off BAR_DECLINED, and the undo puts it back, into the
+    # record of what the person wants that every stage reads (issue 327).
+    import wants
     one = rows["rule~declined~brindlewood 3"]
     got = app_actions._rule_drop(_run("rule.drop", {"kind": "your_rule", "id": one["id"],
                                                     "drop": one["drop"]}))
     assert "brindlewood 3" not in profile_set.get("search.py", "BAR_DECLINED")
+    assert "brindlewood 3" not in wants.held_declined()
     app_actions._rule_undrop(_run("rule.undrop", {}, got["undo"]["value"]))
-    assert "brindlewood 3" in profile_set.get("search.py", "BAR_DECLINED")
+    assert "brindlewood 3" in wants.held_declined()
     # A kind of employer ruled out, written as patterns no page can edit, is named off.
     sector = next(r for r in rows.values() if r["kind"] == "sector")
     app_actions._rule_drop(_run("rule.drop", {"kind": "your_rule", "id": sector["id"],
