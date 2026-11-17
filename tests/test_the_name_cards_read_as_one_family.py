@@ -106,6 +106,11 @@ TASK_ROW = r"""(() => {
   const c = document.querySelector('#main [data-item="copperleaf_pay_tamsin"]');
   return c ? {line: (c.querySelector('.meta') || {textContent: ''}).textContent.trim(), buttons: [...c.querySelectorAll('.card-actions > .btn')].map((b) => b.textContent.trim())} : null;
 })()"""
+TASK_JOB = r"""(() => {
+  const c = document.querySelector('#main [data-item="app-copperleaf-payments"]');
+  return c ? {line: [...c.querySelectorAll('p.meta')].map((p) => p.textContent.trim()).find((t) => /Tamsin/.test(t)) || '',
+    buttons: [...c.querySelectorAll('.card-actions > .btn, .card-actions > a')].map((b) => b.textContent.trim())} : null;
+})()"""
 TASK_TODO = r"""(() => {
   const c = document.querySelector('#main [data-item="due-tamsin-resume"]');
   return c ? {title: c.querySelector('.card-title').textContent.trim(), buttons: [...c.querySelectorAll('.card-actions > .btn')].map((b) => b.textContent.trim())} : null;
@@ -116,14 +121,22 @@ def test_what_tamsin_asked_for_is_one_task_in_one_wording_on_every_screen(run, t
     got = _go(run, tmp_path, [
         {"hash": "todo", "eval": TASK_TODO},
         {"hash": "contacts", "eval": TASK_ROW},
+        {"hash": "jobs", "eval": TASK_JOB},
         {"hash": "contacts/" + TAMSIN + "/open", "ready": "!!document.querySelector('dialog.detail[open] .d-person')", "eval": TASK_CARD},
-        {"click": "I sent it: send Tamsin your CV", "within": "dialog[open]", "eval": "1"},
+        {"click": "I sent it: send Tamsin your CV", "within": "dialog[open]", "read": "dialog.sheet[open]"},
+        {"submit": True},
     ], WIDE, clock=T)
-    todo, row, card = (a["eval"] for a in got["after"][:3])
+    todo, row, job, card = (a["eval"] for a in got["after"][:4])
+    assert job and job["line"] == "Send Tamsin your CV." and job["buttons"][:2] == ["Get the CV for Tamsin", "I sent it"], job
     assert todo and todo["title"] == "Send Tamsin your CV" and todo["buttons"][:2] == ["Get the CV for Tamsin", "I sent it"], todo
     assert row and row["line"].startswith("Send Tamsin your CV") and row["buttons"][:2] == ["Get the CV for Tamsin", "I sent it"], row
     assert card and card["what"].startswith("Send Tamsin your CV.") and card["buttons"] == ["Get the CV for Tamsin", "I sent it"], card
-    # I sent it finishes the task: its row is done, the same tap as To do's Done on it.
+    # I sent it finishes the task, the same wherever it is pressed: the CV logged as sent to her
+    # with its file (as Jobs always logged it), and her row about it done.
+    assert "Sent to Tamsin" in got["after"][4]["text"], got["after"][4]["text"][:200]
+    sent = [a for a in got["actions"] if a["action"] == "ready.sent_to_contact"]
+    assert sent and sent[-1]["item"] == "app-copperleaf-payments" and sent[-1]["value"]["contact"] == TAMSIN, got["actions"]
+    assert sent[-1]["value"]["attached"] == "Morgan_Ellis_CV_Copperleaf.pdf", sent[-1]
     done = [a for a in got["actions"] if a["action"] == "due.done"]
     assert done and done[-1]["item"] == "due-tamsin-resume", got["actions"]
 

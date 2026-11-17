@@ -397,8 +397,9 @@ def test_the_briefs_jobs_tile_leads_with_the_drafts_ready_to_apply(run, tmp_path
 
 def test_a_draft_made_for_someone_links_their_name_and_has_no_pill_to_see_them(run, tmp_path):
     # "See Tamsin" stood as a pill row of its own between two lines that named her (the screen
-    # review, 2026-11-11). Her name in "Made for Tamsin" opens her card.
-    look = """(() => { const c = [...document.querySelectorAll('#main .card.app')].find((x) => /Made for Tamsin/.test(x.textContent)); if (!c) return null;
+    # review, 2026-11-11). Her name in "Send Tamsin your CV" (one task in one wording since
+    # 2026-11-17) opens her card.
+    look = """(() => { const c = [...document.querySelectorAll('#main .card.app')].find((x) => /Send Tamsin your CV/.test(x.textContent)); if (!c) return null;
       return {pill: [...c.querySelectorAll('button, a.btn')].filter((b) => /^See /.test(b.textContent.trim())).length,
               link: (c.querySelector('.meta a') || {}).textContent || null}; })()"""
     got = _go(run, tmp_path, [{"hash": "jobs", "eval": look}], PHONE, clock=T)

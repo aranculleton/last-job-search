@@ -421,7 +421,8 @@ def test_every_section_full_shows_its_items_in_plain_words(run, pages):
     # Foods: Your phone said applied at 09:12 ... Which is right?" read as an error.
     assert "Did you apply to Quayside Foods?" in drafts, "a draft's question is on its card, ahead of its other notes"
     assert "Which is right?" not in drafts and "Your phone said applied" not in drafts, "two devices that disagreed are one plain question"
-    assert "Made for Tamsin, who asked for it." in drafts and "I sent it to Tamsin" in drafts
+    # What Tamsin asked for, one task in one wording on every screen (2026-11-17).
+    assert "Send Tamsin your CV." in drafts and "Get the CV for Tamsin" in drafts and "I sent it" in drafts
     assert "put your name forward here" not in drafts, "the referrer's own resume carries no hold"
     # Drafts are cards in Jobs' one list, in their jobs' places: its switch, To apply and
     # Applied (2026-11-05: a drafted job stood in Found and again in Drafts).

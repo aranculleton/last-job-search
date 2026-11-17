@@ -74,10 +74,11 @@ next?" in its first lines, and nothing asks for a decision a default could make.
 - An item's actions are defined once, for every card that shows it (`ivActs` for an
   interview, `canSayReplied` and `theyRepliedBtn` for a person): To do offers what Coming up
   and Contacts offer for the same item, with the same names ("Read your prep" everywhere).
-  What someone asked for is one task in one sentence wherever it shows (To do, Contacts, their
-  card): "Send Tamsin your CV", with Get the CV for Tamsin, then I sent it (`askWords`, `askBtn`,
-  `askSentBtn`; the redesign's second round, 2026-11-17: four screens said "Choose the role",
-  "See the CV for Tamsin" and "Asked for your CV"). An
+  What someone asked for is one task in one sentence wherever it shows (To do, Jobs, Contacts,
+  their card): "Send Tamsin your CV", with Get the CV for Tamsin, then I sent it, which does the
+  same wherever it is pressed: the CV logged as sent to them with its file and their row about it
+  done (`askWords`, `askBtn`, `askSent`; the redesign's second round, 2026-11-17: four screens
+  said "Choose the role", "Made for Tamsin", "See the CV for Tamsin" and "Asked for your CV"). An
   interview's card: its next step and Add to calendar; Practise with Claude, Update my prep and
   a new day under More; they said no and I withdrew in its trash. Two days before and the day
   before, practice is on its face instead of the calendar: "Practise 3 questions" (its prep

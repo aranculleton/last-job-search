@@ -76,13 +76,14 @@ def test_a_person_is_one_card_with_the_referral_in_its_grey_box(run, tmp_path, v
         {"hash": "todo", "read": tamsin, "eval": "[...document.querySelectorAll('#main [data-card]')].filter((c) => /Tamsin/.test(c.textContent) && !c.parentElement.closest('[data-card]')).length"},
         # What she asked for is one task in one wording, its Done "I sent it" once the CV can be
         # got (the redesign's second round, 2026-11-17).
-        {"click": "I sent it: Send Tamsin your CV", "exact": True, "count": tamsin},
+        {"click": "I sent it: Send Tamsin your CV", "exact": True},
+        {"submit": True, "count": tamsin},
     ], vp, clock=T)
     card = got["after"][0]["text"]
     assert got["after"][0]["eval"] == 1, "one card for Tamsin"
     assert "Send Tamsin your CV" in card and "Tamsin has put your name forward at Copperleaf Pay" in card, card
     assert "do not apply cold" not in got["after"][0]["text"].replace(card, ""), "never a card of its own"
-    assert "This posting has closed" not in got["after"][1]["text"], "a closed posting is set aside, never a To do"
+    assert "This posting has closed" not in got["after"][2]["text"], "a closed posting is set aside, never a To do"
     assert [x for x in got["actions"] if x["item"] == "due-tamsin-resume" and x["action"] == "due.done"]
 
 

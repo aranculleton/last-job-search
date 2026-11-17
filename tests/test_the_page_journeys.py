@@ -423,7 +423,8 @@ def test_a_resume_asked_for_is_made_for_that_person_and_logged_with_its_file(run
         {"hash": "todo", "more": "due-tamsin-resume", "click": "Choose the role", "read": "dialog",
          "eval": "[...document.querySelectorAll('dialog option')].map((o) => o.textContent).join('\\n')"},
         {"click": "Cancel", "exact": True},
-        {"hash": "drafts", "click": "I sent it to Tamsin"},
+        # The CV made for her is one task in one wording on every screen: I sent it (2026-11-17).
+        {"hash": "drafts", "click": "I sent it: send Tamsin your CV"},
         {"submit": True},
     ], vp)
     sheet = got["after"][0]["dialog"]

@@ -4991,10 +4991,24 @@
     return d && obj(d.done).action ? d : null;
   }
   function askSentBtn(p, ask, key) {
+    if (!askGet(p, ask, key) || !(askDueRow(p) || ask.made)) return null;
+    return btn("I sent it", () => askSent(p, ask), {kind: "secondary", small: true, key: "asksent:" + key, aria: "I sent it: " + lc1(askWords(p, ask))});
+  }
+  // I sent it, wherever it is pressed: the CV an application was drafted for them is logged as
+  // a message with its file, as Jobs always did (ready.sent_to_contact), and their row about it
+  // is done (To do's Done on it), in one tap; `rows`, To do's rows about them all.
+  function askSent(p, ask, rows) {
     const d = askDueRow(p);
-    if (!d || !askGet(p, ask, key)) return null;
-    return btn("I sent it", () => act([{item: d.id, action: txt(d.done.action), value: {on: todayIso()}, rev: d.rev}], "Sent: " + ask.what + " to " + txt(p.first_name)),
-      {kind: "secondary", small: true, key: "asksent:" + key, aria: "I sent it: " + lc1(askWords(p, ask))});
+    const done = (rows || (d ? [d] : [])).filter((x) => obj(x.done).action)
+      .map((x) => ({item: x.id, action: txt(x.done.action), value: {on: todayIso()}, rev: x.rev}));
+    const name = txt(p.first_name);
+    if (!ask.made) { if (done.length) act(done, "Sent: " + ask.what + " to " + name); return; }
+    const a = ask.made;
+    const file = (arr(a.files).find((f) => f.kind !== "letter") || {}).name;
+    sheet({title: "Sent to " + name, intro: "What you wrote with it, so it is kept with your conversation.",
+      fields: [{id: "text", type: "text", long: true, label: "Your message", value: "Here's my " + noun() + ", as promised. Thank you for passing it on.", required: true, max: 2000}],
+      submit: "Log it", onSubmit: (v) => act([{item: a.id, action: "ready.sent_to_contact", value: {text: v.text, channel: "linkedin_message", on: todayIso(), attached: txt(file) || null, contact: txt(p.id)}, rev: a.rev}].concat(done),
+        "Logged: sent to " + name)});
   }
   // The one date a card about someone shows, in one form everywhere: "first wrote 10 Sep",
   // "replied to you on Sat 12 Sept", "5 days late" and "replied 43 days ago" all described
@@ -5523,7 +5537,7 @@
     const rows = [d].concat(arr(ctx.also)).filter((x) => obj(x.done).action);
     // What someone asked for, once it can be got, ends with I sent it, as on their card (askSentBtn).
     const doneWord = asked && asked.ask.doc && askGet(asked.p, asked.ask, "dueask:" + d.id) ? "I sent it" : txt(done.label) || "Done";
-    const doneBtn = done.action && !busy ? btn(doneWord, () => act(rows.map((x) => ({item: x.id, action: txt(obj(x.done).action), value: {on: todayIso()}, rev: x.rev})), "Done: " + txt(d.title)),
+    const doneBtn = done.action && !busy ? btn(doneWord, doneWord === "I sent it" ? () => askSent(asked.p, asked.ask, rows) : () => act(rows.map((x) => ({item: x.id, action: txt(obj(x.done).action), value: {on: todayIso()}, rev: x.rev})), "Done: " + txt(d.title)),
       {kind: hasWork ? "secondary" : "primary", small: true, pressed: marked, key: "duedone:" + (ctx.where || "") + ":" + d.id, aria: doneWord + ": " + title}) : null;
     // Waiting on them: They replied, as on their card in Contacts (one set of actions a person).
     const who = isPerson(dueContact(d)) ? personById(dueContact(d)) : null;
@@ -8018,7 +8032,11 @@
     const markApplied = () => confirmApplied([a], () => act([{item: a.id, action: "ready.applied", value: {on: todayIso()}, rev: a.rev}], "Marked as applied: " + txt(a.company)));
     const toCopy = (out.text ? 1 : 0) + screen.filter((qa) => !qa.fill && txt(qa.a)).length;
     const toFill = screen.filter((qa) => qa.fill || !txt(qa.a)).length;
-    const fileWord = files.length === 2 ? "Get both files" : files.length === 1 ? "Get the " + (files[0].kind === "letter" ? "cover letter" : noun()) : "Get the files";
+    // Made for someone who asked for it: one task in one wording wherever it shows (askWords):
+    // "Send Tamsin your CV", Get the CV for Tamsin, then I sent it.
+    const askedHere = forWho && txt(a.route) !== "portal" && txt(forWho.id) ? (() => { const p = personById(txt(forWho.id)); const k = p ? personAsk(p) : null; return k && k.made && k.made.id === a.id ? [p, k] : null; })() : null;
+    const fileWord = askedHere && files.length === 1 ? "Get the " + noun() + " for " + txt(forWho.first_name)
+      : files.length === 2 ? "Get both files" : files.length === 1 ? "Get the " + (files[0].kind === "letter" ? "cover letter" : noun()) : "Get the files";
     // Made, but not on the page yet: getting them here is the card's one filled button, never
     // a line under More while "Apply on their site" stood on its face (the walk-through,
     // 2026-11-03). Where a check needs a fix first, the fix is filled and this is beside it.
@@ -8097,9 +8115,12 @@
     const fixOutLine = fixOut ? alertLine(fixOut, {where: "drafts", section: "drafts", item: a.id, bare: true}) : null;
     // Never while "Did you apply?" is open on it: the answer may be that it went already.
     const applyPill = live && !forWho && safeUrl(obj(a.apply).url) && !draftUnmade(a) && !filesWork && !(asks.length && applyAsk(asks[0])) ? applyLink(a.apply, "rapply:" + a.id, applyWhere(a.apply), true, !checkAlert && !asks.length && !tweakPending(a)) : null;
-    const appliedPill = live && !checkAlert && !asks.length ? (forWho ? sentToBtn(a, forWho, getBtn) : j && referredProcess(j) ? null : btn("I have applied", markApplied, {kind: safeUrl(obj(a.apply).url) ? "secondary" : "primary", small: true, key: "rapplied:" + a.id, aria: "I have applied: " + about})) : null;
-    const filesPill = forWho ? null : getBtn;
-    const row = [primary, applyPill, appliedPill, filesPill].filter(Boolean);
+    const appliedPill = live && !checkAlert && !asks.length ? (askedHere ? btn("I sent it", () => askSent(askedHere[0], askedHere[1]), {kind: getBtn ? "secondary" : "primary", small: true, key: "sentto:" + a.id, aria: "I sent it: " + lc1(askWords(askedHere[0], askedHere[1]))})
+      : forWho ? sentToBtn(a, forWho, getBtn) : j && referredProcess(j) ? null : btn("I have applied", markApplied, {kind: safeUrl(obj(a.apply).url) ? "secondary" : "primary", small: true, key: "rapplied:" + a.id, aria: "I have applied: " + about})) : null;
+    const filesPill = forWho && !askedHere ? null : getBtn;
+    // Asked for: getting the CV made for them is the step, then I sent it, as on their card.
+    if (askedHere && getBtn) { getBtn.classList.replace("secondary", "primary"); getBtn.setAttribute("data-primary", "1"); }
+    const row = (askedHere ? [primary, filesPill, appliedPill, applyPill] : [primary, applyPill, appliedPill, filesPill]).filter(Boolean);
     let room = FACE_PILLS - facePills([faceBox, fixOutLine]);
     const kept = [];
     const moved = [];
@@ -8125,6 +8146,7 @@
         fold.panel,
         // Their name opens their card, in its sentence: "See Tamsin" was a pill row of its own
         // between two lines naming her (the screen review, 2026-11-11).
+        askedHere ? h("p", {class: "meta"}, "Send ", itemLink("contacts", txt(forWho.id), txt(forWho.first_name), "madefor:" + a.id), " " + askedHere[1].what + ".") :
         forWho ? h("p", {class: "meta"}, txt(a.route) === "portal" ? "For the portal, naming " : "Made for ", txt(forWho.id) && isPerson(txt(forWho.id)) ? itemLink("contacts", txt(forWho.id), txt(forWho.first_name), "madefor:" + a.id) : txt(forWho.first_name),
           txt(a.route) === "portal" ? " as your referrer." : ", who asked for it.") : null,
         ref && live && !alertsOf(a).concat(jobAlerts).some((x) => x.kind === "referral_hold") ? h("p", {class: "warm"}, itemLink("contacts", ref.id, txt(ref.first_name), "warmapp:" + a.id), " has put your name forward here: ask before you apply yourself.") : null,
