@@ -20,6 +20,10 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Added
+
+- **Every employer has a card of its own.** Tap an employer's name on a job, an application, a person's card or an interview: its card shows your roles there with where each stands, the people you know there and your interviews, and each opens its own card. The same employer is found however its name is written.
+
 ### Fixed
 
 - **Chat's answers read cleanly and never end at "I can't".** The page's own quick answers showed markdown raw, with asterisks around names and "- " before list items, and sometimes said what they could not do instead of passing the question on. Lists and bold now show as they should in every answer, and a question the page cannot answer goes to Claude by itself.
@@ -38,6 +42,10 @@ make sense to somebody whose repo just received it.
 - **A LinkedIn profile read on your computer is not queued a second time.** A read that finished just before midnight was queued again just after, for the same people, because what your computer saved had not reached the cloud yet; the repeat waited for your computer and no other chat could close it. A read finished in the last day now keeps its people off the next one, and a chat in the cloud can close a repeat once every profile in it is shown to be read and saved (issue 318).
 - **In the app maker's own copy, every chat the page's chat starts can file app bugs straight away.** Each fresh page chat, job chat and the chat that starts chats on the computer now attaches the app as well when it starts, so a bug it meets is filed without asking again in that chat. Nobody else's copy is changed: only the app maker's own files app bugs (issue 318).
 - **Saving no longer wakes the page's chat twice.** Every save made a short-lived request on GitHub, and the cloud woke the chat that answers your page twice for each one, a turn spent reading its whole history just to do nothing. Those two notices are now stopped before they reach Claude, so saves stay silent and cheap (issue 272).
+
+### Changed
+
+- **The cards that open from a name are cleaner and easier to read.** An employer's, a person's, an application's and an interview's card now list what they hold as tidy rows: each says where it stands and opens with one tap, the arrow at its end saying so. An application's and an interview's stages run down a timeline, filled once done. On a laptop a card is as tall as what it holds, and its title no longer has a box drawn round it.
 
 ## [4.16.1] - 2026-11-12
 
