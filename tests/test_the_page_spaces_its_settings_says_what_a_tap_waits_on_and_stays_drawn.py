@@ -211,9 +211,11 @@ def _long_brief(tmp_path):
     path = os.path.join(str(tmp_path), "long.html")
     with open(path, "w", encoding="utf-8") as fh:
         fh.write(app_page.standalone(app_page.render(m)))
+    # The live change lands in News: Next is To do's own list since the redesign (2026-11-16,
+    # DESIGN.md, One ranked list), so a brief's own steps changing no longer redraws it.
     view = copy.deepcopy(m["brief"])
-    nxt = next(s for s in view["sections"] if s["kind"] == "next")
-    nxt["items"][0] = dict(nxt["items"][0], text="Reply to Juno at Larkspur Retail today.")
+    nws = next(s for s in view["sections"] if s["kind"] == "news")
+    nws["items"][0] = dict(nws["items"][0], text="Item 0: the central bank held its rate this week, and planning teams expect steadier demand, again today.")
     return path, view
 
 
@@ -232,12 +234,12 @@ def test_a_long_brief_scrolled_fast_on_a_phone_keeps_every_panel_drawn_through_l
     for i, s in enumerate(steps):
         for k, tag, chars in s["panels"]:
             assert chars > 0, ("a panel lost its words", s["what"], k)
-            changed = i >= upd and k == "bp:next"
+            changed = i >= upd and k == "bp:news"
             assert changed or tag == first[k], ("a panel was torn down and built again", s["what"], k)
         if 0 < i <= upd and steps[i - 1]["what"] != "opened":
             assert s["y"] >= steps[i - 1]["y"], ("scrolling down never jumps back up", steps[i - 1], s)
     assert steps[upd]["y"] == steps[upd - 1]["y"] == steps[upd - 1]["max"], ("the page stays where it was", steps[upd - 1], steps[upd])
-    assert "Reply to Juno at Larkspur Retail today." in r["text"], "the panel that changed shows the change"
+    assert "planning teams expect steadier demand, again today." in r["text"], "the panel that changed shows the change"
 
 
 # ------------------------------------------------------------------ Claude's work, 4 November

@@ -543,17 +543,18 @@ def test_the_brief_opens_its_items(run, tmp_path, vp):
     # The Brief is a page of its own (4.3): each line opens the thing it is about.
     got = _go(run, tmp_path, [
         {"hash": "brief", "eval": "(() => !!document.querySelector('#main .brief-page .bp-next'))()"},
-        {"click": "Reply to Juno at Larkspur Retail.", "role": "link"},
-        # The late follow-up leads Today, and its button opens its draft (4.8: Today's one thing
-        # comes again in Next three only where there is room).
-        {"hash": "brief", "click": "See the draft"},
+        # Next is To do's own list since the redesign (2026-11-16, DESIGN.md, One ranked list):
+        # the messages to send, Juno's reply among them, open their card in To do; Today is To
+        # do's first card, the thank-you two days late, with its own button.
+        {"eval": "(document.querySelector('#main [data-k=\"bp-next:send\"]').click(), 1)", "until": "location.hash.startsWith('#todo')"},
+        {"hash": "brief", "eval": "document.querySelector('#main .bp-today .bp-iv .btn.primary').textContent"},
         # The interview this week, its prep ready, is Coming up's row, its prep one tap away
         # (the screen review, 2026-11-11: a step for its prep took it out of Coming up); Today
         # is what has rolled over (2026-11-02: "the most pressing task").
         {"hash": "brief", "click": "Read your prep for Larkspur Retail"},
     ], vp, clock="2026-10-25T07:30:00Z")
     assert got["after"][0]["eval"], "the Brief has its own page, with the next three"
-    assert got["after"][1]["hash"] == "#contacts/larkspur_retail_castellan"
-    assert got["after"][2]["hash"] == "#contacts/fernhill_freight_halloway", got["after"][2]["hash"]   # Wren's card, her draft on it
+    assert got["after"][1]["hash"] == "#todo/grp:send", got["after"][1]["hash"]
+    assert got["after"][2]["eval"] == "Draft the thank-you", got["after"][2]["eval"]
     assert got["after"][3]["hash"].endswith("int-larkspur-supply/open"), got["after"][3]["hash"]
     assert "Larkspur Retail" in got["after"][3]["dialog"]
