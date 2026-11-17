@@ -6939,7 +6939,8 @@
     const inThis = found.concat(loose);
     // A job whose open question is whether it was applied to waits in the fold at the top, with
     // the other "Did you apply" questions: the list leads with what to apply to.
-    const confirming = tab === "new" ? inThis.filter(asksApplied) : [];
+    // While several are being selected every card stays in the list, to be ticked.
+    const confirming = tab === "new" && !S.selecting ? inThis.filter(asksApplied) : [];
     const listed = confirming.length ? inThis.filter((r) => confirming.indexOf(r) < 0) : inThis;
     // Your resume for when nobody named a role: after the jobs, which are what the list is for.
     const cvCard = tab === "new" ? generalResumeCard() : null;
@@ -7022,13 +7023,13 @@
     // "2 jobs to confirm": every "Did you apply to ...?" in one fold, closed until opened, its
     // cards the same cards they are anywhere (a question on its own card, a draft with its
     // question), so they never lead the list.
-    const askTodos = todoItems({each: true}).filter((i) => (i.tab === "jobs" || i.tab === "drafts") && !onCards.has(i.key) && applyAsk(i.need));
+    const askTodos = selecting ? [] : todoItems({each: true}).filter((i) => (i.tab === "jobs" || i.tab === "drafts") && !onCards.has(i.key) && applyAsk(i.need));
     const nAsk = askTodos.length + confirming.length;
     if (nAsk) put(wrap, det("jobs-confirm", false, {class: "band-more confirm-fold"},
       h("summary", {class: "band-more-sum", "data-k": "jobs-confirm"}, h("span", {}, plural(nAsk, "job to confirm", "jobs to confirm"), h("span", {class: "band-more-why"}, ": did you apply?"))),
       h("div", {class: "stack jobs"}, askTodos.map((i) => i.node({where: i.tab, section: i.tab})).concat(confirming.map(lo.render)))));
-    put(wrap, tabTodos("jobs", onCards, (i) => !applyAsk(i.need)));
-    put(wrap, tabTodos("drafts", onCards, (i) => !applyAsk(i.need)));
+    put(wrap, tabTodos("jobs", onCards, (i) => selecting || !applyAsk(i.need)));
+    put(wrap, tabTodos("drafts", onCards, (i) => selecting || !applyAsk(i.need)));
     // One Select several for the whole list: a draft's card takes its box too, its mark
     // ready.applied beside a find's job.applied (2026-11-05).
     S.selectingReady = selecting;
@@ -18637,7 +18638,9 @@
     if (c) c.focus();
   }
   function moveCard(step) {
-    const cards = [...$("main").querySelectorAll("[data-card]")].filter((c) => c.getClientRects().length);
+    // A card in a closed fold is out of sight, though Chrome still lays it out ("2 jobs to
+    // confirm"): j and k pass it by.
+    const cards = [...$("main").querySelectorAll("[data-card]")].filter((c) => c.getClientRects().length && !c.closest("details:not([open])"));
     if (!cards.length) return;
     const ae = document.activeElement;
     const at = cards.findIndex((c) => c === ae || c.contains(ae));

@@ -1676,8 +1676,8 @@ a.navlink, .applylink, .btn.link, .fold .btn.link, .bp-foot a { text-decoration-
      title is drawn its own height and reaches its 44px down into the line under it, never up:
      the prep's link there is drawn over that reach and keeps its own taps, and a 44px title
      line made every row a line of air taller (2026-11-10). */
-  .bp-up-row a.up-link { display: inline-block; position: relative; }
-  .bp-up-row a.up-link::after { content: ""; position: absolute; top: 0; left: 0; right: 0; bottom: calc(20px - var(--target)); }
+  a.up-link { display: inline-block; position: relative; }
+  a.up-link::after { content: ""; position: absolute; top: 0; left: 0; right: 0; bottom: calc(20px - var(--target)); }
   .up-prep .btn.link { margin-block: 0; }
   /* A one-line row is centred in its target, never a line of text over an empty one; a row
      that wraps reads from its start, never centred under itself (the review, 2026-11-10). */
