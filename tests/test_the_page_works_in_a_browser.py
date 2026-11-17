@@ -429,7 +429,8 @@ def test_every_section_full_shows_its_items_in_plain_words(run, pages):
     # Each message on its person's card, and one short summary line (2026-11-04).
     msgs = r["contacts"]["text"]
     assert "7 to send · " in msgs and "sent this week" not in msgs, msgs[:400]
-    assert "LinkedIn InMail" in msgs and "Subject:" in msgs, msgs[:400]
+    # "Paid LinkedIn message", never LinkedIn's own "InMail" (the UX review, 2026-11-17).
+    assert "Paid LinkedIn message" in msgs and "InMail" not in msgs and "Subject:" in msgs, msgs[:400]
     assert "Every application" in r["progress"]["text"] and "earlier, finished" in r["progress"]["text"]
     settings = r["settings"]["text"]
     assert "An update is waiting" in settings and "4.0.1" not in settings
@@ -1837,7 +1838,8 @@ def test_everything_booked_is_one_tap_from_any_calendar_and_the_brief_shows_the_
     assert ("Ready to send" in p["bp:today"] or "Ready to do" in p["bp:today"]) and "Overdue" not in p["bp:today"] and "Rolled over" not in p["bp:today"] and "Harbourline Bank" in p["bp:today"], p["bp:today"]
     shown = [k for k, t in p.items() if "Larkspur" in t and "screen" in t]
     assert len(shown) == 1 and shown != ["bp:today"], shown
-    assert "Juno" in p["bp:next"] and "Juno" not in p["bp:people"], (p["bp:next"], p["bp:people"])
+    # With nobody else waiting, Waiting on you is not drawn (the redesign's second round, 2026-11-17).
+    assert "Juno" in p["bp:next"] and "Juno" not in p.get("bp:people", ""), (p["bp:next"], p.get("bp:people"))
     # Coming up's, in its rows: Next three's "Read the prep" took it out of them while the
     # week strip marked its day (the screen review, 2026-11-11).
     assert r["cards"] and any("Larkspur" in c for c in r["cards"]), r["cards"]

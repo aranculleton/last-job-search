@@ -25,7 +25,13 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   card takes the focus; "Show 1 more" never stays over what it showed. (layout 2, crowd tests,
   fold test)
 - To do's five are what is late or due today first, then the questions; setting-up cards wait
-  behind the fold. The small questions (a yes or a no, a choice of a few) are one card, "4 quick
+  behind the fold. What is not due yet ("Next 7 days", "Later") waits under one fold, "Not due
+  yet (5)", shut until opened whatever today holds: its cards are not today's (open by itself,
+  its chevron said shut over five cards, the UX review, 2026-11-17). With nothing due today To
+  do says so as good news: a soft clay circle with a tick, "Nothing left today", one quiet line
+  and one quiet "See what's coming up" (the Brief's Today the same when it has nothing). Every
+  fold on To do is the one disclosure: its words in the ink at 14/600, a 16px chevron pointing
+  right while shut and down once open, a finger's height on touch. (calm test) The small questions (a yes or a no, a choice of a few) are one card, "4 quick
   answers", always among the five: one question at a time in its grey box with "1 of 4", each
   answered with its own control (answerBox), the next there the moment it is answered.
   (tired-person tests, quick answers test)
@@ -154,8 +160,9 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   draft's in its draft), its trash shown on hover or focus; no Done chip, no Open button.
   (the maintainer, 2026-11-05; Stop Claude tests, compact row test)
 - **A laptop's Brief is one screen.** From 960px wide the Brief's panels are two rows (Today,
-  Coming up and Next; Waiting on you, Jobs, News and the numbers) that share the window's
-  height, with the privacy line and the tip on one last row, so the
+  Coming up and Next; Jobs, News and the numbers, with Waiting on you before them only when it
+  names someone) that share the window's height, with the privacy line and the tip on one last
+  row, so the
   page does not scroll at 1000 by 560, 1280 by 720 or 1440 by 900. Each list shows as many as
   its room holds and gives way below to one, its panel's own "All ..." opening the rest, at
   every width, two columns too: nothing is cut off inside a panel (Next three cut its third step
@@ -163,6 +170,23 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   with no screen of its own, says "2 more" and opens them in place. On a short window (660px
   or less) the numbers are one line under the greeting, opening Progress with its chart. A
   phone scrolls. (the maintainer, 2026-11-05; fit tests)
+  Three panels a row line up with the three above them, and where a short window's row has two
+  (the numbers gone under the greeting), News takes two of the three columns. A panel is as
+  tall as what it holds; only a Brief stretched to the window's foot lines its panels up edge to
+  edge, and no panel is capped in height, so nothing in one is ever cut off (the accessibility
+  review, 2026-11-17: at 300px Next, Waiting on you and Jobs cut their rows under a person's own
+  text spacing). Every panel is a card, News and Your progress too (on the page itself they
+  read as unfinished); a number's tile is the well's paper in light and raised in the dark,
+  where the well vanished; Today is a clay wash in light and, in the dark, a card like the rest
+  under a clay strip (a whole panel of clay read as a muddy block). Today in Coming up's week is
+  a soft clay fill with its day and number in clay, never a ring, which read as a key's focus
+  stuck there (the redesign's second round, 2026-11-17). (fit tests, room tests, calm test)
+- **Waiting on you never says again who Today or Next has**: a person on the messages card in
+  either, named or among its "5 more", is theirs, and with nobody else waiting the panel is not
+  drawn. Next's steps are whole rows to tap, each ending in a chevron, on a phone as on a
+  laptop, and its way to To do says To do's own count, "See all 4", wherever that is at least
+  what the Brief shows of it. Why: four lists answered "what next?" and Waiting on you repeated
+  Marisol, a row of the messages card (the UX review, 2026-11-17). (calm test, room test)
 - A Brief row is a line of words: what it is with its day inside it ("Read the prep for the
   phone screen · Wed 28 Oct, 13:00"), wrapping from its start, never centred and never the day
   a column of its own squeezing the words (the review, 2026-11-10, at the Larger size). (room
@@ -214,7 +238,7 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   of 100, strong" is its own name to a screen reader. Why: a bare "84" in a tinted blob was read
   as nothing (the usability review, 2026-11-16), and the Brief's green pill, the card's ring and
   the sheets' "Scored 79" were three ways to say one number (the redesign, phase 2,
-  2026-11-17). (fit ring test)
+  2026-11-17). (fit ring test, calm test)
 - Two devices that said different things about an application are asked as one plain
   question, "Did you apply to Quayside Foods?" with "Yes, I applied" and "Not yet", each
   answer the engine's own action. Why: "Two answers about Quayside Foods: Your phone said
@@ -427,8 +451,11 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   many are overdue, where any are, and once one is done how far it has gone ("2 of 7 done").
   Why: "7 to send" over "Messages to send (7)" said one number twice (the screen review,
   2026-11-11). The quick answers' "1 of 4" stays: it says which question you are on.
-  On a wide screen a row is one line, its name and how it stands side by side; the row spans
-  the card, its trash at the card's edge (rows stopping short left the trash a column in
+  A row is two lines on every screen, at least 48px tall, a hairline between rows: who it is,
+  with where they work, on the first, one line cut short with "..." rather than wrapped; how it
+  stands (the kind, the day) muted on the second (the redesign's second round, 2026-11-17:
+  "Noor / at Brackenridge / Advisory / First note" ran four lines beside its button). The row
+  spans the card, its trash at the card's edge (rows stopping short left the trash a column in
   mid-card, the screen review, 2026-11-11), and its buttons sit together at its end, just
   before the trash and 16px from it (the redesign, 2026-11-16: 8px from "See the draft" was
   one slip from putting someone away), every row's starting at one edge (the rows share the
@@ -437,9 +464,11 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   the buttons stood in a column halfway across the card with empty room after them and the
   trash alone at the edge, two places to look (the maintainer, 2026-11-12). A row's line of
   facts is one run of words, its dots kept wherever words stand on both sides of them, never
-  a hole mid-line. On a phone the name is one line and where they work the muted line under it,
-  beside the row's button. A row's button and its trash keep one line at any width, the words
-  beside them giving way (at a tablet's width the trash fell under its button, 2026-11-11).
+  a hole mid-line. A row's button and its trash keep one line at any width, the words beside
+  them giving way (at a tablet's width the trash fell under its button, 2026-11-11).
+  "Messages to send (7)" says in one short line under its title what went this week ("3 sent
+  this week."), never a sum to do against a weekly figure and credits left; its time in the
+  calendar, "Set a time to send", waits under its More.
   (layout 8, one-card tests, room test, overlap test: alone)
 - One "?" a card at most, after the last word of its line, and no more than three on a first
   screen. (design test, budget test)
@@ -618,6 +647,16 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   makes it look quite cluttered"), and one filled pill a screen, with each card's next step
   in the semibold weight, says at a glance what to do.
   (action-row test, layout 7)
+- **On To do a card's face is its next step and one more**, then More for the rest: a way to
+  where it lives ("Open in Coming up", "Open in Contacts"), Add to calendar, a time to send it,
+  They replied beside a Done (the redesign's second round, 2026-11-17: "Choose the role · 15 min
+  of Claude · Done · Open in Contacts" ran three lines on a phone, and "Read your prep | Add to
+  calendar | More" was a wall of grey). An interview's Add to calendar leads its More there.
+  A card is tagged by what it is: a thank-you is a "Thank-you", a message, never "Interview"
+  (the UX review, 2026-11-17). Each card's title is a heading one level under what holds it
+  (the screen's h2, a band's h3, an employer's h4), drawn as before (the accessibility review,
+  2026-11-17: To do's titles were paragraphs a screen reader's heading list skipped).
+  (action-row test, calm test)
 - Before any action goes on a card, in this order: is it needed at all (if not, it goes)? Can
   the app do it by itself (then it does, and says so)? Can it merge with another (one
   control)? Only then, where it lives: the card (the next step and at most two others), the
@@ -667,7 +706,13 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
 - More's toggle stays in its row beside the card's other pills, open or shut, and its panel
   opens under the row, on every card. Where the row is too wide for its line, the pill before
   More goes down to the next line with it, never More alone (`moreFit`; under "Practise 3
-  questions" and "Read your prep" on a phone, the screen review, 2026-11-11). Its buttons are one row of pills that wraps only at the
+  questions" and "Read your prep" on a phone, the screen review, 2026-11-11). A gauge is one
+  with its button: a row wraps between a button with its gauge and the next pill, never between
+  the two, the button going down with a gauge that would start a line, and with a gauge before
+  More the pair goes down with it; where the pair fills a line by itself, More takes the next
+  line by itself, the one place More stands alone ("6 min of Claude" went down with More, under
+  the "Prepare me" it belonged to, the redesign's second round, 2026-11-17; calm test, overlap
+  test: alone). Its buttons are one row of pills that wraps only at the
   panel's width, never a line a kind; a note or a link in a sentence follows them. Why: opened
   inside the row it took the whole width and dropped below "I sent it", and a row a kind left
   one button alone on a line (the maintainer, 2026-11-05). (More test)
@@ -830,7 +875,10 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
 
 ## Words and settings
 
-- Plain words: no git, branch, command or config, no file names, no ids.
+- Plain words: no git, branch, command or config, no file names, no ids. A thing is called
+  what a person calls it: a "Paid LinkedIn message", never LinkedIn's "InMail"; "When your brief
+  arrives", never "When it comes"; "Add a date" on the Brief's Coming up; "Set a time to send"
+  for the messages' time in the calendar (the UX review, 2026-11-17). (calm test)
 - One date a card, said one way: a day gone by as "12 Sept", a day ahead with its weekday. A
   card about someone shows the day they wrote (or you did); its corner says only "Overdue".
   What someone asked for leads the card, and its button does it ("Make a CV for Juno").

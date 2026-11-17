@@ -169,16 +169,28 @@ def _checklists():
 
 
 GROWS = r"""(() => [...document.querySelectorAll('#main .g-row')].filter((r) => r.getClientRects().length && r.querySelector('.g-name + p.small')).map((r) => {
-  const mid = (e) => { const b = e.getBoundingClientRect(); return (b.top + b.bottom) / 2; };
   const name = r.querySelector('.g-name'), sub = r.querySelector('.g-name + p.small');
-  return {row: r.dataset.item, oneLine: Math.abs(mid(name) - mid(sub)) < 4};
+  // Its lines are where its words' letters sit (a link's own box can be taller than its line,
+  // a finger's height on a phone): centres more than half a line apart are lines apart.
+  const lines = (e) => { const mids = []; const w = document.createTreeWalker(e, NodeFilter.SHOW_TEXT);
+    for (let t = w.nextNode(); t; t = w.nextNode()) { const g = document.createRange(); g.selectNodeContents(t); for (const x of g.getClientRects()) if (x.width > 0.5) mids.push((x.top + x.bottom) / 2); }
+    return mids.sort((a, b) => a - b).filter((m, i, all) => !i || m - all[i - 1] > 8).length; };
+  const n = name.getBoundingClientRect(), b = sub.getBoundingClientRect(), row = r.getBoundingClientRect();
+  return {row: r.dataset.item, nameLines: lines(name), cut: name.scrollWidth > name.clientWidth + 1 ? getComputedStyle(name).textOverflow : 'whole',
+    under: b.top >= n.bottom - 1 && Math.abs(b.left - n.left) <= 1, tall: Math.round(row.height)};
 }))()"""
 
 
-def test_a_checklist_rows_name_and_state_share_a_line_on_a_wide_screen(run, tmp_path):
-    rows = _eval(run, tmp_path, "todo", GROWS, WIDE)
+@pytest.mark.parametrize("size", [WIDE, PHONE], ids=["wide", "phone"])
+def test_a_checklist_row_is_two_lines_its_name_on_one_and_how_it_stands_under_it(run, tmp_path, size):
+    """The redesign's second round, 2026-11-17: "Noor / at Brackenridge / Advisory / First note"
+    ran four lines beside its button on a phone. On every screen a row is two lines: who, with
+    where they work, on one line cut short with "..." rather than wrapped, and how it stands
+    under it, at the same edge; at least 48px tall."""
+    rows = _eval(run, tmp_path, "todo", GROWS, size)
     assert len(rows) >= 5, rows
-    assert all(r["oneLine"] for r in rows), rows
+    assert all(r["nameLines"] == 1 and r["cut"] in ("whole", "ellipsis") for r in rows), rows
+    assert all(r["under"] and r["tall"] >= 48 for r in rows), rows
 
 
 # Each checklist's rows: where their buttons start and end, their trash, and the row's own end.
@@ -566,7 +578,7 @@ def test_messages_to_send_rows_span_the_card_with_their_trash_at_its_edge(run, t
     # column in mid-card; on a phone a name wrapped to three underlined lines beside its pill
     # ("Noor at / Brackenridge / Advisory") (the screen review, 2026-11-11). The row spans the
     # card, its trash at the card's edge, its pills one column just before it (2026-11-12); a
-    # phone puts the name on its line and where they work under it.
+    # name and where they work keep one line, cut short rather than wrapped (2026-11-17).
     rows = _eval(run, tmp_path, "todo", SENDROWS, vp)
     assert rows and len(rows) >= 5, rows
     assert all(r["bin"] is not None and r["bin"] <= 8 for r in rows), rows
@@ -577,7 +589,7 @@ def test_messages_to_send_rows_span_the_card_with_their_trash_at_its_edge(run, t
         assert len({r["pill"] for r in rows}) <= 2 and max(r["pill"] for r in rows) - min(r["pill"] for r in rows) <= 2, rows
     else:
         assert all(r["nameLines"] == 1 for r in rows if r["nameLines"] is not None), rows
-        assert [r for r in rows if r["atBelow"] is not None] and all(r["atBelow"] for r in rows if r["atBelow"] is not None), rows
+        assert [r for r in rows if r["atBelow"] is not None] and not any(r["atBelow"] for r in rows if r["atBelow"] is not None), rows
 
 
 # Every "·" in a line of facts, and whether it sits on the line of what follows it.

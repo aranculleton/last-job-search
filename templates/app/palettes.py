@@ -54,6 +54,8 @@ LIGHT = {
     "sunk": ("#f2f0eb", "[D] paper a step deeper: wells, tracks, a segmented control's track"),
     "raised": ("#efece6", "[D] a secondary button's fill"),
     "raised-hover": ("#e9e5de", "[D] a secondary button, hovered: quiet text 4.5:1 on it (the accessibility review, 2026-11-17)"),
+    "tile": ("#f2f0eb", "[D] a number's tile on the Brief: the well's paper, a step under the card"),
+    "today-wash": ("#f8ebe4", "[D] the Brief's Today: clay at 12% on white, as the selected place"),
     "ink": ("#1f1d1a", "[D] warm charcoal: all text that matters, 16.8:1 on a card"),
     "muted": ("#6b665e", "[D] warm grey: facts, times, labels, 4.8:1 at worst"),
     "line": ("#e7e3dc", "[D] a hairline: a card's edge, a row's divider, decoration only"),
@@ -105,6 +107,8 @@ DARK = {
     "sunk": ("#131211", "[D] the depths inside a card"),
     "raised": ("#2a2825", "[D] a secondary button's fill"),
     "raised-hover": ("#34322e", "[D] a secondary button, hovered"),
+    "tile": ("#2a2825", "[D] a number's tile on the Brief, raised: the depths vanished into a dark card"),
+    "today-wash": ("#1d1c1a", "[D] the Brief's Today: a card like the rest under its clay strip, never a brown block"),
     "ink": ("#f2efe9", "[D] warm off-white, never pure white: 14.8:1 on a card"),
     "muted": ("#a9a39a", "[D] warm grey: 5.5:1 at worst"),
     "line": ("#2e2c29", "[D] a hairline"),
@@ -190,6 +194,10 @@ def pairs() -> list:
             ("mark", "accent-soft", 3.0, "the chosen place's ring"), ("muted", "raised-hover", 4.5, "quiet words on a hovered button"),
             ("line-strong", "accent-soft", 3.0, "a control's edge on the soft clay"), ("link-line", "accent-soft", 3.0, "a link's underline on the soft clay"),
             ("line-strong", "overlay", 3.0, "a field's edge in a sheet"), ("ink", "surface", 4.5, "a soft pill's words in a sunk box")]
+    # The Brief's own grounds: a number's tile, and Today under its strip.
+    for s in ("tile", "today-wash"):
+        out += [("ink", s, 4.5, "body text on " + s), ("muted", s, 4.5, "secondary text on " + s), ("mark-ink", s, 4.5, "clay as text on " + s),
+                ("focus", s, 3.0, "focus ring on " + s)]
     for st in STATUSES:
         out += [(f"st-{st}", f"st-{st}-bg", 4.5, f"{st}: a status word on its tint"), ("muted", f"st-{st}-bg", 4.5, f"secondary text on {st}'s tint")]
         out += [(f"st-{st}", s, 4.5, f"{st}: a status line") for s in SURFACES]

@@ -1127,7 +1127,19 @@ function drawnProbe(allow) {
     const q = c.getBoundingClientRect();
     const sibs = [...row.children].filter((k) => k !== own && !k.matches(".more-panel, .more-body") && shown(k) && k.getBoundingClientRect().width > 0);
     if (!sibs.length) continue;
-    if (!sibs.some((k) => sameLine(k.getBoundingClientRect(), q))) say("alone", c, (c.matches("summary") ? "More" : "the bin") + " alone on its line beside " + sibs.length + " other" + (sibs.length > 1 ? "s" : ""));
+    if (sibs.some((k) => sameLine(k.getBoundingClientRect(), q))) continue;
+    // One case only: More after a button with its gauge that fill the line above by themselves.
+    // The two never part (DESIGN.md, Buttons: a gauge is one with its button), so nothing can
+    // go down with More and it takes the next line on its own (the redesign's second round,
+    // 2026-11-17). Anything else on that line, or a gauge apart from its button, is still alone.
+    if (c.matches("summary")) {
+      let prev = own.previousElementSibling;
+      while (prev && !(shown(prev) && prev.getBoundingClientRect().width > 0)) prev = prev.previousElementSibling;
+      const b = prev && prev.matches(".cost") ? prev.previousElementSibling : null;
+      const g = prev ? prev.getBoundingClientRect() : null;
+      if (b && b.matches("[data-wakes]") && shown(b) && sameLine(b.getBoundingClientRect(), g) && !sibs.some((k) => k !== b && k !== prev && sameLine(k.getBoundingClientRect(), g))) continue;
+    }
+    say("alone", c, (c.matches("summary") ? "More" : "the bin") + " alone on its line beside " + sibs.length + " other" + (sibs.length > 1 ? "s" : ""));
   }
   // (f) faint words.
   const rgba = (s) => { const m = /rgba?\(([^)]+)\)/.exec(s || ""); if (!m) return null; const p = m[1].split(/[ ,/]+/).filter(Boolean).map(Number); return [p[0], p[1], p[2], p.length > 3 ? p[3] : 1]; };
@@ -2711,7 +2723,9 @@ S.todo = async (a) => {
   const r = await page.evaluate(() => {
     const title = (c) => { const t = c.querySelector(".card-title"); return t ? t.textContent : ""; };
     const bands = [...document.querySelectorAll("#main .band")].map((b) => ({band: b.querySelector("h3").textContent,
-      groups: [...b.querySelectorAll(".todo-group")].map((g) => ({employer: g.querySelector("h4") ? g.querySelector("h4").textContent : null,
+      // The employer's own heading, by its class: a card's title is a heading too since the
+      // redesign's second round (2026-11-17), an h4 under its band.
+      groups: [...b.querySelectorAll(".todo-group")].map((g) => ({employer: g.querySelector(".todo-employer") ? g.querySelector(".todo-employer").textContent : null,
         titles: [...g.querySelectorAll("[data-card]")].map(title)}))}));
     const first = document.querySelector("#main [data-card]");
     return {bands, first: first ? title(first) : null, summary: (document.querySelector("#main .summary") || {}).textContent,

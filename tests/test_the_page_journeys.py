@@ -316,8 +316,9 @@ def test_an_email_opens_in_the_mail_app_with_subject_and_body_filled(run, tmp_pa
 
 def test_a_wave_of_first_notes_is_on_each_persons_card_with_the_week_s_budget(run, tmp_path, vp):
     """Each first note on its person's card (one page since 2026-11-04), and the week's count
-    against the limit once, on To do's one card of messages to send (the UX review,
-    2026-11-05: the wave is rows of it, never a card of its own)."""
+    once, on To do's one card of messages to send (the UX review, 2026-11-05: the wave is rows
+    of it, never a card of its own). The card says what went this week in one short line, never
+    a sum against the week's figure (the redesign's second round, 2026-11-17)."""
     notes = ("copperleaf_pay_ash", "larkspur_retail_ltd_kit", "quayside_foods_rafe")
     got = _go(run, tmp_path, [
         {"hash": "contacts", "read": "#main .sec-head",
@@ -326,7 +327,7 @@ def test_a_wave_of_first_notes_is_on_each_persons_card_with_the_week_s_budget(ru
         {"click": "Open Contacts at the people with a message to send", "until": "location.hash.startsWith('#contacts')"},
     ], vp)
     assert "sent this week" not in got["after"][0]["text"], got["after"][0]["text"]
-    assert "3 sent this week of about 20." in got["after"][1]["text"], got["after"][1]["text"]
+    assert "3 sent this week." in got["after"][1]["text"] and "of about 20" not in got["after"][1]["text"], got["after"][1]["text"]
     assert got["after"][0]["eval"] == [True, True, True], got["after"][0]["eval"]
     assert got["after"][1]["count"] == 0, "the wave is rows of the messages card, never a card of its own"
     assert got["after"][2]["hash"].startswith("#contacts/"), got["after"][2]["hash"]
