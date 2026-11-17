@@ -47,4 +47,4 @@ def test_probe(run, tmp_path, vp):
     ], vp, clock=T)
     for i, a in enumerate(got["after"]):
         print("STEP", i, a.get("eval"))
-    assert False, "probe: read the steps above"
+    raise AssertionError("probe: read the steps above")
