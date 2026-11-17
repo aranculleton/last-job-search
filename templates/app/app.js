@@ -10433,7 +10433,11 @@
     // Drawn to a phone's own width there, so its labels read at the page's small size: scaled
     // down from 640 they were about 7px high (the screen review, 2026-11-11).
     const narrow = window.innerWidth < 760;
-    const W = narrow ? 340 : 640;
+    // On a computer drawn to the width it is given, its card's inside, so it fills the card at
+    // the page's own size (the redesign's second round, 2026-11-17: 640 wide it stood in half
+    // of a 1165px card).
+    const room = $("main") ? $("main").clientWidth - 42 : 640;
+    const W = narrow ? 340 : Math.max(640, Math.min(1400, Math.round(room)));
     const H = narrow ? 200 : 220;
     const L = 32 + 7 * Math.max(0, String(top).length - 3);
     const B = 34;

@@ -189,6 +189,24 @@ def test_progress_leads_with_its_totals_and_its_applications_sit_in_a_card(run, 
     assert seen["card"] and seen["card"][0] not in ("rgba(0, 0, 0, 0)", "transparent") and seen["card"][1] >= 12, seen
 
 
+CELLS = r"""(() => { const left = (e) => { const g = document.createRange(); g.selectNodeContents(e); const r = g.getClientRects()[0]; return r ? Math.round(r.left) : null; };
+  const s = document.querySelector('#main .weeks-svg'), c = document.querySelector('#main details.chart');
+  const heads = [...document.querySelectorAll('#main .apps thead th')], rows = [...document.querySelectorAll('#main .apps tbody tr')].filter((r) => r.getClientRects().length);
+  return {chart: [s.getBoundingClientRect().width, s.getBoundingClientRect().height, c.clientWidth - parseFloat(getComputedStyle(c).paddingLeft) - parseFloat(getComputedStyle(c).paddingRight)],
+    cols: heads.map((h, i) => [left(h)].concat(rows.slice(0, 4).map((r) => r.children[i] && left(r.children[i])))),
+    line: rows.length ? Math.round(rows[0].children[0].getBoundingClientRect().left) : null}; })()"""
+
+
+def test_progress_on_a_computer_lines_up_its_columns_and_its_chart_fills_its_card(run, tmp_path):
+    # Header words at 279, the rows' at 283 and the hairlines at 267; the weekly chart 550px wide
+    # in a 1165px card (the redesign's second round, 2026-11-17).
+    seen = _eval(run, tmp_path, "progress", CELLS, WIDE)
+    w, h, room = seen["chart"]
+    assert w >= room - 2 and h <= 220.5, seen["chart"]
+    assert seen["cols"] and all(len({x for x in col if x is not None}) == 1 for col in seen["cols"]), seen["cols"]
+    assert seen["cols"][0][0] == seen["line"], (seen["cols"][0], seen["line"])
+
+
 # ------------------------------------------------------------------ Coming up
 
 COMING = r"""(() => { const days = [...document.querySelectorAll('#main [data-k="up-days"] > .up-day')];

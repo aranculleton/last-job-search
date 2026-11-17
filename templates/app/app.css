@@ -985,7 +985,11 @@ dialog.work-sheet { width: min(560px, calc(100vw - 16px)); }
 .sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; }
 .sw-a { background: var(--chart-a); }
 .sw-b { background: var(--chart-b); margin-left: 8px; }
-.svg-wrap { max-width: 560px; }
+/* The weekly chart fills its card, drawn to the card's own width at most 220px tall (app.js
+   draws it to the width it is given): held to 560px it left half a 1165px card empty (the
+   redesign's second round, 2026-11-17). */
+.svg-wrap { max-width: none; }
+.weeks-svg { max-height: 220px; }
 .weeks-svg { display: block; width: 100%; height: auto; max-width: 100%; }
 .weeks-svg .grid { stroke: var(--line); stroke-width: 1; }
 .weeks-svg .axis { stroke: var(--line-strong); stroke-width: 1; }
@@ -1505,7 +1509,14 @@ p.count.tone-warn { color: var(--st-overdue); }
 .app-rows { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow-card); }
 /* On a computer the table sits in a card as the phone's rows do: bare on the page it read as
    another screen's (the redesign, phase 2, 2026-11-17). */
-.apps .listv > .scroll-x { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow-card); padding: 4px 8px; }
+/* One cell padding, 12 by 16, the first and last cells' words at the card's 16px and the row's
+   hairline from there to there: the headings, the rows' words and the hairlines started at
+   three different places (the redesign's second round, 2026-11-17). */
+.apps .listv > .scroll-x { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow-card); padding: 4px 16px; }
+.apps .listv > .scroll-x .data :is(th, td) { padding: 12px 16px; }
+.apps .listv > .scroll-x .data :is(th, td):first-child { padding-left: 0; }
+.apps .listv > .scroll-x .data :is(th, td):last-child { padding-right: 0; }
+.apps .listv > .scroll-x .data td > .btn.link { padding-inline: 0; }
 .apps .data tbody tr:last-child > td { border-bottom: 0; }
 .app-row { padding: 12px 16px; border-top: 1px solid var(--line); display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; overflow-wrap: anywhere; }
 .app-rows > .app-row:first-child { border-top: 0; }

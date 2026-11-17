@@ -229,7 +229,10 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   holds (a week of 400 drew 42 numbers on top of each other, 2026-11-11). Progress leads with what the person has done so far ("14 applied, 3 interviews so far."), this
   week's own work after it once there is some ("This week: 5 applied, 3 messages sent."), never
   "This week: 0 applied." over fourteen applications (the UX review of the redesign, 2026-11-17),
-  and its every application sits in a card on a computer as on a phone. It says the same, its "Each week" card open on its chart, every fold in it
+  and its every application sits in a card on a computer as on a phone, its columns' words, the
+  headings' and the hairlines starting at one line 16px in, and the weekly chart drawn to its
+  card's width, at most 220px tall (the redesign's second round, 2026-11-17: three starting
+  lines, and a chart 550px wide in a 1165px card; progress test: columns). It says the same, its "Each week" card open on its chart, every fold in it
   with the chevron Settings' rows use (folded, it read as a heading over an empty box, the
   review, 2026-11-10). (the maintainer, 2026-11-10: "not make it look like im
   doing nothing"; progress glance tests)
