@@ -760,8 +760,8 @@ details.more.split[open] { flex-basis: auto; }
 /* Leading a line of its row, a quiet button's words line up with the card's own (app.js,
    quietFit); after a button and its gauge it keeps 16px from the gauge, so "I heard back" is
    never read as the gauge's words (the redesign's second round, 2026-11-17). */
-.card .card-actions > .btn.quiet.lead-quiet { margin-inline-start: -17px !important; }
-@media (max-width: 759px) { .card .card-actions > .btn.quiet.lead-quiet { margin-inline-start: -13px !important; } }
+.card .card-actions > .btn.quiet.lead-quiet { margin-inline-start: -16px !important; }
+@media (max-width: 759px) { .card .card-actions > .btn.quiet.lead-quiet { margin-inline-start: -12px !important; } }
 .card-actions > [data-wakes] + .cost + .btn.quiet { margin-inline-start: 4px; }
 @media (max-width: 759px) { .card-actions > [data-wakes] + .cost + .btn.quiet { margin-inline-start: 8px; } }
 @media (hover: hover) { .card.app-record .card-actions > .btn.quiet:hover { background: var(--raised); } }
@@ -830,7 +830,7 @@ details.send { border-top: 1px solid var(--line); }
    2026-11-17), and lined up by their tops the button hung 7px under the words (README picture,
    4.15.0). The button keeps the line's own height, reaching past it above and below. */
 .pdraft > .subject { display: block; font-size: var(--t-md); line-height: 24px; --bh: calc(36px * var(--tz)); }
-.pdraft > .subject > .btn { display: inline-flex; vertical-align: middle; min-height: 0; height: var(--bh); margin: calc((24px - var(--bh)) / 2) 0 calc((24px - var(--bh)) / 2) 4px; }
+.pdraft > .subject > .btn { display: inline-flex; vertical-align: middle; min-height: 0; height: var(--bh); margin: -4px 0 -4px 4px; }
 .pdraft > .subject > .btn.icon-only { background: none; border-color: transparent; }
 @media (hover: hover) { .pdraft > .subject > .btn.icon-only:hover { background: var(--raised); } }
 /* Its own hairline, as a card's answer box keeps: a hovered card turns the page's colour,
@@ -1019,7 +1019,7 @@ dialog.work-sheet { width: min(560px, calc(100vw - 16px)); }
    its whole segment unseen, so it reads, taps and arrows as a choice; its ring is the
    segment's. A row of outlined capsules each with a dot read as a form. */
 .pills .pill-row { display: flex; flex-wrap: wrap; gap: 2px; padding: 2px; border-radius: var(--r-ctl); background: var(--seg-track); width: fit-content; max-width: 100%; }
-.pills .choice { align-items: center; justify-content: center; gap: 8px; min-height: 32px; padding: 4px 12px; border: 1px solid transparent; border-radius: 8px; color: var(--muted); font-weight: 500; font-size: var(--t-sm); }
+.pills .choice { align-items: center; justify-content: center; gap: 8px; min-height: 32px; padding: 4px 12px; border: 1px solid transparent; border-radius: 8px; color: var(--muted); font-weight: 400; font-size: var(--t-sm); }
 .pills .choice:has(input:checked) { background: var(--thumb); color: var(--ink); font-weight: 600; border-color: transparent; box-shadow: var(--shadow-card); }
 .setting.pills .choice > input, .field.pills .choice > input { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; margin: 0 !important; opacity: 0; cursor: pointer; }
 /* The chosen one also carries an outline in no colour, which forced colours (Windows high
@@ -1181,7 +1181,7 @@ textarea { width: 100%; resize: vertical; line-height: 1.45; }
    the accessibility review). 36px tall with a mouse, 44 on touch, full width on a phone. */
 .segctl { display: inline-flex; align-items: stretch; gap: 2px; border: 0; border-radius: var(--r-ctl); padding: 2px; background: var(--seg-track); min-width: 0; flex: 0 1 auto; }
 .seg-opt { flex: 1 1 0; display: inline-flex; align-items: center; justify-content: center; min-height: 32px; padding: 4px 12px; border: 1px solid transparent; border-radius: 8px; background: none; color: var(--muted);
-  font-weight: 500; font-size: var(--t-sm); line-height: 1.2; cursor: pointer; white-space: nowrap; min-width: 0; }
+  font-weight: 400; font-size: var(--t-sm); line-height: 1.2; cursor: pointer; white-space: nowrap; min-width: 0; }
 .seg-opt[aria-pressed="true"], .seg-opt:has(input:checked) { background: var(--thumb); color: var(--ink); font-weight: 600; border-color: transparent; box-shadow: var(--shadow-card); }
 @media (hover: hover) { .seg-opt:not([aria-pressed="true"]):not(:has(input:checked)):hover { color: var(--ink); } }
 .seg-n { margin-left: 4px; font-variant-numeric: tabular-nums; color: var(--muted); font-weight: 600; white-space: pre; }

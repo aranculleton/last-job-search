@@ -84,7 +84,7 @@ def test_a_chosen_state_is_never_its_fill_alone():
     1.4.11, and 1.4.1 in Icons only). The side menu's place and the phone's tab carry a ring that
     reaches 3:1 where it is drawn. The chosen segment's ring made it a second, outlined family
     (the redesign's second round, 2026-11-17), so it is told by its words as well as its thumb:
-    the ink at 600 against the others' grey at 500, with no edge, its thumb lifted off its track
+    the ink at 600 against the others' grey at 400, with no edge, its thumb lifted off its track
     in both looks, and Highlight in forced colours."""
     css = open(CSS, encoding="utf-8").read()
     seg = re.search(r"\.seg-opt\[aria-pressed=\"true\"\], \.seg-opt:has\(input:checked\) \{([^}]*)\}", css)
@@ -95,7 +95,7 @@ def test_a_chosen_state_is_never_its_fill_alone():
         on, off = chosen.group(1), base[name].group(1)
         assert "border-color: transparent" in on and "line-strong" not in on, (name, "no edge of its own", on)
         assert "color: var(--ink)" in on and "font-weight: 600" in on, (name, "its words in the ink at 600", on)
-        assert "color: var(--muted)" in off and "font-weight: 500" in off, (name, "the others grey at 500", off)
+        assert "color: var(--muted)" in off and "font-weight: 400" in off, (name, "the others grey at 400", off)
         fill = re.search(r"background:\s*var\(--([a-z-]+)\)", on).group(1)
         for look, pal in palettes.PALETTES.items():
             assert palettes.ratio(pal[fill][0], pal["seg-track"][0]) >= 1.1, (look, name, "the thumb lifted off its track")

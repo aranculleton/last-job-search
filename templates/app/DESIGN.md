@@ -762,7 +762,7 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   round, 2026-11-17). A **segmented control** (`.segctl`, a view switch and a setting's short
   choice alike) is a track at radius 10 with 2px round its options, the chosen one the thumb
   colour lifted by the card's shadow with no edge, its words in the ink at 600, the others grey
-  at 500, 36px tall with a mouse and 44 on touch, a count after its name ("To apply · 5"). Its
+  at 400, 36px tall with a mouse and 44 on touch, a count after its name ("To apply · 5"). Its
   track is the track colour (`--seg-track`: sunk in the light, raised in the dark), as is a tip,
   a pin offer and your resume's own card on the page: a sunk track vanished into the dark page
   and "Applied" floated as loose words beside a lone thumb (the redesign's second round,
@@ -872,7 +872,7 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   pressed state is never its fill alone: the chosen place in the side menu and the phone's
   chosen tab each carry a ring that reaches 3:1 (the accessibility review, 2026-11-17), and the
   chosen segment is told by its words as well as its thumb, in the ink at 600 against the
-  others' grey at 500, with no edge (an edge of its own read as a second, outlined family, the
+  others' grey at 400, with no edge (an edge of its own read as a second, outlined family, the
   redesign's second round, 2026-11-17), forced colours drawing it in Highlight; every control
   shows its focus ring. Words on the soft accent (an answer's box,
   your own message in a chat) are in the ink, as they were when the muted grey was 3.56:1 there
