@@ -154,6 +154,19 @@ next?" in its first lines, and nothing asks for a decision a default could make.
 - A card reads top down: its top line (a kind or a score, the title, a state pill, the trash),
   one line of facts, at most one block in a soft grey box (a question or a suggestion), then
   its actions: one row of pills (Buttons, below). (layout 7, 8, action-row test)
+- A name (a person, an employer) heading a card, a row or a line of facts reads as a name: the
+  ink, semibold, underlined only under the pointer; a name inside a sentence ("Made for
+  Tamsin") keeps its underline. "Why" and "Details" are quiet disclosures, the word in the ink
+  with a chevron that turns when open. Why: underlines on every name and fold read as a page
+  of errors (the redesign, 2026-11-16). (action-row test: a link inside a sentence)
+- A job's fit is a ring round its number, drawn as far round as the fit goes in its band's
+  colour (green strong, blue good, grey below), the number in the ink and "Fit 84 out of 100"
+  said to a screen reader; never red. Why: a bare "84" in a tinted blob was read as nothing
+  (the usability review, 2026-11-16).
+- Two devices that said different things about an application are asked as one plain
+  question, "Did you apply to Quayside Foods?" with "Yes, I applied" and "Not yet", each
+  answer the engine's own action. Why: "Two answers about Quayside Foods: Your phone said
+  applied at 09:12 ... Which is right?" read as an error (the redesign, 2026-11-16).
 - Jobs is one list of the jobs you might apply to, each once at its own stage, and Applied beside
   it. A drafted job stood in Found and again in Drafts, and acting on it meant flipping tabs: now a
   drafted job is its draft's card, carrying the job's fit and reasons, a job being drafted shows
@@ -188,8 +201,10 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   row's "· Recruiter" under its name, and a name broken after its 41st letter (the screen
   review, 2026-11-11). (overlap test: separator, crushed)
 - A Jobs card's actions are the one row of pills of Buttons, below: one filled next step, two soft
-  pills at most, then More. A pencil beside the resume's words and one beside the letter's ("CV 1
-  page ✎ letter 1 page ✎", the engine's own parts, kept on one line each) open the Tweak panel; the
+  pills at most, then More. What was checked is a tick and the documents as small chips, each
+  with its pencil ("All checks passed: [CV 1 page ✎] [letter 1 page ✎]", the engine's own parts,
+  kept whole each, under the words on a phone; the redesign, 2026-11-16: bare pencils on the
+  line read as stray marks); the pencils open the Tweak panel; the
   pencil at the end of a job's facts corrects its title, pay or place, code only. What Claude can
   do by itself is never a button: a draft's remake after a check with its fix in hand, and its
   files, are queued by the view, and the card says what Claude is doing. Every control that wakes
@@ -206,9 +221,15 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   a grey pill on its row in Coming up and on the Brief; the box of the same words is there
   wherever its day is given, and booked again without it, it is confirmed. Why: a day only
   asked for read as fixed (the maintainer, 2026-11-05). (not-confirmed tests)
-- A Coming up row is its time, its title, and one line under it saying what it is and
-  whether its prep is ready ("Interview · Supply Chain Analyst · Prep ready"); its icons keep
-  their own places, the pencil, the calendar, then the trash, so they line up down the list.
+- A Coming up row is what it is first, read before its time (its title semibold), one line
+  under it saying what it is and whether its prep is ready ("Interview · Supply Chain Analyst ·
+  Prep ready"), its time in a steady column of its own (on the left on a computer, a small line
+  over the title on a phone), and its tools as one group, the calendar first so it lines up down
+  the list, then the pencil, the trash in its own place at the row's end 16px from them. A row
+  with no time yet says so in the time's column as a quiet dashed capsule, "Add the time", an
+  empty slot to fill rather than a button squeezed in. Why: rows led with "13:00", icons floated
+  with gaps where one was missing, and the trash sat 4px from the calendar (the redesign,
+  2026-11-16).
   On a phone the title is drawn its own height and reaches its tap down into that line, whose
   own link is drawn over the reach. Why: a line each, each its own 44px, made a row of three
   short lines 190px tall, and the calendar moved a place on every row with a trash (the
