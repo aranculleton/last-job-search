@@ -44,7 +44,7 @@ ME = LISTENER["chat"]
 def _git(cwd, *args) -> str:
     r = subprocess.run(["git", "-C", str(cwd), "-c", "user.name=Test Person", "-c",
                         "user.email=t@example.com", "-c", "commit.gpgsign=false", *args],
-                       capture_output=True, text=True, timeout=60)
+                       capture_output=True, text=True, encoding="utf-8", timeout=60)
     assert r.returncode == 0, r.stderr
     return r.stdout.strip()
 

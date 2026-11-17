@@ -1017,16 +1017,6 @@ def listener_rung_lately(db: dict, now: dt.datetime) -> bool:
                 and 0 <= (now - rung_at).total_seconds() < answer_s(rec, rung_at))
 
 
-def listener_quiet(db: dict, now: dt.datetime) -> bool:
-    """A live listener that has not answered for LISTENER_QUIET_S and is not rung lately: its
-    watch may lapse, so the scheduled task rings it once (keep-alive)."""
-    rec = listener(db)
-    last = max([t for t in (_time(rec.get("answered_at")), _time(rec.get("ready_at"))) if t],
-               default=None)
-    return bool(listener_live(db, now) and not listener_rung_lately(db, now) and last
-                and (now - last).total_seconds() >= LISTENER_QUIET_S)
-
-
 def _chat_title(db: dict, chat: str) -> str:
     """The title a chat the app started on the computer was given (SESSION_TITLE), from the
     work it was started for, or ""."""
