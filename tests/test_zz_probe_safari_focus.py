@@ -7,7 +7,7 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import test_the_page_journeys as journeys  # noqa: E402
-from test_the_page_journeys import PHONE, WIDE, _go  # noqa: E402
+from test_the_page_journeys import WIDE, _go  # noqa: E402
 
 T = "2026-10-25T09:00:00.000Z"
 EVENT = "up-ev20261020120000"
@@ -32,7 +32,7 @@ def run():
     yield from journeys.browser()
 
 
-@pytest.mark.parametrize("vp", [PHONE, WIDE], ids=["phone", "wide"])
+@pytest.mark.parametrize("vp", [WIDE], ids=["wide"])
 def test_probe(run, tmp_path, vp):
     got = _go(run, tmp_path, [
         {"hash": "interviews", "eval": STATE % EVENT},
@@ -45,6 +45,7 @@ def test_probe(run, tmp_path, vp):
         {"press": "Tab", "eval": STATE % SCREEN},
         {"press": "Enter", "wait": 800, "eval": STATE % SCREEN},
     ], vp, clock=T)
-    for i, a in enumerate(got["after"]):
-        print("STEP", i, a.get("eval"))
-    raise AssertionError("probe: read the steps above")
+    import json
+    keep = ("active", "openDetails", "openDialogs", "atSum", "sy", "sumRect")
+    trace = [{k: (a.get("eval") or {}).get(k) for k in keep} for a in got["after"]]
+    raise AssertionError("PROBE " + json.dumps(trace, separators=(",", ":")))
