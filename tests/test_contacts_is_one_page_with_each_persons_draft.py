@@ -335,7 +335,7 @@ def test_the_reply_line_says_each_state_and_can_be_called_off(run, page, model):
     failed = _reply_work("failed", error="Claude could not read their message.", finished_at="2026-10-25T18:30:00Z")
     got = run("engine", html=page, viewport=PHONE, clock=CLOCK, seed={"work/reply~" + CORWIN: failed}, steps=[
         {"hash": "contacts", "eval": LINE},
-        {"click": "Try the reply to Corwin again", "eval": LINE},
+        {"click": "Try again: the reply to Corwin", "eval": LINE},
     ])
     assert not got["errors"], got["errors"]
     assert got["after"][0]["eval"] == "Did not finish · Claude could not read their message. Try again", got["after"][0]["eval"]

@@ -326,13 +326,11 @@ JOBS = r"""(() => {
 def test_a_jobs_lines_keep_together_and_a_draft_is_as_tight_as_a_find(run, tmp_path, width):
     # 390 wide, where "Why" ended one line and its pencil started the next (2026-11-10).
     got = _eval(run, tmp_path, "jobs", JOBS, {"width": width, "height": 844 if width < 760 else 900})
-    # The pencil at the end of a job's facts stays beside "Why", never alone on a line. On a
-    # phone it is the last line of the job's details, in words, so the facts keep to two lines
-    # (the redesign, phase 2, 2026-11-17).
-    if width > 760:
-        assert got["pens"] and all(d <= 4 for d in got["pens"]), got
-    else:
-        assert got["pens"] == [] and got["penRows"] >= 1, got
+    # What corrects a job's title, pay or place is the last line of its details, in words, on
+    # every screen: on a phone a pencil at the end of the facts pushed them to three lines (the
+    # redesign, phase 2, 2026-11-17), and the pencil is for asking Claude to rewrite what it
+    # wrote (the redesign's second round, 2026-11-17).
+    assert got["pens"] == [] and got["penRows"] >= 1, got
     assert got["whys"] and all(d <= 4 for d in got["whys"]), got
     # A draft's lines are a card's step apart, not half again more.
     assert got["draftGap"] == got["cardGap"] == "8px", got
@@ -350,7 +348,7 @@ PILLS = r"""(() => [...document.querySelectorAll('[data-k="bp-tip"], [data-k="ti
 
 def test_a_control_standing_on_its_own_is_a_pill_never_underlined_words(run, tmp_path):
     # Got it, Add all to your calendar, Add the time, the work panel's Hide, the sheet's Close
-    # and Your profile's Add a job, Change skills and Change: underlined words as controls,
+    # and Your profile's Add a past job, Change skills and Change: underlined words as controls,
     # against the page's own rule (the review, 2026-11-10). A past job is a row that opens its
     # sheet since 2026-11-17 (the name cards test).
     seen = []

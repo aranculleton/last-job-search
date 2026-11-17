@@ -357,7 +357,7 @@ def test_a_reply_owed_says_so_and_drafts_from_their_words_already_kept(run, tmp_
 def test_a_call_is_booked_prepared_for_and_followed_by_a_thank_you(run, tmp_path, vp):
     m = _sample()
     got = _go(run, tmp_path, [
-        {"hash": "contacts", "more": "ellerwick_trust_priya", "click": "A call booked with Marisol"},
+        {"hash": "contacts", "more": "ellerwick_trust_priya", "click": "Call booked: a call with Marisol"},
         {"fill": {"The day": "2026-10-28"}, "submit": True},
         {"hash": "contacts", "click": "Prepare me for the call with Bea"},
         {"submit": True},
@@ -380,7 +380,7 @@ def test_a_hiring_call_becomes_an_interview_not_a_call_prep(run, tmp_path, vp):
     _item(m, "harbourline_bank_bea")["is_process_stage"] = True
     got = _go(run, tmp_path, [
         {"hash": "contacts", "read": '[data-item="harbourline_bank_bea"]'},
-        {"click": "Make the call with Bea an interview"},
+        {"click": "Make it an interview: the call with Bea"},
     ], vp, model=m)
     assert "This call is an interview stage" in got["after"][0]["text"]
     assert "Prepare me" not in got["after"][0]["text"]

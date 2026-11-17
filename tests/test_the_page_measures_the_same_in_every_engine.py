@@ -56,7 +56,7 @@ def test_latest_on_a_phone_measured_safaris_way_stops_at_the_field(run, tmp_path
     got = run("engine", html=html, viewport={"width": 390, "height": 760}, clock=CLOCK, seed=_talk(), measureBeforeZoom=True, steps=[
         {"hash": "chat", "wait": 300},
         {"eval": "(window.scrollTo(0, 0), window.dispatchEvent(new Event('scroll')), 1)"},
-        {"click": "Go to the latest message", "wait": 300, "eval": gap},
+        {"click": "Latest: go to the latest message", "wait": 300, "eval": gap},
     ])
     assert not got["errors"], got["errors"]
     left = got["after"][2]["eval"]

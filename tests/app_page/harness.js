@@ -2377,9 +2377,9 @@ S.you = async (a) => {
   await turn(page, 6);
   // A past job is a row that opens its own sheet, where taking it off is the last thing (the
   // redesign's second round, 2026-11-17).
-  await page.getByRole("button", {name: "Change Graduate Analyst at Saltmarsh Analytics"}).first().click();
+  await page.getByRole("button", {name: "Graduate Analyst at Saltmarsh Analytics"}).first().click();
   await turn(page, 3);
-  await page.locator("dialog.sheet").getByRole("button", {name: "Take Graduate Analyst at Saltmarsh Analytics off"}).click();
+  await page.locator("dialog.sheet").getByRole("button", {name: "Take this job off: Graduate Analyst at Saltmarsh Analytics"}).click();
   await turn(page, 3);
   await page.locator("dialog.sheet").getByRole("button", {name: "Take it off"}).click();
   await turn(page, 6);

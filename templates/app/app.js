@@ -3561,7 +3561,7 @@
     if (foldN) {
       const label = o.foldLabel ? o.foldLabel(foldN) : foldN + " earlier, finished";
       parts.push(h("p", {class: "fold"}, h("span", {}, label + ": "),
-        btn(st.open ? "Hide" : (o.foldShow || "Show"), () => { st.open = !st.open; scheduleRender(); }, {kind: "link", key: "fold:" + key, aria: (st.open ? "Hide " : "Show ") + label})));
+        btn(st.open ? "Hide" : (o.foldShow || "Show"), () => { st.open = !st.open; scheduleRender(); }, {kind: "link", key: "fold:" + key, aria: (st.open ? "Hide " : o.foldShow ? o.foldShow + ": " : "Show ") + label})));
       if (st.open) {
         const fshown = folded.slice(0, PAGE_SIZE * (st.foldPages || 1));
         parts.push(box(fshown.map(o.renderFolded || o.render)));
@@ -4798,7 +4798,7 @@
     // made it eleven lines deep (the maintainer, 2026-11-11).
     const moreActs = [!busy && has && !offer && !offered.length && (!mockUp || drill) ? mock("secondary") : null,
       has && !busy ? prepBtn("secondary") : null,
-      offered.length || offer ? null : btn(dayOf(iv.when) && !timeOf(iv.when) ? "Add the time" : "New day", () => askMoved(iv), {kind: "secondary", small: true, key: "ivmoved:" + k, aria: "A new day or time: " + txt(iv.company)}),
+      offered.length || offer ? null : btn(dayOf(iv.when) && !timeOf(iv.when) ? "Add the time" : "New day", () => askMoved(iv), {kind: "secondary", small: true, key: "ivmoved:" + k, aria: (dayOf(iv.when) && !timeOf(iv.when) ? "Add the time: " : "New day: ") + txt(iv.company)}),
       mockUp ? cal : null,
       elseBtn("interview", iv.id, "the interview with " + txt(iv.company), "iv:" + k)];
     // Its prep changed in words: the pencil beside the prep's own word on the card, as a draft's
@@ -7897,13 +7897,15 @@
       // line showed through the box's own padding.
       return [h("p", {class: "sendtext big" + (open ? "" : " is-clamped"), id: tid}, h("span", {class: "sendtext-in"}, body)),
         h("button", {type: "button", class: "btn link small read-all", "aria-expanded": String(open), "aria-controls": tid, "data-k": "readall:" + m.id,
-          "aria-label": (open ? "Show less of the " : "Show all of the ") + (txt(m.kind) === "first_note" ? "note" : "message") + " to " + txt(m.first_name),
+          "aria-label": (open ? "Show less: the " : "Show all: the ") + (txt(m.kind) === "first_note" ? "note" : "message") + " to " + txt(m.first_name),
           onclick: () => { if (bodyOpen.has(m.id)) bodyOpen.delete(m.id); else bodyOpen.add(m.id); scheduleRender(); }}, open ? "Show less" : "Show all", h("span", {class: "chev", "aria-hidden": "true"}))];
     }
     if (!(txt(m.channel) === "inmail" && body.length > INMAIL_CLIP + 40) || bodyOpen.has(m.id)) return h("p", {class: "sendtext big", id: tid}, body);
     const cut = body.slice(0, INMAIL_CLIP).replace(/\s+\S*$/, "") + "\u2026";
     return h("p", {class: "sendtext big", id: tid}, cut, " ",
-      btn("More", () => { bodyOpen.add(m.id); scheduleRender(); }, {kind: "quiet", small: true, key: "body:" + m.id, aria: "Show all of the paid LinkedIn message to " + txt(m.first_name)}));
+      // "Show all", the page's own fold word, and its name starts with it (WCAG 2.5.3): "More"
+      // was named "Show all of ..." (the accessibility review of the redesign's second round).
+      ((b) => { b.setAttribute("aria-expanded", "false"); b.setAttribute("aria-controls", tid); return b; })(btn("Show all", () => { bodyOpen.add(m.id); scheduleRender(); }, {kind: "quiet", small: true, key: "body:" + m.id, aria: "Show all: the paid LinkedIn message to " + txt(m.first_name)})));
   }
   // Said on this page that they get no more messages: their note goes from Messages at once,
   // its Undo in the toast and the person still in Contacts. A note stayed on the list after "No
@@ -9002,7 +9004,7 @@
     const name = txt(p.first_name);
     // One quiet control on the line: call it off while it waits or runs, or try again.
     const ctl = go.cancel ? stopClaude("the message to " + name, go.cancel, "rgo-cancel:" + p.id)
-      : go.retry ? btn("Try again", go.retry, {kind: "link", small: true, key: "rgo-retry:" + p.id, aria: "Try the reply to " + name + " again"}) : null;
+      : go.retry ? btn("Try again", go.retry, {kind: "link", small: true, key: "rgo-retry:" + p.id, aria: "Try again: the reply to " + name}) : null;
     const dot = go.tone === "bad" || go.tone === "held" ? "tone-" + go.tone : "tone-plain is-waiting";
     // The "·" stays with the word, so a line that wraps never starts with it (the screen
     // review, 2026-11-09: "· Set her draft aside" under "Set aside").
@@ -9276,7 +9278,7 @@
       last ? h("div", {class: "ct-latest"}, pair(last, asks.length - 1, true)) : null,
       box,
       !open && last && !going ? h("div", {class: "card-actions"},
-        btn("Ask more", () => { S.cardAsk.add(th); S.focusAfter = {key: "ct-text:" + th}; scheduleRender(); }, {kind: "secondary", small: true, key: "ct-more:" + th, aria: "Ask Claude more about " + label}),
+        btn("Ask more", () => { S.cardAsk.add(th); S.focusAfter = {key: "ct-text:" + th}; scheduleRender(); }, {kind: "secondary", small: true, key: "ct-more:" + th, aria: "Ask more about " + label}),
         btn("Hide", () => { sset("local", "ljs:ct-hide:" + th, txt(last.q.id)); openState.delete("ct-show:" + th); scheduleRender(); }, {kind: "secondary", small: true, key: "ct-hide:" + th, aria: "Hide what Claude said about " + label})) : null);
   }
   // The records a card's question may touch: the people and the messages its item is related
@@ -9435,11 +9437,11 @@
     const prep = obj(obj(p.call).prep);
     return [
       txt(prep.text) && !onPage ? btn("Read your call prep", () => openDetail("person", p.id), {small: true, key: "pprep:" + key}) : null,
-      talking && st !== "call_booked" ? btn("Call booked", () => askCall(p), {small: true, key: "pcall:" + key, aria: "A call booked with " + name}) : null,
+      talking && st !== "call_booked" ? btn("Call booked", () => askCall(p), {small: true, key: "pcall:" + key, aria: "Call booked: a call with " + name}) : null,
       st === "call_booked" && onPage ? btn("Change the call", () => askCall(p), {small: true, key: "dcall:" + key}) : null,
       st === "referral_in_progress" && !referralEndedHere(p.id) ? btn("The referral is over", () => referralEnded(p), {small: true, key: "prefend:" + key, aria: "The referral is over: " + name})
         : talking && onPage ? btn("They put my name forward", () => referralAgreed(p), {small: true, key: "dref:" + key}) : null,
-      wrote ? btn("They sent me a job", () => askAddJob(p), {small: true, key: "pjob:" + key, aria: name + " sent me a job"}) : null,
+      wrote ? btn("They sent me a job", () => askAddJob(p), {small: true, key: "pjob:" + key, aria: "They sent me a job: " + name}) : null,
       talking && !(asked && asked.doc) ? btn("Make a " + noun() + " for " + name, () => askContactResume(p), {small: true, key: "cres:" + key}) : null,
       onPage && (!wrote || p.paste) && g !== "held" ? pasteProfileBtn(p, "dpaste:" + key) : null];
   }
@@ -9540,12 +9542,12 @@
     else if (got) owed = btn("Draft a reply", replyHere, {kind: "primary", small: true, key: "reply:" + p.id, aria: "Draft a reply to " + name});
     // What they asked for is the button: "Make a CV for Juno", not "Draft a reply" (2026-11-03).
     else if (asked && asked.doc) owed = askBtn(p, asked, "pask:" + p.id);
-    else if (p.is_process_stage) owed = btn("Make it an interview", () => act([{item: p.id, action: "process.register", value: {contact: txt(p.id)}, rev: p.rev}], "Now an interview: " + txt(p.employer)), {kind: "primary", small: true, key: "process:" + p.id, aria: "Make the call with " + name + " an interview"});
+    else if (p.is_process_stage) owed = btn("Make it an interview", () => act([{item: p.id, action: "process.register", value: {contact: txt(p.id)}, rev: p.rev}], "Now an interview: " + txt(p.employer)), {kind: "primary", small: true, key: "process:" + p.id, aria: "Make it an interview: the call with " + name});
     // A call whose day has gone since the engine last looked: the thank-you, not its prep.
     else if (st === "call_booked" && callPast(p) && txt(obj(p.owed).kind) === "prep") owed = owedBtn(Object.assign({}, p, {owed: {kind: "thanks"}}), p.id);
     else owed = owedBtn(p, p.id, replyHere);
     // A note past its day with nothing logged may have gone from LinkedIn itself: asked in To do.
-    if (!owed && !sent && !going && !box && txt(p.asked_sent)) owed = btn("Did it go?", () => go("todo", {focus: true, item: txt(p.asked_sent)}), {kind: "secondary", small: true, key: "pasked:" + p.id, aria: "Did your note to " + name + " go?"});
+    if (!owed && !sent && !going && !box && txt(p.asked_sent)) owed = btn("Did it go?", () => go("todo", {focus: true, item: txt(p.asked_sent)}), {kind: "secondary", small: true, key: "pasked:" + p.id, aria: "Did it go? Your note to " + name});
     const call = obj(p.call);
     const callDay = txt(call.day || call.on);
     // Waiting on them, the one thing likely to happen next is the card's main button: "They
@@ -9837,7 +9839,7 @@
     const add = u.pending ? stateWord("Saving", null) : !obj(u.cal).ics ? null : btn("", () => calSheet([u]),
       {kind: "quiet icon-only", small: true, icon: "cal-add", key: (brief ? "bp-cal:" : "cal:") + u.id, aria: "Add to your calendar: " + txt(u.title)});
     const rm = u.own && !brief && !u.pending ? btn("", () => act([{item: txt(u.id), action: "upcoming.remove", rev: txt(u.rev)}], "Taken off: " + txt(u.title)),
-      {kind: "quiet icon-only", small: true, icon: "bin", key: "up-rm:" + u.id, aria: "Take off: " + txt(u.title)}) : null;
+      {kind: "quiet icon-only", small: true, icon: "bin", key: "up-rm:" + u.id, aria: "Take it off: " + txt(u.title)}) : null;
     const prep = brief ? upPrep(u, prepped || new Set(), true, nextPrep, leadRow) : null;
     // Asked for and not confirmed by them yet: said on its row, here and on the Brief.
     const maybe = u.tentative ? stateWord(NOT_CONFIRMED, null) : null;
@@ -9856,7 +9858,7 @@
     const menu = u.pending ? null : upMenu(u, [
       obj(u.cal).ics ? upMenuItem("Add to your calendar", () => calSheet([u]), "cal:" + u.id, "Add to your calendar: " + txt(u.title)) : null,
       upDayBtn(u) ? upMenuItem("Change the day", () => { S.upEdit = S.upEdit === u.id ? null : u.id; S.upTime = null; scheduleRender(); }, "up-day:" + u.id, "Change the day: " + txt(u.title)) : null,
-      rm ? upMenuItem("Take it off", () => rm.click(), "up-rm:" + u.id, "Take off: " + txt(u.title)) : null,
+      rm ? upMenuItem("Take it off", () => rm.click(), "up-rm:" + u.id, "Take it off: " + txt(u.title)) : null,
       callOff(u) ? upMenuItem("The call is off", () => callOff(u).click(), "up-off:" + u.id, "The call is off: " + txt(u.title)) : null]);
     const go = upGo(u);
     // The whole row opens what it is: a tap anywhere but on one of its own controls is its
@@ -11549,11 +11551,20 @@
     const company = txt(ab.company) || txt(src.company);
     const at = (x) => txt(x.place_short !== undefined && x.place_short !== null ? x.place_short : x.place);
     const place = at(src) || (j ? at(j) : "");
+    const about = [company, role].filter(Boolean).join(", ");
+    // The trash top right, as on every live card: a draft's or a job's own; a question with
+    // nothing else behind it puts the role away with its own "Skip this role", which then is
+    // not said twice among the answers, so every card answers "Yes, I applied" and "Not yet".
+    const skip = !d && !r ? arr(n.options).find((op) => /\.skip$/.test(txt(obj(op).action))) : null;
+    const bin = d ? btn("", () => askRemoveDraft(d), {kind: "quiet icon-only", small: true, icon: "bin", key: "dbin:" + d.id, aria: "Not sending: " + about})
+      : r ? btn("", () => askRemoveJob(r), {kind: "quiet icon-only", small: true, icon: "bin", key: "bin:" + r.id, aria: "Not for me: " + about})
+      : skip ? btn("", () => answerNeed(n, skip), {kind: "quiet icon-only", small: true, icon: "bin", key: "bin:" + n.id, aria: txt(skip.label) + ": " + about}) : null;
+    const asked = skip ? Object.assign({}, n, {options: arr(n.options).filter((op) => op !== skip)}) : n;
     return card("article", {class: "card job confirm-card", "aria-labelledby": hid, "data-item": id},
       h("div", {class: "job-main"},
-        h("div", {class: "job-top"}, j ? fitRing(j.score, j.band, {word: true}) : null, h("h3", {id: hid}, breakable(role || company))),
+        h("div", {class: "job-top"}, j ? fitRing(j.score, j.band, {word: true}) : null, h("h3", {id: hid}, breakable(role || company)), bin ? h("span", {class: "top-end"}, bin) : null),
         company ? jobFactsLine(h("bdi", {class: "co"}, employerLink(company, "cf:" + id, role)), place ? [place] : [], [], null) : null,
-        questionBlock(n, {where: "jobs", item: id})));
+        questionBlock(asked, {where: "jobs", item: id})));
   }
   function asksApplied(r) {
     const d = listDraft(r);
@@ -12243,9 +12254,13 @@
   // nothing said a row opened anything (the maintainer, 2026-11-16: "genuinely polished").
   function dRow(o) {
     const st = o.state && txt(o.state[0]) ? stateWord(txt(o.state[0]), o.state[1] === "plain" ? null : o.state[1]) : null;
+    // A ring before the row's name is said after it, so the row's name starts with the words it
+    // shows (WCAG 2.5.3): "Fit 79 out of 100, Supply Chain Data Analyst" did not.
+    const ring = o.lead && o.lead.querySelector ? (o.lead.matches(".fit-ring") ? o.lead : o.lead.querySelector(".fit-ring")) : null;
+    if (ring) o.lead.setAttribute("aria-hidden", "true");
     return h("button", {type: "button", class: "setting-row act-row d-row", "data-k": o.key, onclick: o.open}, o.lead || null,
       h("span", {class: "d-row-main"}, h("span", {class: "d-row-name"}, h("bdi", {}, o.label)), o.sub ? h("span", {class: "d-row-sub"}, o.sub) : null),
-      st, h("span", {class: "set-go", "aria-hidden": "true"}, "\u203a"));
+      st, ring ? h("span", {class: "sr-only"}, ", " + txt(ring.getAttribute("aria-label"))) : null, h("span", {class: "set-go", "aria-hidden": "true"}, "\u203a"));
   }
   // A card's rarer updates in one menu (the redesign's second round, 2026-11-17): on a person's
   // card four equal pills ("Call booked", "The referral is over", "They sent me a job", "Don't
@@ -14289,7 +14304,7 @@
         const d = document.querySelector("dialog.sheet[open]");
         if (d) { try { d.close(); } catch (e) { /* already closed */ } }
         removeJob(j);
-      }, {kind: "quiet", small: true, icon: "bin", key: "you-rm:" + txt(j.id), aria: "Take " + txt(j.title) + " at " + txt(j.employer) + " off"})) : null,
+      }, {kind: "quiet", small: true, icon: "bin", key: "you-rm:" + txt(j.id), aria: "Take this job off: " + txt(j.title) + " at " + txt(j.employer)})) : null,
       onSubmit: (v) => { askProfile(Object.assign({part: "job", change: j ? "edit" : "add", was: j ? {employer: txt(j.employer), title: txt(j.title), dates: txt(j.dates)} : null}, v), (j ? "Update " : "Add ") + v.title + " at " + v.employer); }});
   }
   function removeJob(j) {
@@ -14374,7 +14389,9 @@
       jobs.length ? h("ul", {class: "plain set-rows prof-jobs"}, jobs.map((j) => {
         const what = txt(j.title) + " at " + txt(j.employer);
         return h("li", {class: "prof-job", "data-item": txt(j.id), "data-card": "1"},
-          h("button", {type: "button", class: "act-row prof-job-row", "data-k": "you-job:" + txt(j.id), "aria-label": "Change " + what, onclick: () => jobSheet(j)},
+          // Named by what it shows, its title first (WCAG 2.5.3): "Change <title>" did not start
+          // with the words on the row (the accessibility review of the redesign's second round).
+          h("button", {type: "button", class: "act-row prof-job-row", "data-k": "you-job:" + txt(j.id), onclick: () => jobSheet(j)},
             h("span", {class: "prof-job-main"}, h("span", {class: "prof-job-t"}, h("bdi", {}, txt(j.title)), h("span", {class: "muted"}, " at "), h("bdi", {}, txt(j.employer))),
               h("span", {class: "prof-job-sub"}, [txt(j.dates), txt(j.place), Number(j.lines) ? plural(Number(j.lines), "point", "points") + " Claude can use" : "nothing yet on what you did"].filter(Boolean).join(" \u00b7 "))),
             h("span", {class: "set-go", "aria-hidden": "true"}, "\u203a")));
@@ -16436,7 +16453,7 @@
       notes ? h("p", {class: "wc-time"}, plural(notes, "message", "messages") + " ready to send.") : null,
       open ? h("div", {class: "stack wc-run"}, list.map(([id, w]) => workCard(id, w))) : null,
       h("div", {class: "wc-actions"},
-        btn(open ? "Hide them" : "Show them", () => { openState.set("det:run:" + gid, !open); scheduleRender(); }, {kind: "link", small: true, key: "run:" + gid, aria: (open ? "Hide " : "Show ") + n + " " + words[1]}),
+        btn(open ? "Hide them" : "Show them", () => { openState.set("det:run:" + gid, !open); scheduleRender(); }, {kind: "link", small: true, key: "run:" + gid, aria: (open ? "Hide them: " : "Show them: ") + n + " " + words[1]}),
         done ? (notes ? tabLink("contacts", null) : null)
           : stopClaude(n + " " + words[1], () => { for (const [id] of list) stopWork(id); }, "run-stop:" + gid)));
   }
@@ -16745,7 +16762,7 @@
     } catch (e) { /* storage refused */ }
   }
   function buildTalkJump() {
-    talkJump = h("button", {type: "button", class: "btn secondary small talk-jump", "data-k": "talk-jump", hidden: true, "aria-label": "Go to the latest message",
+    talkJump = h("button", {type: "button", class: "btn secondary small talk-jump", "data-k": "talk-jump", hidden: true, "aria-label": "Latest: go to the latest message",
       onclick: () => toChatEnd(dockOpen && dockBox && talkBody.parentNode === dockBox ? dockBox : null)}, "Latest \u2193");
     return talkJump;
   }

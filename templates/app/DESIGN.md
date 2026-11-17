@@ -53,13 +53,17 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   search; what else is booked stays in Coming up. Why: the Brief's Today picked one thing, its
   Next three another and To do a third, and their counts read 4, 1 and 3 over seven messages
   (the redesign's reviews, 2026-11-16). (one-answer test; Today tests)
-- What helps Claude do more (your profile, reading profiles, the LinkedIn download) is never
+- What helps Claude do more (your profile, reading profiles, your LinkedIn messages) is never
   counted among today's things: it is one soft card right after them, above "Not due yet", in
   To do's own style, under its own small heading, "When you have a minute" (under "Needs your
   answer" it read as one more question, the screen review, 2026-11-11): its title "Help Claude
   do more", the first one's one plain line saying what it gives ("Your profile: every resume
   and letter is built from it"), and its one pill to start it, which puts that one's own card
-  in its place; the rest fold under "N more ways to help Claude".
+  in its place; the rest fold under "N more ways to help Claude". The LinkedIn task is said one
+  way wherever it is offered, "Add your LinkedIn messages" (To do's card and its pill, Contacts'
+  foot, and Settings' row "Your LinkedIn messages"): three screens said "Bring in your LinkedIn
+  messages", "Add your LinkedIn download" and "Your LinkedIn download", and "download" said
+  neither of what nor to where (the redesign's second round, 2026-11-17).
   With nothing due today, its first card shows at once under its own heading. Why: at the foot
   of To do, among the folds, it was not found (the maintainer, 2026-11-07), and as one faint
   line after today's things it was "so hidden" (2026-11-10). (help test)
@@ -250,8 +254,12 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   Brief and clay in Contacts, every Contacts avatar the same clay, and the cards had none (the
   redesign's second round, 2026-11-17). (name cards test)
 - An employer's card is everything the page holds about it: one summary line (its roles,
-  people and interviews) with the person's bar's verdict as a state ("Clears your bar", "Below
-  your bar", "Ruled out by your rules") and the reason behind its "?"; its Next; its roles,
+  people and interviews) with the person's bar's verdict as a state, in their words ("Meets what
+  you asked for", "Below what you asked for", "Ruled out by your rules"; "Clears your bar" was
+  the app's word, the redesign's second round, 2026-11-17) and the reason behind its "?"; its
+  Next, where a reply is already written "See your reply to Juno", opening it with Copy and I
+  sent it at no cost in Claude's time, never "Reply to Juno" (Chat's starters likewise offer to
+  help reply only to someone with no reply written); its roles,
   people and interviews as rows that open; and last "What Claude found": at most three facts
   Claude's research saved, those checked against their page first and the newest first, each a
   short row in the ink with its page a quiet link under it and the day it was checked (the
@@ -264,13 +272,22 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   when after it) with its one filled button and, where the task has one, its second step beside
   it (I sent it); where it stands as four steps on one thread (Written to, Replied, Talked,
   Referral), an 8px dot a step joined by a 2px hairline, green once done and the next one ringed
-  in clay, its name under it and said in words to a screen reader; then They replied where it can
+  in clay, its name under it and said in words to a screen reader, and the steps follow the
+  record: a referral waiting on what the person was asked for is the ringed step, "Waiting on
+  your CV" under it, until I sent it (four green dots read as finished while Next still said to
+  send the CV, the redesign's second round, 2026-11-17); then They replied where it can
   be said, and one soft "Update" with its chevron opening their rarer updates as a menu, a
   finger's height a row on the overlay (a call booked, the referral is over, they sent me a job),
   "Don't contact again" last and in red. Escape closes the menu, never the card under it. Why:
   four equal pills read as status tags beside the card's one button, a line of ticks as text, and
   "Next: Asked for your CV" did not say who (the redesign's second round, 2026-11-17). (person
   card tests, stepper test)
+- "Also at <employer>" on an interview's or an application's card is a row for each other thing
+  there, each naming its object: a draft made for someone is "Your CV for Tamsin", any other
+  "Your application: <role>"; a role found there is its title over its fit, its town and its
+  stage in Jobs' words, "71 fit · Manchester · not applied yet" (`relLabel`, `alsoJobLine`).
+  Why: "Your draft" named nothing and "A role found there" said nothing the row did not (the
+  redesign's second round, 2026-11-17). (name cards test)
 - Every card's sheet is 680 wide on a computer. An interview's is wide only with a prep to read
   beside its stages, and without one it says nothing of the prep but its Next ("Get your prep:
   ..."): a lone "No prep yet." in an empty column of a 960 sheet said it twice. (name cards test)
@@ -278,11 +295,13 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   rows; app.js `fitRing`, app.css `.fit-ring`): its number in the ink inside, drawn as far round
   as the fit goes, green for a strong fit and grey below it (the muted grey for good, the edge
   grey under that), never blue, which is for work in progress and focus, and never red; 36px on
-  a card, 28px (`.sm`) in a row with "fit" after it ("79 fit", never "Scored 79"); "Fit 84 out
-  of 100, strong" is its own name to a screen reader. Why: a bare "84" in a tinted blob was read
-  as nothing (the usability review, 2026-11-16), and the Brief's green pill, the card's ring and
-  the sheets' "Scored 79" were three ways to say one number (the redesign, phase 2,
-  2026-11-17). (fit ring test, calm test)
+  a card, 28px (`.sm`) in a row, and "fit" after it wherever it is drawn ("79 fit", never
+  "Scored 79"); "Fit 84 out of 100, strong" is its own name to a screen reader, and its tip
+  says "How well this job matches what you want, out of 100". Why: a bare "84" in a tinted blob
+  was read as nothing (the usability review, 2026-11-16), the Brief's green pill, the card's
+  ring and the sheets' "Scored 79" were three ways to say one number (the redesign, phase 2,
+  2026-11-17), and on Jobs and the Brief, where jobs are ranked, nothing said what "71" was (the
+  redesign's second round, 2026-11-17). (fit ring test, calm test)
 - Two devices that said different things about an application are asked as one plain
   question, "Did you apply to Quayside Foods?" with "Yes, I applied" and "Not yet", each
   answer the engine's own action, and nothing under it about the devices. Why: "Two answers
@@ -308,8 +327,11 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   (To do asks them too; above the list it would stand between the switch and the first card),
   closed until opened, "2 jobs to confirm: did you apply?", each one the same card whatever
   asks it (`confirmCard`): the role with its fit ring where the job is known, the employer and
-  the place, the question and its answers in the grey box, no trash and no More (one was a To
-  do card and one a whole draft card, the redesign's second round, 2026-11-17); in the list
+  the place, the question and its answers in the grey box ("Yes, I applied", "Not yet"), the
+  trash top right as on every live card (the draft's or the job's own; for a question with
+  nothing else behind it, its own "Skip this role", then not said again among the answers) and
+  no More (one was a To do card and one a whole draft card with other answers, the redesign's
+  second round, 2026-11-17); in the list
   while several are being selected, to be ticked; and a draft asking it offers no "Apply on their site" while it is open. A posting
   that has closed waits under the list ("1 closed: Show"), as do the jobs you hid ("1 you hid:
   Show") and what the search's rules left out ("41 that did not fit: Show"). Why: the first
@@ -346,17 +368,22 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   when it was posted and found, the pay where stated) ending with its details fold: "Why"
   where it has a score, else "Details", short labelled rows in one size and one tone (why it
   scored, a watch-out apart, worth knowing, skills, the posting, "Also at" the employer by kind,
-  each link naming what it opens). More holds only the rare actions; a card with none has no More.
-  The last fact, "Why" and the pencil keep together at the line's end, never "Why" or the
-  pencil alone on a line, and a
+  each link naming what it opens, and last "Change the details", which corrects its title, pay
+  or place). More holds only the rare actions; a card with none has no More.
+  The last fact and "Why" keep together at the line's end, never "Why" alone on a line, and a
   draft's lines are a card's 8px apart, as a find's are (2026-11-10). Each fact is kept whole, a
   line breaking only at a dot ("Posted 5 / days ago" broke mid-phrase). On a phone the facts are
   two lines at most: where it is (the employer, the town, how it is worked), cut short with "..."
   if it must be, then the pay and the closing day, "Why" at the end; when it was found, and when
-  it was posted where it has a closing day, are its details' "When" row, and the pencil that
-  corrects its title, pay or place is its details' last line, in words ("Change the title, pay or
-  place"). Why: three and four lines of facts on a phone (the redesign, phase 2, 2026-11-17).
-  (jobs page tests, layout 16, room test)
+  it was posted where it has a closing day, are its details' "When" row. Why: three and four
+  lines of facts on a phone (the redesign, phase 2, 2026-11-17). **The pencil is only for asking
+  Claude to rewrite what it wrote** (a document, a message, a prep, the brief): what changes a
+  fact is said in words where the fact is, never a pencil and never under More, which holds no
+  way to edit (the maintainer, 2026-11-05). A job's title, pay and place are "Change the
+  details", the last line of its details on every screen; a booked call's day is "Change the
+  time" beside it. Why: the Jobs tip says to use the pencil on anything Claude writes, and a
+  pencil beside a job's facts or a call's time changed a date or a title, not Claude's words
+  (the redesign's second round, 2026-11-17). (jobs page tests, layout 16, room test)
 - A dot between facts never starts or ends a line, and a day said in words ("Sun 20 Sept") is
   never broken over two: a dot is held to the word after it, and one a line would still start
   or end with goes out of sight (app.js `wordsAdd`, `sepFit`). A file's name or the page's
@@ -370,8 +397,8 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   Open (the file, where it is on the page) and its pencil, 36px (the redesign, phase 2,
   2026-11-17: grey capsules "CV ✎ letter ✎" after "All checks passed:" read as tags, and before
   them bare pencils on the line read as stray marks); the one made for a person says only that
-  its checks passed. The pencils open the Tweak panel; the
-  pencil at the end of a job's facts corrects its title, pay or place, code only. What Claude can
+  its checks passed. The pencils open the Tweak panel; "Change the details" in a job's details
+  corrects its title, pay or place, code only. What Claude can
   do by itself is never a button: a draft's remake after a check with its fix in hand, and its
   files, are queued by the view, and the card says what Claude is doing. Every control that wakes
   Claude carries the gauge; the sweep tags each control Claude-waking or code-only. A warm route
@@ -866,6 +893,13 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   size it sets, the control keeping its height and targets. On a phone Standard is 100%,
   Smaller the old 85% and Larger 115%. (the maintainer, 4.12; settings
   fold test)
+- A control's name starts with the words it shows (WCAG 2.5.3, Label in Name), whatever it
+  adds after them: "Take it off: Careers fair", "They sent me a job: Juno", "Show all: the paid
+  LinkedIn message to Bea", "Latest: go to the latest message"; a row that shows its name says
+  it first, its ring's fit after it. A speech user says the words they see. Why: "Take it off"
+  was named "Take off: ...", a "More" "Show all of ...", and "Latest" "Go to the latest message"
+  (the accessibility review of the redesign's second round, 2026-11-17). (design-language test:
+  every screen and every card's sheet, with each fold and menu open)
 
 ## Colour, type and space
 
