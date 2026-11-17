@@ -2863,6 +2863,10 @@ SAFE_DEFAULTS: dict[str, str] = {
                            "/setup turns it on for one",
     "search.PORTAL_LOCATIONS": "defaults to every SCRAPE_LOCATION; /add-portal writes it "
                                "only when a board cannot read those names",
+    # The person's own minutes for one of their boards (scrape_wide.board_share, issue 327).
+    "search.PORTAL_MINUTES": "{}: each of the person's own boards gets the time its jobs on the "
+                             "list have earned it, and a board with too few searches to judge "
+                             "by the minute after LinkedIn and freehire it had before",
     "search.WORKDAY_INTERNAL_SITES": "the app drops Workday's 'Privileged' site already; a "
                                      "profile adds an employer's own internal site names "
                                      "once a round has shown one",

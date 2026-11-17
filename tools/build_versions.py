@@ -118,8 +118,9 @@ METHODS: dict[str, dict] = {
             (29, "2026-11-11", False, "the robots.txt check names the new page fetcher it gates (tools/fetch_page.py); no board changes"),
             (30, "2026-11-11", False, "openroles 0.5.1 reads the boards: a robots.txt with a byte-order mark or a percent-encoded rule is obeyed and one with a rule that cannot be read is a no, a host that says slow down is sent nothing until its pause has passed, a Greenhouse or Gem posting is where its own location says, not where its office tags are, a posting listed on two pages comes back once, and what a description left out is counted for every part of it, text hidden by an inline style of any kind included"),
             (31, "2026-11-17", False, "an employer's job site that asks to slow down is read once more after its pause, a Workday data centre is read two sites at a time, each site's robots.txt is kept a day, a posting whose page failed goes on without its body for the fetch stage, and the round says which sites it could not read; nothing to build again"),
+            (32, "2026-11-17", False, "the portals' notes say how long a round searches one of the person's own boards and that profile/search.py PORTAL_MINUTES gives one minutes of the person's own; no board is built differently"),
         ),
-        "fingerprint": "e27bafc12a3a42ee",
+        "fingerprint": "865950692698adcf",
     },
     "search": {
         "setup": True, "by": "upgrade", "priority": 2, "time": "~20 min",
