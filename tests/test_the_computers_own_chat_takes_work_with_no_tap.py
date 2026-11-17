@@ -239,24 +239,26 @@ def test_a_wake_takes_the_work_keeps_its_own_bell_or_rests(tmp_path, monkeypatch
     assert f"listener-woke \"$D\" --chat {me}" in steps and "listener-steps" in steps
 
 
-def test_the_scheduled_task_rings_a_quiet_listener_once_and_never_a_fresh_one(
+def test_the_scheduled_task_never_rings_the_computers_own_chat_with_nothing_waiting(
         tmp_path, monkeypatch):
-    """A watch can end after hours with nothing happening: the hourly task, with nothing
-    waiting, rings a listener quiet for two hours, and leaves a fresh one alone. One keep-alive
-    left unanswered makes it stale, so the next job goes the way it went before."""
+    """A task made before still runs keep-alive whenever nothing waits. It rang a listener quiet
+    for two hours so its watch would hold, and each ring woke that chat's whole history with
+    nothing to do (issue #322): its wait finds its rings on GitHub whether its watch holds or
+    not, so the task rings it never, quiet or fresh, and leaves nothing in the copy. A ring left
+    unanswered still makes it stale, so the next job goes the way it went before."""
     _as(monkeypatch, "computer", tmp_path)
     path = str(tmp_path / "bell.html")
-    quiet = _with(_db(), LISTENER, answered_at=app_model.stamp(T - timedelta(hours=3)))
-    said = computer.keep_alive(quiet, T, path)
-    assert said.startswith("keep-alive: ") and "listener-rung" in said and f"url {LBELL}" in said
-    assert "<title>" + computer.LISTENER_BELL_TITLE in open(path, encoding="utf-8").read()
-    assert computer.keep_alive(_with(_db(), LISTENER), T, path) == ""
-    assert computer.keep_alive(_with(_db()), T, path) == ""
+    quiet = _with(_db(), LISTENER, answered_at=app_model.stamp(T - timedelta(hours=3)),
+                  kept_at=app_model.stamp(T - timedelta(hours=3)))
+    for db in (quiet, _with(_db(), LISTENER), _with(_db())):
+        assert computer.keep_alive(db, T, path) == ""
+    assert not os.path.exists(path) and not os.path.exists(computer.ring_path())
+    dump = _dump(quiet, tmp_path / "dump")
+    assert _run("keep-alive", dump, "--file", path, "--now", NOW) == ""
     rung = _apply(quiet, computer.listener_rung(quiet, T, str(tmp_path / "r")))
-    assert computer.keep_alive(rung, T + timedelta(minutes=1), path) == ""      # once
-    assert computer.listener_stale(rung, T + timedelta(minutes=6))
-    assert computer.keep_alive(rung, T + timedelta(hours=1), path) == ""        # stale: left
-    # The task's steps run it whenever nothing waits.
+    assert computer.listener_live(rung, T + timedelta(minutes=6))
+    assert computer.listener_stale(rung, T + timedelta(seconds=computer.LISTENER_LATE_ANSWER_S))
+    # The task's steps run it whenever nothing waits, and it prints nothing.
     steps = "\n".join(computer.task_steps(URL))
     assert "computer.py keep-alive" in steps and computer.TASK_EVERY_MIN == 60
 
@@ -264,33 +266,35 @@ def test_the_scheduled_task_rings_a_quiet_listener_once_and_never_a_fresh_one(
 # ------------------------------------------------------------------ its own watch, its own save
 
 
-def test_an_idle_computer_chat_keeps_its_watch_with_one_background_wait(tmp_path, monkeypatch):
+def test_an_idle_computer_chat_keeps_one_wait_in_code_and_never_a_sleep(tmp_path, monkeypatch):
     """With no scheduled task on the computer (COMPUTER.md says none is made), nothing rang an
-    idle listener, and its watch could lapse after a quiet afternoon. Each way it goes idle ends
-    with one background wait, whose end wakes it to republish its bell."""
+    idle listener, and its watch could lapse after a quiet afternoon; a background sleep woke it
+    about twelve times a day to republish its bell (issue #322). Each way it goes idle now ends
+    with one wait, code that looks on GitHub for its rings and wakes it only for one."""
     _as(monkeypatch, "computer", tmp_path)
     me = LISTENER["chat"]
     wait = ("run_in_background true", f"timeout {computer.LISTENER_WAIT_TIMEOUT_MS}",
-            f"sleep {computer.LISTENER_WAIT_S}", "unless one is already running",
-            "never a foreground sleep", "When it ends it wakes this chat")
-    assert computer.LISTENER_WAIT_S < 2 * 3600 and computer.LISTENER_WAIT_S > \
-        computer.LISTENER_KEEP_S and computer.LISTENER_WAIT_TIMEOUT_MS > \
-        computer.LISTENER_WAIT_S * 1000
+            "One at a time", "never a foreground sleep", "never a plain sleep",
+            "only when work is rung for it", "costing nothing")
+    assert computer.LISTENER_WAIT_TIMEOUT_MS <= 2 * 3600 * 1000 and \
+        computer.LISTENER_POLL_S <= 60 < computer.LISTENER_KEEP_S
     idle = _with(_db(), LISTENER, kept_at=app_model.stamp(T - timedelta(hours=2)))
     keep = computer.listener_woke(idle, me, T, str(tmp_path / "a"))["next"]
     rest = computer.listener_woke(_with(_db(), LISTENER), me, T, str(tmp_path / "b"))["next"]
     stay = computer.listener_become(_with(_db(), LISTENER), me, str(tmp_path / "s.html"), T)
     become = computer.listener_become(_with(_db()), "session_macA", str(tmp_path / "n.html"), T)
     for said, who in ((keep, me), (rest, me), (stay, me), (become, "session_macA")):
-        assert all(w in said for w in wait) and f"listener-steps --chat {who}" in said, said
+        assert all(w in said for w in wait) and f"listener-wait --chat {who}" in said and \
+            f"listener-steps --chat {who}" in said and "command sleep" not in said, said
     # Mid-job it waits for nothing: its step 8 starts the wait once the job is over.
     take = computer.listener_woke(_with(_db(WORK), LISTENER), me, T, str(tmp_path / "c"))["next"]
-    assert take.startswith("take:") and "sleep" not in take
-    # Woken by the wait's end, its next wake republishes the bell: an hour has gone by.
-    after = T + timedelta(seconds=computer.LISTENER_WAIT_S)
+    assert take.startswith("take:") and "listener-wait" not in take and "sleep" not in take
+    # Woken an hour later with nothing waiting, it republishes the bell, so its watch starts
+    # again; a wait stopped at a time limit is started again in one call.
+    after = T + timedelta(seconds=computer.LISTENER_KEEP_S)
     assert computer.listener_woke(_with(_db(), LISTENER, kept_at=NOW), me, after,
                                   str(tmp_path / "d"))["next"].startswith("keep:")
-    assert "background wait ending" in computer.listener_steps(URL, me)[0]
+    assert "stopped at a time limit" in computer.listener_steps(URL, me)[1]
 
 
 def test_the_work_the_computers_own_chat_saved_is_brought_to_master_at_once(
@@ -303,7 +307,7 @@ def test_the_work_the_computers_own_chat_saved_is_brought_to_master_at_once(
     me = LISTENER["chat"]
     stay = computer.listener_become(_with(_db(), LISTENER), me, str(tmp_path / "s.html"), T)
     assert f"Artifact read with url {BELL}" in stay and "computer.py rung" in stay
-    assert stay.index("rung") < stay.index("do step 9") < stay.index("sleep")
+    assert stay.index("rung") < stay.index("do step 9") < stay.index("listener-wait")
     assert "<title>" + computer.BELL_TITLE in (tmp_path / "starter-bell.html").read_text(
         encoding="utf-8")
     # Becoming it, the ring comes only once it is recorded, so the starter never puts it away.

@@ -389,6 +389,25 @@ def test_a_stop_and_a_lift_on_two_chats_keep_the_newer_snapshot_whole(repo, monk
     written_as(repo, "documents/network/.reads_stopped.json", indent=1, newline=False)
 
 
+def test_two_chats_that_rang_the_computers_own_chat_keep_the_later_ring(repo):
+    """The ring its wait reads on GitHub (issue #322): two chats that rang it the same afternoon
+    land the later ring, whole, as its writer writes it."""
+    import computer
+    t = dt.datetime.fromisoformat
+    r, said = two_chats(
+        repo,
+        lambda: computer.write_ring("session_listenerEXAMPLE", t("2026-10-25T08:00:00+00:00")),
+        lambda: computer.write_ring("session_listenerEXAMPLE", t("2026-10-25T12:00:00+00:00")),
+        lambda: computer.write_ring("session_otherEXAMPLE", t("2026-10-25T09:00:00+00:00")))
+    assert r.returncode == 0, said
+    assert read(repo, "documents", "computer_ring.json") == {
+        "chat": "session_listenerEXAMPLE", "rung_at": "2026-10-25T12:00:00Z"}
+    written_as(repo, "documents/computer_ring.json", indent=1, sort_keys=True,
+               ensure_ascii=False)
+    computer.write_ring("session_listenerEXAMPLE", t("2026-10-25T12:00:00+00:00"))
+    unchanged(repo)
+
+
 def test_search_filters_balance_and_title_yields_merge(repo, monkeypatch):
     import reading as R
     import sources
