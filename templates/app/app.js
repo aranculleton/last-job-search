@@ -5892,7 +5892,10 @@
   const fitHeld = (l) => { let n = 0; const t = l.textContent; for (let i = 0; i < t.length; i++) n = (n * 31 + t.charCodeAt(i)) | 0; return fitName(l) + "=" + l.children.length + ":" + n; };
   // The text size is part of it: a fit kept from before Smaller was chosen left the Brief a
   // tenth short of the window (the maintainer, 2026-11-06: "pressing smaller size shrunk the brief").
-  const fitKey = (lists) => window.innerWidth + "x" + window.innerHeight + "@" + (document.body ? document.body.style.zoom : "") + ":" + lists.map(fitHeld).join("|");
+  // The grid's own width too: Claude's work opened or closed beside the Brief leaves the window
+  // as it was and changes every panel's room, and the counts worked out with it open overfilled
+  // the Brief once it closed (the redesign, phase 2, 2026-11-17).
+  const fitKey = (lists) => window.innerWidth + "x" + window.innerHeight + "@" + (document.body ? document.body.style.zoom : "") + "/" + Math.round(((document.querySelector("#main .brief-grid") || {}).clientWidth) || 0) + ":" + lists.map(fitHeld).join("|");
   // The counts last worked out, put on a Brief drawn afresh before it is compared with the one
   // on screen (patch): without them the two never matched, and every live update, and the
   // minute's redraw, tore the whole Brief down and built it again, which a phone scrolling
@@ -6600,8 +6603,8 @@
       null, {icon: "todo", w: 4, m: 2, count: heroCounts && need > 1 ? "1 of " + need : null}));
     // Booked things only: a follow-up 45 days late is To do's, never Coming up's, and the line
     // says what the strip shows (the audit, 2026-11-03).
-    put(grid, briefPanel("upcoming", "Coming up", [weekStrip(allUp), upCards.length ? (() => { const seen = new Set(); const lead = (upCards.find((u) => u.kind === "interview") || {}).id; const next = upNextPrep(upCards) === lead ? lead : null;
-      return h("ul", {class: "plain bp-up", "data-fit": "2,2"}, upCards.map((u) => upRow(u, "brief", seen, next, lead))); })()
+    put(grid, briefPanel("upcoming", "Coming up", [weekStrip(allUp), upCards.length ? (() => { const seen = new Set(); const lead = (upCards.find((u) => u.kind === "interview") || {}).id;
+      return h("ul", {class: "plain bp-up", "data-fit": "2,2"}, upCards.map((u) => upRow(u, "brief", seen, null, lead))); })()
       : h("p", {class: "muted"}, (allUp.length ? "Nothing else booked." : "Nothing booked yet.") + briefWaiting())],
       // "All 1 coming up" said nothing the panel did not: a count only where there is more.
       [navLink("interviews", allUp.length > 1 && allUp.length > upCards.length ? "All " + allUp.length + " coming up" : "Coming up"),
@@ -9640,17 +9643,15 @@
     prepped.add(id);
     const w = workDoc("prep~" + seg(iv.id));
     if (w && ACTIVE.has(w.status)) return h("span", {class: "up-prep"}, "Preparing your prep");
-    // On the Brief, its prep as a soft pill, never underlined words (the redesign, phase 2,
-    // 2026-11-17), on the next interview's row alone: Read your prep where it is ready, Prepare
-    // me (or Update my prep) where it is not; the others say so in the quiet words, as a pill
-    // on each took the room the Brief's other panels list in. The title opens each prep.
+    // On the Brief, the next interview's prep, ready, is a soft pill, Read your prep; every
+    // other row says its prep in the quiet words, never underlined words (the redesign, phase
+    // 2, 2026-11-17). Prepare me is on Coming up's row and To do's card: with its gauge beside it
+    // here it grew the row after the panel was fitted, and the Brief ran past the window. The
+    // title opens each prep.
     if (brief) {
       const p = obj(iv.prep);
-      if (leadRow !== u.id) return h("span", {class: "up-prep"}, p.updated && !p.stale ? "Prep ready" : p.updated ? "Prep is for an earlier plan" : "No prep yet");
-      if (p.updated && !p.stale) return h("span", {class: "up-prep"}, btn("Read your prep", () => openDetail("interview", iv.id), {kind: "secondary", small: true, key: "bp-up-read:" + u.id, aria: "Read your prep for " + txt(iv.company)}));
-      if (nextPrep !== u.id) return h("span", {class: "up-prep"}, p.updated ? "Prep is for an earlier plan" : "No prep yet");
-      return h("span", {class: "up-prep"}, p.updated ? btn("Update my prep", () => askPrep(iv), {kind: "secondary", small: true, key: "bp-up-prep:" + u.id, wakes: "prep", aria: "Update my prep for " + txt(iv.company)})
-        : btn("Prepare me", () => askPrep(iv), {kind: "secondary", small: true, key: "bp-up-prep:" + u.id, wakes: "prep", aria: "Prepare me for " + txt(iv.company)}));
+      if (leadRow === u.id && p.updated && !p.stale) return h("span", {class: "up-prep"}, btn("Read your prep", () => openDetail("interview", iv.id), {kind: "secondary", small: true, key: "bp-up-read:" + u.id, aria: "Read your prep for " + txt(iv.company)}));
+      return h("span", {class: "up-prep"}, p.updated && !p.stale ? "Prep ready" : p.updated ? "Prep is for an earlier plan" : "No prep yet");
     }
     // The row's one pill, in the words To do uses ("Read your prep"): the night before, the key
     // action was a small underlined "Prep ready" (the UX review, 2026-11-10, U-12).
@@ -9674,12 +9675,10 @@
     const prep = brief ? upPrep(u, prepped || new Set(), true, nextPrep, leadRow) : null;
     // Asked for and not confirmed by them yet: said on its row, here and on the Brief.
     const maybe = u.tentative ? stateWord(NOT_CONFIRMED, null) : null;
-    // Its prep's pill on its day's line, at its end, never a line of its own: under the title it
-    // took the room the Brief's other panels list in (2026-11-11), and beside the title it
-    // squeezed the day onto two lines.
+    // Its prep under its title: a pill on the next interview's row alone (upPrep), the quiet
+    // words on the others, so the rows keep their height wherever the panel is drawn.
     if (brief) return h("li", {class: "bp-up-row"},
-      h("span", {class: "up-main"}, h("span", {class: "bp-up-when"}, h("span", {class: "up-when"}, [upDayLabel(u.day), upWhen(u)].filter(Boolean).join(" · ")), prep),
-        h("span", {class: "up-title"}, upGo(u)), maybe), add);
+      h("span", {class: "up-main"}, h("span", {class: "up-when"}, [upDayLabel(u.day), upWhen(u)].filter(Boolean).join(" · ")), h("span", {class: "up-title"}, upGo(u)), maybe, prep), add);
     const sub = [UP_WORDS[txt(u.kind)] || "", txt(u.note), txt(u.place)].filter(Boolean).join(" \u00b7\u00a0");
     // A row of a day's card (the redesign, phase 2, 2026-11-17): its time in a steady column, what
     // it is in the title's size, what kind and whether its prep is ready on the line under it

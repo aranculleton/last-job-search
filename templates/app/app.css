@@ -2712,10 +2712,8 @@ ul.bp-news { gap: 12px; }
    the calendar beside it and out of the panel at a tablet's width (2026-11-11). */
 .bp-up-row .up-when { font-size: var(--t-sm); color: var(--muted); white-space: normal; }
 .bp-up-row .up-title { overflow-wrap: anywhere; }
-.bp-up-when { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 2px 8px; min-width: 0; }
-.bp-up-when > .up-prep { flex: 0 1 auto; min-width: 0; justify-content: flex-end; }
 @media (min-width: 760px) and (pointer: fine), (min-width: 760px) and (pointer: none) {
-  .bp-up-when > .up-prep > .btn.small { min-height: 24px; padding: 2px 12px; }
+  .bp-up-row .up-prep > .btn.small { min-height: 24px; padding: 2px 12px; }
 }
 .bp-upcoming { --pc: var(--st-running); --pcbg: var(--st-running-bg); }
 dialog.sheet .sheet-body { display: grid; gap: 16px; }
