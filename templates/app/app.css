@@ -2593,8 +2593,10 @@ ul.bp-news { gap: 12px; }
 .d-step.now { color: var(--ink); }
 .d-step.now .d-step-dot { background: var(--surface); box-shadow: 0 0 0 2px var(--mark); }
 .d-step-l { overflow-wrap: anywhere; }
-/* What the step waits on, under its name ("Waiting on your CV"): quiet, never a second state. */
+/* What the step waits on, under its name ("Waiting on your CV"): quiet, never a second state; the
+   steps keep their names on one line however tall one grows. */
 .d-step-sub { font-weight: 400; color: var(--muted); overflow-wrap: anywhere; }
+.d-steps > .d-step { align-content: start; }
 .d-next { margin: 0; }
 /* A person's page: each block apart, as cards are, never run together (2026-11-02). */
 .d-person { display: grid; gap: 16px; }
