@@ -7,7 +7,7 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import test_the_page_journeys as journeys  # noqa: E402
-from test_the_page_journeys import WIDE, _go  # noqa: E402
+from test_the_page_journeys import PHONE, WIDE, _go  # noqa: E402
 
 T = "2026-10-25T09:00:00.000Z"
 EVENT = "up-ev20261020120000"
@@ -27,25 +27,31 @@ STATE = r"""(() => { const a = document.activeElement;
     atSum: at ? (at.getAttribute('data-k') || at.className || at.tagName) : null, items, sy: window.scrollY, ih: window.innerHeight}; })()"""
 
 
+LOG = r"""(() => { const k = (e) => e ? (e.getAttribute && (e.getAttribute('data-k') || e.id) || e.tagName || String(e)) : null;
+  window.__flog = [];
+  for (const t of ['focusin', 'focusout', 'keydown', 'keyup', 'toggle']) document.addEventListener(t, (e) => window.__flog.push(t + ':' + k(e.target) + (e.key ? '/' + e.key + (e.altKey ? '+alt' : '') : '') + (e.relatedTarget ? '>' + k(e.relatedTarget) : '')), true);
+  return 'ok'; })()"""
+READ = r"""(() => { const a = document.activeElement; const out = {active: a ? (a.getAttribute('data-k') || a.id || a.tagName) : null, log: window.__flog.slice()}; window.__flog.length = 0; return out; })()"""
+TRY = r"""(() => { const b = document.querySelector('[data-k="cal:%s"]'); if (!b) return 'no item';
+  const cs = getComputedStyle(b); const p = b.closest('.menu-panel'); const pcs = p ? getComputedStyle(p) : null;
+  b.focus(); const got = document.activeElement === b;
+  return {focused: got, tabIndex: b.tabIndex, vis: cs.visibility, disp: cs.display, panel: pcs && [pcs.display, pcs.visibility, pcs.position, pcs.contentVisibility || ''],
+    open: b.closest('details').open, log: window.__flog.slice()}; })()"""
+
+
 @pytest.fixture(scope="module")
 def run():
     yield from journeys.browser()
 
 
-@pytest.mark.parametrize("vp", [WIDE], ids=["wide"])
+@pytest.mark.parametrize("vp", [PHONE, WIDE], ids=["phone", "wide"])
 def test_probe(run, tmp_path, vp):
     got = _go(run, tmp_path, [
-        {"hash": "interviews", "eval": STATE % EVENT},
-        {"open": "up-more:" + EVENT, "eval": STATE % EVENT},
-        {"press": "Tab", "eval": STATE % EVENT},
-        {"press": "Enter", "wait": 800, "eval": STATE % EVENT},
-        {"press": "Escape", "wait": 800, "eval": STATE % EVENT},
-        {"open": "up-more:" + SCREEN, "eval": STATE % SCREEN},
-        {"press": "Tab", "eval": STATE % SCREEN},
-        {"press": "Tab", "eval": STATE % SCREEN},
-        {"press": "Enter", "wait": 800, "eval": STATE % SCREEN},
+        {"hash": "interviews", "eval": LOG},
+        {"open": "up-more:" + EVENT, "eval": READ},
+        {"press": "Tab", "eval": READ},
+        {"eval": TRY % EVENT},
     ], vp, clock=T)
     import json
-    keep = ("active", "openDetails", "openDialogs", "atSum", "sy", "sumRect")
-    trace = [{k: (a.get("eval") or {}).get(k) for k in keep} for a in got["after"]]
+    trace = [a.get("eval") for a in got["after"]]
     raise AssertionError("PROBE " + json.dumps(trace, separators=(",", ":")))
