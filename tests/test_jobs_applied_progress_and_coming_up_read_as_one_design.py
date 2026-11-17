@@ -17,9 +17,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import pytest  # noqa: E402
 
 import test_the_page_journeys as journeys  # noqa: E402
-from test_the_page_journeys import PHONE, WIDE, _go  # noqa: E402
+from test_the_page_journeys import PHONE, WIDE, _go, _sample  # noqa: E402
 
 T = "2026-10-25T09:00:00Z"
+PERSON_ZONE = _sample()["person"]["time_zone"]
 
 
 @pytest.fixture(scope="module")
@@ -27,9 +28,9 @@ def run():
     yield from journeys.browser()
 
 
-def _eval(run, tmp_path, where, js, vp):
+def _eval(run, tmp_path, where, js, vp, zone=None):
     step = {"hash": "jobs", "open": "jobsw:applied", "eval": js} if where == "applied" else {"hash": where, "eval": js}
-    return _go(run, tmp_path, [step], vp, clock=T)["after"][0]["eval"]
+    return _go(run, tmp_path, [step], vp, clock=T, zone=zone)["after"][0]["eval"]
 
 
 # ------------------------------------------------------------------ one ring for a fit
@@ -232,18 +233,30 @@ COMING = r"""(() => { const days = [...document.querySelectorAll('#main [data-k=
         opens: link ? r.classList.contains('opens') && getComputedStyle(r).cursor === 'pointer' : null}; }),
     prep: [...document.querySelectorAll('#main [data-k^="up-prep:"], #main [data-k^="up-read:"]')].map((b) => b.dataset.k + '=' + b.textContent),
     lg: (() => { const p = document.createElement('span'); p.style.fontSize = 'var(--t-lg)'; document.querySelector('#main').append(p);
-      const v = parseFloat(getComputedStyle(p).fontSize); p.remove(); return v; })()}; })()"""
+      const v = parseFloat(getComputedStyle(p).fontSize); p.remove(); return v; })(),
+    rem: parseFloat(getComputedStyle(document.documentElement).fontSize),
+    here: document.querySelectorAll('#main .up-row .up-here').length}; })()"""
 
 
+# On a device in the person's own zone each time is said once, in a steady 64px column (56 on a
+# phone). On a device in another zone each time says both ("13:00 London time (3:00 here)") and
+# the column is wider on every row alike, 10rem (6rem on a phone), so the rows still line up
+# (DESIGN.md, "A time from another zone"). The device's zone is set both ways: taken from the
+# machine, the far zones of Everywhere drew the design's own wider column, 90 and 150px, against
+# the home zone's 56 and 64, and the test failed there with nothing wrong (2026-11-17).
+@pytest.mark.parametrize("zone", [PERSON_ZONE, "Pacific/Kiritimati"], ids=["home", "far"])
 @pytest.mark.parametrize("vp", [PHONE, WIDE], ids=["phone", "wide"])
-def test_coming_up_is_a_card_a_day_each_row_its_time_what_it_is_and_one_more(run, tmp_path, vp):
-    seen = _eval(run, tmp_path, "interviews", COMING, vp)
+def test_coming_up_is_a_card_a_day_each_row_its_time_what_it_is_and_one_more(run, tmp_path, vp, zone):
+    seen = _eval(run, tmp_path, "interviews", COMING, vp, zone=zone)
     assert [d["head"] for d in seen["days"]][:2] == ["Wed 28 Oct", "Thu 29 Oct"], seen["days"]
     assert all(d["lists"] == 1 and d["rows"] >= 1 for d in seen["days"]), seen["days"]
     rows = {r["id"]: r for r in seen["rows"]}
     # The time a steady column, as wide on every row with a time.
     times = {tuple(r["when"]) for r in seen["rows"] if r["when"]}
-    assert len(times) == 1 and next(iter(times))[1] == (64 if vp is WIDE else 56), times
+    home = zone == PERSON_ZONE
+    assert (seen["here"] == 0) == home, (zone, seen["here"])
+    want = (64 if vp is WIDE else 56) if home else round((10 if vp is WIDE else 6) * seen["rem"])
+    assert len(times) == 1 and next(iter(times))[1] == want, (times, want)
     # A title in a card title's size (To do's), semibold; one More, no bare icons beside it.
     for r in seen["rows"]:
         assert r["size"] == seen["lg"] and r["weight"] == "600", (r, seen["lg"])
