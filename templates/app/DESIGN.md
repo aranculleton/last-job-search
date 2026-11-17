@@ -844,7 +844,7 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
 - Colours are the tokens in `palettes.py`, never a raw value. Light: warm near-white paper and
   white cards, the filled button the text colour with white on it. Dark: warm near-black, a card
   a step lighter. Clay means it is the person's move and nothing else: "Needs your answer",
-  "Your turn" and "Ready to do" are clay chips (the soft clay with clay words, app.js `moveTone`),
+  "Your turn", "Ready to do" and "Ready to send" are clay chips (the soft clay with clay words, app.js `moveTone`),
   never the late amber or the running blue; blue is for work in progress and for focus. Behind a
   sheet the page steps back under the scrim, a warm near-black at 45% in both looks. (colour
   tests)

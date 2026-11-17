@@ -3274,7 +3274,7 @@
   // Clay means it is the person's move, and nothing else does (the redesign's second round,
   // 2026-11-17): "Needs your answer" in the late amber read as late, and "Ready to do" in blue
   // as running. The words say it, so every chip and state that says one is drawn so.
-  const YOUR_MOVE = /^(Needs your answer|Replied: your turn|Your turn|Ready to do|\d+ questions? for you)$/;
+  const YOUR_MOVE = /^(Needs your answer|Replied: your turn|Your turn|Ready to do|Ready to send|\d+ questions? for you)$/;
   const moveTone = (text, tone) => (YOUR_MOVE.test(txt(text).trim()) ? "you" : tone);
   function chip(text, tone) { return h("span", {class: "chip tone-" + (moveTone(text, tone) || "plain")}, text); }
   // The one control that calls off Claude's work, wherever it shows (Claude's work, a card's
@@ -8000,7 +8000,7 @@
       const n = pagesOf(k);
       const key = "doc-open:" + a.id + ":" + k;
       return h("li", {class: "doc-row", "data-doc": k}, icon("k-application"),
-        h("span", {class: "doc-words"}, h("span", {class: "doc-name"}, name), " ", h("span", {class: "doc-meta"}, [n ? plural(n, "page", "pages") : "", "checked"].filter(Boolean).join(" \u00b7 "))),
+        h("span", {class: "doc-words"}, h("span", {class: "doc-name"}, name), " ", h("span", {class: "doc-meta"}, (n ? [plural(n, "page", "pages"), "checked"] : ["checked", "page count not read here"]).join(" \u00b7 "))),
         h("span", {class: "doc-acts"}, f && f.asset ? btn("Open", () => download(f, key), {kind: "quiet", small: true, key, aria: "Open " + lc1(name) + ": " + txt(f.name)}) : null,
           docPencil(a, k)), noteFor(key));
     }));

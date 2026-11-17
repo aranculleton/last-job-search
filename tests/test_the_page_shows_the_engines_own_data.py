@@ -254,8 +254,10 @@ def test_every_section_shows_the_engines_items_in_plain_words(run, built):
     # · letter 1 page ✎"), so the text read has the pencils' names between the parts.
     # Said as the documents and their length alone since 2026-11-05: "Made, right length:" on
     # every card read as something to do.
-    said = (["CV 1 page", "letter 1 page"] if pdftext.reader() or shutil.which("pdfinfo")
-            else ["Made; page count not read here"])
+    # Since the redesign (2026-11-16) each document is a row: its name, then its length and
+    # that it was checked ("CV", then "1 page \u00b7 checked"), or that its length was not read here.
+    said = (["CV\n1 page \u00b7 checked", "Cover letter\n1 page \u00b7 checked"] if pdftext.reader() or shutil.which("pdfinfo")
+            else ["CV\nchecked \u00b7 page count not read here"])
     assert all(s in t["drafts"] for s in said) and "\nChecked\n" not in t["drafts"], t["drafts"]
     assert "Made, right length" not in t["drafts"], t["drafts"]
     fern = t["drafts"].split("Operations Analyst", 1)[1].split("Claims Forecasting Analyst", 1)[0]
