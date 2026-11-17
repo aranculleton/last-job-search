@@ -2182,8 +2182,9 @@ def _filtered(name: str, targets: dict, ctx: Ctx | None = None) -> dict:
         return item
 
     # A whole rule comes back by its id, as before: filtered~<its kind>.
+    more = (data.get("not_listed") or {}).get("kinds") if isinstance(data, dict) else None
     got = rules_view.left_view(found, name, rules_view.content_day(rounds_dir(name)), targets,
-                               item_of)
+                               item_of, more=more if isinstance(more, dict) else None)
     held = got.pop("held")
     if ctx is not None:
         _list(ctx, "filtered", held, sum(len(g["items"]) for g in got["groups"]), 0)

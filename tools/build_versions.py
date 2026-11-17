@@ -117,8 +117,9 @@ METHODS: dict[str, dict] = {
             (28, "2026-11-06", False, "the app's example person lists only the app's own job sites, never the copy's own, so the app's checks pass in a person's copy; nothing to build again"),
             (29, "2026-11-11", False, "the robots.txt check names the new page fetcher it gates (tools/fetch_page.py); no board changes"),
             (30, "2026-11-11", False, "openroles 0.5.1 reads the boards: a robots.txt with a byte-order mark or a percent-encoded rule is obeyed and one with a rule that cannot be read is a no, a host that says slow down is sent nothing until its pause has passed, a Greenhouse or Gem posting is where its own location says, not where its office tags are, a posting listed on two pages comes back once, and what a description left out is counted for every part of it, text hidden by an inline style of any kind included"),
+            (31, "2026-11-17", False, "an employer's job site that asks to slow down is read once more after its pause, a Workday data centre is read two sites at a time, each site's robots.txt is kept a day, a posting whose page failed goes on without its body for the fetch stage, and the round says which sites it could not read; nothing to build again"),
         ),
-        "fingerprint": "66a9ac7874b3ff41",
+        "fingerprint": "e27bafc12a3a42ee",
     },
     "search": {
         "setup": True, "by": "upgrade", "priority": 2, "time": "~20 min",
@@ -865,8 +866,9 @@ METHODS: dict[str, dict] = {
             (60, "2026-11-17", False, "the eligibility gate reads the market's own wording for citizenship, residence and a clearance beside the person's pattern: the neighbouring country's citizenship and residence always, and each other status the person's own pattern names; nothing needs redoing: it only cuts more"),
             (61, "2026-11-17", False, "bar.py judge --file records a round's batch of employers nobody had judged in one write, each marked by the round with its day, so a person or a chat can overturn it; nothing is screened differently"),
             (62, "2026-11-17", False, "a brand-leverage lift reads the posting with its boilerplate set aside (benefits, the equal-opportunity paragraph, travel asked of the person, the work model, stakeholder engagement), a lift for working terms ignores a bare hybrid, and one that says employer reads only what the employer is, so a travel requirement no longer lifts a job as a travel employer; opportunity.py --leverage-words says what each lift fired on; nothing ruled out needs looking at again, and the jobs on the page are scored again by the jobs-rescored upgrade"),
+            (63, "2026-11-17", False, "the record of jobs only seen keeps what a later search reads (when each was seen, and its title, employer and place while it can be relisted), and each search's list of what it left out keeps a few of its own checks' rows and counts the rest; nothing screened differently"),
         ),
-        "fingerprint": "af5dcc61ddceba3e",
+        "fingerprint": "48c3a85878046e06",
     },
     "routines": {
         "by": "you", "priority": 3, "applies": "routines",
@@ -1287,6 +1289,7 @@ KEEPS_NOTHING: dict[str, str] = {
     ".agents/skills/freehire-search/*": "the app's own portal, searched afresh by every round",
     ".claude/skills/job-scraper/SKILL.md": "how a round searches; every round runs it afresh",
     ".claude/skills/job-scraper/manual-round.md": "a round done by hand, read afresh each time",
+    ".claude/skills/job-scraper/rules.md": "why a round's rules are what they are, read when changing the round",
     ".claude/skills/job-application-assistant/SKILL.md": "routing: which command handles what",
     ".claude/skills/job-application-assistant/11-cost-model.md":
         "which model runs each stage; what it writes is held to the same checks",

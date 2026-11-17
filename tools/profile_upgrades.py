@@ -1211,6 +1211,41 @@ def _old_sweep_cursor() -> str:
             "that every file there is a round reads it" if os.path.exists(old) else "")
 
 
+# A seen file this small is read quickly and needs no shortening before the next round does it.
+SEEN_COMPACT_FROM = 1024 * 1024
+
+
+def _seen_compacted() -> str:
+    """Issue 310: every round wrote each posting it only saw into seen_jobs.json in full, and
+    one copy's file reached 19MB. A round now keeps those records short (throttle.compact);
+    a file grown before is shortened here at once, with no search needed."""
+    path = person.state("job_scraper", "seen_jobs.json")
+    try:
+        if os.path.getsize(path) < SEEN_COMPACT_FROM:
+            return ""
+        import throttle
+        n = throttle.compact_file(path, person.today().isoformat(), dry=True)
+    except Exception:  # noqa: BLE001  a file that cannot be read is the search's to report
+        return ""
+    return (f"your record of jobs already seen keeps {n} job(s) in full that a search reads "
+            "only the dates of" if n else "")
+
+
+def _left_out_slimmed() -> str:
+    """Issue 310: each search's left-out list kept every job its own free gates left out, 5 to
+    6MB a search. A search now keeps a few of each and counts the rest (filtered.slim); the
+    lists written before are slimmed here."""
+    import filtered
+    folder = person.state("documents", "rounds", filtered.FOLDER)
+    try:
+        names = sorted(n for n in os.listdir(folder) if n.endswith(".json"))
+    except OSError:
+        return ""
+    old = [n[:-5] for n in names if filtered.unslimmed(os.path.join(folder, n))]
+    return (f"{len(old)} search(es)' lists of what was left out keep every job the search's "
+            "own checks left out" if old else "")
+
+
 def _old_jobs_tweaks() -> str:
     """4.10 kept the record of tweaks to the person's search at documents/rounds/tweaks.json,
     among the round summaries, and a person's own test that reads every documents/rounds/*.json
@@ -2452,6 +2487,17 @@ REGISTRY: tuple[Upgrade, ...] = (
             _dropped_rows, "python3 tools/network/state.py dropped-rows --apply", "instant",
             command=("python3", "tools/network/state.py", "dropped-rows", "--apply"),
             paths=("network_contacts.csv",), priority=2),
+    Upgrade("seen-compacted", "2026-11-17",
+            "your record of jobs already seen kept small, so every search and every save is "
+            "quicker",
+            _seen_compacted, "python3 tools/throttle.py --compact", "instant",
+            command=("python3", "tools/throttle.py", "--compact"),
+            paths=("job_scraper/seen_jobs.json",), priority=3, conditional=True),
+    Upgrade("left-out-slimmed", "2026-11-17",
+            "each search's list of what it left out kept small, every count still whole",
+            _left_out_slimmed, "python3 tools/filtered.py slim", "instant",
+            command=("python3", "tools/filtered.py", "slim"),
+            paths=("documents/rounds/filtered/*.json",), priority=3, conditional=True),
     Upgrade("sweep-cursor-moved", "2026-10-19",
             "the slow boards' resume point moved out from among your round summaries, so a "
             "check that every file there is a round passes again",

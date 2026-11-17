@@ -394,6 +394,9 @@ _HASHED = ("a snapshot named by the hash of what it holds: two chats that write 
            "the same thing")
 _PER_ROUND = ("named after the round that wrote it, once, and never written again; a round "
               "is run by one chat")
+_CACHE = ("kept a short while in rounds/.cache beside the rounds, which git ignores "
+          "(run_round.cache_dir): what a site answered, never committed, and either chat's copy "
+          "is the same public answer")
 JSON_NAMES = {
     "interview_live.json": "an interview's live prep beside its interview_prep.md (interview_live.path_for); merged as documents/applications/*/interview_live.json",
     ".from_search.json": "the person's own words choosing notes from search results, for one day only (reading.from_search_chosen, issue 287); a day gone by is ignored, so either side's copy is that day's choice or nothing",
@@ -425,6 +428,8 @@ JSON_NAMES = {
                      # each site searched read and failed (00_scrape/sources.json)
                      "05_ruled.json", "05_ruled_out.json", "06_trimmed.json", "unjudged.json",
                      "sources.json"), _ROUND),
+    # each employer site's robots.txt as last answered, kept a day (ats_boards.keep_robots)
+    "robots.json": _CACHE,
     **dict.fromkeys(("apps_in.json", "picks.json", "draft_args.json", "pack.json", "held.json",
                      "staged_roles.json", "packet.json", "drafts.json",
                      "tools/draft_audit.py: outreach_*.json",
