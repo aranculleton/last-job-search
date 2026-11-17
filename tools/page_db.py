@@ -2963,16 +2963,22 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
         if signin in SIGNINS:
             needs["signin"] = signin
             # Met by a chat on the person's computer: signed in there, in that chat's own
-            # browser, which has the sign-in page open; the card opens that chat and never
-            # LinkedIn beside the page, where a sign-in did not reach it (the maintainer,
-            # 2026-11-12). Its words are the engine's (computer.signin_in_chat).
+            # browser, which has the sign-in page open; the card names that chat and never
+            # opens LinkedIn beside the page, where a sign-in did not reach it (the maintainer,
+            # 2026-11-12), nor the chat's own link, which opens it without its browser (issue
+            # 286). Its words and steps are the engine's (computer.signin_in_chat,
+            # signin_steps), for the computer's own system.
             sess = item.get("computer_session") if isinstance(item.get("computer_session"),
                                                               dict) else {}
             if str(item.get("to") or "") == "computer" and sess.get("id") \
                     and not sess.get("archived_at"):
+                import claude_surfaces
                 import computer
                 needs["chat"] = str(sess["id"])
-                needs["say"] = computer.signin_in_chat(str(sess.get("computer") or ""))
+                needs["say"] = computer.signin_in_chat(str(sess.get("computer") or ""),
+                                                       computer.chat_title(db, str(sess["id"])))
+                needs["steps"] = computer.signin_steps(computer.system_seen(db) or
+                                                       claude_surfaces.here_system())
         # The choices as pages before 4.10 read them: their words alone.
         fields = asked(question, needs, [c["label"] for c in (clean or {}).get("choices") or []]
                        if kind in ("choice", "yesno") else None, at)

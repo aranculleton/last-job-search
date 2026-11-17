@@ -305,15 +305,21 @@ def test_the_sign_in_card_opens_the_chat_on_the_computer_and_never_linkedin(tmp_
         fields = json.load(open(entry["file_path"], encoding="utf-8"))
     needs = fields["needs"]
     assert needs["chat"] == "session_macEXAMPLE" and needs["signin"] == "linkedin"
-    assert needs["say"] == ("Sign in to LinkedIn once, in the chat on your Studio Laptop: tap "
-                            "Open the chat, then sign in on the page already open there. Being "
-                            "signed in beside your page does not count.")
-    assert "linkedin.com" not in json.dumps(needs)
-    # The page draws that: its one button the chat's own link, nothing opening LinkedIn.
+    # The chat by the title it was started with, never "tap Open the chat": that link opened it
+    # without its browser (issues 285 and 286, 2026-11-16).
+    title = computer.session_title("Reading 3 profiles", "Studio Laptop")
+    assert needs["say"] == ("Sign in to LinkedIn once, in the chat “" + title + "” on your "
+                            "Studio Laptop. Open that chat from "
+                            "the list of chats in the Claude app there: a link to it opens it "
+                            "without Claude's browser. Being signed in beside your page does not "
+                            "count.")
+    assert needs["steps"] and all(s[:1].isdigit() for s in needs["steps"])
+    assert "linkedin.com" not in json.dumps(needs) and "claude.ai/code" not in json.dumps(needs)
+    # The page draws that: its words and steps, and nothing opening LinkedIn or the chat's link.
     js = open(os.path.join(ROOT, "templates", "app", "app.js"), encoding="utf-8").read()
     box = js[js.index("function signinBox("):]
     box = box[:box.index("const tried = S.signinFor")]
-    assert '"https://claude.ai/code/" + chat' in box and "Open the chat" in box
+    assert "n.steps" in box and "claude.ai/code" not in box and "Open the chat" not in box
     assert "openReading" not in box and "linkedin.com" not in box
 
 

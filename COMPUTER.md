@@ -177,8 +177,11 @@ neither the steps say all three in one line. Never pass on a Mac's keys to anyon
    computer, in that chat's own browser: being signed in beside the page did not reach it, seen
    twice on 2026-11-12, so the two are treated as separate. A chat on the computer that finds
    LinkedIn signed out opens the sign-in page in its own browser with its panel up and puts one
-   card on To do, "Sign in to LinkedIn once, in the chat on <the computer>", whose one button
-   opens that chat; no LinkedIn link is offered anywhere else. Check: a chat already at work on the computer says what
+   card on To do, "Sign in to LinkedIn once, in the chat on <the computer>", which names that
+   chat and gives the steps to open it from the list of chats in the Claude app there
+   (`computer-chat-signin`): its own link opens it without its browser (2026-11-16). One card
+   covers every read waiting on that sign-in, and its steps keep the sign-in too; no LinkedIn
+   link is offered anywhere else. Check: a chat already at work on the computer says what
    its own tab shows in its heartbeat (`computer.py beat --linkedin in`), and opens nothing
    extra for it; who looks in each case is the table below. No chat can read whether the
    browser keeps sign-ins, so it is judged by its effect: a sign-in lost by the next look, one
@@ -235,7 +238,7 @@ bridge by the computer starter, woken by its bell, in Auto, titled `Last Job Sea
 (`Job search · <job> · <computer>` before issue #289), its prompt complete, its results back through the page and the copy and never
 `send_message`, archived by the starter once its work is finished or waits on the person: a
 chat that finds LinkedIn signed out opens its sign-in page in its own browser, puts the Sign
-in to LinkedIn card on the page (its button opens that chat) and looks again by itself for a
+in to LinkedIn card on the page (it names that chat, never links it) and looks again by itself for a
 quarter of an hour (`computer.py signin-wait`, then `signin-seen` on the feed opened afresh),
 carrying on the moment they are signed in; only after that does
 it ring the bell, its chat is put away, and a fresh one starts once they sign in; the person

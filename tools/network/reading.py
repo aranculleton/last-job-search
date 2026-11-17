@@ -46,7 +46,8 @@ only through `fenced()`, as data, never as instructions.
     python3 tools/network/reading.py paste <file|->         # several profiles in one paste, split by ---
     python3 tools/network/reading.py draft <contact_id> <file|->   # a note to draft.md, marked if unread
                                                    # [--own-facts "<why>"]: what the example check found is theirs
-    python3 tools/network/reading.py gate                          # may a browser page load go now
+    python3 tools/network/reading.py from-search --said "<their words>"  # they chose notes before reads, today
+    python3 tools/network/reading.py gate                         # may a browser page load go now
     python3 tools/network/reading.py new-computer --tools browser  # a computer's first run: sign-in, the download
     python3 tools/network/reading.py signin --page <file|->        # signed in? and the one line to say if not
     python3 tools/network/reading.py linkedin-check                # passed, signed-out or due today
@@ -1568,10 +1569,10 @@ def computer_signin_steps(wid: str) -> list:
     return [
         f"open {SIGNIN_URL} in Claude's browser, in a tab of its own, and show Claude's browser "
         "in this chat (its panel up), so the sign-in page is in front of them when they open "
-        "this chat from their page",
+        "this chat in the Claude app on this computer",
         f"put it on their page, never in this chat: python3 tools/app.py done \"$D\" --work {wid} "
         "--chat <your id> --kind computer --signin linkedin --question \"LinkedIn is signed out "
-        "in Claude's browser.\" and send its batch (its card's one button opens this chat)",
+        "in Claude's browser.\" and send its batch (its card names this chat and how to open it)",
         HEARTBEAT_OUT,
         "wait for it one wait at a time: ArtifactData query of the page's work into \"$D\" (as "
         f"it is now), then python3 tools/computer.py signin-wait \"$D\" --work {wid} (a Bash "
@@ -2149,11 +2150,37 @@ def route(tools=(), consent: str | None = None, env=None, signed_in: bool | None
                        "what it prints (the profile and its Experience page, then `reading.py "
                        "read <contact> - --source browser`) until it says done, and write each "
                        "note from its reading (`reading.py draft <contact> -`, never "
-                       "--wait-for-read). LinkedIn's sign-in page instead of a profile: "
-                       "`reading.py signin` and its steps, then carry on. Never queue them for "
+                       "--wait-for-read). Nobody is shown and no note drafted, a recruiter's "
+                       "included, before their profile is read. LinkedIn's sign-in page instead "
+                       "of a profile: `reading.py signin` and its steps, which ask for the "
+                       "sign-in on their page, and the run waits there, drafting nothing from "
+                       "search results meanwhile (only the person may choose that, in their own "
+                       "words: `reading.py from-search --said`), then carries on once they are "
+                       "signed in. Never queue them for "
                        "the page, and never fetch linkedin.com over the web (WebFetch, curl): "
                        "it is read only in the signed-in browser on the person's computer"),
                 "say": "", "signin": True}
+    if consent == "browser" and reads_first():
+        # The person's computer reads profiles: nobody is shown and no note is saved before
+        # their profile is read there (issue 287). The reads go to the computer by themselves
+        # (app.py computer_reads, args.read_first), which writes each note from what it read.
+        return {"route": "page", "browser": "Claude's browser on your computer",
+                "usable": True,
+                "do": ("put the best on today's short list (`reading.py shortlist`) and queue "
+                       "them (`reading.py queue-page <contact>...`), and save no note and show "
+                       "nobody yet: with the person's computer set up to read profiles, each "
+                       "is read there first, by itself, and their note is written from what "
+                       "was read, a recruiter's included. Say in one line that their computer "
+                       "reads these profiles before any note is written. Notes from search "
+                       "results only if the person chooses that, in their own words "
+                       "(`reading.py from-search --said`). Never fetch linkedin.com over the "
+                       "web (WebFetch, curl): it is read only in the signed-in browser on the "
+                       "person's computer"),
+                # Told once, as the page's own route tells them, until the page has read.
+                "say": "" if place.page_reads() else
+                       "Their profiles are read in the Claude app on your computer before any "
+                       "note is written.",
+                "signin": False}
     if consent == "browser":
         return {"route": "page", "browser": "your page in the Claude desktop app",
                 "usable": True,
@@ -3816,7 +3843,76 @@ def card_enough(reading: dict | None, company: str = "") -> bool:
     if where != "at":
         return False
     keep, why = verdict(r, company)
-    return keep and not why
+    # With the person's computer set up to read profiles, a recruiter is read like anyone
+    # else: drafted from search results "as the app's normal route for recruiters", while the
+    # sign-in there was missing, without asking (issue 287).
+    return keep and not why and not reads_first()
+
+
+# Every person read before they are shown or written to, where the person's computer reads
+# profiles (issue 287, 2026-11-16): a people search drafted and showed people while LinkedIn was
+# signed out on their computer, recruiters from search results and the rest under WAITS ON A
+# READ, and they never agreed to that. The default is signed in and read first; notes from
+# search results are their choice alone, said in their own words, for that day
+# (`from-search --said`).
+FROM_SEARCH = ("documents", "network", ".from_search.json")
+
+
+def from_search_chosen(today: datetime.date | None = None) -> str:
+    """The person's own words choosing notes from search results today, or "" where they have
+    not chosen it today."""
+    try:
+        with open(person.state(*FROM_SEARCH), encoding="utf-8") as fh:
+            got = json.load(fh)
+    except (OSError, ValueError):
+        return ""
+    day = (today or person.today()).isoformat()
+    if not isinstance(got, dict) or str(got.get("day") or "") != day:
+        return ""
+    return " ".join(str(got.get("said") or "").split())
+
+
+def choose_from_search(said: str, today: datetime.date | None = None) -> str:
+    """Keep the person's choice of notes from search results for today, in their own words,
+    and return the path it was kept at. Never made for them: refused with no words."""
+    said = " ".join(str(said or "").split())
+    if not said:
+        raise ValueError("the person's own words choosing it, as they said them (--said)")
+    p = person.state(*FROM_SEARCH)
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    with open(p, "w", encoding="utf-8", newline="\n") as fh:
+        json.dump({"day": (today or person.today()).isoformat(), "said": said[:300]}, fh,
+                  indent=1, sort_keys=True)
+        fh.write("\n")
+    return p
+
+
+def reads_first(today: datetime.date | None = None) -> bool:
+    """Is every person read before they are shown or written to? Yes where the person reads
+    profiles in Claude's browser (PROFILE_READS browser) and their computer is set up for it
+    (tools/computer.py reads_there: they work on a computer, and its setup was tested), unless
+    they chose notes from search results today (from_search_chosen)."""
+    if reads_now() != "browser":
+        return False
+    try:
+        import computer
+        import place
+        ready = computer.reads_there(place.place_record(), {}, datetime.datetime.now(
+            datetime.timezone.utc))
+    except Exception:  # noqa: BLE001  nothing to read: not set up
+        return False
+    return bool(ready) and not from_search_chosen(today)
+
+
+READ_FIRST_SAVE = (
+    "not saved. {who}'s profile has not been read, and with the person's computer set up to "
+    "read profiles, nobody is shown or written to before their profile is read. Read it in "
+    "Claude's browser (reading.py next); a chat without that browser queues it for the "
+    "computer instead (reading.py queue-page), which reads it and writes the note by itself. "
+    "LinkedIn signed out, or the computer not ready: stop the run there and ask for that one "
+    "thing on their page (reading.py signin prints how), showing nobody meanwhile. Notes from "
+    "search results only if the person chooses that, in their own words: python3 "
+    "tools/network/reading.py from-search --said \"<their words>\"")
 
 
 def draft_text(contact_id: str, note: str, name: str = "", card_only: bool = False) -> str:
@@ -5871,6 +5967,15 @@ def save_drafts(batch: dict, own_facts_why: dict | None = None) -> int:
             refused += 1
             continue
         got = load(cid) or {}
+        if mtype == "first_note" and not _page_read(got) and not marked(cid) and reads_first():
+            # Nobody shown or written to before their profile is read, where the person's
+            # computer reads profiles: card-only, WAITS ON A READ and a public finding alike
+            # (issue 287), unless the person chose notes from search results today. A note
+            # already saved that way (before this, or on their choice) keeps its standing when
+            # changed (tweak.py): it is no new person shown.
+            print("reading: " + READ_FIRST_SAVE.format(who=row.get("name") or cid))
+            refused += 1
+            continue
         if not has_read(got) and not card_only and not waits \
                 and not card_enough(got, row.get("company", "")):
             print("reading: " + NO_READING_SAVE.format(who=row.get("name") or cid, cid=cid))
@@ -6034,6 +6139,11 @@ def main(argv: list | None = None) -> int:
     dr.add_argument("--own-facts", default="", metavar="WHY",
                     help="the name or employer the example check found is this reader's own "
                          "(their past employer, your referrer): saved, with your reason kept")
+    fs = sub.add_parser("from-search", help="the person chose, in their own words, notes from "
+                                            "search results today instead of reading each "
+                                            "profile first (only theirs to choose: never asked "
+                                            "for them, never the default)")
+    fs.add_argument("--said", required=True, help="their own words choosing it")
     dd = sub.add_parser("drafts", help="a batch of first notes, checked together before any is "
                                        "saved: {\"<id>\": \"<note>\"} or {\"<id>\": {\"note\": "
                                        "..., \"card_only\": true, \"own_facts\": \"<why>\"}}")
@@ -6626,6 +6736,16 @@ def main(argv: list | None = None) -> int:
     if a.cmd == "paste":
         text = sys.stdin.read() if a.file == "-" else open(a.file, encoding="utf-8").read()
         return _paste(text, a.source)
+    if a.cmd == "from-search":
+        try:
+            choose_from_search(a.said)
+        except ValueError as e:
+            raise SystemExit(f"reading: {e}") from None
+        print("reading: kept for today, in their words: notes may be written from search "
+              "results before each profile is read (card-only for a recruiter, WAITS ON A READ "
+              "for the rest), and each is shown to them as resting on the search. Tomorrow "
+              "every person is read first again.")
+        return EXIT["ok"]
     if a.cmd in ("draft", "drafts"):
         import learned
         waiting = learned.refuse_over_pending(f"reading.py {a.cmd}")
