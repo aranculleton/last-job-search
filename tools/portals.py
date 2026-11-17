@@ -532,7 +532,8 @@ def _no_results(got: dict) -> bool:
     return not got.get("results")
 
 
-def run_cli(cmd: list[str], timeout: int = 90, empty=None) -> tuple[dict | None, str | None]:
+def run_cli(cmd: list[str], timeout: int = 90, empty=None,
+            started=None) -> tuple[dict | None, str | None]:
     """(parsed JSON, None) on success; (None, reason) on any failure.
 
     Failures used to vanish: a blocked or rate-limited portal just produced a
@@ -578,6 +579,10 @@ def run_cli(cmd: list[str], timeout: int = 90, empty=None) -> tuple[dict | None,
     env = dict(os.environ, NODE_USE_ENV_PROXY="1")
     try:
         with tempfile.TemporaryFile("w+", encoding="utf-8") as fh:
+            # `started`, given, is told the moment the request goes, after everything made
+            # for it: a board's crawl-delay runs from there (hydrate.started, issue 343).
+            if started is not None:
+                started()
             p = subprocess.run(cmd, stdout=fh, stderr=subprocess.PIPE,
                                text=True, timeout=timeout, env=env,
                                encoding="utf-8", errors="replace")

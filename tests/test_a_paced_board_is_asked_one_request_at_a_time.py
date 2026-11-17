@@ -37,10 +37,14 @@ def test_one_request_in_flight_and_each_a_delay_after_the_last_began(monkeypatch
     hydrate._PACE.clear()
     inflight, peak, spans, lock = [0], [0], [], threading.Lock()
 
-    def fetch(cmd, timeout=60, empty=None):
+    # portals.run_cli's own way: told the moment the request goes (`started`), as the real
+    # one tells the pacer (issue 343).
+    def fetch(cmd, timeout=60, empty=None, started=None):
         with lock:
             inflight[0] += 1
             peak[0] = max(peak[0], inflight[0])
+        if started is not None:
+            started()
         began = time.monotonic()
         time.sleep(FETCH)
         with lock:
