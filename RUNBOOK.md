@@ -187,12 +187,15 @@ python3 tools/run_round.py
 set another); the round's first line says it (`window: 10 days (your setting)`). Pass
 `--jobage <days>` only when they ask for a different window for this one search.
 
-**Employers nobody has judged wait below judged ones.** Where the person's profile states a
-bar (pay, prestige or signal), an employer no list names and nobody has judged is ranked down
-until judged, and the round prints `unjudged:` with the file listing them (each with what its
-posting says about it). Judge them in one batch, never one call each: fill each verdict and a
-few words why (one small-model agent can do the whole file from the person's bar and those
-lines), run `python3 tools/bar.py judge --file <that file>`, then `--recut` the round.
+**Employers nobody has judged are judged inside the round.** Where the person's profile
+states a bar (pay, prestige or signal), an employer no list names and nobody has judged is
+ranked down until judged, and the round prints `unjudged:` with a brief for judging them (the
+bar and what each posting says about its employer). Start the `employer-judge` agent (on the
+small model, in the background) with that brief, then run `python3 tools/run_round.py --recut
+--out <the round's folder> --judged`: it waits for the answer for at most three minutes, keeps
+each judgement for good (marked as the round's, so a person or a chat can overturn it) and cuts
+again. Pass on that cut. With no agent to start, fill the batch file by hand and run `python3
+tools/bar.py judge --file <that file>`, then `--recut`.
 
 **Leave `--out` off.** The round names itself, `r` and the next number, and prints its
 folder (`round: r12, its files in rounds/r12`), which is the folder `--recut` and a
@@ -767,7 +770,10 @@ chat has lost it.
 | Sent a contact a resume | that message's row, with the file: `state.py message <id> --attached <file>` |
 | A new person worth contacting | `network_contacts.csv` |
 | A contact's situation changed, or something is now owed | that contact's `status` and `next_action`: `python3 tools/network/state.py set <contact> --status <s> --next-action "<what>" --due <date> --note "<what happened>"`, never by hand |
-| They turn down an employer, or a kind of employer ("no more Acme", "no pension funds") | `python3 tools/wants.py decline "<employer>" --said "<their words>"`, or `wants.py sector-out "<kind>" --said "<their words>"`: one command for every setting it touches (the bar, the tier lifts, the searches by name, the employer's own job site, the note in `profile/CLAUDE.md`), never `BAR_DECLINED` by hand. A group ("MBB") is each of its employers by name |
+| They turn down an employer, or a kind of employer ("no more Acme", "no pension funds") | `python3 tools/wants.py decline "<employer>" --said "<their words>"`, or `wants.py sector-out "<kind>" --said "<their words>"`: one command for every setting it touches (the bar, the tier lifts, the searches by name, the employer's own job site, the note in `profile/CLAUDE.md`), kept with their words and the day in `profile/wants.json`, never `BAR_DECLINED` by hand. A group ("MBB") is each of its employers by name. Only where they say it should rank jobs down rather than leave them out ("I'd rather not, but show me if it's great"), add `--soft` |
+| They change where they search, remote work, their pay floor or their cut line ("add Leeds", "nothing under 45k") | `python3 tools/wants.py set places --add "<place as the job sites write it>"` (or `--drop`), `set remote "<country>"`, `set pay-floor <number>` or `set pay-cut <number>`, each with `--said "<their words>"`: the setting and their words in `profile/wants.json` in one step, never `SCRAPE_LOCATIONS` or `SALARY_FLOOR` by hand |
+| They say what a sign of work-life balance or a kind of role means to them, or `wants.py show` says one needs their words | `python3 tools/wants.py words "<as show names it>" "<their plain words>" --said "<their words>"`; when `wants.py check` says a pattern was rewritten, `wants.py link` or `forget` as it says |
+| They want an employer ranked up ("Acme pays well and keeps hours sane") | `python3 tools/wants.py want "<employer>" --tier <1, 2, 3 or backed> --said "<their words>"` (1 lifts +30, 2 +20, backed +14, 3 +10), kept in `profile/wants.json`, never a tier set by hand; `wants.py unwant "<employer>"` takes it back, and `wants.py show` lists every want with its words and day |
 | An employer turns out to have no relevant presence at all | `job_scraper/do_not_target.json`, with a `review_after` |
 | A posting was ruled out | `job_scraper/seen_jobs.json`, through `tools/exclude.py add` (a reason, and what it rests on) |
 | A fact about the candidate: a skill, a gap, a date, a constraint | `01-candidate-profile.md`, and `profile/CLAUDE.md` if it belongs in the summary |

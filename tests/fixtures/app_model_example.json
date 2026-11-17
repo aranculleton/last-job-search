@@ -1,7 +1,7 @@
 {
  "model": 1,
  "made_at": "2026-10-25T18:00:00Z",
- "rev": "9baa2faf5ba5",
+ "rev": "8e87386b0410",
  "app": {
   "version": "4.16.0",
   "url": null,
@@ -2314,7 +2314,7 @@
     "id": "rule~sector~a-sector-the-candidate-will-not-work-in-",
     "kind": "sector",
     "name": "Kinds of employer",
-    "sentence": "Left out: A sector you will not work in (gambling and tobacco).",
+    "sentence": "Left out: A sector you will not work in (gambling and tobacco); still kept as words to look for in a posting, not yet as a kind of employer.",
     "set_on": null,
     "words": null,
     "review_on": null,
@@ -2325,7 +2325,7 @@
      "why": "a sector the candidate will not work in (gambling and tobacco)"
     },
     "still_right": false,
-    "rev": "0d54905ee96f"
+    "rev": "e736dbfe9e51"
    },
    {
     "id": "rule~credential",

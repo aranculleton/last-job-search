@@ -198,8 +198,10 @@ def test_every_rule_reads_as_one_sentence_with_what_it_left_out(state, profile):
     assert one["set_on"] == "2026-04-13" and one["drop"] == {"kind": "declined",
                                                               "key": "brindlewood 3"}
     sector = next(r for r in rows if r["kind"] == "sector")
+    # Still written as a pattern (search.py BAR_EXCLUDED), and said so (issue 327).
     assert sector["sentence"] == ("Left out: A sector you will not work in (gambling and "
-                                  "tobacco).")
+                                  "tobacco); still kept as words to look for in a posting, not "
+                                  "yet as a kind of employer.")
     learned = [r for r in rows if r["kind"] == "learned"]
     assert [r["words"] for r in learned] == ["never say reach out", "no night shifts"]
     assert learned[0]["set_on"] == "2026-06-01"
@@ -308,13 +310,16 @@ def _run(action, target, value=None):
 
 def test_a_rule_is_dropped_or_changed_through_its_own_writer(state, profile):
     rows = {r["id"]: r for r in rules_view.your_rules(TODAY, {})}
-    # An employer turned down comes off BAR_DECLINED, and the undo puts it back.
+    # An employer turned down comes off BAR_DECLINED, and the undo puts it back, into the
+    # record of what the person wants that every stage reads (issue 327).
+    import wants
     one = rows["rule~declined~brindlewood 3"]
     got = app_actions._rule_drop(_run("rule.drop", {"kind": "your_rule", "id": one["id"],
                                                     "drop": one["drop"]}))
     assert "brindlewood 3" not in profile_set.get("search.py", "BAR_DECLINED")
+    assert "brindlewood 3" not in wants.held_declined()
     app_actions._rule_undrop(_run("rule.undrop", {}, got["undo"]["value"]))
-    assert "brindlewood 3" in profile_set.get("search.py", "BAR_DECLINED")
+    assert "brindlewood 3" in wants.held_declined()
     # A kind of employer ruled out, written as patterns no page can edit, is named off.
     sector = next(r for r in rows.values() if r["kind"] == "sector")
     app_actions._rule_drop(_run("rule.drop", {"kind": "your_rule", "id": sector["id"],

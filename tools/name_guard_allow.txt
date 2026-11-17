@@ -818,3 +818,4 @@ Northwind Pensions      # invented employer, tests/test_what_the_person_turned_d
 Pension Funds           # a kind of employer, not a person: tools/sector.py and the same test
 Harbourline Pension Plan  # invented employer, tests/test_what_the_person_turned_down_is_followed_everywhere.py
 Unheard Of Ltd          # invented employer nobody has judged, tests/test_an_employers_card_says_what_claude_found.py
+Wexford Capital         # invented employer, tests/test_what_the_person_wants_is_one_record.py

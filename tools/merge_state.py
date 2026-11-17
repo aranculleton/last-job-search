@@ -166,6 +166,10 @@ JSON_FILES = {
                                     "indent": 2, "sort": "top", "ascii": True},
     # Employers judged against the person's bar (bar.judge): one record an employer, dated.
     "profile/employers_judged.json": {"stamps": ("date",), "indent": 2, "sort": "top"},
+    # What the person wants from a search (wants._save, issue 327): one record an employer and
+    # one a kind of employer, each dated, so two chats each turning one down keep both, and
+    # one taken back on one side stays taken back.
+    "profile/wants.json": {"stamps": ("date",), "indent": 2, "sort": "all"},
     # Every no to a question, dated (profile_upgrades.record_no).
     "profile/asked.json": {"stamps": ("no",), "indent": 2, "sort": "all", "ascii": True},
     # Where the person works, dated when asked (place.record); the day a chat first ran on
@@ -428,10 +432,11 @@ JSON_NAMES = {
                      # a search limited to named employers: its names and the rows at them
                      "employers.json", "named.json",
                      # the rows the hard rules pass and leave out, before the throttle; the
-                     # shortlist's size before its cut; the employers left to judge; and what
+                     # shortlist's size before its cut; the employers left to judge, and the
+                     # employer judge's answer, taken once by the cut that reads it; and what
                      # each site searched read and failed (00_scrape/sources.json)
                      "05_ruled.json", "05_ruled_out.json", "06_trimmed.json", "unjudged.json",
-                     "sources.json"), _ROUND),
+                     "judged.json", "sources.json"), _ROUND),
     # each employer site's robots.txt as last answered, kept a day (ats_boards.keep_robots)
     "robots.json": _CACHE,
     **dict.fromkeys(("apps_in.json", "picks.json", "draft_args.json", "pack.json", "held.json",

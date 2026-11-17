@@ -22,9 +22,12 @@ rank, stop at the shortlist, draft nothing until the candidate picks. `_common.m
    the job sites), those words open the message, and with no site reached there is no
    shortlist and no web search in its place.
 2. Where the round printed `unjudged:`, it wrote the employers among its best rows that
-   nobody has judged against the bar, each with what its posting says about it, to the file
-   it names: give each a verdict (pay, prestige, signal or none) and a few words why, from
-   what you know, and record them all at once with `python3 tools/bar.py judge --file <that
+   nobody has judged against the bar, and a brief for judging them: start the
+   `employer-judge` agent with that brief, then `python3 tools/run_round.py --recut --out
+   <the folder it printed> --judged`, which waits for its answer for at most three minutes,
+   keeps each judgement for good and cuts again. With no agent to start, give each a verdict
+   (pay, prestige, signal or none) and a few words why in the batch file it names, from what
+   you know, and record them all at once with `python3 tools/bar.py judge --file <that
    file>`. With no such line, `python3 tools/bar.py unjudged`; where it says the profile
    states no bar, nothing is judged or ruled out for one: go to step 3. Else judge each
    employer it lists once (`bar.py judge "<employer>" <verdict> "<why>"`): a "none" that says

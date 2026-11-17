@@ -1550,3 +1550,52 @@ def test_lists_still_lifting_an_employer_turned_down_are_tidied_in_the_backgroun
     import profile_set
     assert profile_set.get("employers.py", "TIER_2") == {"oakmere foods"}
     assert profile_set.get("search.py", "SCRAPE_EMPLOYERS") == ["Oakmere Foods"]
+
+
+def test_settings_on_employers_wanted_or_turned_down_move_into_one_record_in_the_background(
+        profile):
+    """Issue 327: the employers and kinds turned down (BAR_DECLINED, BAR_SECTORS_OUT) and the
+    employers lifted (the tier sets) move into profile/wants.json at once, each as it was, and
+    the settings stay, empty. Invented employers."""
+    with open(profile / "employers.py", "a", encoding="utf-8") as fh:
+        fh.write('\nTIER_2 = {"kestrel mutual", "oakmere foods"}\n')
+    search = (profile / "search.py").read_text(encoding="utf-8")
+    (profile / "search.py").write_text(
+        search + '\nBAR_DECLINED = {"Harrow Bank": "candidate declined it 2026-11-01"}\n',
+        encoding="utf-8")
+    person.reset()
+    u = U.by_id("wants-moved")
+    assert u.cost == "instant" and u.command == ("python3", "tools/wants.py", "move")
+    assert "profile/wants.json" in u.paths
+    assert u.pending().startswith("3 of your settings")
+    _tool("wants.py", "move")
+    person.reset()
+    assert u.pending() == ""
+    import profile_set
+    assert profile_set.get("employers.py", "TIER_2") == set()
+    assert profile_set.get("search.py", "BAR_DECLINED") == {}
+    got = json.loads((profile / "wants.json").read_text(encoding="utf-8"))
+    assert got["employers"]["Harrow Bank"]["want"] == "out"
+    assert got["employers"]["oakmere foods"]["tiers"] == ["TIER_2"]
+
+
+def test_where_you_search_your_pay_and_the_patterns_you_weigh_are_kept_in_the_record(profile):
+    """Issue 327: the places, the remote rule, the pay floor and the cut line, and the
+    work-life signs and kinds of role written as patterns, are kept in profile/wants.json as
+    they are now, with "moved" as who wrote them, and no setting changes. Invented words."""
+    (profile / "wants.json").unlink()
+    with open(profile / "search.py", "a", encoding="utf-8") as fh:
+        fh.write('\nOPP_TITLE_FAMILY = [(re.compile(r"\\bsales\\b", re.I), -15)]\n')
+    search = (profile / "search.py").read_text(encoding="utf-8")
+    person.reset()
+    u = U.by_id("wants-seeded")
+    assert u.cost == "instant" and u.command == ("python3", "tools/wants.py", "seed")
+    assert u.paths == ("profile/wants.json",)
+    assert u.pending().startswith("5 of your settings")
+    _tool("wants.py", "seed")
+    person.reset()
+    assert u.pending() == ""
+    assert (profile / "search.py").read_text(encoding="utf-8") == search
+    got = json.loads((profile / "wants.json").read_text(encoding="utf-8"))
+    assert got["settings"]["places"]["by"] == "moved"
+    assert got["families"]["\\bsales\\b"]["words"] == ""

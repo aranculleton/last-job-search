@@ -1249,6 +1249,43 @@ def _declined_tidied() -> str:
             + (f" and {len(names) - 5} more" if len(names) > 5 else ""))
 
 
+def _wants_moved() -> str:
+    """Issue 327: the person's wants lived in a dozen settings, one spoken "no" carried into
+    several by hand. They are kept in one record now (profile/wants.json), which the bar and
+    the tier lifts are compiled from: the employers and kinds turned down (search.py
+    BAR_DECLINED, BAR_SECTORS_OUT) and the employers lifted (employers.py TIER_1, TIER_2,
+    YC_AND_BACKED, TIER_3) are moved into it here, each entry's effect the same (wants.move
+    checks it and puts every file back otherwise). A sector pattern (BAR_EXCLUDED) stays where
+    it is: which kind it means needs a chat."""
+    try:
+        import wants
+        todo = wants.to_move()
+    except Exception:  # noqa: BLE001  a profile that does not load is the check's to report
+        return ""
+    n = sum(len(v) for v in todo.values())
+    return (f"{n} of your settings on employers you want or turned down are not in your one "
+            "record of what you want yet" if n else "")
+
+
+def _wants_seeded() -> str:
+    """Issue 327: the rest of what the person wants is kept in the same record. Where they
+    search, where they search for remote work, the pay floor and the cut line stay settings
+    the code reads (search.py SCRAPE_LOCATIONS, SCRAPE_REMOTE_LOCATIONS, SALARY_FLOOR,
+    SALARY_CUT_BELOW), and the work-life signs and kinds of role stay patterns (OPP_LEVERAGE,
+    OPP_TITLE_FAMILY, OPP_WRONG_FAMILY, FIT_WRONG_FAMILY): the record keeps each as it is now,
+    with "moved" as who wrote it and the pattern's own reason as its words, never guessed, and
+    no setting changes (wants.seed)."""
+    try:
+        import wants
+        todo = wants.to_seed()
+    except Exception:  # noqa: BLE001  a profile that does not load is the check's to report
+        return ""
+    n = sum(len(v) for v in todo.values())
+    return (f"{n} of your settings on where you search, your pay, and the signs of work-life "
+            "balance and kinds of role you weigh are not in your record of what you want yet"
+            if n else "")
+
+
 def _left_out_slimmed() -> str:
     """Issue 310: each search's left-out list kept every job its own free gates left out, 5 to
     6MB a search. A search now keeps a few of each and counts the rest (filtered.slim); the
@@ -2518,6 +2555,19 @@ REGISTRY: tuple[Upgrade, ...] = (
             command=("python3", "tools/wants.py", "tidy"),
             paths=("profile/search.py", "profile/boards.py", "profile/employers.py"),
             conditional=True, priority=2),
+    Upgrade("wants-moved", "2026-11-17",
+            "what you want from a search, and what you turned down, kept in one record with "
+            "your words and the day, which every part of the search reads",
+            _wants_moved, "python3 tools/wants.py move", "instant",
+            command=("python3", "tools/wants.py", "move"),
+            paths=("profile/wants.json", "profile/search.py", "profile/employers.py"),
+            conditional=True, priority=2),
+    Upgrade("wants-seeded", "2026-11-17",
+            "where you search, your pay floor, and the signs of work-life balance and kinds of "
+            "role you weigh, kept in your record of what you want beside the employers",
+            _wants_seeded, "python3 tools/wants.py seed", "instant",
+            command=("python3", "tools/wants.py", "seed"),
+            paths=("profile/wants.json",), conditional=True, priority=3),
     Upgrade("left-out-slimmed", "2026-11-17",
             "each search's list of what it left out kept small, every count still whole",
             _left_out_slimmed, "python3 tools/filtered.py slim", "instant",

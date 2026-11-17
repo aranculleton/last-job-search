@@ -437,23 +437,34 @@ def page_set_asides(dump_dir) -> tuple[set, set]:
 
 
 def declined_now() -> dict:
-    """The employers turned down by name as the profile holds them now (search.py
-    BAR_DECLINED, each entry by its employer key, as bar.py reads it), read from the file:
+    """The employers turned down by name as the profile holds them now (the record of what the
+    person wants, profile/wants.json, and search.py BAR_DECLINED, each entry by its employer
+    key, as bar.py reads it), read from the files:
     bar.py keeps the copy the round read when it started, so a "No more roles from them" said
     on the page while it ran was never seen by its cut (2026-11-04)."""
+    try:
+        import wants
+        held = wants.held_declined()
+    except Exception:  # noqa: BLE001  no profile, or a record that cannot be read: the setting
+        held = {}
     try:
         import profile_set
         got = profile_set.get("search.py", "BAR_DECLINED")
     except Exception:  # noqa: BLE001  no profile, or no such setting: none
-        return {}
+        return held
     # Not set at all is profile_set.MISSING, itself a dict ({"missing": True}): read as the
     # setting, it turned down an employer called Missing and named it in Your rules.
     if got is profile_set.MISSING or not isinstance(got, dict):
-        return {}
+        return held
     # Each entry read through the employer key, however it is written: one written by hand
-    # ("north-shore mutual", "acme insurance") cut nothing (2026-11-16).
+    # ("north-shore mutual", "acme insurance") cut nothing (2026-11-16). The record of what the
+    # person wants (profile/wants.json, issue 327) holds the rest: an entry still in the
+    # setting reads first, as it did before it was moved.
     from company_key import keyed
-    return keyed({str(k): str(v) for k, v in got.items() if isinstance(v, str)})
+    out = keyed({str(k): str(v) for k, v in got.items() if isinstance(v, str)})
+    for k, v in held.items():
+        out.setdefault(k, v)
+    return out
 
 
 def family(name: str) -> set:
@@ -1149,6 +1160,18 @@ def say_ruled(gone, ranked: int) -> str:
 UNJUDGED = "unjudged.json"
 UNJUDGED_TOP = 150
 UNJUDGED_DOWN = 20
+# And judged inside the round, once, by a small model (issue 327): the round writes what that
+# model needs (JUDGE_BRIEF: the person's bar and the batch, each with what its posting says),
+# the chat that runs the round starts the employer-judge agent on it (.claude/agents, on haiku,
+# in the background), and the round cut again with --judged waits for its answer (JUDGED) at
+# most JUDGE_WAIT seconds, keeps every judgement for good (bar.judge_many, marked by the
+# round, so a person or a chat can overturn it) and cuts with them. A chat judged the batch by
+# hand after the round, if it judged it at all. An employer the answer leaves out, or one the
+# wait ran out on, still waits UNJUDGED_DOWN below judged ones, as before.
+JUDGE_BRIEF = "judge.md"
+JUDGED = "judged.json"
+JUDGE_AGENT = "employer-judge"
+JUDGE_WAIT = 180
 
 
 def _unjudged_check(today=None):
@@ -1218,15 +1241,89 @@ def say_unjudged(out_dir: str, rows, today) -> list[str]:
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(batch, fh, indent=1, ensure_ascii=False)
         fh.write("\n")
+    import bar
+    brief = os.path.join(out_dir, JUDGE_BRIEF)
+    answer = os.path.join(out_dir, JUDGED)
+    with open(brief, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(bar.judge_brief(batch, local_path.rel(answer, ROOT)))
     names = [b["company"] for b in batch]
     shown_names = ", ".join(names[:12]) + (f" and {len(names) - 12} more" if len(names) > 12
                                            else "")
+    out = local_path.rel(out_dir, ROOT)
     return [f"unjudged: {len(names)} employers among the best {UNJUDGED_TOP} rows that nobody has "
             f"judged yet against your bar, ranked down until judged: {shown_names}",
-            f"  judge them in one batch: give each a verdict (pay, prestige, signal or none) and "
-            f"a few words why in {local_path.rel(path, ROOT)}, run python3 tools/bar.py judge "
-            f"--file {local_path.rel(path, ROOT)}, then cut the round again (--recut --out "
-            f"{local_path.rel(out_dir, ROOT)})"]
+            f"  judge them now, inside the round: start the {JUDGE_AGENT} agent on "
+            f"{local_path.rel(brief, ROOT)}, then run python3 tools/run_round.py --recut --out "
+            f"{out} --judged: it waits up to {JUDGE_WAIT // 60} minutes for the answer, keeps "
+            "each judgement for good and cuts the round again",
+            f"  with no agent to start: give each a verdict (pay, prestige, signal or none) and a "
+            f"few words why in {local_path.rel(path, ROOT)}, run python3 tools/bar.py judge "
+            f"--file {local_path.rel(path, ROOT)}, then --recut --out {out}"]
+
+
+def _answer(path: str):
+    """The judge's answer, a list, once it is there whole; None while it is not."""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            got = json.load(fh)
+    except (OSError, ValueError):
+        return None
+    if isinstance(got, dict):
+        got = got.get("employers")
+    return got if isinstance(got, list) else None
+
+
+def take_judged(out_dir: str, wait: int = 0, today=None, sleep=time.sleep,
+                clock=time.monotonic) -> list[str]:
+    """The employer judge's answer to the round's batch (JUDGED), waited for up to `wait`
+    seconds where the round asked one (UNJUDGED) and none is there yet, and kept for good:
+    each verdict recorded once, marked by the round (bar.judge_many), never over a judgement a
+    person or a chat made meanwhile or an employer a list now names. The answer is taken
+    once: its file goes, so a later cut never writes it again over a judgement overturned
+    since. The lines that say what happened; none where nothing was asked."""
+    import bar
+    path = os.path.join(out_dir, JUDGED)
+    asked = os.path.join(out_dir, UNJUDGED)
+    if not os.path.isfile(path) and not (wait and os.path.isfile(asked)):
+        return []
+    end = clock() + max(0, int(wait or 0))
+    got = _answer(path)
+    while got is None and clock() < end:
+        sleep(min(2.0, max(0.0, end - clock())))
+        got = _answer(path)
+    if got is None:
+        return [f"judge: no answer from the {JUDGE_AGENT} agent within {int(wait or 0)} seconds, "
+                "so the employers it was asked about still wait below judged ones; when its "
+                f"answer comes, cut the round again (--recut --out {local_path.rel(out_dir, ROOT)})"]
+    day = datetime.date.fromisoformat(today) if isinstance(today, str) else (
+        today or person.today())
+    fresh, already = [], []
+    for e in got:
+        company = str((e or {}).get("company") or "").strip() if isinstance(e, dict) else ""
+        if company and bar.listed(company, day):
+            already.append(company)
+        else:
+            fresh.append(e)
+    said, skipped = bar.judge_many(fresh, today=day.isoformat(), by="round")
+    try:
+        os.remove(path)
+    except OSError:
+        pass
+    counts: dict = {}
+    for e in fresh:
+        what = str((e or {}).get("verdict") or "").strip().lower() if isinstance(e, dict) else ""
+        if what in (bar.PAY, bar.PRESTIGE, bar.SIGNAL, bar.NONE):
+            counts[what] = counts.get(what, 0) + 1
+    lines = [f"judged in the round: {len(said)} employer(s), kept for good"
+             + (" (" + ", ".join(f"{w} {n}" for w, n in sorted(counts.items())) + ")"
+                if counts else "")]
+    if already:
+        lines.append(f"  already judged or on your lists, left as they are: {len(already)}")
+    if skipped:
+        lines.append("  not judged, so still waiting below judged ones: "
+                     + ", ".join(c for c, _w in skipped[:12])
+                     + (f" and {len(skipped) - 12} more" if len(skipped) > 12 else ""))
+    return lines
 
 
 def write_summary(shortlist_path, out_dir, name, scraped_path=None, show=None, rules=None,
@@ -1431,11 +1528,14 @@ def prune(out_dir, keep=(), hold=(), top=KEEP_TOP):
     draft is staged from, cut to `top` rows (None: every one, for a search limited to
     named employers, which holds only theirs). Anything named in `keep` is slimmed rather
     than deleted, and anything in `hold` is left as it is, for the caller to delete later.
-    The employers a search was limited to (NAMED_FILE) stay, for a --recut.
+    The employers a search was limited to (NAMED_FILE) stay, for a --recut, and so do the
+    batch of employers to judge, the judge's brief and its answer (UNJUDGED, JUDGE_BRIEF,
+    JUDGED), for the cut that takes the answer.
     """
     freed = 0
     for name in os.listdir(out_dir):
-        if name in ("round.log", NAMED_FILE, TRIMMED, UNJUDGED) or name in hold:
+        if name in ("round.log", NAMED_FILE, TRIMMED, UNJUDGED, JUDGE_BRIEF, JUDGED) \
+                or name in hold:
             continue
         path = os.path.join(out_dir, name)
         if name == SHORTLIST:
@@ -1950,6 +2050,9 @@ def recut(a) -> int:
         if named_keys(given) != named_keys(names):
             names, found = given, None
             write_named(a.out, names)
+    # The employer judge's answer first, waited for with --judged: every cut below reads it.
+    for line in take_judged(a.out, a.judged or 0, a.today):
+        print(line)
     rules = hard_rules(a.jobage, a.today, seen, a.no_seen_read, dump=a.dump, name=name,
                        tracker=a.tracker, own=links)
     path = write_summary(short, where, name,
@@ -2124,6 +2227,11 @@ def main():
                     help="search nothing: cut the round in --out again, every hard rule "
                          "applied as it stands now (a ruling or a judgement made since), "
                          "refilled from the next rows to --show")
+    ap.add_argument("--judged", nargs="?", type=int, const=JUDGE_WAIT, default=None,
+                    metavar="SECONDS",
+                    help="with --recut: wait for the employer judge's answer to the round's "
+                         f"batch (at most {JUDGE_WAIT} seconds, or the number given), keep each "
+                         "judgement for good, then cut with them")
     ap.add_argument("--table", action="store_true",
                     help="end by printing the counts line and the ranked table for the person "
                          "(the job-scraper skill, Step 5), warm routes in its Check, to pass "

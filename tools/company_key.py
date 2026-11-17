@@ -365,6 +365,13 @@ def _names_on_record() -> list[str]:
     for attr in ("TIER_1", "TIER_2", "TIER_3", "YC_AND_BACKED"):
         out += [str(n) for n in (getattr(_EMP, attr, None) or ()) if isinstance(n, str)]
     try:
+        # The record of what the person wants (profile/wants.json, issue 327): every employer
+        # it turns down or lifts, as written.
+        import wants
+        out += list(wants.load()["employers"])
+    except Exception:  # noqa: BLE001  no record: no names there
+        pass
+    try:
         if person.exists("boards.py"):
             out += [str(n) for n in getattr(person.module("boards"), "BOARDS", {}) or {}]
     except Exception:  # noqa: BLE001  a profile with no boards names none

@@ -420,6 +420,7 @@ def _plain(why: str) -> str:
 # Each rule's short name in Your rules, by its kind.
 NAMES = {"place": "Where", "field": "Your field", "age": "How recent", "pay": "Pay",
          "language": "Languages", "sector": "Kinds of employer", "bar": "Employer bar",
+         "soft": "Ranked down",
          "agency": "Staffing agencies", "learned": "Learned from you",
          "set_aside": "Roles you set aside", "more_at": "More people at one employer"}
 
@@ -460,10 +461,23 @@ def your_rules(today: dt.date, seen: dict | None = None, learned_rows=None) -> l
     # No search yet: no rule says a number, never "None left out" of a search never run.
     n = lambda k: None if lately is None else (lately.get(k) or {}).get("n", 0)  # noqa: E731
     rows = []
+    try:
+        import wants
+        said_as = wants.load()["settings"]
+    except Exception:  # noqa: BLE001  no record to read: the settings alone
+        said_as = {}
+
+    def kept_words(*names) -> dict:
+        """The person's words and the day for a rule, where the record of what they want keeps
+        them (tools/wants.py set, or the page): never for one only moved there."""
+        got = [said_as.get(x) or {} for x in names]
+        got = [v for v in got if v.get("said") and v.get("by") != "moved"]
+        return {"words": "; ".join(v["said"] for v in got),
+                "set_on": max((str(v.get("date") or "") for v in got), default="")}
     places = list(_search("SCRAPE_LOCATIONS", []) or [])
     if places:
         rows.append(_row("rule~places", "place", _where_sentence(places, _search("SCRAPE_REMOTE_LOCATIONS", []) or []),
-                         n("place"), rec, edit={"what": "places"}))
+                         n("place"), rec, edit={"what": "places"}, **kept_words("places", "remote")))
     titles = list(_search("SCRAPE_QUERIES", []) or [])
     if titles:
         rows.append(_row("rule~roles", "field", f"You search for {_listed(titles)}; a title "
@@ -473,11 +487,13 @@ def your_rules(today: dt.date, seen: dict | None = None, learned_rows=None) -> l
                      "out", n("age"), rec, edit={"what": "window"}))
     floor, cut = _search("SALARY_FLOOR"), _search("SALARY_CUT_BELOW")
     cur = str(_search("CURRENCY_SYMBOL", "") or "")
+    said_pay = kept_words("pay floor", "pay cut")
     if floor or cut:
         said = (f"Your pay floor is {cur}{int(floor):,}" if floor else "")
         if cut:
             said += ("; " if said else "") + f"a stated range topping out under {cur}{int(cut):,} is left out"
-        rows.append(_row("rule~pay", "pay", said, n("pay"), rec, edit={"what": "pay"}))
+        rows.append(_row("rule~pay", "pay", said, n("pay"), rec, edit={"what": "pay"},
+                         **said_pay))
     held = [str(x).capitalize() for x in _search("LANGUAGES_HELD", ("english",)) or ()]
     langs = None if lately is None else sum(v["n"] for k, v in lately.items()
                                             if k.startswith("language:"))
@@ -497,8 +513,14 @@ def your_rules(today: dt.date, seen: dict | None = None, learned_rows=None) -> l
                          drop={"kind": "declined", "key": key},
                          set_on=dated.group(1) if dated else "", name=f"No more from {who}"))
     # Kinds of employer turned down as kinds (tools/wants.py sector-out), each its own row:
-    # the bin takes the rule off and puts back what it took off the lists.
-    for kind, why in sorted(dict(_search("BAR_SECTORS_OUT", {}) or {}).items()):
+    # the bin takes the rule off and puts back what it took off the lists. Read from the record
+    # of what the person wants and the setting together, as the bar reads them (issue 327).
+    try:
+        import wants
+        kinds_out = wants.sectors_out()
+    except Exception:  # noqa: BLE001  no profile to read: no kind turned down
+        kinds_out = {}
+    for kind, why in sorted(kinds_out.items()):
         dated = re.search(r"\b(20\d\d-\d\d-\d\d)\b", str(why))
         said = re.sub(r"^turned down (?:on the page|in a chat), 20\d\d-\d\d-\d\d:? ?", "",
                       str(why))
@@ -508,12 +530,33 @@ def your_rules(today: dt.date, seen: dict | None = None, learned_rows=None) -> l
                          f"No roles at any {k}" + (f": {_plain(said).rstrip('.')}" if said else ""),
                          n("sector"), rec, drop={"kind": "sector_out", "sector": k},
                          set_on=dated.group(1) if dated else "", name=f"No {k}"))
+    # A "no" the person said only ranks down (tools/wants.py --soft), each its own row: it
+    # leaves nothing out, so it counts none, and a chat takes it back.
+    try:
+        import wants
+        soft = wants.held_soft()
+        from opportunity import SOFT_NO
+    except Exception:  # noqa: BLE001  no record to read: nothing ranked down
+        soft, SOFT_NO = {"employers": {}, "kinds": {}}, 0
+    for key, why in sorted(soft["employers"].items()):
+        who = names.get(key) or key.title()
+        rows.append(_row(f"rule~soft~{key}", "soft", f"Roles at {who} are ranked down "
+                         f"({SOFT_NO:+d}), never left out: {_plain(why).rstrip('.')}", None, rec,
+                         name=f"Less from {who}"))
+    for kind, why in sorted(soft["kinds"].items()):
+        rows.append(_row(f"rule~soft_kind~{_slug(kind)}", "soft", f"Roles at any {kind} are "
+                         f"ranked down ({SOFT_NO:+d}), never left out: "
+                         f"{_plain(why).rstrip('.')}", None, rec, name=f"Less from any {kind}"))
+    # A sector rule still written as words to look for (search.py BAR_EXCLUDED), not as a kind
+    # of employer: which kind it means needs a chat (issue 327), and the row says so.
     off = set(_search("BAR_EXCLUDED_OFF", []) or [])
     for _rx, why in list(_search("BAR_EXCLUDED", []) or []):
         if why in off:
             continue
-        rows.append(_row(f"rule~sector~{_slug(why)}", "sector", f"Left out: {_plain(why)}",
-                         n("sector"), rec, drop={"kind": "sector", "why": why}))
+        rows.append(_row(f"rule~sector~{_slug(why)}", "sector",
+                         f"Left out: {_plain(why).rstrip('.')}; still kept as words to look for "
+                         "in a posting, not yet as a kind of employer", n("sector"), rec,
+                         drop={"kind": "sector", "why": why}))
     try:
         import bar
         if bar.applies():

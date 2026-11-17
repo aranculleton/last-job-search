@@ -97,6 +97,10 @@ def test_an_entry_written_by_hand_comes_off_your_rules_and_goes_back(tmp_path, m
                                                     "drop": rows[0]["drop"]}))
     assert profile_set.get("search.py", "BAR_DECLINED") == {}
     app_actions._rule_undrop(_run("rule.undrop", {}, got["undo"]["value"]))
-    back = profile_set.get("search.py", "BAR_DECLINED")
+    # Put back in the record of what the person wants (profile/wants.json, issue 327), by its
+    # key, with the reason it had; the old setting stays as the bin left it.
+    import wants
+    assert profile_set.get("search.py", "BAR_DECLINED") == {}
+    back = wants.held_declined()
     assert list(back) == ["north shore mutual"], back
     assert json.dumps(back["north shore mutual"]).find("2026-11-01") > 0
