@@ -356,8 +356,10 @@
   // of tabs"): Drafts and Applied are views of Jobs, and Progress is opened from the Brief's
   // numbers. The messages to send are on each person's own card in Contacts, one page with no
   // tabs (the maintainer, 2026-11-04).
-  // The phone's tab bar: five places at most.
-  const NAV = ["brief", "todo", "jobs", "contacts", "chat"];
+  // The phone's tab bar: five places at most. Coming up is one of them and Chat is the header's
+  // button, as on a computer (the redesign's second round, 2026-11-17: Coming up opened only
+  // through the Brief on a phone).
+  const NAV = ["brief", "todo", "jobs", "contacts", "interviews"];
   // The side menu: every place with the others, Coming up among them and Chat last, and
   // Settings alone at the bottom (the person, 2026-11-03: Coming up beside Settings while Chat
   // sat with the main places "makes no sense").
@@ -16014,9 +16016,11 @@
     // shown, the light's word and the pill's ran 64px off a phone).
     const screen = $("screen"), pill = $("pill"), conn = $("conn");
     const row = top ? top.querySelector(".top-in") : null;
-    for (const el of [conn, pill]) if (el) el.classList.remove("tight");
+    // Then the Chat button its word, its icon and its name still saying it.
+    const steps = [conn, pill, fabEl];
+    for (const el of steps) if (el) el.classList.remove("tight");
     const cut = () => (!!screen && screen.getClientRects().length > 0 && screen.scrollWidth > screen.clientWidth + 1) || (!!row && row.scrollWidth > row.clientWidth + 1);
-    for (const el of [conn, pill]) if (el && cut()) el.classList.add("tight");
+    for (const el of steps) if (el && cut()) el.classList.add("tight");
   }
 
   // ------------------------------------------------------------------ Chat: one box
@@ -16980,6 +16984,7 @@
   function dockSizeSay() {
     if (!dockEl) return;
     dockEl.classList.toggle("is-big", dockBig);
+    document.documentElement.classList.toggle("dock-big", dockBig);
     if (dockSizeBtn) {
       dockSizeBtn.setAttribute("aria-pressed", String(dockBig));
       dockSizeBtn.setAttribute("aria-label", dockBig ? "Make the chat smaller" : "Make the chat bigger");
@@ -17011,10 +17016,15 @@
         h("a", {href: "#chat", class: "btn secondary small", "data-k": "dock-full", onclick: (e) => { e.preventDefault(); openInChat(); }}, "Open in Chat"),
         h("button", {type: "button", class: "btn secondary small", "data-k": "dock-close", "aria-label": "Close the chat panel", onclick: () => closeDock(true)}, "Close")),
       dockBox);
+    // On a phone it carries Claude's light as a small dot on its icon, its state in its name,
+    // and a new answer not seen yet as a grey dot after its word (fabSay).
     fabEl = h("button", {type: "button", class: "chat-fab", id: "chat-fab", "data-k": "chat-fab", "aria-label": "Chat with Claude", "aria-haspopup": "dialog",
       "aria-controls": "chat-dock", "aria-expanded": "false", hidden: true, onclick: (e) => openDock({opener: e.currentTarget})},
-      svg("svg", {viewBox: "0 0 24 24", class: "ic", "aria-hidden": "true", focusable: "false"}, [svg("path", {d: "M4 5h16v11H9l-5 4z", fill: "none", stroke: "currentColor", "stroke-width": "2", "stroke-linecap": "round", "stroke-linejoin": "round"})]),
-      h("span", {class: "fab-word", "aria-hidden": "true"}, "Chat"));
+      h("span", {class: "fab-ic", "aria-hidden": "true"},
+        svg("svg", {viewBox: "0 0 24 24", class: "ic", "aria-hidden": "true", focusable: "false"}, [svg("path", {d: "M4 5h16v11H9l-5 4z", fill: "none", stroke: "currentColor", "stroke-width": "2", "stroke-linecap": "round", "stroke-linejoin": "round"})]),
+        h("span", {class: "dot fab-dot"})),
+      h("span", {class: "fab-word", "aria-hidden": "true"}, "Chat"),
+      h("span", {class: "navdot fab-new", "aria-hidden": "true", hidden: true}));
     document.body.appendChild(dockEl);
     // The Chat button sits in the header on a computer, never floating over the cards: floating,
     // it covered a bin, a Copy button and a value in Settings (the redesign, 2026-11-16).
@@ -17067,14 +17077,40 @@
     // On a phone the Chat tab is the one way in: a floating button as well was two buttons
     // for one thing (the maintainer, 2026-10-28). In the header it is never in a selection's
     // way; the panel is lifted over Claude's browser panel.
-    fabEl.hidden = shown || dockOpen || window.innerWidth < 760;
+    // On a phone it is always there, the one way into Chat, "you are here" on Chat itself (as
+    // the gear is on Settings); on a computer it gives way to the panel and to Chat.
+    const narrow = window.innerWidth < 760;
+    fabEl.hidden = narrow ? false : shown || dockOpen;
     fabEl.setAttribute("aria-expanded", String(dockOpen));
-    document.body.classList.toggle("has-fab", !fabEl.hidden);
+    document.documentElement.classList.toggle("dock-open", dockOpen && !narrow);
+    document.body.classList.toggle("has-fab", !fabEl.hidden && !narrow);
+    fabSay();
     const bp = $("browser-panel");
     const lift = bp ? Math.ceil(bp.getBoundingClientRect().height / drawnPerPx()) + 12 : 0;
     for (const el of [dockEl, fabEl]) el.style.setProperty("--dock-lift", lift + "px");
     if (dockOpen) renderChat();
     else growTalk();
+  }
+  // The Chat button's light, its name and its new-answer dot. On a phone Claude's light is the
+  // dot on its icon, its words in the button's name: "● Claude" beside it was a second control
+  // for one state (the redesign's second round, 2026-11-17). On a computer the light keeps its
+  // own place in the header and the button is "Chat with Claude".
+  function fabSay() {
+    if (!fabEl) return;
+    const narrow = window.innerWidth < 760;
+    const [state, words] = connState();
+    const at = lastAnswerAt();
+    // A computer says a new answer on the side menu's Chat, as before.
+    const fresh = narrow && !!at && !chatShown() && at > txt(pref("chat:seen", ""));
+    const dot = fabEl.querySelector(".fab-dot");
+    if (dot) dot.className = "dot fab-dot conn-" + state;
+    const nd = fabEl.querySelector(".fab-new");
+    if (nd) nd.hidden = !fresh;
+    fabEl.setAttribute("data-state", state);
+    fabEl.setAttribute("aria-label", "Chat with Claude" + (narrow ? ". Claude: " + words.replace(/\.$/, "") + "." : "") + (fresh ? " A new answer." : ""));
+    if (narrow) { fabEl.removeAttribute("aria-haspopup"); fabEl.removeAttribute("aria-controls"); fabEl.removeAttribute("aria-expanded"); }
+    else { fabEl.setAttribute("aria-haspopup", "dialog"); fabEl.setAttribute("aria-controls", "chat-dock"); fabEl.setAttribute("aria-expanded", String(dockOpen)); }
+    if (narrow && S.section === "chat") fabEl.setAttribute("aria-current", "page"); else fabEl.removeAttribute("aria-current");
   }
   function focusTalk(text) {
     if (!talkEl) buildTalk();
@@ -17871,7 +17907,7 @@
     const tabs = $("tabs");
     if (tabs) {
       patch(tabs, [h("ul", {class: "plain tab-list"}, NAV.map((id) => h("li", {}, h("a", {href: "#" + id, class: "tab", "data-k": "tab:" + id, "aria-current": navOwner(S.section) === id ? "page" : null,
-        onclick: (e) => { e.preventDefault(); go(id, {focus: true}); }}, h("span", {class: "tab-ic", "aria-hidden": "true"}, icon(id)), h("span", {class: "tab-label"}, labelOf(id)), id === "todo" ? badgeEl() : navCount(id)))))]);
+        onclick: (e) => { e.preventDefault(); go(id, {focus: true}); }}, h("span", {class: "tab-ic", "aria-hidden": "true"}, icon(id)), h("span", {class: "tab-label"}, labelOf(id)), id === "todo" ? badgeEl() : null))))]);
     }
   }
   function connState() {
@@ -18000,6 +18036,7 @@
         h("span", {class: "sr-only"}, ": " + words + (age ? " Updated " + age + "." : "")))]);
       conn.setAttribute("data-state", state);
     }
+    fabSay();
     const pulse = $("pulse");
     // An update on its way is said like an app says it: one line under the header, moving,
     // until the new version is published and every open view reloads to it by itself.
@@ -18356,6 +18393,10 @@
       const open = [...document.querySelectorAll("details.more[open]")];
       const mine = open.find((d) => d.contains(t)) || open[open.length - 1];
       if (mine) { mine.open = false; const s = mine.querySelector("summary"); if (s) s.focus(); e.preventDefault(); }
+      // The Chat panel closes from anywhere on the page, not only from inside it: focus on a
+      // card beside it is never left under it with no key to clear it (WCAG 2.4.11, the
+      // accessibility review, 2026-11-17).
+      else if (dockOpen) { e.preventDefault(); closeDock(true); }
       else if (S.connOpen) { S.connOpen = false; render(); }
       return;
     }

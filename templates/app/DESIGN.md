@@ -10,8 +10,11 @@ next?" in its first lines, and nothing asks for a decision a default could make.
 - Seven places: **Brief** (the home screen), **To do**, **Jobs** (To apply, Applied),
   **Contacts** (one list, each person with what to send them), **Coming up** and **Chat**
   together in the side menu, and **Settings** alone at its foot. Five sit in the phone's tab
-  bar (Brief, To do, Jobs, Contacts, Chat); To do alone carries a coloured badge, and Chat a
-  small grey dot while an answer waits unseen. (layout 6, nav order test; contacts rules test)
+  bar (Brief, To do, Jobs, Contacts, Coming up), and Chat is the header's button on a phone as
+  on a computer: on a phone Coming up opened only through the Brief, and Progress lit the Brief
+  with no way back (the redesign's second round, 2026-11-17). To do alone carries a badge, and
+  no other tab a count; the Chat button a small grey dot after its word while an answer waits
+  unseen. (layout 6, nav order test; contacts rules test)
 - Each screen: its title, one plain summary line, at most three blocks before the first item.
   A way to somewhere else (the new jobs, Start again, Paste a message) is a soft pill beside
   the summary, centred on its line, never an underlined line under it; what Claude is doing is the header's work
@@ -90,12 +93,14 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   opens and closes the panel on the right, as the menu's "Icons only" folds, remembered on the
   device (open beside every screen but the Brief until the person chooses); narrower, it opens
   as a panel on the right, and on a phone as a sheet from the bottom. (pill tests)
-- On a computer the Chat button is the header's last control, a soft button with its icon and
-  "Chat", never floating over the page: bottom right it covered a bin, a Copy button and a value
+- On a computer and on a phone the Chat button is the header's last control, a soft button
+  with its icon and "Chat", never floating over the page: bottom right it covered a bin, a Copy button and a value
   in Settings (the redesign, 2026-11-16). Its panel opens under the header at the right, or the
   button sits beside the page's name and the panel at the left where the person chose it
   (Settings > Look, Chat button, or the panel's own arrow; the same choice, kept on the device),
-  small or big.
+  small or big. While the panel is open on a computer the page keeps its width clear of it,
+  and Escape anywhere on the page closes it, so nothing the keyboard reaches sits under it
+  (WCAG 2.4.11, the accessibility review, 2026-11-17).
   The panel's controls are the page's own soft pills (Open in Chat, Close), never underlined words.
   The conversation opens on its last day; earlier messages come only by its Show, never by
   scrolling up (the maintainer, 2026-11-06). (chat panel tests) On a phone the Chat is as tall
@@ -108,12 +113,16 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   2026-11-11), and with its box under the header the box sat mid-screen on a phone and jumped to
   the foot with the first message (the redesign, 2026-11-16). (empty chat tests)
 - The frame is calm. On a phone the tab bar is the card colour with a hairline on top: the tab
-  you are on has a soft clay capsule behind its icon, its icon in clay and its name in ink at
-  600, the others grey at 400; To do's count is a clay badge and every other count the same
-  capsule outlined in grey, so a "5" by Jobs reads as a count. On a computer the place you are on
-  in the side menu is the same soft clay fill, its name at 600 and its icon in clay, never a bar
-  down its side; "Icons only" is a quiet grey control. The phone's header has one title (on
-  the Brief its greeting) and Claude's labelled light at its right. On a phone a sheet rises
+  you are on has a soft clay capsule behind its icon, ringed in clay, its icon in clay and its
+  name in ink at 600, the others grey at 400; To do's count is a clay badge at its icon's top
+  right corner, past the glyph, and no other tab has a count. On a computer the place you are
+  on in the side menu is the same soft clay fill ringed in clay, its name at 600 and its icon
+  in clay, never a bar down its side; "Icons only" is a quiet grey control. A chosen place is
+  never its fill alone: the fill is 1.1:1 from the page, so its ring reaches 3:1 (WCAG 1.4.11,
+  1.4.1 in Icons only; the accessibility review, 2026-11-17). The phone's header has one title
+  (on the Brief its greeting) and at its right the gear and the Chat button, which carries
+  Claude's light as a small dot on its icon's corner, its state said in its name; on a computer
+  the light keeps its own labelled place beside the Chat button. On a phone a sheet rises
   from the foot with round top corners and a small grabber; a sheet and a menu float on the
   overlay colour with a hairline and the floating shadow, a menu's rows a finger's height (the redesign, 2026-11-16: a grey bar with a red line on top, a dot after the title
   that read as "unread" and a bare "5" read as dated). (layout 5 and 6, menu tests, sheet tests)

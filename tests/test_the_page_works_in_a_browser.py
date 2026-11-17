@@ -1039,9 +1039,11 @@ def test_the_chat_opens_from_any_section_in_a_panel_with_the_same_thread(run, pa
     r = run("chat_dock", html=pages["sample"], viewport=vp)
     _clean(r)
     if vp is PHONE:
-        # One way into the chat on a phone, its tab: no floating button and no panel over it
-        # (the maintainer, 2026-10-28).
-        assert not r["fab"] and not r["dockBefore"]
+        # One way into the chat on a phone, the header's Chat button, never a panel over the
+        # page (the maintainer, 2026-10-28); its name says Claude's light (the redesign's
+        # second round, 2026-11-17).
+        assert r["fab"] and not r["dockBefore"]
+        assert r["fabName"].startswith("Chat with Claude. Claude: "), r["fabName"]
         # Paste a message opens its box under Contacts' header, never the Chat (2026-11-05).
         assert r["phone"]["hash"].startswith("#contacts") and not r["phone"]["dock"]
         assert r["phone"]["box"] and r["phone"]["focus"] == "ct-text:card-place-paste", r["phone"]

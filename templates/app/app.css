@@ -36,7 +36,7 @@
 
 *, *::before, *::after { box-sizing: border-box; }
 [hidden] { display: none !important; }
-html { -webkit-text-size-adjust: 100%; scroll-padding-top: calc(var(--top-h) + env(safe-area-inset-top, 0px) + 8px); scroll-padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-bottom, 0px) + 72px); }
+html { -webkit-text-size-adjust: 100%; scroll-padding-top: calc(var(--top-real, var(--top-h)) + env(safe-area-inset-top, 0px) + 8px); scroll-padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-bottom, 0px) + 72px); }
 body {
   margin: 0;
   background: var(--bg);
@@ -55,6 +55,9 @@ a { color: var(--link); text-decoration-color: var(--link-line); text-decoration
 @media (hover: hover) { a:hover { text-decoration-color: var(--ink); } }
 :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: 6px; }
 button, input, select, textarea { font: inherit; color: inherit; }
+/* A field's hint is the quiet grey, never the browser's own: its #757575 was 3.4:1 on a sheet in
+   the dark (the accessibility review, 2026-11-17). */
+::placeholder { color: var(--muted); opacity: 1; }
 .sr-only { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 .muted { color: var(--muted); }
 .small { font-size: var(--t-sm); }
@@ -87,6 +90,9 @@ bdi { unicode-bidi: isolate; }
 /* Claude's state is a small labelled light at the header's right, beside its tools: a dot
    straight after the screen's name read as "unread" (the redesign, 2026-11-16). */
 .conn { display: inline-flex; margin-left: auto; }
+/* On a phone Claude's light is the dot on the Chat button (app.js, fabSay): the word "Claude"
+   beside it was a second control for one state (the redesign's second round, 2026-11-17). */
+@media (max-width: 759px) { .conn { display: none; } .top-in > .top-tools { margin-left: auto; } }
 .conn-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; flex: none; min-width: var(--target); min-height: var(--target); padding: 0 8px; border: 0; background: none; border-radius: 999px;
   color: var(--muted); font-size: var(--t-sm); font-weight: 600; line-height: 1; cursor: pointer; }
 @media (hover: hover) { .conn-btn:hover { background: var(--raised); color: var(--ink); } }
@@ -170,7 +176,10 @@ bdi { unicode-bidi: isolate; }
 }
 .tab-ic { display: grid; place-items: center; width: 56px; height: 32px; border-radius: 16px; flex: none; }
 .tab[aria-current="page"] { color: var(--ink); font-weight: 600; }
-.tab[aria-current="page"] .tab-ic { background: var(--accent-soft); color: var(--mark); }
+.tab[aria-current="page"] .tab-ic { background: var(--accent-soft); color: var(--mark); box-shadow: inset 0 0 0 1px var(--mark); }
+/* Its ring is drawn inside the bar: flush with the screen's foot, a ring outside it lost its
+   bottom edge (the accessibility review, 2026-11-17). */
+.tab:focus-visible { outline-offset: -3px; border-radius: var(--r-sm); }
 .tab[aria-current="page"] .ic { stroke-width: 2.25; }
 .tab-label { max-width: 100%; }
 /* Icons are drawn on a 24-point grid and shown at 24px unless a control sets a smaller size,
@@ -181,7 +190,10 @@ bdi { unicode-bidi: isolate; }
    filled in clay; the others are the same capsule outlined in grey, so "5" by Jobs reads as a
    count and never as a footnote (the redesign, 2026-11-16). */
 .badge { min-width: 20px; height: 20px; padding: 0 4px; border-radius: 10px; background: var(--mark); color: var(--mark-on); font: 600 0.75rem/20px var(--font-data); text-align: center; font-variant-numeric: tabular-nums; }
-.tab .badge { position: absolute; top: 4px; left: calc(50% + 4px); box-shadow: 0 0 0 2px var(--surface); }
+/* On a phone tab it sits at the icon's top right corner, past the glyph, never over it (a "5"
+   on Jobs' briefcase read as part of the icon, the review, 2026-11-17), ringed in the bar's
+   colour. Only To do carries one there. */
+.tab .badge { position: absolute; top: 4px; left: calc(50% + 8px); min-width: 18px; height: 18px; line-height: 18px; border-radius: 9px; box-shadow: 0 0 0 2px var(--surface); }
 /* A quiet count: the section's own number, never a call to act. */
 .navcount { min-width: 20px; height: 20px; padding: 0 4px; border-radius: 10px; background: none; box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--muted); font: 600 0.75rem/20px var(--font-data); text-align: center; font-variant-numeric: tabular-nums; }
 .side-list .navcount, .side-list .badge { margin-left: auto; }
@@ -227,7 +239,11 @@ bdi { unicode-bidi: isolate; }
 }
 .side-list a .ic { color: var(--muted); }
 @media (hover: hover) { .side-list a:hover { background: var(--raised); } }
-.side-list a[aria-current="page"] { background: var(--accent-soft); font-weight: 600; }
+/* The chosen row is ringed in clay as well as filled: its fill alone was 1.1:1 from the page and
+   from a hovered row, and in Icons only the clay icon was its only sign (the accessibility
+   review, 2026-11-17: 1.4.1, 1.4.11). A ring all round, never a bar down one side. */
+.side-list a[aria-current="page"] { background: var(--accent-soft); font-weight: 600; box-shadow: inset 0 0 0 1px var(--mark); }
+.side-list a[aria-current="page"] .ic { stroke-width: 2.25; }
 .side-list a[aria-current="page"] .ic { color: var(--mark); }
 .side-list a[aria-current="page"] .navcount { color: var(--ink); }
 @media (hover: hover) { .side-list a:hover .count, .side-list a[aria-current="page"] .count { color: var(--ink); } }
@@ -1619,6 +1635,12 @@ label.pick { display: flex; align-items: flex-start; justify-content: center; wi
   .weeks-svg .bar-b { fill: CanvasText; }
   .bp-spark .bp-bar:not(.is-sent) { forced-color-adjust: none; background: Highlight; }
   .bp-spark .bp-bar.is-sent, .sw.sw-b { forced-color-adjust: none; background: CanvasText; }
+  .seg-opt[aria-pressed="true"], .seg-opt:has(input:checked), .pills .choice:has(input:checked) { forced-color-adjust: none; background: Highlight; color: HighlightText; }
+  .gear[aria-current="page"], .chat-fab[aria-current="page"] { outline: 3px solid Highlight; outline-offset: -3px; }
+  .navdot, .bp-day-dots i { forced-color-adjust: none; background: CanvasText; }
+  .bp-day-dots i.due { background: Canvas; box-shadow: inset 0 0 0 2px CanvasText; }
+  .bp-day.is-today { outline: 2px solid CanvasText; outline-offset: -2px; }
+  .chat-fab, .seg-opt, .conn-btn, .gear, .sheet-x, .back-btn { border: 1px solid ButtonText; }
   .weeks-svg .tick { fill: CanvasText; }
   .weeks-svg .grid, .weeks-svg .axis { stroke: GrayText; }
 }
@@ -1774,10 +1796,11 @@ dialog.work-sheet :is(select, input, textarea) { width: 100%; max-width: 100%; m
 .head-ask { font-size: var(--t-sm); }
 .head-ask .btn.link { font-size: inherit; padding-left: 0; }
 
-/* The Chat button is the header's last control on a computer, a soft button like the page's
-   own (raised fill, its icon and "Chat"), so it never floats over a card: bottom right it
-   covered a bin, a Copy button and a value in Settings (the redesign, 2026-11-16). A phone has
-   the Chat tab and no button. */
+/* The Chat button is the header's last control, on a computer and on a phone, a soft button
+   like the page's own (raised fill, its icon and "Chat"), so it never floats over a card: bottom
+   right it covered a bin, a Copy button and a value in Settings (the redesign, 2026-11-16). On a
+   phone it carries Claude's light as a small dot on its icon's corner, ringed in its own fill,
+   and a new answer as a grey dot after its word (the redesign's second round, 2026-11-17). */
 .chat-fab {
   display: inline-flex; align-items: center; gap: 8px; flex: none; min-height: var(--target); padding: 0 12px;
   border: 0; border-radius: var(--r-btn); background: var(--raised); color: var(--ink);
@@ -1785,12 +1808,30 @@ dialog.work-sheet :is(select, input, textarea) { width: 100%; max-width: 100%; m
 }
 @media (hover: hover) { .chat-fab:hover { background: var(--raised-hover); } }
 .chat-fab .ic { width: 20px; height: 20px; }
+.fab-ic { position: relative; display: inline-grid; place-items: center; }
+.fab-dot { position: absolute; top: -2px; right: -4px; width: 8px; height: 8px; box-shadow: 0 0 0 2px var(--raised); }
+.chat-fab .fab-new { margin-left: -4px; }
+.chat-fab[aria-current="page"] { background: var(--accent-soft); color: var(--ink); box-shadow: inset 0 0 0 1px var(--mark); }
+.chat-fab[aria-current="page"] .fab-dot { box-shadow: 0 0 0 2px var(--accent-soft); }
+/* A computer keeps Claude's light in its own place in the header. */
+@media (min-width: 760px) { .fab-dot { display: none; } }
+/* Where the header is short of room the word goes, its name still saying it (app.js, fitTop). */
+.chat-fab.tight .fab-word { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .chat-dock {
   position: fixed; z-index: 31; right: max(16px, env(safe-area-inset-right, 0px));
   bottom: calc(env(safe-area-inset-bottom, 0px) + 16px + var(--dock-lift, 0px));
   width: min(420px, calc(100vw - 32px)); height: min(600px, calc(100dvh - var(--top-h) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 48px - var(--dock-lift, 0px)));
   display: flex; flex-direction: column; overflow: hidden;
   background: var(--surface); color: var(--ink); border: 1px solid var(--line-strong); border-radius: var(--r); box-shadow: var(--shadow);
+}
+/* While the panel is open on a computer the page keeps its width clear, so nothing the keyboard
+   reaches sits under it (WCAG 2.4.11, the accessibility review, 2026-11-17); Escape anywhere
+   closes it (app.js, onKey). */
+@media (min-width: 760px) {
+  html.dock-open:not(.dock-left) .shell { padding-right: calc(min(420px, 100vw - 32px) + 16px); }
+  html.dock-open.dock-left .shell { padding-left: calc(min(420px, 100vw - 32px) + 16px); }
+  html.dock-open.dock-big:not(.dock-left) .shell { padding-right: calc(min(760px, 100vw - 280px) + 16px); }
+  html.dock-open.dock-big.dock-left .shell { padding-left: calc(min(760px, 100vw - 280px) + 16px); }
 }
 /* On a computer the panel opens under the header, below its button, never over the header. */
 @media (min-width: 760px) {
