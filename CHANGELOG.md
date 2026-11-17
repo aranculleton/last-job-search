@@ -26,6 +26,7 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **Your computer's own chat costs nothing while it waits.** It woke itself about twelve times a day to keep listening, re-reading its whole history each time with nothing to do. Now a chat that sends it work also leaves a small note in your copy, and the computer's chat checks for that note once a minute without Claude, waking only when work is there; a chat already open the old way moves over by itself once it has the update, and if it is ever woken often with nothing to do, that is reported by itself (issue 322).
 - **Chat's answers read cleanly and never end at "I can't".** The page's own quick answers showed markdown raw, with asterisks around names and "- " before list items, and sometimes said what they could not do instead of passing the question on. Lists and bold now show as they should in every answer, and a question the page cannot answer goes to Claude by itself.
 - **Chat's Latest button only shows when there is something below.** Opening Chat from a long screen showed "Latest" for a moment over a conversation that already ended on the screen. It now waits until Chat is drawn before deciding.
 - **A booked interview day is on your tracker too.** When an interview's day was booked after it had been noted as still to choose, the tracker kept saying the day was not chosen, so a chat reading it first could tell you the interview was not booked when it was. Booking a day now adds it to the tracker as well, and the update puts right any already booked. Profile upgrade: `interview-days-noted`.
@@ -59,6 +60,7 @@ make sense to somebody whose repo just received it.
 - **A job can show a different title on different resumes, where you have agreed one.** If a role may be shown under another title for some kinds of job (a more technical title for data science roles, say), list it with that role's `titles` in `profile/roles.py`. Each resume then prints the one its kind of job gets, and checking or remaking that resume later keeps it, with no profile edits between resumes. A role with one title prints as before (issue 316).
 
 ### Changed
+- **`computer.listener_quiet` is retired.** It told the old keep-alive ring when the computer's own chat had gone quiet; the chat now waits for work in code and nothing rings it to keep it awake, so nothing used it (issue 322).
 
 - **The cards that open from a name are cleaner and easier to read.** An employer's, a person's, an application's and an interview's card now list what they hold as tidy rows: each says where it stands and opens with one tap, the arrow at its end saying so. An application's and an interview's stages run down a timeline, filled once done. On a laptop a card is as tall as what it holds, and its title no longer has a box drawn round it.
 

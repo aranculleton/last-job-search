@@ -225,15 +225,20 @@ a chat already on the computer; the computer's own chat, "Last Job Search · You
 chat`): the first chat on the computer that finishes its job with no live listener publishes a
 bell of its own and stays open as it (`ring --chat` prints `stay`, then `listener-ready`; its
 record is `meta/computer_listener`), each wake runs `listener-steps` (`listener-woke`: take the
-work as any chat there does, republish its own bell at most hourly, or rest), idle it keeps
-one background wait of just under two hours whose end wakes it to republish its bell, so its
-watch never lapses, after each job it rings the starter, whose wake lands what it saved (no
-chat on the computer may merge: `land.on_computer`; `starter-woke` prints the landing), the
-starter and `archivable` never put it away, and the hourly scheduled task, where there is one,
-also rings it once after two quiet hours (`keep-alive`); a ring unanswered for five minutes, or two in a row,
-marks it stale and the work goes on down this list, so a chat started from the cloud asks the
-person's Allow only until the computer has its own chat (issue #250); a chat started there from
-the cloud (`create_session` on the
+work as any chat there does, republish its own bell at most hourly, or rest), idle it costs
+no turn at all: whoever rings it also leaves the ring in the person's copy
+(`documents/computer_ring.json`, landed with that chat's save at once), and its one background
+command, `listener-wait`, is code that reads that ring on GitHub once a minute and ends, which
+wakes the chat, only when work is rung for it, so a watch that lapsed after quiet hours costs a
+minute or two and never a turn (`background-command-limit`; issue #322; a wait that cannot read
+GitHub for nearly two hours wakes it to keep its bell, as often as before and no more), after
+each job it rings the starter, whose wake lands what it saved (no chat on the computer may
+merge: `land.on_computer`; `starter-woke` prints the landing), the starter and `archivable`
+never put it away, and a scheduled task made before never rings it (`keep-alive`); a ring
+unanswered for five minutes (fifteen where it had been quiet for two hours, since its ring may
+come through GitHub), or two in a row, marks it stale and the work goes on down this list,
+so a chat started from the cloud asks the person's Allow only until the computer has its own
+chat (issue #250); a chat started there from the cloud (`create_session` on the
 bridge by the computer starter, woken by its bell, in Auto, titled `Last Job Search · <job>`
 (`Job search · <job> · <computer>` before issue #289), its prompt complete, its results back through the page and the copy and never
 `send_message`, archived by the starter once its work is finished or waits on the person: a
