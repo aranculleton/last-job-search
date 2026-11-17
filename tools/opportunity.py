@@ -90,18 +90,35 @@ SELF_PORTRAIT = re.compile(r"\b(?:culture|foster\w*)\b[^.;!?\n]{0,80}", re.I)
 # Brand leverage, core capabilities and the wrong job families are the
 # profile's (search.py, OPP_*): where the candidate's own employers do
 # disproportionate work, what is held, and which families are a different job.
-#   LEVERAGE      (sector pattern, points, why[, "set_aside_self_portrait"])
+#   LEVERAGE      (sector pattern, points, why[, "set_aside_self_portrait"]).
+#                 The lifts together count up to LEVERAGE_CAP; a penalty
+#                 (negative points) counts in full, whatever the lifts came to
 #   CORE          (pattern, points) for each held capability a posting names
-#   TITLE_FAMILY  (pattern, points) read from the title alone: a job family
-#                 is the title's claim, and the body's words are the tools and
-#                 the neighbouring teams
-#   WRONG_FAMILY  (pattern, points) read from the whole posting
+#   TITLE_FAMILY  (pattern, points[, why]) read from the title alone: a job
+#                 family is the title's claim, and the body's words are the
+#                 tools and the neighbouring teams
+#   WRONG_FAMILY  (pattern, points[, why]) read from the whole posting
+# A family entry with no why says "job family looks wrong" when it docks, as it
+# always did; one that lifts, or a penalty for a preference (long hours, a live
+# coding test), says its own why. Neither family list is capped.
 # --------------------------------------------------------------------------
 LEVERAGE = [(*e[:3], SELF_PORTRAIT) if e[3:] == ("set_aside_self_portrait",) else e
             for e in getattr(_S, "OPP_LEVERAGE", [])]
 CORE = list(getattr(_S, "OPP_CORE", []))
 TITLE_FAMILY = list(getattr(_S, "OPP_TITLE_FAMILY", []))
 WRONG_FAMILY = list(getattr(_S, "OPP_WRONG_FAMILY", []))
+# The most the lifts of LEVERAGE add together, so leverage tilts rather than dominates. Only
+# the lifts: a penalty written there was swallowed by the cap on any posting whose lifts passed
+# it by more than the penalty, so it bit only on postings that were already weak (2026-11-16).
+LEVERAGE_CAP = 30
+
+
+def family_says(points: int, why: str = "") -> str:
+    """A job family entry's line in a score's reasons: its own why where the profile gives one,
+    else the wrong-family words for a penalty and plain words for a lift."""
+    if why:
+        return f"{points:+d} {why}"
+    return f"{points} job family looks wrong" if points < 0 else f"{points:+d} a job family you rank up"
 
 
 # Titles above and below the person's level, docked 12 and 25. Both are the
@@ -219,8 +236,8 @@ def ceiling() -> int:
     tier_top = (30 if TIER_1 else 20 if TIER_2 else 14 if YC_AND_BACKED
                 else 10 if TIER_3 else 0)
     core = sum(p for _, p in CORE if p > 0)
-    leverage = min(30, sum(e[1] for e in LEVERAGE if e[1] > 0))
-    families = sum(max(0, p) for _, p in (*TITLE_FAMILY, *WRONG_FAMILY))
+    leverage = min(LEVERAGE_CAP, sum(e[1] for e in LEVERAGE if e[1] > 0))
+    families = sum(max(0, e[1]) for e in (*TITLE_FAMILY, *WRONG_FAMILY))
     return 40 + tier_top + core + leverage + families + 12 + 6
 
 
@@ -273,18 +290,23 @@ def score(job: dict, today: dt.date | None = None) -> dict:
     if core:
         why.append(f"+{sum(core)} core capability match on {len(core)} signals")
 
-    lev = 0
+    lifts = docks = 0
     for pat, p, reason, *aside in LEVERAGE:
         if pat.search(aside[0].sub(" ", hay) if aside else hay):
-            lev += p
-            why.append(f"+{p} leverage: {reason}")
-    pts += min(lev, 30)  # cap, so leverage tilts rather than dominates
+            if p >= 0:
+                lifts += p
+            else:
+                docks += p
+            why.append(f"{p:+d} leverage: {reason}")
+    pts += min(lifts, LEVERAGE_CAP) + docks
+    if lifts > LEVERAGE_CAP:
+        why.append(f"leverage lifts counted to +{LEVERAGE_CAP} of +{lifts}")
 
     for families, text in ((TITLE_FAMILY, title), (WRONG_FAMILY, hay)):
-        for pat, p in families:
+        for pat, p, *said in families:
             if pat.search(text):
                 pts += p
-                why.append(f"{p} job family looks wrong")
+                why.append(family_says(p, str(said[0]) if said else ""))
 
     if SENIOR_UP.search(title):
         pts -= 12

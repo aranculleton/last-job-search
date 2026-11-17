@@ -413,8 +413,9 @@ METHODS: dict[str, dict] = {
             (104, "2026-11-11", False, "the general resume's plain-text copy and its short copy to paste read \"AWS\" whole, as the PDF does, never \"A WS\": a kern in a field reads as the one word TeX prints (issue 236); a copy kept before reads right once the general resume is made again"),
             (105, "2026-11-16", False, "RUNBOOK's map of what goes where says upcoming.py add takes --zone for something booked on another clock than the person's; nothing made changes"),
             (106, "2026-11-16", False, "RUNBOOK.md says land.py --detach commits and pushes the turn's work to the chat's branch before it returns, and that the cloud's message at the end of a turn about a save still at work is answered with nothing; nothing made changes"),
+            (107, "2026-11-16", False, "the run book says a change to how jobs are scored is followed in the same turn by tools/rescore.py, which scores the jobs on the page again, and names it among the tools; no document changes"),
         ),
-        "fingerprint": "7026e9ad3db4534d",
+        "fingerprint": "67bac0e7553d3a7a",
     },
     "interview": {
         # Only a process with a round still to come is prepared again: a prep for a round
@@ -846,8 +847,9 @@ METHODS: dict[str, dict] = {
             (55, "2026-11-10", False, "C++, C# and C in a job title are three roles: an application, a ruling or a sighting of one no longer stands for another at the same employer; rulings are read from their titles each round, so nothing needs looking at again"),
             (56, "2026-11-11", False, "rank.md names the page fetcher for a posting a 403 refused (tools/fetch_page.py); a draft a chat stopped because the job is not one the person can take holds that posting alone, as a role they set aside does (about six months, then shown once more), never judged again against the rules"),
             (57, "2026-11-11", False, "a role set aside with no day holds as if set aside the day it is first read, and the next save of the seen jobs, a search's included, writes that day on it, so it still ends"),
+            (58, "2026-11-16", False, "a penalty written in a profile's brand leverage counts in full on a strong posting, only the lifts being capped at 30, and a job family entry may say its own reason; an employer turned down is matched however its entry is written, and a bilingual name's French qualifier (Assurance et services financiers) keys as its English one does; fit's blend of fit and opportunity is one function a round and tools/rescore.py share; nothing ruled out needs looking at again, and the jobs on the page are scored again by the jobs-rescored upgrade"),
         ),
-        "fingerprint": "77a04152d8211502",
+        "fingerprint": "be0bc31aa958eb43",
     },
     "routines": {
         "by": "you", "priority": 3, "applies": "routines",
@@ -1340,6 +1342,7 @@ KEEPS_NOTHING: dict[str, str] = {
     "tools/network/pace.py": "how fast reads go and the count of pages loaded, kept per "
                              "computer outside the repo; nothing in the person's repo",
     "tools/run_round.py": "runs every round afresh; its shortlists are dated records of one round",
+    "tools/rescore.py": "scores the jobs on the page again by itself whenever it or how jobs are scored changes (its own fingerprint, read by the jobs-rescored upgrade), so nothing it wrote waits on a version",
     "tools/scrape_wide.py": "runs every round afresh",
     "tools/hydrate.py": "runs every round afresh",
     "tools/lookup_score.py": "a lookup run on demand",
