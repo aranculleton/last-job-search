@@ -53,7 +53,7 @@ LIGHT = {
     "overlay": ("#ffffff", "[D] white: what floats, a sheet, a menu, the Chat panel"),
     "sunk": ("#f2f0eb", "[D] paper a step deeper: wells, tracks, a segmented control's track"),
     "raised": ("#efece6", "[D] a secondary button's fill"),
-    "raised-hover": ("#e6e2da", "[D] a secondary button, hovered"),
+    "raised-hover": ("#e9e5de", "[D] a secondary button, hovered: quiet text 4.5:1 on it (the accessibility review, 2026-11-17)"),
     "ink": ("#1f1d1a", "[D] warm charcoal: all text that matters, 16.8:1 on a card"),
     "muted": ("#6b665e", "[D] warm grey: facts, times, labels, 4.8:1 at worst"),
     "line": ("#e7e3dc", "[D] a hairline: a card's edge, a row's divider, decoration only"),
@@ -88,6 +88,8 @@ LIGHT = {
     "toast-ink": ("#f7f6f3", "[D] paper on charcoal"),
     "toast-hover": ("#3a3631", "[D] a message's button, hovered"),
     "selection": ("#f3d9cc", "[D] clay's tint: selected text"),
+    "thumb": ("#ffffff", "[D] the chosen segment of a segmented control, the card colour on its sunk track, ringed in line-strong (3.2:1 on the track)"),
+    "scrim": ("#141312", "[D] the shade behind a sheet, drawn at 45% (app.css): the page steps back and only the sheet, its ink 16.8:1 on overlay, is read"),
     "shadow": ("0 12px 32px rgb(31 29 26 / 0.14), 0 2px 6px rgb(31 29 26 / 0.06)", "[D] what floats: a sheet, a menu, the Chat panel"),
     "shadow-card": ("0 1px 2px rgb(31 29 26 / 0.05)", "[D] a card's faintest lift, light only"),
     **_docs(),
@@ -106,7 +108,7 @@ DARK = {
     "ink": ("#f2efe9", "[D] warm off-white, never pure white: 14.8:1 on a card"),
     "muted": ("#a9a39a", "[D] warm grey: 5.5:1 at worst"),
     "line": ("#2e2c29", "[D] a hairline"),
-    "line-strong": ("#7a746b", "[D] an input's, a switch's or a checkbox's edge, 3.7:1 on a card"),
+    "line-strong": ("#807a71", "[D] an input's, a switch's or a checkbox's edge, 4:1 on a card, 3:1 on the soft clay and a hovered button (2026-11-17)"),
     "accent": ("#f2efe9", "[D] the filled button is the text colour, with charcoal on it"),
     "accent-hover": ("#ffffff", "[D] the filled button, hovered"),
     "accent-ink": ("#1a1917", "[D] charcoal on the filled button, 15.3:1"),
@@ -115,7 +117,7 @@ DARK = {
     "mark-on": ("#1a1917", "[D] charcoal on a clay fill, 6.8:1"),
     "mark-ink": ("#f0a68b", "[D] clay as text, 6.9:1 at worst"),
     "link": ("#f2efe9", "[D] a link is the text colour"),
-    "link-line": ("#7a746b", "[D] a link's underline inside a sentence: the control edge, 3.7:1 on a card"),
+    "link-line": ("#807a71", "[D] a link's underline inside a sentence: the control edge, 4:1 on a card, 3.2:1 on the soft clay"),
     "focus": ("#8ab4ff", "[D] blue: a keyboard's ring, 6.6:1 at worst"),
     "danger": ("#ff8f84", "[D] a removal's confirming fill, charcoal on it"),
     "danger-ink": ("#1a1917", "[D] charcoal on the removal fill"),
@@ -137,6 +139,8 @@ DARK = {
     "toast-ink": ("#1a1917", "[D] charcoal"),
     "toast-hover": ("#d9d4cc", "[D] a message's button, hovered"),
     "selection": ("#4a3328", "[D] clay's tint: selected text"),
+    "thumb": ("#34322e", "[D] the chosen segment, lifted off its track, ringed in line-strong (3:1 on it, 4.4:1 on the track)"),
+    "scrim": ("#000000", "[D] the shade behind a sheet, drawn at 45%: the page darkens and the sheet, a step lighter with its shadow, stands out"),
     "shadow": ("0 16px 40px rgb(0 0 0 / 0.55)", "[D] what floats"),
     "shadow-card": ("none", "[D] a card in the dark carries its hairline alone"),
     **_docs(),
@@ -178,7 +182,14 @@ def pairs() -> list:
     out += [("mark-ink", s, 4.5, "clay as text") for s in SURFACES + ("accent-soft",)]
     out += [("mark-on", "mark", 4.5, "text on a clay fill"), ("mark", "raised", 3.0, "a mark on a button"),
             ("danger-ink", "danger", 4.5, "text on the removal fill"), ("ink", "overlay", 4.5, "text on what floats"),
-            ("line-strong", "sunk", 3.0, "a button's edge in a card's soft box")]
+            ("line-strong", "sunk", 3.0, "a chosen segment's ring on its track"),
+            # The pairs the selected states and the soft clay draw (the accessibility review,
+            # 2026-11-17): a ring that says which is chosen, words on a hovered button.
+            ("ink", "thumb", 4.5, "the chosen segment's words"), ("line-strong", "thumb", 3.0, "the chosen segment's ring"),
+            ("muted", "thumb", 4.5, "a count on the chosen segment"),
+            ("mark", "accent-soft", 3.0, "the chosen place's ring"), ("muted", "raised-hover", 4.5, "quiet words on a hovered button"),
+            ("line-strong", "accent-soft", 3.0, "a control's edge on the soft clay"), ("link-line", "accent-soft", 3.0, "a link's underline on the soft clay"),
+            ("line-strong", "overlay", 3.0, "a field's edge in a sheet"), ("ink", "surface", 4.5, "a soft pill's words in a sunk box")]
     for st in STATUSES:
         out += [(f"st-{st}", f"st-{st}-bg", 4.5, f"{st}: a status word on its tint"), ("muted", f"st-{st}-bg", 4.5, f"secondary text on {st}'s tint")]
         out += [(f"st-{st}", s, 4.5, f"{st}: a status line") for s in SURFACES]
@@ -237,7 +248,8 @@ def css() -> str:
         ':root[data-theme="light"], :root[data-look="light"] { color-scheme: light; }',
         '@media (prefers-color-scheme: dark) {\n:root:not([data-theme="light"]):not([data-look="light"]) {\n' + dark + "\n}\n}",
         ':root[data-theme="dark"]:not([data-look="light"]), :root[data-look="dark"] {\n' + dark + "\n}",
-        "dialog::backdrop { background: rgb(20 19 18 / 0.45); }  /* [D] warm near-black as a scrim, in both */",
+        # The scrim's token where the backdrop inherits it, else the same warm near-black.
+        "dialog::backdrop { background: var(--scrim, #141312); opacity: 0.45; }  /* [D] the scrim, in both */",
         "::selection { background: var(--selection); color: var(--ink); }",
     ])
 

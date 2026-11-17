@@ -356,8 +356,10 @@
   // of tabs"): Drafts and Applied are views of Jobs, and Progress is opened from the Brief's
   // numbers. The messages to send are on each person's own card in Contacts, one page with no
   // tabs (the maintainer, 2026-11-04).
-  // The phone's tab bar: five places at most.
-  const NAV = ["brief", "todo", "jobs", "contacts", "chat"];
+  // The phone's tab bar: five places at most. Coming up is one of them and Chat is the header's
+  // button, as on a computer (the redesign's second round, 2026-11-17: Coming up opened only
+  // through the Brief on a phone).
+  const NAV = ["brief", "todo", "jobs", "contacts", "interviews"];
   // The side menu: every place with the others, Coming up among them and Chat last, and
   // Settings alone at the bottom (the person, 2026-11-03: Coming up beside Settings while Chat
   // sat with the main places "makes no sense").
@@ -1004,7 +1006,9 @@
     const st = COST_WORDS.findIndex((w, i) => i && t.indexOf(w) >= 0);
     if (st <= 0) return text;
     const rest = t.replace(COST_WORDS[st] + ". ", "").replace(COST_WORDS[st], "").trim();
-    return [h("span", {class: "has-tip", "data-tip": COST_WORDS[st], tabindex: "0"}, gauge(st), h("span", {class: "sr-only"}, COST_WORDS[st] + ". ")), " ", rest];
+    // No stop of its own for the keyboard: its words are read with it already, and a stop on
+    // every gauge was one more tab a card (WCAG 1.4.13, the accessibility review, 2026-11-17).
+    return [h("span", {class: "has-tip", "data-tip": COST_WORDS[st]}, gauge(st), h("span", {class: "sr-only"}, COST_WORDS[st] + ". ")), " ", rest];
   }
   // An engine cost ({state, label}) said the same way: free things as the engine says them,
   // the rest as the amount and the time this kind of work really takes.
@@ -1030,7 +1034,7 @@
     // nothing to anyone who cannot hover (2026-11-03).
     // "2 min of Claude", never a bare "2 min": beside "Find jobs" a bare "38 min" read as a wait
     // (the review, 2026-11-10).
-    return h("span", {class: "cost has-tip", id, "data-tip": words, tabindex: "0"}, gauge(st), h("span", {"aria-hidden": "true"}, time ? time + " of Claude" : ["", "a little", "some", "a lot"][st] + " of your allowance"), h("span", {class: "sr-only"}, words));
+    return h("span", {class: "cost has-tip", id, "data-tip": words}, gauge(st), h("span", {"aria-hidden": "true"}, time ? time + " of Claude" : ["", "a little", "some", "a lot"][st] + " of your allowance"), h("span", {class: "sr-only"}, words));
   }
 
   // ------------------------------------------------------------------ capabilities
@@ -3248,7 +3252,12 @@
     if (typeof f !== "object") return txt(f);
     return txt(f.label || f.text || f.kind || f.type || f.how || "");
   }
-  function chip(text, tone) { return h("span", {class: "chip tone-" + (tone || "plain")}, text); }
+  // Clay means it is the person's move, and nothing else does (the redesign's second round,
+  // 2026-11-17): "Needs your answer" in the late amber read as late, and "Ready to do" in blue
+  // as running. The words say it, so every chip and state that says one is drawn so.
+  const YOUR_MOVE = /^(Needs your answer|Replied: your turn|Your turn|Ready to do|\d+ questions? for you)$/;
+  const moveTone = (text, tone) => (YOUR_MOVE.test(txt(text).trim()) ? "you" : tone);
+  function chip(text, tone) { return h("span", {class: "chip tone-" + (moveTone(text, tone) || "plain")}, text); }
   // The one control that calls off Claude's work, wherever it shows (Claude's work, a card's
   // line, a reply, a card's question, the Chat's quick answer): a faint red quiet pill, "Stop
   // Claude", so it never reads as putting the job or the message away (the maintainer,
@@ -4004,9 +4013,16 @@
     // Asked first to keep the LinkedIn sign-in (the computer's card, keep_signin): a sign-in
     // waits behind it, never beside it, so the next one lasts (the maintainer's Mac, 2026-11-11).
     const keepFirst = needsItems().some((n) => txt(n.id) === "q-setup-computer" && txt(obj(n.about).say) === "keep_signin" && !effective(n.id));
+    // One card for one LinkedIn sign-in in a chat on the computer, however many reads wait on
+    // it: the newest, whose chat is likeliest still open; its tap sends them all back
+    // (signinBox). Two cards asked for the same sign-in (issue 285). A sign-in on this page's
+    // own browser is another sign-in, and keeps its own card.
+    const signinCard = [...allWork()].filter(([, w]) => txt(w.status) === "needs_you" && chatSignin(w))
+      .sort(([, a], [, b]) => txt(b.asked_you_at).localeCompare(txt(a.asked_you_at))).map(([id]) => id)[0];
     for (const [id, w] of allWork()) {
       if (txt(w.status) !== "needs_you") continue;
       if (keepFirst && signinNeeded(w)) continue;
+      if (chatSignin(w) && id !== signinCard) continue;
       const it = {key: "work:" + id, kind: WORK_KIND[txt(w.kind)] || "setup", band: "answer", employer: txt(obj(w.args).company) || employerIn(w.title),
         tab: null, counts: true, node: (ctx) => workTodo(id, w, ctx)};
       if (!each && quickWork(w) && !todoHidden(it)) quick.push({id, kind: it.kind, w}); else out.push(it);
@@ -5063,21 +5079,28 @@
     // Asked before the page knew the kind (4.14): a read on the computer that stopped there.
     return txt(obj(w).to) === "computer" && /signed out/i.test(txt(obj(w).note));
   }
+  // Waiting on a sign-in in a chat on the person's computer (needs.chat, from the engine).
+  function chatSignin(w) {
+    return signinNeeded(w) && /^session_[\w-]+$/.test(txt(obj(obj(w).needs).chat));
+  }
   function signinBox(id, w, key) {
     if (!signinNeeded(w)) return null;
-    // Met by a chat on the person's computer (needs.chat, the engine's words in needs.say): the
-    // sign-in is made in that chat's own browser, where its sign-in page is open, and the one
-    // button opens that chat. LinkedIn opened beside this page left the chat on the Mac signed
-    // out, twice (the maintainer, 2026-11-12), so nothing here opens LinkedIn.
+    // Met by a chat on the person's computer (needs.chat, the engine's words in needs.say and
+    // its steps in needs.steps): the sign-in is made in that chat's own browser, where its
+    // sign-in page is open. LinkedIn opened beside this page left the chat on the Mac signed
+    // out, twice (the maintainer, 2026-11-12), so nothing here opens LinkedIn; nor the chat's
+    // own link, which opens it without its browser (issue 286): the card names the chat. One
+    // sign-in sends back every read waiting on it (issue 285).
     const n = obj(w.needs);
     const chat = txt(n.chat);
     if (/^session_[\w-]+$/.test(chat)) {
+      const steps = arr(n.steps).map(txt).map(unnumber).filter(Boolean);
       return h("div", {class: "wc-signin", "data-signin": "linkedin-chat"},
         h("p", {class: "tone-warn"}, txt(n.say)),
+        steps.length ? h("ol", {class: "setup-steps"}, steps.map((s) => h("li", {}, s))) : null,
         h("div", {class: "wc-actions"},
-          h("a", {href: "https://claude.ai/code/" + chat, target: "_blank", rel: "noopener noreferrer", class: "btn primary small", "data-primary": "1", "data-k": key + ":chat"},
-            "Open the chat", h("span", {class: "sr-only"}, " (opens in a new tab)")),
-          btn("I've signed in", () => answerWork(id, "Signed in to LinkedIn", "signed in"), {small: true, key: key + ":signed"})));
+          btn("I've signed in", () => { for (const [wid, w2] of allWork()) if (txt(w2.status) === "needs_you" && chatSignin(w2)) answerWork(wid, "Signed in to LinkedIn", "signed in"); },
+            {kind: "primary", small: true, key: key + ":signed"})));
     }
     const tried = S.signinFor === id;
     if (tried && S.reading.ok === true && !SIGNIN_SENT.has(id)) {
@@ -10036,7 +10059,10 @@
         : weekWords.trim() || "Nothing applied yet.";
     // The next step, from how far applications got; else what is working (the Brief's own line).
     const small = nothing ? null : funnelReading(funnel) || txt(obj(d.glance).working);
-    const wrap = h("section", {class: "sec", "aria-labelledby": "h-progress" + (where ? "-" + where : "")}, screenHead("progress", "Progress", sum, small, where));
+    // Opened from the Brief's numbers, it goes back there (the UX review, 2026-11-17: it lit
+    // "Brief" with no way back).
+    const back = where ? null : backBtn("Brief", () => go("brief", {focus: true}), "progress-back", "#brief");
+    const wrap = h("section", {class: "sec sub-page", "aria-labelledby": "h-progress" + (where ? "-" + where : "")}, back, screenHead("progress", "Progress", sum, small, where));
     if (nothing) { put(wrap, empty("Nothing counted yet.", "Each application you mark as sent is counted here, with every reply and interview after it.",
       h("div", {class: "card-actions"}, btn("Go to Jobs", () => go("jobs", {focus: true}), {kind: "secondary", small: true, key: "progress-go-jobs"})))); return wrap; }
     if (hasRecent) {
@@ -10556,7 +10582,7 @@
       }
       const hint = h("p", {class: "hint tweak-hint", id: hid, hidden: true}, txt(r.hint), rec ? h("span", {}, " Recommended: " + rec.why) : null);
       const q = h("button", {type: "button", class: "q", "aria-expanded": "false", "aria-controls": hid, "data-k": "tw-q:" + r.p, "aria-label": "What " + r.label.toLowerCase() + " changes",
-        onclick: (e) => { hint.hidden = !hint.hidden; e.currentTarget.setAttribute("aria-expanded", String(!hint.hidden)); }}, "?");
+        onclick: (e) => { hint.hidden = !hint.hidden; e.currentTarget.setAttribute("aria-expanded", String(!hint.hidden)); }}, icon("info"));
       return h("div", {class: "tweak-row", "data-p": r.p}, h("div", {class: "tweak-label"}, h("span", {class: "tw-label", id: lid}, r.label), q), control, hint);
     };
     // Two choices in view, the rest one tap below, and the person's own words first: five rows
@@ -10981,7 +11007,7 @@
     const part = !where && tourSteps().some((t) => t[0] === id);
     // The "?" sits at the end of the summary line: the title is hidden under a phone's own
     // top bar, and a "?" on a line of its own looked broken.
-    const q = part ? h("button", {type: "button", class: "help-q", "data-k": "help:" + id, "aria-label": "How " + title + " works", onclick: () => showTourPart(id)}, "?") : null;
+    const q = part ? h("button", {type: "button", class: "help-q", "data-k": "help:" + id, "aria-label": "How " + title + " works", onclick: () => showTourPart(id)}, icon("info")) : null;
     return h("header", {class: "sec-head"},
       h("h2", {id: "h-" + id + (where ? "-" + where : ""), tabindex: "-1", class: "screen-title"}, title),
       h("div", {class: "summary" + (tool ? " with-tool" : "")},
@@ -11000,9 +11026,15 @@
     return real.length ? h("div", {class: "controls"}, kids) : null;
   }
   // A view switch: two or three options, equal widths, noun labels, no counts.
+  // A count is said after the option's name, quiet and in figures ("To apply · 5", the
+  // redesign's second round, 2026-11-17): given as a third item, or as the name's last word.
   function segmented(label, options, value, onPick, key) {
-    return h("div", {class: "segctl", role: "group", "aria-label": label}, options.map(([v, l]) =>
-      h("button", {type: "button", class: "seg-opt", "aria-pressed": String(v === value), "data-k": key + ":" + v, onclick: () => onPick(v)}, l)));
+    return h("div", {class: "segctl", role: "group", "aria-label": label}, options.map(([v, l, n]) => {
+      const m = n === undefined ? /^(.*\S) (\d+)$/.exec(txt(l)) : null;
+      const name = m ? m[1] : l, count = m ? m[2] : n;
+      return h("button", {type: "button", class: "seg-opt", "aria-pressed": String(v === value), "data-k": key + ":" + v, onclick: () => onPick(v)},
+        name, count !== undefined && count !== null && count !== "" ? h("span", {class: "seg-n"}, h("span", {"aria-hidden": "true"}, "\u00b7 "), h("span", {class: "sr-only"}, " "), String(count)) : null);
+    }));
   }
   // The list's own menu (⋯): Select several, Open beside, and the like. A disclosure, so it
   // works with a keyboard and a screen reader as it is.
@@ -11197,7 +11229,7 @@
   const lc1 = (s) => (s && /^(?:[A-Z][a-z]|A(?![A-Za-z]))/.test(s) ? s[0].toLowerCase() + s.slice(1) : s);
   // A card's state: one word top right, and the same colour as a rule on its leading edge.
   // The default state has neither.
-  function stateWord(text, tone) { return text ? h("span", {class: "state-word" + (tone ? " tone-" + tone : "")}, text) : null; }
+  function stateWord(text, tone) { tone = moveTone(text, tone); return text ? h("span", {class: "state-word" + (tone ? " tone-" + tone : "")}, text) : null; }
   function edgeOf(x) {
     if (!x) return "";
     if (typeof x === "string") return " edge-" + x;
@@ -11355,7 +11387,7 @@
     const id = "hq-" + seg(key);
     const open = !!S.hintOpen && S.hintOpen.has(key);
     return [h("button", {type: "button", class: "q", "aria-expanded": String(open), "aria-controls": id, "data-k": "hq:" + key, "aria-label": label || "Why",
-      onclick: () => { S.hintOpen = S.hintOpen || new Set(); if (S.hintOpen.has(key)) S.hintOpen.delete(key); else S.hintOpen.add(key); scheduleRender(); }}, "?"),
+      onclick: () => { S.hintOpen = S.hintOpen || new Set(); if (S.hintOpen.has(key)) S.hintOpen.delete(key); else S.hintOpen.add(key); scheduleRender(); }}, icon("info")),
     h("span", {class: "hint q-hint", id, hidden: !open}, " " + text + ".")];
   }
   // A search over a long list, filling the control row.
@@ -11365,6 +11397,7 @@
     const st = listState(key);
     const sid = "q-" + seg(key);
     return h("div", {class: "searchf"}, h("label", {class: "sr-only", for: sid}, "Search " + (o.name || "this list")),
+      h("span", {class: "searchf-ic", "aria-hidden": "true"}, icon("search")),
       h("input", {type: "search", id: sid, class: "fsearch", placeholder: "Search", value: st.q, "data-k": "q:" + key, autocomplete: "off",
         oninput: (e) => { st.q = e.target.value; st.pages = 1; scheduleRender(); }}));
   }
@@ -11808,9 +11841,12 @@
     // Back names where the person came from, and the address keeps that screen under the view.
     const section = SECTION_IDS.has(S.section) && S.section !== "chat" ? S.section : home;
     const backWord = labelOf(section);
-    const back = h("button", {type: "button", class: "btn quiet small detail-back", "data-k": "detail-back", onclick: () => closeDetail(false)}, h("span", {"aria-hidden": "true"}, "‹ "), backWord);
+    // Its header is a 52px bar: the way back at its left, Close at its right on every size,
+    // a hairline under it (the redesign's second round, 2026-11-17: no close on a computer).
+    const back = backBtn(backWord, () => closeDetail(false), "detail-back");
+    const shut = h("button", {type: "button", class: "sheet-x", "data-k": "detail-close", "aria-label": "Close", title: "Close", onclick: () => closeDetail(false)}, icon("x"));
     detailDlg = h("dialog", {class: "detail" + (size ? " " + size : ""), "aria-labelledby": "detail-title", "data-detail": kind + ":" + id},
-      h("div", {class: "detail-top"}, back),
+      h("div", {class: "detail-top"}, back, shut),
       h("div", {class: "detail-body"}, h("h2", {class: "detail-title", id: "detail-title", tabindex: "-1"}, title), body));
     detailDlg._opener = document.activeElement;
     // Its own address, and when it opened: the frame it sits in may answer the address it
@@ -11826,6 +11862,16 @@
     if (!o.fromHistory) { addrTaken = null; try { history.pushState(null, "", detailDlg._addr); } catch (e) { /* the frame refuses */ } }
     const hd = $("detail-title");
     if (hd) hd.focus();
+  }
+  // One way back, the same on every screen and sheet: a chevron and the place's name in the
+  // semibold small size, a soft target 36px tall (44 on touch), never underlined words, and
+  // above the title on a phone as on a computer (the redesign's second round, 2026-11-17:
+  // "‹ Settings" sat under Your profile's title on a phone, "‹ Jobs" was underlined in a sheet
+  // and Progress had no way back at all).
+  function backBtn(label, onBack, key, href) {
+    const at = {class: "back-btn", "data-k": key, onclick: (e) => { e.preventDefault(); onBack(); }};
+    const kids = [icon("back"), h("span", {class: "back-word"}, label)];
+    return href ? h("a", Object.assign({href}, at), kids) : h("button", Object.assign({type: "button"}, at), kids);
   }
   function detailLink(kind, id, label, key) {
     return h("button", {type: "button", class: "btn link", "data-k": key || "detail:" + kind + ":" + id, onclick: () => openDetail(kind, id)}, label);
@@ -13892,8 +13938,8 @@
   }
   function renderProfile(where) {
     const y = you();
-    const back = h("a", {href: "#settings", class: "back-link", "data-k": "profile-back", onclick: (e) => { e.preventDefault(); go("settings", {focus: true}); }}, "‹ Settings");
-    const wrap = h("section", {class: "sec profile-page", "aria-labelledby": "h-profile" + (where ? "-" + where : "")}, back,
+    const back = where ? null : backBtn("Settings", () => go("settings", {focus: true}), "profile-back", "#settings");
+    const wrap = h("section", {class: "sec profile-page sub-page", "aria-labelledby": "h-profile" + (where ? "-" + where : "")}, back,
       screenHead("profile", "Your profile", "Everything Claude knows about you. Each application uses only what fits the job.", null, where));
     if (!Object.keys(y).length) { put(wrap, empty("Nothing here yet.", "Your profile fills in as you answer the setup questions.", null, "contacts")); return wrap; }
     const busy = profileBusy();
@@ -16211,9 +16257,11 @@
     // shown, the light's word and the pill's ran 64px off a phone).
     const screen = $("screen"), pill = $("pill"), conn = $("conn");
     const row = top ? top.querySelector(".top-in") : null;
-    for (const el of [conn, pill]) if (el) el.classList.remove("tight");
+    // Then the Chat button its word, its icon and its name still saying it.
+    const steps = [conn, pill, fabEl];
+    for (const el of steps) if (el) el.classList.remove("tight");
     const cut = () => (!!screen && screen.getClientRects().length > 0 && screen.scrollWidth > screen.clientWidth + 1) || (!!row && row.scrollWidth > row.clientWidth + 1);
-    for (const el of [conn, pill]) if (el && cut()) el.classList.add("tight");
+    for (const el of steps) if (el && cut()) el.classList.add("tight");
   }
 
   // ------------------------------------------------------------------ Chat: one box
@@ -16285,10 +16333,12 @@
     talkEarlier = h("div", {class: "talk-earlier"});
     talkCount = h("p", {class: "talk-count muted small", id: "talk-count", hidden: true});
     talkInput = h("textarea", {id: "talk-text", rows: 1, maxlength: TALK_MAX, "data-k": "talk-text", placeholder: talkPlaceholder(), "aria-describedby": "talk-count",
-      oninput: () => { pasteLanded(); draftSet("talk", talkInput.value); countTalk(); growTalk(); },
+      oninput: () => { pasteLanded(); draftSet("talk", talkInput.value); countTalk(); growTalk(); sendSay(); },
       onpaste: onTalkPaste,
       onkeydown: (e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); sendChat(); } }});
-    talkSend = h("button", {type: "submit", class: "btn primary", "data-k": "talk-send"}, "Send");
+    // Send is a round filled button with an arrow, grey while there is nothing to send (the
+    // redesign's second round, 2026-11-17); its name is "Send".
+    talkSend = h("button", {type: "submit", class: "talk-send is-empty", "data-k": "talk-send", "aria-label": "Send", title: "Send"}, icon("send"));
     talkStop = h("button", {type: "button", class: "btn quiet small stop-claude", "data-k": "talk-stop", hidden: true, "aria-label": "Stop Claude's work on this answer", onclick: () => { if (S.quick.ctl) S.quick.ctl.abort(); }}, "Stop Claude");
     // Pictures: a button for the file picker and a row of what is about to go with the message.
     talkAttach = h("div", {class: "talk-attach", role: "group", "aria-label": "Pictures to send", hidden: true});
@@ -16351,6 +16401,7 @@
     talkCount.hidden = n < 0.8 * TALK_MAX && !S.talkCut;
     talkCount.textContent = S.talkCut ? "Only the first " + TALK_MAX.toLocaleString("en-GB") + " characters fit. Send the rest as a second message, or as a screenshot." : n + " of " + TALK_MAX + " characters";
     if (n < TALK_MAX) S.talkCut = false;
+    sendSay();
   }
   function convMessages(conv) {
     const list = [];
@@ -16425,7 +16476,10 @@
       h("div", {class: "examples", role: "group", "aria-label": "Ways to start"}, starters().map(([label, text, k, form]) =>
         h("button", {type: "button", class: "btn secondary small", "data-k": "start:" + k, onclick: () => (form ? form() : focusTalk(text))}, label)))];
   }
-  function talkPlaceholder() { return picsOn() ? "Ask anything, or paste a screenshot of a message you got" : "Ask anything, or paste a message you got"; }
+  // Short, so the box stays one line on a phone: three lines of hint made it a block (the
+  // redesign's second round, 2026-11-17).
+  function talkPlaceholder() { return picsOn() ? "Ask Claude, or paste a screenshot" : "Ask Claude, or paste a message"; }
+  function sendSay() { if (talkSend && talkInput) talkSend.classList.toggle("is-empty", !talkInput.value.trim() && !(talkAttach && talkAttach.childNodes.length)); }
   function renderChat() {
     if (!talkEl) buildTalk();
     const fk = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.k : null;
@@ -16505,11 +16559,13 @@
     // An empty Chat: its few words in the room above, its ways to start as chips just over the box.
     if (!items.length && !viewing && !S.quick.mode) {
       const [intro, chips] = talkIntro();
-      put(talkHello, [h("span", {class: "talk-hello-mark", "aria-hidden": "true"}, icon("chat")), intro]);
+      // A heading over its line, as every empty place has (the redesign's second round, 2026-11-17).
+      put(talkHello, [h("span", {class: "talk-hello-mark", "aria-hidden": "true"}, icon("chat")), h("h3", {class: "talk-hello-title"}, "What can Claude do for you?"), intro]);
       put(talkExamples, chips);
     }
     talkHello.hidden = !talkHello.childNodes.length;
     talkInput.placeholder = talkPlaceholder();
+    sendSay();
     growTalk();
     renderPics();
     talkSum.textContent = S.quick.busy ? "Claude is answering." : "Ask anything about your search.";
@@ -17177,6 +17233,7 @@
   function dockSizeSay() {
     if (!dockEl) return;
     dockEl.classList.toggle("is-big", dockBig);
+    document.documentElement.classList.toggle("dock-big", dockBig);
     if (dockSizeBtn) {
       dockSizeBtn.setAttribute("aria-pressed", String(dockBig));
       dockSizeBtn.setAttribute("aria-label", dockBig ? "Make the chat smaller" : "Make the chat bigger");
@@ -17208,10 +17265,15 @@
         h("a", {href: "#chat", class: "btn secondary small", "data-k": "dock-full", onclick: (e) => { e.preventDefault(); openInChat(); }}, "Open in Chat"),
         h("button", {type: "button", class: "btn secondary small", "data-k": "dock-close", "aria-label": "Close the chat panel", onclick: () => closeDock(true)}, "Close")),
       dockBox);
+    // On a phone it carries Claude's light as a small dot on its icon, its state in its name,
+    // and a new answer not seen yet as a grey dot after its word (fabSay).
     fabEl = h("button", {type: "button", class: "chat-fab", id: "chat-fab", "data-k": "chat-fab", "aria-label": "Chat with Claude", "aria-haspopup": "dialog",
       "aria-controls": "chat-dock", "aria-expanded": "false", hidden: true, onclick: (e) => openDock({opener: e.currentTarget})},
-      svg("svg", {viewBox: "0 0 24 24", class: "ic", "aria-hidden": "true", focusable: "false"}, [svg("path", {d: "M4 5h16v11H9l-5 4z", fill: "none", stroke: "currentColor", "stroke-width": "2", "stroke-linecap": "round", "stroke-linejoin": "round"})]),
-      h("span", {class: "fab-word", "aria-hidden": "true"}, "Chat"));
+      h("span", {class: "fab-ic", "aria-hidden": "true"},
+        svg("svg", {viewBox: "0 0 24 24", class: "ic", "aria-hidden": "true", focusable: "false"}, [svg("path", {d: "M4 5h16v11H9l-5 4z", fill: "none", stroke: "currentColor", "stroke-width": "2", "stroke-linecap": "round", "stroke-linejoin": "round"})]),
+        h("span", {class: "dot fab-dot"})),
+      h("span", {class: "fab-word", "aria-hidden": "true"}, "Chat"),
+      h("span", {class: "navdot fab-new", "aria-hidden": "true", hidden: true}));
     document.body.appendChild(dockEl);
     // The Chat button sits in the header on a computer, never floating over the cards: floating,
     // it covered a bin, a Copy button and a value in Settings (the redesign, 2026-11-16).
@@ -17256,22 +17318,48 @@
     // drawn (placeChat).
     if (shown && !S.chatWasShown && talkForm) { S.chatPlace = true; S.chatPlacedAt = null; S.chatStick = true; S.chatBack = 0; requestAnimationFrame(() => placeChat(true)); }
     S.chatWasShown = shown;
-    // Seen: the Chat tab's dot goes once its newest answer has been on screen.
+    // Seen: the Chat button's dot goes once its newest answer has been on screen.
     if (shown && lastAnswerAt() && lastAnswerAt() !== txt(pref("chat:seen", ""))) setPref("chat:seen", lastAnswerAt());
     const home = dockOpen ? dockBox : talkEl;
     if (talkBody.parentNode !== home) home.appendChild(talkBody);
     dockEl.hidden = !dockOpen;
-    // On a phone the Chat tab is the one way in: a floating button as well was two buttons
+    // On a phone the header's Chat button is the one way in: a floating button as well was two buttons
     // for one thing (the maintainer, 2026-10-28). In the header it is never in a selection's
     // way; the panel is lifted over Claude's browser panel.
-    fabEl.hidden = shown || dockOpen || window.innerWidth < 760;
+    // On a phone it is always there, the one way into Chat, "you are here" on Chat itself (as
+    // the gear is on Settings); on a computer it gives way to the panel and to Chat.
+    const narrow = window.innerWidth < 760;
+    fabEl.hidden = narrow ? false : shown || dockOpen;
     fabEl.setAttribute("aria-expanded", String(dockOpen));
-    document.body.classList.toggle("has-fab", !fabEl.hidden);
+    document.documentElement.classList.toggle("dock-open", dockOpen && !narrow);
+    document.body.classList.toggle("has-fab", !fabEl.hidden && !narrow);
+    fabSay();
     const bp = $("browser-panel");
     const lift = bp ? Math.ceil(bp.getBoundingClientRect().height / drawnPerPx()) + 12 : 0;
     for (const el of [dockEl, fabEl]) el.style.setProperty("--dock-lift", lift + "px");
     if (dockOpen) renderChat();
     else growTalk();
+  }
+  // The Chat button's light, its name and its new-answer dot. On a phone Claude's light is the
+  // dot on its icon, its words in the button's name: "● Claude" beside it was a second control
+  // for one state (the redesign's second round, 2026-11-17). On a computer the light keeps its
+  // own place in the header and the button is "Chat with Claude".
+  function fabSay() {
+    if (!fabEl) return;
+    const narrow = window.innerWidth < 760;
+    const [state, words] = connState();
+    const at = lastAnswerAt();
+    // A computer says a new answer on the side menu's Chat, as before.
+    const fresh = narrow && !!at && !chatShown() && at > txt(pref("chat:seen", ""));
+    const dot = fabEl.querySelector(".fab-dot");
+    if (dot) dot.className = "dot fab-dot conn-" + state;
+    const nd = fabEl.querySelector(".fab-new");
+    if (nd) nd.hidden = !fresh;
+    fabEl.setAttribute("data-state", state);
+    fabEl.setAttribute("aria-label", "Chat with Claude" + (narrow ? ". Claude: " + words.replace(/\.$/, "") + "." : "") + (fresh ? " A new answer." : ""));
+    if (narrow) { fabEl.removeAttribute("aria-haspopup"); fabEl.removeAttribute("aria-controls"); fabEl.removeAttribute("aria-expanded"); }
+    else { fabEl.setAttribute("aria-haspopup", "dialog"); fabEl.setAttribute("aria-controls", "chat-dock"); fabEl.setAttribute("aria-expanded", String(dockOpen)); }
+    if (narrow && S.section === "chat") fabEl.setAttribute("aria-current", "page"); else fabEl.removeAttribute("aria-current");
   }
   function focusTalk(text) {
     if (!talkEl) buildTalk();
@@ -17285,7 +17373,7 @@
     if (S.owner !== true) return;
     if (!dockEl) buildDock();
     if (chatShown()) { focusTalk(o.text); return; }
-    // A phone has the Chat tab: the panel there was a second chat window over the first.
+    // A phone opens Chat itself: the panel there was a second chat window over the first.
     if (window.innerWidth < 760) { go("chat", {focus: false}); focusTalk(o.text); return; }
     if (!dockOpen) {
       const op = o.opener || document.activeElement;
@@ -17535,7 +17623,9 @@
   // Where the Chat button and its panel sit, on this device: the panel's arrow sets the same.
   function sideRow() {
     const opts = [["right", "Right"], ["left", "Left"]];
-    return h("div", {class: "setting-row look-row"}, h("span", {class: "set-name", id: "side-name"}, "Chat button"),
+    // Named for what it moves now: the panel that opens beside the page (the redesign's second
+    // round, 2026-11-17: "Chat button" named a floating button that is gone).
+    return h("div", {class: "setting-row look-row"}, h("span", {class: "set-name", id: "side-name"}, "Chat panel"),
       h("div", {class: "segctl", role: "radiogroup", "aria-labelledby": "side-name"}, opts.map(([v, label]) => {
         const id = "side-" + v;
         return h("label", {class: "seg-opt look-choice", for: id}, h("input", {type: "radio", name: "dock-side", id, "data-k": id, value: v, checked: (dockLeft ? "left" : "right") === v, onchange: () => setDockSide(v === "left")}), h("span", {class: "look-name"}, label));
@@ -18011,6 +18101,16 @@
     "k-search": "M11 4a7 7 0 1 0 0 14a7 7 0 0 0 0-14zM16 16l4 4",
     "k-setup": "M4 7h10M18 7h2M4 17h4M12 17h8M14 5v4M8 15v4",
     "k-update": "M20 12a8 8 0 1 1-3-6.2M20 4v5h-5",
+    // The shared parts' own marks (the redesign's second round, 2026-11-17): a way back, a fold's
+    // chevron, the one "?" (an i in a circle), a search's magnifier, Filter's sliders, Send's arrow.
+    back: "M15 18l-6-6 6-6",
+    "chev-right": "M9 6l6 6-6 6",
+    "chev-down": "M6 9l6 6 6-6",
+    info: "M12 3a9 9 0 1 0 0 18a9 9 0 0 0 0-18zM12 11v5M12 7.5v.5",
+    search: "M11 4a7 7 0 1 0 0 14a7 7 0 0 0 0-14zM16 16l4 4",
+    filter: "M4 7h10M18 7h2M4 17h4M12 17h8M14 5v4M8 15v4",
+    send: "M12 19V5M6 11l6-6 6 6",
+    plus: "M12 5v14M5 12h14",
   };
   function icon(name) { return svg("svg", {viewBox: "0 0 24 24", class: "ic", "aria-hidden": "true", focusable: "false"}, [svg("path", {d: ICON[name] || ICON.todo, fill: "none", stroke: "currentColor", "stroke-width": "2", "stroke-linecap": "round", "stroke-linejoin": "round"})]); }
 
@@ -18068,7 +18168,7 @@
     const tabs = $("tabs");
     if (tabs) {
       patch(tabs, [h("ul", {class: "plain tab-list"}, NAV.map((id) => h("li", {}, h("a", {href: "#" + id, class: "tab", "data-k": "tab:" + id, "aria-current": navOwner(S.section) === id ? "page" : null,
-        onclick: (e) => { e.preventDefault(); go(id, {focus: true}); }}, h("span", {class: "tab-ic", "aria-hidden": "true"}, icon(id)), h("span", {class: "tab-label"}, labelOf(id)), id === "todo" ? badgeEl() : navCount(id)))))]);
+        onclick: (e) => { e.preventDefault(); go(id, {focus: true}); }}, h("span", {class: "tab-ic", "aria-hidden": "true"}, icon(id)), h("span", {class: "tab-label"}, labelOf(id)), id === "todo" ? badgeEl() : null))))]);
     }
   }
   function connState() {
@@ -18189,6 +18289,8 @@
       screen.textContent = S.section === "drafts" ? labelOf(navOwner("drafts")) : labelOf(S.section);
       // The Brief's greeting is its one title on a phone (app.css, .screen.is-home).
       screen.classList.toggle("is-home", S.section === "brief" && !settingUp());
+      // A screen opened from another (Your profile, Progress) titles itself under its way back.
+      screen.classList.toggle("is-sub", (S.section === "profile" || S.section === "progress") && !settingUp());
     }
     const conn = $("conn");
     if (conn) {
@@ -18197,6 +18299,7 @@
         h("span", {class: "sr-only"}, ": " + words + (age ? " Updated " + age + "." : "")))]);
       conn.setAttribute("data-state", state);
     }
+    fabSay();
     const pulse = $("pulse");
     // An update on its way is said like an app says it: one line under the header, moving,
     // until the new version is published and every open view reloads to it by itself.
@@ -18550,9 +18653,20 @@
     if (e.repeat && !typing && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); return; }
     if (document.querySelector("dialog[open]")) return;
     if (e.key === "Escape") {
+      // A gauge's words shown under the pointer go first, the pointer left where it is, until
+      // it moves (WCAG 1.4.13: dismissible).
+      if (document.querySelector(".has-tip:hover") && !document.documentElement.classList.contains("tips-off")) {
+        document.documentElement.classList.add("tips-off");
+        window.addEventListener("pointermove", () => document.documentElement.classList.remove("tips-off"), {once: true});
+        e.preventDefault(); return;
+      }
       const open = [...document.querySelectorAll("details.more[open]")];
       const mine = open.find((d) => d.contains(t)) || open[open.length - 1];
       if (mine) { mine.open = false; const s = mine.querySelector("summary"); if (s) s.focus(); e.preventDefault(); }
+      // The Chat panel closes from anywhere on the page, not only from inside it: focus on a
+      // card beside it is never left under it with no key to clear it (WCAG 2.4.11, the
+      // accessibility review, 2026-11-17).
+      else if (dockOpen) { e.preventDefault(); closeDock(true); }
       else if (S.connOpen) { S.connOpen = false; render(); }
       return;
     }

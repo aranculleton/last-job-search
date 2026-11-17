@@ -744,14 +744,14 @@ def test_chat_opens_on_its_newest_answers_unanswered_ones_and_dots_a_new_one(run
     msgs["talk/cloud-1/messages/m21"] = {"from": "you", "text": "Can you tidy the old drafts please?", "at": "2026-10-24T09:00:00Z", "_v": 1}
     msgs["talk/cloud-1/messages/m22"] = {"from": "claude", "text": "Done: the old drafts are set aside.", "at": "2026-10-25T18:10:00Z", "_v": 1}
     got = run("engine", html=page, viewport=PHONE, clock=CLOCK, seed=msgs, steps=[
-        {"hash": "contacts", "eval": "!!document.querySelector('.tab .navdot')"},
+        {"hash": "contacts", "eval": "!!document.querySelector('#chat-fab .fab-new:not([hidden])')"},
         # Waited for, with a time limit, never read after a set time.
         {"hash": "chat", "ready": PLACED, "eval": PLACED},
         {"hash": "chat", "read": "#main .talk-list"},
-        {"hash": "contacts", "eval": "!!document.querySelector('.tab .navdot')"}])
+        {"hash": "contacts", "eval": "!!document.querySelector('#chat-fab .fab-new:not([hidden])')"}])
     assert not got["errors"], got["errors"]
     a = got["after"]
-    assert a[0]["eval"] is True, "a new answer not seen yet dots the Chat tab"
+    assert a[0]["eval"] is True, "a new answer not seen yet dots the Chat button"
     assert a[1]["eval"] is True, "Chat opens on its newest message and the box"
     assert a[2]["text"].count("No answer to this one") == 1, a[2]["text"]
     assert a[3]["eval"] is False, "seen, the dot goes"

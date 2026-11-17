@@ -413,8 +413,9 @@ METHODS: dict[str, dict] = {
             (104, "2026-11-11", False, "the general resume's plain-text copy and its short copy to paste read \"AWS\" whole, as the PDF does, never \"A WS\": a kern in a field reads as the one word TeX prints (issue 236); a copy kept before reads right once the general resume is made again"),
             (105, "2026-11-16", False, "RUNBOOK's map of what goes where says upcoming.py add takes --zone for something booked on another clock than the person's; nothing made changes"),
             (106, "2026-11-16", False, "RUNBOOK.md says land.py --detach commits and pushes the turn's work to the chat's branch before it returns, and that the cloud's message at the end of a turn about a save still at work is answered with nothing; nothing made changes"),
+            (107, "2026-11-16", False, "the run book says a change to how jobs are scored is followed in the same turn by tools/rescore.py, which scores the jobs on the page again, and names it among the tools; no document changes"),
         ),
-        "fingerprint": "7026e9ad3db4534d",
+        "fingerprint": "67bac0e7553d3a7a",
     },
     "interview": {
         # Only a process with a round still to come is prepared again: a prep for a round
@@ -692,8 +693,10 @@ METHODS: dict[str, dict] = {
             (133, "2026-11-12", False, "someone owed a follow-up holds their place at their employer until it goes, as one within their wait does: a run picks nobody new there and the line says which follow-up to send first; a connection request nobody accepted in three weeks says to withdraw it, dated by that day; read each time, so nothing made before needs making again"),
             (134, "2026-11-12", False, "a people run asked for a number finishes with how many it drafted (app.py done --drafted), is done only at that number, and short of it only once no good people are left, saying why (--short) and kept as part-done; its progress count is never more done than its total; an employer whose people who fit were all held back (written to, its limit of people waiting) is full for now, searched again as soon as a reply or a close frees a place, never nobody who fits for a month, and an empty search through a city's own number is never recorded as nobody there; someone a read of their own page ruled out stays out until their headline or employer is new; a contact a run adds, and the employers it names to search next, carry the employer's proper name, never its lower-case key; notes are written as before"),
             (135, "2026-11-16", False, "a partner or a principal of the firm reads as a hiring leader, never a peer held back (issue 283), while a partner of a function or a principal of a craft stays as it was; a people run asked in a chat is on the page's work list first, its own card (issue 276); people already found stay as they were"),
+            (136, "2026-11-16", False, "with the person's computer set up to read LinkedIn profiles, a people search shows nobody and drafts no first note, a recruiter's included, before that person's profile is read: LinkedIn signed out stops the run on the one card asking for the sign-in, and notes from search results are the person's own choice for the day (reading.py from-search --said); notes already waiting keep their standing"),
+            (137, "2026-11-16", False, "with the person's computer set up to read LinkedIn profiles, a people search in a chat without Claude's own browser queues its short list for the computer and saves no note: the computer reads each and writes the note from what it read; notes already waiting keep their standing"),
         ),
-        "fingerprint": "686462e71dd61e7d",
+        "fingerprint": "50157cfae5f97571",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
@@ -773,8 +776,10 @@ METHODS: dict[str, dict] = {
             (62, "2026-11-12", False, "a chat the app started on the computer that met a sign-out opens the sign-in in its own browser with its panel up, waits, then looks at LinkedIn's feed opened afresh (computer.py signin-seen), never at an address read before the wait; notes are written as before"),
             (63, "2026-11-12", False, "a note is refused at an employer where a follow-up owed fills a place, the line saying which follow-up goes first; notes are written as before"),
             (64, "2026-11-12", False, "today's list read is not a run done: with fewer than the number asked drafted, reading.py next says to find the rest at the next employers and read on; a people search in the person's own city uses every location number kept for their area (the metro region, their city, the towns their job search covers) and place-ids says what a city's own number leaves out; a people search's mutual connections are never results of their own, each card read whole from its own name link; notes are written as before"),
+            (65, "2026-11-16", False, "a first note to someone whose profile was not read is refused where the person's computer reads profiles (reading.reads_first), card-only and waiting alike, unless the person chose notes from search results today; a chat on the computer that met a sign-out tells the person nothing of a button, since the card names the chat"),
+            (66, "2026-11-16", False, "where the person's computer reads profiles, a chat without Claude's own browser is routed to queue the short list for the computer and save no note, and a refused note says so; notes are written as before; the person is told once where their profiles are read, as the page's own route tells them"),
         ),
-        "fingerprint": "dbdc13b9d8860968",
+        "fingerprint": "c3ae3798a808464a",
     },
     "screening": {
         "by": "round", "priority": 2,
@@ -846,8 +851,9 @@ METHODS: dict[str, dict] = {
             (55, "2026-11-10", False, "C++, C# and C in a job title are three roles: an application, a ruling or a sighting of one no longer stands for another at the same employer; rulings are read from their titles each round, so nothing needs looking at again"),
             (56, "2026-11-11", False, "rank.md names the page fetcher for a posting a 403 refused (tools/fetch_page.py); a draft a chat stopped because the job is not one the person can take holds that posting alone, as a role they set aside does (about six months, then shown once more), never judged again against the rules"),
             (57, "2026-11-11", False, "a role set aside with no day holds as if set aside the day it is first read, and the next save of the seen jobs, a search's included, writes that day on it, so it still ends"),
+            (58, "2026-11-16", False, "a penalty written in a profile's brand leverage counts in full on a strong posting, only the lifts being capped at 30, and a job family entry may say its own reason; an employer turned down is matched however its entry is written, and a bilingual name's French qualifier (Assurance et services financiers) keys as its English one does; fit's blend of fit and opportunity is one function a round and tools/rescore.py share; nothing ruled out needs looking at again, and the jobs on the page are scored again by the jobs-rescored upgrade"),
         ),
-        "fingerprint": "77a04152d8211502",
+        "fingerprint": "be0bc31aa958eb43",
     },
     "routines": {
         "by": "you", "priority": 3, "applies": "routines",
@@ -1185,8 +1191,10 @@ METHODS: dict[str, dict] = {
             (207, "2026-11-12", True, "each item's links to the rest at its employer are kept apart from the item in the page's database, a record an employer or so, and put back as the page reads them: on the items, one new note at an employer rewrote every colleague's card, and bringing the page up to date after eight new people rewrote most of a long People section"),
             (208, "2026-11-16", True, "Claude's answers in Chat show their lists and bold as formatted text, never raw markdown, and the page's own answer that says it cannot is handed to Claude instead of shown; Chat's Latest button is decided once Chat is on the screen, never drawn for a moment over a conversation with nothing below"),
             (209, "2026-11-16", True, "an employer's name on a job, an application, a person's card or an interview opens its own card: its roles with where each stands, its people and its interviews, each opening its own card; every card that opens from a name draws its lists as Settings' rows (a pill for where each stands, a › that says it opens) and its stages on a timeline, is as tall as what it holds on a laptop, and has no box round its title"),
+            (210, "2026-11-16", True, "a LinkedIn sign-in in a chat on the person's computer is one To do card that names that chat and gives the steps to open it from the Claude app's list of chats there and sign in, keeping the sign-in among them, with no link to the chat, which opened it without its browser; its I've signed in sends back every read waiting on that sign-in"),
+            (211, "2026-11-16", True, "the one card for a sign-in in a chat on the person's computer covers only reads waiting on that chat's sign-in: a sign-in in the page's own browser keeps its own card, and the computer's I've signed in no longer sends it back"),
         ),
-        "fingerprint": "665e63f1aa873a94",
+        "fingerprint": "2b919f6bb6e803bf",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",
@@ -1340,6 +1348,7 @@ KEEPS_NOTHING: dict[str, str] = {
     "tools/network/pace.py": "how fast reads go and the count of pages loaded, kept per "
                              "computer outside the repo; nothing in the person's repo",
     "tools/run_round.py": "runs every round afresh; its shortlists are dated records of one round",
+    "tools/rescore.py": "scores the jobs on the page again by itself whenever it or how jobs are scored changes (its own fingerprint, read by the jobs-rescored upgrade), so nothing it wrote waits on a version",
     "tools/scrape_wide.py": "runs every round afresh",
     "tools/hydrate.py": "runs every round afresh",
     "tools/lookup_score.py": "a lookup run on demand",

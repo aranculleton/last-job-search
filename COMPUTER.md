@@ -147,8 +147,13 @@ neither the steps say all three in one line. Never pass on a Mac's keys to anyon
    included, no scheduled task may fire into it and no other chat's message reaches it. So the
    page's helper and the brief never approve: their `route` makes the starter once
    (`create_session`) and later wakes it by republishing its bell, a tiny page it published and
-   watches. The starter takes the app's updates at every wake (`sync_app.py --if-stale`), and
-   its own `route` prints the `create_session` on the computer, always in Auto. Refused as an
+   watches. The starter takes the app's updates at every wake (`sync_app.py --if-stale --role
+   starter`, which gives it nothing else of the update check: no page, no improvements, no app
+   reports, and the hook holds none of its turns), then reads its own mode (`starter-woke`
+   prints the step: `get_session` on itself, then `computer.py starter-mode`): out of Auto, the
+   page's card goes up at once, it starts nothing, and while the card is new it looks again by
+   itself every ten minutes, so switching it back is all the person does. In Auto, its own
+   `route` prints the `create_session` on the computer, always in Auto. Refused as an
    untrusted device, it runs `trust-check`, then `computer.py starter-waits --on allow`, then
    `confirm_repository_trust`: the question "Let Claude use your computers and other sessions
    from here?" in that chat, once. Tapping Allow clears that chat's own Auto (seen on
@@ -158,8 +163,10 @@ neither the steps say all three in one line. Never pass on a Mac's keys to anyon
    without one: a chat started so came up on the Mac in Manual and stopped at its first command.
    Each wait is the page's own record (`meta/computer_starter`, `waits_for`), never a file of the
    starter's copy, which no drawing of the page reads: the page shows one To do card, "Claude
-   needs your OK once", whose button opens that chat and whose steps name only what is still
-   needed, and the work's line says the same. A chat started on the computer since, or the
+   needs your OK once" for the Allow and "Switch one chat back to Auto" for the mode (a setting,
+   so it says nothing pops up), whose button opens that chat and whose steps name only what is
+   still needed, and the work's line says the same; where the person writes in that chat, the
+   starter gives the card's own steps. A chat started on the computer since, or the
    starter's `--on none`, ends it.
 3. **Auto for every other chat.** The page's helper and the brief also start chats in Auto, and
    one refused Auto because it is not in Auto itself puts one card on the page to switch it
@@ -170,8 +177,11 @@ neither the steps say all three in one line. Never pass on a Mac's keys to anyon
    computer, in that chat's own browser: being signed in beside the page did not reach it, seen
    twice on 2026-11-12, so the two are treated as separate. A chat on the computer that finds
    LinkedIn signed out opens the sign-in page in its own browser with its panel up and puts one
-   card on To do, "Sign in to LinkedIn once, in the chat on <the computer>", whose one button
-   opens that chat; no LinkedIn link is offered anywhere else. Check: a chat already at work on the computer says what
+   card on To do, "Sign in to LinkedIn once, in the chat on <the computer>", which names that
+   chat and gives the steps to open it from the list of chats in the Claude app there
+   (`computer-chat-signin`): its own link opens it without its browser (2026-11-16). One card
+   covers every read waiting on that sign-in, and its steps keep the sign-in too; no LinkedIn
+   link is offered anywhere else. Check: a chat already at work on the computer says what
    its own tab shows in its heartbeat (`computer.py beat --linkedin in`), and opens nothing
    extra for it; who looks in each case is the table below. No chat can read whether the
    browser keeps sign-ins, so it is judged by its effect: a sign-in lost by the next look, one
@@ -228,7 +238,7 @@ bridge by the computer starter, woken by its bell, in Auto, titled `Last Job Sea
 (`Job search · <job> · <computer>` before issue #289), its prompt complete, its results back through the page and the copy and never
 `send_message`, archived by the starter once its work is finished or waits on the person: a
 chat that finds LinkedIn signed out opens its sign-in page in its own browser, puts the Sign
-in to LinkedIn card on the page (its button opens that chat) and looks again by itself for a
+in to LinkedIn card on the page (it names that chat, never links it) and looks again by itself for a
 quarter of an hour (`computer.py signin-wait`, then `signin-seen` on the feed opened afresh),
 carrying on the moment they are signed in; only after that does
 it ring the bell, its chat is put away, and a fresh one starts once they sign in; the person

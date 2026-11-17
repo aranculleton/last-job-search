@@ -236,6 +236,12 @@ JSON_FILES = {
     # (filtered.back): one row a posting, known by its link. Its two writers escape
     # differently, so the file's own way is kept.
     "documents/rounds/*.json": {"lists": {"": ("url",)}, "indent": 1, "ascii": "ours"},
+    # The posting text of the jobs on a search's list (tools/rescore.py keep and run): a job a
+    # key, known by its link, so text either side kept is kept; and the scoring they were
+    # scored with, the app's own record, where either side's stands, since the page's jobs are
+    # scored again wherever it is not today's (rescore.due).
+    "documents/rounds/bodies/*.json": {"pick": {"scored_with": "either_scoring"}, "quiet": True,
+                                       "indent": 1},
     # ---- networking
     # Their own LinkedIn profile, as looked at (own_profile.record, answer, dismiss): the
     # looks and the dismissals only ever added to, each answer dated.
@@ -386,6 +392,7 @@ _PER_ROUND = ("named after the round that wrote it, once, and never written agai
               "is run by one chat")
 JSON_NAMES = {
     "interview_live.json": "an interview's live prep beside its interview_prep.md (interview_live.path_for); merged as documents/applications/*/interview_live.json",
+    ".from_search.json": "the person's own words choosing notes from search results, for one day only (reading.from_search_chosen, issue 287); a day gone by is ignored, so either side's copy is that day's choice or nothing",
     ".people_seen.json": "where an earlier people search found nobody in a place, by employer and date, so the next run searches likely employers first (candidates.order); expires after 30 days, and either side's copy is a hint, never a record",
     "tools/land.py: .json": "a changed file's own name, read only to check it parses before a data-only save lands (land.data_check); never written",
     ".sent.json": "each view batch's records as they stood before it was sent, in the view's own folder, so a refused save can be put back and made again (page_db.keep_landed); never committed",
@@ -433,7 +440,7 @@ JSON_NAMES = {
                      "ljs-job-chats.json", "ljs-tidy-planned.json", "ljs-versions.json",
                      "ljs-save-held.json", "ljs-land-result.json", ".mirror.json",
                      "ljs-touched.json", "ljs-pdf-pages.json", "ljs-claims.json",
-                     "ljs-retired-saves.json", "ljs-app-bug.json",
+                     "ljs-retired-saves.json", "ljs-app-bug.json", "ljs-computer-starter.json",
                      "ljs-tidy-renames.json"), _GITDIR),
     # A bug a chat in the maintainer's copy checked but could not file (no GitHub tools there),
     # one file a bug under handoff/app_bugs/, named by its key: two chats that held the same bug
@@ -485,6 +492,11 @@ JSON_NAMES = {
                     "company_research/*.json"),
     ".sweep.json": "documents/rounds/.sweep.json",
     "tools/run_round.py: %s.json": "documents/rounds/*.json",
+    # A search's list, read and written again with its scores, and the text of its jobs kept
+    # beside it (tools/rescore.py), each wired.
+    "tools/rescore.py: *.json": "documents/rounds/bodies/*.json",
+    "tools/rescore.py: .json": ("a suffix test on the files beside the lists, and each "
+                                "search's list itself, wired as documents/rounds/*.json"),
     # A search renamed when two took one name (land._round_clash): its summary and left-out
     # list under the new name, merged as the round files they are.
     "tools/land.py: r%d%s.json": "documents/rounds/*.json",
@@ -935,7 +947,15 @@ def _further(base, ours, theirs) -> tuple[str, str]:
     return "", ""
 
 
-PICKERS = {"higher_version": _higher_version, "further": _further}
+def _either_scoring(base, ours, theirs) -> tuple[str, str]:
+    """The scoring a search's jobs were scored with (tools/rescore.py): this side's stands.
+    Either is only a record, and where it is not today's the jobs are scored again by the
+    next sync (rescore.due), so it never needs a person."""
+    return "ours", "either scoring stands: the jobs are scored again where it is not today's"
+
+
+PICKERS = {"higher_version": _higher_version, "further": _further,
+           "either_scoring": _either_scoring}
 
 
 def newest_written(base, ours, theirs, rule: dict, settled: list | None = None) -> tuple:

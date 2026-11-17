@@ -1513,6 +1513,13 @@ def _employer_names() -> str:
     return ("%d contact(s) with their employer in lower case" % n) if n else ""
 
 
+def _jobs_rescored() -> str:
+    """The jobs the page lists, scored by other rules than today's (tools/rescore.py due): a
+    change to how jobs are scored, the person's own or an update's, reached none of them, and
+    the page kept each search's scores for as long as it listed its jobs (2026-11-16)."""
+    return _probe("import rescore; print(rescore.due())")
+
+
 def _readings_linked() -> str:
     """Contacts with no employer whose saved profile read names one: every check made per
     employer passed them by (the audit's NW-6, NW-28 and PD-20)."""
@@ -2226,6 +2233,13 @@ REGISTRY: tuple[Upgrade, ...] = (
             _employer_names, "python3 tools/network/state.py employer-names --apply", "instant",
             command=("python3", "tools/network/state.py", "employer-names", "--apply"),
             paths=("network_contacts.csv",), priority=2, conditional=True),
+    Upgrade("jobs-rescored", "2026-11-16",
+            "the jobs on your page scored again whenever how jobs are scored changes, by you "
+            "or by an update",
+            _jobs_rescored, "python3 tools/rescore.py", "instant",
+            command=("python3", "tools/rescore.py"),
+            paths=("documents/rounds/*.json", "documents/rounds/bodies/*.json"),
+            priority=2, conditional=True),
     Upgrade("readings-linked", "2026-11-11",
             "every contact whose profile was read has the employer it names",
             _readings_linked, "python3 tools/network/reading.py link-all", "instant",
@@ -3529,6 +3543,20 @@ def _main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
     if not person.exists():
         return 0                                    # the app, or a repo before /setup
+    if a.after and _in_starter():
+        # The chat that starts the chats on the person's computer takes the update and nothing
+        # else: told here to start the improvements and bring the page up to date, which its
+        # own prompt forbids, it was then held at the end of its turn until it did, and its
+        # claim on them kept every other chat from starting them (issue #282). The day's check
+        # is still recorded, and the merge driver set, as for any sync.
+        try:
+            import merge_state
+            import sync_app
+            merge_state.install(ROOT)
+            sync_app._record_check(ROOT)
+        except Exception:  # noqa: BLE001  never breaks the sync
+            pass
+        return 0
     if a.not_now is not None:
         not_now(a.not_now)
         print("profile_upgrades: noted for today; the next chat, or this one tomorrow, starts "
@@ -3704,6 +3732,16 @@ def _main(argv: list[str] | None = None) -> int:
     print(text or "Profile upgrades: none pending.")
     say_page()
     return 0
+
+
+def _in_starter() -> bool:
+    """Is this run in the chat that starts the chats on the computer (app_listen.starter_here)?
+    Read from the file the update brought in, so an older sync_app.py's run knows it too."""
+    try:
+        import app_listen
+        return app_listen.starter_here()
+    except Exception:  # noqa: BLE001  never breaks the sync
+        return False
 
 
 def _setup_unfinished() -> bool:

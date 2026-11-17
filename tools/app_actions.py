@@ -877,13 +877,7 @@ def _job_bring_back(r: Run) -> dict:
     import exclude
     t = r.target
     if t.get("declined"):
-        import profile_set
-        try:
-            have = dict(profile_set.get("search.py", "BAR_DECLINED") or {})
-        except Exception:  # noqa: BLE001
-            have = {}
-        if have.pop(str(t["declined"]), None) is not None:
-            profile_set.set_line("search.py", "BAR_DECLINED", have)
+        _undecline(str(t["declined"]))
     why = r.words() or "brought back on the page"
     if t["kind"] == "filtered_group" or t.get("many"):
         import filtered
@@ -1934,13 +1928,15 @@ def _decline_employer(company: str, why: str, day: str) -> str:
     by bar.py, every round and discovery), keyed the way bar.py looks it up; "" when it was
     already there, so an undo never takes away a ruling the person made before."""
     import profile_set
-    from company_key import key as _ckey
+    from company_key import key as _ckey, keyed
     try:
         have = dict(profile_set.get("search.py", "BAR_DECLINED") or {})
     except Exception:  # noqa: BLE001  no setting yet: start one
         have = {}
     k = _ckey(company) or company
-    if not k or k in have:
+    # Already there however it was written: one written by hand as "north-shore mutual" got a
+    # second entry, and its undo took the person's own away with it.
+    if not k or k in keyed(have):
         return ""
     have[k] = f"turned down on the page, {day}: {why}"
     profile_set.set_line("search.py", "BAR_DECLINED", have)
@@ -1953,13 +1949,21 @@ def _decline_employer(company: str, why: str, day: str) -> str:
 
 
 def _undecline(k: str) -> None:
+    """Every entry turned down that stands for the employer keyed `k`, however it was written,
+    taken off: the list is read by key (company_key.keyed), so an entry left in another form
+    still turned the employer down."""
     import profile_set
+    from company_key import entry_key
     try:
-        have = dict(profile_set.get("search.py", "BAR_DECLINED") or {})
+        got = profile_set.get("search.py", "BAR_DECLINED")
     except Exception:  # noqa: BLE001
         return
-    if have.pop(k, None) is not None:
-        profile_set.set_line("search.py", "BAR_DECLINED", have)
+    if not isinstance(got, dict) or got is profile_set.MISSING:
+        return
+    have = dict(got)
+    kept = {e: why for e, why in have.items() if e != k and entry_key(e) != entry_key(k)}
+    if len(kept) != len(have):
+        profile_set.set_line("search.py", "BAR_DECLINED", kept)
 
 
 PARKED = "draft.not-needed.md"     # a note nobody will send, kept beside its folder's draft
@@ -2584,7 +2588,10 @@ def _rule_undrop(r: Run) -> dict:
     v = r.value
     if v.get("kind") == "declined":
         import profile_set
-        have = dict(run_round_declined())
+        # The setting as written, the employer added back by its key: written back from the
+        # keyed reading (run_round.declined_now), every other entry would be rewritten too.
+        got = profile_set.get("search.py", "BAR_DECLINED")
+        have = dict(got) if isinstance(got, dict) and got is not profile_set.MISSING else {}
         have[str(v["key"])] = str(v.get("why") or "turned down on the page")
         profile_set.set_line("search.py", "BAR_DECLINED", have)
     elif v.get("kind") == "sector":

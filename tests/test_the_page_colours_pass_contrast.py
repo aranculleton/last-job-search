@@ -54,21 +54,45 @@ def test_every_pair_in_both_looks_reaches_its_ratio():
     assert set(palettes.PALETTES) == {"light", "dark"}, "light and dark only: no theme to pick"
 
 
-def test_a_soft_pills_edge_in_a_suggestion_box_reaches_3_to_1_on_the_box():
-    """"Write to Juno" in a job's warm-route box had no edge (border-color transparent), 1.19:1
-    against the box in the dark look (the review, 2026-11-05): its edge is a token that reaches
-    3:1 on the box's tint in both looks, and that pair is one the check holds."""
+def test_a_soft_pill_in_a_suggestion_box_is_lifted_off_the_box_and_its_words_read():
+    """"Write to Juno" in a job's warm-route box had no edge and the box's own fill, 1.19:1 in the
+    dark look (the review, 2026-11-05), and a 3:1 edge then made it the one outlined pill among
+    the soft ones (the redesign's second round, 2026-11-17). One soft look now: a pill in a sunk
+    box is the colour of what floats, lifted off the box in both looks and by the card's shadow
+    in the light, with no edge; its words in the ink reach 4.5:1 on it, a pair the check holds,
+    and they and its fill say it is a button (WCAG 1.4.11 asks no edge of a labelled button)."""
     with open(CSS, encoding="utf-8") as fh:
         css = fh.read()
     rule = re.search(r"\.card\.app\) \.suggest \.btn\.secondary \{([^}]*)\}", css)
     assert rule, "the soft pill in a card's suggestion box has its own rule"
-    edge = re.search(r"border-color:\s*var\(--([a-z-]+)\)", rule.group(1))
-    assert edge, rule.group(1)
+    fill = re.search(r"background:\s*var\(--([a-z-]+)\)", rule.group(1))
+    assert fill, rule.group(1)
+    assert re.search(r"border-color:\s*transparent", rule.group(1)), ("no edge of its own", rule.group(1))
+    assert re.search(r"box-shadow:\s*var\(--shadow-card\)", rule.group(1)), ("lifted by the card's shadow", rule.group(1))
     box = re.search(r"^\.suggest \{[^}]*background:\s*var\(--([a-z-]+)\)", css, re.M)
     assert box, "the suggestion box has its tint"
     for look, pal in palettes.PALETTES.items():
-        assert palettes.ratio(pal[edge.group(1)][0], pal[box.group(1)][0]) >= 3.0, (look, edge.group(1), box.group(1))
-    assert (edge.group(1), box.group(1), 3.0) in [(f, b, n) for f, b, n, _w in palettes.pairs()]
+        f, b = pal[fill.group(1)][0], pal[box.group(1)][0]
+        assert palettes.luminance(f) > palettes.luminance(b) and palettes.ratio(f, b) >= 1.1, (look, "lifted off the box", fill.group(1), box.group(1))
+        assert palettes.ratio(pal["ink"][0], f) >= 4.5, (look, "its words")
+    assert ("ink", fill.group(1), 4.5) in [(fg, bg, n) for fg, bg, n, _w in palettes.pairs()] or fill.group(1) in palettes.SURFACES
+
+
+def test_a_chosen_state_is_never_its_fill_alone():
+    """The chosen segment, the chosen place in the side menu and the phone's chosen tab were their
+    fill alone, 1.1 to 1.3:1 from their neighbours (the accessibility review, 2026-11-17: WCAG
+    1.4.11, and 1.4.1 in Icons only): each carries a ring that reaches 3:1 where it is drawn."""
+    css = open(CSS, encoding="utf-8").read()
+    seg = re.search(r"\.seg-opt\[aria-pressed=\"true\"\], \.seg-opt:has\(input:checked\) \{([^}]*)\}", css)
+    assert seg and "border-color: var(--line-strong)" in seg.group(1), "the chosen segment is ringed"
+    pills = re.search(r"\.pills \.choice:has\(input:checked\) \{([^}]*border-color[^}]*)\}", css)
+    assert pills and "var(--line-strong)" in pills.group(1), "a setting's chosen short choice is ringed"
+    for sel in (r"\.side-list a\[aria-current=\"page\"\] \{", r"\.tab\[aria-current=\"page\"\] \.tab-ic \{"):
+        rule = re.search(sel + r"([^}]*)\}", css)
+        assert rule and "inset 0 0 0 1px var(--mark)" in rule.group(1), sel
+    want = {("line-strong", "sunk"), ("line-strong", "thumb"), ("mark", "accent-soft"), ("mark", "surface"), ("mark", "bg")}
+    held = {(f, b) for f, b, n, _w in palettes.pairs() if n >= 3.0}
+    assert want <= held, want - held
 
 
 def test_the_ratios_are_computed_by_the_wcag_formula():
