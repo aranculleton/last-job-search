@@ -517,10 +517,13 @@ def test_in_the_days_before_practice_is_on_the_interviews_card(run, tmp_path, vp
     # The UX review of 2026-11-10 (U-4): Practise with Claude was under More, and nothing said
     # to practise. Two days before and the day before, the card says to practise three
     # questions today and its first pill opens the prep with the answers hidden, at the first
-    # question likely to come up; three days before and on the day itself, reading leads and
-    # the calendar is beside it.
+    # question likely to come up; three days before and on the day itself, reading leads, the
+    # calendar first under its More (the redesign's second round, 2026-11-17: a To do card's
+    # face is its next step and one more, and "Read your prep | Add to calendar | More" was a
+    # wall of grey).
     card = ("(() => { const c = [...document.querySelectorAll('#main [data-item]')].find((x) => x.dataset.item === 'soon:%s');"
             " return c ? {pills: [...c.querySelectorAll(':scope > .card-actions > .btn')].map((b) => b.textContent.trim()),"
+            " more: [...c.querySelectorAll('.more-panel .btn')].map((b) => b.textContent.trim()),"
             " text: c.textContent} : null; })()" % IV)
     opened = _ev("const d = document.querySelector('dialog.detail'); const a = document.activeElement;"
                  " return {simple: [...d.querySelectorAll('.lp-simple')].filter(vis).length, shown: [...d.querySelectorAll('.lp-reveal')].filter(vis).length,"
@@ -538,7 +541,7 @@ def test_in_the_days_before_practice_is_on_the_interviews_card(run, tmp_path, vp
         at = seen[days][0]
         assert at["pills"] == ["Practise 3 questions", "Read your prep"], (days, at["pills"])
         assert "Today: practise 3 questions, about 10 minutes." in at["text"], at["text"]
-    assert seen[3][0]["pills"] == ["Read your prep", "Add to calendar"], seen[3][0]["pills"]
+    assert seen[3][0]["pills"] == ["Read your prep"] and seen[3][0]["more"][:1] == ["Add to calendar"], seen[3][0]
     assert "practise 3 questions" not in seen[3][0]["text"]
     drill = seen[1][1]
     assert drill["simple"] == 0 and drill["shown"] > 0 and drill["at"], drill

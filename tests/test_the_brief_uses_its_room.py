@@ -174,6 +174,20 @@ def test_next_never_counts_fewer_in_to_do_than_it_shows(run, tmp_path):
     r = got["after"][0]["eval"]
     assert r["steps"] >= 1, r
     import re as _re
+    assert r["links"], r
     for t in r["links"]:
-        m = _re.match(r"All (\d+) in To do$", t)
-        assert not m or int(m.group(1)) > r["steps"], r
+        # "See all 4" since the redesign's second round (2026-11-17): never a count under the
+        # steps the panel lists.
+        m = _re.match(r"(?:All (\d+) in To do|See all (\d+))$", t)
+        assert not m or int(m.group(1) or m.group(2)) > r["steps"], r
+
+
+def test_next_says_see_all_with_to_dos_own_count(run, tmp_path):
+    """The UX review, 2026-11-17: Next's way to To do said "To do" under Today's "1 of 4" and
+    three steps; it says "See all 4", the badge's own number."""
+    look = ("(() => { const p = document.querySelector('[data-k=\"bp:next\"]');"
+            " const b = document.querySelector('[data-k=\"side:todo\"] .badge, [data-k=\"side:todo\"] .navcount');"
+            " return {links: [...p.querySelectorAll('.bp-foot a')].map((a) => a.textContent.trim()), badge: b ? parseInt(b.textContent, 10) : null}; })()")
+    got = _go(run, tmp_path, [{"hash": "brief", "eval": look}], WIDE, model=_full(), clock=T, zone=PERSON_ZONE)
+    r = got["after"][0]["eval"]
+    assert r["links"] == ["See all " + str(r["badge"])], r

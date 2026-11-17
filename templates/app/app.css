@@ -52,7 +52,7 @@ body {
   overflow-wrap: break-word;
 }
 body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
-h1, h2, h3, h4 { line-height: 1.25; text-wrap: balance; margin: 0; }
+h1, h2, h3, h4, h5 { line-height: 1.25; text-wrap: balance; margin: 0; }
 p { margin: 0; }
 a { color: var(--link); text-decoration-color: var(--link-line); text-decoration-thickness: 1px; text-underline-offset: 3px; }
 @media (hover: hover) { a:hover { text-decoration-color: var(--ink); } }
@@ -319,6 +319,11 @@ bdi { unicode-bidi: isolate; }
 .empty-ic .ic { width: 28px; height: 28px; }
 .empty .card-actions { justify-content: center; }
 .empty-title { color: var(--ink); font-weight: 600; font-size: var(--t-lg); }
+/* "Nothing left today": its one way on is the quiet look, words in the ink with the raised fill
+   under the pointer, never an underlined line standing alone (the redesign's second round,
+   2026-11-17). */
+.all-clear > .btn.quiet { text-decoration: none; font-weight: 600; }
+.all-clear > .empty-ic { color: var(--mark-ink); }
 
 
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; display: grid; gap: 8px; min-width: 0; box-shadow: var(--shadow-card); }
@@ -339,44 +344,31 @@ bdi { unicode-bidi: isolate; }
 .todo-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; }
 /* A row's state pill ("Draft ready") beside its day, together at the line's end. */
 .todo-top .todo-state { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-/* A checklist card: one row a person, their buttons at the row's end. */
+/* A checklist card: one row a person, two lines each on every screen (the redesign's second
+   round, 2026-11-17): who, with where they work, on the first, cut short with "..." rather than
+   wrapped; how it stands (the kind, the day) muted on the second; the row's button and its
+   trash together at its end. At least 48px tall, a hairline between rows inside the card's
+   padding. A name broken over four lines beside its button read as a wall ("Noor / at
+   Brackenridge / Advisory / First note"). */
 .g-rows { display: grid; margin-top: 8px; }
-.g-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; padding: 8px 0; border-top: 1px solid var(--line); }
+.g-row { display: flex; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 4px 12px; min-height: 48px; padding: 8px 0; border-top: 1px solid var(--line); }
 .g-row:first-child { border-top: 0; }
 .g-row.is-marked .g-name { color: var(--muted); }
-.g-main { min-width: 0; flex: 1 1 14rem; }
-.g-name { font-weight: 600; }
-.g-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.g-main { min-width: 0; flex: 1 1 auto; display: grid; gap: 2px; }
+.g-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.g-main > p.small { line-height: 1.4; }
+.g-acts { display: flex; flex: none; flex-wrap: nowrap; align-items: center; gap: 8px; }
 .g-at { font-weight: 400; color: var(--muted); }
-/* On a wide screen a row is one line, the name and how it stands side by side, and its
-   buttons sit together at the row's end, just before its trash at the card's edge: a column in
-   mid-card, with empty room after it and the trash alone at the edge, read as two places to
-   look (the maintainer, 2026-11-12). Every row's buttons start at one edge, the rows sharing
-   the list's columns (subgrid): the words take what is left, the buttons the widest row's
-   room. Without subgrid each row's buttons still end at its trash. */
+/* Every row's buttons start at one edge, the rows sharing the list's columns (subgrid): the
+   words take what is left, the buttons the widest row's room, just before the trash at the
+   card's edge (the maintainer, 2026-11-12). Without subgrid each row's buttons still end at
+   its trash. */
 @media (min-width: 760px) {
-  .g-row { flex-wrap: nowrap; }
-  .g-main { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 4px; flex: 1 1 auto; }
-  .g-main > .g-name + p.small::before { content: "\00b7\00a0"; }
-  /* The row's button and its bin keep one line: the words beside them give way instead (at a
-     tablet's width the bin fell under its button, the screen review, 2026-11-11). */
-  .g-acts { flex: none; flex-wrap: nowrap; }
   .g-acts > [data-bin] { margin-left: auto; }
   @supports (grid-template-columns: subgrid) {
     ul.g-rows { grid-template-columns: minmax(0, 1fr) max-content; column-gap: 12px; }
     ul.g-rows > .g-row { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; }
   }
-}
-/* On a phone the name is its own line and where they work, with how it stands, the line under
-   it, both beside the row's button. */
-@media (max-width: 759px) {
-  .g-row { flex-wrap: nowrap; }
-  .g-acts { flex: none; }
-  .g-main { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 4px; }
-  .g-main > .g-name { display: contents; }
-  .g-name > .name-link { flex-basis: 100%; font-weight: 600; }
-  .g-name > .g-at { font-size: var(--t-sm); }
-  .g-main > .g-name:has(> .g-at) + p.small::before { content: "\00b7\00a0"; }
 }
 .hidden-note { margin-top: 12px; }
 .top-end { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; }
@@ -1789,7 +1781,7 @@ li:first-child > .fb-row, .fb-row:first-child { border-top: 0; }
    width, and its own text and fields ran off the right (the maintainer, 2026-10-26). */
 dialog.work-sheet :is(form, div, label, fieldset) { min-width: 0; }
 dialog.work-sheet :is(select, input, textarea) { width: 100%; max-width: 100%; min-width: 0; text-overflow: ellipsis; }
-/* A fold at a list's end is a quiet line with its arrow, never a bar the width of the page:
+/* A fold at a list's end is a quiet row with its chevron, never a bar the width of the page:
    three of them stacked read as three big buttons (the maintainer, 2026-11-06: "think it needs
    better design"). */
 /* One disclosure everywhere (the redesign's second round, 2026-11-17): a quiet row, its words at
@@ -1803,7 +1795,18 @@ dialog.work-sheet :is(select, input, textarea) { width: 100%; max-width: 100%; m
 @media (max-width: 759px), (pointer: coarse) { .band-more > summary, .disclose { min-height: var(--target); } }
 @media (prefers-reduced-motion: reduce) { .band-more > summary::after, .disclose::after { transition: none; } }
 .band-more > summary::-webkit-details-marker { display: none; }
+/* LinkedIn's steps fold the same way: the one disclosure, on a <details>. */
+.how-fold > summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; margin: 8px 0 0 -8px;
+  min-height: 36px; border-radius: var(--r-ctl); font-weight: 600; font-size: var(--t-sm); color: var(--ink); }
+.how-fold > summary::after { content: ""; flex: none; width: 7px; height: 7px; margin: 0 4px 0 4px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg); }
+.how-fold[open] > summary::after { transform: translateY(-2px) rotate(45deg); }
+@media (hover: hover) { .how-fold > summary:hover { background: var(--raised); } .how-fold > summary::after { transition: transform 0.15s; } }
+@media (max-width: 759px), (pointer: coarse) { .how-fold > summary { min-height: var(--target); } }
+@media (prefers-reduced-motion: reduce) { .how-fold > summary::after { transition: none; } }
+.how-fold > summary::-webkit-details-marker { display: none; }
 .band-more[open] > summary { margin-bottom: 12px; }
+/* LinkedIn's steps under their fold, read as the card's own words. */
+.how-fold[open] > summary { margin-bottom: 4px; }
 /* What a fold gives, said beside its name in the quiet tone (Help Claude do more). */
 .band-more > summary .band-more-why { font-weight: 400; white-space: pre-wrap; }
 /* "Show N more" says what it still folds: once open it holds nothing back, so it goes. */
@@ -2080,7 +2083,10 @@ html.tips-off .has-tip::after { content: none; }
 .brief-hello .screen-title { font-size: 1.75rem; line-height: 1.2; letter-spacing: -0.01em; outline: none; }
 .brief-hello .sum-small { margin: 4px 0 0; }
 .brief-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
-@media (min-width: 760px) { .brief-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* Each panel as tall as what it holds (the redesign's second round, 2026-11-17: panels
+   stretched to their row's tallest stood half empty); only a Brief stretched to the window's
+   foot lines its panels up edge to edge (is-filled, the maintainer, 2026-11-06). */
+@media (min-width: 760px) { .brief-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; } .brief-grid.is-filled { align-items: stretch; } }
 /* A laptop's Brief is one screen, two rows of panels sharing the window's height (fitBrief
    sets the grid's height; the maintainer, 2026-11-05: "the brief should fit the window"). */
 @media (min-width: 960px) {
@@ -2110,6 +2116,9 @@ html.tips-off .has-tip::after { content: none; }
      stretched to the window's foot (a tall window) it sat short over empty space. */
   .brief-grid .bp-numbers .bp-body > .bp-spark-wrap { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
   .brief-grid .bp-numbers .bp-spark { flex: 1 1 auto; max-height: 160px; }
+  /* In a row not stretched to the window's foot, Your progress still reaches its row's foot:
+     its chart is what grows into the room, so the panel is never a short chart over nothing. */
+  .brief-grid .bpanel.bp-numbers { align-self: stretch; }
 }
 /* A short laptop window (720 or less) draws the Brief closer: the greeting smaller, its panels'
    numbers four across in a narrow panel, the foot's pills a little lower, so two rows fit. */
@@ -2174,21 +2183,25 @@ html.tips-off .has-tip::after { content: none; }
 /* Today leads (the redesign, 2026-11-16): a flat clay tint, never a gradient behind its words, so
    every word on it has one background its contrast is measured against; the one thing to do
    on white inside it. Next carries the same clay: its numbers go on from Today's "1 of 4". */
-.bp-today { --pc: var(--mark-ink); --pcbg: var(--surface); background: var(--accent-soft); }
+.bp-today { --pc: var(--mark-ink); --pcbg: var(--surface); background: var(--today-wash); }
+/* Its title on a clay strip: the wash itself in light; in the dark the whole panel in clay read
+   as a muddy brown block (the redesign's second round, 2026-11-17), so only the strip is. */
+.bp-today > .bp-title { margin: -16px -16px 0; padding: 12px 16px; background: var(--accent-soft); border-radius: var(--r) var(--r) 0 0; }
+@media (min-width: 960px) { .brief-grid .bp-today > .bp-title { margin: -12px -16px 0; padding: 8px 16px; } }
+@media (min-width: 960px) { html.brief-short .brief-grid .bp-today > .bp-title { margin-top: -8px; } }
 .bp-next { --pc: var(--mark-ink); --pcbg: var(--accent-soft); }
-.bp-people { --pc: var(--st-running); --pcbg: var(--st-running-bg); }
+.bp-people { --pc: var(--mark-ink); --pcbg: var(--accent-soft); }
 .bp-jobs { --pc: var(--st-done); --pcbg: var(--st-done-bg); }
-.bp-news { --pc: var(--st-overdue); --pcbg: var(--st-overdue-bg); }
+.bp-news { --pc: var(--muted); --pcbg: var(--sunk); }
 .bp-numbers { --pc: var(--chart-a); --pcbg: var(--accent-soft); }
-@media (min-width: 760px) { .bpanel { max-height: 300px; } }
-/* The numbers grow with what they show: "How far they got" was cut off at 1280 by 800, and
-   clipped when opened (2026-10-30). */
-@media (min-width: 760px) { .bpanel.bp-numbers { max-height: none; } }
+/* No panel is capped in height: at 300px Next, Waiting on you and Jobs cut their rows under
+   a person's own text spacing, with nothing to say so (the accessibility review, 2026-11-17).
+   The fit (fitBrief) chooses how many rows each shows; the panel holds all it is given. */
 .bp-title { margin: 0; display: flex; align-items: center; gap: 8px; font-size: var(--t-sm); font-weight: 600; color: var(--ink); }
 .bp-ic { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 8px; color: var(--pc); background: var(--pcbg); }
 .bp-ic .ic { width: 16px; height: 16px; }
 .bp-count { margin-left: auto; font-size: var(--t-sm); font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
-.bp-body { display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow: hidden; }
+.bp-body { display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow: clip; overflow-clip-margin: 4px; }
 /* The brief's lead is its point: said in full, never cut off with "...". */
 .bp-lead { margin: 0; line-height: 1.55; }
 /* A list's own small heading inside a panel ("New, best fit first" under the drafts' line). */
@@ -2239,7 +2252,17 @@ html.tips-off .has-tip::after { content: none; }
 .iv-when-line > .when { margin: 0; flex: 1 1 10em; min-width: 0; }
 .paren > a { white-space: normal; }
 .bp-go { flex: none; font-size: var(--t-sm); }
-.bp-steps li { align-items: baseline; }
+/* Each step is a whole row to tap, ending in a chevron, on a phone as on a laptop (the
+   redesign's second round, 2026-11-17: plain words on a phone and grey wells on a laptop did
+   not say they open anything). The link reaches over its row; its focus ring is the row's. */
+.bp-steps li { align-items: baseline; position: relative; }
+@media (max-width: 759px), (pointer: coarse) { .bp-steps li { min-height: var(--target); align-items: center; } }
+.bp-steps li > .bp-link { position: static; }
+.bp-steps li > .bp-link::before { content: ""; position: absolute; inset: 0; border-radius: var(--r-sm); }
+.bp-steps li > .bp-link:focus-visible { outline: none; }
+.bp-steps li:has(> .bp-link:focus-visible) { outline: 2px solid var(--focus); outline-offset: -2px; border-radius: var(--r-sm); }
+.bp-steps li::after { content: ""; flex: none; align-self: center; width: 8px; height: 8px; margin: 0 4px 0 auto; box-sizing: border-box; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(-45deg); pointer-events: none; }
+@media (hover: hover) { .bp-steps li:hover { background: var(--raised); border-radius: var(--r-sm); } }
 /* Each step's number is its place among To do's things for today (data-n), Today the first; one
    not due yet has a small dot in its place. */
 .bp-steps li::before { content: attr(data-n); flex: none; width: 20px; height: 20px; border-radius: 50%; color: var(--pc); background: var(--pcbg); font-size: 0.75rem; font-weight: 700; display: inline-grid; place-items: center; }
@@ -2272,9 +2295,8 @@ html.tips-off .has-tip::after { content: none; }
     ul.bp-people .bp-state { grid-column: 2; white-space: normal; }
   }
 }
-.bp-score { flex: none; min-width: 32px; text-align: center; padding: 2px 8px; border-radius: 999px; font-variant-numeric: tabular-nums; font-weight: 600; font-size: var(--t-sm); color: var(--st-done); background: var(--st-done-bg); }
-.bp-score.tone-good { color: var(--st-running); background: var(--st-running-bg); }
-.bp-score.tone-fair { color: var(--st-waiting); background: var(--st-waiting-bg); }
+/* A job's fit on the Brief: Jobs' own ring, a step smaller. */
+.bp-jobs .score-pill.bp-fit { flex: none; width: 32px; height: 32px; min-width: 32px; }
 /* The counts never stretch: where their panel is wide (a day with no news) they keep their size. */
 /* Your progress fits its panel at any width, by the panel's own width rather than the
    window's (the maintainer, 2026-11-02: "leaves white space or gets weirdly cramped"): two by
@@ -2299,7 +2321,7 @@ html.tips-off .has-tip::after { content: none; }
   .bp-numbers .bp-body > :not(.bp-glance):not(.bp-spark-wrap) { grid-column: 1 / -1; }
   .bp-numbers .bp-body > .bp-glance:last-child, .bp-numbers .bp-body > .bp-glance.is-alone { grid-column: 1 / -1; }
 }
-.bp-stat { display: flex; flex-direction: column; gap: 2px; padding: 8px 12px; background: var(--sunk); border-radius: var(--r-sm); min-width: 0; }
+.bp-stat { display: flex; flex-direction: column; gap: 2px; padding: 8px 12px; background: var(--tile); border-radius: var(--r-sm); min-width: 0; }
 /* The Brief keeps to a few type styles: one bold weight for its greeting and numbers, 600 for
    every emphasis, so a glance reads one voice (LAYOUT_SPEC 7.10). */
 .brief-page strong, .brief-page b { font-weight: 600; }
@@ -2310,13 +2332,12 @@ html.tips-off .has-tip::after { content: none; }
    what it is in the Brief's largest words after the greeting, and its one filled button with
    the time it takes beside it on one line. */
 .bp-iv { display: flex; flex-wrap: wrap; align-items: center; align-content: flex-start; gap: 4px 8px; padding: 12px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-sm); }
-.bp-iv p, .bp-iv > .ask-box { margin: 0; flex: 1 0 100%; }
+.bp-iv p, .bp-iv > .bp-iv-what, .bp-iv > .ask-box { margin: 0; flex: 1 0 100%; }
 .bp-iv-when { font-size: var(--t-sm); font-weight: 600; color: var(--mark-ink); }
 .bp-iv-what { font-weight: 700; font-size: var(--t-xl); line-height: 1.25; letter-spacing: -0.01em; }
 .bp-iv .btn { margin-top: 4px; }
 .bp-iv > .cost { margin-top: 4px; }
 /* The top row, Today and Coming up, is as tall as what they hold: never cut. */
-@media (min-width: 760px) { .bpanel.bp-today, .bpanel.bp-upcoming, .bpanel.bp-news { max-height: none; } }
 /* A news point: what happened, what to do with it, where it is from. Never cut by the panel's
    height: News was clipped at its bottom once each point said how to use it (2026-11-02). */
 ul.bp-news { gap: 12px; }
@@ -2645,7 +2666,10 @@ dialog.sheet .sheet-body { display: grid; gap: 16px; }
 .bp-week { display: grid; grid-template-columns: repeat(14, minmax(0, 1fr)); gap: 2px; }
 .bp-day { display: grid; justify-items: center; gap: 2px; padding: 4px 0 8px; min-height: var(--target); border: 0; border-radius: 8px; background: transparent; color: var(--muted); font: inherit; cursor: pointer; }
 .bp-day.has { cursor: pointer; color: var(--ink); }
-.bp-day.is-today { box-shadow: inset 0 0 0 2px var(--pc); color: var(--ink); }
+/* Today: a soft clay fill, its day and number in clay, never a ring (a 2px ring read as a key's
+   focus stuck there, the redesign's second round, 2026-11-17). Its number keeps the strip's 600:
+   a 700 there was an eighth type style on the Brief's first screen (layout 10). */
+.bp-day.is-today { background: var(--accent-soft); border-radius: 10px; color: var(--mark-ink); }
 .bp-day:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 .bp-day-w { font-size: var(--t-sm); line-height: 1; }
 .bp-day-n { font-size: var(--t-sm); font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums; }
@@ -2657,8 +2681,10 @@ dialog.sheet .sheet-body { display: grid; gap: 16px; }
 /* Today and tomorrow stand out at a glance, never in red (the maintainer, 2026-11-02: red
    "promotes alarmism", and pine and iris were too faint): a clear green and gold, the panel's
    own colour for every other day. Coming up's day headings carry the same as a dot. */
-.bp-day.is-today .bp-day-dots i { background: var(--day-today); }
-.bp-day.is-today .bp-day-dots i.due { background: transparent; box-shadow: inset 0 0 0 1.5px var(--day-today); }
+/* Today's dots stay green on its clay fill, in the deeper green that keeps 3:1 there (the
+   bright one is 2.8:1 on it in light). */
+.bp-day.is-today .bp-day-dots i { background: var(--st-done); }
+.bp-day.is-today .bp-day-dots i.due { background: transparent; box-shadow: inset 0 0 0 1.5px var(--st-done); }
 .bp-day.is-tomorrow .bp-day-dots i { background: var(--day-tomorrow); }
 .bp-day.is-tomorrow .bp-day-dots i.due { background: transparent; box-shadow: inset 0 0 0 1.5px var(--day-tomorrow); }
 .up-day.is-today > .group, .up-day.is-tomorrow > .group { display: flex; align-items: center; gap: 8px; }
@@ -2745,12 +2771,11 @@ ul.bp-news { max-width: 80ch; }
 /* A phone shows two of the likely questions; the prep holds the rest. */
 @media (max-width: 759px) { .bp-qs > li:nth-child(n+3) { display: none; } }
 /* Today leads and the rest stand back (the redesign, 2026-11-16): only Today's icon carries a
-   colour, every other panel's the quiet grey, so the panels read as equals under it; News and
-   Your progress, read last, sit on the page itself with their edge alone. */
+   colour, every other panel's the quiet grey, so the panels read as equals under it. Every
+   panel is a card, News and Your progress too: on the page itself they read as unfinished
+   (the redesign's second round, 2026-11-17). */
 .bpanel:not(.bp-today) > .bp-title .bp-ic { color: var(--muted); background: var(--sunk); }
 .bp-today > .bp-title .bp-count { color: var(--mark-ink); }
-.bpanel.bp-news, .bpanel.bp-numbers { background: transparent; box-shadow: none; }
-.bp-news > .bp-title, .bp-numbers > .bp-title { color: var(--muted); }
 /* A laptop's row gives Today more height than its one thing needs: the thing's white card takes
    it, its words and button at its middle, never a block of clay tint under them. */
 @media (min-width: 960px) {

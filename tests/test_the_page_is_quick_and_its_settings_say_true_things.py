@@ -467,4 +467,4 @@ def test_the_menu_fold_is_its_own_section_at_the_top_settings_is_last_and_an_emp
     got = _go(run, tmp_path, [{"hash": "brief", "eval": order, "count": '[data-k^="week:"]', "read": '#main [data-k="bp-up-add"]'}], WIDE, model=m)
     assert got["after"][0]["eval"] == ["side:settings", "side-toggle", "Icons only", "BUTTON", False, True], \
         got["after"][0]["eval"]
-    assert got["after"][0]["count"] == 0 and got["after"][0]["text"] == "Add something"
+    assert got["after"][0]["count"] == 0 and got["after"][0]["text"] == "Add a date"

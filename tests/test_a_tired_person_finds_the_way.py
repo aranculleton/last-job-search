@@ -98,13 +98,15 @@ def test_a_card_hidden_by_mistake_comes_back_from_the_end_of_to_do(run, tmp_path
 def test_an_interview_goes_into_the_calendar_from_its_to_do_card_and_its_prep(run, tmp_path, vp):
     card = '[data-item="soon:int-larkspur-supply"]'
     got = _go(run, tmp_path, [
-        {"hash": "todo", "read": card},
+        # First under the card's More since the redesign's second round (2026-11-17): its face
+        # is its next step and one more.
+        {"hash": "todo", "more": "soon:int-larkspur-supply", "read": card},
         {"click": "Add to calendar", "within": card, "read": "dialog.cal-sheet"},
         {"eval": "document.querySelector('[data-k=cal-close]').click(); 'closed'"},
         {"click": "Read your prep", "within": card, "read": "dialog.detail"},
         {"click": "Add to calendar", "within": "dialog.detail", "read": "dialog.cal-sheet"},
     ], vp, clock=T)
-    assert "Add to calendar" in got["after"][0]["text"], "a button with words on the To do card"
+    assert "Add to calendar" in got["after"][0]["text"], "a button with words on the To do card, under its More"
     for i in (1, 4):
         sheet = got["after"][i]["text"]
         assert "Add to your calendar" in sheet and "Phone screen: Larkspur Retail" in sheet and "Google Calendar" in sheet, sheet
