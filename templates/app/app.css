@@ -306,6 +306,9 @@ bdi { unicode-bidi: isolate; }
 .group { font-size: var(--t-sm); line-height: 18px; font-weight: 600; color: var(--muted); letter-spacing: 0.01em; }
 :is(.band, .help-band) > h3.group:first-child { margin-bottom: -8px; }
 .sec > :is(.band, .help-band, .set-group, .set-asks):not(:first-child) { margin-top: 12px; }
+/* Under "Not due yet", "Later" keeps the room above it every section header has: 12px from the
+   card over it read as one of that card's lines (the redesign's second round, 2026-11-17). */
+.todo-rest > .band:not(:first-child) { margin-top: 24px; }
 .d-block > h3.group:first-child { margin-bottom: -4px; }
 .band, .help-band { display: grid; gap: 16px; }
 .todo-group { display: grid; gap: 12px; }
@@ -1308,6 +1311,13 @@ dialog.work-sheet { position: fixed; inset: auto 0 0 0; margin: 0; width: 100%; 
    read 4.44:1 on the hover colour under a pointer left on it (French, CI, 2026-11-11). */
 @media (hover: hover) { .act-row:hover { background: var(--raised); } .act-row:hover :is(.set-go, .hint) { color: var(--ink); } }
 .set-go { color: var(--muted); font-size: 1.125rem; }
+/* One chevron size in Settings and a card's rows: the row that opens a page ("Your profile",
+   Help) drew a thin 12px "›" beside the folds' heavier one (the redesign's second round,
+   2026-11-17); both are the 16px chevron every fold draws, in the quiet grey. */
+.set-go { display: inline-flex; font-size: 0; line-height: 0; }
+.set-go::before { content: ""; width: 16px; height: 16px; background: currentColor; clip-path: polygon(33% 27.5%, 42% 19%, 73% 50%, 42% 81%, 33% 72.5%, 55.6% 50%); forced-color-adjust: none; }
+.set-sum::after { width: 16px; height: 16px; border: 0; background: var(--muted); clip-path: polygon(33% 27.5%, 42% 19%, 73% 50%, 42% 81%, 33% 72.5%, 55.6% 50%); transform: none; forced-color-adjust: none; }
+.setting-row[open] > .set-sum::after, .site-key-fold[open] > .set-sum::after { transform: rotate(90deg); }
 .look-row .segctl { flex: 0 1 auto; }
 /* Light or dark, Text size and the Chat panel's side are the one segmented control (above). */
 /* A card's title that opens it elsewhere (an interview in To do opens in Coming up): the card's
@@ -1334,7 +1344,7 @@ dialog.work-sheet { position: fixed; inset: auto 0 0 0; margin: 0; width: 100%; 
    steps to get one (Settings, Job sites). */
 .checks-list li.site-key { display: block; }
 .checks-list li.site-key > .state, .checks-list li.site-key > .state-wrap { padding: 0 16px; }
-.site-key-fold[open] > .set-sum::after { transform: rotate(45deg); }
+.site-key-fold[open] > .set-sum::after { transform: rotate(90deg); }
 /* On a phone a long value goes under its name, at its left edge, in grey: beside its name it
    wrapped right-aligned into a ragged column ("Greater Manchester, Leeds, / remote in the UK"),
    and a long name wrapped as "When it / comes" (the redesign, 2026-11-16). A row whose name and
@@ -2085,6 +2095,10 @@ dialog.work-sheet :is(select, input, textarea) { width: 100%; max-width: 100%; m
 .talk-hello-title { font-size: 1.25rem; line-height: 1.3; font-weight: 700; color: var(--ink); }
 .talk-hello .talk-intro { max-width: 44ch; color: var(--muted); }
 .talk-examples .examples { gap: 8px; }
+/* With no messages yet the starters sit centred under the centred heading, as one block with
+   it; the box under them keeps its whole width (the redesign's second round, 2026-11-17). */
+.talk-empty .talk-examples .examples { justify-content: center; }
+.talk-empty .talk-examples { justify-items: center; text-align: center; }
 /* The ways to start are the page's soft buttons at the controls' radius, never outlined capsules. */
 .talk-examples .examples .btn.secondary { background: var(--raised); border-color: transparent; border-radius: var(--r-ctl); padding-inline: 12px; font-size: var(--t-sm); }
 @media (hover: hover) { .talk-examples .examples .btn.secondary:hover { background: var(--raised-hover); } }

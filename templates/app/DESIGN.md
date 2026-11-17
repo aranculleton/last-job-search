@@ -122,8 +122,8 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   never behind the header (taken as 56px, its first words slid under the Refresh pill,
   2026-11-11). (overlap test: chat opens)
   The box keeps to the foot from the first look, so the first message never moves it; with no
-  messages its starters are soft buttons just above it, a heading ("What can Claude do for
-  you?") and a short intro sit in the room above them, and there is no subtitle. The box is a
+  messages its starters are soft buttons just above it, centred under a centred heading ("What
+  can Claude do for you?") and a short intro in the room above them, and there is no subtitle. The box is a
   rounded rectangle, never a pill, its hint one short line ("Ask Claude, or paste a screenshot"),
   Send a round filled button with an arrow, grey while there is nothing to send, and a message's
   words keep a reading measure of about 70 characters (the redesign's second round, 2026-11-17:
@@ -774,7 +774,8 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   chevron pointing right while folded and down once open, as a Settings row's is, 44px tall on
   touch. Every fold draws that one chevron, after its words: a card's "Why" and "Details", a
   note's "Show all", "Since your last brief", "How the app runs", Progress's "Each week", LinkedIn's
-  "How to get it" and "2 jobs to confirm"; a line that only names what is under it (a note's
+  "How to get it" and "2 jobs to confirm", and a row that opens a page (Your profile, Help, a
+  card's rows) draws it in the quiet grey, never a thin "›" beside it; a line that only names what is under it (a note's
   "Reply · LinkedIn" while the note shows) has none (the redesign's second round, 2026-11-17:
   some pointed down while shut, one up while open, a 10px one beside 16px ones, and a lopsided
   tick read as "confirmed"; disclosure tests). A **section's header** (`.group`) is a small label, 13/18 at 600 in the quiet grey, 32px
