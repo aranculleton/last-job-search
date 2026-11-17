@@ -47,6 +47,13 @@ STAGES = ((os.path.join("00_scrape", "dropped.json"), "search"),
           ("06_skipped.json", "throttle"))
 FIELDS = ("title", "company", "location", "url", "portal", "date")
 REASON_CAP = 240
+# The search's own free gates (title, place, age, language) leave out thousands a round: 8,580
+# of one round's 12,695 rows, 5 to 6MB a round, every one committed (issue 310). They are
+# decided again for free before anything is fetched, and a person changes one by its setting,
+# never by bringing back a row. So a list keeps SEARCH_KEPT of each such rule's rows, the
+# first the page shows, and counts the rest ("not_listed"): its counts and kinds stay whole.
+# Every other stage's rows are kept, each of them one a person may want back.
+SEARCH_KEPT = 25
 
 
 def _rows(path: str) -> list[dict]:
@@ -114,14 +121,50 @@ def path_for(summary_dir: str, name: str) -> str:
     return os.path.join(summary_dir, FOLDER, f"{name}.json")
 
 
+def _counted(found: list[dict], not_listed: dict | None = None) -> dict[str, int]:
+    """{rule: rows it left out}, the listed rows and those only counted."""
+    counts: dict[str, int] = dict((not_listed or {}).get("rules") or {})
+    for e in found:
+        rule = e.get("rule") or e.get("stage") or "other"
+        counts[rule] = counts.get(rule, 0) + 1
+    return counts
+
+
+def slim(found: list[dict], not_listed: dict | None = None) -> tuple[list[dict], dict]:
+    """(the rows a list keeps, what it only counts: {"rules": {rule: n}, "kinds": {kind: n}}):
+    SEARCH_KEPT of each of the search's own rules, every other row, and `not_listed` added."""
+    rules = dict((not_listed or {}).get("rules") or {})
+    kinds = dict((not_listed or {}).get("kinds") or {})
+    try:
+        import rules_view
+        declined = rules_view._declined_keys()
+    except Exception:  # noqa: BLE001  no profile to read the rules by: counted by rule alone
+        rules_view, declined = None, {}
+    kept, seen = [], {}
+    for e in found:
+        if e.get("stage") != "search":
+            kept.append(e)
+            continue
+        rule = e.get("rule") or "search"
+        seen[rule] = seen.get(rule, 0) + 1
+        if seen[rule] <= SEARCH_KEPT:
+            kept.append(e)
+            continue
+        rules[rule] = rules.get(rule, 0) + 1
+        if rules_view is not None:
+            kind, lang = rules_view.kind_of(e, declined)
+            k = f"{kind}:{lang}" if lang else kind
+            kinds[k] = kinds.get(k, 0) + 1
+    return kept, {"rules": rules, "kinds": kinds}
+
+
 def write(round_dir: str, summary_dir: str, name: str) -> str | None:
     """documents/rounds/filtered/<name>.json from the round's stage files, and its path."""
     found = entries(round_dir)
-    counts: dict[str, int] = {}
-    for e in found:
-        counts[e["rule"]] = counts.get(e["rule"], 0) + 1
+    counts = _counted(found)
+    kept, not_listed = slim(found)
     path = path_for(summary_dir, name)
-    _save(path, name, counts, found)
+    _save(path, name, counts, kept, not_listed)
     return path
 
 
@@ -152,24 +195,30 @@ def add(summary_dir: str, name: str, found: list[dict]) -> str | None:
             continue
         keys.add(k)
         have.append(e)
-    counts: dict[str, int] = {}
-    for e in have:
-        rule = e.get("rule") or e.get("stage") or "other"
-        counts[rule] = counts.get(rule, 0) + 1
-    _save(path, name, counts, have)
+    not_listed = data.get("not_listed") if isinstance(data.get("not_listed"), dict) else None
+    _save(path, name, _counted(have, not_listed), have, not_listed)
     return path
 
 
-def _save(path: str, name: str, counts: dict, found: list[dict]) -> None:
+def _save(path: str, name: str, counts: dict, found: list[dict],
+          not_listed: dict | None = None) -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
     # One posting a line: a round can filter a thousand, and a line each keeps the file a
     # third the size of an indented one and its changes readable. The first line holds the
     # counts, by the stage's rule and by the person's rule in plain words (rules_view.kinds_of),
-    # so Your rules reads a search's counts by its first line alone.
-    head = {"round": name, "counts": dict(sorted(counts.items(), key=lambda kv: -kv[1]))}
+    # so Your rules reads a search's counts by its first line alone; with what the list only
+    # counts (`not_listed`, slim), and that it was slimmed.
+    head = {"round": name, "counts": dict(sorted(counts.items(), key=lambda kv: -kv[1])),
+            "slim": 1}
+    more = dict((not_listed or {}).get("kinds") or {})
+    if (not_listed or {}).get("rules"):
+        head["not_listed"] = {"rules": dict(not_listed["rules"]), "kinds": more}
     try:
         import rules_view
-        head["kinds"] = dict(sorted(rules_view.kinds_of(found).items(), key=lambda kv: -kv[1]))
+        kinds = rules_view.kinds_of(found)
+        for k, n in more.items():
+            kinds[k] = kinds.get(k, 0) + n
+        head["kinds"] = dict(sorted(kinds.items(), key=lambda kv: -kv[1]))
     except Exception:  # noqa: BLE001  no profile to read the rules by: the counts alone
         pass
     head = json.dumps(head, ensure_ascii=False)
@@ -180,6 +229,44 @@ def _save(path: str, name: str, counts: dict, found: list[dict]) -> None:
 
 def _summary_dir() -> str:
     return person.state("documents", "rounds")
+
+
+def slim_all(summary_dir: str | None = None) -> list[str]:
+    """Every left-out list written before lists were slimmed, slimmed (the left-out-slimmed
+    upgrade): the names done. A list a later round already wrote slim is left as it is."""
+    folder = os.path.join(summary_dir or _summary_dir(), FOLDER)
+    try:
+        names = sorted(n for n in os.listdir(folder) if n.endswith(".json"))
+    except OSError:
+        return []
+    done = []
+    for n in names:
+        path = os.path.join(folder, n)
+        if not unslimmed(path):
+            continue
+        try:
+            with open(path, encoding="utf-8") as fh:
+                data = json.load(fh)
+        except (OSError, ValueError):
+            continue
+        data = data if isinstance(data, dict) else {"filtered": data}
+        rows = [e for e in data.get("filtered") or [] if isinstance(e, dict)]
+        kept, not_listed = slim(rows, data.get("not_listed")
+                                if isinstance(data.get("not_listed"), dict) else None)
+        _save(path, str(data.get("round") or n[:-5]), _counted(kept, not_listed), kept,
+              not_listed)
+        done.append(n[:-5])
+    return done
+
+
+def unslimmed(path: str) -> bool:
+    """Was this left-out list written before lists were slimmed? Its first line says."""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            line = fh.readline()
+    except OSError:
+        return False
+    return '"slim": ' not in line.split(', "filtered": [', 1)[0]
 
 
 def load(name: str, summary_dir: str | None = None) -> dict:
@@ -280,6 +367,7 @@ def main(argv=None) -> int:
     s = sub.add_parser("show", help="what a round filtered out, numbered")
     s.add_argument("round")
     s.add_argument("--rule", default="", help="only entries whose rule or reason has these words")
+    sub.add_parser("slim", help="slim every left-out list written before lists were slimmed")
     b = sub.add_parser("back", help="bring filtered postings back into the round's shortlist")
     b.add_argument("round")
     b.add_argument("picks", nargs="+")
@@ -289,12 +377,20 @@ def main(argv=None) -> int:
     if not a.cmd:
         ap.print_usage()
         return 2
+    if a.cmd == "slim":
+        done = slim_all()
+        print(f"filtered: {len(done)} left-out list(s) slimmed" + (f" ({', '.join(done)})"
+                                                                 if done else ""))
+        return 0
     name = os.path.basename(os.path.normpath(a.round))
     if a.cmd == "show":
         data = load(name)
         found = data.get("filtered") or []
         want = _low(a.rule)
-        print(f"round {name}: {len(found)} filtered out"
+        only = sum(((data.get("not_listed") or {}).get("rules") or {}).values())
+        print(f"round {name}: {len(found) + only} filtered out"
+              + (f", {only} of them by the search's own gates counted, not listed"
+                 if only else "")
               + (" (" + ", ".join(f"{n} {k}" for k, n in (data.get("counts") or {}).items()) + ")"
                  if data.get("counts") else ""))
         for i, e in enumerate(found, 1):

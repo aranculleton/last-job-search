@@ -864,8 +864,9 @@ METHODS: dict[str, dict] = {
             (60, "2026-11-17", False, "the eligibility gate reads the market's own wording for citizenship, residence and a clearance beside the person's pattern: the neighbouring country's citizenship and residence always, and each other status the person's own pattern names; nothing needs redoing: it only cuts more"),
             (61, "2026-11-17", False, "bar.py judge --file records a round's batch of employers nobody had judged in one write, each marked by the round with its day, so a person or a chat can overturn it; nothing is screened differently"),
             (62, "2026-11-17", False, "a brand-leverage lift reads the posting with its boilerplate set aside (benefits, the equal-opportunity paragraph, travel asked of the person, the work model, stakeholder engagement), a lift for working terms ignores a bare hybrid, and one that says employer reads only what the employer is, so a travel requirement no longer lifts a job as a travel employer; opportunity.py --leverage-words says what each lift fired on; nothing ruled out needs looking at again, and the jobs on the page are scored again by the jobs-rescored upgrade"),
+            (63, "2026-11-17", False, "the record of jobs only seen keeps what a later search reads (when each was seen, and its title, employer and place while it can be relisted), and each search's list of what it left out keeps a few of its own checks' rows and counts the rest; nothing screened differently"),
         ),
-        "fingerprint": "af5dcc61ddceba3e",
+        "fingerprint": "48c3a85878046e06",
     },
     "routines": {
         "by": "you", "priority": 3, "applies": "routines",

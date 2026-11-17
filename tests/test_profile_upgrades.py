@@ -1475,3 +1475,54 @@ def test_follow_ups_never_fitted_to_your_rules_come_off_their_cards(profile, mon
     import followup_drafts
     for cid in (flagged, also):
         assert again[cid]["status"] == "check" and followup_drafts.RULES_TO_FIT in again[cid]["warnings"]
+
+
+def _tool(*argv):
+    r = subprocess.run([sys.executable, os.path.join(ROOT, "tools", *argv[:1]), *argv[1:]],
+                       cwd=ROOT, env=os.environ, capture_output=True, text=True,
+                       encoding="utf-8", errors="replace")
+    assert r.returncode == 0, r.stderr
+    return r.stdout
+
+
+def test_a_seen_file_grown_before_is_shortened_in_the_background(profile):
+    """Issue 310: rounds wrote each posting they only saw in full, and one copy's file reached
+    19MB. A file grown before is shortened at once. Invented postings."""
+    path = person.state("job_scraper", "seen_jobs.json")
+    day = person.today().isoformat()
+    data = json.load(open(path, encoding="utf-8"))
+    ruling = json.loads(json.dumps(data["seen"]))
+    for i in range(2500):
+        url = f"https://www.linkedin.com/jobs/view/44{i:08d}"
+        data["seen"][url] = {
+            "title": "Demand Planner", "company": "Oakmere Foods", "url": url,
+            "first_seen": day, "last_seen": day, "posted_date": day, "deadline": None,
+            "portal": "linkedin", "source": "cli", "location": "Manchester, UK",
+            "location_verdict": "PASS", "fit": 61, "opportunity": 50, "priority": 30.5,
+            "status": "skipped", "skipped_date": day,
+            "skip_reason": "same-employer duplicate: a higher-ranked role at Oakmere Foods "
+                           "was surfaced, and one role per employer is shown"}
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(data, fh, indent=2)
+    u = U.by_id("seen-compacted")
+    assert "2500 job(s) in full" in u.pending()
+    _tool("throttle.py", "--compact")
+    assert u.pending() == ""
+    kept = json.load(open(path, encoding="utf-8"))["seen"]
+    assert all(kept[k] == v for k, v in ruling.items())          # the ruling as it was
+    assert len(kept) == len(ruling) + 2500
+
+
+def test_left_out_lists_written_before_are_slimmed_in_the_background(profile):
+    import filtered
+    folder = os.path.join(person.state("documents", "rounds"), filtered.FOLDER)
+    os.makedirs(folder, exist_ok=True)
+    rows = [{"title": f"Planner {i}", "company": "Oakmere Foods", "url": f"https://x.example/{i}",
+             "stage": "search", "rule": "title", "reason": "title: not searched for"}
+            for i in range(60)]
+    with open(os.path.join(folder, "r2.json"), "w", encoding="utf-8") as fh:
+        json.dump({"round": "r2", "counts": {"title": 60}, "filtered": rows}, fh)
+    u = U.by_id("left-out-slimmed")
+    assert u.pending().startswith("1 search(es)'")
+    _tool("filtered.py", "slim")
+    assert u.pending() == ""
