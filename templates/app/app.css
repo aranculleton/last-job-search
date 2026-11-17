@@ -639,6 +639,9 @@ details.more.split[open] { flex-basis: auto; }
 /* It reaches above and below the title's line without making it taller, so the facts sit as
    close under a title with a ring as under one without. */
 .job-top > .fit-ring { align-self: center; margin-block: -4px; }
+/* In a row (the Brief's jobs) the small ring reaches past the row's line the same way, so a
+   row with a fit is no taller than one without and the panel lists as many. */
+.bp-list .fit-ring.sm { align-self: center; margin-block: -4px; }
 /* A line of facts that wraps starts its next line at the card's edge: the width a cut dot
    keeps goes at the end of its part, never as an indent before "£38,000" (the usability
    review, 2026-11-16). */
