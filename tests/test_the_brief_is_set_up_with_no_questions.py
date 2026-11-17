@@ -156,7 +156,7 @@ def test_a_brief_in_a_chat_not_made_for_it_gets_one_of_its_own_never_set_up(tmp_
                                   repo="example-owner/example-copy")
     assert got["state"] == "elsewhere" and "needs a chat of its own" in got["say"], got
     chat, make, record, old = got["calls"]
-    assert chat["tool"] == "create_session" and chat["args"]["title"] == routines.BRIEF_NAME
+    assert chat["tool"] == "create_session" and chat["args"]["title"] == routines.BRIEF_CHAT_TITLE
     assert make["tool"] == "create_trigger" and \
         make["args"]["persistent_session_id"] == routines.NEW_CHAT
     assert f"record --session {routines.NEW_CHAT}" in record["run"] and "--own-chat" in record["run"]
@@ -203,7 +203,7 @@ def test_a_brief_in_a_chat_not_made_for_it_gets_one_of_its_own_never_set_up(tmp_
                     "CRON_TZ=Europe/London 38 7 * * 1,4", path=str(path), own_chat=True)
     reg = json.loads(path.read_text(encoding="utf-8"))
     assert reg["routines"][0]["chat"] == {"session_id": "session_EXAMPLENEWCHAT",
-                                          "title": routines.BRIEF_NAME, "own": True}
+                                          "title": routines.BRIEF_CHAT_TITLE, "own": True}
     assert routines.check(reg) == [] and routines.owns_chat(reg["routines"][0])
     # Out of a fresh chat each run, the registry becomes a chat set-up.
     path.write_text(json.dumps(fresh), encoding="utf-8")
@@ -270,7 +270,7 @@ def test_the_plan_gives_the_brief_a_chat_of_its_own_with_the_copy_attached(monke
     got = routines.plan("example-owner", "my-job-search", "Europe/London", now=now,
                         chat="session_EXAMPLEHELPER")
     assert got["create_session"] == {
-        "title": "Job search: morning brief",
+        "title": "Last Job Search \u00b7 Brief",
         "source_url": "https://github.com/example-owner/my-job-search",
         "prompt": routines.BRIEF_CHAT_PROMPT, "permission_mode": "auto"}
     assert "session_EXAMPLEHELPER" not in json.dumps(got)

@@ -63,13 +63,13 @@ def test_a_chat_question_starts_the_chats_own_chat_and_the_changes_stay_here(rin
     # Handed out first, to a chat of its own, started as a big job's is.
     assert item["work"] == "talk~q1" and item["run"] == "child session", said
     call = item["create_session"]
-    assert call["title"] == page_db.QUESTION_CHAT_TITLE
+    assert call["title"] == page_db.QUESTION_CHAT_TITLE + ", 25 Oct"     # the day it was asked
     assert "--kind talk" in call["prompt"] and "More is waiting" in said
     # A refused or failed start is said with the call: let go at once, answered here.
     assert "never make it again for this question: python3 tools/app.py let-go" in said, said
     assert all(land(ring, said))
     stored = ring.stored("work", "talk~q1")["data"]
-    assert stored["status"] == "claimed" and stored["chat_title"] == page_db.QUESTION_CHAT_TITLE
+    assert stored["status"] == "claimed" and stored["chat_title"] == call["title"]
     # The changes stay with the chat that answers the page, taken on the same folder.
     again = ring.wake(ring.read("wake2"))
     assert [it["work"] for it in _items(again)] == ["tweak~0", "tweak~1", "tweak~2"], again

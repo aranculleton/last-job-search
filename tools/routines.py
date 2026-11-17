@@ -510,14 +510,17 @@ def move_calls(reg: dict, r: dict, live: dict, here: str, repo: str) -> list[dic
 
 # ------------------------------------------------------------------ the brief's own chat
 
-# The brief runs in a chat of its own, "Job search: morning brief", made with create_session
-# and the person's copy as its source, its task bound to it (persistent_session_id). Bound to
+# The brief runs in a chat of its own, "Last Job Search · Brief" (BRIEF_CHAT_TITLE; "Job search:
+# morning brief" before issue #289), made with create_session and the person's copy as its source, its task bound to it (persistent_session_id). Bound to
 # the chat that answers the page, it failed every morning once that chat approved computer
 # access (confirm_repository_trust ties it to the person's own devices for good, and a
 # scheduled run there is refused); a task that starts a fresh chat each run gets no copy, no
 # add_repo and no way to clone one, and failed on its first run (the maintainer, 2026-11-10).
 # Never moved from helper to helper as the page's helper renews: its chat stays its own.
 NEW_CHAT = "<the brief's new chat id>"
+# The brief's chat's name in the person's list: the app's name, then what it is for (issue
+# #289). Its scheduled task keeps BRIEF_NAME, which also sets the minute it runs (_back).
+BRIEF_CHAT_TITLE = "Last Job Search \u00b7 Brief"
 BRIEF_CHAT_PROMPT = ("This chat runs the job search's morning brief on its schedule, and "
                      "nothing else. Nothing to do now: reply with the one word Ready.")
 
@@ -544,7 +547,7 @@ def brief_chat_call(repo: str = "") -> dict:
         mode = app_listen.SESSION_MODE
     except Exception:  # noqa: BLE001
         mode = "auto"
-    return {"title": BRIEF_NAME, "source_url": copy_url(repo), "prompt": BRIEF_CHAT_PROMPT,
+    return {"title": BRIEF_CHAT_TITLE, "source_url": copy_url(repo), "prompt": BRIEF_CHAT_PROMPT,
             "permission_mode": mode}
 
 
@@ -610,7 +613,9 @@ def needs_own_chat(reg: dict, r: dict | None, live: dict | None = None,
     return ""
 
 
-_BRIEF_TITLE = re.compile(r"^(?:[^\w\s]{1,3}\s*)?Job search:.*\bbrief\b", re.I)
+# Any "Job search: ... brief ..." title an older version gave it, or its name since issue #289.
+_BRIEF_TITLE = re.compile(r"^(?:[^\w\s]{1,3}\s*)?(?:Job search:.*\bbrief\b|Last Job Search\s+"
+                          r"\u00b7\s+Brief(?:\s+\(.*\))?\s*$)", re.I)
 
 
 def _copy_of(detail: dict) -> str:
@@ -959,7 +964,7 @@ def _page_chat() -> str:
 def plan(owner: str, name: str, zone: str = "", now: datetime.datetime | None = None,
          chat: str = "", initiation: str = "human_request") -> dict:
     """The exact calls a cloud chat makes to set the brief up with no questions: a chat of its
-    own, "Job search: morning brief", made with create_session and the person's copy as its
+    own, "Last Job Search · Brief", made with create_session and the person's copy as its
     source; the task bound to it (persistent_session_id); and one first run there a few
     minutes on (never fire_trigger, which starts a new chat with no copy in it). Never bound
     to the chat that answers the page or the chat asking: one that approves computer access
@@ -1133,7 +1138,7 @@ def record(session: str, trigger: str, cron: str = "", path: str | None = None,
         # set-up: written only in a field the app does not read, it was moved to a new chat
         # about once a day (audit BT-1). The daily tidy-up makes it again where it is gone,
         # archived or approved computer access.
-        entry["chat"] = {"session_id": session, "title": title or BRIEF_NAME, "own": True}
+        entry["chat"] = {"session_id": session, "title": title or BRIEF_CHAT_TITLE, "own": True}
     elif was_chat.get("own") and str(was_chat.get("session_id") or "") in (session, ""):
         entry["chat"] = dict(was_chat)          # a later record never drops its own chat
     elif reg["setup"] == "chat_per_briefing":

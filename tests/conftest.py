@@ -51,6 +51,14 @@ os.environ["LJS_LAND_NO_GITHUB"] = "1"
 # as it did before it started them itself. A test of that step unsets this.
 os.environ["LJS_HOOK_NO_SAVE"] = "1"
 atexit.register(shutil.rmtree, _state, ignore_errors=True)
+# Nor the chats of the machine the suite runs on: a helper's size and how far it has grown since
+# its start-up are read from Claude Code's own session files (app_listen.history_tokens,
+# helper_usage.startup_tokens), and on a developer's computer or in a cloud container those are
+# the developer's own, so a renewal test passed on GitHub and failed there (issue #290). An
+# empty folder of the suite's own; a test of a session file writes one and points here itself.
+_claude = tempfile.mkdtemp(prefix="ljs_claude_")
+os.environ["CLAUDE_CONFIG_DIR"] = _claude
+atexit.register(shutil.rmtree, _claude, ignore_errors=True)
 # The checkout the suite runs in is read as the app's own, wherever it is. In a person's copy
 # (ci_local.sh runs this suite there; the computer check runs it in one cloned from a folder)
 # the day's update check is the copy's, and where it has not run that day, start, a wake and
@@ -176,6 +184,8 @@ def clean_start() -> None:
                 pass
     os.environ["LJS_PROFILE"] = EXAMPLE
     os.environ["LJS_STATE"] = _state
+    # A test that took it away to read a home of its own gets it back for the next.
+    os.environ["CLAUDE_CONFIG_DIR"] = _claude
 
 
 @pytest.fixture(autouse=True)
