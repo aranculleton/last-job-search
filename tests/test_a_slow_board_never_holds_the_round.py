@@ -91,6 +91,7 @@ def _board_calls(calls):
 
 # ------------------------------------------------------------------ the round is not held
 
+@pytest.mark.timing
 def test_a_paced_board_stops_soon_after_linkedin_and_freehire_finish(board, monkeypatch,
                                                                       capsys):
     monkeypatch.setattr(scrape_wide, "QUERIES", [f"role {n}" for n in range(40)])
