@@ -98,7 +98,10 @@ next?" in its first lines, and nothing asks for a decision a default could make.
 - Every screen is the whole width, as the Brief is: its column fills the space between the
   side menu and Claude's work and narrows only as they take room (the menu's names shown, the
   work panel open) or the window does. No screen sits in a narrow column of its own; card text
-  keeps its own measure. The side menu opens on "Icons only", its own section above the
+  keeps its own measure. Settings and Your profile are the whole width too, their groups in two
+  columns where the screen holds two of 400px and one under the other where it does not, so a
+  value never sits far from its name (the redesign's second round, 2026-11-17: both were a
+  720px column of their own; layout test: whole width). The side menu opens on "Icons only", its own section above the
   screens under one rule, as Settings is below them. (layout and menu tests)
 - Claude's work has one button on every screen, the pill in the header. On a wide screen it
   opens and closes the panel on the right, as the menu's "Icons only" folds, remembered on the

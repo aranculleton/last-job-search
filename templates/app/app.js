@@ -352,12 +352,12 @@
       if (whole) p.previousElementSibling.classList.add("fits");
     }
   }
-  // A quiet button that starts a line of its row has its words, not its box, under the card's
-  // own words: "I heard back" leading a row stood 17px in from them (the redesign's second
-  // round, 2026-11-17).
+  // A quiet button that starts a line of a card's row has its words, not its box, under the
+  // card's own words, its box in the card's padding: "I heard back" leading a row stood 17px in
+  // from them (the redesign's second round, 2026-11-17).
   function quietFit() {
     for (const b of document.querySelectorAll(".lead-quiet")) b.classList.remove("lead-quiet");
-    for (const b of document.querySelectorAll(GLUE_ROWS + " > .btn.quiet:not(.icon-only):not(.stop-claude)")) {
+    for (const b of document.querySelectorAll(".card .card-actions > .btn.quiet:not(.icon-only):not(.stop-claude)")) {
       if (!shownIn(b)) continue;
       const row = b.parentElement.getBoundingClientRect(), q = b.getBoundingClientRect();
       if (Math.abs(q.left - row.left) < 2) b.classList.add("lead-quiet");

@@ -757,8 +757,8 @@ details.more.split[open] { flex-basis: auto; }
 /* Leading a line of its row, a quiet button's words line up with the card's own (app.js,
    quietFit); after a button and its gauge it keeps 16px from the gauge, so "I heard back" is
    never read as the gauge's words (the redesign's second round, 2026-11-17). */
-:is(.card-actions, .wc-actions, .suggest-acts, .g-acts, .fix, .fb-acts, .bp-foot, .sheet-actions) > .btn.quiet.lead-quiet { margin-inline-start: -17px !important; }
-@media (max-width: 759px) { :is(.card-actions, .wc-actions, .suggest-acts, .g-acts, .fix, .fb-acts, .bp-foot, .sheet-actions) > .btn.quiet.lead-quiet { margin-inline-start: -13px !important; } }
+.card .card-actions > .btn.quiet.lead-quiet { margin-inline-start: -17px !important; }
+@media (max-width: 759px) { .card .card-actions > .btn.quiet.lead-quiet { margin-inline-start: -13px !important; } }
 .card-actions > [data-wakes] + .cost + .btn.quiet { margin-inline-start: 4px; }
 @media (max-width: 759px) { .card-actions > [data-wakes] + .cost + .btn.quiet { margin-inline-start: 8px; } }
 @media (hover: hover) { .card.app-record .card-actions > .btn.quiet:hover { background: var(--raised); } }
@@ -1349,7 +1349,21 @@ dialog.work-sheet { position: fixed; inset: auto 0 0 0; margin: 0; width: 100%; 
    screen: Your profile stood centred, 165px right of every other screen's edge on a laptop,
    and Settings' rows ran the whole width with each value 900px from its name (the redesign,
    2026-11-16). */
-.sec.settings-page, .sec.profile-page { max-width: 720px; margin-inline: 0 auto; }
+/* Both are the whole width, as every screen is (DESIGN.md, "Every screen is the whole width"):
+   their groups keep a reading measure by standing in two columns where the screen holds two of
+   400px, one under the other where it does not, so a value never sits 900px from its name (the
+   redesign's second round, 2026-11-17: both were a 720px column of their own). */
+@media (min-width: 760px) {
+  .sec.settings-page { display: block; columns: 400px 2; column-gap: 32px; }
+  .sec.settings-page > :not(.set-group) { column-span: all; }
+  .sec.settings-page > :not(:first-child) { margin-top: 24px; }
+  .sec.settings-page > .sec-head { margin-bottom: 24px; }
+  .sec.settings-page > .sec-head + :not(:first-child) { margin-top: 0; }
+  .sec.settings-page > .set-group { break-inside: avoid; }
+  .sec.profile-page > .prof-grid { display: block; columns: 400px 2; column-gap: 32px; }
+  .sec.profile-page > .prof-grid > * { break-inside: avoid; }
+  .sec.profile-page > .prof-grid > * + * { margin-top: 32px; }
+}
 
 /* Chat: the box pinned at the bottom (4.9) */
 /* As tall as the window under the header as it is drawn (app.js, fitTop), never taller: opened
