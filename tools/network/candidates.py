@@ -156,6 +156,27 @@ def is_recruiter(title: str) -> bool:
     return compose.is_recruiter(title) or bool(_TALENT_LEAD.search(str(title or "")))
 
 
+# A partner or a principal is the most senior hiring decision-maker a consulting or
+# professional-services firm has. Read as neither a director nor a head, two partners were
+# held back as peers while a director elsewhere was chosen (issue 283). The title is the word
+# alone, or after a word of rank, at the start of a part of the headline, with nothing after
+# it but where they work: "Partner at ...", "Senior Partner", "Principal, Operations
+# Strategy". A partner of a function ("Talent Partner", "HR Business Partner", "Client
+# Partner") or of a programme ("Partner Solutions Architect") and a principal of a craft
+# ("Principal Engineer", "Principal Consultant") stay what they were.
+_HEADLINE_PARTS = re.compile(r"\s*(?:[|\u00b7\u2022/;,]|\s[-\u2013\u2014]\s)\s*")
+_PARTNER_TITLE = re.compile(
+    r"^(?:(?:senior|equity|salaried|associate|founding|managing|executive|deputy|global|"
+    r"regional|national|practice)\s+)*(?:partner|principal)(?:\s*$|\s+(?:at|@|of|in|for|with)\b|"
+    r"\s*@|\s*\()", re.I)
+
+
+def leads_as_partner(title: str) -> bool:
+    """Is a part of the headline the title of a partner or a principal of the firm?"""
+    return any(_PARTNER_TITLE.search(part) for part in
+               _HEADLINE_PARTS.split(" ".join(str(title or "").split())) if part)
+
+
 def kind_of(title: str) -> str:
     """founder, hiring_leader, recruiter, senior_peer or peer, from a headline."""
     import discovery
@@ -164,7 +185,7 @@ def kind_of(title: str) -> str:
         return "recruiter"
     if _FOUNDER.search(t):
         return "founder"
-    if discovery.AUTHORITY_TITLE.search(t):
+    if discovery.AUTHORITY_TITLE.search(t) or leads_as_partner(t):
         return "hiring_leader"
     if discovery.SENIOR_IC_TITLE.search(t):
         return "senior_peer"

@@ -1345,6 +1345,17 @@ def _process_postings() -> str:
             "CI fails until each has one" % n) if n else ""
 
 
+def _interview_days_untold() -> str:
+    """An interview booked for a day while its tracker notes still say the day is to choose:
+    until 2026-11-16 a day booked with `interview_pack.py book` went on outcome.md alone, and
+    a chat reading the tracker first said the interview was not booked (issue 274)."""
+    found = _probe("import interview_pack as p; print(len(p.note_booked_days(spoken_of=True, "
+                   "write=False)))")
+    n = int(found) if found.isdigit() else 0
+    return ("%d booked interview(s) whose day your tracker's notes do not say yet" % n
+            if n else "")
+
+
 def _twin_folders() -> str:
     """One application in two folders: until 2026-10-26 verify_batch.py named the folder
     without the abbreviation outreach.py named it with, so its verify.json sat apart from
@@ -2236,6 +2247,12 @@ REGISTRY: tuple[Upgrade, ...] = (
             _process_postings, "python3 tools/interview_pack.py postings", "instant",
             command=("python3", "tools/interview_pack.py", "postings"),
             paths=("documents/applications/*/job_posting.md",), priority=1, conditional=True),
+    Upgrade("interview-days-noted", "2026-11-16",
+            "each interview booked for a day says that day in your tracker's notes too, so "
+            "nothing reads it as still to choose",
+            _interview_days_untold, "python3 tools/interview_pack.py booked-days", "instant",
+            command=("python3", "tools/interview_pack.py", "booked-days"),
+            paths=("job_search_tracker.csv",), priority=2, conditional=True),
     Upgrade("one-folder-each", "2026-10-26",
             "each application's checks kept in its one folder, beside its note and documents",
             _twin_folders, "python3 tools/docpaths.py merge-twins", "instant",

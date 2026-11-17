@@ -1872,3 +1872,30 @@ def test_a_second_ask_a_minute_after_the_first_rings_too(run, tmp_path):
     _clean(r)
     assert len(r["rings"]) == 2, r["rings"]
     assert "general_resume" in r["rings"][1] and "draft" in r["rings"][0], r["rings"]
+
+
+def test_a_quick_answer_draws_its_lists_and_bold_never_raw_markdown(run, pages):
+    """Issue #267: the page's own answer showed "**Example Co**" with its asterisks and its
+    list as "- " lines. It is drawn as the formatted text it is, from text nodes only."""
+    r = run("talk", html=pages["sample"], question="Who works where?",
+            sample={"reply": "Two employers have people you know:\n- **Harbourline Bank**: Juno\n"
+                             "- **Fernhill Freight**: Wren"})
+    _clean(r)
+    d = r["drawn"]
+    assert d and d["items"] == ["Harbourline Bank: Juno", "Fernhill Freight: Wren"], d
+    assert d["bold"] == ["Harbourline Bank", "Fernhill Freight"], d
+    assert "**" not in d["text"] and "- " not in d["text"], d
+
+
+def test_a_quick_answer_that_says_it_cannot_goes_to_claude_instead(run, pages):
+    """Issue #267: asked about a contact's offer, the page's own answer said the offer "isn't
+    in the page's data" and that replying was "something I can't do here": a dead end. An
+    answer that says it cannot is never shown; the question goes to Claude, as needs_chat does."""
+    r = run("talk", html=pages["sample"], question="Should I take Juno up on her referral offer?",
+            sample={"reply": "Her offer isn't in the page's data, so I can't tell whether she's "
+                             "in your contacts. Replying to her is something I can't do here."})
+    _clean(r)
+    assert not any("can't" in t or "isn't in the page" in t for t in r["quick"]), r["quick"]
+    assert any("Sent to Claude" in t for t in r["quick"]), r["quick"]
+    sent = [w for w in r["work"] if w["kind"] == "talk"]
+    assert len(sent) == 1 and sent[0]["to"] == "cloud", r["work"]
