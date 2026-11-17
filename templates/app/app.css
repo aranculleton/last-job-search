@@ -1415,6 +1415,10 @@ dialog.work-sheet { position: fixed; inset: auto 0 0 0; margin: 0; width: 100%; 
 @media (hover: hover) { .talk-send:not(.is-empty):hover { background: var(--accent-hover); } }
 .talk-send:disabled { cursor: not-allowed; }
 @media (max-width: 759px), (pointer: coarse) { .talk-send { position: relative; } .talk-send::after { content: ""; position: absolute; inset: -4px; } }
+/* On touch the box itself is a 44px target, however many lines its hint takes: one line of
+   Windows' type left it 40px (Everywhere, 2026-11-17). Its words stay where they were, and the
+   row around one line is 54px, as it already was beside the picture button. */
+@media (max-width: 759px), (pointer: coarse) { .talk-row textarea { min-height: var(--target); } }
 .examples { display: flex; flex-wrap: wrap; gap: 8px; }
 .talk-who { font-weight: 600; }
 
@@ -1743,6 +1747,10 @@ a.navlink, .applylink, .btn.link, .fold .btn.link, .bp-foot a { text-decoration-
   .seg-opt::after { content: ""; position: absolute; inset: calc(-6px * var(--tz)) 0; }
   .pill, .menu-btn, .af-chip { min-height: calc(36px * var(--tz)); position: relative; }
   .pill::after, .menu-btn::after, .af-chip::after { content: ""; position: absolute; inset: calc(-4px * var(--tz)) 0; }
+  /* Its reach is above and below only, so the work pill with its count alone is a target's
+     width by its own rule: in a Mac's type its spinner and "1" were 41px (Everywhere,
+     2026-11-17). */
+  .pill { min-width: var(--target); justify-content: center; }
   .active-filters { min-height: calc(36px * var(--tz)); }
   .btn, .btn.small, .btn.icon { min-width: var(--target); }
   /* A link inside a sentence keeps the sentence's line: its 44px target reaches above and

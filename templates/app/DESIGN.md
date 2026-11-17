@@ -954,7 +954,12 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   words to send in the body's size, a one-line setting a 44px row. Why: drawn at 85% a phone's body was 12.8px and its small
   words 11.2px in grey (the review, 2026-11-10); "1 job posting per screen" (the maintainer,
   2026-10-29) is answered by the padding. (room test, target probe) A switch or a checkbox is reached
-  through its whole row, its label. (target probe, layout 14)
+  through its whole row, its label. (target probe, layout 14) A target's size is its own rule,
+  never its words' size: a control showing only a count or an icon is 44px wide, and a box to
+  type in 44px tall however many lines its hint takes (Chat's box on a phone is 54px around one
+  line, as it was beside its picture button). Why: the header's work pill with its count alone was 41px wide in a Mac's
+  type, and Chat's box, its hint one line in Windows' type, 40px tall (Everywhere, 2026-11-17;
+  target probe, work pill test, chat box test).
 - On a computer every control is at least 24px each way where it is reached (WCAG 2.2, 2.5.8),
   at any of the page's sizes: a small one keeps its drawn look and reaches the rest through its
   `::after`; a row that is a link, and a fold's heading, are that tall; a setting's pill is its

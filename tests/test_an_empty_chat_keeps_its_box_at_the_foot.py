@@ -75,3 +75,21 @@ def test_with_messages_the_box_stays_at_the_foot(run, tmp_path, vp, scheme):
     # The first message never moves the box: it is where it was on the empty Chat.
     empty = _look(run, tmp_path, vp, scheme, {})
     assert abs(seen["rowBottom"] - empty["rowBottom"]) <= 2, (empty["rowBottom"], seen["rowBottom"])
+
+
+# On touch the box itself is a 44px target however many lines its hint takes: in Windows' type
+# the hint took one line and the box was 40px (Everywhere, 2026-11-17). One line is set here,
+# whatever the type this machine has. The row around it keeps the design's 48px at least.
+ONE_LINE = ("(() => { const t = document.querySelector('#talk-text'); t.rows = 1; const r = t.closest('.talk-row');"
+            " return {box: t.getBoundingClientRect().height, row: r.getBoundingClientRect().height}; })()")
+
+
+@pytest.mark.parametrize("vp", [PHONE, WIDE], ids=["phone", "wide"])
+def test_the_box_with_one_line_is_a_full_target_on_a_phone(run, tmp_path, vp):
+    path = os.path.join(str(tmp_path), "page.html")
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(app_page.standalone(app_page.render(_sample())))
+    got = run("engine", html=path, viewport=vp, steps=[{"hash": "chat", "wait": 200, "eval": ONE_LINE}], fake={"canSend": "available"}, clock=CLOCK)
+    assert not got["errors"], got["errors"]
+    seen = got["after"][0]["eval"]
+    assert seen["box"] >= (43.5 if vp is PHONE else 39.5) and seen["row"] >= 47.5, seen
