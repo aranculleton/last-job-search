@@ -1,7 +1,7 @@
 {
  "model": 1,
  "made_at": "2026-10-25T18:00:00Z",
- "rev": "76efc82b5a63",
+ "rev": "1ee10349837e",
  "app": {
   "version": "4.16.0",
   "url": null,
@@ -657,12 +657,12 @@
     "chars": 144,
     "limit": 300,
     "near_at": 285,
-    "show": true,
+    "show": false,
     "near": false,
     "over": false,
     "tone": "muted",
     "label": "144 of 300 characters",
-    "short": "144/300"
+    "short": "156 letters to spare"
    },
    "warnings": [],
    "blocked": [],
