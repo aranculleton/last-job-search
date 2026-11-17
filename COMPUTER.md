@@ -9,9 +9,9 @@ set up, clicking **Install** in a window from Apple.
 **Using it, once it is set up.** You never need to keep a chat open on your computer. Keep
 the Claude app open there, with your computer awake, and that is all: when something needs
 your computer (reading someone's LinkedIn profile before Claude writes to them), Claude
-starts a chat there by itself, called "Job search · what it is doing · your computer's
-name", does the work and puts it on your page. The first of them stays open afterwards as
-"Job search: on your computer" and takes every later job there by itself, so nothing new
+starts a chat there by itself, called "Last Job Search · what it is doing", does the work
+and puts it on your page. The first of them stays open afterwards as "Last Job Search · Your
+computer" and takes every later job there by itself, so nothing new
 needs your OK; any others are put away by themselves once their work is done, and are safe to
 delete. To watch one, open it in the Claude app on your computer. The first is started by one
 small chat of Claude's, "Job search: starts chats on your computer", which stays. The first
@@ -213,7 +213,7 @@ helper (a `computer:` line, while work waits there or a chat there is left to pu
 the brief looks on each run; while something waits, the chat runs `route` (a step it has no
 tool for, such as `list_environments` in the helper's subagent, is handed back to the chat
 that started it: `handback`), which picks the first that works:
-a chat already on the computer; the computer's own chat, "Job search: on your computer"
+a chat already on the computer; the computer's own chat, "Last Job Search · Your computer"
 (`computer.py` LISTENER_TITLE, the listener), woken by republishing its bell (`ring computer
 chat`): the first chat on the computer that finishes its job with no live listener publishes a
 bell of its own and stays open as it (`ring --chat` prints `stay`, then `listener-ready`; its
@@ -227,8 +227,8 @@ also rings it once after two quiet hours (`keep-alive`); a ring unanswered for f
 marks it stale and the work goes on down this list, so a chat started from the cloud asks the
 person's Allow only until the computer has its own chat (issue #250); a chat started there from
 the cloud (`create_session` on the
-bridge by the computer starter, woken by its bell, in Auto, titled `Job search · <job> ·
-<computer>`, its prompt complete, its results back through the page and the copy and never
+bridge by the computer starter, woken by its bell, in Auto, titled `Last Job Search · <job>`
+(`Job search · <job> · <computer>` before issue #289), its prompt complete, its results back through the page and the copy and never
 `send_message`, archived by the starter once its work is finished or waits on the person: a
 chat that finds LinkedIn signed out opens its sign-in page in its own browser, puts the Sign
 in to LinkedIn card on the page (it names that chat, never links it) and looks again by itself for a

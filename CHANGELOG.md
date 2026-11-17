@@ -20,6 +20,10 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Added
+
+- **Every employer has a card of its own.** Tap an employer's name on a job, an application, a person's card or an interview: its card shows your roles there with where each stands, the people you know there and your interviews, and each opens its own card. The same employer is found however its name is written.
+
 ### Fixed
 
 - **Chat's answers read cleanly and never end at "I can't".** The page's own quick answers showed markdown raw, with asterisks around names and "- " before list items, and sometimes said what they could not do instead of passing the question on. Lists and bold now show as they should in every answer, and a question the page cannot answer goes to Claude by itself.
@@ -33,10 +37,16 @@ make sense to somebody whose repo just received it.
 - **Claude's own chat on your computer stays open without asking you.** It asked whether to keep it open as your computer's chat; that is now simply how it works.
 
 - **Old chats leave your chat list the morning after, as they should.** Each morning the page's old chat and the brief's old chat stayed for two or three more days, so two "Job search page" and two "morning brief" chats sat side by side: the daily tidy-up could not see that their work was already saved on GitHub, and it waited for yesterday's page chat to put itself away, which it never did. It now checks GitHub itself, and puts each old chat away once its work is proven saved. Chats already piled up are cleared by the first tidy-up after you update, and one whose work never reached your main copy is kept a week at most: its saved work stays on GitHub.
+- **Claude's chats have short, plain names that say what each is for.** The chats the app keeps in your list had long, mixed names that were cut off ("Job search: morning brief", "Job search page", "Job search: on your computer") and did not say which were safe to delete. Each now starts "Last Job Search", then one plain word: "Brief" and "Your computer" stay for good, "Page" is replaced by a fresh one each day (an older one is safe to delete), and a one-off job says its task and day, such as "Last Job Search · Finding jobs, 16 Nov". The chats you already have take the new names by themselves, and your page's Settings says which chat answers it.
+- **A busy day with your page no longer costs ten times a quiet one.** The chat that answers your page was replaced by a fresh one only once a day, and every message it handles re-reads everything it has said so far, so on a day of many taps it grew huge and one day cost over ten times the day before. It now hands your page to a fresh chat as soon as it has grown long, at a quiet moment and never in the middle of a job, carrying what was in hand; nothing you asked for is lost. Your page's Settings also says roughly what answering it cost today.
 - **An old "starts chats on your computer" chat is named once on your To do.** When a newer one replaced it, the old one stayed in your list for good: it holds your OK to use your computer, so only you can archive it. Your page now names it, with its day, until you tap Done.
 - **A reply is no longer held up by the save that follows it.** The save ran entirely after Claude's turn ended, so at the end of almost every turn the cloud found the work not yet saved and sent Claude back to save it again, or to wait minutes for the save already running. The work is now saved to GitHub in a few seconds before the rest of the save goes on by itself, so the turn simply ends (issue 271).
 - **Claude is no longer told about "unpushed" work that is already saved.** After your copy took in what other chats had saved, the cloud counted all of it as this chat's unsaved work (53 where 2 were its own), turn after turn, even in a chat whose only job is starting chats on your computer. Each chat's saved copy now moves along with it, so only real unsaved work is ever counted; a chat already caught in this is put right by its next save or page update (issue 281).
 - **Saving no longer wakes the page's chat twice.** Every save made a short-lived request on GitHub, and the cloud woke the chat that answers your page twice for each one, a turn spent reading its whole history just to do nothing. Those two notices are now stopped before they reach Claude, so saves stay silent and cheap (issue 272).
+
+### Changed
+
+- **The cards that open from a name are cleaner and easier to read.** An employer's, a person's, an application's and an interview's card now list what they hold as tidy rows: each says where it stands and opens with one tap, the arrow at its end saying so. An application's and an interview's stages run down a timeline, filled once done. On a laptop a card is as tall as what it holds, and its title no longer has a box drawn round it.
 
 ## [4.16.1] - 2026-11-12
 

@@ -35,7 +35,7 @@ T = app_model.parse_time(NOW)
 READ_A, READ_B = "network~read~1", "network~read~2"
 CHAT = "session_macEXAMPLE"
 # The title the chat was started with (computer.session_title), as the person's list shows it.
-CHAT_TITLE = "Job search · Reading 3 profiles · Studio Laptop"
+CHAT_TITLE = computer.session_title("Reading 3 profiles", "Studio Laptop")
 
 
 def _beat(**facts) -> dict:

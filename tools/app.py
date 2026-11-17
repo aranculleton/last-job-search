@@ -1343,7 +1343,8 @@ def choose(db: dict, chat: str, kind: str, now, on: str = "", no_sessions: bool 
            and item.get("own_chat") != "refused"
            and page_db.busy_here(db, chat, kind, now, but=chosen["work"])
            and page_db.chats_at_work(db, now) < page_db.HEAVY_CAP_CHATS)
-    chosen.update(where_it_runs(chosen, chat, kind, no_sessions, taken=taken, question=own))
+    chosen.update(where_it_runs(chosen, chat, kind, no_sessions, taken=taken, question=own,
+                                now=now))
     if own and chosen.get("run") == "child session":
         chosen["if_refused"] = QUESTION_REFUSED.format(work=chosen["work"], chat=chat or PARENT)
     if job_chat or sent_here or reads_here:
@@ -1491,7 +1492,17 @@ def _claimed_here(dump: str, *chosen) -> None:
 # interview prep, a networking run) never runs in the chat that answers the page. Run there,
 # even as background agents, a search and a networking run held it for 15 and 23 minutes and
 # the page waited on every tap (2026-10-29). Each gets a cloud chat of its own instead.
-CHILD_TITLE = "Job search: {title}"
+# Its chat is named for its task and its day, after the app's name (issue #289: "Last Job
+# Search · People search, 16 Nov"), so the person can tell it from the chats kept for good.
+CHILD_TITLE = "Last Job Search \u00b7 {title}, {day}"
+CHILD_TASK_MAX = 45     # the task's words in it: a name no longer than before the app's name grew
+_MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+
+def short_day(day: dt.date) -> str:
+    """"16 Nov": a chat's day in its name, the same words in every language a computer is set
+    to (strftime's month names follow the computer's own)."""
+    return f"{day.day} {_MONTHS[day.month - 1]}"
 # The page's data tools, which .claude/settings.json pre-approves. Artifact is not among them
 # (publishing or deleting a page still asks, tools/security_guards.py), and create_session
 # drops a tool its caller has not pre-approved, so naming it carried nothing (the stranger
@@ -1883,24 +1894,26 @@ def distinct_title(title: str, taken) -> str:
     taken = set(taken or ())
     if title not in taken:
         return title
-    head, _, text = title.partition(": ")
+    sep = " \u00b7 " if " \u00b7 " in title else ": "
+    head, _, text = title.partition(sep)
     n = 2
     while True:
-        got = f"{head}: {text[:55].rstrip()} ({n})"
+        got = f"{head}{sep}{text[:55].rstrip()} ({n})"
         if got not in taken:
             return got
         n += 1
 
 
 def where_it_runs(chosen: dict, chat: str, kind: str, no_sessions: bool = False,
-                  taken=(), question: bool = False) -> dict:
+                  taken=(), question: bool = False, now: dt.datetime | None = None) -> dict:
     """`run`: `here` for light work; for a big job, `child session` with the create_session
     call to make (its prompt runs the item, pins its progress, saves, brings the page up to
     date and puts itself away, messaging no chat), or, where a chat cannot start one (a chat on a computer, or no
     create_session tool), `background agent` with the Agent call. A big job is never `here`.
     `taken`: the names of the job chats still at work. `question`: a Chat question with room
     for a chat of its own (page_db.QUESTION_CHAT_TITLE), started only where a big job's would
-    be; anywhere else it is answered here, first (page_db.ASKED_FIRST)."""
+    be; anywhere else it is answered here, first (page_db.ASKED_FIRST). `now`: the time, whose
+    day in the person's own zone the chat's name carries."""
     if not chosen.get("heavy") and not question:
         return {"run": "here"}
     import app_listen
@@ -1911,8 +1924,14 @@ def where_it_runs(chosen: dict, chat: str, kind: str, no_sessions: bool = False,
     parent = chat or PARENT
     owner, name = app_setup.origin()
     import page_db
-    title = distinct_title(page_db.QUESTION_CHAT_TITLE if question else CHILD_TITLE.format(
-        title=" ".join(str(chosen.get("title") or chosen["kind"]).split())[:60]), taken)
+    import app_model
+    day = short_day(app_model.local_day(now or dt.datetime.now(dt.timezone.utc),
+                                        app_listen._zone()))
+    task = " ".join(str(chosen.get("title") or chosen["kind"]).split())
+    if len(task) > CHILD_TASK_MAX:      # cut at a word, so the day still shows after it
+        task = task[:CHILD_TASK_MAX + 1].rsplit(" ", 1)[0].rstrip(" ,:;")
+    title = distinct_title(page_db.QUESTION_CHAT_TITLE + f", {day}" if question else
+                           CHILD_TITLE.format(title=task, day=day), taken)
     if question and not (kind == "cloud" and not no_sessions and owner and name):
         # No chat of its own can be started here: never a background agent for a question.
         return {"run": "here"}
@@ -3217,7 +3236,7 @@ NESTED_JOB = (" If the create_session is refused because this chat cannot start 
 
 RETIRED_WAIT_S = 40 * 60
 UNSAVED_PREFIX = "unsaved-"      # meta/unsaved-<chat>: a save a retired chat gave up on
-UNSAVED_TITLE = "Job search: changes to save, {day}"   # that chat's own name, the card says it
+UNSAVED_TITLE = "Last Job Search \u00b7 Changes to save, {day}"   # that chat's own name, the card says it
 UNSAVED_DAYS = 14                # its card goes after this long, whatever became of the work
 
 
@@ -3372,9 +3391,9 @@ def cmd_retired(a) -> int:
         import page_db
         _, now = app_model.clock(None, None)
         head = land._git(root, "rev-parse", "HEAD").stdout.strip()
-        # A name of its own, which the card gives: every helper is "Job search page", and the
-        # person could not tell which chat to open (review of fix/helpers, item 5).
-        title = UNSAVED_TITLE.format(day=f"{now.day} {now.strftime('%B')}")
+        # A name of its own, which the card gives: every helper is "Last Job Search · Page", and
+        # the person could not tell which chat to open (review of fix/helpers, item 5).
+        title = UNSAVED_TITLE.format(day=short_day(now))
         w = page_db.Writes(os.path.join(land.git_dir(root) or root, "ljs-retired-out"))
         w.add("set", "meta", UNSAVED_PREFIX + chat,
               {"chat": chat, "title": title, "since": app_model.stamp(now), "head": head})

@@ -1428,7 +1428,10 @@ def held_locks(db: dict, now: dt.datetime) -> dict:
 # chat that answers the page leaves Chat questions to it. It counts against the same cap as
 # the big jobs' chats (HEAVY_CAP_CHATS) and is put away as theirs are, when its work has ended
 # (tidy.py finished_jobs). Where none can be started, the question is answered first, here.
-QUESTION_CHAT_TITLE = "Job search: Chat"
+# Its name is this and its day ("Last Job Search · Chat questions, 16 Nov", issue #289);
+# "Job search: Chat" before, which a claim made then still carries.
+QUESTION_CHAT_TITLE = "Last Job Search \u00b7 Chat questions"
+OLD_QUESTION_CHAT_TITLE = "Job search: Chat"
 
 
 def chat_question(item: dict) -> bool:
@@ -1439,7 +1442,8 @@ def chat_question(item: dict) -> bool:
 
 def in_question_chat(item: dict) -> bool:
     """Was this work claimed for the Chat's own chat (its claim names that chat's title)?"""
-    return str(item.get("chat_title") or "").startswith(QUESTION_CHAT_TITLE)
+    return str(item.get("chat_title") or "").startswith((QUESTION_CHAT_TITLE,
+                                                          OLD_QUESTION_CHAT_TITLE))
 
 
 def question_chat_live(db: dict, now: dt.datetime) -> bool:

@@ -304,8 +304,9 @@ def test_the_sign_in_card_opens_the_chat_on_the_computer_and_never_linkedin(tmp_
     assert needs["chat"] == "session_macEXAMPLE" and needs["signin"] == "linkedin"
     # The chat by the title it was started with, never "tap Open the chat": that link opened it
     # without its browser (issues 285 and 286, 2026-11-16).
-    assert needs["say"] == ("Sign in to LinkedIn once, in the chat “Job search · Reading 3 "
-                            "profiles · Studio Laptop” on your Studio Laptop. Open that chat from "
+    title = computer.session_title("Reading 3 profiles", "Studio Laptop")
+    assert needs["say"] == ("Sign in to LinkedIn once, in the chat “" + title + "” on your "
+                            "Studio Laptop. Open that chat from "
                             "the list of chats in the Claude app there: a link to it opens it "
                             "without Claude's browser. Being signed in beside your page does not "
                             "count.")

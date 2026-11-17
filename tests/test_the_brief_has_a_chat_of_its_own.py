@@ -66,7 +66,7 @@ def _moved_to_its_own_chat(calls, old="trig_EXAMPLEB"):
     assert [c.get("tool") or "run" for c in calls] == [
         "create_session", "create_trigger", "run", "update_trigger"], calls
     assert calls[0]["args"] == routines.brief_chat_call(REPO)
-    assert calls[0]["args"]["title"] == "Job search: morning brief"
+    assert calls[0]["args"]["title"] == routines.BRIEF_CHAT_TITLE == "Last Job Search \u00b7 Brief"
     assert calls[0]["args"]["source_url"] == f"https://github.com/{REPO}"
     assert calls[1]["args"]["persistent_session_id"] == routines.NEW_CHAT
     assert calls[1]["args"]["cron_expression"] == CRON          # its days and time kept
@@ -218,7 +218,7 @@ def test_the_computer_trust_check_moves_the_brief_into_its_own_chat_recorded_as_
     lines = computer.trust_check(HELPER, {"data": [
         {"id": "trig_EXAMPLEB", "name": routines.BRIEF_NAME, "persistent_session_id": HELPER,
          "cron_expression": CRON, "enabled": True, "prompt": "Scheduled run: morning brief."}]})
-    assert '"title": "Job search: morning brief"' in lines[0]
+    assert f'"title": "{routines.BRIEF_CHAT_TITLE}"' in lines[0]
     assert "--own-chat" in lines[1] and "routines_screen" not in lines[1]
     assert "create_new_session_on_fire" not in "".join(lines)
 

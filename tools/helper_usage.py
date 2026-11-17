@@ -138,6 +138,70 @@ def totals(file: str, since: str = "") -> dict:
     return t
 
 
+def _from_outside(d: dict) -> bool:
+    """Is this line of a session file a message from outside the chat (the prompt it was
+    started with, a ring, a check-in), never a tool's result, a note the app or Claude Code
+    adds (isMeta), a summary after compaction or a subagent's line?"""
+    if d.get("type") != "user" or d.get("isMeta") or d.get("isCompactSummary") or \
+            d.get("isSidechain"):
+        return False
+    content = (d.get("message") or {}).get("content") if isinstance(d.get("message"), dict) \
+        else None
+    if isinstance(content, str):
+        return bool(content.strip())
+    if not isinstance(content, list):
+        return False
+    kinds = {c.get("type") for c in content if isinstance(c, dict)}
+    return "text" in kinds and "tool_result" not in kinds
+
+
+def startup_tokens(file: str = "") -> int | None:
+    """The history a chat's start-up left it with: its input at the last turn before the
+    second message from outside (its first ring, after the prompt it was started with), from
+    its own session file (the newest, as history_tokens reads it). None while it is still in
+    its first turn, or where there is no file. Its start-up alone grew a new helper by
+    anything from 45,000 to 230,000 tokens (the maintainer's log, November 2026), so growth
+    that renews a helper is counted from here (app_listen.grown_tokens, issue #290)."""
+    file = file or session_file()
+    if not file:
+        return None
+    outside, last = 0, None
+    try:
+        with open(file, encoding="utf-8", errors="replace") as fh:
+            for line in fh:
+                if '"usage"' not in line and '"user"' not in line:
+                    continue
+                if '"tool_result"' in line and '"usage"' not in line:
+                    continue                    # a tool's answer: never from outside
+                try:
+                    d = json.loads(line)
+                except ValueError:
+                    continue
+                if not isinstance(d, dict):
+                    continue
+                u = (d.get("message") or {}).get("usage") \
+                    if isinstance(d.get("message"), dict) else None
+                if d.get("type") == "assistant" and isinstance(u, dict):
+                    last = sum(int(u.get(k) or 0) for k in (
+                        "input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"))
+                elif _from_outside(d):
+                    outside += 1
+                    if outside == 2:
+                        return last
+    except OSError:
+        return None
+    return None
+
+
+def grown(size: int, file: str = "") -> int:
+    """How far a chat at `size` tokens (its last turn's input) has grown since its start-up
+    ended (startup_tokens); 0 while that is not known."""
+    start = startup_tokens(file)
+    if start is None or not size:
+        return 0
+    return max(0, int(size) - start)
+
+
 def estimate(t: dict) -> float:
     return sum(t.get(k, 0) * RATES[k] for k in RATES) / 1_000_000
 
