@@ -43,6 +43,10 @@ otherwise every one of `SCRAPE_LOCATIONS` (the first deep, the rest two pages),
 the way LinkedIn is searched. A board that can filter for remote postings is
 also searched with `--remote` and no place.
 
+How long a board is searched in a round is what its jobs on the list have earned it
+(scrape_wide.board_share), unless the person gives it minutes of their own:
+`PORTAL_MINUTES = {"<portal>": 10}` in profile/search.py.
+
 ## linkedin-search, and what its default means
 
 It ships on, and it stays on: in most markets it carries more postings than every

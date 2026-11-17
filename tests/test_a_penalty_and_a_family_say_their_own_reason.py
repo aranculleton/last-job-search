@@ -79,7 +79,9 @@ def test_a_penalty_stated_as_leverage_counts_on_a_strong_posting(tmp_path):
                              _posting(2, "Freight Analyst", "The role is on call one weekend "
                                       "in four, with long hours at quarter end. ")])
     steady, long_hours = got["1"], got["2"]
-    # Four lifts worth 50 reach the cap of 30 on both; the penalty is not swallowed by it.
+    # Four lifts worth 50 count 25 on both (each after the strongest at half the one before,
+    # issue 327), and would reach the cap of 30 without that; the penalty is swallowed by
+    # neither.
     assert steady["opportunity"] - long_hours["opportunity"] == 12, (steady["why"],
                                                                      long_hours["why"])
     assert "-12 leverage: long or unpredictable hours, which cost the person evenings" \

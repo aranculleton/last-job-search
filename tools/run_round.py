@@ -1554,6 +1554,10 @@ def say_sources(out_dir: str) -> list[str]:
         if s.get("why"):
             line += " (" + "; ".join(s["why"]) + ")"
         lines.append(line)
+        if s.get("time"):
+            # One of the person's own boards: its time this round and why
+            # (scrape_wide.board_share, issue 327).
+            lines.append(f"  {s.get('source')}'s time: {s['time']}")
     b = got.get("boards") or {}
     quiet, partial = b.get("quiet") or {}, b.get("partial") or {}
     found = sum((b.get("found") or {}).values())
@@ -1571,6 +1575,36 @@ def say_sources(out_dir: str) -> list[str]:
     if got.get("stopped"):
         lines.append(f"  stopped short: {got['stopped']}")
     return lines
+
+
+def record_board_yield(out_dir: str, today: str, name: str, rules=None) -> None:
+    """Keep how many of each of the person's own boards' jobs reached this round's list
+    (06_shortlist.json), scoring scrape_wide.LISTED_AT or more and passing every hard rule
+    (`rules`), for the time each board is given in the rounds after (scrape_wide.record_yield,
+    board_share). Every site the round searched (SOURCES) is counted, none found too. Fails
+    open: a round never stops over what it keeps for the next."""
+    sites = {str(s.get("source")) for s in _sources(out_dir).get("sites") or []
+             if s.get("source")}
+    if not sites:
+        return
+    import scrape_wide
+    try:
+        rows = _read_json(os.path.join(out_dir, SHORTLIST))
+    except Exception:  # noqa: BLE001  no list written: nothing reached it
+        rows = []
+    rows = rows if isinstance(rows, list) else list(rows.values())
+    got: dict = dict.fromkeys(sites, 0)
+    for r in rows:
+        if not isinstance(r, dict) or r.get("portal") not in got:
+            continue
+        score = r.get("fit") if r.get("fit") is not None else r.get("priority")
+        if (score or 0) >= scrape_wide.LISTED_AT and not (rules and rules(r)):
+            got[r["portal"]] += 1
+    try:
+        scrape_wide.record_yield(got, today, name)
+    except Exception as e:  # noqa: BLE001
+        print(f"sources: what each board found for the list was not kept ({e})",
+              file=sys.stderr)
 
 
 def failed_sources(out_dir: str) -> list[str]:
@@ -2367,6 +2401,12 @@ def main():
                                      and not rules(r)], a.today):
         print(line)
         log.write(line + "\n")
+    # What each of the person's own boards put on this list, for its time in the rounds after
+    # (issue 327): a round that searched live, the whole search, its first pass. A widening
+    # finds again what the pass before it listed, and a search of named employers asks each
+    # board for them alone; neither is what the board brings to a round.
+    if not a.from_scraped and not names and a.round == 1:
+        record_board_yield(a.out, a.today, os.path.basename(os.path.abspath(a.out)), rules)
     if summary:
         print(f"shortlist summary: {local_path.rel(summary, ROOT)} "
               f"(top {KEEP_TOP}, no posting bodies) - commit this one")
