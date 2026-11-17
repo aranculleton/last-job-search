@@ -1696,7 +1696,14 @@ def effective_status(contact, thread_rows) -> str:
     ordering `platform_budget` already accounts for; reading `not_contacted` off
     the empty log kept a whole batch of sent requests out of the nudge queue.
     `reconcile` still reports the missing rows as `no_messages_logged`.
+
+    Read once a page build for a contact and its rows (`_per_build`): a build asked it
+    about 3.5 times a person, from each list, hold and count (issue 340).
     """
+    return _per_build("effective_status", thread_rows, _effective_status, contact)
+
+
+def _effective_status(thread_rows, contact) -> str:
     stored = str(contact.get("status") or "").strip()
     derived = derive_status(thread_rows)
     if stored in schema.TERMINAL:
@@ -6416,6 +6423,20 @@ def platform_budget(contacts, threads, today, inmail_balance=None, index=None) -
     the count. `inmail_balance` is that record ({} for none); None reads it from file.
     `index` is `by_contact(threads)` when the caller has it already.
     """
+    # Counted once a page build for this very book, log and day: the InMail card, the
+    # LinkedIn budget and the holds each counted it again (issue 340). Each caller gets
+    # a copy of its own, and `index` changes only how fast, never what.
+    if remembered.active() and contacts is not None and threads is not None:
+        import copy
+        kept = remembered.get("platform_budget", (id(contacts), id(threads), str(today),
+                              repr(inmail_balance)),
+                              lambda: (contacts, threads, _platform_budget(
+                                  contacts, threads, today, inmail_balance, index)))
+        return copy.deepcopy(kept[2])
+    return _platform_budget(contacts, threads, today, inmail_balance, index)
+
+
+def _platform_budget(contacts, threads, today, inmail_balance=None, index=None) -> dict:
     today = _need_date(today, "today")
     index = by_contact(threads) if index is None else index
     week_start = today - datetime.timedelta(days=today.weekday())
