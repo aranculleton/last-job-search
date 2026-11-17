@@ -3132,6 +3132,11 @@
   function det(key, byDefault, attrs) {
     const el = h("details", Object.assign({}, attrs, {"data-k": "det:" + key, open: openState.has("det:" + key) ? openState.get("det:" + key) : byDefault}));
     for (let i = 3; i < arguments.length; i++) add(el, arguments[i]);
+    // Its button is in the Tab order and takes the focus in every engine: Safari did not focus a
+    // summary given none, so a menu closed after its choice left the focus on nothing and Tab
+    // started at the top of the page (the everywhere check, Safari, 2026-11-17).
+    const s = el.firstElementChild;
+    if (s && s.tagName === "SUMMARY" && !s.hasAttribute("tabindex")) s.setAttribute("tabindex", "0");
     return el;
   }
   // A card's "More": its secondary actions and detail, out of the way until asked for.
@@ -6707,7 +6712,7 @@
       const to = face.item || null;
       return h("li", {"data-n": n ? String(n) : null, class: n ? null : "bp-step-soon"},
         h("a", {href: "#todo" + (to ? "/" + to : ""), class: "bp-text bp-link", "data-k": "bp-next:" + i.key, onclick: (e) => { e.preventDefault(); go("todo", {focus: true, item: to}); }},
-          h("span", {}, face.title, detail ? h("span", {class: "bp-when"}, " · " + detail) : null)));
+          h("span", {}, face.title, detail ? " " : null, detail ? h("span", {class: "bp-when"}, "\u00b7 " + detail) : null)));
     });
     take(heroKeys);
     // Coming up: the next things booked that no panel above shows.

@@ -3015,7 +3015,10 @@ ul.bp-news { max-width: 80ch; }
 
 /* The Brief's rows say when and whose move, quietly beside what. */
 .bp-iv-role { margin: 0; font-size: var(--t-sm); color: var(--muted); }
-.bp-when { color: var(--muted); font-size: var(--t-sm); }
+/* Its words go down to the next line together when the row has no room for them, and never
+   past the row: Safari drew "· Ready to do" 3px past a tablet's row as words on the title's own
+   line (the everywhere check, 2026-11-17). */
+.bp-when { color: var(--muted); font-size: var(--t-sm); display: inline-block; max-width: 100%; }
 .bp-state .bp-when { display: block; font-weight: 400; }
 .up-prep { display: block; font-size: var(--t-sm); color: var(--muted); }
 /* A line with a pill ("No prep yet", Prepare me, its gauge) keeps room between the three: written
