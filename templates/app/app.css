@@ -620,10 +620,13 @@ details.more.split[open] { flex-basis: auto; }
 /* A line of facts breaks only at a dot, each fact whole ("Posted 5 days ago", never "Posted 5 /
    days ago"). On a phone a job's is two lines at most: where it is, cut short with "..." if it
    must be, then the pay and the closing day; what it leaves out is in the card's details. */
-.facts .fact, .facts .fact-w { white-space: nowrap; }
-.facts .fact.next { white-space: normal; }
+.facts .fact-w, .facts .facts-a > .fact { display: inline-block; max-width: 100%; }
+.facts .facts-end { max-width: 100%; }
+/* (an inline block as wide as its words or the line: whole where it fits, wrapping inside only
+   where it alone is wider than the line, at double text) */
 @media (max-width: 759px) {
   .facts.two-part > .facts-a { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .facts.two-part > .facts-a > .fact { display: inline; }
   .facts.two-part .f-drop, .facts.two-part .f-rel, .facts.two-part .f-long { display: none; }
   /* The second line starts at the card's edge: its first dot is out of sight with no room kept
      for it, as the first line above it is a block of its own and nothing can move up beside it. */
@@ -720,7 +723,7 @@ details.more.split[open] { flex-basis: auto; }
 .doc-row > .ic { flex: none; width: 16px; height: 16px; color: var(--muted); }
 .doc-words { flex: 1 1 0; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; }
 .doc-name { font-weight: 600; color: var(--ink); }
-.doc-meta { font-size: var(--t-sm); color: var(--muted); white-space: nowrap; }
+.doc-meta { font-size: var(--t-sm); color: var(--muted); }
 .doc-acts { flex: none; display: inline-flex; align-items: center; gap: 4px; }
 .doc-acts > .btn.quiet:not(.icon-only) { min-height: 36px; padding: 8px 12px; font-weight: 600; text-decoration: none; }
 .doc-acts > .btn.icon-only { width: 36px; height: 36px; min-height: 36px; padding: 0; justify-content: center; }
@@ -2689,6 +2692,14 @@ ul.bp-news { gap: 12px; }
   .up-row + .up-row::before { left: 12px; }
   .up-row > .up-when { white-space: normal; }
   .up-days:has(.up-here) .up-row { grid-template-columns: 6rem minmax(0, 1fr) auto; }
+}
+/* Where a day's card is narrow for its words (a phone at double text, a time from another
+   zone), the time is a line over the title, never a column squeezing it. */
+.up-list { container-type: inline-size; }
+@container (max-width: 20em) {
+  .up-row, .up-days:has(.up-here) .up-row { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "when end" "main end"; }
+  .up-row > .up-when { padding-top: 0; white-space: normal; }
+  .up-row > .up-when:has(> .btn[data-k^="up-time:"]) { grid-column: 1; grid-row: 3; }
 }
 .bp-up-row { display: flex; align-items: center; gap: 8px; }
 .bp-up-row .up-main { flex: 1; display: grid; gap: 2px; min-width: 0; }
