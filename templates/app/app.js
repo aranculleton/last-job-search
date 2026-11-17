@@ -6412,6 +6412,9 @@
         detail = named.map((x) => x.name).join(all > 2 ? ", " : " and ") + (all > 2 ? " and " + plural(all - 2, "more", "more") : "");
       }
       take(queueKeys(i, face, named).filter((k) => !kept.has(k)));
+      // A short one ("Ready to do", "Wed 28 Oct, 13:00") is read whole: in a narrow column
+      // "do" went down alone under "Ready to".
+      if (detail && detail.length <= 24) detail = detail.replace(/ /g, "\u00a0");
       const to = face.item || null;
       return h("li", {"data-n": n ? String(n) : null, class: n ? null : "bp-step-soon"},
         h("a", {href: "#todo" + (to ? "/" + to : ""), class: "bp-text bp-link", "data-k": "bp-next:" + i.key, onclick: (e) => { e.preventDefault(); go("todo", {focus: true, item: to}); }},
