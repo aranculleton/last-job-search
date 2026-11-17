@@ -372,10 +372,14 @@ def test_the_builders_prompt_says_what_it_must():
             "Merge only when Fast checks, Everywhere, Platforms and both rehearsals are green",
             "before 07:30 UK time", "python3 tools/app_bug.py window",
             "needs-maintainer", "fixed-unreleased", "builder-report",
-            "never a second comment for the same reason",
+            # The maintainer, 2026-11-17: "THE RELEASE ALWAYS WAITS FOR EVERYTHING TO BE FIXED".
+            "The release always waits for everything to be fixed",
+            "never left for a later week or taken out of the batch to ship the rest",
+            "nothing is taken out of the batch to ship the rest",
             # The maintainer, 2026-11-16: their call is always the builder's to make.
             "The maintainer's call is always yours to make", "never hand it back",
-            "A red Everywhere or Platforms leg is your call too, never theirs",
+            "A red Everywhere or Platforms leg holds the release too, whatever caused it",
+            "never released around",
             "list the open issues again", "this last look is made once",
             "never a second release in one run", "one release a week",
             "do the maintainer items", "need you: see needs-maintainer",
