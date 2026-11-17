@@ -275,14 +275,16 @@ SUMMARY_DIR = "documents/rounds"
 # `first_seen` and `age_days` because the portal's `date` is a relist date as often
 # as not: the age is the earlier of the two.
 # fit_why rides along: the reasons behind the score, which an interview pack reads weeks
-# later, after the round's own files are pruned.
+# later, after the round's own files are pruned. `brought_back` too: a cut made again wrote
+# the list without it, and the page then left the posting out by the rule it was brought
+# back from (2026-11-16).
 SUMMARY_FIELDS = ("priority", "fit", "fit_why", "opportunity", "title", "company", "location",
                   "date", "first_seen", "age_days", "url", "portal", "bar", "bar_reason",
                   "warm_route_note", "referral_note", "outreach_pending_note",
                   "throttle_override_note",
                   "drafted_note", "silent_application_note", "set_aside_note", "apply_url",
                   "link_kind", "link_status", "link_check", "near", "salary", "aimed_at_ai",
-                  "employment_type")
+                  "employment_type", "brought_back")
 LINK_FIELDS = ("apply_url", "link_kind", "link_status", "link_check")
 
 
@@ -617,6 +619,21 @@ def judged_none(company, today=None) -> str:
             + (f" ({said})" if said else ""))
 
 
+def persons_own(row, kept=()) -> bool:
+    """Whether the person chose this posting themselves: brought it back after a rule
+    filtered it (tools/filtered.py back writes `brought_back`), or kept it for later (`kept`,
+    the keep records' links, normalized). Such a row is never left out again by a rule the
+    posting decides (the search window, a score, the bar, the place, the screen), on the
+    page (app_model._jobs) or in a cut of its round made again (hard_rules): a posting
+    brought back from the 10-day window was dropped by both (2026-11-16). A ruling, a set
+    aside or an employer turned down since, and a closed link, still stand."""
+    from lookup_score import norm
+    if row.get("brought_back"):
+        return True
+    u = norm(str(row.get("url") or ""))
+    return bool(u) and u in kept
+
+
 def unscored(row) -> bool:
     """A row with no 0-100 score, read as the page reads one (its fit, else its priority).
     Never shown: a list of unranked links is a failed search."""
@@ -661,6 +678,11 @@ def hard_rules(jobage, today, seen=None, keep_ruled_out=False, dump=None, name="
     had = already_had(name, day, tracker, own, listed=listed, drafts=drafts)
     from company_key import key as company_key
     from lookup_score import norm
+    try:
+        import app_model
+        kept = {norm(u) for u in app_model.kept_jobs()} - {None, ""}
+    except Exception:  # noqa: BLE001  no keep records yet
+        kept = set()
 
     def set_aside(row) -> bool:
         if norm(row.get("url") or "") in waiting:
@@ -672,6 +694,8 @@ def hard_rules(jobage, today, seen=None, keep_ruled_out=False, dump=None, name="
         return any(app_model.job_rev(u, c, t, st) in revs for st in ("new", "ready"))
 
     def check(row) -> str:
+        if persons_own(row, kept):
+            return chosen(row)
         if unscored(row):
             return "no score: a job is never shown unscored"
         age = prefilter.age_days(row, day) if window else None
@@ -695,6 +719,15 @@ def hard_rules(jobage, today, seen=None, keep_ruled_out=False, dump=None, name="
         cuts = (text_screen.screen(row).get("cuts") or []) if screen else []
         if cuts:
             return f"screen: {cuts[0]}"
+        return chosen(row)
+
+    def chosen(row) -> str:
+        """The rules that hold for every row, the person's own choices included: an employer
+        turned down by name, a Set aside still waiting on the page, a ruling made since, and
+        a job they already have."""
+        k = company_key(str(row.get("company") or "")) if declined else ""
+        if k and k in declined and persons_own(row, kept):
+            return f"candidate's bar: {declined[k]}"
         if (waiting or revs) and set_aside(row):
             return SET_ASIDE_ON_PAGE
         return ruled(row) or mine(row) or had(row) or ""
@@ -1136,9 +1169,11 @@ def write_summary(shortlist_path, out_dir, name, scraped_path=None, show=None, r
         check = link_checker(scraped, datetime.datetime.now(datetime.timezone.utc))
     kept, passed = [], []
     for r in rows:
-        if len(kept) >= want:
+        # A posting the person brought back stays whatever the number asked for: a cut made
+        # again left it below the ten and off the list (2026-11-16).
+        if len(kept) >= want and not r.get("brought_back"):
             if not keys:
-                break
+                continue
             if company_key(str(r.get("company") or "")) in taken:
                 continue
         why = rules(r) if rules else ""

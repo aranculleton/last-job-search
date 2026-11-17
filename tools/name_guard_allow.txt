@@ -800,3 +800,7 @@ Dunholme Foods          # invented employer, the same test
 Eskdale Freight         # invented employer, the same test
 Fellbeck Retail         # invented employer, the same test
 Gorsefield Employer     # invented employer, the same test
+Harwood Systems         # invented employer, tests/test_a_job_brought_back_stays_through_every_cut.py
+Brantwood Foods         # invented employer, the same test
+Ashby Freight           # invented employer, the same test
+Coldwell Retail         # invented employer, the same test

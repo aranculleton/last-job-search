@@ -1891,14 +1891,14 @@ def _jobs(ctx: Ctx, targets: dict) -> dict:
         # by itself, counted to today from its own date: the week rule hung on a chat
         # remembering to clear it, measured from the day it was found (2026-11-03).
         if status == "new" and not added and posted is not None and posted > window \
-                and not (url and norm(url) in kept):
+                and not run_round.persons_own(r, kept):
             continue
         # The search's own hard rules, read down the list (run_round.page_rules, the one
         # function its shortlist is cut by): a row failing one now is never a fresh find. A
         # "find 20 more" left 18 of 37 to clear by hand, US-based, failing the bar, or a copy
         # of a role drafted or applied for (2026-11-05). What the person chose stays: a job
         # they added, kept or brought back, and one they took off a ruling.
-        mine = added or (url and norm(url) in kept) or bool(r.get("brought_back")) \
+        mine = added or run_round.persons_own(r, kept) \
             or (entry is not None and str(entry.get("status") or "").lower() == "lifted")
         why = cut(r) if status == "new" and not mine else ""
         if not why and status == "ready" and not mine and entry \

@@ -229,6 +229,12 @@ def back(name: str, picks, why: str = "", round_dir: str | None = None,
     import exclude
     summary_dir = summary_dir or _summary_dir()
     today = today or dt.date.today().isoformat()
+    # The round's own folder, found by its name where the person's rounds are kept: the page
+    # brings a posting back with no folder named, and a cut of the round made again rebuilt
+    # the list from that folder's shortlist without it (2026-11-16).
+    if round_dir is None and os.path.abspath(summary_dir) == os.path.abspath(_summary_dir()):
+        mine = person.state("rounds", name)
+        round_dir = mine if os.path.isdir(mine) else None
     found = load(name, summary_dir).get("filtered") or []
     chosen = [find(found, p) for p in picks]
     copies = [p for p in ((os.path.join(round_dir, "06_shortlist.json") if round_dir else None),
