@@ -3045,7 +3045,7 @@ def _messages(ctx: Ctx, targets: dict) -> list:
         # they look, a request nobody accepted. A draft to such a person is never offered.
         if surface.held(c, ctx.by_contact.get(cid) or [], live,
                         replying=live == "replied_needs_response",
-                        memo=ctx._got.setdefault("held_memo", {})):
+                        memo=ctx._got.setdefault("held_memo", {}), today=ctx.today):
             continue
         # A draft written before their newest message answers an older one (times offered
         # that have passed, a request it never saw): never offered, and their message is
