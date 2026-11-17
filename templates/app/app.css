@@ -622,6 +622,9 @@ details.more.split[open] { flex-basis: auto; }
    must be, then the pay and the closing day; what it leaves out is in the card's details. */
 .facts .fact-w, .facts .facts-a > .fact { display: inline-block; max-width: 100%; }
 .facts .facts-end { max-width: 100%; }
+/* The last fact goes with "Why" as one block that moves to the next line whole; only where that
+   block is wider than a line do its last words share Why's line (never Why alone). */
+.facts .facts-end > .fact-w { display: inline; }
 /* (an inline block as wide as its words or the line: whole where it fits, wrapping inside only
    where it alone is wider than the line, at double text) */
 @media (max-width: 759px) {
