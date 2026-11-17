@@ -5382,8 +5382,7 @@ def _where(ctx: Ctx, targets: dict) -> dict:
     # second one is never offered beside it. The cloud does the work (4.3), so it is
     # recommended even where a chat on the computer answers the page today.
     helper_row = ({"state": "ready", "title": helper.get("title") or app_listen.HELPER_CHAT_TITLE,
-                   "say": "The one chat that does what you ask for here, even with your "
-                          "computer off. If it is ever closed, this page offers a new one."}
+                   "say": _helper_say(ctx, helper)}
                   if helper.get("helper") or helper.get("kind") == "cloud" else
                   {"state": "not_set_up", "title": None,
                    "say": "Recommended: Claude's helper in the cloud works when your computer "
@@ -5457,6 +5456,27 @@ def _where(ctx: Ctx, targets: dict) -> dict:
                                                     default="") or None}}
     out["rev"] = rev_of({k: v for k, v in out.items() if k != "rev"})
     return out
+
+
+def _helper_say(ctx: Ctx, helper: dict) -> str:
+    """The helper's line in Settings: what it is, its name in the person's chats and that an
+    older one is safe to delete (issue #289: they could not tell which of the app's chats ran
+    behind the page, or which they could delete), and roughly what answering the page cost
+    today (issue #290), from the usage log the wakes keep (helper_usage)."""
+    import app_listen
+    name = str(helper.get("title") or "") if helper.get("helper") else ""
+    say = ("The chat behind this page that does what you ask here, even with your computer off: "
+           f"\u201c{name or app_listen.HELPER_CHAT_TITLE}\u201d in your chats. A fresh one takes "
+           "over each day, or sooner once it grows long, so an older one is safe to delete. If it "
+           "is ever closed, this page offers a new one.")
+    try:
+        import helper_usage
+        cost = helper_usage.day(ctx.today.isoformat(), ctx.zone)
+    except Exception:  # noqa: BLE001  no log to read: the line says nothing of it
+        cost = {}
+    if cost.get("wakes"):
+        say += f" Answering your page cost about ${cost['usd']:.2f} today."
+    return say
 
 
 _DAY_NAMES = ("Sundays", "Mondays", "Tuesdays", "Wednesdays", "Thursdays", "Fridays",

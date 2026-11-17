@@ -443,7 +443,10 @@ def test_a_big_job_is_never_run_by_the_chat_that_answers_the_page(monkeypatch):
         got = app.where_it_runs(chosen, "listener-1", "cloud")
         assert got["run"] == "child session", kind
         call = got["create_session"]
-        assert call["title"] == "Job search: Analyst roles at Kestrel Mutual"
+        # The app's name, the job and its day (issue #289).
+        assert re.fullmatch(r"Last Job Search \u00b7 Analyst roles at Kestrel Mutual, "
+                            r"\d{1,2} (?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)",
+                            call["title"]), call["title"]
         assert tidy.APP_TITLE.match(call["title"])        # the daily tidy archives it
         assert call["source_url"] == "https://github.com/example-owner/example-copy"
         assert call["model"] == "sonnet"

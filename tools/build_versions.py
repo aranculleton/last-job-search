@@ -949,8 +949,9 @@ METHODS: dict[str, dict] = {
             (89, "2026-11-12", False, "the tidy-up keeps the chat on your computer that takes its LinkedIn work (\"Job search: on your computer\"), by its name or the page's record of it, so later jobs there need no new chat and nobody's OK; nothing made before needs making again"),
             (90, "2026-11-16", False, "the tidy-up asks GitHub itself which branches it holds and whether master holds an old chat's branch, so the page's and the brief's old chats go the morning after, and yesterday's page chat goes once its work is proven saved; nothing made before needs making again"),
             (91, "2026-11-16", False, "a chat whose work is on GitHub but never reached master is kept a week of quiet at most, so the first tidy-up after an update clears an install's whole backlog and nothing stays for good; nothing made before needs making again"),
+            (92, "2026-11-17", False, "the app's chats are named \"Last Job Search \u00b7 <what each is for>\" (Brief, Page, Your computer, a one-off job with its day); the daily tidy-up renames the brief's chat, the computer's own chat and the scheduled runs' chat an install already has, once each, and the page's chat renames itself at its next check-in; every older name is still known; nothing made before needs making again"),
         ),
-        "fingerprint": "65d7d5dac141bd04",
+        "fingerprint": "003e380c725aac9c",
     },
     "expand": {
         "by": "upgrade", "priority": 4, "time": "~15 min",
@@ -1185,8 +1186,9 @@ METHODS: dict[str, dict] = {
             (206, "2026-11-12", True, "To do draws the card for connection requests nobody accepted in three weeks again, each request a line of what to do (\"Withdraw your request to Wren: it has waited 3 weeks\") as on its card in Contacts; a first note at an employer where a follow-up is owed waits behind it, saying which to send first"),
             (207, "2026-11-12", True, "each item's links to the rest at its employer are kept apart from the item in the page's database, a record an employer or so, and put back as the page reads them: on the items, one new note at an employer rewrote every colleague's card, and bringing the page up to date after eight new people rewrote most of a long People section"),
             (208, "2026-11-16", True, "Claude's answers in Chat show their lists and bold as formatted text, never raw markdown, and the page's own answer that says it cannot is handed to Claude instead of shown; Chat's Latest button is decided once Chat is on the screen, never drawn for a moment over a conversation with nothing below"),
+            (209, "2026-11-16", True, "an employer's name on a job, an application, a person's card or an interview opens its own card: its roles with where each stands, its people and its interviews, each opening its own card; every card that opens from a name draws its lists as Settings' rows (a pill for where each stands, a › that says it opens) and its stages on a timeline, is as tall as what it holds on a laptop, and has no box round its title"),
         ),
-        "fingerprint": "67b2c2de8882a08d",
+        "fingerprint": "665e63f1aa873a94",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",
