@@ -44,6 +44,56 @@ META = {k: dict(employer=r["employer"], dates=r["dates"], title=r["title"], loc=
                 **({"ns": r["ns"]} if "ns" in r else {}))
         for k, r in zip(KEYS, ROLES)}
 _NO_SKILLS = {k for k, r in zip(KEYS, ROLES) if r.get("skills_context") is False}
+# The titles each role may print under: its own `title` first (the default), then the others
+# its roles.py `titles` allows, each for a kind of posting the draft's `role_titles` picks by
+# (allocate.titles_of). A role with one title has only it.
+TITLES = {k: [r["title"], *allocate.titles_of(r)] for k, r in zip(KEYS, ROLES)}
+
+
+def _title_key(t) -> str:
+    return " ".join(str(t).split()).casefold()
+
+
+def title_problems(a) -> list:
+    """What is wrong with a draft's `role_titles`, one plain line each; [] when it has none
+    or every title it gives is one the profile allows that role. Read by the code audit
+    (draft_audit.malformed) before the render, which refuses the same (role_titles)."""
+    chosen = a.get("role_titles")
+    if chosen is None or chosen == {}:
+        return []
+    if not isinstance(chosen, dict):
+        return ['role_titles is {"<role>": "<title>"}: one title for each role it changes, '
+                "from the titles the profile allows that role"]
+    out = []
+    for key, title in chosen.items():
+        if key not in TITLES:
+            out.append(f"role_titles names {key!r}, which is no role in the profile (its "
+                       f"roles: {', '.join(KEYS)})")
+        elif not isinstance(title, str) or _title_key(title) not in map(_title_key, TITLES[key]):
+            allowed = " or ".join(repr(t) for t in TITLES[key])
+            out.append(f"role_titles gives {key} the title {title!r}, which the profile does "
+                       f"not allow that role: only {allowed}" + (
+                           "" if len(TITLES[key]) > 1 else " (roles.py lists no other titles "
+                           "for it, so leave it out of role_titles)"))
+    return out
+
+
+def role_titles(a) -> dict:
+    """{role key: the title it prints under on this resume}: the profile's own `title`, or
+    the one the draft's `role_titles` picks from those its roles.py `titles` allows, as the
+    profile writes it. Raises ValueError for a title the profile does not allow that role:
+    printed, it is a job title the person never agreed. Read by the render, the round-trip
+    check (verify_pdf.roundtrip_fields) and a re-render from the kept draft.json alike, so a
+    title chosen for one application stays with it (issue 316)."""
+    bad = title_problems(a)
+    if bad:
+        raise ValueError("; ".join(bad))
+    out = {k: t[0] for k, t in TITLES.items()}
+    for key, title in (a.get("role_titles") or {}).items():
+        out[key] = next(t for t in TITLES[key] if _title_key(t) == _title_key(title))
+    return out
+
+
 _SALUTATION_SUFFIX = person.get("documents.salutation_suffix", " hiring team")
 AWS_KERN = re.compile(r"\bAWS\b")
 
@@ -371,6 +421,9 @@ def bullet_text(a, b, reworded=None):
 
 def build(a):
     jobs = []
+    # Each role's title on this resume: the profile's, or the one the draft chose from those
+    # the profile allows it (role_titles). Refused before anything is made from the draft.
+    titles = role_titles(a)
     # The bullets reworded for a yes on this application (stage_picks.py consent), put
     # through the guard again here: the audit passed them, and a hand edit to draft.json
     # since then is never rendered.
@@ -395,7 +448,7 @@ def build(a):
         bl = [kern_aws(reworded.get(b, BULLETS[b])) for b in keys]
         if not bl:
             continue
-        jobs.append(dict(key=j["employer"], bullets=bl, **m))
+        jobs.append(dict(key=j["employer"], bullets=bl, **dict(m, title=titles[j["employer"]])))
     # A role the profile marks always_show stays on the page with its default
     # bullet when a draft gives it none: an unexplained gap in the dates reads
     # worse than a short entry. A role with no achievement on file (an early job given
@@ -407,9 +460,9 @@ def build(a):
         if r.get("always_show"):
             b = r["always_show"]
             jobs.append(dict(key=k, bullets=[kern_aws(reworded[b]) if b in reworded
-                                             else BULLETS[b]], **META[k]))
+                                             else BULLETS[b]], **dict(META[k], title=titles[k])))
         elif k not in LIBRARY.LIB:
-            jobs.append(dict(key=k, bullets=[], **META[k]))
+            jobs.append(dict(key=k, bullets=[], **dict(META[k], title=titles[k])))
     jobs.sort(key=lambda j: CHRONO.index(j["key"]))
     summary = cap_summary(clean(a["summary"]))
     # The filename suffix is derived, not chosen. A drafter picking it by hand

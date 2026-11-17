@@ -413,8 +413,9 @@ METHODS: dict[str, dict] = {
             (104, "2026-11-11", False, "the general resume's plain-text copy and its short copy to paste read \"AWS\" whole, as the PDF does, never \"A WS\": a kern in a field reads as the one word TeX prints (issue 236); a copy kept before reads right once the general resume is made again"),
             (105, "2026-11-16", False, "RUNBOOK's map of what goes where says upcoming.py add takes --zone for something booked on another clock than the person's; nothing made changes"),
             (106, "2026-11-16", False, "RUNBOOK.md says land.py --detach commits and pushes the turn's work to the chat's branch before it returns, and that the cloud's message at the end of a turn about a save still at work is answered with nothing; nothing made changes"),
+            (107, "2026-11-17", False, "the letter writer is given the employer's newest facts whose words were checked on the page first, never the six oldest, and none the page no longer says (issue 314); a role may print another title the person agreed for a kind of posting (roles.py titles), picked per draft in role_titles and kept by the render, the round trip and a re-render from the kept draft.json, a role with one title printing as before, and the grounding auditor told such a title is one the person agreed (issue 316); nothing made before changes"),
         ),
-        "fingerprint": "7026e9ad3db4534d",
+        "fingerprint": "d54bb5cf839e8362",
     },
     "interview": {
         # Only a process with a round still to come is prepared again: a prep for a round
@@ -692,8 +693,9 @@ METHODS: dict[str, dict] = {
             (133, "2026-11-12", False, "someone owed a follow-up holds their place at their employer until it goes, as one within their wait does: a run picks nobody new there and the line says which follow-up to send first; a connection request nobody accepted in three weeks says to withdraw it, dated by that day; read each time, so nothing made before needs making again"),
             (134, "2026-11-12", False, "a people run asked for a number finishes with how many it drafted (app.py done --drafted), is done only at that number, and short of it only once no good people are left, saying why (--short) and kept as part-done; its progress count is never more done than its total; an employer whose people who fit were all held back (written to, its limit of people waiting) is full for now, searched again as soon as a reply or a close frees a place, never nobody who fits for a month, and an empty search through a city's own number is never recorded as nobody there; someone a read of their own page ruled out stays out until their headline or employer is new; a contact a run adds, and the employers it names to search next, carry the employer's proper name, never its lower-case key; notes are written as before"),
             (135, "2026-11-16", False, "a partner or a principal of the firm reads as a hiring leader, never a peer held back (issue 283), while a partner of a function or a principal of a craft stays as it was; a people run asked in a chat is on the page's work list first, its own card (issue 276); people already found stay as they were"),
+            (136, "2026-11-17", False, "reply.py finish checks a referral ask as one, by the limit compose.referral_ask keeps, whoever wrote last (the page's referral ask work, --referral-ask, or the ask's own shape), and the default close is shorter (issue 315); drafts already saved stay as they are"),
         ),
-        "fingerprint": "686462e71dd61e7d",
+        "fingerprint": "8f58471de8b20b6c",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",

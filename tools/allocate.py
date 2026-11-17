@@ -53,6 +53,28 @@ def role_keys(roles=None) -> list:
     return out
 
 
+def titles_of(role) -> dict:
+    """{title: the kind of posting it is for}: the other titles a role may print under on
+    one resume (roles.py `titles`, optional), as the person agreed them, each with the rule
+    for which postings get it. {} for a role with one title, which prints it always. A list
+    of titles, with no rule beside each, is read too. The draft picks one in `role_titles`
+    (render_application.role_titles), so a person's "this title for that kind of job" needs
+    no edit to the profile between renders (issue 316)."""
+    got = (role or {}).get("titles") if isinstance(role, dict) else None
+    if isinstance(got, dict):
+        items = got.items()
+    elif isinstance(got, (list, tuple)):
+        items = ((t, "") for t in got)
+    else:
+        return {}
+    out = {}
+    for title, why in items:
+        title = " ".join(str(title or "").split())
+        if title and title.casefold() != " ".join(str(role.get("title") or "").split()).casefold():
+            out[title] = " ".join(str(why or "").split())
+    return out
+
+
 KEYS = role_keys()
 BY_KEY = dict(zip(KEYS, ROLES))
 TENURE = {k: r["tenure_months"] for k, r in BY_KEY.items()}

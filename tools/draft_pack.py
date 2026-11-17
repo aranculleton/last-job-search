@@ -799,7 +799,7 @@ rewords a chosen one and chooses nothing):
   word for word in plain text with the skill added and joined by a linking word (in, on,
   with, using, and). Every number and every tool kept; nothing else added or taken out.
   It changes this resume only, never the profile. Not in claim_map. [code]
-Body words across p1 + p2 + lead + p4 + the three bullet texts: 200 to 250.
+{titles}Body words across p1 + p2 + lead + p4 + the three bullet texts: 200 to 250.
 Keep the posting's words in sentences about them (cite POSTING) and the candidate's in
 sentences about the candidate: "I built claims forecasts" from a posting about claims is
 a domain the candidate has not worked in.
@@ -825,10 +825,42 @@ P4_PLAIN = ('- p4: the close: where the candidate is, worded as the LOC line say
 
 
 def contract() -> str:
-    """Section 1 of the pack, its close worded for this person's status."""
+    """Section 1 of the pack, its close worded for this person's status, and the titles a
+    role may print under where the profile allows one more than one."""
     import profile_facts
     needs = profile_facts.status_needs_saying(auth_line())
-    return CONTRACT.replace("{p4}", P4_WITH_STATUS if needs else P4_PLAIN)
+    titles = "".join(line + "\n" for line in title_lines())
+    return (CONTRACT.replace("{p4}", P4_WITH_STATUS if needs else P4_PLAIN)
+            .replace("{titles}", titles))
+
+
+def title_lines(roles=None) -> list[str]:
+    """The contract's role_titles item, for a profile that allows a role more than one title
+    (roles.py `titles`): each such role, the title it prints by default, and each other title
+    with the kind of posting it is for. [] when every role has one title, so the pack, and the
+    hash a draft is audited against, are as they were. A person's "this title for that kind of
+    job" was followed only by editing the profile between renders (issue 316)."""
+    import allocate
+    if roles is None:
+        try:
+            roles = person.module("roles").ROLES
+        except Exception:  # noqa: BLE001  no roles.py yet: nothing to choose between
+            return []
+    rows = []
+    for key, r in zip(allocate.role_keys(roles), roles):
+        others = allocate.titles_of(r)
+        if not others:
+            continue
+        said = [f'"{t}"' + (f" for {why}" if why else "") for t, why in others.items()]
+        rows.append(f'  {key}: "{r["title"]}" by default; ' + "; ".join(said) + ".")
+    if not rows:
+        return []
+    return ["- role_titles: leave it out, and each role prints the title the profile gives it. "
+            "Where the profile",
+            "  allows a role another title for a kind of posting, {\"<role>\": \"<title>\"} "
+            "prints the one",
+            "  this posting gets, by the rule beside it; only these titles, written as here. "
+            "[code]"] + rows
 
 
 APP_RULES = (
@@ -1142,6 +1174,45 @@ UNREAD = " | NOT READ ON THE PAGE (a search summary): never cite it"
 
 # ------------------------------------------------------------------ build
 
+# How many of an employer's saved facts the drafter is offered from the cache.
+CACHED_FACTS = 6
+
+
+def freshest_facts(data: dict) -> list:
+    """The cache's facts in the order the drafter is offered them: every fact the code audit
+    lets a letter cite (its quote checked, on a kept page or stamped `quote_checked` when it
+    was saved) before one it does not, the newest first within each (its `date_seen`, else
+    the day its quote was checked, else the file's `fetched_date`; facts of one day keep the
+    order they were saved in). A fact the audit would refuse whatever the drafter did, its
+    quote no longer on the page it cites as kept today or too short to show anything, is
+    left out, so the checked copy saved beside it is offered in its place.
+
+    The file's first six were handed on, the oldest, because a save appends: research saved
+    today never reached the drafter, and an old fact whose quote had left its page was
+    offered and refused as research:not-on-page (issue 314)."""
+    import company_research as CR
+    from dates import as_date
+
+    fetched = as_date(str((data or {}).get("fetched_date") or "").strip(), iso_only=True)
+    ranked = []
+    for i, f in enumerate((data or {}).get("facts") or []):
+        if not (isinstance(f, dict) and f.get("claim") and f.get("quote") and f.get("url")):
+            continue
+        problem = CR.quote_problem(f)
+        if problem in ("not-on-page", "short"):
+            continue
+        if f.get("read") is False:
+            rank = 2
+        elif problem == "" or f.get("quote_checked"):
+            rank = 0
+        else:
+            rank = 1
+        seen = (as_date(str(f.get("date_seen") or "").strip(), iso_only=True)
+                or as_date(str(f.get("quote_checked") or "").strip(), iso_only=True) or fetched)
+        ranked.append((rank, -(seen.toordinal() if seen else 0), i, f))
+    return [f for *_k, f in sorted(ranked, key=lambda r: r[:3])]
+
+
 def cached_research(pick: dict, round_dir: str, today: str = "") -> dict | None:
     """The employer's saved research, when it is recent and holds facts with their quotes,
     as the research step would return it, and written where the drafter and the audit read it
@@ -1154,13 +1225,12 @@ def cached_research(pick: dict, round_dir: str, today: str = "") -> dict | None:
         data, _age, fresh = company_research.load(str(pick.get("company") or ""), today or None)
     except Exception:  # noqa: BLE001  no cache, or a broken one: research as before
         return None
-    facts = [f for f in (data.get("facts") or []) if isinstance(f, dict)
-             and f.get("claim") and f.get("quote") and f.get("url")]
+    facts = freshest_facts(data)
     if not fresh or len(facts) < 2:
         return None
     out = {"company_key": company_research.file_key(pick.get("company") or ""),
            "cache_path": company_research.path(str(pick.get("company") or "")) or "",
-           "facts": facts[:6], "team_context": str(data.get("team_context") or ""),
+           "facts": facts[:CACHED_FACTS], "team_context": str(data.get("team_context") or ""),
            "do_not_claim": [str(x) for x in data.get("do_not_claim") or []],
            "not_verified": [str(x) for x in data.get("not_verified") or []],
            "named_contact": "", "req_id": "", "salary": "", "deadline": "", "work_model": "",
