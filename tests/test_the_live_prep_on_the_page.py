@@ -119,7 +119,8 @@ def _go(run, tmp_path, model, steps, vp, scheme=None, touch=False):
     return got
 
 
-OPEN = {"hash": "interviews", "click": "Read your prep", "read": "dialog.detail"}
+# Coming up's row is its own tap to the prep (the redesign, phase 2, 2026-11-17).
+OPEN = {"hash": "interviews", "open": "up-go:up-app-larkspur-supply-phone-screen-2026-10-28", "read": "dialog.detail"}
 VISIBLE = "(el) => !!el && el.checkVisibility() && el.getClientRects().length > 0"
 Q1 = '[data-lpq="q1"]'
 # Where a tap went, once its smooth scroll has brought it to the top of the screen.
@@ -786,10 +787,13 @@ def test_on_a_practice_day_coming_up_and_to_do_lead_with_the_same_step(run, tmp_
     # questions while Coming up's row led with Read your prep.
     todo = ("(() => { const c = [...document.querySelectorAll('#main [data-item]')].find((x) => x.dataset.item === 'soon:%s');"
             " return c ? c.querySelector('.card-actions > .btn').textContent.trim() : null; })()" % IV)
-    row = "(() => { const b = document.querySelector('#main .up-prep .btn'); return b ? b.textContent.trim() : null; })()"
-    for days, lead in ((1, "Practise 3 questions"), (3, "Read your prep")):
+    # Coming up's row for that interview: its step, else (since the redesign's phase 2,
+    # 2026-11-17) the row is its own tap to read the prep, with its "Prep ready" chip.
+    row = ("(() => { const r = [...document.querySelectorAll('#main .up-row')].find((x) => (x.querySelector('.up-link') || {getAttribute: () => ''}).getAttribute('href') === '#interviews/%s');"
+           " if (!r) return null; const b = r.querySelector('.up-prep .btn'); return b ? b.textContent.trim() : r.classList.contains('opens') ? 'Read your prep: ' + r.querySelector('.up-sub .state-word').textContent : null; })()" % IV)
+    for days, lead, step in ((1, "Practise 3 questions", "Practise 3 questions"), (3, "Read your prep", "Read your prep: Prep ready")):
         got = _go(run, tmp_path, _soon(days), [{"hash": "todo", "eval": todo}, {"hash": "interviews", "eval": row}], vp)
-        assert [a["eval"] for a in got["after"]] == [lead, lead], (days, [a["eval"] for a in got["after"]])
+        assert [a["eval"] for a in got["after"]] == [lead, step], (days, [a["eval"] for a in got["after"]])
 
 
 def test_a_term_is_a_quiet_dotted_word_that_wraps_with_its_sentence(run, tmp_path, vp):

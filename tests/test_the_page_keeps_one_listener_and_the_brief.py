@@ -498,7 +498,8 @@ def test_every_count_of_jobs_to_look_at_agrees_and_leaves_out_a_closed_one(run, 
     # What Claude is making is its own work, said in the work pill: the Brief's line leaves it out
     # when anything else is owed, so a small laptop's panel holds the line whole (4.15.0).
     making = int((re.search(r"(\d+) being made", jobs_line) or [0, 0])[1])
-    parts = [int((re.search(r"(\d+) (?:drafts? )?" + w, panel) or [0, 0])[1]) for w in ("ready to apply", "waiting on you", "being made", "still to make")]
+    # The ready ones are "applications ready to send" since the redesign's phase 2 (2026-11-17).
+    parts = [int((re.search(r"(\d+) (?:drafts? |applications? )?" + w, panel) or [0, 0])[1]) for w in ("ready to send", "waiting on you", "being made", "still to make")]
     assert (not send) or sum(parts) == send or (sum(parts) == send - making and not parts[2]), (panel, jobs_line)
     assert (not todo_line) or todo_line.startswith("%d new" % look), todo_line
     assert "Analytics Consultant" not in panel, panel      # its posting has closed
@@ -595,18 +596,20 @@ def test_every_persons_step_and_day_start_at_one_edge(run, tmp_path, vp):
     assert max(lefts) - min(lefts) <= 1, rows
 
 
-# Coming up's own day headings mark today and tomorrow in the strip's calm colours.
+# Coming up's own day headings mark today and tomorrow in the strip's calm colours: a "Today"
+# or "Tomorrow" capsule beside the day, its dot in the day's colour (the redesign, phase 2).
 def test_coming_up_marks_today_and_tomorrow_calmly(run, tmp_path, vp):
     model = copy.deepcopy(_sample())
     for n, day in enumerate(("2026-10-25", "2026-10-26")):
         call = copy.deepcopy(next(u for u in model["upcoming"] if u["kind"] == "call"))
         call.update(id="up-call-%d" % n, day=day, start=day + "T15:00:00Z", end=day + "T15:30:00Z")
         model["upcoming"].insert(n, call)
-    got = _go(run, tmp_path, [{"hash": "interviews", "eval": "[...document.querySelectorAll('#main .up-day')].slice(0, 3).map((d) => [d.className, "
-                                                            "getComputedStyle(d.querySelector('.group'), '::before').backgroundColor])"}],
+    got = _go(run, tmp_path, [{"hash": "interviews", "eval": "[...document.querySelectorAll('#main .up-day')].slice(0, 3).map((d) => { const c = d.querySelector('.day-cap');"
+                                                            " return [d.className, c ? getComputedStyle(c, '::before').backgroundColor : '', c ? c.textContent : '']; })"}],
               vp, model=model, clock=T)
-    (c0, today), (c1, tomorrow), (c2, later) = got["after"][0]["eval"]
+    (c0, today, w0), (c1, tomorrow, w1), (c2, later, w2) = got["after"][0]["eval"]
     assert "is-today" in c0 and "is-tomorrow" in c1 and "is-to" not in c2, got["after"][0]["eval"]
+    assert (w0, w1, w2) == ("Today", "Tomorrow", ""), got["after"][0]["eval"]
     assert today != tomorrow and today not in ("rgba(0, 0, 0, 0)", "") and tomorrow not in ("rgba(0, 0, 0, 0)", "")
 
 

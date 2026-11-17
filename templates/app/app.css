@@ -612,16 +612,31 @@ details.more.split[open] { flex-basis: auto; }
 /* The bin reaches above and below the top line without making it taller, so a card with a
    state pill keeps its facts as close under the title as one without. */
 @media (min-width: 760px) { :is(.card.job, .card.app, .card.app-record) .top-end .icon-only { margin-block: -8px; } }
-/* A job's number: a small badge, green for a strong fit, blue for a good one, grey below. */
-.score-pill { flex: none; min-width: 32px; padding: 2px 8px; border-radius: 999px; text-align: center; font: 600 var(--t-sm)/1.4 var(--font-data);
-  font-variant-numeric: tabular-nums; background: var(--st-waiting-bg); color: var(--st-waiting); cursor: help; }
-.score-pill.tone-ok { background: var(--st-done-bg); color: var(--st-done); }
-.score-pill.tone-info { background: var(--st-running-bg); color: var(--st-running); }
 .card.job .job-main { display: grid; gap: 4px; min-width: 0; }
 .card.job.st-dismissed, .card.job.st-applied { background: var(--sunk); box-shadow: none; }
 .facts { font-size: var(--t-sm); color: var(--muted); }
 .facts .co { color: var(--ink); }
 .facts .soon { color: var(--ink); font-weight: 600; }
+/* A line of facts breaks only at a dot, each fact whole ("Posted 5 days ago", never "Posted 5 /
+   days ago"). On a phone a job's is two lines at most: where it is, cut short with "..." if it
+   must be, then the pay and the closing day; what it leaves out is in the card's details. */
+.facts .fact-w, .facts .facts-a > .fact { display: inline-block; max-width: 100%; }
+.facts .facts-end { max-width: 100%; }
+/* The last fact goes with "Why" as one block that moves to the next line whole; only where that
+   block is wider than a line do its last words share Why's line (never Why alone). */
+.facts .facts-end > .fact-w { display: inline; }
+/* (an inline block as wide as its words or the line: whole where it fits, wrapping inside only
+   where it alone is wider than the line, at double text) */
+@media (max-width: 759px) {
+  .facts.two-part > .facts-a { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .facts.two-part > .facts-a > .fact { display: inline; }
+  .facts.two-part .f-drop, .facts.two-part .f-rel, .facts.two-part .f-long { display: none; }
+  /* The second line starts at the card's edge: its first dot is out of sight with no room kept
+     for it, as the first line above it is a block of its own and nothing can move up beside it. */
+  .facts.two-part .facts-b .words:has(> .sep-lead:first-child) { padding-right: 0; }
+}
+.m-pen { display: flex; padding-top: 4px; }
+@media (min-width: 760px) { .m-row.m-narrow, .facts .f-short { display: none; } }
 .warm { background: var(--st-running-bg); color: var(--st-running); border-radius: var(--r-sm); padding: 12px 12px; }
 .warm a { color: inherit; font-weight: 600; }
 .warm-k { font-weight: 600; }
@@ -652,21 +667,30 @@ details.more.split[open] { flex-basis: auto; }
 .f-rule .card-actions { margin-top: 8px; }
 .f-rows { margin-top: 8px; }
 .f-count { font: 600 var(--t-sm) var(--font-data); color: var(--muted); }
-/* The redesign (2026-11-16): a job's fit is a ring round its number, drawn as far round as the
-   fit goes, in its band's colour (green strong, blue good, grey below), the number in the ink.
-   A bare "84" in a tinted blob was read as nothing (the usability review); its words, "Fit 84
-   out of 100", are said to a screen reader beside it. Never red: a low fit is not a fault. */
-.score-pill, .score-pill.tone-ok, .score-pill.tone-info { position: relative; display: inline-grid; place-items: center; width: 36px; height: 36px; min-width: 36px; padding: 0;
-  border-radius: 50%; background: none; color: var(--ink); font: 600 var(--t-sm)/1 var(--font-data); --sc: var(--st-waiting); --fit: 0%; }
-.score-pill.tone-ok { --sc: var(--st-done); }
-.score-pill.tone-info { --sc: var(--st-running); }
-.score-pill::before { content: ""; position: absolute; inset: 0; border-radius: 50%; background: conic-gradient(var(--sc) var(--fit), var(--line) 0);
+/* A job's fit: one ring wherever a fit is shown (Jobs, the Brief, the sheets), its number in the
+   ink inside, drawn as far round as the fit goes on a hairline track: green for a strong fit,
+   the muted grey for a good one, the edge grey below. Never blue (in progress and focus only)
+   and never red: a low fit is not a fault. 36px on a job's card; `.sm`, 28px, in a row, with
+   "fit" after it where the row says so ("79 fit"). Said as "Fit 84 out of 100, strong" by its
+   own label (the redesign, phase 2, 2026-11-17). */
+.fit-ring { position: relative; flex: none; display: inline-grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; color: var(--ink);
+  font: 600 var(--t-sm)/1 var(--font-data); font-variant-numeric: tabular-nums; cursor: help; --sc: var(--line-strong); --fit: 0%; }
+.fit-ring.is-strong { --sc: var(--st-done); }
+.fit-ring.is-good { --sc: var(--muted); }
+.fit-ring::before { content: ""; position: absolute; inset: 0; border-radius: 50%; background: conic-gradient(var(--sc) var(--fit), var(--line) 0);
   -webkit-mask: radial-gradient(closest-side, transparent calc(100% - 3px), var(--ink) calc(100% - 2.5px)); mask: radial-gradient(closest-side, transparent calc(100% - 3px), var(--ink) calc(100% - 2.5px)); }
-.score-pill.fit-10 { --fit: 10%; } .score-pill.fit-20 { --fit: 20%; } .score-pill.fit-30 { --fit: 30%; } .score-pill.fit-40 { --fit: 40%; } .score-pill.fit-50 { --fit: 50%; }
-.score-pill.fit-60 { --fit: 60%; } .score-pill.fit-70 { --fit: 70%; } .score-pill.fit-80 { --fit: 80%; } .score-pill.fit-90 { --fit: 90%; } .score-pill.fit-100 { --fit: 100%; }
+.fit-ring.sm { width: 28px; height: 28px; }
+.fit-ring.sm::before { -webkit-mask: radial-gradient(closest-side, transparent calc(100% - 2.5px), var(--ink) calc(100% - 2px)); mask: radial-gradient(closest-side, transparent calc(100% - 2.5px), var(--ink) calc(100% - 2px)); }
+.fit-ring.fit-10 { --fit: 10%; } .fit-ring.fit-20 { --fit: 20%; } .fit-ring.fit-30 { --fit: 30%; } .fit-ring.fit-40 { --fit: 40%; } .fit-ring.fit-50 { --fit: 50%; }
+.fit-ring.fit-60 { --fit: 60%; } .fit-ring.fit-70 { --fit: 70%; } .fit-ring.fit-80 { --fit: 80%; } .fit-ring.fit-90 { --fit: 90%; } .fit-ring.fit-100 { --fit: 100%; }
+.fit-with-word { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.fit-word { font-size: var(--t-sm); color: var(--muted); }
 /* It reaches above and below the title's line without making it taller, so the facts sit as
    close under a title with a ring as under one without. */
-.job-top > .score-pill { align-self: center; margin-block: -4px; }
+.job-top > .fit-ring { align-self: center; margin-block: -4px; }
+/* In a row (the Brief's jobs) the small ring reaches past the row's line the same way, so a
+   row with a fit is no taller than one without and the panel lists as many. */
+.bp-list .fit-ring.sm { align-self: center; margin-block: -4px; }
 /* A line of facts that wraps starts its next line at the card's edge: the width a cut dot
    keeps goes at the end of its part, never as an indent before "£38,000" (the usability
    review, 2026-11-16). */
@@ -690,18 +714,40 @@ details.more.split[open] { flex-basis: auto; }
    edge, so "Add Power BI" and Dismiss read as a pair, never one white among grey ones. */
 .suggest :is(.suggest-acts, .fix) > .btn:not(.icon-only):not(.primary) { background: var(--surface); border-color: var(--line-strong); color: var(--ink); }
 @media (hover: hover) { .suggest :is(.suggest-acts, .fix) > .btn:not(.icon-only):not(.primary):hover { background: var(--raised); border-color: var(--line-strong); } }
-/* What was checked, said as the documents themselves: a tick, then each document a small chip
-   with its pencil ("All checks passed: [CV] [letter]"), never stray pencils on the line. */
+/* What was checked, said as the documents themselves: on the card made for a person a tick and
+   its words; on a draft a row a document in a soft well ("CV", "1 page · checked", Open, the
+   pencil), a hairline between, inset 16 (the redesign, phase 2, 2026-11-17: grey capsules
+   "CV ✎ letter ✎" read as tags). */
 .card.app .checks { color: var(--ink); column-gap: 8px; row-gap: 4px; }
 .card.app .checks::before { content: ""; flex: none; width: 6px; height: 11px; margin: 0 4px 0 4px; border-right: 2px solid var(--st-done); border-bottom: 2px solid var(--st-done); transform: translateY(-2px) rotate(45deg); }
-.checks .doc-part { display: inline-flex; align-items: center; gap: 4px; padding: 0 0 0 8px; border-radius: 999px; background: var(--raised); color: var(--ink); line-height: 1.5; }
-.checks .doc-part > .ic { width: 14px; height: 14px; flex: none; color: var(--muted); }
-.checks .doc-part > .btn.icon-only { background: none; border-color: transparent; color: var(--ink); }
-/* On a phone the documents take the line under the words, side by side, never one each. */
-@media (max-width: 759px) {
-  .card.app .checks:has(> .doc-part)::after { content: ""; order: 1; flex-basis: 100%; height: 0; }
-  .card.app .checks > .doc-part { order: 2; }
+.doc-rows { display: grid; margin: 0; padding: 0; border-radius: var(--r-sm); background: var(--sunk); }
+.doc-row { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 0 12px; min-height: 52px; padding: 4px 4px 4px 16px; }
+.doc-row + .doc-row::before { content: ""; position: absolute; top: 0; left: 16px; right: 0; border-top: 1px solid var(--line); }
+.doc-row > .ic { flex: none; width: 16px; height: 16px; color: var(--muted); }
+.doc-words { flex: 1 1 0; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; }
+.doc-name { font-weight: 600; color: var(--ink); }
+.doc-meta { font-size: var(--t-sm); color: var(--muted); }
+.doc-acts { flex: none; display: inline-flex; align-items: center; gap: 4px; }
+.doc-acts > .btn.quiet:not(.icon-only) { min-height: 36px; padding: 8px 12px; font-weight: 600; text-decoration: none; }
+.doc-acts > .btn.icon-only { width: 36px; height: 36px; min-height: 36px; padding: 0; justify-content: center; }
+.doc-row > .note { flex-basis: 100%; }
+@media (max-width: 759px), (pointer: coarse) {
+  .doc-acts > .btn.quiet:not(.icon-only), .doc-acts > .btn.icon-only { min-height: var(--target); }
+  .doc-acts > .btn.icon-only { width: var(--target); height: var(--target); }
 }
+
+/* Applied: "I heard back" is a quiet control, its words in the ink, the soft fill under the
+   pointer only, beside the card's one next step (the UX review of the redesign, 2026-11-17). */
+.card.app-record .card-actions > .btn.quiet { background: transparent; border-color: transparent; text-decoration: none; font-weight: 600; }
+@media (hover: hover) { .card.app-record .card-actions > .btn.quiet:hover { background: var(--raised); } }
+/* Jobs in its stages: a small heading over each once there are two (Ready to send, Being
+   written, New), the section label (.group), 24 above and 8 below, 8 above the first. */
+.job-groups { display: grid; }
+.job-group > .list-head { margin: 24px 0 8px; }
+.job-group:first-child > .list-head { margin-top: 8px; }
+/* "2 jobs to confirm": one quiet row at the head of the list, its cards under it once open. */
+.confirm-fold > summary { color: var(--ink); }
+.confirm-fold > summary .band-more-why { color: var(--muted); font-weight: 400; }
 
 /* ------------------------------------------------------------------ drafts */
 .card.app { grid-template-columns: minmax(0, 1fr); }
@@ -1403,7 +1449,6 @@ p.count.tone-warn { color: var(--st-overdue); }
    font the two were 5px apart (GitHub's runner, 2026-11-11). */
 .facts .btn.icon-only::before, .meta .btn.icon-only::before { content: "\200b"; width: 0; }
 /* A document's words and its pencil keep together: a pencil alone on a line named nothing. */
-.checks .doc-part { white-space: nowrap; }
 @media (min-width: 760px) and (pointer: fine), (min-width: 760px) and (pointer: none) {
   .facts .info-toggle { display: inline; min-height: 0; padding: 0 2px; }
   /* An interview's pencil beside its prep's word, on its line of facts, the same (2026-11-11). */
@@ -1422,7 +1467,11 @@ p.count.tone-warn { color: var(--st-overdue); }
 .apps { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
 .apps-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; min-height: var(--target); }
 .apps-head .searchf { flex: 1 1 auto; min-width: 0; }
-.app-rows { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); }
+.app-rows { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow-card); }
+/* On a computer the table sits in a card as the phone's rows do: bare on the page it read as
+   another screen's (the redesign, phase 2, 2026-11-17). */
+.apps .listv > .scroll-x { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow-card); padding: 4px 8px; }
+.apps .data tbody tr:last-child > td { border-bottom: 0; }
 .app-row { padding: 12px 16px; border-top: 1px solid var(--line); display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; overflow-wrap: anywhere; }
 .app-rows > .app-row:first-child { border-top: 0; }
 .app-row-top { font-weight: 600; }
@@ -1688,13 +1737,13 @@ label.pick { display: flex; align-items: flex-start; justify-content: center; wi
   :root { --muted: var(--ink) !important; --line: var(--line-strong) !important; --st-waiting: var(--ink) !important; }
   a, .btn.link, .btn.quiet { text-decoration-color: currentColor; }
   :focus-visible { outline-width: 4px; }
-  .chip, .score-pill, .badge, .btn.secondary, .btn.answer { box-shadow: inset 0 0 0 1px currentColor; }
+  .chip, .fit-ring, .badge, .btn.secondary, .btn.answer { box-shadow: inset 0 0 0 1px currentColor; }
   .card, .work-card, .person, .tile, .chart, .bar, .fun-track { border-color: var(--ink); }
 }
 
 /* ------------------------------------------------------------------ forced colours (Windows high contrast): the system's colours, edges kept */
 @media (forced-colors: active) {
-  .btn, .tab, .pill, .bulk, .toast, .chip, .score-pill, .look-choice, .more-btn, .alert, .suggest { border: 1px solid ButtonText; }
+  .btn, .tab, .pill, .bulk, .toast, .chip, .fit-ring, .look-choice, .more-btn, .alert, .suggest { border: 1px solid ButtonText; }
   .btn.filter[aria-pressed="true"], .btn.answer[aria-pressed="true"], .tab[aria-current="page"], .side-list a[aria-current="page"],
   .look-choice:has(input:checked) { outline: 3px solid Highlight; outline-offset: -3px; }
   :focus-visible { outline: 3px solid Highlight; }
@@ -1822,7 +1871,7 @@ dialog.work-sheet :is(select, input, textarea) { width: 100%; max-width: 100%; m
 /* What a fold gives, said beside its name in the quiet tone (Help Claude do more). */
 .band-more > summary .band-more-why { font-weight: 400; white-space: pre-wrap; }
 /* "Show N more" says what it still folds: once open it holds nothing back, so it goes. */
-.band-more:not(.soon-more)[open] > summary { display: none; }
+.band-more:not(.soon-more):not(.confirm-fold)[open] > summary { display: none; }
 
 /* An opened setting reads as inside its row, a shade deeper, and each item in it is a block:
    its name and its state on one line, the state always at the right, the button under them.
@@ -2307,8 +2356,6 @@ html.tips-off .has-tip::after { content: none; }
     ul.bp-people .bp-state { grid-column: 2; white-space: normal; }
   }
 }
-/* A job's fit on the Brief: Jobs' own ring, a step smaller. */
-.bp-jobs .score-pill.bp-fit { flex: none; width: 32px; height: 32px; min-width: 32px; }
 /* The counts never stretch: where their panel is wide (a day with no news) they keep their size. */
 /* Your progress fits its panel at any width, by the panel's own width rather than the
    window's (the maintainer, 2026-11-02: "leaves white space or gets weirdly cramped"): two by
@@ -2542,8 +2589,6 @@ ul.bp-news { gap: 12px; }
 .d-facts-line .name-link, .d-facts-line .navlink, .d-stack > .meta .navlink { color: var(--ink); font-weight: 600; text-decoration: none; }
 @media (hover: hover) { .d-facts-line .name-link:hover, .d-facts-line .navlink:hover, .d-stack > .meta .navlink:hover { text-decoration: underline; text-decoration-color: var(--line-strong); text-decoration-thickness: 1px; text-underline-offset: 3px; } }
 .d-next-when { font-weight: 400; color: var(--muted); }
-/* A job's fit on a card's row: the ring every job wears, a step smaller. */
-.score-pill.d-fit { width: 32px; height: 32px; min-width: 32px; }
 /* A card's Update menu: a soft pill with its chevron, its rows a finger's height on the
    overlay, opening under it from its left edge; the way to stop last, in red. */
 .upd-menu .menu-btn { display: inline-flex; align-items: center; gap: 4px; }
@@ -2644,62 +2689,75 @@ ul.bp-news { gap: 12px; }
   .btn:active:not(:disabled) { transform: none; }
 }
 
-/* Coming up: by day, each row what it is, its time in a steady column, and its tools. Read in
-   that order (the redesign, 2026-11-16: a row led with "13:00" and its title came second);
-   drawn with the time on the left, where a day's rows line up by it. The tools are one group,
-   the calendar first so it stands in one place down the list and the pencil after it, and the
-   trash keeps its own column at the row's end, 16px from them (a row with no trash leaves it
-   empty, never a gap between two icons). */
+/* Coming up (the redesign, phase 2, 2026-11-17): each day one card of rows under its day, the
+   rows parted by a hairline inset 16. A row is its time in a steady 64px column (tabular,
+   semibold), what it is in the title's size (17/24 semibold) with what kind it is and a chip
+   for its prep on the line under it, and one More at its end (36px, 44 on touch) holding the
+   calendar, a new day and taking it off. Nothing reserves room for a tool a row does not have,
+   and the whole row opens what it is. Seven cards under day headers, icons floating mid-card
+   where a missing trash left its slot empty, read as unfinished. */
 .up-agenda { display: grid; gap: 12px; }
-.up-days { display: grid; gap: 16px; }
+.up-days { display: grid; gap: 20px; }
 .up-day { display: grid; gap: 8px; }
-.up-list { display: grid; gap: 8px; }
-.up-row { --up-ic: 36px; display: grid; grid-template-columns: 8rem minmax(0, 1fr) calc(var(--up-ic) * 2 + 4px) calc(var(--up-ic) + 4px); grid-template-areas: "when main acts bin";
-  align-items: center; gap: 8px 12px; padding: 12px 16px;
-  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow-card); }
-.up-row > .up-when { grid-area: when; }
+.up-day-head { display: flex; align-items: center; gap: 8px; min-height: 24px; }
+.up-day-head > .group { margin: 0; }
+.day-cap { display: inline-flex; align-items: center; gap: 4px; padding: 0 8px; border-radius: 999px; background: var(--raised); color: var(--ink); font-size: var(--t-sm); font-weight: 600; line-height: 22px; }
+.day-cap::before { content: ""; flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--day-today); }
+.up-day.is-tomorrow .day-cap::before { background: var(--day-tomorrow); }
+.up-list { display: grid; gap: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow-card); }
+.up-row { --up-ic: 36px; position: relative; display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; grid-template-areas: "when main end";
+  align-items: start; column-gap: 12px; padding: 12px 8px 12px 16px; }
+.up-row + .up-row::before { content: ""; position: absolute; top: 0; left: 16px; right: 0; border-top: 1px solid var(--line); }
+.up-row:first-child { border-radius: var(--r) var(--r) 0 0; }
+.up-row:last-child { border-radius: 0 0 var(--r) var(--r); }
+.up-row:only-child { border-radius: var(--r); }
+.up-row.opens { cursor: pointer; }
+@media (hover: hover) { .up-row.opens:hover { background: var(--sunk); } }
+.up-row > .up-when { grid-area: when; padding-top: 2px; }
 .up-row > .up-main { grid-area: main; }
-.up-row > .up-acts { grid-area: acts; }
-.up-row > .up-bin { grid-area: bin; display: flex; justify-content: flex-end; }
-.up-row .btn.icon-only { width: var(--up-ic); min-width: var(--up-ic); padding-inline: 0; }
+.up-row > .up-end { grid-area: end; align-self: center; display: flex; align-items: center; }
 .up-when { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
-/* No time yet reads as a state of the row, an empty slot to fill: a quiet capsule with a dashed
-   edge in the time's own column, never a button squeezed into it (the usability review). */
-.up-when > .btn[data-k^="up-time:"] { padding-inline: 12px; border-radius: 999px; border: 1px dashed var(--line-strong); background: var(--surface); color: var(--muted); font-size: var(--t-sm); }
-@media (hover: hover) { .up-when > .btn[data-k^="up-time:"]:hover { background: var(--raised); color: var(--ink); border-color: var(--line-strong); } }
+.up-row > .up-when { line-height: 24px; }
+/* A day with no clock time ("End of day", "All day") says so in the quiet small words, wrapping
+   in its column. No time yet is a soft "+ Add the time" under what the row is, a slot to fill:
+   squeezed into the time's 64px it broke over three lines. */
+.up-when.is-word { font-size: var(--t-sm); line-height: 18px; padding-top: 4px; white-space: normal; color: var(--muted); }
+.up-row > .up-when:has(> .btn[data-k^="up-time:"]) { grid-column: 2; grid-row: 2; padding-top: 8px; }
+.up-row > .up-end { grid-row: 1 / span 2; }
+.up-when > .btn[data-k^="up-time:"] { min-height: 36px; padding: 8px 12px; border: 0; border-radius: var(--r-btn); background: var(--raised); color: var(--ink); font-size: var(--t-sm); font-weight: 600; text-decoration: none; }
+.up-when > .btn[data-k^="up-time:"] > .ic { width: 16px; height: 16px; color: var(--muted); }
+@media (hover: hover) { .up-when > .btn[data-k^="up-time:"]:hover { background: var(--raised-hover); } }
 /* A time read from another zone says both ("15:00 Toronto time (20:00 here)"): it wraps in its
    own column, the time here kept whole under the person's clock, and the column is wider on
-   every row of the list alike, so the rows still line up. Held to one line in 7rem it ran under
-   the title, over the row's line of facts and into its pill on a laptop (2026-11-11). */
+   every row of the list alike, so the rows still line up (2026-11-11). */
 .up-when:has(> .up-here) { white-space: normal; overflow-wrap: anywhere; }
 .up-here { white-space: nowrap; }
-@media (min-width: 760px) { .up-days:has(.up-here) .up-row { grid-template-columns: 10rem minmax(0, 1fr) calc(var(--up-ic) * 2 + 4px) calc(var(--up-ic) + 4px); } }
+.up-row .up-here { font-weight: 400; color: var(--muted); font-size: var(--t-sm); }
+.up-days:has(.up-here) .up-row { grid-template-columns: 10rem minmax(0, 1fr) auto; }
 .up-main { display: grid; gap: 2px; min-width: 0; }
 .up-title { overflow-wrap: anywhere; }
-.up-row .up-title { font-weight: 600; }
-/* What it is and whether its prep is ready are one line under its title ("Interview · Supply
-   Chain Analyst · Prep ready"): a line each, on a phone each its own 44px, made a row of three
-   short lines 190px tall (the maintainer, 2026-11-10: "inline and things are good"). A box
-   that opens on the row (a new day, a time) still takes the whole width. */
-.up-row > .up-main { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 4px; }
-.up-row > .up-main > * { flex: 1 1 100%; min-width: 0; }
-.up-row > .up-main > :is(.up-note, .up-prep, .state-word) { flex: 0 1 auto; }
-/* The dot between what a row is and its prep only where they share a line: it leads the
-   prep, and where the prep's pill takes the line under it the dot goes (sepFit). Ending the
-   first, it ended its line over the pill on a tablet ("Interview · Supply Chain Analyst ·",
-   the screen review, 2026-11-11). */
-@media (min-width: 760px) { .up-row > .up-main > .up-note + .up-prep.sep-before::before { content: "\00b7\00a0"; } }
-/* The row's tools in a column of their own as wide on every row, the calendar first: they line
-   up down the list whatever a row has (the review, 2026-11-10). */
-.up-acts { display: flex; align-items: center; justify-content: flex-start; gap: 4px; }
-/* On a phone: the time, the tools and the trash on one line, what it is under them, its title
-   the line's strongest words. */
+.up-row .up-title { font-size: var(--t-lg); line-height: 1.45; font-weight: 600; }
+/* Its link is its line's own height, a computer's 24px target at least (WCAG 2.5.8). */
+.up-row .up-title > .up-link { display: inline-block; }
+.up-row .up-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: var(--t-sm); color: var(--muted); }
+.up-row .up-sub > .up-note { min-width: 0; }
+.up-row .up-prep { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 8px; }
+.up-row .up-prep > .btn { margin: 0; }
+.up-menu > .menu-btn { min-width: var(--up-ic); min-height: var(--up-ic); width: var(--up-ic); height: var(--up-ic); padding: 0; border-radius: var(--r-sm); color: var(--muted); }
+/* On a phone the same three parts, the time column narrower and every target a finger's. */
 @media (max-width: 759px) {
-  .up-row > .up-when { font-size: var(--t-sm); }
-  .up-row { --up-ic: var(--target); grid-template-columns: minmax(0, 1fr) calc(var(--up-ic) * 2 + 4px) calc(var(--up-ic) + 4px); grid-template-areas: "when acts bin" "main main main"; padding: 8px 12px 12px; row-gap: 0; }
-  /* A time read from another zone says both ("13:00 London time (3:00 here)"): on a phone it
-     wraps rather than running 205px past the screen at double text (Everywhere, 4.15.0). */
+  .up-row { --up-ic: var(--target); grid-template-columns: 56px minmax(0, 1fr) auto; padding: 12px 4px 12px 12px; column-gap: 8px; }
+  .up-row + .up-row::before { left: 12px; }
   .up-row > .up-when { white-space: normal; }
+  .up-days:has(.up-here) .up-row { grid-template-columns: 6rem minmax(0, 1fr) auto; }
+}
+/* Where a day's card is narrow for its words (a phone at double text, a time from another
+   zone), the time is a line over the title, never a column squeezing it. */
+.up-list { container-type: inline-size; }
+@container (max-width: 20em) {
+  .up-row, .up-days:has(.up-here) .up-row { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "when end" "main end"; }
+  .up-row > .up-when { padding-top: 0; white-space: normal; }
+  .up-row > .up-when:has(> .btn[data-k^="up-time:"]) { grid-column: 1; grid-row: 3; }
 }
 .bp-up-row { display: flex; align-items: center; gap: 8px; }
 .bp-up-row .up-main { flex: 1; display: grid; gap: 2px; min-width: 0; }
@@ -2707,6 +2765,9 @@ ul.bp-news { gap: 12px; }
    the calendar beside it and out of the panel at a tablet's width (2026-11-11). */
 .bp-up-row .up-when { font-size: var(--t-sm); color: var(--muted); white-space: normal; }
 .bp-up-row .up-title { overflow-wrap: anywhere; }
+@media (min-width: 760px) and (pointer: fine), (min-width: 760px) and (pointer: none) {
+  .bp-up-row .up-prep > .btn.small { min-height: 24px; padding: 2px 12px; }
+}
 .bp-upcoming { --pc: var(--st-running); --pcbg: var(--st-running-bg); }
 dialog.sheet .sheet-body { display: grid; gap: 16px; }
 .cal-choices { display: grid; gap: 8px; }
@@ -2742,9 +2803,6 @@ dialog.sheet .sheet-body { display: grid; gap: 16px; }
 .bp-day.is-today .bp-day-dots i.due { background: transparent; box-shadow: inset 0 0 0 1.5px var(--st-done); }
 .bp-day.is-tomorrow .bp-day-dots i { background: var(--day-tomorrow); }
 .bp-day.is-tomorrow .bp-day-dots i.due { background: transparent; box-shadow: inset 0 0 0 1.5px var(--day-tomorrow); }
-.up-day.is-today > .group, .up-day.is-tomorrow > .group { display: flex; align-items: center; gap: 8px; }
-.up-day.is-today > .group::before, .up-day.is-tomorrow > .group::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--day-today); flex: none; }
-.up-day.is-tomorrow > .group::before { background: var(--day-tomorrow); }
 /* On a phone, the coming week: fourteen days do not fit a thumb. */
 @media (max-width: 559px) { .bp-week { grid-template-columns: repeat(7, minmax(0, 1fr)); } .bp-week > .bp-day:nth-child(n+8) { display: none; } }
 /* A narrow Coming up shows this week's seven days; the list and "All coming up" hold the rest.

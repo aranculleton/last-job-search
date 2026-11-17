@@ -177,7 +177,7 @@ def test_setting_a_job_aside_keeps_the_reason_given(run, tmp_path):
 def test_bringing_back_a_posting_the_search_left_out(run, tmp_path):
     where = Search(str(tmp_path / "s"))
     got, rec = _round_trip(run, tmp_path, where, "back", [
-        {"hash": "jobs", "click": "left out by the search"},
+        {"hash": "jobs", "click": "that did not fit"},
         # Left out by rule (2026-11-05): a rule's own rows open with See them.
         {"click": "See the jobs left out as", "exact": False},
         {"click": "Bring back", "exact": False},

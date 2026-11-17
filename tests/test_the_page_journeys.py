@@ -227,7 +227,8 @@ def test_the_prep_is_read_on_the_page_and_practice_uses_its_questions(run, tmp_p
     # 2026-11-03: the prep opens on what to say and ask, and its likely questions are one tap
     # below, folded: the questions are read once that fold is open.
     got = _go(run, tmp_path, [
-        {"hash": "interviews", "click": "Read your prep"},
+        # The row is its own tap to the prep (the redesign, phase 2, 2026-11-17).
+        {"hash": "interviews", "open": "up-go:up-app-larkspur-supply-phone-screen-2026-10-28"},
         {"open": "prep-fold:int-larkspur-supply:q", "read": "dialog.detail"},
         {"click": "Practise with Claude", "within": "dialog.detail", "read": "#main", "wait": 300, "calls": "sample"},
         {"eval": "(() => { const t = document.querySelector('#talk-text'); t.value = 'I have three years of store and supplier data behind me, turned into weekly plans.'; t.dispatchEvent(new Event('input', {bubbles: true})); return 1; })()"},
@@ -466,7 +467,7 @@ def test_changing_your_mind_keeps_the_reason_and_brings_things_back(run, tmp_pat
         # Why is asked once, in the bin's own sheet (2026-10-29: never a second "Why?"), and the
         # reason is the tap that does it (2026-11-03).
         {"click": "The pay", "exact": True, "within": "dialog"},
-        {"click": "41 left out by the search", "exact": False},
+        {"click": "Show the 41 that did not fit", "exact": False},
         # Left out by rule (2026-11-05): the rule's own rows open with See them.
         {"click": "See the jobs left out as", "exact": False,
          "within": ".f-rule:has-text('Needs a driving licence')"},

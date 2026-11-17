@@ -45,7 +45,7 @@ CARD = r"""(() => {
   }
   const r = d.getBoundingClientRect();
   return {title: d.querySelector('.detail-title').textContent.trim(), parts,
-    fit: [...d.querySelectorAll('.d-row .score-pill.d-fit .sr-only')].map((x) => x.textContent.trim()),
+    fit: [...d.querySelectorAll('.d-row .fit-ring.sm')].map((x) => x.getAttribute('aria-label')),
     said: (d.querySelector('.d-employer > p .d-sum-words') || {textContent: ''}).textContent.trim(),
     fits: r.width <= window.innerWidth + 1, address: location.hash};
 })()"""
@@ -72,7 +72,7 @@ def test_an_employer_on_a_job_card_opens_its_card_with_its_roles_and_people(run,
     # A job found there and not applied to says so, with its fit as the ring every job wears
     # (the redesign's second round, 2026-11-17), never "Scored 79" in words.
     assert card["parts"]["Roles"][2].startswith("Supply Chain Data Analyst · Not applied · "), card
-    assert "Scored" not in card["parts"]["Roles"][2] and card["fit"] == ["Fit 79 out of 100"], card
+    assert "Scored" not in card["parts"]["Roles"][2] and [f.split(",")[0] for f in card["fit"]] == ["Fit 79 out of 100"], card
     # The same employer however it is written: Kit is at "Larkspur Retail Ltd".
     assert _names(card["parts"]["People"]) == ["Juno", "Kit"], card
     assert len(card["parts"]["Interviews"]) == 1, card

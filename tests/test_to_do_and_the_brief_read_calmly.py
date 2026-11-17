@@ -253,11 +253,12 @@ def test_linkedins_steps_wait_one_tap_away(run, tmp_path):
 
 
 RING = r"""(() => [...document.querySelectorAll('#main [data-k="bp:jobs"] li')].filter((l) => l.getClientRects().length).map((l) => {
-  const r = l.querySelector('.score-pill'); return r ? {ring: getComputedStyle(r, '::before').backgroundImage.startsWith('conic-gradient'), said: l.textContent.includes('Fit 84 out of 100') || /Fit \d+ out of 100/.test(l.textContent), w: Math.round(r.getBoundingClientRect().width)} : null; }))()"""
+  const r = l.querySelector('.fit-ring'); return r ? {ring: getComputedStyle(r, '::before').backgroundImage.startsWith('conic-gradient'), said: /^Fit \d+ out of 100/.test(r.getAttribute('aria-label') || ''), w: Math.round(r.getBoundingClientRect().width)} : null; }))()"""
 
 
 def test_a_jobs_fit_on_the_brief_is_the_ring_jobs_wears(run, tmp_path):
-    """The redesign's second round, 2026-11-17: a green "84" pill on the Brief, a ring on Jobs."""
+    """The redesign's second round, 2026-11-17: a green "84" pill on the Brief, a ring on Jobs.
+    The one ring (`fitRing`), its small size in a row, 28px."""
     got = _go(run, tmp_path, [{"hash": "brief", "eval": RING}], WIDE, clock=T)
     rows = got["after"][0]["eval"]
-    assert rows and all(r and r["ring"] and r["said"] and r["w"] == 32 for r in rows), rows
+    assert rows and all(r and r["ring"] and r["said"] and r["w"] == 28 for r in rows), rows

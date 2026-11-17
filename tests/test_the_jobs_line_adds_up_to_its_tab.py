@@ -72,10 +72,10 @@ def test_the_brief_counts_the_drafts_as_jobs_does(run, tmp_path, vp):
     jobs, brief = got["after"][0]["eval"], got["after"][1]["eval"]
     for word in ("ready", "waiting on you", "being made", "still to make"):
         j = re.search(r"(\d+) " + word, jobs)
-        b = re.search(r"(\d+) (?:drafts? )?" + word, brief)
+        b = re.search(r"(\d+) (?:drafts? |applications? )?" + word, brief)
         # What Claude is making is its own work, said in the work pill: the Brief names it only
         # when nothing else is owed, and then in Jobs' number (4.15.0, a small laptop's panel).
-        if word == "being made" and b is None and any(re.search(r"\d+ (?:drafts? )?" + w, brief) for w in ("ready", "waiting on you", "still to make")):
+        if word == "being made" and b is None and any(re.search(r"\d+ (?:drafts? |applications? )?" + w, brief) for w in ("ready", "waiting on you", "still to make")):
             continue
         assert (j and j.group(1)) == (b and b.group(1)), (word, jobs, brief)
 

@@ -157,7 +157,9 @@ def test_jobs_says_what_its_list_is_under_the_drafts_line(run, tmp_path):
     r = got["after"][0]["eval"]
     # The drafts' line and the new jobs under it each say what they are, and the two add up to
     # the menu's count: "18 drafts ready to apply" over the list of new jobs read as its heading.
-    assert r["lead"] == "18 drafts ready to apply" and r["sub"] == "New, best fit first", r
+    # In the person's words since the redesign's phase 2 (2026-11-17): applications ready to
+    # send, then the best match.
+    assert r["lead"] == "18 applications ready to send" and r["sub"] == "Best match", r
     assert "All 8 new" in r["all"] and r["nav"] == 18 + 8, r
 
 

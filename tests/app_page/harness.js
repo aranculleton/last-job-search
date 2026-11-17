@@ -2067,9 +2067,13 @@ S.coming_up = async (a) => {
   r.rows = await page.$$eval('[data-k="up-days"] .up-row', (x) => x.map((e) => e.getAttribute("data-item")));
   r.when = await page.$$eval('[data-k="up-days"] .up-row .up-when', (x) => x.map((e) => e.textContent));
   r.prep = await page.$$eval('[data-k^="up-prep:"], [data-k^="up-read:"]', (x) => x.map((e) => e.getAttribute("data-k") + "=" + e.textContent));
+  r.chips = await page.$$eval('[data-k="up-days"] .up-row .up-sub .state-word', (x) => x.map((e) => e.textContent));
   r.nav = await txt('[data-k="side:interviews"] .navcount');
   r.sum = await txt("#main .summary");
-  // One item into a calendar: the choices, Google's link, the file, and the choice kept.
+  // One item into a calendar: the choices, Google's link, the file, and the choice kept. It is
+  // under the row's one More (the redesign, phase 2, 2026-11-17).
+  await page.locator('[data-k="up-more:up-app-larkspur-supply-phone-screen-2026-10-28"]').click();
+  await turn(page, 2);
   await page.locator('[data-k="cal:up-app-larkspur-supply-phone-screen-2026-10-28"]').click();
   await turn(page, 2);
   const keys = (sel) => page.$$eval(sel, (x) => x.map((e) => e.getAttribute("data-k") || (e.querySelector("[data-k]") || {getAttribute: () => ""}).getAttribute("data-k")));
@@ -2083,6 +2087,8 @@ S.coming_up = async (a) => {
   await page.locator('[data-k="cal-close"]').click();
   await turn(page, 2);
   r.closed = await page.evaluate(() => !document.querySelector("dialog.cal-sheet"));
+  await page.locator('[data-k="up-more:up-call-harbourline-bank-bea-2026-10-29"]').click();
+  await turn(page, 2);
   await page.locator('[data-k="cal:up-call-harbourline-bank-bea-2026-10-29"]').click();
   await turn(page, 2);
   r.firstAfter = (await keys("dialog.cal-sheet .cal-choices > *"))[0] || "";
@@ -2115,6 +2121,8 @@ S.coming_up = async (a) => {
   r.added = store.list("actions/").map((k) => store.get(k)).filter((d) => d.action === "upcoming.add");
   r.saving = await page.$$eval('[data-k="up-days"] .up-row', (x) => x.map((e) => e.textContent).filter((t) => t.includes("Coffee with")));
   // The person's own one taken off.
+  await page.locator('[data-k="up-more:up-ev20261020120000"]').click();
+  await turn(page, 2);
   await page.locator('[data-k="up-rm:up-ev20261020120000"]').click();
   await turn(page, 6);
   r.removed = store.list("actions/").map((k) => store.get(k)).filter((d) => d.action === "upcoming.remove");
@@ -2429,7 +2437,10 @@ S.downloads = async (a) => {
   await turn(page, 8);
   r.saves = (await calls(page)).filter((c) => c.cap === "downloads");
   r.note = await T(page, '#main [data-item="app-ellerwick-insight"] .note');
-  // Its question answered and done: then the draft asks for its files.
+  // Its question answered and done: then the draft asks for its files. A "Did you apply"
+  // question waits in Jobs' one fold under the list (the redesign, phase 2).
+  await page.locator('[data-k="jobs-confirm"]').click();
+  await turn(page, 2);
   await page.locator('#main [data-item="app-quayside-demand"]').getByRole("button", {name: "Not yet"}).click();
   await turn(page, 4);
   for (const p of store.list("actions/")) store.chat("receipts/" + p.split("/")[1], {applied_at: new Date().toISOString(), by: "cloud-1", result: "ok", note: ""});
@@ -2688,7 +2699,7 @@ S.busy = async (a) => {
   r.settings = await page.evaluate(() => document.getElementById("main").innerText);
   await goto(page, "progress");
   // How far applications got is said in its own card since the UX review of 2026-11-10 (U-7):
-  // the screen's line leads with this week's own work.
+  // the screen's line leads with what was done so far, this week's own work after it.
   // The period's counts are the funnel's own, said once there (the screen review, 2026-11-11):
   // the switch changes what it counts, and the line under it says what is usual.
   const funnel = () => page.evaluate(() => { const f = document.querySelector("#h-funnel"); return f ? f.closest(".chart").textContent : ""; });
@@ -3319,11 +3330,12 @@ S.motion = async (a) => {
     await goto(o.page, "jobs");
     await o.page.waitForSelector("#main .card .btn", {timeout: 5000}).catch(() => null);
     r[m].drawn = await o.page.evaluate(() => {
-      const b = document.querySelector("#main .card .btn"); const c = document.querySelector("#main .card");
+      // The first in sight: a "Did you apply" card waits folded under Jobs' list.
+      const b = [...document.querySelectorAll("#main .card .btn")].find((x) => x.getClientRects().length); const c = document.querySelector("#main .card");
       return {btn: b ? getComputedStyle(b).transitionDuration : null, card: c ? getComputedStyle(c).transitionDuration : null,
         fading: [...document.querySelectorAll("#main .btn, #main .chip, #main .card")].reduce((n, e) => n + e.getAnimations().filter((x) => x.transitionProperty).length, 0)};
     });
-    const hb = o.page.locator("#main .card .btn").first();
+    const hb = o.page.locator("#main .card .btn:visible").first();
     if (await hb.count()) { await hb.hover(); await turn(o.page, 2); r[m].hovered = await hb.evaluate((b) => getComputedStyle(b).transitionDuration); }
     await o.ctx.close();
     if (own) await own.close().catch(() => {});

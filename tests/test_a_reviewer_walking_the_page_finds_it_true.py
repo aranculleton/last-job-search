@@ -121,8 +121,9 @@ def test_the_brief_counts_drafts_ready_apart_from_those_being_made_and_apply_wai
     ], WIDE, model=m)
     brief, card = got["after"][0]["text"], got["after"][1]["text"]
     # In Jobs' own words, from its one tally: a draft nothing is making is "still to make"
-    # there, and the Brief called it "being made" (the screen review, 2026-11-11).
-    assert "1 draft ready to apply, 1 still to make" in brief, brief
+    # there, and the Brief called it "being made" (the screen review, 2026-11-11). A ready one
+    # is an application ready to send (the redesign, phase 2, 2026-11-17).
+    assert "1 application ready to send, 1 still to make" in brief, brief
     assert "Apply on" not in card, card
     assert "Not made yet" in card or "Claude" in card, card
 
@@ -425,7 +426,8 @@ def test_every_card_keeps_to_one_filled_and_two_soft_pills_and_each_pencil_has_i
                                               "title": "Write to Tam at Harbourline Bank", "args": {"contact": "tam"}},
                                    "cost": {"state": 2, "label": "Some Claude, about a minute or two"}}
     got = _go(run, tmp_path, [
-        {"hash": "jobs", "eval": FACE, "read": '#main [data-item="app-ellerwick-insight"] .checks'},
+        # What was checked is the documents' own rows since the redesign's phase 2 (2026-11-17).
+        {"hash": "jobs", "eval": FACE, "read": '#main [data-item="app-ellerwick-insight"] .doc-rows'},
         {"hash": "todo", "eval": FACE},
         {"hash": "jobs", "read": '#main [data-item="r12-1"]'},
     ], PHONE, model=m)
