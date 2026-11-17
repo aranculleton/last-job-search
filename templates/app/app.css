@@ -1888,9 +1888,12 @@ label.pick { display: flex; align-items: flex-start; justify-content: center; wi
 /* The page's address wraps only at its slashes and dots (app.js, addressWords), each part
    kept whole; a part too long for any line still breaks rather than run off the card. */
 .page-url { overflow-wrap: break-word; }
-/* A part longer than its line (a page's long id in Settings' narrower column) breaks inside
-   itself, never runs under Copy link beside it (the redesign's second round, 2026-11-17). */
-.page-url > .nowrap { white-space: normal; overflow-wrap: anywhere; }
+/* Each part a box of its own: one that does not fit after the rest goes to the next line whole,
+   and only one longer than a whole line breaks inside itself, at its hyphens (addressWords)
+   and then anywhere, never running under Copy link (the redesign's second round). Wrapped as
+   words, the page's id broke at a hyphen in Chrome where it fitted a line of its own, and
+   between two digits in Firefox (Everywhere, 2026-11-17). */
+.page-url > .nowrap { display: inline-block; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
 .add-download { display: inline-flex; gap: 8px; flex-wrap: wrap; }
 /* An opened fold (foldBody): its words, then what they do, then the line a tap leaves. On a
    wide screen the words and the buttons stand side by side, the buttons at the right edge
@@ -1907,6 +1910,11 @@ li:first-child > .fb-row, .fb-row:first-child { border-top: 0; }
   .fbody.has-acts > .fb-acts { grid-column: 2; grid-row: 1; justify-content: flex-end; }
   .fbody > :not(.fb-say):not(.fb-acts) { grid-column: 1 / -1; }
   .fbody > .state { justify-content: space-between; }
+  /* The page's address takes the row's whole width, its Copy link under it at the right edge:
+     beside the button its 36-letter id had 291 to 327px of a two-column Settings and was 327px
+     long (Everywhere, 2026-11-17). */
+  .fbody.has-acts.fb-whole { grid-template-columns: minmax(0, 1fr); }
+  .fbody.has-acts.fb-whole > .fb-acts { grid-column: 1; grid-row: auto; }
 }
 /* A short single choice in Settings sits side by side and wraps on a phone: four choices stood
    down the left of a wide panel with a gap after each (the maintainer, 2026-11-04: "this could

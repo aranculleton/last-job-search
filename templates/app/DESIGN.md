@@ -408,10 +408,14 @@ next?" in its first lines, and nothing asks for a decision a default could make.
 - A dot between facts never starts or ends a line, and a day said in words ("Sun 20 Sept") is
   never broken over two: a dot is held to the word after it, and one a line would still start
   or end with goes out of sight (app.js `wordsAdd`, `sepFit`). A file's name or the page's
-  address wraps only after an underscore, a slash or a dot, never inside a word. Why: "·
+  address wraps only after an underscore, a slash or a dot, never inside a word: a part that
+  does not fit after the rest goes to the next line whole, and only a part longer than a whole
+  line breaks inside itself, at its hyphens. Why: "·
   Applied 3 Nov" with nothing before it, "Interview · Supply Chain Analyst ·" over a pill, a
   row's "· Recruiter" under its name, and a name broken after its 41st letter (the screen
-  review, 2026-11-11). (overlap test: separator, crushed)
+  review, 2026-11-11); the page's 36-letter id broken at a hyphen in Chrome where it fitted a
+  line of its own, and between two digits in Firefox (Everywhere, 2026-11-17). (overlap test:
+  separator, crushed; settings link test)
 - A Jobs card's actions are the one row of pills of Buttons, below: one filled next step, two soft
   pills at most, then More. What was checked is the documents themselves, a row each in a soft
   well, a hairline between: its icon, its name ("CV", "Cover letter"), "1 page · checked", then
@@ -1101,7 +1105,10 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   only the brief needs the cloud). (place and routing tests)
 - An opened setting reads across a wide panel: its words on the left, its buttons at the right
   edge under the row's own value, and a tap's line under both with its Undo at the right; on a
-  phone the buttons follow the words. One way to do each thing in it. A short single choice is
+  phone the buttons follow the words. The page's own address is the one row whose words take
+  the whole width, its Copy link under it at the right edge: beside the button its 36-letter id
+  had 291 to 327px of a two-column Settings and was 327px long (Everywhere, 2026-11-17;
+  settings link test). One way to do each thing in it. A short single choice is
   a segmented control (a sunk track, the one chosen raised on it), still a radio group, that
   wraps on a phone; a choice with more to say under each is a list of option rows; a setting
   that is on or off is a switch, its state its knob's place as well as its colour. On a phone a

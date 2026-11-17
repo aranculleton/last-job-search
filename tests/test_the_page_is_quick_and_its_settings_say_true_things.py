@@ -146,6 +146,49 @@ def test_open_on_another_device_gives_the_pages_own_link(run, tmp_path):
     assert url in text and "Copy link" in text and "arrives with the next update" not in text, text
 
 
+# The address wraps only after a slash or a dot, each part kept whole on a line, and takes the
+# row's whole width with Copy link under it (DESIGN.md, "A file's name or the page's address" and
+# "An opened setting"). Settings' two columns left the page's 36-letter id 291 to 327px beside
+# Copy link, 327px long: Chrome broke it at a hyphen and Firefox between two digits (Everywhere,
+# 2026-11-17). On a laptop and on a wide screen with Claude's work open beside it the id is
+# whole; on a 375px phone it is longer than the line, and breaks only at its hyphens.
+ADDRESS = r"""(() => { const p = document.querySelector('#page-url'); if (!p) return null;
+  const f = p.closest('.fbody'), b = f.querySelector('.fb-acts .btn'), pr = p.getBoundingClientRect(), br = b.getBoundingClientRect(), fr = f.getBoundingClientRect();
+  const lines = (e) => { const out = new Set(), each = []; let w = 0; const t = document.createTreeWalker(e, NodeFilter.SHOW_TEXT);
+    for (let n = t.nextNode(); n; n = t.nextNode()) { const g = document.createRange(); g.selectNodeContents(n); const own = new Set();
+      for (const q of g.getClientRects()) if (q.width > 0.5) { out.add(Math.round(q.top)); own.add(Math.round(q.top)); w += q.width; }
+      each.push(own.size); }
+    return {lines: out.size, piece: Math.max(...each), w}; };
+  return {text: p.textContent, line: p.clientWidth, parts: [...p.querySelectorAll(':scope > .nowrap')].map((s) => Object.assign({part: s.textContent}, lines(s))),
+    inside: pr.right <= fr.right + 0.5 && p.scrollWidth <= p.clientWidth + 0.5, under: br.top >= pr.bottom - 0.5,
+    rightEdge: Math.abs(br.right - fr.right) < 0.5, beside: !!document.querySelector('#rail .work-card')}; })()"""
+RUNNING = {"work/search~1": {"kind": "search", "title": "Finding jobs", "to": "cloud", "args": {}, "asked_at": "2026-10-25T09:28:00.000Z",
+                             "status": "running", "claimed_by": "cloud-1", "claimed_at": "2026-10-25T09:28:00.000Z", "stage": 1,
+                             "stage_at": "2026-10-25T09:29:00.000Z", "stages": [{"name": "Getting started", "est_s": 60}, {"name": "Searching job sites", "est_s": 300}],
+                             "steps": [], "_v": 1}}
+
+
+@pytest.mark.parametrize("vp, seed", [(PHONE, None), ({"width": 1280, "height": 800}, None), ({"width": 1600, "height": 900}, RUNNING)],
+                         ids=["phone", "laptop", "beside-the-work"])
+def test_the_pages_address_keeps_each_part_whole_with_copy_link_under_it(run, tmp_path, vp, seed):
+    m = _sample()
+    url = "https://claude.ai/code/artifact/00000000-0000-4000-8000-000000000000"
+    m["app"] = dict(m["app"], url=url)
+    got = _go(run, tmp_path, [{"hash": "settings", "open": "info-sum:device-link", "eval": ADDRESS}], vp, model=m, seed=seed)
+    seen = got["after"][0]["eval"]
+    assert seen and seen["text"] == url, seen
+    assert seen["parts"][-1]["part"] == "00000000-0000-4000-8000-000000000000", seen["parts"]
+    # Whole, or longer than a whole line and broken only at its hyphens (each piece on one line).
+    broken = [p for p in seen["parts"] if p["lines"] != 1]
+    assert all(p["w"] > seen["line"] and p["piece"] == 1 for p in broken), (seen["line"], broken)
+    if vp is not PHONE:
+        assert broken == [], (seen["line"], broken)
+    assert seen["inside"] and seen["under"], seen
+    if vp is not PHONE:
+        assert seen["rightEdge"], seen
+    assert seen["beside"] == bool(seed), seen
+
+
 # ------------------------------------------------------------------ 6 and 22: Where Claude works
 
 ADVANCED = "(() => { document.querySelectorAll('details.set-advanced').forEach((d) => { d.open = true; }); return 1; })()"

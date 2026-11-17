@@ -14144,7 +14144,8 @@
   function anotherDeviceBody() {
     const url = pageUrl();
     return h("div", {class: "d-stack"},
-      url ? foldBody(h("p", {class: "page-url", id: "page-url"}, addressWords(url)), copyButton(url, "Copy link", "copy:page-url", "page-url"), noteFor("copy:page-url")) :
+      // The address the row's whole width, Copy link under it (DESIGN.md, "An opened setting").
+      url ? foldBody(h("p", {class: "page-url", id: "page-url"}, addressWords(url)), copyButton(url, "Copy link", "copy:page-url", "page-url"), noteFor("copy:page-url"), {class: "fb-whole"}) :
         h("p", {class: "muted"}, "The link arrives with the next update of this page."),
       foldBody(h("p", {}, "Open the link on your phone signed in to the same Claude account. Pinned to your sidebar, the page is always one tap away."),
         btn("Pin it to my sidebar", askPin, {small: true, kind: "secondary", key: "pin-page", wakes: "talk"})));
@@ -18159,7 +18160,14 @@
   // screen review, 2026-11-11). The text reads and copies the same.
   const partsAfter = (s, re) => txt(s).replace(re, "$1\n").split("\n").filter(Boolean);
   function fileWords(name) { return partsAfter(name, /([_\-.])/g).flatMap((p, i) => (i ? [h("wbr"), p] : [p])); }
-  function addressWords(url) { return partsAfter(url, /([\/.])/g).flatMap((p, i) => [i ? h("wbr") : null, h("span", {class: "nowrap"}, p)]); }
+  // Each part of an address its own box (app.css, .page-url): kept whole on a line, and where one
+  // is longer than a whole line (the page's 36-letter id on a 375px phone) it breaks at its hyphens,
+  // in every engine: Firefox finds no break between a hyphen and a digit, and broke the id
+  // between two digits (Everywhere, 2026-11-17).
+  function addressWords(url) {
+    return partsAfter(url, /([\/.])/g).flatMap((p, i) => [i ? h("wbr") : null,
+      h("span", {class: "nowrap"}, partsAfter(p, /(-)/g).flatMap((q, j) => (j ? [h("wbr"), q] : [q])))]);
+  }
   function valueWord(s) {
     const copy = SETTING_COPY[txt(s.key)] || {};
     const v = txt(settingValue(s));

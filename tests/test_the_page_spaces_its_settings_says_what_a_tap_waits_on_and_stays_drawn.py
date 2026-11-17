@@ -76,6 +76,12 @@ def test_an_opened_fold_puts_its_buttons_beside_its_words_on_a_wide_screen_and_a
         assert abs(f["right"] - last) <= 4, ("its buttons stand at the right edge of a wide fold, never bunched on the left", f)
         if f["words"]:
             first = min(f["buttons"], key=lambda b: b["t"])
+            if f["fold"] == "det:info:device-link":
+                # The page's own address is the one row whose words take the whole width, its
+                # Copy link under it at the right edge (DESIGN.md, "An opened setting"): beside
+                # the button its 36-letter id did not fit a two-column Settings (2026-11-17).
+                assert first["name"] == "Copy link" and first["t"] >= f["words"]["b"] - 1, ("the address over its Copy link", f)
+                continue
             assert first["t"] < f["words"]["b"], ("beside the words they belong to, not under them", f)
     # The waiting download's line: its Undo at the right, under where its button stood.
     waited = _go(run, tmp_path, [{"hash": "settings", "eval": FOLDS}], WIDE, model=m, seed=seed, clock=T)["after"][0]["eval"]
