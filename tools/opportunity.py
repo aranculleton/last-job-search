@@ -39,6 +39,7 @@ read them as guides.
 Usage:
     python3 tools/opportunity.py postings.json --top 60 --out ranked.json
     python3 tools/opportunity.py postings.json --explain
+    python3 tools/opportunity.py documents/rounds/<round>.json --leverage-words
 """
 
 from __future__ import annotations
@@ -90,9 +91,10 @@ SELF_PORTRAIT = re.compile(r"\b(?:culture|foster\w*)\b[^.;!?\n]{0,80}", re.I)
 # Brand leverage, core capabilities and the wrong job families are the
 # profile's (search.py, OPP_*): where the candidate's own employers do
 # disproportionate work, what is held, and which families are a different job.
-#   LEVERAGE      (sector pattern, points, why[, "set_aside_self_portrait"]).
-#                 The lifts together count up to LEVERAGE_CAP; a penalty
-#                 (negative points) counts in full, whatever the lifts came to
+#   LEVERAGE      (pattern, points, why[, where it reads][, "set_aside_self_portrait"]).
+#                 Where it reads is SCOPES, below. The lifts together count up
+#                 to LEVERAGE_CAP; a penalty (negative points) counts in full,
+#                 whatever the lifts came to
 #   CORE          (pattern, points) for each held capability a posting names
 #   TITLE_FAMILY  (pattern, points[, why]) read from the title alone: a job
 #                 family is the title's claim, and the body's words are the
@@ -102,8 +104,7 @@ SELF_PORTRAIT = re.compile(r"\b(?:culture|foster\w*)\b[^.;!?\n]{0,80}", re.I)
 # always did; one that lifts, or a penalty for a preference (long hours, a live
 # coding test), says its own why. Neither family list is capped.
 # --------------------------------------------------------------------------
-LEVERAGE = [(*e[:3], SELF_PORTRAIT) if e[3:] == ("set_aside_self_portrait",) else e
-            for e in getattr(_S, "OPP_LEVERAGE", [])]
+LEVERAGE = list(getattr(_S, "OPP_LEVERAGE", []))
 CORE = list(getattr(_S, "OPP_CORE", []))
 TITLE_FAMILY = list(getattr(_S, "OPP_TITLE_FAMILY", []))
 WRONG_FAMILY = list(getattr(_S, "OPP_WRONG_FAMILY", []))
@@ -111,6 +112,157 @@ WRONG_FAMILY = list(getattr(_S, "OPP_WRONG_FAMILY", []))
 # the lifts: a penalty written there was swallowed by the cap on any posting whose lifts passed
 # it by more than the penalty, so it bit only on postings that were already weak (2026-11-16).
 LEVERAGE_CAP = 30
+
+# Where a leverage entry reads. Every lift read the whole posting, and every posting repeats the
+# same boilerplate, so an entry meant to recognize the employer's sector or the work fired on
+# words that say nothing about either: over one evening's 73 postings the travel-industry lift
+# fired 11 times on "travel", none at a travel employer ("Travel Requirements: 15%", "travel to
+# customers up to 30% of the time", "global travel coverage" in a benefits list), the
+# consulting lift 21 times on "stakeholder engagement", and the work-life lift 20 times on a
+# bare "hybrid" (2026-11-16, #306). An entry names where it reads as an item after its why:
+#   "employer"  what the employer is: the employer field, the title, what the person's own
+#               catalogue calls it (employers.py, sector.kind) and the posting's sentences
+#               about the employer itself, boilerplate set aside. For a sector or a kind of
+#               employer (media, travel, consulting, the public sector)
+#   "work"      the title and the posting with its boilerplate set aside: benefits and perks,
+#               the equal-opportunity paragraph, travel asked of the person and the work model,
+#               and duties every posting lists ("stakeholder engagement"). For what the role
+#               does (pricing, risk, experiments)
+#   "terms"     the whole posting, travel and the work model included, but a bare "hybrid",
+#               which most office jobs say, is no sign of anything. For working terms
+#               ("flexible hours", "no on-call")
+#   "any"       the whole posting
+# Named nowhere, a lift reads "work", or "terms" where its pattern names a working term whole
+# (TERMS_SAID), and a penalty reads "any": a penalty for heavy travel reads the travel asked.
+SCOPES = ("employer", "work", "terms", "any")
+# A cue that the sentence it is in is boilerplate.
+BOILERPLATE = re.compile(
+    r"\b(?:"
+    # benefits and perks
+    r"benefits?|perks?|group (?:rrsp|insurance|benefits)|rrsp match\w*|pension match\w*|"
+    r"matched pension|401\s?\(?k\)?|paid time off|pto|(?:paid|weeks? of|days? of) vacation|"
+    r"vacation (?:days|time|allowance)|parental leave|"
+    r"wellness (?:days?|allowance|stipend|programs?)|(?:staff|employee|travel) discounts?|"
+    r"(?:health|dental|medical|life|travel) (?:insurance|coverage|cover)|"
+    # the equal-opportunity paragraph
+    r"equal (?:employment )?opportunit\w*|regardless of|"
+    r"(?:request|need|require)\w* (?:an? )?accommodations?|"
+    r"accommodations? (?:are|is|will be) (?:available|provided)|"
+    # travel asked of the person
+    r"travel requirements?|travel (?:is )?required|(?:willing\w*|able|ability) to travel|"
+    r"travel (?:of )?up to|\d{1,3}\s?% (?:of the time )?travel|travel \d{1,3}\s?%|"
+    r"occasional(?:ly)? travel|travel to (?:customers?|clients?|the office|our offices?|sites?)|"
+    # the work model
+    r"hybrid|in[- ]office|on[- ]site|work(?:ing)? model|days? (?:a|per) week (?:in|at|from)|"
+    r"remote[- ](?:role|position|work\w*|first|option)|work(?:ing)? remotely"
+    r")\b", re.I)
+# A sentence, or the run of punctuation between two. Read piece by piece, a body is set aside in
+# one pass: a pattern spanning "the sentence around a cue" backtracked over the whole of a body
+# with no full stop in it, 26 seconds for one posting of 20,000 characters.
+_PIECE = re.compile(r"[^.!?\n]+[.!?]?|[.!?\n]+")
+# Longer than this, a piece is no sentence (a body with no full stops), and only the words
+# around each cue are set aside.
+_LONG_PIECE = 400
+_NEAR_CUE = re.compile(r"(?:\S+\s+){0,8}?\S*" + BOILERPLATE.pattern + r"\S*(?:\s+\S+){0,8}",
+                       re.I)
+
+
+def set_aside_boilerplate(text: str) -> str:
+    """`text` with each sentence holding a boilerplate cue set aside (BOILERPLATE)."""
+    out = []
+    for piece in _PIECE.findall(text):
+        if not BOILERPLATE.search(piece):
+            out.append(piece)
+        elif len(piece) <= _LONG_PIECE:
+            out.append(" ")
+        else:
+            out.append(_NEAR_CUE.sub(" ", piece))
+    return "".join(out)
+
+
+# Duties every posting lists, never the employer's line of business.
+DUTY_WORDS = re.compile(r"\b(?:stakeholder|customer|employee|community|user)s?\s+engagement\b",
+                        re.I)
+BARE_HYBRID = re.compile(r"\bhybrid\b", re.I)
+# A sentence where the employer says what it is.
+SAYS_WHAT_IT_IS = re.compile(r"\b(?:about us|about the company|who we are|"
+                             r"we(?: are|'re|\u2019re) (?:a|an|one of)|our mission|founded|"
+                             r"headquartered)\b", re.I)
+# Working terms a lift may name whole; an entry whose pattern matches one of them entire reads
+# "terms" unless it says otherwise. A sector's word inside one ("travel" in "travel up to 50%")
+# is not a term named whole.
+TERMS_SAID = ("flexible hours", "flexible working", "flexible schedule", "work-life balance",
+              "work life balance", "4-day week", "four-day week", "remote-first", "fully remote",
+              "summer hours", "compressed hours", "no on-call")
+_SENTENCE = re.compile(r"(?<=[.!?])\s+|\n+")
+
+
+def _names_terms(pat) -> bool:
+    for t in TERMS_SAID:
+        m = pat.search(t)
+        if m and m.group(0).lower() == t:
+            return True
+    return False
+
+
+def scope_named(entry) -> str:
+    """The scope a leverage entry names after its why, or ""."""
+    return next((x for x in entry[3:] if isinstance(x, str) and x in SCOPES), "")
+
+
+def _scoped(entry) -> tuple:
+    """(pattern, points, why, where it reads, what it sets aside) for a leverage entry: its
+    why may be followed by a scope (SCOPES) and "set_aside_self_portrait" (or a pattern of
+    its own to set aside), in either order."""
+    pat, p, reason, *rest = entry
+    aside = None
+    for x in rest:
+        if x == "set_aside_self_portrait":
+            aside = SELF_PORTRAIT
+        elif hasattr(x, "sub"):
+            aside = x
+    scope = scope_named(entry) or (
+        "any" if (p or 0) < 0
+        else "terms" if pat is not None and _names_terms(pat)
+        else "work")
+    return pat, p, reason, scope, aside
+
+
+def unscoped() -> list[str]:
+    """The why of each lift in the profile's leverage that names no scope: one meant for the
+    employer's sector reads the work instead, duties and all, until it says "employer"."""
+    return [str(e[2]) for e in LEVERAGE if len(e) >= 3 and (e[1] or 0) > 0
+            and not scope_named(e)]
+
+
+def employer_says(job: dict, body: str) -> str:
+    """What a posting says its employer is: the employer field, the title, what the person's
+    own catalogue calls it, and the posting's sentences about the employer itself (one that
+    says what it is, or names it and goes on "is" or "are"), its boilerplate set aside."""
+    company = str(job.get("company") or "")
+    kind = ""
+    try:
+        import sector  # it imports this module, so it is read here, at call time
+        kind = sector.kind(company)
+    except Exception:  # noqa: BLE001  no catalogue to read: the posting's own words stand
+        pass
+    first = re.escape(company.split()[0]) if company.split() else ""
+    named = (re.compile(r"\b" + first + r"\w*(?:\s+\S+){0,3}?\s+(?:is|are|was|has been)\b", re.I)
+             if first and len(company.split()[0]) > 2 else None)
+    said = [s for s in _SENTENCE.split(DUTY_WORDS.sub(" ", set_aside_boilerplate(body)))
+            if SAYS_WHAT_IT_IS.search(s) or (named and named.search(s))]
+    return "\n".join([company, str(job.get("title") or ""), kind] + said[:6])
+
+
+def read_for(scope: str, job: dict, title: str, body: str) -> str:
+    """The text a leverage entry of `scope` reads."""
+    if scope == "employer":
+        return employer_says(job, body)
+    if scope == "work":
+        return f"{title}\n" + DUTY_WORDS.sub(" ", set_aside_boilerplate(body))
+    if scope == "terms":
+        return BARE_HYBRID.sub(" ", f"{title}\n{body}")
+    return f"{title}\n{body}"
 
 
 def family_says(points: int, why: str = "") -> str:
@@ -291,8 +443,12 @@ def score(job: dict, today: dt.date | None = None) -> dict:
         why.append(f"+{sum(core)} core capability match on {len(core)} signals")
 
     lifts = docks = 0
-    for pat, p, reason, *aside in LEVERAGE:
-        if pat.search(aside[0].sub(" ", hay) if aside else hay):
+    texts: dict = {}
+    for entry in LEVERAGE:
+        pat, p, reason, scope, aside = _scoped(entry)
+        if scope not in texts:
+            texts[scope] = read_for(scope, job, title, body)
+        if pat.search(aside.sub(" ", texts[scope]) if aside else texts[scope]):
             if p >= 0:
                 lifts += p
             else:
@@ -381,6 +537,45 @@ def score(job: dict, today: dt.date | None = None) -> dict:
     return {**job, "opportunity": pts, "why": why}
 
 
+def leverage_words(jobs) -> list[str]:
+    """Each leverage entry's hits over `jobs` (rows with their posting text) and the five
+    words it most often matched, read as score() reads them."""
+    from collections import Counter
+    out = []
+    for entry in LEVERAGE:
+        pat, p, reason, scope, aside = _scoped(entry)
+        words: Counter = Counter()
+        hits = 0
+        for j in jobs:
+            if not isinstance(j, dict):
+                continue
+            text = read_for(scope, j, j.get("title") or "", (j.get("desc") or "")[:20000])
+            text = aside.sub(" ", text) if aside else text
+            found = [m.group(0).lower() for m in pat.finditer(text)]
+            if found:
+                hits += 1
+                words.update(set(found))
+        top = ", ".join(f"{w} {n}" for w, n in words.most_common(5))
+        out.append(f"{p:+d} ({scope}) {hits} of {len(jobs)}: {reason[:60]}"
+                   + (f" [{top}]" if top else ""))
+    return out
+
+
+def with_kept_text(jobs: list, infile: str) -> list:
+    """`jobs` with the posting text a search keeps beside its list (bodies/<name>.json, as
+    tools/rescore.py keeps it) where a row has none of its own."""
+    path = os.path.join(os.path.dirname(os.path.abspath(infile)), "bodies",
+                        os.path.basename(infile))
+    try:
+        with open(path, encoding="utf-8") as fh:
+            bodies = (json.load(fh) or {}).get("bodies") or {}
+    except (OSError, ValueError, AttributeError):
+        return jobs
+    from lookup_score import norm
+    return [dict(j, desc=bodies.get(norm(str(j.get("url") or "")) or "", ""))
+            if isinstance(j, dict) and not j.get("desc") else j for j in jobs]
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("infile")
@@ -388,11 +583,20 @@ def main() -> int:
     ap.add_argument("--top", type=int, default=60)
     ap.add_argument("--today")
     ap.add_argument("--explain", action="store_true")
+    ap.add_argument("--leverage-words", dest="leverage_words", action="store_true",
+                    help="for each leverage entry, where it reads, how many of the postings "
+                         "in infile it fires on and the words it most often matched: a word "
+                         "firing for the wrong reason shows here. A search's kept list "
+                         "(documents/rounds/<round>.json) is read with the text kept beside it")
     a = ap.parse_args()
     today = dt.date.fromisoformat(a.today) if a.today else dt.date.today()
 
     data = json.load(open(a.infile, encoding="utf-8"))
     jobs = list(data.values()) if isinstance(data, dict) else list(data)
+    if a.leverage_words:
+        for line in leverage_words(with_kept_text(jobs, a.infile)):
+            print(line)
+        return 0
     out = sorted((score(j, today) for j in jobs),
                  key=lambda x: -x["opportunity"])
     # --out is the pipeline's input for the next stage, so it holds EVERY

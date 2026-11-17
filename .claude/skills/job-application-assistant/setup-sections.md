@@ -303,7 +303,11 @@ market, so write each one for this person, never copy it:
   `FIT_CORE`, `FIT_DOMAIN`, `FIT_ROLE_SHAPE`, `OPP_CORE`, `OPP_TITLE_FAMILY` and the rest):
   the example's are a mid-career analyst's, and copied they mis-rank anyone else. Write them
   from the person's field and level, then score two or three invented postings (a clear
-  match, a role above them, a different field) and check the order is right.
+  match, a role above them, a different field) and check the order is right. Each
+  `OPP_LEVERAGE` lift says after its why where it reads: `"employer"` for a sector or kind of
+  employer (media, travel, consulting), `"work"` for what the role does, `"terms"` for working
+  terms (flexible hours), so a travel requirement or a benefits line never lifts a job as a
+  travel employer (`tools/opportunity.py` `SCOPES`).
 <!-- /section -->
 <!-- section: voice -->
 - **Their outreach words**, `voice.py` (`OUTREACH_ASKS`, `OUTREACH_OPENING`): optional; the

@@ -141,8 +141,9 @@ METHODS: dict[str, dict] = {
             (10, "2026-10-25", False, "setup's search section moved to setup-sections.md with the same rules; what the person was not asked is written from a default, never a question; a field's titles and interchangeable tools come from the market tables first"),
             (11, "2026-10-29", False, "a search runs as a background job inside the one helper chat, beside up to two other big jobs; what it finds and scores is as before"),
             (12, "2026-11-03", False, "setup writes every language held and the screen cuts any other a posting requires, and a title in one; where the market posts in another language its own titles are researched; every pay figure is a year's"),
+            (13, "2026-11-17", False, "setup writes where each brand-leverage lift reads (the employer, the work or the terms); a profile written before says it through the leverage-scopes upgrade, never a new setup"),
         ),
-        "fingerprint": "c6252b5fe10c3050",
+        "fingerprint": "8b97981e6a4b6f58",
     },
     "market": {
         "setup": True, "by": "upgrade", "priority": 3, "time": "~15 min",
@@ -861,8 +862,9 @@ METHODS: dict[str, dict] = {
             (59, "2026-11-17", False, "an employer a job feed names by its careers site, run together, with a number on its slug or by a team is the employer the person's records hold (company_key), so the company throttle, the role already applied for and one role per employer hold for it; a listing marked internal in its employer field is cut as internal-only; nothing needs redoing: the throttle decides these every round"),
             (60, "2026-11-17", False, "the eligibility gate reads the market's own wording for citizenship, residence and a clearance beside the person's pattern: the neighbouring country's citizenship and residence always, and each other status the person's own pattern names; nothing needs redoing: it only cuts more"),
             (61, "2026-11-17", False, "bar.py judge --file records a round's batch of employers nobody had judged in one write, each marked by the round with its day, so a person or a chat can overturn it; nothing is screened differently"),
+            (62, "2026-11-17", False, "a brand-leverage lift reads the posting with its boilerplate set aside (benefits, the equal-opportunity paragraph, travel asked of the person, the work model, stakeholder engagement), a lift for working terms ignores a bare hybrid, and one that says employer reads only what the employer is, so a travel requirement no longer lifts a job as a travel employer; opportunity.py --leverage-words says what each lift fired on; nothing ruled out needs looking at again, and the jobs on the page are scored again by the jobs-rescored upgrade"),
         ),
-        "fingerprint": "72bfdae0c06cf2a3",
+        "fingerprint": "af5dcc61ddceba3e",
     },
     "routines": {
         "by": "you", "priority": 3, "applies": "routines",

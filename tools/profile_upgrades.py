@@ -1520,6 +1520,24 @@ def _jobs_rescored() -> str:
     return _probe("import rescore; print(rescore.due())")
 
 
+def _leverage_scopes() -> str:
+    """Lifts in the profile's brand leverage that name no place to read (opportunity.unscoped):
+    each read the whole posting, so a lift for a kind of employer fired on a travel
+    requirement, a benefits line or "stakeholder engagement" (issue 306). Since then a lift
+    reads the posting with its boilerplate set aside, and one for a kind of employer reads
+    what the employer is only once it says "employer"."""
+    got = _probe("import opportunity; print(len(opportunity.unscoped()))")
+    n = int(got) if got.isdigit() else 0
+    return (f"{n} scoring lift{'s' if n != 1 else ''} in profile/search.py "
+            f"{'do' if n != 1 else 'does'} not say where {'they read' if n != 1 else 'it reads'}"
+            ) if n else ""
+
+
+def _leverage_unscoped() -> list:
+    got = _probe("import opportunity; print('\\n'.join(opportunity.unscoped()))")
+    return [ln for ln in got.splitlines() if ln.strip()]
+
+
 def _readings_linked() -> str:
     """Contacts with no employer whose saved profile read names one: every check made per
     employer passed them by (the audit's NW-6, NW-28 and PD-20)."""
@@ -2240,6 +2258,19 @@ REGISTRY: tuple[Upgrade, ...] = (
             command=("python3", "tools/rescore.py"),
             paths=("documents/rounds/*.json", "documents/rounds/bodies/*.json"),
             priority=2, conditional=True),
+    Upgrade("leverage-scopes", "2026-11-17",
+            "jobs lifted for the kind of employer you want only where the employer is that "
+            "kind, never for a word in its benefits, travel or duties",
+            _leverage_scopes, "/setup --section search: after the why of each OPP_LEVERAGE "
+            "lift in profile/search.py (and after \"set_aside_self_portrait\" or before it, "
+            "either order), add where it reads: \"employer\" for a sector or kind of employer "
+            "(media, travel, consulting, the public sector), \"work\" for what the role does "
+            "(pricing, risk, experiments, a job family), \"terms\" for working terms (flexible "
+            "hours, remote). Leave penalties as they are and change no pattern. Then run "
+            "python3 tools/opportunity.py documents/rounds/<the newest search>.json "
+            "--leverage-words and check each lift fires where it should; say in one plain line "
+            "what changed", "edit", "~5 min", priority=2, conditional=True,
+            every=_leverage_unscoped),
     Upgrade("readings-linked", "2026-11-11",
             "every contact whose profile was read has the employer it names",
             _readings_linked, "python3 tools/network/reading.py link-all", "instant",
