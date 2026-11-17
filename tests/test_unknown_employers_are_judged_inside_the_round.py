@@ -185,12 +185,13 @@ def test_the_round_never_waits_on_the_judge_past_its_time(a_round, monkeypatch, 
 
 
 def test_the_judge_is_a_small_background_agent_the_round_instructions_start():
-    head = open(os.path.join(ROOT, ".claude", "agents", "employer-judge.md"),
-                encoding="utf-8").read().split("\n---", 1)[0]
-    import yaml
-    meta = yaml.safe_load(head[4:])
+    # The app's own reader of an agent's head (no YAML library: the 3.9 floor has none).
+    from pathlib import Path
+    import check_framework_version
+    meta = check_framework_version.parse_frontmatter(
+        Path(ROOT) / ".claude" / "agents" / "employer-judge.md")
     assert meta["name"] == run_round.JUDGE_AGENT
-    assert meta["model"] == "haiku" and meta["background"] is True
+    assert meta["model"] == "haiku" and meta["background"] == "true"
     assert {t.strip() for t in meta["tools"].split(",")} == {"Read", "Write"}
     for doc in (".claude/skills/job-scraper/SKILL.md", "RUNBOOK.md",
                 "automation/prompts/job_round.md"):
