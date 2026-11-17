@@ -16388,9 +16388,18 @@
   let talkJump = null;
   function jumpShown() {
     if (!talkJump) return;
+    // Chat is drawn before it is put on the page: measured then, "at the end?" was asked of the
+    // screen it replaced, and Latest stood over a conversation with nothing below until the next
+    // frame (2026-11-16). Hidden until it is on the page, and asked again once it is.
+    if (!talkForm || !talkForm.isConnected) {
+      talkJump.hidden = true;
+      if (!jumpLater) { jumpLater = true; queueMicrotask(() => { jumpLater = false; if (talkForm && talkForm.isConnected) jumpShown(); }); }
+      return;
+    }
     const shown = (dockOpen || S.section === "chat") && !nearEnd(chatScroller());
     talkJump.hidden = !shown;
   }
+  let jumpLater = false;
   // The person's own scroll decides: up from the end lets go of it, back down holds it again.
   function onChatScroll() {
     if (!(dockOpen || S.section === "chat")) return;

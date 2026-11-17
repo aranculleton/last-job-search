@@ -526,10 +526,14 @@ master cannot see work sitting on another chat's branch, and builds it a second 
    more, and what to do about it.
 2. **Finish by getting the work onto master.** Not "pushed to the branch": on master. Once
    the answer is out (the reply, the page brought up to date), and at most once a turn,
-   run `python3 tools/land.py --detach --message "<what changed>"`: it returns at once and
-   lands in a process of its own, pull request and merge included, and its end wakes
-   nobody (a background run's end woke the chat, a whole turn, 2026-11-11). What it could
-   not do is said once by the next read (`land.github_waiting`). A chat whose next step
+   run `python3 tools/land.py --detach --message "<what changed>"`: in a few seconds it
+   commits the turn's work and pushes it to this chat's branch, so the cloud's own check at
+   the end of the turn finds nothing unsaved, then returns and lands in a process of its own,
+   pull request and merge included, and its end wakes nobody (a background run's end woke
+   the chat, a whole turn, 2026-11-11). Where it says the save before it is still at work,
+   the cloud's message at the end of the turn about uncommitted or unpushed work is that
+   save: answer it with nothing, no git command and no waiting. What it could not do is said
+   once by the next read (`land.github_waiting`). A chat whose next step
    needs the landing done (a job's own chat), or a scheduled run that must see it end, runs
    plain `python3 tools/land.py --message "<what changed>"` instead, in the foreground or
    the background; never a `pgrep` loop to wait on it, which matches its own command line
@@ -722,7 +726,7 @@ chat has lost it.
 | An application changed status (interview, offer, rejection, silence) | `job_search_tracker.csv` `status`, via `/outcome` |
 | An interview was booked | that application's `outcome.md`, as a scheduled stage line with its time and zone, via `/outcome` |
 | A networking call was booked | that contact's `status` `call_booked`, its day as `--due` and its time and zone in `--next-action` ("Call 2pm ET on Teams") |
-| Anything else booked that is not one of those (a careers fair, a coffee with someone not in Contacts, a call set up elsewhere) | `python3 tools/upcoming.py add "<what>" <YYYY-MM-DD> [HH:MM]`, so it shows in Coming up |
+| Anything else booked that is not one of those (a careers fair, a coffee with someone not in Contacts, a call set up elsewhere) | `python3 tools/upcoming.py add "<what>" <YYYY-MM-DD> [HH:MM] [--zone <zone>]`, so it shows in Coming up; `--zone` where it was booked on another clock than theirs ("America/Vancouver", "UK time") |
 | The questions an interview asked, and which stories landed | `documents/interview/question_bank.csv`, via `/outcome` (`interview_pack.py asked`) |
 | Anything learned about a role, employer or process | `job_search_tracker.csv` `notes`, appended with the date |
 | Messaged someone, or they replied | `network_threads.csv`, one row per message |
