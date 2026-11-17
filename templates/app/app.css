@@ -2899,9 +2899,15 @@ ul.bp-news { gap: 12px; }
 @media (hover: hover) { .up-when > .btn[data-k^="up-time:"]:hover { background: var(--raised-hover); } }
 /* A time read from another zone says both ("15:00 Toronto time (20:00 here)"): it wraps in its
    own column, the time here kept whole under the person's clock, and the column is wider on
-   every row of the list alike, so the rows still line up (2026-11-11). */
+   every row of the list alike, so the rows still line up (2026-11-11). The time here names its
+   day where it is another day ("(Thu 3:00 here)", issue 334), and the column is as wide as that
+   needs: 8rem on a phone holds "(Wed 23:00 here)", 7.6rem in the widest type the checks draw, where
+   6rem ran it 25px into the title. Where a 12-hour clock makes it wider still, it is one piece
+   that breaks after its day, never through its clock or out of the column. */
 .up-when:has(> .up-here) { white-space: normal; overflow-wrap: anywhere; }
-.up-here { white-space: nowrap; }
+.up-here { display: inline-block; white-space: nowrap; }
+.up-here:has(> span) { white-space: normal; }
+.up-here > span { white-space: nowrap; }
 .up-row .up-here { font-weight: 400; color: var(--muted); font-size: var(--t-sm); }
 .up-days:has(.up-here) .up-row { grid-template-columns: 10rem minmax(0, 1fr) auto; }
 .up-main { display: grid; gap: 2px; min-width: 0; }
@@ -2923,7 +2929,7 @@ ul.bp-news { gap: 12px; }
   .up-row { --up-ic: var(--target); grid-template-columns: 56px minmax(0, 1fr) auto; padding: 12px 4px 12px 12px; column-gap: 8px; }
   .up-row + .up-row::before { left: 12px; }
   .up-row > .up-when { white-space: normal; }
-  .up-days:has(.up-here) .up-row { grid-template-columns: 6rem minmax(0, 1fr) auto; }
+  .up-days:has(.up-here) .up-row { grid-template-columns: 8rem minmax(0, 1fr) auto; }
   .up-row > .up-prep { grid-column: 1 / -1; }
 }
 /* Where a day's card is narrow for its words (a phone at double text, a time from another

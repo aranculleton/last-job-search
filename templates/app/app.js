@@ -928,15 +928,27 @@
   // A time said one way everywhere (the audit, 2026-11-03: the hero said "18:00", Coming up
   // "18:00 (13:00 here)", the card "10:00 London time, 5:00 here"): in the person's own zone,
   // and on a device in another one, the zone named and the time here beside it.
-  function clockWords(t) {
-    const p = clockParts(t);
+  function clockWords(t, day) {
+    const p = clockParts(t, day);
     return p.here ? p.main + " (" + p.here + " here)" : p.main;
   }
   // Its two parts: the person's clock with its zone named, and the time here where that differs.
-  function clockParts(t) {
+  // The time here names its day where the device's day is not the one the time is filed under
+  // (`day`, the person's own day of it unless a row says which): 13:00 London time on Wed 28 Oct
+  // is 3:00 on Thursday in Kiritimati, and under "Wed 28 Oct" a bare "(3:00 here)" read as
+  // Wednesday there (issue 334). On the same day it is the clock alone, as before.
+  function clockParts(t, day) {
     const main = clock(t, zone());
-    if (DEVICE_TZ && zone() && zone() !== DEVICE_TZ && clock(t, DEVICE_TZ) !== main) return {main: main + " " + city(zone()) + " time", here: clock(t, DEVICE_TZ)};
-    return {main, here: ""};
+    if (!DEVICE_TZ || !zone() || zone() === DEVICE_TZ) return {main, here: ""};
+    const at = clock(t, DEVICE_TZ);
+    const on = ymdIn(t, DEVICE_TZ) !== (day || ymdIn(t, zone())) ? weekdayIn(t, DEVICE_TZ) : "";
+    if (!on && at === main) return {main, here: ""};
+    return {main: main + " " + city(zone()) + " time", here: (on ? on + " " : "") + at, on, at};
+  }
+  // "Thu": the day of the week a moment falls on in a zone, said as fmtDay says it.
+  function weekdayIn(t, z) {
+    try { return dtf(LOC, {weekday: "short", timeZone: z}).format(new Date(t)).replace(/[.,]+$/, ""); }
+    catch (e) { return ""; }
   }
   function fmtWhen(s) {
     if (!txt(s)) return "";
@@ -9829,15 +9841,18 @@
   // Coming up's own row: from another zone, the time here is one piece the column wraps before,
   // never through, so "15:00 Toronto time" sits over "(20:00 here)" in the time's own column.
   // Held to one line, it ran under the title and over the row's line of facts and its pill on a
-  // laptop (the maintainer, 2026-11-11).
+  // laptop (the maintainer, 2026-11-11). Its day, where named, is a piece of its own: where a
+  // 12-hour clock makes "(Wed 11:00 PM here)" wider than the column, it breaks after the day,
+  // never through the clock or out of the column (issue 334).
   function upWhenRow(u) {
-    const p = u.start ? clockParts(tms(u.start)) : null;
+    const p = u.start ? clockParts(tms(u.start), dayOf(u.day)) : null;
     if (!p || !p.here) return upWhen(u);
-    return [p.main, " ", h("span", {class: "up-here"}, "(" + p.here + " here)")];
+    return [p.main, " ", h("span", {class: "up-here"}, p.on ? [h("span", {}, "(" + p.on), " ", h("span", {}, p.at + " here)")] : "(" + p.here + " here)")];
   }
   function upWhen(u) {
     // On a device somewhere else, the time here as well, as every other time on the page.
-    if (u.start) return clockWords(tms(u.start));
+    // Its day here named against the day it is filed under (clockParts).
+    if (u.start) return clockWords(tms(u.start), dayOf(u.day));
     if (u.time) return txt(u.time);
     // No time known: nothing said, and its row in Coming up offers "Add the time" (upRow).
     return u.kind === "test" || u.kind === "deadline" ? "End of day" : u.kind === "event" ? "All day" : "";
