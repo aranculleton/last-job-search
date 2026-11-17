@@ -1116,6 +1116,7 @@ textarea { width: 100%; resize: vertical; line-height: 1.45; }
 .filter-btn { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 8px 12px; border-radius: var(--r-ctl); border: 1px solid transparent;
   background: var(--raised); color: var(--ink); font-weight: 600; font-size: var(--t-sm); cursor: pointer; flex: none; white-space: nowrap; }
 @media (hover: hover) { .filter-btn:hover { background: var(--raised-hover); } }
+@media (max-width: 759px), (pointer: coarse) { .filter-btn { min-height: var(--target); } }
 .filter-btn .ic { width: 16px; height: 16px; }
 .fl-n { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px; background: var(--mark); color: var(--mark-on); font-size: 0.75rem; font-weight: 600; font-variant-numeric: tabular-nums; }
 @media (max-width: 359px) { .fl-word { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; } }

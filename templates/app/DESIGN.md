@@ -108,8 +108,12 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   never behind the header (taken as 56px, its first words slid under the Refresh pill,
   2026-11-11). (overlap test: chat opens)
   The box keeps to the foot from the first look, so the first message never moves it; with no
-  messages its starters are chips just above it, a short intro sits in the room above them, and
-  there is no subtitle. Why: an empty Chat said "Ask anything" three ways (the screen review,
+  messages its starters are soft buttons just above it, a heading ("What can Claude do for
+  you?") and a short intro sit in the room above them, and there is no subtitle. The box is a
+  rounded rectangle, never a pill, its hint one short line ("Ask Claude, or paste a screenshot"),
+  Send a round filled button with an arrow, grey while there is nothing to send, and a message's
+  words keep a reading measure of about 70 characters (the redesign's second round, 2026-11-17:
+  a three-line hint made the box a block on a phone). Why: an empty Chat said "Ask anything" three ways (the screen review,
   2026-11-11), and with its box under the header the box sat mid-screen on a phone and jumped to
   the foot with the first message (the redesign, 2026-11-16). (empty chat tests)
 - The frame is calm. On a phone the tab bar is the card colour with a hairline on top: the tab
