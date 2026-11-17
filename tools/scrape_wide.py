@@ -522,7 +522,7 @@ class PageWalk:
 def sweep(skill: str, tasks: list[tuple], jobage: int, sleep=time.sleep,
           clock=time.monotonic, tally: "Tally | None" = None,
           on_rows=None, log=None, requests=None,
-          covered=None) -> tuple[list[dict], int, list[str]]:
+          covered=None, kept=None) -> tuple[list[dict], int, list[str]]:
     """Every request for one person's portal, one at a time, `crawl-delay` apart.
 
     Its own thread, so a board that asks for five seconds between requests
@@ -540,6 +540,9 @@ def sweep(skill: str, tasks: list[tuple], jobage: int, sleep=time.sleep,
 
     `covered`, given an employer's key, says whether that employer's own board was read this
     round: its search here (NAMED) is then not sent, and counts as gone through.
+
+    `kept` holds what the board answered in the last PACED_TTL: a request it answered then is
+    not sent again (it counts as gone through, in `tally.kept`), and every answer is kept.
     """
     delay, rows, failed = portals.crawl_delay(skill), [], []
     start, streak, sent, last, why = clock(), 0, 0, "", ""
@@ -549,7 +552,7 @@ def sweep(skill: str, tasks: list[tuple], jobage: int, sleep=time.sleep,
         _say(plan, log)
     if tally is not None:
         tally.ends = start + SWEEP_BUDGET
-    walk, at, ended, skipped = PageWalk(), 0, 0, 0
+    walk, at, ended, skipped, reused = PageWalk(), 0, 0, 0, 0
     for at, task in enumerate(tasks):
         q, loc, pg = task[1:4]
         remote = len(task) > 4 and task[4]
@@ -564,6 +567,16 @@ def sweep(skill: str, tasks: list[tuple], jobage: int, sleep=time.sleep,
             skipped += 1                      # its own board was read this round
             if tally is not None:
                 tally.covered = skipped
+            continue
+        had = kept.get(paced_key(skill, task, jobage), PACED_TTL) if kept is not None else None
+        if had is not None:
+            reused += 1                       # answered in the last PACED_TTL: not sent again
+            walk.answered(search, pg, had)
+            rows += had
+            if on_rows and had:
+                on_rows(list(had))
+            if tally is not None:
+                tally.kept = reused
             continue
         if streak >= SWEEP_MAX_FAILS:
             why = f"{streak} failures in a row ({last})"
@@ -590,6 +603,8 @@ def sweep(skill: str, tasks: list[tuple], jobage: int, sleep=time.sleep,
             last = cause(err)
         else:
             walk.answered(search, pg, got)
+            if kept is not None:
+                kept.put(paced_key(skill, task, jobage), list(got))
         rows += got
         new = None
         if on_rows and got:
@@ -673,6 +688,7 @@ class Tally:
         self.capped = 0
         self.ended = 0                    # deeper pages not sent: their search had run out
         self.covered = 0                  # employer searches not sent: its own site was read
+        self.kept = 0                     # requests not sent: answered a short while ago
         # Failed requests, counted as they land with their causes. `failed` also
         # carries the note a stopped portal leaves, which is not a request.
         self.errors = 0
@@ -717,6 +733,8 @@ class Tally:
         if self.covered:
             bits.append(f"{self.covered} employer search(es) not needed, the employer's own "
                         "job site was read")
+        if self.kept:
+            bits.append(f"{self.kept} answered a short while ago, not asked again")
         if self.stopped:
             bits.append(f"stopped: {self.stopped}")
         elif self.finished:
@@ -764,7 +782,7 @@ def _say(line: str, log=None) -> None:
 
 def pool(jobs: list[tuple], workers: int, budget: float = POOL_BUDGET, cap: int | None = None,
          clock=time.monotonic, sleep=time.sleep, tallies: dict | None = None,
-         on_rows=None, on_sent=None, page_of=None) -> tuple[list[dict], dict]:
+         on_rows=None, on_sent=None, page_of=None, on_answer=None) -> tuple[list[dict], dict]:
     """Run [(portal, fn, args)] on `workers` threads until done or `budget` runs out.
 
     Each portal gets a Tally (in `tallies`, shared with the progress line). A 429
@@ -773,8 +791,9 @@ def pool(jobs: list[tuple], workers: int, budget: float = POOL_BUDGET, cap: int 
     POOL_MAX_FAILS identical failures in a row of any kind stop it too. `cap`
     is the most requests a portal may send. `on_rows` sees each batch of rows as it
     lands, which is how a partial scrape survives a stage that is killed, and
-    `on_sent` each job that was answered without an error. `page_of` gives a job's
-    (search, page), and a page past where its search ran out (PageWalk) is not sent.
+    `on_sent` each job that was answered without an error, and `on_answer` each such job
+    with its rows. `page_of` gives a job's (search, page), and a page past where its search
+    ran out (PageWalk) is not sent.
     Returns (rows, tallies)."""
     tallies = {} if tallies is None else tallies
     start = clock()
@@ -886,6 +905,8 @@ def pool(jobs: list[tuple], workers: int, budget: float = POOL_BUDGET, cap: int 
                         on_rows(list(got))
                     if on_sent:
                         on_sent(job)
+                    if on_answer:
+                        on_answer(job, list(got or ()))
                 if not t.active and (t.stopped or not t.queued
                                      or (t.cap and t.sent >= t.cap)):
                     t.finished = True
@@ -1396,6 +1417,53 @@ def search_page(job: tuple) -> tuple[str, int]:
     return json.dumps([kind, q, loc, jobage]), int(pg)
 
 
+# What each search was answered, kept a while beside the rounds (run_round passes --cache:
+# rounds/.cache, which git ignores and no save takes), so a round run again soon after asks
+# for nothing it was just answered. A round pruned its scrape and kept nothing, so a search
+# run again nine minutes later, with only how jobs are scored changed, sent its 5,910
+# requests again and took 24 minutes (issue 309). An answer is known by its request
+# (request_key: the site, the words, the place, the page and how recent the jobs must be), so
+# a search or a place added since is simply asked, and another window is another search. It
+# is used for REQUEST_TTL on LinkedIn and freehire, which answer the same search much the
+# same within hours, and PACED_TTL on a person's own board that asks to be sent less (its
+# crawl-delay); never past it, and a failed request is never kept. `--fresh` asks again.
+REQUEST_TTL = 6 * 3600
+PACED_TTL = 12 * 3600
+_wall = time.time            # the clock answers are dated by; a test sets its own
+
+
+class Kept:
+    """The answers kept in `folder` (hydrate.Kept, dated on this file's clock, and nothing
+    older than any site keeps one): `get` gives a request's rows, `put` keeps them."""
+
+    def __init__(self, folder: str):
+        from hydrate import Kept as _Kept
+        self.kept = _Kept(folder, oldest=max(REQUEST_TTL, PACED_TTL), clock=lambda: _wall())
+
+    def get(self, key: str, ttl: float) -> list | None:
+        got = self.kept.get(key, ttl)
+        return [r for r in got if isinstance(r, dict)] if isinstance(got, list) else None
+
+    def put(self, key: str, rows: list) -> None:
+        self.kept.put(key, list(rows))
+
+
+class _Fresh:
+    """Kept answers for a round asked to ask again (--fresh): none read, every answer kept."""
+
+    def __init__(self, kept):
+        self.put = kept.put
+
+    def get(self, key: str, ttl: float) -> None:
+        return None
+
+
+def paced_key(skill: str, task: tuple, jobage: int) -> str:
+    """A person's own board's request, as `request_key` says one of the app's two."""
+    q, loc, pg = task[1:4]
+    return json.dumps([skill, q, loc, pg, bool(len(task) > 4 and task[4]), jobage])
+
+
 def before(folder: str | None) -> tuple[list[dict], set[str]]:
     """(the postings, the requests answered) of the scrape in `folder`, the round before a
     widening; ([], set()) where there is none, and the round then sends everything."""
@@ -1619,7 +1687,12 @@ def main() -> int:
     ap.add_argument("--cache", default=None,
                     help="a folder beside the rounds, never saved with the person's files, "
                          "where what the search was answered is kept a short while: each "
+                         f"search's answer for {REQUEST_TTL // 3600} hours "
+                         f"({PACED_TTL // 3600} on a board that asks to be sent less) and each "
                          "employer site's robots.txt for a day")
+    ap.add_argument("--fresh", action="store_true",
+                    help="ask every site again, whatever answers --cache keeps (they are "
+                         "still kept for the next search)")
     ap.add_argument("--employers-file", dest="employers_file", default=None,
                     help="a search limited to these employers (run_round.py --employers writes "
                          "the file): their own boards and searches by their names alone")
@@ -1768,10 +1841,13 @@ def main() -> int:
 
     def covered(employer_key: str) -> bool:
         return any(_ckey(e) == employer_key for e in list(board_report["read"]))
+    # What each search was answered a short while ago, kept beside the rounds (Kept).
+    kept = Kept(os.path.join(a.cache, "requests")) if a.cache else None
+    reuse = None if a.fresh else kept
     paced = ThreadPoolExecutor(max_workers=max(1, len(mine)))
     sweeps = {paced.submit(sweep, skill, ts, a.jobage, tally=tallies[portals.short(skill)],
                            on_rows=landed, log=a.log, requests=a.request_log,
-                           covered=covered):
+                           covered=covered, kept=_Fresh(kept) if a.fresh and kept else kept):
               portals.short(skill)
               for skill, ts in mine.items()}
     jobs = []
@@ -1797,10 +1873,33 @@ def main() -> int:
               f"{planned - len(jobs)} of its {planned} LinkedIn and freehire requests not "
               "sent again")
     sent_now: set[str] = set(answered)
+    if reuse is not None and jobs:
+        # Answered in the last REQUEST_TTL: its postings land as they were, and a deeper page
+        # of a search an answered page ended is not asked for either (PageWalk).
+        walk, ask, had_n = PageWalk(), [], 0
+        for j in jobs:
+            had = reuse.get(request_key(j), REQUEST_TTL)
+            if had is None:
+                ask.append(j)
+                continue
+            had_n += 1
+            landed(had)
+            sent_now.add(request_key(j))
+            walk.answered(*search_page(j), had)
+        planned, jobs = len(jobs), [j for j in ask if not walk.past_end(*search_page(j))]
+        if had_n:
+            print(f"kept answers: {had_n} of {planned} LinkedIn and freehire searches were "
+                  f"answered in the last {REQUEST_TTL // 3600} hours and are not asked again"
+                  + (f"; {len(ask) - len(jobs)} deeper page(s) not needed"
+                     if len(ask) > len(jobs) else ""))
 
     def answered_now(job):
         with lock:
             sent_now.add(request_key(job))
+
+    def keep_answer(job, rows_):
+        if kept is not None:
+            kept.put(request_key(job), rows_)
     done = threading.Event()
     shown: dict = {}
 
@@ -1831,7 +1930,8 @@ def main() -> int:
     employer_boards = boards.submit(read_boards)
     boards.shutdown(wait=False)
     _, pool_tallies = pool(jobs, workers, budget=a.budget, cap=cap, tallies=tallies,
-                           on_rows=landed, on_sent=answered_now, page_of=search_page)
+                           on_rows=landed, on_sent=answered_now, page_of=search_page,
+                           on_answer=keep_answer)
     with open(os.path.join(a.out, SENT), "w", encoding="utf-8", newline="\n") as fh:
         json.dump(sorted(sent_now), fh)
     if jobs:
@@ -1847,7 +1947,7 @@ def main() -> int:
         # Where the next round's tail starts: past every task gone through, a page not
         # needed because its search had run out included.
         swept.update({k: n + tallies[portal].ended + tallies[portal].covered
-                      for k in mine if portals.short(k) == portal})
+                      + tallies[portal].kept for k in mine if portals.short(k) == portal})
         if errs:
             failed.setdefault(portal, []).extend(errs)
         landed(rows_)

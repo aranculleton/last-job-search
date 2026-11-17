@@ -549,6 +549,75 @@ def _fetch(job: dict, timeout: int) -> dict:
         return {**job, "hydrate_error": f"{type(e).__name__}: {str(e)[:160]}"}
 
 
+# What was fetched, kept a while beside the rounds (run_round passes --keep-bodies:
+# rounds/.cache/bodies, which git ignores and no save takes), so a search run again soon after
+# fetches nothing it has just fetched (issue 309). One gzipped file an entry, named by its key's
+# hash; an entry is used for its time to live and never past it.
+BODY_TTL = 48 * 3600
+_wall = time.time            # the clock what is kept is dated by; a test sets its own
+
+
+class Kept:
+    """Answers kept in one folder, each dated: `get(key, ttl)` gives one younger than `ttl`
+    seconds, `put(key, value)` keeps one. Anything older than `oldest` is taken out when the
+    folder is opened. Never fails what uses it."""
+
+    def __init__(self, folder: str, oldest: float = BODY_TTL, clock=None):
+        self.folder, self.oldest = folder, oldest
+        self.clock = clock or (lambda: _wall())
+        self.prune()
+
+    def _path(self, key: str) -> str:
+        import hashlib
+        return os.path.join(self.folder, hashlib.sha256(key.encode("utf-8")).hexdigest()
+                            + ".json.gz")
+
+    def get(self, key: str, ttl: float):
+        import gzip
+        try:
+            with gzip.open(self._path(key), "rt", encoding="utf-8") as fh:
+                got = json.load(fh)
+        except (OSError, ValueError, EOFError):
+            return None
+        if not isinstance(got, dict) or got.get("key") != key:
+            return None
+        at = got.get("at")
+        if not isinstance(at, (int, float)) or not 0 <= self.clock() - at < ttl:
+            return None
+        return got.get("value")
+
+    def put(self, key: str, value) -> None:
+        import gzip
+        import tempfile
+        try:
+            os.makedirs(self.folder, exist_ok=True)
+            fd, tmp = tempfile.mkstemp(dir=self.folder, suffix=".tmp")
+            with os.fdopen(fd, "wb") as raw, gzip.open(raw, "wt", encoding="utf-8") as fh:
+                json.dump({"key": key, "at": self.clock(), "value": value}, fh)
+            os.replace(tmp, self._path(key))
+        except OSError:
+            pass
+
+    def prune(self) -> None:
+        try:
+            entries = list(os.scandir(self.folder))
+        except OSError:
+            return
+        now = self.clock()
+        for e in entries:
+            try:
+                if e.name.endswith(".tmp") or now - e.stat().st_mtime > self.oldest:
+                    os.remove(e.path)
+            except OSError:
+                pass
+
+
+def _kept_key(job: dict) -> str:
+    from lookup_score import norm
+    url = str(job.get("url") or "")
+    return norm(url) or url
+
+
 def cached_bodies(path: str | None) -> dict[str, str]:
     """{normalised URL: body} from an earlier round's hydrated file, or {}.
 
@@ -693,6 +762,10 @@ def main() -> int:
                     help="fail if the fraction with a description is below this")
     ap.add_argument("--cache", default=None,
                     help="an earlier round's hydrated file: its bodies are reused, not fetched")
+    ap.add_argument("--keep-bodies", dest="keep_bodies", default=None,
+                    help="a folder beside the rounds, never saved with the person's files, where "
+                         f"each job's text is kept {BODY_TTL // 3600} hours: one fetched then is "
+                         "not fetched again")
     ap.add_argument("--budget", type=float, default=BUDGET,
                     help="seconds the stage may fetch for; past them a posting is not fetched")
     a = ap.parse_args()
@@ -708,8 +781,24 @@ def main() -> int:
             if body and not (j.get("desc") or "").strip():
                 jobs[i] = {**j, "desc": body}
                 reused += 1
+    kept = Kept(a.keep_bodies) if a.keep_bodies else None
+    from_kept = 0
+    wanted = [not (j.get("desc") or "").strip() and bool(j.get("url")) for j in jobs]
+    if kept is not None:
+        for i, j in enumerate(jobs):
+            had = kept.get(_kept_key(j), BODY_TTL) if wanted[i] else None
+            if isinstance(had, dict) and str(had.get("desc") or "").strip():
+                jobs[i] = {**j, **had}
+                from_kept += 1
     before = sum(1 for j in jobs if (j.get("desc") or "").strip())
     out = hydrate_all(jobs, a.workers, budget=a.budget)
+    if kept is not None:
+        # What this stage fetched, kept for the next search: the fields the fetch added.
+        for want, j, got in zip(wanted, jobs, out):
+            if (want and not (j.get("desc") or "").strip() and not got.get("hydrate_error")
+                    and str(got.get("desc") or "").strip()):
+                kept.put(_kept_key(got), {k: v for k, v in got.items()
+                                          if k != "aimed_at_ai" and j.get(k) != v})
 
     after = sum(1 for j in out if (j.get("desc") or "").strip())
     errors = [j for j in out if j.get("hydrate_error")]
@@ -718,6 +807,7 @@ def main() -> int:
     frac = after / len(out) if out else 0.0
     print(f"{len(out)} postings: {before} had a description"
           + (f" ({reused} from the round before)" if reused else "")
+          + (f" ({from_kept} fetched in the last {BODY_TTL // 3600} hours)" if from_kept else "")
           + f", {after} now do ({frac:.0%}); {len(errors)} fetch errors", file=sys.stderr)
     if errors:
         from collections import Counter

@@ -2049,6 +2049,9 @@ def main():
                     help="the page's work item this search is for (its id): named in "
                          "round.log, so the page marks the search done only once this "
                          "round's shortlist is saved")
+    ap.add_argument("--fresh", action="store_true",
+                    help="ask every job site again: a search run again within a few hours "
+                         "reuses what the sites answered, kept beside the rounds")
     ap.add_argument("--round", type=int, default=1, help=argparse.SUPPRESS)
     ap.add_argument("--first-pages", dest="first_pages", type=int, default=None,
                     help=argparse.SUPPRESS)
@@ -2181,6 +2184,7 @@ def main():
                     "--pages", str(a.pages), "--jobage", str(a.jobage), "--today", a.today,
                     "--workers", str(a.workers), "--request-log", requests,
                     "--cache", cache_dir(a.out)]
+                   + (["--fresh"] if a.fresh else [])
                    # The employer boards read the repo's own seen file unless the round
                    # was given another.
                    + (["--seen", a.seen] if a.seen else [])
@@ -2240,7 +2244,8 @@ def main():
                "--workers", str(a.workers), "--require", a.require]
     room = _stage_budget(hydrate, deadline)
     run(hydrate + ["--budget", str(room - min(HYDRATE_MARGIN_SEC, room // 2))]
-        + (["--cache", a.hydrate_cache] if a.hydrate_cache else []), log, deadline)
+        + (["--cache", a.hydrate_cache] if a.hydrate_cache else [])
+        + ["--keep-bodies", os.path.join(cache_dir(a.out), "bodies")], log, deadline)
     # The screen's cuts go to seen_jobs.json, so the next round drops them before
     # hydrate fetches them again.
     run([sys.executable, f"{T}/text_screen.py", f(HYDRATED), "--out", f("03_screened.json"),
