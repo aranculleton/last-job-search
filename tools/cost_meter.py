@@ -22,6 +22,7 @@ What it counts, for one run of the brief:
     python3 tools/cost_meter.py brief                    # before (newest v3 release) and after
     python3 tools/cost_meter.py brief --before <rev>     # "before" from another revision
     python3 tools/cost_meter.py brief --json
+    python3 tools/cost_meter.py search --before <rev>    # what a chat running a search reads
 
 The procedures are written down below as data (BEFORE, AFTER): each a list of steps, a step
 being a command it runs or a fixed size. When a prompt changes how the brief runs, change
@@ -58,6 +59,8 @@ SIZES = {
     "write_record": (2500, "the brief's record, written by the model"),
     "drafts_written": (900, "three drafts written by the model"),
     "news_in": (1100, "the news lines handed back to brief.py news"),
+    "round_out": (2500, "run_round.py --table's summary, counts line and a ten-row table"),
+    "round_cmd": (200, "the run_round.py command and its exit"),
 }
 
 # Each step: (label, kind, what). kind "cmd" runs `what` (argv, run in the scratch copy), "file"
@@ -120,6 +123,36 @@ AFTER = [
     ("land.py wakes the run: open the PR", "size", "git"),
     ("merge it", "size", "git"),
 ]
+
+
+# What a chat running a job search reads (issue 312): the job-scraper skill, RUNBOOK.md's step 1
+# and the round's own output. The skill was about 7,000 tokens, most of it rules the round
+# does not act on, carried in the chat for every later call. "before" reads the same files from
+# the revision given. A section step is (file, its heading): the heading to the next one of its
+# level.
+SEARCH = [
+    ("read the job-scraper skill", "file", ".claude/skills/job-scraper/SKILL.md"),
+    ("read RUNBOOK.md, 1. Find jobs", "section", ("RUNBOOK.md", "## 1. Find jobs")),
+    ("python3 tools/run_round.py --table", "size", "round_cmd"),
+    ("what the round prints", "size", "round_out"),
+    ("the reply", "out", "reply"),
+]
+PROCEDURES = {"brief": (BEFORE, AFTER), "search": (SEARCH, SEARCH)}
+
+
+def section(text: str, heading: str) -> str:
+    """`heading`'s section of a markdown text, to the next heading of its level, or ""."""
+    lines = text.splitlines(keepends=True)
+    level = heading.split(" ", 1)[0]
+    out, inside = [], False
+    for line in lines:
+        if line.startswith(heading):
+            inside = True
+        elif inside and line.startswith(level + " "):
+            break
+        if inside:
+            out.append(line)
+    return "".join(out)
 
 
 def tokens(chars: int) -> int:
@@ -250,6 +283,8 @@ def measure(steps, rev: str | None, state: str) -> dict:
     for label, kind, what in steps:
         if kind == "file":
             chars, note = len(prompt_file(what, rev)), "file"
+        elif kind == "section":
+            chars, note = len(section(prompt_file(what[0], rev), what[1])), "file section"
         elif kind == "cmd":
             chars, note = len(run(what, state)), "measured"
         else:
@@ -262,9 +297,10 @@ def measure(steps, rev: str | None, state: str) -> dict:
             "processed_tokens": processed + tokens(base + convo)}
 
 
-def report(before: dict, after: dict, rev: str) -> str:
+def report(before: dict, after: dict, rev: str, what: str = "brief") -> str:
     fixed = fixed_load()
-    out = ["Brief run, ESTIMATED tokens (characters / 4; no tokenizer), on the example person",
+    out = [f"{what.capitalize()} run, ESTIMATED tokens (characters / 4; no tokenizer), on the "
+           "example person",
            "", "Fixed load on every call, the same before and after:"]
     out += ["  %-36s %7d tokens" % (k, tokens(v)) for k, v in fixed.items()]
     for name, m in (("BEFORE (%s)" % rev, before), ("AFTER (this tree)", after)):
@@ -285,25 +321,26 @@ def report(before: dict, after: dict, rev: str) -> str:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("what", choices=["brief"])
+    ap.add_argument("what", choices=sorted(PROCEDURES))
     ap.add_argument("--before", default=None, help="the revision holding the old prompts "
                                                    "(default: the newest v3 release)")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
     rev = a.before or newest_v3()
     state = scratch_state()
+    old, new = PROCEDURES[a.what]
     try:
-        before = measure(BEFORE, rev, state)
+        before = measure(old, rev, state)
         shutil.rmtree(os.path.dirname(state), ignore_errors=True)
         state = scratch_state()
-        after = measure(AFTER, None, state)
+        after = measure(new, None, state)
     finally:
         shutil.rmtree(os.path.dirname(state), ignore_errors=True)
     if a.json:
         print(json.dumps({"estimate": "characters / 4", "before_rev": rev, "fixed": fixed_load(),
                           "before": before, "after": after}, indent=1))
     else:
-        sys.stdout.write(report(before, after, rev))
+        sys.stdout.write(report(before, after, rev, a.what))
     return 0
 
 

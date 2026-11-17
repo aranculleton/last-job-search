@@ -1287,6 +1287,7 @@ KEEPS_NOTHING: dict[str, str] = {
     ".agents/skills/freehire-search/*": "the app's own portal, searched afresh by every round",
     ".claude/skills/job-scraper/SKILL.md": "how a round searches; every round runs it afresh",
     ".claude/skills/job-scraper/manual-round.md": "a round done by hand, read afresh each time",
+    ".claude/skills/job-scraper/rules.md": "why a round's rules are what they are, read when changing the round",
     ".claude/skills/job-application-assistant/SKILL.md": "routing: which command handles what",
     ".claude/skills/job-application-assistant/11-cost-model.md":
         "which model runs each stage; what it writes is held to the same checks",
