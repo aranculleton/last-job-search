@@ -242,3 +242,58 @@ def test_your_profile_is_grouped_rows_a_job_one_line_that_opens_its_sheet(run, t
     assert len(jobs) >= 2 and all(j["lines"] == 1 and j["go"] and not j["bin"] and j["height"] <= 72 for j in jobs), jobs
     assert parts[:1] == ["Still to fill in"] or parts[0] == "Experience", parts
     assert {"Experience", "Skills", "Education", "Certificates"} <= set(parts), parts
+
+
+# ------------------------------------------------------------------ the second round's words on the cards
+
+STEPPER = r"""(() => [...document.querySelectorAll('dialog.detail[open] .d-steps > li')].map((li) => [li.querySelector('.d-step-l').textContent.trim(),
+  li.className.replace('d-step', '').trim(), (li.querySelector('.d-step-sub') || {textContent: ''}).textContent.trim()]))()"""
+
+
+def test_a_referral_waiting_on_the_cv_is_the_step_ringed_and_says_so(run, tmp_path):
+    # All four dots were green, Referral's among them, while her Next still said to send the CV
+    # (the UX review of the redesign's second round, 2026-11-17).
+    got = _go(run, tmp_path, [{"hash": "contacts/" + TAMSIN + "/open", "ready": "!!document.querySelector('dialog.detail[open] .d-steps')", "eval": STEPPER}],
+              WIDE, clock=T)
+    steps = got["after"][0]["eval"]
+    assert [s[0] for s in steps] == ["Written to", "Replied", "Talked", "Referral"], steps
+    assert [s[1] for s in steps] == ["done", "done", "done", "now"], steps
+    assert steps[3][2] == "Waiting on your CV" and not any(s[2] for s in steps[:3]), steps
+
+
+ALSO = r"""(() => { const b = [...document.querySelectorAll('dialog.detail[open] .d-block')].find((x) => /^Also at /.test(x.querySelector('h3').textContent));
+  return b ? [...b.querySelectorAll('.d-row')].map((r) => [r.querySelector('.d-row-name').textContent.trim(), (r.querySelector('.d-row-sub') || {textContent: ''}).textContent.trim()]) : null; })()"""
+
+
+def test_also_at_names_what_each_row_is(run, tmp_path):
+    # "Your draft" named no object, and "A role found there" said nothing the row did not (the UX
+    # review of the redesign's second round, 2026-11-17).
+    got = _go(run, tmp_path, [{"hash": "interviews/int-copperleaf-payments/open", "ready": "!!document.querySelector('dialog.detail[open]')", "eval": ALSO}],
+              WIDE, clock=T)
+    rows = dict(got["after"][0]["eval"] or [])
+    assert "Your CV for Tamsin" in rows and "Your draft" not in rows, rows
+    assert rows.get("Data Analyst, Payments") == "71 fit · Manchester · ready to send", rows
+    assert "A role found there" not in rows.values(), rows
+
+
+NEXT = r"""(() => { const d = document.querySelector('dialog.detail[open] .d-next-block');
+  return d ? {what: d.querySelector('.d-next-what, p').textContent.trim(), buttons: [...d.querySelectorAll('.btn')].map((b) => [b.textContent.trim(), b.hasAttribute('data-wakes')])} : null; })()"""
+STARTERS = "[...document.querySelectorAll('#main .examples .btn, #main .examples button')].map((b) => b.textContent.trim())"
+
+
+def test_a_reply_already_written_is_opened_never_asked_for_again(run, tmp_path):
+    # The Larkspur card's Next offered "Reply to Juno" and Chat "Help me reply to Juno", while
+    # her reply sat drafted and ready to send in To do and Contacts: two ways to spend Claude's
+    # time on what was done (the UX review of the redesign's second round, 2026-11-17).
+    got = _go(run, tmp_path, [
+        {"hash": "jobs/emp~larkspur-retail/open", "ready": "!!document.querySelector('dialog.detail[open] .d-employer')", "eval": NEXT},
+        {"click": "See your reply to Juno", "until": "location.hash.startsWith('#contacts')", "read": '#main [data-item="larkspur_retail_castellan"]'},
+        {"hash": "chat", "eval": STARTERS},
+    ], WIDE, clock=T)
+    nxt = got["after"][0]["eval"]
+    assert nxt and nxt["what"].startswith("Juno replied: your reply is ready to send"), nxt
+    assert nxt["buttons"] == [["See your reply to Juno", False]], nxt
+    card = got["after"][1]["text"]
+    assert "Copy" in card and "I sent it" in card, card[:400]
+    starters = got["after"][2]["eval"]
+    assert len(starters) == 4 and not any(s.startswith("Help me reply to Juno") for s in starters), starters

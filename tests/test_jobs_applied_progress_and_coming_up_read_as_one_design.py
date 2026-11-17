@@ -35,14 +35,16 @@ def _eval(run, tmp_path, where, js, vp):
 # ------------------------------------------------------------------ one ring for a fit
 
 RINGS = r"""(() => { const root = getComputedStyle(document.documentElement);
-  const ring = (r) => ({name: r.getAttribute('aria-label'), role: r.getAttribute('role'), n: r.textContent.trim(),
+  const word = (r) => { const w = r.parentElement.matches('.fit-with-word') ? r.parentElement.querySelector('.fit-word') : null; return w && w.getClientRects().length ? w.textContent.trim() : null; };
+  const ring = (r) => ({name: r.getAttribute('aria-label'), role: r.getAttribute('role'), n: r.textContent.trim(), word: word(r),
     sc: getComputedStyle(r).getPropertyValue('--sc').trim(), w: Math.round(r.getBoundingClientRect().width)});
   return {cards: [...document.querySelectorAll('#main .card.job, #main .card.app')].filter((c) => c.getClientRects().length && c.querySelector('.job-top .fit-ring'))
       .map((c) => ring(c.querySelector('.job-top .fit-ring'))),
     pills: document.querySelectorAll('#main .score-pill, #main .bp-score').length,
     done: root.getPropertyValue('--st-done').trim(), running: root.getPropertyValue('--st-running').trim()}; })()"""
 BRIEF_RINGS = r"""[...document.querySelectorAll('#main .bp-jobs .fit-ring')].filter((r) => r.getClientRects().length)
-  .map((r) => ({sm: r.classList.contains('sm'), w: Math.round(r.getBoundingClientRect().width), name: r.getAttribute('aria-label')}))"""
+  .map((r) => ({sm: r.classList.contains('sm'), w: Math.round(r.getBoundingClientRect().width), name: r.getAttribute('aria-label'),
+    word: r.parentElement.matches('.fit-with-word') ? r.parentElement.querySelector('.fit-word').textContent.trim() : null}))"""
 
 
 @pytest.mark.parametrize("vp", [PHONE, WIDE], ids=["phone", "wide"])
@@ -56,8 +58,11 @@ def test_a_fit_is_one_ring_green_when_strong_and_never_blue(run, tmp_path, vp):
         # Blue is for work in progress and focus only; green says strong.
         assert r["sc"] != seen["running"], r
         assert (r["sc"] == seen["done"]) == r["name"].endswith(", strong"), r
+        # "fit" beside every ring: on Jobs, where jobs are ranked, nothing said what "71" was (the
+        # UX review of the redesign's second round, 2026-11-17).
+        assert r["word"] == "fit", r
     brief = _eval(run, tmp_path, "brief", BRIEF_RINGS, vp)
-    assert brief and all(r["sm"] and r["w"] == 28 and r["name"].startswith("Fit ") for r in brief), brief
+    assert brief and all(r["sm"] and r["w"] == 28 and r["name"].startswith("Fit ") and r["word"] == "fit" for r in brief), brief
 
 
 # ------------------------------------------------------------------ Jobs: the list in its stages
@@ -71,6 +76,8 @@ LIST = r"""(() => { const m = document.querySelector('#main');
     outside: asks.filter((c) => !c.closest('details.confirm-fold')).map((c) => c.textContent.slice(0, 60)),
     foldAfter: !!(fold && first && (first.compareDocumentPosition(fold) & Node.DOCUMENT_POSITION_FOLLOWING)),
     apply: fold ? fold.querySelectorAll('.applylink').length : -1,
+    asked: fold ? [...fold.querySelectorAll(':scope .card')].map((c) => ({one: c.matches('.card.job.confirm-card'), bin: !!c.querySelector('.job-top [data-bin]'),
+      answers: [...c.querySelectorAll('.question .opts .btn')].map((b) => b.textContent.trim()), more: !!c.querySelector('details.more')})) : [],
     groups: [...m.querySelectorAll('.job-group')].map((g) => [g.querySelector('.list-head').textContent.trim(),
       [...g.querySelectorAll('.card .job-top .fit-ring')].map((r) => Number(r.textContent))]),
     text: m.innerText}; })()"""
@@ -83,6 +90,11 @@ def test_jobs_leads_with_what_to_apply_to_in_its_stages_best_fit_first(run, tmp_
     assert seen["fold"] == "2 jobs to confirm: did you apply?", seen["fold"]
     assert seen["inFold"] == 2 and seen["outside"] == [] and seen["foldAfter"], seen
     assert seen["apply"] == 0, seen
+    # Each one the same card, whatever asks it, with the same answers and the trash, and nothing
+    # about the phone and the laptop (the UX review of the redesign's second round, 2026-11-17).
+    assert all(c["one"] and c["bin"] and not c["more"] and c["answers"] == ["Yes, I applied", "Not yet"] for c in seen["asked"]), seen["asked"]
+    assert "said different things" not in seen["text"], seen["text"]
+    assert len(seen["asked"]) == 2, seen["asked"]
     # The stages each under a small heading, best fit first within each.
     heads = [g[0] for g in seen["groups"]]
     assert heads == ["Ready to send", "Being written", "New"], heads

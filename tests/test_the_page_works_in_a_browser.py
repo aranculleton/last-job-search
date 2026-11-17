@@ -539,8 +539,10 @@ def test_a_newer_view_document_replaces_its_section_without_a_republish(run, pag
     assert r["titles"] == ["Senior Research Analyst"]
     # The one list counts the drafts to send beside the new view's one find (2026-11-05).
     # One sentence whose total is the tab's since the UX review of 2026-11-10 (U-9).
-    # Ready only when nothing waits on it (the review of 2026-11-11).
-    assert r["lede"].startswith("4 to apply to: 2 ready, 1 waiting on you, 1 to look at."), r["lede"]
+    # Ready only when nothing waits on it (the review of 2026-11-11). In the words of the list's
+    # headings, the "Did you apply?" questions the fold's own count (the redesign's second round,
+    # 2026-11-17).
+    assert r["lede"].startswith("4 to apply for: 2 ready to send, 1 new. 2 to confirm."), r["lede"]
 
 
 # ------------------------------------------------------------------ To do, alerts and suggestions

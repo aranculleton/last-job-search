@@ -3151,7 +3151,7 @@ S.crowd = async (a) => {
   await page.locator("#main input[type=search]").fill("");
   await turn(page, 4);
   r.cleared = (await page.$$("#main .person")).length;
-  const fold = page.getByRole("button", {name: /^Show \d+ more (person|people)/});
+  const fold = page.getByRole("button", {name: /^Show them: \d+ more (person|people)/});
   await fold.first().click();
   await turn(page, 4);
   r.unfolded = (await page.$$("#main .person")).length;
@@ -3566,7 +3566,8 @@ S.a11y_selftest = async (a) => {
 S.big = async (a) => {
   const o = await open({html: a.html, hash: "jobs", viewport: a.viewport});
   const t0 = Date.now();
-  const r = {cards: (await o.page.$$("#main .card.job")).length, overflow: await overflow(o.page)};
+  // The list's own cards: a "Did you apply?" card waits in its fold under the list.
+  const r = {cards: (await o.page.$$("#main .card.job:not(.confirm-card)")).length, overflow: await overflow(o.page)};
   // Over 25 the Filter sheet holds an employer search (LAYOUT_SPEC 4.2).
   await o.page.locator("#main .filter-btn").first().click();
   await turn(o.page, 3);
@@ -3588,7 +3589,7 @@ S.big = async (a) => {
 S.view_overlay = async (a) => {
   const o = await open({html: a.html, hash: "jobs", seed: {"view/jobs": {made_at: "2026-10-26T07:00:00Z", data: {round: "r13", made_at: "2026-10-26T07:00:00Z", met: true, summary: "A fresh search: 1 worth a look.",
     rows: [{id: "r13-1", rank: 1, score: 88, band: "strong", company: "Ellerwick Trust", title: "Senior Research Analyst", place: "Salford", remote: "hybrid", pay: {text: "not stated", stated: false}, apply: {url: "https://example.com/jobs/e", status: "open"}, notes: [], status: "new", questions: [], rev: "x"}], filtered: {count: 0, groups: []}}}}});
-  const r = {titles: await T(o.page, "#main .card.job h3"), lede: await one(o.page, "#main .summary"), errors: o.errors};
+  const r = {titles: await T(o.page, "#main .card.job:not(.confirm-card) h3"), lede: await one(o.page, "#main .summary"), errors: o.errors};
   await o.ctx.close();
   return r;
 };
