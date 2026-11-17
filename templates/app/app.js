@@ -10842,7 +10842,7 @@
       const m = n === undefined ? /^(.*\S) (\d+)$/.exec(txt(l)) : null;
       const name = m ? m[1] : l, count = m ? m[2] : n;
       return h("button", {type: "button", class: "seg-opt", "aria-pressed": String(v === value), "data-k": key + ":" + v, onclick: () => onPick(v)},
-        name, count !== undefined && count !== null && count !== "" ? h("span", {class: "seg-n"}, h("span", {"aria-hidden": "true"}, " \u00b7 "), h("span", {class: "sr-only"}, " "), String(count)) : null);
+        name, count !== undefined && count !== null && count !== "" ? h("span", {class: "seg-n"}, h("span", {"aria-hidden": "true"}, "\u00b7 "), h("span", {class: "sr-only"}, " "), String(count)) : null);
     }));
   }
   // The list's own menu (⋯): Select several, Open beside, and the like. A disclosure, so it
