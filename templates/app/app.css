@@ -1046,11 +1046,12 @@ textarea { width: 100%; resize: vertical; line-height: 1.45; }
 /* A note on a card is a calm line in the card's own ink, its tone a small dot, never bold
    coloured text (the maintainer, 2026-10-29: "the yellow texts are annoying"). */
 .alert-text { font-weight: 400; color: var(--ink); }
+/* Its dot is the page's one bullet, 6px in the control edge; red only where something failed
+   (the redesign's second round, 2026-11-17: a violet dot before a referral read as "on hold"
+   and an amber one as "late"). */
 .alert.tone-bad .alert-text::before, .alert.tone-warn .alert-text::before, .alert.tone-held .alert-text::before {
-  content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; vertical-align: 0.1em; }
+  content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 8px; vertical-align: 0.15em; background: var(--line-strong); }
 .alert.tone-bad .alert-text::before { background: var(--st-failed); }
-.alert.tone-warn .alert-text::before { background: var(--st-overdue); }
-.alert.tone-held .alert-text::before { background: var(--st-held); }
 
 .alert .cost { color: var(--muted); }
 /* A note's one fix sits on the note's own line when there is room, not in a row of its own
@@ -2542,8 +2543,7 @@ ul.bp-news { gap: 12px; }
    2026-11-02: "the bullets ... look clunky and misspaced"). */
 .bp-lead-list { display: grid; gap: 8px; margin: 0; padding-left: 0; list-style: none; }
 .bp-lead-list > li { position: relative; padding-left: 16px; line-height: 1.45; }
-.bp-lead-list > li::before { content: ""; position: absolute; left: 2px; top: calc(0.725em - 3px); width: 6px; height: 6px; border-radius: 50%; background: var(--line); }
-.bp-news > li::before, .bp-facts > li::before { background: var(--pc); }
+.bp-lead-list > li::before { content: ""; position: absolute; left: 2px; top: calc(0.725em - 3px); width: 6px; height: 6px; border-radius: 50%; background: var(--line-strong); }
 /* Today's facts beside its one thing: who first, in ink, then each fact on its own line with a
    small dot in the panel's colour, not a list of plain bullets (the maintainer, 2026-11-02:
    "slightly prettier appearance of the bullets in today"). */
