@@ -57,7 +57,7 @@ def test_record_own_chat_names_it_in_every_set_up_and_leaves_the_relay(tmp_path)
     routines.record(OWN, "trig_EXAMPLEB", CRON, path=path, own_chat=True)
     reg = routines.load(path)
     brief = next(r for r in reg["routines"] if routines._is_brief(r))
-    assert brief["chat"] == {"session_id": OWN, "title": routines.BRIEF_NAME, "own": True}
+    assert brief["chat"] == {"session_id": OWN, "title": routines.BRIEF_CHAT_TITLE, "own": True}
     assert reg["setup"] == "chat_per_briefing"
     assert "ops_session" not in reg and not any(r.get("mode") == "fresh_session"
                                                 for r in reg["routines"])

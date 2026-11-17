@@ -300,7 +300,7 @@ def test_a_new_helpers_start_up_never_renews_it(copy, monkeypatch):
     assert app_listen.renewal(rec, {"work": {}}, LIVE, later) is None  # big, not near the limit
     size["n"] = 720_000
     assert app_listen.renewal(rec, {"work": {}}, LIVE, now) is None   # its first hour, still
-    assert app_listen.renewal(rec, {"work": {}}, LIVE, later)["title"] == "Job search page"
+    assert app_listen.renewal(rec, {"work": {}}, LIVE, later)["title"] == app_listen.HELPER_CHAT_TITLE
     # The record step sets it aside: `app.py published` says the republish is done.
     import app
     called = []
