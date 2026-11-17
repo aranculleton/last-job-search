@@ -28,7 +28,7 @@ if _HERE not in sys.path:
 
 import person  # noqa: E402
 
-FILES = ("search.py", "networking.py", "boards.py")
+FILES = ("search.py", "networking.py", "boards.py", "employers.py")
 MISSING = {"missing": True}
 
 
@@ -226,6 +226,180 @@ def set_line(name: str, key: str, value) -> dict:
     if above:
         out["above"] = above        # the comments moved above the line, which restore takes back
     return out
+
+
+# ------------------------------------------------------------------ one entry of a list
+
+def _container(n):
+    """The literal holding a setting's entries: a list, set, tuple or dict, or one given to
+    set() or frozenset(); None where it is written as other code."""
+    node = n.value
+    if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+            and node.func.id in ("set", "frozenset") and not node.keywords):
+        if not node.args:
+            return node
+        node = node.args[0] if len(node.args) == 1 else None
+    return node if isinstance(node, (ast.List, ast.Set, ast.Tuple, ast.Dict)) else None
+
+
+def _byte_at(data: bytes):
+    starts = [0]
+    for line in data.splitlines(keepends=True):
+        starts.append(starts[-1] + len(line))
+    return lambda line, col: starts[line - 1] + col
+
+
+def _read(name: str) -> tuple[str, str]:
+    path = _path(name)
+    with open(path, encoding="utf-8") as fh:
+        return path, fh.read()
+
+
+def _write(path: str, out: str) -> None:
+    ast.parse(out)
+    with open(path, "w", encoding="utf-8", newline="") as fh:
+        fh.write(out)
+    person.reset()
+
+
+def drop_entries(name: str, key: str, drop) -> list[dict]:
+    """Take each entry `drop(entry)` says yes to out of the list, set or dict `KEY` in
+    profile/<name>, where it is written, so every other entry and every comment stays as the
+    person wrote it (a dict's entry is asked about by its key). Returns what came out, each
+    {"entry", "src"}: `src` its text as it was written, which `add_entries` puts back. A
+    setting written as code is Refused, naming it; one not there drops nothing."""
+    try:
+        path, src = _read(name)
+    except OSError:
+        return []
+    n = _node(ast.parse(src), key)
+    if n is None:
+        return []
+    node = _container(n)
+    if node is None:
+        raise Refused(f"{key} in {name} is written as code, not a plain list: change it by hand")
+    if isinstance(node, ast.Call):                   # set() with nothing in it
+        return []
+    data = src.encode("utf-8")
+    at = _byte_at(data)
+    items = (list(zip(node.keys, node.values)) if isinstance(node, ast.Dict)
+             else [(e, e) for e in node.elts])
+    gone, spans = [], []
+    for first, last in items:
+        if first is None:                            # a `**other` inside a dict
+            continue
+        try:
+            entry = ast.literal_eval(first)
+        except ValueError:
+            continue
+        if not drop(entry):
+            continue
+        a, b = at(first.lineno, first.col_offset), at(last.end_lineno, last.end_col_offset)
+        gone.append({"entry": entry, "src": data[a:b].decode("utf-8")})
+        # The comma after it goes with it, and the whole line where nothing else is on it.
+        end = b
+        while end < len(data) and data[end:end + 1] in (b" ", b"\t"):
+            end += 1
+        if data[end:end + 1] == b",":
+            end += 1
+            while end < len(data) and data[end:end + 1] in (b" ", b"\t"):
+                end += 1
+        else:
+            # The last entry, with no comma after it: the comma before it goes instead, so
+            # `["a", "b"]` is `["a"]`, never `["a", ]`.
+            back = a
+            while back > 0 and data[back - 1:back] in (b" ", b"\t"):
+                back -= 1
+            if data[back - 1:back] == b",":
+                a, end = back - 1, b
+        line0 = data.rfind(b"\n", 0, a) + 1
+        eol = data.find(b"\n", end)
+        eol = len(data) if eol < 0 else eol
+        rest = data[end:eol].strip()
+        if not data[line0:a].strip() and (not rest or rest.startswith(b"#")):
+            a, end = line0, min(len(data), eol + 1)
+        elif not rest:
+            # Last on a line with others before it: no space is left at the line's end.
+            while a > line0 and data[a - 1:a] in (b" ", b"\t"):
+                a -= 1
+        spans.append((a, end))
+    if not gone:
+        return []
+    merged: list = []
+    for a, b in sorted(spans):
+        if merged and a <= merged[-1][1]:
+            merged[-1][1] = max(merged[-1][1], b)
+        else:
+            merged.append([a, b])
+    for a, b in reversed(merged):
+        data = data[:a] + data[b:]
+    # A line every entry of which came off goes too, inside the setting and nowhere else.
+    top = data.rfind(b"\n", 0, at(node.lineno, node.col_offset)) + 1
+    bottom = at(node.end_lineno, node.end_col_offset) - sum(b - a for a, b in merged)
+    inside = b"".join(ln for ln in data[top:bottom].splitlines(keepends=True)
+                      if ln.strip() or ln in (b"\n", b"\r\n") or not ln.endswith(b"\n"))
+    out = (data[:top] + inside + data[bottom:]).decode("utf-8")
+    if isinstance(node, ast.Set) and len(gone) == len(node.elts):
+        # Every entry of a set gone: `{}` would be a dict, so it is written set().
+        m = _node(ast.parse(out), key)
+        inner = _container(m)
+        if isinstance(inner, ast.Dict) and not inner.keys:
+            b2 = out.encode("utf-8")
+            at2 = _byte_at(b2)
+            s, e = at2(inner.lineno, inner.col_offset), at2(inner.end_lineno, inner.end_col_offset)
+            out = (b2[:s] + b"set()" + b2[e:]).decode("utf-8")
+    _write(path, out)
+    return gone
+
+
+def add_entries(name: str, key: str, srcs, kind: str = "list") -> None:
+    """Put entries back into the list, set or dict `KEY` in profile/<name>, each as the text
+    `drop_entries` kept (`src`), before its closing bracket, one a line where the person wrote
+    it one a line. A setting not there is written new, as `kind` (list, set or dict)."""
+    srcs = [str(s) for s in srcs or () if str(s).strip()]
+    if not srcs:
+        return
+    path = _path(name)
+    try:
+        with open(path, encoding="utf-8") as fh:
+            src = fh.read()
+    except OSError:
+        src = ""
+    n = _node(ast.parse(src), key)
+    if n is None:
+        body = ", ".join(srcs)
+        text = {"set": "{%s}", "dict": "{%s}"}.get(kind, "[%s]") % body
+        _write(path, src.rstrip("\n") + ("\n\n" if src.strip() else "") + f"{key} = {text}\n")
+        return
+    node = _container(n)
+    if node is None:
+        raise Refused(f"{key} in {name} is written as code, not a plain list: change it by hand")
+    data = src.encode("utf-8")
+    at = _byte_at(data)
+    if isinstance(node, ast.Call):                   # set(): written as a set of them
+        a, b = at(node.lineno, node.col_offset), at(node.end_lineno, node.end_col_offset)
+        _write(path, (data[:a] + ("{%s}" % ", ".join(srcs)).encode("utf-8") + data[b:])
+               .decode("utf-8"))
+        return
+    elts = node.values if isinstance(node, ast.Dict) else node.elts
+    close = at(node.end_lineno, node.end_col_offset) - 1          # the closing bracket
+    last = at(elts[-1].end_lineno, elts[-1].end_col_offset) if elts else None
+    between = data[last:close].decode("utf-8") if elts else ""
+    comma = "," in re.sub(r"#[^\n]*", "", between)
+    line0 = data.rfind(b"\n", 0, close) + 1
+    edits = []
+    if node.lineno != node.end_lineno and not data[line0:close].strip():
+        first = node.keys[0] if isinstance(node, ast.Dict) and node.keys else (elts[0] if elts else None)
+        pad = " " * (first.col_offset if first is not None else n.col_offset + 4)
+        if elts and not comma:
+            edits.append((last, last, b","))
+        edits.append((line0, line0, "".join(f"{pad}{s},\n" for s in srcs).encode("utf-8")))
+    else:
+        lead = "" if not elts else " " if comma else ", "
+        edits.append((close, close, (lead + ", ".join(srcs)).encode("utf-8")))
+    for a, b, text in sorted(edits, key=lambda e: e[0], reverse=True):
+        data = data[:a] + text + data[b:]
+    _write(path, data.decode("utf-8"))
 
 
 def restore(record: dict) -> None:

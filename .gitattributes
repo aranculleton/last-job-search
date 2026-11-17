@@ -70,6 +70,7 @@ job_scraper/do_not_target.json merge=ljs-state text eol=lf
 documents/rounds/*.json merge=ljs-state text eol=lf
 documents/rounds/bodies/*.json merge=ljs-state text eol=lf
 documents/rounds/.sweep/cursor.json merge=ljs-state text eol=lf
+documents/rounds/searched/with.json merge=ljs-state text eol=lf
 documents/rounds/added/jobs.json merge=ljs-state text eol=lf
 documents/rounds/kept/jobs.json merge=ljs-state text eol=lf
 documents/page_assets.json merge=ljs-state text eol=lf

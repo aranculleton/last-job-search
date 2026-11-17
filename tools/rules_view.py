@@ -490,12 +490,24 @@ def your_rules(today: dt.date, seen: dict | None = None, learned_rows=None) -> l
     for key, why in sorted(declined.items()):
         rid = f"rule~declined~{key}"
         dated = re.search(r"\b(20\d\d-\d\d-\d\d)\b", str(why))
-        why = re.sub(r"^turned down on the page, 20\d\d-\d\d-\d\d: ", "", str(why))
+        why = re.sub(r"^turned down (?:on the page|in a chat), 20\d\d-\d\d-\d\d: ", "", str(why))
         who = names.get(key) or key.title()
         rows.append(_row(rid, "declined", f"No more roles from {who}: "
                          f"{_plain(why).rstrip('.')}", _employer_left(key, seen, today), rec,
                          drop={"kind": "declined", "key": key},
                          set_on=dated.group(1) if dated else "", name=f"No more from {who}"))
+    # Kinds of employer turned down as kinds (tools/wants.py sector-out), each its own row:
+    # the bin takes the rule off and puts back what it took off the lists.
+    for kind, why in sorted(dict(_search("BAR_SECTORS_OUT", {}) or {}).items()):
+        dated = re.search(r"\b(20\d\d-\d\d-\d\d)\b", str(why))
+        said = re.sub(r"^turned down (?:on the page|in a chat), 20\d\d-\d\d-\d\d:? ?", "",
+                      str(why))
+        import sector
+        k = sector.kind_key(kind)
+        rows.append(_row(f"rule~sector_out~{_slug(k)}", "sector",
+                         f"No roles at any {k}" + (f": {_plain(said).rstrip('.')}" if said else ""),
+                         n("sector"), rec, drop={"kind": "sector_out", "sector": k},
+                         set_on=dated.group(1) if dated else "", name=f"No {k}"))
     off = set(_search("BAR_EXCLUDED_OFF", []) or [])
     for _rx, why in list(_search("BAR_EXCLUDED", []) or []):
         if why in off:

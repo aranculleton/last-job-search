@@ -2226,11 +2226,25 @@ def cmd_check(a) -> int:
         today, now = app_model.clock(a.today, a.now)
         model, _ = app_model.build(today, now)
     bad = app_model.check(model)
+    # And the person's settings against what they turned down (tools/wants.py): an employer or
+    # a kind of employer turned down that a list still searches or lifts (issue 307).
+    drift = []
+    if person.exists():
+        try:
+            import wants
+            drift = [wants.say(f) for f in wants.drift()]
+        except Exception as e:  # noqa: BLE001  a profile that does not load is said, not raised
+            drift = [f"what you turned down could not be checked ({type(e).__name__}: {e})"]
     if bad:
         print(f"app: the model breaks the contract in {len(bad)} place"
               f"{'s' if len(bad) != 1 else ''}:")
         for line in bad:
             print(f"  {line}")
+    if drift:
+        print(f"app: {len(drift)} setting(s) still search or lift what you turned down:")
+        for line in drift:
+            print(f"  {line}")
+    if bad or drift:
         return 1
     print(f"app: the model keeps the contract (rev {model.get('rev')})")
     return 0

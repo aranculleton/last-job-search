@@ -236,6 +236,10 @@ JSON_FILES = {
                                             "indent": 1, "sort": "all", "ascii": True},
     "documents/rounds/.sweep.json": {"pick": {"*": "further"}, "quiet": True,
                                      "indent": 1, "sort": "all", "ascii": True},
+    # What each of the last few rounds searched with (wants.record, issue 307), one record a
+    # round, read only for the next round's "since the last search" line: each round's record
+    # taken whole, so two chats each running a round keep both.
+    "documents/rounds/searched/with.json": {"whole": ("*",), "stamps": ("date",), "indent": 1},
     # A round's summary (run_round.write_summary), which a job brought back joins
     # (filtered.back): one row a posting, known by its link. Its two writers escape
     # differently, so the file's own way is kept.

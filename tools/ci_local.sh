@@ -274,6 +274,11 @@ person.data("person")
 for f in sorted(glob.glob(person.path("*.py"))):
     person.module(os.path.basename(f)[:-3])
 '
+  # An employer or a kind of employer turned down that a list still searches or lifts: a
+  # missed edit went on spending a round's requests on it (issue 307). Each is named with its
+  # line; `python3 tools/wants.py tidy` takes the plain ones off.
+  PYTHONDONTWRITEBYTECODE=1 run "nothing you turned down is still searched" \
+    "$PY" tools/wants.py check
   # Loading is not enough: a profile with a setting missing (an empty search.py, a
   # person.json with no identity) loaded, landed, and then broke every page update and the
   # brief (the stranger audit, 2026-11-03, X-39). The page is built from them here, in full.

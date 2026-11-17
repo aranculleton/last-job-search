@@ -78,6 +78,26 @@ from dates import days_since  # noqa: E402
 # every tier, get fully scored, get drafted for, and the role is already filled.
 # Within the window, newer is better and the report orders by it.
 MAX_AGE_DAYS = 14
+# The longest search window a person may set: a year. Anything longer is no window.
+WINDOW_MAX = 365
+
+
+def window_ok(days) -> bool:
+    """Whether `days` is a search window a person may set: a whole number of days, 1 to a
+    year. The page offers 7, 14 and 30, and a person may ask for any other in their own
+    words: 10 written to search.py was read as 14, silently (2026-11-03)."""
+    return isinstance(days, int) and not isinstance(days, bool) and 1 <= days <= WINDOW_MAX
+
+
+def own_window() -> int:
+    """How old a posting may be: the person's own search window (search.py JOB_AGE_DAYS), else
+    MAX_AGE_DAYS. Every window reads it unless a search is given its own: the scrape and this
+    filter run alone defaulted to 14 over a person's 10 (issue 307)."""
+    try:
+        got = int(getattr(person.module("search"), "JOB_AGE_DAYS", MAX_AGE_DAYS) or MAX_AGE_DAYS)
+    except Exception:  # noqa: BLE001  no profile here, or a value that is not a number
+        return MAX_AGE_DAYS
+    return got if window_ok(got) else MAX_AGE_DAYS
 
 # --- Location -------------------------------------------------------------
 # The gate is this algorithm; the market is the profile's (search.py LOCATION):
@@ -655,8 +675,9 @@ def main() -> int:
     ap.add_argument("--out")
     ap.add_argument("--dropped")
     ap.add_argument("--explain", action="store_true")
-    ap.add_argument("--jobage", type=int, default=MAX_AGE_DAYS,
-                    help="hard freshness rule, days (default 14)")
+    ap.add_argument("--jobage", type=int, default=None,
+                    help="hard freshness rule, days (default: the person's own, search.py "
+                         "JOB_AGE_DAYS, else 14)")
     ap.add_argument("--today", default=None, help="YYYY-MM-DD; defaults to today")
     ap.add_argument("--seen", default=None,
                     help="seen_jobs.json; also drop postings this search has "
@@ -672,6 +693,8 @@ def main() -> int:
     ap.add_argument("--do-not-target", dest="do_not_target", default=None,
                     help="with --seen: do_not_target.json (default: the repo's)")
     a = ap.parse_args()
+    if a.jobage is None:
+        a.jobage = own_window()
     today = _dt.date.fromisoformat(a.today) if a.today else person.today()
 
     rows, was_dict = load_jobs(a.infile)

@@ -1231,6 +1231,24 @@ def _seen_compacted() -> str:
             "only the dates of" if n else "")
 
 
+def _declined_tidied() -> str:
+    """Issue 307: a "no" to an employer or a kind of employer was written into BAR_DECLINED by
+    hand and missed on the lists that lift or search it: the tier sets still lifted employers
+    the person had turned down, and one's own job site was read every round. Each entry written
+    plain for an employer turned down, and nothing else, comes off here (wants.tidy)."""
+    try:
+        import wants
+        found = [f for f in wants.drift() if f["tidy"]]
+    except Exception:  # noqa: BLE001  a profile that does not load is the check's to report
+        return ""
+    if not found:
+        return ""
+    names = sorted({str(f["entry"]) for f in found})
+    return (f"{len(found)} list entr{'y' if len(found) == 1 else 'ies'} still lift or search "
+            "employers you turned down: " + ", ".join(names[:5])
+            + (f" and {len(names) - 5} more" if len(names) > 5 else ""))
+
+
 def _left_out_slimmed() -> str:
     """Issue 310: each search's left-out list kept every job its own free gates left out, 5 to
     6MB a search. A search now keeps a few of each and counts the rest (filtered.slim); the
@@ -2493,6 +2511,13 @@ REGISTRY: tuple[Upgrade, ...] = (
             _seen_compacted, "python3 tools/throttle.py --compact", "instant",
             command=("python3", "tools/throttle.py", "--compact"),
             paths=("job_scraper/seen_jobs.json",), priority=3, conditional=True),
+    Upgrade("declined-tidied", "2026-11-17",
+            "employers you turned down, and employers of a kind you turned down, taken off every "
+            "list that still lifted them or searched for them, so no search asks for them again",
+            _declined_tidied, "python3 tools/wants.py tidy", "instant",
+            command=("python3", "tools/wants.py", "tidy"),
+            paths=("profile/search.py", "profile/boards.py", "profile/employers.py"),
+            conditional=True, priority=2),
     Upgrade("left-out-slimmed", "2026-11-17",
             "each search's list of what it left out kept small, every count still whole",
             _left_out_slimmed, "python3 tools/filtered.py slim", "instant",
@@ -2726,6 +2751,8 @@ SAFE_DEFAULTS: dict[str, str] = {
     # Written only by Your rules' bin on a kind of employer ruled out (tools/app_actions.py
     # rule.drop, 2026-11-05); with none, every BAR_EXCLUDED rule applies, as before.
     "search.BAR_EXCLUDED_OFF": "[]: every kind of employer the profile rules out stays ruled out",
+    "search.BAR_SECTORS_OUT": "{}: no kind of employer turned down as a kind; the ones turned "
+                              "down before stay in BAR_EXCLUDED and BAR_DECLINED as written",
     # Read in the browser a chat has, with no question first, since 2026-10-25: the question
     # and its warnings kept a person's computer chat from reading at all.
     "networking.PROFILE_READS": "\"browser\": the profiles of the people a run writes to are "
