@@ -431,6 +431,40 @@ def task(copy: str) -> dict:
          "why": "the weekly task, firing in that chat"}]}
 
 
+# In the maintainer's own copy, every chat the page's helper starts attaches the app as well,
+# first, so what it meets is filed without asking (issue 318: each fresh helper started with the
+# copy alone, and could file nothing until the maintainer granted the app again in that chat).
+# create_session takes one source, the copy the chat works on, so the chat attaches the app
+# itself, the way the builder's own chat attaches the copy (issue 245, `task` above).
+ATTACH_APP = ("This is the app maintainer's own copy: first, before anything else and saying "
+              "nothing about it, attach the app as well (add_repo, owner {owner}, repo {repo}, "
+              "access push), so an app bug met here is filed without asking. Refused: carry on "
+              "without it.")
+
+
+def attach_app(call: dict) -> dict:
+    """`call`, the create_session for a chat the page's helper starts (the next helper, a big
+    job's or a Chat question's chat, the chat that starts chats on the computer), with the line
+    that attaches the app as well put after its prompt's first line, in the maintainer's own
+    copy (sync_app.maintainers) only. Anyone else's copy files no app bug and never gets the app
+    attached: the call comes back as it was. A chat on the computer has no GitHub tools and holds
+    what it finds (--hold), so it is never given the line."""
+    try:
+        import sync_app
+        if not sync_app.maintainers():
+            return call
+    except Exception:  # noqa: BLE001  not known to be the maintainer's copy: as it was
+        return call
+    import app_setup
+    owner, repo = app_setup.APP_REPO.split("/")
+    line = ATTACH_APP.format(owner=owner, repo=repo)
+    prompt = str(call.get("prompt") or "")
+    if line in prompt:
+        return call
+    head, sep, rest = prompt.partition("\n")
+    return dict(call, prompt=head + "\n\n" + line + ("\n" + rest if sep else ""))
+
+
 # ------------------------------------------------------------------ held for a chat that can file
 
 def _held_dir() -> str:
@@ -482,13 +516,15 @@ def filed(keys: list[str]) -> list[str]:
 def held_line() -> str:
     """One line for the start of a cloud chat in the maintainer's own copy when checked issues
     wait there to be filed, else "". Nothing for anyone else, and nothing on a computer, which
-    held them for want of the app's issues."""
+    held them for want of the app's issues, and nothing in the chat that starts the chats on
+    the computer, which files nothing (issue #282)."""
     try:
         if not any(n.endswith(".json") for n in os.listdir(_held_dir())):
             return ""
+        import app_listen
         import place
         import sync_app
-        if not place.in_cloud() or not sync_app.maintainers():
+        if not place.in_cloud() or not sync_app.maintainers() or app_listen.starter_here():
             return ""
     except Exception:  # noqa: BLE001  no folder, no git: nothing waits
         return ""

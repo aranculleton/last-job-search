@@ -117,6 +117,18 @@ def test_the_computer_puts_away_its_finished_job_chats_by_either_name_never_its_
                    "Job search · Find 10 people at Larkspur · Studio Laptop"], got
 
 
+
+# A computer's own chat replaced by a newer one goes, by its new name or its name before the
+# chats were named Last Job Search: one still called "Job search: on your computer" stayed in
+# the list beside its successor, the starter's clean-up matching the new name only.
+def test_a_replaced_computer_chat_goes_by_either_name():
+    old = NOW - dt.timedelta(hours=5)
+    listing = [{"title": t, "id": f"local-{i}", "status": "idle", "updated_at": old.isoformat()}
+               for i, t in enumerate(("Job search: on your computer", APP + "Your computer",
+                                      "Holiday plans"))]
+    got = [r["title"] for r in computer.archivable(listing, True, now=NOW, old_listener=True)]
+    assert got == ["Job search: on your computer", APP + "Your computer"], got
+
 def _plan(copy, tmp_path, monkeypatch, chats, renamed_before=None):
     """The daily tidy-up's plan, run as the chat that answers the page runs it."""
     monkeypatch.setattr(tidy, "_listener", lambda dump: {

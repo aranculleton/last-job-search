@@ -392,6 +392,7 @@ _PER_ROUND = ("named after the round that wrote it, once, and never written agai
               "is run by one chat")
 JSON_NAMES = {
     "interview_live.json": "an interview's live prep beside its interview_prep.md (interview_live.path_for); merged as documents/applications/*/interview_live.json",
+    ".from_search.json": "the person's own words choosing notes from search results, for one day only (reading.from_search_chosen, issue 287); a day gone by is ignored, so either side's copy is that day's choice or nothing",
     ".people_seen.json": "where an earlier people search found nobody in a place, by employer and date, so the next run searches likely employers first (candidates.order); expires after 30 days, and either side's copy is a hint, never a record",
     "tools/land.py: .json": "a changed file's own name, read only to check it parses before a data-only save lands (land.data_check); never written",
     ".sent.json": "each view batch's records as they stood before it was sent, in the view's own folder, so a refused save can be put back and made again (page_db.keep_landed); never committed",
@@ -439,7 +440,7 @@ JSON_NAMES = {
                      "ljs-job-chats.json", "ljs-tidy-planned.json", "ljs-versions.json",
                      "ljs-save-held.json", "ljs-land-result.json", ".mirror.json",
                      "ljs-touched.json", "ljs-pdf-pages.json", "ljs-claims.json",
-                     "ljs-retired-saves.json", "ljs-app-bug.json",
+                     "ljs-retired-saves.json", "ljs-app-bug.json", "ljs-computer-starter.json",
                      "ljs-tidy-renames.json"), _GITDIR),
     # A bug a chat in the maintainer's copy checked but could not file (no GitHub tools there),
     # one file a bug under handoff/app_bugs/, named by its key: two chats that held the same bug

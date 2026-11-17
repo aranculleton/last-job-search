@@ -223,6 +223,64 @@ def no_screen(dump: str, db: dict) -> str:
 
 
 COMPUTER_READS = "network~read~"
+# A read finished this recently keeps its people off the next one, whatever its id or its day:
+# what the computer read and saved can take a while to reach this copy, and a read finished at
+# 23:52 let the 00:22 page update queue the same people again, since the guard went by the day
+# in its id (issue 318). Past it, people still unread here are read again, once a day.
+READ_KEPT_S = 24 * 3600
+# What a read for the computer says when a cloud chat closes it as already done (read_proven).
+ALREADY_READ = "Already read: every profile here was read and saved before this started."
+
+
+def read_people(d: dict) -> set[str]:
+    """The people a networking read or rewrite names (`args.contacts`, `args.contact`), or
+    none for any other work."""
+    if str((d or {}).get("kind") or "") != "network":
+        return set()
+    a = d.get("args") if isinstance(d.get("args"), dict) else {}
+    if not (a.get("rewrite") or a.get("read_first")):
+        return set()
+    named = [str(c) for c in a.get("contacts") or []] if isinstance(a.get("contacts"), list) else []
+    return {c.strip() for c in named + [str(a.get("contact") or "")] if c.strip()}
+
+
+def _finished_lately(d: dict, now) -> bool:
+    """Did this work finish less than READ_KEPT_S ago (by its finish, else its asking)?"""
+    import app_model
+    at = app_model.parse_time(d.get("finished_at") or d.get("asked_at"))
+    return at is not None and (now - at).total_seconds() < READ_KEPT_S
+
+
+def read_proven(db: dict, work_id: str, now) -> tuple[list[str], list[str]]:
+    """For a read sent to the computer (`work_id`), the people it names who are proven read
+    already, and those who are not. Proven: a fresh reading of them saved in this copy, or
+    another read the page shows done in the last READ_KEPT_S that names them (what it read is
+    saved on the computer, on its way here), or one kept on the computer (computer.saved_here).
+    A repeat queued before the first read's save reached this copy showed "Waiting for your
+    computer", and no cloud chat could close it (issue 318)."""
+    import page_db
+    work = db.get("work") or {}
+    item = (work.get(page_db.safe_id(work_id)) or {}).get("data") or {}
+    done: set = set()
+    for wid, doc in work.items():
+        d = (doc or {}).get("data") or {}
+        if wid == page_db.safe_id(work_id) or str(d.get("status") or "") != "done":
+            continue
+        if d.get("saved_here") or _finished_lately(d, now):
+            done |= read_people(d)
+    proven, left = [], []
+    for c in sorted(read_people(item)):
+        if c not in done:
+            try:
+                import reading
+                if not reading.fresh(reading.load(c), person.today(now)):
+                    left.append(c)
+                    continue
+            except Exception:  # noqa: BLE001  no reading to look at: not proven
+                left.append(c)
+                continue
+        proven.append(c)
+    return proven, left
 
 
 def unread_why(cid: str, model: dict, now) -> str:
@@ -288,18 +346,20 @@ def computer_reads(model: dict, work: dict, now) -> tuple[str, dict] | None:
     day = now.date().isoformat().replace("-", "")
     for wid, doc in work.items():
         d = (doc or {}).get("data") or {}
-        if d.get("kind") != "network":
+        people = read_people(d)
+        if not people:
             continue
-        a = d.get("args") if isinstance(d.get("args"), dict) else {}
         # Today's read, finished too: its people are not queued again until tomorrow. A read
         # that finished with some still unread was written over by the next page update, under
         # the same id, as a new job with its clock reset (the maintainer's page, 2026-11-10).
         today = str(wid).startswith(page_db.safe_id(f"{COMPUTER_READS}{day}~"))
         # Read on the computer and kept there, not yet in this copy (computer.saved_here): its
         # people are never queued again meanwhile, or the same profiles were read twice.
-        if (str(d.get("status") or "queued") not in page_db.FINISHED or today
-                or d.get("saved_here")) and (a.get("rewrite") or a.get("read_first")):
-            going |= {str(c) for c in a.get("contacts") or []} | {str(a.get("contact") or "")}
+        # Finished in the last READ_KEPT_S, under any id: its save may not be here yet, and the
+        # day in its id alone let a read finished before midnight be queued again just after.
+        if str(d.get("status") or "queued") not in page_db.FINISHED or today \
+                or d.get("saved_here") or _finished_lately(d, now):
+            going |= people
     cids, left = [], []
     for c in dict.fromkeys(want):
         if not c or c in going:
@@ -405,6 +465,12 @@ def self_fixes(db: dict | None, model: dict, out_dir: str, now, dump_dir: str = 
     got = computer_reads(model, work, now)
     if got:
         w.add("set", "work", got[0], got[1], if_version=None)
+    # A sign-in card written before it named the chat on the computer said "tap Open the
+    # chat" over a button the page no longer draws (issues 285 and 286): its words and steps
+    # made again by the update itself, once, so a read already waiting on it is not stuck.
+    import computer
+    for wid, version, needs in computer.signin_cards_to_renew(db):
+        w.add("update", "work", wid, {"needs": needs}, if_version=version)
     out = w.save("self") if w.entries else []
     ever = set()
     for d in work.values():
@@ -793,6 +859,17 @@ def cmd_view(a) -> int:
             ended = page_db.fail_stranded(db, now, os.path.join(a.out_dir, "stranded"))
             batches = list(batches) + list(ended["batches"])
         except Exception:  # noqa: BLE001  nothing read to judge it by: nothing ended
+            pass
+        # A chat put away (archived, or gone) does nothing for the person any more: its busy
+        # line comes off the page on every redraw, in a batch of its own, so a line an older
+        # version left behind clears by itself (issue 318: "Job search: reading 40 postings"
+        # stayed on Claude's work panel after its chat was archived).
+        try:
+            import tidy
+            batches = list(batches) + tidy.busy_gone(a.dump, tidy.put_away(),
+                                                     os.path.join(a.out_dir, "busy-gone"),
+                                                     keep=False)
+        except Exception:  # noqa: BLE001  no record of what was put away: nothing to take off
             pass
     # Work this update queued for itself (a remake, the files, a computer read) wakes nobody by
     # itself: the brief's run starts a fresh helper for it (app_listen.brief_wakes).
@@ -1940,7 +2017,10 @@ def where_it_runs(chosen: dict, chat: str, kind: str, no_sessions: bool = False,
                 "permission_mode": app_listen.SESSION_MODE}
         if chosen.get("model"):
             call["model"] = chosen["model"]
-        got = {"run": "child session", "create_session": call}
+        # In the maintainer's own copy, with the app attached as well, so an app bug the job
+        # meets is filed without asking (issue 318).
+        import app_bug
+        got = {"run": "child session", "create_session": app_bug.attach_app(call)}
         if parent == PARENT:
             got["first"] = (f"put this chat's own id, from get_session with no session_id, "
                             f"wherever its prompt says {PARENT}, so the job's chat can report "
@@ -3782,6 +3862,25 @@ def cmd_done(a) -> int:
     made, noted, links, problem = _made(a, db, reply)
     if problem:
         return _refuse("done", f"not finished: {problem}")
+    # A read for the computer, closed as done by a chat that is not there: only once every
+    # profile in it is proven read (read_proven), so a repeat queued before the first read's
+    # save arrived can be closed, never one still owed (issue 318).
+    proven = False
+    item = ((db.get("work") or {}).get(page_db.safe_id(a.work)) or {}).get("data") or {}
+    kind_here = page_db.claimed_kind(item, a.kind or app_listen.chat_kind(), a.chat)
+    if not (a.failed or a.stopped or a.question) and page_db.computer_only(item, kind_here) \
+            and read_people(item):
+        unread = read_proven(db, a.work, now)[1]
+        if unread:
+            n = len(read_people(item))
+            return _refuse("done", (
+                f"not finished: this read is for their computer, and {len(unread)} of its {n} "
+                f"profiles {'is' if len(unread) == 1 else 'are'} not read and saved yet "
+                f"({', '.join(unread)}). Leave it: it starts on their computer by itself. Where it "
+                "should not run at all, call it off instead with --stopped and a --summary "
+                "saying why."))
+        proven = True
+        a.summary = a.summary or ALREADY_READ
     try:
         got = page_db.finish(db, a.work, now, a.out or os.path.join(a.dump, "out"),
                              summary=a.summary, status="failed" if a.failed else
@@ -3793,7 +3892,7 @@ def cmd_done(a) -> int:
                              outcome=getattr(a, "outcome", "") or "",
                              signin=getattr(a, "signin", "") or "", go=made, me=_me(a.chat),
                              drafted=getattr(a, "drafted", None),
-                             short=getattr(a, "short", "") or "")
+                             short=getattr(a, "short", "") or "", proven=proven)
     except (KeyError, ValueError) as e:
         return _refuse("done", f"not finished: {e.args[0] if e.args else e}")
     if got.get("status") in ("done", "failed", "stopped") and not got.get("again"):
