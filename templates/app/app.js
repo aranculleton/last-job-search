@@ -324,6 +324,8 @@
   // a pill gone down with More), so the two compare as the same when nothing changed (patch).
   function sepKept(probe, live) {
     if (!live) return;
+    const pt = probe.querySelectorAll(".sendtext"), lt = live.querySelectorAll(".sendtext");
+    if (pt.length && lt.length === pt.length) lt.forEach((t, i) => { if (t.classList.contains("fits")) pt[i].classList.add("fits"); });
     const ps = probe.querySelectorAll(".sep-dot, .sep-before");
     const ls = live.querySelectorAll(".sep-dot, .sep-before");
     if (ps.length && ls.length === ps.length) ps.forEach((p, i) => { for (const c of SEP_CUT) if (ls[i].classList.contains(c)) p.classList.add(c); });
@@ -337,7 +339,19 @@
       if (at >= 0 && pr[i].children[at]) pr[i].children[at].classList.add("more-mate");
     });
   }
-  function lineFit() { moreFit(); sepFit(); }
+  // A clipped draft's Show all only where its two lines hide something: "Show all" under a
+  // two-line note hid nothing (the redesign's second round, 2026-11-17).
+  function clampFit() {
+    for (const p of document.querySelectorAll(".sendtext.fits")) p.classList.remove("fits");
+    for (const p of document.querySelectorAll(".sendtext:has(> .sendtext-in) + .read-all")) {
+      const t = p.previousElementSibling.firstElementChild;
+      if (!shownIn(t) && !t.getClientRects().length) continue;
+      const lh = parseFloat(getComputedStyle(t).lineHeight) || 24;
+      const whole = p.previousElementSibling.classList.contains("is-clamped") ? t.scrollHeight <= t.clientHeight + 1 : t.getBoundingClientRect().height <= lh * DRAFT_LINES + 1;
+      if (whole) p.previousElementSibling.classList.add("fits");
+    }
+  }
+  function lineFit() { moreFit(); sepFit(); clampFit(); }
   function svg(tag, attrs, kids) {
     const el = document.createElementNS("http://www.w3.org/2000/svg", tag);
     for (const k of Object.keys(attrs || {})) if (attrs[k] !== null && attrs[k] !== undefined) el.setAttribute(k, String(attrs[k]));
@@ -7883,8 +7897,9 @@
   const DRAFT_LINES = 2;
   function clippedBody(m, body, tid, clamp) {
     if (clamp && txt(m.channel) !== "inmail") {
-      const long = body.length > 60 * DRAFT_LINES || body.split(/\n/).length > DRAFT_LINES;
-      if (!long) return h("p", {class: "sendtext big", id: tid}, body);
+      // Every draft after the first is clipped to its two lines, whatever its length: a guess
+      // from its letters left a long one whole (the redesign's second round, 2026-11-17).
+      // Show all shows only where the two lines hide something (clampFit).
       const open = bodyOpen.has(m.id);
       // The words clipped inside the box, never at its edge: clipped at its edge, the fifth
       // line showed through the box's own padding.

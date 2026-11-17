@@ -814,13 +814,13 @@ details.send { border-top: 1px solid var(--line); }
    taller than their target (34 against 32) and they reached into the words (Everywhere,
    4.15.0). A phone keeps its 36px buttons and their 44px reach. */
 @media (min-width: 760px) { .pdraft > .sendbox > .bubble-tools { height: var(--target); } .pdraft > .sendbox > .bubble-tools > .btn { min-height: 0; height: 100%; box-sizing: border-box; } }
-.pdraft > .subject { display: grid; grid-template-columns: auto minmax(0, max-content) auto; justify-content: start; align-items: start; column-gap: 4px; --bh: calc(36px * var(--tz)); }
-/* Its Copy sits on the subject's first line: lined up by their tops, the button hung 7px under
-   the words (README picture, 4.15.0). A zero-width strut the button's height makes the first
-   line as tall as the button with the words in its middle; a wrapped subject's other lines
-   keep their own height. */
-.pdraft > .subject > span::before { content: ""; display: inline-block; width: 0; height: var(--bh); vertical-align: middle; }
-.pdraft > .subject > .btn { align-self: start; min-height: 0; height: var(--bh); }
+/* The subject is one run of words, "Subject:" and the words wrapping as a sentence does, its Copy
+   at the run's end on its last line, in the middle of that line: in three columns a wrapped
+   subject hung in a column of its own with 30px between its lines (the redesign's second round,
+   2026-11-17), and lined up by their tops the button hung 7px under the words (README picture,
+   4.15.0). The button keeps the line's own height, reaching past it above and below. */
+.pdraft > .subject { display: block; font-size: var(--t-md); line-height: 24px; --bh: calc(36px * var(--tz)); }
+.pdraft > .subject > .btn { display: inline-flex; vertical-align: middle; min-height: 0; height: var(--bh); margin: calc((24px - var(--bh)) / 2) 0 calc((24px - var(--bh)) / 2) 4px; }
 .pdraft > .subject > .btn.icon-only { background: none; border-color: transparent; }
 @media (hover: hover) { .pdraft > .subject > .btn.icon-only:hover { background: var(--raised); } }
 /* Its own hairline, as a card's answer box keeps: a hovered card turns the page's colour,
@@ -878,6 +878,8 @@ ul.people > li.person.has-draft:not(li.person.has-draft ~ li) .sendtext.is-clamp
 ul.people > li.person.has-draft:not(li.person.has-draft ~ li) .sendbox > .read-all { display: none; }
 .sendbox > .btn.read-all { display: inline-flex; align-items: center; gap: 0; min-height: 24px; margin: 4px 0 0; padding: 0 2px; color: var(--ink); font-weight: 600; font-size: var(--t-sm);
   text-decoration: none; }
+/* Show all only where the two lines hide something (app.js, clampFit). */
+.sendtext.fits + .read-all { display: none; }
 .read-all > .chev { display: inline-block; width: 6px; height: 6px; margin: 0 2px 0 8px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: translateY(-2px) rotate(45deg); }
 .read-all[aria-expanded="true"] > .chev { transform: translateY(1px) rotate(-135deg); }
 @media (hover: hover) { .sendbox > .btn.read-all:hover { text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 3px; } }

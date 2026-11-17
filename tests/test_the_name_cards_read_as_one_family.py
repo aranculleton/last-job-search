@@ -192,7 +192,7 @@ CLAMPS = r"""(() => [...document.querySelectorAll('#main li.person.has-draft')].
   const t = c.querySelector('.sendtext-in'), more = c.querySelector('.read-all');
   if (!t) return null;
   const lh = parseFloat(getComputedStyle(t).lineHeight);
-  return [c.dataset.item, Math.round(t.getBoundingClientRect().height / lh), more ? more.textContent.trim() : null];
+  return [c.dataset.item, Math.round(t.getBoundingClientRect().height / lh), more && more.getClientRects().length ? more.textContent.trim() : null, t.scrollHeight > t.clientHeight + 1];
 }).filter(Boolean))()"""
 COUNTS = "[...document.querySelectorAll('#main li.person .msg-facts .count')].map((c) => c.textContent.trim())"
 
@@ -211,10 +211,14 @@ def test_copy_and_i_sent_it_sit_together_and_once_copied_it_says_where_to_paste(
     assert after["who"] == before["who"] and after["sentFilled"] and after["line"] == "Copied. Paste it in LinkedIn.", after
     # One count in the header: the messages written to send.
     assert "7 messages to send" in before["head"] and "need you" not in before["head"], before["head"]
-    # The first draft whole; every long one after it two lines, with Show all.
+    # The first draft whole; every one after it two lines at most, with Show all where they hide
+    # something and only there (the redesign's second round, 2026-11-17: a long one was left
+    # whole, and a two-line one offered Show all over nothing).
     assert clamps[0][2] is None or clamps[0][1] > 2, clamps
+    assert all(c[1] <= 2 for c in clamps[1:]), clamps
     folded = [c for c in clamps[1:] if c[2]]
-    assert folded and all(c[1] <= 2 and c[2] == "Show all" for c in folded), clamps
+    assert folded and all(c[2] == "Show all" and c[3] for c in folded), clamps
+    assert all(c[2] is None for c in clamps[1:] if not c[3]), clamps
     # A note far inside its limit shows no count.
     assert all("to spare" in c or "over" in c for c in counts), counts
 

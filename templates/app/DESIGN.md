@@ -583,9 +583,13 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   message on the card, "They replied" is the soft pill beside I sent it, and waits under More
   only where Open their profile already stands there (the redesign, 2026-11-16: under More it
   was not found when they wrote again before the message went). Copy is the draft's own tool,
-  never counted against the row's two soft pills. A long draft after the first shows its first
-  two lines and "Show all", which opens it in place (Copy copies every word); the first draft
-  on the list is drawn whole (the redesign, 2026-11-16: ten drafts drawn whole were a wall of
+  never counted against the row's two soft pills. Every draft after the first shows its first
+  two lines, with "Show all" only where they hide something, which opens it in place (Copy
+  copies every word); the first draft on the list is drawn whole. An email's subject is one run
+  of words, "Subject:" and the words wrapping as a sentence does, its Copy at the run's end (the
+  redesign's second round, 2026-11-17: a long draft was left whole, a two-line one offered Show
+  all over nothing, and a wrapped subject hung in a column of its own; one-family test, room
+  test: subject) (the redesign, 2026-11-16: ten drafts drawn whole were a wall of
   words; its second round, 2026-11-17: Copy filled on the first card and outlined on the rest,
   1000px from I sent it on a laptop, and four lines a draft still 3350px of a phone).
   Why: five buttons a card read as five jobs, and three dates a card as none. Floated into
