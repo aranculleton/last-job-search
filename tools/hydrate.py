@@ -592,7 +592,7 @@ class Kept:
         try:
             os.makedirs(self.folder, exist_ok=True)
             fd, tmp = tempfile.mkstemp(dir=self.folder, suffix=".tmp")
-            with os.fdopen(fd, "wb") as raw, gzip.open(raw, "wt", encoding="utf-8") as fh:
+            with os.fdopen(fd, "wb") as raw, gzip.open(raw, "wt", encoding="utf-8", newline="\n") as fh:
                 json.dump({"key": key, "at": self.clock(), "value": value}, fh)
             os.replace(tmp, self._path(key))
         except OSError:
