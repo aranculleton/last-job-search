@@ -1102,3 +1102,9 @@ def restate_ratio(reply_text, their_message, ignore=()) -> Restatement:
     ratio = len(overlap) / len(distinct)
     flagged = ratio >= RESTATE_THRESHOLD and len(distinct) >= MIN_CONTENT_WORDS
     return Restatement(round(ratio, 3), overlap, flagged)
+
+
+# One module, imported by its own name or from network (issue 339; state.py says why).
+_MODULE_NAME = os.path.splitext(os.path.basename(__file__))[0]
+if __name__ in (_MODULE_NAME, "network." + _MODULE_NAME):
+    sys.modules[_MODULE_NAME] = sys.modules["network." + _MODULE_NAME] = sys.modules[__name__]

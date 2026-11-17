@@ -756,7 +756,7 @@ def live(today: dt.date | None = None, contacts=None, threads=None) -> list[dict
         try:
             import state
             contacts = state.load_contacts() if contacts is None else contacts
-            threads = (state.load_threads() if os.path.exists(state.THREADS_CSV) else []) \
+            threads = (state.load_threads() if os.path.exists(state.threads_csv()) else []) \
                 if threads is None else threads
         except Exception:  # noqa: BLE001  no contact book: nothing about people is held
             contacts, threads = contacts or [], threads or []
@@ -813,7 +813,7 @@ def _lift_employer_wait(h, today, words) -> str:
     import reading
     import state
     contacts = state.load_contacts()
-    threads = state.load_threads() if os.path.exists(state.THREADS_CSV) else []
+    threads = state.load_threads() if os.path.exists(state.threads_csv()) else []
     owed: set = set()
     waiting, _ = reading.at_employer(h["what"], contacts, today=today, threads=threads,
                                      owed=owed)
@@ -934,7 +934,7 @@ def _lift_person(h, today, words) -> str:
     row = next((c for c in contacts if str(c.get("contact_id") or "").strip() == cid), None)
     if row is None:
         raise ValueError(f"{h['what']} is not in your contacts any more")
-    threads = state.load_threads() if os.path.exists(state.THREADS_CSV) else []
+    threads = state.load_threads() if os.path.exists(state.threads_csv()) else []
     state.put_next(row, state.by_contact(threads).get(cid, []), "", "")
     state.save_contacts(contacts)
     return f"{h['what']}: off hold; what is owed them follows your follow-up rule from now"
@@ -944,7 +944,7 @@ def _lift_note_aside(h, today, words) -> str:
     import state
     cid = h.get("contact_id") or ""
     contacts = state.load_contacts()
-    threads = state.load_threads() if os.path.exists(state.THREADS_CSV) else []
+    threads = state.load_threads() if os.path.exists(state.threads_csv()) else []
     state.reopen(contacts, threads, cid, today, f"{words} (Held back for now)")
     state.save_contacts(contacts)
     return f"{h['what']}: offered again from today, with the note as it was"

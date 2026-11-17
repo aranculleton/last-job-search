@@ -79,35 +79,36 @@ _pages = tempfile.mkdtemp(prefix="ljs_pages_")
 os.environ["LJS_RESEARCH_PAGES"] = _pages
 atexit.register(shutil.rmtree, _pages, ignore_errors=True)
 
-# The networking limits are read from the profile when their module is first imported, and
-# the app reaches that module by two names (`schema`, and `network.schema` from the page's
-# model). Both are imported here, under the example, so a test that points LJS_PROFILE at a
-# free plan for a moment cannot fix the limits for every test after it in the same worker
-# (2026-10-29: a 209-character follow-up was checked against 180 on one parallel run and
-# 280 on another). A test that changes the plan reloads both (reload_limits below).
+# The networking limits are read from the profile when their module is first imported. The
+# app reaches that module by two names (`schema`, and `network.schema` from the page's model),
+# which are one module (issue 339). It is imported here, under the example, so a test that
+# points LJS_PROFILE at a free plan for a moment cannot fix the limits for every test after it
+# in the same worker (2026-10-29: a 209-character follow-up was checked against 180 on one
+# parallel run and 280 on another). A test that changes the plan reloads it (reload_limits
+# below).
 for _p in (os.path.join(ROOT, "tools", "network"), os.path.join(ROOT, "tools")):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 import schema as _schema  # noqa: E402,F401
 from network import schema as _network_schema  # noqa: E402,F401
 # The message log's module is reached by two names as well (`state`, and `network.state` from
-# followup_drafts and the page's model), and each fixes its file paths when first imported.
-# Imported here, under the tests' own state, so a test that points LJS_STATE at a folder of its
-# own for a moment cannot leave one name reading that folder, deleted, for every test after it
-# in the same worker (the review, 2026-11-10: the referral-ask tests failed after the interview
-# pack's, which first imported network.state inside a fixture of its own).
+# followup_drafts and the page's model), one module too. Its loads and saves read the state at
+# each call (issue 340), but its CONTACTS_CSV, THREADS_CSV and TRACKER_CSV still say where the
+# files were when it was first imported, and a test may read them. Imported here, under the
+# tests' own state, so a test that points LJS_STATE at a folder of its own for a moment cannot
+# leave those names saying that folder, deleted, for every test after it in the same worker
+# (the review, 2026-11-10: the referral-ask tests failed after the interview pack's, which
+# first imported network.state inside a fixture of its own).
 import state as _state_module  # noqa: E402,F401
 from network import state as _network_state  # noqa: E402,F401
 
 
 def _reload_limits():
-    """Re-read the networking limits under both of the module's names, from whatever profile
-    LJS_PROFILE now names: after a test switches the plan, and again when it switches back."""
+    """Re-read the networking limits, from whatever profile LJS_PROFILE now names: after a test
+    switches the plan, and again when it switches back. `schema` and `network.schema` are one
+    module, so one reload serves both names."""
     import importlib
-    for name in ("schema", "network.schema"):
-        if name in sys.modules:
-            importlib.reload(sys.modules[name])
-    return sys.modules["schema"]
+    return importlib.reload(sys.modules["schema"])
 
 
 import pytest  # noqa: E402
@@ -206,13 +207,12 @@ def _limits_as_the_profile_says():
     use says them (schema.limits_now reads them again when the settings change): a test that
     pointed LJS_PROFILE at a copy of its own left them read from it, and a later test's own
     rule (monkeypatched) was read over from the example mid-test."""
-    for name in ("schema", "network.schema"):
-        mod = sys.modules.get(name)
-        if mod is not None and hasattr(mod, "limits_now"):
-            try:
-                mod.limits_now()
-            except Exception:  # noqa: BLE001  a test of a profile with no settings: as it was
-                pass
+    mod = sys.modules.get("schema")     # network.schema is the same module (issue 339)
+    if mod is not None and hasattr(mod, "limits_now"):
+        try:
+            mod.limits_now()
+        except Exception:  # noqa: BLE001  a test of a profile with no settings: as it was
+            pass
     yield
 
 

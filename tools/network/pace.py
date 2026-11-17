@@ -298,3 +298,9 @@ def slow(load_seconds: float, history: list) -> bool:
     if load_seconds < SLOW_FLOOR_SECONDS or len(past) < 3:
         return False
     return load_seconds > SLOW_FACTOR * statistics.median(past)
+
+
+# One module, imported by its own name or from network (issue 339; state.py says why).
+_MODULE_NAME = os.path.splitext(os.path.basename(__file__))[0]
+if __name__ in (_MODULE_NAME, "network." + _MODULE_NAME):
+    sys.modules[_MODULE_NAME] = sys.modules["network." + _MODULE_NAME] = sys.modules[__name__]

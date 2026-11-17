@@ -98,6 +98,20 @@ def pace(skill: str, sleep=time.sleep, clock=time.perf_counter) -> bool:
     return True
 
 
+def started(skill: str, clock=time.perf_counter) -> None:
+    """The moment a paced request really goes, after its command and its output file are
+    made: the next one waits its crawl-delay from here. `pace` stamped the turn it gave, and
+    a request whose setup took 0.06s started that late, so the next went 0.14s after it to a
+    board that asked for 0.2s (CI, 2026-11-17, issue 343). Never earlier than the turn."""
+    with _PACE_GUARD:
+        got = _PACE.get(skill)
+    if got is None:
+        return
+    lock, times = got
+    with lock:
+        times[0] = max(times[0], clock())
+
+
 # Requirements sit at the END of a posting. A 9,000-character cap cut the
 # requirements off bodies in a round, which is exactly the text the screen and
 # the scorers read.
@@ -519,7 +533,7 @@ def _fetch(job: dict, timeout: int) -> dict:
         # kept wherever it falls in stderr, where only the last line was kept.
         d, err = portals.run_cli(
             [*portals.runtime(), cli, "detail", str(ident), "--format", "json"],
-            timeout=timeout, empty=_no_body)
+            timeout=timeout, empty=_no_body, started=lambda: started(skill))
         if err:
             return {**job, "hydrate_error": f"detail {err}"}
         if not isinstance(d, dict):

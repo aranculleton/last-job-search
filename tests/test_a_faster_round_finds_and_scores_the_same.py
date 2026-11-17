@@ -247,6 +247,29 @@ def test_a_paced_boards_requests_stay_its_crawl_delay_apart(tmp_path, monkeypatc
     assert len(board) == 5 and min(gaps) >= 0.17, gaps
 
 
+def test_a_slow_start_never_shortens_the_next_gap(tmp_path, monkeypatch):
+    """The delay runs from when a request starts, not from when its turn was given: the
+    second request's command took 0.1s to make, it started that late, and the third went
+    0.1s after it to a board that asked for 0.2s (CI, 2026-11-17: gaps of 0.26s then
+    0.14s, issue 343)."""
+    hydrate, sent = _paced(tmp_path, monkeypatch, 0.2)
+    import time
+    import portals
+    made = portals.runtime
+    calls = []
+
+    def slow_second():
+        calls.append(1)
+        if len(calls) == 2:
+            time.sleep(0.1)
+        return made()
+    monkeypatch.setattr(portals, "runtime", slow_second)
+    _hydrate(hydrate, tmp_path, monkeypatch, _rows("cityboard", 4), workers=1)
+    board = sorted(t for who, t in sent if who == "cityboard-search")
+    gaps = [b - a for a, b in zip(board, board[1:])]
+    assert len(board) == 4 and min(gaps) >= 0.17, gaps
+
+
 def test_a_long_hydrate_says_how_far_it_has_got(tmp_path, monkeypatch, capsys):
     hydrate, _sent = _paced(tmp_path, monkeypatch, 0.25)
     monkeypatch.setattr(hydrate, "PROGRESS_SECONDS", 0.1, raising=False)

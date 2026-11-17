@@ -1431,17 +1431,19 @@ def to_write_here(got) -> list[str]:
                  or (i["draft"]["status"] == "write" and i["draft"]["who"] == "here"))]
 
 
-def held_by_rule(contact: dict, msgs, kind: str = "") -> str:
+def held_by_rule(contact: dict, msgs, kind: str = "", today=None) -> str:
     """Why the person's own surface rules stop a message to this contact, in plain words, or
     "": surface.held, the one check every screen and the due list read. A reply to someone
     who wrote last is held only by what stops a reply (a closed thread, an employer turned
-    down), as there."""
+    down), as there. Judged on `today` where given, the day the due list was made for, as
+    the due list judges it (issue 341)."""
     from network import state
     import surface
     msgs = list(msgs or ())
     status = state.effective_status(contact, msgs)
     got = surface.held(contact, msgs, status,
-                       replying=kind == "reply" or status in state.schema.OWED_BY_US)
+                       replying=kind == "reply" or status in state.schema.OWED_BY_US,
+                       today=today)
     if not got:
         return ""
     return got.get("said") or "their conversation is closed"
@@ -1473,7 +1475,7 @@ def check(entries, contacts, threads, today: str, got=None) -> list[dict]:
         owed = e.get("owed") or (
             "reply" if (it.get("kind") in ("reply", "resume") if it else kind == "reply")
             else "nudge")
-        stop = held_by_rule(c, index.get(iid, ()), owed) if c else None
+        stop = held_by_rule(c, index.get(iid, ()), owed, today=today) if c else None
         if stop:
             # The person's own rules stop anything going to them (where they live, their limit,
             # an employer turned down): a draft written by hand is held as one written by code
