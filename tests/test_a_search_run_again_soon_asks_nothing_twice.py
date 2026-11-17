@@ -89,6 +89,26 @@ def test_a_search_run_again_within_the_window_sends_nothing_it_was_just_answered
     assert again == [] and found_again == found       # the same postings, nothing sent
 
 
+def test_a_clock_set_apart_from_the_files_still_keeps_what_was_just_answered(sites, monkeypatch):
+    """Answers are dated on the app's clock and their files on the file system's. A clock 30
+    days ahead (the everywhere check's 30-days, 2026-11-17, as a computer whose clock was moved
+    is) read every file as a month old and took it out as soon as the folder was opened, so a
+    search run again a minute later asked everything again. A file's age is read on the clock
+    that dated it."""
+    import time
+    ahead = 30 * 86400
+    monkeypatch.setattr(scrape_wide, "_wall", lambda: time.time() + ahead)
+    monkeypatch.setattr(hydrate, "_wall", lambda: time.time() + ahead)
+    cache = sites / "rounds" / ".cache"
+    first, again = [], []
+    monkeypatch.setattr(scrape_wide, "run", _answers(first))
+    _, found = _scrape(sites / "r1", monkeypatch, cache=cache)
+    assert first
+    monkeypatch.setattr(scrape_wide, "run", _answers(again))
+    _, found_again = _scrape(sites / "r2", monkeypatch, cache=cache)
+    assert again == [] and found_again == found
+
+
 def test_nothing_is_served_past_the_window_and_a_new_search_is_asked(sites, monkeypatch):
     cache = sites / "rounds" / ".cache"
     now = [1_000_000.0]
