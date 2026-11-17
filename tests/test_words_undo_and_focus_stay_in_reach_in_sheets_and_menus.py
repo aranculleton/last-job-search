@@ -233,3 +233,31 @@ def test_escape_closes_a_menu_inside_a_sheet_and_never_the_sheet(run, tmp_path):
     ], PHONE, clock=T)
     assert got["after"][1]["eval"] == [False, True, "menu:dupd:" + TAMSIN], got["after"][1]["eval"]
     assert got["after"][2]["eval"] is False
+
+
+# Where a tap on each part of each menu's and More's button lands: the button itself, or the
+# part, with its button's key.
+TAPS_LAND = r"""(() => { const out = [];
+  for (const s of document.querySelectorAll('details:is(.menu, .more) > summary')) {
+    const parts = [s, ...s.querySelectorAll('*')];
+    for (const p of parts) { const r = p.getBoundingClientRect();
+      if (!r.width || !r.height || r.bottom < 0 || r.top > innerHeight || r.right < 0 || r.left > innerWidth) continue;
+      const at = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      if (at && s.contains(at) && at !== s) out.push([s.getAttribute('data-k'), at.tagName + '.' + (at.className && at.className.baseVal !== undefined ? at.className.baseVal : at.className)]); } }
+  return out; })()"""
+
+
+@pytest.mark.parametrize("vp", [PHONE, WIDE], ids=["phone", "wide"])
+def test_a_tap_on_a_menus_button_lands_on_the_button_itself(run, tmp_path, vp):
+    """Safari starts Tab from the spot a tap lands on: a tap on the ⋯ inside a Coming up row's
+    button, then Option-Tab, left the focus where it was and never reached the menu's first item
+    (the everywhere check, Safari, 2026-11-17). Every part of a menu's or More's button lets the
+    tap through to the button."""
+    got = _go(run, tmp_path, [
+        {"hash": "interviews", "eval": TAPS_LAND},
+        {"hash": "contacts", "eval": TAPS_LAND},
+        {"hash": "jobs", "eval": TAPS_LAND},
+        {"hash": CARD, "ready": CARD_OPEN, "eval": TAPS_LAND},
+    ], vp, clock=T)
+    caught = [a["eval"] for a in got["after"]]
+    assert caught == [[], [], [], []], caught

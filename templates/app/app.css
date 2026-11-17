@@ -1229,6 +1229,9 @@ textarea { width: 100%; resize: vertical; line-height: 1.45; }
 .menu.worded .menu-btn { font-size: 0.875rem; border: 0; padding: 8px 16px; border-radius: var(--r-ctl); background: var(--raised); }
 @media (hover: hover) { .menu-btn:hover { background: var(--raised); } .menu.worded .menu-btn:hover { background: var(--raised-hover); } }
 .menu-btn::-webkit-details-marker { display: none; }
+/* A tap anywhere on a menu's or More's button lands on the button itself: Safari starts Tab from the
+   spot tapped, and from the glyph inside it Option-Tab went nowhere (DESIGN.md, menus). */
+details:is(.menu, .more) > summary * { pointer-events: none; }
 @media (hover: hover) { .menu-btn:hover { background: var(--raised); } }
 .menu-panel { position: absolute; right: 0; top: calc(100% + 4px); z-index: 25; min-width: 240px; background: var(--surface); border: 1px solid var(--line-strong);
   border-radius: var(--r-sm); box-shadow: var(--shadow); padding: 4px; display: grid; }

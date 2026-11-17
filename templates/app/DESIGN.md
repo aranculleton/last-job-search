@@ -814,7 +814,10 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   accessibility review of the redesign's second round, 2026-11-17). A menu's button and its
   items are in the Tab order in every engine, and a menu opened by a press on its button takes
   the focus there: Safari focuses neither a summary nor a button unless told, and left the
-  focus on the screen's title (the everywhere check, 2026-11-17). (sheets-and-menus test)
+  focus on the screen's title (the everywhere check, 2026-11-17). A tap anywhere on a menu's or
+  a More's button lands on the button itself, its glyph and words included: Safari starts Tab
+  from the spot tapped, and from the ⋯ inside the button Option-Tab went nowhere at all (the
+  everywhere check, Safari, 2026-11-17). (sheets-and-menus test)
 - **On To do a card's face is its next step and one more**, then More for the rest: a way to
   where it lives ("Open in Coming up", "Open in Contacts"), Add to calendar, a time to send it,
   They replied beside a Done (the redesign's second round, 2026-11-17: "Choose the role · 15 min
