@@ -11478,6 +11478,23 @@
   document.addEventListener("pointerdown", (e) => {
     for (const d of document.querySelectorAll("details.menu[open]")) if (!d.contains(e.target)) d.open = false;
   }, true);
+  // Safari leaves the focus where it was when a menu's button is clicked, where Chrome and
+  // Firefox move it to the button: Tab from a menu opened that way started at the top of the
+  // page, never at its first item (the everywhere check, Safari, 2026-11-17). A menu opened by
+  // a press on its own button while nothing has the focus takes it there; one the page opens
+  // itself (drawn again open) is left alone.
+  let pressedSummary = null;
+  document.addEventListener("pointerdown", (e) => { pressedSummary = e.target && e.target.closest ? e.target.closest("summary") : null; }, true);
+  document.addEventListener("toggle", (e) => {
+    const d = e.target;
+    if (!d || d.tagName !== "DETAILS" || !d.open || !d.matches("details.menu, details.more")) return;
+    const s = d.firstElementChild;
+    if (!s || s !== pressedSummary) return;
+    pressedSummary = null;
+    const ae = document.activeElement;
+    if (ae && ae !== document.body && ae !== document.documentElement) return;
+    s.focus({preventScroll: true});
+  }, true);
 
   // ------------------------------------------------------------------ Filter: one button, a sheet on a phone, a panel on wide
 

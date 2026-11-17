@@ -1775,6 +1775,10 @@ a.navlink, .applylink, .btn.link, .fold .btn.link, .bp-foot a { text-decoration-
   /* A one-line row is centred in its target, never a line of text over an empty one; a row
      that wraps reads from its start, never centred under itself (the review, 2026-11-10). */
   a.bp-text.bp-link { display: flex; align-items: center; text-align: start; }
+  /* Its words are a flex item, and one never wider than its row: Safari read "· Ready to do"
+     (joined so "do" never goes down alone) as too wide to shrink and drew it 3px past the row
+     (the everywhere check, Safari, a tablet, 2026-11-17). */
+  a.bp-text.bp-link > span { min-width: 0; }
   .bp-jobs a.bp-text.bp-link, .bp-jobs .bp-link { align-items: flex-start; justify-content: center; }
   .bp-list { gap: 2px; }
   /* The Brief's Tweak is its pencil on a phone, beside the greeting, not a row of its own. */
