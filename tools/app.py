@@ -1489,6 +1489,7 @@ def _claimed_here(dump: str, *chosen) -> None:
 # Its chat is named for its task and its day, after the app's name (issue #289: "Last Job
 # Search · People search, 16 Nov"), so the person can tell it from the chats kept for good.
 CHILD_TITLE = "Last Job Search \u00b7 {title}, {day}"
+CHILD_TASK_MAX = 45     # the task's words in it: a name no longer than before the app's name grew
 _MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
 
 
@@ -1920,10 +1921,11 @@ def where_it_runs(chosen: dict, chat: str, kind: str, no_sessions: bool = False,
     import app_model
     day = short_day(app_model.local_day(now or dt.datetime.now(dt.timezone.utc),
                                         app_listen._zone()))
+    task = " ".join(str(chosen.get("title") or chosen["kind"]).split())
+    if len(task) > CHILD_TASK_MAX:      # cut at a word, so the day still shows after it
+        task = task[:CHILD_TASK_MAX + 1].rsplit(" ", 1)[0].rstrip(" ,:;")
     title = distinct_title(page_db.QUESTION_CHAT_TITLE + f", {day}" if question else
-                           CHILD_TITLE.format(title=" ".join(str(
-                               chosen.get("title") or chosen["kind"]).split())[:60], day=day),
-                           taken)
+                           CHILD_TITLE.format(title=task, day=day), taken)
     if question and not (kind == "cloud" and not no_sessions and owner and name):
         # No chat of its own can be started here: never a background agent for a question.
         return {"run": "here"}
