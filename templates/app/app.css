@@ -2535,10 +2535,10 @@ dialog.sheet .sheet-body { display: grid; gap: 16px; }
 .bp-week { display: grid; grid-template-columns: repeat(14, minmax(0, 1fr)); gap: 2px; }
 .bp-day { display: grid; justify-items: center; gap: 2px; padding: 4px 0 8px; min-height: var(--target); border: 0; border-radius: 8px; background: transparent; color: var(--muted); font: inherit; cursor: pointer; }
 .bp-day.has { cursor: pointer; color: var(--ink); }
-/* Today: a soft clay fill, its number in clay at 700, never a ring (a 2px ring read as a key's
-   focus stuck there, the redesign's second round, 2026-11-17). */
+/* Today: a soft clay fill, its day and number in clay, never a ring (a 2px ring read as a key's
+   focus stuck there, the redesign's second round, 2026-11-17). Its number keeps the strip's 600:
+   a 700 there was an eighth type style on the Brief's first screen (layout 10). */
 .bp-day.is-today { background: var(--accent-soft); border-radius: 10px; color: var(--mark-ink); }
-.bp-day.is-today .bp-day-n { font-weight: 700; }
 .bp-day:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 .bp-day-w { font-size: var(--t-sm); line-height: 1; }
 .bp-day-n { font-size: var(--t-sm); font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums; }

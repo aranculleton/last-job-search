@@ -192,14 +192,17 @@ def test_every_brief_panel_is_a_card_and_none_is_capped(run, tmp_path, scheme):
 
 
 WEEK = r"""(() => { const d = document.querySelector('#main .bp-day.is-today'); const n = d.querySelector('.bp-day-n'); const cs = getComputedStyle(d);
-  return {ring: cs.boxShadow, outline: cs.outlineStyle, fill: cs.backgroundColor, radius: cs.borderRadius, weight: getComputedStyle(n).fontWeight}; })()"""
+  const other = document.querySelector('#main .bp-day:not(.is-today) .bp-day-n');
+  return {ring: cs.boxShadow, outline: cs.outlineStyle, fill: cs.backgroundColor, radius: cs.borderRadius, weight: getComputedStyle(n).fontWeight,
+    clay: getComputedStyle(n).color !== getComputedStyle(other).color}; })()"""
 
 
 def test_today_in_the_week_is_a_soft_fill_never_a_ring(run, tmp_path):
     got = _go(run, tmp_path, [{"hash": "brief", "eval": WEEK}], WIDE, clock=T)
     w = got["after"][0]["eval"]
     assert w["ring"] == "none" and w["outline"] == "none" and w["fill"] not in ("rgba(0, 0, 0, 0)", "transparent"), w
-    assert w["radius"] == "10px" and w["weight"] == "700", w
+    # Its number keeps the strip's 600, in clay: a 700 was one type style too many (layout 10).
+    assert w["radius"] == "10px" and w["weight"] == "600" and w["clay"], w
 
 
 NEXT = r"""(() => [...document.querySelectorAll('#main .bp-steps > li')].filter((li) => li.getClientRects().length).map((li) => {

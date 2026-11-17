@@ -166,7 +166,7 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   read as unfinished); a number's tile is the well's paper in light and raised in the dark,
   where the well vanished; Today is a clay wash in light and, in the dark, a card like the rest
   under a clay strip (a whole panel of clay read as a muddy block). Today in Coming up's week is
-  a soft clay fill with its number in clay at 700, never a ring, which read as a key's focus
+  a soft clay fill with its day and number in clay, never a ring, which read as a key's focus
   stuck there (the redesign's second round, 2026-11-17). (fit tests, room tests, calm test)
 - **Waiting on you never says again who Today or Next has**: a person on the messages card in
   either, named or among its "5 more", is theirs, and with nobody else waiting the panel is not
