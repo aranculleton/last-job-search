@@ -58,7 +58,9 @@ CLOCK_KEYS = frozenset({"made_at", "updated", "seen_at", "seen_recently"})
 SECTIONS = ("app", "person", "needs_you", "jobs", "ready", "messages", "due", "people",
             "interviews", "done", "settings", "brief", "setup", "updates", "applications",
             "referrals", "message_budget", "linkedin", "learned", "help", "resume",
-            "search", "where", "listener", "schedule", "you", "upcoming", "rules")
+            "search", "where", "listener", "schedule", "you", "upcoming", "rules",
+            # Built last: it reads the employers every other section names (_employers).
+            "employers")
 # The page shows every live contact, then the rest by recency up to a size budget
 # (tools/app_lists.py PEOPLE_BYTES); the whole book is in the page's database for "Show".
 DUE_MAX = 100
@@ -2150,6 +2152,95 @@ def bar_words(verdict, reason: str) -> str:
     # Anything else: the reason as said, without a command or a code in it.
     why = re.sub(r"\s*\([^)]*`[^)]*\)", "", re.sub(r"`[^`]*`", "", why)).strip(" ;:,")
     return (why[:1].upper() + why[1:]).rstrip(".") + "." if why else ""
+
+
+# ------------------------------------------------------------------ an employer's own card
+
+# What an employer's card says of the employer itself (issue #263): a few of the facts Claude's
+# research saved (company_research/<key>.json), each short with the page it came from, and
+# whether it clears the person's bar. A few, short: the card is read in a glance, and every
+# employer the page names carries its own.
+EMPLOYER_FACTS = 3
+EMPLOYER_FACT_CHARS = 160
+
+
+def employer_facts(company, root=None, names=()) -> dict:
+    """{facts, more}: the facts saved about `company` that name their page, those whose quote
+    was checked against the page first (company_research save stamps `quote_checked`), the
+    newest first, at most EMPLOYER_FACTS, each {text, source, url, on, checked}; `more` is how
+    many more were saved. A fact with no page behind it is never said: its source is the one
+    thing that lets the person check it. Nothing saved: no facts."""
+    import company_research
+    from urllib.parse import urlsplit
+    try:
+        data, _age, _fresh = company_research.load(str(company or ""), root=root)
+    except (OSError, ValueError):
+        data = {}
+    kept = []
+    for f in (data.get("facts") or []) if isinstance(data, dict) else []:
+        if not isinstance(f, dict):
+            continue
+        url = str(f.get("url") or f.get("source_url") or "").strip()
+        text = " ".join(scrub(f.get("claim") or "", names).split())
+        host = urlsplit(url).netloc.lower() if re.match(r"https?://", url, re.I) else ""
+        if not text or not host:
+            continue
+        host = host[4:] if host.startswith("www.") else host
+        checked = str(f.get("quote_checked") or "").strip()[:10]
+        seen = str(f.get("date_seen") or "").strip()[:10]
+        kept.append({"text": short(text, EMPLOYER_FACT_CHARS), "source": host, "url": url,
+                     "on": checked or seen or None, "checked": bool(checked)})
+    kept.sort(key=lambda x: (x["checked"], x["on"] or ""), reverse=True)
+    return {"facts": kept[:EMPLOYER_FACTS], "more": max(0, len(kept) - EMPLOYER_FACTS)}
+
+
+def employer_bar(company) -> dict | None:
+    """{bar, said}: the person's bar's verdict on `company` (tools/bar.py: pay, prestige,
+    signal, none or excluded) and one plain sentence for it (bar_words), or None where it
+    says nothing about the employer: a profile with no bar, or a "none" nobody has judged
+    (bar.listed), which is an unknown name rather than a failing one."""
+    try:
+        import bar
+        if not bar.applies():
+            return None
+        what, why = bar.verdict(company)
+        if what == bar.NONE and not bar.listed(company):
+            return None
+    except Exception:  # noqa: BLE001  no profile, no bar: nothing to say
+        return None
+    return {"bar": what, "said": bar_words(what, why)}
+
+
+def _employers(ctx: Ctx, targets: dict) -> list:
+    """Each employer the page names (its applications, drafts, jobs, people, messages and
+    interviews, built before this section) with what its card says of the employer itself:
+    {name, facts, more} where research was saved, {bar, said} where the bar says something.
+    An employer with neither is left out, and one the page names nowhere is never carried,
+    however much was found about it: the page's data stays small."""
+    import company_research
+    model = ctx._got.get("model") or {}
+    names = []
+    for key, field in (("applications", "company"), ("ready", "company"), ("interviews", "company"),
+                       ("people", "employer"), ("messages", "employer")):
+        names += [it.get(field) for it in model.get(key) or [] if isinstance(it, dict)]
+    names += [r.get("company") for r in (model.get("jobs") or {}).get("rows") or [] if isinstance(r, dict)]
+    out, seen = [], set()
+    for name in names:
+        name = " ".join(str(name or "").split())
+        k = company_research.file_key(name) if name else ""
+        if not k or k in seen:
+            continue
+        seen.add(k)
+        item = {"name": name}
+        got = employer_facts(name, names=ctx.names)
+        if got["facts"]:
+            item.update(facts=got["facts"], more=got["more"])
+        said = employer_bar(name)
+        if said:
+            item.update(said)
+        if len(item) > 1:
+            out.append(item)
+    return out
 
 
 def _filtered(name: str, targets: dict, ctx: Ctx | None = None) -> dict:
@@ -6450,7 +6541,8 @@ BUILDERS = {"app": _app, "person": _person, "needs_you": _needs_you, "jobs": _jo
             "referrals": _referrals, "message_budget": _message_budget,
             "linkedin": _linkedin, "learned": _learned, "help": _help, "resume": _resume,
             "search": _search, "where": _where, "listener": _listener,
-            "schedule": _schedule, "you": _you, "upcoming": _upcoming, "rules": _rules}
+            "schedule": _schedule, "you": _you, "upcoming": _upcoming, "rules": _rules,
+            "employers": _employers}
 
 # What a section is before there is a profile to build it from: a setup still running, or
 # none started. The page shows the setup then, and every other section empty.
@@ -6470,7 +6562,7 @@ EMPTY = {
                              "queue": [], "check": {"state": "due", "on": None, "at": None},
                              "rev": "none"}},
     "learned": [], "help": {"tip": None, "tour": [], "off": False}, "resume": None,
-    "search": None, "where": None, "schedule": None, "upcoming": [],
+    "search": None, "where": None, "schedule": None, "upcoming": [], "employers": [],
     "rules": {"id": "your-rules", "rows": [], "brief_line": None, "still_right": 0, "held": [],
               "every_hold": [], "rev": "none"},
     "jobs": {"round": "", "made_at": None, "met": False, "summary": "No search has run yet.",
@@ -6521,6 +6613,8 @@ def _make_model(today, now, only, shown, full, work_time, computer, held_work,
     ctx._got["unsaved"] = list(unsaved or [])
     targets: dict = {}
     model = {"model": MODEL, "made_at": stamp(now), "rev": ""}
+    # The sections built so far, for the one that reads them (employers, built last).
+    ctx._got["model"] = model
     for name in SECTIONS:
         if only is not None and name not in only:
             continue

@@ -1,7 +1,7 @@
 {
  "model": 1,
  "made_at": "2026-10-25T18:00:00Z",
- "rev": "c724c38d6108",
+ "rev": "76efc82b5a63",
  "app": {
   "version": "4.16.0",
   "url": null,
@@ -2534,6 +2534,7 @@
   ],
   "rev": "5f0ba4f627f5"
  },
+ "employers": [],
  "people_count": {
   "shown": 3,
   "all": 3,
