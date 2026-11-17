@@ -966,6 +966,14 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   in one line; everything harmless lives where it belongs (Look, This device). A reason is said
   in the person's voice ("You cleared these"), never the engine's. (the maintainer, 4.12;
   settings fold test)
+- Your profile reads as Settings does: each part (Still to fill in, Experience, Skills,
+  Education, Certificates) a small label with its one way to add or change at its right
+  ("Add a job", "Change skills", "Change"), over one card of rows. A past job is a row that opens
+  its sheet, its title and employer on one line cut short with an ellipsis, its dates, place and
+  what Claude has on it a quiet line under, and a chevron; taking it off is the last thing in its
+  sheet, never a trash beside a Change on its row. Why: beside "Change" and a trash, "Senior
+  Operations Analyst at Brindle & Hart Logistics" ran to six lines on a phone, and Your profile
+  was cards where Settings was rows (the redesign's second round, 2026-11-17). (name cards test)
 - Each setting has one home in Settings. Where a setting also has a control elsewhere (the
   Brief's bell, a break from To do), both open the same sheet and can never disagree.
 - Every control does something visible (the sweep test taps all of them) and every action

@@ -5012,7 +5012,8 @@
   }
   // A due row about someone who asked for something leads with what they asked.
   function dueAsk(d) {
-    if (!["reply", "follow_up", "nudge"].includes(txt(d.kind)) && txt(d.sub) !== "reply") return null;
+    // A row to send someone what they asked for (kind "resume") is that one task as well.
+    if (!["reply", "follow_up", "nudge", "resume"].includes(txt(d.kind)) && txt(d.sub) !== "reply") return null;
     const p = personOf(dueContact(d));
     const ask = personAsk(p);
     return ask ? {p, ask, title: askWords(p, ask)} : null;

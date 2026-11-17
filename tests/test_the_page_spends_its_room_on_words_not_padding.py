@@ -343,21 +343,22 @@ def test_a_jobs_lines_keep_together_and_a_draft_is_as_tight_as_a_find(run, tmp_p
 
 # ------------------------------------------------------------------ a control on its own is a pill
 
-PILLS = r"""(() => [...document.querySelectorAll('[data-k="bp-tip"], [data-k="tip-seen"], [data-k="cal-all"], [data-k^="up-time:"], [data-k="work-hide"], [data-k="work-close"], [data-k^="you-edit:"], [data-k="you-edu"], [data-k="you-certs"]')]
+PILLS = r"""(() => [...document.querySelectorAll('[data-k="bp-tip"], [data-k="tip-seen"], [data-k="cal-all"], [data-k^="up-time:"], [data-k="work-hide"], [data-k="work-close"], [data-k="you-add-job"], [data-k="you-skills"], [data-k="you-edu"], [data-k="you-certs"]')]
   .filter((b) => b.getClientRects().length).map((b) => { const s = getComputedStyle(b);
     return {k: b.dataset.k.split(':')[0], pill: s.textDecorationLine === 'none' && parseFloat(s.borderTopLeftRadius) >= 12 && !/rgba\(0, 0, 0, 0\)|transparent/.test(s.backgroundColor)}; }))()"""
 
 
 def test_a_control_standing_on_its_own_is_a_pill_never_underlined_words(run, tmp_path):
     # Got it, Add all to your calendar, Add the time, the work panel's Hide, the sheet's Close
-    # and Your profile's Change: underlined words as controls, against the page's own rule
-    # (the review, 2026-11-10).
+    # and Your profile's Add a job, Change skills and Change: underlined words as controls,
+    # against the page's own rule (the review, 2026-11-10). A past job is a row that opens its
+    # sheet since 2026-11-17 (the name cards test).
     seen = []
     for vp, hashes, opener in ((WIDE, ["brief", "interviews", "todo", "profile"], None), (PHONE, ["todo"], "pill")):
         steps = [dict({"hash": h_, "eval": PILLS}, **({"open": opener} if opener else {})) for h_ in hashes]
         got = _go(run, tmp_path, steps, vp, clock=T, seed=WORK)
         seen += [x for a in got["after"] for x in a["eval"]]
-    assert {x["k"] for x in seen} >= {"bp-tip", "cal-all", "up-time", "work-hide", "work-close", "you-edit", "you-edu", "you-certs"}, seen
+    assert {x["k"] for x in seen} >= {"bp-tip", "cal-all", "up-time", "work-hide", "work-close", "you-add-job", "you-skills", "you-edu", "you-certs"}, seen
     assert [x for x in seen if not x["pill"]] == [], seen
 
 
