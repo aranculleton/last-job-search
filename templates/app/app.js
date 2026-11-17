@@ -6600,7 +6600,8 @@
       null, {icon: "todo", w: 4, m: 2, count: heroCounts && need > 1 ? "1 of " + need : null}));
     // Booked things only: a follow-up 45 days late is To do's, never Coming up's, and the line
     // says what the strip shows (the audit, 2026-11-03).
-    put(grid, briefPanel("upcoming", "Coming up", [weekStrip(allUp), upCards.length ? (() => { const seen = new Set(); const next = upNextPrep(upCards); return h("ul", {class: "plain bp-up", "data-fit": "2,2"}, upCards.map((u) => upRow(u, "brief", seen, next))); })()
+    put(grid, briefPanel("upcoming", "Coming up", [weekStrip(allUp), upCards.length ? (() => { const seen = new Set(); const lead = (upCards.find((u) => u.kind === "interview") || {}).id; const next = upNextPrep(upCards) === lead ? lead : null;
+      return h("ul", {class: "plain bp-up", "data-fit": "2,2"}, upCards.map((u) => upRow(u, "brief", seen, next, lead))); })()
       : h("p", {class: "muted"}, (allUp.length ? "Nothing else booked." : "Nothing booked yet.") + briefWaiting())],
       // "All 1 coming up" said nothing the panel did not: a count only where there is more.
       [navLink("interviews", allUp.length > 1 && allUp.length > upCards.length ? "All " + allUp.length + " coming up" : "Coming up"),
@@ -9629,7 +9630,7 @@
   }
   // Whether an interview's prep is ready, said under it, with "Prepare me" only where it is
   // not: reading it is the row's own tap (one per interview, on its first row).
-  function upPrep(u, prepped, brief, nextPrep) {
+  function upPrep(u, prepped, brief, nextPrep, leadRow) {
     // An interview's own row only: a test due in the same process is not what the prep is for.
     if (u.kind !== "interview") return null;
     const id = txt(obj(u.go).item);
@@ -9639,12 +9640,13 @@
     prepped.add(id);
     const w = workDoc("prep~" + seg(iv.id));
     if (w && ACTIVE.has(w.status)) return h("span", {class: "up-prep"}, "Preparing your prep");
-    // On the Brief, its prep as a soft pill under the row, never underlined words (the
-    // redesign, phase 2, 2026-11-17): Read your prep where it is ready, and Prepare me (or
-    // Update my prep) only on the next interview without one, as Coming up has it; the others
-    // say so in the quiet words.
+    // On the Brief, its prep as a soft pill, never underlined words (the redesign, phase 2,
+    // 2026-11-17), on the next interview's row alone: Read your prep where it is ready, Prepare
+    // me (or Update my prep) where it is not; the others say so in the quiet words, as a pill
+    // on each took the room the Brief's other panels list in. The title opens each prep.
     if (brief) {
       const p = obj(iv.prep);
+      if (leadRow !== u.id) return h("span", {class: "up-prep"}, p.updated && !p.stale ? "Prep ready" : p.updated ? "Prep is for an earlier plan" : "No prep yet");
       if (p.updated && !p.stale) return h("span", {class: "up-prep"}, btn("Read your prep", () => openDetail("interview", iv.id), {kind: "secondary", small: true, key: "bp-up-read:" + u.id, aria: "Read your prep for " + txt(iv.company)}));
       if (nextPrep !== u.id) return h("span", {class: "up-prep"}, p.updated ? "Prep is for an earlier plan" : "No prep yet");
       return h("span", {class: "up-prep"}, p.updated ? btn("Update my prep", () => askPrep(iv), {kind: "secondary", small: true, key: "bp-up-prep:" + u.id, wakes: "prep", aria: "Update my prep for " + txt(iv.company)})
@@ -9663,13 +9665,13 @@
   }
   // A row: when, what (its tap opens it), whether it is ready, and a calendar with a plus to
   // add it to yours. One button a row, never a row of them (the maintainer, 2026-11-02).
-  function upRow(u, where, prepped, nextPrep) {
+  function upRow(u, where, prepped, nextPrep, leadRow) {
     const brief = where === "brief";
     const add = u.pending ? stateWord("Saving", null) : !obj(u.cal).ics ? null : btn("", () => calSheet([u]),
       {kind: "quiet icon-only", small: true, icon: "cal-add", key: (brief ? "bp-cal:" : "cal:") + u.id, aria: "Add to your calendar: " + txt(u.title)});
     const rm = u.own && !brief && !u.pending ? btn("", () => act([{item: txt(u.id), action: "upcoming.remove", rev: txt(u.rev)}], "Taken off: " + txt(u.title)),
       {kind: "quiet icon-only", small: true, icon: "bin", key: "up-rm:" + u.id, aria: "Take off: " + txt(u.title)}) : null;
-    const prep = brief ? upPrep(u, prepped || new Set(), true, nextPrep) : null;
+    const prep = brief ? upPrep(u, prepped || new Set(), true, nextPrep, leadRow) : null;
     // Asked for and not confirmed by them yet: said on its row, here and on the Brief.
     const maybe = u.tentative ? stateWord(NOT_CONFIRMED, null) : null;
     // Its prep's pill on its day's line, at its end, never a line of its own: under the title it

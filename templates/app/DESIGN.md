@@ -329,8 +329,9 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   tool a row does not have. The whole row opens what it is. Only the next interview whose prep
   is missing carries "Prepare me" on its row (a practice day leads with "Practise 3 questions",
   as To do does); a row with no time yet has a soft "+ Add the time" under what it is. The
-  Brief's Coming up rows say the same in soft pills, "Read your prep" where it is ready and
-  "Prepare me" on the next interview without one, never underlined words. Why:
+  Brief's Coming up says the next interview's prep as a soft pill on its day's line, "Read your
+  prep" where it is ready and "Prepare me" where it is not, the others' in the quiet words, never
+  underlined words. Why:
   seven cards under day headers, icons floating mid-card where a missing trash left its slot
   empty, rows 87px tall with an inline pill against 68, and titles smaller than the same
   interview's on To do (the redesign, phase 2, 2026-11-17). On a phone what a row is and its

@@ -228,4 +228,6 @@ def test_the_briefs_coming_up_says_its_prep_in_soft_pills_as_coming_up_does(run,
     rows = _eval(run, tmp_path, "brief", BRIEF_PREP, vp)
     assert rows and all(len(r) == 1 or (not r[1] and r[2] == "none") for r in rows), rows
     said = [r[0] for r in rows]
-    assert "Read your prep" in said and said.count("Prepare me") <= 1, said
+    # One pill, on the next interview's row; the others' prep in the quiet words.
+    assert said[0] == "Read your prep" and sum(1 for r in rows if len(r) > 1) == 1, rows
+    assert "Prepare me" not in said[1:] and all(r[0] in ("Prep ready", "No prep yet", "Prep is for an earlier plan") for r in rows[1:]), rows
