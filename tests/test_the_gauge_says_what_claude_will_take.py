@@ -173,3 +173,17 @@ def test_the_briefs_find_jobs_and_contacts_find_people_carry_their_gauge(run, tm
     got = _go(run, tmp_path, [{"hash": "brief", "eval": look}, {"hash": "jobs", "eval": look}, {"hash": "contacts", "eval": look}], WIDE, clock=T)
     seen = {k: (w, g) for a in got["after"] for k, w, g in a["eval"]}
     assert seen == {"bp-search": ("search", True), "head-find-jobs": ("search", True), "head-find-people": ("network", True)}, seen
+
+
+@pytest.mark.parametrize("size", [{"width": 1000, "height": 560}, {"width": 1000, "height": 800}, {"width": 1280, "height": 720}, {"width": 1440, "height": 900}],
+                         ids=lambda s: "%dx%d" % (s["width"], s["height"]))
+def test_the_briefs_gauges_keep_their_line_in_a_narrow_panel(run, tmp_path, size):
+    # In a 206px panel "Find jobs" and "38 min of Claude" do not fit one line, nor "Draft the
+    # thank-you" and its gauge in Today's card at 1280 by 720: the gauge's words wrap beside the
+    # button rather than going down a line on their own (the redesign's second round,
+    # 2026-11-17). In a short window the Brief's Find jobs gives way to the Jobs screen.
+    got = _go(run, tmp_path, [{"hash": "brief", "wait": 200, "eval": GLUED}], size, clock=T)
+    pairs = got["after"][0]["eval"]["pairs"]
+    assert pairs and [p for p in pairs if not p[1]] == [], pairs
+    if size["width"] >= 1440:
+        assert "Find jobs" in [n for n, _ in pairs], pairs

@@ -2470,6 +2470,19 @@ html.tips-off .has-tip::after { content: none; }
 .bp-n { font-size: 1.375rem; font-weight: 700; line-height: 1.15; font-variant-numeric: tabular-nums; }
 .bp-l { font-size: var(--t-sm); color: var(--muted); overflow-wrap: normal; word-break: normal; hyphens: none; }
 .bp-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: auto; padding-top: 8px; font-size: var(--t-sm); }
+/* In a narrow panel (a Brief's foot, Today's card) a button's gauge keeps its line, its words
+   wrapping beside it rather than going down a line on their own (DESIGN.md, Buttons: a gauge is
+   one with its button). */
+:is(.bp-foot, .bp-iv) > [data-wakes] + .cost { flex: 1 1 0; min-width: 5.5em; max-width: max-content; white-space: normal; line-height: 1.2; }
+.bp-foot > [data-wakes] { flex: none; }
+/* Today's card in a narrow panel (a laptop 1000px wide): its button takes its own width first,
+   its words wrapping only where even then the pair would not fit (the button ran 9px past the
+   card there, its gauge on the line under it). */
+.bp-iv > [data-wakes] { flex: 100 1 0; min-width: 6em; max-width: max-content; white-space: normal; }
+/* In a short window the Brief's Find jobs gives way first, its gauge with it, to the Jobs screen
+   where it leads: beside "Open Jobs" the pair took a line of its own, and Coming up's week gave
+   way for it (the redesign's second round, 2026-11-17). */
+html.brief-short .bp-jobs > .bp-foot > [data-k="bp-search"], html.brief-short .bp-jobs > .bp-foot > [data-k="bp-search"] + .cost { display: none; }
 /* The one thing to do: when it is in clay (never the error red: "Ready to send" is good news),
    what it is in the Brief's largest words after the greeting, and its one filled button with
    the time it takes beside it on one line. */
@@ -3003,9 +3016,11 @@ ul.bp-news { max-width: 80ch; }
 .bpanel:not(.bp-today) > .bp-title .bp-ic { color: var(--muted); background: var(--sunk); }
 .bp-today > .bp-title .bp-count { color: var(--mark-ink); }
 /* A laptop's row gives Today more height than its one thing needs: the thing's white card takes
-   it, its words and button at its middle, never a block of clay tint under them. */
+   it, never a block of clay tint under them, its words and button from its top as every card's
+   are: at its middle they left 60px of nothing over "Ready to do" (the redesign's second round,
+   2026-11-17). */
 @media (min-width: 960px) {
-  .brief-grid.is-filled .bp-today > .bp-body > .bp-iv { flex: 1 1 auto; align-content: center; }
+  .brief-grid.is-filled .bp-today > .bp-body > .bp-iv { flex: 1 1 auto; align-content: flex-start; }
 }
 .cal-file { display: grid; gap: 4px; }
 .cal-file .hint { margin: 0; }

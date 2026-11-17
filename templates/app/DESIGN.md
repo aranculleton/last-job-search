@@ -198,7 +198,9 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   text spacing). Every panel is a card, News and Your progress too (on the page itself they
   read as unfinished); a number's tile is the well's paper in light and raised in the dark,
   where the well vanished; Today is a clay wash in light and, in the dark, a card like the rest
-  under a clay strip (a whole panel of clay read as a muddy block). Today in Coming up's week is
+  under a clay strip (a whole panel of clay read as a muddy block); stretched, Today's white
+  card takes the room and its words start at its top, never at its middle with 60px of nothing
+  over them (the redesign's second round, 2026-11-17). Today in Coming up's week is
   a soft clay fill with its day and number in clay, never a ring, which read as a key's focus
   stuck there (the redesign's second round, 2026-11-17). (fit tests, room tests, calm test)
 - **Waiting on you never says again who Today or Next has**: a person on the messages card in
@@ -808,7 +810,10 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   people) and its gauge on a row of their own, the other buttons on the row under them; Coming
   up's step (Prepare me) is a row of the card's own, from under the time; and a To do card's
   Done, where on its line it would stand alone under its next step and that step's gauge, goes
-  under More. Why: "38 min of Claude" alone under "Find jobs · Add a job · Your CV" read as the
+  under More. In a narrow Brief panel (Today's card, the Jobs panel's foot) the gauge's words
+  wrap beside the button, and the button's own words only where even then the pair would not
+  fit; in a short window the Brief's Find jobs gives way first, its gauge with it, to the Jobs
+  screen where it leads. Why: "38 min of Claude" alone under "Find jobs · Add a job · Your CV" read as the
   cost of all three, and Done stood alone under "Draft the follow-up · 2 min of Claude" (the
   redesign's second round, 2026-11-17; gauge test: phone). Its buttons are one row of pills that wraps only at the
   panel's width, never a line a kind; a note or a link in a sentence follows them. Why: opened
