@@ -1271,6 +1271,7 @@ def _pull_master() -> int:
     if old:
         return after_rewrite(old)
     if git("merge-base", "--is-ancestor", "origin/master", "HEAD", check=False).returncode == 0:
+        _level()
         return 0
     dirty = _unsaved()
     if dirty:
@@ -1296,6 +1297,7 @@ def _pull_master() -> int:
               "branch: run `git merge origin/master` and settle it (RUNBOOK.md, \"Landing on master\", says how).")
         return 1
     print("sync_app: brought in master (what other chats merged).")
+    _level()
     if app_before and app_tree(ROOT) != app_before:
         # Another chat's sync brought the update to master: the person's own tests are checked
         # against it here too, never only in the chat that took it (a person's copy, 2026-11-05:
@@ -1303,6 +1305,17 @@ def _pull_master() -> int:
         # background: nothing waits on the whole suite (D2).
         own_tests_later()
     return 0
+
+
+def _level() -> None:
+    """This branch's copy on GitHub moved up with the master just taken in, where it has one
+    (land.level): left behind, the cloud's check at the end of the turn counted master's own
+    commits as this chat's, unpushed (a person's copy, 2026-11-16)."""
+    try:
+        import land
+        land.level(ROOT)
+    except Exception:  # noqa: BLE001  a copy older than the landing tool, or no network
+        pass
 
 
 # Which chat works in the main folder on this computer, and when it last said so: kept in
