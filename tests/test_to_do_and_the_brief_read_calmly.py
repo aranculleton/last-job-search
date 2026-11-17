@@ -24,7 +24,7 @@ import pytest  # noqa: E402
 import app_page  # noqa: E402
 import test_the_page_journeys as journeys  # noqa: E402
 from test_the_page_journeys import PHONE, WIDE, _go, _sample  # noqa: E402
-from test_the_page_keeps_one_listener_and_the_brief import _two_waiting  # noqa: E402
+from test_the_brief_fits_a_laptop_and_its_foot_reads_as_one_line import _two_waiting  # noqa: E402
 
 T = "2026-10-25T09:00:00Z"
 
@@ -213,3 +213,19 @@ def test_next_steps_are_whole_rows_to_tap_with_a_chevron(run, tmp_path, vp):
     got = _go(run, tmp_path, [{"hash": "brief", "eval": NEXT}], vp, clock=T)
     rows = got["after"][0]["eval"]
     assert len(rows) == 3 and all(r["chevron"] == "solid" and r["whole"] for r in rows), rows
+
+
+def test_things_are_called_what_a_person_calls_them(run, tmp_path):
+    """The UX review, 2026-11-17: "When it comes", "Add something", "Plan a time" and LinkedIn's
+    own "InMail" said less than they could."""
+    got = _go(run, tmp_path, [
+        {"hash": "brief", "read": "#main .brief-head"},
+        {"hash": "brief", "read": '#main [data-k="bp:upcoming"] .bp-foot'},
+        {"hash": "settings"},
+        {"hash": "todo", "more": "grp:send", "read": '#main [data-item="grp:send"]'},
+    ], WIDE, clock=T)
+    head, foot, settings, send = (a["text"] for a in got["after"])
+    assert "When your brief arrives" in head and "When it comes" not in head, head
+    assert "Add a date" in foot and "Add something" not in foot, foot
+    assert "When your brief arrives" in settings and "When it comes" not in settings, settings[:600]
+    assert "Set a time to send" in send and "Plan a time" not in send and "InMail" not in send, send

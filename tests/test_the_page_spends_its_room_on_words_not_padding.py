@@ -172,7 +172,11 @@ def _checklists():
 
 GROWS = r"""(() => [...document.querySelectorAll('#main .g-row')].filter((r) => r.getClientRects().length && r.querySelector('.g-name + p.small')).map((r) => {
   const name = r.querySelector('.g-name'), sub = r.querySelector('.g-name + p.small');
-  const lines = (e) => { const g = document.createRange(); g.selectNodeContents(e); return new Set([...g.getClientRects()].filter((x) => x.width > 0.5).map((x) => Math.round(x.top))).size; };
+  // Its lines are where its words' letters sit (a link's own box can be taller than its line,
+  // a finger's height on a phone): centres more than half a line apart are lines apart.
+  const lines = (e) => { const mids = []; const w = document.createTreeWalker(e, NodeFilter.SHOW_TEXT);
+    for (let t = w.nextNode(); t; t = w.nextNode()) { const g = document.createRange(); g.selectNodeContents(t); for (const x of g.getClientRects()) if (x.width > 0.5) mids.push((x.top + x.bottom) / 2); }
+    return mids.sort((a, b) => a - b).filter((m, i, all) => !i || m - all[i - 1] > 8).length; };
   const n = name.getBoundingClientRect(), b = sub.getBoundingClientRect(), row = r.getBoundingClientRect();
   return {row: r.dataset.item, nameLines: lines(name), cut: name.scrollWidth > name.clientWidth + 1 ? getComputedStyle(name).textOverflow : 'whole',
     under: b.top >= n.bottom - 1 && Math.abs(b.left - n.left) <= 1, tall: Math.round(row.height)};

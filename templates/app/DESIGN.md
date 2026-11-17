@@ -28,7 +28,7 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   do says so as good news: a soft clay circle with a tick, "Nothing left today", one quiet line
   and one quiet "See what's coming up" (the Brief's Today the same when it has nothing). Every
   fold on To do is the one disclosure: its words in the ink at 14/600, a 16px chevron pointing
-  right while shut and down once open, a finger's height on touch. (all clear tests, fold test) The small questions (a yes or a no, a choice of a few) are one card, "4 quick
+  right while shut and down once open, a finger's height on touch. (calm test) The small questions (a yes or a no, a choice of a few) are one card, "4 quick
   answers", always among the five: one question at a time in its grey box with "1 of 4", each
   answered with its own control (answerBox), the next there the moment it is answered.
   (tired-person tests, quick answers test)
@@ -167,13 +167,13 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   where the well vanished; Today is a clay wash in light and, in the dark, a card like the rest
   under a clay strip (a whole panel of clay read as a muddy block). Today in Coming up's week is
   a soft clay fill with its number in clay at 700, never a ring, which read as a key's focus
-  stuck there (the redesign's second round, 2026-11-17). (fit tests, room tests)
+  stuck there (the redesign's second round, 2026-11-17). (fit tests, room tests, calm test)
 - **Waiting on you never says again who Today or Next has**: a person on the messages card in
   either, named or among its "5 more", is theirs, and with nobody else waiting the panel is not
   drawn. Next's steps are whole rows to tap, each ending in a chevron, on a phone as on a
   laptop, and its way to To do says To do's own count, "See all 4", wherever that is at least
   what the Brief shows of it. Why: four lists answered "what next?" and Waiting on you repeated
-  Marisol, a row of the messages card (the UX review, 2026-11-17). (one-answer test, room test)
+  Marisol, a row of the messages card (the UX review, 2026-11-17). (calm test, room test)
 - A Brief row is a line of words: what it is with its day inside it ("Read the prep for the
   phone screen · Wed 28 Oct, 13:00"), wrapping from its start, never centred and never the day
   a column of its own squeezing the words (the review, 2026-11-10, at the Larger size). (room
@@ -607,7 +607,7 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   (the UX review, 2026-11-17). Each card's title is a heading one level under what holds it
   (the screen's h2, a band's h3, an employer's h4), drawn as before (the accessibility review,
   2026-11-17: To do's titles were paragraphs a screen reader's heading list skipped).
-  (action-row test, card diet test, headings test)
+  (action-row test, calm test)
 - Before any action goes on a card, in this order: is it needed at all (if not, it goes)? Can
   the app do it by itself (then it does, and says so)? Can it merge with another (one
   control)? Only then, where it lives: the card (the next step and at most two others), the
@@ -789,7 +789,10 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
 
 ## Words and settings
 
-- Plain words: no git, branch, command or config, no file names, no ids.
+- Plain words: no git, branch, command or config, no file names, no ids. A thing is called
+  what a person calls it: a "Paid LinkedIn message", never LinkedIn's "InMail"; "When your brief
+  arrives", never "When it comes"; "Add a date" on the Brief's Coming up; "Set a time to send"
+  for the messages' time in the calendar (the UX review, 2026-11-17). (calm test)
 - One date a card, said one way: a day gone by as "12 Sept", a day ahead with its weekday. A
   card about someone shows the day they wrote (or you did); its corner says only "Overdue".
   What someone asked for leads the card, and its button does it ("Make a CV for Juno").

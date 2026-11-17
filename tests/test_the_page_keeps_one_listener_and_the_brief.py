@@ -19,6 +19,7 @@ import pytest  # noqa: E402
 
 import test_the_page_journeys as journeys  # noqa: E402
 from test_the_page_journeys import PHONE, WIDE, _go, _one, _sample  # noqa: E402
+from test_the_brief_fits_a_laptop_and_its_foot_reads_as_one_line import _two_waiting  # noqa: E402
 from test_the_page_works_in_a_browser import EMPTY  # noqa: E402
 
 
@@ -558,18 +559,6 @@ def test_a_reply_owed_is_shown_once_when_a_step_names_the_same_person(run, tmp_p
 # two (the maintainer, 2026-11-02: "dynamic based on screen size ... be smart").
 FITS = ("[...document.querySelectorAll('#main [data-fit]')].map((l) => [l.className, l.getAttribute('data-fit'), "
         "[...l.children].filter((li) => li.hidden).length, [...l.children].filter((li) => !li.hidden).length])")
-
-
-def _two_waiting(model):
-    """Two people waiting on the person whom no other panel names: Waiting on you is drawn only
-    for who Today and Next leave out (the redesign's second round, 2026-11-17), and the
-    sample's one, Marisol, is a row of the messages card in Next. Both invented."""
-    one = next(p for p in model["people"] if p["id"] == "ellerwick_trust_priya")
-    model["people"].append(dict(one, id="quayside_foods_odette", first_name="Odette", employer="Quayside Foods", rev="p-odette",
-                                next_action="Ask about the demand planning team", owed={"kind": "reply", "label": "Draft a reply", "reply": True}, related={}))
-    model["people"].append(dict(one, id="kestrel_mutual_linus", first_name="Linus", employer="Kestrel Mutual", rev="p-linus",
-                                next_action="Say thanks", owed={"kind": "reply", "label": "Draft a reply", "reply": True}, related={}))
-    return model
 
 
 @pytest.mark.parametrize("size", [{"width": 1440, "height": 1400}, {"width": 1280, "height": 700},

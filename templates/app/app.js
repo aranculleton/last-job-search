@@ -7632,7 +7632,9 @@
     const made = arr(a.files).filter(fileMade);
     return made.length > 0 && made.some((f) => !f.asset);
   }
-  const CHANNEL = {linkedin_note: "LinkedIn connection note", linkedin_message: "LinkedIn message", inmail: "LinkedIn InMail", email: "Email"};
+  // "Paid LinkedIn message", never "InMail", LinkedIn's own word nobody else uses (the UX review,
+  // 2026-11-17).
+  const CHANNEL = {linkedin_note: "LinkedIn connection note", linkedin_message: "LinkedIn message", inmail: "Paid LinkedIn message", email: "Email"};
   // An InMail's body is clipped to a few lines with More, never a wall of words (Copy still takes
   // it whole); the engine says why the run chose an InMail, the credit it spends and the one
   // switch to the other message kept beside it (tools/network/inmail_pick.py, 2026-11-05).
@@ -7642,7 +7644,7 @@
     const im = obj(m.inmail);
     const sw = obj(im.switch);
     const said = [txt(im.line), txt(im.credit)].filter(Boolean).join(" · ");
-    const swBtn = txt(sw.to) ? btn(txt(sw.label), () => act([{item: m.id, action: "msg.channel", value: {to: txt(sw.to)}, rev: m.rev}], txt(sw.to) === "inmail" ? "An InMail now: " + txt(m.first_name) : "A connection note now: " + txt(m.first_name)),
+    const swBtn = txt(sw.to) ? btn(txt(sw.label), () => act([{item: m.id, action: "msg.channel", value: {to: txt(sw.to)}, rev: m.rev}], txt(sw.to) === "inmail" ? "A paid LinkedIn message now: " + txt(m.first_name) : "A connection note now: " + txt(m.first_name)),
       {kind: "quiet", small: true, key: "chan:" + m.id, aria: txt(sw.label) + " to " + txt(m.first_name)}) : null;
     return said || swBtn ? h("p", {class: "small hint-line msg-inmail"}, said ? h("span", {class: "muted"}, said) : null, said && swBtn ? " " : null, swBtn) : null;
   }
@@ -7666,7 +7668,7 @@
     if (!(txt(m.channel) === "inmail" && body.length > INMAIL_CLIP + 40) || bodyOpen.has(m.id)) return h("p", {class: "sendtext big", id: tid}, body);
     const cut = body.slice(0, INMAIL_CLIP).replace(/\s+\S*$/, "") + "\u2026";
     return h("p", {class: "sendtext big", id: tid}, cut, " ",
-      btn("More", () => { bodyOpen.add(m.id); scheduleRender(); }, {kind: "quiet", small: true, key: "body:" + m.id, aria: "Show all of the InMail to " + txt(m.first_name)}));
+      btn("More", () => { bodyOpen.add(m.id); scheduleRender(); }, {kind: "quiet", small: true, key: "body:" + m.id, aria: "Show all of the paid LinkedIn message to " + txt(m.first_name)}));
   }
   // Said on this page that they get no more messages: their note goes from Messages at once,
   // its Undo in the toast and the person still in Contacts. A note stayed on the list after "No
@@ -7990,7 +7992,7 @@
   // ready while it breaks the person's rules, and never a Fix button (2026-11-04).
   const DRAFT_WORD = {first_note: "Your note", follow_up: "Your follow-up", reply: "Your reply", thank_you: "Your thank-you", referral_ask: "Your referral ask"};
   const DRAFT_KIND = {first_note: "Note", follow_up: "Follow-up", reply: "Reply", thank_you: "Thank-you", referral_ask: "Referral ask"};
-  const CHANNEL_SHORT = {linkedin_note: "Connection note", linkedin_message: "LinkedIn", inmail: "LinkedIn InMail", email: "Email"};
+  const CHANNEL_SHORT = {linkedin_note: "Connection note", linkedin_message: "LinkedIn", inmail: "Paid LinkedIn message", email: "Email"};
   const PEN_CHIPS = [["Shorter", "Make it shorter."], ["Warmer", "Make it warmer."], ["More formal", "Make it more formal."]];
   // Where its fix stands: "going" (asked, or being made), "failed" (tried as often as it may,
   // or called off), or null (nothing to fix, or what is left only reads better changed).
@@ -13114,7 +13116,7 @@
     // notes ready, so after "4 notes ready." it said "4 notes ready." again (2026-11-03).
     else if (Number.isFinite(sent) && wk.sent !== null && wk.sent !== undefined) parts.push(sent ? sent + " sent this week." : "None sent yet this week.");
     else if (txt(b.line)) parts.push(ready ? txt(b.line).replace(/^\d+ notes? ready\.\s*/, "") : txt(b.line));
-    if (Number(b.inmail_credits) >= 0 && b.inmail_credits !== undefined && b.inmail_credits !== null) parts.push(nWord(Number(b.inmail_credits), "InMail credit", "InMail credits") + " left.");
+    if (Number(b.inmail_credits) >= 0 && b.inmail_credits !== undefined && b.inmail_credits !== null) parts.push(nWord(Number(b.inmail_credits), "paid LinkedIn message", "paid LinkedIn messages") + " left.");
     return parts.join(" ");
   }
   // The resume someone asked for: "I sent it to Tamsin" logs the message with its file; a

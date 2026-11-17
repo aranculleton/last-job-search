@@ -428,7 +428,8 @@ def test_every_section_full_shows_its_items_in_plain_words(run, pages):
     # Each message on its person's card, and one short summary line (2026-11-04).
     msgs = r["contacts"]["text"]
     assert "7 to send · " in msgs and "sent this week" not in msgs, msgs[:400]
-    assert "LinkedIn InMail" in msgs and "Subject:" in msgs, msgs[:400]
+    # "Paid LinkedIn message", never LinkedIn's own "InMail" (the UX review, 2026-11-17).
+    assert "Paid LinkedIn message" in msgs and "InMail" not in msgs and "Subject:" in msgs, msgs[:400]
     assert "Every application" in r["progress"]["text"] and "earlier, finished" in r["progress"]["text"]
     settings = r["settings"]["text"]
     assert "An update is waiting" in settings and "4.0.1" not in settings

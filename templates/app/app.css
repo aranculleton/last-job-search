@@ -1985,6 +1985,9 @@ dialog.work-sheet :is(select, input, textarea) { width: 100%; max-width: 100%; m
      stretched to the window's foot (a tall window) it sat short over empty space. */
   .brief-grid .bp-numbers .bp-body > .bp-spark-wrap { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
   .brief-grid .bp-numbers .bp-spark { flex: 1 1 auto; max-height: 160px; }
+  /* In a row not stretched to the window's foot, Your progress still reaches its row's foot:
+     its chart is what grows into the room, so the panel is never a short chart over nothing. */
+  .brief-grid .bpanel.bp-numbers { align-self: stretch; }
 }
 /* A short laptop window (720 or less) draws the Brief closer: the greeting smaller, its panels'
    numbers four across in a narrow panel, the foot's pills a little lower, so two rows fit. */
