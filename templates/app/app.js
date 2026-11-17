@@ -281,13 +281,26 @@
   // me" it belonged to.
   const shownIn = (e) => !!(e && e.getClientRects().length && e.getBoundingClientRect().width > 0);
   const gaugeOf = (b) => (b && b.matches("[data-wakes]") && b.nextElementSibling && b.nextElementSibling.matches(".cost") ? b.nextElementSibling : null);
+  // Every row of pills a gauge can sit in, not only those with a More: a gauge never starts a
+  // line its button is not on (the redesign's second round, 2026-11-17).
+  const GLUE_ROWS = ":is(.card-actions, .wc-actions, .suggest-acts, .g-acts, .fix, .fb-acts, .bp-foot, .sheet-actions)";
+  const lineOf = (a, b) => { const m = (a.top + a.bottom) / 2; return m > b.top && m < b.bottom; };
   function moreFit() {
     for (const r of document.querySelectorAll(".more-wrap")) r.classList.remove("more-wrap");
     for (const m of document.querySelectorAll(".more-mate")) m.classList.remove("more-mate");
+    for (const r of document.querySelectorAll(".fold-on")) r.classList.remove("fold-on");
+    // A To do card's Done never stands alone on a line under its next step and that step's
+    // gauge: where it would, it goes under More (dueActs drew it there too, unseen till now).
+    for (const f of document.querySelectorAll(".card-actions > .fold-out")) {
+      if (!shownIn(f)) continue;
+      const q = f.getBoundingClientRect();
+      const sibs = [...f.parentElement.children].filter((k) => k !== f && shownIn(k));
+      if (sibs.length && !sibs.some((k) => lineOf(k.getBoundingClientRect(), q) || lineOf(q, k.getBoundingClientRect()))) f.parentElement.classList.add("fold-on");
+    }
     const wrap = [];
     const first = (row) => [...row.children].find(shownIn);
     // A gauge alone at a line's start: its button goes down with it.
-    for (const g of document.querySelectorAll(MORE_ROWS + " > [data-wakes] + .cost")) {
+    for (const g of document.querySelectorAll(GLUE_ROWS + " > [data-wakes] + .cost")) {
       const b = g.previousElementSibling;
       if (!shownIn(g) || !shownIn(b) || first(b.parentElement) === b) continue;
       if (g.getBoundingClientRect().top >= b.getBoundingClientRect().bottom - 1) wrap.push([b.parentElement, b]);
@@ -314,9 +327,10 @@
     const ps = probe.querySelectorAll(".sep-dot, .sep-before");
     const ls = live.querySelectorAll(".sep-dot, .sep-before");
     if (ps.length && ls.length === ps.length) ps.forEach((p, i) => { for (const c of SEP_CUT) if (ls[i].classList.contains(c)) p.classList.add(c); });
-    const pr = probe.querySelectorAll(MORE_ROWS);
-    const lr = live.querySelectorAll(MORE_ROWS);
+    const pr = probe.querySelectorAll(GLUE_ROWS);
+    const lr = live.querySelectorAll(GLUE_ROWS);
     if (pr.length && lr.length === pr.length) lr.forEach((r, i) => {
+      if (r.classList.contains("fold-on")) pr[i].classList.add("fold-on");
       if (!r.classList.contains("more-wrap")) return;
       pr[i].classList.add("more-wrap");
       const at = [...r.children].findIndex((k) => k.classList.contains("more-mate"));
@@ -5574,11 +5588,22 @@
   // step first, then the others in the order they matter; past the first two they wait under
   // More with `rest` (a way to where it lives, a lesser choice), kept there even alone, so a
   // card's row is never three pills and a link.
+  // Where the next step wakes Claude, the pill after it and its gauge has a twin under More,
+  // shown only where on its own line it would stand alone (moreFit: "Draft the follow-up · 2 min
+  // of Claude" left Done alone under them on a phone, the redesign's second round, 2026-11-17).
   function dueActs(d, ctx, face, rest, about) {
     const shown = face.filter(Boolean);
+    const fold = shown.length >= 2 && shown[0].nodeType === 1 && shown[0].hasAttribute("data-wakes") && shown[1].nodeType === 1 && shown[1].matches("button.btn") ? shown[1] : null;
+    let twin = null;
+    if (fold) {
+      fold.classList.add("fold-out");
+      twin = btn(fold.textContent, () => fold.click(), {small: true, key: (fold.getAttribute("data-k") || "fold") + ":more", aria: fold.getAttribute("aria-label")});
+      twin.classList.add("fold-twin");
+    }
     const under = shown.slice(2).concat(arr(rest).filter(Boolean));
-    return h("div", {class: "card-actions"}, shown.slice(0, 2),
-      under.length ? more("due:" + ((ctx && ctx.where) || "") + ":" + d.id, about, [h("div", {class: "more-acts"}, under)], true) : null);
+    const m = under.length || twin ? more("due:" + ((ctx && ctx.where) || "") + ":" + d.id, about, [h("div", {class: "more-acts"}, twin, under)], true) : null;
+    if (m && !under.length) m.classList.add("fold-only");
+    return h("div", {class: "card-actions"}, shown.slice(0, 2), m);
   }
   const ENOUGH = /^\s*(?:that'?s (?:all|it)|that is (?:all|it)|thats (?:all|it)|done|no more|nothing (?:more|else)|none)\s*[.!]*\s*$/i;
   function openSetupQuestion(step, saidNow) {
@@ -6761,7 +6786,9 @@
       : searching ? h("p", {class: "muted"}, "Searching now.") : toSend ? null : h("p", {class: "muted"}, "Nothing new to look at.")],
       // "All 1 new" under one job said nothing (the screen review, 2026-11-11): a count from two.
       [best.length ? navLink("jobs", best.length > 1 ? "All " + best.length + " new" : "Open Jobs") : readyRows.length > 1 ? navLink("drafts", "All " + readyRows.length + " drafts") : null,
-        !searching ? h("button", {type: "button", class: "btn link", "data-k": "bp-search", onclick: () => askSearch()}, "Find jobs") : null],
+        // The same Find jobs as Jobs' header, its gauge beside it: here it had none while
+        // Jobs said "38 min of Claude" (the redesign's second round, 2026-11-17).
+        !searching ? runBtn("search", "Find jobs", () => askSearch(), {kind: "link", key: "bp-search", wakes: "search"}) : null],
       {icon: "jobs", w: w2, ws: 4}));
     // News that matters to the search, in points (the maintainer, 2026-10-31).
     // Each point: what happened, then what to do with it, then where it is from, so a point
@@ -8806,7 +8833,8 @@
       // A message from someone not on the list: one soft pill beside Find people. What Claude
       // is doing is the header's work pill and each card's own line, never a third line here.
       screenHead("contacts", "Contacts", sum, null, where, h("div", {class: "head-tools"},
-        runBtn("network", "Find people", () => askFindPeople(), {small: true, key: "head-find-people", icon: "k-search"}),
+        // A run of Claude's, its gauge beside it as Find jobs' (the redesign's second round, 2026-11-17).
+        runBtn("network", "Find people", () => askFindPeople(), {small: true, key: "head-find-people", icon: "k-search", wakes: "network"}),
         btn("Paste a message", () => openPlace("paste"), {small: true, key: "got-msg" + (where ? ":" + where : ""),
           aria: "Paste a message someone sent you"})), {quiet: true}),
       // Its box and Claude's answer right under the header, never in the Chat; a screenshot
@@ -9825,9 +9853,13 @@
       onclick: opens ? (e) => { if (e.target.closest("a, button, summary, input, select, textarea, label, details, form, .menu-panel")) return; go.click(); } : null},
       h("span", {class: "up-when" + (!u.start && !u.time ? " is-word" : "")}, upWhen(u) ? upWhenRow(u) : (u.own || u.pending ? "" : addTimeBtn(u))),
       h("span", {class: "up-main"}, h("span", {class: "up-title"}, go),
-        sub || maybe || chip ? h("span", {class: "up-sub"}, sub ? h("span", {class: "up-note"}, sub) : null, maybe, chip) : null, step,
+        sub || maybe || chip ? h("span", {class: "up-sub"}, sub ? h("span", {class: "up-note"}, sub) : null, maybe, chip) : null,
         upTimeForm(u), upDayForm(u), upTimed.has(u.id) ? stateLine(txt(obj(upTimeTarget(u)).item), "up:" + u.id) : null),
-      u.pending ? h("span", {class: "up-end"}, add) : menu ? h("span", {class: "up-end"}, menu) : null);
+      u.pending ? h("span", {class: "up-end"}, add) : menu ? h("span", {class: "up-end"}, menu) : null,
+      // Its step a row of the card's own, under the time on a phone: in the title's column
+      // "Prepare me" and its gauge did not fit, and "6 min of Claude" fell under the button
+      // (the redesign's second round, 2026-11-17).
+      step);
   }
   // A row's one More: a small menu of what is rare for it, each a line in words.
   function upMenuItem(label, fn, key, aria) {

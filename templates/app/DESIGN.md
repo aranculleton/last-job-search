@@ -764,7 +764,15 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   More the pair goes down with it; where the pair fills a line by itself, More takes the next
   line by itself, the one place More stands alone ("6 min of Claude" went down with More, under
   the "Prepare me" it belonged to, the redesign's second round, 2026-11-17; calm test, overlap
-  test: alone). Its buttons are one row of pills that wraps only at the
+  test: alone). On a phone the pair keeps one line wherever it is (every row of pills, the
+  Brief's Today, a sheet): a button that wakes Claude is drawn at the phone's 12px a side with
+  its gauge 6px from it at 420px and under; Jobs' and Contacts' header put Find jobs (Find
+  people) and its gauge on a row of their own, the other buttons on the row under them; Coming
+  up's step (Prepare me) is a row of the card's own, from under the time; and a To do card's
+  Done, where on its line it would stand alone under its next step and that step's gauge, goes
+  under More. Why: "38 min of Claude" alone under "Find jobs · Add a job · Your CV" read as the
+  cost of all three, and Done stood alone under "Draft the follow-up · 2 min of Claude" (the
+  redesign's second round, 2026-11-17; gauge test: phone). Its buttons are one row of pills that wraps only at the
   panel's width, never a line a kind; a note or a link in a sentence follows them. Why: opened
   inside the row it took the whole width and dropped below "I sent it", and a row a kind left
   one button alone on a line (the maintainer, 2026-11-05). (More test)
@@ -800,7 +808,8 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   file under it, "Goes with it: Your resume (PDF)", saved in a tap to attach; the engine's
   `sends` says which (the maintainer, 2026-11-05: "it would be great if the actual document
   was linked there").
-- Every control that wakes Claude carries the gauge beside it: the same bars, size and place,
+- Every control that wakes Claude carries the gauge beside it, wherever it is offered (the
+  Brief's Find jobs as Jobs', Contacts' Find people: gauge test, the same run's button): the same bars, size and place,
   with its minutes shown as Claude's ("2 min of Claude": a bare "38 min" beside Find jobs read
   as a wait, the review, 2026-11-10), and under the pointer it says it in words that can be
   hovered and go with Escape, read aloud with the gauge, with no keyboard stop of their own

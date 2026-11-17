@@ -378,12 +378,14 @@ bdi { unicode-bidi: isolate; }
 .top-end { flex-shrink: 0; max-width: 100%; }
 .top-end > .state-word { white-space: normal; }
 .head-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-/* On a phone a screen's own buttons keep one row, and what a run costs goes on a short line of
-   its own under them, under the button it belongs to: Find jobs, its cost and Add a job took
-   two 44px rows and pushed the first job below its first screen (2026-11-11). */
+/* On a phone the button that wakes Claude and its gauge are one row of their own, the screen's
+   other buttons on the row under them: the gauge alone on a line of its own under "Find jobs ·
+   Add a job · Your CV" read as the cost of all three (the redesign's second round, 2026-11-17;
+   DESIGN.md, Buttons: a gauge is one with its button). */
 @media (max-width: 759px) {
-  .summary .head-tools { row-gap: 2px; }
-  .summary .head-tools > .cost { order: 9; flex-basis: 100%; }
+  .summary .head-tools { row-gap: 4px; }
+  .summary .head-tools:has(> [data-wakes] + .cost)::after { content: ""; flex-basis: 100%; height: 0; order: 1; }
+  .summary .head-tools > [data-wakes] + .cost ~ * { order: 2; }
   /* Semibold, a phone's three header buttons keep one row at 12px a side (the redesign). */
   .summary .head-tools > .btn:not(.icon-only) { padding-inline: 12px; }
 }
@@ -2316,6 +2318,17 @@ html.tips-off .has-tip::after { content: none; }
 .more-wrap > .more-mate, .more-wrap > .more-mate ~ * { order: 2; margin-top: -12px !important; }
 .g-acts.more-wrap > :is(.more-mate, .more-mate ~ *) { margin-top: -8px !important; }
 @media (max-width: 759px) { .more-wrap > :is(.more-mate, .more-mate ~ *) { margin-top: -8px !important; } }
+:is(.fix, .fb-acts, .bp-foot).more-wrap > :is(.more-mate, .more-mate ~ *) { margin-top: -8px !important; }
+/* A To do card's Done under More where on its own line it would stand alone under its next
+   step and that step's gauge (app.js, moreFit; the redesign's second round, 2026-11-17). */
+.card-actions:not(.fold-on) .fold-twin, .card-actions:not(.fold-on) > details.more.fold-only, .card-actions.fold-on > .fold-out { display: none; }
+/* On a narrow phone a button that wakes Claude is drawn at the phone's 12px a side, its gauge
+   6px from it, so the two keep one line in a card's width (DESIGN.md, Buttons: a gauge is one
+   with its button). */
+@media (max-width: 420px) {
+  .btn[data-wakes]:not(.icon-only):not(.link) { padding-inline: 12px; }
+  .btn[data-wakes]:not(.icon-only):not(.link) + .cost { margin-inline-start: -2px; }
+}
 /* An interview's pill leads its line of when on a phone (the screen review, 2026-11-11). */
 .iv-when-line { display: flex; flex-wrap: nowrap; align-items: baseline; gap: 8px; }
 .iv-when-line > .when { margin: 0; flex: 1 1 10em; min-width: 0; }
@@ -2404,6 +2417,8 @@ html.tips-off .has-tip::after { content: none; }
 .bp-iv-what { font-weight: 700; font-size: var(--t-xl); line-height: 1.25; letter-spacing: -0.01em; }
 .bp-iv .btn { margin-top: 4px; }
 .bp-iv > .cost { margin-top: 4px; }
+/* Its next step and the gauge keep one line on a narrow phone (DESIGN.md, Buttons). */
+@media (max-width: 420px) { .bp-iv { padding: 12px; } }
 /* The top row, Today and Coming up, is as tall as what they hold: never cut. */
 /* A news point: what happened, what to do with it, where it is from. Never cut by the panel's
    height: News was clipped at its bottom once each point said how to use it (2026-11-02). */
@@ -2761,6 +2776,10 @@ ul.bp-news { gap: 12px; }
 .up-row .up-sub > .up-note { min-width: 0; }
 .up-row .up-prep { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 8px; }
 .up-row .up-prep > .btn { margin: 0; }
+/* A row's step (Prepare me, Practise 3 questions) is a row of the card's own: under the title on
+   a computer, the card's whole width from under the time on a phone, so a button and its gauge
+   keep one line (the redesign's second round, 2026-11-17). */
+.up-row > .up-prep { grid-column: 2; }
 .up-menu > .menu-btn { min-width: var(--up-ic); min-height: var(--up-ic); width: var(--up-ic); height: var(--up-ic); padding: 0; border-radius: var(--r-sm); color: var(--muted); }
 /* On a phone the same three parts, the time column narrower and every target a finger's. */
 @media (max-width: 759px) {
@@ -2768,6 +2787,7 @@ ul.bp-news { gap: 12px; }
   .up-row + .up-row::before { left: 12px; }
   .up-row > .up-when { white-space: normal; }
   .up-days:has(.up-here) .up-row { grid-template-columns: 6rem minmax(0, 1fr) auto; }
+  .up-row > .up-prep { grid-column: 1 / -1; }
 }
 /* Where a day's card is narrow for its words (a phone at double text, a time from another
    zone), the time is a line over the title, never a column squeezing it. */
@@ -2776,6 +2796,7 @@ ul.bp-news { gap: 12px; }
   .up-row, .up-days:has(.up-here) .up-row { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "when end" "main end"; }
   .up-row > .up-when { padding-top: 0; white-space: normal; }
   .up-row > .up-when:has(> .btn[data-k^="up-time:"]) { grid-column: 1; grid-row: 3; }
+  .up-row > .up-prep { grid-column: 1 / -1; }
 }
 .bp-up-row { display: flex; align-items: center; gap: 8px; }
 .bp-up-row .up-main { flex: 1; display: grid; gap: 2px; min-width: 0; }
