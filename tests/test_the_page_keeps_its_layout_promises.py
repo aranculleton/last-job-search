@@ -38,8 +38,8 @@ FIRST_LIMIT = {"phone": 270, "wide": 300}
 # in both themes.
 BOTH = {"phone", "wide"}
 KNOWN = {
-    # 9: two applications at one employer, each row named by the employer alone.
-    (9, "progress", "Ellerwick Trust"): {"wide"},
+    # 9: two applications at one employer, each row named by the employer alone, was met once
+    # Progress left out the draft not sent yet (the redesign's second round, 2026-11-17).
 }
 
 
