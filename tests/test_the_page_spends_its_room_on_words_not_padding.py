@@ -443,14 +443,20 @@ def test_a_phone_draws_the_page_at_its_own_size_by_default(run, tmp_path):
 
 
 PROFILE = r"""(() => { const card = document.querySelector('#main .prof-missing'), row = card && card.querySelector('li');
-  if (!row) return null; const t = card.querySelector('.prof-h').getBoundingClientRect(), r = row.firstElementChild.getBoundingClientRect();
-  return {inset: Math.round(r.left - t.left)}; })()"""
+  if (!row) return null;
+  const label = card.closest('.prof-sec').querySelector('h3.group').getBoundingClientRect(), c = card.getBoundingClientRect();
+  const r = row.firstElementChild.getBoundingClientRect();
+  const job = document.querySelector('#main .prof-job-main'), j = job.getBoundingClientRect(), jc = job.closest('.set-rows').getBoundingClientRect();
+  return {label: Math.round(label.left - c.left), inset: Math.round(r.left - c.left), jobInset: Math.round(j.left - jc.left)}; })()"""
 
 
-def test_what_is_still_to_fill_in_reads_at_the_cards_own_edge(run, tmp_path, vp):
+def test_what_is_still_to_fill_in_reads_as_the_profiles_other_rows(run, tmp_path, vp):
     # A Settings row's 16px inset put each line a step in from the card's title (2026-11-10).
+    # Since the redesign's second round (2026-11-17) Your profile is Settings' grouped rows: each
+    # part's label over its card at the card's own edge, and every row's words one inset in,
+    # what is still to fill in as a past job's.
     got = _eval(run, tmp_path, "profile", PROFILE, vp)
-    assert got is not None and abs(got["inset"]) <= 1, got
+    assert got is not None and abs(got["label"]) <= 1 and got["inset"] == got["jobInset"] and got["inset"] in (13, 17), got  # the row's 12 or 16 and the hairline
 
 
 HEAD = r"""(() => { const s = document.querySelector('#main .summary.with-tool'); if (!s) return null;

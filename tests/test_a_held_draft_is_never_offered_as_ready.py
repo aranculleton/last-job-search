@@ -159,7 +159,8 @@ LOOK = r"""(() => {
   const card = document.querySelector('[data-msg="msg-ash-1"]');
   const line = document.querySelector('[data-k="held:msg-ash-1"]');
   return {line: line ? line.textContent.replace(/\s+/g, ' ').trim() : null,
-          copy: !!(card && card.querySelector('.bubble-copy')),
+          // Its Copy is in its card's row, beside I sent it, since 2026-11-17.
+          copy: !!(card && card.closest('[data-item]').querySelector('.bubble-copy[data-k="copy:msgt-msg-ash-1"]')),
           sent: !!document.querySelector('[data-k="sent:msg-ash-1"]'),
           anyway: !!document.querySelector('[data-k="unhold:msg-ash-1"]'),
           finished: [...document.querySelectorAll('[data-tweak-done]')].map((e) => e.textContent).filter((t) => /held/i.test(t))};
