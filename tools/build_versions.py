@@ -428,9 +428,10 @@ METHODS: dict[str, dict] = {
             (115, "2026-11-17", False, "RUNBOOK says every want is kept with the person's words in profile/wants.json and an employer they want ranked up goes through one command (tools/wants.py want); nothing made changes"),
             (116, "2026-11-17", False, "RUNBOOK says a round's employers nobody has judged are judged inside it by the employer-judge agent, on the small model, and the round is cut again with --judged, which waits for the answer three minutes at most; nothing made changes"),
             (117, "2026-11-17", False, "RUNBOOK says where the person searches and their pay floor and cut line change through tools/wants.py set, the words for a work-life sign or a kind of role through wants.py words, and a no that only ranks down is written with --soft only where they say so; nothing made changes"),
-            (118, "2026-11-17", False, "the page's colours are redone in templates/app/palettes.py, which this method's templates pattern also reads; nothing a draft prints changes"),
+            (118, "2026-11-17", False, "a page build looks for each application's folder once, where Applications, its stages and the campaign chats each looked again (issue 336); the same folder is found, so nothing made changes"),
+            (119, "2026-11-17", False, "the page's colours are redone in templates/app/palettes.py, which this method's templates pattern also reads; nothing a draft prints changes"),
         ),
-        "fingerprint": "b4b9a0eda668f9fa",
+        "fingerprint": "43f2e50edbbb6715",
     },
     "interview": {
         # Only a process with a round still to come is prepared again: a prep for a round
@@ -711,8 +712,9 @@ METHODS: dict[str, dict] = {
             (136, "2026-11-16", False, "with the person's computer set up to read LinkedIn profiles, a people search shows nobody and drafts no first note, a recruiter's included, before that person's profile is read: LinkedIn signed out stops the run on the one card asking for the sign-in, and notes from search results are the person's own choice for the day (reading.py from-search --said); notes already waiting keep their standing"),
             (137, "2026-11-16", False, "with the person's computer set up to read LinkedIn profiles, a people search in a chat without Claude's own browser queues its short list for the computer and saves no note: the computer reads each and writes the note from what it read; notes already waiting keep their standing"),
             (138, "2026-11-17", False, "reply.py finish checks a referral ask as one, by the limit compose.referral_ask keeps, whoever wrote last (the page's referral ask work, --referral-ask, or the ask's own shape), and the default close is shorter (issue 315); drafts already saved stay as they are"),
+            (139, "2026-11-17", False, "a page build counts each employer's people waiting once, from the contact book's own rows there, and reads each person's place, the bar on their employer and the person's limits once, where the holds, To do and Contacts each asked again (issue 336); every answer is the same, so nothing made changes"),
         ),
-        "fingerprint": "1689b9071b43d930",
+        "fingerprint": "9ba197a53195f708",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
@@ -794,8 +796,9 @@ METHODS: dict[str, dict] = {
             (64, "2026-11-12", False, "today's list read is not a run done: with fewer than the number asked drafted, reading.py next says to find the rest at the next employers and read on; a people search in the person's own city uses every location number kept for their area (the metro region, their city, the towns their job search covers) and place-ids says what a city's own number leaves out; a people search's mutual connections are never results of their own, each card read whole from its own name link; notes are written as before"),
             (65, "2026-11-16", False, "a first note to someone whose profile was not read is refused where the person's computer reads profiles (reading.reads_first), card-only and waiting alike, unless the person chose notes from search results today; a chat on the computer that met a sign-out tells the person nothing of a button, since the card names the chat"),
             (66, "2026-11-16", False, "where the person's computer reads profiles, a chat without Claude's own browser is routed to queue the short list for the computer and save no note, and a refused note says so; notes are written as before; the person is told once where their profiles are read, as the page's own route tells them"),
+            (67, "2026-11-17", False, "who is waiting at an employer is counted once and its line said from that count (reading.full_line), and the message log is grouped once for it, where each check counted the whole book twice (issue 336); the same people are counted, so notes are written as before"),
         ),
-        "fingerprint": "c3ae3798a808464a",
+        "fingerprint": "bf27ab1d8156ec40",
     },
     "screening": {
         "by": "round", "priority": 2,
@@ -878,8 +881,9 @@ METHODS: dict[str, dict] = {
             (66, "2026-11-17", False, "the employers and kinds of employer turned down and the employers lifted are read from the person's one record of what they want (profile/wants.json) as well as from the old settings, each deciding as before; nothing ruled out needs looking at again"),
             (67, "2026-11-17", False, "a round writes a brief from which a small agent judges the employers nobody has judged against the bar (bar.judge_brief), and the round's cut keeps each judgement for good, marked as the round's; nothing ruled out needs looking at again"),
             (68, "2026-11-17", False, "a no the person said only ranks down (profile/wants.json, hard false, written only with --soft) takes 20 off a job's opportunity score and says why, and is never cut; every no written before stays a cut, so nothing scored before changes and nothing ruled out needs looking at again"),
+            (69, "2026-11-17", False, "the do-not-target list is read against the person's day once a page build (remembered.day), and bar.judged_at gives the judgements file's state for a build to keep an answer by (issue 336); nothing is screened differently"),
         ),
-        "fingerprint": "d926fa6f63f9ae3f",
+        "fingerprint": "ec0eb7922e48760d",
     },
     "routines": {
         "by": "you", "priority": 3, "applies": "routines",

@@ -254,8 +254,10 @@ class Names:
             if full and first and full != first:
                 self.first.setdefault(full.casefold(), first)
         alts = sorted(self.first, key=len, reverse=True)
-        self.rx = (re.compile(r"(?<!\w)(?:" + "|".join(re.escape(a) for a in alts) + r")(?!\w)",
-                              re.I) if alts else None)
+        # The pattern of every name is made only if something asks for it (`rx`): `sub` cuts a
+        # text by a pattern of only the names it could hold, and the one of 2,000 names took
+        # some 40 ms of every build to make for nothing (issue 336).
+        self._alts, self._rx = alts, None
         # A line holds a full name only where the name's first two words stand side by side
         # in it, so a set says first whether the pattern of every name can match at all: run
         # on every line of a book of 2,000, it made each build half a second slower once the
@@ -306,8 +308,16 @@ class Names:
             got.update(self.by_pair.get(p, ()))
         return tuple(sorted(got, key=lambda a: (-len(a), a)))
 
+    @property
+    def rx(self):
+        """One pattern of every full name, longest first, or None for a book with none."""
+        if self._rx is None and self._alts:
+            self._rx = re.compile(r"(?<!\w)(?:" + "|".join(re.escape(a) for a in self._alts)
+                                  + r")(?!\w)", re.I)
+        return self._rx
+
     def sub(self, text: str) -> str:
-        if self.rx is None:
+        if not self._alts:
             return text
         got = self.done.get(text)
         if got is None:
@@ -612,6 +622,11 @@ class Ctx:
 
     @property
     def by_contact(self) -> dict:
+        # Asked once a person by every section: what is kept is returned without importing
+        # anything again (issue 336).
+        got = self._got.get("by_contact")
+        if got is not None:
+            return got
         from network import state
         return self._once("by_contact", lambda: state.by_contact(self.threads))
 
@@ -3509,9 +3524,11 @@ def _call_of(cid: str, status: str, due: str, said: str = "", home: str = "",
     is made. `folders` is `_folder_names` of documents/network, read once for a whole book:
     an id of plain letters, digits, "_" and "-" with no folder there has no prep, and its
     prep is not looked for on disk one person at a time."""
+    there = folders is None or not _PLAIN_ID.fullmatch(cid) or cid.lower() in folders
+    if status != "call_booked" and not there:
+        return None
     path = person.state("documents", "network", cid, "prep.md")
-    have = (folders is None or not _PLAIN_ID.fullmatch(cid) or cid.lower() in folders) \
-        and os.path.isfile(path)
+    have = there and os.path.isfile(path)
     if status != "call_booked" and not have:
         return None
     clock = None
@@ -3959,7 +3976,7 @@ def _people(ctx: Ctx, targets: dict) -> list:
                 "came_through": _came_through(c.get("referred_by"), full) or None,
                 # A resume made for them when they asked for one: on their card, to get, and
                 # found by their name; never in place of the person's own (2026-11-05).
-                "resume_for_them": resume_made_for(cid),
+                "resume_for_them": resume_made_for(cid, folders),
                 "who": who_they_are(c, status),
                 "replied": full[cid]["replied"], "live": full[cid]["live"], "call": call,
                 "paste": _paste(cid, full[cid]["first_name"], None, ctx._got.get("work_time"))
@@ -5059,10 +5076,14 @@ def _help(ctx: Ctx, targets: dict) -> dict:
 # ------------------------------------------------------------------ your resume
 
 
-def resume_made_for(cid: str) -> dict | None:
+def resume_made_for(cid: str, folders=None) -> dict | None:
     """The resume made for a contact who asked for one (general_resume.py --for-contact keeps
     documents/network/<id>/resume.json beside it): {name, path, made_on, asset, get}, or
-    None. Only while the file it names is there."""
+    None. Only while the file it names is there. `folders`, as `_call_of` takes it: an id
+    with no folder there has nothing made for it, and is not looked for on disk."""
+    if folders is not None and _PLAIN_ID.fullmatch(str(cid or "")) \
+            and str(cid).lower() not in folders:
+        return None
     try:
         rec_path = person.state("documents", "network", cid, "resume.json")
     except Exception:  # noqa: BLE001  no copy: nothing made
