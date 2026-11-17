@@ -7,7 +7,9 @@ what can slow things down or use more of the Claude allowance.
   small trash.
 - Learned rules were shown twice: in Your rules (210 rows titled "Learned from you") and in
   What you have taught it. One home now, grouped by area, a rule a line; Your rules has one
-  row that opens it.
+  row that opens it. Since the redesign (2026-11-16) that row is the home itself, "Learned from
+  you", opening in place: a row linking to "What you have taught it" further down was the same
+  thing twice.
 - Something looks wrong opens its box in place, no popup, begun with where and the version;
   Tell the app's makers stays a quiet link under the box.
 - What's new says the version on its row; inside, the newest few lines with Show more, and
@@ -92,7 +94,7 @@ def test_employers_turned_down_are_one_row_that_opens_their_names_each_with_a_tr
 def test_learned_rules_have_one_home_grouped_by_area_and_your_rules_links_to_it(run, tmp_path):
     got = _go(run, tmp_path, [
         {"hash": "settings", "eval": SETTINGS_TEXT, "count": '#main [data-k^="info-sum:rule-rule-learned"]'},
-        {"click": "Learned from you: 15 rules", "eval": "document.querySelector('[data-k=\"det:info:learned\"]').open",
+        {"open": "info-sum:learned", "eval": "document.querySelector('[data-k=\"det:info:learned\"]').open",
          "read": '[data-k="det:info:learned"]', "count": '[data-k="det:info:learned"] .l-group'},
         {"eval": "(() => { const s = document.querySelector('[data-k=\"det:info:learned\"] .l-say'); const r = s.getBoundingClientRect();"
                  " return [getComputedStyle(s).whiteSpace, getComputedStyle(s).textOverflow, Math.round(r.height) < 40,"
@@ -101,6 +103,8 @@ def test_learned_rules_have_one_home_grouped_by_area_and_your_rules_links_to_it(
     first, opened, line = got["after"]
     assert first["count"] == 0, "no learned rule in Your rules"
     assert "Learned from you: 15 rules" in first["eval"]
+    # One row, in Your rules, and no second one under Your data.
+    assert "What you have taught it" not in first["eval"]
     assert opened["eval"] is True and opened["count"] == 3, (opened["eval"], opened["count"])
     for head in ("Messages (5)", "Documents (5)", "Jobs (5)"):
         assert head in opened["text"], opened["text"][:400]

@@ -253,7 +253,14 @@ bdi { unicode-bidi: isolate; }
 .todo-employer { font-size: var(--t-sm); font-weight: 600; color: var(--muted); }
 .stack { display: grid; gap: 16px; }
 .banner { padding: 12px 16px; border-radius: var(--r-sm); background: var(--st-overdue-bg); color: var(--st-overdue); display: grid; gap: 8px; justify-items: start; }
-.empty { padding: 24px 20px; border: 1px dashed var(--line-strong); border-radius: var(--r); display: grid; gap: 8px; color: var(--muted); }
+/* An empty place (app.js, empty): a soft clay circle with the screen's icon, a short heading,
+   one grey line and one button, centred, with no box round it (the redesign, 2026-11-16): a
+   dashed box read as something missing or broken. */
+.empty { padding: 32px 20px; border: 0; border-radius: var(--r); display: grid; justify-items: center; text-align: center; gap: 8px; color: var(--muted); }
+.empty > p { max-width: 44ch; }
+.empty-ic { display: grid; place-items: center; width: 64px; height: 64px; margin-bottom: 8px; border-radius: 50%; background: var(--accent-soft); color: var(--mark); }
+.empty-ic .ic { width: 28px; height: 28px; }
+.empty .card-actions { justify-content: center; }
 .empty-title { color: var(--ink); font-weight: 600; font-size: var(--t-lg); }
 
 
@@ -804,7 +811,7 @@ dialog.work-sheet .rail-head { min-height: calc(var(--target) + 8px); padding-ri
 dialog.work-sheet { width: min(560px, calc(100vw - 16px)); }
 
 /* ------------------------------------------------------------------ progress */
-.chart { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px 20px; display: grid; gap: 12px; min-width: 0; }
+.chart { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow-card); padding: 16px 20px; display: grid; gap: 12px; min-width: 0; }
 .chart h3 { font-size: var(--t-md); font-weight: 600; }
 /* A fold in a chart's card says it opens, with the chevron Settings' rows use, turned when
    open: "Each week" and "Show as a table" read as headings over nothing (2026-11-10). */
@@ -812,12 +819,17 @@ dialog.work-sheet { width: min(560px, calc(100vw - 16px)); }
 .chart summary::-webkit-details-marker { display: none; }
 .chart summary::after { content: ""; width: 8px; height: 8px; flex: none; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg); margin-left: 4px; }
 .chart details[open] > summary::after, details.chart[open] > summary::after { transform: rotate(-135deg); }
-.funnel { display: grid; gap: 8px; }
-.fun-row { display: grid; grid-template-columns: 84px minmax(0, 1fr) auto; align-items: center; gap: 12px; }
+/* The funnel's bars are soft capsules in the mark on a sunk track (the redesign, 2026-11-16):
+   14px bars in the alarm colour read as a telling-off. A step not reached yet is its label and
+   "None yet" in grey over an empty track. */
+.funnel { display: grid; gap: 12px; }
+.fun-row { display: grid; grid-template-columns: 84px minmax(0, 1fr) minmax(72px, auto); align-items: center; gap: 12px; }
 .fun-label { font-weight: 600; }
-.fun-track { height: 14px; border-radius: 6px; background: var(--sunk); overflow: hidden; }
-.fun-fill { display: block; height: 100%; background: var(--chart-a); border-radius: 6px; }
-.fun-n { font: 600 var(--t-md) var(--font-data); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.fun-track { height: 8px; border-radius: 999px; background: var(--sunk); box-shadow: inset 0 0 0 1px var(--line); overflow: hidden; }
+.fun-fill { display: block; height: 100%; background: var(--chart-a); border-radius: 999px; }
+.fun-n { font: 600 var(--t-md) var(--font-data); font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
+.fun-none .fun-label, .fun-n.muted { color: var(--muted); }
+.fun-n.muted { font-weight: 400; font-size: var(--t-sm); }
 .reading { max-width: 64ch; }
 .legend { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; font-size: var(--t-sm); color: var(--muted); }
 .sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; }
@@ -845,11 +857,34 @@ dialog.work-sheet { width: min(560px, calc(100vw - 16px)); }
 .choice { display: flex; align-items: flex-start; gap: 12px; min-height: 36px; }
 .choice input { margin-top: 2px !important; flex: none; }
 .choice label { cursor: pointer; }
-/* Short choices as pills side by side: the radio stays, so it reads and works as a choice. */
-.pills .pill-row { display: flex; flex-wrap: wrap; gap: 8px; }
-.pills .choice { align-items: center; gap: 8px; min-height: 0; padding: 8px 12px; border: 1px solid var(--line); border-radius: 99px; }
-.pills .choice:has(input:checked) { border-color: var(--mark); background: var(--sunk); }
-.pills .choice input { margin-top: 0 !important; width: 16px; height: 16px; }
+/* Short choices side by side are a segmented control (the redesign, 2026-11-16): a sunk track,
+   the one chosen raised on it in the ink, the others in grey. Each is still a radio, laid over
+   its whole segment unseen, so it reads, taps and arrows as a choice; its ring is the
+   segment's. A row of outlined capsules each with a dot read as a form. */
+.pills .pill-row { display: flex; flex-wrap: wrap; gap: 2px; padding: 2px; border-radius: var(--r-sm); background: var(--sunk); box-shadow: inset 0 0 0 1px var(--line); width: fit-content; max-width: 100%; }
+.pills .choice { align-items: center; justify-content: center; gap: 8px; min-height: 0; padding: 8px 12px; border: 0; border-radius: calc(var(--r-sm) - 2px); color: var(--muted); font-weight: 600; }
+.pills .choice:has(input:checked) { background: var(--overlay); color: var(--ink); box-shadow: var(--shadow-card), 0 0 0 1px var(--line); }
+.setting.pills .choice > input, .field.pills .choice > input { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; margin: 0 !important; opacity: 0; cursor: pointer; }
+/* The chosen one also carries an outline in no colour, which forced colours (Windows high
+   contrast) draw in the text colour: there the fill and the shadow are gone, and with the
+   radio unseen nothing else would say which is chosen. */
+.pills .choice:has(input:checked) { outline: 2px solid transparent; outline-offset: -2px; }
+.pills .choice:has(input:focus-visible) { outline: 3px solid var(--focus); outline-offset: 2px; }
+/* A box ticked in a sheet (the brief's days) is ticked in the ink, as a filter chip that is on
+   is, never in the clay that marks what needs the person (the redesign, 2026-11-16). */
+.field .choice input[type="checkbox"] { accent-color: var(--ink); }
+/* A choice with more to say under each (an example, a line of why) is a list of option rows:
+   a row each, its round mark filled when chosen (a ring when not, never its colour alone). */
+.opt-rows { display: grid; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); overflow: hidden; }
+.opt-rows > .choice { align-items: flex-start; padding: 12px 16px; border-top: 1px solid var(--line); min-width: 0; }
+.opt-rows > .choice:first-child { border-top: 0; }
+.opt-rows > .choice:has(input:checked) { background: var(--accent-soft); }
+.opt-rows > .choice:has(input:checked) > label { font-weight: 600; }
+.opt-rows > .choice:has(input:checked) .hint { font-weight: 400; }
+.opt-rows > .choice > label { flex: 1 1 auto; min-width: 0; }
+.opt-rows input[type="radio"] { appearance: none; -webkit-appearance: none; flex: none; border: 2px solid var(--line-strong); border-radius: 50%; background: var(--surface); cursor: pointer; }
+.opt-rows input[type="radio"]:checked { border: 6px solid var(--mark); }
+@media (max-width: 759px) { .opt-rows > .choice { padding-block: 0; } .pills .pill-row { width: 100%; } .pills .pill-row > .choice { flex: 1 1 auto; } }
 .toggle { display: flex; align-items: center; gap: 12px; }
 .toggle input { width: 22px; height: 22px; accent-color: var(--mark); flex: none; }
 .toggle label { font-weight: 600; }
@@ -1098,6 +1133,11 @@ dialog.work-sheet { position: fixed; inset: auto 0 0 0; margin: 0; width: 100%; 
 .set-go { color: var(--muted); font-size: 1.125rem; }
 .look-row .segctl { flex: 0 1 auto; }
 .look-row .seg-opt { padding: 8px 12px; font-size: 0.875rem; }
+/* Light or dark, Text size and the Chat button are the same segmented control as a setting's
+   short choice (above): a sunk track, the one chosen raised on it (the redesign, 2026-11-16). */
+.look-row .segctl { border: 0; border-radius: var(--r-sm); background: var(--sunk); box-shadow: inset 0 0 0 1px var(--line); }
+.look-row .seg-opt { border-radius: calc(var(--r-sm) - 2px); color: var(--muted); }
+.look-row .look-choice:has(input:checked) { background: var(--overlay); color: var(--ink); box-shadow: var(--shadow-card), 0 0 0 1px var(--line); }
 /* A card's title that opens it elsewhere (an interview in To do opens in Coming up): the card's
    own tap, drawn as its title, underlined only under a pointer. */
 .title-link { color: inherit; text-decoration: none; position: relative; display: inline-block; }
@@ -1106,11 +1146,38 @@ dialog.work-sheet { position: fixed; inset: auto 0 0 0; margin: 0; width: 100%; 
 @media (hover: hover) { .title-link:hover { text-decoration: underline; } }
 .toggle-label { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex: 1 1 100%; min-width: 0; min-height: var(--target); cursor: pointer; }
 .toggle-row input[type="checkbox"] { width: 24px; height: 24px; accent-color: var(--mark); margin: 0; flex: none; }
+/* A switch (app.js, toggleLabel): a track with a knob, the knob at the right on a filled track
+   when on, at the left on an outlined one when off, so its state is its place and its fill as
+   well as its colour; the knob is a ring of border, which forced colours keep. Its checkbox
+   lies over it unseen, the tap and the state, and gives the track its focus ring. */
+.switch { position: relative; flex: none; display: inline-grid; width: 44px; height: 26px; }
+.toggle-row .switch > input[role="switch"] { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.switch-ui { position: relative; width: 44px; height: 26px; border-radius: 999px; border: 2px solid var(--line-strong); background: var(--surface); }
+.switch-ui::before { content: ""; position: absolute; top: 2px; left: 2px; width: 0; height: 0; border: 9px solid var(--line-strong); border-radius: 50%; }
+.switch > input:checked + .switch-ui { background: var(--mark); border-color: var(--mark); }
+.switch > input:checked + .switch-ui::before { left: 20px; border-color: var(--mark-on); }
+.switch > input:focus-visible + .switch-ui { outline: 3px solid var(--focus); outline-offset: 2px; }
+@media (hover: hover) and (pointer: fine) { .switch-ui::before { transition: left 0.15s; } }
 /* A job site that needs a key: "Needs a free key" where its tick would be, opening on the
    steps to get one (Settings, Job sites). */
 .checks-list li.site-key { display: block; }
 .checks-list li.site-key > .state, .checks-list li.site-key > .state-wrap { padding: 0 16px; }
 .site-key-fold[open] > .set-sum::after { transform: rotate(-135deg); }
+/* On a phone a long value goes under its name, at its left edge, in grey: beside its name it
+   wrapped right-aligned into a ragged column ("Greater Manchester, Leeds, / remote in the UK"),
+   and a long name wrapped as "When it / comes" (the redesign, 2026-11-16). A row whose name and
+   value fit one line keeps them on it, a 44px row (app.js, sumFit). */
+@media (max-width: 759px) {
+  .set-sum.set-long { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; row-gap: 2px; justify-content: stretch; }
+  .set-sum.set-long > .set-name { grid-column: 1; margin-right: 0; }
+  .set-sum.set-long > .set-value { grid-column: 1; text-align: left; }
+  .set-sum.set-long::after { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
+}
+/* Settings and Your profile read as one column of rows, at the same left edge as every other
+   screen: Your profile stood centred, 165px right of every other screen's edge on a laptop,
+   and Settings' rows ran the whole width with each value 900px from its name (the redesign,
+   2026-11-16). */
+.sec.settings-page, .sec.profile-page { max-width: 720px; margin-inline: 0 auto; }
 
 /* Chat: the box pinned at the bottom (4.9) */
 /* As tall as the window under the header as it is drawn (app.js, fitTop), never taller: opened
@@ -1250,6 +1317,14 @@ p.count.tone-warn { color: var(--st-overdue); }
 .app-row-top { font-weight: 600; }
 /* Employer and role read as one line of words, never two wrapped columns. */
 .app-row-top .btn.link { display: inline-block; text-align: left; padding: 8px 0; white-space: normal; }
+/* A row that opens is a name, never underlined words (the redesign, 2026-11-16): the whole row
+   is its tap, with the chevron Settings' rows use to say it opens. */
+.app-row { position: relative; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; }
+.app-row > * { grid-column: 1; }
+.app-row::after { content: "\203a"; grid-column: 2; grid-row: 1 / span 2; align-self: center; color: var(--muted); font-size: var(--t-lg); }
+.app-row-top .btn.link, .data td .btn.link { text-decoration: none; color: var(--ink); font-weight: 600; }
+.app-row-top .btn.link::before { content: ""; position: absolute; inset: 0; }
+@media (hover: hover) { .app-row-top .btn.link:hover, .data td .btn.link:hover { text-decoration: underline; text-decoration-color: var(--link-line); } }
 
 @media (max-width: 759px) {
   .top { padding-block: 0; }
@@ -1546,19 +1621,13 @@ li:first-child > .fb-row, .fb-row:first-child { border-top: 0; }
   .fbody > :not(.fb-say):not(.fb-acts) { grid-column: 1 / -1; }
   .fbody > .state { justify-content: space-between; }
 }
-/* A short single choice in Settings is a row of chips, each with its radio, that wrap on a
-   phone: four choices stood down the left of a wide panel with a gap after each (the
-   maintainer, 2026-11-04: "this could be a bit better right"). On the fold's grey, a chip is
-   white, and the one chosen carries the mark. */
-.set-body .pills .choice { background: var(--surface); }
-.set-body .pills .choice:has(input:checked) { background: var(--surface); box-shadow: inset 0 0 0 1px var(--mark); }
+/* A short single choice in Settings sits side by side and wraps on a phone: four choices stood
+   down the left of a wide panel with a gap after each (the maintainer, 2026-11-04: "this could
+   be a bit better right"). Since the redesign (2026-11-16) a segmented control (above). */
 /* A short word ("On", "Off") still has its full target. */
 .set-body .pills .choice label { white-space: nowrap; min-width: var(--target); text-align: center; }
-/* A chip with its own example under its words (File names): a soft card rather than a
-   pill, its words left, the example wrapping anywhere on a phone rather than running off. */
-.set-body .pills .choice.has-ex { border-radius: var(--r-sm); padding-block: 8px; align-items: flex-start; flex: 1 1 auto; max-width: 100%; min-width: 0; }
-.set-body .pills .choice.has-ex input { margin-top: 4px !important; flex: none; }
-.set-body .pills .choice.has-ex label { white-space: normal; text-align: left; min-width: 0; flex: 1 1 auto; }
+/* A choice with its own example under its words (File names) is an option row (above), its
+   words left, the example wrapping anywhere on a phone rather than running off. */
 /* A file's name wraps after its underscores (app.js, fileWords), never inside a word. */
 .chip-ex { overflow-wrap: break-word; }
 .chip-rec { color: var(--muted); font-weight: 400; }
@@ -2091,12 +2160,12 @@ ul.bp-news { gap: 12px; }
   background: radial-gradient(circle at center, transparent 0 10px, var(--line-strong) 10px 11px, transparent 11.5px); } }
 .af-x { margin-left: 4px; }
 
-/* Your profile, a page of its own */
-.sec.profile-page { max-width: 960px; }
+/* Your profile, a page of its own: its column is Settings' (above, after the settings rows). */
 .back-link { justify-self: start; font-size: var(--t-sm); color: var(--muted); text-decoration: none; }
 @media (hover: hover) { .back-link:hover { color: var(--ink); text-decoration: underline; } }
+/* One column of cards, read in order, in Settings' column (the redesign, 2026-11-16): two
+   columns left Skills short beside Education with a gap under it. */
 .prof-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
-@media (min-width: 900px) { .prof-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .prof-card.wide { grid-column: 1 / -1; } }
 .prof-card { display: flex; flex-direction: column; gap: 12px; }
 /* What is still to fill in reads as the card's own rows, at its edge: a Settings row's 16px
    inset and 52px height put each a step in from the card's title (2026-11-10). */
@@ -2267,6 +2336,15 @@ ul.bp-news { gap: 12px; }
    one quiet line. */
 .d-person .timeline .t-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .d-person .timeline .t-event .t-text { color: var(--muted); }
+/* A card's Next (app.js, dNext): the one thing to do there, first under its title, a soft clay
+   well with "Next" over it, its line in the ink, and its one filled button (the redesign,
+   2026-11-16). Rows and timelines follow. */
+.d-next-block { display: grid; gap: 8px; justify-items: start; padding: 12px 16px; border-radius: var(--r-sm); background: var(--accent-soft); }
+.d-next-k { margin: 0; font-size: var(--t-sm); font-weight: 600; color: var(--mark-ink); }
+.d-next-what { margin: 0; font-weight: 600; color: var(--ink); }
+.d-next-block .d-next-what a { font-weight: 400; }
+.d-next-block > .card-actions { margin: 0; }
+.d-next-block .when, .d-next-block .meta { color: var(--ink); }
 /* Every point on the Brief has the same small dot, centred on its first line whatever its
    size, in place of the browser's own bullet beside a dot of ours (the maintainer,
    2026-11-02: "the bullets ... look clunky and misspaced"). */
@@ -2553,6 +2631,9 @@ ul.news .news-line { padding-block: 4px; }
 .makers-link a { color: var(--muted); }
 /* Text size: Smaller and Larger drawn in their own size; the control keeps its height. */
 .size-choice .look-name { line-height: 1; }
+/* An opened row's chips (Roles, Where) on the fold's grey: white with a hairline, never grey on
+   grey, where they read as loose bold words (the redesign, 2026-11-16). */
+.set-body .chip-list .chip { background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); }
 /* A number on the Brief opens where those things are: the tile is the tap, no underline. */
 a.bp-stat { color: inherit; text-decoration: none; border-radius: var(--r-sm); }
 a.bp-stat:hover { text-decoration: none; }

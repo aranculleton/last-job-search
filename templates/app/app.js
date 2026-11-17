@@ -3253,7 +3253,14 @@
   function stopClaude(what, run, key) {
     return btn("Stop Claude", run, {kind: "quiet stop-claude", small: true, key, aria: "Stop Claude's work on " + txt(what || "this")});
   }
-  function empty(title, body, extra) { return h("div", {class: "empty"}, h("p", {class: "empty-title"}, title), body ? h("p", {}, body) : null, extra || null); }
+  // An empty place says what will come there, calmly: a soft circle with the screen's own
+  // icon, a short heading, one grey line and at most one button, never a dashed box (the
+  // redesign, 2026-11-16). A list a filter or a search emptied wears the magnifier.
+  const EMPTY_ICON = {todo: "todo", brief: "brief", jobs: "jobs", drafts: "jobs", contacts: "contacts", interviews: "interviews", progress: "progress", chat: "chat", settings: "settings", profile: "contacts"};
+  function empty(title, body, extra, ic) {
+    const name = ic || (/^Nothing (matches|to show)/.test(txt(title)) ? "k-search" : EMPTY_ICON[S.section] || "todo");
+    return h("div", {class: "empty"}, h("span", {class: "empty-ic", "aria-hidden": "true"}, icon(name)), h("p", {class: "empty-title"}, title), body ? h("p", {}, body) : null, extra || null);
+  }
   function btn(label, onclick, o) {
     o = o || {};
     return h("button", {type: "button", class: "btn " + (o.kind || "secondary") + (o.small ? " small" : ""), "data-k": o.key || null,
@@ -7359,8 +7366,11 @@
       if (!asks && SEARCH_ROW_RULES.has(txt(x.kind))) continue;
       (asks || Number(x.left_out) > 0 ? out : quiet).push(ruleRow(x));
     }
+    // What it learned is this one row, opening in place: "Learned from you" here and "What you
+    // have taught it" under Your data were the same rules twice (the redesign, 2026-11-16).
+    // Its colon is for a screen reader, which reads the row's name and value as one.
     const n = learnedLive().length;
-    if (n) out.push(actionRow("Learned from you: " + plural(n, "rule", "rules"), openLearned, "rules-learned"));
+    out.push(infoRow("learned", ["Learned from you", h("span", {class: "sr-only"}, ": ")], n ? plural(n, "rule", "rules") : "None yet", learnedRows()));
     return {rows: out.concat(quiet), first: out.length};
   }
   const SEARCH_ROW_RULES = new Set(["field", "place", "pay"]);
@@ -7398,11 +7408,6 @@
         all.length ? h("ul", {class: "plain held-rules small"}, shortList("held-rules", all, 0, "How long each kind of hold lasts")) : null]);
   }
   const HOLD_AREAS = {jobs: "Jobs", applications: "Applications", people: "People", messages: "Messages", interviews: "Interviews", page: "This page"};
-  function openLearned() {
-    openState.set("det:info:learned", true);
-    S.focusAfter = {key: "info-sum:learned"};
-    scheduleRender();
-  }
   function learnedLive() { return arr(M().learned).filter((x) => !x.retired && !effective(txt(x.id), ["learned.retire"])); }
   // "Employers you've turned down (N)", with what they left out in the last 30 days (each job
   // once); it opens the names, each
@@ -9798,10 +9803,12 @@
     // got comes second, beside what is usual: "Offer 0 of 24" first, with no base rate, read
     // as a verdict, and the week's effort was folded away (the UX review, 2026-11-10, U-7).
     const wk = thisWeek(weeks);
-    const sum = nothing ? "Nothing counted yet." : "This week: " + (Number(wk.applied) || 0) + " applied" +
+    // Empty, the header says what the screen is for and the empty state below says what comes:
+    // "Nothing counted yet." over "Nothing counted yet." said it twice (the redesign, 2026-11-16).
+    const sum = nothing ? "Your applications, replies and interviews, counted as they happen." : "This week: " + (Number(wk.applied) || 0) + " applied" +
       (wk.sent !== undefined ? ", " + nWord(Number(wk.sent) || 0, "message sent", "messages sent") : "") + ".";
     // The next step, from how far applications got; else what is working (the Brief's own line).
-    const small = nothing ? "Each application you mark as sent is counted here." : funnelReading(funnel) || txt(obj(d.glance).working);
+    const small = nothing ? null : funnelReading(funnel) || txt(obj(d.glance).working);
     const wrap = h("section", {class: "sec", "aria-labelledby": "h-progress" + (where ? "-" + where : "")}, screenHead("progress", "Progress", sum, small, where));
     if (nothing) { put(wrap, empty("Nothing counted yet.", "Each application you mark as sent is counted here, with every reply and interview after it.",
       h("div", {class: "card-actions"}, btn("Go to Jobs", () => go("jobs", {focus: true}), {kind: "secondary", small: true, key: "progress-go-jobs"})))); return wrap; }
@@ -9848,17 +9855,24 @@
   function funnelChart(funnel) {
     const top = Math.max(1, Number(funnel[0].n) || 0);
     const words = {applied: "Applied", replied: "Replied", interview: "Interview", offer: "Offer", hired: "Hired"};
+    // A step none has reached yet says "None yet" in grey, never "0 of 14" in bold beside an
+    // empty bar: "Offer 0 of 14" read as a telling-off (the redesign, 2026-11-16).
     const rows = funnel.map((f, i) => {
       const n = Number(f.n) || 0;
       const pct = Math.round((n / top) * 100);
-      return h("li", {class: "fun-row"}, h("span", {class: "fun-label"}, words[txt(f.stage)] || cap1(txt(f.stage))),
+      return h("li", {class: "fun-row" + (i && !n ? " fun-none" : "")}, h("span", {class: "fun-label"}, words[txt(f.stage)] || cap1(txt(f.stage))),
         h("span", {class: "fun-track", "aria-hidden": "true"}, h("span", {class: "fun-fill", style: "width:" + Math.max(n ? 2 : 0, pct) + "%"})),
-        h("span", {class: "fun-n"}, String(n), i ? h("span", {class: "muted"}, " of " + top) : null));
+        i && !n ? h("span", {class: "fun-n muted"}, "None yet") : h("span", {class: "fun-n"}, String(n), i ? h("span", {class: "muted"}, " of " + top) : null));
     });
+    // What is usual, and where the person stands against it when they are ahead of it: a few in
+    // every 100 reach an interview, so three in fourteen is a good run, and says so.
+    const a = Number(funnel[0].n) || 0;
+    const iv = Number((funnel.find((f) => f.stage === "interview") || {}).n) || 0;
+    const ahead = a > 0 && iv / a >= 0.1 ? " You're ahead." : "";
     // The counts in words, and that most get no reply and a referral helps, one tap down: the
     // card stays within its words (DESIGN.md's budget) with what is usual on its face.
     return card("section", {class: "chart", "aria-labelledby": "h-funnel"}, h("h3", {id: "h-funnel", class: "card-title"}, "How far applications got"),
-      h("ol", {class: "plain funnel"}, rows), h("p", {class: "small muted", "data-k": "typical-rates"}, TYPICAL_RATES));
+      h("ol", {class: "plain funnel"}, rows), h("p", {class: "small muted", "data-k": "typical-rates"}, TYPICAL_RATES + ahead));
   }
   function weekStart(w) {
     const m = /^(\d{4})-W(\d{2})$/.exec(txt(w));
@@ -11503,7 +11517,37 @@
       ivs.length ? plural(ivs.length, "interview", "interviews") : ""].filter(Boolean).join(" · ");
     return h("div", {class: "d-stack d-employer", "data-employer": e.id},
       said ? h("p", {class: "muted"}, said) : null,
+      employerNext(e),
       dRows("Roles", roles), dRows("People", people), dRows("Interviews", ivs));
+  }
+  // The one thing to do at an employer, first on its card, with its one filled button (the
+  // redesign, 2026-11-16): an interview in the next two days, else someone waiting on a reply,
+  // else the next interview, else a message ready to send. The card was all rows and nothing
+  // said which mattered.
+  function employerNext(e) {
+    const ahead = e.ivs.filter((iv) => iv.when && !isPast(iv.when) && !ivOffer(iv)).sort((a, b) => txt(a.when).localeCompare(txt(b.when)));
+    const soon = ahead.find((iv) => { const n = dayDiff(iv.when); return n !== null && n <= 2; });
+    const owed = e.people.find((p) => personGroup(p) === "now");
+    const iv = soon || (owed ? null : ahead[0]);
+    if (iv) return ivNext(iv, "emp-next:" + iv.id);
+    if (owed) return dNext(txt(owed.first_name) + " replied: it's your turn.",
+      btn("Reply to " + txt(owed.first_name), () => openDetail("person", owed.id), {kind: "primary", small: true, key: "emp-next:" + owed.id}));
+    for (const p of e.people) {
+      const m = draftReady(personMessage(p.id));
+      if (m && sendable(m) && !msgStopped(m)) return dNext("Your " + (txt(m.kind) === "first_note" ? "note" : "message") + " to " + txt(p.first_name) + " is ready to send.", seeDraftBtn(m, "emp-next:" + p.id));
+    }
+    return null;
+  }
+  // An interview coming up as a card's next thing: when, and its prep to read (or to make).
+  function ivNext(iv, key) {
+    const has = !!obj(iv.prep).updated;
+    return dNext("Your " + lc1(stageName(iv)) + ", " + lc1(relWhen(iv.when)) + (fmtWhen(iv.when) ? " (" + fmtWhen(iv.when) + ")" : "") + ".",
+      btn(has ? "Read your prep" : "Get ready for it", () => openDetail("interview", iv.id), {kind: "primary", small: true, key}));
+  }
+  // A card's "Next": the one thing to do there, in a line, and its one filled button.
+  function dNext(what, button, more) {
+    return h("section", {class: "d-next-block", "aria-label": "Next"}, h("h3", {class: "d-next-k"}, "Next"),
+      what ? h("p", {class: "d-next-what"}, what) : null, more || null, button ? h("div", {class: "card-actions"}, button) : null);
   }
   function detailOf(kind, id) {
     if (kind === "employer") { const e = employerOf(id); return e ? [e.name, employerDetail(e), "jobs", ""] : null; }
@@ -11558,9 +11602,40 @@
       h("span", {class: "d-row-main"}, h("span", {class: "d-row-name"}, h("bdi", {}, o.label)), o.sub ? h("span", {class: "d-row-sub"}, o.sub) : null),
       st, h("span", {class: "set-go", "aria-hidden": "true"}, "\u203a"));
   }
-  function dRows(title, rows) {
+  function dRows(title, rows, after) {
     const list = arr(rows).filter(Boolean);
-    return list.length ? h("section", {class: "d-block"}, h("h3", {class: "group"}, title), h("div", {class: "set-rows d-rows"}, list)) : null;
+    return list.length ? h("section", {class: "d-block"}, h("h3", {class: "group"}, title), h("div", {class: "set-rows d-rows"}, list), after || null) : null;
+  }
+  // "Also at <employer>" on an interview's or an application's card: the other things there,
+  // each a row that opens it, as every other list on a card is (the redesign, 2026-11-16). It
+  // was a line of underlined links run together with commas. The same choice of what is
+  // "also" there as the list cards' line (relatedLinks): never the card's own role, draft or
+  // person, and each person once.
+  function relatedRows(company, except, item) {
+    const c = txt(company);
+    const rel = item && item.related && typeof item.related === "object" ? item.related : null;
+    if (!c || !rel) return null;
+    const own = new Set([txt(except), txt(item.job), txt(item.contact)].filter(Boolean));
+    const ownMsg = (id) => own.has(txt(obj(messageById(id)).contact));
+    const noted = new Set(arr(rel.messages).map((id) => txt(obj(messageById(id)).contact)).filter(Boolean));
+    const rows = [];
+    for (const sec of Object.keys(REL_SECTION)) {
+      for (const raw of arr(rel[sec])) {
+        const id = txt(raw);
+        if (own.has(id) || (sec === "people" && noted.has(id)) || (sec === "messages" && ownMsg(id))) continue;
+        const l = relLabel(sec, id);
+        if (!l) continue;
+        const who = sec === "people" ? peopleItems().find((p) => txt(p.id) === id) : sec === "messages" ? peopleItems().find((p) => txt(p.id) === txt(obj(messageById(id)).contact)) : null;
+        const ivx = sec === "interviews" ? allInterviews().find((x) => txt(x.id) === id) : null;
+        const open = who ? () => openDetail("person", who.id) : ivx ? () => openDetail("interview", ivx.id)
+          : () => { closeDetail(true); const r = resolveSection(REL_SECTION[sec]) || {section: "todo"}; go(r.section, {focus: true, drafts: r.drafts, item: id}); };
+        rows.push(dRow({label: cap1(l.replace(/^the role: /, "")), state: who && sec === "people" ? statusWord(who) : null,
+          sub: sec === "jobs" ? "A role found there" : ivx && ivx.when ? (isPast(ivx.when) ? fmtDay(txt(ivx.when)) : fmtWhen(ivx.when)) : "",
+          open, key: "rel:" + (except || "") + ":" + sec + ":" + id}));
+      }
+    }
+    const extra = Number(item.people_more) || 0;
+    return dRows("Also at " + c, rows, extra ? h("p", {class: "small muted"}, "And " + plural(extra, "other person", "other people") + ".") : null);
   }
   // What has happened and what is to come, in order: a dot a step on one thread, filled once it
   // has happened and a ring while it is to come (its shape, never its colour alone), and said
@@ -11821,12 +11896,16 @@
     const draftsSaid = drafts ? h("span", {class: "lp-drafts"}, (drafts === 1 ? "One answer is a draft" : drafts + " answers are drafts") + " you asked for.") : null;
     if (lv) return h("div", {class: "d-stack d-live"}, h("p", {class: "when lp-day"}, head, draftsSaid ? [" · ", draftsSaid] : null), hint,
       refLine ? h("p", {class: "meta"}, refLine) : null, liveView(iv, lv, one ? h("div", {class: "card-actions"}, one) : null));
+    // The one thing to do, said over its buttons, while the interview is still to come (the
+    // redesign, 2026-11-16).
+    const nextWhat = offer || isPast(iv.when) ? "" : busy ? "Claude is writing your prep." : has ? "Run through the likely questions out loud once before the day."
+      : "Get your prep: what to say, what they will likely ask, and what to ask them.";
     return h("div", {class: "d-stack"},
       head ? h("p", {class: "when"}, head) : null,
       hint,
       h("p", {class: "meta"}, [txt(iv.role), stageDetails(iv)].filter(Boolean).join(" · "),
         refLine ? [" · ", refLine] : null),
-      acts,
+      nextWhat ? dNext(nextWhat, null, acts) : acts,
       // The minutes before first, in big type; the rest folded, one tap each; what was sent
       // and the stages beside it, never under it (the maintainer, 2026-10-29).
       lv ? null : h("div", {class: "prep-layout"},
@@ -11834,11 +11913,11 @@
           has ? [glance, folds,
             !r && iv.prep_text ? det("prep:" + iv.id + ":doc", false, {class: "prep-fold"}, h("summary", {class: "prep-fold-sum", "data-k": "prep-fold:" + iv.id + ":doc"}, h("span", {class: "prep-fold-t"}, "The whole prep")), h("div", {class: "prep-fold-body"}, prepText(iv.prep_text))) : null,
             !glance && !folds && !iv.prep_text ? h("p", {class: "muted"}, "Your prep is saved; it shows here once the page next updates.") : null]
-            : h("p", {class: "muted"}, "No prep yet. Prepare me builds it: what to say, the questions they are likely to ask, and what to ask them.")),
+            : h("p", {class: "muted"}, nextWhat ? "No prep yet." : "No prep yet. Prepare me builds it: what to say, the questions they are likely to ask, and what to ask them.")),
         h("aside", {class: "prep-side"},
           block("What you sent", arr(iv.sent_files).filter((f) => txt(f.name) || txt(f.kind)).map((f) => h("p", {}, sentWords(f)))),
           dTimeline("Stages", arr(iv.stages).filter((s) => txt(s.label || s.name)).map((s) => ({day: s.date || s.on ? fmtDay(s.date || s.on) : "", label: txt(s.label || s.name), done: stepDone(s)}))),
-          relatedLinks(iv.company, iv.id, iv))));
+          relatedRows(iv.company, iv.id, iv))));
   }
   // ------------------------------------------------------------------ the live prep (tools/interview_live.py)
 
@@ -12746,8 +12825,11 @@
       emailLine(p.id, "pemail:" + p.id),
       resumeForThem(p, "d"),
       referralLine(p),
-      asked ? h("p", {class: "d-next"}, h("strong", {}, "Asked for " + asked.what), personWhen(p) ? ", " + personWhen(p).day + "." : ".") :
-      nextLine && !sent ? h("p", {class: "d-next"}, h("strong", {}, txt(p.hold) ? "" : "Next: "), nextLine.replace(/[.\s]+$/, "") + ".", link ? [" ", link] : null) : null,
+      // Their Next (the redesign, 2026-11-16): what is owed, in a line, with the card's one
+      // filled button under it, first on the card; then where it stands and everything else.
+      ((line) => (line || owed ? dNext(null, owed, line) : null))(
+        asked ? h("p", {class: "d-next d-next-what"}, "Asked for " + asked.what + (personWhen(p) ? ", " + personWhen(p).day + "." : ".")) :
+        nextLine && !sent ? h("p", {class: "d-next d-next-what"}, nextLine.replace(/[.\s]+$/, "") + ".", link ? [" ", link] : null) : null),
       // Where it stands, in words with ticks: outlined pills here read as buttons beside the
       // real ones, and tapping one did nothing (2026-11-02).
       h("p", {class: "d-steps"}, steps.map(([l, done], i) => [i ? h("span", {class: "d-sep", "aria-hidden": "true"}, " · ") : null,
@@ -12755,9 +12837,10 @@
       // How it began, where their conversation is: on the card it was a "?" on every person,
       // past the three a first screen may have (2026-11-04).
       exchangeHistory(p) ? h("p", {class: "small muted", "data-k": "pex:" + p.id}, exchangeHistory(p) + ".") : null,
-      // The card's one button, then the same list the row's More has (personActions), and the
-      // bin's own sheet for not writing to them again: one place to stop, never a second route.
-      h("div", {class: "card-actions wrap"}, owed,
+      // The same list the row's More has (personActions), and the bin's own sheet for not
+      // writing to them again: one place to stop, never a second route. The card's one button
+      // is in its Next, above.
+      h("div", {class: "card-actions wrap"},
         replyOut ? btn("They replied", () => logReply(p, false), {small: true, key: "dlog:" + p.id}) : null,
         personActions(p, p.id, true),
         g !== "done" ? btn("Don't contact again", () => askRemovePerson(p.id, txt(p.first_name), txt(p.employer), p.rev), {kind: "quiet", small: true, key: "dstop:" + p.id}) : null),
@@ -12783,14 +12866,22 @@
     // An application only sent has no word of its own: its line is when it went, with no dot
     // before it ("· Applied Sun 20 Sept", the screen review, 2026-11-11).
     const word = stateWord((APP_STATE[txt(a.status)] || [cap1(txt(a.status))])[0], (APP_STATE[txt(a.status)] || [0, null])[1]);
+    // Its Next (the redesign, 2026-11-16): an interview for it coming up, with its prep; else,
+    // while it is live, I heard back. With an interview ahead, I heard back stays, softer.
+    const k = employerKey(a.company);
+    const role = txt(a.role).toLowerCase();
+    const iv = k ? allInterviews().filter((x) => employerKey(x.company) === k && x.when && !isPast(x.when) && !ivOffer(x) && (!txt(x.role) || !role || txt(x.role).toLowerCase() === role))
+      .sort((x, y) => txt(x.when).localeCompare(txt(y.when)))[0] : null;
+    const heard = appLive(a) ? btn("I heard back", () => heardBack(a), {kind: iv ? "secondary" : "primary", small: true, key: "dheard:" + a.id}) : null;
     return h("div", {class: "d-stack d-app"},
       // Its employer opens its own card, as on a person's (issue #263).
       h("p", {}, word, employerKey(a.company) ? [word ? " · " : null, employerLink(a.company, "dapp:" + a.id)] : null,
         a.applied_on ? h("span", {class: "muted"}, (word || employerKey(a.company) ? " · " : "") + "Applied " + fmtDay(a.applied_on)) : null),
-      appLive(a) ? h("div", {class: "card-actions"}, btn("I heard back", () => heardBack(a), {kind: "primary", small: true, key: "dheard:" + a.id})) : null,
+      iv ? ivNext(iv, "dapp-next:" + a.id) : heard ? dNext("Waiting to hear from " + txt(a.company) + ". Tell Claude when they reply.", heard) : null,
+      iv && heard ? h("div", {class: "card-actions"}, heard) : null,
       dTimeline("Stages", arr(a.stages).map((s) => ({day: s.date || s.on ? fmtDay(s.date || s.on) : "", label: txt(s.label || s.name), done: stepDone(s)}))),
       block("What went", arr(a.sent_files).map((f) => h("p", {}, typeof f === "string" ? h("bdi", {}, f) : [(f.kind === "letter" ? "Cover letter" : Noun()) + ": ", h("bdi", {}, txt(f.name))]))),
-      relatedLinks(a.company, a.id, a));
+      relatedRows(a.company, a.id, a));
   }
 
   // ------------------------------------------------------------------ practice from the pack (FUNCTIONS_SPEC 1.8)
@@ -13272,7 +13363,7 @@
       [btn("Tidy these up", () => { askPlace("rules", "Tidy what I have taught you: find rules the app now does by itself, rules that say the same thing, and rules a later one replaced, and show me each before anything goes."); },
         {small: true, kind: "secondary", key: "learned-tidy", wakes: "talk"})], placeTalk("rules"), {class: "learned-intro"});
     const newest = (a, b) => txt(b.on).localeCompare(txt(a.on));
-    const lo = {items, name: "what you have taught it", one: "rule", many: "rules", sort: newest,
+    const lo = {items, name: "rules learned from you", one: "rule", many: "rules", sort: newest,
       search: (x) => [x.say, x.rule, x.said, x.area].map(txt).join(" "), searchLabel: "A word in a rule", render: learnedRow, box: (kids) => h("ul", {class: "plain l-list"}, kids)};
     const search = items.length > 5 ? controlRow([searchField("learned", lo)]) : null;
     if (txt(listState("learned").q).trim()) return [intro, search, listView("learned", lo)];
@@ -13464,7 +13555,7 @@
       const pid = "portal-" + seg(txt(p.name));
       if (p.key) {
         return h("li", {class: "site-key", "data-item": item}, det("site-key:" + pid, false, {class: "site-key-fold"},
-          h("summary", {class: "set-sum", "data-k": "site-key-sum:" + pid}, h("span", {class: "set-name"}, label, note(p)), h("span", {class: "set-value", "data-k": "site-needs:" + pid}, needs(p))),
+          sumFit(h("summary", {class: "set-sum", "data-k": "site-key-sum:" + pid}, h("span", {class: "set-name"}, label, note(p)), h("span", {class: "set-value", "data-k": "site-needs:" + pid}, needs(p)))),
           h("div", {class: "set-body"}, h("p", {}, "To get one:"), h("ol", {class: "setup-steps", "data-k": "site-steps:" + pid}, arr(obj(p.key).steps).map((x) => h("li", {}, txt(x)))))),
           stateLine(item, "site:" + pid), nextSearchBtn(item, pid));
       }
@@ -13557,7 +13648,7 @@
     const back = h("a", {href: "#settings", class: "back-link", "data-k": "profile-back", onclick: (e) => { e.preventDefault(); go("settings", {focus: true}); }}, "‹ Settings");
     const wrap = h("section", {class: "sec profile-page", "aria-labelledby": "h-profile" + (where ? "-" + where : "")}, back,
       screenHead("profile", "Your profile", "Everything Claude knows about you. Each application uses only what fits the job.", null, where));
-    if (!Object.keys(y).length) { put(wrap, empty("Nothing here yet.", "Your profile fills in as you answer the setup questions.")); return wrap; }
+    if (!Object.keys(y).length) { put(wrap, empty("Nothing here yet.", "Your profile fills in as you answer the setup questions.", null, "contacts")); return wrap; }
     const busy = profileBusy();
     if (busy) put(wrap, busy);
     const missing = arr(y.missing);
@@ -17010,7 +17101,7 @@
     // Only the app's own settings have a usual; the search is the person's own, so "All on the
     // usual settings" over a changed pay read false (the 3 November audit).
     const sum = changed.length ? nWord(changed.length, "setting", "settings") + " changed from how the app came: " + changed.map((s) => settingLabel(s).toLowerCase()).join(", ") + "." : "Your search, your brief and how the page looks and runs.";
-    const wrap = h("section", {class: "sec", "aria-labelledby": "h-settings" + (where ? "-" + where : "")}, screenHead("settings", "Settings", sum, null, where));
+    const wrap = h("section", {class: "sec settings-page", "aria-labelledby": "h-settings" + (where ? "-" + where : "")}, screenHead("settings", "Settings", sum, null, where));
     const byKey = new Map(all.map((s) => [txt(s.key), s]));
     const pick = (keys) => keys.map((k) => byKey.get(k)).filter(Boolean);
     const known = new Set(["suggestions", "app_updates", "tips", "linkedin_plan", "profile_reads", "prep_days", "calendar_reminder", "brief_push", "time_zone", "file_names"]);
@@ -17028,13 +17119,15 @@
     const search = searchRows().filter(Boolean);
     if (search.length) put(wrap, settingsGroup("Your search", search));
     const yours = yourRulesRows();
-    if (yours.rows.length) put(wrap, settingsGroup("Your rules", shortList("rules", yours.rows, Math.max(1, yours.first), "Show all")));
+    put(wrap, settingsGroup("Your rules", shortList("rules", yours.rows, Math.max(1, yours.first), "Show all")));
     // The phone notification only where the brief's own run sends it (model.schedule.push_here).
     put(wrap, settingsGroup("Your brief", briefRows().concat(pick(obj(M().schedule).push_here ? ["brief_push", "prep_days"] : ["prep_days"]).map(settingRow))));
     const cal = pick(["calendar_reminder"]).map(settingRow);
     if (cal.length) put(wrap, settingsGroup("Coming up", cal));
     // Look: how the page looks and is used here, harmless to change (the maintainer, 4.12).
-    put(wrap, settingsGroup("Look", [lookRow(), sizeRow(), window.innerWidth >= 760 ? sideRow() : null, touchOnly() ? null : keysRow()]));
+    // Keyboard shortcuts are not offered on a phone either, whatever it says it can do (the
+    // redesign, 2026-11-16): a row about keys on a phone was a row nobody there can use.
+    put(wrap, settingsGroup("Look", [lookRow(), sizeRow(), window.innerWidth >= 760 ? sideRow() : null, touchOnly() || phoneNow() ? null : keysRow()]));
     put(wrap, settingsGroup("LinkedIn", linkedinRows().concat(pick(["profile_reads"]).map((s) => settingRow(s, txt(settingValue(s)) === "paste" ? null : readingBody())), [computerRow()], pick(["linkedin_plan"]).map((s) => settingRow(s)))));
     put(wrap, settingsGroup("Help", [actionRow("Show me around", () => showTour(0), "help-tour"),
       // The chat bubble, where the person is, rather than taking them away to Chat (2026-10-30).
@@ -17050,8 +17143,7 @@
       infoRow("news", "What's new", [ver, waiting ? "" : "Up to date"].filter(Boolean).join(" · "), updatesBody()),
       // "How updates arrive" shows only to someone holding updates, so they can let them in
       // again (the maintainer, 2026-10-31); holding them is said in a chat.
-      ...pick(held ? ["app_updates"] : []).map(settingRow),
-      infoRow("learned", "What you have taught it", plural(learnedLive().length, "rule", "rules"), learnedRows())].concat(others.map(settingRow))));
+      ...pick(held ? ["app_updates"] : []).map(settingRow)].concat(others.map(settingRow))));
     put(wrap, settingsGroup("This device", [infoRow("device", "Check this device", null, deviceList())]));
     // Advanced, folded: only what can slow things down or use more of the Claude allowance
     // (the maintainer, 4.12); everything harmless lives where it belongs (Look, This device).
@@ -17118,7 +17210,9 @@
       // and the one recommended for the person's country says so.
       const ex = obj(s.examples);
       const withEx = arr(s.choices).some((c) => txt(ex[txt(c[0])]));
-      const chips = withEx || (arr(s.choices).length <= 5 && arr(s.choices).every((c) => !wordsOf(c)[1] && txt(wordsOf(c)[0]).length <= 24));
+      // Since the redesign (2026-11-16) the chips are a segmented control, and a choice with
+      // more to say under each (an example, a line of why) is a list of option rows.
+      const chips = !withEx && arr(s.choices).length <= 5 && arr(s.choices).every((c) => !wordsOf(c)[1] && txt(wordsOf(c)[0]).length <= 24);
       const opts = arr(s.choices).map((c, i) => {
         const words = wordsOf(c);
         const shown = txt(ex[txt(c[0])]);
@@ -17131,7 +17225,7 @@
           h("label", {for: sid + "-" + i}, words[0], rec, under ? h("span", {class: "hint block" + (shown ? " chip-ex" : ""), id: hid}, shown ? fileWords(shown) : under) : null));
       });
       body = h("fieldset", {class: "setting" + (chips ? " pills" : "")}, h("legend", {class: "sr-only"}, settingLabel(s)), copy.hint ? h("p", {class: "hint"}, copy.hint) : null,
-        chips ? h("div", {class: "pill-row"}, opts) : opts);
+        chips ? h("div", {class: "pill-row"}, opts) : h("div", {class: "opt-rows"}, opts));
     } else {
       const key = "set:" + s.key;
       const draft = draftGet(key);
@@ -17140,7 +17234,7 @@
         btn("Save", () => { const val = inp.value; draftSet(key, null); act([{item, action: "setting.set", value: s.kind === "number" ? Number(val) : val, rev: s.rev}], settingLabel(s) + ": " + val); }, {small: true, key: "save:" + s.key, aria: "Save " + settingLabel(s)})));
     }
     return det("set:" + s.key, false, {class: "setting-row"},
-      h("summary", {class: "set-sum", "data-k": "set-sum:" + s.key}, h("span", {class: "set-name"}, settingLabel(s)), h("span", {class: "set-value"}, valueWord(s))),
+      sumFit(h("summary", {class: "set-sum", "data-k": "set-sum:" + s.key}, h("span", {class: "set-name"}, settingLabel(s)), h("span", {class: "set-value"}, valueWord(s)))),
       h("div", {class: "set-body"}, body, s.help ? h("p", {class: "hint"}, txt(s.help)) : null, more && more.nodeType ? more : null), stateLine(item, setId(s)));
   }
   function lookRow() {
@@ -17187,7 +17281,11 @@
     // Its own name too, so two switches never share one ("on") for a tool reading names.
     const said = [words].flat().find((w) => typeof w === "string");
     if (said && input && input.setAttribute && !input.getAttribute("aria-label")) input.setAttribute("aria-label", said);
-    return h("label", {for: id, class: "toggle-label"}, h("span", {class: "set-name"}, words), input);
+    // A switch is drawn as one, a track with a knob, beside the box that is its tap and its
+    // state (the redesign, 2026-11-16): a ticked clay square read as a form, not a setting.
+    const sw = input && input.getAttribute && input.getAttribute("role") === "switch";
+    return h("label", {for: id, class: "toggle-label"}, h("span", {class: "set-name"}, words),
+      sw ? h("span", {class: "switch"}, input, h("span", {class: "switch-ui", "aria-hidden": "true"})) : input);
   }
   // An opened fold: what it says, what it does, and the line a tap leaves. On a wide screen the
   // buttons stand at its right edge, under the row's own value, beside the words they belong
@@ -17201,8 +17299,15 @@
       h("div", {class: "fb-say"}, say), a.length ? h("div", {class: "fb-acts"}, a) : null, after);
   }
   function infoRow(key, name, value, body) {
-    return det("info:" + key, false, {class: "setting-row"}, h("summary", {class: "set-sum", "data-k": "info-sum:" + key}, h("span", {class: "set-name"}, name), value ? h("span", {class: "set-value"}, value) : null),
+    return det("info:" + key, false, {class: "setting-row"}, sumFit(h("summary", {class: "set-sum", "data-k": "info-sum:" + key}, h("span", {class: "set-name"}, name), value ? h("span", {class: "set-value"}, value) : null)),
       h("div", {class: "set-body"}, body));
+  }
+  // A row whose name and value run past a phone's one line says its value under its name
+  // (app.css, .set-long): about 32 letters fit beside each other at a phone's size.
+  function sumFit(sum) {
+    const v = sum.querySelector(".set-value");
+    if (v && txt(sum.textContent).replace(/\s+/g, " ").trim().length > 32) sum.classList.add("set-long");
+    return sum;
   }
   function actionRow(name, fn, key) {
     return h("button", {type: "button", class: "setting-row act-row", "data-k": key, onclick: fn}, h("span", {class: "set-name"}, name), h("span", {class: "set-go", "aria-hidden": "true"}, "›"));
