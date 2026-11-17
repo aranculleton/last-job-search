@@ -639,7 +639,12 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
 - More's toggle stays in its row beside the card's other pills, open or shut, and its panel
   opens under the row, on every card. Where the row is too wide for its line, the pill before
   More goes down to the next line with it, never More alone (`moreFit`; under "Practise 3
-  questions" and "Read your prep" on a phone, the screen review, 2026-11-11). Its buttons are one row of pills that wraps only at the
+  questions" and "Read your prep" on a phone, the screen review, 2026-11-11). A gauge is one
+  with its button: a row wraps between a button with its gauge and the next pill, never between
+  the two, the button going down with a gauge that would start a line, and with a gauge before
+  More the pair goes down with it; where that pair starts the row, More takes the next line by
+  itself ("6 min of Claude" went down with More, under the "Prepare me" it belonged to, the
+  redesign's second round, 2026-11-17; calm test). Its buttons are one row of pills that wraps only at the
   panel's width, never a line a kind; a note or a link in a sentence follows them. Why: opened
   inside the row it took the whole width and dropped below "I sent it", and a row a kind left
   one button alone on a line (the maintainer, 2026-11-05). (More test)
