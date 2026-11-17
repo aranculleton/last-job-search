@@ -61,6 +61,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import company_key as _ck  # noqa: E402
 from company_key import key as company_key  # noqa: E402
 from opportunity import YC_AND_BACKED, _names_in, tier  # noqa: E402
+import sector as _sector  # noqa: E402
 from sector import tech_name  # noqa: E402
 from text_screen import salary_range  # noqa: E402
 
@@ -80,6 +81,13 @@ EXCLUDED_RULES = [r for r in getattr(_S, "BAR_EXCLUDED", []) if r[1] not in EXCL
 # Read through the employer key, as every lookup is (company_key.keyed): an entry written by
 # hand in any other form ("north-shore mutual", "acme insurance") matched nothing (2026-11-16).
 DECLINED = _ck.keyed(getattr(_S, "BAR_DECLINED", {}) or {})
+# Kinds of employer turned down as kinds (search.py BAR_SECTORS_OUT, {kind: the person's words
+# and the day}): one rule on what the employer is, by the person's own catalogue (sector.kind)
+# or by its posting saying so of itself (sector.said_kind), never a list of names. One "no" to
+# a whole sector became about 40 names written by hand into BAR_DECLINED, and an employer of
+# that kind on none of them was never cut (issue 307). tools/wants.py writes it.
+SECTORS_OUT = {_sector.kind_key(k): str(v) for k, v in
+               dict(getattr(_S, "BAR_SECTORS_OUT", {}) or {}).items() if _sector.kind_key(k)}
 PUBLIC_PRESTIGE, _PRESTIGE_WHY = getattr(_S, "BAR_PUBLIC_PRESTIGE", (_NEVER, ""))
 PENSIONS, _TARGETS_WHY = getattr(_S, "BAR_PUBLIC_TARGETS", (_NEVER, ""))
 NAMED_PUBLIC, _NAMED_WHY = getattr(_S, "BAR_NAMED_PUBLIC", (_NEVER, ""))
@@ -161,9 +169,35 @@ def excluded_by_name(company: str | None) -> str:
             return why
     if k in DECLINED:
         return DECLINED[k]
+    why = kind_out(name)
+    if why:
+        return why
     if PUBLIC_PRESTIGE.search(both) or PENSIONS.search(both):
         return ""
     return _NAMED_WHY if NAMED_PUBLIC.search(both) else ""
+
+
+def kind_why(kind: str, said: str) -> str:
+    """The reason a job at an employer of a kind turned down is left out."""
+    return f"a kind of employer you turned down ({kind}): {said}"
+
+
+def kind_out(company: str | None, posting: str = "", out: dict | None = None,
+             catalogue: dict | None = None) -> str:
+    """Why the employer is of a kind the person turned down (BAR_SECTORS_OUT), or "": by what
+    their own catalogue calls it (sector.kind) and, with `posting`, for an employer the
+    catalogue does not hold, by the posting saying it of its own employer (sector.said_kind).
+    `out` and `catalogue` are the settings as read just now (tools/wants.py), in place of the
+    ones read at start."""
+    out = SECTORS_OUT if out is None else out
+    if not out or not company:
+        return ""
+    have = _sector.kind(company, catalogue)
+    k = _sector.kind_key(have)
+    if k:
+        return kind_why(k, out[k]) if k in out else ""
+    said = _sector.said_kind(posting, company, out) if posting else ""
+    return kind_why(said, out[said]) + " (its posting says so)" if said in out else ""
 
 
 UNLISTED = ("not on your employer lists yet, so this says nothing about it: judge its pay, "
@@ -464,7 +498,7 @@ def _verdict(company: str | None, posting: str = "",
     mid = (lo + hi) // 2 if lo and hi else None
     paid = mid is not None and mid >= TARGET_MIDPOINT
 
-    why = excluded_by_name(company)
+    why = excluded_by_name(company) or kind_out(company, posting)
     if why:
         return EXCLUDED, why
     if PUBLIC_PRESTIGE.search(both):

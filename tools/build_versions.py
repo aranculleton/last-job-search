@@ -423,8 +423,9 @@ METHODS: dict[str, dict] = {
             (111, "2026-11-17", False, "RUNBOOK says an employer nobody has judged waits below judged ones and a round's batch of them is judged in one go (bar.py judge --file), then the round is cut again; nothing made changes"),
             (112, "2026-11-17", False, "RUNBOOK says every round prints what each source read and what failed, and a failed source is passed on in plain words; nothing made changes"),
             (113, "2026-11-17", False, "RUNBOOK says a round asked for a number that finds fewer checks itself before it reports and searches wider by itself when the search's own hour allows; nothing made changes"),
+            (114, "2026-11-17", False, "RUNBOOK says an employer or a kind of employer the person turns down goes through one command (tools/wants.py decline or sector-out) that changes every setting it touches, and is taken back the same way; nothing made changes"),
         ),
-        "fingerprint": "b9ff931b573ad946",
+        "fingerprint": "ea5ccce82aa2e197",
     },
     "interview": {
         # Only a process with a round still to come is prepared again: a prep for a round
@@ -867,8 +868,9 @@ METHODS: dict[str, dict] = {
             (61, "2026-11-17", False, "bar.py judge --file records a round's batch of employers nobody had judged in one write, each marked by the round with its day, so a person or a chat can overturn it; nothing is screened differently"),
             (62, "2026-11-17", False, "a brand-leverage lift reads the posting with its boilerplate set aside (benefits, the equal-opportunity paragraph, travel asked of the person, the work model, stakeholder engagement), a lift for working terms ignores a bare hybrid, and one that says employer reads only what the employer is, so a travel requirement no longer lifts a job as a travel employer; opportunity.py --leverage-words says what each lift fired on; nothing ruled out needs looking at again, and the jobs on the page are scored again by the jobs-rescored upgrade"),
             (63, "2026-11-17", False, "the record of jobs only seen keeps what a later search reads (when each was seen, and its title, employer and place while it can be relisted), and each search's list of what it left out keeps a few of its own checks' rows and counts the rest; nothing screened differently"),
+            (64, "2026-11-17", False, "a kind of employer turned down as a kind (search.py BAR_SECTORS_OUT) is cut by what the person's catalogue calls the employer, or its posting says of itself, and the filter run alone reads the person's own window; nothing ruled out needs looking at again: it only cuts more"),
         ),
-        "fingerprint": "48c3a85878046e06",
+        "fingerprint": "3235ca8286d3246a",
     },
     "routines": {
         "by": "you", "priority": 3, "applies": "routines",
@@ -1367,6 +1369,9 @@ KEEPS_NOTHING: dict[str, str] = {
     "tools/run_round.py": "runs every round afresh; its shortlists are dated records of one round",
     "tools/rescore.py": "scores the jobs on the page again by itself whenever it or how jobs are scored changes (its own fingerprint, read by the jobs-rescored upgrade), so nothing it wrote waits on a version",
     "tools/scrape_wide.py": "runs every round afresh",
+    "tools/wants.py": "writes the person's settings the moment they turn something down and "
+                      "checks them against each other on every run; a list it missed before is "
+                      "put right by the declined-tidied upgrade, so nothing waits on a version",
     "tools/hydrate.py": "runs every round afresh",
     "tools/lookup_score.py": "a lookup run on demand",
     "salary_lookup.py": "a lookup run on demand",

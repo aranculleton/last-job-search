@@ -137,10 +137,11 @@ def verdict(company: str | None, posting: str = "") -> tuple[str, str]:
     return V_UNKNOWN, "not a name on file and the posting settles nothing"
 
 
-def kind(company: str | None) -> str:
+def kind(company: str | None, catalogue: dict | None = None) -> str:
     """What the person's own catalogue (employers.py) says this employer is, in its words:
     NOT_TECH's ("professional services", "bank"), "technology company" or "software product"
-    for the two tech lists, and "" for a name it does not hold. Nothing is guessed."""
+    for the two tech lists, and "" for a name it does not hold. Nothing is guessed.
+    `catalogue`, a NOT_TECH read just now, in place of the one read at start."""
     c = " %s " % _norm(str(company or "").split("|")[0])
     if not c.strip():
         return ""
@@ -148,7 +149,56 @@ def kind(company: str | None) -> str:
         return "technology company"
     if _in(c, ADJACENT_COMPANIES):
         return "software product"
-    return next((what for name, what in NOT_TECH.items() if _in(c, {name})), "")
+    got = NOT_TECH if catalogue is None else catalogue
+    return next((what for name, what in got.items() if _in(c, {name})), "")
+
+
+def kind_key(what: str | None) -> str:
+    """A kind of employer as one form, however it was said: case, punctuation and plurals set
+    aside ("Pension Funds", "pension fund"; "consultancies", "consultancy"), so a kind the
+    person turned down is matched against the catalogue's word for an employer."""
+    out = []
+    for w in _norm(what).replace("'", " ").split():
+        if len(w) > 4 and w.endswith("ies"):
+            w = w[:-3] + "y"
+        elif len(w) > 3 and w.endswith("s") and not w.endswith(("ss", "us")):
+            w = w[:-1]
+        out.append(w)
+    return " ".join(out)
+
+
+def _kind_words(k: str) -> str:
+    """A kind's words as a pattern taking its plural ("pension funds", "consultancies")."""
+    words = k.split()
+    last = words[-1]
+    tail = (re.escape(last[:-1]) + r"(?:y|ies)" if last.endswith("y")
+            else re.escape(last) + r"(?:s|es)?")
+    return r"\s+".join([re.escape(w) for w in words[:-1]] + [tail])
+
+
+def said_kind(posting: str, company: str | None, kinds) -> str:
+    """The kind among `kinds` (each a kind_key) a posting says its own employer is, or "":
+    only with the employer the subject, "we are a ... <kind>", "<employer> is one of the
+    ... <kinds>", the way the bar reads a public body from its posting (tools/bar.py
+    PUBLIC_SAID). A posting about its clients ("we serve banks") names a client, never the
+    employer, and is not read as one."""
+    kinds = [k for k in (kind_key(x) for x in kinds or ()) if k]
+    text = str(posting or "")
+    if not kinds or not text:
+        return ""
+    alts = "|".join(sorted((_kind_words(k) for k in kinds), key=len, reverse=True))
+    its = r"(?:an?|the|one\s+of\s+the)\s+(?:[\w&'-]+\s+){0,3}?(?P<kind>%s)\b" % alts
+    subjects = [r"\b(?:we\s+are|we're|we’re)\s+"]
+    first = " ".join(str(company or "").split("|")[0].split())
+    if first:
+        subjects.append(r"\b" + r"\W+".join(re.escape(w) for w in first.split())
+                        + r"\b(?:\s*\([^)]{0,60}\))?\s+is\s+")
+    for subject in subjects:
+        m = re.search(subject + its, text, re.I)
+        if m:
+            got = kind_key(m.group("kind"))
+            return next((k for k in kinds if k == got), got)
+    return ""
 
 
 def keep(company: str | None, posting: str = "", include_unknown: bool = False) -> bool:

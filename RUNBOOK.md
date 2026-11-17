@@ -767,6 +767,7 @@ chat has lost it.
 | Sent a contact a resume | that message's row, with the file: `state.py message <id> --attached <file>` |
 | A new person worth contacting | `network_contacts.csv` |
 | A contact's situation changed, or something is now owed | that contact's `status` and `next_action`: `python3 tools/network/state.py set <contact> --status <s> --next-action "<what>" --due <date> --note "<what happened>"`, never by hand |
+| They turn down an employer, or a kind of employer ("no more Acme", "no pension funds") | `python3 tools/wants.py decline "<employer>" --said "<their words>"`, or `wants.py sector-out "<kind>" --said "<their words>"`: one command for every setting it touches (the bar, the tier lifts, the searches by name, the employer's own job site, the note in `profile/CLAUDE.md`), never `BAR_DECLINED` by hand. A group ("MBB") is each of its employers by name |
 | An employer turns out to have no relevant presence at all | `job_scraper/do_not_target.json`, with a `review_after` |
 | A posting was ruled out | `job_scraper/seen_jobs.json`, through `tools/exclude.py add` (a reason, and what it rests on) |
 | A fact about the candidate: a skill, a gap, a date, a constraint | `01-candidate-profile.md`, and `profile/CLAUDE.md` if it belongs in the summary |
@@ -875,7 +876,8 @@ The hook and the four steps are in CLAUDE.md ("Learning the person"); this is th
   already on their page are scored by it too.
 - **Rulings change, and that is normal:** when they change their mind about a kind of job, a
   sector or an employer, undo the ruling in the same turn (`exclude.py lift "<words of the
-  reason>"`, the sector or employer out of `search.py` `BAR_EXCLUDED` or `BAR_DECLINED`, the
+  reason>"`, `python3 tools/wants.py undecline "<employer>"` or `sector-back "<kind>"` (a
+  kind in `search.py` `BAR_EXCLUDED` out of it by hand), the
   entry out of `job_scraper/do_not_target.json`). A ruling made by their screening rules
   lapses by itself when the part of the rules it rests on changes (one blocker row, one gate
   setting); when you change a screening rule, run `exclude.py lapsed` in the same turn and

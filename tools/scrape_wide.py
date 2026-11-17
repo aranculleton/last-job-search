@@ -23,7 +23,7 @@ scraped. So the correct shape is: scrape as wide as the portals allow, filter
 hard for free, and spend the model budget only on survivors.
 
 Usage:
-    python3 tools/scrape_wide.py --out DIR [--pages 5] [--jobage 14]
+    python3 tools/scrape_wide.py --out DIR [--pages 5] [--jobage <days>]
 
 `--out` is a DIRECTORY: it receives scraped.json (everything), kept.json (past
 the prefilter), dropped.json and sources.json (what each source read and what failed, the
@@ -1280,14 +1280,33 @@ def _still_empty(last: dict, today: dt.date | None) -> set:
     return out
 
 
+def turned_down():
+    """A function from an employer's name to why the person turned it down, by name or by kind
+    (tools/wants.py, the settings as they stand now), or "". A round asked for the Workday
+    boards and name searches of six employers the person had declined, four of them weeks
+    before, and every request was spent for rows the bar then cut (issue 307)."""
+    try:
+        import wants
+        return wants.out_fn()
+    except Exception:  # noqa: BLE001  no profile to read: nobody is turned down
+        return lambda name: ""
+
+
+def searched_employers(out=None) -> list:
+    """SCRAPE_EMPLOYERS without the employers the person turned down."""
+    out = out or turned_down()
+    return [e for e in EMPLOYERS if not out(e)]
+
+
 def build_tasks(on: dict[str, bool], pages: int, today: dt.date | None = None) -> list[tuple]:
     """(kind, query, location, page) for every request, for the portals that are on.
 
     `kind` is "li", "lir" or "fh" for the app's two portals, and the portal's
     own name for a person's portal, whose requests come last and are sent by
-    `sweep`, paced."""
+    `sweep`, paced. An employer the person turned down is never asked for by name."""
     li, fh = on.get("linkedin-search"), on.get("freehire-search")
     tasks = []
+    employers = searched_employers()
     # LinkedIn: every query against the home city deep, the rest shallow.
     if li:
         for q in QUERIES:
@@ -1305,7 +1324,7 @@ def build_tasks(on: dict[str, bool], pages: int, today: dt.date | None = None) -
                 tasks.append(("fh", q, None, pg))
     # The named-employer pass. Shallow, because a company search that needs
     # five pages is not finding that company, it is finding the query words.
-    for emp in EMPLOYERS:
+    for emp in employers:
         for t in EMPLOYER_QUERIES:
             q = f"{emp} {t}"
             if li:
@@ -1350,12 +1369,12 @@ def build_tasks(on: dict[str, bool], pages: int, today: dt.date | None = None) -
         depth = min(pages, portals.pages(skill))
         qs = broadest(QUERIES)
         core = [(skill, q, places[0], pg) for pg in range(1, depth + 1) for q in qs]
-        tail = [(skill, f"{emp} {t}", places[0], 1) for emp in EMPLOYERS
+        tail = [(skill, f"{emp} {t}", places[0], 1) for emp in employers
                 for t in EMPLOYER_QUERIES]
         # An employer this board had nothing from in the last EMPTY_DAYS is not asked for.
         empty = _still_empty(cursor.get(skill) or {}, today)
         tail = [t for t in tail if t[1] not in empty]
-        NAMED.update({(skill, f"{emp} {t}"): _key(emp) for emp in EMPLOYERS
+        NAMED.update({(skill, f"{emp} {t}"): _key(emp) for emp in employers
                       for t in EMPLOYER_QUERIES})
         for pg in range(1, min(depth, 2) + 1):
             if portals.takes_remote(skill):
@@ -1384,7 +1403,8 @@ def named_tasks(on: dict[str, bool], pages: int, employers) -> list[tuple]:
     search: the whole search filtered afterwards cost every request of a round. The paced
     boards' cursor is left where it is: this is not their round."""
     li, fh = on.get("linkedin-search"), on.get("freehire-search")
-    names = [str(e).strip() for e in employers or () if str(e).strip()]
+    out = turned_down()
+    names = [str(e).strip() for e in employers or () if str(e).strip() and not out(e)]
     asks = [t for t in EMPLOYER_QUERIES if str(t).strip()]
     places = EMPLOYER_LOCATIONS or LOCATIONS
     remote = EMPLOYER_REMOTE or REMOTE_LOCATIONS
@@ -1661,6 +1681,13 @@ def _employer_boards(today: dt.date, seen: str | None = None,
         if not mine:
             return [], {}, {}
         extra["boards"] = mine
+    # An employer the person turned down has its own job site read no more: every request
+    # there was spent on rows the bar cuts (issue 307).
+    mine = boards_to_read(extra.get("boards"))
+    if mine is not None:
+        if not mine:
+            return [], {}, {}
+        extra["boards"] = mine
     newer = {"report": report, "cache_dir": cache_dir, "retry_until": retry_until}
     try:
         import inspect
@@ -1672,6 +1699,16 @@ def _employer_boards(today: dt.date, seen: str | None = None,
                   if v is not None and (anything or k in takes)})
     rows, quiet = _ats_fetch(notes=notes, today=today, **extra)
     return rows, quiet, notes
+
+
+def boards_to_read(boards: dict | None = None) -> dict | None:
+    """The employer boards a round reads: `boards` (else profile/boards.py's) without those of
+    employers the person turned down, or None where none of them is."""
+    import ats_boards
+    boards = ats_boards.BOARDS if boards is None else boards
+    out = turned_down()
+    kept = {e: b for e, b in boards.items() if not out(e)}
+    return kept if len(kept) != len(boards) else None
 
 
 # The employer boards a round could not read, in SOURCES, for the round to say before its
@@ -1724,7 +1761,9 @@ def main() -> int:
     ap.add_argument("--pages", type=int, default=None,
                     help=f"default {CLOUD_PAGES} in the cloud, {LOCAL_PAGES} on a person's own "
                          "computer (profile/search.py SCRAPE_PAGES sets their own)")
-    ap.add_argument("--jobage", type=int, default=14)
+    ap.add_argument("--jobage", type=int, default=None,
+                    help="how old a posting may be, in days (default: the person's own, "
+                         "search.py JOB_AGE_DAYS, else 14)")
     ap.add_argument("--today", default=None)
     ap.add_argument("--seen", default=None,
                     help="the round's seen_jobs.json, for the employer boards (default: the repo's)")
@@ -1768,6 +1807,9 @@ def main() -> int:
         return 1 if said.startswith("could not") else 0
     if not a.out:
         ap.error("the following arguments are required: --out")
+    if a.jobage is None:
+        from prefilter import own_window
+        a.jobage = own_window()
     today = dt.date.fromisoformat(a.today) if a.today else dt.date.today()
     pages, workers, cap = defaults()
     pages = a.pages or pages
@@ -1859,6 +1901,10 @@ def main() -> int:
         from run_round import named_employers
         employers = named_employers(a.employers_file)
         _, no_board = named_boards(employers)
+        out = turned_down()
+        down = [e for e in employers if out(e)]
+        if down:
+            print("employers: not searched, as you turned them down: " + ", ".join(down))
         print(f"employers: searching {len(employers)} named employers by name"
               + (f"; no board of their own on file for {', '.join(no_board)} "
                  "(tools/ats_boards.py --find \"<employer>\" finds one)" if no_board else ""))
@@ -2091,8 +2137,9 @@ def main() -> int:
         for employer, why in sorted(ats_notes.items()):
             print(f"  partial: {employer}: {why}")
         import ats_boards
-        total = (len(named_boards(employers)[0]) if employers is not None
-                 else len(ats_boards.BOARDS))
+        planned = named_boards(employers)[0] if employers is not None else ats_boards.BOARDS
+        kept_boards = boards_to_read(planned)
+        total = len(planned if kept_boards is None else kept_boards)
         unread = boards_unread(ats_quiet, total, board_report)
         boards.update(unread)                 # into SOURCES, for the round to say
         if unread["line"]:
