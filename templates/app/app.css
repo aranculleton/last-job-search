@@ -2,7 +2,7 @@
    sections in a bar along the bottom and every control a 44px target; from 760px the
    sections run down the left; from 1280px running work sits in a rail on the right and a
    second section can open beside the first. Colour: every colour is a token from
-   templates/app/palettes.py (rose pine, dawn and main, with rose), written into the page
+   templates/app/palettes.py (warm paper and charcoal, clay the one mark), written into the page
    ahead of this sheet; this sheet names tokens and never a colour, and a state is always a
    word or an icon as well as a colour. Type: the device's own faces, nothing fetched, on a
    short scale. Space: generous, so a stressed person sees one thing at a time. */
@@ -446,8 +446,8 @@ bdi { unicode-bidi: isolate; }
 .btn:disabled { opacity: 0.55; cursor: not-allowed; }
 /* A card's actions are one row of pills (DESIGN.md, "Buttons, links and taps"): one height,
    radius and padding, the same gap. The one next step is the filled pill, semibold; every
-   other control in the row (a quiet or a link button, a link that acts) is the soft grey
-   pill at the regular weight, its edge 3:1 on the card; More is a soft pill too. Text
+   other control in the row (a quiet or a link button, a link that acts) is the soft pill,
+   the raised fill with no edge, its words at 600; More is a soft pill too. Text
    buttons beside pills read as clutter (the maintainer, 2026-11-05). */
 .btn.secondary { font-weight: 600; }
 :is(.card-actions, .wc-actions, .suggest-acts, .more-acts, .g-acts, .fix, .bp-foot, .sheet-actions) > :is(.btn, a):not(.icon-only),
