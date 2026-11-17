@@ -870,8 +870,9 @@ METHODS: dict[str, dict] = {
             (62, "2026-11-17", False, "a brand-leverage lift reads the posting with its boilerplate set aside (benefits, the equal-opportunity paragraph, travel asked of the person, the work model, stakeholder engagement), a lift for working terms ignores a bare hybrid, and one that says employer reads only what the employer is, so a travel requirement no longer lifts a job as a travel employer; opportunity.py --leverage-words says what each lift fired on; nothing ruled out needs looking at again, and the jobs on the page are scored again by the jobs-rescored upgrade"),
             (63, "2026-11-17", False, "the record of jobs only seen keeps what a later search reads (when each was seen, and its title, employer and place while it can be relisted), and each search's list of what it left out keeps a few of its own checks' rows and counts the rest; nothing screened differently"),
             (64, "2026-11-17", False, "a kind of employer turned down as a kind (search.py BAR_SECTORS_OUT) is cut by what the person's catalogue calls the employer, or its posting says of itself, and the filter run alone reads the person's own window; nothing ruled out needs looking at again: it only cuts more"),
+            (65, "2026-11-17", False, "several brand-leverage lifts on one posting count strongest first, the next at half, the next at a quarter and so on, still +30 at most, so one strong reason to want a job is not outweighed by many small ones; a penalty still counts in full and --explain says what each lift counted; nothing ruled out needs looking at again, and the jobs on the page are scored again by the jobs-rescored upgrade"),
         ),
-        "fingerprint": "3235ca8286d3246a",
+        "fingerprint": "5a3fb2976a84b213",
     },
     "routines": {
         "by": "you", "priority": 3, "applies": "routines",

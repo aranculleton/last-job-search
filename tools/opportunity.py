@@ -92,9 +92,10 @@ SELF_PORTRAIT = re.compile(r"\b(?:culture|foster\w*)\b[^.;!?\n]{0,80}", re.I)
 # profile's (search.py, OPP_*): where the candidate's own employers do
 # disproportionate work, what is held, and which families are a different job.
 #   LEVERAGE      (pattern, points, why[, where it reads][, "set_aside_self_portrait"]).
-#                 Where it reads is SCOPES, below. The lifts together count up
-#                 to LEVERAGE_CAP; a penalty (negative points) counts in full,
-#                 whatever the lifts came to
+#                 Where it reads is SCOPES, below. The lifts count strongest first,
+#                 each after the first at half the one before (count_lifts), and
+#                 together up to LEVERAGE_CAP; a penalty (negative points) counts in
+#                 full, whatever the lifts came to
 #   CORE          (pattern, points) for each held capability a posting names
 #   TITLE_FAMILY  (pattern, points[, why]) read from the title alone: a job
 #                 family is the title's claim, and the body's words are the
@@ -112,6 +113,42 @@ WRONG_FAMILY = list(getattr(_S, "OPP_WRONG_FAMILY", []))
 # the lifts: a penalty written there was swallowed by the cap on any posting whose lifts passed
 # it by more than the penalty, so it bit only on postings that were already weak (2026-11-16).
 LEVERAGE_CAP = 30
+# And each lift after the strongest counts half what it would have one place higher: a posting
+# that named five things the person finds a little familiar, six points each, outranked one that
+# was squarely the work they want, twenty points, 30 against 20 (issue 327).
+_FRACTIONS = {1: "half", 2: "a quarter", 3: "an eighth", 4: "a sixteenth"}
+
+
+def count_lifts(points: list) -> list[tuple[int, int, float, bool]]:
+    """Each lift as it counts, strongest first (a tie in the profile's order): (its place in
+    `points`, its rank from 0, what it counts, whether LEVERAGE_CAP held it back). The
+    strongest counts in full, the next at half, the next at a quarter and so on, each rounded
+    to whole points, and together they stop at LEVERAGE_CAP: one strong reason to want a job is
+    not outweighed by many small ones."""
+    out, total = [], 0
+    for rank, i in enumerate(sorted(range(len(points)), key=lambda k: -points[k])):
+        p = points[i]
+        full = p if rank == 0 else int(p / 2 ** rank + 0.5)
+        got = max(0, min(full, LEVERAGE_CAP - total))
+        total += got
+        out.append((i, rank, got, got < full))
+    return out
+
+
+def _lift_says(points, rank: int, got, held: bool, reason: str) -> str:
+    """A lift's line in `why`: what it counted, and where that is not its points, why."""
+    if rank == 0 and not held:
+        return f"{points:+d} leverage: {reason}"
+    bits = [f"{points:+d}"]
+    if rank:
+        nth = rank + 1
+        suffix = {1: "st", 2: "nd", 3: "rd"}.get(nth % 10 if nth % 100 not in (11, 12, 13)
+                                                 else 0, "th")
+        bits.append(f"the {nth}{suffix} lift, counts "
+                    + _FRACTIONS.get(rank, f"1/{2 ** rank}"))
+    if held:
+        bits.append(f"the lifts held to +{LEVERAGE_CAP}")
+    return f"{got:+d} leverage: {reason} ({', '.join(bits)})"
 
 # Where a leverage entry reads. Every lift read the whole posting, and every posting repeats the
 # same boilerplate, so an entry meant to recognize the employer's sector or the work fired on
@@ -388,7 +425,7 @@ def ceiling() -> int:
     tier_top = (30 if TIER_1 else 20 if TIER_2 else 14 if YC_AND_BACKED
                 else 10 if TIER_3 else 0)
     core = sum(p for _, p in CORE if p > 0)
-    leverage = min(LEVERAGE_CAP, sum(e[1] for e in LEVERAGE if e[1] > 0))
+    leverage = sum(got for _, _, got, _ in count_lifts([e[1] for e in LEVERAGE if e[1] > 0]))
     families = sum(max(0, e[1]) for e in (*TITLE_FAMILY, *WRONG_FAMILY))
     return 40 + tier_top + core + leverage + families + 12 + 6
 
@@ -442,21 +479,26 @@ def score(job: dict, today: dt.date | None = None) -> dict:
     if core:
         why.append(f"+{sum(core)} core capability match on {len(core)} signals")
 
-    lifts = docks = 0
+    lifts, docks = [], []
     texts: dict = {}
     for entry in LEVERAGE:
         pat, p, reason, scope, aside = _scoped(entry)
         if scope not in texts:
             texts[scope] = read_for(scope, job, title, body)
         if pat.search(aside.sub(" ", texts[scope]) if aside else texts[scope]):
-            if p >= 0:
-                lifts += p
-            else:
-                docks += p
-            why.append(f"{p:+d} leverage: {reason}")
-    pts += min(lifts, LEVERAGE_CAP) + docks
-    if lifts > LEVERAGE_CAP:
-        why.append(f"leverage lifts counted to +{LEVERAGE_CAP} of +{lifts}")
+            (lifts if p >= 0 else docks).append((p, reason))
+    counted = count_lifts([p for p, _ in lifts])
+    for i, rank, got, held in counted:
+        pts += got
+        why.append(_lift_says(lifts[i][0], rank, got, held, lifts[i][1]))
+    total = sum(got for _, _, got, _ in counted)
+    if total != sum(p for p, _ in lifts):
+        why.append(f"leverage lifts counted {total:+d} of {sum(p for p, _ in lifts):+d}: the "
+                   "strongest in full, the next at half, the next at a quarter and so on, "
+                   f"+{LEVERAGE_CAP} at most")
+    for p, reason in docks:
+        pts += p
+        why.append(f"{p:+d} leverage: {reason}")
 
     for families, text in ((TITLE_FAMILY, title), (WRONG_FAMILY, hay)):
         for pat, p, *said in families:
