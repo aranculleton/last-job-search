@@ -162,7 +162,10 @@ def test_a_draft_that_needs_a_fix_says_so_on_its_card_with_its_state_by_the_titl
         {"hash": "drafts", "read": '#main [data-item="app-quayside-demand"]',
          "eval": "(() => { const c = document.querySelector('#main [data-item=\"app-quayside-demand\"]'); const al = c.querySelector('[data-alert=\"al-checks-app-quayside-demand\"]');"
                  " const h3 = c.querySelector('.job-top h3').getBoundingClientRect(); const pill = c.querySelector('.job-top .state-word').getBoundingClientRect();"
-                 " return {folded: !al || !!al.closest('details'), onRow: pill.top < h3.bottom, atStart: Math.abs(pill.left - h3.left) <= 2,"
+                 # Folded inside the card, never; the card itself may wait in Jobs' "jobs to
+                 # confirm" fold with its question (the redesign, phase 2, 2026-11-17).
+                 " const d = al && al.closest('details');"
+                 " return {folded: !al || (!!d && c.contains(d)), onRow: pill.top < h3.bottom, atStart: Math.abs(pill.left - h3.left) <= 2,"
                  " gap: Math.round(pill.top - h3.bottom)}; })()"},
     ], vp, clock=T)
     card = got["after"][0]["text"]
