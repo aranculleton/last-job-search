@@ -331,6 +331,14 @@ def drop_entries(name: str, key: str, drop) -> list[dict]:
             merged[-1][1] = max(merged[-1][1], b)
         else:
             merged.append([a, b])
+    for span in merged:
+        # A run of entries that ended its line leaves no space at the line's end.
+        eol = data.find(b"\n", span[1])
+        if not data[span[1]:len(data) if eol < 0 else eol].strip():
+            while span[0] > 0 and data[span[0] - 1:span[0]] in (b" ", b"\t"):
+                span[0] -= 1
+            if eol >= 0 and (span[0] == 0 or data[span[0] - 1:span[0]] == b"\n"):
+                span[1] = eol + 1                        # the whole line was entries
     for a, b in reversed(merged):
         data = data[:a] + data[b:]
     # A line every entry of which came off goes too, inside the setting and nowhere else.
