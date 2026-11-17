@@ -106,7 +106,7 @@ only the person can, in theirs.
   prints gives one of the app's tasks the line that gets its files in any chat: make it, then
   `routines.py mended`.
 - **In a cloud chat** with none, `brief` prints the calls to make, in order: `create_session`
-  for the brief's own chat ("Job search: morning brief", the copy as its `source_url`);
+  for the brief's own chat ("Last Job Search · Brief", the copy as its `source_url`);
   `create_trigger` bound to that new chat (`persistent_session_id`, never the chat that
   answers the page or this chat), `CRON_TZ=<their zone> 38 7 * * *` (5:38 where 7:38 falls in
   the scheduler's slow hours), the stub as its prompt, and no `connectors` field (some
@@ -203,7 +203,7 @@ put away by the chat that answers the page (`tidy.py close`, for an older one th
 reports) or by the daily tidy-up. Once a day, and at once after a hand-over to a fresh helper, the chat that
 answers the page archives the app's own chats it no longer uses: never one the person named,
 one a scheduled task that is on still uses, a live campaign's chat, one used in the last two
-days (an old helper excepted: only the live one, "Job search page", is ever kept), or one
+days (an old helper excepted: only the live one, "Last Job Search · Page", is ever kept), or one
 whose work is not on master yet. A shortlist that works where it is stays there; one whose
 chat no longer works (deleted, or a helper the page no longer uses) moves into the chat that
 answers the page. The brief moves only into a new chat of its own (a new task on the same

@@ -23,8 +23,8 @@ page waited on every tap (2026-10-29). `next` never hands one to this chat to ru
   publishes, watches or answers the page, and is titled `Job search: <title>`, never the same
   as another job's chat at work; it puts itself away once its work is saved and nothing else
   waits, and the daily tidy puts away one that could not.
-- **A question typed in the page's Chat gets a chat of its own too** (`Job search: Chat`,
-  `page_db.QUESTION_CHAT_TITLE`) while this chat has other work of its own running or waiting
+- **A question typed in the page's Chat gets a chat of its own too** (`Last Job Search · Chat
+  questions, <day>`, `page_db.QUESTION_CHAT_TITLE`) while this chat has other work of its own running or waiting
   (`page_db.busy_here`), so it never waits on that work (issue #226): `next` hands it out
   first with `run: child session`, made exactly as a big job's call is. With nothing else
   going on it is answered here, at once, which is quicker than a fresh chat's start. A start

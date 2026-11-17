@@ -133,3 +133,31 @@ def test_the_other_gates_still_hold_for_a_grown_helper(tmp_path, monkeypatch):
     assert not _renews(db, tmp_path, "mid-job")
     monkeypatch.setattr(app_listen, "chat_kind", lambda: "computer")
     assert not _renews(_db(), tmp_path, "computer")
+
+
+def test_the_page_says_which_chat_answers_it_and_roughly_what_that_cost_today(tmp_path,
+                                                                              monkeypatch):
+    """Issue #290 asks for the day's cost in one plain line on the page, and issue #289 for the
+    page to say which chats run behind it and which are safe to delete: the row for Claude's
+    helper in Settings says both, worked out in the engine from the usage log the wakes keep
+    (helper_usage), never by the page."""
+    import app_model
+    import person
+    state = tmp_path / "state"
+    (state / "documents").mkdir(parents=True)
+    (state / "documents" / "helper_usage.json").write_text(json.dumps({"entries": [
+        {"at": "2026-11-15T20:00:00Z", "chat": "session_EXAMPLEYESTERDAY", "kind": "wake",
+         "listener": 300_000, "agent_in": 1_000_000, "agent_out": 5_000, "est_usd": 9.0},
+        {"at": "2026-11-16T09:00:00Z", "chat": CHAT, "kind": "wake", "listener": 150_000,
+         "agent_in": 2_000_000, "agent_out": 8_000, "est_usd": 1.25},
+        {"at": "2026-11-16T14:00:00Z", "chat": CHAT, "kind": "wake", "listener": 290_000,
+         "agent_in": 3_000_000, "agent_out": 9_000, "est_usd": 2.15}]}), encoding="utf-8")
+    monkeypatch.setenv(person.STATE_ENV, str(state))
+    monkeypatch.setattr(app_listen, "seen", lambda: {"listener": {
+        "chat": CHAT, "title": app_listen.HELPER_CHAT_TITLE, "kind": "cloud", "helper": True}})
+    model, _ = app_model.build(NOW.date(), NOW, only=("where",))
+    say = model["where"]["helper"]["say"]
+    assert "“Last Job Search · Page”" in say, say
+    assert "an older one is safe to delete" in say and "fresh one takes over" in say, say
+    assert "Answering your page cost about $3.40 today" in say, say
+    assert "$9" not in say                     # yesterday's helper is yesterday's
