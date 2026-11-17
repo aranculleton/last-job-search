@@ -180,8 +180,12 @@ account uses. Its progress prints a line a portal a minute, to the screen and `r
 ## 1. Find jobs
 
 ```bash
-python3 tools/run_round.py --jobage 7
+python3 tools/run_round.py
 ```
+
+**The window is the person's own** (`JOB_AGE_DAYS` in `profile/search.py`, 14 days unless they
+set another); the round's first line says it (`window: 10 days (your setting)`). Pass
+`--jobage <days>` only when they ask for a different window for this one search.
 
 **Leave `--out` off.** The round names itself, `r` and the next number, and prints its
 folder (`round: r12, its files in rounds/r12`), which is the folder `--recut` and a

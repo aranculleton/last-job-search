@@ -11,7 +11,8 @@ rank, stop at the shortlist, draft nothing until the candidate picks. `_common.m
    (`python3 tools/sync_app.py --if-stale --on "<the model this run is on>"`, then `/upgrade 20`): a job board an upgrade
    builds is searched this round.
 
-   Run: `python3 tools/run_round.py --jobage 7 --expand` (no `--out`: the round names itself
+   Run: `python3 tools/run_round.py --expand` (no `--jobage`: the window is the person's own,
+   `JOB_AGE_DAYS`; no `--out`: the round names itself
    and prints its folder, `round: rN, its files in rounds/rN`). Never read or
    ask for the person's email: this round, and its message, is their job alert.
    Read the exit code: 0 met the yield target, 2 missed it (report what the MISSED message

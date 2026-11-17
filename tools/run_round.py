@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """One command from portals to a ranked shortlist.
 
-    python3 tools/run_round.py --out rounds/r1 [--pages 5] [--jobage 14]
+    python3 tools/run_round.py --out rounds/r1 [--pages 5] [--jobage <days>]
     python3 tools/run_round.py --out rounds/r2 --from-scraped rounds/r1/00_scrape/kept.json
 
 Runs every free stage in order and stops at the shortlist, which is where a
@@ -1738,6 +1738,13 @@ def _job_age_days() -> int:
     return got if job_age_ok(got) else 14
 
 
+def window_line(days: int, own: int, given) -> str:
+    """The line a round starts with: the window it searches, and whether it is the person's."""
+    if given is None or days == own:
+        return f"window: {days} days (your setting)"
+    return f"window: {days} days (given for this search; your setting is {own})"
+
+
 def main():
     try:  # a chat that carried on into a new day has not checked the app since
         import sync_app
@@ -1751,8 +1758,9 @@ def main():
     ap.add_argument("--pages", type=int, default=None,
                     help="default 5 in the cloud and 2 on a person's own computer "
                          "(scrape_wide.defaults; SCRAPE_PAGES in profile/search.py)")
-    ap.add_argument("--jobage", type=int, default=_job_age_days(),
-                    help="hard freshness rule, days (profile/search.py JOB_AGE_DAYS, else 14)")
+    ap.add_argument("--jobage", type=int, default=None,
+                    help="hard freshness rule, days: the person's own (profile/search.py "
+                         "JOB_AGE_DAYS, else 14) unless they asked for another for this search")
     ap.add_argument("--workers", type=int, default=None,
                     help="default 10 in the cloud and 4 on their own computer (SCRAPE_WORKERS)")
     ap.add_argument("--top", type=int, default=40, help="shortlist length shown")
@@ -1814,6 +1822,9 @@ def main():
                          "on as it is; with --recut, the round's table again. Writes nothing "
                          "more: the round's files are the same with or without it")
     a = ap.parse_args()
+    own_window = _job_age_days()
+    given_window = a.jobage
+    a.jobage = own_window if a.jobage is None else a.jobage
     if a.recut:
         if not a.out:
             ap.error("--recut needs --out, the round's own folder")
@@ -1846,6 +1857,11 @@ def main():
     f = lambda n: os.path.join(a.out, n)
     log = open(f("round.log"), "a", encoding="utf-8", errors="replace", newline="\n")
     log.write(round_stamp(os.path.basename(os.path.abspath(a.out)), a.work))
+    # The window, and whose it is, before anything is searched: a round asked for in a chat
+    # ran the skill's 14 over the person's 10 and nothing said so (2026-11-16).
+    line = window_line(a.jobage, own_window, given_window)
+    print(line, flush=True)
+    log.write(line + "\n")
     log.flush()
     if names:
         write_named(a.out, names)
