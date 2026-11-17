@@ -73,7 +73,11 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   as that work's one question. (one-card tests)
 - An item's actions are defined once, for every card that shows it (`ivActs` for an
   interview, `canSayReplied` and `theyRepliedBtn` for a person): To do offers what Coming up
-  and Contacts offer for the same item, with the same names ("Read your prep" everywhere). An
+  and Contacts offer for the same item, with the same names ("Read your prep" everywhere).
+  What someone asked for is one task in one sentence wherever it shows (To do, Contacts, their
+  card): "Send Tamsin your CV", with Get the CV for Tamsin, then I sent it (`askWords`, `askBtn`,
+  `askSentBtn`; the redesign's second round, 2026-11-17: four screens said "Choose the role",
+  "See the CV for Tamsin" and "Asked for your CV"). An
   interview's card: its next step and Add to calendar; Practise with Claude, Update my prep and
   a new day under More; they said no and I withdrew in its trash. Two days before and the day
   before, practice is on its face instead of the calendar: "Practise 3 questions" (its prep
@@ -241,10 +245,27 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   nothing about it (no bar in the profile, or a name nobody has judged), no state. Why: an
   employer's name opened nothing, and then a card with none of what the app knew of the
   employer itself (issue #263). (employer card tests)
+- A person's card: their initial and their name at its top, their state and employer as one
+  line of facts; its Next the one task in its own words ("Send Tamsin your CV", who asked and
+  when after it) with its one filled button and, where the task has one, its second step beside
+  it (I sent it); where it stands as four steps on one thread (Written to, Replied, Talked,
+  Referral), an 8px dot a step joined by a 2px hairline, green once done and the next one ringed
+  in clay, its name under it and said in words to a screen reader; then They replied where it can
+  be said, and one soft "Update" with its chevron opening their rarer updates as a menu, a
+  finger's height a row on the overlay (a call booked, the referral is over, they sent me a job),
+  "Don't contact again" last and in red. Escape closes the menu, never the card under it. Why:
+  four equal pills read as status tags beside the card's one button, a line of ticks as text, and
+  "Next: Asked for your CV" did not say who (the redesign's second round, 2026-11-17). (person
+  card tests, stepper test)
+- Every card's sheet is 680 wide on a computer. An interview's is wide only with a prep to read
+  beside its stages, and without one it says nothing of the prep but its Next ("Get your prep:
+  ..."): a lone "No prep yet." in an empty column of a 960 sheet said it twice. (name cards test)
 - A job's fit is a ring round its number, drawn as far round as the fit goes in its band's
   colour (green strong, blue good, grey below), the number in the ink and "Fit 84 out of 100"
   said to a screen reader; never red. The same ring wherever a fit is shown, the Brief's Jobs a
-  step smaller (32px), never a tinted "84" pill (the redesign's second round, 2026-11-17; calm test). Why: a bare "84" in a tinted blob was read as nothing
+  step smaller (32px), as on a card's rows (a person's or an employer's roles), never a tinted "84"
+  pill nor "Scored 79" in words (the redesign's second round, 2026-11-17; calm test, employer
+  card tests). Why: a bare "84" in a tinted blob was read as nothing
   (the usability review, 2026-11-16).
 - Two devices that said different things about an application are asked as one plain
   question, "Did you apply to Quayside Foods?" with "Yes, I applied" and "Not yet", each

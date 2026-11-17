@@ -4945,6 +4945,9 @@
   const ASKING = new Set(["replied_needs_response", "in_conversation", "referral_in_progress", "call_booked"]);
   function personAsk(p) {
     if (!p || !ASKING.has(txt(p.status)) || personSentHere(p)) return null;
+    // Sent here (I sent it, or To do's Done on its row): nothing is asked any more.
+    const asked = dueById(obj(p.owed).due);
+    if (asked && effective(asked.id, ["due.done"])) return null;
     // "send the CV", "Send Tamsin your CV", "share my portfolio": the thing, after the verb,
     // whoever it goes to, and its article.
     const name = txt(p.first_name).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -4957,11 +4960,38 @@
     const made = doc ? readyItems().find((a) => readyLive(a) && txt(obj(a.for_contact).id || a.for_contact) === txt(p.id)) || null : null;
     return {what: (art === "a" || art === "an" ? art : "your") + " " + thing, doc, made};
   }
-  // The one button for what someone asked: the resume made for them, or making it.
+  // What someone asked for is one task, said one way wherever it shows (To do, Contacts, their
+  // card): "Send Tamsin your CV", its one button getting the CV made for them, then I sent it
+  // (the redesign's second round, 2026-11-17: four screens said it four ways, "Choose the
+  // role", "See the CV for Tamsin", "Asked for your CV").
+  function askWords(p, ask) { return "Send " + txt(p.first_name) + " " + ask.what; }
+  // The resume made for them, saved in a tap: the one an application drafted for them carries,
+  // or one made for them alone (resumeForThem). Null while there is none on the page.
+  function askGet(p, ask, key) {
+    const f = ask && ask.made ? arr(ask.made.files).find((x) => x.kind !== "letter" && txt(x.asset)) : null;
+    if (f) return () => download(Object.assign({company: txt(ask.made.company)}, f), key);
+    return ask && ask.doc ? getMadeFor(p, key) : null;
+  }
+  // The one button for what someone asked: the resume made for them to get, else to see (made,
+  // its file not on the page yet), else making it.
   function askBtn(p, ask, key, kind) {
     const name = txt(p.first_name);
+    const get = askGet(p, ask, key);
+    if (get) return btn("Get the " + noun() + " for " + name, get, {kind: kind || "primary", small: true, key});
     if (ask.made) return btn("See the " + noun() + " for " + name, () => go("drafts", {focus: true, drafts: "apps", item: ask.made.id}), {kind: kind || "primary", small: true, key});
     return btn("Make a " + noun() + " for " + name, () => askContactResume(p), {kind: kind || "primary", small: true, key});
+  }
+  // Once it can be got, the task ends with I sent it: their row about it is done, the same tap
+  // as To do's Done on it.
+  function askDueRow(p) {
+    const d = dueById(obj(p.owed).due);
+    return d && obj(d.done).action ? d : null;
+  }
+  function askSentBtn(p, ask, key) {
+    const d = askDueRow(p);
+    if (!d || !askGet(p, ask, key)) return null;
+    return btn("I sent it", () => act([{item: d.id, action: txt(d.done.action), value: {on: todayIso()}, rev: d.rev}], "Sent: " + ask.what + " to " + txt(p.first_name)),
+      {kind: "secondary", small: true, key: "asksent:" + key, aria: "I sent it: " + lc1(askWords(p, ask))});
   }
   // The one date a card about someone shows, in one form everywhere: "first wrote 10 Sep",
   // "replied to you on Sat 12 Sept", "5 days late" and "replied 43 days ago" all described
@@ -4982,7 +5012,7 @@
     if (!["reply", "follow_up", "nudge"].includes(txt(d.kind)) && txt(d.sub) !== "reply") return null;
     const p = personOf(dueContact(d));
     const ask = personAsk(p);
-    return ask ? {p, ask, title: whoAt(p.first_name, p.employer) + " asked for " + ask.what} : null;
+    return ask ? {p, ask, title: askWords(p, ask)} : null;
   }
   function dueGroup(list, ctx, g) {
     const where = (ctx && ctx.where) || "";
@@ -5487,8 +5517,10 @@
     const chipWords = own ? readyWords(d) : late && pw ? "Overdue" : when;
     // A person's card holds every row about them (personTodos): its Done finishes all of them.
     const rows = [d].concat(arr(ctx.also)).filter((x) => obj(x.done).action);
-    const doneBtn = done.action && !busy ? btn(txt(done.label) || "Done", () => act(rows.map((x) => ({item: x.id, action: txt(obj(x.done).action), value: {on: todayIso()}, rev: x.rev})), "Done: " + txt(d.title)),
-      {kind: hasWork ? "secondary" : "primary", small: true, pressed: marked, key: "duedone:" + (ctx.where || "") + ":" + d.id, aria: (txt(done.label) || "Done") + ": " + txt(d.title)}) : null;
+    // What someone asked for, once it can be got, ends with I sent it, as on their card (askSentBtn).
+    const doneWord = asked && asked.ask.doc && askGet(asked.p, asked.ask, "dueask:" + d.id) ? "I sent it" : txt(done.label) || "Done";
+    const doneBtn = done.action && !busy ? btn(doneWord, () => act(rows.map((x) => ({item: x.id, action: txt(obj(x.done).action), value: {on: todayIso()}, rev: x.rev})), "Done: " + txt(d.title)),
+      {kind: hasWork ? "secondary" : "primary", small: true, pressed: marked, key: "duedone:" + (ctx.where || "") + ":" + d.id, aria: doneWord + ": " + title}) : null;
     // Waiting on them: They replied, as on their card in Contacts (one set of actions a person).
     const who = isPerson(dueContact(d)) ? personById(dueContact(d)) : null;
     const replied = who && !busy && !draft && canSayReplied(who) ? theyRepliedBtn(who, "duereplied:" + (ctx.where || "") + ":" + d.id, () => logReply(who)) : null;
@@ -8430,7 +8462,7 @@
   // reply" (2026-11-03).
   const PERSON_STATUS = {not_contacted: ["Not written to", "plain"], awaiting_reply: ["Waiting for a reply", "plain"],
     connected_no_reply: ["Connected", "plain"], replied_needs_response: ["Replied: your turn", "warn"],
-    in_conversation: ["Talking", "ok"], call_booked: ["Call booked", "ok"], referral_in_progress: ["Referral", "held"],
+    in_conversation: ["Talking", "ok"], call_booked: ["Call booked", "ok"], referral_in_progress: ["Referral", "info"],
     converted_to_application: ["Applied", "ok"], gone_cold: ["Gone quiet", "plain"], closed: ["Closed", "plain"],
     dropped: ["Set aside", "plain"], cold: ["Gone quiet", "plain"], stopped: ["Stopped", "plain"]};
   function statusWord(p) {
@@ -9334,7 +9366,7 @@
       : st === "call_booked" && callDay ? "Call " + dayWords(callDay) + (call.time ? " at " + txt(call.time) : "")
       : txt(p.hold) ? txt(p.hold).replace(/[.\s]+$/, "") + "."
       // What they asked for, with the one date this row is about (2026-11-03).
-      : asked ? "Asked for " + asked.what + (pw ? ", " + pw.day : "") + "."
+      : asked ? askWords(p, asked) + (pw ? " \u00b7 asked " + pw.day : "")
       // The next step and the latest exchange; a late one says so in its corner, "Overdue".
       : ["now", "follow"].includes(g) && step ? "Next: " + step + (ex ? " · " + ex : "")
       : step ? step + "."
@@ -9363,7 +9395,9 @@
         box ? replyBox(p) : null,
         // The gauge only beside what wakes Claude: a draft's own act (I sent it, Copy) is the
         // page's alone, and carried a follow-up's two minutes (the review, 2026-11-05).
-        h("div", {class: "card-actions"}, owed, d && owed === d.act ? d.cost : owedCost(p, d ? null : owed, going || box), (d || onHold) && !replyFace ? null : theyReplied, more("person:" + p.id, whoAt(name, p.employer), extra)),
+        h("div", {class: "card-actions"}, owed, d && owed === d.act ? d.cost : owedCost(p, d ? null : owed, going || box),
+          asked && asked.doc && owed && !d && !busy ? askSentBtn(p, asked, "p:" + p.id) : null,
+          (d || onHold) && !replyFace ? null : theyReplied, more("person:" + p.id, whoAt(name, p.employer), extra)),
         cardTalk("person", p.id, whoAt(name, p.employer)),
         noteFor("reply:" + p.id), due ? stateLine(due.id, "pdue:" + p.id) : null, d ? d.line : done1 ? stateLine(done1.id, "msg:" + done1.id) : null,
         going ? null : stateLine(p.id, "person:" + p.id)));
@@ -11690,8 +11724,8 @@
     // with their fit; its people with where each stands and their next step; its interviews.
     const roles = e.apps.map((a) => dRow({label: txt(a.role) || "A role", state: appWord(a), sub: a.applied_on ? "Applied " + fmtDay(txt(a.applied_on)) : "",
       open: () => openDetail("application", a.id), key: "emp-app:" + a.id}))
-      .concat(e.jobs.map((r) => dRow({label: txt(r.title) || "A role", state: ["Not applied", null],
-        sub: [Number.isFinite(Number(r.score)) && r.score !== null && r.score !== "" ? "Scored " + Number(r.score) : "", r.found_on ? "found " + fmtDay(txt(r.found_on)) : "", txt(r.place)].filter(Boolean).join(" \u00b7 "),
+      .concat(e.jobs.map((r) => dRow({label: txt(r.title) || "A role", state: ["Not applied", null], lead: sheetFit(r),
+        sub: cap1([r.found_on ? "found " + fmtDay(txt(r.found_on)) : "", txt(r.place)].filter(Boolean).join(" \u00b7 ")),
         open: () => { closeDetail(true); go("jobs", {item: r.id}); }, key: "emp-job:" + r.id})));
     // Under each person, when you were last in touch: their next step's own words ("Reply",
     // "First note") said nothing their state did not.
@@ -11771,8 +11805,11 @@
   function detailOf(kind, id) {
     if (kind === "employer") { const e = employerOf(id); return e ? [e.name, employerDetail(e), "jobs", ""] : null; }
     // A live prep is read full screen on every screen: the parts, its term panel beside them.
-    if (kind === "interview") { const iv = allInterviews().find((x) => x.id === id); return iv ? [ivTitle(iv), interviewDetail(iv), "interviews", obj(iv.prep).updated && livePrep(iv) ? "wide full" : "wide"] : null; }
-    if (kind === "person") { const p = peopleItems().find((x) => x.id === id); return p ? [whoAt(p.first_name, p.employer), personDetail(p), "contacts", ""] : null; }
+    // Wide only with a prep to read beside its stages: without one it is 680 as every card is,
+    // never 960 round one line (the redesign's second round, 2026-11-17).
+    if (kind === "interview") { const iv = allInterviews().find((x) => x.id === id); return iv ? [ivTitle(iv), interviewDetail(iv), "interviews", obj(iv.prep).updated ? (livePrep(iv) ? "wide full" : "wide") : ""] : null; }
+    // A person's card carries their initial beside their name, in their one colour.
+    if (kind === "person") { const p = peopleItems().find((x) => x.id === id); return p ? [whoAt(p.first_name, p.employer), personDetail(p), "contacts", "", avatar(p)] : null; }
     if (kind === "application") { const a = applicationItems().find((x) => x.id === id); return a ? [txt(a.role) + " at " + txt(a.company), applicationDetail(a), "jobs", ""] : null; }
     return null;
   }
@@ -11781,7 +11818,7 @@
     const got = detailOf(kind, id);
     if (!got) return;
     if (detailDlg) closeDetail(true);
-    const [title, body, home, size] = got;
+    const [title, body, home, size, lead] = got;
     // Back names where the person came from, and the address keeps that screen under the view.
     const section = SECTION_IDS.has(S.section) && S.section !== "chat" ? S.section : home;
     const backWord = labelOf(section);
@@ -11791,7 +11828,7 @@
     const shut = h("button", {type: "button", class: "sheet-x", "data-k": "detail-close", "aria-label": "Close", title: "Close", onclick: () => closeDetail(false)}, icon("x"));
     detailDlg = h("dialog", {class: "detail" + (size ? " " + size : ""), "aria-labelledby": "detail-title", "data-detail": kind + ":" + id},
       h("div", {class: "detail-top"}, back, shut),
-      h("div", {class: "detail-body"}, h("h2", {class: "detail-title", id: "detail-title", tabindex: "-1"}, title), body));
+      h("div", {class: "detail-body"}, ((t) => (lead ? h("header", {class: "detail-head"}, lead, t) : t))(h("h2", {class: "detail-title", id: "detail-title", tabindex: "-1"}, title)), body));
     detailDlg._opener = document.activeElement;
     // Its own address, and when it opened: the frame it sits in may answer the address it
     // pushes (sheetStays).
@@ -11833,6 +11870,33 @@
     return h("button", {type: "button", class: "setting-row act-row d-row", "data-k": o.key, onclick: o.open}, o.lead || null,
       h("span", {class: "d-row-main"}, h("span", {class: "d-row-name"}, h("bdi", {}, o.label)), o.sub ? h("span", {class: "d-row-sub"}, o.sub) : null),
       st, h("span", {class: "set-go", "aria-hidden": "true"}, "\u203a"));
+  }
+  // A job's fit on a card's row: the one ring every job wears (Jobs, the Brief), a step smaller,
+  // its words said to a screen reader (the redesign's second round, 2026-11-17: "Scored 79").
+  function sheetFit(r) {
+    const n = Number(obj(r).score);
+    if (!Number.isFinite(n) || r.score === null || r.score === "") return null;
+    return h("span", {class: "score-pill d-fit tone-" + ({strong: "ok", good: "info"}[txt(r.band)] || "plain") + fitClass(n), title: SCORE_MEANS},
+      h("span", {"aria-hidden": "true"}, String(n)), h("span", {class: "sr-only"}, "Fit " + n + " out of 100"));
+  }
+  // A card's rarer updates in one menu (the redesign's second round, 2026-11-17): on a person's
+  // card four equal pills ("Call booked", "The referral is over", "They sent me a job", "Don't
+  // contact again") read as status tags beside its one button. One soft "Update" with its
+  // chevron opens them as a menu, a finger's height a row, the way to stop last and in red.
+  // Escape closes the menu, never the card under it.
+  function updateMenu(key, about, items, last) {
+    const list = arr(items).flat().filter(Boolean);
+    if (!list.length && !last) return null;
+    if (last) list.push(last);
+    for (const b of list) {
+      b.className = "menu-item" + (b === last ? " menu-stop" : "");
+      b.addEventListener("click", () => { const d = b.closest("details"); if (d) { d.open = false; openState.set("det:menu:" + key, false); } });
+    }
+    const d = det("menu:" + key, false, {class: "menu worded upd-menu"},
+      h("summary", {class: "menu-btn", "data-k": "menu:" + key}, h("span", {}, "Update"), h("span", {class: "sr-only"}, ": " + about), icon("chev-down")),
+      h("div", {class: "menu-panel", role: "group", "aria-label": "Update " + about}, list));
+    d.addEventListener("keydown", (e) => { if (e.key === "Escape" && d.open) { useEsc(e); d.open = false; const s0 = d.querySelector("summary"); if (s0) s0.focus(); } });
+    return d;
   }
   function dRows(title, rows, after) {
     const list = arr(rows).filter(Boolean);
@@ -12145,7 +12209,8 @@
           has ? [glance, folds,
             !r && iv.prep_text ? det("prep:" + iv.id + ":doc", false, {class: "prep-fold"}, h("summary", {class: "prep-fold-sum", "data-k": "prep-fold:" + iv.id + ":doc"}, h("span", {class: "prep-fold-t"}, "The whole prep")), h("div", {class: "prep-fold-body"}, prepText(iv.prep_text))) : null,
             !glance && !folds && !iv.prep_text ? h("p", {class: "muted"}, "Your prep is saved; it shows here once the page next updates.") : null]
-            : h("p", {class: "muted"}, nextWhat ? "No prep yet." : "No prep yet. Prepare me builds it: what to say, the questions they are likely to ask, and what to ask them.")),
+            // Where Next says it, nothing: a lone "No prep yet." in an empty column said it twice.
+            : nextWhat ? null : h("p", {class: "muted"}, "No prep yet. Prepare me builds it: what to say, the questions they are likely to ask, and what to ask them.")),
         h("aside", {class: "prep-side"},
           block("What you sent", arr(iv.sent_files).filter((f) => txt(f.name) || txt(f.kind)).map((f) => h("p", {}, sentWords(f)))),
           dTimeline("Stages", arr(iv.stages).filter((s) => txt(s.label || s.name)).map((s) => ({day: s.date || s.on ? fmtDay(s.date || s.on) : "", label: txt(s.label || s.name), done: stepDone(s)}))),
@@ -13047,35 +13112,45 @@
     const owed = draft ? seeDraftBtn(draft, "ddraft:" + p.id) : sent ? null
       : got ? btn("Draft a reply", () => logReply(Object.assign({}, p, {status: "replied_needs_response"}), true), {kind: "primary", small: true, key: "dreply:" + p.id})
       : asked && asked.doc ? askBtn(p, asked, "dres:" + p.id) : owedBtn(p, "d:" + p.id);
+    // What they asked for, once it can be got, ends with I sent it beside its button.
+    const sentIt = asked && asked.doc && !draft && !sent && !got ? askSentBtn(p, asked, "d:" + p.id) : null;
     const replyOut = !got && !sent && ["waiting", "talking", "follow", "leave"].includes(g) && steps[0][1] && st !== "replied_needs_response";
     const prep = obj(obj(p.call).prep);
+    // The rarer updates in one menu, Don't contact again last in red (updateMenu).
+    const stop = g !== "done" ? btn("Don't contact again", () => askRemovePerson(p.id, txt(p.first_name), txt(p.employer), p.rev), {kind: "quiet", small: true, key: "dstop:" + p.id}) : null;
+    const update = updateMenu("dupd:" + p.id, whoAt(txt(p.first_name), p.employer), personActions(p, p.id, true), stop);
+    // The next step to happen is the one ringed: the first not done, after those done.
+    const nowAt = steps.findIndex(([, done]) => !done);
     return h("div", {class: "d-stack d-person"},
       // Their employer opens its own card (issue #263): here, not on their row, where it sat on
       // the line under their name and the two links' tap areas lay over each other on a phone.
-      h("p", {}, stateWord(w, tone === "plain" ? null : tone), employerKey(p.employer) ? [" · ", employerLink(p.employer, "dperson:" + p.id)] : null,
+      h("p", {class: "d-facts-line"}, stateWord(w, tone === "plain" ? null : tone), employerKey(p.employer) ? [" · ", employerLink(p.employer, "dperson:" + p.id)] : null,
         txt(p.came_through) ? h("span", {class: "muted"}, " · Came through " + txt(p.came_through)) : null),
       emailLine(p.id, "pemail:" + p.id),
       resumeForThem(p, "d"),
       referralLine(p),
       // Their Next (the redesign, 2026-11-16): what is owed, in a line, with the card's one
       // filled button under it, first on the card; then where it stands and everything else.
-      ((line) => (line || owed ? dNext(null, owed, line) : null))(
-        asked ? h("p", {class: "d-next d-next-what"}, "Asked for " + asked.what + (personWhen(p) ? ", " + personWhen(p).day + "." : ".")) :
+      // What they asked for is said as the one task it is, "Send Tamsin your CV", with who asked
+      // and when under it (the redesign's second round, 2026-11-17: "Asked for your CV" did not
+      // say who).
+      ((line) => (line || owed ? dNext(null, owed && sentIt ? [owed, sentIt] : owed, line) : null))(
+        asked ? h("p", {class: "d-next d-next-what"}, askWords(p, asked) + ".", personWhen(p) ? h("span", {class: "d-next-when"}, " " + txt(p.first_name) + " asked " + personWhen(p).day + ".") : null) :
         nextLine && !sent ? h("p", {class: "d-next d-next-what"}, nextLine.replace(/[.\s]+$/, "") + ".", link ? [" ", link] : null) : null),
-      // Where it stands, in words with ticks: outlined pills here read as buttons beside the
-      // real ones, and tapping one did nothing (2026-11-02).
-      h("p", {class: "d-steps"}, steps.map(([l, done], i) => [i ? h("span", {class: "d-sep", "aria-hidden": "true"}, " · ") : null,
-        h("span", {class: done ? "d-step done" : "d-step muted"}, l, done ? [h("span", {"aria-hidden": "true"}, " ✓"), h("span", {class: "sr-only"}, " (done)")] : h("span", {class: "sr-only"}, " (not yet)"))])),
+      // Where it stands, as four steps on one thread (the redesign's second round, 2026-11-17):
+      // a dot a step, filled green once done, the next one ringed in clay, its name under it;
+      // never pills, which read as buttons beside the real ones and did nothing (2026-11-02).
+      h("ol", {class: "plain d-steps", "aria-label": "Where it stands"}, steps.map(([l, done], i) =>
+        h("li", {class: "d-step" + (done ? " done" : i === nowAt ? " now" : "")}, h("span", {class: "d-step-dot", "aria-hidden": "true"}),
+          h("span", {class: "d-step-l"}, l), h("span", {class: "sr-only"}, done ? " (done)" : i === nowAt ? " (next)" : " (not yet)")))),
       // How it began, where their conversation is: on the card it was a "?" on every person,
       // past the three a first screen may have (2026-11-04).
       exchangeHistory(p) ? h("p", {class: "small muted", "data-k": "pex:" + p.id}, exchangeHistory(p) + ".") : null,
       // The same list the row's More has (personActions), and the bin's own sheet for not
       // writing to them again: one place to stop, never a second route. The card's one button
       // is in its Next, above.
-      h("div", {class: "card-actions wrap"},
-        replyOut ? btn("They replied", () => logReply(p, false), {small: true, key: "dlog:" + p.id}) : null,
-        personActions(p, p.id, true),
-        g !== "done" ? btn("Don't contact again", () => askRemovePerson(p.id, txt(p.first_name), txt(p.employer), p.rev), {kind: "quiet", small: true, key: "dstop:" + p.id}) : null),
+      replyOut || update ? h("div", {class: "card-actions wrap"},
+        replyOut ? btn("They replied", () => logReply(p, false), {small: true, key: "dlog:" + p.id}) : null, update) : null,
       // A block takes a list: the thread handed over bare was dropped, and a page with a whole
       // conversation showed none of it.
       block("Your conversation", thread.length || draftLine || gotLine ? [
@@ -13087,7 +13162,7 @@
       // The role and the ask on lines of their own: the role's title and "Ask ... for a
       // referral" ran together as one word where the role had a warm note (2026-11-03).
       dRows("Roles at " + txt(p.employer), jobsThere.map((r) => {
-        const row = dRow({label: txt(r.title), sub: [Number.isFinite(Number(r.score)) && r.score !== null && r.score !== "" ? "Scored " + Number(r.score) : "", txt(r.place)].filter(Boolean).join(" \u00b7 "),
+        const row = dRow({label: txt(r.title), sub: txt(r.place), lead: sheetFit(r),
           open: () => { const to = resolveSection("jobs") || {section: "jobs"}; go(to.section, {focus: true, drafts: to.drafts, item: r.id}); }, key: "dpjob:" + r.id});
         const ask = !p.is_process_stage && g !== "held" && (st === "replied_needs_response" || st === "in_conversation" || st === "call_booked");
         return ask ? h("div", {class: "d-row-with"}, row, h("p", {class: "d-row-more"}, btn("Ask " + txt(p.first_name) + " for a referral for this role", () => askReferral(p, r), {kind: "link", key: "dask:" + r.id}))) : row;
@@ -13107,7 +13182,7 @@
     const heard = appLive(a) ? btn("I heard back", () => heardBack(a), {kind: iv ? "secondary" : "primary", small: true, key: "dheard:" + a.id}) : null;
     return h("div", {class: "d-stack d-app"},
       // Its employer opens its own card, as on a person's (issue #263).
-      h("p", {}, word, employerKey(a.company) ? [word ? " · " : null, employerLink(a.company, "dapp:" + a.id)] : null,
+      h("p", {class: "d-facts-line"}, word, employerKey(a.company) ? [word ? " · " : null, employerLink(a.company, "dapp:" + a.id)] : null,
         a.applied_on ? h("span", {class: "muted"}, (word || employerKey(a.company) ? " · " : "") + "Applied " + fmtDay(a.applied_on)) : null),
       iv ? ivNext(iv, "dapp-next:" + a.id) : heard ? dNext("Waiting to hear from " + txt(a.company) + ". Tell Claude when they reply.", heard) : null,
       iv && heard ? h("div", {class: "card-actions"}, heard) : null,

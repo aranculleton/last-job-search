@@ -687,12 +687,19 @@ def test_i_sent_it_is_done_in_contacts_to_do_and_the_brief_at_once(run, tmp_path
     assert "Juno" not in got["after"][7]["text"] and "Juno" not in got["after"][7]["eval"], got["after"][7]
 
 
-# A person's page: where it stands is a line of words with ticks, never outlined pills that
-# look like the buttons under them; its blocks stand apart; and Back names where the person came
-# from (Contacts, where each message is on its person's card since 2026-11-04).
-STEPS = ("(() => { const p = document.querySelector('dialog.detail .d-steps'); if (!p) return null; const c = p.cloneNode(true); "
-         "c.querySelectorAll('.sr-only').forEach((s) => s.remove()); "
-         "return [c.textContent, [...p.querySelectorAll('*')].some((e) => parseFloat(getComputedStyle(e).borderTopWidth) > 0)]; })()")
+# A person's page: where it stands is four steps on one thread (the redesign's second round,
+# 2026-11-17), each a dot with its name under it, done ones green and the next one ringed,
+# never outlined pills that look like the buttons under them; its blocks stand apart; and Back
+# names where the person came from (Contacts, where each message is on its person's card since
+# 2026-11-04).
+STEPS = ("(() => { const p = document.querySelector('dialog.detail .d-steps'); if (!p) return null; "
+         "const steps = [...p.querySelectorAll(':scope > li')].map((li) => { const dot = getComputedStyle(li.querySelector('.d-step-dot')); "
+         "return [li.querySelector('.d-step-l').textContent.trim(), li.querySelector('.sr-only').textContent.trim(), "
+         "dot.backgroundColor, dot.boxShadow !== 'none', Math.round(li.querySelector('.d-step-dot').getBoundingClientRect().width)]; }); "
+         "const done = getComputedStyle(document.documentElement).getPropertyValue('--st-done').trim(); "
+         "const probe = document.createElement('span'); probe.style.color = done; document.body.appendChild(probe); const green = getComputedStyle(probe).color; probe.remove(); "
+         "return [steps, green, p.tagName, p.getAttribute('aria-label'), "
+         "[...p.querySelectorAll('.d-step-l, li')].some((e) => parseFloat(getComputedStyle(e).borderTopWidth) > 0), !!p.querySelector('button')]; })()")
 GAPS = ("(() => { const kids = [...document.querySelector('dialog.detail .detail-body > div').children].filter((e) => e.getBoundingClientRect().height > 0); "
         "return Math.min(...kids.slice(1).map((e, i) => Math.round(e.getBoundingClientRect().top - kids[i].getBoundingClientRect().bottom))); })()")
 
@@ -704,10 +711,17 @@ def test_a_persons_page_says_where_it_stands_in_words_and_back_names_where_it_ca
         {"eval": "document.querySelectorAll('dialog.detail .stepper').length"},
     ], vp, clock=T)
     assert got["after"][0]["text"].replace("‹", "").strip() == "Contacts", got["after"][0]["text"]
-    assert got["after"][0]["eval"], "the stages are a line of words"
-    words, bordered = got["after"][0]["eval"]
-    assert " ".join(words.split()) == "Written to ✓ · Replied ✓ · Talked · Referral", words
-    assert not bordered, "no stage is drawn as a pill"
+    assert got["after"][0]["eval"], "the stages are a list of steps"
+    steps, green, tag, label, bordered, buttons = got["after"][0]["eval"]
+    assert tag == "OL" and label == "Where it stands", (tag, label)
+    assert [x[0] for x in steps] == ["Written to", "Replied", "Talked", "Referral"], steps
+    # Said in words, never by colour alone: done, the next one, and the rest.
+    assert [x[1] for x in steps] == ["(done)", "(done)", "(next)", "(not yet)"], steps
+    # 8px dots: the done ones green, the next one ringed, the rest neither.
+    assert all(x[4] == 8 for x in steps), steps
+    assert [x[2] == green for x in steps] == [True, True, False, False], (steps, green)
+    assert [x[3] for x in steps] == [False, False, True, False], steps
+    assert not bordered and not buttons, "no stage is drawn as a pill or is a button"
     assert got["after"][1]["eval"] >= 12, "the page's blocks stand apart: %r" % got["after"][1]["eval"]
     assert got["after"][2]["eval"] == 0
 

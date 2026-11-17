@@ -1318,6 +1318,9 @@ dialog.detail[open] { overflow: hidden; }
 .detail-top { flex: none; }
 dialog.detail .detail-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; align-content: start; }
 .detail-title { font-size: 1.375rem; font-weight: 700; line-height: 1.25; }
+/* A person's card: their initial in their one colour beside their name. */
+.detail-head { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.detail-head > .detail-title { min-width: 0; }
 @media (min-width: 760px) { dialog.detail { margin: auto; width: 680px; height: auto; max-height: calc(100dvh - 64px); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow); } }
 /* As tall as what it holds, up to the window, then its body scrolls: pinned at the window's
    height, a short card sat at the top of a tall empty panel (2026-11-16). */
@@ -2430,6 +2433,8 @@ ul.bp-news { gap: 12px; }
 .prep-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; margin-top: 8px; }
 @media (min-width: 900px) { dialog.detail.wide .prep-layout { grid-template-columns: minmax(0, 76ch) 260px; justify-content: start; gap: 32px; } dialog.detail.wide .prep-side { position: sticky; top: 0; align-self: start; } }
 .prep-main { display: flex; flex-direction: column; gap: 24px; min-width: 0; }
+/* No prep yet: Next says so, and the empty column takes no room. */
+.prep-main:empty { display: none; }
 .prep-side { display: flex; flex-direction: column; gap: 16px; min-width: 0; font-size: var(--t-sm); }
 .prep-side .d-block { display: flex; flex-direction: column; gap: 4px; }
 .prep-side .d-block p { margin: 0; }
@@ -2511,10 +2516,19 @@ ul.bp-news { gap: 12px; }
 .bp-wk.is-now:last-child { display: flex; justify-content: flex-end; }
 /* Each week is a column that answers the pointer, a tap or the keyboard; the one pointed at
    stays full and the others step back, and the line under them says its week. */
-/* Where a conversation is, as one line of words with ticks: outlined pills beside the buttons
-   read as buttons that did nothing (2026-11-02). */
-.d-steps { font-size: var(--t-sm); color: var(--muted); }
-.d-steps .d-step.done { color: var(--ink); }
+/* Where a conversation is, as four steps on one thread (the redesign's second round,
+   2026-11-17): an 8px dot a step joined by a 2px hairline, green once done, the next one
+   ringed in clay, its name under it at the section label's size; never pills, which read as
+   buttons that did nothing (2026-11-02). */
+.d-steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0; }
+.d-step { position: relative; display: grid; justify-items: center; gap: 8px; text-align: center; font-size: 0.8125rem; line-height: 18px; font-weight: 600; color: var(--muted); min-width: 0; }
+.d-step:not(:first-child)::before { content: ""; position: absolute; top: 3px; right: calc(50% + 8px); left: calc(-50% + 8px); height: 2px; border-radius: 1px; background: var(--line); }
+.d-step-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line-strong); }
+.d-step.done { color: var(--ink); }
+.d-step.done .d-step-dot { background: var(--st-done); }
+.d-step.now { color: var(--ink); }
+.d-step.now .d-step-dot { background: var(--surface); box-shadow: 0 0 0 2px var(--mark); }
+.d-step-l { overflow-wrap: anywhere; }
 .d-next { margin: 0; }
 /* A person's page: each block apart, as cards are, never run together (2026-11-02). */
 .d-person { display: grid; gap: 16px; }
@@ -2522,6 +2536,22 @@ ul.bp-news { gap: 12px; }
 .d-person .timeline { display: grid; gap: 12px; }
 /* An employer's page as a person's: each block apart, its lists Settings' rows (issue 263). */
 .d-employer > p { margin: 0; }
+/* A name standing in a card's line of facts (an employer, who referred you) is a name: the
+   ink at 600, underlined only under the pointer (the redesign's second round, 2026-11-17: they
+   were underlined like links in a sentence). */
+.d-facts-line .name-link, .d-facts-line .navlink, .d-stack > .meta .navlink { color: var(--ink); font-weight: 600; text-decoration: none; }
+@media (hover: hover) { .d-facts-line .name-link:hover, .d-facts-line .navlink:hover, .d-stack > .meta .navlink:hover { text-decoration: underline; text-decoration-color: var(--line-strong); text-decoration-thickness: 1px; text-underline-offset: 3px; } }
+.d-next-when { font-weight: 400; color: var(--muted); }
+/* A job's fit on a card's row: the ring every job wears, a step smaller. */
+.score-pill.d-fit { width: 32px; height: 32px; min-width: 32px; }
+/* A card's Update menu: a soft pill with its chevron, its rows a finger's height on the
+   overlay, opening under it from its left edge; the way to stop last, in red. */
+.upd-menu .menu-btn { display: inline-flex; align-items: center; gap: 4px; }
+.upd-menu .menu-btn .ic { width: 16px; height: 16px; }
+.upd-menu[open] .menu-btn .ic { transform: rotate(180deg); }
+.upd-menu .menu-panel { left: 0; right: auto; border-radius: 12px; }
+.upd-menu .menu-item { min-height: 44px; }
+.upd-menu .menu-item.menu-stop { color: var(--st-failed); }
 /* Its summary line: what it holds, quiet, and whether it clears the person's bar as a state
    with its "?" (issue 263, part 2). */
 .d-sum { display: flex; flex-wrap: wrap; align-items: center; column-gap: 12px; row-gap: 4px; color: var(--muted); }

@@ -577,13 +577,16 @@ def test_their_reply_logged_turns_the_row_at_once_and_let_it_go_is_in_the_bin(ru
 def test_a_persons_page_has_their_link_and_a_late_step_reads_late(run, page):
     """contacts 18, 24, 42 and 44, contacts_chat_2 9."""
     got = run("engine", html=page, viewport=PHONE, clock=CLOCK, steps=[
-        {"hash": "contacts", "open": "pname:row:kestrel_bank_lowther", "read": "dialog"},
+        # Their rarer updates are under the card's one Update menu (the redesign's second round,
+        # 2026-11-17), the way to stop last in it.
+        {"hash": "contacts", "open": "pname:row:kestrel_bank_lowther"},
+        {"open": "menu:dupd:kestrel_bank_lowther", "read": "dialog"},
         {"hash": "contacts", "more": "kestrel_bank_lowther", "read": "#main [data-item=\"kestrel_bank_lowther\"]"}])
     assert not got["errors"], got["errors"]
-    page_text = got["after"][0]["dialog"]
+    page_text = got["after"][1]["dialog"]
     assert "Open the link" in page_text and "4481616253" not in page_text and "http" not in page_text
     assert "Don't contact again" in page_text
-    more = got["after"][1]["text"]
+    more = got["after"][2]["text"]
     assert "conversation" not in more.split("More", 1)[-1].lower(), "the name opens their page"
 
 
@@ -632,6 +635,7 @@ def test_small_things_each_say_what_they_are(run, page, model):
         "idris_page": {"hash": "contacts", "open": "pname:row:moss_energy_orme", "read": "dialog"},
         "close1": {"eval": close},
         "shirin_page": {"hash": "contacts", "open": "pname:row:kestrel_bank_lowther", "read": "dialog"},
+        "update": {"open": "menu:dupd:kestrel_bank_lowther"},
         "stop": {"click": "Don't contact again", "eval": "[...document.querySelectorAll('dialog[open]')].map((d) => d.textContent).join(' | ')"},
         "close2": {"eval": close},
         # Each message is on its person's card in Contacts (2026-11-04); the buttons counted are
