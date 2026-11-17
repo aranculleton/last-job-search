@@ -286,6 +286,19 @@ def test_a_name_with_its_legal_form_is_one_employer_and_a_kind_named_as_an_emplo
     assert "an employer, not a kind" in str(e.value)
 
 
+def test_a_posting_employer_turned_down_on_the_page_is_one_employer_whatever_its_commas(
+        tmp_path, monkeypatch):
+    """The page passes the posting's own employer: a firm named with a comma is one firm, and
+    a name written two ways is one employer in a chat too."""
+    _profile(tmp_path, monkeypatch)
+    import app_actions
+    import wants
+    assert app_actions._decline_employer("Smith, Jones and Partners", "no more roles from them",
+                                         TODAY)
+    assert wants.decline("Brackwater Assurance / Brackwater Insurance", "no", TODAY)["added"]
+    assert len(profile_set.get("search.py", "BAR_DECLINED")) == 2
+
+
 # ------------------------------------------------------------------ the check
 
 LIFT = '''

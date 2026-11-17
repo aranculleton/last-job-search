@@ -276,7 +276,9 @@ def refusal(name: str) -> str:
     if re.search(r"[\\|*?\[\]^$]|\(\?", n):
         return (f"\"{n}\" is written as a pattern, and the list is read as employers' names: "
                 "give the employer's name as it is written")
-    parts = [p for p in re.split(r"\s*[,;/]\s*", n) if p.strip()]
+    # A name written two ways ("Acme Assurance / Acme Insurance") is one employer, as the
+    # employer key reads it; a comma or a semicolon between two names is two.
+    parts = [p for p in re.split(r"\s*[,;]\s*", n) if p.strip()]
     real = [p for p in parts if ck.key(p) and ck.strip_legal_forms("x " + p).strip() != "x"]
     if len(real) > 1:
         return f"\"{n}\" names more than one employer: turn each down on its own"
@@ -403,7 +405,11 @@ def decline(company: str, said: str = "", day: str | None = None, by: str = "cha
     import rules_view
     from company_key import key as company_key, keyed
     name = " ".join(str(company or "").split())
-    why_not = refusal(name)
+    # A name the page passes is a posting's own employer, never a list or a pattern a chat
+    # wrote ("Smith, Jones and Partners" is one firm): only a name with no employer in it is
+    # refused there.
+    why_not = refusal(name) if by != "page" else ("" if company_key(name) else
+                                                  f"\"{name}\" has no employer's name in it")
     if why_not:
         raise Refused(why_not)
     day = day or person.today().isoformat()
