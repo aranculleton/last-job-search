@@ -2712,7 +2712,9 @@ S.todo = async (a) => {
   const r = await page.evaluate(() => {
     const title = (c) => { const t = c.querySelector(".card-title"); return t ? t.textContent : ""; };
     const bands = [...document.querySelectorAll("#main .band")].map((b) => ({band: b.querySelector("h3").textContent,
-      groups: [...b.querySelectorAll(".todo-group")].map((g) => ({employer: g.querySelector("h4") ? g.querySelector("h4").textContent : null,
+      // The employer's own heading, by its class: a card's title is a heading too since the
+      // redesign's second round (2026-11-17), an h4 under its band.
+      groups: [...b.querySelectorAll(".todo-group")].map((g) => ({employer: g.querySelector(".todo-employer") ? g.querySelector(".todo-employer").textContent : null,
         titles: [...g.querySelectorAll("[data-card]")].map(title)}))}));
     const first = document.querySelector("#main [data-card]");
     return {bands, first: first ? title(first) : null, summary: (document.querySelector("#main .summary") || {}).textContent,
