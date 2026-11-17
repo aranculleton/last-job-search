@@ -210,9 +210,10 @@ again, fixes and releases everything at once, and no Actions workflow runs Claud
    the app's own code, each with a test that fails first, on one branch; cuts a patch; and
    merges it, the release, only with Fast checks, Everywhere, Platforms and both rehearsals
    green, before 07:30 so the maintainer's 07:56 brief takes it. Its pull request says "Closes
-   #N" for each issue it fixed, so the release closes them. One it could not fix stays open
-   with one comment why; no bug, or a choice about what the app does, it decides and fixes or
-   closes itself (`needs-maintainer` only for a step only the maintainer's hand can make). With nothing open it ends in a few calls. Only a bug the person says
+   #N" for each issue it fixed, so the release closes them. The release always waits for
+   everything to be fixed (the maintainer, 2026-11-17): a hard fix or a red check, whatever
+   caused it, is fixed at its cause before it merges, never left for a later week or released
+   around; no bug, or a choice about what the app does, it decides and fixes or closes itself (`needs-maintainer` only for a step only the maintainer's hand can make). With nothing open it ends in a few calls. Only a bug the person says
    stops their search pokes the same task at once (`app_bug.py wake`, once an hour at most).
 3. **What it did stays on GitHub.** The run ends by rewriting its report issue
    (`builder-report`) to one dated line; the release notes and the issues say the rest. The
