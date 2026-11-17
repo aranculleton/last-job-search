@@ -749,7 +749,12 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   of its own, 4px after the last word, the raised fill under a pointer, a 44px target on touch.
   A **fold** (`.band-more`, `.disclose`) is a quiet row, its words at 14/600 in the ink, a 16px
   chevron pointing right while folded and down once open, as a Settings row's is, 44px tall on
-  touch. A **section's header** (`.group`) is a small label, 13/18 at 600 in the quiet grey, 32px
+  touch. Every fold draws that one chevron, after its words: a card's "Why" and "Details", a
+  note's "Show all", "Since your last brief", "How the app runs", Progress's "Each week", LinkedIn's
+  "How to get it" and "2 jobs to confirm"; a line that only names what is under it (a note's
+  "Reply · LinkedIn" while the note shows) has none (the redesign's second round, 2026-11-17:
+  some pointed down while shut, one up while open, a 10px one beside 16px ones, and a lopsided
+  tick read as "confirmed"; disclosure tests). A **section's header** (`.group`) is a small label, 13/18 at 600 in the quiet grey, 32px
   from the group before it and 8 to what it heads. The **way back** (`backBtn`) is a chevron and
   the place's name at 15/600 in the ink, never underlined, above the title on a phone and a
   computer: Your profile goes back to Settings, Progress to the Brief, a card's sheet to where it

@@ -3374,3 +3374,30 @@ dialog.detail .detail-body:has(> .d-live > .lp) > .detail-title { margin-top: 16
   .set-sum, .toggle-row, .look-row, .act-row, .update-row { min-height: var(--target); padding: 8px 12px; }
   .set-body { padding: 0 12px 12px; }
 }
+/* ------------------------------------------------------------------ the one disclosure's chevron */
+/* Every fold draws the one chevron (the redesign's second round, 2026-11-17: "Why ⌄" was 10px,
+   "Since your last brief" and "Advanced" pointed down while shut and "Each week" up while open,
+   and "2 jobs to confirm" drew a lopsided tick): a 16px chevron in the words' colour, pointing
+   right while folded and down once open, 4px after the words. */
+:is(.band-more > summary, .disclose, .how-fold > summary, .chart summary, .bp-all > summary, .brief-earlier > summary, .set-advanced > summary)::after,
+:is(.info-toggle, .read-all) > .chev, .pdraft:not([open]) > summary::before {
+  content: ""; display: inline-block; flex: none; width: 16px; height: 16px; margin: 0; border: 0; border-radius: 0;
+  background: currentColor; clip-path: polygon(33% 27.5%, 42% 19%, 73% 50%, 42% 81%, 33% 72.5%, 55.6% 50%); transform: none; vertical-align: -3px; forced-color-adjust: none; }
+:is(.info-toggle, .read-all) > .chev { margin-left: 4px; }
+.chart summary { gap: 4px; }
+:is(.band-more[open] > summary, .disclose[aria-expanded="true"], .how-fold[open] > summary, .chart details[open] > summary, details.chart[open] > summary, .bp-all[open] > summary, .brief-earlier[open] > summary, .set-advanced[open] > summary)::after,
+:is(.info-toggle, .read-all)[aria-expanded="true"] > .chev { transform: rotate(90deg); }
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  :is(.band-more > summary, .disclose, .how-fold > summary, .chart summary, .bp-all > summary, .brief-earlier > summary, .set-advanced > summary)::after, :is(.info-toggle, .read-all) > .chev { transition: transform 0.15s; }
+}
+/* Its words are the disclosure's: 14/600 in the ink, a quiet row 44px tall on touch. */
+.brief-earlier > summary, .bp-all > summary { color: var(--ink); font-weight: 600; font-size: var(--t-sm); gap: 4px; }
+.set-advanced > summary { display: inline-flex; justify-content: flex-start; gap: 4px; min-height: 36px; padding: 4px 8px; margin-left: -8px; border: 0; border-radius: var(--r-ctl); background: none; color: var(--ink); font-size: var(--t-sm); font-weight: 600; }
+@media (hover: hover) { .set-advanced > summary:hover, .brief-earlier > summary:hover { background: var(--raised); } }
+@media (max-width: 759px), (pointer: coarse) { .set-advanced > summary { min-height: var(--target); } }
+/* A draft's label shown open is its heading, with no chevron: a chevron before "Reply ·
+   LinkedIn" read as a toggle on every note. Folded away, it says it opens, as every fold does. */
+.pdraft[open] > summary::before { content: none; }
+.pdraft[open] > summary { cursor: default; }
+.pdraft:not([open]) > summary { color: var(--ink); }
+.pdraft:not([open]) > summary::before { order: 2; }

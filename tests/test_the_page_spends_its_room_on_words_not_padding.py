@@ -367,7 +367,7 @@ def test_a_control_standing_on_its_own_is_a_pill_never_underlined_words(run, tmp
 WEEKS = r"""(() => { const c = document.querySelector('#main details.chart'); if (!c) return null;
   const svg = c.querySelector('svg.weeks-svg');
   return {open: c.open, chart: svg && svg.getClientRects().length ? Math.round(svg.getBoundingClientRect().height) : 0,
-          chevrons: [...c.querySelectorAll('summary')].map((s) => getComputedStyle(s, '::after').content !== 'none' && getComputedStyle(s, '::after').borderRightStyle === 'solid')}; })()"""
+          chevrons: [...c.querySelectorAll('summary')].map((s) => getComputedStyle(s, '::after').content !== 'none' && getComputedStyle(s, '::after').clipPath.startsWith('polygon'))}; })()"""
 
 
 def test_the_weeks_card_on_progress_shows_its_chart_and_says_it_folds(run, tmp_path, vp):
