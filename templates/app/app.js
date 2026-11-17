@@ -6980,8 +6980,15 @@
   // moves), 3 being written (a job being drafted, or a draft whose files are still to come),
   // 4 new.
   const JOB_STAGE_WORDS = ["Needs your answer", "Ready to send", "Ready to send", "Being written", "New"];
-  // One never made is Claude's to make next, by itself, before any check of it is the person's.
-  function draftStage(a) { return readyLive(a) ? (readyQuestions(a).length ? 0 : draftUnmade(a) ? 3 : alertsOf(a).some((x) => x.kind === "checks") ? 0 : 1) : 2; }
+  // One never made, or one whose check Claude makes again by itself ("The CV runs to a second
+  // page: Claude makes it again next"), is being written; a check only the person can settle
+  // needs their answer.
+  function draftStage(a) { return readyLive(a) ? (readyQuestions(a).length ? 0 : draftUnmade(a) || selfFixing(a) ? 3 : alertsOf(a).some((x) => x.kind === "checks") ? 0 : 1) : 2; }
+  function selfFixing(a) {
+    const ac = obj(obj(alertsOf(a).find((x) => x.kind === "checks" && obj(x.action).type)).action);
+    const w = txt(ac.id) ? workDoc(txt(ac.id)) : null;
+    return ac.type === "work" && txt(ac.kind) === "draft" && !(w && TERMINAL.has(txt(w.status)));
+  }
   function jobStage(r) { const d = listDraft(r); if (d) return draftStage(d); const st = jobStatus(r); return st === "asking" ? 0 : st === "drafting" ? 3 : 4; }
   // A draft asking whether it was sent waits with the other "Did you apply?" questions.
   function draftAsksApplied(a) { const qs = readyLive(a) ? readyQuestions(a) : []; return qs.length > 0 && applyAsk(qs[0]); }

@@ -158,26 +158,39 @@ def test_a_phone_toast_keeps_close_on_its_words_row(run, tmp_path):
 
 
 def test_a_draft_that_needs_a_fix_says_so_on_its_card_with_its_state_by_the_title(run, tmp_path, vp):
+    # Its "Did you apply?" question first, on the one card every such question has (the
+    # redesign's second round, 2026-11-17); answered "Not yet", the draft is its own card again.
     got = _go(run, tmp_path, [
-        {"hash": "drafts", "read": '#main [data-item="app-quayside-demand"]',
-         "eval": "(() => { const c = document.querySelector('#main [data-item=\"app-quayside-demand\"]'); const al = c.querySelector('[data-alert=\"al-checks-app-quayside-demand\"]');"
-                 " const h3 = c.querySelector('.job-top h3').getBoundingClientRect(); const pill = c.querySelector('.job-top .state-word').getBoundingClientRect();"
+        {"hash": "drafts", "read": '#main [data-item="app-quayside-demand"]'},
+        {"click": "Not yet", "within": '#main [data-item="app-quayside-demand"]', "read": '#main .card.app[data-item="app-quayside-demand"]',
+         # Claude makes it again by itself, so it waits under "Being written", said by its heading;
+         # a state pill (Supply Chain's "1 question for you") stays by its title.
+         "eval": "(() => { const c = document.querySelector('#main .card.app[data-item=\"app-quayside-demand\"]'); const al = c.querySelector('[data-alert=\"al-checks-app-quayside-demand\"]');"
+                 " const s = document.querySelector('#main [data-item=\"r12-2\"]');"
+                 # Wrapped under a title with a ring before it, the pill starts at the card's text
+                 # edge, where its facts line starts, never pushed off to the right.
+                 " const h3 = s.querySelector('.job-top h3').getBoundingClientRect(); const pill = s.querySelector('.job-top .state-word').getBoundingClientRect();"
+                 " const edge = s.querySelector('.facts').getBoundingClientRect().left;"
+                 " const g = c.closest('.job-group'); const head = g ? g.querySelector('.list-head').textContent.trim() : null;"
                  # Folded inside the card, never; the card itself may wait in Jobs' "jobs to
                  # confirm" fold with its question (the redesign, phase 2, 2026-11-17).
                  " const d = al && al.closest('details');"
-                 " return {folded: !al || (!!d && c.contains(d)), onRow: pill.top < h3.bottom, atStart: Math.abs(pill.left - h3.left) <= 2,"
+                 # Said on its face, as the alert or as Claude's line for it, never only in a fold.
+                 " const face = [...c.querySelectorAll('[data-alert=\"al-checks-app-quayside-demand\"], .work-inline')].find((e) => /second page/.test(e.textContent) && !(e.closest('details') && c.contains(e.closest('details'))));"
+                 " return {folded: !face, head, onRow: pill.top < h3.bottom, atStart: Math.abs(pill.left - edge) <= 2,"
                  " gap: Math.round(pill.top - h3.bottom)}; })()"},
     ], vp, clock=T)
-    card = got["after"][0]["text"]
-    r = got["after"][0]["eval"]
+    asked, card = got["after"][0]["text"], got["after"][1]["text"]
+    r = got["after"][1]["eval"]
     assert not r["folded"], "the failed check is on the card, not folded into More"
+    assert r["head"] == "Being written", r
     # What Claude can do by itself is never a button (2026-11-05): the failed check is said on
     # the card, and Claude makes it again once its question is answered.
     # The check's own finding leads, capitalised, since the UX review of 2026-11-10 (U-19).
     assert "The CV runs to a second page by two lines" in card and "Make it again" not in card, card
     # Two devices that disagreed are asked as one plain question since the redesign of
     # 2026-11-16 ("Two answers about Quayside Foods ... Which is right?" read as an error).
-    assert "Did you apply to Quayside Foods?" in card and "Two answers about" not in card, "its question stays first, in plain words"
+    assert "Did you apply to Quayside Foods?" in asked and "Two answers about" not in asked, "its question stays first, in plain words"
     assert r["onRow"] or (r["atStart"] and r["gap"] <= 8), ("the state stays by the title, never pushed off to the right below it", r)
 
 

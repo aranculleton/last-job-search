@@ -110,13 +110,17 @@ def test_a_checklist_row_has_its_next_step_and_done_and_its_bin_they_replied(run
 def test_to_do_never_offers_a_fix_and_the_draft_says_what_claude_will_fix(run, tmp_path):
     # Claude makes the draft again by itself (tools/app.py self_fixes queues it); a closed
     # posting is set aside by itself; a referral is a note on the job.
-    got = _go(run, tmp_path, [{"hash": "todo"}, {"hash": "drafts", "read": '[data-item="app-quayside-demand"]'}], WIDE, clock=T)
+    # Its "Did you apply?" question comes first, on the one card every such question has (the
+    # redesign's second round, 2026-11-17); answered "Not yet", the draft is its own card again.
+    got = _go(run, tmp_path, [{"hash": "todo"}, {"hash": "drafts", "read": '[data-item="app-quayside-demand"]'},
+                              {"click": "Not yet", "within": '#main [data-item="app-quayside-demand"]', "read": '#main .card.app[data-item="app-quayside-demand"]'}], WIDE, clock=T)
     todo = got["after"][0]["text"]
     for b in ("Make it again", "Shorten it", "Set it aside", "the CV runs to a second page"):
         assert b not in todo, (b, todo)
+    assert "Did you apply to Quayside Foods?" in got["after"][1]["text"], got["after"][1]["text"]
     # The check's own finding leads the line since the UX review of 2026-11-10 (U-19), so it
     # starts with a capital: "The CV runs to ...: Claude makes it again next."
-    assert "The CV runs to a second page by two lines" in got["after"][1]["text"] and "Make it again" not in got["after"][1]["text"], got["after"][1]["text"]
+    assert "The CV runs to a second page by two lines" in got["after"][2]["text"] and "Make it again" not in got["after"][2]["text"], got["after"][2]["text"]
 
 
 def test_a_fix_claude_could_not_make_is_said_on_to_do_with_no_button(run, tmp_path):

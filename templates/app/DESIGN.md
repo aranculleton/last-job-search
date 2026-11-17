@@ -320,8 +320,9 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   2 to confirm."; a card's pill is the same word, left off under a heading that already says
   it, and a question waiting on you is the card's pill, "1 question for you"; an employer's
   card says a role's stage ("Being written", "Did you apply?"), and a closing day in Coming up
-  the same ("Did you apply? Answer in Jobs."). A draft whose files are still to come is being
-  written, never ready. Why: one job was "waiting on you" in the summary, under "Being written"
+  the same ("Did you apply? Answer in Jobs."). A draft whose files are still to come, or one
+  Claude makes again by itself after a check ("The CV runs to a second page: Claude makes it
+  again next"), is being written, never ready and never waiting on the person. Why: one job was "waiting on you" in the summary, under "Being written"
   with a "Drafting" pill, and "Not applied" on its employer's card (the redesign's second
   round, 2026-11-17). Every "Did you apply to ...?" waits in one fold straight under the list
   (To do asks them too; above the list it would stand between the switch and the first card),
