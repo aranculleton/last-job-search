@@ -1060,6 +1060,9 @@ dialog.detail[open] { overflow: hidden; }
 dialog.detail .detail-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; align-content: start; }
 .detail-title { font-size: 1.375rem; font-weight: 700; line-height: 1.25; }
 @media (min-width: 760px) { dialog.detail { margin: auto; width: 680px; height: auto; max-height: calc(100dvh - 64px); border: 1px solid var(--line); border-radius: var(--r); } }
+/* As tall as what it holds, up to the window, then its body scrolls: pinned at the window's
+   height, a short card sat at the top of a tall empty panel (2026-11-16). */
+@media (min-width: 760px) { dialog.detail:not(.full) { height: -webkit-fit-content; height: fit-content; } }
 dialog.question-screen { position: fixed; inset: 0; margin: 0; width: 100%; max-width: 100%; height: calc(100dvh * var(--tz)); max-height: calc(100dvh * var(--tz)); padding: 0; border: 0; background: var(--surface); color: var(--ink); }
 dialog.question-screen[open] { display: flex; flex-direction: column; }
 @media (min-width: 760px) { dialog.question-screen { margin: auto; width: 560px; height: auto; max-height: calc(100dvh - 64px); border: 1px solid var(--line); border-radius: var(--r); } }
@@ -2135,6 +2138,40 @@ ul.bp-news { gap: 12px; }
 .d-person { display: grid; gap: 16px; }
 .d-person .d-block { display: grid; gap: 8px; }
 .d-person .timeline { display: grid; gap: 12px; }
+/* An employer's page as a person's: each block apart, its lists Settings' rows (issue 263). */
+.d-employer > p { margin: 0; }
+/* A card is drawn as one rhythm: its parts 16px apart, a part's heading 8px over what it heads
+   (2026-11-16: an application's "I heard back" sat on the heading under it). */
+.d-stack:not(.d-live) { display: grid; gap: 16px; align-content: start; }
+.d-block { display: grid; gap: 8px; }
+/* A card's lists of things that open: Settings' rows (4.10). */
+.d-rows .d-row { min-height: 56px; }
+.d-row-main { display: grid; gap: 2px; margin-right: auto; min-width: 0; }
+.d-row-name { font-weight: 600; overflow-wrap: anywhere; }
+.d-row-sub { font-size: var(--t-sm); color: var(--muted); overflow-wrap: anywhere; }
+.d-row > .state-word { flex: none; }
+.set-rows > .act-row:first-child, .set-rows > .d-row-with:first-child > .act-row { border-top: 0; }
+@media (hover: hover) { .act-row:hover .d-row-sub { color: var(--ink); } }
+.d-row-with + .act-row, .act-row + .d-row-with, .d-row-with + .d-row-with { border-top: 1px solid var(--line); }
+.d-row-with > .act-row { border-top: 0; }
+.d-row-more { margin: 0; padding: 0 16px 8px; }
+@media (max-width: 759px) { .d-row-more { padding-inline: 12px; } }
+/* What has happened, on one thread: a dot a step, filled once done, a ring while to come. */
+.d-time { display: grid; }
+.d-time > li { display: grid; grid-template-columns: 12px minmax(0, 1fr); column-gap: 12px; position: relative; padding-bottom: 16px; }
+.d-time > li:last-child { padding-bottom: 0; }
+.d-time > li:not(:last-child)::before { content: ""; position: absolute; left: 5px; top: 18px; bottom: 2px; width: 2px; border-radius: 1px; background: var(--line); }
+.d-time-dot { box-sizing: border-box; width: 12px; height: 12px; margin-top: 4px; border-radius: 50%; border: 2px solid var(--accent); background: var(--surface); }
+.d-time > li.done .d-time-dot { background: var(--accent); }
+.d-time-main { display: grid; gap: 2px; min-width: 0; }
+.d-time-day { font-size: var(--t-sm); color: var(--muted); }
+.d-time > li.to-come .d-time-what { color: var(--muted); }
+/* "Also at": a link and its comma on one line. */
+.related .rel-one { white-space: nowrap; }
+.related .rel-one > a { white-space: normal; }
+/* A card's title is where it starts reading, never a box: focus is put there for a screen
+   reader, and Chrome drew its ring round every title on opening (2026-11-16). */
+.detail-title:focus:not(:focus-visible), .detail-title[tabindex="-1"]:focus { outline: none; }
 .d-person .timeline li { display: grid; gap: 2px; }
 .d-person .t-draft .t-text { white-space: pre-wrap; background: var(--sunk); border-radius: var(--r-sm); padding: 12px 16px; }
 /* Their words and yours keep their lines; what was not a message (an acceptance, a call) is
