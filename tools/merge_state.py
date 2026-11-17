@@ -187,6 +187,10 @@ JSON_FILES = {
     # ever added to, one entry a piece of work, kept RUNS_KEEP_DAYS.
     "documents/computer_runs.json": {"lists": {"runs": ("at", "work")},
                                      "order": {"runs": "at"}, "indent": 1, "sort": "all"},
+    # The newest ring of the computer's own chat (computer.write_ring), which its wait reads on
+    # GitHub: written whole, so two chats that rang it keep the later ring.
+    "documents/computer_ring.json": {"whole": ("",), "stamps": ("rung_at",), "indent": 1,
+                                     "sort": "all"},
     # What the person booked that the app did not know of (upcoming.add): one entry each,
     # known by its id, so the page and a chat adding one each on the same day keep both.
     "documents/upcoming.json": {"lists": {"events": ("id",)}, "indent": 2},
@@ -446,7 +450,8 @@ JSON_NAMES = {
                      "ljs-save-held.json", "ljs-land-result.json", ".mirror.json",
                      "ljs-touched.json", "ljs-pdf-pages.json", "ljs-claims.json",
                      "ljs-retired-saves.json", "ljs-app-bug.json", "ljs-computer-starter.json",
-                     "ljs-tidy-renames.json"), _GITDIR),
+                     "ljs-tidy-renames.json", "ljs-listener-wait.json",
+                     "ljs-listener-answered.json", "ljs-listener-idle.json"), _GITDIR),
     # A bug a chat in the maintainer's copy checked but could not file (no GitHub tools there),
     # one file a bug under handoff/app_bugs/, named by its key: two chats that held the same bug
     # wrote the same file, so either side's copy is the bug, and `app_bug.py filed` deletes it.
