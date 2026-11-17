@@ -61,11 +61,16 @@ every run, never one stage for both.
 
 **Where it runs.** A run is whole where Claude's own browser is: a chat on the person's
 computer (`reading.py route --tools <its browser tools>` prints `here`) does every step below
-itself, the reads included. A cloud chat with no browser, asked in the chat, first queues it
-as work (`python3 tools/app.py ask "$D" --kind network --title "<a few plain words>" --args
-'<json>' --here --chat <your chat id>`, `work` and `holds` read into `$D` first): while the
-person's computer is ready it prints `sent_to: computer`, and the run goes there, whole, and
-this chat does none of it but what `then` says. Otherwise it is this chat's, as below.
+itself, the reads included. **Every run asked in a chat is on the page's work list first**, as
+its own card, before step 1: `python3 tools/app.py ask "$D" --kind network --title "<a few
+plain words>" --args '<json>' --here --chat <your chat id>` (`work` and `holds` read into `$D`
+first; over an older read it names the read to make, then run it again), and send its batch.
+A job search asked with it is a second ask, its own card (the job-scraper skill), never one
+busy line for both. The run then pins its stages on that item (`app.py pin`, above) and ends
+with `app.py done`, so the person sees it start, go and finish. In a cloud chat with no
+browser, while the person's computer is ready, `ask` prints `sent_to: computer`, and the run
+goes there, whole, and this chat does none of it but what `then` says. Otherwise it is this
+chat's, as below.
 
 1. **start.** `python3 tools/learned.py brief people` and `brief targets` (who they want, in
    their words), and the queue an earlier run left (step 1 of "Run it", below).

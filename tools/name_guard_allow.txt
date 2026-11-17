@@ -782,3 +782,8 @@ Jory Pellam                 # invented contact, tests/test_a_people_search_resul
 Kit Ames                    # invented contact, the same test
 Tova Fenn                   # invented contact, the same test
 Ivo Marr                    # invented contact, the same test
+Tamsin Oakridge             # invented partner, tests/test_a_people_run_reaches_the_people_who_answer.py
+Rufus Penhallow             # invented partner, the same test
+Odile Sarrow                # invented director, the same test
+Examplewood Consulting      # invented employer, the same test
+Regional Chair              # a title, not a person

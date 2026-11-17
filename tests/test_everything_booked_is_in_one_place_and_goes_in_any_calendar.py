@@ -342,6 +342,36 @@ def test_the_command_line_keeps_and_takes_away(tmp_path, monkeypatch, capsys):
     assert upcoming.main(["remove", row["id"]]) == 1
 
 
+@pytest.mark.parametrize("said, want", [("America/Vancouver", "America/Vancouver"),
+                                        ("Pacific", "America/Los_Angeles"),
+                                        ("UK time", "Europe/London")])
+def test_the_command_line_keeps_a_time_in_the_zone_it_was_booked_in(search, monkeypatch, capsys, said, want):
+    # Issue 273: a call booked in another country's clock could not be added from the command
+    # line with its zone, though add() takes one; a chat had to call the function from Python.
+    monkeypatch.setenv("LJS_STATE", search.state)
+    monkeypatch.setenv("LJS_PROFILE", search.profile)
+    assert upcoming.main(["add", "Call with the current employer", "2026-11-12", "16:00", "--zone", said]) == 0
+    row = upcoming.added()[-1]
+    assert (row["time"], row["zone"]) == ("16:00", want)
+    assert want in capsys.readouterr().out
+    own = [u for u in _up(search) if u["kind"] == "event"]
+    assert [(u["time"], u["zone"]) for u in own] == [("16:00", want)]
+
+
+@pytest.mark.parametrize("args, says", [
+    (["2026-11-12", "16:00", "--zone", "Atlantis/Lost"], "a zone like America/Toronto"),
+    (["2026-11-12", "--zone", "America/Vancouver"], "a time like 14:30"),
+])
+def test_the_command_line_refuses_a_zone_it_cannot_use_and_writes_nothing(search, monkeypatch, capsys, args, says):
+    # A time read in the wrong zone is worse than no time: a zone this cannot place, or a zone
+    # with no time to put in it, is refused out loud rather than dropped.
+    monkeypatch.setenv("LJS_STATE", search.state)
+    monkeypatch.setenv("LJS_PROFILE", search.profile)
+    assert upcoming.main(["add", "Call", *args]) == 1
+    assert says in capsys.readouterr().out
+    assert upcoming.added() == []
+
+
 def test_a_page_never_breaks_on_a_list_it_cannot_build(search, monkeypatch):
     import app_model as am
 

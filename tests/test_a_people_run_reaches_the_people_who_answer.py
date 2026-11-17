@@ -207,6 +207,57 @@ def test_a_headline_that_reads_as_selling_is_out(tmp_path):
     assert _names(got["chosen"]) == ["Kit Sowerby"]
 
 
+STRAT_NET = '''
+HOME_CITY = ""
+FUNCTION_TITLE = re.compile(r"\\b(strategy|consult\\w*|transformation|operations)\\b", re.I)
+REPLY_RATES = {"recruiter": (8, 13), "founder": (6, 8), "hiring_leader": (5, 9), "peer": (7, 164)}
+'''
+STRAT_EMP = ('TIER_1 = {"examplewood consulting", "sample & co", "brackenfield group", '
+             '"quillmere advisory"}\n')
+
+
+def test_a_partner_at_a_consulting_firm_is_the_hiring_side_never_a_peer(tmp_path):
+    # Issue 283: two partners came back held as peers while a director elsewhere was chosen as
+    # a hiring leader, and the run went off to search other employers.
+    _profile(tmp_path, STRAT_NET, STRAT_EMP)
+    _book(tmp_path, [])
+    people = [
+        _p("Tamsin Oakridge", "Partner at Examplewood Consulting", "Examplewood Consulting"),
+        _p("Rufus Penhallow", "Partner at Sample & Co, Regional Chair", "Sample & Co"),
+        _p("Odile Sarrow", "Senior Director of Strategy", "Brackenfield Group"),
+    ]
+    got = _json(tmp_path, people, "--want", "3")
+    assert {r["name"]: r["kind"] for r in got["chosen"]} == {
+        "Tamsin Oakridge": "hiring_leader", "Rufus Penhallow": "hiring_leader",
+        "Odile Sarrow": "hiring_leader"}, got
+    assert got["peers_held"] == [] and got["no_hiring_side"] == []
+
+
+@pytest.mark.parametrize("headline, kind", [
+    ("Partner at Examplewood Consulting", "hiring_leader"),
+    ("Partner, Sample & Co | Regional Chair", "hiring_leader"),
+    ("Partner - Strategy & Transformation", "hiring_leader"),
+    ("Senior Partner", "hiring_leader"),
+    ("Associate Partner at Quillmere Advisory", "hiring_leader"),
+    ("Principal at Examplewood Consulting", "hiring_leader"),
+    ("Principal, Operations Strategy", "hiring_leader"),
+    ("Managing Director, Brackenfield Group", "hiring_leader"),
+    ("Managing Partner", "founder"),
+    # A partner of a function or a programme, and a principal of a craft, stay as they were.
+    ("Talent Partner", "recruiter"),
+    ("HR Business Partner", "peer"),
+    ("Client Partner at Nimbus Cloud", "peer"),
+    ("Partner Solutions Architect", "peer"),
+    ("Partnerships Lead", "senior_peer"),
+    ("Principal Data Scientist", "senior_peer"),
+    ("Principal Consultant at Examplewood Consulting", "senior_peer"),
+    ("Senior Principal Engineer", "senior_peer"),
+])
+def test_a_partner_or_principal_as_the_title_is_a_hiring_leader(headline, kind):
+    import candidates
+    assert candidates.kind_of(headline) == kind
+
+
 def test_a_sales_person_is_never_cut_for_selling():
     import candidates
     assert candidates.sales_reading("Account Executive, Mid-Market", own={"sales"}) == ""
