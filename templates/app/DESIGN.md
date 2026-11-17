@@ -519,7 +519,11 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   them giving way (at a tablet's width the trash fell under its button, 2026-11-11).
   "Messages to send (7)" says in one short line under its title what went this week ("3 sent
   this week."), never a sum to do against a weekly figure and credits left; its time in the
-  calendar, "Set a time to send", waits under its More.
+  calendar, "Set a time to send", waits under its More. On a phone (480px and under) each row is
+  one tap to its draft, a 16px chevron at its end in place of "See the draft" (its name still
+  "See the draft to Juno"), its trash an icon at the row's end with a finger's target, and the
+  line under the name one line, cut short with "..." (the redesign's second round, 2026-11-17:
+  the button and the trash took 55% of each row and cut the names short; calm test: one tap).
   (layout 8, one-card tests, room test, overlap test: alone)
 - One "?" a card at most, after the last word of its line, and no more than three on a first
   screen. (design test, budget test)

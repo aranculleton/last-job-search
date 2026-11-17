@@ -3401,3 +3401,20 @@ dialog.detail .detail-body:has(> .d-live > .lp) > .detail-title { margin-top: 16
 .pdraft[open] > summary { cursor: default; }
 .pdraft:not([open]) > summary { color: var(--ink); }
 .pdraft:not([open]) > summary::before { order: 2; }
+
+/* ------------------------------------------------------------------ messages to send on a phone */
+/* On a phone each person's row is its own tap to their draft, a chevron at its end, and its
+   trash stays an icon at the end, a finger's target over the row: "See the draft" and the trash
+   took over half of each row and cut the names short ("Wren at Fernhill Fr..."), and the line
+   under a name wrapped to leave "reply" alone (the redesign's second round, 2026-11-17). */
+@media (max-width: 480px) {
+  .send-card .g-row { position: relative; }
+  .send-card .g-main > p.small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .send-card .g-acts > .btn:not([data-bin]) { position: static; min-width: var(--target); min-height: var(--target); padding: 0; border: 0; background: none; font-size: 0; color: var(--muted); }
+  .send-card .g-acts > .btn:not([data-bin])::before { content: ""; width: 16px; height: 16px; background: currentColor; clip-path: polygon(33% 27.5%, 42% 19%, 73% 50%, 42% 81%, 33% 72.5%, 55.6% 50%); forced-color-adjust: none; }
+  .send-card .g-acts > .btn:not([data-bin])::after { content: ""; position: absolute; inset: 0; border-radius: var(--r-sm); }
+  .send-card .g-acts > .btn:not([data-bin]):focus-visible { outline: none; }
+  .send-card .g-acts > .btn:not([data-bin]):focus-visible::after { outline: 3px solid var(--focus); outline-offset: -3px; }
+  .send-card .g-acts > [data-bin], .send-card .g-main a.name-link { position: relative; z-index: 1; }
+  .send-card .g-acts > [data-bin] { min-width: var(--target); min-height: var(--target); }
+}

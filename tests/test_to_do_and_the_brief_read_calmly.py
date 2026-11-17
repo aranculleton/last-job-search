@@ -308,3 +308,32 @@ def test_every_fold_draws_the_one_chevron_right_while_shut_and_down_once_open(ru
     assert {False, True} <= {x[4] for x in seen}, "folds seen shut and open"
     drafts = [d for a in got["after"] for d in a["eval"]["drafts"]]
     assert drafts and set(drafts) == {"none"}, drafts
+
+
+SENDTAP = r"""(() => [...document.querySelectorAll('#main .send-card .g-row')].filter((r) => r.getClientRects().length).map((r) => {
+  r.scrollIntoView({block: 'center'});
+  const meta = r.querySelector('.g-main > p.small'), see = r.querySelector('.g-acts > .btn:not([data-bin])'), bin = r.querySelector('.g-acts > [data-bin]');
+  const m = meta.getBoundingClientRect(), b = bin ? bin.getBoundingClientRect() : null;
+  const g = document.createRange(); g.selectNodeContents(meta);
+  const hit = document.elementFromPoint(m.left + 4, (m.top + m.bottom) / 2);
+  const binHit = b ? document.elementFromPoint((b.left + b.right) / 2, (b.top + b.bottom) / 2) : null;
+  return {name: r.querySelector('.g-name').textContent.trim(), share: r.querySelector('.g-main').getBoundingClientRect().width / r.getBoundingClientRect().width,
+    metaLines: new Set([...g.getClientRects()].map((x) => Math.round(x.top))).size, opens: hit === see, label: see.getAttribute('aria-label'),
+    words: Math.round(see.getBoundingClientRect().width), bin: b ? [Math.round(b.width), Math.round(b.height), !!binHit && binHit.closest('[data-bin]') === bin] : null};
+}))()"""
+
+
+def test_on_a_phone_a_message_row_is_one_tap_to_its_draft_and_its_names_are_whole(run, tmp_path):
+    # "See the draft" and the trash took 55% of each row on a phone, names were cut ("Wren at
+    # Fernhill Fr..."), and Wren's line wrapped to leave "reply" alone (the redesign's second
+    # round, 2026-11-17): the whole row opens the draft, a chevron at its end, the trash a
+    # finger's target at the end, the line under the name one line.
+    got = _go(run, tmp_path, [{"hash": "todo", "eval": SENDTAP}], {"width": 390, "height": 844}, clock=T)
+    rows = got["after"][0]["eval"]
+    assert len(rows) >= 5, rows
+    for r in rows:
+        # The words take the row: the name and its employer at least 60% of it (it was 45%).
+        assert r["share"] >= 0.6 and r["metaLines"] == 1, r
+        assert r["opens"] and r["label"].startswith("See the"), r
+        assert r["words"] <= 48, ("the button is its chevron, its words its name", r)
+        assert r["bin"] and r["bin"][0] >= 44 and r["bin"][1] >= 44 and r["bin"][2], r
