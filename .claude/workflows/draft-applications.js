@@ -173,6 +173,10 @@ const DRAFT_PROPS = {
   bullet_rewordings: { type: 'array', items: { type: 'object', properties: {
     id: { type: 'string' }, skill: { type: 'string' }, text: { type: 'string' } },
     required: ['id', 'skill', 'text'] } },
+  // Optional: the title a role prints under on this resume, where the profile allows it
+  // more than one (roles.py titles), picked by the rule section 1 of the pack gives; the
+  // renderer and the code audit refuse any other (render_application.role_titles).
+  role_titles: { type: 'object', additionalProperties: { type: 'string' } },
 }
 const DRAFT_REQ = ['company', 'role', 'summary', 'tools', 'p1', 'p2', 'lead', 'cl_bullets', 'p4', 'angle', 'requirement_map', 'notes_for_tracker', 'claim_map', 'stretches']
 const DRAFT_SCHEMA = { type: 'object', properties: { ...DRAFT_PROPS, check_output: { type: 'string' } }, required: [...DRAFT_REQ, 'check_output'] }

@@ -22,7 +22,10 @@ log changed only by these commands, a referral ask for one linked role only once
 2. **Draft** the reply from what it printed, or nothing where it says none is owed.
 3. **Finish.** Run `python3 tools/network/reply.py finish <contact id> --draft-file -`
    with the draft on its input (from the page's work: `--work <id> --dump "$D"`, and
-   `--thread <t>` for a message in its chat). It runs step 5's check, and refuses, saving
+   `--thread <t>` for a message in its chat). A referral ask (`compose.referral_ask()`) is
+   checked as one, by its own limit, whoever wrote last: the page's referral ask work and an
+   ask ending with the posting's link on its own line are known by themselves; add
+   `--referral-ask` for any other. It runs step 5's check, and refuses, saving
    nothing, while the check finds anything or a reaction of theirs waits unrecorded
    (`learned.py record` or `skip` first): rewrite and run it again. Passed, it saves the
    draft where the person's card in Contacts shows it with Copy and "I sent it", prints step 7's line

@@ -84,7 +84,10 @@ NOT_PROSE = {"claim_map", "stretches", "posting", "research", "check_output", "p
              # The profile's own bullets with a yes named: held to the guard in
              # tools/bullet_rewording.py (nothing but the yes and a linking word added), and
              # read by check_claims with the resume (document_texts).
-             "bullet_rewordings"}
+             "bullet_rewordings",
+             # The title a role prints under, from those the profile allows it: held to that
+             # list by malformed() and the renderer (render_application.role_titles).
+             "role_titles"}
 # A sentence this short, with no figure, states no fact ("Where it maps:").
 MIN_FACT_WORDS = 4
 # Content words of a do_not_claim entry a sentence must share to be flagged.
@@ -444,6 +447,14 @@ def malformed(d: dict) -> list[dict]:
     if cm is not None and not isinstance(cm, list):
         out.append(_finding("malformed", "claim_map", type(cm).__name__,
                             'claim_map is a list of {"field", "sentence", "cites"}'))
+    # A role's title from those the profile allows it, or the render refuses the draft
+    # (issue 316): said here, before anything is made.
+    if d.get("role_titles") not in (None, {}):
+        import render_application as R
+        for why in R.title_problems(d):
+            out.append(_finding("malformed", "role_titles", str(d.get("role_titles"))[:80],
+                                why + "; leave a role out of role_titles to print the "
+                                "profile's own title"))
     return out
 
 
