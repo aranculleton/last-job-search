@@ -418,6 +418,22 @@ def portal_locations(skill: str) -> list[str | None]:
 SWEEP_BUDGET = 20 * 60
 SWEEP_MAX_FAILS = 3
 
+# And it never holds the round. Two rounds one evening waited 20 minutes for their scrape,
+# LinkedIn and freehire done after under seven: the paced boards spent the last 13 adding about
+# 1% of what reached the list and nothing at fit 75 or more, while one board that did find
+# strong roles needed three minutes of requests (issue 301). The order of a board's requests is
+# the order of value (page one of every search at the first place first, the cursor carrying
+# the rest to the next round), so a board stops PACED_AFTER_POOL seconds after LinkedIn and
+# freehire finish, though never before PACED_MIN into the scrape. Where neither of those is
+# searched the board is the search, and keeps SWEEP_BUDGET.
+PACED_AFTER_POOL = 60
+PACED_MIN = 3 * 60
+PACED_STOP = "LinkedIn and freehire had finished, and a slow board does not hold the round"
+# An employer a board was asked for by name and had nothing from (no posting at that employer
+# in its answer) is not asked for on that board again for this many days. One board answered
+# 59 such searches in a round with nothing new; the four answered 400 with 24 (issue 301).
+EMPTY_DAYS = 30
+
 # How long one paced request takes, its crawl-delay included, decides how many fit the
 # budget. One board at a crawl-delay of 5 seconds managed about 7 a minute, so its
 # 20 minutes held about 150 of its 243 requests whatever happened, and nothing said so.
@@ -522,7 +538,7 @@ class PageWalk:
 def sweep(skill: str, tasks: list[tuple], jobage: int, sleep=time.sleep,
           clock=time.monotonic, tally: "Tally | None" = None,
           on_rows=None, log=None, requests=None,
-          covered=None, kept=None) -> tuple[list[dict], int, list[str]]:
+          covered=None, kept=None, stop=None) -> tuple[list[dict], int, list[str]]:
     """Every request for one person's portal, one at a time, `crawl-delay` apart.
 
     Its own thread, so a board that asks for five seconds between requests
@@ -543,6 +559,10 @@ def sweep(skill: str, tasks: list[tuple], jobage: int, sleep=time.sleep,
 
     `kept` holds what the board answered in the last PACED_TTL: a request it answered then is
     not sent again (it counts as gone through, in `tally.kept`), and every answer is kept.
+
+    `stop`, asked before each request, says why the sweep should stop now ("" to go on):
+    LinkedIn and freehire have finished (PACED_STOP). An employer searched for by name is
+    recorded in `tally.named` as whether the board had anything at that employer.
     """
     delay, rows, failed = portals.crawl_delay(skill), [], []
     start, streak, sent, last, why = clock(), 0, 0, "", ""
@@ -586,6 +606,9 @@ def sweep(skill: str, tasks: list[tuple], jobage: int, sleep=time.sleep,
         if clock() - start > SWEEP_BUDGET:
             why = f"its {SWEEP_BUDGET // 60}-minute budget ran out"
             break
+        why = stop() if stop is not None else ""
+        if why:
+            break
         if delay:
             wait = delay if began is None else began + delay - clock()
             if wait > 0:
@@ -605,6 +628,8 @@ def sweep(skill: str, tasks: list[tuple], jobage: int, sleep=time.sleep,
             walk.answered(search, pg, got)
             if kept is not None:
                 kept.put(paced_key(skill, task, jobage), list(got))
+            if employer and tally is not None:
+                tally.named[q] = any(_employer_key(r.get("company")) == employer for r in got)
         rows += got
         new = None
         if on_rows and got:
@@ -689,6 +714,7 @@ class Tally:
         self.ended = 0                    # deeper pages not sent: their search had run out
         self.covered = 0                  # employer searches not sent: its own site was read
         self.kept = 0                     # requests not sent: answered a short while ago
+        self.named: dict[str, bool] = {}  # an employer's search: did the board have it there
         # Failed requests, counted as they land with their causes. `failed` also
         # carries the note a stopped portal leaves, which is not a request.
         self.errors = 0
@@ -1129,9 +1155,18 @@ def _sweep_paths() -> tuple[str, str]:
 
 # This round's plan per person portal: (mode, core requests, rotating length, offset).
 PLAN: dict[str, tuple[str, int, int, int]] = {}
-# This round's employer searches on a person's portal for an employer whose own board is on
-# file: {(portal, query): the employer's key}. Sent only if that board was not read (`sweep`).
+# This round's employer searches on a person's portals: {(portal, query): the employer's key}.
+# One whose own board is on file is sent only if that board was not read (`sweep`'s
+# `covered`), and one the board had nothing from is remembered (`save_cursor`, EMPTY_DAYS).
 NAMED: dict[tuple[str, str], str] = {}
+
+
+def _employer_key(name) -> str:
+    try:
+        from company_key import key
+    except Exception:  # pragma: no cover
+        return str(name or "").lower()
+    return key(name)
 
 
 def _covered_by_ats() -> set:
@@ -1200,15 +1235,19 @@ def move_cursor() -> str:
     return f"moved {old} to {new}"
 
 
-def save_cursor(sent_by_skill: dict, today: str, secs_by_skill: dict | None = None) -> None:
+def save_cursor(sent_by_skill: dict, today: str, secs_by_skill: dict | None = None,
+                named_by_skill: dict | None = None) -> None:
     """Where each person portal's tail starts next round, from what this one sent, and how
-    long one of its requests took (`secs`, for the next round's plan)."""
+    long one of its requests took (`secs`, for the next round's plan). `named_by_skill`:
+    {portal: {employer search: whether the board had anything at that employer}}, kept as
+    `empty` (the day each came back with nothing), for EMPTY_DAYS."""
     if not PLAN and not os.path.exists(_sweep_paths()[1]):
         return
     state = _cursor()
     for skill, (mode, core, rotating, offset) in PLAN.items():
         if skill not in sent_by_skill:
             continue
+        last = state.get(skill) if isinstance(state.get(skill), dict) else {}
         sent = sent_by_skill[skill]
         done = sent if mode == "all" else max(0, sent - core)
         state[skill] = {"mode": mode, "next": (offset + done) % rotating if rotating else 0,
@@ -1216,10 +1255,32 @@ def save_cursor(sent_by_skill: dict, today: str, secs_by_skill: dict | None = No
         secs = (secs_by_skill or {}).get(skill)
         if secs:
             state[skill]["secs"] = round(float(secs), 1)
+        empty = {q: d for q, d in dict(last.get("empty") or {}).items()
+                 if q in _still_empty({"empty": {q: d}}, dt.date.fromisoformat(today))}
+        for q, found in ((named_by_skill or {}).get(skill) or {}).items():
+            if found:
+                empty.pop(q, None)
+            else:
+                empty[q] = today
+        if empty:
+            state[skill]["empty"] = dict(sorted(empty.items()))
     _write_cursor(state)
 
 
-def build_tasks(on: dict[str, bool], pages: int) -> list[tuple]:
+def _still_empty(last: dict, today: dt.date | None) -> set:
+    """The employer searches a board had nothing from within EMPTY_DAYS of `today`."""
+    day = today or person.today()
+    out = set()
+    for q, when in dict(last.get("empty") or {}).items():
+        try:
+            if (day - dt.date.fromisoformat(str(when))).days < EMPTY_DAYS:
+                out.add(q)
+        except ValueError:
+            continue
+    return out
+
+
+def build_tasks(on: dict[str, bool], pages: int, today: dt.date | None = None) -> list[tuple]:
     """(kind, query, location, page) for every request, for the portals that are on.
 
     `kind` is "li", "lir" or "fh" for the app's two portals, and the portal's
@@ -1276,7 +1337,6 @@ def build_tasks(on: dict[str, bool], pages: int) -> list[tuple]:
     # over when it comes up only if that board was read this round (`sweep`'s `covered`): it
     # was left out of the plan up front, so a board the site asked to slow down lost its
     # employer both ways (issue 302).
-    covered = _covered_by_ats()
     cursor = _cursor()
     PLAN.clear()
     NAMED.clear()
@@ -1292,8 +1352,11 @@ def build_tasks(on: dict[str, bool], pages: int) -> list[tuple]:
         core = [(skill, q, places[0], pg) for pg in range(1, depth + 1) for q in qs]
         tail = [(skill, f"{emp} {t}", places[0], 1) for emp in EMPLOYERS
                 for t in EMPLOYER_QUERIES]
+        # An employer this board had nothing from in the last EMPTY_DAYS is not asked for.
+        empty = _still_empty(cursor.get(skill) or {}, today)
+        tail = [t for t in tail if t[1] not in empty]
         NAMED.update({(skill, f"{emp} {t}"): _key(emp) for emp in EMPLOYERS
-                      for t in EMPLOYER_QUERIES if _key(emp) in covered})
+                      for t in EMPLOYER_QUERIES})
         for pg in range(1, min(depth, 2) + 1):
             if portals.takes_remote(skill):
                 tail += [(skill, q, None, pg, True) for q in qs]
@@ -1351,6 +1414,8 @@ def named_tasks(on: dict[str, bool], pages: int, employers) -> list[tuple]:
                 tasks.append((skill, q, first, 1))
                 if _key(emp) in covered:
                     NAMED[(skill, q)] = _key(emp)
+    # A search the person limited to these employers asks for them whatever a board had before,
+    # and teaches nothing: only an ordinary round's employer searches are remembered.
     return tasks
 
 
@@ -1797,7 +1862,8 @@ def main() -> int:
         print(f"employers: searching {len(employers)} named employers by name"
               + (f"; no board of their own on file for {', '.join(no_board)} "
                  "(tools/ats_boards.py --find \"<employer>\" finds one)" if no_board else ""))
-    tasks = named_tasks(on, pages, employers) if employers is not None else build_tasks(on, pages)
+    tasks = (named_tasks(on, pages, employers) if employers is not None
+             else build_tasks(on, pages, today))
     if not tasks:
         print("portals: none of the portals this scrape can call is on, so this "
               "round is the employer boards alone (python3 tools/portals.py)")
@@ -1844,10 +1910,21 @@ def main() -> int:
     # What each search was answered a short while ago, kept beside the rounds (Kept).
     kept = Kept(os.path.join(a.cache, "requests")) if a.cache else None
     reuse = None if a.fresh else kept
+    # A paced board stops PACED_AFTER_POOL after LinkedIn and freehire finish, never before
+    # PACED_MIN; where neither is searched, it keeps its own budget (issue 301).
+    paced_from, pool_ended = time.monotonic(), []
+    pooled = any(t[0] in ("li", "lir", "fh") for t in tasks)
+
+    def paced_stop() -> str:
+        if not (pooled and pool_ended):
+            return ""
+        return PACED_STOP if time.monotonic() >= max(pool_ended[0] + PACED_AFTER_POOL,
+                                                     paced_from + PACED_MIN) else ""
     paced = ThreadPoolExecutor(max_workers=max(1, len(mine)))
     sweeps = {paced.submit(sweep, skill, ts, a.jobage, tally=tallies[portals.short(skill)],
                            on_rows=landed, log=a.log, requests=a.request_log,
-                           covered=covered, kept=_Fresh(kept) if a.fresh and kept else kept):
+                           covered=covered, kept=_Fresh(kept) if a.fresh and kept else kept,
+                           stop=paced_stop):
               portals.short(skill)
               for skill, ts in mine.items()}
     jobs = []
@@ -1932,6 +2009,7 @@ def main() -> int:
     _, pool_tallies = pool(jobs, workers, budget=a.budget, cap=cap, tallies=tallies,
                            on_rows=landed, on_sent=answered_now, page_of=search_page,
                            on_answer=keep_answer)
+    pool_ended.append(time.monotonic())
     with open(os.path.join(a.out, SENT), "w", encoding="utf-8", newline="\n") as fh:
         json.dump(sorted(sent_now), fh)
     if jobs:
@@ -1972,7 +2050,8 @@ def main() -> int:
             _say(f"portals: {t.name} stopped, {t.stopped}; {t.total - t.sent} of {t.total} "
                  "requests not sent", a.log)
     save_cursor(swept, today.isoformat(),
-                {k: tallies[portals.short(k)].per for k in mine})
+                {k: tallies[portals.short(k)].per for k in mine},
+                {k: tallies[portals.short(k)].named for k in mine})
     _write_partial(a.out, seen)
 
     # Employer boards, straight from the ATS: every system openroles reads, and
