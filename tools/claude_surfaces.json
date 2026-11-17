@@ -943,6 +943,132 @@
       "ui_sensitive": true
     },
     {
+      "id": "computer-chat-signin",
+      "claim": "A chat the app started on the person's computer has the desktop app's Browser pane when it is opened in the Claude desktop app on that computer, from the list of sessions in the Code tab's sidebar. Opened from its claude.ai link, on that computer or anywhere else, it is a Remote Control view, where the Browser pane is not available, and no link opens an existing session in the desktop app (deep-links). So a LinkedIn sign-in in that chat is made there: the chat opened from that list by its name, its browser shown (Browser in the session's title bar, or Cmd+Shift+B on a Mac, Ctrl+Shift+B on Windows or Linux), the sign-in, and Keep cookies in the browser's ⋮ menu so it lasts.",
+      "goal": "sign in to LinkedIn in the chat Claude reads in on your computer, and stay signed in",
+      "how": "in the Claude desktop app on your computer, the chat named here from the list of chats in its Code tab; Cmd+Shift+B on a Mac, Ctrl+Shift+B on Windows or Linux shows its browser; choose Keep cookies in the browser's ⋮ menu so you stay signed in",
+      "steps": [
+        "In the Claude desktop app on your computer, open the chat named here from the list of chats in its Code tab: a link to it opens a view without the browser.",
+        "Show that chat's browser: Browser in its title bar (Cmd+Shift+B on a Mac, Ctrl+Shift+B on Windows or Linux).",
+        "Sign in to LinkedIn there yourself.",
+        "In the browser's ⋮ menu, choose Keep cookies, so you stay signed in after you quit the app."
+      ],
+      "page_goal": "sign in to LinkedIn in the chat Claude reads in on your computer, and stay signed in",
+      "page_steps": [
+        "In the Claude desktop app on your computer, open the chat named on this card from the list of chats in its Code tab: a link to it opens a view without the browser.",
+        "Show that chat's browser: Browser in its title bar, or Cmd+Shift+B on a Mac, Ctrl+Shift+B on Windows or Linux.",
+        "Sign in to LinkedIn there yourself.",
+        "In the browser's ⋮ menu, choose Keep cookies, so you stay signed in after you quit the app.",
+        "Come back to this page and tap I've signed in."
+      ],
+      "sources": [
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "The sidebar lists your sessions and lets you run several in parallel."},
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "To open the Browser, press Cmd+Shift+B on macOS or Ctrl+Shift+B on Windows, or click Browser in the session's title bar."},
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "Choose whether the Browser keeps cookies after you quit the app with Keep cookies in the Browser pane's ⋮ menu, so you don't have to sign in again"},
+        {"url": "observed:remote-control-view", "quote": "Browser isn't available in remote control sessions. You can start a new SSH session or a session on this computer to use it."}
+      ],
+      "status": "observed",
+      "verified_on": "2026-11-16",
+      "verified_against": "code.claude.com/docs/en/desktop read 2026-11-16 (the sidebar's list of sessions, the Browser and its key, Keep cookies); observed 2026-11-16 on a Mac: the chat's claude.ai link opened it as a Remote Control view, whose Browser pane showed the quoted message, and the same chat opened from the sidebar of the desktop app there showed the browser and the sign-in worked; code.claude.com/docs/en/deep-links and /desktop read 2026-11-16 name no link that opens an existing session",
+      "ui_sensitive": true
+    },
+    {
+      "id": "computer-chat-signin-mac",
+      "variant_of": "computer-chat-signin",
+      "system": "darwin",
+      "claim": "On a Mac, a chat the app started on the person's computer has the desktop app's Browser pane when it is opened in the Claude desktop app on that computer, from the list of sessions in the Code tab's sidebar. Opened from its claude.ai link, on that computer or anywhere else, it is a Remote Control view, where the Browser pane is not available, and no link opens an existing session in the desktop app (deep-links). So a LinkedIn sign-in in that chat is made there: the chat opened from that list by its name, its browser shown (Browser in the session's title bar, or Cmd+Shift+B), the sign-in, and Keep cookies in the browser's ⋮ menu so it lasts.",
+      "goal": "sign in to LinkedIn in the chat Claude reads in on your computer, and stay signed in",
+      "how": "in the Claude desktop app on your computer, the chat named here from the list of chats in its Code tab; Cmd+Shift+B shows its browser; choose Keep cookies in the browser's ⋮ menu so you stay signed in",
+      "steps": [
+        "In the Claude desktop app on your computer, open the chat named here from the list of chats in its Code tab: a link to it opens a view without the browser.",
+        "Show that chat's browser: Browser in its title bar (Cmd+Shift+B).",
+        "Sign in to LinkedIn there yourself.",
+        "In the browser's ⋮ menu, choose Keep cookies, so you stay signed in after you quit the app."
+      ],
+      "page_goal": "sign in to LinkedIn in the chat Claude reads in on your computer, and stay signed in",
+      "page_steps": [
+        "In the Claude desktop app on your computer, open the chat named on this card from the list of chats in its Code tab: a link to it opens a view without the browser.",
+        "Show that chat's browser: Browser in its title bar, or Cmd+Shift+B.",
+        "Sign in to LinkedIn there yourself.",
+        "In the browser's ⋮ menu, choose Keep cookies, so you stay signed in after you quit the app.",
+        "Come back to this page and tap I've signed in."
+      ],
+      "sources": [
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "The sidebar lists your sessions and lets you run several in parallel."},
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "To open the Browser, press Cmd+Shift+B on macOS or Ctrl+Shift+B on Windows, or click Browser in the session's title bar."},
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "Choose whether the Browser keeps cookies after you quit the app with Keep cookies in the Browser pane's ⋮ menu, so you don't have to sign in again"},
+        {"url": "observed:remote-control-view", "quote": "Browser isn't available in remote control sessions. You can start a new SSH session or a session on this computer to use it."}
+      ],
+      "status": "observed",
+      "verified_on": "2026-11-16",
+      "verified_against": "code.claude.com/docs/en/desktop read 2026-11-16 (the sidebar's list of sessions, the Browser and its key, Keep cookies); observed 2026-11-16 on a Mac: the chat's claude.ai link opened it as a Remote Control view, whose Browser pane showed the quoted message, and the same chat opened from the sidebar of the desktop app there showed the browser and the sign-in worked; code.claude.com/docs/en/deep-links and /desktop read 2026-11-16 name no link that opens an existing session",
+      "ui_sensitive": true
+    },
+    {
+      "id": "computer-chat-signin-windows",
+      "variant_of": "computer-chat-signin",
+      "system": "win32",
+      "claim": "On Windows, a chat the app started on the person's computer has the desktop app's Browser pane when it is opened in the Claude desktop app on that computer, from the list of sessions in the Code tab's sidebar. Opened from its claude.ai link, on that computer or anywhere else, it is a Remote Control view, where the Browser pane is not available, and no link opens an existing session in the desktop app (deep-links). So a LinkedIn sign-in in that chat is made there: the chat opened from that list by its name, its browser shown (Browser in the session's title bar, or Ctrl+Shift+B), the sign-in, and Keep cookies in the browser's ⋮ menu so it lasts.",
+      "goal": "sign in to LinkedIn in the chat Claude reads in on your computer, and stay signed in",
+      "how": "in the Claude desktop app on your computer, the chat named here from the list of chats in its Code tab; Ctrl+Shift+B shows its browser; choose Keep cookies in the browser's ⋮ menu so you stay signed in",
+      "steps": [
+        "In the Claude desktop app on your computer, open the chat named here from the list of chats in its Code tab: a link to it opens a view without the browser.",
+        "Show that chat's browser: Browser in its title bar (Ctrl+Shift+B).",
+        "Sign in to LinkedIn there yourself.",
+        "In the browser's ⋮ menu, choose Keep cookies, so you stay signed in after you quit the app."
+      ],
+      "page_goal": "sign in to LinkedIn in the chat Claude reads in on your computer, and stay signed in",
+      "page_steps": [
+        "In the Claude desktop app on your computer, open the chat named on this card from the list of chats in its Code tab: a link to it opens a view without the browser.",
+        "Show that chat's browser: Browser in its title bar, or Ctrl+Shift+B.",
+        "Sign in to LinkedIn there yourself.",
+        "In the browser's ⋮ menu, choose Keep cookies, so you stay signed in after you quit the app.",
+        "Come back to this page and tap I've signed in."
+      ],
+      "sources": [
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "The sidebar lists your sessions and lets you run several in parallel."},
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "To open the Browser, press Cmd+Shift+B on macOS or Ctrl+Shift+B on Windows, or click Browser in the session's title bar."},
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "Choose whether the Browser keeps cookies after you quit the app with Keep cookies in the Browser pane's ⋮ menu, so you don't have to sign in again"},
+        {"url": "observed:remote-control-view", "quote": "Browser isn't available in remote control sessions. You can start a new SSH session or a session on this computer to use it."}
+      ],
+      "status": "observed",
+      "verified_on": "2026-11-16",
+      "verified_against": "code.claude.com/docs/en/desktop read 2026-11-16 (the sidebar's list of sessions, the Browser and its key, Keep cookies); observed 2026-11-16 on a Mac: the chat's claude.ai link opened it as a Remote Control view, whose Browser pane showed the quoted message, and the same chat opened from the sidebar of the desktop app there showed the browser and the sign-in worked; code.claude.com/docs/en/deep-links and /desktop read 2026-11-16 name no link that opens an existing session",
+      "ui_sensitive": true
+    },
+    {
+      "id": "computer-chat-signin-linux",
+      "variant_of": "computer-chat-signin",
+      "system": "linux",
+      "claim": "On Linux, a chat the app started on the person's computer has the desktop app's Browser pane when it is opened in the Claude desktop app on that computer, from the list of sessions in the Code tab's sidebar. Opened from its claude.ai link, on that computer or anywhere else, it is a Remote Control view, where the Browser pane is not available, and no link opens an existing session in the desktop app (deep-links). So a LinkedIn sign-in in that chat is made there: the chat opened from that list by its name, its browser shown (Browser in the session's title bar, or Ctrl+Shift+B), the sign-in, and Keep cookies in the browser's ⋮ menu so it lasts.",
+      "goal": "sign in to LinkedIn in the chat Claude reads in on your computer, and stay signed in",
+      "how": "in the Claude desktop app on your computer, the chat named here from the list of chats in its Code tab; Ctrl+Shift+B shows its browser; choose Keep cookies in the browser's ⋮ menu so you stay signed in",
+      "steps": [
+        "In the Claude desktop app on your computer, open the chat named here from the list of chats in its Code tab: a link to it opens a view without the browser.",
+        "Show that chat's browser: Browser in its title bar (Ctrl+Shift+B).",
+        "Sign in to LinkedIn there yourself.",
+        "In the browser's ⋮ menu, choose Keep cookies, so you stay signed in after you quit the app."
+      ],
+      "page_goal": "sign in to LinkedIn in the chat Claude reads in on your computer, and stay signed in",
+      "page_steps": [
+        "In the Claude desktop app on your computer, open the chat named on this card from the list of chats in its Code tab: a link to it opens a view without the browser.",
+        "Show that chat's browser: Browser in its title bar, or Ctrl+Shift+B.",
+        "Sign in to LinkedIn there yourself.",
+        "In the browser's ⋮ menu, choose Keep cookies, so you stay signed in after you quit the app.",
+        "Come back to this page and tap I've signed in."
+      ],
+      "sources": [
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "The sidebar lists your sessions and lets you run several in parallel."},
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "To open the Browser, press Cmd+Shift+B on macOS or Ctrl+Shift+B on Windows, or click Browser in the session's title bar."},
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "Choose whether the Browser keeps cookies after you quit the app with Keep cookies in the Browser pane's ⋮ menu, so you don't have to sign in again"},
+        {"url": "observed:remote-control-view", "quote": "Browser isn't available in remote control sessions. You can start a new SSH session or a session on this computer to use it."}
+      ],
+      "status": "observed",
+      "verified_on": "2026-11-16",
+      "verified_against": "code.claude.com/docs/en/desktop read 2026-11-16 (the sidebar's list of sessions, the Browser and its key, Keep cookies); observed 2026-11-16 on a Mac: the chat's claude.ai link opened it as a Remote Control view, whose Browser pane showed the quoted message, and the same chat opened from the sidebar of the desktop app there showed the browser and the sign-in worked; code.claude.com/docs/en/deep-links and /desktop read 2026-11-16 name no link that opens an existing session",
+      "ui_sensitive": true
+    },
+    {
       "id": "find-page",
       "claim": "A page a chat publishes stays in the person's Claude account. claude.ai/code/artifacts lists every page they have made, and the page's own header links to it; in the Claude app the same pages are under Artifacts in its side menu, on a computer and on a phone. A chat can pin a page to that side menu with the Artifact tool's pin action, which the app offers once, after the first publish. Whether the phone app shows a page Claude Code published, and a pinned one, was not checked on a phone.",
       "goal": "open your job search page again",

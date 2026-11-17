@@ -482,13 +482,15 @@ def filed(keys: list[str]) -> list[str]:
 def held_line() -> str:
     """One line for the start of a cloud chat in the maintainer's own copy when checked issues
     wait there to be filed, else "". Nothing for anyone else, and nothing on a computer, which
-    held them for want of the app's issues."""
+    held them for want of the app's issues, and nothing in the chat that starts the chats on
+    the computer, which files nothing (issue #282)."""
     try:
         if not any(n.endswith(".json") for n in os.listdir(_held_dir())):
             return ""
+        import app_listen
         import place
         import sync_app
-        if not place.in_cloud() or not sync_app.maintainers():
+        if not place.in_cloud() or not sync_app.maintainers() or app_listen.starter_here():
             return ""
     except Exception:  # noqa: BLE001  no folder, no git: nothing waits
         return ""
