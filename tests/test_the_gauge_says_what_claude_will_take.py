@@ -117,3 +117,73 @@ def test_a_prep_lines_pill_has_room_from_the_words_and_the_gauge_beside_it(run, 
     for row in rows:
         for side in ("left", "right"):
             assert row[side] is None or row[side] >= 6, (side, row)
+
+
+# Every gauge on a screen or an open sheet, against the button it belongs to; and every pill
+# after a gauge in a card's row that stands alone on a line of its own.
+GLUED = r"""(() => {
+  const roots = [document.getElementById('main'), ...document.querySelectorAll('dialog[open]')].filter(Boolean);
+  const vis = (e) => e.getClientRects().length && e.getBoundingClientRect().width > 0;
+  const line = (a, b) => { const m = (a.top + a.bottom) / 2; return m > b.top && m < b.bottom; };
+  const pairs = roots.flatMap((r) => [...r.querySelectorAll('[data-wakes] + .cost')]).filter((g) => vis(g) && vis(g.previousElementSibling)).map((g) => {
+    const b = g.previousElementSibling, r = b.getBoundingClientRect(), q = g.getBoundingClientRect();
+    return [b.textContent.trim(), line(q, r) && q.left >= r.right - 1];
+  });
+  const alone = [];
+  for (const row of document.querySelectorAll('#main .card-actions')) {
+    const kids = [...row.children].filter(vis);
+    for (const k of kids) {
+      if (k.matches('details.more, .cost') || !k.matches('[data-wakes] + .cost ~ *')) continue;
+      const q = k.getBoundingClientRect();
+      if (kids.length > 1 && !kids.some((o) => o !== k && (line(o.getBoundingClientRect(), q) || line(q, o.getBoundingClientRect())))) alone.push(k.textContent.trim());
+    }
+  }
+  return {pairs, alone};
+})()"""
+
+NARROW = {"width": 390, "height": 844}
+
+
+def test_on_a_phone_every_gauge_keeps_the_line_of_its_button_and_done_never_stands_alone(run, tmp_path):
+    # The maintainer's gauge, glued to its button (the redesign's second round, 2026-11-17): on a
+    # phone "38 min of Claude" sat alone under "Find jobs · Add a job · Your CV" and read as the
+    # cost of all three, "6 min of Claude" fell under Coming up's Prepare me, the Brief's
+    # "Draft the thank-you" left its gauge on the next line, and To do's follow-up stranded Done
+    # alone under "Draft the follow-up · 2 min of Claude".
+    steps = [{"hash": h, "wait": 200, "eval": GLUED} for h in ("brief", "todo", "jobs", "contacts", "interviews", "progress", "chat", "settings", "profile")]
+    steps += [{"hash": "jobs", "open": "jobsw:applied", "wait": 200, "eval": GLUED},
+              {"hash": "contacts/copperleaf_pay_tamsin/open", "ready": "!!document.querySelector('dialog.detail[open]')", "wait": 150, "eval": GLUED},
+              {"hash": "jobs/emp~larkspur-retail/open", "ready": "!!document.querySelector('dialog.detail[open]')", "wait": 150, "eval": GLUED},
+              {"hash": "interviews/int-copperleaf-payments/open", "ready": "!!document.querySelector('dialog.detail[open]')", "wait": 150, "eval": GLUED}]
+    got = _go(run, tmp_path, steps, NARROW, clock=T)
+    pairs = [(s.get("hash"), p) for s, a in zip(steps, got["after"]) for p in a["eval"]["pairs"]]
+    names = {n for _, (n, _ok) in pairs}
+    # Where they were seen to break, and the Brief's and Contacts' runs that had no gauge at all.
+    assert {"Find jobs", "Find people", "Prepare me", "Draft the thank-you", "Draft the follow-up"} <= names, names
+    assert [x for x in pairs if not x[1][1]] == [], pairs
+    alone = [(s.get("hash"), a["eval"]["alone"]) for s, a in zip(steps, got["after"]) if a["eval"]["alone"]]
+    assert alone == [], alone
+
+
+def test_the_briefs_find_jobs_and_contacts_find_people_carry_their_gauge(run, tmp_path):
+    # The same run's button with the same gauge wherever it is offered: the Brief's Find jobs had
+    # none while Jobs' said "38 min of Claude" (the redesign's second round, 2026-11-17).
+    look = ("[...document.querySelectorAll('#main [data-k=\"bp-search\"], #main [data-k=\"head-find-jobs\"], #main [data-k=\"head-find-people\"]')]"
+            ".map((b) => [b.getAttribute('data-k'), b.getAttribute('data-wakes'), !!(b.nextElementSibling && b.nextElementSibling.matches('.cost') && b.nextElementSibling.querySelector('.gauge'))])")
+    got = _go(run, tmp_path, [{"hash": "brief", "eval": look}, {"hash": "jobs", "eval": look}, {"hash": "contacts", "eval": look}], WIDE, clock=T)
+    seen = {k: (w, g) for a in got["after"] for k, w, g in a["eval"]}
+    assert seen == {"bp-search": ("search", True), "head-find-jobs": ("search", True), "head-find-people": ("network", True)}, seen
+
+
+@pytest.mark.parametrize("size", [{"width": 1000, "height": 560}, {"width": 1000, "height": 800}, {"width": 1280, "height": 720}, {"width": 1440, "height": 900}],
+                         ids=lambda s: "%dx%d" % (s["width"], s["height"]))
+def test_the_briefs_gauges_keep_their_line_in_a_narrow_panel(run, tmp_path, size):
+    # In a 206px panel "Find jobs" and "38 min of Claude" do not fit one line, nor "Draft the
+    # thank-you" and its gauge in Today's card at 1280 by 720: the gauge's words wrap beside the
+    # button rather than going down a line on their own (the redesign's second round,
+    # 2026-11-17). In a short window the Brief's Find jobs gives way to the Jobs screen.
+    got = _go(run, tmp_path, [{"hash": "brief", "wait": 200, "eval": GLUED}], size, clock=T)
+    pairs = got["after"][0]["eval"]["pairs"]
+    assert pairs and [p for p in pairs if not p[1]] == [], pairs
+    if size["width"] >= 1440:
+        assert "Find jobs" in [n for n, _ in pairs], pairs

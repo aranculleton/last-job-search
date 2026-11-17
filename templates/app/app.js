@@ -281,13 +281,26 @@
   // me" it belonged to.
   const shownIn = (e) => !!(e && e.getClientRects().length && e.getBoundingClientRect().width > 0);
   const gaugeOf = (b) => (b && b.matches("[data-wakes]") && b.nextElementSibling && b.nextElementSibling.matches(".cost") ? b.nextElementSibling : null);
+  // Every row of pills a gauge can sit in, not only those with a More: a gauge never starts a
+  // line its button is not on (the redesign's second round, 2026-11-17).
+  const GLUE_ROWS = ":is(.card-actions, .wc-actions, .suggest-acts, .g-acts, .fix, .fb-acts, .bp-foot, .sheet-actions)";
+  const lineOf = (a, b) => { const m = (a.top + a.bottom) / 2; return m > b.top && m < b.bottom; };
   function moreFit() {
     for (const r of document.querySelectorAll(".more-wrap")) r.classList.remove("more-wrap");
     for (const m of document.querySelectorAll(".more-mate")) m.classList.remove("more-mate");
+    for (const r of document.querySelectorAll(".fold-on")) r.classList.remove("fold-on");
+    // A To do card's Done never stands alone on a line under its next step and that step's
+    // gauge: where it would, it goes under More (dueActs drew it there too, unseen till now).
+    for (const f of document.querySelectorAll(".card-actions > .fold-out")) {
+      if (!shownIn(f)) continue;
+      const q = f.getBoundingClientRect();
+      const sibs = [...f.parentElement.children].filter((k) => k !== f && shownIn(k));
+      if (sibs.length && !sibs.some((k) => lineOf(k.getBoundingClientRect(), q) || lineOf(q, k.getBoundingClientRect()))) f.parentElement.classList.add("fold-on");
+    }
     const wrap = [];
     const first = (row) => [...row.children].find(shownIn);
     // A gauge alone at a line's start: its button goes down with it.
-    for (const g of document.querySelectorAll(MORE_ROWS + " > [data-wakes] + .cost")) {
+    for (const g of document.querySelectorAll(GLUE_ROWS + " > [data-wakes] + .cost")) {
       const b = g.previousElementSibling;
       if (!shownIn(g) || !shownIn(b) || first(b.parentElement) === b) continue;
       if (g.getBoundingClientRect().top >= b.getBoundingClientRect().bottom - 1) wrap.push([b.parentElement, b]);
@@ -311,19 +324,46 @@
   // a pill gone down with More), so the two compare as the same when nothing changed (patch).
   function sepKept(probe, live) {
     if (!live) return;
+    const pt = probe.querySelectorAll(".sendtext"), lt = live.querySelectorAll(".sendtext");
+    if (pt.length && lt.length === pt.length) lt.forEach((t, i) => { if (t.classList.contains("fits")) pt[i].classList.add("fits"); });
     const ps = probe.querySelectorAll(".sep-dot, .sep-before");
     const ls = live.querySelectorAll(".sep-dot, .sep-before");
     if (ps.length && ls.length === ps.length) ps.forEach((p, i) => { for (const c of SEP_CUT) if (ls[i].classList.contains(c)) p.classList.add(c); });
-    const pr = probe.querySelectorAll(MORE_ROWS);
-    const lr = live.querySelectorAll(MORE_ROWS);
+    const pr = probe.querySelectorAll(GLUE_ROWS);
+    const lr = live.querySelectorAll(GLUE_ROWS);
     if (pr.length && lr.length === pr.length) lr.forEach((r, i) => {
+      if (r.classList.contains("fold-on")) pr[i].classList.add("fold-on");
+      [...r.children].forEach((k, j) => { if (k.classList.contains("lead-quiet") && pr[i].children[j]) pr[i].children[j].classList.add("lead-quiet"); });
       if (!r.classList.contains("more-wrap")) return;
       pr[i].classList.add("more-wrap");
       const at = [...r.children].findIndex((k) => k.classList.contains("more-mate"));
       if (at >= 0 && pr[i].children[at]) pr[i].children[at].classList.add("more-mate");
     });
   }
-  function lineFit() { moreFit(); sepFit(); }
+  // A clipped draft's Show all only where its two lines hide something: "Show all" under a
+  // two-line note hid nothing (the redesign's second round, 2026-11-17).
+  function clampFit() {
+    for (const p of document.querySelectorAll(".sendtext.fits")) p.classList.remove("fits");
+    for (const p of document.querySelectorAll(".sendtext:has(> .sendtext-in) + .read-all")) {
+      const t = p.previousElementSibling.firstElementChild;
+      if (!shownIn(t) && !t.getClientRects().length) continue;
+      const lh = parseFloat(getComputedStyle(t).lineHeight) || 24;
+      const whole = p.previousElementSibling.classList.contains("is-clamped") ? t.scrollHeight <= t.clientHeight + 1 : t.getBoundingClientRect().height <= lh * DRAFT_LINES + 1;
+      if (whole) p.previousElementSibling.classList.add("fits");
+    }
+  }
+  // A quiet button that starts a line of a card's row has its words, not its box, under the
+  // card's own words, its box in the card's padding: "I heard back" leading a row stood 17px in
+  // from them (the redesign's second round, 2026-11-17).
+  function quietFit() {
+    for (const b of document.querySelectorAll(".lead-quiet")) b.classList.remove("lead-quiet");
+    for (const b of document.querySelectorAll(".card .card-actions > .btn.quiet:not(.icon-only):not(.stop-claude)")) {
+      if (!shownIn(b)) continue;
+      const row = b.parentElement.getBoundingClientRect(), q = b.getBoundingClientRect();
+      if (Math.abs(q.left - row.left) < 2) b.classList.add("lead-quiet");
+    }
+  }
+  function lineFit() { moreFit(); quietFit(); sepFit(); clampFit(); }
   function svg(tag, attrs, kids) {
     const el = document.createElementNS("http://www.w3.org/2000/svg", tag);
     for (const k of Object.keys(attrs || {})) if (attrs[k] !== null && attrs[k] !== undefined) el.setAttribute(k, String(attrs[k]));
@@ -3274,7 +3314,9 @@
   // Clay means it is the person's move, and nothing else does (the redesign's second round,
   // 2026-11-17): "Needs your answer" in the late amber read as late, and "Ready to do" in blue
   // as running. The words say it, so every chip and state that says one is drawn so.
-  const YOUR_MOVE = /^(Needs your answer|Replied: your turn|Your turn|Ready to do|Ready to send|\d+ questions? for you)$/;
+  // "Follow-up ready" is the person's move too: in blue it read as work going on (the redesign's
+  // second round, 2026-11-17).
+  const YOUR_MOVE = /^(Needs your answer|Replied: your turn|Your turn|Ready to do|Ready to send|Follow-up ready|\d+ questions? for you)$/;
   const moveTone = (text, tone) => (YOUR_MOVE.test(txt(text).trim()) ? "you" : tone);
   function chip(text, tone) { return h("span", {class: "chip tone-" + (moveTone(text, tone) || "plain")}, text); }
   // The one control that calls off Claude's work, wherever it shows (Claude's work, a card's
@@ -5553,11 +5595,22 @@
   // step first, then the others in the order they matter; past the first two they wait under
   // More with `rest` (a way to where it lives, a lesser choice), kept there even alone, so a
   // card's row is never three pills and a link.
+  // Where the next step wakes Claude, the pill after it and its gauge has a twin under More,
+  // shown only where on its own line it would stand alone (moreFit: "Draft the follow-up · 2 min
+  // of Claude" left Done alone under them on a phone, the redesign's second round, 2026-11-17).
   function dueActs(d, ctx, face, rest, about) {
     const shown = face.filter(Boolean);
+    const fold = shown.length >= 2 && shown[0].nodeType === 1 && shown[0].hasAttribute("data-wakes") && shown[1].nodeType === 1 && shown[1].matches("button.btn") ? shown[1] : null;
+    let twin = null;
+    if (fold) {
+      fold.classList.add("fold-out");
+      twin = btn(fold.textContent, () => fold.click(), {small: true, key: (fold.getAttribute("data-k") || "fold") + ":more", aria: fold.getAttribute("aria-label")});
+      twin.classList.add("fold-twin");
+    }
     const under = shown.slice(2).concat(arr(rest).filter(Boolean));
-    return h("div", {class: "card-actions"}, shown.slice(0, 2),
-      under.length ? more("due:" + ((ctx && ctx.where) || "") + ":" + d.id, about, [h("div", {class: "more-acts"}, under)], true) : null);
+    const m = under.length || twin ? more("due:" + ((ctx && ctx.where) || "") + ":" + d.id, about, [h("div", {class: "more-acts"}, twin, under)], true) : null;
+    if (m && !under.length) m.classList.add("fold-only");
+    return h("div", {class: "card-actions"}, shown.slice(0, 2), m);
   }
   const ENOUGH = /^\s*(?:that'?s (?:all|it)|that is (?:all|it)|thats (?:all|it)|done|no more|nothing (?:more|else)|none)\s*[.!]*\s*$/i;
   function openSetupQuestion(step, saidNow) {
@@ -6740,7 +6793,9 @@
       : searching ? h("p", {class: "muted"}, "Searching now.") : toSend ? null : h("p", {class: "muted"}, "Nothing new to look at.")],
       // "All 1 new" under one job said nothing (the screen review, 2026-11-11): a count from two.
       [best.length ? navLink("jobs", best.length > 1 ? "All " + best.length + " new" : "Open Jobs") : readyRows.length > 1 ? navLink("drafts", "All " + readyRows.length + " drafts") : null,
-        !searching ? h("button", {type: "button", class: "btn link", "data-k": "bp-search", onclick: () => askSearch()}, "Find jobs") : null],
+        // The same Find jobs as Jobs' header, its gauge beside it: here it had none while
+        // Jobs said "38 min of Claude" (the redesign's second round, 2026-11-17).
+        !searching ? runBtn("search", "Find jobs", () => askSearch(), {kind: "link", key: "bp-search", wakes: "search"}) : null],
       {icon: "jobs", w: w2, ws: 4}));
     // News that matters to the search, in points (the maintainer, 2026-10-31).
     // Each point: what happened, then what to do with it, then where it is from, so a point
@@ -7896,7 +7951,10 @@
   // all the same (app.css).
   const DRAFT_LINES = 2;
   function clippedBody(m, body, tid, clamp) {
-    if (clamp && txt(m.channel) !== "inmail") {
+    if (clamp) {
+      // Every draft after the first is clipped to its two lines, a paid LinkedIn message too:
+      // clipped by its letters instead, Noor's was left four lines long (the redesign's second
+      // round, 2026-11-17). Show all shows only where the two lines hide something (clampFit).
       const long = body.length > 60 * DRAFT_LINES || body.split(/\n/).length > DRAFT_LINES;
       if (!long) return h("p", {class: "sendtext big", id: tid}, body);
       const open = bodyOpen.has(m.id);
@@ -8853,7 +8911,8 @@
       // A message from someone not on the list: one soft pill beside Find people. What Claude
       // is doing is the header's work pill and each card's own line, never a third line here.
       screenHead("contacts", "Contacts", sum, null, where, h("div", {class: "head-tools"},
-        runBtn("network", "Find people", () => askFindPeople(), {small: true, key: "head-find-people", icon: "k-search"}),
+        // A run of Claude's, its gauge beside it as Find jobs' (the redesign's second round, 2026-11-17).
+        runBtn("network", "Find people", () => askFindPeople(), {small: true, key: "head-find-people", icon: "k-search", wakes: "network"}),
         btn("Paste a message", () => openPlace("paste"), {small: true, key: "got-msg" + (where ? ":" + where : ""),
           aria: "Paste a message someone sent you"})), {quiet: true}),
       // Its box and Claude's answer right under the header, never in the Chat; a screenshot
@@ -9875,9 +9934,13 @@
       onclick: opens ? (e) => { if (e.target.closest("a, button, summary, input, select, textarea, label, details, form, .menu-panel")) return; go.click(); } : null},
       h("span", {class: "up-when" + (!u.start && !u.time ? " is-word" : "")}, upWhen(u) ? upWhenRow(u) : (u.own || u.pending ? "" : addTimeBtn(u))),
       h("span", {class: "up-main"}, h("span", {class: "up-title"}, go),
-        sub || maybe || chip ? h("span", {class: "up-sub"}, sub ? h("span", {class: "up-note"}, sub) : null, maybe, chip) : null, step,
+        sub || maybe || chip ? h("span", {class: "up-sub"}, sub ? h("span", {class: "up-note"}, sub) : null, maybe, chip) : null,
         upTimeForm(u), upDayForm(u), upTimed.has(u.id) ? stateLine(txt(obj(upTimeTarget(u)).item), "up:" + u.id) : null),
-      u.pending ? h("span", {class: "up-end"}, add) : menu ? h("span", {class: "up-end"}, menu) : null);
+      u.pending ? h("span", {class: "up-end"}, add) : menu ? h("span", {class: "up-end"}, menu) : null,
+      // Its step a row of the card's own, under the time on a phone: in the title's column
+      // "Prepare me" and its gauge did not fit, and "6 min of Claude" fell under the button
+      // (the redesign's second round, 2026-11-17).
+      step);
   }
   // A closing day's line says where its application stands in Jobs' own words: "The application is
   // drafted and not sent yet" stood beside Jobs asking "Did you apply?" about the same one (the UX
@@ -10297,7 +10360,7 @@
   // ------------------------------------------------------------------ Progress
 
   const APP_GROUP = {applied: "waiting", interview: "progress", offer: "progress", rejected: "closed", withdrawn: "closed", closed: "closed", drafted: "unsent", hired: "progress"};
-  const APP_WORD = {applied: ["Applied", "info"], interview: ["Interviewing", "ok"], offer: ["Offer", "ok"], hired: ["Hired", "ok"], rejected: ["Not this time", "plain"], withdrawn: ["Withdrawn", "plain"], closed: ["Closed", "plain"], drafted: ["Not sent yet", "warn"]};
+  const APP_WORD = {applied: ["Applied", "info"], interview: ["Interviewing", "ok"], offer: ["Offer", "ok"], hired: ["Hired", "ok"], rejected: ["Not this time", "plain"], withdrawn: ["Withdrawn", "plain"], closed: ["Closed", "plain"], drafted: ["Not sent yet", "you"]};
   const APP_LIVE = new Set(["applied", "interview", "offer", "drafted"]);
   // The last 30 days first, all time one tap away (the maintainer, 2026-10-26).
   function renderProgress(where) {
@@ -10435,7 +10498,11 @@
     // Drawn to a phone's own width there, so its labels read at the page's small size: scaled
     // down from 640 they were about 7px high (the screen review, 2026-11-11).
     const narrow = window.innerWidth < 760;
-    const W = narrow ? 340 : 640;
+    // On a computer drawn to the width it is given, its card's inside, so it fills the card at
+    // the page's own size (the redesign's second round, 2026-11-17: 640 wide it stood in half
+    // of a 1165px card).
+    const room = $("main") ? $("main").clientWidth - 42 : 640;
+    const W = narrow ? 340 : Math.max(640, Math.min(1400, Math.round(room)));
     const H = narrow ? 200 : 220;
     const L = 32 + 7 * Math.max(0, String(top).length - 3);
     const B = 34;
@@ -12118,7 +12185,8 @@
     const people = e.people.map((p) => dRow({label: txt(p.first_name) || "Someone", state: statusWord(p), sub: p.last ? "Last in touch " + fmtDayMonth(p.last) : "",
       lead: avatar(p, "av-sm"), open: () => openDetail("person", p.id), key: "emp-person:" + p.id}));
     const ivs = e.ivs.map((iv) => dRow({label: ivTitle(iv), sub: iv.when ? (isPast(iv.when) ? fmtDay(txt(iv.when)) : fmtWhen(iv.when)) : "No day yet",
-      state: iv.when && !isPast(iv.when) ? [cap1(relWhen(iv.when)), "info"] : null, open: () => openDetail("interview", iv.id), key: "emp-iv:" + iv.id}));
+      // A day away is said in the one neutral capsule, as on To do: in blue it read as work going on.
+      state: iv.when && !isPast(iv.when) ? [cap1(relWhen(iv.when)), "plain"] : null, open: () => openDetail("interview", iv.id), key: "emp-iv:" + iv.id}));
     const said = [roles.length ? plural(roles.length, "role", "roles") : "", people.length ? plural(people.length, "person", "people") : "",
       ivs.length ? plural(ivs.length, "interview", "interviews") : ""].filter(Boolean).join(" · ");
     // Whether it clears the person's bar, a state beside what the card holds, its sentence

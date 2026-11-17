@@ -132,8 +132,9 @@ def test_not_due_yet_waits_shut_under_its_one_disclosure(run, tmp_path, vp):
     assert "Not due yet (" in words and "Second interview with Harbourline Bank" not in words and "Next 7 days" not in words, words[-800:]
     got = _go(run, tmp_path, [{"hash": "todo", "eval": FOLD}], vp, clock=T)
     f = got["after"][0]["eval"]
-    # The one disclosure: its words in the ink at 600, with its chevron.
-    assert f and f["words"].startswith("Not due yet (") and f["ink"] and f["weight"] == "600" and f["chevron"] == "7px", f
+    # The one disclosure: its words in the ink at 600, with its 16px chevron (the redesign's
+    # second round, 2026-11-17: one chevron for every fold).
+    assert f and f["words"].startswith("Not due yet (") and f["ink"] and f["weight"] == "600" and f["chevron"] == "16px", f
 
 
 def _nothing_today():
@@ -262,3 +263,77 @@ def test_a_jobs_fit_on_the_brief_is_the_ring_jobs_wears(run, tmp_path):
     got = _go(run, tmp_path, [{"hash": "brief", "eval": RING}], WIDE, clock=T)
     rows = got["after"][0]["eval"]
     assert rows and all(r and r["ring"] and r["said"] and r["w"] == 28 for r in rows), rows
+
+
+CHEVRONS = r"""(() => {
+  const vis = (e) => e.getClientRects().length && e.getBoundingClientRect().width > 0;
+  const out = [];
+  for (const s of document.querySelectorAll('#main :is(.band-more > summary, .disclose, .how-fold > summary, .chart summary, .bp-all > summary, .brief-earlier > summary, .set-advanced > summary)')) {
+    if (!vis(s)) continue;
+    const a = getComputedStyle(s, '::after'), open = s.matches('.disclose') ? s.getAttribute('aria-expanded') === 'true' : s.parentElement.open;
+    out.push([s.textContent.trim().slice(0, 24), a.width, a.clipPath.slice(0, 7), a.transform, open, Math.round(s.getBoundingClientRect().height), getComputedStyle(s).fontWeight]);
+  }
+  for (const c of document.querySelectorAll('#main :is(.info-toggle, .read-all) > .chev')) {
+    if (!vis(c)) continue;
+    const t = c.parentElement, a = getComputedStyle(c);
+    out.push([t.textContent.trim().slice(0, 24), a.width, a.clipPath.slice(0, 7), a.transform, t.getAttribute('aria-expanded') === 'true', null, getComputedStyle(t).fontWeight]);
+  }
+  const drafts = [...document.querySelectorAll('#main .pdraft[open] > summary')].filter(vis).map((s) => getComputedStyle(s, '::before').content);
+  return {out, drafts};
+})()"""
+
+
+def test_every_fold_draws_the_one_chevron_right_while_shut_and_down_once_open(run, tmp_path):
+    # The redesign's second round, 2026-11-17: "Why ⌄" and "Details ⌄" were a 10px chevron, "Since
+    # your last brief" and "Advanced" pointed down while shut, "Each week" up while open, and "2
+    # jobs to confirm" drew a lopsided tick that read as "confirmed"; a chevron before every note's
+    # "Reply · LinkedIn" read as a toggle on a line that names its note.
+    # Read once each chevron has finished turning.
+    steps = [{"hash": h, "ready": "document.getAnimations().every((a) => !(a instanceof CSSTransition) || a.playState !== 'running')", "eval": CHEVRONS}
+             for h in ("todo", "jobs", "contacts", "progress", "settings", "brief")]
+    got = _go(run, tmp_path, steps, PHONE, clock=T)
+    seen = [x for a in got["after"] for x in a["eval"]["out"]]
+    assert len(seen) >= 6, seen
+    def turned(t):
+        # A quarter turn clockwise: matrix(cos, sin, -sin, cos, 0, 0) with sin 1.
+        if t == "none":
+            return 0
+        a, b = [float(x) for x in t[len("matrix("):-1].split(",")[:2]]
+        return 90 if abs(a) < 1e-3 and abs(b - 1) < 1e-3 else None
+    for words, width, clip, turn, opened, tall, weight in seen:
+        assert width == "16px" and clip == "polygon", (words, width, clip)
+        assert turned(turn) == (90 if opened else 0), (words, turn, opened)
+        assert weight == "600", (words, weight)
+        assert tall is None or tall >= 44, (words, tall)
+    assert {False, True} <= {x[4] for x in seen}, "folds seen shut and open"
+    drafts = [d for a in got["after"] for d in a["eval"]["drafts"]]
+    assert drafts and set(drafts) == {"none"}, drafts
+
+
+SENDTAP = r"""(() => [...document.querySelectorAll('#main .send-card .g-row')].filter((r) => r.getClientRects().length).map((r) => {
+  r.scrollIntoView({block: 'center'});
+  const meta = r.querySelector('.g-main > p.small'), see = r.querySelector('.g-acts > .btn:not([data-bin])'), bin = r.querySelector('.g-acts > [data-bin]');
+  const m = meta.getBoundingClientRect(), b = bin ? bin.getBoundingClientRect() : null;
+  const g = document.createRange(); g.selectNodeContents(meta);
+  const hit = document.elementFromPoint(m.left + 4, (m.top + m.bottom) / 2);
+  const binHit = b ? document.elementFromPoint((b.left + b.right) / 2, (b.top + b.bottom) / 2) : null;
+  return {name: r.querySelector('.g-name').textContent.trim(), share: r.querySelector('.g-main').getBoundingClientRect().width / r.getBoundingClientRect().width,
+    metaLines: new Set([...g.getClientRects()].map((x) => Math.round(x.top))).size, opens: hit === see, label: see.getAttribute('aria-label'),
+    words: Math.round(see.getBoundingClientRect().width), bin: b ? [Math.round(b.width), Math.round(b.height), !!binHit && binHit.closest('[data-bin]') === bin] : null};
+}))()"""
+
+
+def test_on_a_phone_a_message_row_is_one_tap_to_its_draft_and_its_names_are_whole(run, tmp_path):
+    # "See the draft" and the trash took 55% of each row on a phone, names were cut ("Wren at
+    # Fernhill Fr..."), and Wren's line wrapped to leave "reply" alone (the redesign's second
+    # round, 2026-11-17): the whole row opens the draft, a chevron at its end, the trash a
+    # finger's target at the end, the line under the name one line.
+    got = _go(run, tmp_path, [{"hash": "todo", "eval": SENDTAP}], {"width": 390, "height": 844}, clock=T)
+    rows = got["after"][0]["eval"]
+    assert len(rows) >= 5, rows
+    for r in rows:
+        # The words take the row: the name and its employer at least 60% of it (it was 45%).
+        assert r["share"] >= 0.6 and r["metaLines"] == 1, r
+        assert r["opens"] and r["label"].startswith("See the"), r
+        assert r["words"] <= 48, ("the button is its chevron, its words its name", r)
+        assert r["bin"] and r["bin"][0] >= 44 and r["bin"][1] >= 44 and r["bin"][2], r

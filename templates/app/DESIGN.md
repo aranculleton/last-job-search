@@ -105,7 +105,10 @@ next?" in its first lines, and nothing asks for a decision a default could make.
 - Every screen is the whole width, as the Brief is: its column fills the space between the
   side menu and Claude's work and narrows only as they take room (the menu's names shown, the
   work panel open) or the window does. No screen sits in a narrow column of its own; card text
-  keeps its own measure. The side menu opens on "Icons only", its own section above the
+  keeps its own measure. Settings and Your profile are the whole width too, their groups in two
+  columns where the screen holds two of 400px and one under the other where it does not, so a
+  value never sits far from its name (the redesign's second round, 2026-11-17: both were a
+  720px column of their own; layout test: whole width). The side menu opens on "Icons only", its own section above the
   screens under one rule, as Settings is below them. (layout and menu tests)
 - Claude's work has one button on every screen, the pill in the header. On a wide screen it
   opens and closes the panel on the right, as the menu's "Icons only" folds, remembered on the
@@ -126,14 +129,18 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   never behind the header (taken as 56px, its first words slid under the Refresh pill,
   2026-11-11). (overlap test: chat opens)
   The box keeps to the foot from the first look, so the first message never moves it; with no
-  messages its starters are soft buttons just above it, a heading ("What can Claude do for
-  you?") and a short intro sit in the room above them, and there is no subtitle. The box is a
+  messages its starters are soft buttons just above it, centred under a centred heading ("What
+  can Claude do for you?") and a short intro in the room above them, and there is no subtitle. The box is a
   rounded rectangle, never a pill, its hint one short line ("Ask Claude, or paste a screenshot"),
   Send a round filled button with an arrow, grey while there is nothing to send, and a message's
   words keep a reading measure of about 70 characters (the redesign's second round, 2026-11-17:
   a three-line hint made the box a block on a phone). Why: an empty Chat said "Ask anything" three ways (the screen review,
   2026-11-11), and with its box under the header the box sat mid-screen on a phone and jumped to
-  the foot with the first message (the redesign, 2026-11-16). (empty chat tests)
+  the foot with the first message (the redesign, 2026-11-16). (empty chat tests) On a phone the
+  Chat reaches the tab bar exactly, its box above it, and the page's foot ("Private to you")
+  starts under the first screen, never behind the tab bar (the redesign's second round,
+  2026-11-17: an empty Chat ran 945px in an 844px window, its foot behind the tab bar; tired
+  person test: the Chat footer).
 - The frame is calm. On a phone the tab bar is the card colour with a hairline on top: the tab
   you are on has a soft clay capsule behind its icon, ringed in clay, its icon in clay and its
   name in ink at 600, the others grey at 400; To do's count is a clay badge at its icon's top
@@ -141,9 +148,11 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   on in the side menu is the same soft clay fill ringed in clay, its name at 600 and its icon
   in clay, never a bar down its side; "Icons only" is a quiet grey control. A chosen place is
   never its fill alone: the fill is 1.1:1 from the page, so its ring reaches 3:1 (WCAG 1.4.11,
-  1.4.1 in Icons only; the accessibility review, 2026-11-17). The phone's header has one title
+  1.4.1 in Icons only; the accessibility review, 2026-11-17), the gear's on Settings and your
+  profile included, where a phone marks no tab. The phone's header has one title
   (on the Brief its greeting) and at its right the gear and the Chat button, which carries
-  Claude's light as a small dot on its icon's corner, its state said in its name; on a computer
+  Claude's light as a small dot on its icon's corner, its state said in its name, a light that is
+  a ring keeping its ring under the button's halo on the Chat screen too; on a computer
   the light keeps its own labelled place beside the Chat button. On a phone a sheet rises
   from the foot with round top corners and a small grabber; a sheet and a menu float on the
   overlay colour with a hairline and the floating shadow, a menu's rows a finger's height (the redesign, 2026-11-16: a grey bar with a red line on top, a dot after the title
@@ -196,7 +205,9 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   text spacing). Every panel is a card, News and Your progress too (on the page itself they
   read as unfinished); a number's tile is the well's paper in light and raised in the dark,
   where the well vanished; Today is a clay wash in light and, in the dark, a card like the rest
-  under a clay strip (a whole panel of clay read as a muddy block). Today in Coming up's week is
+  under a clay strip (a whole panel of clay read as a muddy block); stretched, Today's white
+  card takes the room and its words start at its top, never at its middle with 60px of nothing
+  over them (the redesign's second round, 2026-11-17). Today in Coming up's week is
   a soft clay fill with its day and number in clay, never a ring, which read as a key's focus
   stuck there (the redesign's second round, 2026-11-17). (fit tests, room tests, calm test)
 - **Waiting on you never says again who Today or Next has**: a person on the messages card in
@@ -230,7 +241,10 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   holds (a week of 400 drew 42 numbers on top of each other, 2026-11-11). Progress leads with what the person has done so far ("14 applied, 3 interviews so far."), this
   week's own work after it once there is some ("This week: 5 applied, 3 messages sent."), never
   "This week: 0 applied." over fourteen applications (the UX review of the redesign, 2026-11-17),
-  and its every application sits in a card on a computer as on a phone. It says the same, its "Each week" card open on its chart, every fold in it
+  and its every application sits in a card on a computer as on a phone, its columns' words, the
+  headings' and the hairlines starting at one line 16px in, and the weekly chart drawn to its
+  card's width, at most 220px tall (the redesign's second round, 2026-11-17: three starting
+  lines, and a chart 550px wide in a 1165px card; progress test: columns). It says the same, its "Each week" card open on its chart, every fold in it
   with the chevron Settings' rows use (folded, it read as a heading over an empty box, the
   review, 2026-11-10). (the maintainer, 2026-11-10: "not make it look like im
   doing nothing"; progress glance tests)
@@ -271,11 +285,14 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   line of facts; its Next the one task in its own words ("Send Tamsin your CV", who asked and
   when after it) with its one filled button and, where the task has one, its second step beside
   it (I sent it); where it stands as four steps on one thread (Written to, Replied, Talked,
-  Referral), an 8px dot a step joined by a 2px hairline, green once done and the next one ringed
-  in clay, its name under it and said in words to a screen reader, and the steps follow the
-  record: a referral waiting on what the person was asked for is the ringed step, "Waiting on
-  your CV" under it, until I sent it (four green dots read as finished while Next still said to
-  send the CV, the redesign's second round, 2026-11-17); then They replied where it can
+  Referral), an 8px dot a step joined by a 2px hairline, filled green once done with a green join
+  after it and its name in the ink at 600, the next one ringed in clay, one not yet reached a
+  hollow ring with its name grey at 400 (done was told from not yet by colour alone, and forced
+  colours drew all four alike: the accessibility review, 2026-11-17), its name under it and said
+  in words to a screen reader, and the steps follow the record: a referral waiting on what the
+  person was asked for is the ringed step, "Waiting on your CV" under it, until I sent it (four
+  green dots read as finished while Next still said to send the CV, the redesign's second round,
+  2026-11-17); then They replied where it can
   be said, and one soft "Update" with its chevron opening their rarer updates as a menu, a
   finger's height a row on the overlay (a call booked, the referral is over, they sent me a job),
   "Don't contact again" last and in red. Escape closes the menu, never the card under it. Why:
@@ -341,7 +358,10 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   doing (the UX review of the redesign, 2026-11-17). (jobs page tests, jobs fold test)
 - Applied is ordered by what comes next, the nearest first: an interview by its day, then a
   follow-up by its day, then the rest newest first; "I heard back" is a quiet control beside a
-  card's next step. Why: the nearest interview (Wed 28 Oct) stood under a later one (Wed 4 Nov),
+  card's next step, its words under the card's own where it leads a line and 16px from a gauge
+  before it (a quiet button leading a line was 17px in from the card's words, and after "6 min
+  of Claude" read as the gauge's words: the redesign's second round, 2026-11-17; applied tests:
+  I heard back). Why: the nearest interview (Wed 28 Oct) stood under a later one (Wed 4 Nov),
   and five cards each ended in an equal grey "I heard back" (the UX review of the redesign,
   2026-11-17). An application owing a follow-up says so in clay, "Follow up by Wed 28 Oct"
   ("Follow up now" once its day has come), and "Follow-up ready" only once a follow-up is
@@ -568,7 +588,11 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   them giving way (at a tablet's width the trash fell under its button, 2026-11-11).
   "Messages to send (7)" says in one short line under its title what went this week ("3 sent
   this week."), never a sum to do against a weekly figure and credits left; its time in the
-  calendar, "Set a time to send", waits under its More.
+  calendar, "Set a time to send", waits under its More. On a phone (480px and under) each row is
+  one tap to its draft, a 16px chevron at its end in place of "See the draft" (its name still
+  "See the draft to Juno"), its trash an icon at the row's end with a finger's target, and the
+  line under the name one line, cut short with "..." (the redesign's second round, 2026-11-17:
+  the button and the trash took 55% of each row and cut the names short; calm test: one tap).
   (layout 8, one-card tests, room test, overlap test: alone)
 - One "?" a card at most, after the last word of its line, and no more than three on a first
   screen. (design test, budget test)
@@ -624,9 +648,13 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   message on the card, "They replied" is the soft pill beside I sent it, and waits under More
   only where Open their profile already stands there (the redesign, 2026-11-16: under More it
   was not found when they wrote again before the message went). Copy is the draft's own tool,
-  never counted against the row's two soft pills. A long draft after the first shows its first
-  two lines and "Show all", which opens it in place (Copy copies every word); the first draft
-  on the list is drawn whole (the redesign, 2026-11-16: ten drafts drawn whole were a wall of
+  never counted against the row's two soft pills. Every long draft after the first, a paid
+  LinkedIn message too, shows its first two lines, with "Show all" only where they hide something, which opens it in place (Copy
+  copies every word); the first draft on the list is drawn whole. An email's subject is one run
+  of words, "Subject:" and the words wrapping as a sentence does, its Copy at the run's end (the
+  redesign's second round, 2026-11-17: a paid message was left four lines long, a two-line one
+  offered Show all over nothing, and a wrapped subject hung in a column of its own; one-family test, room
+  test: subject) (the redesign, 2026-11-16: ten drafts drawn whole were a wall of
   words; its second round, 2026-11-17: Copy filled on the first card and outlined on the rest,
   1000px from I sent it on a laptop, and four lines a draft still 3350px of a phone).
   Why: five buttons a card read as five jobs, and three dates a card as none. Floated into
@@ -743,9 +771,13 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   the accent fill with its own ink, semibold, once a screen (its first); every other card's
   next step is the soft pill in the semibold weight. Every other action beside it is the soft
   pill (the raised fill with no edge, its words in the ink at 600), and More is a soft pill too:
-  one soft look, and in a sunk box (a question, a suggestion, a document well) the colour of
-  what floats, lifted by the card's shadow, never an outlined pill (the redesign's second round,
-  2026-11-17). The quiet look is its words alone, the raised fill under a pointer, never
+  one soft look, and in a sunk box (a question, a suggestion, a document well) the well's own
+  button colour (`--well-btn`: white lifted by the card's shadow in the light, raised in the
+  dark), never an outlined pill, "Add Power BI" and Dismiss as "Yes, I have" and No; on the clay
+  Next of a sheet the card colour, lifted; on a tip, a pin offer and your resume's own card,
+  which sit on the page in the track's colour, the chosen segment's thumb colour (the redesign's
+  second round, 2026-11-17: "Add Power BI" kept an edge of its own, More vanished on your
+  resume's card and "I sent it" was a muddy grey on the clay). The quiet look is its words alone, the raised fill under a pointer, never
   underlined. At
   most three before More: the next step and one or two others; rarer actions go under More,
   and a duplicate or a dead button goes. Why: text buttons beside pills read as clutter and
@@ -782,16 +814,25 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   which read as calling something off. (the maintainer, 2026-11-05)
 - The shared parts are drawn once and look the same wherever they are (the redesign's second
   round, 2026-11-17). A **segmented control** (`.segctl`, a view switch and a setting's short
-  choice alike) is a sunk track at radius 10 with 2px round its options, the chosen one the thumb
-  colour ringed in the control edge and lifted by the card's shadow, its words in the ink, the
-  others grey, all 600, 36px tall with a mouse and 44 on touch, a count after its name ("To
-  apply · 5"). A **search** is a field at radius 10 with its magnifier inside at the left, 40px
+  choice alike) is a track at radius 10 with 2px round its options, the chosen one the thumb
+  colour lifted by the card's shadow with no edge, its words in the ink at 600, the others grey
+  at 400, 36px tall with a mouse and 44 on touch, a count after its name ("To apply · 5"). Its
+  track is the track colour (`--seg-track`: sunk in the light, raised in the dark), as is a tip,
+  a pin offer and your resume's own card on the page: a sunk track vanished into the dark page
+  and "Applied" floated as loose words beside a lone thumb (the redesign's second round,
+  2026-11-17). A **search** is a field at radius 10 with its magnifier inside at the left, 40px
   tall (44 on touch), never a capsule. **Filter** is a soft button with the sliders, its count of
   filters on a small clay badge. The **"?"** is one 20px i in a circle in the quiet grey, no ring
   of its own, 4px after the last word, the raised fill under a pointer, a 44px target on touch.
   A **fold** (`.band-more`, `.disclose`) is a quiet row, its words at 14/600 in the ink, a 16px
   chevron pointing right while folded and down once open, as a Settings row's is, 44px tall on
-  touch. A **section's header** (`.group`) is a small label, 13/18 at 600 in the quiet grey, 32px
+  touch. Every fold draws that one chevron, after its words: a card's "Why" and "Details", a
+  note's "Show all", "Since your last brief", "How the app runs", Progress's "Each week", LinkedIn's
+  "How to get it" and "2 jobs to confirm", and a row that opens a page (Your profile, Help, a
+  card's rows) draws it in the quiet grey, never a thin "›" beside it; a line that only names what is under it (a note's
+  "Reply · LinkedIn" while the note shows) has none (the redesign's second round, 2026-11-17:
+  some pointed down while shut, one up while open, a 10px one beside 16px ones, and a lopsided
+  tick read as "confirmed"; disclosure tests). A **section's header** (`.group`) is a small label, 13/18 at 600 in the quiet grey, 32px
   from the group before it and 8 to what it heads. The **way back** (`backBtn`) is a chevron and
   the place's name at 15/600 in the ink, never underlined, above the title on a phone and a
   computer: Your profile goes back to Settings, Progress to the Brief, a card's sheet to where it
@@ -818,7 +859,22 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   More the pair goes down with it; where the pair fills a line by itself, More takes the next
   line by itself, the one place More stands alone ("6 min of Claude" went down with More, under
   the "Prepare me" it belonged to, the redesign's second round, 2026-11-17; calm test, overlap
-  test: alone). Its buttons are one row of pills that wraps only at the
+  test: alone). On a phone the pair keeps one line wherever it is (every row of pills, the
+  Brief's Today, a sheet): a button that wakes Claude is drawn at the phone's 12px a side with
+  its gauge 6px from it at 420px and under; Jobs' and Contacts' header put Find jobs (Find
+  people) and its gauge on a row of their own, the other buttons on the row under them; Coming
+  up's step (Prepare me) is a row of the card's own, from under the time; Jobs' header on a
+  phone is two rows under its line: Find jobs and its gauge, then "Add a job" with when it
+  searched beside it, your CV's own button going there since Jobs' card under the list and Your
+  profile both have it (the first job stayed within the first screen's promise, layout test 1);
+  and a To do card's
+  Done, where on its line it would stand alone under its next step and that step's gauge, goes
+  under More. In a narrow Brief panel (Today's card, the Jobs panel's foot) the gauge's words
+  wrap beside the button, and the button's own words only where even then the pair would not
+  fit; in a short window the Brief's Find jobs gives way first, its gauge with it, to the Jobs
+  screen where it leads. Why: "38 min of Claude" alone under "Find jobs · Add a job · Your CV" read as the
+  cost of all three, and Done stood alone under "Draft the follow-up · 2 min of Claude" (the
+  redesign's second round, 2026-11-17; gauge test: phone). Its buttons are one row of pills that wraps only at the
   panel's width, never a line a kind; a note or a link in a sentence follows them. Why: opened
   inside the row it took the whole width and dropped below "I sent it", and a row a kind left
   one button alone on a line (the maintainer, 2026-11-05). (More test)
@@ -854,7 +910,8 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   file under it, "Goes with it: Your resume (PDF)", saved in a tap to attach; the engine's
   `sends` says which (the maintainer, 2026-11-05: "it would be great if the actual document
   was linked there").
-- Every control that wakes Claude carries the gauge beside it: the same bars, size and place,
+- Every control that wakes Claude carries the gauge beside it, wherever it is offered (the
+  Brief's Find jobs as Jobs', Contacts' Find people: gauge test, the same run's button): the same bars, size and place,
   with its minutes shown as Claude's ("2 min of Claude": a bare "38 min" beside Find jobs read
   as a wait, the review, 2026-11-10), and under the pointer it says it in words that can be
   hovered and go with Escape, read aloud with the gauge, with no keyboard stop of their own
@@ -870,9 +927,12 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
 - Text on a pill reads at 4.5:1 in both looks, and a soft pill is told by its fill and its
   words, with no edge: WCAG 1.4.11 asks no edge of a button its words name, and an edge of its
   own made a second, outlined family (the redesign's second round, 2026-11-17). A chosen or
-  pressed state is never its fill alone: the chosen segment, the chosen place in the side menu
-  and the phone's chosen tab each carry a ring that reaches 3:1 (the accessibility review,
-  2026-11-17); every control shows its focus ring. Words on the soft accent (an answer's box,
+  pressed state is never its fill alone: the chosen place in the side menu and the phone's
+  chosen tab each carry a ring that reaches 3:1 (the accessibility review, 2026-11-17), and the
+  chosen segment is told by its words as well as its thumb, in the ink at 600 against the
+  others' grey at 400, with no edge (an edge of its own read as a second, outlined family, the
+  redesign's second round, 2026-11-17), forced colours drawing it in Highlight; every control
+  shows its focus ring. Words on the soft accent (an answer's box,
   your own message in a chat) are in the ink, as they were when the muted grey was 3.56:1 there
   in the dark (2026-11-11).
   Every word on every screen is checked in both looks (overlap test: faint). (colour tests, layout 14)
@@ -911,8 +971,12 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
 - Colours are the tokens in `palettes.py`, never a raw value. Light: warm near-white paper and
   white cards, the filled button the text colour with white on it. Dark: warm near-black, a card
   a step lighter. Clay means it is the person's move and nothing else: "Needs your answer",
-  "Your turn", "Ready to do" and "Ready to send" are clay chips (the soft clay with clay words, app.js `moveTone`),
-  never the late amber or the running blue; blue is for work in progress and for focus. Behind a
+  "Your turn", "Ready to do", "Ready to send", "Follow-up ready" and an application not sent yet
+  are clay chips (the soft clay with clay words, app.js `moveTone`),
+  never the late amber or the running blue; blue is for work in progress and for focus. A day
+  away ("In 3 days", "Tomorrow") is one neutral capsule wherever it is said, and the Brief's week
+  strip draws a day's dots in the clay ink (the redesign's second round, 2026-11-17: "In 3 days"
+  was blue on an employer's card and grey on To do, and the strip's dots blue). Behind a
   sheet the page steps back under the scrim, a warm near-black at 45% in both looks. (colour
   tests)
 - A character count is said only within 30 letters of its limit or over it, as what is left

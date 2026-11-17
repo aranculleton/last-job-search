@@ -139,13 +139,15 @@ def test_a_draft_is_downloaded_marked_applied_and_its_follow_up_is_done_from_to_
         {"hash": "drafts", "more": "app-ellerwick-insight", "click": "Get both files: Morgan_Ellis_CV_Ellerwick.pdf and Morgan_Ellis_Cover_Letter_Ellerwick.pdf", "calls": "downloads"},
         {"click": "I have applied: Ellerwick Trust, Research Analyst", "receipts": True, "view": {"ready": nxt["ready"], "due": nxt["due"]}},
         {"hash": "todo", "read": '[data-item="due-ellerwick-follow"]'},
-        {"click": "Done: Follow up with Ellerwick Trust"},
+        # On a phone its Done waits under More, where beside "Draft the follow-up" and its gauge
+        # it would stand alone on a line (the redesign's second round, 2026-11-17).
+        {"click": "Done: Follow up with Ellerwick Trust", **({"more": "due-ellerwick-follow"} if vp is PHONE else {})},
     ], vp)
     assert [c["filename"] for c in got["after"][0]["calls"]] == ["Morgan_Ellis_Ellerwick_Trust_CV.pdf", "Morgan_Ellis_Ellerwick_Trust_Cover_Letter.pdf"]  # named for the reader since 2026-11-05; the employer before the document since 2026-11-06
     a = _one(got, "ready.applied")
     assert a["value"]["on"] and a["rev_seen"] == "a1"
     row = got["after"][2]["text"]
-    assert "Draft the follow-up" in row and "Done" in row, row
+    assert "Draft the follow-up" in row and ("More" in row if vp is PHONE else "Done" in row), row
     d = _one(got, "due.done")
     assert d["item"] == "due-ellerwick-follow" and d["rev_seen"] == "d9"
 

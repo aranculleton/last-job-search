@@ -399,3 +399,19 @@ def test_a_refused_tap_with_nothing_asked_still_has_a_way_out(run, tmp_path):
     kind, text, one_bin, has_date = card
     assert kind != "Setup" and "2026-10-28" not in text and "28 Oct" in text, card
     assert one_bin and has_date and "in Chat" not in text, card
+
+
+WIDTHS = r"""(() => { const s = document.querySelector('#main > .sec'); const kids = [...document.querySelectorAll('#main .sec.settings-page > .set-group, #main .prof-grid > *')].filter((e) => e.getClientRects().length);
+  return {sec: Math.round(s.getBoundingClientRect().width), main: Math.round(document.getElementById('main').getBoundingClientRect().width),
+    lefts: [...new Set(kids.map((e) => Math.round(e.getBoundingClientRect().left)))], widest: Math.max(...kids.map((e) => Math.round(e.getBoundingClientRect().width)))}; })()"""
+
+
+def test_settings_and_your_profile_are_the_whole_width_their_groups_in_two_columns(run, tmp_path):
+    # Every screen is the whole width (DESIGN.md): Settings and Your profile were the only 720px
+    # columns (the redesign's second round, 2026-11-17). On a wide screen they take the column
+    # every screen takes, their groups in two columns of a reading measure.
+    got = _go(run, tmp_path, [{"hash": "jobs", "eval": WIDTHS}, {"hash": "settings", "eval": WIDTHS}, {"hash": "profile", "eval": WIDTHS}], WIDE, clock=T)
+    jobs, settings, profile = (a["eval"] for a in got["after"])
+    for name, r in (("settings", settings), ("profile", profile)):
+        assert abs(r["sec"] - jobs["sec"]) <= 1, (name, r, jobs)
+        assert len(r["lefts"]) == 2 and r["widest"] <= r["sec"] // 2, (name, r)

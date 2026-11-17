@@ -42,6 +42,11 @@ PROBE = r"""(() => {
     const hs = [];
     look.forEach((c, i) => {
       const s = getComputedStyle(c);
+      // On a phone a message to send is one tap to its draft, its button the row's chevron
+      // (DESIGN.md, To do: the redesign's second round, 2026-11-17): its tap must be the whole
+      // row, else it is held to a pill like any other.
+      const row = c.closest('.send-card .g-row'), after = getComputedStyle(c, '::after');
+      if (row && innerWidth <= 480 && after.position === 'absolute' && s.position === 'static' && s.fontSize === '0px') { hs.push(Math.round(c.getBoundingClientRect().height)); return; }
       const flat = s.backgroundColor === 'rgba(0, 0, 0, 0)' || s.backgroundColor === 'transparent';
       if (s.textDecorationLine !== 'none' || parseFloat(s.borderTopLeftRadius) < 12 || flat) bad.push([where, 'not a pill', name(ctrls[i])]);
       hs.push(Math.round(c.getBoundingClientRect().height));

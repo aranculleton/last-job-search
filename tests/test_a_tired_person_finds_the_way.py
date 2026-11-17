@@ -220,7 +220,8 @@ def test_the_bells_sheet_takes_a_break_through_the_same_sheet_settings_opens(run
 
 
 FOOT = ("(() => { const f = document.querySelector('#foot .foot-line').getBoundingClientRect(); const t = document.querySelector('.tabs').getBoundingClientRect();"
-        " return {top: Math.round(f.top), bottom: Math.round(f.bottom), tabs: Math.round(t.top)}; })()")
+        " const b = document.querySelector('.talk-form').getBoundingClientRect();"
+        " return {top: Math.round(f.top), bottom: Math.round(f.bottom), tabs: Math.round(t.top), vh: innerHeight, box: Math.round(b.bottom)}; })()")
 
 
 def test_the_chat_footer_never_sits_half_under_the_tab_bar(run, tmp_path):
@@ -230,6 +231,10 @@ def test_the_chat_footer_never_sits_half_under_the_tab_bar(run, tmp_path):
     ], PHONE, clock=T)
     top, end = got["after"][0]["eval"], got["after"][1]["eval"]
     assert top["top"] >= top["tabs"], ("on the first screen the footer is below the tab bar, never peeking out of it", top)
+    # Nor behind it: the Chat reaches the tab bar and its foot starts under the first screen,
+    # its box above the tab bar (the redesign's second round, 2026-11-17: "Private to you" sat
+    # behind the tab bar on an empty Chat and its tail peeked out).
+    assert top["top"] >= top["vh"] and top["box"] <= top["tabs"], top
     assert end["bottom"] <= end["tabs"], ("scrolled down, it is read above the tab bar", end)
 
 

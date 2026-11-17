@@ -365,7 +365,7 @@ def test_a_control_standing_on_its_own_is_a_pill_never_underlined_words(run, tmp
 WEEKS = r"""(() => { const c = document.querySelector('#main details.chart'); if (!c) return null;
   const svg = c.querySelector('svg.weeks-svg');
   return {open: c.open, chart: svg && svg.getClientRects().length ? Math.round(svg.getBoundingClientRect().height) : 0,
-          chevrons: [...c.querySelectorAll('summary')].map((s) => getComputedStyle(s, '::after').content !== 'none' && getComputedStyle(s, '::after').borderRightStyle === 'solid')}; })()"""
+          chevrons: [...c.querySelectorAll('summary')].map((s) => getComputedStyle(s, '::after').content !== 'none' && getComputedStyle(s, '::after').clipPath.startsWith('polygon'))}; })()"""
 
 
 def test_the_weeks_card_on_progress_shows_its_chart_and_says_it_folds(run, tmp_path, vp):
@@ -654,17 +654,27 @@ def test_an_interviews_card_on_a_phone_keeps_its_pill_on_the_when_line_and_its_t
 
 
 SUBJECT = ("[...document.querySelectorAll('#main .pdraft > .subject')].filter((p) => p.getClientRects().length).map((p) => {"
-           " const g = document.createRange(); g.selectNodeContents(p.children[1]); const line = g.getClientRects()[0];"
+           " const g = document.createRange(); g.selectNodeContents(p.children[1]); const lines = [...g.getClientRects()], line = lines[lines.length - 1];"
+           " const k = document.createRange(); k.selectNodeContents(p.children[0]); const label = k.getClientRects()[0];"
            " const b = p.querySelector('.btn').getBoundingClientRect();"
-           " return {words: p.children[1].textContent, off: Math.round(((b.top + b.bottom) / 2 - (line.top + line.bottom) / 2) * 10) / 10}; })")
+           " return {words: p.children[1].textContent, off: Math.round(((b.top + b.bottom) / 2 - (line.top + line.bottom) / 2) * 10) / 10,"
+           " after: Math.round(b.left - line.right), lines: new Set(lines.map((r) => Math.round(r.top))).size,"
+           " hang: lines.length ? Math.round(Math.min(...lines.map((r) => r.left)) - label.left) : null,"
+           " gap: lines.length > 1 ? Math.round(lines[1].top - lines[0].bottom) : 0}; })")
 
 
 def test_an_email_subjects_copy_sits_on_its_line(run, tmp_path, vp):
     # The README picture of 4.15.0: the subject's Copy sat 7px below "Subject: Thank you for
-    # Thursday", its top lined up with the words' top and its height hanging under them.
+    # Thursday", its top lined up with the words' top and its height hanging under them. And the
+    # subject is one run of words (the redesign's second round, 2026-11-17): in a column of its
+    # own a wrapped subject hung under its first word with 30px between its lines, so its Copy
+    # is at the run's end, in the middle of its last line, and a wrapped line starts under
+    # "Subject:".
     got = _eval(run, tmp_path, "contacts", SUBJECT, vp)
     assert got, "an email draft with a subject on Contacts"
     assert all(abs(s["off"]) <= 2 for s in got), got
+    assert all(0 <= s["after"] <= 12 for s in got), got
+    assert all(s["hang"] <= 0 and s["gap"] <= 8 for s in got if s["lines"] > 1), got
 
 
 NARROW_WHY = r"""(() => Array.from({length: 161}, (_, i) => 140 + i).flatMap((w) => [...document.querySelectorAll('#main .card.job .facts')].map((f) => {

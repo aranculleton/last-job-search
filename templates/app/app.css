@@ -159,7 +159,9 @@ bdi { unicode-bidi: isolate; }
 .top-in > .screen.is-home { display: none; }
 .gear { display: inline-grid; place-items: center; flex: none; width: var(--target); height: var(--target); border-radius: 50%; color: var(--ink); }
 @media (hover: hover) { .gear:hover { background: var(--raised); } }
-.gear[aria-current="page"] { background: var(--raised); color: var(--accent); }
+/* "You are here" as the phone's chosen tab is: the soft clay with a clay ring, never the raised
+   fill alone, which was its hover too (the accessibility review, 2026-11-17: 1.11:1). */
+.gear[aria-current="page"] { background: var(--accent-soft); color: var(--mark); box-shadow: inset 0 0 0 1px var(--mark); }
 
 
 .main { grid-area: main; min-width: 0; outline: none; padding-top: 8px; }
@@ -304,6 +306,9 @@ bdi { unicode-bidi: isolate; }
 .group { font-size: var(--t-sm); line-height: 18px; font-weight: 600; color: var(--muted); letter-spacing: 0.01em; }
 :is(.band, .help-band) > h3.group:first-child { margin-bottom: -8px; }
 .sec > :is(.band, .help-band, .set-group, .set-asks):not(:first-child) { margin-top: 12px; }
+/* Under "Not due yet", "Later" keeps the room above it every section header has: 12px from the
+   card over it read as one of that card's lines (the redesign's second round, 2026-11-17). */
+.todo-rest > .band:not(:first-child) { margin-top: 24px; }
 .d-block > h3.group:first-child { margin-bottom: -4px; }
 .band, .help-band { display: grid; gap: 16px; }
 .todo-group { display: grid; gap: 12px; }
@@ -378,12 +383,23 @@ bdi { unicode-bidi: isolate; }
 .top-end { flex-shrink: 0; max-width: 100%; }
 .top-end > .state-word { white-space: normal; }
 .head-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-/* On a phone a screen's own buttons keep one row, and what a run costs goes on a short line of
-   its own under them, under the button it belongs to: Find jobs, its cost and Add a job took
-   two 44px rows and pushed the first job below its first screen (2026-11-11). */
+/* On a phone the button that wakes Claude and its gauge are one row of their own, the screen's
+   other buttons on the row under them: the gauge alone on a line of its own under "Find jobs ·
+   Add a job · Your CV" read as the cost of all three (the redesign's second round, 2026-11-17;
+   DESIGN.md, Buttons: a gauge is one with its button). */
 @media (max-width: 759px) {
-  .summary .head-tools { row-gap: 2px; }
-  .summary .head-tools > .cost { order: 9; flex-basis: 100%; }
+  .summary .head-tools { row-gap: 4px; }
+  .summary .head-tools:has(> [data-wakes] + .cost)::after { content: ""; flex-basis: 100%; height: 0; order: 1; }
+  .summary .head-tools > [data-wakes] + .cost ~ * { order: 2; }
+  /* Jobs' header in two rows, not four: Find jobs and its gauge, then "Add a job you found" with
+     when it searched beside it; your CV is on Jobs' own card under the list and in Your profile,
+     so the header's goes. With the summary on two lines, four rows put the first job past the
+     first screen's promise (the redesign's second round, 2026-11-17). */
+  .summary.with-tool:has(> .head-tools > [data-k="add-job"]) { flex-wrap: wrap; align-items: center; column-gap: 8px; row-gap: 4px; }
+  .summary.with-tool:has(> .head-tools > [data-k="add-job"]) > :is(.sum-words, .head-tools) { display: contents; }
+  .summary.with-tool:has(> .head-tools > [data-k="add-job"]) > .sum-words > * { flex: 1 0 100%; }
+  .summary.with-tool:has(> .head-tools > [data-k="add-job"]) > .sum-words > p.sum-small { flex: 0 1 auto; order: 3; }
+  .summary.with-tool > .head-tools > [data-k="jobs-resume"] { display: none; }
   /* Semibold, a phone's three header buttons keep one row at 12px a side (the redesign). */
   .summary .head-tools > .btn:not(.icon-only) { padding-inline: 12px; }
 }
@@ -475,7 +491,15 @@ bdi { unicode-bidi: isolate; }
 /* A suggestion's Dismiss as well as its Use: both one soft look in its box (the redesign's
    second round, 2026-11-17: "Add Power BI" and "Dismiss" were two looks side by side). */
 :is(.question, .suggest, .ask-box, .well) :is(.btn.secondary, .btn.answer, .card-actions > .btn:not(.primary), .fix > .btn:not(.primary), .opts > .btn:not(.primary), .suggest-acts > .btn:not(.primary):not(.stop-claude)) {
-  background: var(--overlay); border-color: transparent; box-shadow: var(--shadow-card); }
+  background: var(--well-btn); border-color: transparent; box-shadow: var(--shadow-card); }
+/* On the clay Next of a person's or an application's sheet a soft button is the card colour,
+   lifted in the light and a step under the clay in the dark: the raised grey was muddy there. */
+.d-next-block :is(.btn.secondary, .card-actions > .btn:not(.primary), .card-actions > details.more > .more-btn) { background: var(--surface); border-color: transparent; box-shadow: var(--shadow-card); }
+@media (hover: hover) { .d-next-block :is(.btn.secondary, .card-actions > .btn:not(.primary), .card-actions > details.more > .more-btn):hover { background: var(--raised-hover); } }
+/* A tip, a pin offer and your resume's own card sit on the page, not in a card: their well is
+   the track's colour (raised in the dark, where a sunk one vanished into the page), and a soft
+   button on it is the thumb's, lifted as the chosen segment is. */
+:is(.bp-tip, .pin-offer, .quiet-card) :is(.btn.secondary, .card-actions > .btn:not(.primary):not(.icon-only), .card-actions > details.more > .more-btn) { background: var(--thumb); border-color: transparent; box-shadow: var(--shadow-card); }
 @media (hover: hover) { :is(.question, .suggest, .ask-box, .well) :is(.btn.secondary, .btn.answer, .card-actions > .btn:not(.primary), .fix > .btn:not(.primary), .opts > .btn:not(.primary), .suggest-acts > .btn:not(.primary):not(.stop-claude)):hover { background: var(--raised-hover); } }
 .fbar, .seg { display: inline-flex; align-items: center; gap: 4px; min-height: 38px; font-weight: 600; font-size: var(--t-sm); }
 .filters { display: grid; gap: 12px; min-width: 0; }
@@ -653,7 +677,7 @@ details.more.split[open] { flex-basis: auto; }
 :is(.card.job, .card.app) .suggest { padding: 8px 12px; gap: 4px; }
 :is(.card.job, .card.app) .suggest-text { font-size: var(--t-sm); }
 :is(.card.job, .card.app) .suggest-acts { gap: 4px 12px; }
-:is(.card.job, .card.app) .suggest .btn.secondary { background: var(--overlay); border-color: transparent; box-shadow: var(--shadow-card); }
+:is(.card.job, .card.app) .suggest .btn.secondary { background: var(--well-btn); border-color: transparent; box-shadow: var(--shadow-card); }
 .filtered { border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); padding: 4px 16px 12px; }
 .wc-more summary { cursor: pointer; font-size: var(--t-sm); font-weight: 600; color: var(--muted); min-height: 36px; display: flex; align-items: center; }
 .filtered summary, .gone summary, details.send summary, .chart summary, .recent summary, .brief summary {
@@ -712,10 +736,11 @@ details.more.split[open] { flex-basis: auto; }
 /* The "?" goes with the last word of its line, never onto a line of its own (a word joiner
    after the words, which no line breaks after). */
 :is(.suggest, .alert, .question) .hint-line > p::after { content: "\2060"; }
-/* A suggestion's pills are one kind in its grey box: each the card's own colour with the 3:1
-   edge, so "Add Power BI" and Dismiss read as a pair, never one white among grey ones. */
-.suggest :is(.suggest-acts, .fix) > .btn:not(.icon-only):not(.primary) { background: var(--surface); border-color: var(--line-strong); color: var(--ink); }
-@media (hover: hover) { .suggest :is(.suggest-acts, .fix) > .btn:not(.icon-only):not(.primary):hover { background: var(--raised); border-color: var(--line-strong); } }
+/* A suggestion's pills are one kind in its grey box, the well's soft button with no edge, so
+   "Add Power BI" and Dismiss read as "Yes, I have" and "No" do (the redesign's second round,
+   2026-11-17: an edge of their own made a third, outlined look). */
+.suggest :is(.suggest-acts, .fix) > .btn:not(.icon-only):not(.primary) { background: var(--well-btn); border-color: transparent; box-shadow: var(--shadow-card); color: var(--ink); }
+@media (hover: hover) { .suggest :is(.suggest-acts, .fix) > .btn:not(.icon-only):not(.primary):hover { background: var(--raised-hover); border-color: transparent; } }
 /* What was checked, said as the documents themselves: on the card made for a person a tick and
    its words; on a draft a row a document in a soft well ("CV", "1 page · checked", Open, the
    pencil), a hairline between, inset 16 (the redesign, phase 2, 2026-11-17: grey capsules
@@ -741,6 +766,13 @@ details.more.split[open] { flex-basis: auto; }
 /* Applied: "I heard back" is a quiet control, its words in the ink, the soft fill under the
    pointer only, beside the card's one next step (the UX review of the redesign, 2026-11-17). */
 .card.app-record .card-actions > .btn.quiet { background: transparent; border-color: transparent; text-decoration: none; font-weight: 600; }
+/* Leading a line of its row, a quiet button's words line up with the card's own (app.js,
+   quietFit); after a button and its gauge it keeps 16px from the gauge, so "I heard back" is
+   never read as the gauge's words (the redesign's second round, 2026-11-17). */
+.card .card-actions > .btn.quiet.lead-quiet { margin-inline-start: -16px !important; }
+@media (max-width: 759px) { .card .card-actions > .btn.quiet.lead-quiet { margin-inline-start: -12px !important; } }
+.card-actions > [data-wakes] + .cost + .btn.quiet { margin-inline-start: 4px; }
+@media (max-width: 759px) { .card-actions > [data-wakes] + .cost + .btn.quiet { margin-inline-start: 8px; } }
 @media (hover: hover) { .card.app-record .card-actions > .btn.quiet:hover { background: var(--raised); } }
 /* Jobs in its stages: a small heading over each once there are two (Ready to send, Being
    written, New), the section label (.group), 24 above and 8 below, 8 above the first. */
@@ -772,7 +804,8 @@ details.send { border-top: 1px solid var(--line); }
 .stack.jobs, ul.people, .stack.list-panel { gap: 8px; background: transparent; border: 0; box-shadow: none; }
 .stack.jobs > .card.job, ul.people > li.person, .stack.list-panel > .card { border: 1px solid var(--line); border-radius: var(--r); box-shadow: none; background: var(--surface); padding: 16px; }
 
-.stack.list-panel > .card.is-marked, .stack.list-panel > .card.quiet-card { background: var(--sunk); }
+.stack.list-panel > .card.is-marked { background: var(--sunk); }
+.stack.list-panel > .card.quiet-card { background: var(--seg-track); }
 .after-list { margin-top: 8px; }
 .stack.jobs > .card.job.st-dismissed, .stack.jobs > .card.job.st-applied { background: var(--sunk); }
 @media (hover: hover) { .stack.jobs > .card.job:hover, ul.people > li.person:hover { background: var(--bg); } }
@@ -800,13 +833,13 @@ details.send { border-top: 1px solid var(--line); }
    taller than their target (34 against 32) and they reached into the words (Everywhere,
    4.15.0). A phone keeps its 36px buttons and their 44px reach. */
 @media (min-width: 760px) { .pdraft > .sendbox > .bubble-tools { height: var(--target); } .pdraft > .sendbox > .bubble-tools > .btn { min-height: 0; height: 100%; box-sizing: border-box; } }
-.pdraft > .subject { display: grid; grid-template-columns: auto minmax(0, max-content) auto; justify-content: start; align-items: start; column-gap: 4px; --bh: calc(36px * var(--tz)); }
-/* Its Copy sits on the subject's first line: lined up by their tops, the button hung 7px under
-   the words (README picture, 4.15.0). A zero-width strut the button's height makes the first
-   line as tall as the button with the words in its middle; a wrapped subject's other lines
-   keep their own height. */
-.pdraft > .subject > span::before { content: ""; display: inline-block; width: 0; height: var(--bh); vertical-align: middle; }
-.pdraft > .subject > .btn { align-self: start; min-height: 0; height: var(--bh); }
+/* The subject is one run of words, "Subject:" and the words wrapping as a sentence does, its Copy
+   at the run's end on its last line, in the middle of that line: in three columns a wrapped
+   subject hung in a column of its own with 30px between its lines (the redesign's second round,
+   2026-11-17), and lined up by their tops the button hung 7px under the words (README picture,
+   4.15.0). The button keeps the line's own height, reaching past it above and below. */
+.pdraft > .subject { display: block; font-size: var(--t-md); line-height: 24px; --bh: calc(36px * var(--tz)); }
+.pdraft > .subject > .btn { display: inline-flex; vertical-align: middle; min-height: 0; height: var(--bh); margin: -4px 0 -4px 4px; }
 .pdraft > .subject > .btn.icon-only { background: none; border-color: transparent; }
 @media (hover: hover) { .pdraft > .subject > .btn.icon-only:hover { background: var(--raised); } }
 /* Its own hairline, as a card's answer box keeps: a hovered card turns the page's colour,
@@ -864,6 +897,8 @@ ul.people > li.person.has-draft:not(li.person.has-draft ~ li) .sendtext.is-clamp
 ul.people > li.person.has-draft:not(li.person.has-draft ~ li) .sendbox > .read-all { display: none; }
 .sendbox > .btn.read-all { display: inline-flex; align-items: center; gap: 0; min-height: 24px; margin: 4px 0 0; padding: 0 2px; color: var(--ink); font-weight: 600; font-size: var(--t-sm);
   text-decoration: none; }
+/* Show all only where the two lines hide something (app.js, clampFit). */
+.sendtext.fits + .read-all { display: none; }
 .read-all > .chev { display: inline-block; width: 6px; height: 6px; margin: 0 2px 0 8px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: translateY(-2px) rotate(45deg); }
 .read-all[aria-expanded="true"] > .chev { transform: translateY(1px) rotate(-135deg); }
 @media (hover: hover) { .sendbox > .btn.read-all:hover { text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 3px; } }
@@ -962,7 +997,11 @@ dialog.work-sheet { width: min(560px, calc(100vw - 16px)); }
 .sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; }
 .sw-a { background: var(--chart-a); }
 .sw-b { background: var(--chart-b); margin-left: 8px; }
-.svg-wrap { max-width: 560px; }
+/* The weekly chart fills its card, drawn to the card's own width at most 220px tall (app.js
+   draws it to the width it is given): held to 560px it left half a 1165px card empty (the
+   redesign's second round, 2026-11-17). */
+.svg-wrap { max-width: none; }
+.weeks-svg { max-height: 220px; }
 .weeks-svg { display: block; width: 100%; height: auto; max-width: 100%; }
 .weeks-svg .grid { stroke: var(--line); stroke-width: 1; }
 .weeks-svg .axis { stroke: var(--line-strong); stroke-width: 1; }
@@ -988,9 +1027,9 @@ dialog.work-sheet { width: min(560px, calc(100vw - 16px)); }
    the one chosen raised on it in the ink, the others in grey. Each is still a radio, laid over
    its whole segment unseen, so it reads, taps and arrows as a choice; its ring is the
    segment's. A row of outlined capsules each with a dot read as a form. */
-.pills .pill-row { display: flex; flex-wrap: wrap; gap: 2px; padding: 2px; border-radius: var(--r-ctl); background: var(--sunk); width: fit-content; max-width: 100%; }
-.pills .choice { align-items: center; justify-content: center; gap: 8px; min-height: 32px; padding: 4px 12px; border: 1px solid transparent; border-radius: 8px; color: var(--muted); font-weight: 600; font-size: var(--t-sm); }
-.pills .choice:has(input:checked) { background: var(--thumb); color: var(--ink); border-color: var(--line-strong); box-shadow: var(--shadow-card); }
+.pills .pill-row { display: flex; flex-wrap: wrap; gap: 2px; padding: 2px; border-radius: var(--r-ctl); background: var(--seg-track); width: fit-content; max-width: 100%; }
+.pills .choice { align-items: center; justify-content: center; gap: 8px; min-height: 32px; padding: 4px 12px; border: 1px solid transparent; border-radius: 8px; color: var(--muted); font-weight: 400; font-size: var(--t-sm); }
+.pills .choice:has(input:checked) { background: var(--thumb); color: var(--ink); font-weight: 600; border-color: transparent; box-shadow: var(--shadow-card); }
 .setting.pills .choice > input, .field.pills .choice > input { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; margin: 0 !important; opacity: 0; cursor: pointer; }
 /* The chosen one also carries an outline in no colour, which forced colours (Windows high
    contrast) draw in the text colour: there the fill and the shadow are gone, and with the
@@ -1149,10 +1188,10 @@ textarea { width: 100%; resize: vertical; line-height: 1.45; }
    in the light and ringed in the control edge, its words in the ink, the others grey, all 600.
    The ring is what says which is chosen: the fill alone was 1.1:1 from the track (WCAG 1.4.11,
    the accessibility review). 36px tall with a mouse, 44 on touch, full width on a phone. */
-.segctl { display: inline-flex; align-items: stretch; gap: 2px; border: 0; border-radius: var(--r-ctl); padding: 2px; background: var(--sunk); min-width: 0; flex: 0 1 auto; }
+.segctl { display: inline-flex; align-items: stretch; gap: 2px; border: 0; border-radius: var(--r-ctl); padding: 2px; background: var(--seg-track); min-width: 0; flex: 0 1 auto; }
 .seg-opt { flex: 1 1 0; display: inline-flex; align-items: center; justify-content: center; min-height: 32px; padding: 4px 12px; border: 1px solid transparent; border-radius: 8px; background: none; color: var(--muted);
-  font-weight: 600; font-size: var(--t-sm); line-height: 1.2; cursor: pointer; white-space: nowrap; min-width: 0; }
-.seg-opt[aria-pressed="true"], .seg-opt:has(input:checked) { background: var(--thumb); color: var(--ink); border-color: var(--line-strong); box-shadow: var(--shadow-card); }
+  font-weight: 400; font-size: var(--t-sm); line-height: 1.2; cursor: pointer; white-space: nowrap; min-width: 0; }
+.seg-opt[aria-pressed="true"], .seg-opt:has(input:checked) { background: var(--thumb); color: var(--ink); font-weight: 600; border-color: transparent; box-shadow: var(--shadow-card); }
 @media (hover: hover) { .seg-opt:not([aria-pressed="true"]):not(:has(input:checked)):hover { color: var(--ink); } }
 .seg-n { margin-left: 4px; font-variant-numeric: tabular-nums; color: var(--muted); font-weight: 600; white-space: pre; }
 @media (max-width: 759px) { .controls > .segctl { flex: 1 1 auto; } }
@@ -1281,6 +1320,13 @@ dialog.work-sheet { position: fixed; inset: auto 0 0 0; margin: 0; width: 100%; 
    read 4.44:1 on the hover colour under a pointer left on it (French, CI, 2026-11-11). */
 @media (hover: hover) { .act-row:hover { background: var(--raised); } .act-row:hover :is(.set-go, .hint) { color: var(--ink); } }
 .set-go { color: var(--muted); font-size: 1.125rem; }
+/* One chevron size in Settings and a card's rows: the row that opens a page ("Your profile",
+   Help) drew a thin 12px "›" beside the folds' heavier one (the redesign's second round,
+   2026-11-17); both are the 16px chevron every fold draws, in the quiet grey. */
+.set-go { display: inline-flex; font-size: 0; line-height: 0; }
+.set-go::before { content: ""; width: 16px; height: 16px; background: currentColor; clip-path: polygon(33% 27.5%, 42% 19%, 73% 50%, 42% 81%, 33% 72.5%, 55.6% 50%); forced-color-adjust: none; }
+.set-sum::after { width: 16px; height: 16px; border: 0; background: var(--muted); clip-path: polygon(33% 27.5%, 42% 19%, 73% 50%, 42% 81%, 33% 72.5%, 55.6% 50%); transform: none; forced-color-adjust: none; }
+.setting-row[open] > .set-sum::after, .site-key-fold[open] > .set-sum::after { transform: rotate(90deg); }
 .look-row .segctl { flex: 0 1 auto; }
 /* Light or dark, Text size and the Chat panel's side are the one segmented control (above). */
 /* A card's title that opens it elsewhere (an interview in To do opens in Coming up): the card's
@@ -1307,7 +1353,7 @@ dialog.work-sheet { position: fixed; inset: auto 0 0 0; margin: 0; width: 100%; 
    steps to get one (Settings, Job sites). */
 .checks-list li.site-key { display: block; }
 .checks-list li.site-key > .state, .checks-list li.site-key > .state-wrap { padding: 0 16px; }
-.site-key-fold[open] > .set-sum::after { transform: rotate(45deg); }
+.site-key-fold[open] > .set-sum::after { transform: rotate(90deg); }
 /* On a phone a long value goes under its name, at its left edge, in grey: beside its name it
    wrapped right-aligned into a ragged column ("Greater Manchester, Leeds, / remote in the UK"),
    and a long name wrapped as "When it / comes" (the redesign, 2026-11-16). A row whose name and
@@ -1322,12 +1368,30 @@ dialog.work-sheet { position: fixed; inset: auto 0 0 0; margin: 0; width: 100%; 
    screen: Your profile stood centred, 165px right of every other screen's edge on a laptop,
    and Settings' rows ran the whole width with each value 900px from its name (the redesign,
    2026-11-16). */
-.sec.settings-page, .sec.profile-page { max-width: 720px; margin-inline: 0 auto; }
+/* Both are the whole width, as every screen is (DESIGN.md, "Every screen is the whole width"):
+   their groups keep a reading measure by standing in two columns where the screen holds two of
+   400px, one under the other where it does not, so a value never sits 900px from its name (the
+   redesign's second round, 2026-11-17: both were a 720px column of their own). */
+@media (min-width: 760px) {
+  .sec.settings-page { display: block; columns: 400px 2; column-gap: 32px; }
+  .sec.settings-page > :not(.set-group) { column-span: all; }
+  .sec.settings-page > :not(:first-child) { margin-top: 24px; }
+  .sec.settings-page > .sec-head { margin-bottom: 24px; }
+  .sec.settings-page > .sec-head + :not(:first-child) { margin-top: 0; }
+  .sec.settings-page > .set-group { break-inside: avoid; }
+  .sec.profile-page > .prof-grid { display: block; columns: 400px 2; column-gap: 32px; }
+  .sec.profile-page > .prof-grid > * { break-inside: avoid; }
+  .sec.profile-page > .prof-grid > * + * { margin-top: 32px; }
+}
 
 /* Chat: the box pinned at the bottom (4.9) */
 /* As tall as the window under the header as it is drawn (app.js, fitTop), never taller: opened
    at its end, a Chat taller than that slid its first words under the header. */
 .talk { display: flex; flex-direction: column; gap: 12px; min-height: calc(100dvh * var(--tz) - var(--top-real, 56px) - var(--tabs-h) - 48px - env(safe-area-inset-bottom, 0px)); }
+/* On a phone it reaches the tab bar exactly, so the page's foot starts under the first screen,
+   never under the tab bar on it: "Private to you" sat behind the tab bar and its tail peeked out
+   (the redesign's second round, 2026-11-17). */
+@media (max-width: 759px) { .talk.sec { min-height: calc(100dvh * var(--tz) - var(--top-real, 56px) - var(--tabs-h) - 8px - env(safe-area-inset-bottom, 0px)); } }
 .talk-form { margin-top: auto; position: sticky; bottom: calc(var(--tabs-h) + env(safe-area-inset-bottom, 0px) + 8px); z-index: 5; background: var(--bg); padding-block: 8px; display: grid; gap: 8px; }
 @media (min-width: 760px) { .talk { min-height: calc(100dvh - 120px); } .talk-form { bottom: 0; padding-bottom: 16px; } }
 /* No messages yet: the box at the foot where it stays once there are messages, its starters
@@ -1478,7 +1542,14 @@ p.count.tone-warn { color: var(--st-overdue); }
 .app-rows { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow-card); }
 /* On a computer the table sits in a card as the phone's rows do: bare on the page it read as
    another screen's (the redesign, phase 2, 2026-11-17). */
-.apps .listv > .scroll-x { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow-card); padding: 4px 8px; }
+/* One cell padding, 12 by 16, the first and last cells' words at the card's 16px and the row's
+   hairline from there to there: the headings, the rows' words and the hairlines started at
+   three different places (the redesign's second round, 2026-11-17). */
+.apps .listv > .scroll-x { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow-card); padding: 4px 16px; }
+.apps .listv > .scroll-x .data :is(th, td) { padding: 12px 16px; }
+.apps .listv > .scroll-x .data :is(th, td):first-child { padding-left: 0; }
+.apps .listv > .scroll-x .data :is(th, td):last-child { padding-right: 0; }
+.apps .listv > .scroll-x .data td > .btn.link { padding-inline: 0; }
 .apps .data tbody tr:last-child > td { border-bottom: 0; }
 .app-row { padding: 12px 16px; border-top: 1px solid var(--line); display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; overflow-wrap: anywhere; }
 .app-rows > .app-row:first-child { border-top: 0; }
@@ -1769,6 +1840,11 @@ label.pick { display: flex; align-items: flex-start; justify-content: center; wi
   .navdot, .bp-day-dots i { forced-color-adjust: none; background: CanvasText; }
   .bp-day-dots i.due { background: Canvas; box-shadow: inset 0 0 0 2px CanvasText; }
   .bp-day.is-today { outline: 2px solid CanvasText; outline-offset: -2px; }
+  .d-step-dot, .d-step::before { forced-color-adjust: none; }
+  .d-step::before { background: CanvasText; }
+  .d-step.done .d-step-dot { background: CanvasText; }
+  .d-step:not(.done) .d-step-dot { background: Canvas; box-shadow: inset 0 0 0 1.5px CanvasText; }
+  .d-step.now .d-step-dot { box-shadow: inset 0 0 0 1.5px CanvasText, 0 0 0 2px Highlight; }
   .chat-fab, .seg-opt, .conn-btn, .gear, .sheet-x, .back-btn { border: 1px solid ButtonText; }
   .weeks-svg .tick { fill: CanvasText; }
   .weeks-svg .grid, .weeks-svg .axis { stroke: GrayText; }
@@ -1792,10 +1868,13 @@ label.pick { display: flex; align-items: flex-start; justify-content: center; wi
 }
 
 
-.quiet-card { background: var(--sunk); }
+.quiet-card { background: var(--seg-track); }
 /* The page's address wraps only at its slashes and dots (app.js, addressWords), each part
    kept whole; a part too long for any line still breaks rather than run off the card. */
 .page-url { overflow-wrap: break-word; }
+/* A part longer than its line (a page's long id in Settings' narrower column) breaks inside
+   itself, never runs under Copy link beside it (the redesign's second round, 2026-11-17). */
+.page-url > .nowrap { white-space: normal; overflow-wrap: anywhere; }
 .add-download { display: inline-flex; gap: 8px; flex-wrap: wrap; }
 /* An opened fold (foldBody): its words, then what they do, then the line a tap leaves. On a
    wide screen the words and the buttons stand side by side, the buttons at the right edge
@@ -1957,6 +2036,13 @@ dialog.work-sheet :is(select, input, textarea) { width: 100%; max-width: 100%; m
 .chat-fab .fab-new { margin-left: -4px; }
 .chat-fab[aria-current="page"] { background: var(--accent-soft); color: var(--ink); box-shadow: inset 0 0 0 1px var(--mark); }
 .chat-fab[aria-current="page"] .fab-dot { box-shadow: 0 0 0 2px var(--accent-soft); }
+/* A light that is a ring (connecting, not listening) keeps its ring under the halo, on the Chat
+   screen too: the halo alone left a clear dot on the clay button, nothing to see (the
+   accessibility review, 2026-11-17: WCAG 1.4.11). */
+.fab-dot:is(.conn-connecting, .conn-reconnecting) { box-shadow: inset 0 0 0 2px var(--line-strong), 0 0 0 2px var(--raised); }
+.chat-fab[aria-current="page"] .fab-dot:is(.conn-connecting, .conn-reconnecting) { box-shadow: inset 0 0 0 2px var(--line-strong), 0 0 0 2px var(--accent-soft); }
+.fab-dot.conn-unheard { box-shadow: inset 0 0 0 3px var(--st-overdue), 0 0 0 2px var(--raised); }
+.chat-fab[aria-current="page"] .fab-dot.conn-unheard { box-shadow: inset 0 0 0 3px var(--st-overdue), 0 0 0 2px var(--accent-soft); }
 /* A computer keeps Claude's light in its own place in the header. */
 @media (min-width: 760px) { .fab-dot { display: none; } }
 /* Where the header is short of room the word goes, its name still saying it (app.js, fitTop). */
@@ -2021,6 +2107,10 @@ dialog.work-sheet :is(select, input, textarea) { width: 100%; max-width: 100%; m
 .talk-hello-title { font-size: 1.25rem; line-height: 1.3; font-weight: 700; color: var(--ink); }
 .talk-hello .talk-intro { max-width: 44ch; color: var(--muted); }
 .talk-examples .examples { gap: 8px; }
+/* With no messages yet the starters sit centred under the centred heading, as one block with
+   it; the box under them keeps its whole width (the redesign's second round, 2026-11-17). */
+.talk-empty .talk-examples .examples { justify-content: center; }
+.talk-empty .talk-examples { justify-items: center; text-align: center; }
 /* The ways to start are the page's soft buttons at the controls' radius, never outlined capsules. */
 .talk-examples .examples .btn.secondary { background: var(--raised); border-color: transparent; border-radius: var(--r-ctl); padding-inline: 12px; font-size: var(--t-sm); }
 @media (hover: hover) { .talk-examples .examples .btn.secondary:hover { background: var(--raised-hover); } }
@@ -2316,6 +2406,17 @@ html.tips-off .has-tip::after { content: none; }
 .more-wrap > .more-mate, .more-wrap > .more-mate ~ * { order: 2; margin-top: -12px !important; }
 .g-acts.more-wrap > :is(.more-mate, .more-mate ~ *) { margin-top: -8px !important; }
 @media (max-width: 759px) { .more-wrap > :is(.more-mate, .more-mate ~ *) { margin-top: -8px !important; } }
+:is(.fix, .fb-acts, .bp-foot).more-wrap > :is(.more-mate, .more-mate ~ *) { margin-top: -8px !important; }
+/* A To do card's Done under More where on its own line it would stand alone under its next
+   step and that step's gauge (app.js, moreFit; the redesign's second round, 2026-11-17). */
+.card-actions:not(.fold-on) .fold-twin, .card-actions:not(.fold-on) > details.more.fold-only, .card-actions.fold-on > .fold-out { display: none; }
+/* On a narrow phone a button that wakes Claude is drawn at the phone's 12px a side, its gauge
+   6px from it, so the two keep one line in a card's width (DESIGN.md, Buttons: a gauge is one
+   with its button). */
+@media (max-width: 420px) {
+  .btn[data-wakes]:not(.icon-only):not(.link) { padding-inline: 12px; }
+  .btn[data-wakes]:not(.icon-only):not(.link) + .cost { margin-inline-start: -2px; }
+}
 /* An interview's pill leads its line of when on a phone (the screen review, 2026-11-11). */
 .iv-when-line { display: flex; flex-wrap: nowrap; align-items: baseline; gap: 8px; }
 .iv-when-line > .when { margin: 0; flex: 1 1 10em; min-width: 0; }
@@ -2394,6 +2495,19 @@ html.tips-off .has-tip::after { content: none; }
 .bp-n { font-size: 1.375rem; font-weight: 700; line-height: 1.15; font-variant-numeric: tabular-nums; }
 .bp-l { font-size: var(--t-sm); color: var(--muted); overflow-wrap: normal; word-break: normal; hyphens: none; }
 .bp-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: auto; padding-top: 8px; font-size: var(--t-sm); }
+/* In a narrow panel (a Brief's foot, Today's card) a button's gauge keeps its line, its words
+   wrapping beside it rather than going down a line on their own (DESIGN.md, Buttons: a gauge is
+   one with its button). */
+:is(.bp-foot, .bp-iv) > [data-wakes] + .cost { flex: 1 1 0; min-width: 5.5em; max-width: max-content; white-space: normal; line-height: 1.2; }
+.bp-foot > [data-wakes] { flex: none; }
+/* Today's card in a narrow panel (a laptop 1000px wide): its button takes its own width first,
+   its words wrapping only where even then the pair would not fit (the button ran 9px past the
+   card there, its gauge on the line under it). */
+.bp-iv > [data-wakes] { flex: 100 1 0; min-width: 6em; max-width: max-content; white-space: normal; }
+/* In a short window the Brief's Find jobs gives way first, its gauge with it, to the Jobs screen
+   where it leads: beside "Open Jobs" the pair took a line of its own, and Coming up's week gave
+   way for it (the redesign's second round, 2026-11-17). */
+html.brief-short .bp-jobs > .bp-foot > [data-k="bp-search"], html.brief-short .bp-jobs > .bp-foot > [data-k="bp-search"] + .cost { display: none; }
 /* The one thing to do: when it is in clay (never the error red: "Ready to send" is good news),
    what it is in the Brief's largest words after the greeting, and its one filled button with
    the time it takes beside it on one line. */
@@ -2403,6 +2517,8 @@ html.tips-off .has-tip::after { content: none; }
 .bp-iv-what { font-weight: 700; font-size: var(--t-xl); line-height: 1.25; letter-spacing: -0.01em; }
 .bp-iv .btn { margin-top: 4px; }
 .bp-iv > .cost { margin-top: 4px; }
+/* Its next step and the gauge keep one line on a narrow phone (DESIGN.md, Buttons). */
+@media (max-width: 420px) { .bp-iv { padding: 12px; } }
 /* The top row, Today and Coming up, is as tall as what they hold: never cut. */
 /* A news point: what happened, what to do with it, where it is from. Never cut by the panel's
    height: News was clipped at its bottom once each point said how to use it (2026-11-02). */
@@ -2418,10 +2534,10 @@ ul.bp-news { gap: 12px; }
 .bp-all > summary::after, .brief-earlier > summary::after { content: ""; width: 7px; height: 7px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg) translateY(-2px); }
 .bp-all[open] > summary::after, .brief-earlier[open] > summary::after { transform: rotate(-135deg) translateY(-1px); }
 .bp-all[open] > summary { margin-bottom: 8px; }
-.bp-tip { display: flex; align-items: baseline; gap: 8px 12px; flex-wrap: wrap; margin: 0; padding: 12px 16px; border-radius: var(--r-sm); background: var(--sunk); font-size: var(--t-sm); }
+.bp-tip { display: flex; align-items: baseline; gap: 8px 12px; flex-wrap: wrap; margin: 0; padding: 12px 16px; border-radius: var(--r-sm); background: var(--seg-track); font-size: var(--t-sm); }
 .bp-tip-k { font-weight: 600; color: var(--ink); }
 .bp-tip-t { min-width: 0; }
-.pin-offer { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; margin: 0; padding: 12px 16px; border-radius: var(--r-sm); background: var(--sunk); font-size: var(--t-sm); }
+.pin-offer { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; margin: 0; padding: 12px 16px; border-radius: var(--r-sm); background: var(--seg-track); font-size: var(--t-sm); }
 .pin-t { min-width: 0; }
 .pin-acts { display: inline-flex; gap: 8px; margin-left: auto; }
 .setup .pin-offer { margin-top: 12px; }
@@ -2588,8 +2704,14 @@ ul.bp-news { gap: 12px; }
 .d-step { position: relative; display: grid; justify-items: center; gap: 8px; text-align: center; font-size: 0.8125rem; line-height: 18px; font-weight: 600; color: var(--muted); min-width: 0; }
 .d-step:not(:first-child)::before { content: ""; position: absolute; top: 3px; right: calc(50% + 8px); left: calc(-50% + 8px); height: 2px; border-radius: 1px; background: var(--line); }
 .d-step-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line-strong); }
+/* A step not yet reached is a hollow ring, its word grey at 400; a done one filled in green, its
+   word in the ink at 600, the join after it green: done was told from not yet by colour alone
+   (the accessibility review, 2026-11-17: WCAG 1.4.1, 1.4.11). */
+.d-step:not(.done):not(.now) { font-weight: 400; }
+.d-step:not(.done):not(.now) .d-step-dot { background: var(--surface); box-shadow: inset 0 0 0 1.5px var(--line-strong); }
 .d-step.done { color: var(--ink); }
 .d-step.done .d-step-dot { background: var(--st-done); }
+.d-step.done + .d-step::before { background: var(--st-done); }
 .d-step.now { color: var(--ink); }
 .d-step.now .d-step-dot { background: var(--surface); box-shadow: 0 0 0 2px var(--mark); }
 .d-step-l { overflow-wrap: anywhere; }
@@ -2764,6 +2886,10 @@ ul.bp-news { gap: 12px; }
 .up-row .up-sub > .up-note { min-width: 0; }
 .up-row .up-prep { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 8px; }
 .up-row .up-prep > .btn { margin: 0; }
+/* A row's step (Prepare me, Practise 3 questions) is a row of the card's own: under the title on
+   a computer, the card's whole width from under the time on a phone, so a button and its gauge
+   keep one line (the redesign's second round, 2026-11-17). */
+.up-row > .up-prep { grid-column: 2; }
 .up-menu > .menu-btn { min-width: var(--up-ic); min-height: var(--up-ic); width: var(--up-ic); height: var(--up-ic); padding: 0; border-radius: var(--r-sm); color: var(--muted); }
 /* On a phone the same three parts, the time column narrower and every target a finger's. */
 @media (max-width: 759px) {
@@ -2771,6 +2897,7 @@ ul.bp-news { gap: 12px; }
   .up-row + .up-row::before { left: 12px; }
   .up-row > .up-when { white-space: normal; }
   .up-days:has(.up-here) .up-row { grid-template-columns: 6rem minmax(0, 1fr) auto; }
+  .up-row > .up-prep { grid-column: 1 / -1; }
 }
 /* Where a day's card is narrow for its words (a phone at double text, a time from another
    zone), the time is a line over the title, never a column squeezing it. */
@@ -2779,6 +2906,7 @@ ul.bp-news { gap: 12px; }
   .up-row, .up-days:has(.up-here) .up-row { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "when end" "main end"; }
   .up-row > .up-when { padding-top: 0; white-space: normal; }
   .up-row > .up-when:has(> .btn[data-k^="up-time:"]) { grid-column: 1; grid-row: 3; }
+  .up-row > .up-prep { grid-column: 1 / -1; }
 }
 .bp-up-row { display: flex; align-items: center; gap: 8px; }
 .bp-up-row .up-main { flex: 1; display: grid; gap: 2px; min-width: 0; }
@@ -2811,8 +2939,10 @@ dialog.sheet .sheet-body { display: grid; gap: 16px; }
 .bp-day-w { font-size: var(--t-sm); line-height: 1; }
 .bp-day-n { font-size: var(--t-sm); font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums; }
 .bp-day-dots { display: flex; gap: 2px; min-height: 6px; }
-.bp-day-dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--pc); }
-.bp-day-dots i.due { background: transparent; box-shadow: inset 0 0 0 1.5px var(--pc); }
+/* A day's dots in the clay ink, never the blue of work going on (the redesign's second round,
+   2026-11-17); today's and tomorrow's keep their own colours (below). */
+.bp-day-dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--mark-ink); }
+.bp-day-dots i.due { background: transparent; box-shadow: inset 0 0 0 1.5px var(--mark-ink); }
 /* A day an invitation offers, still to choose: outlined and fainter than one booked. */
 .bp-day-dots i.offered { opacity: 0.6; }
 /* Today and tomorrow stand out at a glance, never in red (the maintainer, 2026-11-02: red
@@ -2915,9 +3045,11 @@ ul.bp-news { max-width: 80ch; }
 .bpanel:not(.bp-today) > .bp-title .bp-ic { color: var(--muted); background: var(--sunk); }
 .bp-today > .bp-title .bp-count { color: var(--mark-ink); }
 /* A laptop's row gives Today more height than its one thing needs: the thing's white card takes
-   it, its words and button at its middle, never a block of clay tint under them. */
+   it, never a block of clay tint under them, its words and button from its top as every card's
+   are: at its middle they left 60px of nothing over "Ready to do" (the redesign's second round,
+   2026-11-17). */
 @media (min-width: 960px) {
-  .brief-grid.is-filled .bp-today > .bp-body > .bp-iv { flex: 1 1 auto; align-content: center; }
+  .brief-grid.is-filled .bp-today > .bp-body > .bp-iv { flex: 1 1 auto; align-content: flex-start; }
 }
 .cal-file { display: grid; gap: 4px; }
 .cal-file .hint { margin: 0; }
@@ -3323,4 +3455,48 @@ dialog.detail .detail-body:has(> .d-live > .lp) > .detail-title { margin-top: 16
   /* A setting's row its 44px, its words 12px from the group's edge, as a card's are. */
   .set-sum, .toggle-row, .look-row, .act-row, .update-row { min-height: var(--target); padding: 8px 12px; }
   .set-body { padding: 0 12px 12px; }
+}
+/* ------------------------------------------------------------------ the one disclosure's chevron */
+/* Every fold draws the one chevron (the redesign's second round, 2026-11-17: "Why ⌄" was 10px,
+   "Since your last brief" and "Advanced" pointed down while shut and "Each week" up while open,
+   and "2 jobs to confirm" drew a lopsided tick): a 16px chevron in the words' colour, pointing
+   right while folded and down once open, 4px after the words. */
+:is(.band-more > summary, .disclose, .how-fold > summary, .chart summary, .bp-all > summary, .brief-earlier > summary, .set-advanced > summary)::after,
+:is(.info-toggle, .read-all) > .chev, .pdraft:not([open]) > summary::before {
+  content: ""; display: inline-block; flex: none; width: 16px; height: 16px; margin: 0; border: 0; border-radius: 0;
+  background: currentColor; clip-path: polygon(33% 27.5%, 42% 19%, 73% 50%, 42% 81%, 33% 72.5%, 55.6% 50%); transform: none; vertical-align: -3px; forced-color-adjust: none; }
+:is(.info-toggle, .read-all) > .chev { margin-left: 4px; }
+.chart summary { gap: 4px; }
+:is(.band-more[open] > summary, .disclose[aria-expanded="true"], .how-fold[open] > summary, .chart details[open] > summary, details.chart[open] > summary, .bp-all[open] > summary, .brief-earlier[open] > summary, .set-advanced[open] > summary)::after,
+:is(.info-toggle, .read-all)[aria-expanded="true"] > .chev { transform: rotate(90deg); }
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  :is(.band-more > summary, .disclose, .how-fold > summary, .chart summary, .bp-all > summary, .brief-earlier > summary, .set-advanced > summary)::after, :is(.info-toggle, .read-all) > .chev { transition: transform 0.15s; }
+}
+/* Its words are the disclosure's: 14/600 in the ink, a quiet row 44px tall on touch. */
+.brief-earlier > summary, .bp-all > summary { color: var(--ink); font-weight: 600; font-size: var(--t-sm); gap: 4px; }
+.set-advanced > summary { display: inline-flex; justify-content: flex-start; gap: 4px; min-height: 36px; padding: 4px 8px; margin-left: -8px; border: 0; border-radius: var(--r-ctl); background: none; color: var(--ink); font-size: var(--t-sm); font-weight: 600; }
+@media (hover: hover) { .set-advanced > summary:hover, .brief-earlier > summary:hover { background: var(--raised); } }
+@media (max-width: 759px), (pointer: coarse) { .set-advanced > summary { min-height: var(--target); } }
+/* A draft's label shown open is its heading, with no chevron: a chevron before "Reply ·
+   LinkedIn" read as a toggle on every note. Folded away, it says it opens, as every fold does. */
+.pdraft[open] > summary::before { content: none; }
+.pdraft[open] > summary { cursor: default; }
+.pdraft:not([open]) > summary { color: var(--ink); }
+.pdraft:not([open]) > summary::before { order: 2; }
+
+/* ------------------------------------------------------------------ messages to send on a phone */
+/* On a phone each person's row is its own tap to their draft, a chevron at its end, and its
+   trash stays an icon at the end, a finger's target over the row: "See the draft" and the trash
+   took over half of each row and cut the names short ("Wren at Fernhill Fr..."), and the line
+   under a name wrapped to leave "reply" alone (the redesign's second round, 2026-11-17). */
+@media (max-width: 480px) {
+  .send-card .g-row { position: relative; }
+  .send-card .g-main > p.small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .send-card .g-acts > .btn:not([data-bin]) { position: static; min-width: var(--target); min-height: var(--target); padding: 0; border: 0; background: none; font-size: 0; color: var(--muted); }
+  .send-card .g-acts > .btn:not([data-bin])::before { content: ""; width: 16px; height: 16px; background: currentColor; clip-path: polygon(33% 27.5%, 42% 19%, 73% 50%, 42% 81%, 33% 72.5%, 55.6% 50%); forced-color-adjust: none; }
+  .send-card .g-acts > .btn:not([data-bin])::after { content: ""; position: absolute; inset: 0; border-radius: var(--r-sm); }
+  .send-card .g-acts > .btn:not([data-bin]):focus-visible { outline: none; }
+  .send-card .g-acts > .btn:not([data-bin]):focus-visible::after { outline: 3px solid var(--focus); outline-offset: -3px; }
+  .send-card .g-acts > [data-bin], .send-card .g-main a.name-link { position: relative; z-index: 1; }
+  .send-card .g-acts > [data-bin] { min-width: var(--target); min-height: var(--target); }
 }

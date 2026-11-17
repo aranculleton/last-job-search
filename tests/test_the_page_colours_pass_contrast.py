@@ -81,18 +81,51 @@ def test_a_soft_pill_in_a_suggestion_box_is_lifted_off_the_box_and_its_words_rea
 def test_a_chosen_state_is_never_its_fill_alone():
     """The chosen segment, the chosen place in the side menu and the phone's chosen tab were their
     fill alone, 1.1 to 1.3:1 from their neighbours (the accessibility review, 2026-11-17: WCAG
-    1.4.11, and 1.4.1 in Icons only): each carries a ring that reaches 3:1 where it is drawn."""
+    1.4.11, and 1.4.1 in Icons only). The side menu's place and the phone's tab carry a ring that
+    reaches 3:1 where it is drawn. The chosen segment's ring made it a second, outlined family
+    (the redesign's second round, 2026-11-17), so it is told by its words as well as its thumb:
+    the ink at 600 against the others' grey at 400, with no edge, its thumb lifted off its track
+    in both looks, and Highlight in forced colours."""
     css = open(CSS, encoding="utf-8").read()
     seg = re.search(r"\.seg-opt\[aria-pressed=\"true\"\], \.seg-opt:has\(input:checked\) \{([^}]*)\}", css)
-    assert seg and "border-color: var(--line-strong)" in seg.group(1), "the chosen segment is ringed"
     pills = re.search(r"\.pills \.choice:has\(input:checked\) \{([^}]*border-color[^}]*)\}", css)
-    assert pills and "var(--line-strong)" in pills.group(1), "a setting's chosen short choice is ringed"
-    for sel in (r"\.side-list a\[aria-current=\"page\"\] \{", r"\.tab\[aria-current=\"page\"\] \.tab-ic \{"):
-        rule = re.search(sel + r"([^}]*)\}", css)
+    base = {"seg": re.search(r"^\.seg-opt \{([^}]*)\}", css, re.M), "pills": re.search(r"^\.pills \.choice \{([^}]*)\}", css, re.M)}
+    for name, chosen in (("seg", seg), ("pills", pills)):
+        assert chosen and base[name], name
+        on, off = chosen.group(1), base[name].group(1)
+        assert "border-color: transparent" in on and "line-strong" not in on, (name, "no edge of its own", on)
+        assert "color: var(--ink)" in on and "font-weight: 600" in on, (name, "its words in the ink at 600", on)
+        assert "color: var(--muted)" in off and "font-weight: 400" in off, (name, "the others grey at 400", off)
+        fill = re.search(r"background:\s*var\(--([a-z-]+)\)", on).group(1)
+        for look, pal in palettes.PALETTES.items():
+            assert palettes.ratio(pal[fill][0], pal["seg-track"][0]) >= 1.1, (look, name, "the thumb lifted off its track")
+    assert re.search(r"\.seg-opt\[aria-pressed=\"true\"\], \.seg-opt:has\(input:checked\), \.pills \.choice:has\(input:checked\) \{ forced-color-adjust: none; background: Highlight", css), "forced colours"
+    # The gear's "you are here" too: its raised fill was its hover as well, 1.11:1 (the
+    # accessibility review, 2026-11-17), and on a phone Settings has no tab to mark it.
+    for sel in (r"\.side-list a\[aria-current=\"page\"\] \{", r"\.tab\[aria-current=\"page\"\] \.tab-ic \{", r"^\.gear\[aria-current=\"page\"\] \{"):
+        rule = re.search(sel + r"([^}]*)\}", css, re.M)
         assert rule and "inset 0 0 0 1px var(--mark)" in rule.group(1), sel
-    want = {("line-strong", "sunk"), ("line-strong", "thumb"), ("mark", "accent-soft"), ("mark", "surface"), ("mark", "bg")}
+    want = {("line-strong", "thumb"), ("mark", "accent-soft"), ("mark", "surface"), ("mark", "bg")}
     held = {(f, b) for f, b, n, _w in palettes.pairs() if n >= 3.0}
     assert want <= held, want - held
+    # The words that tell it apart read on the thumb and on the track.
+    words = {(f, b) for f, b, n, _w in palettes.pairs() if n >= 4.5}
+    assert {("ink", "thumb"), ("muted", "seg-track"), ("ink", "seg-track")} <= words
+
+
+def test_a_track_and_a_tip_on_the_page_never_vanish_into_it():
+    """In the dark the sunk track sat on the page at 1.01:1: Jobs' "Applied" floated as loose words
+    beside a lone thumb, the Brief's tip was a ghost and your resume's card the page's own colour
+    (the redesign's second round, 2026-11-17). Their colour is the track's, a step off the page in
+    both looks, and a soft button on it is the thumb's, lifted off it."""
+    css = open(CSS, encoding="utf-8").read()
+    for sel in (r"^\.segctl \{", r"^\.pills \.pill-row \{", r"^\.bp-tip \{", r"^\.pin-offer \{", r"^\.quiet-card \{"):
+        rule = re.search(sel + r"([^}]*)\}", css, re.M)
+        assert rule and "background: var(--seg-track)" in rule.group(1), sel
+    for look, pal in palettes.PALETTES.items():
+        assert palettes.ratio(pal["seg-track"][0], pal["bg"][0]) >= 1.05, (look, "the track off the page")
+        assert palettes.ratio(pal["thumb"][0], pal["seg-track"][0]) >= 1.1, (look, "a button lifted off the track")
+    assert re.search(r":is\(\.bp-tip, \.pin-offer, \.quiet-card\) :is\([^)]*\.btn\.secondary[^{]*\{ background: var\(--thumb\); border-color: transparent", css)
 
 
 def test_the_ratios_are_computed_by_the_wcag_formula():
@@ -218,3 +251,17 @@ def test_the_generated_css_follows_the_hosts_contract_and_the_persons_choice():
     assert ':root[data-theme="dark"]:not([data-look="light"]), :root[data-look="dark"]' in css
     assert "data-palette" not in css, "no theme to pick"
     assert "::selection { background: var(--selection)" in css
+
+
+def test_the_chat_buttons_light_keeps_its_ring_on_the_chat_screen():
+    """On a phone the Chat button's light while Claude connects or is not listening is a ring, and
+    on the Chat screen the button's halo rule drew over it: a clear dot with a clay halo on a clay
+    button, nothing to see (the accessibility review, 2026-11-17: WCAG 1.4.11). Each ring state
+    carries its ring and the halo, on the button and on the chosen one."""
+    css = open(CSS, encoding="utf-8").read()
+    for state, ring in (("connecting", "inset 0 0 0 2px var(--line-strong)"), ("unheard", "inset 0 0 0 3px var(--st-overdue)")):
+        for halo in ("var(--raised)", "var(--accent-soft)"):
+            rules = [m.group(1) for m in re.finditer(r"([^{}]*\.fab-dot[^{}]*conn-" + state + r"[^{}]*)\{([^}]*)\}", css)
+                     if ring in m.group(2) and "0 0 0 2px " + halo in m.group(2)]
+            assert rules, (state, halo)
+    assert any("aria-current" in r for r in [m.group(1) for m in re.finditer(r"([^{}]*\.fab-dot[^{}]*conn-unheard[^{}]*)\{[^}]*accent-soft", css)])
