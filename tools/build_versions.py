@@ -423,8 +423,9 @@ METHODS: dict[str, dict] = {
             (111, "2026-11-17", False, "RUNBOOK says an employer nobody has judged waits below judged ones and a round's batch of them is judged in one go (bar.py judge --file), then the round is cut again; nothing made changes"),
             (112, "2026-11-17", False, "RUNBOOK says every round prints what each source read and what failed, and a failed source is passed on in plain words; nothing made changes"),
             (113, "2026-11-17", False, "RUNBOOK says a round asked for a number that finds fewer checks itself before it reports and searches wider by itself when the search's own hour allows; nothing made changes"),
+            (114, "2026-11-17", False, "the page's colours are redone in templates/app/palettes.py, which this method's templates pattern also reads; nothing a draft prints changes"),
         ),
-        "fingerprint": "b9ff931b573ad946",
+        "fingerprint": "820e3417b53d4a1f",
     },
     "interview": {
         # Only a process with a round still to come is prepared again: a prep for a round
@@ -1209,8 +1210,9 @@ METHODS: dict[str, dict] = {
             (209, "2026-11-16", True, "an employer's name on a job, an application, a person's card or an interview opens its own card: its roles with where each stands, its people and its interviews, each opening its own card; every card that opens from a name draws its lists as Settings' rows (a pill for where each stands, a › that says it opens) and its stages on a timeline, is as tall as what it holds on a laptop, and has no box round its title"),
             (210, "2026-11-16", True, "a LinkedIn sign-in in a chat on the person's computer is one To do card that names that chat and gives the steps to open it from the Claude app's list of chats there and sign in, keeping the sign-in among them, with no link to the chat, which opened it without its browser; its I've signed in sends back every read waiting on that sign-in"),
             (211, "2026-11-16", True, "the one card for a sign-in in a chat on the person's computer covers only reads waiting on that chat's sign-in: a sign-in in the page's own browser keeps its own card, and the computer's I've signed in no longer sends it back"),
+            (212, "2026-11-17", True, "the page is redesigned: warm paper and charcoal with a clay mark, one type scale, one family of buttons, tabs and folds; Coming up joins the phone's tabs and Chat is a header button; To do and the Brief give one ranked answer with a call booked today leading; Jobs by stage and best match, Coming up a card a day, Contacts sending from under each draft; the four cards share rows, an Update menu and a stepper, and an employer's card says what Claude found and whether it clears the person's bar"),
         ),
-        "fingerprint": "2b919f6bb6e803bf",
+        "fingerprint": "bf3dc8f5d33d8b76",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

@@ -74,12 +74,9 @@ make sense to somebody whose repo just received it.
 - **A job can show a different title on different resumes, where you have agreed one.** If a role may be shown under another title for some kinds of job (a more technical title for data science roles, say), list it with that role's `titles` in `profile/roles.py`. Each resume then prints the one its kind of job gets, and checking or remaking that resume later keeps it, with no profile edits between resumes. A role with one title prints as before (issue 316).
 
 ### Changed
+
+- **Your page has a new look, and it is quicker to use.** Warm paper and charcoal with a clay mark, one clear type scale, and one kind of each control: buttons, tabs, search, filters and folds look and behave the same everywhere. On a phone, Coming up has its own tab and Chat is a button at the top, as on a computer. Each card shows one main button, one other and More, so what to do next stands out; To do and the Brief give the same answer to "what next?", with a call or test booked today leading the Brief. Jobs are grouped by how far along they are, best match first, each with one fit ring; Coming up is one card a day; Contacts puts Copy and I sent it under each message, and the cards for an employer, a person, an application and an interview share one tidy layout, with an Update menu and where things stand as steps. An employer's card now also says what Claude found about them and whether they clear your bar. It is easier to read with a screen reader or high-contrast colours too.
 - **`computer.listener_quiet` is retired.** It told the old keep-alive ring when the computer's own chat had gone quiet; the chat now waits for work in code and nothing rings it to keep it awake, so nothing used it (issue 322).
-
-- **The cards that open from a name are cleaner and easier to read.** An employer's, a person's, an application's and an interview's card now list what they hold as tidy rows: each says where it stands and opens with one tap, the arrow at its end saying so. An application's and an interview's stages run down a timeline, filled once done. On a laptop a card is as tall as what it holds, and its title no longer has a box drawn round it.
-
-### Changed
-
 - **The cards that open from a name are cleaner and easier to read.** An employer's, a person's, an application's and an interview's card now list what they hold as tidy rows: each says where it stands and opens with one tap, the arrow at its end saying so. An application's and an interview's stages run down a timeline, filled once done. On a laptop a card is as tall as what it holds, and its title no longer has a box drawn round it.
 
 ## [4.16.1] - 2026-11-12
