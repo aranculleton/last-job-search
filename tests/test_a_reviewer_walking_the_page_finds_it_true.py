@@ -426,7 +426,8 @@ def test_every_card_keeps_to_one_filled_and_two_soft_pills_and_each_pencil_has_i
                                               "title": "Write to Tam at Harbourline Bank", "args": {"contact": "tam"}},
                                    "cost": {"state": 2, "label": "Some Claude, about a minute or two"}}
     got = _go(run, tmp_path, [
-        {"hash": "jobs", "eval": FACE, "read": '#main [data-item="app-ellerwick-insight"] .checks'},
+        # What was checked is the documents' own rows since the redesign's phase 2 (2026-11-17).
+        {"hash": "jobs", "eval": FACE, "read": '#main [data-item="app-ellerwick-insight"] .doc-rows'},
         {"hash": "todo", "eval": FACE},
         {"hash": "jobs", "read": '#main [data-item="r12-1"]'},
     ], PHONE, model=m)
