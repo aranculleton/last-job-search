@@ -135,6 +135,38 @@ def test_a_round_asks_no_declined_employer_by_name_nor_reads_its_own_job_site(tm
     assert set(read) == {"Oakmere Foods"}, read
 
 
+def test_a_whole_scrape_reads_no_declined_employers_job_site_and_counts_it_in_none(
+        tmp_path, monkeypatch):
+    """The scrape itself, from its own command: the declined employer's board is never asked,
+    and the count of boards the search says it read leaves it out."""
+    _profile(tmp_path, monkeypatch, declined=HAND)
+    import ats_boards
+    import portals
+    import scrape_wide
+    (tmp_path / "skills").mkdir()
+    monkeypatch.setattr(portals, "SKILLS", str(tmp_path / "skills"))
+    monkeypatch.setattr(scrape_wide, "QUERIES", ["planner"])
+    monkeypatch.setattr(scrape_wide, "LOCATIONS", [scrape_wide.DEEP + " area"])
+    monkeypatch.setattr(ats_boards, "BOARDS", {"Kestrel Mutual": ("workday", "k.wd3/C"),
+                                               "Oakmere Foods": ("greenhouse", "oakmere")})
+    asked = {}
+
+    def fetch_all(boards=None, notes=None, today=None, report=None, **_):
+        asked.update(boards if boards is not None else ats_boards.BOARDS)
+        return [], {"Oakmere Foods": "resolved, but nothing matching the location filter"}
+    monkeypatch.setattr(ats_boards, "fetch_all", fetch_all)
+    portals.cli.cache_clear()
+    out = tmp_path / "00_scrape"
+    monkeypatch.setattr(sys, "argv", ["scrape_wide.py", "--out", str(out), "--today", TODAY,
+                                      "--skip-canary", "--workers", "2"])
+    try:
+        scrape_wide.main()
+    finally:
+        portals.cli.cache_clear()
+    assert set(asked) == {"Oakmere Foods"}, asked
+    assert json.load(open(out / "sources.json", encoding="utf-8"))["boards"]["boards"] == 1
+
+
 # ------------------------------------------------------------------ a kind turned down is one rule
 
 def test_a_kind_turned_down_cuts_every_employer_of_that_kind_by_one_rule(tmp_path, monkeypatch):

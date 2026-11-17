@@ -1683,7 +1683,7 @@ def _employer_boards(today: dt.date, seen: str | None = None,
         extra["boards"] = mine
     # An employer the person turned down has its own job site read no more: every request
     # there was spent on rows the bar cuts (issue 307).
-    mine = read_boards(extra.get("boards"))
+    mine = boards_to_read(extra.get("boards"))
     if mine is not None:
         if not mine:
             return [], {}, {}
@@ -1701,7 +1701,7 @@ def _employer_boards(today: dt.date, seen: str | None = None,
     return rows, quiet, notes
 
 
-def read_boards(boards: dict | None = None) -> dict | None:
+def boards_to_read(boards: dict | None = None) -> dict | None:
     """The employer boards a round reads: `boards` (else profile/boards.py's) without those of
     employers the person turned down, or None where none of them is."""
     import ats_boards
@@ -2138,7 +2138,7 @@ def main() -> int:
             print(f"  partial: {employer}: {why}")
         import ats_boards
         planned = named_boards(employers)[0] if employers is not None else ats_boards.BOARDS
-        kept_boards = read_boards(planned)
+        kept_boards = boards_to_read(planned)
         total = len(planned if kept_boards is None else kept_boards)
         unread = boards_unread(ats_quiet, total, board_report)
         boards.update(unread)                 # into SOURCES, for the round to say
