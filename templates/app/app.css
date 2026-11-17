@@ -49,7 +49,7 @@ body {
   overflow-wrap: break-word;
 }
 body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
-h1, h2, h3, h4 { line-height: 1.25; text-wrap: balance; margin: 0; }
+h1, h2, h3, h4, h5 { line-height: 1.25; text-wrap: balance; margin: 0; }
 p { margin: 0; }
 a { color: var(--link); text-decoration-color: var(--link-line); text-decoration-thickness: 1px; text-underline-offset: 3px; }
 @media (hover: hover) { a:hover { text-decoration-color: var(--ink); } }
@@ -304,44 +304,31 @@ bdi { unicode-bidi: isolate; }
 .todo-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; }
 /* A row's state pill ("Draft ready") beside its day, together at the line's end. */
 .todo-top .todo-state { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-/* A checklist card: one row a person, their buttons at the row's end. */
+/* A checklist card: one row a person, two lines each on every screen (the redesign's second
+   round, 2026-11-17): who, with where they work, on the first, cut short with "..." rather than
+   wrapped; how it stands (the kind, the day) muted on the second; the row's button and its
+   trash together at its end. At least 48px tall, a hairline between rows inside the card's
+   padding. A name broken over four lines beside its button read as a wall ("Noor / at
+   Brackenridge / Advisory / First note"). */
 .g-rows { display: grid; margin-top: 8px; }
-.g-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; padding: 8px 0; border-top: 1px solid var(--line); }
+.g-row { display: flex; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 4px 12px; min-height: 48px; padding: 8px 0; border-top: 1px solid var(--line); }
 .g-row:first-child { border-top: 0; }
 .g-row.is-marked .g-name { color: var(--muted); }
-.g-main { min-width: 0; flex: 1 1 14rem; }
-.g-name { font-weight: 600; }
-.g-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.g-main { min-width: 0; flex: 1 1 auto; display: grid; gap: 2px; }
+.g-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.g-main > p.small { line-height: 1.4; }
+.g-acts { display: flex; flex: none; flex-wrap: nowrap; align-items: center; gap: 8px; }
 .g-at { font-weight: 400; color: var(--muted); }
-/* On a wide screen a row is one line, the name and how it stands side by side, and its
-   buttons sit together at the row's end, just before its trash at the card's edge: a column in
-   mid-card, with empty room after it and the trash alone at the edge, read as two places to
-   look (the maintainer, 2026-11-12). Every row's buttons start at one edge, the rows sharing
-   the list's columns (subgrid): the words take what is left, the buttons the widest row's
-   room. Without subgrid each row's buttons still end at its trash. */
+/* Every row's buttons start at one edge, the rows sharing the list's columns (subgrid): the
+   words take what is left, the buttons the widest row's room, just before the trash at the
+   card's edge (the maintainer, 2026-11-12). Without subgrid each row's buttons still end at
+   its trash. */
 @media (min-width: 760px) {
-  .g-row { flex-wrap: nowrap; }
-  .g-main { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 4px; flex: 1 1 auto; }
-  .g-main > .g-name + p.small::before { content: "\00b7\00a0"; }
-  /* The row's button and its bin keep one line: the words beside them give way instead (at a
-     tablet's width the bin fell under its button, the screen review, 2026-11-11). */
-  .g-acts { flex: none; flex-wrap: nowrap; }
   .g-acts > [data-bin] { margin-left: auto; }
   @supports (grid-template-columns: subgrid) {
     ul.g-rows { grid-template-columns: minmax(0, 1fr) max-content; column-gap: 12px; }
     ul.g-rows > .g-row { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; }
   }
-}
-/* On a phone the name is its own line and where they work, with how it stands, the line under
-   it, both beside the row's button. */
-@media (max-width: 759px) {
-  .g-row { flex-wrap: nowrap; }
-  .g-acts { flex: none; }
-  .g-main { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 4px; }
-  .g-main > .g-name { display: contents; }
-  .g-name > .name-link { flex-basis: 100%; font-weight: 600; }
-  .g-name > .g-at { font-size: var(--t-sm); }
-  .g-main > .g-name:has(> .g-at) + p.small::before { content: "\00b7\00a0"; }
 }
 .hidden-note { margin-top: 12px; }
 .top-end { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; }
@@ -1699,21 +1686,28 @@ li:first-child > .fb-row, .fb-row:first-child { border-top: 0; }
    width, and its own text and fields ran off the right (the maintainer, 2026-10-26). */
 dialog.work-sheet :is(form, div, label, fieldset) { min-width: 0; }
 dialog.work-sheet :is(select, input, textarea) { width: 100%; max-width: 100%; min-width: 0; text-overflow: ellipsis; }
-/* A fold at a list's end is a quiet line with its arrow, never a bar the width of the page:
+/* A fold at a list's end is a quiet row with its chevron, never a bar the width of the page:
    three of them stacked read as three big buttons (the maintainer, 2026-11-06: "think it needs
-   better design"). */
+   better design"). The one disclosure (the redesign's second round, 2026-11-17): its words in
+   the ink at 14/600, a 16px chevron pointing right while shut and down once open, the raised
+   fill under the pointer, 44px tall on touch. "Not due yet (5)" in grey with a 10px chevron
+   glued to it, open over its cards with its chevron saying shut, read as a caption. */
 .band-more > summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; margin: 4px 0 0 -8px;
-  min-height: var(--target); border-radius: var(--r-sm); font-weight: 600; font-size: var(--t-sm); color: var(--muted); }
-.band-more > summary::after { content: "\203A"; display: inline-block; transition: transform 0.15s; }
-.band-more[open] > summary::after { transform: rotate(90deg); }
-@media (hover: hover) { .band-more > summary:hover { color: var(--ink); background: var(--raised); } }
-@media (prefers-reduced-motion: reduce) { .band-more > summary::after { transition: none; } }
+  min-height: var(--target); border-radius: var(--r-sm); font-weight: 600; font-size: var(--t-sm); color: var(--ink); }
+.band-more > summary::after { content: ""; flex: none; width: 8px; height: 8px; margin: 0 4px; box-sizing: border-box; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted);
+  transform: rotate(-45deg); }
+.band-more[open] > summary::after { transform: translateY(-2px) rotate(45deg); }
+@media (hover: hover) { .band-more > summary:hover { background: var(--raised); } .band-more > summary::after { transition: transform 0.15s; } }
+@media (hover: hover) and (prefers-reduced-motion: reduce) { .band-more > summary::after { transition: none; } }
 .band-more > summary::-webkit-details-marker { display: none; }
 .band-more[open] > summary { margin-bottom: 12px; }
+/* LinkedIn's steps under their fold, read as the card's own words. */
+.band-more.how-fold > summary { margin-top: 8px; }
+.band-more.how-fold[open] > summary { margin-bottom: 4px; }
 /* What a fold gives, said beside its name in the quiet tone (Help Claude do more). */
 .band-more > summary .band-more-why { font-weight: 400; white-space: pre-wrap; }
 /* "Show N more" says what it still folds: once open it holds nothing back, so it goes. */
-.band-more:not(.soon-more)[open] > summary { display: none; }
+.band-more:not(.soon-more):not(.how-fold)[open] > summary { display: none; }
 
 /* An opened setting reads as inside its row, a shade deeper, and each item in it is a block:
    its name and its state on one line, the state always at the right, the button under them.

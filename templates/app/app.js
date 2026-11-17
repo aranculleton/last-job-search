@@ -3257,6 +3257,17 @@
   // icon, a short heading, one grey line and at most one button, never a dashed box (the
   // redesign, 2026-11-16). A list a filter or a search emptied wears the magnifier.
   const EMPTY_ICON = {todo: "todo", brief: "brief", jobs: "jobs", drafts: "jobs", contacts: "contacts", interviews: "interviews", progress: "progress", chat: "chat", settings: "settings", profile: "contacts"};
+  // Nothing left today, said as good news (the redesign's second round, 2026-11-17): a soft clay
+  // circle with a tick, its one line, and one quiet way on to what is coming, on To do and on
+  // the Brief's Today alike. `head`: its heading's level where it stands.
+  function allClear(key, head) {
+    const up = upcomingItems().length;
+    return h("div", {class: "empty all-clear", "data-k": "all-clear:" + key},
+      h("span", {class: "empty-ic", "aria-hidden": "true"}, icon("check")),
+      h(head || "h3", {class: "empty-title"}, "Nothing left today"),
+      h("p", {}, "Claude adds things here as they come in."),
+      up ? btn("See what's coming up", () => go("interviews", {focus: true}), {kind: "quiet", small: true, key: "all-clear-up:" + key}) : null);
+  }
   function empty(title, body, extra, ic) {
     const name = ic || (/^Nothing (matches|to show)/.test(txt(title)) ? "k-search" : EMPTY_ICON[S.section] || "todo");
     return h("div", {class: "empty"}, h("span", {class: "empty-ic", "aria-hidden": "true"}, icon(name)), h("p", {class: "empty-title"}, title), body ? h("p", {}, body) : null, extra || null);
@@ -3806,8 +3817,8 @@
   const TODAY_FIRST = ["now", "answer", "week", "later"];
   const TAB_WORDS = {jobs: "Jobs", drafts: "Jobs", "drafts-messages": "Contacts", contacts: "Contacts", interviews: "Coming up"};
 
-  function kindMark(kind) {
-    return h("span", {class: "kind kind-" + kind}, icon("k-" + kind), h("span", {}, KINDS[kind] || "To do"));
+  function kindMark(kind, word) {
+    return h("span", {class: "kind kind-" + kind}, icon("k-" + kind), h("span", {}, word || KINDS[kind] || "To do"));
   }
   function needKind(n) {
     const k = txt(n.kind);
@@ -4167,7 +4178,7 @@
       return h("li", {class: "g-row", "data-item": d ? d.id : m.id},
         h("div", {class: "g-main"}, h("p", {class: "g-name"}, rowName(cid, name, "send:" + m.id),
           fs === "going" ? [" ", chip("Claude is fixing it", "info")] : flag || fs === "failed" ? [" ", chip("Check first", "warn")] : null),
-          why ? h("p", {class: "muted small sep-before"}, why) : null, stateLine(m.id, "send:" + where + ":msg:" + m.id) || (d ? stateLine(d.id, "send:" + where + ":" + d.id) : null)),
+          why ? h("p", {class: "muted small"}, why) : null, stateLine(m.id, "send:" + where + ":msg:" + m.id) || (d ? stateLine(d.id, "send:" + where + ":" + d.id) : null)),
         h("div", {class: "g-acts"}, seeDraftBtn(m, "send:" + where + ":" + m.id, "secondary"),
           cid ? btn("", () => askRemovePerson(cid, txt(p ? p.first_name : m.first_name), txt(p ? p.employer : m.employer), null, Object.assign({skip, replied: p && canSayReplied(p) ? () => logReply(p) : null}, d ? {later: laterChoices(d), hide: () => hideTodo("due:" + d.id, txt(d.title))} : {})),
             {kind: "quiet icon-only", small: true, icon: "bin", key: "sendbin:" + where + ":" + m.id, aria: "Not " + name + "?"}) : null));
@@ -4178,12 +4189,20 @@
       h("div", {class: "todo-top"}, kindMark("message"), h("span", {class: "todo-state"}, late ? h("span", {class: "chip tone-warn"}, late + " overdue") : null,
         gone ? h("span", {class: "chip tone-plain", "data-k": "grp-done:" + hid}, gone + " of " + (gone + left.length) + " done") : null)),
       h("p", {class: "card-title", id: hid}, "Messages to send (" + left.length + ")"),
-      // The week's first notes against the week's usual number, where there are any.
-      notes ? h("p", {class: "small muted"}, budgetLine(0) || "Copy each one and send it on LinkedIn.") : null,
+      // One short line: what went this week (the redesign's second round, 2026-11-17: "3 sent
+      // this week of about 20. 4 InMail credits left." was a sum to do). The count to send is
+      // the title's alone.
+      sendWeekLine(notes),
       groupRows("send:" + where, left.map(row)),
       h("div", {class: "card-actions"}, btn("Open Contacts", () => go("contacts", {focus: true, item: left[0].id}), {kind: "primary", small: true, key: "send-open:" + where, aria: "Open Contacts at the people with a message to send"}),
-        btn("Plan a time", () => planTime("Send " + plural(left.length, "message", "messages")), {kind: "secondary", small: true, icon: "cal-add", key: "send-plan:" + where,
-          aria: "Plan a time in your calendar: send " + plural(left.length, "message", "messages")})));
+        more("send:" + where, "Messages to send", [h("div", {class: "more-acts"}, btn("Set a time to send", () => planTime("Send " + plural(left.length, "message", "messages")), {kind: "secondary", small: true, icon: "cal-add", key: "send-plan:" + where,
+          aria: "Set a time to send them, in your calendar: " + plural(left.length, "message", "messages")}))], true)));
+  }
+  function sendWeekLine(notes) {
+    const wk = obj(obj(M().message_budget || M().send_budget).week);
+    const sent = wk.sent === null || wk.sent === undefined ? NaN : Number(wk.sent);
+    if (Number.isFinite(sent)) return h("p", {class: "small muted send-week"}, sent ? sent + " sent this week." : "None sent yet this week.");
+    return notes ? h("p", {class: "small muted send-week"}, "Copy each one and send it on LinkedIn.") : null;
   }
   // The quick answers, one at a time: the question in the card's one grey box with the control
   // its answer needs (answerBox), the next one there the moment it is answered.
@@ -4529,10 +4548,6 @@
     for (const f of all.filter((i) => i.band === "first")) put(wrap, withHide(f, f.node({where: "todo", section: "todo"})));
     // The brief has a page of its own now; To do is only what to do.
     if (top && !settingUp) put(wrap, top.node({where: "todo", section: "todo"}));
-    if (!all.length && !setup) {
-      put(wrap, empty("Nothing needs you right now.", "New questions and follow-ups appear here first.",
-        h("div", {class: "card-actions"}, btn("Find jobs", askSearch, {kind: "primary", small: true, key: "todo-find"}))));
-    }
     // Today's things: the first TODO_FIRST show, and the rest of today's wait behind one fold
     // under their band's heading. What is late or due today comes first, then the questions:
     // a thank-you two days late, today's reply and today's resume waited behind four small
@@ -4570,6 +4585,10 @@
       if (there && today) { put(rest, restBox); restN += there; }
       if (there && !today) { put(soon, restBox); soonCount += there; }
     }
+    // Nothing due today: said as good news, with one quiet way on, and what is not due yet
+    // stays folded under it (the redesign's second round, 2026-11-17).
+    const clear = !settingUp && !setup && !paused && !top && !shown && !restN && !all.some((i) => i.band === "first");
+    if (clear) put(wrap, allClear("todo"));
     // The tour, on a first visit only and after what is late or due today, one line high: it
     // sat above a reply 26 days late on every visit (the walk-through, 2026-11-03). Settings
     // has it under Help for any time after.
@@ -4630,11 +4649,28 @@
         more ? det("todo-help", false, {class: "band-more"}, h("summary", {class: "band-more-sum"}, more + " more " + (more === 1 ? "way" : "ways") + " to help Claude"),
           h("div", {class: "stack todo-help"}, helpNodes.slice(1))) : null));
     }
-    if (soonCount) put(wrap, det("todo-soon", !shown && !top, {class: "band-more soon-more"}, h("summary", {class: "band-more-sum"}, "Not due yet (" + soonCount + ")"), soon));
+    // Folded until asked for, whatever today holds: its content is not today's (the redesign's
+    // second round, 2026-11-17; open by itself, its chevron said closed over five cards).
+    if (soonCount) put(wrap, det("todo-soon", false, {class: "band-more soon-more"}, h("summary", {class: "band-more-sum"}, "Not due yet (" + soonCount + ")"), soon));
     const hidden = dueItems().find((d) => txt(d.kind) === "hidden");
     if (!settingUp) put(wrap, hidden ? h("p", {class: "muted small hidden-note"}, txt(hidden.title) + ".") : null,
       hiddenFold(hiddenTodos(settingUp, every)), settingUp ? null : putOffFold(), doneTodayFold(), tipLine("todo"));
+    headCards(wrap, 3);
     return wrap;
+  }
+  // A card's title is a heading, one level under what holds it (the accessibility review,
+  // 2026-11-17: To do's titles were paragraphs, so a screen reader's heading list skipped every
+  // card): the screen's h2, a band's h3 ("Due or late"), an employer's h4 over two of theirs.
+  // Drawn as before (.card-title); a card no band holds is an h3 under the screen's title.
+  function headCards(root, base) {
+    for (const t of root.querySelectorAll(":is(article, section).card > p.card-title")) {
+      const lvl = t.closest(".todo-group.by-employer") ? 5 : t.closest("section.band") ? 4 : base || 3;
+      const hd = document.createElement("h" + lvl);
+      for (const a of [...t.attributes]) hd.setAttribute(a.name, a.value);
+      hd.append(...t.childNodes);
+      t.replaceWith(hd);
+    }
+    return root;
   }
   // The to-dos that belong to one section, at its top: the same items, done in either place.
   function tabTodos(tab, onCards) {
@@ -4648,9 +4684,9 @@
     // the person away for something this screen could show (the maintainer, 2026-11-06: "why
     // would to do have it but not the jobs page?").
     const rest = items.slice(1);
-    return h("div", {class: "orphan"}, first.node({where: tab, section: tab}),
+    return headCards(h("div", {class: "orphan"}, first.node({where: tab, section: tab}),
       rest.length === 1 ? rest[0].node({where: tab, section: tab}) : rest.length ? det("tab-todos:" + tab, false, {class: "band-more"}, h("summary", {class: "band-more-sum", "data-k": "tab-todos-more:" + tab}, "Show " + rest.length + " more"),
-        h("div", {class: "stack"}, rest.map((i) => i.node({where: tab, section: tab})))) : null);
+        h("div", {class: "stack"}, rest.map((i) => i.node({where: tab, section: tab})))) : null), 3);
   }
   function comingUp(iv, ctx) {
     ctx = ctx || {};
@@ -4677,7 +4713,11 @@
       // The same actions as its card in Coming up (ivActs), and its bin the same choices.
       // A new day waits under More, alone or not (DESIGN.md: an interview's card): "New day" on
       // the face beside Prepare me and Add to calendar (the review, 2026-11-05).
-      h("div", {class: "card-actions"}, acts.main, more("soon:" + k, txt(iv.company), [h("div", {class: "more-acts"}, acts.more)], true)),
+      // Its face is its next step and at most one more (Practise 3 questions beside Read your
+      // prep); Add to calendar leads More (the redesign's second round, 2026-11-17: "Read your
+      // prep | Add to calendar | More", all grey, was a wall).
+      h("div", {class: "card-actions"}, acts.main.filter((b) => !b.matches("[data-k^='soon-cal:']")),
+        more("soon:" + k, txt(iv.company), [h("div", {class: "more-acts"}, acts.main.filter((b) => b.matches("[data-k^='soon-cal:']")).concat(acts.more))], true)),
       cardTalk("interview", iv.id, "the interview with " + txt(iv.company)));
   }
   // Two days before and the day before, with its prep ready: a day to practise (the UX review,
@@ -4960,7 +5000,7 @@
       const we = busy(d) ? dueWorkEntry(d, kind) : null;
       return h("li", {class: "g-row" + (marked ? " is-marked" : ""), "data-item": d.id},
         h("div", {class: "g-main"}, h("p", {class: "g-name"}, cid ? rowName(cid, name, "fg:" + d.id) : name),
-          dueWho(d) ? h("p", {class: "muted small sep-before"}, cap1(dueWho(d))) : null, stateLine(d.id, "due:" + where + ":" + d.id),
+          dueWho(d) ? h("p", {class: "muted small"}, cap1(dueWho(d))) : null, stateLine(d.id, "due:" + where + ":" + d.id),
           we ? (compact ? rowWord(we[1]) : workInline(we[0], we[1], {key: "fgw:" + where + ":" + d.id})) : null),
         h("div", {class: "g-acts"}, busy(d) ? null :
           draft ? seeDraftBtn(draft, "fgdraft:" + where + ":" + d.id, "secondary") :
@@ -4995,8 +5035,8 @@
       gone.length && !showGone ? h("p", {class: "fold"}, ds.length > gone.length ? h("span", {}, gone.length + " done: ") : null,
         btn(ds.length > gone.length ? "Show" : "Show them", () => { openState.set("grp-gone:" + hid, true); scheduleRender(); }, {kind: "link", key: "grpgone:" + hid})) : null,
       ds.length > gone.length ? h("div", {class: "card-actions"}, allBtn,
-        btn("Plan a time", () => planTime(words.title(ds.length - gone.length)), {kind: "secondary", small: true, icon: "cal-add", key: "fg-plan:" + where + ":" + g + ":" + band,
-          aria: "Plan a time in your calendar: " + words.title(ds.length - gone.length)})) : null);
+        btn(dueKind(ds[0]) === "message" ? "Set a time to send" : "Set a time", () => planTime(words.title(ds.length - gone.length)), {kind: "secondary", small: true, icon: "cal-add", key: "fg-plan:" + where + ":" + g + ":" + band,
+          aria: "Set a time in your calendar: " + words.title(ds.length - gone.length)})) : null);
   }
   // A group card shows its first five, the rest one tap below, as long lists do elsewhere
   // (the maintainer, 2026-10-30: 23 follow-ups listed whole on one card).
@@ -5419,21 +5459,32 @@
     // 2026-11-04).
     const dateEl = chipWords ? h("span", {class: own ? "chip tone-info" : late ? "chip tone-warn" : "muted small"}, chipWords) : null;
     return card("article", {class: "card todo due-row" + (late && !selfSetDue(d) ? " late" : "") + (marked ? " is-marked" : "") + (draft ? " is-drafted" : ""), "aria-labelledby": hid, "data-item": d.id, "data-k": "card:" + (ctx.where || "") + ":" + d.id},
-      h("div", {class: "todo-top"}, kindMark(dueKind(d)), draft ? h("span", {class: "todo-state"}, chip("Draft ready", "ok"), dateEl) : dateEl),
+      // A thank-you is a message, said as one: tagged "Interview" it read as the interview itself
+      // (the UX review, 2026-11-17).
+      h("div", {class: "todo-top"}, txt(d.kind) === "thank_you" ? kindMark("message", "Thank-you") : kindMark(dueKind(d)), draft ? h("span", {class: "todo-state"}, chip("Draft ready", "ok"), dateEl) : dateEl),
       h("p", {class: "card-title", id: hid}, title),
       dueWho(d) ? h("p", {class: "muted small due-context"}, cap1(dueWho(d))) : null,
       hold ? h("div", {class: "ask-box hold-box", "data-k": "hold:" + (ctx.where || "") + ":" + d.id},
         h("p", {class: "ask-q"}, plainDates(hold.text), hold.why ? hintQ("holdwhy:" + (ctx.where || "") + ":" + d.id, txt(plainDates(hold.why)).replace(/\.$/, ""), "Why: " + clip(txt(plainDates(hold.text)), 60)) : null)) : null,
-      h("div", {class: "card-actions"},
-        txt(d.sub) === "choose" && interviewItems().find((i) => i.id === txt(d.item)) ? btn("Choose the day", () => chooseDay(interviewItems().find((i) => i.id === txt(d.item))), {kind: "primary", small: true, key: "dueday:" + (ctx.where || "") + ":" + d.id}) :
+      dueActs(d, ctx, [txt(d.sub) === "choose" && interviewItems().find((i) => i.id === txt(d.item)) ? btn("Choose the day", () => chooseDay(interviewItems().find((i) => i.id === txt(d.item))), {kind: "primary", small: true, key: "dueday:" + (ctx.where || "") + ":" + d.id}) :
         busy ? btn("See its progress", openWork, {small: true, key: "duesee:" + (ctx.where || "") + ":" + d.id}) :
           draft ? seeDraftBtn(draft, "duedraft:" + (ctx.where || "") + ":" + d.id) :
           asked && asked.ask.doc ? askBtn(asked.p, asked.ask, "dueask:" + (ctx.where || "") + ":" + d.id) :
           hasWork ? btn(dueLabel(d, kind), () => askDue(d), {kind: "primary", small: true, key: "duework:" + (ctx.where || "") + ":" + d.id, aria: dueLabel(d, kind) + ": " + txt(d.title), wakes: kind}) : null,
-        doneBtn, replied, ctx.where === "todo" && !replied ? tabLink(dueTab(d), dueTab(d) === "contacts" ? (dueContact(d) || null) : (txt(d.item) || null)) : null,
-        asked && asked.ask.doc && hasWork ? more("due:" + (ctx.where || "") + ":" + d.id, title, [h("div", {class: "more-acts"},
-          btn(dueLabel(d, kind), () => askDue(d), {kind: "quiet", small: true, key: "duework:" + (ctx.where || "") + ":" + d.id, aria: dueLabel(d, kind) + ": " + txt(d.title)}))]) : null),
+        doneBtn, replied], [ctx.where === "todo" && !replied ? tabLink(dueTab(d), dueTab(d) === "contacts" ? (dueContact(d) || null) : (txt(d.item) || null)) : null,
+        asked && asked.ask.doc && hasWork ? btn(dueLabel(d, kind), () => askDue(d), {kind: "quiet", small: true, key: "duework:" + (ctx.where || "") + ":" + d.id, aria: dueLabel(d, kind) + ": " + txt(d.title)}) : null], title),
       noteFor("duework:" + d.id), stateLine(d.id, "due:" + (ctx.where || "") + ":" + d.id));
+  }
+  // A To do card's actions on a diet (the redesign's second round, 2026-11-17): its next step,
+  // one more beside it, and More for the rest, never a wall of equal pills. `face`: the next
+  // step first, then the others in the order they matter; past the first two they wait under
+  // More with `rest` (a way to where it lives, a lesser choice), kept there even alone, so a
+  // card's row is never three pills and a link.
+  function dueActs(d, ctx, face, rest, about) {
+    const shown = face.filter(Boolean);
+    const under = shown.slice(2).concat(arr(rest).filter(Boolean));
+    return h("div", {class: "card-actions"}, shown.slice(0, 2),
+      under.length ? more("due:" + ((ctx && ctx.where) || "") + ":" + d.id, about, [h("div", {class: "more-acts"}, under)], true) : null);
   }
   const ENOUGH = /^\s*(?:that'?s (?:all|it)|that is (?:all|it)|thats (?:all|it)|done|no more|nothing (?:more|else)|none)\s*[.!]*\s*$/i;
   function openSetupQuestion(step, saidNow) {
@@ -9620,7 +9671,7 @@
     return t;
   }
   function planTime(title) {
-    sheet({title: "Plan a time", intro: txt(title) + ": choose when" + (zone() ? ", in " + city(zone()) + " time," : "") + " and it goes in your calendar.",
+    sheet({title: "Set a time", intro: txt(title) + ": choose when" + (zone() ? ", in " + city(zone()) + " time," : "") + " and it goes in your calendar.",
       fields: [{id: "on", type: "date", label: "The day", required: true, value: addDays(todayIso(), 1)},
         {id: "time", type: "time", label: "The time", value: "09:00"}],
       validate: (v) => (txt(v.time) && !/^([01]?\d|2[0-3]):[0-5]\d$/.test(txt(v.time)) ? "Write the time like 09:30." : dayDiff(v.on) !== null && dayDiff(v.on) < 0 ? "Choose today or a day ahead." : null),
@@ -14186,7 +14237,10 @@
         asked ? h("p", {}, ending ? "Its link stops working after about three days: add it soon." : late ? "It should be in your email by now." :
           "LinkedIn emails you when it's ready: usually minutes for messages and connections, up to a day for the full copy. Its link stops working after about three days.") :
           h("div", {}, h("p", {}, "So Claude knows who you have talked to, and never writes to someone twice."),
-            steps.length ? h("ol", {class: "steps"}, steps.map((s) => h("li", {}, s))) : null),
+            // LinkedIn's steps one tap away, never eight lines on a phone (the UX review,
+            // 2026-11-17): its button opens the page they start on.
+            steps.length ? det("export-how", false, {class: "band-more how-fold"}, h("summary", {class: "band-more-sum", "data-k": "export-how"}, "How to get it"),
+              h("ol", {class: "steps"}, steps.map((s) => h("li", {}, s)))) : null),
         // One button at a time, the next once it is done: LinkedIn's page, then "I've asked for
         // it", then "Add the download". Three equal buttons under three steps left the person
         // to work out the order (the walk-through, 2026-11-03).
@@ -17778,6 +17832,7 @@
     "side-hide": "M5 4h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z M9 4v16 M16 9l-3 3 3 3",
     "side-show": "M5 4h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z M9 4v16 M13 9l3 3-3 3",
     todo: "M12 3a9 9 0 1 0 0 18a9 9 0 0 0 0-18zM8 12l3 3l5-6",
+    check: "M5 12.5l4.5 4.5L19 7.5",
     // Four panels with clear space between them: 2 units apart under a 1.75 line, their edges
     // ran together at the menu's size and read as blurred (the maintainer, 2026-11-04).
     brief: "M3 3h7v9H3zM14 3h7v5h-7zM14 12h7v9h-7zM3 16h7v5H3z",
