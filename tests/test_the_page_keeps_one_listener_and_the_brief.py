@@ -294,24 +294,22 @@ def test_refresh_asks_claude_only_when_the_data_is_older_than_today(run, tmp_pat
     assert ("Up to date" in got["after"][4]["eval"]) is (not asks), got["after"][4]["eval"]
 
 
-# A call this afternoon is Coming up's first row, and the strip marks today's things and
-# tomorrow's in their own colours, nothing else. Today's card led with the call until the
-# redesign (2026-11-16): since then Today is To do's first card, one answer to "what next?"
-# on both screens (DESIGN.md, One ranked list; test_the_brief_and_to_do_give_one_answer).
-def test_a_call_today_is_coming_ups_first_and_the_strip_marks_today_and_tomorrow(run, tmp_path, vp):
+# Today's card is what comes next today: a call this afternoon leads, ahead of an interview
+# three days out (the maintainer, 2026-11-02: "the most upcoming event"), and the strip
+# marks today's things red and tomorrow's amber, nothing else.
+def test_today_leads_with_what_is_on_today_and_the_strip_marks_today_and_tomorrow(run, tmp_path, vp):
     model = copy.deepcopy(_sample())
     call = copy.deepcopy(next(u for u in model["upcoming"] if u["kind"] == "call"))
     call.update(id="up-call-today", day="2026-10-25", time="15:00", start="2026-10-25T15:00:00Z",
                 end="2026-10-25T15:30:00Z")
     model["upcoming"].insert(0, call)
     got = _go(run, tmp_path, [
-        {"hash": "brief", "eval": "[document.querySelector('#main .bp-iv .bp-iv-what').textContent, (document.querySelector('#main .bp-up > li') || {}).textContent || '']"},
+        {"hash": "brief", "eval": "document.querySelector('#main .bp-iv .bp-iv-what').textContent"},
         {"eval": "(() => { const d = (n) => document.querySelectorAll('#main .bp-day')[n]; const c = (n) => d(n).querySelector('.bp-day-dots i'); "
                  "return [d(0).classList.contains('is-today'), d(1).classList.contains('is-tomorrow'), "
                  "c(0) ? getComputedStyle(c(0)).backgroundColor : null, d(4).querySelector('.bp-day-dots i') ? getComputedStyle(d(4).querySelector('.bp-day-dots i')).backgroundColor : null]; })()"}],
         vp, model=model, clock=T)
-    hero, first_up = got["after"][0]["eval"]
-    assert call["title"] in first_up and hero != call["title"], got["after"][0]["eval"]
+    assert got["after"][0]["eval"] == call["title"], got["after"][0]["eval"]
     today, tomorrow, red, later = got["after"][1]["eval"]
     assert today and tomorrow and red and later and red != later      # today's dot is its own colour
 
@@ -422,18 +420,16 @@ def test_the_menu_folds_to_its_icons_and_back(run, tmp_path, vp):
     assert after["side"] == before["side"] and after["pressed"] == "false" and after["title"] is None, after
 
 
-# The release review and the walk-through (2026-11-02). A test due today is itself, never the
-# interview it belongs to. Since the redesign (2026-11-16) Today is To do's first card: the
-# second interview two days off with no prep yet, Prepare me its button; the test due today is
-# Coming up's, by its own name.
-def test_a_test_due_today_is_itself_in_coming_up_and_its_interview_leads_today(run, tmp_path, vp):
+# The release review and the walk-through (2026-11-02). A test due today is itself on Today,
+# never the interview it belongs to, and that interview stays in Coming up.
+def test_a_test_due_today_leads_as_itself_and_its_interview_stays_coming_up(run, tmp_path, vp):
     got = _go(run, tmp_path, [{"hash": "brief", "eval": "[document.querySelector('#main .bp-today .bp-iv-when').textContent, "
                                                        "document.querySelector('#main .bp-today .bp-iv-what').textContent, "
                                                        "document.querySelector('#main .bp-upcoming').textContent]"}],
               vp, clock="2026-11-02T08:30:00Z")
     when, what, coming = got["after"][0]["eval"]
-    assert "Second interview" in what and "Online test" not in what, (when, what)
-    assert "Online test" in coming, coming
+    assert when.startswith("Due today") and "Online test" in what, (when, what)
+    assert "Second interview" in coming, coming
 
 
 # A late reply or follow-up with a draft ready leads to the drafts, not to a person's page,

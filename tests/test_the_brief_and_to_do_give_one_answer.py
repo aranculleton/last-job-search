@@ -102,13 +102,12 @@ def test_the_brief_is_to_dos_first_four_in_its_order_with_its_count(run, tmp_pat
     assert brief["next"][0]["text"].startswith("Messages to send (7)") and "Juno" in brief["next"][0]["text"], brief["next"]
 
 
-def test_an_interview_two_days_off_with_no_prep_leads_both(run, tmp_path):
-    # The second interview on Wednesday, with no prep yet: To do's first card, and so Today's,
-    # with Prepare me; the online test due today is Coming up's, beside it.
-    todo, brief = _read(run, tmp_path, WIDE, clock="2026-11-02T08:30:00Z")
+def test_an_interview_tomorrow_with_no_prep_leads_both(run, tmp_path):
+    # The second interview tomorrow, with no prep yet and nothing booked today: To do's first
+    # card, and so Today's, with Prepare me.
+    todo, brief = _read(run, tmp_path, WIDE, clock="2026-11-03T08:30:00Z")
     _agree(todo, brief)
     assert "Second interview" in brief["today"] and brief["button"] == "Prepare me", brief
-    assert any("Online test" in u for u in brief["upcoming"]), brief["upcoming"]
 
 
 def test_a_quiet_to_do_fills_next_with_what_is_not_due_yet_by_its_day(run, tmp_path):
@@ -124,14 +123,23 @@ def test_a_quiet_to_do_fills_next_with_what_is_not_due_yet_by_its_day(run, tmp_p
     assert brief["next"] and all(s["n"] is None for s in brief["next"]), brief["next"]
 
 
-def test_a_call_today_stays_in_coming_up_and_today_is_still_to_dos_first(run, tmp_path):
+def test_a_call_booked_today_leads_the_brief_and_next_is_to_dos_first_three(run, tmp_path):
+    # The one exception (the maintainer, 2026-11-02: "the most upcoming event"; "if there are
+    # multiple things today then the most important one like an interview or a call"): a call
+    # this afternoon leads Today, with no "1 of N" over it, since it is none of To do's cards;
+    # To do is as it was, and Next is To do's first three, numbered from one.
     m = copy.deepcopy(_sample())
     call = copy.deepcopy(next(u for u in m["upcoming"] if u["kind"] == "call"))
     call.update(id="up-call-today", day="2026-10-25", time="15:00", start="2026-10-25T15:00:00Z", end="2026-10-25T15:30:00Z")
     m["upcoming"].insert(0, call)
     todo, brief = _read(run, tmp_path, WIDE, model=m)
-    _agree(todo, brief)
-    assert any(call["title"] in u for u in brief["upcoming"]), brief["upcoming"]
+    plain, _ = _read(run, tmp_path, WIDE)
+    assert brief["today"] == call["title"] and brief["count"] is None, brief
+    assert [c["title"] for c in todo["cards"]] == [c["title"] for c in plain["cards"]] and todo["badge"] == plain["badge"], (todo, plain)
+    want = [c["title"] for c in todo["cards"][:3]]
+    got = [s["text"] for s in brief["next"]]
+    assert len(got) == 3 and all(g.startswith(w) for g, w in zip(got, want)), (got, want)
+    assert [s["n"] for s in brief["next"]] == ["1", "2", "3"], brief["next"]
 
 
 def test_a_step_opens_its_own_card_in_to_do(run, tmp_path):

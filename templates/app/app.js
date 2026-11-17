@@ -6336,7 +6336,32 @@
       .sort((x, y) => (KIND_RANK[txt(x.kind)] ?? 5) - (KIND_RANK[txt(y.kind)] ?? 5) || upAt(x) - upAt(y));
     const first = queue[0];
     const upNow = todayUp[0];
-    if (first) {
+    // The one exception to the one list: something booked today and not over leads Today, by
+    // its kind and then its time, as the maintainer set it (2026-11-02: "the most upcoming
+    // event"; "if there are multiple things today then the most important one like an
+    // interview or a call"). Next is then To do's first three, Today being none of them.
+    let afterHero = queue.slice(1);
+    if (upNow) {
+      heroKeys = upKeys(upNow);
+      const g = obj(upNow.go);
+      const ofIv = txt(g.to) === "interviews" && (txt(upNow.kind) === "interview" || !txt(upNow.kind)) ? interviewItems().find((x) => x.id === txt(g.item)) : null;
+      if (ofIv) {
+        hero = ivHero(ofIv, "Today" + (timeOf(upNow.start) ? ", " + timeOf(upNow.start) : ""));
+        heroKeys = heroKeys.concat(upKeys(upNow));
+      } else {
+        const who = txt(g.to) === "contacts" ? whoOf(g.item) : null;
+        const of = txt(g.to) === "interviews" ? interviewItems().find((x) => x.id === txt(g.item)) : null;
+        const open = who ? () => openDetail("person", who.id) : of ? () => openDetail("interview", of.id) : null;
+        facts = (txt(upNow.note) ? [txt(upNow.note)] : []).concat(who ? personFacts(who, dueItems().find((d) => txt(d.item) === who.id)) : []);
+        hero = h("div", {class: "bp-iv"},
+          h("p", {class: "bp-iv-when"}, h("span", {}, (txt(upNow.kind) === "test" ? "Due today" : "Today") + (timeOf(upNow.start) ? ", " + timeOf(upNow.start) : "")),
+            obj(upNow.cal).ics ? btn("", () => calSheet([upNow]), {kind: "quiet icon-only", small: true, icon: "cal-add", key: "bp-cal-hero", aria: "Add to your calendar: " + txt(upNow.title)}) : null),
+          h("p", {class: "bp-iv-what"}, h("bdi", {}, txt(upNow.title))),
+          open ? btn(who ? "Open " + txt(who.first_name) : "Open it", open, {kind: "primary", small: true, key: "bp-up:" + upNow.id}) : null);
+      }
+      // An interview today that is To do's own first card is said once, on Today.
+      afterHero = queue.filter((i) => !(heroIv && i.key === "iv:" + heroIv.id));
+    } else if (first) {
       const face = faceOf(first);
       heroCounts = counted(first);
       if (face.iv) hero = ivHero(face.iv, ivWhen(face.iv), face.node ? queueAct(face, "bp-first") : null);
@@ -6369,26 +6394,6 @@
         h("p", {class: "bp-iv-when"}, busy ? "Searching now" : "First"),
         h("p", {class: "bp-iv-what"}, busy ? "Claude is finding your first jobs. They show here when the search is done." : "Find your first jobs"),
         busy ? null : btn("Start the search", () => askSearch(), {kind: "primary", small: true, key: "bp-first-search"}));
-    } else if (upNow) {
-      // Nothing on To do, and something booked today: that, by the time it starts, with the way
-      // to it.
-      heroKeys = upKeys(upNow);
-      const g = obj(upNow.go);
-      const ofIv = txt(g.to) === "interviews" && (txt(upNow.kind) === "interview" || !txt(upNow.kind)) ? interviewItems().find((x) => x.id === txt(g.item)) : null;
-      if (ofIv) {
-        hero = ivHero(ofIv, "Today" + (timeOf(upNow.start) ? ", " + timeOf(upNow.start) : ""));
-        heroKeys = heroKeys.concat(upKeys(upNow));
-      } else {
-        const who = txt(g.to) === "contacts" ? whoOf(g.item) : null;
-        const of = txt(g.to) === "interviews" ? interviewItems().find((x) => x.id === txt(g.item)) : null;
-        const open = who ? () => openDetail("person", who.id) : of ? () => openDetail("interview", of.id) : null;
-        facts = (txt(upNow.note) ? [txt(upNow.note)] : []).concat(who ? personFacts(who, dueItems().find((d) => txt(d.item) === who.id)) : []);
-        hero = h("div", {class: "bp-iv"},
-          h("p", {class: "bp-iv-when"}, h("span", {}, (txt(upNow.kind) === "test" ? "Due today" : "Today") + (timeOf(upNow.start) ? ", " + timeOf(upNow.start) : "")),
-            obj(upNow.cal).ics ? btn("", () => calSheet([upNow]), {kind: "quiet icon-only", small: true, icon: "cal-add", key: "bp-cal-hero", aria: "Add to your calendar: " + txt(upNow.title)}) : null),
-          h("p", {class: "bp-iv-what"}, h("bdi", {}, txt(upNow.title))),
-          open ? btn(who ? "Open " + txt(who.first_name) : "Open it", open, {kind: "primary", small: true, key: "bp-up:" + upNow.id}) : null);
-      }
     }
 
     // A booked interview in Coming up's first rows is never taken from it by a step: the week
@@ -6396,11 +6401,12 @@
     // prep" in Next three had claimed (the screen review, 2026-11-11).
     const allUp = upcomingItems();
     const kept = new Set(allUp.filter((u) => !upKeys(u).some((k) => heroKeys.includes(k))).slice(0, 4).map(upKeys).flat().filter((k) => k.startsWith("iv:")));
-    // Next: the three after Today, in To do's order, each opening its own card in To do, where
-    // its button is. What To do counts today carries its number; what is not due yet its day.
+    // Next: the three after Today, in To do's order (its first three where Today is what is
+    // booked today), each opening its own card in To do, where its button is. What To do counts
+    // today carries its number; what is not due yet its day.
     let place = heroCounts ? 1 : 0;
     let stepsCounted = 0;
-    const steps = (first ? queue.slice(1, 4) : []).map((i) => {
+    const steps = (upNow || first ? afterHero.slice(0, 3) : []).map((i) => {
       const face = faceOf(i);
       const n = counted(i) ? ++place : 0;
       if (n) stepsCounted++;
