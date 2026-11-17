@@ -229,3 +229,17 @@ def test_things_are_called_what_a_person_calls_them(run, tmp_path):
     assert "Add a date" in foot and "Add something" not in foot, foot
     assert "When your brief arrives" in settings and "When it comes" not in settings, settings[:600]
     assert "Set a time to send" in send and "Plan a time" not in send and "InMail" not in send, send
+
+
+HOW = r"""(() => { const d = document.querySelector('#main [data-item="linkedin-export"] details.how-fold'); if (!d) return null;
+  return {open: d.open, words: d.querySelector(':scope > summary').textContent.trim(), steps: d.querySelector('ol.steps').checkVisibility(),
+    button: [...document.querySelectorAll('#main [data-item="linkedin-export"] .card-actions .btn')].map((b) => b.textContent.trim())}; })()"""
+
+
+def test_linkedins_steps_wait_one_tap_away(run, tmp_path):
+    """The UX review, 2026-11-17: the LinkedIn card printed its three steps inline, eight lines
+    on a phone. They wait under "How to get it"; its button opens the page they start on."""
+    got = _go(run, tmp_path, [{"hash": "todo", "eval": HOW}], PHONE, clock=T)
+    h = got["after"][0]["eval"]
+    assert h and h["open"] is False and h["words"] == "How to get it" and h["steps"] is False, h
+    assert [b.startswith("Open LinkedIn's download page") for b in h["button"]] == [True], h

@@ -14270,7 +14270,7 @@
           h("div", {}, h("p", {}, "So Claude knows who you have talked to, and never writes to someone twice."),
             // LinkedIn's steps one tap away, never eight lines on a phone (the UX review,
             // 2026-11-17): its button opens the page they start on.
-            steps.length ? det("export-how", false, {class: "band-more how-fold"}, h("summary", {class: "band-more-sum", "data-k": "export-how"}, "How to get it"),
+            steps.length ? det("export-how", false, {class: "how-fold"}, h("summary", {"data-k": "export-how"}, "How to get it"),
               h("ol", {class: "steps"}, steps.map((s) => h("li", {}, s)))) : null),
         // One button at a time, the next once it is done: LinkedIn's page, then "I've asked for
         // it", then "Add the download". Three equal buttons under three steps left the person

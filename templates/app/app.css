@@ -284,6 +284,11 @@ bdi { unicode-bidi: isolate; }
 .empty-ic .ic { width: 28px; height: 28px; }
 .empty .card-actions { justify-content: center; }
 .empty-title { color: var(--ink); font-weight: 600; font-size: var(--t-lg); }
+/* "Nothing left today": its one way on is the quiet look, words in the ink with the raised fill
+   under the pointer, never an underlined line standing alone (the redesign's second round,
+   2026-11-17). */
+.all-clear > .btn.quiet { text-decoration: none; font-weight: 600; }
+.all-clear > .empty-ic { color: var(--mark-ink); }
 
 
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; display: grid; gap: 8px; min-width: 0; box-shadow: var(--shadow-card); }
@@ -1692,22 +1697,22 @@ dialog.work-sheet :is(select, input, textarea) { width: 100%; max-width: 100%; m
    the ink at 14/600, a 16px chevron pointing right while shut and down once open, the raised
    fill under the pointer, 44px tall on touch. "Not due yet (5)" in grey with a 10px chevron
    glued to it, open over its cards with its chevron saying shut, read as a caption. */
-.band-more > summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; margin: 4px 0 0 -8px;
+.band-more > summary, .how-fold > summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; margin: 4px 0 0 -8px;
   min-height: var(--target); border-radius: var(--r-sm); font-weight: 600; font-size: var(--t-sm); color: var(--ink); }
-.band-more > summary::after { content: ""; flex: none; width: 8px; height: 8px; margin: 0 4px; box-sizing: border-box; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted);
+.band-more > summary::after, .how-fold > summary::after { content: ""; flex: none; width: 8px; height: 8px; margin: 0 4px; box-sizing: border-box; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted);
   transform: rotate(-45deg); }
-.band-more[open] > summary::after { transform: translateY(-2px) rotate(45deg); }
-@media (hover: hover) { .band-more > summary:hover { background: var(--raised); } .band-more > summary::after { transition: transform 0.15s; } }
-@media (hover: hover) and (prefers-reduced-motion: reduce) { .band-more > summary::after { transition: none; } }
-.band-more > summary::-webkit-details-marker { display: none; }
+.band-more[open] > summary::after, .how-fold[open] > summary::after { transform: translateY(-2px) rotate(45deg); }
+@media (hover: hover) { .band-more > summary:hover, .how-fold > summary:hover { background: var(--raised); } .band-more > summary::after, .how-fold > summary::after { transition: transform 0.15s; } }
+@media (hover: hover) and (prefers-reduced-motion: reduce) { .band-more > summary::after, .how-fold > summary::after { transition: none; } }
+.band-more > summary::-webkit-details-marker, .how-fold > summary::-webkit-details-marker { display: none; }
 .band-more[open] > summary { margin-bottom: 12px; }
 /* LinkedIn's steps under their fold, read as the card's own words. */
-.band-more.how-fold > summary { margin-top: 8px; }
-.band-more.how-fold[open] > summary { margin-bottom: 4px; }
+.how-fold > summary { margin-top: 8px; }
+.how-fold[open] > summary { margin-bottom: 4px; }
 /* What a fold gives, said beside its name in the quiet tone (Help Claude do more). */
 .band-more > summary .band-more-why { font-weight: 400; white-space: pre-wrap; }
 /* "Show N more" says what it still folds: once open it holds nothing back, so it goes. */
-.band-more:not(.soon-more):not(.how-fold)[open] > summary { display: none; }
+.band-more:not(.soon-more)[open] > summary { display: none; }
 
 /* An opened setting reads as inside its row, a shade deeper, and each item in it is a block:
    its name and its state on one line, the state always at the right, the button under them.
