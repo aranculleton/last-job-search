@@ -5271,6 +5271,18 @@
   // never "One check needs you: ...: Claude makes it again next.", which said both that the
   // person was needed and that they were not (the UX review, 2026-11-10, U-19); one not made
   // yet is made, never made again.
+  // A draft's line while Claude makes it again by itself, on whichever card the draft is drawn:
+  // its own, or the card asking whether it was sent (the redesign's second round, 2026-11-17:
+  // that card dropped the line, and the check's finding went unsaid). The work's own progress
+  // once it has started, else the check's finding.
+  function draftFixLine(a) {
+    const al = alertsOf(a).find((x) => x.kind === "checks" && obj(x.action).type);
+    const ac = al ? obj(al.action) : {};
+    const w = txt(ac.id) ? workDoc(txt(ac.id)) : null;
+    if (!readyLive(a) || ac.type !== "work" || txt(ac.kind) !== "draft" || (w && TERMINAL.has(txt(w.status)))) return null;
+    return w ? workInline(txt(ac.id), w, {key: "fix:" + a.id, lead: "Claude is making it again"})
+      : h("div", {class: "work-inline", role: "status"}, h("p", {class: "wi-text"}, h("span", {class: "dot is-waiting", "aria-hidden": "true"}), " " + selfFixLine(al)));
+  }
   function selfFixLine(al) {
     const found = txt(obj(al).text).replace(/^\s*(?:one|two|three|four|five|\d+)\s+checks?\s+needs?\s+you\s*:\s*/i, "").replace(/[.\s]+$/, "");
     if (/^not made yet\b/i.test(found) || txt(obj(obj(al).action).label) === "Make it") return "Not made yet: Claude makes it next.";
@@ -7271,7 +7283,7 @@
         : "Nothing applied yet. Roles you apply to move here.";
     }
     const wrap = h("section", {class: "sec", "aria-labelledby": "h-jobs" + (where ? "-" + where : "")},
-      screenHead("jobs", "Jobs", sum, small, where, jobsHeadTools(rows), {quiet: true}));
+      screenHead("jobs", "Jobs", sum, small, where, jobsHeadTools(rows), {quiet: true, tail: resumeLine()}));
     // A job the person added is being scored: its own card at the top, with the work line
     // every card uses (and Cancel), since the header carries no "Claude is on it" line
     // (2026-11-05); it becomes the job's own card once scored.
@@ -8230,8 +8242,7 @@
     // to change (the review, 2026-11-05).
     const selfFix = live && fixAc.type === "work" && txt(fixAc.kind) === "draft" && !(fixWork && TERMINAL.has(txt(fixWork.status)));
     const fixOut = live && asks.length && checkAlert && !selfFix ? checkAlert : null;
-    const fixLine = !selfFix ? null : fixWork ? workInline(txt(fixAc.id), fixWork, {key: "fix:" + a.id, lead: "Claude is making it again"})
-      : h("div", {class: "work-inline", role: "status"}, h("p", {class: "wi-text"}, h("span", {class: "dot is-waiting", "aria-hidden": "true"}), " " + selfFixLine(checkAlert)));
+    const fixLine = selfFix ? draftFixLine(a) : null;
     let primary = null;
     if (!live || asks.length || checkAlert) primary = null;
     // More as labelled rows, as on a Found card (2026-11-04): the files, the checks, the
@@ -11405,7 +11416,7 @@
       h("div", {class: "summary" + (tool ? " with-tool" : "")},
         // The "?" sits in the summary's own line, small, never a line or a column of its own
         // (the maintainer, 2026-10-29).
-        h("div", {class: "sum-words"}, h("p", {class: "sum"}, sum, q), small ? h("p", {class: "sum-small"}, small) : null, running),
+        h("div", {class: "sum-words"}, h("p", {class: "sum"}, sum, q, o && o.tail ? o.tail : null), small ? h("p", {class: "sum-small"}, small) : null, running),
         tool || null));
   }
   const nWord = (n, one, many) => n + " " + (n === 1 ? one : many);
@@ -11712,7 +11723,11 @@
       h("div", {class: "job-main"},
         h("div", {class: "job-top"}, j ? fitRing(j.score, j.band, {word: true}) : null, h("h3", {id: hid}, breakable(role || company)), bin ? h("span", {class: "top-end"}, bin) : null),
         company ? jobFactsLine(h("bdi", {class: "co"}, employerLink(company, "cf:" + id, role)), place ? [place] : [], [], null) : null,
-        questionBlock(asked, {where: "jobs", item: id})));
+        questionBlock(asked, {where: "jobs", item: id}),
+        // A draft's own line while Claude makes it again, and the box its trash's "Something
+        // else" opens (DESIGN.md, "every trash ends with Something else"), as on its own card.
+        d ? draftFixLine(d) : null,
+        d ? cardTalk("application", d.id, about) : r ? cardTalk("job", r.id, about) : null));
   }
   function asksApplied(r) {
     const d = listDraft(r);
@@ -13801,7 +13816,7 @@
     const sum = live.length ? live.length + " still open" + (booked ? ", " + booked + " with an interview booked" : "") +
       (undated ? ", " + nWord(undated, "interview", "interviews") + " with no day yet" : "") + (nudge ? ", " + nudge + " due a follow-up" : "") + "."
       : "Nothing applied yet. Roles you apply to move here.";
-    const wrap = h("section", {class: "sec", "aria-labelledby": "h-jobs" + (where ? "-" + where : "")}, screenHead("jobs", "Jobs", sum, null, where, jobsHeadTools(jobRows(), true), {quiet: true}));
+    const wrap = h("section", {class: "sec", "aria-labelledby": "h-jobs" + (where ? "-" + where : "")}, screenHead("jobs", "Jobs", sum, null, where, jobsHeadTools(jobRows(), true), {quiet: true, tail: resumeLine()}));
     // What has finished (not this time, closed, withdrawn) waits in the fold under the list, "9
     // finished: Show", once a day has gone by: "Not this time" and "Closed" sat in the live list
     // above "7 earlier, finished" (the UX review of the redesign's second round, 2026-11-17). One
@@ -14572,6 +14587,17 @@
 
   // The general resume from every Jobs tab: one quiet link, after what Jobs is for (finding
   // roles and a resume for each), never a button beside Find jobs.
+  // On a phone your resume is a link at the end of Jobs' line, not a pill in its header: with a
+  // search running, "Finding jobs" and "Add a job you found" fill a phone's row, and a third pill
+  // on a row of its own put the first job past the first screen's promise (layout test 1). The
+  // link costs no row and keeps it one tap from every Jobs tab (the maintainer, 2026-10-31:
+  // "it's hidden atm"); a computer has the header's pill (app.css `.sum-cv`).
+  function resumeLine() {
+    const l = resumeLink();
+    if (!l) return null;
+    l.setAttribute("data-k", "jobs-resume-line");
+    return h("span", {class: "sum-cv"}, " ", l);
+  }
   function resumeLink() {
     return h("button", {type: "button", class: "btn link", "data-k": "jobs-resume", onclick: () => { setPref("drafts:view", "apps"); go("drafts", {focus: true, item: txt(obj(M().resume).id) || "resume-general"}); }}, "Your " + noun());
   }

@@ -2045,8 +2045,11 @@ S.two_asks = async (a) => {
 S.general_resume = async (a) => {
   const o = await open({html: a.html, hash: "jobs", fake: {canSend: "available"}});
   const {page} = o;
-  const r = {link: await page.evaluate(() => (document.querySelector('#main [data-k="jobs-resume"]') || {}).textContent || "")};
-  await page.locator('#main [data-k="jobs-resume"]').click();
+  // The header's pill on a computer, the link at the end of Jobs' line on a phone: whichever
+  // is on the screen, one tap.
+  const cv = page.locator('#main :is([data-k="jobs-resume"], [data-k="jobs-resume-line"])').locator("visible=true").first();
+  const r = {link: ((await cv.textContent().catch(() => "")) || "").trim()};
+  await cv.click();
   await turn(page, 6);
   r.hash = await page.evaluate(() => location.hash);
   r.card = await page.evaluate(() => (document.querySelector('#main [data-item="resume-general"], #main #gen-resume') || {}).textContent || "");

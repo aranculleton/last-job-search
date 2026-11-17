@@ -873,9 +873,11 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   its gauge 6px from it at 420px and under; Jobs' and Contacts' header put Find jobs (Find
   people) and its gauge on a row of their own, the other buttons on the row under them; Coming
   up's step (Prepare me) is a row of the card's own, from under the time; Jobs' header on a
-  phone is two rows under its line: Find jobs and its gauge, then "Add a job" with when it
-  searched beside it, your CV's own button going there since Jobs' card under the list and Your
-  profile both have it (the first job stayed within the first screen's promise, layout test 1);
+  phone is two rows under its line: Find jobs and its gauge, then "Add a job you found" with when
+  it searched beside it; "Your CV" is a link at the end of the line itself, so the general resume
+  stays one tap from every Jobs tab (the maintainer, 2026-10-31: "it's hidden atm") at no row's
+  cost (with a search running, "Finding jobs" and "Add a job you found" fill a phone's row, and a
+  third pill put the first job past the first screen's promise, layout test 1);
   and a To do card's
   Done, where on its line it would stand alone under its next step and that step's gauge, goes
   under More. In a narrow Brief panel (Today's card, the Jobs panel's foot) the gauge's words

@@ -400,6 +400,8 @@ bdi { unicode-bidi: isolate; }
   .summary.with-tool:has(> .head-tools > [data-k="add-job"]) > .sum-words > * { flex: 1 0 100%; }
   .summary.with-tool:has(> .head-tools > [data-k="add-job"]) > .sum-words > p.sum-small { flex: 0 1 auto; order: 3; }
   .summary.with-tool > .head-tools > [data-k="jobs-resume"] { display: none; }
+  /* ...and is the link at the end of the line instead (app.js resumeLine). */
+  .summary .sum-cv { display: inline; }
   /* Semibold, a phone's three header buttons keep one row at 12px a side (the redesign). */
   .summary .head-tools > .btn:not(.icon-only) { padding-inline: 12px; }
 }
@@ -1108,6 +1110,8 @@ textarea { width: 100%; resize: vertical; line-height: 1.45; }
 .summary { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
 .sum-words { display: grid; gap: 4px; min-width: 0; flex: 1 1 auto; }
 .sum { font-size: 1rem; color: var(--ink); max-width: 64ch; }
+/* Your resume's link at the end of Jobs' line is a phone's; a computer has the header's pill. */
+.sum-cv { display: none; }
 .sum-small { font-size: 0.875rem; color: var(--muted); }
 .sum-small .btn.link { font-size: inherit; }
 .summary.with-tool > :last-child { flex: none; }
