@@ -7908,10 +7908,12 @@
   // all the same (app.css).
   const DRAFT_LINES = 2;
   function clippedBody(m, body, tid, clamp) {
-    if (clamp && txt(m.channel) !== "inmail") {
-      // Every draft after the first is clipped to its two lines, whatever its length: a guess
-      // from its letters left a long one whole (the redesign's second round, 2026-11-17).
-      // Show all shows only where the two lines hide something (clampFit).
+    if (clamp) {
+      // Every draft after the first is clipped to its two lines, a paid LinkedIn message too:
+      // clipped by its letters instead, Noor's was left four lines long (the redesign's second
+      // round, 2026-11-17). Show all shows only where the two lines hide something (clampFit).
+      const long = body.length > 60 * DRAFT_LINES || body.split(/\n/).length > DRAFT_LINES;
+      if (!long) return h("p", {class: "sendtext big", id: tid}, body);
       const open = bodyOpen.has(m.id);
       // The words clipped inside the box, never at its edge: clipped at its edge, the fifth
       // line showed through the box's own padding.
