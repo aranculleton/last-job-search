@@ -1391,6 +1391,11 @@ S.engine = async (a) => {
     if (st.then) { await page.getByRole("button", {name: st.then, exact: !!st.exact}).first().click(); await turn(page, 6); }
     // The mouse moved onto a control and left there, as a person reading with a mouse does.
     if (st.hover) { await page.locator(st.hover).first().hover(); await turn(page, 2); }
+    // Keys pressed one after another on the keyboard, each to whatever has the focus then
+    // (Tab, Enter, Escape), and a tap with the mouse on a part of the screen that is no control
+    // (beside an open menu, 2026-11-17).
+    for (const k of [].concat(st.press || [])) { await page.keyboard.press(k); await turn(page, 3); }
+    if (st.tapOn) { await page.locator(st.tapOn).first().click({force: true}); await turn(page, 3); }
     // A finger's tap on a screen with touch (`touch`): the touch, then the mouse's events and
     // the click a phone makes of it, the focus they give included. A click is a mouse's alone.
     if (st.finger) { await (st.within ? page.locator(st.within) : page).getByRole(st.role || "button", {name: st.finger, exact: !!st.exact}).first().tap(); await turn(page, 6); }

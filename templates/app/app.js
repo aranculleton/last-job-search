@@ -2505,9 +2505,34 @@
 
   // ------------------------------------------------------------------ live region and toasts
 
+  // A sheet opened with showModal() makes the rest of the page inert, what is said and the
+  // toasts with it: inside a person's card "No longer waiting for Tamsin" was said to no one and
+  // its Undo could not be reached (the accessibility review of the redesign's second round,
+  // 2026-11-17, WCAG 4.1.3 and 2.1.1). The page's polite line, its urgent line and the toasts'
+  // box go into the top open sheet as it opens and back as it closes, so each is in place before
+  // anything is said in it. Every sheet opens with showModal() on a dialog, so watching for that
+  // keeps one rule for all of them, those made later included.
+  const VOICE = {live: null, alert: null, toasts: null};
+  function topSheet() { const open = document.querySelectorAll("dialog[open]"); return open.length ? open[open.length - 1] : null; }
+  function carryVoice() {
+    const home = topSheet() || document.body;
+    for (const id of Object.keys(VOICE)) {
+      const el = VOICE[id] || (VOICE[id] = $(id));
+      if (!el || el.parentNode === home) continue;
+      // Moved, a line is a new one to a screen reader: emptied, so nothing said is said twice.
+      if (id !== "toasts") el.textContent = "";
+      home.appendChild(el);
+    }
+  }
+  if (window.MutationObserver && document.body) {
+    const sheetsMoved = new MutationObserver((recs) => { if (recs.some((r) => r.type === "childList" || (r.target && r.target.tagName === "DIALOG"))) carryVoice(); });
+    sheetsMoved.observe(document.documentElement, {attributes: true, attributeFilter: ["open"], subtree: true});
+    sheetsMoved.observe(document.body, {childList: true});
+  }
   let liveTimer = null;
   function announce(msg) {
-    const el = $("live");
+    carryVoice();
+    const el = VOICE.live;
     if (!el) return;
     el.textContent = "";
     clearTimeout(liveTimer);
@@ -2515,7 +2540,8 @@
   }
   // A failure is said at once, over anything else being read out.
   function shout(msg) {
-    const el = $("alert");
+    carryVoice();
+    const el = VOICE.alert;
     if (!el) { announce(msg); return; }
     el.textContent = "";
     setTimeout(() => { el.textContent = msg; }, 30);
@@ -2532,7 +2558,8 @@
     renderToasts();
   }
   function renderToasts() {
-    const box = $("toasts");
+    carryVoice();
+    const box = VOICE.toasts;
     if (!box) return;
     const t0 = now();
     S.toasts = S.toasts.filter((t) => !t.gone && (t.held || t0 < t.until));
@@ -2611,7 +2638,8 @@
     dlg.addEventListener("close", () => {
       dlg.remove();
       if (afterClose) { const f = afterClose; afterClose = null; f(); return; }
-      if (opener && opener.isConnected && opener.focus) { opener.focus(); return; }
+      const back = opener && opener.isConnected && opener.focus ? shownOr(opener) : null;
+      if (back) { back.focus(); return; }
       let c = null;
       try { c = fromItem ? $("main").querySelector('[data-item="' + (window.CSS && CSS.escape ? CSS.escape(fromItem) : fromItem) + '"]') : null; } catch (e) { c = null; }
       const u = c ? c.querySelector(".undo") || c : null;
@@ -9891,7 +9919,7 @@
   // A row's one More: a small menu of what is rare for it, each a line in words.
   function upMenuItem(label, fn, key, aria) {
     return h("button", {type: "button", class: "menu-item", "data-k": key, "aria-label": aria,
-      onclick: (e) => { const d = e.currentTarget.closest("details"); if (d) { d.open = false; openState.set(d.getAttribute("data-k"), false); } fn(); }}, label);
+      onclick: (e) => { shutMenu(e.currentTarget.closest("details")); fn(); }}, label);
   }
   function upMenu(u, items) {
     const list = items.filter(Boolean);
@@ -10021,7 +10049,7 @@
       h("p", {class: "hint"}, "Nothing is connected and nothing is sent: each one opens or saves the event for you to keep."),
       note,
       h("div", {class: "sheet-actions"}, h("button", {type: "button", class: "btn secondary", "data-k": "cal-close", onclick: () => { try { calDlg.close(); } catch (e) { /* gone */ } }}, "Done"))));
-    calDlg.addEventListener("close", () => { const d = calDlg; calDlg = null; if (d) d.remove(); if (opener && opener.isConnected && opener.focus) opener.focus(); });
+    calDlg.addEventListener("close", () => { const d = calDlg; calDlg = null; if (d) d.remove(); const back = opener && opener.isConnected && opener.focus ? shownOr(opener) : null; if (back) back.focus(); });
     document.body.appendChild(calDlg);
     try { calDlg.showModal(); } catch (e) { calDlg.setAttribute("open", ""); }
     const f = calDlg.querySelector("a, button");
@@ -10745,8 +10773,25 @@
     Promise.resolve().then(() => {
       const k = op.dataset && op.dataset.k;
       const el = op.isConnected ? op : (k ? document.querySelector('[data-k="' + (window.CSS && CSS.escape ? CSS.escape(k) : k) + '"]') : null);
-      if (el && el.focus) el.focus();
+      const to = el ? shownOr(el) : null;
+      if (to && to.focus) to.focus();
     });
+  }
+  // What takes the focus back for a control that is not drawn: the button of the menu, fold or
+  // More it is hidden in (a More's panel is apart from its button, which names it in
+  // aria-controls), else its card. Focus handed to a hidden control goes nowhere (the
+  // accessibility review of the redesign's second round, 2026-11-17, WCAG 2.4.3).
+  function shownOr(el) {
+    const shown = (x) => !!x && (x.checkVisibility ? x.checkVisibility() : x.getClientRects().length > 0);
+    if (shown(el)) return el;
+    for (let p = el.parentElement; p; p = p.parentElement) {
+      let s = null;
+      if (p.tagName === "DETAILS") s = p.querySelector(":scope > summary");
+      else if (p.id) { try { s = document.querySelector('[aria-controls="' + (window.CSS && CSS.escape ? CSS.escape(p.id) : p.id) + '"]'); } catch (e) { s = null; } }
+      if (shown(s)) return s;
+    }
+    const c = el.closest("[data-card]");
+    return shown(c) ? c : null;
   }
   function closeTweak() {
     const st = S.tweak;
@@ -11324,8 +11369,37 @@
     return det("menu:" + key, false, {class: "menu" + (label ? " worded" : "")},
       h("summary", {class: "menu-btn", "data-k": "menu:" + key, "aria-label": label ? null : "More for " + about}, label ? h("span", {}, label) : h("span", {"aria-hidden": "true"}, "⋯")),
       h("div", {class: "menu-panel", role: "group", "aria-label": "More for " + about}, list.map(([label, fn, k]) =>
-        h("button", {type: "button", class: "menu-item", "data-k": "mi:" + key + ":" + (k || label), onclick: (e) => { const d = e.currentTarget.closest("details"); if (d) { d.open = false; openState.set("det:menu:" + key, false); } fn(); }}, label))));
+        h("button", {type: "button", class: "menu-item", "data-k": "mi:" + key + ":" + (k || label), onclick: (e) => { shutMenu(e.currentTarget.closest("details")); fn(); }}, label))));
   }
+  // A menu's item closes its menu and puts the focus on the menu's own button before it does
+  // anything: hidden with its menu, the item chosen dropped the focus to nothing, and a sheet it
+  // opened handed the focus back to that hidden item (the accessibility review of the redesign's
+  // second round, 2026-11-17, WCAG 2.4.3). The button is then what opened whatever comes next.
+  function shutMenu(d) {
+    if (!d) return;
+    d.open = false;
+    const k = d.getAttribute("data-k");
+    if (k) openState.set(k, false);
+    const s = d.querySelector(":scope > summary");
+    if (s) { try { s.focus({preventScroll: true}); } catch (e) { s.focus(); } }
+  }
+  // A floating menu closes once it is left (WCAG 2.4.11): Escape closes it with the focus on its
+  // button, the focus moving on to something outside it closes it, and so does a tap beside it.
+  // Open, a row's menu covered the next row's own ⋯, and Tab from its last item put the focus
+  // under it with no key to clear it (the same review). A focus that goes nowhere (a tap on a
+  // button that takes no focus, as Safari's) keeps it open: its item's own tap closes it.
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape" || e.defaultPrevented) return;
+    const d = e.target && e.target.closest ? e.target.closest("details.menu[open]") : null;
+    if (d) { useEsc(e); shutMenu(d); }
+  });
+  document.addEventListener("focusout", (e) => {
+    const d = e.target && e.target.closest ? e.target.closest("details.menu[open]") : null;
+    if (d && e.relatedTarget && !d.contains(e.relatedTarget)) d.open = false;
+  }, true);
+  document.addEventListener("pointerdown", (e) => {
+    for (const d of document.querySelectorAll("details.menu[open]")) if (!d.contains(e.target)) d.open = false;
+  }, true);
 
   // ------------------------------------------------------------------ Filter: one button, a sheet on a phone, a panel on wide
 
@@ -12278,14 +12352,13 @@
     const list = arr(items).flat().filter(Boolean);
     if (!list.length && !last) return null;
     if (last) list.push(last);
-    for (const b of list) {
-      b.className = "menu-item" + (b === last ? " menu-stop" : "");
-      b.addEventListener("click", () => { const d = b.closest("details"); if (d) { d.open = false; openState.set("det:menu:" + key, false); } });
-    }
+    for (const b of list) b.className = "menu-item" + (b === last ? " menu-stop" : "");
     const d = det("menu:" + key, false, {class: "menu worded upd-menu"},
       h("summary", {class: "menu-btn", "data-k": "menu:" + key}, h("span", {}, "Update"), h("span", {class: "sr-only"}, ": " + about), icon("chev-down")),
       h("div", {class: "menu-panel", role: "group", "aria-label": "Update " + about}, list));
-    d.addEventListener("keydown", (e) => { if (e.key === "Escape" && d.open) { useEsc(e); d.open = false; const s0 = d.querySelector("summary"); if (s0) s0.focus(); } });
+    // An item's own action runs once the menu has closed onto Update (shutMenu): caught on the
+    // way down, before the item's own tap. Escape closes it as it closes every menu.
+    d.addEventListener("click", (e) => { const b = e.target && e.target.closest ? e.target.closest(".menu-item") : null; if (b && d.contains(b)) shutMenu(d); }, true);
     return d;
   }
   function dRows(title, rows, after) {
@@ -19114,7 +19187,8 @@
         window.addEventListener("pointermove", () => document.documentElement.classList.remove("tips-off"), {once: true});
         e.preventDefault(); return;
       }
-      const open = [...document.querySelectorAll("details.more[open]")];
+      // A card's More or a floating menu, the one the focus is in first (WCAG 2.4.11).
+      const open = [...document.querySelectorAll("details:is(.more, .menu)[open]")];
       const mine = open.find((d) => d.contains(t)) || open[open.length - 1];
       if (mine) { mine.open = false; const s = mine.querySelector("summary"); if (s) s.focus(); e.preventDefault(); }
       // The Chat panel closes from anywhere on the page, not only from inside it: focus on a
