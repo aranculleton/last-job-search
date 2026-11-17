@@ -1825,10 +1825,12 @@ def test_everything_booked_is_one_tap_from_any_calendar_and_the_brief_shows_the_
     p = r["panels"]
     # Said "Overdue", its one day in its facts, never "Rolled over · 2 days late" (2026-11-03).
     # Ready, never "Overdue", for a day the person set (the UX review of 2026-11-10, U-6).
-    assert ("Ready to send" in p["bp:today"] or "Ready to do" in p["bp:today"]) and "Overdue" not in p["bp:today"] and "Rolled over" not in p["bp:today"] and "Fernhill Freight" in p["bp:today"], p["bp:today"]
+    # Since the redesign (2026-11-16) Today is To do's first card (DESIGN.md, One ranked list):
+    # the thank-you two days late; the follow-up is a row of the messages to send, in Next.
+    assert ("Ready to send" in p["bp:today"] or "Ready to do" in p["bp:today"]) and "Overdue" not in p["bp:today"] and "Rolled over" not in p["bp:today"] and "Harbourline Bank" in p["bp:today"], p["bp:today"]
     shown = [k for k, t in p.items() if "Larkspur" in t and "screen" in t]
     assert len(shown) == 1 and shown != ["bp:today"], shown
-    assert "Reply to Juno" in p["bp:next"] and "Juno" not in p["bp:people"], (p["bp:next"], p["bp:people"])
+    assert "Juno" in p["bp:next"] and "Juno" not in p["bp:people"], (p["bp:next"], p["bp:people"])
     # Coming up's, in its rows: Next three's "Read the prep" took it out of them while the
     # week strip marked its day (the screen review, 2026-11-11).
     assert r["cards"] and any("Larkspur" in c for c in r["cards"]), r["cards"]
