@@ -281,5 +281,15 @@
       "checked": "2026-10-25",
       "verified": true
     }
-  ]
+  ],
+  "status_words": {
+    "citizenship": {
+      "says": "Irish citizen",
+      "words": "\\birish\\s+(?:citizen\\w*|nationals?|nationality)\\b|\\bcitizens? of ireland\\b"
+    },
+    "clearance": {
+      "says": "security clearance",
+      "words": "\\bsecurity clearance\\b"
+    }
+  }
 }

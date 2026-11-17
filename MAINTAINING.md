@@ -195,7 +195,10 @@ again, fixes and releases everything at once, and no Actions workflow runs Claud
    refusals a chat recovers from (`tweak.py`, `app.py next` and `done`, `network/reply.py`)
    print it ready to run in this copy only (`met_line`), and `met --person` files the
    maintainer's complaint that something was not filed (issue #240). A cloud chat whose session lacks the app attaches it first (add_repo,
-   access push). A chat with no GitHub tools for the app (one on their computer) holds the
+   access push); every chat the page's helper starts there (the next helper, a job's or a Chat
+   question's chat, the computer starter) is told to as its first step (`app_bug.attach_app`,
+   issue 318), since create_session takes the copy as its one source. A chat with no GitHub
+   tools for the app (one on their computer) holds the
    checked issue instead (`--hold`, into `handoff/app_bugs/`, saved like their other files),
    and the next cloud chat's sync says so and files it (`app_bug.py held`, then `filed`). Any
    other copy files nothing (exit 2) and keeps the link.

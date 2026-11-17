@@ -362,14 +362,33 @@ def test_a_query_a_broader_one_covers_is_not_sent():
 
 
 def test_an_employer_read_from_its_own_board_is_not_searched_for_on_a_portal(skills, monkeypatch):
+    # Decided once the board has been read, never up front: a board the site asked to slow
+    # down was left out of the plan all the same, and its employer lost both ways (issue 302).
     from company_key import key
     monkeypatch.setattr(scrape_wide, "EMPLOYERS", ["Fernhill Freight", "Oakmere Foods"])
     monkeypatch.setattr(scrape_wide, "_covered_by_ats", lambda: {key("Fernhill Freight")})
     monkeypatch.setattr(scrape_wide, "_cursor", lambda: {})
     city = _mine(scrape_wide.build_tasks(portals.enabled({}), 5))
-    assert not any("Fernhill" in t[1] for t in city) and any("Oakmere" in t[1] for t in city)
+    named = [t for t in city if "Fernhill" in t[1] or "Oakmere" in t[1]]
+    assert any("Fernhill" in t[1] for t in named) and any("Oakmere" in t[1] for t in named)
     li = [t for t in scrape_wide.build_tasks(portals.enabled({}), 5) if t[0] == "li"]
     assert any("Fernhill" in t[1] for t in li) or not li     # the app's portals are unchanged
+
+    def sent_with(read):
+        sent = []
+        monkeypatch.setattr(scrape_wide, "contract",
+                            lambda skill, q, *a, **k: (sent.append(q), ([], None))[1])
+        tally = scrape_wide.Tally("cityboard", len(named))
+        _, n, _ = scrape_wide.sweep("cityboard-search", named, 14, sleep=lambda s: None,
+                                    tally=tally, covered=lambda k: k in read)
+        return sent, n, tally
+    # Its own board was read this round: not searched for here, and counted as gone through.
+    sent, n, tally = sent_with({key("Fernhill Freight")})
+    assert not any("Fernhill" in q for q in sent) and any("Oakmere" in q for q in sent)
+    assert n + tally.covered == len(named) and tally.covered >= 1
+    # Its board was not read (asked to slow down, say): its name is searched here after all.
+    sent, n, tally = sent_with(set())
+    assert any("Fernhill" in q for q in sent) and tally.covered == 0
 
 
 def test_successive_rounds_reach_every_request_on_a_board_too_slow_for_one(skills, monkeypatch,

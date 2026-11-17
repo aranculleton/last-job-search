@@ -187,6 +187,10 @@ JSON_FILES = {
     # ever added to, one entry a piece of work, kept RUNS_KEEP_DAYS.
     "documents/computer_runs.json": {"lists": {"runs": ("at", "work")},
                                      "order": {"runs": "at"}, "indent": 1, "sort": "all"},
+    # The newest ring of the computer's own chat (computer.write_ring), which its wait reads on
+    # GitHub: written whole, so two chats that rang it keep the later ring.
+    "documents/computer_ring.json": {"whole": ("",), "stamps": ("rung_at",), "indent": 1,
+                                     "sort": "all"},
     # What the person booked that the app did not know of (upcoming.add): one entry each,
     # known by its id, so the page and a chat adding one each on the same day keep both.
     "documents/upcoming.json": {"lists": {"events": ("id",)}, "indent": 2},
@@ -390,6 +394,9 @@ _HASHED = ("a snapshot named by the hash of what it holds: two chats that write 
            "the same thing")
 _PER_ROUND = ("named after the round that wrote it, once, and never written again; a round "
               "is run by one chat")
+_CACHE = ("kept a short while in rounds/.cache beside the rounds, which git ignores "
+          "(run_round.cache_dir): what a site answered, never committed, and either chat's copy "
+          "is the same public answer")
 JSON_NAMES = {
     "interview_live.json": "an interview's live prep beside its interview_prep.md (interview_live.path_for); merged as documents/applications/*/interview_live.json",
     ".from_search.json": "the person's own words choosing notes from search results, for one day only (reading.from_search_chosen, issue 287); a day gone by is ignored, so either side's copy is that day's choice or nothing",
@@ -415,7 +422,14 @@ JSON_NAMES = {
                      "06_skipped.json", "kept.json", "dropped.json", "scraped.json",
                      "sent.json", "partial_rows.json", "tools/run_round.py: .json",
                      # a search limited to named employers: its names and the rows at them
-                     "employers.json", "named.json"), _ROUND),
+                     "employers.json", "named.json",
+                     # the rows the hard rules pass and leave out, before the throttle; the
+                     # shortlist's size before its cut; the employers left to judge; and what
+                     # each site searched read and failed (00_scrape/sources.json)
+                     "05_ruled.json", "05_ruled_out.json", "06_trimmed.json", "unjudged.json",
+                     "sources.json"), _ROUND),
+    # each employer site's robots.txt as last answered, kept a day (ats_boards.keep_robots)
+    "robots.json": _CACHE,
     **dict.fromkeys(("apps_in.json", "picks.json", "draft_args.json", "pack.json", "held.json",
                      "staged_roles.json", "packet.json", "drafts.json",
                      "tools/draft_audit.py: outreach_*.json",
@@ -441,7 +455,8 @@ JSON_NAMES = {
                      "ljs-save-held.json", "ljs-land-result.json", ".mirror.json",
                      "ljs-touched.json", "ljs-pdf-pages.json", "ljs-claims.json",
                      "ljs-retired-saves.json", "ljs-app-bug.json", "ljs-computer-starter.json",
-                     "ljs-tidy-renames.json"), _GITDIR),
+                     "ljs-tidy-renames.json", "ljs-listener-wait.json",
+                     "ljs-listener-answered.json", "ljs-listener-idle.json"), _GITDIR),
     # A bug a chat in the maintainer's copy checked but could not file (no GitHub tools there),
     # one file a bug under handoff/app_bugs/, named by its key: two chats that held the same bug
     # wrote the same file, so either side's copy is the bug, and `app_bug.py filed` deletes it.
@@ -464,6 +479,9 @@ JSON_NAMES = {
                      "rule_map.json", "remote.json", "design_draft.json",
                      "tools/leak_scan.py: **.json", "tools/markets.py: *.json",
                      "tools/markets.py: .json", "tools/locale_rules.py: .json",
+                     # the market tables (tools/markets/<cc>.json), read for a neighbour's
+                     # status words, and the suffix test that lists them
+                     "tools/text_screen.py: *.json", "tools/text_screen.py: .json",
                      "tools/profile_upgrades.py: *.json"), _APP),
     **dict.fromkeys(("reading-ledger.json", "budget.json",
                      # a state folder outside git (a test's): the ledger in the computer's

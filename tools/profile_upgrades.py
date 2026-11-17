@@ -1211,6 +1211,41 @@ def _old_sweep_cursor() -> str:
             "that every file there is a round reads it" if os.path.exists(old) else "")
 
 
+# A seen file this small is read quickly and needs no shortening before the next round does it.
+SEEN_COMPACT_FROM = 1024 * 1024
+
+
+def _seen_compacted() -> str:
+    """Issue 310: every round wrote each posting it only saw into seen_jobs.json in full, and
+    one copy's file reached 19MB. A round now keeps those records short (throttle.compact);
+    a file grown before is shortened here at once, with no search needed."""
+    path = person.state("job_scraper", "seen_jobs.json")
+    try:
+        if os.path.getsize(path) < SEEN_COMPACT_FROM:
+            return ""
+        import throttle
+        n = throttle.compact_file(path, person.today().isoformat(), dry=True)
+    except Exception:  # noqa: BLE001  a file that cannot be read is the search's to report
+        return ""
+    return (f"your record of jobs already seen keeps {n} job(s) in full that a search reads "
+            "only the dates of" if n else "")
+
+
+def _left_out_slimmed() -> str:
+    """Issue 310: each search's left-out list kept every job its own free gates left out, 5 to
+    6MB a search. A search now keeps a few of each and counts the rest (filtered.slim); the
+    lists written before are slimmed here."""
+    import filtered
+    folder = person.state("documents", "rounds", filtered.FOLDER)
+    try:
+        names = sorted(n for n in os.listdir(folder) if n.endswith(".json"))
+    except OSError:
+        return ""
+    old = [n[:-5] for n in names if filtered.unslimmed(os.path.join(folder, n))]
+    return (f"{len(old)} search(es)' lists of what was left out keep every job the search's "
+            "own checks left out" if old else "")
+
+
 def _old_jobs_tweaks() -> str:
     """4.10 kept the record of tweaks to the person's search at documents/rounds/tweaks.json,
     among the round summaries, and a person's own test that reads every documents/rounds/*.json
@@ -1518,6 +1553,24 @@ def _jobs_rescored() -> str:
     change to how jobs are scored, the person's own or an update's, reached none of them, and
     the page kept each search's scores for as long as it listed its jobs (2026-11-16)."""
     return _probe("import rescore; print(rescore.due())")
+
+
+def _leverage_scopes() -> str:
+    """Lifts in the profile's brand leverage that name no place to read (opportunity.unscoped):
+    each read the whole posting, so a lift for a kind of employer fired on a travel
+    requirement, a benefits line or "stakeholder engagement" (issue 306). Since then a lift
+    reads the posting with its boilerplate set aside, and one for a kind of employer reads
+    what the employer is only once it says "employer"."""
+    got = _probe("import opportunity; print(len(opportunity.unscoped()))")
+    n = int(got) if got.isdigit() else 0
+    return (f"{n} scoring lift{'s' if n != 1 else ''} in profile/search.py "
+            f"{'do' if n != 1 else 'does'} not say where {'they read' if n != 1 else 'it reads'}"
+            ) if n else ""
+
+
+def _leverage_unscoped() -> list:
+    got = _probe("import opportunity; print('\\n'.join(opportunity.unscoped()))")
+    return [ln for ln in got.splitlines() if ln.strip()]
 
 
 def _readings_linked() -> str:
@@ -2240,6 +2293,19 @@ REGISTRY: tuple[Upgrade, ...] = (
             command=("python3", "tools/rescore.py"),
             paths=("documents/rounds/*.json", "documents/rounds/bodies/*.json"),
             priority=2, conditional=True),
+    Upgrade("leverage-scopes", "2026-11-17",
+            "jobs lifted for the kind of employer you want only where the employer is that "
+            "kind, never for a word in its benefits, travel or duties",
+            _leverage_scopes, "/setup --section search: after the why of each OPP_LEVERAGE "
+            "lift in profile/search.py (and after \"set_aside_self_portrait\" or before it, "
+            "either order), add where it reads: \"employer\" for a sector or kind of employer "
+            "(media, travel, consulting, the public sector), \"work\" for what the role does "
+            "(pricing, risk, experiments, a job family), \"terms\" for working terms (flexible "
+            "hours, remote). Leave penalties as they are and change no pattern. Then run "
+            "python3 tools/opportunity.py documents/rounds/<the newest search>.json "
+            "--leverage-words and check each lift fires where it should; say in one plain line "
+            "what changed", "edit", "~5 min", priority=2, conditional=True,
+            every=_leverage_unscoped),
     Upgrade("readings-linked", "2026-11-11",
             "every contact whose profile was read has the employer it names",
             _readings_linked, "python3 tools/network/reading.py link-all", "instant",
@@ -2421,6 +2487,17 @@ REGISTRY: tuple[Upgrade, ...] = (
             _dropped_rows, "python3 tools/network/state.py dropped-rows --apply", "instant",
             command=("python3", "tools/network/state.py", "dropped-rows", "--apply"),
             paths=("network_contacts.csv",), priority=2),
+    Upgrade("seen-compacted", "2026-11-17",
+            "your record of jobs already seen kept small, so every search and every save is "
+            "quicker",
+            _seen_compacted, "python3 tools/throttle.py --compact", "instant",
+            command=("python3", "tools/throttle.py", "--compact"),
+            paths=("job_scraper/seen_jobs.json",), priority=3, conditional=True),
+    Upgrade("left-out-slimmed", "2026-11-17",
+            "each search's list of what it left out kept small, every count still whole",
+            _left_out_slimmed, "python3 tools/filtered.py slim", "instant",
+            command=("python3", "tools/filtered.py", "slim"),
+            paths=("documents/rounds/filtered/*.json",), priority=3, conditional=True),
     Upgrade("sweep-cursor-moved", "2026-10-19",
             "the slow boards' resume point moved out from among your round summaries, so a "
             "check that every file there is a round passes again",

@@ -200,12 +200,15 @@ def _spread(n: int, k: int) -> list[int]:
 
 
 def left_view(found: list[dict], name: str, made: dt.date | None, targets: dict,
-              item_of=None, declined: dict | None = None) -> dict:
+              item_of=None, declined: dict | None = None, more: dict | None = None) -> dict:
     """The left-out list of round `name` grouped by the rule that cut each row:
     {count, groups: [{id, kind, reason, label, count, last, examples, items, check, held,
     edit, rev}], held: [every row the page holds for search, at most HELD_PER_RULE a rule]}.
     `item_of(n, entry)` makes the page's row for entry n (1-based) and records its target;
-    `made` is the day the round ran, the day a rule last cut something here."""
+    `made` is the day the round ran, the day a rule last cut something here. `more` is what
+    the list only counts, {kind or "kind:Lang": n} (filtered.slim): each rule's count is
+    every row it left out, listed or not."""
+    more = more or {}
     declined = _declined_keys() if declined is None else declined
     by: dict = {}
     for n, e in enumerate(found, 1):
@@ -225,7 +228,8 @@ def left_view(found: list[dict], name: str, made: dt.date | None, targets: dict,
         edit = KINDS.get(kind, KINDS["other"])[1]
         groups.append({
             "id": gid, "kind": kind, "reason": label_of(kind, lang), "label": label_of(kind, lang),
-            "count": len(ns), "last": made.isoformat() if made else None,
+            "count": len(ns) + int(more.get(f"{kind}:{lang}" if lang else kind) or 0),
+            "last": made.isoformat() if made else None,
             "examples": [str(found[n - 1].get("title") or "") for n in ns[:EXAMPLES]],
             "items": rows[:FIRST], "held": len(rows), "check": check,
             "edit": ({"what": edit, **({"language": lang} if lang else {})} if edit else None)})
@@ -233,7 +237,8 @@ def left_view(found: list[dict], name: str, made: dt.date | None, targets: dict,
         groups[-1]["rev"] = _rev(g_rev)
         targets[gid] = {"kind": "filtered_group", "round": name, "reason": groups[-1]["label"],
                         "ns": ns, "rev": groups[-1]["rev"]}
-    return {"count": len(found), "groups": groups, "held": held}
+    return {"count": len(found) + sum(int(n or 0) for n in more.values()), "groups": groups,
+            "held": held}
 
 
 def _rev(obj) -> str:

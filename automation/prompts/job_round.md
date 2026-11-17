@@ -11,7 +11,8 @@ rank, stop at the shortlist, draft nothing until the candidate picks. `_common.m
    (`python3 tools/sync_app.py --if-stale --on "<the model this run is on>"`, then `/upgrade 20`): a job board an upgrade
    builds is searched this round.
 
-   Run: `python3 tools/run_round.py --jobage 7 --expand` (no `--out`: the round names itself
+   Run: `python3 tools/run_round.py --expand` (no `--jobage`: the window is the person's own,
+   `JOB_AGE_DAYS`; no `--out`: the round names itself
    and prints its folder, `round: rN, its files in rounds/rN`). Never read or
    ask for the person's email: this round, and its message, is their job alert.
    Read the exit code: 0 met the yield target, 2 missed it (report what the MISSED message
@@ -20,10 +21,14 @@ rank, stop at the shortlist, draft nothing until the candidate picks. `_common.m
    thin market. When the round prints "Tell the person" (this run's cloud settings block
    the job sites), those words open the message, and with no site reached there is no
    shortlist and no web search in its place.
-2. `python3 tools/bar.py unjudged`. Where it says the profile states no bar, nothing is judged
-   or ruled out for one: go to step 3. Else judge each employer it lists once (`bar.py judge
-   "<employer>" <verdict> "<why>"`): a "none" that says "not on your employer lists yet" has
-   not failed the bar. Then rule out each row failing the candidate's own bar (`tools/bar.py`,
+2. Where the round printed `unjudged:`, it wrote the employers among its best rows that
+   nobody has judged against the bar, each with what its posting says about it, to the file
+   it names: give each a verdict (pay, prestige, signal or none) and a few words why, from
+   what you know, and record them all at once with `python3 tools/bar.py judge --file <that
+   file>`. With no such line, `python3 tools/bar.py unjudged`; where it says the profile
+   states no bar, nothing is judged or ruled out for one: go to step 3. Else judge each
+   employer it lists once (`bar.py judge "<employer>" <verdict> "<why>"`): a "none" that says
+   "not on your employer lists yet" has not failed the bar. Then rule out each row failing the candidate's own bar (`tools/bar.py`,
    and the target sectors and exclusions in `profile/CLAUDE.md`) with `python3
    tools/exclude.py add <url> --title "<title>" --company "<company>" --reason "candidate's
    bar: <why>"`, and cut the round again: `python3 tools/run_round.py --out <the folder it

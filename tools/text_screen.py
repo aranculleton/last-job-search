@@ -798,6 +798,91 @@ _NOT_BY_PERMIT = getattr(_S, "ELIGIBILITY_NOT_BY_PERMIT", _NEVER)
 _ALWAYS = getattr(_S, "ELIGIBILITY_ALWAYS", _NEVER)
 ELIGIBILITY_CUT_REASON = getattr(_S, "ELIGIBILITY_CUT_REASON",
                                  "eligibility gate: a status the candidate does not hold stated as a condition")
+
+
+# The wording a country's postings use for citizenship, residence and a clearance ships with
+# the app (tools/markets/<cc>.json, "status_words"), and the person's own ELIGIBILITY is
+# added to, never replaced. Setup wrote a pattern for the home country alone, so a remote role
+# in the neighbouring country that said "You must be a U.S. Citizen to apply for this
+# position" passed the screen and ranked at 72 (2026-11-16): the pattern held "us citizen"
+# without the dots. The neighbour's citizenship and residence always bar a person searching
+# its remote roles from home; its clearance, and each of the home country's own statuses, only
+# where the person's own pattern already names that status (`says`) as one they lack, since a
+# citizen of their own country meets its citizenship.
+class _Either:
+    """Several patterns read as one: `search` gives the first match, `finditer` every one."""
+
+    def __init__(self, *rx):
+        self.rx = rx
+
+    def search(self, s):
+        got = [m for m in (r.search(s) for r in self.rx) if m]
+        return min(got, key=lambda m: m.start()) if got else None
+
+    def finditer(self, s):
+        for r in self.rx:
+            yield from r.finditer(s)
+
+
+_MARKETS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "markets")
+
+
+def _status_table(cc: str) -> dict:
+    try:
+        with open(os.path.join(_MARKETS, f"{cc}.json"), encoding="utf-8") as fh:
+            got = json.load(fh)
+    except (OSError, ValueError):
+        return {}
+    return got if isinstance(got, dict) else {}
+
+
+def neighbour_country() -> str:
+    """The code of the one neighbouring country the profile's location names (search.py
+    LOCATION neighbour), from its own `country` or the market table whose name its words
+    match, or ""."""
+    nb = (getattr(_S, "LOCATION", None) or {}).get("neighbour") or {}
+    if not isinstance(nb, dict) or not nb:
+        return ""
+    if nb.get("country"):
+        return str(nb["country"]).strip().lower()
+    words = nb.get("words")
+    rx = words if hasattr(words, "search") else re.compile(str(words), re.I) if words else None
+    if rx is None:
+        return ""
+    home = person.country().lower()
+    for f in sorted(os.listdir(_MARKETS)):
+        cc = f[:-5]
+        if not f.endswith(".json") or cc == home:
+            continue
+        t = _status_table(cc)
+        names = [t.get("name") or ""] + list(t.get("aka") or [])
+        if any(rx.search(str(n).lower()) for n in names if n):
+            return cc
+    return ""
+
+
+def status_words(own=None) -> list:
+    """The market's status patterns this person's screen reads beside their own (`own`, their
+    ELIGIBILITY): the neighbour's citizenship and residence, and every other status, home or
+    neighbour, whose plain phrase their own pattern names."""
+    own = ELIGIBILITY if own is None else own
+    out = []
+    home = person.country().lower()
+    near = neighbour_country()
+    for cc, always in ((home, ()), (near, ("citizenship", "residence"))):
+        if not cc:
+            continue
+        for kind, w in (_status_table(cc).get("status_words") or {}).items():
+            if not isinstance(w, dict) or not w.get("words"):
+                continue
+            if kind in always or own.search(str(w.get("says") or "")):
+                out.append(re.compile(w["words"], re.I))
+    return out
+
+
+_STATUS_WORDS = status_words()
+if _STATUS_WORDS:
+    ELIGIBILITY = _Either(ELIGIBILITY, *_STATUS_WORDS)
 CONDITION = re.compile(
     r"\b(must|required|require[sd]?|requirement|only|eligib\w+|need to be|"
     r"needs? to|restricted to|limited to|condition of|prerequisite|"
@@ -1490,10 +1575,21 @@ INTERNAL_ONLY = getattr(_S, "INTERNAL_ONLY", None) or re.compile(
 _RESTRICTS = re.compile(r"\bonly\b|\brestricted\b|\blimited to\b", re.I)
 
 
-def internal_only(title: str, text: str) -> str | None:
-    """The title or sentence that restricts a vacancy to the employer's own staff."""
+# The employer field marking a listing as internal: "<Employer> - Internal",
+# "<Employer> (Internal)". An aggregator copies it from the employer's internal careers site,
+# and the gate read only the title and the body, so one was ranked (2026-11-16).
+INTERNAL_EMPLOYER = re.compile(
+    r"(?:\s[-\u2013\u2014|:,]\s*|\(\s*|\s)internal(?:\s+(?:only|postings?|jobs|careers?|"
+    r"candidates?(?:\s+only)?))?\s*\)?\s*$", re.I)
+
+
+def internal_only(title: str, text: str, company: str = "") -> str | None:
+    """The title, employer field or sentence that restricts a vacancy to the employer's own
+    staff."""
     if INTERNAL_ONLY_TITLE.search(title or ""):
         return (title or "")[:200]
+    if INTERNAL_EMPLOYER.search(company or ""):
+        return f"listed under {company}"[:200]
     for s in sentences(text):
         m = INTERNAL_ONLY.search(s)
         if m and _RESTRICTS.search(m.group(0)):
@@ -1925,7 +2021,7 @@ def screen(job: dict) -> dict:
         if w:
             cuts.append(f'{CUTS["residence"][0]}: "{w}"')
 
-    i = internal_only(job.get("title") or "", text)
+    i = internal_only(job.get("title") or "", text, str(job.get("company") or ""))
     if i:
         cuts.append(f'{CUTS["internal_only"][0]}: "{i}"')
 

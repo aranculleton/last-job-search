@@ -1590,6 +1590,110 @@ def _sighting(entries: dict, urls: dict, pairs: dict, r: dict, today: str) -> st
     return u
 
 
+# ------------------------------------------------------------------ keeping the file small
+#
+# A posting a round only saw (surfaced, or skipped for a reason the throttle decides again
+# every round: RE_EVALUATED, a queue decision) is a record, never a ruling: what a later round
+# reads of it is when it was first and last seen (the age and relist rules), and, while the
+# relist rule can still match it (RELIST_WINDOW), its title, employer and place. Each round
+# wrote about 1,700 of them with every field it had, a sentence of skip reason each, so one
+# copy's file reached 19MB in two months, committed 108 times and read whole by every stage
+# (issue 310). Now a record keeps only what is read: in full while it can be relisted (or for
+# the person's own window, if longer), then only when it was seen, and nothing after
+# FORGET_DAYS unseen, by when the same link is a posting this search no longer knows. A
+# ruling, an application, a set-aside and anything with a field a round does not write is
+# never touched.
+FORGET_DAYS = 180
+_ROUND_WRITTEN = frozenset({"title", "company", "url", "first_seen", "last_seen", "posted_date",
+                            "deadline", "portal", "source", "location", "location_verdict",
+                            "fit", "opportunity", "priority", "status", "skip_reason",
+                            "skipped_date", "relisted_from", "rank_date"})
+_RECORD_KEEPS = ("title", "company", "location", "first_seen", "last_seen", "status", "fit",
+                 "priority", "deadline", "skip_reason", "relisted_from")
+_SEEN_KEEPS = ("first_seen", "last_seen", "status")
+
+
+def is_record(e) -> bool:
+    """Is this seen_jobs.json entry a round's record of a posting it only saw, never a
+    ruling, an application or anything a person or a chat wrote?"""
+    if not isinstance(e, dict) or set(e) - _ROUND_WRITTEN:
+        return False
+    status = str(e.get("status") or "").lower()
+    if status == "surfaced":
+        return True
+    if status != "skipped":
+        return False
+    reason = str(e.get("skip_reason") or "")
+    return (not reason.strip() or reason.lower().startswith(RE_EVALUATED)
+            or bool(QUEUE_DECISION.search(reason)))
+
+
+def _record_days() -> int:
+    """How long a record keeps its title, employer and place: the relist window, or the
+    person's own window for how recent a job must be, if that is longer."""
+    try:
+        own = int(getattr(person.module("search"), "JOB_AGE_DAYS", 0) or 0)
+    except Exception:  # noqa: BLE001  no profile: the relist window alone
+        own = 0
+    return max(RELIST_WINDOW, own)
+
+
+def compact(entries: dict, today: str = "") -> int:
+    """Shorten every round record in `entries` (seen_jobs.json's "seen") to what a later round
+    reads, in place. How many entries it changed or let go."""
+    now = as_date(today, iso_only=True) or person.today()
+    keep_whole = (now - dt.timedelta(days=_record_days())).isoformat()
+    forget = (now - dt.timedelta(days=FORGET_DAYS)).isoformat()
+    changed = 0
+    for k in list(entries):
+        e = entries[k]
+        if not is_record(e):
+            continue
+        days = _days_seen(e)
+        if not days:
+            continue
+        first, last = min(days), max(days)
+        if last < forget:
+            del entries[k]
+            changed += 1
+            continue
+        out = {f: e[f] for f in (_RECORD_KEEPS if last >= keep_whole else _SEEN_KEEPS)
+               if e.get(f) not in (None, "")}
+        out["first_seen"], out["last_seen"] = first, last
+        if out.get("skip_reason"):
+            # Its kind alone, where that still reads as a reason decided again every round;
+            # else none, which is never read as a ruling either (ruled_out).
+            kind = skip_kind(out["skip_reason"])
+            if kind.lower().startswith(RE_EVALUATED) or QUEUE_DECISION.search(kind):
+                out["skip_reason"] = kind
+            else:
+                del out["skip_reason"]
+        if e.get("url") and e["url"] != k:
+            out["url"] = e["url"]
+        if out != e:
+            entries[k] = out
+            changed += 1
+    return changed
+
+
+def compact_file(path: str = SEEN, today: str = "", dry: bool = False) -> int:
+    """compact() on the seen file at `path`, written back unless `dry`. Entries changed."""
+    data = load_seen(path)
+    n = compact(data["seen"], today)
+    if n and not dry:
+        _dump_seen(path, data)
+    return n
+
+
+def _dump_seen(path: str, data: dict) -> None:
+    tmp = tempfile.NamedTemporaryFile("w", newline="\n", dir=os.path.dirname(path) or ".",
+                                      delete=False, encoding="utf-8", suffix=".tmp")
+    with tmp:
+        json.dump(data, tmp, indent=2, ensure_ascii=False)
+        tmp.write("\n")
+    os.replace(tmp.name, path)
+
+
 def write_back(path: str, data: dict, skipped: list[dict], today: str,
                kept: list[dict] | tuple = (), index: tuple | None = None) -> int:
     """Record every skip, and when each posting was first and last seen. Returns skips written.
@@ -1626,12 +1730,10 @@ def write_back(path: str, data: dict, skipped: list[dict], today: str,
     # so it ends six months on rather than holding from whichever day it is read.
     import exclude
     exclude.date_undated(data, today)
-    tmp = tempfile.NamedTemporaryFile("w", newline="\n", dir=os.path.dirname(path) or ".",
-                                      delete=False, encoding="utf-8", suffix=".tmp")
-    with tmp:
-        json.dump(data, tmp, indent=2, ensure_ascii=False)
-        tmp.write("\n")
-    os.replace(tmp.name, path)
+    # Every record kept to what a later round reads (compact): the next round after an update
+    # shrinks a file that grew before it.
+    compact(entries, today)
+    _dump_seen(path, data)
     return n
 
 
@@ -1655,8 +1757,11 @@ def skip_kind(reason: str) -> str:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("infile", help="fit.py output, every ranked row")
-    ap.add_argument("--out", required=True, help="the shortlist: surfaced rows only")
+    ap.add_argument("infile", nargs="?", help="fit.py output, every ranked row")
+    ap.add_argument("--out", help="the shortlist: surfaced rows only")
+    ap.add_argument("--compact", action="store_true",
+                    help="no round: shorten the seen file's records of postings only seen to "
+                         "what a later round reads (the seen-compacted upgrade)")
     ap.add_argument("--skipped", help="the rows this stage removed, with reasons")
     ap.add_argument("--tracker", default=TRACKER)
     ap.add_argument("--seen", default=SEEN)
@@ -1672,6 +1777,13 @@ def main() -> int:
                     help="skip nothing for a past ruling in seen_jobs.json, so everything "
                          "previously excluded is scored again (run_round.py --no-seen-read)")
     a = ap.parse_args()
+    if a.compact:
+        n = compact_file(a.seen, a.today)
+        print(f"throttle: {n} record(s) of postings only seen shortened or let go in "
+              f"{os.path.basename(a.seen)}")
+        return 0
+    if not (a.infile and a.out):
+        ap.error("the ranked rows and --out are needed, or --compact")
 
     with open(a.infile, encoding="utf-8") as fh:
         data = json.load(fh)
@@ -1686,6 +1798,10 @@ def main() -> int:
     today = as_date(a.today, iso_only=True)
     tracker = _tracker_rows(a.tracker)
     contacts = _contact_rows(a.contacts)
+    # The employers these records name are what a feed's run-together, careers-site or team
+    # name is joined to, so an open application under "<Name> Bank" holds back a role listed
+    # as "jobs.<name>bank.com" (company_key.know).
+    company_key.know(r.get("company") for r in [*tracker, *contacts])
     live = _derived_statuses(contacts, a.threads or threads_beside(a.contacts)) if contacts else {}
     dnt = _read_do_not_target(a.do_not_target) or {}
     open_apps = open_applications(a.tracker, today, rows=tracker)

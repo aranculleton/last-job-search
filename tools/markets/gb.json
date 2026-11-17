@@ -287,5 +287,19 @@
       "checked": "2026-10-25",
       "verified": true
     }
-  ]
+  ],
+  "status_words": {
+    "citizenship": {
+      "says": "British citizen",
+      "words": "\\b(?:british|uk|u\\.k\\.)\\s+(?:citizen\\w*|nationals?|nationality)\\b|\\bcitizens? of the (?:uk|united kingdom)\\b"
+    },
+    "residence": {
+      "says": "indefinite leave to remain",
+      "words": "\\bindefinite leave to remain\\b"
+    },
+    "clearance": {
+      "says": "security clearance",
+      "words": "\\b(?:sc|dv|security)[- ]?(?:cleared|clearance)\\b|\\bdeveloped vetting\\b"
+    }
+  }
 }

@@ -10,8 +10,10 @@ there is, tried in this order (`route`), and the page says which in one line:
      own chat, "Job search: on your computer", kept open after an earlier job and watching a
      bell page of its own, is woken by republishing that bell (`ring computer chat`, the
      listener): no new chat, and nothing for the person to allow. The first chat on the
-     computer that finishes its job while there is none becomes it; idle, it keeps one
-     background wait whose end wakes it to republish its bell, and after each job it rings
+     computer that finishes its job while there is none becomes it; idle, it costs no turn:
+     whoever rings it also leaves the ring in the person's copy, and its one background
+     command (`listener-wait`) reads that on GitHub in code and ends, waking it, only when
+     work is rung for it, so a watch that lapsed still reaches it; after each job it rings
      the starter, whose wake lands what it saved; one that does not answer is stale, and the
      work goes on down this list;
   2. a cloud chat starts a chat on the computer itself (`computer session`), which asks the
@@ -26,7 +28,7 @@ there is, tried in this order (`route`), and the page says which in one line:
      (`finished`), whichever chat answers the page by then;
   3. the scheduled task on the computer (claude_surfaces: routines-local) takes it on its
      next run, while the desktop app is open there (`computer task`); with nothing waiting it
-     rings a quiet listener once, so its watch never lapses (`keep-alive`);
+     does nothing (`keep-alive`, kept for a task made before);
   4. a folder the computer offers to cloud chats (claude_surfaces: folder-attach), where it
      does (`computer folder`);
   5. a cloud chat lent the computer's browser (claude_surfaces: cloud-linked-browser) does it
@@ -61,7 +63,8 @@ whose trend the brief reports (`trend`).
     python3 tools/computer.py listener-rung <dump>             # its bell was republished
     python3 tools/computer.py listener-woke <dump> --chat ID [--file F]  # a wake: take, keep, rest
     python3 tools/computer.py listener-steps [--chat ID]       # what it does every wake
-    python3 tools/computer.py keep-alive <dump> --file F       # the scheduled task rings it
+    python3 tools/computer.py listener-wait --chat ID [--again]  # its wait: ends when rung
+    python3 tools/computer.py keep-alive <dump> --file F       # a task made before: nothing now
     python3 tools/computer.py saved-here <dump> --chat ID     # its save kept here: said on the page
     python3 tools/computer.py tidy-folders [<dump>]           # the chats' merged, clean folders removed
     python3 tools/computer.py signed-in <dump> --work ID          # its own sign-in question, answered
@@ -561,12 +564,15 @@ COMPUTER_MODE_REFUSED = (
 
 
 def starter_call(url: str, copy: str, owner: str, name: str) -> dict:
-    """The create_session that makes the computer starter, from the person's copy."""
+    """The create_session that makes the computer starter, from the person's copy (in the
+    maintainer's own, with the app attached as well: app_bug.attach_app, issue 318)."""
+    import app_bug
     import app_listen
-    return {"title": STARTER_TITLE, "prompt": starter_prompt(url, copy),
-            "source_url": f"https://github.com/{owner}/{name}",
-            "extra_allowed_tools": list(STARTER_TOOLS),
-            "permission_mode": app_listen.SESSION_MODE}
+    return app_bug.attach_app({
+        "title": STARTER_TITLE, "prompt": starter_prompt(url, copy),
+        "source_url": f"https://github.com/{owner}/{name}",
+        "extra_allowed_tools": list(STARTER_TOOLS),
+        "permission_mode": app_listen.SESSION_MODE})
 
 
 def bell_html(now: dt.datetime, of: str = "starter") -> str:
@@ -867,7 +873,8 @@ def ring_steps(bell: str, path: str, rung_cmd: str = "rung") -> str:
     return (f"Artifact read with url {bell} (it is another chat's page, and a publish to a page "
             f"this chat has not read is refused), then Artifact publish with file_path \"{path}\" "
             f"and url {bell} (never a new page), then ArtifactComments watch with url {bell} and "
-            f"on: false, then python3 tools/computer.py {rung_cmd} <dump> and send its batch. "
+            f"on: false, then python3 tools/computer.py {rung_cmd} <dump> and send its batch"
+            + (RING_LANDS if rung_cmd == "listener-rung" else "") + ". "
             "Refused even so: leave it; the finished work and this chat's last heartbeat already "
             "tell the page it waits to be put away, and the next wake of Claude's chats puts it "
             "away. Say nothing about it to the person.")
@@ -894,27 +901,60 @@ LISTENER_BELL_TITLE = "Job search computer chat bell"
 # the starter, whose chat on the computer then becomes the listener.
 LISTENER_ANSWER_S = 5 * 60
 LISTENER_SILENT_RINGS = 2
-# A watch can end after hours with no activity (page-watch): the hourly scheduled task on the
-# computer, where there is one, rings a listener that has not answered for this long.
+# A watch can end after hours with no activity (page-watch). A listener quiet this long may
+# have lost its watch on its bell: its ring then reaches it through the person's copy on GitHub
+# (RING_FILE), once the ringing chat's save has landed there, so it is given LISTENER_LATE_ANSWER_S
+# to answer before it is stale. The hourly scheduled task once rang a listener this quiet; it
+# no longer does (keep_alive).
 LISTENER_QUIET_S = 2 * 3600
-# On an idle wake the listener republishes its own bell at most this often, so its watch starts
-# again, and a wake its own publish might cause never loops.
+LISTENER_LATE_ANSWER_S = 15 * 60
+# On a wake with nothing waiting the listener republishes its own bell at most this often, so
+# its watch starts again, and a wake its own publish might cause never loops.
 LISTENER_KEEP_S = 60 * 60
 # What the page says of work the listener is rung for.
 LISTENER_TAKES = "Your computer's chat takes it."
-# Idle, it keeps its own watch alive: one background wait at a time, just under the two hours a
-# background command may run and under the hours a watch lasts with nothing happening
-# (page-watch). Its end wakes the chat (a background command re-invokes the chat when it
-# exits; a foreground sleep is refused), and that wake republishes its bell, kept_at being
-# over LISTENER_KEEP_S old by then. Without it, a listener on a computer with no scheduled task
-# (COMPUTER.md, section 6, step 5) lost its watch after a quiet afternoon.
+# Idle, the listener costs no turn at all (issue #322). It kept one background `sleep 6600`
+# going, whose end woke the whole chat about twelve times a day to republish its bell with
+# nothing to do, every wake re-reading its whole history. Now whoever rings it also leaves the
+# ring in the person's copy (RING_FILE, written by listener_rung and landed with that chat's
+# save: ring_steps), and its one background command is the wait (listener_wait), code that
+# reads that file on GitHub once a minute and ends, which wakes the chat, only when work is
+# rung for it. A background command re-invokes the chat when it exits, and in the desktop app
+# it has no time limit (claude_surfaces: background-command-limit); where one applies (an
+# unattended session, two hours at most) the chat starts it again in one step (`--again`).
+RING_FILE = ("documents", "computer_ring.json")
+LISTENER_POLL_S = 60
+# A wait that cannot read GitHub this long (offline, signed out of GitHub, no copy there) ends,
+# so the chat keeps its bell's watch itself, as often as before and never more.
 LISTENER_WAIT_S = 6600
-LISTENER_WAIT_TIMEOUT_MS = 7_000_000
-LISTENER_WAIT = ("Then start one background wait, unless one is already running (never a second "
-                 "one, and never a foreground sleep): a Bash call with run_in_background true, "
-                 f"timeout {LISTENER_WAIT_TIMEOUT_MS}, command sleep {LISTENER_WAIT_S}. When it "
-                 "ends it wakes this chat: python3 tools/computer.py listener-steps --chat "
-                 "{chat}, and do what it prints.")
+LISTENER_WAIT_TIMEOUT_MS = 7_200_000
+# A wait not heard from this long is not running (it writes each round; a computer asleep or a
+# wait put away stops). Waits are told apart by their own record in the checkout (WAIT_FILE),
+# never by asking the system about a process: on Windows that ends it (land._alive).
+LISTENER_BEAT_S = 5 * 60
+WAIT_FILE = "ljs-listener-wait.json"          # the running wait: owner, beat, the ring it woke for
+ANSWERED_FILE = "ljs-listener-answered.json"  # the newest ring a wake of the chat answered
+IDLE_FILE = "ljs-listener-idle.json"          # its wakes with nothing waiting, and when filed
+# Wakes with nothing waiting this many in a day mean the wait is not doing its job: in the
+# maintainer's own copy the wake that makes it so prints the line that files it (app_bug
+# met_line), at most once in LISTENER_IDLE_SAID_DAYS. A chat ran the old full wake twelve times
+# a day and filed nothing, since nothing it ran was refused (issue #322).
+LISTENER_IDLE_FILE_AT = 4
+LISTENER_IDLE_SAID_DAYS = 7
+LISTENER_WAIT = ("Then start your wait, one Bash call with run_in_background true, timeout "
+                 f"{LISTENER_WAIT_TIMEOUT_MS}, command python3 tools/computer.py listener-wait "
+                 "--chat {chat}: it looks on GitHub once a minute, in code, costing nothing, and "
+                 "ends, which wakes this chat, only when work is rung for it. One at a time, never "
+                 "a foreground sleep and never a plain sleep. When this chat is woken: python3 "
+                 "tools/computer.py listener-steps --chat {chat}, and do what it prints.")
+LISTENER_WAIT_AGAIN = ("start your wait again, the same way: one Bash call with "
+                       f"run_in_background true, timeout {LISTENER_WAIT_TIMEOUT_MS}, command "
+                       "python3 tools/computer.py listener-wait --chat {chat} --again")
+LISTENER_RUNNING = ("Your wait (python3 tools/computer.py listener-wait) is running already: "
+                    "start no other.")
+# How a chat that rings the listener leaves the ring where its wait reads it: in its save.
+RING_LANDS = (", then python3 tools/land.py --detach, saying nothing (it carries the ring to "
+              "GitHub, where the computer's chat looks for it once a minute)")
 
 
 def listener(db: dict) -> dict:
@@ -935,9 +975,22 @@ def _answered(rec: dict, since: dt.datetime | None) -> bool:
                                          _time(rec.get("ready_at"))))
 
 
+def answer_s(rec: dict, rung_at: dt.datetime | None) -> int:
+    """How long a ring of the listener has to be answered: LISTENER_ANSWER_S, or, where it had
+    been quiet LISTENER_QUIET_S when rung (its watch on its bell may have lapsed, so the ring
+    reaches it through GitHub once the ringing chat's save lands), LISTENER_LATE_ANSWER_S."""
+    last = max([t for t in (_time(rec.get(k)) for k in ("answered_at", "ready_at", "kept_at"))
+                if t], default=None)
+    if rung_at is not None and last is not None and \
+            (rung_at - last).total_seconds() >= LISTENER_QUIET_S:
+        return LISTENER_LATE_ANSWER_S
+    return LISTENER_ANSWER_S
+
+
 def listener_stale(db: dict, now: dt.datetime) -> bool:
     """Is there no listener to ring: none, no bell, marked stale and not answered since, rung
-    LISTENER_SILENT_RINGS times unanswered, or rung LISTENER_ANSWER_S ago with no answer?"""
+    LISTENER_SILENT_RINGS times unanswered, or rung longer ago than it has to answer
+    (answer_s) with no answer?"""
     rec = listener(db)
     if not rec.get("chat") or not rec.get("bell"):
         return True
@@ -948,7 +1001,7 @@ def listener_stale(db: dict, now: dt.datetime) -> bool:
     if rung_at is None or _answered(rec, rung_at):
         return False
     return int(rec.get("rings") or 0) >= LISTENER_SILENT_RINGS or \
-        (now - rung_at).total_seconds() >= LISTENER_ANSWER_S
+        (now - rung_at).total_seconds() >= answer_s(rec, rung_at)
 
 
 def listener_live(db: dict, now: dt.datetime) -> bool:
@@ -956,21 +1009,12 @@ def listener_live(db: dict, now: dt.datetime) -> bool:
 
 
 def listener_rung_lately(db: dict, now: dt.datetime) -> bool:
-    """Rung, not answered yet, and still within LISTENER_ANSWER_S: it is on its way."""
+    """Rung, not answered yet, and still within the time it has to answer (answer_s): it is
+    on its way."""
     rec = listener(db)
     rung_at = _time(rec.get("rung_at"))
     return bool(listener_live(db, now) and rung_at and not _answered(rec, rung_at)
-                and 0 <= (now - rung_at).total_seconds() < LISTENER_ANSWER_S)
-
-
-def listener_quiet(db: dict, now: dt.datetime) -> bool:
-    """A live listener that has not answered for LISTENER_QUIET_S and is not rung lately: its
-    watch may lapse, so the scheduled task rings it once (keep-alive)."""
-    rec = listener(db)
-    last = max([t for t in (_time(rec.get("answered_at")), _time(rec.get("ready_at"))) if t],
-               default=None)
-    return bool(listener_live(db, now) and not listener_rung_lately(db, now) and last
-                and (now - last).total_seconds() >= LISTENER_QUIET_S)
+                and 0 <= (now - rung_at).total_seconds() < answer_s(rec, rung_at))
 
 
 def _chat_title(db: dict, chat: str) -> str:
@@ -996,12 +1040,32 @@ def listener_ready(db: dict, chat: str, bell: str, computer: str, now: dt.dateti
 
 
 def listener_rung(db: dict, now: dt.datetime, out_dir: str, dump_dir: str = "") -> list[str]:
-    """Its bell was republished: kept, with how many rings in a row went unanswered."""
+    """Its bell was republished: kept, with how many rings in a row went unanswered, and the
+    ring left in the person's copy (RING_FILE), where its wait reads it once this chat's save
+    lands (ring_steps), so a watch that lapsed still reaches it."""
     rec = listener(db)
     last = _time(rec.get("rung_at"))
     rings = 1 if last is None or _answered(rec, last) else int(rec.get("rings") or 0) + 1
+    if rec.get("chat"):
+        write_ring(str(rec["chat"]), now)
     return _starter_set(db, {"rung_at": _stamp(now), "rings": rings}, out_dir, dump_dir,
                         "listener-rung", LISTENER_DOC)
+
+
+def ring_path() -> str:
+    import person
+    return os.path.join(person.state(), *RING_FILE)
+
+
+def write_ring(chat: str, now: dt.datetime) -> str:
+    """The ring for the listener `chat`, written whole (merge_state keeps the later one)."""
+    path = ring_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
+        json.dump({"chat": chat, "rung_at": _stamp(now)}, fh, indent=1, sort_keys=True,
+                  ensure_ascii=False)
+        fh.write("\n")
+    return path
 
 
 def listener_marked_stale(db: dict, now: dt.datetime, out_dir: str,
@@ -1014,8 +1078,11 @@ def listener_marked_stale(db: dict, now: dt.datetime, out_dir: str,
 def listener_woke(db: dict, chat: str, now: dt.datetime, out_dir: str, path: str = "",
                   dump_dir: str = "") -> dict:
     """The listener was woken: {"batches", "next"}. Its answer is kept (rings reset, not
-    stale); `next` says what this wake does: take the first queued work, republish its own
-    bell (at most every LISTENER_KEEP_S), or rest. A chat no longer the listener is told so."""
+    stale), and in this checkout the newest ring it answers, so its wait never wakes it again
+    for a ring its bell brought; `next` says what this wake does: take the first queued work,
+    republish its own bell (at most every LISTENER_KEEP_S), or rest, each with its wait started
+    where none runs (wait_line). A wake with nothing waiting counts itself (idle_line). A chat
+    no longer the listener is told so."""
     rec = listener(db)
     if not is_listener(db, chat):
         return {"batches": [], "next": (
@@ -1023,34 +1090,65 @@ def listener_woke(db: dict, chat: str, now: dt.datetime, out_dir: str, path: str
             "nothing: the chat that starts chats on this computer puts this one away.")}
     at = _stamp(now)
     fields = {"answered_at": at, "rings": 0, "stale_at": None}
+    if rec.get("rung_at"):
+        answered(str(rec["rung_at"]))
     w = waiting(db, now)
     kept = _time(rec.get("kept_at"))
     if w["queued"]:
         said = (f"take: follow from step 2 the steps python3 tools/computer.py prompt --work "
                 f"{w['queued'][0]} prints, in this chat; its step 8 keeps this chat open.")
-    elif kept is None or (now - kept).total_seconds() >= LISTENER_KEEP_S:
-        # The record first, then the publish: a wake its own publish might bring rests.
-        fields["kept_at"] = at
-        bell_path = path or "<your scratchpad>/listener-bell.html"
-        if path:
-            write_bell(path, now, "listener")
-        said = (f"keep: send the batch first, then Artifact publish with file_path "
-                f"\"{bell_path}\" and url {rec.get('bell')} (your own page: no read first), so "
-                "its watch starts again. " + LISTENER_WAIT.format(chat=chat) +
-                " End the turn, saying nothing.")
     else:
-        said = ("rest: nothing waits. " + LISTENER_WAIT.format(chat=chat) +
-                " End the turn, saying nothing.")
+        if _checkout_json(WAIT_FILE).get("ended") != "keep":
+            # A wake its wait asked for to keep the bell, while the chats that ring it leave no
+            # ring on GitHub yet, is the old interval, expected: never counted.
+            idle_wake(now)
+        if kept is None or (now - kept).total_seconds() >= LISTENER_KEEP_S:
+            # The record first, then the publish: a wake its own publish might bring rests.
+            fields["kept_at"] = at
+            bell_path = path or "<your scratchpad>/listener-bell.html"
+            if path:
+                write_bell(path, now, "listener")
+            said = (f"keep: send the batch first, then Artifact publish with file_path "
+                    f"\"{bell_path}\" and url {rec.get('bell')} (your own page: no read first), "
+                    "so its watch starts again. " + wait_line(chat, now) +
+                    " End the turn, saying nothing.")
+        else:
+            said = ("rest: nothing waits. " + wait_line(chat, now) +
+                    " End the turn, saying nothing.")
+    filing = idle_line(now)
+    if filing:
+        said += " First, " + filing + "."
     return {"batches": _starter_set(db, fields, out_dir, dump_dir, "listener-woke",
                                     LISTENER_DOC), "next": said}
 
 
-def listener_steps(url: str, chat: str = "") -> list[str]:
-    """What the listener does every time it is woken, in the shape of the starter's wake."""
+def listener_steps(url: str, chat: str = "", now: dt.datetime | None = None) -> list[str]:
+    """What the listener does every time it is woken, by what woke it: while its wait runs
+    (wait_running), only a ring of its bell needs the page read, and anything else ends the turn
+    at once; with none running, a wait stopped at a time limit is started again in one call,
+    and anything else (its bell, its wait's own line, an older sleep ending) reads the page."""
     me = chat or "<your id>"
-    return [
-        "Every time this chat is woken (its bell republished, its background wait ending, or "
-        "anything else), say nothing and:",
+    if wait_running(now, chat):
+        how = [
+            "Every time this chat is woken, say nothing. Your wait (python3 tools/computer.py "
+            "listener-wait) is running: it looks for work on GitHub in code, costing nothing, and "
+            "its own line wakes you when work is rung for you. So, by what woke you:",
+            "- Your bell page republished: do steps 1 and 2 below.",
+            "- An older plain sleep of yours ending, or a wait of yours stopped or ended with no "
+            "line of its own: end the turn now, saying nothing, and do nothing else.",
+        ]
+    else:
+        how = [
+            "Every time this chat is woken, say nothing, and by what woke you:",
+            "- Your wait (python3 tools/computer.py listener-wait) stopped at a time limit, with "
+            "no line of its own: " + LISTENER_WAIT_AGAIN.format(chat=me) + ", and end the "
+            "turn. Nothing else.",
+            "- Your bell page republished, your wait's own line (`rung`, `blind` or `keep`), an "
+            "older plain sleep of yours ending, or anything else that is not the person: do "
+            "steps 1 and 2 below.",
+        ]
+    how.append("A message the person typed here is not a wake: answer it as any chat does.")
+    return how + [
         "1. Load ArtifactData if it is not loaded (ToolSearch, select:ArtifactData). Read the "
         f"page's work, beats and meta into a fresh folder in your scratchpad, $D: ArtifactData "
         f"query, url {url}, once for each collection, out_dir $D, limit 1000.",
@@ -1063,6 +1161,239 @@ def listener_steps(url: str, chat: str = "") -> list[str]:
         "everything back. After a compaction, or wherever you lose your place: python3 "
         f"tools/computer.py listener-steps --chat {me} prints these steps again.",
     ]
+
+
+# ------------------------------------------------------------------ the listener's wait
+
+_CHECKOUT_PATHS: dict = {}
+
+
+def _checkout_path(name: str) -> str:
+    """app_listen.checkout_file, asked of git once a state folder: the wait reads its records
+    every round."""
+    import app_listen
+    import person
+    key = (person.state(), name)
+    if key not in _CHECKOUT_PATHS:
+        _CHECKOUT_PATHS[key] = app_listen.checkout_file(name)
+    return _CHECKOUT_PATHS[key]
+
+
+def _checkout_json(name: str) -> dict:
+    try:
+        with open(_checkout_path(name), encoding="utf-8") as fh:
+            got = json.load(fh)
+        return got if isinstance(got, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _save_checkout_json(name: str, data: dict) -> None:
+    """Written whole, as app_listen keeps its own: the wait and the chat each write their own
+    file, so neither loses the other's."""
+    import app_listen
+    path = _checkout_path(name)
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        tmp = f"{path}.{os.getpid()}.tmp"
+        with open(tmp, "w", encoding="utf-8", newline="\n") as fh:
+            json.dump(data, fh, indent=1, sort_keys=True)
+            fh.write("\n")
+        app_listen._replace(tmp, path)
+    except OSError:
+        pass                    # a record that cannot be kept never stops a wake or a wait
+
+
+def answered(rung_at: str) -> None:
+    """A wake of the listener read the page with the ring `rung_at` on it: answered here."""
+    got = _checkout_json(ANSWERED_FILE)
+    if (_time(rung_at) or dt.datetime.min.replace(tzinfo=dt.timezone.utc)) > \
+            (_time(got.get("rung_at")) or dt.datetime.min.replace(tzinfo=dt.timezone.utc)):
+        _save_checkout_json(ANSWERED_FILE, {"rung_at": rung_at})
+
+
+def wait_running(now: dt.datetime | None = None, chat: str = "") -> bool:
+    """Is a wait running in this checkout (for `chat`, where given): one has it (owner) and was
+    heard from in the last LISTENER_BEAT_S? Chats on the computer can share a folder, and the
+    wait of a listener replaced is never the new one's."""
+    now = now or dt.datetime.now(dt.timezone.utc)
+    got = _checkout_json(WAIT_FILE)
+    beat = _time(got.get("beat"))
+    return bool(got.get("owner") and beat and (not chat or got.get("chat") == chat) and
+                -LISTENER_BEAT_S < (now - beat).total_seconds() < LISTENER_BEAT_S)
+
+
+def wait_line(chat: str, now: dt.datetime | None = None) -> str:
+    """How a moment with nothing waiting ends: the wait started, or left running."""
+    return LISTENER_RUNNING if wait_running(now, chat) else LISTENER_WAIT.format(chat=chat)
+
+
+def idle_wake(now: dt.datetime) -> None:
+    """One more wake with nothing waiting, kept a day."""
+    got = _checkout_json(IDLE_FILE)
+    cut = now - dt.timedelta(days=1)
+    wakes = [w for w in got.get("wakes") or [] if (_time(w) or cut) > cut]
+    got["wakes"] = sorted(wakes + [_stamp(now)])
+    _save_checkout_json(IDLE_FILE, got)
+
+
+def idle_line(now: dt.datetime) -> str:
+    """The line that files too many wakes with nothing waiting (LISTENER_IDLE_FILE_AT in a
+    day), in the maintainer's own copy only, at most once in LISTENER_IDLE_SAID_DAYS; ""
+    otherwise."""
+    got = _checkout_json(IDLE_FILE)
+    cut = now - dt.timedelta(days=1)
+    n = len([w for w in got.get("wakes") or [] if (_time(w) or cut) > cut])
+    said = _time(got.get("said_at"))
+    if n < LISTENER_IDLE_FILE_AT or (said and (now - said).days < LISTENER_IDLE_SAID_DAYS):
+        return ""
+    import app_bug
+    line = app_bug.met_line(
+        "tools/computer.py:listener_woke",
+        f"The computer's own chat was woken {n} times in a day with nothing waiting for it, "
+        "each wake reading its whole history again: its wait (listener-wait) is not keeping "
+        "it asleep.")
+    if line:
+        got["said_at"] = _stamp(now)
+        _save_checkout_json(IDLE_FILE, got)
+    return line
+
+
+def _git_out(root: str, *args: str, timeout: int = 60):
+    import subprocess
+    try:
+        return subprocess.run(["git", "-C", root, *args], capture_output=True, text=True,
+                              encoding="utf-8", errors="replace", timeout=timeout,
+                              stdin=subprocess.DEVNULL)
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def _show(root: str, spot: str):
+    """(found, text) for `<commit>:<path>` in this checkout's objects; None where git fails."""
+    there = _git_out(root, "cat-file", "-e", spot)
+    if there is None:
+        return None
+    if there.returncode != 0:
+        return False, ""
+    shown = _git_out(root, "show", spot)
+    if shown is None or shown.returncode != 0:
+        return None
+    return True, shown.stdout
+
+
+def ring_on_github(root: str, last: str = "") -> tuple[str, dict | None, bool | None]:
+    """(master's commit on GitHub, the ring there, whether the copy's own code there leaves
+    rings) for the copy at `root`: ("", None, None) where GitHub cannot be read, the ring {}
+    where master holds none, and (tip, {}, None) where master has not moved since `last`. Only
+    a master that moved is fetched, into git's objects alone (no branch, no FETCH_HEAD), so a
+    chat working in this checkout is never disturbed. The chats that ring the listener run the
+    copy's code, so until master's own tools/computer.py names RING_FILE (an update taken on
+    this computer first) none of them leaves a ring there."""
+    r = _git_out(root, "ls-remote", "origin", "refs/heads/master", timeout=60)
+    tip = (r.stdout.split() or [""])[0] if r is not None and r.returncode == 0 else ""
+    if not tip:
+        return "", None, None
+    if tip == last:
+        return tip, {}, None
+    have = _git_out(root, "cat-file", "-e", tip + "^{commit}")
+    if have is None or have.returncode != 0:
+        got = _git_out(root, "fetch", "-q", "--no-tags", "--no-write-fetch-head", "origin",
+                       "refs/heads/master", timeout=120)
+        if got is not None and got.returncode != 0 and "no-write-fetch-head" in got.stderr:
+            got = _git_out(root, "fetch", "-q", "--no-tags", "origin", "refs/heads/master",
+                           timeout=120)            # a git older than 2.29
+        if got is None or got.returncode != 0:
+            return "", None, None
+    code = _show(root, tip + ":tools/computer.py")
+    ring = _show(root, tip + ":" + "/".join(RING_FILE))
+    if code is None or ring is None:
+        return "", None, None
+    able = bool(code[0]) and json.dumps(RING_FILE[-1]) in code[1]
+    try:
+        got = json.loads(ring[1]) if ring[0] else {}
+    except ValueError:
+        got = {}
+    return tip, got if isinstance(got, dict) else {}, able
+
+
+def listener_wait(chat: str, sleep=None, clock=None, rounds: int | None = None,
+                  again: bool = False, token: str = "") -> str:
+    """The listener's one background command: code, never the model. Once a minute
+    (LISTENER_POLL_S) it reads the ring on the copy's master on GitHub (ring_on_github) and
+    returns, ending the command and so waking the chat, only for a ring for `chat` newer than
+    any it woke for or a wake of the chat answered ("rung: ..."), or after LISTENER_WAIT_S
+    unable to read GitHub ("blind: ...") or with the copy's code there leaving no rings yet
+    ("keep: ..."): only the bell can reach it then, so the chat keeps its bell's watch, as
+    often as before the wait and no more. A newer wait in this checkout takes over, and this
+    one then stops looking and never returns: its return would wake the chat. `again`: started
+    after a wait stopped at a time limit, so the wake that started it counts as one with nothing
+    waiting. `rounds` is for tests: "" once they are spent."""
+    import person
+    import time
+    sleep = sleep or time.sleep
+    clock = clock or time.time
+
+    def at() -> dt.datetime:
+        return dt.datetime.fromtimestamp(clock(), dt.timezone.utc)
+    if again:
+        idle_wake(at())
+    root = person.state()
+    me = token or f"{os.getpid()}-{os.urandom(4).hex()}"
+    state = _checkout_json(WAIT_FILE)
+    state.update(owner=me, chat=chat, beat=_stamp(at()), started=_stamp(at()), ended=None)
+    _save_checkout_json(WAIT_FILE, state)
+
+    def end(how: str, now: dt.datetime, **kw) -> None:
+        # Read afresh: a newer wait that took over meanwhile keeps running, and learns what
+        # this one woke for, so one ring wakes the chat once.
+        cur = dict(_checkout_json(WAIT_FILE), **kw)
+        if cur.get("owner") == me:
+            cur.update(owner=None, ended=how, beat=_stamp(now))
+        _save_checkout_json(WAIT_FILE, cur)
+
+    last, blind, able, began = "", None, False, at()
+    while rounds is None or rounds > 0:
+        if rounds is not None:
+            rounds -= 1
+        if _checkout_json(WAIT_FILE).get("owner") != me:
+            # Another wait took over: quiet for good, since an end here would wake the chat.
+            sleep(24 * 3600)
+            continue
+        tip, ring, leaves = ring_on_github(root, last)
+        able = able if leaves is None else leaves
+        now = at()
+        if ring is not None and not able and (now - began).total_seconds() >= LISTENER_WAIT_S:
+            # The chats that ring it have not taken this update yet: its bell is the only way
+            # in, so its watch is kept as often as before, and no more.
+            end("keep", now)
+            return (f"keep: the chats that ring this one do not leave their rings on GitHub "
+                    f"yet, so its bell is still the way in. Do steps 1 and 2 that python3 "
+                    f"tools/computer.py listener-steps --chat {chat} prints, now: they keep "
+                    "its bell's watch and start this wait again.")
+        if ring is None:
+            blind = blind or now
+            if (now - blind).total_seconds() >= LISTENER_WAIT_S:
+                end("blind", now)
+                return (f"blind: GitHub could not be read for nearly two hours, so a ring may "
+                        f"reach this chat only through its bell. Do steps 1 and 2 that python3 "
+                        f"tools/computer.py listener-steps --chat {chat} prints, now: they keep "
+                        "its bell's watch and start this wait again.")
+        else:
+            blind, last = None, tip
+            rung = _time(ring.get("rung_at")) if str(ring.get("chat") or "") == chat else None
+            seen = [t for t in (_time(_checkout_json(WAIT_FILE).get("woke_for")),
+                                _time(_checkout_json(ANSWERED_FILE).get("rung_at"))) if t]
+            if rung is not None and all(rung > t for t in seen):
+                end("rung", now, woke_for=_stamp(rung))
+                return (f"rung: work waits for this chat. Do steps 1 and 2 that python3 "
+                        f"tools/computer.py listener-steps --chat {chat} prints, now.")
+        cur = _checkout_json(WAIT_FILE)
+        if cur.get("owner") == me:
+            cur["beat"] = _stamp(now)
+            _save_checkout_json(WAIT_FILE, cur)
+        sleep(LISTENER_POLL_S)
+    return ""
 
 
 # The computer's own chat is the default, never a question: a chat told it "becomes your
@@ -1082,7 +1413,7 @@ def listener_become(db: dict, chat: str, path: str, now: dt.datetime) -> str:
         return ("stay: this chat is your computer's own chat and stays open. " +
                 LISTENER_UNASKED + " " +
                 land_steps(db, path, now) + "Skip the rest of step 8 and do step 9. "
-                + LISTENER_WAIT.format(chat=chat) + " Never archive it.")
+                + wait_line(chat, now) + " Never archive it.")
     if not chat or listener_live(db, now) or app_listen.chat_kind() == "cloud":
         return ""
     write_bell(path, now, "listener")
@@ -1101,7 +1432,7 @@ def listener_become(db: dict, chat: str, path: str, now: dt.datetime) -> str:
         LISTENER_TITLE + "\" where you can, by asking the Claude app's own session tools in "
         "plain words (claude_surfaces: computer-chat-archive), never the person; where you "
         "cannot, leave it. 5. Do step 9. " +
-        LISTENER_WAIT.format(chat=chat) + " From then "
+        wait_line(chat, now) + " From then "
         "on, every time this chat is woken: python3 tools/computer.py listener-steps --chat " +
         chat + ", and do what it prints. Never archive it.")
 
@@ -2789,14 +3120,11 @@ def task_steps(url: str) -> list[str]:
 
 def keep_alive(db: dict, now: dt.datetime, path: str) -> str:
     """What a run of the scheduled task with nothing queued does for the computer's own chat:
-    its bell rung once where it has not answered for LISTENER_QUIET_S, so its watch never
-    lapses (page-watch); "" otherwise. Unanswered, it is stale, and the next job goes to the
-    starter, whose chat becomes the listener."""
-    rec = listener(db)
-    if not listener_quiet(db, now):
-        return ""
-    write_bell(path, now, "listener")
-    return "keep-alive: " + ring_steps(rec["bell"], path, "listener-rung")
+    nothing, now. It rang a listener quiet for LISTENER_QUIET_S so its watch would not lapse,
+    and each ring woke that chat's whole history with nothing to do; its wait finds its rings
+    on GitHub whether its watch holds or not (listener_wait, issue #322). Kept for a task made
+    before, whose steps still run it."""
+    return ""
 
 
 def route(db: dict, now: dt.datetime, chat: str = "", envs=None, folders=None,
@@ -2880,7 +3208,8 @@ def route(db: dict, now: dt.datetime, chat: str = "", envs=None, folders=None,
                                      "url": bell}),
                        ("ArtifactComments", {"action": "watch", "url": bell, "on": False})],
             "_after": ("python3 tools/computer.py listener-rung <dump>, and send its batch "
-                       "(ArtifactData batch). Say nothing about it to the person."),
+                       "(ArtifactData batch)" + RING_LANDS + ". Say nothing about it to the "
+                       "person."),
             "waiting": w}, back, chat)
     listed_on = bridges(envs)
     found = pick_bridge(listed_on, db, now, copy)
@@ -4068,7 +4397,12 @@ def main(argv=None) -> int:
     p.add_argument("--now", default=None)
     p = sub.add_parser("listener-steps", help="what the computer's own chat does on each wake")
     p.add_argument("--chat", default="")
-    p = sub.add_parser("keep-alive", help="the scheduled task's ring of a quiet listener")
+    p = sub.add_parser("listener-wait", help="the computer's own chat's one background wait: "
+                                              "ends only when work is rung for it")
+    p.add_argument("--chat", required=True)
+    p.add_argument("--again", action="store_true",
+                   help="started again after a wait stopped at a time limit")
+    p = sub.add_parser("keep-alive", help="a scheduled task made before: does nothing now")
     p.add_argument("dump")
     p.add_argument("--file", required=True)
     p.add_argument("--out", default="")
@@ -4197,6 +4531,18 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
     if a.cmd == "trust-check":
         print("\n".join(trust_check(a.chat, _load_json(a.triggers))))
+        return 0
+    if a.cmd == "listener-wait":
+        try:
+            line = listener_wait(a.chat, again=a.again)
+        except Exception as e:  # noqa: BLE001  a wait that fails at once must never loop
+            import time
+            print(f"listener-wait: {e}", file=sys.stderr)
+            time.sleep(LISTENER_WAIT_S)
+            line = (f"keep: this chat's wait could not run, so its bell is the way in. Do steps "
+                    f"1 and 2 that python3 tools/computer.py listener-steps --chat {a.chat} "
+                    "prints, now: they keep its bell's watch and start this wait again.")
+        print(line, flush=True)
         return 0
     import page_db
     if a.cmd == "trusted":

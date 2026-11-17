@@ -298,5 +298,19 @@
       "checked": "2026-10-25",
       "verified": true
     }
-  ]
+  ],
+  "status_words": {
+    "citizenship": {
+      "says": "U.S. citizen",
+      "words": "\\b(?:u\\.\\s?s\\.(?:\\s?a\\.)?|usa|us|united states|american)\\s+(?:citizen(?:ship|s)?|nationals?|nationality|persons?)\\b|\\bcitizens? of the (?:u\\.\\s?s\\.(?:\\s?a\\.)?|usa|us|united states)"
+    },
+    "residence": {
+      "says": "U.S. permanent resident",
+      "words": "\\bgreen card\\b|\\b(?:lawful|u\\.\\s?s\\.|us|united states)\\s+permanent residen\\w*"
+    },
+    "clearance": {
+      "says": "security clearance",
+      "words": "\\b(?:active\\s+|current\\s+)?(?:security|secret|top secret|ts\\s?/\\s?sci|dod|government|federal)\\s+clearance\\b|\\bpublic trust\\b|\\bts\\s?/\\s?sci\\b|\\bclearable\\b"
+    }
+  }
 }

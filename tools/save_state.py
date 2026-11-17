@@ -291,6 +291,8 @@ def main(argv: list[str] | None = None, root: str = ROOT) -> int:
               "Nothing to tell the person" % (len(went), _some(went)))
     staged = _git(root, "diff", "--cached", "--name-only").stdout.split()
     print(f"save_state: staged; {len(staged)} file(s) now waiting to be committed")
+    for line in too_big(root, staged):
+        print(line)
     if left:
         words = "; ".join(ln.strip() for w in left_words for ln in w.splitlines() if ln.strip())
         print(LEFT_OUT_LINE % (len(left), _some(left), words or "no words from git",
@@ -298,6 +300,31 @@ def main(argv: list[str] | None = None, root: str = ROOT) -> int:
     if staged:
         print(LAND)
     return LEFT_OUT if left else 0
+
+
+# A saved file of the search that grows past this is noticed the day it does, not months on:
+# seen_jobs.json reached 19MB and the left-out lists 59MB, committed and copied into every new
+# chat, before anyone looked (issue 310). Said to Claude, never to the person: it is the app's.
+SIZE_WARN_MB = 5
+_SIZE_WATCHED = ("job_scraper/", "documents/rounds/", "network_", "job_search_tracker.csv")
+
+
+def too_big(root: str, rels) -> list[str]:
+    """A line for each of the search's saved files in `rels` past SIZE_WARN_MB."""
+    out = []
+    for rel in rels:
+        if not str(rel).startswith(_SIZE_WATCHED):
+            continue
+        try:
+            size = os.path.getsize(os.path.join(root, rel))
+        except OSError:
+            continue
+        if size > SIZE_WARN_MB * 1024 * 1024:
+            out.append(f"save_state: {rel} holds {size / 1048576:.0f} MB, more than the "
+                       f"{SIZE_WARN_MB} MB a saved file of the search should; every save and "
+                       "every new chat copies it, so report it as the app's problem (nothing "
+                       "to tell the person)")
+    return out
 
 
 # A file can go away between being listed and being staged: an upgrade making the PDFs
