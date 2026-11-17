@@ -242,6 +242,7 @@ def _take_master() -> str:
     except Exception:  # noqa: BLE001  drawn from master alone, as before
         pass
     if _git("merge-base", "--is-ancestor", "origin/master", "HEAD")[0] == 0:
+        _level()
         return ""
     # The row-by-row driver set first, and a file two chats changed settled, never left: a
     # job's chat is a fresh clone that never ran the sync, and its page update stopped on two
@@ -254,10 +255,22 @@ def _take_master() -> str:
         if not ok and _merging():
             _git("merge", "--abort")
     if ok:
+        _level()
         return ""
     return ("app: this copy is behind master, and taking master stopped on a change of this "
             "chat's own in the same file: save this chat's work first, then run this again. The "
             "page was left as it is, so nothing another chat saved is lost from it.")
+
+
+def _level() -> None:
+    """This branch's copy on GitHub moved up with the master just taken in, where it has one
+    (land.level): left behind, the cloud's check at the end of the turn counted master's own
+    commits as this chat's, unpushed (a person's copy, 2026-11-16)."""
+    try:
+        import land
+        land.level(ROOT)
+    except Exception:  # noqa: BLE001  the next save moves it
+        pass
 
 
 def code_moved(before: str) -> bool:
