@@ -3281,7 +3281,9 @@ S.design = async (a) => {
       }).map((e) => e.tagName.toLowerCase() + "." + [...e.classList].join("."));
       const needBin = [...document.querySelectorAll("#main .card.job:not(.is-marked):not(.st-dismissed):not(.st-applied), #main .card.app:not(.st-applied):not(.st-not_applying):not(.quiet-card), #main .card.msg:not(.is-marked), #main li.person, #main .card.interview, #main .card.app-record, #main .wave-row")]
         .filter(vis).filter((c) => !c.querySelector('[data-k^="bin:"], [data-k^="dbin:"], [data-k^="mbin:"], [data-k^="pbin:"], [data-k^="ivbin:"], [data-k^="recbin:"], [data-k^="wbin:"]'))
-        .filter((c) => !c.matches(".card.app") || !c.querySelector(".meta") || !/Made for|For the portal/.test(c.textContent))
+        // A draft made for someone who asked for it has no trash: its line names them ("Send
+        // Tamsin your CV.", "For the portal, naming ...") with their name's link.
+        .filter((c) => !c.matches(".card.app") || !c.querySelector(".meta") || !(/Made for|For the portal/.test(c.textContent) || c.querySelector('.meta [data-k^="madefor:"]')))
         .map(name);
       return {manyQ, xs, side: [...new Set(side)], needBin};
     });
