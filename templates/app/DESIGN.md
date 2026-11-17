@@ -32,10 +32,15 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   over it ("1 of 4", the badge's number) and Next's numbers go on from it (2, 3, 4); a step not
   due yet has a dot in place of a number, and its day. The next interview goes to the top of
   both from as many days before as the person chose (Settings, "Your next interview on the
-  Brief"). With nothing on To do, Today is what is booked today, else the first search; what is
-  booked always stays in Coming up. Why: the Brief's Today picked one thing, its Next three
-  another and To do a third, and their counts read 4, 1 and 3 over seven messages (the
-  redesign's reviews, 2026-11-16). (one-answer test)
+  Brief"). The one exception: something booked today and not over leads Today, an interview
+  first, then a call, a test, a deadline, anything else, then by its time, as the maintainer
+  set it (2026-11-02: "the most upcoming event"; "if there are multiple things today then the
+  most important one like an interview or a call"); it has no count over it, being none of To
+  do's cards, and Next is then To do's first three, numbered from one, an interview today that
+  is To do's first card said once. With nothing on To do or booked today, Today is the first
+  search; what else is booked stays in Coming up. Why: the Brief's Today picked one thing, its
+  Next three another and To do a third, and their counts read 4, 1 and 3 over seven messages
+  (the redesign's reviews, 2026-11-16). (one-answer test; Today tests)
 - What helps Claude do more (your profile, reading profiles, the LinkedIn download) is never
   counted among today's things: it is one soft card right after them, above "Not due yet", in
   To do's own style, under its own small heading, "When you have a minute" (under "Needs your
