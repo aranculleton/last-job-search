@@ -497,7 +497,8 @@ def test_every_count_of_jobs_to_look_at_agrees_and_leaves_out_a_closed_one(run, 
     # What Claude is making is its own work, said in the work pill: the Brief's line leaves it out
     # when anything else is owed, so a small laptop's panel holds the line whole (4.15.0).
     making = int((re.search(r"(\d+) being made", jobs_line) or [0, 0])[1])
-    parts = [int((re.search(r"(\d+) (?:drafts? )?" + w, panel) or [0, 0])[1]) for w in ("ready to apply", "waiting on you", "being made", "still to make")]
+    # The ready ones are "applications ready to send" since the redesign's phase 2 (2026-11-17).
+    parts = [int((re.search(r"(\d+) (?:drafts? |applications? )?" + w, panel) or [0, 0])[1]) for w in ("ready to send", "waiting on you", "being made", "still to make")]
     assert (not send) or sum(parts) == send or (sum(parts) == send - making and not parts[2]), (panel, jobs_line)
     assert (not todo_line) or todo_line.startswith("%d new" % look), todo_line
     assert "Analytics Consultant" not in panel, panel      # its posting has closed
