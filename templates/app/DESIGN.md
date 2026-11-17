@@ -172,8 +172,14 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   its room holds and gives way below to one, its panel's own "All ..." opening the rest, at
   every width, two columns too: nothing is cut off inside a panel (Next three cut its third step
   in half at a tablet's width, the screen review, 2026-11-11); News,
-  with no screen of its own, says "2 more" and opens them in place. On a short window (660px
-  or less) the numbers are one line under the greeting, opening Progress with its chart. A
+  with no screen of its own, says "2 more" and opens them in place, measured as part of its
+  foot while the Brief is fitted. On a short window (660px
+  or less) the numbers are one line under the greeting, opening Progress with its chart. Past
+  every list at one, Coming up's two weeks give way, the one thing there that says again what
+  its rows say; no row is ever drawn over the tip and the privacy line, nor within 4px of them;
+  and the calendar on Coming up's row is a square icon, so its time and "Read your prep" keep
+  a line each in a narrow panel. Why: in a window 1003 by 701 the Brief ran 48px past it, and at
+  1000 by 560 its second row was drawn 17px over the tip (2026-11-17). A
   phone scrolls. (the maintainer, 2026-11-05; fit tests)
   Three panels a row line up with the three above them, and where a short window's row has two
   (the numbers gone under the greeting), News takes two of the three columns. A panel is as

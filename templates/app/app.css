@@ -2838,6 +2838,10 @@ dialog.sheet .sheet-body { display: grid; gap: 16px; }
 /* Coming up's next three, as small cards side by side where there is room. */
 .bp-up { display: grid; gap: 8px; margin: 0; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
 .bp-up-row { padding: 8px 8px 8px 12px; border-radius: var(--r-sm); background: var(--sunk); align-items: flex-start; }
+/* Its calendar is a square icon, as a row's More is: drawn with a small button's 16px sides it
+   took 52px of a narrow panel's row, and its time and "Read your prep" each broke onto two
+   lines there (a 1003 by 701 window, the Brief 48px past it, 2026-11-17). */
+.bp-up-row > .btn.icon-only { padding-inline: 8px; }
 /* Its title cut to two lines is the link itself, so the link can be a whole target. */
 .bp-up-row .up-title > a.up-link { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .bp-share { display: block; font-size: var(--t-sm); font-weight: 600; color: var(--ink); }

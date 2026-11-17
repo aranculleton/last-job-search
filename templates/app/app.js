@@ -5955,12 +5955,15 @@
     // to Next alone (its own list since 2026-11-05) left every other list unfitted in the new
     // drawing, and the Brief's other panels were built again over the same words.
     for (const l of lists) { const n = fitMemo.counts[fitName(l)]; const {base} = fitOf(l); [...l.children].forEach((li, i) => { fitHide(li, i >= (n === undefined ? base : n)); }); }
+    fitWeek(grid, fitMemo.week !== false);
     fitFill(grid, fitMemo.fill || "");
     fitAirSet(grid, fitMemo.air);
     fitMore(lists);
   }
   // Written only where it changes: the same mark written again is still a change to the page.
   function fitHide(li, v) { if (li.hidden !== v) li.hidden = v; }
+  // Coming up's two weeks, shown or given way (fitBrief): the last thing a laptop's Brief gives.
+  function fitWeek(grid, v) { const w = grid.querySelector(".bp-upcoming .bp-week"); if (w) fitHide(w, !v); }
   // How much of the window a Brief must already fill to be stretched to its foot.
   const FILL_SHARE = 0.75;
   // The compact Brief (the numbers a line under the greeting): a short window always, and any
@@ -5984,6 +5987,7 @@
     if (fitMemo.key === key && fitMemo.counts) {
       briefShort(fitMemo.short);
       for (const l of lists) { const n = fitMemo.counts[name(l)]; const {base} = fit(l); [...l.children].forEach((li, i) => { fitHide(li, i >= (n === undefined ? base : n)); }); }
+      fitWeek(grid, fitMemo.week !== false);
       fitFill(grid, fitMemo.fill || "");
       fitAirSet(grid, fitMemo.air);
       fitMore(lists);
@@ -5991,8 +5995,10 @@
     }
     const short = window.innerWidth >= 960 && (forceShort === true || window.innerHeight <= 660);
     briefShort(short);
-    const remember = (air) => { fitMemo = {key, short, fill: grid.style.height, air: air || null, counts: Object.fromEntries(lists.map((l) => [name(l), [...l.children].filter((li) => !li.hidden).length]))}; };
+    const week = grid.querySelector(".bp-upcoming .bp-week");
+    const remember = (air) => { fitMemo = {key, short, fill: grid.style.height, air: air || null, week: !(week && week.hidden), counts: Object.fromEntries(lists.map((l) => [name(l), [...l.children].filter((li) => !li.hidden).length]))}; };
     for (const l of lists) { const {base} = fit(l); [...l.children].forEach((li, i) => { fitHide(li, i >= base); }); }
+    fitWeek(grid, true);
     fitFill(grid, "");
     fitAirSet(grid, null);
     if (window.innerWidth < 760 || getComputedStyle(grid).gridTemplateColumns.split(" ").length < 2) { remember(); return; }
@@ -6010,9 +6016,11 @@
       const panel = l.closest(".bpanel");
       if (!panel) continue;
       for (const li of [...l.children].filter((x) => x.hidden)) {
+        fitMore(lists);
         const before = panel.getBoundingClientRect().height;
         li.hidden = false;
-        if (panel.getBoundingClientRect().height > before + 1 || fitSpills(panel)) { li.hidden = true; break; }
+        fitMore(lists);
+        if (panel.getBoundingClientRect().height > before + 1 || fitSpills(panel)) { li.hidden = true; fitMore(lists); break; }
       }
     }
     // Shrink: while the Brief runs past the bottom of the window, one item gives way at a
@@ -6027,7 +6035,10 @@
     const room = one ? window.innerHeight - tail : window.innerHeight - 64;
     // The lowest panel, not the grid's own box: a grid given its height keeps it while a row
     // that has grown runs out of it.
-    const bottom = () => screenY(Math.max(grid.getBoundingClientRect().bottom, ...[...grid.children].map((p) => p.getBoundingClientRect().bottom))) + (one ? window.scrollY : 0);
+    // Each measure is taken with News' "2 more" as it will be drawn for what its list now hides
+    // (fitMore): put in only after the fit, it took News' foot to two lines on a narrow panel and
+    // the second row 17px past the grid it had been fitted to, over the tip (2026-11-17).
+    const bottom = () => { fitMore(lists); return screenY(Math.max(grid.getBoundingClientRect().bottom, ...[...grid.children].map((p) => p.getBoundingClientRect().bottom))) + (one ? window.scrollY : 0); };
     // Each list first gives way to its fewest; on a laptop, past that, to one, so the window
     // holds the whole Brief rather than scrolling (every list's "All" opens the rest).
     // Next three keeps its three on a window 600px tall or more: below its fewest, a step of it
@@ -6065,6 +6076,12 @@
       best.li.hidden = true;
       if (best.also) best.also.hidden = true;
     }
+    // Still past the window in the compact Brief with every list at its fewest: Coming up's two
+    // weeks give way, the one thing on the Brief that only says again what its rows and its "All
+    // 7 coming up" say. In a window 1003 by 701, the page's 15px type left the three panels of a
+    // row 241px wide, and Coming up's one row, its strip and its two pills took the Brief 48px
+    // past the window however few rows each list showed (2026-11-17).
+    if (one && short && week && bottom() > room + 1) fitWeek(grid, false);
     // Each panel then shows what more there is room for, and a Brief that nearly fills the
     // window is stretched to its foot, its rows sharing the height, so the panels line up edge
     // to edge (the maintainer, 2026-11-06: "polished ... nice to look at at a single glance").
@@ -6150,7 +6167,21 @@
     const panels = [...grid.children].filter((p) => p.getClientRects().length);
     const keyOf = (p) => txt(p.getAttribute("data-k"));
     const mark = (p, m) => { const k = keyOf(p); air.marks[k] = (air.marks[k] ? air.marks[k] + " " : "") + m; };
+    const unmark = (p, m) => { const k = keyOf(p); const left = txt(air.marks[k]).split(" ").filter((x) => x && x !== m).join(" "); if (left) air.marks[k] = left; else delete air.marks[k]; };
     const shownIn = (l) => [...l.children].filter((li) => !li.hidden).length;
+    // The rows stay clear of the Brief's foot under the grid, the tip and the privacy line: past
+    // the height the fit gave the grid only into the room above the foot, and never within 4px of
+    // it. A line or a box added in a row that was already full grows the row past the grid, and
+    // with nothing scrolling the second row was drawn over the tip: Jobs' "Best match" and
+    // Waiting on you's boxes, whose wider sides wrapped its words, took it 23px down at 1000 by
+    // 560 (2026-11-17).
+    const foot = grid.nextElementSibling;
+    const inGrid = () => {
+      if (!grid.style.height) return true;
+      const gb = grid.getBoundingClientRect().bottom;
+      const ft = foot && foot.getClientRects().length ? foot.getBoundingClientRect().top - 4 * drawnPerPx() : gb;
+      return panels.every((q) => q.getBoundingClientRect().bottom <= Math.max(gb, ft) + 1);
+    };
     // First a list's own small heading (Jobs' "Best match"), where the Brief has the
     // room for its line, or makes it by showing one row fewer of a long list ("All 8 new" opens
     // them all): it never costs another panel a row on a small window (Next three lost its
@@ -6159,7 +6190,7 @@
     // page: none runs out of room, and nothing scrolls.
     const scrolls = () => (document.scrollingElement || document.documentElement).scrollHeight - window.innerHeight;
     const roomNow = () => new Map(panels.map((q) => [q, airRoom(q)]));
-    const holds = (was, sc) => scrolls() <= Math.max(0, sc) && panels.every((q) => airRoom(q) >= Math.min(-2, was.get(q)) - FIT_SLACK);
+    const holds = (was, sc) => inGrid() && scrolls() <= Math.max(0, sc) && panels.every((q) => airRoom(q) >= Math.min(-2, was.get(q)) - FIT_SLACK);
     for (const p of panels) {
       if (!p.querySelector(":scope > .bp-body > .bp-sub")) continue;
       const was = roomNow(), sc = scrolls();
@@ -6178,6 +6209,7 @@
       if (n && rows.every((l) => shownIn(l) <= 4) && airRoom(p) >= 16 * n) mark(p, "roomy");
     }
     fitAirSet(grid, air);
+    for (const p of [...panels].reverse()) if (!inGrid() && txt(air.marks[keyOf(p)]).split(" ").includes("roomy")) { unmark(p, "roomy"); fitAirSet(grid, air); }
     // Then the rows a step of the spacing scale further apart at a time, up to 24px.
     for (const p of panels) {
       const room = airRoom(p);
@@ -6192,6 +6224,11 @@
       if (best) for (const x of lists) if (x.n && best > x.cur) air.gaps[fitName(x.l)] = best;
     }
     fitAirSet(grid, air);
+    for (const p of [...panels].reverse()) {
+      if (inGrid()) break;
+      const mine = [...p.querySelectorAll("[data-fit]")].map(fitName).filter((k) => air.gaps[k]);
+      if (mine.length) { for (const k of mine) delete air.gaps[k]; fitAirSet(grid, air); }
+    }
     // More than that left (two people in a tall row, "Nothing booked yet."): the foot's pills
     // follow what they open, a step under it, and the room stays at the panel's own foot rather
     // than as a hole between the content and its pills. Under 32px the pills stay at the foot,
