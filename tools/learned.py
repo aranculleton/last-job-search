@@ -2331,6 +2331,30 @@ GITHUB_EVENT_SAID = ("A GitHub event about a save's pull request: nothing waits 
                      "Read nothing and run nothing else; where this chat has "
                      "unsubscribe_pr_activity, make that one call for this pull request, then "
                      "end the turn with no text.")
+# The pull request an event is about, in its data as the cloud delivers it
+# ({"pr":"owner/repo#12"}, seen 2026-11-12).
+EVENT_PR = re.compile(r'"pr"\s*:\s*"([^"/\s]+/[^"#\s]+)#\d+"')
+# A pull request on the person's own copy is a save's (CLAUDE.md, "Landing is silent"), and the
+# cloud subscribes the chat that opened it by itself, the chat that answers the page included
+# when the save ran in the background: both its events (subscribed, merged) reached that chat
+# as a turn, its whole history read again to be told to do nothing (a person's copy,
+# 2026-11-16). Stopped here, before the chat: a blocked prompt "never reaches Claude"
+# (code.claude.com/docs/en/hooks, UserPromptSubmit decision control), and the person, who
+# could see the reason, sees the outcome in plain words.
+def _save_event_stopped() -> dict:
+    return {"decision": "block", "reason": "Saved.",
+            "hookSpecificOutput": {"hookEventName": "UserPromptSubmit",
+                                   "suppressOriginalPrompt": True}}
+
+
+def _own_repo() -> str:
+    """"owner/repo" of the person's copy on GitHub (its origin), lower case, or ""."""
+    try:
+        import land
+        owner, repo = land._slug(person.state())
+    except Exception:  # noqa: BLE001  unknown: no event is taken for a save's
+        return ""
+    return "" if owner.startswith("<") else ("%s/%s" % (owner, repo)).lower()
 
 
 # A turn the app or the platform makes, never the person typing: a ring from the page, a task's
@@ -2382,7 +2406,11 @@ def hook(event: dict) -> dict:
     if name == "UserPromptSubmit" and GITHUB_EVENT.search(str(event.get("prompt") or "")):
         # A save's pull request, which the cloud chat was subscribed to by itself: nothing in
         # a person's copy waits on one (CLAUDE.md, "Saving"), and each woke the chat twice a
-        # save (the maintainer's copy, 2026-11-06).
+        # save (the maintainer's copy, 2026-11-06). One on the person's own copy never reaches
+        # the chat; one elsewhere is not a save's, and is the chat's as ever.
+        pr = EVENT_PR.search(str(event.get("prompt") or ""))
+        if pr:
+            return _save_event_stopped() if pr.group(1).lower() == _own_repo() else {}
         return {"hookSpecificOutput": {"hookEventName": "UserPromptSubmit",
                                        "additionalContext": GITHUB_EVENT_SAID}}
     if name == "UserPromptSubmit":
@@ -2899,9 +2927,14 @@ def _cli_hook() -> int:
             import page_db
             page_db.keep_listed_event(event)
             return 0
+        out = hook(event)
+        if out.get("decision") == "block" and \
+                (event.get("hook_event_name") or "") == "UserPromptSubmit":
+            print(json.dumps(out))            # never reaches the chat: nothing to add to it
+            return 0
         due = "\n\n".join(x for x in (_update_due(event), _scheduled_start(event) or
                                        _wake_due(event) or _page_due(event)) if x)
-        out = _with_update(_with_update(hook(event), _brief_unsent(event)), due)
+        out = _with_update(_with_update(out, _brief_unsent(event)), due)
     except Exception as e:  # noqa: BLE001  a hook must never break the chat it runs in
         print(f"learned.py hook: {type(e).__name__}: {e}", file=sys.stderr)
         return 0
