@@ -66,23 +66,24 @@ Anything else, ask in **Chat** on the page.
 
 ## The chats you'll see
 
-Claude works in chats of its own, so your list of chats shows a few named "Job search" that
-you didn't start. Nothing is wrong, and you never need to open or type in them unless a card
+Claude works in chats of its own, so your list of chats shows a few named "Last Job Search"
+that you didn't start: the app itself is your page, and these chats run behind it. Nothing is wrong, and you never need to open or type in them unless a card
 on your page's **To do** says so: your page is the one place you use. Delete one by mistake
 and nothing is lost: the app starts it again when it's needed.
 
 | Chat | What it does | How long it stays |
 |---|---|---|
-| **Job search page** | Answers your page and its **Chat** | Stays. Each day you use your page (or sooner, when it grows full) a fresh one takes over; the old one is called "Job search page (finishing up)" for a little while, then is put away by itself |
-| **Job search: morning brief** | Writes your brief on its days, in a chat of its own so your page still answers at once | Stays. When it grows long, a fresh one takes over and the old one is put away by itself |
+| **Last Job Search · Page** | Answers your page and its **Chat** | Replaced often: each day you use your page, or sooner once it grows long, a fresh one takes over; the old one is called "Last Job Search · Page (finishing up)" for a little while, then is put away by itself. An old one is safe to delete |
+| **Last Job Search · Brief** | Writes your brief on its days, in a chat of its own so your page still answers at once | Stays for good. When it grows long, a fresh one takes over and the old one is put away by itself |
 | **Job search: starts chats on your computer** | Only if you use your computer for LinkedIn: starts the chats there | Stays for good, so you allow it only once (below) |
-| **Job search: *the work*** (for example "Job search: Finding jobs") | One big job: finding jobs, drafting, finding people, an interview prep, or a question in **Chat** while the page is busy | Put away by itself when the work is done |
-| **Job search · *the work* · *your computer's name*** | A job that reads LinkedIn on your computer | Put away by itself when the work is done, except the first one, which stays as the one below |
-| **Job search: on your computer** | Only if you use your computer for LinkedIn: takes every later LinkedIn job there by itself, so nothing new needs your OK | Stays open on your computer |
+| **Last Job Search · *the work*, *its day*** (for example "Last Job Search · Finding jobs, 16 Nov") | One big job: finding jobs, drafting, finding people, an interview prep, or a question in **Chat** while the page is busy ("Chat questions") | Put away by itself when the work is done |
+| **Last Job Search · *the work*** | A job that reads LinkedIn on your computer | Put away by itself when the work is done, except the first one, which stays as the one below |
+| **Last Job Search · Your computer** | Only if you use your computer for LinkedIn: takes every later LinkedIn job there by itself, so nothing new needs your OK | Stays open on your computer |
 
 So you'll normally see three that stay (two if you don't use a computer), plus the one on your
 computer and one for each job while it runs. Chats an older version made are put away by
-themselves too, and each can be brought back.
+themselves too, and each can be brought back; the ones that stay take these names by
+themselves.
 
 **The first time Claude uses your computer**, "Job search: starts chats on your computer"
 asks "Let Claude use your computers and other sessions from here?". Choose Allow, once. A

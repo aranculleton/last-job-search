@@ -290,7 +290,7 @@ def test_the_moved_ops_brief_is_recorded_and_the_registry_stays_an_ops_one(tmp_p
     assert routines.setup_of(reg) == "ops_relay" and routines.check(reg) == []
     brief = next(r for r in reg["routines"] if r["key"] == "morning_brief")
     assert brief["trigger_id"] == "trig_EXAMPLENEW" and brief["chat"] == {
-        "session_id": HELPER, "title": routines.BRIEF_NAME, "own": True}
+        "session_id": HELPER, "title": routines.BRIEF_CHAT_TITLE, "own": True}
     assert "mode" not in brief
     # Its stub from now on is the plain one; the job round, still in the ops chat, keeps the
     # registry's own.

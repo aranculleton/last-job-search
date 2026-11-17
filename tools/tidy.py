@@ -82,8 +82,12 @@ if _HERE not in sys.path:
 # brief"), and without it in the pattern every such chat was read as the person's own and kept.
 # A chat started on the person's computer is "Job search · <job> · <computer>"
 # (tools/computer.py SESSION_TITLE), so the tidy-up knows it too.
-APP_TITLE = re.compile(r"^(?:[^\w\s]{1,3}\s*)?Job search(?::\s*\S.{0,60}|\s+(?:helper|page)\b.{0,60}"
-                       r"|\s+\u00b7\s+\S.{0,60}\s+\u00b7\s+\S.{0,40})$",
+# Since issue #289 every one is "Last Job Search · <what it is for>" (a one-off job's with its
+# day), and every older name is still known: an install keeps chats made under them.
+APP_NAME = "Last Job Search"
+APP_TITLE = re.compile(r"^(?:[^\w\s]{1,3}\s*)?(?:Job search(?::\s*\S.{0,60}|\s+(?:helper|page)\b.{0,60}"
+                       r"|\s+\u00b7\s+\S.{0,60}\s+\u00b7\s+\S.{0,40})"
+                       r"|Last Job Search\s+\u00b7\s+\S.{0,80})$",
                        re.I)
 # The page's helper, under its name since 4.10 ("Job search page", app_listen.HELPER_CHAT_TITLE)
 # and every older one ("Job search helper", "... (finishing up)"). Only the live one, the chat
@@ -94,8 +98,13 @@ APP_TITLE = re.compile(r"^(?:[^\w\s]{1,3}\s*)?Job search(?::\s*\S.{0,60}|\s+(?:h
 STARTER_NAME = re.compile(r"^(?:[^\w\s]{1,3}\s*)?Job search:\s+starts chats on your computer\b", re.I)
 # The computer's own chat (tools/computer.py LISTENER_TITLE), kept open for the next job there,
 # by its name or by the page's record of it (meta/computer_listener), whatever it is called.
-LISTENER_NAME = re.compile(r"^(?:[^\w\s]{1,3}\s*)?Job search:\s+on your computer\b", re.I)
-HELPER_NAME = re.compile(r"^(?:[^\w\s]{1,3}\s*)?Job search\s+(?:helper|page)\b", re.I)
+LISTENER_NAME = re.compile(r"^(?:[^\w\s]{1,3}\s*)?(?:Job search:\s+on your computer\b|Last Job "
+                           r"Search\s+\u00b7\s+Your computer\s*$)", re.I)
+HELPER_NAME = re.compile(r"^(?:[^\w\s]{1,3}\s*)?(?:Job search\s+(?:helper|page)\b|Last Job Search"
+                         r"\s+\u00b7\s+Page(?:\s+\(.*\))?\s*$)", re.I)
+# The chat the scheduled tasks moved into when the brief's chat approved computer access
+# (computer.py trust), under its name before issue #289.
+OLD_RUNS_NAME = "Job search: scheduled runs"
 # Once after the update that brought that rule, the tidy-up is due even if it ran that day,
 # so the helpers left over from before are put away by themselves (`due`). Moved on with
 # 4.10.1, so the helper a brief was left in is put away, the brief moved first, that same day.
@@ -135,7 +144,7 @@ RECHECK = ("Scheduled check-in, after the hand-over: check in on the page as whe
            "line \"Another chat looks after the page now.\"")
 # An old helper used this lately is still in use: kept until a later check-in.
 RECENT_S = 10 * 60
-RUN_TITLE = "⚡ Job search: a scheduled run"
+RUN_TITLE = "⚡ Last Job Search \u00b7 Scheduled run"
 IDLE_DAYS = 2           # quiet this long before it is tidied
 WAITING_DAYS = 7        # quiet this long when it was waiting on the person
 FILE = "tidy.json"      # in profile/: what was archived, so it can be brought back
@@ -828,8 +837,10 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
          branches: set[str] | None, done_before: set[str],
          jobs: dict | None = None, now: dt.datetime | None = None,
          on_github: set[str] | None = None, saves: dict | None = None,
-         job_items: dict | None = None, computer_chat: str = "") -> dict:
+         job_items: dict | None = None, computer_chat: str = "",
+         renamed: dict | None = None) -> dict:
     """{"ask": [ids to read with get_session], "archive": [{id, title, why}],
+    "rename": [{id, title, to}] (new_name; `renamed`, the ones asked for before, never again),
     "keep": [{id, title, why}], "brief": [calls] or [], "save": [{id, title, work}],
     "lost": [{id, title, work: [ids]}]}. `jobs` is finished_jobs(): a chat in it is not kept
     for being used lately. `now` (else noon of `today`) times recent use; `on_github`, every
@@ -1224,6 +1235,21 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
     listed = {s.get("id") for s in chats}
     if rchat in moved_from and rchat in listed and not any(a["id"] == rchat for a in out["archive"]):
         out["moves"] = []                             # its chat is kept: the round stays put
+    # The app's chats kept for good under a name from before issue #289 take the new one, once
+    # each: asked for once even where it is refused, so never every day. The page's helper
+    # renames itself at its check-in (app_listen), and a chat of the person's own never is.
+    out["rename"] = []
+    put_away = {c["id"] for c in out["archive"]}
+    own_brief = brief_chat if routines.owns_chat(brief) else ""
+    for s in chats:
+        sid = str(s.get("id") or "")
+        title = str(s.get("title") or "").strip()
+        if not sid or sid in put_away or sid in done_before or sid in mine_only \
+                or sid == theirs or "archived" in _status(s, info.get(sid)):
+            continue
+        to = new_name(sid, title, own_brief, computer_chat)
+        if to and to != title and (renamed or {}).get(sid) != to:
+            out["rename"].append({"id": sid, "title": title, "to": to})
     out["ask"] = list(dict.fromkeys(out["ask"]))
     # Run by the live helper within a day of its hand-over, with an old helper kept only for
     # now: it asks for its own check-in, as nothing else may ring it before tomorrow's brief.
@@ -1265,6 +1291,85 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
         c for c in routines.mend(triggers, repo, named=routines.named_ids(reg))
         if c["args"]["trigger_id"] not in skip | cleaned]
     return out
+
+
+RUNS_NAME = APP_NAME + " \u00b7 Scheduled runs"     # tools/computer.py, trust: its chat's name
+
+
+def new_name(sid: str, title: str, brief_chat: str = "", computer_chat: str = "") -> str:
+    """The name one of the app's chats kept for good should have now (issue #289), or "": the
+    brief's own chat under an older brief name, the computer's own chat under any of the
+    app's names, and the chat the scheduled runs moved into. Never a chat of the person's
+    own: each only under a name the app gave it."""
+    import routines
+    if sid and sid == brief_chat and routines._BRIEF_TITLE.match(title):
+        return routines.BRIEF_CHAT_TITLE
+    if sid and sid == computer_chat and (APP_TITLE.match(title) or LISTENER_NAME.match(title)):
+        import computer
+        return computer.LISTENER_TITLE
+    if title.lower() == OLD_RUNS_NAME.lower():
+        return RUNS_NAME
+    return ""
+
+
+def renamed() -> dict:
+    """{chat id: name}: the renames asked for so far (profile/tidy.json `renamed`)."""
+    try:
+        with open(_record_path(), encoding="utf-8") as fh:
+            got = json.load(fh).get("renamed") or {}
+        return {str(k): str(v) for k, v in got.items()} if isinstance(got, dict) else {}
+    except (OSError, ValueError, AttributeError):
+        return {}
+
+
+RENAMES = "ljs-tidy-renames.json"   # in the git folder: the renames `plan` asked for, until `done`
+
+
+def _stash_renames(names: dict) -> None:
+    """Keep the renames this plan asked for until `done` records them: the plan itself never
+    writes the person's record (a plan run in the app's own checkout wrote into it)."""
+    d = _git_dir()
+    if not d or not names:
+        return
+    try:
+        with open(os.path.join(d, RENAMES), "w", encoding="utf-8", newline="\n") as fh:
+            json.dump(names, fh, ensure_ascii=False)
+            fh.write("\n")
+    except OSError:
+        pass
+
+
+def _take_renames() -> dict:
+    """The renames the last plan asked for, taken from the git folder (and gone from it)."""
+    d = _git_dir()
+    if not d:
+        return {}
+    path = os.path.join(d, RENAMES)
+    try:
+        with open(path, encoding="utf-8") as fh:
+            got = json.load(fh)
+        os.remove(path)
+    except (OSError, ValueError):
+        return {}
+    return {str(k): str(v) for k, v in got.items()} if isinstance(got, dict) else {}
+
+
+def _note_renamed(names: dict) -> None:
+    if not names:
+        return
+    path = _record_path()
+    try:
+        with open(path, encoding="utf-8") as fh:
+            got = json.load(fh)
+    except (OSError, ValueError):
+        got = {}
+    rows = got.get("renamed") if isinstance(got.get("renamed"), dict) else {}
+    rows.update(names)
+    got["renamed"] = rows
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
+        json.dump(got, fh, indent=2, ensure_ascii=False)
+        fh.write("\n")
 
 
 def _upkeep_calls(reg: dict, triggers: list[dict], helper: str, listener: dict,
@@ -1483,7 +1588,7 @@ def run_plan(a) -> int:
                _campaign_chats(), unmerged(own_branches(read)), done, jobs, now=now,
                on_github=on_github(),
                saves=saves(), job_items=job_items(pagedb) if pagedb is not None else None,
-               computer_chat=_computer_chat(pagedb))
+               computer_chat=_computer_chat(pagedb), renamed=renamed())
     if got["ask"]:
         print("tidy: read these chats first, each with get_session, and run this again with "
               "what each returned under \"details\" in the same standard input (or --details "
@@ -1583,6 +1688,14 @@ def run_plan(a) -> int:
         # them (the maintainer, 2026-11-05).
         print("rings: python3 tools/app.py doorbells, and do what it says (it resolves the "
               "page's open rings only). Say nothing about it.")
+    for c in got.get("rename") or []:
+        call = json.dumps({"session_id": c["id"], "title": c["to"]}, ensure_ascii=False)
+        print(f"rename {c['id']}: set_session_title {call} ({c['title'] or 'a chat'}: the app's "
+              "chats have short new names; say nothing about it)")
+    if got.get("rename"):
+        print("rename: make these, asking nobody and saying nothing about it; one refused is "
+              "left as it is and never asked for again")
+        _stash_renames({c["id"]: c["to"] for c in got["rename"]})
     for c in got["archive"]:
         print(f"archive {c['id']}: {c['title']} ({c['why']})")
     if got["archive"]:
@@ -1603,7 +1716,7 @@ def run_plan(a) -> int:
               "itself, at the page's next check-in or the brief's next run). Set no reminder "
               "or check-in for it")
     elif got["brief"] or got.get("moves") or got.get("upkeep") or got.get("mend") \
-            or got.get("clean") or rings:
+            or got.get("clean") or got.get("rename") or rings:
         # Never "nothing to tidy" over calls still to make: the helper took it as the brief
         # already moved (the maintainer's copy, 2026-11-05).
         print("tidy: no chat to archive; make the calls above, then python3 tools/tidy.py done"
@@ -1679,8 +1792,10 @@ def _record(ids: list[str], titles: dict, today: str, gone: bool = False) -> Non
 
 
 def run_done(ids: list[str], titles: dict, today: str) -> str:
-    """Record what was archived (profile/tidy.json) and that today's tidy-up ran."""
+    """Record what was archived (profile/tidy.json), the renames the plan asked for (once
+    each, made or refused) and that today's tidy-up ran."""
     _mark_checked(today)
+    _note_renamed(_take_renames())
     if not ids:
         return "tidy: done for today"
     _record(ids, titles, today)

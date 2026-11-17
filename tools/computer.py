@@ -138,8 +138,10 @@ SIGNIN_SEEN = ("open " + FEED_URL + " in Claude's browser (navigate a tab of you
                "its address and title as they are now (tabs_context), then python3 "
                "tools/computer.py signin-seen \"$D\" --work {wid} --url \"<that address>\" "
                "--title \"<that title>\"")
-# The name of every chat the app starts on the computer: recognisable, and safe to delete.
-SESSION_TITLE = "Job search · {job} · {computer}"
+# The name of every chat the app starts on the computer: recognisable, and safe to delete. The
+# app's name, then the job, and no computer's name, so it reads the same on a Mac, Windows or
+# Linux (issue #289); "Job search · <job> · <computer>" before, which APP_CHAT still knows.
+SESSION_TITLE = "Last Job Search \u00b7 {job}"
 # The scheduled task on the computer that takes waiting work while no cloud chat is awake
 # (claude_surfaces: routines-local): a fresh chat each run, in the copy's folder, in Auto. It
 # is the fallback, not the way: a chat started from the cloud takes work within a minute, so
@@ -738,7 +740,7 @@ def ring_steps(bell: str, path: str, rung_cmd: str = "rung") -> str:
 LISTENER_DOC = ("meta", "computer_listener")
 # Its name in the person's list of chats, where it can be renamed (claude_surfaces:
 # computer-chat-archive): kept open, never put away by the app.
-LISTENER_TITLE = "Job search: on your computer"
+LISTENER_TITLE = "Last Job Search \u00b7 Your computer"   # "Job search: on your computer" before #289
 LISTENER_BELL_TITLE = "Job search computer chat bell"
 # A ring not answered this long, or this many rings in a row: stale, and the next route goes to
 # the starter, whose chat on the computer then becomes the listener.
@@ -2453,7 +2455,8 @@ def session_prompt(wid: str, title: str, url: str, copy: str) -> str:
 # person pasted into it ("Open my job search on this computer...", place.computer_paste). The
 # one on a Mac on 2026-11-10 found none: the person had deleted the earlier chat by hand, and
 # that one, the setup chat, did not carry the app's name either.
-APP_CHAT = re.compile(r"^\s*Job search\s+\u00b7\s+\S.*\s+\u00b7\s+\S.*$", re.I)
+APP_CHAT = re.compile(r"^\s*(?:Job search\s+\u00b7\s+\S.*\s+\u00b7\s+\S.*|Last Job Search\s+\u00b7\s+"
+                      r"(?!(?:Your computer|Brief|Page|Scheduled runs)\s*$)\S.*)$", re.I)
 _RUNNING = ("running", "working", "busy", "active", "progress", "streaming", "waiting",
             "requires", "blocked", "paused", "input", "permission")
 # The states that say a chat has finished, as whole words ("incomplete" is not "complete").
@@ -3374,7 +3377,7 @@ def trust_check(chat: str, triggers) -> list[str]:
     # The brief's own chat (routines.brief_chat_call), which the rest join: one chat made.
     home = routines.brief_chat_call()
     if not brief:
-        home = dict(home, title="Job search: scheduled runs",
+        home = dict(home, title="Last Job Search \u00b7 Scheduled runs",
                     prompt="This chat runs the job search's scheduled tasks. Nothing to do now.")
     out = [f"first, once: create_session {json.dumps(home, ensure_ascii=False)}; its id is "
            "<home> below (a chat of its own with the copy attached, never the one approving "
