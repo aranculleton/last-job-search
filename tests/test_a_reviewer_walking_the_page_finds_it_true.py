@@ -248,7 +248,11 @@ def test_who_needs_you_is_one_meaning_and_to_dos_count_is_read_as_things_for_tod
         {"hash": "contacts", "read": "#main .summary"},
         {"hash": "todo", "eval": "[...document.querySelectorAll('.badge')].map((b) => b.textContent.trim())"},
     ], PHONE, model=m)
-    assert "1 needs you" in got["after"][0]["text"] and m["people_count"]["need"] == 1, got["after"][0]["text"]
+    # Contacts' header says one count since the redesign's second round (2026-11-17): what is
+    # written to send, the engine's to_send, never a second "needs you" beside To do's.
+    n = m["to_send"]["n"]
+    assert m["people_count"]["need"] == 1 and n >= 1, (m["people_count"], m["to_send"])
+    assert got["after"][0]["text"].startswith(f"{n} {'message' if n == 1 else 'messages'} to send") and "need" not in got["after"][0]["text"], got["after"][0]["text"]
     badges = got["after"][1]["eval"]
     assert badges and all("need you" not in b and b.endswith("for today") for b in badges), badges
 
