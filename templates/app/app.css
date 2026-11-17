@@ -1863,6 +1863,9 @@ label.pick { display: flex; align-items: flex-start; justify-content: center; wi
 /* The page's address wraps only at its slashes and dots (app.js, addressWords), each part
    kept whole; a part too long for any line still breaks rather than run off the card. */
 .page-url { overflow-wrap: break-word; }
+/* A part longer than its line (a page's long id in Settings' narrower column) breaks inside
+   itself, never runs under Copy link beside it (the redesign's second round, 2026-11-17). */
+.page-url > .nowrap { white-space: normal; overflow-wrap: anywhere; }
 .add-download { display: inline-flex; gap: 8px; flex-wrap: wrap; }
 /* An opened fold (foldBody): its words, then what they do, then the line a tap leaves. On a
    wide screen the words and the buttons stand side by side, the buttons at the right edge
