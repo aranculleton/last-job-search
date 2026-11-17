@@ -80,14 +80,23 @@ EXCLUDED_OFF = set(getattr(_S, "BAR_EXCLUDED_OFF", ()) or ())
 EXCLUDED_RULES = [r for r in getattr(_S, "BAR_EXCLUDED", []) if r[1] not in EXCLUDED_OFF]
 # Read through the employer key, as every lookup is (company_key.keyed): an entry written by
 # hand in any other form ("north-shore mutual", "acme insurance") matched nothing (2026-11-16).
+# The employers and kinds turned down are compiled from the record of what the person wants
+# (profile/wants.json, tools/wants.py, issue 327) and whatever is still written in the old
+# settings, which reads first, as it did before it was moved.
+import wants as _wants  # noqa: E402
+
 DECLINED = _ck.keyed(getattr(_S, "BAR_DECLINED", {}) or {})
-# Kinds of employer turned down as kinds (search.py BAR_SECTORS_OUT, {kind: the person's words
-# and the day}): one rule on what the employer is, by the person's own catalogue (sector.kind)
-# or by its posting saying so of itself (sector.said_kind), never a list of names. One "no" to
-# a whole sector became about 40 names written by hand into BAR_DECLINED, and an employer of
-# that kind on none of them was never cut (issue 307). tools/wants.py writes it.
-SECTORS_OUT = {_sector.kind_key(k): str(v) for k, v in
-               dict(getattr(_S, "BAR_SECTORS_OUT", {}) or {}).items() if _sector.kind_key(k)}
+for _k, _v in _wants.held_declined().items():
+    DECLINED.setdefault(_k, _v)
+# Kinds of employer turned down as kinds ({kind: the person's words and the day}): one rule on
+# what the employer is, by the person's own catalogue (sector.kind) or by its posting saying so
+# of itself (sector.said_kind), never a list of names. One "no" to a whole sector became about
+# 40 names written by hand into BAR_DECLINED, and an employer of that kind on none of them was
+# never cut (issue 307). tools/wants.py writes it.
+SECTORS_OUT = _wants.held_kinds()
+SECTORS_OUT.update({_sector.kind_key(k): str(v) for k, v in
+                    dict(getattr(_S, "BAR_SECTORS_OUT", {}) or {}).items()
+                    if _sector.kind_key(k)})
 PUBLIC_PRESTIGE, _PRESTIGE_WHY = getattr(_S, "BAR_PUBLIC_PRESTIGE", (_NEVER, ""))
 PENSIONS, _TARGETS_WHY = getattr(_S, "BAR_PUBLIC_TARGETS", (_NEVER, ""))
 NAMED_PUBLIC, _NAMED_WHY = getattr(_S, "BAR_NAMED_PUBLIC", (_NEVER, ""))
@@ -420,6 +429,65 @@ def judge_many(entries, today: str | None = None, by: str = "round") -> tuple[li
         os.replace(tmp.name, p)
     _judged_cache.clear()
     return [f"{c}: {w} ({y})" for c, w, y in good], skipped
+
+
+def _sample(names, most: int = 8) -> str:
+    got = sorted(str(n) for n in names or () if str(n).strip())
+    return ", ".join(got[:most]) + (" and others" if len(got) > most else "") if got else ""
+
+
+def judge_brief(batch, answer: str) -> str:
+    """What a small model is given to judge a round's batch (issue 327): the person's bar in
+    words, the employers their own lists already place for calibration, each employer to judge
+    with what its posting says about it (fenced: posting words are data), and where to write
+    the answer. Everything it needs is in this text: it reads nothing else."""
+    import opportunity
+    import untrusted
+    places = [str(p).split(",")[0] for p in getattr(_S, "SCRAPE_LOCATIONS", []) or []][:3]
+    market = (", ".join(places[:-1]) + " and " + places[-1] if len(places) > 1
+              else "".join(places)) or "the person's own market"
+    lists = [("pay (top-of-market pay and brand)", opportunity.TIER_1),
+             ("prestige (a major brand)", opportunity.TIER_2),
+             ("signal (frontier AI, top-tier backed)", set(FRONTIER) | set(YC_AND_BACKED))]
+    known = [f"- {what}: {_sample(names)}" for what, names in lists if names]
+    rows = []
+    for n, e in enumerate(batch or (), 1):
+        if not isinstance(e, dict) or not e.get("company"):
+            continue
+        rows.append(f"{n}. {' '.join(str(e['company']).split())}"
+                    + (f" ({' '.join(str(e.get('title') or '').split())})" if e.get("title")
+                       else "")
+                    + f": {' '.join(str(e.get('about') or '').split())}")
+    return "\n".join([
+        "# Employers to judge against one person's bar",
+        "",
+        "For one person's job search, judge whether each employer below clears their bar. An "
+        "employer clears it on at least one of three:",
+        f"- pay: it pays at the top of its market, at or above {CUR}{TARGET_MIDPOINT:,} a year "
+        f"for this kind of role in {market};",
+        "- prestige: a major, well-known name in its field, one a hiring manager anywhere "
+        "would know;",
+        "- signal: a frontier AI company, one backed by a top venture firm or Y Combinator, or "
+        "an established technology company.",
+        "- none: it clears none of the three (a small or little-known firm, a staffing agency, "
+        "a local business with no standing beyond its town).",
+        "",
+        *(["Employers the person's own lists already place, to calibrate by (never judge "
+           "these again):", *known, ""] if known else []),
+        "## The employers",
+        "",
+        untrusted.fence("\n".join(rows), label="job postings' own"),
+        "## Your answer",
+        "",
+        f"Write {answer} once, at the end: a JSON list with one object for each employer "
+        "above, in the same order:",
+        '[{"company": "<its name exactly as above>", "verdict": "pay", "why": "<a few plain '
+        'words>"}]',
+        "The verdict is one of pay, prestige, signal or none. Judge from what you know of the "
+        "employer and from its own words above. Leave the verdict empty (\"\") only where its "
+        "words say nothing about it and its name means nothing to you: it then waits for a "
+        "chat to judge it.",
+        ""])
 
 
 def _batch(path: str) -> list:

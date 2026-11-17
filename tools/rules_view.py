@@ -497,8 +497,14 @@ def your_rules(today: dt.date, seen: dict | None = None, learned_rows=None) -> l
                          drop={"kind": "declined", "key": key},
                          set_on=dated.group(1) if dated else "", name=f"No more from {who}"))
     # Kinds of employer turned down as kinds (tools/wants.py sector-out), each its own row:
-    # the bin takes the rule off and puts back what it took off the lists.
-    for kind, why in sorted(dict(_search("BAR_SECTORS_OUT", {}) or {}).items()):
+    # the bin takes the rule off and puts back what it took off the lists. Read from the record
+    # of what the person wants and the setting together, as the bar reads them (issue 327).
+    try:
+        import wants
+        kinds_out = wants.sectors_out()
+    except Exception:  # noqa: BLE001  no profile to read: no kind turned down
+        kinds_out = {}
+    for kind, why in sorted(kinds_out.items()):
         dated = re.search(r"\b(20\d\d-\d\d-\d\d)\b", str(why))
         said = re.sub(r"^turned down (?:on the page|in a chat), 20\d\d-\d\d-\d\d:? ?", "",
                       str(why))

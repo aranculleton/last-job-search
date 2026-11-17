@@ -425,8 +425,10 @@ METHODS: dict[str, dict] = {
             (112, "2026-11-17", False, "RUNBOOK says every round prints what each source read and what failed, and a failed source is passed on in plain words; nothing made changes"),
             (113, "2026-11-17", False, "RUNBOOK says a round asked for a number that finds fewer checks itself before it reports and searches wider by itself when the search's own hour allows; nothing made changes"),
             (114, "2026-11-17", False, "RUNBOOK says an employer or a kind of employer the person turns down goes through one command (tools/wants.py decline or sector-out) that changes every setting it touches, and is taken back the same way; nothing made changes"),
+            (115, "2026-11-17", False, "RUNBOOK says every want is kept with the person's words in profile/wants.json and an employer they want ranked up goes through one command (tools/wants.py want); nothing made changes"),
+            (116, "2026-11-17", False, "RUNBOOK says a round's employers nobody has judged are judged inside it by the employer-judge agent, on the small model, and the round is cut again with --judged, which waits for the answer three minutes at most; nothing made changes"),
         ),
-        "fingerprint": "ea5ccce82aa2e197",
+        "fingerprint": "75caa1727d50814b",
     },
     "interview": {
         # Only a process with a round still to come is prepared again: a prep for a round
@@ -871,8 +873,10 @@ METHODS: dict[str, dict] = {
             (63, "2026-11-17", False, "the record of jobs only seen keeps what a later search reads (when each was seen, and its title, employer and place while it can be relisted), and each search's list of what it left out keeps a few of its own checks' rows and counts the rest; nothing screened differently"),
             (64, "2026-11-17", False, "a kind of employer turned down as a kind (search.py BAR_SECTORS_OUT) is cut by what the person's catalogue calls the employer, or its posting says of itself, and the filter run alone reads the person's own window; nothing ruled out needs looking at again: it only cuts more"),
             (65, "2026-11-17", False, "several brand-leverage lifts on one posting count strongest first, the next at half, the next at a quarter and so on, still +30 at most, so one strong reason to want a job is not outweighed by many small ones; a penalty still counts in full and --explain says what each lift counted; nothing ruled out needs looking at again, and the jobs on the page are scored again by the jobs-rescored upgrade"),
+            (66, "2026-11-17", False, "the employers and kinds of employer turned down and the employers lifted are read from the person's one record of what they want (profile/wants.json) as well as from the old settings, each deciding as before; nothing ruled out needs looking at again"),
+            (67, "2026-11-17", False, "a round writes a brief from which a small agent judges the employers nobody has judged against the bar (bar.judge_brief), and the round's cut keeps each judgement for good, marked as the round's; nothing ruled out needs looking at again"),
         ),
-        "fingerprint": "5a3fb2976a84b213",
+        "fingerprint": "e862d15cd71be6a9",
     },
     "routines": {
         "by": "you", "priority": 3, "applies": "routines",
@@ -1314,6 +1318,9 @@ KEEPS_NOTHING: dict[str, str] = {
                                 "each person; a pack is the day's",
     "tools/cost_meter.py": "development tooling: measures what a run reads, keeps nothing",
     ".claude/agents/news-reader.md": "searches afresh for each brief; keeps nothing",
+    ".claude/agents/employer-judge.md": "judges a round's batch afresh, each round; the "
+                                        "judgements are the person's own record "
+                                        "(profile/employers_judged.json), never remade",
     "tools/app.py": "the page's view, derived from the state files on every run",
     "tools/tweak.py": "applies a change the person asked for, on demand; the record it keeps of their changes (tweaks.json) is theirs and is never remade",
     "tools/app_setup.py": "builds the setup steps the page shows from the profile, on every run; keeps nothing",
@@ -1371,9 +1378,11 @@ KEEPS_NOTHING: dict[str, str] = {
     "tools/run_round.py": "runs every round afresh; its shortlists are dated records of one round",
     "tools/rescore.py": "scores the jobs on the page again by itself whenever it or how jobs are scored changes (its own fingerprint, read by the jobs-rescored upgrade), so nothing it wrote waits on a version",
     "tools/scrape_wide.py": "runs every round afresh",
-    "tools/wants.py": "writes the person's settings the moment they turn something down and "
-                      "checks them against each other on every run; a list it missed before is "
-                      "put right by the declined-tidied upgrade, so nothing waits on a version",
+    "tools/wants.py": "writes the person's record of what they want (profile/wants.json) the "
+                      "moment they say it and checks the settings against it on every run; "
+                      "settings written before are moved into it by the wants-moved upgrade "
+                      "and a list it missed is put right by the declined-tidied upgrade, so "
+                      "nothing waits on a version",
     "tools/hydrate.py": "runs every round afresh",
     "tools/lookup_score.py": "a lookup run on demand",
     "salary_lookup.py": "a lookup run on demand",
