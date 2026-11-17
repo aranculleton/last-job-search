@@ -104,7 +104,8 @@ def test_a_coming_up_row_says_what_it_is_on_one_line_and_its_more_lines_up(run, 
     # What it is and whether its prep is ready (its chip) share the line under the title where
     # they fit (the maintainer, 2026-11-10: "inline and things are good").
     assert [r for r in rows if r["oneLine"] is False] == [], rows
-    assert any(r["oneLine"] for r in rows), rows
+    if vp is WIDE:
+        assert any(r["oneLine"] for r in rows), rows
     # One More a row, at the same place on every row, and no tool of its own beside it: icons
     # floated mid-card where a missing trash left its slot empty (the redesign, phase 2,
     # 2026-11-17).

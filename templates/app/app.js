@@ -6855,9 +6855,12 @@
     return rest.map(([, c], i) => (/\bf-found\b/.test(c) && i < rest.length - 1) || (/\bf-when\b/.test(c) && close));
   }
   function jobFactsLine(co, where, rest, end) {
+    // With nothing after where it is, one line of words, its last fact kept with "Why".
+    if (!rest.length && where.length) return jobFactsLine(co, where.slice(0, -1), [[where[where.length - 1], "f-where"]], end, true);
+    const one = arguments[4] === true;
     const drops = factDrops(rest);
     const b = rest.map(([x, c], i) => h("span", {class: "fact-w " + c + (drops[i] ? " f-drop" : "")}, "\u00b7\u00a0", h("span", {class: "fact"}, x)));
-    return h("p", {class: "facts two-part"}, h("span", {class: "facts-a"}, co, where.map((x) => [" \u00b7\u00a0", h("span", {class: "fact"}, x)])), " ",
+    return h("p", {class: "facts" + (one ? "" : " two-part")}, h("span", {class: "facts-a"}, co, where.map((x) => [" \u00b7\u00a0", h("span", {class: "fact"}, x)])), " ",
       h("span", {class: "facts-b"}, b.slice(0, -1).map((x) => [x, " "]), h("span", {class: "facts-end"}, b.length ? b[b.length - 1] : null, end)));
   }
   // What a phone's line of facts leaves out, said in the card's details: "Posted 5 days ago,
