@@ -506,8 +506,12 @@ def test_something_else_asks_under_the_card_and_the_answer_shows_there_never_in_
         # The box is filled, then sent (a step taps before it fills).
         {"fillMain": {"Anything else about": "He moved to the risk team. Is my note still right?"}},
         {"click": "Ask Claude about " + p["first_name"], "read": card, "store": "talk/"},
-        # Claude answers in the card's own thread, as `app.py done --reply-file` writes it.
+        # Claude answers in the card's own thread, as `app.py done --reply-file` writes it. The
+        # card follows its thread once the question's own writes are done (askCard), and on a busy
+        # CI machine those outlasted a set number of turns: the card was read still waking Claude
+        # (CI, 2026-11-17). So the answer is waited for under the card, five seconds at most.
         {"write": {"talk/%s/messages/m-answer" % th: {"from": "claude", "text": "Yes. Say risk team in the second line.", "at": "2026-10-25T18:31:00Z", "_v": 1}},
+         "ready": "(document.querySelector(%s) || {textContent: ''}).textContent.includes('Yes. Say risk team in the second line.')" % json.dumps(card),
          "read": card},
         {"hash": "chat", "read": "#main"},
     ])
