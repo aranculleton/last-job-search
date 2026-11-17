@@ -43,7 +43,7 @@ def run():
 @pytest.mark.parametrize("vp", [PHONE, WIDE], ids=["phone", "wide"])
 def test_plan_a_time_puts_the_checklist_in_the_calendar(run, tmp_path, vp):
     got = _go(run, tmp_path, [
-        {"hash": "todo", "click": "Set a time", "exact": True},
+        {"hash": "todo", "click": "Set a time"},
         {"fill": {"The day": "2026-10-27", "The time": "09:30"}, "then": "Add it to my calendar", "eval": SHEET},
     ], vp, model=_checklist(), clock=T)
     seen = got["after"][1]["eval"]
@@ -57,7 +57,7 @@ def test_plan_a_time_puts_the_checklist_in_the_calendar(run, tmp_path, vp):
 
 
 def _plan(run, tmp_path, vp, within=None, zone=None, file=False):
-    click = {"hash": "todo", "click": "Set a time", "exact": True}
+    click = {"hash": "todo", "click": "Set a time"}
     if within:
         click["within"] = within
     steps = [click, {"fill": {"The day": "2026-10-27", "The time": "09:30"}, "then": "Add it to my calendar", "eval": SHEET}]
@@ -78,7 +78,7 @@ def test_messages_to_send_can_be_planned_too(run, tmp_path):
     got = _go(run, tmp_path, [
         # "Set a time to send", under the messages card's More since the redesign's second round
         # (2026-11-17): the card's face is its next step and one more.
-        {"hash": "todo", "more": "grp:send", "click": "Set a time to send", "exact": True, "within": '#main [data-item="grp:send"]'},
+        {"hash": "todo", "more": "grp:send", "click": "Set a time to send", "within": '#main [data-item="grp:send"]'},
         {"fill": {"The day": "2026-10-27", "The time": "09:30"}, "then": "Add it to my calendar", "eval": SHEET},
     ], WIDE, clock=T)
     seen = got["after"][1]["eval"]
