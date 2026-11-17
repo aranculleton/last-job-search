@@ -26,6 +26,7 @@ Seven stages. `tools/run_round.py` runs all of them in order and stops at the sh
 | screen | `text_screen.py` | knockouts that a quoted sentence settles |
 | score | `opportunity.py` | is this job worth having |
 | rank | `fit.py` | would they call back |
+| rules | `run_round.py` | every hard rule the posting decides (place, the bar, already yours), before one role per employer is chosen |
 | throttle | `throttle.py` | employers you are already talking to or applying at |
 
 ### Why the order is what it is
@@ -118,9 +119,10 @@ About 55MB of intermediate files, all of it derived and thick with third-party p
 text. The round deletes them and keeps the top of the shortlist without the posting
 bodies, roughly 30KB, in `documents/rounds/<round>.json`.
 
-A round that **missed** its yield target keeps four files it otherwise deletes, with the
+A round that **missed** its yield target keeps five files it otherwise deletes, with the
 bodies stripped: what the scrape's own gates removed, what the search had already ruled
-out, what the screen removed, and what the throttle removed. Those are the places a posting
+out, what the screen removed, what the rules a posting decides removed, and what the
+throttle removed. Those are the places a posting
 can vanish, and they are what the failure message tells you to read (RUNBOOK.md, "When the
 round misses", lists them).
 

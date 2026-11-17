@@ -43,6 +43,7 @@ FOLDER = "filtered"
 STAGES = ((os.path.join("00_scrape", "dropped.json"), "search"),
           ("01_dropped.json", "already seen"),
           ("03_screened_all.json", "screen"),
+          ("05_ruled_out.json", "rules"),
           ("06_skipped.json", "throttle"))
 FIELDS = ("title", "company", "location", "url", "portal", "date")
 REASON_CAP = 240
@@ -97,8 +98,13 @@ def entries(round_dir: str) -> list[dict]:
             if key in seen:
                 continue
             seen.add(key)
-            e = {k: r.get(k) for k in FIELDS if r.get(k) not in (None, "")}
-            e.update(stage=stage, rule=rule_of(stage, reason),
+            # A row ranked before it was left out keeps its score, so brought back it is
+            # listed like any other (the page lists no row unscored).
+            e = {k: r.get(k) for k in FIELDS + (("fit", "priority") if stage == "rules" else ())
+                 if r.get(k) not in (None, "")}
+            # The rule stage names each row's rule as the search's own cut does
+            # (run_round.rule_word): "location", never the reason's first words.
+            e.update(stage=stage, rule=str(r.get("rule") or "") or rule_of(stage, reason),
                      reason=reason if len(reason) <= REASON_CAP else reason[:REASON_CAP - 3] + "...")
             out.append(e)
     return out

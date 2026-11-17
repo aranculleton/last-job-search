@@ -412,8 +412,9 @@ METHODS: dict[str, dict] = {
             (103, "2026-11-11", False, "RUNBOOK.md says the person's update setting wins over anything earlier in a chat or its memory, and that a new chat's start takes what moved in the app (sync_app.py --if-moved)"),
             (104, "2026-11-11", False, "the general resume's plain-text copy and its short copy to paste read \"AWS\" whole, as the PDF does, never \"A WS\": a kern in a field reads as the one word TeX prints (issue 236); a copy kept before reads right once the general resume is made again"),
             (105, "2026-11-16", False, "RUNBOOK's map of what goes where says upcoming.py add takes --zone for something booked on another clock than the person's; nothing made changes"),
+            (106, "2026-11-17", False, "RUNBOOK says a round runs the rules a posting decides before one role per employer is chosen, keeps a reserve with its top rows, and keeps five files when it misses; nothing made changes"),
         ),
-        "fingerprint": "6c1cf0797222cade",
+        "fingerprint": "3e808782a009549d",
     },
     "interview": {
         # Only a process with a round still to come is prepared again: a prep for a round

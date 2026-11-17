@@ -193,13 +193,19 @@ written over.
 The round handles the keeping and the deleting itself. It writes the top 60 of the
 shortlist, without the posting bodies, to `documents/rounds/<round>.json` at about 30KB,
 then deletes the stage files and prints how much it freed. It keeps `06_shortlist.json`, cut
-to the same 60 with their bodies, because drafting is staged from it; in a later session,
+to the same 60 and a reserve of three times the number asked for, with their bodies, because
+drafting is staged from it and a `--recut` refills from it; in a later session,
 when `rounds/` is gone, `stage_picks.py` reads `documents/rounds/` and fetches the bodies again. That summary file is the one
 to commit, and it takes a plain `git add`: it sits outside `rounds/` deliberately,
 because a keeper inside an ignored tree would need a `!` negation and
 `tools/security_guards.py` rejects negations outside its reviewed allowlist.
 
-Stages, in order: scrape, prefilter, hydrate, screen, opportunity, fit, throttle. The
+Stages, in order: scrape, prefilter, hydrate, screen, opportunity, fit, rules, throttle.
+The rules stage applies every hard rule the posting decides (the place, with "never says it
+hires from home" for a remote role in the neighbouring country, the bar, an agency, an
+employer turned down or judged none, and a job already yours) before one role per employer
+is chosen, so the throttle keeps the best role that can be shown and every row the round keeps
+can be; what it leaves out is on the round's left-out list. The
 shortlist is ranked by fit x opportunity. A fit under 65 (`fit.FIT_FLOOR`) is held low in that
 order, unless a warm route exempts it, and never cut: the yield target counts fit, so a
 posting at 60 to 64 still counts toward it. `tools/throttle.py` has
@@ -245,13 +251,14 @@ python3 tools/run_round.py --from-scraped rounds/<the round it printed>/00_scrap
 
 ### When the round misses
 
-It exits 2 and keeps four files it otherwise deletes, with the posting bodies stripped:
+It exits 2 and keeps five files it otherwise deletes, with the posting bodies stripped:
 
 | File | Answers |
 |---|---|
 | `00_scrape/dropped.json` | what the age, location and title gates removed (the scrape applies them) |
 | `01_dropped.json` | what was already ruled out in `seen_jobs.json`, and relists first seen too long ago |
 | `03_screened_all.json` | what the stated-fact knockouts removed, with the quote |
+| `05_ruled_out.json` | what the rules a posting decides removed before the throttle (place, the bar, already yours) |
 | `06_skipped.json` | what the company throttle and the one-role-per-employer rule removed |
 
 Those are the places a posting can vanish. `--expand` re-runs wider automatically,
@@ -943,7 +950,7 @@ slash command** are the table below, each with what it does, its flags and its e
 
 | Command | What it does |
 |---|---|
-| `python3 tools/run_round.py --out rounds/rN [--expand]` | The whole free pipeline, portals to ranked shortlist. It checks the yield target and prints MET or MISSED with the counts. **Exit 0 met, exit 2 missed, exit 1 a stage actually broke** - a thin market and a broken pipeline are different answers. `--expand` re-runs wider up to the 3 rounds the rule allows. It **prunes itself**: `rounds/` is gitignored and its ~55MB of stage files are deleted, except `06_shortlist.json` cut to the top 60 with their bodies, which is what drafting is staged from; the same 60 rows, minus the posting bodies, are written to `documents/rounds/<round>.json` and **are** committed, beside what it filtered out and why (`documents/rounds/filtered/<round>.json`, read by `tools/filtered.py`). `--keep-intermediates` retains the stage files for debugging a round that went wrong, and a round that **missed** keeps `00_scrape/dropped.json`, `01_dropped.json`, `03_screened_all.json` and `06_skipped.json` automatically, with the posting bodies stripped, because those are the files the MISSED message tells you to read. |
+| `python3 tools/run_round.py --out rounds/rN [--expand]` | The whole free pipeline, portals to ranked shortlist. It checks the yield target and prints MET or MISSED with the counts. **Exit 0 met, exit 2 missed, exit 1 a stage actually broke** - a thin market and a broken pipeline are different answers. `--expand` re-runs wider up to the 3 rounds the rule allows. It **prunes itself**: `rounds/` is gitignored and its ~55MB of stage files are deleted, except `06_shortlist.json` cut to the top 60 and a reserve of three times the number asked for, with their bodies, which is what drafting is staged from and a `--recut` refills from; the same 60 rows, minus the posting bodies, are written to `documents/rounds/<round>.json` and **are** committed, beside what it filtered out and why (`documents/rounds/filtered/<round>.json`, read by `tools/filtered.py`). `--keep-intermediates` retains the stage files for debugging a round that went wrong, and a round that **missed** keeps `00_scrape/dropped.json`, `01_dropped.json`, `03_screened_all.json`, `05_ruled_out.json` and `06_skipped.json` automatically, with the posting bodies stripped, because those are the files the MISSED message tells you to read. |
 | `python3 tools/network/prep.py --all` | Rewrites every contact's prep document. Without it a fix to `prep.py` reaches whichever one somebody runs next and no others. Each document's last line says which prep wrote it: `--stale-only` rewrites only the documents an older prep wrote or written before the contact's row or thread changed (and never writes one for a contact who has none), keeping answers already rewritten to be said, and `--dry-run` lists what would be written and writes nothing. `"<contact>" --check` exits 1 while an answer is raw profile wording or reads as written. |
 | `python3 tools/network/export.py` | LinkedIn's data export, read, only the files it names. **Given one, `take <zip|folder>` first** (`take --find` looks in Downloads, Desktop and Documents): it saves every file the app reads into documents/linkedin/, in the main folder on a computer, and imports the history into network_threads.csv in one step. `files` (no argument) says plainly when messages.csv or Invitations.csv was never saved; `files <zip>` says what a download holds and what is missing, `history --from <zip>` lists the messages and invitations it would add to network_threads.csv (joined by profile address, else a careful name match, else listed as not in the contact book) and `--apply` writes them, twice adding nothing; `pending` lists the invitations sent and never accepted for three weeks, oldest first, for the person to withdraw on LinkedIn, and `withdrawn <name>...` records the ones they did. Nothing is sent. |
 | `python3 tools/network/own_profile.py` | The person's own LinkedIn profile, now and then. `due` prints one line when a look is worth it (never looked over, a fact it compares has changed, or a run of unanswered first notes too long to be chance) and nothing otherwise, at most once in 30 days; `check` lists red flags only, each with its evidence and one fix; `brief` is what is left for the session's model to judge, well under two thousand tokens. Kept in documents/network/own_profile_review.json. |

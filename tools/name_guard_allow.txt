@@ -793,3 +793,10 @@ Tamberlin Engineering   # invented employer, the same test
 Tamberlin Science       # invented employer, the same test
 Wexcombe Engineering    # invented employer, the same test
 Wexcombe Insurance      # invented employer, the same test
+Ashgrove Analytics      # invented employer, tests/test_the_rules_a_posting_decides_run_before_one_role_per_employer.py
+Birchmoor Lending       # invented employer, the same test
+Cobbledale Insurance    # invented employer, the same test
+Dunholme Foods          # invented employer, the same test
+Eskdale Freight         # invented employer, the same test
+Fellbeck Retail         # invented employer, the same test
+Gorsefield Employer     # invented employer, the same test

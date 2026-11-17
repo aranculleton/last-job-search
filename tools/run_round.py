@@ -625,7 +625,7 @@ def unscored(row) -> bool:
 
 
 def hard_rules(jobage, today, seen=None, keep_ruled_out=False, dump=None, name="",
-               tracker=None, own=(), window=True, listed=True, drafts=True):
+               tracker=None, own=(), window=True, listed=True, drafts=True, screen=True):
     """A function from a ranked row to the hard rule it fails now, or "": no score, the
     search window, the candidate's bar (tools/bar.py, its hard rules, with the posting read,
     and a recruitment or staffing agency by the person's own lists, tools/sector.py), the
@@ -643,7 +643,8 @@ def hard_rules(jobage, today, seen=None, keep_ruled_out=False, dump=None, name="
     cut, so it reads every ruling as it stands then, a Set aside or an employer turned down
     while the round ran included (declined_now); the person's own rulings hold even with --no-seen-read, which only looks again
     at what a rule decided; and with `dump`, a page dump, the Set asides still waiting on the
-    page (page_set_asides)."""
+    page (page_set_asides). `screen` False leaves out the stated-fact screen, for rows this
+    round's own screen has just passed (rule_stage)."""
     import bar
     import prefilter
     import sector
@@ -691,7 +692,7 @@ def hard_rules(jobage, today, seen=None, keep_ruled_out=False, dump=None, name="
         place = place_rule(row)
         if place:
             return place
-        cuts = text_screen.screen(row).get("cuts") or []
+        cuts = (text_screen.screen(row).get("cuts") or []) if screen else []
         if cuts:
             return f"screen: {cuts[0]}"
         if (waiting or revs) and set_aside(row):
@@ -1039,6 +1040,60 @@ def say_named(names, rows, found=None, jobage=None) -> list[str]:
     return lines
 
 
+# The rules a posting decides, run on every ranked row before one role per employer is chosen
+# and before the round keeps its top rows. They ran only when the shortlist was cut, after
+# both: at three employers the role the throttle kept was a remote role abroad the cut then
+# removed, while the same employers' roles at home had been skipped as duplicates, and the
+# round kept its top 60 rows, 25 of them failing the place rule, so a cut made again after
+# the evening's judgements found 7 of 10 with about 1,400 ranked rows never read (2026-11-16).
+RULED = "05_ruled.json"
+RULED_OUT = "05_ruled_out.json"
+
+
+def rule_stage(ranked_path, out_path, left_path, rules):
+    """The ranked rows that pass every hard rule (`rules`, hard_rules), written to `out_path`
+    for the throttle, and those that fail one written to `left_path` for the round's left-out
+    list, each with its reason; the failing rows, or None when there is no ranking to read
+    (the stage is left to the throttle as before)."""
+    try:
+        rows = _read_json(ranked_path)
+    except Exception:  # noqa: BLE001  no ranking written: nothing to rule on here
+        return None
+    rows = rows if isinstance(rows, list) else list(rows.values())
+    keep, gone = [], []
+    for r in rows:
+        why = rules(r) if isinstance(r, dict) else ""
+        if why:
+            gone.append({**r, "skip_reason": why})
+        else:
+            keep.append(r)
+    with open(out_path, "w", encoding="utf-8", newline="\n") as fh:
+        json.dump(keep, fh, indent=1)
+        fh.write("\n")
+    links = getattr(getattr(rules, "had", None), "links", ())
+    left = [{**{k: r.get(k) for k in LEFT_FIELDS if r.get(k) not in (None, "")},
+             "skip_reason": r["skip_reason"], "rule": rule_word(r["skip_reason"])}
+            for r in gone if ruled_by(r, r["skip_reason"], links)]
+    with open(left_path, "w", encoding="utf-8", newline="\n") as fh:
+        json.dump(left, fh, indent=1)
+        fh.write("\n")
+    return gone
+
+
+def say_ruled(gone, ranked: int) -> str:
+    """The line the rule stage says: how many ranked rows failed a rule, by rule."""
+    if not gone:
+        return f"rules: all {ranked} ranked rows pass every rule a posting decides"
+    by: dict = {}
+    for r in gone:
+        w = rule_word(r["skip_reason"])
+        by[w] = by.get(w, 0) + 1
+    return (f"rules: {len(gone)} of {ranked} ranked rows fail a rule the posting decides, left "
+            "out before one role per employer is chosen ("
+            + ", ".join(f"{w} {n}" for w, n in sorted(by.items(), key=lambda kv: -kv[1]))
+            + ")")
+
+
 def write_summary(shortlist_path, out_dir, name, scraped_path=None, show=None, rules=None,
                   report=None, links=None, named=None):
     """The compact shortlist, and where it was written. With `scraped_path` (the round's
@@ -1136,7 +1191,8 @@ def write_summary(shortlist_path, out_dir, name, scraped_path=None, show=None, r
 # search had already ruled out. The message named 01_dropped.json for the location
 # and age gates, and the file that answers it was deleted with the rest of 00_scrape.
 SCRAPE_DROPPED = os.path.join("00_scrape", "dropped.json")
-DIAGNOSTICS = (SCRAPE_DROPPED, "01_dropped.json", "03_screened_all.json", "06_skipped.json")
+DIAGNOSTICS = (SCRAPE_DROPPED, "01_dropped.json", "03_screened_all.json", "05_ruled_out.json",
+               "06_skipped.json")
 BODY_FIELD = "desc"
 
 
@@ -1164,11 +1220,37 @@ def slim(path):
 SHORTLIST = "06_shortlist.json"
 
 
+# A reserve kept with the top rows, this many times the number asked for: every row the throttle
+# surfaced has passed the rules a posting decides (rule_stage), so a cut made again after a
+# ruling or a judgement refills from real candidates (2026-11-16).
+RESERVE_TIMES = 3
+# How many rows the round's shortlist held and how many it kept, beside it, so a cut made
+# again can say the kept rows ran out rather than that the round had no more.
+TRIMMED = "06_trimmed.json"
+
+
+def keep_top(show) -> int:
+    """How many surfaced rows a round keeps with their postings: KEEP_TOP, and a reserve of
+    RESERVE_TIMES the number asked for."""
+    return KEEP_TOP + RESERVE_TIMES * shown(show)
+
+
+def not_kept(out_dir: str) -> tuple[int, int]:
+    """(rows kept with their postings, ranked rows the round did not keep), from TRIMMED."""
+    try:
+        got = _read_json(os.path.join(out_dir, TRIMMED))
+        kept = int(got.get("kept") or 0)
+        return kept, max(0, int(got.get("ranked") or 0) - kept)
+    except Exception:  # noqa: BLE001  a round from before, or one never trimmed
+        return 0, 0
+
+
 def trim(path, top=KEEP_TOP):
     """Keep the first `top` rows of a shortlist, bodies and all. Returns bytes saved.
 
-    A shortlist that will not parse is no use to stage from, and staging falls
-    back to `documents/rounds/<round>.json` when it is absent, so it is deleted.
+    How many it held and kept is written beside it (TRIMMED). A shortlist that will not
+    parse is no use to stage from, and staging falls back to
+    `documents/rounds/<round>.json` when it is absent, so it is deleted.
     """
     try:
         before = os.path.getsize(path)
@@ -1183,6 +1265,10 @@ def trim(path, top=KEEP_TOP):
     rows = rows if isinstance(rows, list) else list(rows.values())
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(rows[:top], fh, indent=1)
+        fh.write("\n")
+    with open(os.path.join(os.path.dirname(path), TRIMMED), "w", encoding="utf-8",
+              newline="\n") as fh:
+        json.dump({"kept": len(rows[:top]), "ranked": len(rows)}, fh)
         fh.write("\n")
     return max(0, before - os.path.getsize(path))
 
@@ -1199,7 +1285,7 @@ def prune(out_dir, keep=(), hold=(), top=KEEP_TOP):
     """
     freed = 0
     for name in os.listdir(out_dir):
-        if name in ("round.log", NAMED_FILE) or name in hold:
+        if name in ("round.log", NAMED_FILE, TRIMMED) or name in hold:
             continue
         path = os.path.join(out_dir, name)
         if name == SHORTLIST:
@@ -1442,8 +1528,14 @@ def say_cut(report: dict, show) -> list[str]:
                          f"{r.get('title') or '?'}, {r.get('company') or '?'} ({r['skip_reason']})"
                          for r in passed[:5]))
     if show and int(show) > 0 and report.get("found", 0) < report.get("asked", 0):
+        kept, more = report.get("kept", 0), report.get("not_kept", 0)
+        # The kept rows running out is not the round having no more: a cut made again reads
+        # only the rows kept with their postings (2026-11-16).
         lines.append(f"shortlist: found {report['found']} of the {report['asked']} asked for "
-                     "that pass every rule; the round had no more")
+                     "that pass every rule; "
+                     + (f"the {kept} rows this round kept are used up, and {more} more it "
+                        "ranked were not kept: a new search (python3 tools/run_round.py) "
+                        "reads them" if more else "the round had no more"))
     return lines
 
 
@@ -1606,6 +1698,7 @@ def recut(a) -> int:
     path = write_summary(short, where, name,
                          scraped_path=scraped if os.path.isfile(scraped) else None,
                          show=a.show, rules=rules, report=report, links=links, named=names)
+    report["kept"], report["not_kept"] = not_kept(a.out)
     for line in say_cut(report, None if names else a.show):
         print(line)
     if names and path:
@@ -1875,7 +1968,25 @@ def main():
          "--top", "100000", "--today", a.today], log, deadline)
     run([sys.executable, f"{T}/fit.py", f("04_opportunity.json"), "--out", f("05_ranked.json"),
          "--top", str(a.top)] + (["--tracker", a.tracker] if a.tracker else []), log, deadline)
-    throttle = [sys.executable, f"{T}/throttle.py", f("05_ranked.json"), "--out", f("06_shortlist.json"),
+    # Every rule the posting decides, before one role per employer is chosen: the throttle
+    # then keeps the best role that can be shown, and every row the round keeps can be.
+    seen_path = a.seen or person.state("job_scraper", "seen_jobs.json")
+    began = time.monotonic()
+    log.write(f"\n[rules started {_now()}]\n")
+    pre = hard_rules(a.jobage, a.today, seen_path, a.no_seen_read, dump=a.dump,
+                     name=os.path.basename(os.path.abspath(a.out)), tracker=a.tracker,
+                     screen=False)
+    ruled_out = rule_stage(f("05_ranked.json"), f(RULED), f(RULED_OUT), pre)
+    if ruled_out is not None:
+        line = say_ruled(ruled_out, count(f("05_ranked.json")) or 0)
+        print("+ " + line, flush=True)
+        log.write(line + "\n")
+        _stage_done(log, "rules", began, f"{len(ruled_out)} left out")
+        if not a.no_seen_write:
+            record_left_out([r for r in ruled_out
+                             if ruled_by(r, r["skip_reason"], pre.had.links)], seen_path, a.today)
+    ranked_in = f(RULED) if ruled_out is not None else f("05_ranked.json")
+    throttle = [sys.executable, f"{T}/throttle.py", ranked_in, "--out", f("06_shortlist.json"),
                 "--skipped", f("06_skipped.json"), "--today", a.today]
     if a.tracker:
         throttle += ["--tracker", a.tracker]
@@ -1908,7 +2019,6 @@ def main():
     # Write the keeper, then drop the rest. Done before the expansion branch
     # below returns, so every exit path leaves the same small footprint.
     cut: dict = {}
-    seen_path = a.seen or person.state("job_scraper", "seen_jobs.json")
     rules = hard_rules(a.jobage, a.today, seen_path, a.no_seen_read, dump=a.dump,
                        name=os.path.basename(os.path.abspath(a.out)), tracker=a.tracker)
     summary = write_summary(f("06_shortlist.json"),
@@ -1973,7 +2083,7 @@ def main():
         # about to widen holds its hydrated bodies back for the next one.
         freed = prune(a.out, keep=() if met else DIAGNOSTICS,
                       hold=(HYDRATED, SCRAPED) if widen else (),
-                      top=None if names else KEEP_TOP)
+                      top=None if names else keep_top(a.show))
         print(f"pruned {freed // (1024 * 1024)}MB of reproducible stage files "
               f"(--keep-intermediates to retain them)"
               + ("" if met else f"; kept {', '.join(DIAGNOSTICS)} without bodies"))
@@ -2053,7 +2163,8 @@ def main():
     scrape_dropped = (f"{SCRAPE_DROPPED} for the age, location and title gates, "
                       if os.path.exists(f(SCRAPE_DROPPED)) else "")
     print(f"  likely blocker: in {a.out}, check 06_skipped.json for what the throttle "
-          f"removed, {scrape_dropped}01_dropped.json for what was already ruled out "
+          f"removed, 05_ruled_out.json for the rules a posting decides (place, the bar, "
+          f"already yours), {scrape_dropped}01_dropped.json for what was already ruled out "
           "or first seen too long ago, and 03_screened_all.json for the stated-fact "
           "knockouts. Each was kept (without posting bodies) precisely because this "
           "round missed.")
