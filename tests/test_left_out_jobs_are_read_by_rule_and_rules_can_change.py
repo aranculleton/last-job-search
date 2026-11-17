@@ -198,8 +198,10 @@ def test_every_rule_reads_as_one_sentence_with_what_it_left_out(state, profile):
     assert one["set_on"] == "2026-04-13" and one["drop"] == {"kind": "declined",
                                                               "key": "brindlewood 3"}
     sector = next(r for r in rows if r["kind"] == "sector")
+    # Still written as a pattern (search.py BAR_EXCLUDED), and said so (issue 327).
     assert sector["sentence"] == ("Left out: A sector you will not work in (gambling and "
-                                  "tobacco).")
+                                  "tobacco); still kept as words to look for in a posting, not "
+                                  "yet as a kind of employer.")
     learned = [r for r in rows if r["kind"] == "learned"]
     assert [r["words"] for r in learned] == ["never say reach out", "no night shifts"]
     assert learned[0]["set_on"] == "2026-06-01"

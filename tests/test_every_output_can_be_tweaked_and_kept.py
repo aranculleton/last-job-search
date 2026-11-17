@@ -182,6 +182,25 @@ def test_a_title_the_filter_would_drop_is_refused_and_a_pay_floor_keeps_the_cut_
     assert same["status"] == "cached"
 
 
+def test_a_pay_floor_set_on_the_page_is_kept_in_the_record_of_what_you_want_and_undone(t):
+    """Issue 327: the pay floor is a setting the code reads and a want the person said. Set on
+    the page, the record of what they want (profile/wants.json) keeps the same value, said
+    there, so the check finds nothing to put right; undone, both are as they were."""
+    def record():
+        with open(os.path.join(t.profile, "wants.json"), encoding="utf-8") as fh:
+            return json.load(fh)["settings"]["pay floor"]
+    was = record()
+    ok = t.tweak("apply", "jobs", "jobs", [{"p": "J12", "v": 45000}])
+    assert ok["status"] == "done" and "SALARY_FLOOR = 45000" in _search(t)
+    assert (record()["value"], record()["by"]) == (45000, "page")
+    check = t.python("import subprocess, sys\nr = subprocess.run([sys.executable, "
+                     "'tools/wants.py', 'check'], capture_output=True, text=True, "
+                     "encoding='utf-8')\nprint(r.stdout)")
+    assert "SALARY_FLOOR" not in check, check
+    assert t.tweak("undo", "jobs", "jobs", undo=ok["key"])["status"] == "done"
+    assert record() == was and "SALARY_FLOOR = 42_000" in _search(t)
+
+
 def test_an_employer_to_watch_and_a_site_switched_off(t):
     got = t.tweak("apply", "jobs", "jobs", [{"p": "J9", "v": "Larkspur Retail"}])
     assert got["status"] == "done" and '"Larkspur Retail"' in _search(t)

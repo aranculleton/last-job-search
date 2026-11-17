@@ -1208,7 +1208,9 @@ def _location_names() -> tuple[str | None, str | None]:
 
 def _writes(c: dict, where: dict, keep: bool) -> tuple[list, list, list]:
     """(writes, then, said) for one settings change: each write ("line", file, key, value)
-    or ("json", key, value) or ("routine", key, cron); then, the work to queue after."""
+    or ("json", key, value) or ("routine", key, cron), or ("want", want, value) for the record
+    of what the person wants (tools/wants.py, issue 327), kept beside the setting it says in
+    their terms; then, the work to queue after."""
     p, v = c["p"], c["v"]
     search = {"kind": "search", "title": "Finding jobs", "args": {}}
     if p == "J6":
@@ -1230,12 +1232,14 @@ def _writes(c: dict, where: dict, keep: bool) -> tuple[list, list, list]:
             remote = list(_search_get("SCRAPE_REMOTE_LOCATIONS", []) or [])
             home = str(places[-1] if places else "")
             new = (remote or ([home] if home else [])) if val else []
-            return [("line", "search.py", "SCRAPE_REMOTE_LOCATIONS", new)], [search], \
+            return [("line", "search.py", "SCRAPE_REMOTE_LOCATIONS", new),
+                    ("want", "remote", new)], [search], \
                 ["remote roles " + ("included" if val else "left out")]
         if what == "add":
             if val in places:
                 return [], [], [f"{val} is searched already"]
-            out = [("line", "search.py", "SCRAPE_LOCATIONS", places + [val])]
+            out = [("line", "search.py", "SCRAPE_LOCATIONS", places + [val]),
+                   ("want", "places", places + [val])]
             metro, outside = _location_names()
             town = val.split(",")[0].strip().lower()
             if metro:
@@ -1250,7 +1254,8 @@ def _writes(c: dict, where: dict, keep: bool) -> tuple[list, list, list]:
             return out, [search], [f"{val} searched and kept"]
         if val not in places:
             return [], [], [f"{val} is not searched"]
-        return [("line", "search.py", "SCRAPE_LOCATIONS", [x for x in places if x != val])], \
+        left = [x for x in places if x != val]
+        return [("line", "search.py", "SCRAPE_LOCATIONS", left), ("want", "places", left)], \
             [search], [f"{val} no longer searched"]
     if p == "J8":
         (what, val), = v.items()
@@ -1291,8 +1296,8 @@ def _writes(c: dict, where: dict, keep: bool) -> tuple[list, list, list]:
         if v < cut:
             raise Refused(f"That is under your cut line ({cut:,}): a stated range under it is "
                           "dropped already.")
-        return [("line", "search.py", "SALARY_FLOOR", int(v))], [search], \
-            [f"pay floor {int(v):,}"]
+        return [("line", "search.py", "SALARY_FLOOR", int(v)), ("want", "pay floor", int(v))], \
+            [search], [f"pay floor {int(v):,}"]
     if p == "I2":
         return [("json", "prep.detail", v)], [], [f"the pack shows {v.replace('_', ' ')}"]
     if p == "I3":
@@ -1393,6 +1398,9 @@ def _now_value(w: tuple):
         return profile_set.get(w[1], w[2])
     if w[0] == "json":
         return profile_set.get_json(w[1])
+    if w[0] == "want":
+        import wants
+        return wants.setting_entry(w[1]).get("value", profile_set.MISSING)
     return _routine(w[1]).get("cron")
 
 
@@ -1443,6 +1451,11 @@ def _write(w: tuple) -> dict:
         return profile_set.set_line(w[1], w[2], w[3])
     if w[0] == "json":
         return profile_set.set_json(w[1], w[2])
+    if w[0] == "want":
+        # Changed on the page, so the record of what the person wants keeps the same value,
+        # said there: a setting it held otherwise is one `wants.py check` names (issue 327).
+        import wants
+        return wants.keep_setting(w[1], w[2], by="page")
     return _set_routine(w[1], w[2])
 
 
@@ -1450,6 +1463,9 @@ def _unwrite(rec: dict) -> None:
     import profile_set
     if rec.get("routine"):
         _set_routine(rec["routine"], rec.get("before"))
+    elif rec.get("want"):
+        import wants
+        wants.put_setting(rec["want"], rec.get("before"))
     else:
         profile_set.undo(rec)
 
@@ -1498,7 +1514,8 @@ def _apply_settings(work: dict, where: dict, p: dict) -> dict:
         writes += w
         then += [x for x in t if x not in then]
         said += s_
-    if writes and all(_now_value(w) == w[-1] for w in writes) and not any(
+    # Already as asked is read from the settings: the record beside one is kept as it is.
+    if writes and all(_now_value(w) == w[-1] for w in writes if w[0] != "want") and not any(
             c["p"] in ("I1", "J6", "J11") for c in changes):
         return {"status": "cached", "summary": "Already done: it is as you asked.", "key": p["key"],
                 "outcome": "unchanged"}

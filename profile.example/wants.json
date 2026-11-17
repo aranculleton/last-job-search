@@ -1,0 +1,47 @@
+{
+  "employers": {},
+  "families": {},
+  "kinds": {},
+  "settings": {
+    "pay cut": {
+      "by": "moved",
+      "date": "2026-11-17",
+      "hard": true,
+      "said": "",
+      "setting": "search.py SALARY_CUT_BELOW",
+      "value": 32000
+    },
+    "pay floor": {
+      "by": "moved",
+      "date": "2026-11-17",
+      "hard": false,
+      "said": "",
+      "setting": "search.py SALARY_FLOOR",
+      "value": 42000
+    },
+    "places": {
+      "by": "moved",
+      "date": "2026-11-17",
+      "hard": true,
+      "said": "",
+      "setting": "search.py SCRAPE_LOCATIONS",
+      "value": [
+        "Manchester, England, United Kingdom",
+        "Salford, England, United Kingdom",
+        "Stockport, England, United Kingdom",
+        "United Kingdom"
+      ]
+    },
+    "remote": {
+      "by": "moved",
+      "date": "2026-11-17",
+      "hard": true,
+      "said": "",
+      "setting": "search.py SCRAPE_REMOTE_LOCATIONS",
+      "value": [
+        "United Kingdom"
+      ]
+    }
+  },
+  "signals": {}
+}
