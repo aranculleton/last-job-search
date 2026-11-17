@@ -166,8 +166,9 @@ METHODS: dict[str, dict] = {
             (9, "2026-10-29", False, "the Gulf pay guide is listed by its title"),
             (10, "2026-11-03", False, "the market brief names the country's languages and says the field tables' titles and tools are US English, and setup researches the local ones; pay stated by the month is read as twelve months"),
             (11, "2026-11-11", False, "every page the market brief reads is fetched at the address as written, never as a list of addresses; nothing made changes"),
+            (12, "2026-11-17", False, "the citizenship, residence and clearance wording postings use in the United States, Canada, the United Kingdom, Ireland, Australia and New Zealand ships in the tables (status_words), read by the screen beside the person's own; nothing needs setting up again"),
         ),
-        "fingerprint": "21783d07128058a8",
+        "fingerprint": "7d9404fb6d30a4fb",
     },
     "documents": {
         "setup": True, "by": "upgrade", "priority": 3, "time": "~10 min",
@@ -849,8 +850,9 @@ METHODS: dict[str, dict] = {
             (56, "2026-11-11", False, "rank.md names the page fetcher for a posting a 403 refused (tools/fetch_page.py); a draft a chat stopped because the job is not one the person can take holds that posting alone, as a role they set aside does (about six months, then shown once more), never judged again against the rules"),
             (57, "2026-11-11", False, "a role set aside with no day holds as if set aside the day it is first read, and the next save of the seen jobs, a search's included, writes that day on it, so it still ends"),
             (58, "2026-11-17", False, "an employer a job feed names by its careers site, run together, with a number on its slug or by a team is the employer the person's records hold (company_key), so the company throttle, the role already applied for and one role per employer hold for it; a listing marked internal in its employer field is cut as internal-only; nothing needs redoing: the throttle decides these every round"),
+            (59, "2026-11-17", False, "the eligibility gate reads the market's own wording for citizenship, residence and a clearance beside the person's pattern: the neighbouring country's citizenship and residence always, and each other status the person's own pattern names; nothing needs redoing: it only cuts more"),
         ),
-        "fingerprint": "2568aa8f3f83d09e",
+        "fingerprint": "bbf711be13383a67",
     },
     "routines": {
         "by": "you", "priority": 3, "applies": "routines",

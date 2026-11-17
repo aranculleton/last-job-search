@@ -286,5 +286,19 @@
       "checked": "2026-10-25",
       "verified": true
     }
-  ]
+  ],
+  "status_words": {
+    "citizenship": {
+      "says": "Australian citizen",
+      "words": "\\baustralian\\s+(?:citizen\\w*|nationals?|nationality)\\b|\\bcitizens? of australia\\b"
+    },
+    "residence": {
+      "says": "Australian permanent resident",
+      "words": "\\baustralian\\s+permanent residen\\w*"
+    },
+    "clearance": {
+      "says": "security clearance",
+      "words": "\\b(?:baseline|nv1|nv2|negative vetting|positive vetting|agsva|security)\\s+(?:clearance|vetting)\\b|\\bnv[12]\\b"
+    }
+  }
 }

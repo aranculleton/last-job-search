@@ -290,5 +290,19 @@
       "checked": "2026-10-25",
       "verified": true
     }
-  ]
+  ],
+  "status_words": {
+    "citizenship": {
+      "says": "Canadian citizen",
+      "words": "\\bcanadian\\s+(?:citizen\\w*|nationals?|nationality)\\b|\\bcitizens? of canada\\b"
+    },
+    "residence": {
+      "says": "Canadian permanent resident",
+      "words": "\\b(?:canadian\\s+)?permanent residen\\w*\\b"
+    },
+    "clearance": {
+      "says": "security clearance",
+      "words": "\\b(?:security|secret|top secret|reliability)\\s+(?:clearance|status)\\b|\\benhanced reliability\\b"
+    }
+  }
 }
