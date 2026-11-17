@@ -642,9 +642,10 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   questions" and "Read your prep" on a phone, the screen review, 2026-11-11). A gauge is one
   with its button: a row wraps between a button with its gauge and the next pill, never between
   the two, the button going down with a gauge that would start a line, and with a gauge before
-  More the pair goes down with it; where that pair starts the row, More takes the next line by
-  itself ("6 min of Claude" went down with More, under the "Prepare me" it belonged to, the
-  redesign's second round, 2026-11-17; calm test). Its buttons are one row of pills that wraps only at the
+  More the pair goes down with it; where the pair fills a line by itself, More takes the next
+  line by itself, the one place More stands alone ("6 min of Claude" went down with More, under
+  the "Prepare me" it belonged to, the redesign's second round, 2026-11-17; calm test, overlap
+  test: alone). Its buttons are one row of pills that wraps only at the
   panel's width, never a line a kind; a note or a link in a sentence follows them. Why: opened
   inside the row it took the whole width and dropped below "I sent it", and a row a kind left
   one button alone on a line (the maintainer, 2026-11-05). (More test)
