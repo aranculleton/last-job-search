@@ -579,6 +579,7 @@ details.more.split[open] { flex-basis: auto; }
    days ago"). On a phone a job's is two lines at most: where it is, cut short with "..." if it
    must be, then the pay and the closing day; what it leaves out is in the card's details. */
 .facts .fact, .facts .fact-w { white-space: nowrap; }
+.facts .fact.next { white-space: normal; }
 @media (max-width: 759px) {
   .facts.two-part > .facts-a { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .facts.two-part .f-drop, .facts.two-part .f-rel, .facts.two-part .f-long { display: none; }
@@ -2509,7 +2510,8 @@ ul.bp-news { gap: 12px; }
 .up-row > .up-when { grid-area: when; padding-top: 2px; }
 .up-row > .up-main { grid-area: main; }
 .up-row > .up-end { grid-area: end; align-self: center; display: flex; align-items: center; }
-.up-when { font-weight: 600; font-variant-numeric: tabular-nums; line-height: 24px; white-space: nowrap; }
+.up-when { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.up-row > .up-when { line-height: 24px; }
 /* A day with no clock time ("End of day", "All day") says so in the quiet small words, wrapping
    in its column. No time yet is a soft "+ Add the time" under what the row is, a slot to fill:
    squeezed into the time's 64px it broke over three lines. */
@@ -2523,7 +2525,8 @@ ul.bp-news { gap: 12px; }
    own column, the time here kept whole under the person's clock, and the column is wider on
    every row of the list alike, so the rows still line up (2026-11-11). */
 .up-when:has(> .up-here) { white-space: normal; overflow-wrap: anywhere; }
-.up-here { white-space: nowrap; font-weight: 400; color: var(--muted); font-size: var(--t-sm); }
+.up-here { white-space: nowrap; }
+.up-row .up-here { font-weight: 400; color: var(--muted); font-size: var(--t-sm); }
 .up-days:has(.up-here) .up-row { grid-template-columns: 10rem minmax(0, 1fr) auto; }
 .up-main { display: grid; gap: 2px; min-width: 0; }
 .up-title { overflow-wrap: anywhere; }
