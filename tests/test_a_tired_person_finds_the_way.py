@@ -164,7 +164,7 @@ def test_a_draft_that_needs_a_fix_says_so_on_its_card_with_its_state_by_the_titl
         {"hash": "drafts", "read": '#main [data-item="app-quayside-demand"]'},
         {"click": "Not yet", "within": '#main [data-item="app-quayside-demand"]', "read": '#main .card.app[data-item="app-quayside-demand"]',
          # Claude makes it again by itself, so it waits under "Being written", said by its heading;
-         # a state pill (Supply Chain's "1 question for you") stays by its title.
+         # a state pill ("1 question for you" on the job being written) stays by its title.
          "eval": "(() => { const c = document.querySelector('#main .card.app[data-item=\"app-quayside-demand\"]'); const al = c.querySelector('[data-alert=\"al-checks-app-quayside-demand\"]');"
                  " const s = document.querySelector('#main [data-item=\"r12-2\"]');"
                  # Wrapped under a title with a ring before it, the pill starts at the card's text
