@@ -17107,12 +17107,12 @@
     // drawn (placeChat).
     if (shown && !S.chatWasShown && talkForm) { S.chatPlace = true; S.chatPlacedAt = null; S.chatStick = true; S.chatBack = 0; requestAnimationFrame(() => placeChat(true)); }
     S.chatWasShown = shown;
-    // Seen: the Chat tab's dot goes once its newest answer has been on screen.
+    // Seen: the Chat button's dot goes once its newest answer has been on screen.
     if (shown && lastAnswerAt() && lastAnswerAt() !== txt(pref("chat:seen", ""))) setPref("chat:seen", lastAnswerAt());
     const home = dockOpen ? dockBox : talkEl;
     if (talkBody.parentNode !== home) home.appendChild(talkBody);
     dockEl.hidden = !dockOpen;
-    // On a phone the Chat tab is the one way in: a floating button as well was two buttons
+    // On a phone the header's Chat button is the one way in: a floating button as well was two buttons
     // for one thing (the maintainer, 2026-10-28). In the header it is never in a selection's
     // way; the panel is lifted over Claude's browser panel.
     // On a phone it is always there, the one way into Chat, "you are here" on Chat itself (as
@@ -17162,7 +17162,7 @@
     if (S.owner !== true) return;
     if (!dockEl) buildDock();
     if (chatShown()) { focusTalk(o.text); return; }
-    // A phone has the Chat tab: the panel there was a second chat window over the first.
+    // A phone opens Chat itself: the panel there was a second chat window over the first.
     if (window.innerWidth < 760) { go("chat", {focus: false}); focusTalk(o.text); return; }
     if (!dockOpen) {
       const op = o.opener || document.activeElement;
