@@ -98,12 +98,15 @@ def test_the_lost_auto_is_one_card_and_the_works_line_with_the_chat_named(tmp_pa
     db = _asks(_with_starter(_db(WORK)), "mode", T, tmp_path)
     st = computer.state(db, T, envs=BRIDGE)
     assert st["state"] == "starter_waits" and st["say"] == "starter_mode" and st["asks"] == "mode"
-    assert st["line"] == ("Claude needs your OK once: open the chat “Job search: starts chats on "
-                          "your computer” and switch it to Accept edits and then back to Auto.")
+    # A setting to change, never an OK to give: "Claude needs your OK" sent the person looking
+    # for a question that was never there (issue #275).
+    assert st["line"] == ("Waiting for you to switch the chat “Job search: starts chats on your "
+                          "computer” back to Auto: a setting in that chat, so nothing pops up "
+                          "there.")
     # On To do at once, nothing to wait out first: nothing moves until they do it.
     assert st["card"]
     card = computer.card(st)
-    assert card["title"] == "Claude needs your OK once"
+    assert card["title"] == "Switch one chat back to Auto"
     assert card["open"] == {"label": "Open it",
                             "url": "https://claude.ai/code/session_starterEXAMPLE"}
     assert computer.STARTER_TITLE in card["body"] and "People at Harbourline Bank" in card["body"]
@@ -212,7 +215,7 @@ def test_the_starters_ask_reaches_to_do_wherever_the_page_is_drawn(tmp_path, mon
         person._modules.clear()
         person._data.clear()
     card = next(c for c in built["needs_you"] if c["id"] == "q-setup-computer")
-    assert card["title"] == "Claude needs your OK once" and card["open"]["url"].endswith(
+    assert card["title"] == "Switch one chat back to Auto" and card["open"]["url"].endswith(
         STARTER["chat"])
     row = built["where"]["computer"]
     assert row["say"] == computer.SAY["starter_mode"] and row["asks"] == "mode"
@@ -302,15 +305,21 @@ def test_the_sign_in_card_opens_the_chat_on_the_computer_and_never_linkedin(tmp_
         fields = json.load(open(entry["file_path"], encoding="utf-8"))
     needs = fields["needs"]
     assert needs["chat"] == "session_macEXAMPLE" and needs["signin"] == "linkedin"
-    assert needs["say"] == ("Sign in to LinkedIn once, in the chat on your Studio Laptop: tap "
-                            "Open the chat, then sign in on the page already open there. Being "
-                            "signed in beside your page does not count.")
-    assert "linkedin.com" not in json.dumps(needs)
-    # The page draws that: its one button the chat's own link, nothing opening LinkedIn.
+    # The chat by the title it was started with, never "tap Open the chat": that link opened it
+    # without its browser (issues 285 and 286, 2026-11-16).
+    title = computer.session_title("Reading 3 profiles", "Studio Laptop")
+    assert needs["say"] == ("Sign in to LinkedIn once, in the chat “" + title + "” on your "
+                            "Studio Laptop. Open that chat from "
+                            "the list of chats in the Claude app there: a link to it opens it "
+                            "without Claude's browser. Being signed in beside your page does not "
+                            "count.")
+    assert needs["steps"] and all(s[:1].isdigit() for s in needs["steps"])
+    assert "linkedin.com" not in json.dumps(needs) and "claude.ai/code" not in json.dumps(needs)
+    # The page draws that: its words and steps, and nothing opening LinkedIn or the chat's link.
     js = open(os.path.join(ROOT, "templates", "app", "app.js"), encoding="utf-8").read()
     box = js[js.index("function signinBox("):]
     box = box[:box.index("const tried = S.signinFor")]
-    assert '"https://claude.ai/code/" + chat' in box and "Open the chat" in box
+    assert "n.steps" in box and "claude.ai/code" not in box and "Open the chat" not in box
     assert "openReading" not in box and "linkedin.com" not in box
 
 

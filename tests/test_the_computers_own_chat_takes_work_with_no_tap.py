@@ -321,5 +321,7 @@ def test_the_work_the_computers_own_chat_saved_is_brought_to_master_at_once(
     assert "land.py" in got.get("then", "") and got["batches"]
     db["meta"]["computer_starter"]["data"]["woke_at"] = app_model.stamp(T + timedelta(minutes=1))
     got = json.loads(_run("starter-woke", _dump(db, tmp_path / "d2"), "--now", NOW))
-    assert "then" not in got
+    # Nothing to land: its `then` is its own mode's check alone, which every wake reads first
+    # (issues #277, #280).
+    assert got["then"] == computer.MODE_CHECK and "land.py" not in got["then"]
     assert "where it prints a `then`, do that too" in computer.starter_prompt(URL, COPY)

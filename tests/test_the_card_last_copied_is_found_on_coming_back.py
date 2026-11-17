@@ -74,7 +74,7 @@ def test_work_started_in_a_chat_on_the_computer_says_so_on_its_card_while_it_run
     steps Claude writes after it, and stops saying it once that chat is archived or done."""
     import computer
     say = computer.runs_there("Studio Laptop")
-    assert say == "This runs in a chat on your Studio Laptop, which you can delete when it's done."
+    assert say == "This runs in a chat on your Studio Laptop, which Claude looks after."
     r = run("runs_there", html=sample_page, viewport=viewport, say=say)
     assert not r.get("errors"), r.get("errors")
     assert r["running"] == [say], r

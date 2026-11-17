@@ -43,13 +43,16 @@ def test_a_read_held_on_the_computer_while_linkedin_is_signed_out_has_its_card()
     st = computer.state(db, T, envs=BRIDGE)
     assert st["state"] == "signed_out" and st["card"], st
     card = computer.card(st)
-    # Decided 2026-11-12 (the maintainer's Mac): the one way through opens the chat on the
+    # Decided 2026-11-12 (the maintainer's Mac): the one way through is the chat on the
     # computer that holds the read, where LinkedIn's sign-in is open in its own browser; a
-    # sign-in beside the page did not reach it, so no LinkedIn link is on the card.
+    # sign-in beside the page did not reach it, so no LinkedIn link is on the card. Since
+    # 2026-11-16 (issues 285 and 286) the card names that chat and gives the steps to open it
+    # in the Claude app there: its own link opened it without its browser.
     assert card["body"].startswith("Sign in to LinkedIn once, in the chat on your Studio "
                                    "Laptop"), card["body"]
-    assert card["open"] == {"label": "Open the chat",
-                            "url": "https://claude.ai/code/session_mac1"}
+    assert "open" not in card and "claude.ai/code" not in json.dumps(card)
+    assert card["steps"] == computer.signin_steps(st.get("system") or "")
+    assert [o["label"] for o in card["options"]] == [computer.SIGNED_IN_LABEL]
     assert "browser" not in card and "linkedin.com" not in json.dumps(card)
     # Just taken: the chat there gets its ten minutes to put it on the page itself.
     assert not computer.state(dict(_db((WID, _held(2))), chats=_beat(linkedin="out")), T,
