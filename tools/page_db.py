@@ -2593,6 +2593,27 @@ def busy_beat(db: dict, chat_id: str, chat_kind: str, now: dt.datetime, out_dir:
     return w.save("busy")
 
 
+def clear_busy(db: dict, chats, out_dir: str, dump_dir: str = "") -> list[str]:
+    """The batch that takes the busy line off the page for each chat in `chats` that has one:
+    chats put away (archived or gone) or handed on, which do nothing for the person any more.
+    Only `busy` changes, pinned to the version read; a chat with no line, or not in the read,
+    is left alone. A page chat archived after a fresh one took the page over left "Job search:
+    reading 40 postings, about half done" on Claude's work panel, work no chat was doing
+    (issue 318)."""
+    gone = {safe_id(str(c)) for c in chats or () if str(c or "").strip()}
+    w = Writes(out_dir, db)
+    for cid, doc in sorted((db.get("chats") or {}).items()):
+        if cid not in gone or doc.get("old") or not (doc.get("data") or {}).get("busy"):
+            continue
+        w.add("update", "chats", cid, {"busy": None}, if_version=doc.get("version"))
+    if not w.entries:
+        return []
+    batches = w.save("busy-gone")
+    if dump_dir:
+        keep_landed(dump_dir, batches)
+    return batches
+
+
 # ------------------------------------------------------------------ finishing and asking, by code
 
 # A chat wrote these by hand, a write at a time, and looked up their shape each time (a
@@ -2791,7 +2812,7 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
            question: str = "", about: str = "", answer: dict | None = None,
            answered=(), left_out: str = "", outcome: str = "", signin: str = "",
            go=(), me: str = "", add: bool = False, whom=(), queue=(),
-           drafted: int | None = None, short: str = "") -> dict:
+           drafted: int | None = None, short: str = "", proven: bool = False) -> dict:
     """The batch that finishes one work item (the app skill, step 5): the item `done` (or
     `failed`, with `error` in plain words, or `stopped` after their Stop), its one-sentence
     summary and links, pinned to the version read; each of its locks the dump holds, deleted
@@ -2816,6 +2837,8 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
     `drafted` and `short`: a people run asked for a number (`network_target`) says how many it
     drafted, and is done only at that number; short of it, only with `short` saying why no more
     good people were found, kept as part-done (`result.short`, short_of_target).
+    `proven`: a read for the computer whose every profile is proven read already (app.py
+    read_proven), so any chat may finish it as done while no chat is at it (issue 318).
     {work, status, thread, message, locks, batches}. Raises ValueError, in plain words, for a
     summary that will not do or a reply with no thread; KeyError for an item not in the dump
     or already finished."""
@@ -2878,17 +2901,23 @@ def finish(db: dict, work_id: str, now: dt.datetime, out_dir: str, summary: str 
         not _live_claim(item, now, db.get("work") or {})
     withdrawn = status == "stopped" and not item.get("stop_asked") and not question and \
         (unstarted or cur == "needs_you" or quiet)
+    # A repeat of a read already done and saved, closed as done the same way: only while no
+    # chat is at it (a read for the computer queued again before the first one's save reached
+    # this copy showed "Waiting for your computer" for good, issue 318).
+    proven = bool(proven) and status == "done" and not question and \
+        (unstarted or cur == "needs_you" or quiet)
     # `chat`: the id it was claimed under; `me`: this chat's own (not_its_claim).
-    taken = "" if withdrawn else not_its_claim(item, chat, me)
+    taken = "" if withdrawn or proven else not_its_claim(item, chat, me)
     if taken:
         raise KeyError(taken)
     refused = computer_only(item, claimed_kind(item, chat_kind, chat))
     if withdrawn and not " ".join(str(summary or "").split()):
         raise ValueError("say why it is called off, in one short sentence (--summary)")
-    if refused and not (status == "stopped" and (item.get("stop_asked") or withdrawn)):
+    if refused and not proven and not (status == "stopped" and (item.get("stop_asked")
+                                                                or withdrawn)):
         raise ValueError(f"not finished: {refused}")
     if chat and str(item.get("status") or "queued") == "queued" and not item.get("claimed_by") \
-            and status != "stopped":
+            and status != "stopped" and not proven:
         # Read before its claim landed: pinned to the version before the claim, the finish was
         # refused, and the holds the claim made were never freed (a person's computer,
         # 2026-11-09: a hold deleted by hand).

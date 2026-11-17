@@ -531,6 +531,31 @@ def archived() -> list[dict]:
         return []
 
 
+def put_away() -> set[str]:
+    """The chats recorded as put away (archived, or gone), and not brought back since."""
+    return {str(a["id"]) for a in archived() if a.get("id") and not a.get("restored")}
+
+
+BUSY_GONE_SAID = ("then: send this batch (ArtifactData batch), asking nobody and saying nothing "
+                  "about it: it takes the busy line of a chat put away off the page, so the "
+                  "page never shows work no chat is doing")
+
+
+def busy_gone(dump: str, chats, out: str = "", keep: bool = True) -> list[str]:
+    """The batch that takes the busy line of each chat in `chats` off the page, from the read
+    in `dump` (it must hold the page's heartbeats, `beats`), or [] (issue 318). `keep`: the
+    folder is left as the batch leaves it (a caller that keeps its own batches says False)."""
+    import page_db
+    if not dump or not chats or not page_db.read_has(dump, "chats"):
+        return []
+    try:
+        db = page_db.load(dump)
+    except Exception:  # noqa: BLE001  not a dump: nothing to take off
+        return []
+    return page_db.clear_busy(db, chats, out or os.path.join(dump, "busy-gone"),
+                              dump_dir=dump if keep else "")
+
+
 def _is_apps(title) -> bool:
     return bool(APP_TITLE.match(str(title or "").strip()))
 
@@ -642,12 +667,11 @@ def details(pages) -> dict:
 
 
 def _repo_of(d: dict) -> str:
-    for src in ((d.get("session_context") or {}).get("sources") or []):
-        url = str(((src or {}).get("git_repository") or {}).get("url") or "")
-        m = re.search(r"github\.com[/:]([^/]+/[^/.]+)", url)
-        if m:
-            return m.group(1).lower()
-    return ""
+    """The copy a chat works on, "owner/name" in small letters, from get_session's sources.
+    The app itself, attached beside the copy in the maintainer's own (app_bug.attach_app), is
+    never taken for it, whichever is listed first (issue 318)."""
+    import routines
+    return routines._copy_of(d)
 
 
 def _branches_of(d: dict) -> list[str]:
@@ -1899,7 +1923,7 @@ def retire(old: str, d: dict | None, repo: str, branches: set[str] | None,
     status = _status(None, d)
     if "archived" in status:
         return "archived", title
-    if _running(status) or "requires_action" in status or "blocked" in status:
+    if _at_work(d):
         return "keep", "it is still at work"
     where = _repo_of(d)
     if where and where != repo.lower():
@@ -1909,6 +1933,17 @@ def retire(old: str, d: dict | None, repo: str, branches: set[str] | None,
             _ago_s(last, now) >= RETIRE_SAVED_S and saved_since(d, branches, github, last)):
         return "keep", "it puts itself away once its work is saved"
     return "archive", title
+
+
+def _at_work(d: dict | None) -> bool:
+    """Is the chat get_session described (`d`) at work: running, or waiting on an approval or a
+    question? Gone, archived or unknown is not."""
+    if not d or d.get("gone"):
+        return False
+    status = _status(None, d)
+    if "archived" in status:
+        return False
+    return _running(status) or "requires_action" in status or "blocked" in status
 
 
 RETIRE_QUIET_S = 24 * 3600     # an old helper quiet this long is put away by the new one
@@ -1946,6 +1981,12 @@ def run_retire(a) -> int:
                         on_github())
     if what != "read":
         mark_retire(now)          # asked about again only RETIRE_AGAIN_S on (due)
+    gone: list = []
+    if what != "read" and not _at_work(got.get(old)):
+        # It has handed the page on and is doing nothing, put away or not yet: its busy line
+        # comes off the page now, never left saying work runs that no chat is doing (issue 318).
+        gone = busy_gone(a.dump, {old})
+    first = "First send the batch below. " if gone else ""
     if what == "read":
         print(f"retire: get_session (session_id {old}), then python3 tools/tidy.py retire "
               f"--dump \"{a.dump}\" --stdin with {{\"details\": <what get_session returned>}} in "
@@ -1955,18 +1996,22 @@ def run_retire(a) -> int:
     if what in ("archived", "gone"):
         # Gone (deleted): recorded as such, so the tidy-up rests and Undo never tries it.
         _record([old], {old: said}, now.date().isoformat(), gone=(what == "gone"))
-        print(f"retire: {old} is put away already, and recorded. Nothing more; say nothing "
-              "about it.")
-        return 0
-    if what == "keep":
-        print(f"retire: the helper this chat took the page from, {old}, is kept for now "
-              f"({said}); the next check-in tries again; archive nothing by hand, and say "
+        print(f"retire: {old} is put away already, and recorded. {first}Nothing more; say "
               "nothing about it.")
-        return 0
-    _plan_titles({old: said})
-    print(f"retire: archive_session {json.dumps({'session_id': old})}, then python3 "
-          f"tools/tidy.py closed {old}; commit it with this turn's work. Refused: leave it, the "
-          "next check-in tries again. Say nothing about it.")
+    elif what == "keep":
+        print(f"retire: the helper this chat took the page from, {old}, is kept for now "
+              f"({said}); the next check-in tries again; "
+              + ("send the batch below, " if gone else "") +
+              "archive nothing by hand, and say nothing about it.")
+    else:
+        _plan_titles({old: said})
+        print(f"retire: {first}archive_session {json.dumps({'session_id': old})}, then python3 "
+              f"tools/tidy.py closed {old}; commit it with this turn's work. Refused: leave it, "
+              "the next check-in tries again. Say nothing about it.")
+    if gone:
+        print(BUSY_GONE_SAID + ":")
+        for p in gone:
+            print(p)
     return 0
 
 
@@ -2107,6 +2152,13 @@ def main(argv: list[str]) -> int:
                 print("then: send this batch (ArtifactData batch), asking nobody: it marks the "
                       "day's tidy-up on the page, so no other chat runs it again today")
                 for p in paths:
+                    print(p)
+            # Every chat put away, today or by an older version: its busy line comes off the
+            # page by itself, so a line left behind never says work runs that no chat is doing.
+            gone = busy_gone(a.dump, put_away())
+            if gone:
+                print(BUSY_GONE_SAID + ":")
+                for p in gone:
                     print(p)
         return 0
     gone = [x for x in archived() if not x.get("gone")]      # a deleted chat cannot come back
