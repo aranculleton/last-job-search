@@ -68,9 +68,11 @@ ABSOLUTELY NECESSARY"). What the app should do, a design choice, a default, an i
 no bug: decide it the soundest way, do it (fix it, or close it with one comment saying why in
 two lines), and never hand it back. `needs-maintainer` is only for what truly cannot be done
 without them: their money, their credentials or personal data, or a step only their hand can
-make (below). **One you could not
-fix**: it stays open, with one comment saying why in two lines, never a second comment for the
-same reason in a later week.
+make (below). **The release always waits for everything to be fixed** (the maintainer,
+2026-11-17: "THE RELEASE ALWAYS WAITS FOR EVERYTHING TO BE FIXED"): a hard one is kept at
+until it is fixed at its cause, never left for a later week or taken out of the batch to ship
+the rest. Only one that needs the maintainer's own hand (below) waits for them without holding
+the release.
 
 **One only the maintainer's hand can finish** (a permission rule in `.claude/settings.json`,
 which Auto never lets a chat change, or a check on their own computer): do all the rest of it
@@ -100,17 +102,18 @@ reply in one line; then they can switch the chat back to Auto.
    a quarter of an hour), so also start one background wait, Bash `run_in_background` with
    `sleep 2400`, and when it ends read the pull request's checks once: still running, one
    more such wait (four at most); finished, carry on as below.
-   Red: read only the failing lines, fix, and push with the gate again; a fix you cannot make
-   is taken out of the batch, its issue left as step 3 says.
+   Red: read only the failing lines, fix at the cause, and push with the gate again, as many
+   rounds as it takes: the release waits, and nothing is taken out of the batch to ship the
+   rest.
 6. **Merge only when Fast checks, Everywhere, Platforms and both rehearsals are green**, and
    before 07:30 UK time, so the maintainer's brief takes it (`python3 tools/app_bug.py window
    <the maintainer's copy>` says how long to wait where a merge would fall in the window of
    their own scheduled tasks: wait that long with a background run, Bash `run_in_background`).
    Not green by then: merge once it is, clear of that window. **A red Everywhere or Platforms
-   leg is your call too, never theirs:** one this batch did not cause (no file it changed is
-   one the failing test runs) that fails again on its one re-run, or fails a different test
-   each time, does not hold the release once Fast checks and both rehearsals are green: merge,
-   and say in one comment on the pull request what failed and why it did not hold it.
+   leg holds the release too, whatever caused it:** one this batch did not cause (no file it
+   changed is one the failing test runs) is fixed at its cause all the same, in this batch or
+   as its own fix merged first, never released around; "flaky" is no cause, and a job gets one
+   re-run at most.
    Merge it (squash) and unsubscribe: `release.yml` then tags it, and `tools/release.py publish` closes every
    `fixed-unreleased` issue with "Fixed in vX.Y.Z".
 
