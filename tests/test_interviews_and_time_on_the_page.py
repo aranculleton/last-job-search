@@ -338,12 +338,15 @@ def test_what_was_sent_is_said_even_with_no_file_name(run, tmp_path):
 @pytest.mark.parametrize("vp", [PHONE, WIDE], ids=["phone", "wide"])
 def test_coming_up_reads_your_prep_with_the_pill_to_do_has(run, tmp_path, vp):
     # The UX review of 2026-11-10 (U-12): the night before, the key action in Coming up was a
-    # small underlined "Prep ready" while To do called it "Read your prep". It is the row's pill,
-    # in the same words, and Prepare me is a pill too.
-    look = ("[...document.querySelectorAll('#main .up-prep .btn')].map((b) => [b.textContent.trim(), b.classList.contains('link')])")
+    # small underlined "Prep ready" while To do called it "Read your prep". Since the redesign's
+    # phase 2 (2026-11-17) the row is its own tap to read it, with a "Prep ready" chip, never an
+    # underlined link; Prepare me is a pill, on the next interview with none.
+    look = ("(() => ({pills: [...document.querySelectorAll('#main .up-prep .btn')].map((b) => [b.textContent.trim(), b.classList.contains('link')]),"
+            " ready: [...document.querySelectorAll('#main .up-row.opens .up-sub .state-word')].map((c) => [c.textContent, c.tagName, c.closest('a') === null]),"
+            " links: document.querySelectorAll('#main .up-row .btn.link').length}))()")
     got = _go(run, tmp_path, [{"hash": "interviews", "eval": look}, {"hash": "todo", "eval": (
         "[...document.querySelectorAll('#main [data-item=\"soon:int-larkspur-supply\"] .card-actions .btn')].map((b) => b.textContent.trim())")}], vp=vp)
     rows, todo = got["after"][0]["eval"], got["after"][1]["eval"]
-    assert ["Read your prep", False] in rows and ["Prepare me", False] in rows, rows
-    assert "Prep ready" not in [r[0] for r in rows] and not any(link for _t, link in rows), rows
+    assert rows["pills"] == [["Prepare me", False]], rows
+    assert ["Prep ready", "SPAN", True] in rows["ready"] and rows["links"] == 0, rows
     assert "Read your prep" in todo, todo
