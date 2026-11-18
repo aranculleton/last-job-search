@@ -1132,7 +1132,11 @@ def _old_starter_card(ctx: Ctx, targets: dict) -> list:
         return []
     day = parse_time(old.get("at"))
     when = (" from " + day.strftime("%a ") + str(day.day) + day.strftime(" %b")) if day else ""
-    body = ("An older chat called “" + computer.STARTER_TITLE + "”" + when + " is not used "
+    # By the name it has in their list (computer.starter_title): "Job search: starts chats on
+    # your computer" for one made before the app's chats were named Last Job Search and never
+    # renamed, never a name it may not have.
+    name = old.get("title") or computer.starter_title(old)
+    body = ("An older chat called “" + name + "”" + when + " is not used "
             "any more: a newer one took its place. Claude can't archive it, because it holds "
             "your OK to use your computer. Archive it in your chat list, then tap Done.")
     item = {"id": "q-old-starter", "kind": "setup", "title": "One old chat to archive",

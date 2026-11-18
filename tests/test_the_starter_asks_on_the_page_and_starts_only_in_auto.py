@@ -109,7 +109,9 @@ def test_the_lost_auto_is_one_card_and_the_works_line_with_the_chat_named(tmp_pa
     assert card["title"] == "Switch one chat back to Auto"
     assert card["open"] == {"label": "Open it",
                             "url": "https://claude.ai/code/session_starterEXAMPLE"}
-    assert computer.STARTER_TITLE in card["body"] and "People at Harbourline Bank" in card["body"]
+    # By the name it has: made before the app's chats were renamed, and not renamed.
+    assert computer.OLD_STARTER_TITLE in card["body"] and "People at Harbourline Bank" in \
+        card["body"]
     steps = card["steps"]
     assert [s.split(".")[0] for s in steps] == [str(n) for n in range(1, len(steps) + 1)]
     assert any("Accept edits" in s for s in steps) and any("choose Auto" in s for s in steps)
@@ -218,7 +220,8 @@ def test_the_starters_ask_reaches_to_do_wherever_the_page_is_drawn(tmp_path, mon
     assert card["title"] == "Switch one chat back to Auto" and card["open"]["url"].endswith(
         STARTER["chat"])
     row = built["where"]["computer"]
-    assert row["say"] == computer.SAY["starter_mode"] and row["asks"] == "mode"
+    assert row["say"] == computer.SAY["starter_mode"].format(
+        title=computer.OLD_STARTER_TITLE) and row["asks"] == "mode"
     # A chat started on the computer since: the ask is over.
     started = _apply(woke, computer.started(woke, WID, "session_macEXAMPLE", "env_bridge1",
                                             "Studio Laptop", T + timedelta(minutes=5),
