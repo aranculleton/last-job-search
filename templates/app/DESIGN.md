@@ -173,7 +173,9 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   empty 0% bar, said two things at once (the screen review, 2026-11-18). Waiting work says
   "Claude starts this next" in plain words, never "Claude's helper". Making a resume downloadable is a stage of the resume's own card,
   "On its way", never a card of its own (#237). (queue test)
-- Claude's work says its count once, in the header's pill: no line under its title repeats
+- Claude's work says its count once, in the header's pill: where its words would cut a phone's
+  screen name it says a short form that keeps a word ("2 busy", "1 question", "1 done"), never a
+  bare number beside a spinner (the screen review, 2026-11-18); no line under its title repeats
   it, and "Nothing is sent." is not said over the cards. Each running or waiting card has its
   title, one short state with its clock ("Waking Claude · 1m 4s", never a chip and a line
   both saying it), its bar (none once it runs past its estimate: its time so far says how long,

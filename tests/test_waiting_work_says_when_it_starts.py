@@ -109,7 +109,9 @@ def test_beside_claudes_work_a_cards_line_says_its_state_and_the_panel_the_rest(
 
 
 PILL = ("(() => { const p = document.querySelector('#pill'); const r = p.getBoundingClientRect();"
-        " return {tight: p.classList.contains('tight'), w: r.width, min: getComputedStyle(p).minWidth}; })()")
+        " const c = p.querySelector('.pill-count');"
+        " return {tight: p.classList.contains('tight'), w: r.width, min: getComputedStyle(p).minWidth,"
+        " count: c && c.getClientRects().length ? c.textContent : null}; })()")
 
 
 @pytest.mark.parametrize("where", ["contacts", "interviews"])
@@ -121,3 +123,5 @@ def test_on_a_phone_the_work_pill_with_its_count_alone_is_a_targets_width(run, t
     seen = got["after"][0]["eval"]
     assert seen["tight"], seen
     assert seen["min"] == "44px" and seen["w"] >= 43.5, seen
+    # Its short form keeps a word, never a spinner and a bare "2" (the screen review, 2026-11-18).
+    assert seen["count"] == "2 busy", seen

@@ -16944,7 +16944,10 @@
       going && !asking ? h("span", {class: "spin", "aria-hidden": "true"}) : h("span", {class: "dot tone-" + (asking || slow ? "warn" : !recent.length || act.length ? "plain" : "ok") + (!asking && !slow && act.length ? " is-waiting" : ""), "aria-hidden": "true"}),
       // Where its words would cut the screen's name on a phone, the pill says its count
       // (fitTop), its words kept for a screen reader.
-      h("span", {class: "pill-words"}, words), h("span", {class: "pill-count", "aria-hidden": "true"}, String(asking || going + queued.length || starting + helperGoing || recent.length)),
+      // Its short form keeps a word: a spinner and a bare "2" said nothing (the screen review,
+      // 2026-11-18).
+      h("span", {class: "pill-words"}, words), h("span", {class: "pill-count", "aria-hidden": "true"},
+        asking ? plural(asking, "question", "questions") : going + queued.length ? (going + queued.length) + " busy" : starting + helperGoing ? (starting + helperGoing) + " starting" : recent.length + " done"),
       h("span", {class: "sr-only"}, ": show the work"));
   }
   // A phone's header never cuts the screen's name, its only visible title there: where the
