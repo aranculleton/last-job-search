@@ -10014,7 +10014,7 @@
     // day and taking it off, never a row of bare icons with gaps where one was missing. The whole
     // row opens it; only the next interview with no prep carries "Prepare me".
     const chip = upChip(u, prepped || new Set());
-    const step = upStep(u, nextPrep);
+    const step = upStep(u, nextPrep, leadRow);
     const menu = u.pending ? null : upMenu(u, [
       obj(u.cal).ics ? upMenuItem("Add to your calendar", () => calSheet([u]), "cal:" + u.id, "Add to your calendar: " + txt(u.title)) : null,
       upDayBtn(u) ? upMenuItem("Change the day", () => { S.upEdit = S.upEdit === u.id ? null : u.id; S.upTime = null; scheduleRender(); }, "up-day:" + u.id, "Change the day: " + txt(u.title)) : null,
@@ -10089,12 +10089,14 @@
     return null;
   }
   // The row's one step: practise on the days before (as To do leads, ivPractiseDay), else the
-  // next interview's prep to make.
-  function upStep(u, nextPrep) {
+  // next interview's prep to make, or to read where it is ready, as the Brief offers it: the
+  // next interview said "Prep ready" with no way to read it (the screen review, 2026-11-18).
+  function upStep(u, nextPrep, lead) {
     const iv = upIv(u);
     if (!iv) return null;
     const p = obj(iv.prep);
     if (p.updated && !p.stale && livePrep(iv) && ivPractiseDay(iv)) return h("span", {class: "up-prep"}, btn("Practise 3 questions", () => practisePrep(iv), {kind: "secondary", small: true, key: "up-drill:" + u.id, aria: "Practise 3 questions for " + txt(iv.company)}));
+    if (lead === u.id && p.updated && !p.stale) return h("span", {class: "up-prep"}, btn("Read your prep", () => openDetail("interview", iv.id), {kind: "secondary", small: true, key: "up-read:" + u.id, aria: "Read your prep for " + txt(iv.company)}));
     if (nextPrep !== u.id) return null;
     return h("span", {class: "up-prep"}, p.updated ? btn("Update my prep", () => askPrep(iv), {kind: "secondary", small: true, key: "up-prep:" + u.id, wakes: "prep", aria: "Update my prep for " + txt(iv.company)})
       : btn("Prepare me", () => askPrep(iv), {kind: "secondary", small: true, key: "up-prep:" + u.id, wakes: "prep", aria: "Prepare me for " + txt(iv.company)}));
@@ -10129,9 +10131,10 @@
     // Each day one card of rows under its day, "Wed 28 Oct", with a "Today" or "Tomorrow"
     // capsule beside it (the redesign, phase 2, 2026-11-17: seven cards under day headers).
     const nextPrep = upNextPrep(shown);
+    const lead = (shown.find((u) => u.kind === "interview") || {}).id;
     const cap = (day) => { const n = dayDiff(day); return n === 0 || n === 1 ? h("span", {class: "day-cap"}, n === 0 ? "Today" : "Tomorrow") : null; };
     return [h("ol", {class: "plain up-days", "data-k": "up-days"}, days.map(([day, rows]) => h("li", {class: "up-day" + dayMark(day)},
-      h("div", {class: "up-day-head"}, h("h3", {class: "group"}, fmtDay(day)), cap(day)), h("ul", {class: "plain up-list"}, rows.map((u) => upRow(u, "", prepped, nextPrep)))))),
+      h("div", {class: "up-day-head"}, h("h3", {class: "group"}, fmtDay(day)), cap(day)), h("ul", {class: "plain up-list"}, rows.map((u) => upRow(u, "", prepped, nextPrep, lead)))))),
       later.length ? h("p", {class: "up-later"}, btn("Show " + later.length + " more, to " + fmtDay(later[later.length - 1].day), () => { S.upLater = true; render(); }, {kind: "secondary", small: true, key: "up-later"})) : null];
   }
   // One way to add anything to Coming up, an interview first: "Add something" and "I have an

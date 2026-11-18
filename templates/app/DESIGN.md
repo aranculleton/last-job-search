@@ -459,7 +459,8 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   holding Add to your calendar, Change the day and taking it off: nothing reserves room for a
   tool a row does not have. The whole row opens what it is. Only the next interview whose prep
   is missing carries "Prepare me" on its row (a practice day leads with "Practise 3 questions",
-  as To do does); a row with no time yet has a soft "+ Add the time" under what it is. The
+  as To do does), and the next interview whose prep is ready carries "Read your prep", as the
+  Brief offers it (it said "Prep ready" with no way to read it, the screen review, 2026-11-18); a row with no time yet has a soft "+ Add the time" under what it is. The
   Brief's Coming up says the next interview's prep, ready, as a soft pill under its title, "Read
   your prep", the others' in the quiet words ("No prep yet"), never underlined words; "Prepare
   me", with its gauge, is on Coming up's row and To do's card, as beside it on the Brief it
