@@ -26,6 +26,14 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **No more holes between words on the Brief.** "Have   you used Looker?" and "Juno,   Wren and 5 more" had a wide gap mid-line where a line broke near a dot. The words now sit a space apart.
+- **Coming up lets you read the next interview's prep.** Its row said "Prep ready" with no way to open it; it now has "Read your prep", as the Brief does.
+- **A job waiting for Claude reads as waiting.** Its title stays beside its dot, with "Waiting for Claude" under it, no empty bar until Claude starts it, no line saying it runs in a chat of its own while it waits, and "Waiting:" over a single job. It says "Claude starts this next" rather than talking about a helper.
+- **The time on a running job starts with a capital letter** ("Under a minute so far · about 7 min left"), and the time left never splits over two lines.
+- **The work button at the top of a phone says what its number is**, such as "2 busy", never a spinner and a bare "2".
+- **Today's interview on the Brief is a box its own size**, never stretched to twice its height on a wide screen.
+- **Messages to send names one employer one way.** "Larkspur Retail" and "Larkspur Retail Ltd" showed as if they were two employers.
+- **The Brief's tip about your prep names its button in quotation marks**, and each line on the "Help Claude do more" card ends with a full stop.
 - **A change made by hand to one of the app's own files on your computer no longer stops every update.** Only a chat in the cloud could get past an unsaved change like that, so a copy on your computer with one never updated again. The update puts the app's own files back in any case, so your change is now kept in a folder called .set-aside, where nothing of it is lost, the app's file is put back and the update comes in, saying so once. Unsaved changes to your own files still wait for you, as before.
 - **A file of your own with the same name as one an update brings no longer stops every update.** On your computer nothing ever moved such a file out of the way, so the update stopped on it every day. It is now kept in the .set-aside folder, nothing of it lost, the app's own file takes its name and the update comes in, saying so once.
 - **The chat that looks after your page follows the newest instructions as soon as an update brings them.** The update's note to read them again reached only the helper doing the work for it, so a chat kept open for days went on following the instructions it started with. That note now comes back to the chat itself.
