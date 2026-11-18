@@ -501,6 +501,9 @@ function budgetProbe() {
     return {item: c.getAttribute("data-item"), words: wordsIn(c, false, true), controls: cs.length,
       answers: cs.filter((b) => b.classList.contains("answer")).length, icons: cs.filter((b) => b.classList.contains("icon-only") || b.classList.contains("q")).length, names: cs.filter((b) => b.classList.contains("name-link")).length, filled: cs.filter((b) => b.classList.contains("primary")).length,
       rows: cs.filter((b) => b.closest(".g-row") && !b.classList.contains("icon-only") && !b.classList.contains("name-link")).length,
+      // What folds or opens a draft's own words (its heading, "Read it all"), as "Why" opens a
+      // card's details: the words' own, never one of the card's actions (the redesign, 2026-11-16).
+      folds: cs.filter((b) => b.matches(".pdraft > summary, .read-all")).length,
       alerts: c.querySelectorAll(".alert, .suggest").length,
       labels: cs.map((b) => (b.getAttribute("aria-label") || b.textContent || "").replace(/\s+/g, " ").trim().slice(0, 24))};
   });
@@ -713,14 +716,18 @@ function layoutMeasure() {
       // A More holding one action shows that action in its place (4.3): it fills the More's
       // slot, not a button's.
       // A card's details fold ("Why", "Details") opens it as a summary does: not an action.
-      buttons: own("button, a.btn").filter((b) => !b.closest("summary, .suggest, .alert, .warm, .g-row") && !b.classList.contains("answer") && !b.classList.contains("q") && !b.classList.contains("icon-only") && !b.classList.contains("info-toggle") && !b.hasAttribute("data-more")).length,
+      // A draft's own tools on its heading line, Copy beside the pencil, are the draft's, and its
+      // "Read it all" opens its words as a fold does: the card's actions are its row (the
+      // redesign, 2026-11-16: I sent it and They replied, DESIGN.md, Contacts).
+      buttons: own("button, a.btn").filter((b) => !b.closest("summary, .suggest, .alert, .warm, .g-row") && !b.classList.contains("answer") && !b.classList.contains("q") && !b.classList.contains("icon-only") && !b.classList.contains("info-toggle") && !b.classList.contains("bubble-copy") && !b.classList.contains("read-all") && !b.hasAttribute("data-more")).length,
       // A checklist card's rows are its items, each with its own one action beside its bin
       // (DESIGN.md, "Many of one small thing"): counted a row at a time, never as the card's.
       rowButtons: Math.max(0, ...own(".g-row").map((r) => [...r.querySelectorAll("button, a.btn")].filter((b) => vis(b) && !b.classList.contains("icon-only")).length)),
       // A person's name that opens them is the card's title, not one of its links.
       links: own("a:not(.btn)").filter((x) => !x.closest(".suggest, .alert, .warm") && !x.classList.contains("name-link")).length, more: own("details.more, details.more-menu, summary.more-btn, [data-more]").length,
       own: c.matches(OWN_STEP), primary: own(".btn.primary, .btn.next").length,
-      factLines: c.matches(OWN_STEP) ? lines(own(":scope > .job-main > .org, :scope > .job-main > .facts, :scope > .app-main > .org, :scope > .app-main > .facts, :scope > .org, :scope > .facts, :scope > .meta")) : 0};
+      factLines: c.matches(OWN_STEP) ? lines(own(":scope > .job-main > .org, :scope > .job-main > .facts, :scope > .app-main > .org, :scope > .app-main > .facts, :scope > .org, :scope > .facts, :scope > .meta")) : 0,
+      w: Math.round(c.getBoundingClientRect().width)};
   });
   const named = [...main.querySelectorAll("button, a, input, select, summary")].filter(vis).map(name).filter(Boolean);
   const dupNames = named.filter((n, i) => named.indexOf(n) !== i);
@@ -917,8 +924,14 @@ function drawnProbe(allow) {
     if (s.position !== "fixed" && el.parentElement && el.parentElement !== document.documentElement) { const up = clipOf(el.parentElement); r = Object.assign({}, up, {by: Object.assign({}, up.by)}); }
     if (s.overflowX !== "visible" || s.overflowY !== "visible") {
       const b = el.getBoundingClientRect();
-      if (s.overflowX !== "visible") { if (b.left > r.l) { r.l = b.left; r.by.l = el; } if (b.right < r.r) { r.r = b.right; r.by.r = el; } }
-      if (s.overflowY !== "visible") { if (b.top > r.t) { r.t = b.top; r.by.t = el; } if (b.bottom < r.b) { r.b = b.bottom; r.by.b = el; } }
+      // Where a box that scrolls ends at the same edge as the box round it that hides (a card's
+      // body inside its dialog, both ending at the foot of a phone's screen), what is cut there
+      // is the scroller's to scroll to: the outer box was named, and a row half past a long
+      // card's foot read as cut off for good (the redesign, 2026-11-16).
+      const sx = s.overflowX === "auto" || s.overflowX === "scroll", sy = s.overflowY === "auto" || s.overflowY === "scroll";
+      const tie = (x, y) => Math.abs(x - y) < 0.5;
+      if (s.overflowX !== "visible") { if (b.left > r.l || (sx && tie(b.left, r.l))) { r.l = b.left; r.by.l = el; } if (b.right < r.r || (sx && tie(b.right, r.r))) { r.r = b.right; r.by.r = el; } }
+      if (s.overflowY !== "visible") { if (b.top > r.t || (sy && tie(b.top, r.t))) { r.t = b.top; r.by.t = el; } if (b.bottom < r.b || (sy && tie(b.bottom, r.b))) { r.b = b.bottom; r.by.b = el; } }
     }
     clipCache.set(el, r);
     return r;
@@ -1114,7 +1127,19 @@ function drawnProbe(allow) {
     const q = c.getBoundingClientRect();
     const sibs = [...row.children].filter((k) => k !== own && !k.matches(".more-panel, .more-body") && shown(k) && k.getBoundingClientRect().width > 0);
     if (!sibs.length) continue;
-    if (!sibs.some((k) => sameLine(k.getBoundingClientRect(), q))) say("alone", c, (c.matches("summary") ? "More" : "the bin") + " alone on its line beside " + sibs.length + " other" + (sibs.length > 1 ? "s" : ""));
+    if (sibs.some((k) => sameLine(k.getBoundingClientRect(), q))) continue;
+    // One case only: More after a button with its gauge that fill the line above by themselves.
+    // The two never part (DESIGN.md, Buttons: a gauge is one with its button), so nothing can
+    // go down with More and it takes the next line on its own (the redesign's second round,
+    // 2026-11-17). Anything else on that line, or a gauge apart from its button, is still alone.
+    if (c.matches("summary")) {
+      let prev = own.previousElementSibling;
+      while (prev && !(shown(prev) && prev.getBoundingClientRect().width > 0)) prev = prev.previousElementSibling;
+      const b = prev && prev.matches(".cost") ? prev.previousElementSibling : null;
+      const g = prev ? prev.getBoundingClientRect() : null;
+      if (b && b.matches("[data-wakes]") && shown(b) && sameLine(b.getBoundingClientRect(), g) && !sibs.some((k) => k !== b && k !== prev && sameLine(k.getBoundingClientRect(), g))) continue;
+    }
+    say("alone", c, (c.matches("summary") ? "More" : "the bin") + " alone on its line beside " + sibs.length + " other" + (sibs.length > 1 ? "s" : ""));
   }
   // (f) faint words.
   const rgba = (s) => { const m = /rgba?\(([^)]+)\)/.exec(s || ""); if (!m) return null; const p = m[1].split(/[ ,/]+/).filter(Boolean).map(Number); return [p[0], p[1], p[2], p.length > 3 ? p[3] : 1]; };
@@ -1366,6 +1391,14 @@ S.engine = async (a) => {
     if (st.then) { await page.getByRole("button", {name: st.then, exact: !!st.exact}).first().click(); await turn(page, 6); }
     // The mouse moved onto a control and left there, as a person reading with a mouse does.
     if (st.hover) { await page.locator(st.hover).first().hover(); await turn(page, 2); }
+    // Keys pressed one after another on the keyboard, each to whatever has the focus then
+    // (Tab, Enter, Escape), and a tap with the mouse on a part of the screen that is no control
+    // (beside an open menu, 2026-11-17).
+    // Tab as a keyboard user presses it in each engine: Safari moves to a button only with Option
+    // (Alt) held, unless the person turned on "Press Tab to highlight each item", and its plain
+    // Tab left the focus on a menu's button (the everywhere check, Safari, 2026-11-17).
+    for (const k of [].concat(st.press || [])) { await page.keyboard.press(ENGINE === "webkit" ? k.replace(/^(Shift\+)?Tab$/, "Alt+$&") : k); await turn(page, 3); }
+    if (st.tapOn) { await page.locator(st.tapOn).first().click({force: true}); await turn(page, 3); }
     // A finger's tap on a screen with touch (`touch`): the touch, then the mouse's events and
     // the click a phone makes of it, the focus they give included. A click is a mouse's alone.
     if (st.finger) { await (st.within ? page.locator(st.within) : page).getByRole(st.role || "button", {name: st.finger, exact: !!st.exact}).first().tap(); await turn(page, 6); }
@@ -2015,8 +2048,11 @@ S.two_asks = async (a) => {
 S.general_resume = async (a) => {
   const o = await open({html: a.html, hash: "jobs", fake: {canSend: "available"}});
   const {page} = o;
-  const r = {link: await page.evaluate(() => (document.querySelector('#main [data-k="jobs-resume"]') || {}).textContent || "")};
-  await page.locator('#main [data-k="jobs-resume"]').click();
+  // The header's pill on a computer, the link at the end of Jobs' line on a phone: whichever
+  // is on the screen, one tap.
+  const cv = page.locator('#main :is([data-k="jobs-resume"], [data-k="jobs-resume-line"])').locator("visible=true").first();
+  const r = {link: ((await cv.textContent().catch(() => "")) || "").trim()};
+  await cv.click();
   await turn(page, 6);
   r.hash = await page.evaluate(() => location.hash);
   r.card = await page.evaluate(() => (document.querySelector('#main [data-item="resume-general"], #main #gen-resume') || {}).textContent || "");
@@ -2042,9 +2078,13 @@ S.coming_up = async (a) => {
   r.rows = await page.$$eval('[data-k="up-days"] .up-row', (x) => x.map((e) => e.getAttribute("data-item")));
   r.when = await page.$$eval('[data-k="up-days"] .up-row .up-when', (x) => x.map((e) => e.textContent));
   r.prep = await page.$$eval('[data-k^="up-prep:"], [data-k^="up-read:"]', (x) => x.map((e) => e.getAttribute("data-k") + "=" + e.textContent));
+  r.chips = await page.$$eval('[data-k="up-days"] .up-row .up-sub .state-word', (x) => x.map((e) => e.textContent));
   r.nav = await txt('[data-k="side:interviews"] .navcount');
   r.sum = await txt("#main .summary");
-  // One item into a calendar: the choices, Google's link, the file, and the choice kept.
+  // One item into a calendar: the choices, Google's link, the file, and the choice kept. It is
+  // under the row's one More (the redesign, phase 2, 2026-11-17).
+  await page.locator('[data-k="up-more:up-app-larkspur-supply-phone-screen-2026-10-28"]').click();
+  await turn(page, 2);
   await page.locator('[data-k="cal:up-app-larkspur-supply-phone-screen-2026-10-28"]').click();
   await turn(page, 2);
   const keys = (sel) => page.$$eval(sel, (x) => x.map((e) => e.getAttribute("data-k") || (e.querySelector("[data-k]") || {getAttribute: () => ""}).getAttribute("data-k")));
@@ -2058,6 +2098,8 @@ S.coming_up = async (a) => {
   await page.locator('[data-k="cal-close"]').click();
   await turn(page, 2);
   r.closed = await page.evaluate(() => !document.querySelector("dialog.cal-sheet"));
+  await page.locator('[data-k="up-more:up-call-harbourline-bank-bea-2026-10-29"]').click();
+  await turn(page, 2);
   await page.locator('[data-k="cal:up-call-harbourline-bank-bea-2026-10-29"]').click();
   await turn(page, 2);
   r.firstAfter = (await keys("dialog.cal-sheet .cal-choices > *"))[0] || "";
@@ -2090,6 +2132,8 @@ S.coming_up = async (a) => {
   r.added = store.list("actions/").map((k) => store.get(k)).filter((d) => d.action === "upcoming.add");
   r.saving = await page.$$eval('[data-k="up-days"] .up-row', (x) => x.map((e) => e.textContent).filter((t) => t.includes("Coffee with")));
   // The person's own one taken off.
+  await page.locator('[data-k="up-more:up-ev20261020120000"]').click();
+  await turn(page, 2);
   await page.locator('[data-k="up-rm:up-ev20261020120000"]').click();
   await turn(page, 6);
   r.removed = store.list("actions/").map((k) => store.get(k)).filter((d) => d.action === "upcoming.remove");
@@ -2152,7 +2196,10 @@ S.fixes_1031 = async (a) => {
     status: "queued", stages: [], stage: 0, steps: [], stop_asked: false, attempt: 1}, extra);
   const r = {};
   // 1. The Brief on a wide screen, the data three days old.
-  let o = await open({html: a.html, hash: "brief", viewport: {width: 1440, height: 900}, clock: T, fake: {canSend: "available"}, seed: {
+  // A 15-inch laptop's window: with Claude's work beside it, a 1440 window's Brief says its
+  // numbers in one line under the greeting since the redesign's 15px words (2026-11-16), and the
+  // chart this step points at is the panel's.
+  let o = await open({html: a.html, hash: "brief", viewport: {width: 1680, height: 1050}, clock: T, fake: {canSend: "available"}, seed: {
     "work/draft~started": doc({status: "running", claimed_by: "cloud-1", claimed_at: at(-60), stage_at: at(-60), steps: [{at: at(-60), text: "Starting"}]}),
     "meta/listen": {chat: "cloud-1", kind: "cloud", since: at(-7200), answered_at: at(-30), watching: true}}});
   let {page} = o;
@@ -2332,14 +2379,18 @@ S.you = async (a) => {
   await goto(page, "settings");
   await page.locator('[data-k="open-profile"]').first().click();
   await turn(page, 3);
-  await page.getByRole("button", {name: "Add or take off"}).first().click();
+  await page.getByRole("button", {name: "Change skills"}).first().click();
   await turn(page, 3);
   dlg = page.locator("dialog.sheet");
   await dlg.getByLabel("Power BI").uncheck();
   await dlg.getByLabel(/^Add skills/).fill("Looker, SQL");
   await dlg.getByRole("button", {name: "Save"}).click();
   await turn(page, 6);
-  await page.getByRole("button", {name: "Take Graduate Analyst at Saltmarsh Analytics off"}).first().click();
+  // A past job is a row that opens its own sheet, where taking it off is the last thing (the
+  // redesign's second round, 2026-11-17).
+  await page.getByRole("button", {name: "Graduate Analyst at Saltmarsh Analytics"}).first().click();
+  await turn(page, 3);
+  await page.locator("dialog.sheet").getByRole("button", {name: "Take this job off: Graduate Analyst at Saltmarsh Analytics"}).click();
   await turn(page, 3);
   await page.locator("dialog.sheet").getByRole("button", {name: "Take it off"}).click();
   await turn(page, 6);
@@ -2401,7 +2452,10 @@ S.downloads = async (a) => {
   await turn(page, 8);
   r.saves = (await calls(page)).filter((c) => c.cap === "downloads");
   r.note = await T(page, '#main [data-item="app-ellerwick-insight"] .note');
-  // Its question answered and done: then the draft asks for its files.
+  // Its question answered and done: then the draft asks for its files. A "Did you apply"
+  // question waits in Jobs' one fold under the list (the redesign, phase 2).
+  await page.locator('[data-k="jobs-confirm"]').click();
+  await turn(page, 2);
   await page.locator('#main [data-item="app-quayside-demand"]').getByRole("button", {name: "Not yet"}).click();
   await turn(page, 4);
   for (const p of store.list("actions/")) store.chat("receipts/" + p.split("/")[1], {applied_at: new Date().toISOString(), by: "cloud-1", result: "ok", note: ""});
@@ -2446,11 +2500,17 @@ S.last_used = async (a) => {
   const {page} = o;
   await page.$$eval("#main details:not([open])", (ds) => ds.forEach((d) => { if (d.querySelector(".pdraft, [data-card]") || d.classList.contains("band-more")) d.open = true; }));
   await turn(page, 4);
-  const ids = await page.$$eval("#main .pdraft[data-msg]", (xs) => xs.filter((x) => x.querySelector(".bubble-copy") && x.closest("[data-card]").getClientRects().length).map((x) => x.getAttribute("data-msg")));
+  // A draft's Copy is its card's step beside I sent it, under the draft, since the redesign's
+  // second round (2026-11-17), keyed by the draft's words (app.js draftParts: "copy:msgt-<id>").
+  const copyKey = (id) => "copy:msgt-" + String(id).replace(/[^A-Za-z0-9_\-.~:@+]/g, "-").slice(0, 150);
+  const drafts = await page.$$eval("#main .pdraft[data-msg]", (xs) => xs.filter((x) => { const c = x.closest("[data-card]"); return c && c.getClientRects().length; }).map((x) => x.getAttribute("data-msg")));
+  const ids = [];
+  for (const id of drafts) if (await page.locator('#main [data-card] .bubble-copy[data-k="' + copyKey(id) + '"]').count()) ids.push(id);
   const first = a.first || ids[0];
   const second = a.second || ids[ids.length - 1];
   const box = (id) => '#main .pdraft[data-msg="' + id + '"]';
   const cardOf = (id) => page.locator(box(id)).locator("xpath=ancestor::*[@data-card][1]");
+  const copyOf = (id) => cardOf(id).locator('.bubble-copy[data-k="' + copyKey(id) + '"]');
   const leave = async (how) => {
     await page.evaluate(() => { const se = document.scrollingElement || document.documentElement; se.scrollTop = 0; window.scrollTo(0, 0); });
     await page.evaluate((w) => {
@@ -2487,7 +2547,7 @@ S.last_used = async (a) => {
       kept};
   }, [box(id), id]);
   const r = {ids, first, second};
-  await page.locator(box(first) + " .bubble-copy").click();
+  await copyOf(first).click();
   await turn(page, 4);
   r.afterCopy = await read(first);
   await leave(a.how || "hidden");
@@ -2498,7 +2558,7 @@ S.last_used = async (a) => {
   await turn(page, 4);
   r.later = await read(first);
   // A second card's Copy moves the mark.
-  await page.locator(box(second) + " .bubble-copy").click();
+  await copyOf(second).click();
   await turn(page, 4);
   await leave(a.how || "hidden");
   r.moved = await read(second);
@@ -2660,7 +2720,7 @@ S.busy = async (a) => {
   r.settings = await page.evaluate(() => document.getElementById("main").innerText);
   await goto(page, "progress");
   // How far applications got is said in its own card since the UX review of 2026-11-10 (U-7):
-  // the screen's line leads with this week's own work.
+  // the screen's line leads with what was done so far, this week's own work after it.
   // The period's counts are the funnel's own, said once there (the screen review, 2026-11-11):
   // the switch changes what it counts, and the line under it says what is usual.
   const funnel = () => page.evaluate(() => { const f = document.querySelector("#h-funnel"); return f ? f.closest(".chart").textContent : ""; });
@@ -2684,7 +2744,9 @@ S.todo = async (a) => {
   const r = await page.evaluate(() => {
     const title = (c) => { const t = c.querySelector(".card-title"); return t ? t.textContent : ""; };
     const bands = [...document.querySelectorAll("#main .band")].map((b) => ({band: b.querySelector("h3").textContent,
-      groups: [...b.querySelectorAll(".todo-group")].map((g) => ({employer: g.querySelector("h4") ? g.querySelector("h4").textContent : null,
+      // The employer's own heading, by its class: a card's title is a heading too since the
+      // redesign's second round (2026-11-17), an h4 under its band.
+      groups: [...b.querySelectorAll(".todo-group")].map((g) => ({employer: g.querySelector(".todo-employer") ? g.querySelector(".todo-employer").textContent : null,
         titles: [...g.querySelectorAll("[data-card]")].map(title)}))}));
     const first = document.querySelector("#main [data-card]");
     return {bands, first: first ? title(first) : null, summary: (document.querySelector("#main .summary") || {}).textContent,
@@ -3100,7 +3162,7 @@ S.crowd = async (a) => {
   await page.locator("#main input[type=search]").fill("");
   await turn(page, 4);
   r.cleared = (await page.$$("#main .person")).length;
-  const fold = page.getByRole("button", {name: /^Show \d+ more (person|people)/});
+  const fold = page.getByRole("button", {name: /^Show them: \d+ more (person|people)/});
   await fold.first().click();
   await turn(page, 4);
   r.unfolded = (await page.$$("#main .person")).length;
@@ -3236,7 +3298,9 @@ S.design = async (a) => {
       }).map((e) => e.tagName.toLowerCase() + "." + [...e.classList].join("."));
       const needBin = [...document.querySelectorAll("#main .card.job:not(.is-marked):not(.st-dismissed):not(.st-applied), #main .card.app:not(.st-applied):not(.st-not_applying):not(.quiet-card), #main .card.msg:not(.is-marked), #main li.person, #main .card.interview, #main .card.app-record, #main .wave-row")]
         .filter(vis).filter((c) => !c.querySelector('[data-k^="bin:"], [data-k^="dbin:"], [data-k^="mbin:"], [data-k^="pbin:"], [data-k^="ivbin:"], [data-k^="recbin:"], [data-k^="wbin:"]'))
-        .filter((c) => !c.matches(".card.app") || !c.querySelector(".meta") || !/Made for|For the portal/.test(c.textContent))
+        // A draft made for someone who asked for it has no trash: its line names them ("Send
+        // Tamsin your CV.", "For the portal, naming ...") with their name's link.
+        .filter((c) => !c.matches(".card.app") || !c.querySelector(".meta") || !(/Made for|For the portal/.test(c.textContent) || c.querySelector('.meta [data-k^="madefor:"]')))
         .map(name);
       return {manyQ, xs, side: [...new Set(side)], needBin};
     });
@@ -3289,11 +3353,12 @@ S.motion = async (a) => {
     await goto(o.page, "jobs");
     await o.page.waitForSelector("#main .card .btn", {timeout: 5000}).catch(() => null);
     r[m].drawn = await o.page.evaluate(() => {
-      const b = document.querySelector("#main .card .btn"); const c = document.querySelector("#main .card");
+      // The first in sight: a "Did you apply" card waits folded under Jobs' list.
+      const b = [...document.querySelectorAll("#main .card .btn")].find((x) => x.getClientRects().length); const c = document.querySelector("#main .card");
       return {btn: b ? getComputedStyle(b).transitionDuration : null, card: c ? getComputedStyle(c).transitionDuration : null,
         fading: [...document.querySelectorAll("#main .btn, #main .chip, #main .card")].reduce((n, e) => n + e.getAnimations().filter((x) => x.transitionProperty).length, 0)};
     });
-    const hb = o.page.locator("#main .card .btn").first();
+    const hb = o.page.locator("#main .card .btn:visible").first();
     if (await hb.count()) { await hb.hover(); await turn(o.page, 2); r[m].hovered = await hb.evaluate((b) => getComputedStyle(b).transitionDuration); }
     await o.ctx.close();
     if (own) await own.close().catch(() => {});
@@ -3512,7 +3577,8 @@ S.a11y_selftest = async (a) => {
 S.big = async (a) => {
   const o = await open({html: a.html, hash: "jobs", viewport: a.viewport});
   const t0 = Date.now();
-  const r = {cards: (await o.page.$$("#main .card.job")).length, overflow: await overflow(o.page)};
+  // The list's own cards: a "Did you apply?" card waits in its fold under the list.
+  const r = {cards: (await o.page.$$("#main .card.job:not(.confirm-card)")).length, overflow: await overflow(o.page)};
   // Over 25 the Filter sheet holds an employer search (LAYOUT_SPEC 4.2).
   await o.page.locator("#main .filter-btn").first().click();
   await turn(o.page, 3);
@@ -3534,7 +3600,7 @@ S.big = async (a) => {
 S.view_overlay = async (a) => {
   const o = await open({html: a.html, hash: "jobs", seed: {"view/jobs": {made_at: "2026-10-26T07:00:00Z", data: {round: "r13", made_at: "2026-10-26T07:00:00Z", met: true, summary: "A fresh search: 1 worth a look.",
     rows: [{id: "r13-1", rank: 1, score: 88, band: "strong", company: "Ellerwick Trust", title: "Senior Research Analyst", place: "Salford", remote: "hybrid", pay: {text: "not stated", stated: false}, apply: {url: "https://example.com/jobs/e", status: "open"}, notes: [], status: "new", questions: [], rev: "x"}], filtered: {count: 0, groups: []}}}}});
-  const r = {titles: await T(o.page, "#main .card.job h3"), lede: await one(o.page, "#main .summary"), errors: o.errors};
+  const r = {titles: await T(o.page, "#main .card.job:not(.confirm-card) h3"), lede: await one(o.page, "#main .summary"), errors: o.errors};
   await o.ctx.close();
   return r;
 };
@@ -3630,7 +3696,10 @@ S.walk = async (a) => {
 // where a finding is a double tap, a held key, a second window, a store that refuses or never
 // answers, or a chat landing between two taps.
 S.script = async (a) => {
-  const o = await open({html: a.html, viewport: a.viewport, hash: a.hash, seed: a.seed || {}, fake: a.fake, clock: a.clock, tabs: a.tabs || 1, noStorage: a.noStorage, timezoneId: a.timezoneId});
+  // `still`: the page's clock stopped at `clock`, so nothing the page set going by a timer runs
+  // unless a step moves the clock on (a step that sets state by hand, which a timer would set
+  // back, reads it as set).
+  const o = await open({html: a.html, viewport: a.viewport, hash: a.hash, seed: a.seed || {}, fake: a.fake, clock: a.clock, tabs: a.tabs || 1, noStorage: a.noStorage, timezoneId: a.timezoneId, still: a.still});
   const {store} = o;
   const out = [];
   const read = async (page, st) => ({

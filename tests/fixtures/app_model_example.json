@@ -1,7 +1,7 @@
 {
  "model": 1,
  "made_at": "2026-10-25T18:00:00Z",
- "rev": "dcb21dcd24ef",
+ "rev": "8e87386b0410",
  "app": {
   "version": "4.16.0",
   "url": null,
@@ -657,12 +657,12 @@
     "chars": 144,
     "limit": 300,
     "near_at": 285,
-    "show": true,
+    "show": false,
     "near": false,
     "over": false,
     "tone": "muted",
     "label": "144 of 300 characters",
-    "short": "144/300"
+    "short": "156 letters to spare"
    },
    "warnings": [],
    "blocked": [],
@@ -1905,7 +1905,7 @@
    "id": "tip-search",
    "area": "search",
    "tab": "jobs",
-   "text": "Tap the pencil on anything Claude writes to make it shorter, warmer or reworded. Claude learns your style from your changes.",
+   "text": "Use the pencil on anything Claude writes to make it shorter, warmer or reworded. Claude learns your style from your changes.",
    "rev": "cf41ba3338e1"
   },
   "tour": [
@@ -1913,7 +1913,7 @@
     "key": "brief",
     "tab": "brief",
     "title": "Brief",
-    "text": "Your day at a glance: what is booked, the next three things to do, who is waiting on you, the best new jobs, news that matters to your search and your numbers. Tap any line to go to it."
+    "text": "Your day at a glance: what is booked, the next three things to do, who is waiting on you, the best new jobs, news that matters to your search and your numbers. Each line opens what it names."
    },
    {
     "key": "todo",
@@ -1925,19 +1925,19 @@
     "key": "jobs",
     "tab": "jobs",
     "title": "Jobs",
-    "text": "Every role from found to applied. Found: scored out of 100 for how well it fits you; tap Draft this on one you like. Drafts: your resume and letter, checked; get the files, apply on the employer's site, tap I have applied. Applied: each one tracked, its follow-ups back in To do."
+    "text": "Every role from found to applied. Found: scored out of 100 for how well it fits you; choose Draft this on one you like. Drafts: your resume and letter, checked; get the files, apply on the employer's site, then I have applied. Applied: each one tracked, its follow-ups back in To do."
    },
    {
     "key": "contacts",
     "tab": "contacts",
     "title": "Contacts",
-    "text": "Why people: someone inside who puts your name forward gets you far more interviews than applying cold. Claude finds who to write to and drafts a short note; you send it on LinkedIn yourself. Messages holds the notes ready to send. Tap a name to see everything about that person."
+    "text": "Why people: someone inside who puts your name forward gets you far more interviews than applying cold. Claude finds who to write to and drafts a short note; you send it on LinkedIn yourself. Messages holds the notes ready to send. A name opens everything about that person."
    },
    {
     "key": "interviews",
     "tab": "interviews",
     "title": "Coming up",
-    "text": "Everything booked or due, by day: interviews, calls, tests and closing days. Add any of it to your calendar in a tap, and add anything else with Add something. Interviews shows each one's prep: what they will ask, your answers, your questions."
+    "text": "Everything booked or due, by day: interviews, calls, tests and closing days. Add any of it to your calendar, and add anything else with Add a date. Interviews shows each one's prep: what they will ask, your answers, your questions."
    },
    {
     "key": "settings",
@@ -2394,7 +2394,7 @@
    {
     "id": "duplicates",
     "area": "jobs",
-    "line": "The same job posted again: after 30 days the same title at the employer counts as a new opening. Add it yourself with Add a job."
+    "line": "The same job posted again: after 30 days the same title at the employer counts as a new opening. Add it yourself with Add a job you found."
    },
    {
     "id": "no_team",
@@ -2534,6 +2534,7 @@
   ],
   "rev": "5f0ba4f627f5"
  },
+ "employers": [],
  "people_count": {
   "shown": 3,
   "all": 3,

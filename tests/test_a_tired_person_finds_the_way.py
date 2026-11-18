@@ -98,13 +98,15 @@ def test_a_card_hidden_by_mistake_comes_back_from_the_end_of_to_do(run, tmp_path
 def test_an_interview_goes_into_the_calendar_from_its_to_do_card_and_its_prep(run, tmp_path, vp):
     card = '[data-item="soon:int-larkspur-supply"]'
     got = _go(run, tmp_path, [
-        {"hash": "todo", "read": card},
+        # First under the card's More since the redesign's second round (2026-11-17): its face
+        # is its next step and one more.
+        {"hash": "todo", "more": "soon:int-larkspur-supply", "read": card},
         {"click": "Add to calendar", "within": card, "read": "dialog.cal-sheet"},
         {"eval": "document.querySelector('[data-k=cal-close]').click(); 'closed'"},
         {"click": "Read your prep", "within": card, "read": "dialog.detail"},
         {"click": "Add to calendar", "within": "dialog.detail", "read": "dialog.cal-sheet"},
     ], vp, clock=T)
-    assert "Add to calendar" in got["after"][0]["text"], "a button with words on the To do card"
+    assert "Add to calendar" in got["after"][0]["text"], "a button with words on the To do card, under its More"
     for i in (1, 4):
         sheet = got["after"][i]["text"]
         assert "Add to your calendar" in sheet and "Phone screen: Larkspur Retail" in sheet and "Google Calendar" in sheet, sheet
@@ -156,21 +158,39 @@ def test_a_phone_toast_keeps_close_on_its_words_row(run, tmp_path):
 
 
 def test_a_draft_that_needs_a_fix_says_so_on_its_card_with_its_state_by_the_title(run, tmp_path, vp):
+    # Its "Did you apply?" question first, on the one card every such question has (the
+    # redesign's second round, 2026-11-17); answered "Not yet", the draft is its own card again.
     got = _go(run, tmp_path, [
-        {"hash": "drafts", "read": '#main [data-item="app-quayside-demand"]',
-         "eval": "(() => { const c = document.querySelector('#main [data-item=\"app-quayside-demand\"]'); const al = c.querySelector('[data-alert=\"al-checks-app-quayside-demand\"]');"
-                 " const h3 = c.querySelector('.job-top h3').getBoundingClientRect(); const pill = c.querySelector('.job-top .state-word').getBoundingClientRect();"
-                 " return {folded: !al || !!al.closest('details'), onRow: pill.top < h3.bottom, atStart: Math.abs(pill.left - h3.left) <= 2,"
+        {"hash": "drafts", "read": '#main [data-item="app-quayside-demand"]'},
+        {"click": "Not yet", "within": '#main [data-item="app-quayside-demand"]', "read": '#main .card.app[data-item="app-quayside-demand"]',
+         # Claude makes it again by itself, so it waits under "Being written", said by its heading;
+         # a state pill ("1 question for you" on the job being written) stays by its title.
+         "eval": "(() => { const c = document.querySelector('#main .card.app[data-item=\"app-quayside-demand\"]'); const al = c.querySelector('[data-alert=\"al-checks-app-quayside-demand\"]');"
+                 " const s = document.querySelector('#main [data-item=\"r12-2\"]');"
+                 # Wrapped under a title with a ring before it, the pill starts at the card's text
+                 # edge, where its facts line starts, never pushed off to the right.
+                 " const h3 = s.querySelector('.job-top h3').getBoundingClientRect(); const pill = s.querySelector('.job-top .state-word').getBoundingClientRect();"
+                 " const edge = s.querySelector('.facts').getBoundingClientRect().left;"
+                 " const g = c.closest('.job-group'); const head = g ? g.querySelector('.list-head').textContent.trim() : null;"
+                 # Folded inside the card, never; the card itself may wait in Jobs' "jobs to
+                 # confirm" fold with its question (the redesign, phase 2, 2026-11-17).
+                 " const d = al && al.closest('details');"
+                 # Said on its face, as the alert or as Claude's line for it, never only in a fold.
+                 " const face = [...c.querySelectorAll('[data-alert=\"al-checks-app-quayside-demand\"], .work-inline')].find((e) => /second page/.test(e.textContent) && !(e.closest('details') && c.contains(e.closest('details'))));"
+                 " return {folded: !face, head, onRow: pill.top < h3.bottom, atStart: Math.abs(pill.left - edge) <= 2,"
                  " gap: Math.round(pill.top - h3.bottom)}; })()"},
     ], vp, clock=T)
-    card = got["after"][0]["text"]
-    r = got["after"][0]["eval"]
+    asked, card = got["after"][0]["text"], got["after"][1]["text"]
+    r = got["after"][1]["eval"]
     assert not r["folded"], "the failed check is on the card, not folded into More"
+    assert r["head"] == "Being written", r
     # What Claude can do by itself is never a button (2026-11-05): the failed check is said on
     # the card, and Claude makes it again once its question is answered.
     # The check's own finding leads, capitalised, since the UX review of 2026-11-10 (U-19).
     assert "The CV runs to a second page by two lines" in card and "Make it again" not in card, card
-    assert "Two answers about Quayside Foods" in card, "its question stays first"
+    # Two devices that disagreed are asked as one plain question since the redesign of
+    # 2026-11-16 ("Two answers about Quayside Foods ... Which is right?" read as an error).
+    assert "Did you apply to Quayside Foods?" in asked and "Two answers about" not in asked, "its question stays first, in plain words"
     assert r["onRow"] or (r["atStart"] and r["gap"] <= 8), ("the state stays by the title, never pushed off to the right below it", r)
 
 
@@ -200,7 +220,8 @@ def test_the_bells_sheet_takes_a_break_through_the_same_sheet_settings_opens(run
 
 
 FOOT = ("(() => { const f = document.querySelector('#foot .foot-line').getBoundingClientRect(); const t = document.querySelector('.tabs').getBoundingClientRect();"
-        " return {top: Math.round(f.top), bottom: Math.round(f.bottom), tabs: Math.round(t.top)}; })()")
+        " const b = document.querySelector('.talk-form').getBoundingClientRect();"
+        " return {top: Math.round(f.top), bottom: Math.round(f.bottom), tabs: Math.round(t.top), vh: innerHeight, box: Math.round(b.bottom)}; })()")
 
 
 def test_the_chat_footer_never_sits_half_under_the_tab_bar(run, tmp_path):
@@ -210,6 +231,10 @@ def test_the_chat_footer_never_sits_half_under_the_tab_bar(run, tmp_path):
     ], PHONE, clock=T)
     top, end = got["after"][0]["eval"], got["after"][1]["eval"]
     assert top["top"] >= top["tabs"], ("on the first screen the footer is below the tab bar, never peeking out of it", top)
+    # Nor behind it: the Chat reaches the tab bar and its foot starts under the first screen,
+    # its box above the tab bar (the redesign's second round, 2026-11-17: "Private to you" sat
+    # behind the tab bar on an empty Chat and its tail peeked out).
+    assert top["top"] >= top["vh"] and top["box"] <= top["tabs"], top
     assert end["bottom"] <= end["tabs"], ("scrolled down, it is read above the tab bar", end)
 
 
@@ -230,12 +255,14 @@ def test_to_do_opens_on_what_is_late_or_due_today_and_folds_the_setup(run, tmp_p
     titles = [c["title"] for c in r["cards"]]
     # The Fernhill Freight follow-up and the reply to Juno are drafted, so they are rows of the
     # one card of messages to send, which opens Contacts at them (the UX review, 2026-11-05).
-    for owed in ("Thank-you note after your Harbourline Bank first interview", "Messages to send (7)", "Send your CV to Tamsin"):
+    # What Tamsin asked for is one task in one wording on every screen (the redesign's second
+    # round, 2026-11-17): "Send Tamsin your CV".
+    for owed in ("Thank-you note after your Harbourline Bank first interview", "Messages to send (7)", "Send Tamsin your CV"):
         assert owed in titles, (owed, titles)
     bands = [c["band"] for c in r["cards"]]
     assert bands[0] == "Due or late", bands
     if "Needs your answer" in bands:
-        last_owed = max(titles.index(t) for t in titles if t.startswith(("Thank-you", "Follow up with", "Reply to", "Send your", "Messages to send")))
+        last_owed = max(titles.index(t) for t in titles if t.startswith(("Thank-you", "Follow up with", "Reply to", "Send your", "Send Tamsin", "Messages to send")))
         assert bands.index("Needs your answer") > last_owed, ("questions come after what is owed", r["cards"])
     assert r["youFolded"], "Finish your profile waits behind the fold while today's things show"
     # Four cards today all show (one card an act and a person, 2026-11-05): the first fold is
@@ -257,7 +284,7 @@ def test_a_note_marked_sent_is_no_longer_asked_about(run, tmp_path, vp):
     got = _go(run, tmp_path, [{"hash": "todo", "eval": UNFOLD}, {"eval": ASKED},
                               {"hash": "messages", "eval": "(() => { document.querySelector('[data-k=\"sent:msg-wren-2\"]').click(); return 1; })()"},
                               {"hash": "todo", "eval": UNFOLD}, {"eval": ASKED}], vp, clock=T)
-    assert got["after"][1]["eval"] == "4 quick answers" and got["after"][4]["eval"] == "3 quick answers", [a["eval"] for a in got["after"]]
+    assert got["after"][1]["eval"] == "Answer 4 quick questions" and got["after"][4]["eval"] == "Answer 3 quick questions", [a["eval"] for a in got["after"]]
 
 
 def test_a_message_ranks_first_in_its_group_and_a_text_box_asks_to_be_filled_in():

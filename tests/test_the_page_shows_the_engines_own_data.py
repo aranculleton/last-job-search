@@ -233,8 +233,9 @@ def test_every_section_shows_the_engines_items_in_plain_words(run, built):
     t = {k: v.replace("\u00a0", " ") for k, v in got["texts"].items()}
     assert "Panel interview with Thornbury Bank" in t["todo"] and "Did you apply to Dovecote Freight?" in t["todo"]
     # What Juno asked for leads, with its button, and the one day it is about (the walk-through,
-    # 2026-11-03: "Reply to Juno" with "Draft a reply" over a request for the CV).
-    assert "Juno at Larkspur Retail asked for your CV" in t["todo"] and "Make a CV for Juno" in t["todo"], t["todo"]
+    # 2026-11-03: "Reply to Juno" with "Draft a reply" over a request for the CV), said as the
+    # one task it is on every screen (the redesign's second round, 2026-11-17).
+    assert "Send Juno your CV" in t["todo"] and "Make a CV for Juno" in t["todo"], t["todo"]
     # A draft never made is Claude's to make by itself (tools/app.py self_fixes): said on its
     # card in Drafts, never a To do (the UX review, 2026-11-05).
     assert "asked 12 Sep" in t["todo"] and "first wrote" not in t["todo"] and "Not made yet" not in t["todo"] and "Not made yet" in t["drafts"]
@@ -253,14 +254,17 @@ def test_every_section_shows_the_engines_items_in_plain_words(run, built):
     # · letter 1 page ✎"), so the text read has the pencils' names between the parts.
     # Said as the documents and their length alone since 2026-11-05: "Made, right length:" on
     # every card read as something to do.
-    said = (["CV 1 page", "letter 1 page"] if pdftext.reader() or shutil.which("pdfinfo")
-            else ["Made; page count not read here"])
+    # Since the redesign (2026-11-16) each document is a row: its name, then its length and
+    # that it was checked ("CV", then "1 page \u00b7 checked"), or that its length was not read here.
+    said = (["CV\n1 page \u00b7 checked", "Cover letter\n1 page \u00b7 checked"] if pdftext.reader() or shutil.which("pdfinfo")
+            else ["CV\nchecked \u00b7 page count not read here"])
     assert all(s in t["drafts"] for s in said) and "\nChecked\n" not in t["drafts"], t["drafts"]
     assert "Made, right length" not in t["drafts"], t["drafts"]
     fern = t["drafts"].split("Operations Analyst", 1)[1].split("Claims Forecasting Analyst", 1)[0]
     assert "Get the files" not in fern and "Get my files ready" not in fern, "a file not made yet is not offered"
-    # Still to make where nothing is making it (the review of 2026-11-11).
-    assert "Needs a fix" not in fern and "still to make" in t["drafts"], "a draft never made is still to make, never a fix"
+    # Never made: Claude makes it next by itself, so it is being written, in the word of Jobs'
+    # heading (the review of 2026-11-11; the redesign's second round, 2026-11-17).
+    assert "Needs a fix" not in fern and "being written" in t["drafts"], "a draft never made is being written, never a fix"
     kestrel = t["drafts"].split("Claims Forecasting Analyst", 1)[1]
     # Files not on the page yet are Claude's to put there by itself (the view queues them,
     # 2026-11-05): no "Get my files ready" to tap, and nothing about files until they are there.

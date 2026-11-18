@@ -413,19 +413,25 @@ def test_every_section_full_shows_its_items_in_plain_words(run, pages):
     # question it waits under More: never a rose "Before you apply:" line (2026-11-05).
     assert "Before you apply:" not in jobs and "Juno at Larkspur Retail replied last week" not in jobs
     # A posting that has closed waits under the list, one tap away (2026-11-05).
-    assert "1 closed: Show" in jobs and "This posting has closed." not in jobs and "41 left out by the search" in jobs
+    # What the search's rules left out is said in the person's words (the redesign, phase 2).
+    assert "1 closed: Show" in jobs and "This posting has closed." not in jobs and "41 that did not fit: Show" in jobs
     assert "Tamsin has put your name forward at Copperleaf Pay" in jobs
     drafts = r["drafts"]["text"]
-    assert "Two answers about Quayside Foods" in drafts, "a draft's question is on its card, ahead of its other notes"
-    assert "Made for Tamsin, who asked for it." in drafts and "I sent it to Tamsin" in drafts
+    # Asked as one plain question since the redesign of 2026-11-16: "Two answers about Quayside
+    # Foods: Your phone said applied at 09:12 ... Which is right?" read as an error.
+    assert "Did you apply to Quayside Foods?" in drafts, "a draft's question is on its card, ahead of its other notes"
+    assert "Which is right?" not in drafts and "Your phone said applied" not in drafts, "two devices that disagreed are one plain question"
+    # What Tamsin asked for, one task in one wording on every screen (2026-11-17).
+    assert "Send Tamsin your CV." in drafts and "Get the CV for Tamsin" in drafts and "I sent it" in drafts
     assert "put your name forward here" not in drafts, "the referrer's own resume carries no hold"
     # Drafts are cards in Jobs' one list, in their jobs' places: its switch, To apply and
     # Applied (2026-11-05: a drafted job stood in Found and again in Drafts).
     assert "To apply" in drafts and "Applied" in drafts
     # Each message on its person's card, and one short summary line (2026-11-04).
     msgs = r["contacts"]["text"]
-    assert "7 to send · " in msgs and "sent this week" not in msgs, msgs[:400]
-    assert "LinkedIn InMail" in msgs and "Subject:" in msgs, msgs[:400]
+    assert "7 messages to send" in msgs and "need you" not in "\n".join(msgs.split("\n")[:4]) and "sent this week" not in msgs, msgs[:400]
+    # "Paid LinkedIn message", never LinkedIn's own "InMail" (the UX review, 2026-11-17).
+    assert "Paid LinkedIn message" in msgs and "InMail" not in msgs and "Subject:" in msgs, msgs[:400]
     assert "Every application" in r["progress"]["text"] and "earlier, finished" in r["progress"]["text"]
     settings = r["settings"]["text"]
     assert "An update is waiting" in settings and "4.0.1" not in settings
@@ -533,8 +539,10 @@ def test_a_newer_view_document_replaces_its_section_without_a_republish(run, pag
     assert r["titles"] == ["Senior Research Analyst"]
     # The one list counts the drafts to send beside the new view's one find (2026-11-05).
     # One sentence whose total is the tab's since the UX review of 2026-11-10 (U-9).
-    # Ready only when nothing waits on it (the review of 2026-11-11).
-    assert r["lede"].startswith("4 to apply to: 2 ready, 1 waiting on you, 1 to look at."), r["lede"]
+    # Ready only when nothing waits on it (the review of 2026-11-11). In the words of the list's
+    # headings, the "Did you apply?" questions the fold's own count (the redesign's second round,
+    # 2026-11-17).
+    assert r["lede"].startswith("4 to apply for: 2 ready to send, 1 new. 2 to confirm."), r["lede"]
 
 
 # ------------------------------------------------------------------ To do, alerts and suggestions
@@ -559,7 +567,7 @@ def test_to_do_groups_by_when_then_by_employer_in_the_order_things_are_done(run,
             assert g["employer"] is None or len(g["titles"]) >= 2, ("an employer heads only two or more", b["band"], g)
     answer = next(b for b in r["bands"] if b["band"] == "Needs your answer")["groups"]
     # The small questions are one card, asked one at a time (the UX review, 2026-11-05).
-    assert [g["titles"] for g in answer] == [["4 quick answers"]], answer
+    assert [g["titles"] for g in answer] == [["Answer 4 quick questions"]], answer
     late = next(b for b in r["bands"] if b["band"] == "Due or late")["groups"]
     # The late things first: the follow-up and the thank-you, both two days late. The
     # follow-up is a row of the one card of messages to send (the UX review, 2026-11-05;
@@ -570,11 +578,13 @@ def test_to_do_groups_by_when_then_by_employer_in_the_order_things_are_done(run,
     assert "Prepare for the Larkspur Retail phone screen" not in titles, "the interview's own card is its prep, never a second card"
     assert "Thank-you note after your Harbourline Bank first interview" in titles
     assert r["dueButtons"]["Thank-you note after your Harbourline Bank first interview"][0] == "Draft the thank-you"
-    assert r["dueButtons"]["Send your CV to Tamsin"][0] == "Choose the role"
+    # What Tamsin asked for, one task in one wording: the CV made for her, then I sent it (the
+    # redesign's second round, 2026-11-17).
+    assert r["dueButtons"]["Send Tamsin your CV"][:2] == ["Get the CV for Tamsin", "I sent it"], r["dueButtons"]
     # The reply is drafted already: its row is on the drafted card, which opens it and never
     # drafts it again (2026-11-02), and no card of its own offers to.
     assert "Reply to Juno at Larkspur Retail" not in r["dueButtons"], r["dueButtons"]
-    assert all("Done" in b for b in r["dueButtons"].values()), "every due row can be marked done"
+    assert all("Done" in b or "I sent it" in b for b in r["dueButtons"].values()), "every due row can be marked done"
     assert not [t for t in titles if "first notes ready to send" in t], "the week's first notes are rows of the messages card"
     assert r["chips"] == 0, "no kind chips on To do"
     assert r["filled"] == 0 and r["answers"] >= 2, "a question never fills one of its answers"
@@ -970,7 +980,8 @@ def test_copy_is_the_first_step_then_i_sent_it_and_it_falls_back_to_selecting(ru
 def test_chat_is_one_box_and_quick_answers_read_the_page(run, pages):
     r = run("talk", html=pages["sample"], shot="phone-talk" if SHOTS else "")
     _clean(r)
-    assert r["label"] == "Ask Claude anything" and r["placeholder"] == "Ask anything, or paste a screenshot of a message you got"
+    # One short line, so the box stays one line on a phone (the redesign's second round, 2026-11-17).
+    assert r["label"] == "Ask Claude anything" and r["placeholder"] == "Ask Claude, or paste a screenshot"
     # Four ways in and the box: two example questions as well made six buttons before the box
     # (the audit, 2026-11-03).
     assert r["examples"][0] == "Someone sent me a job" and len(r["examples"]) == 4, r["examples"]
@@ -1036,9 +1047,11 @@ def test_the_chat_opens_from_any_section_in_a_panel_with_the_same_thread(run, pa
     r = run("chat_dock", html=pages["sample"], viewport=vp)
     _clean(r)
     if vp is PHONE:
-        # One way into the chat on a phone, its tab: no floating button and no panel over it
-        # (the maintainer, 2026-10-28).
-        assert not r["fab"] and not r["dockBefore"]
+        # One way into the chat on a phone, the header's Chat button, never a panel over the
+        # page (the maintainer, 2026-10-28); its name says Claude's light (the redesign's
+        # second round, 2026-11-17).
+        assert r["fab"] and not r["dockBefore"]
+        assert r["fabName"].startswith("Chat with Claude. Claude: "), r["fabName"]
         # Paste a message opens its box under Contacts' header, never the Chat (2026-11-05).
         assert r["phone"]["hash"].startswith("#contacts") and not r["phone"]["dock"]
         assert r["phone"]["box"] and r["phone"]["focus"] == "ct-text:card-place-paste", r["phone"]
@@ -1082,7 +1095,7 @@ PNG = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4
 def test_a_pasted_screenshot_goes_with_the_message_as_its_id(run, pages):
     r = run("chat_pics", html=pages["sample"])
     _clean(r)
-    assert r["add"] and r["placeholder"] == "Ask anything, or paste a screenshot of a message you got"
+    assert r["add"] and r["placeholder"] == "Ask Claude, or paste a screenshot"
     assert r["intro"].startswith("Paste a screenshot or a link and say what you want: reply to someone, add a job someone sent you")
     # Three to do things, and one for help with the page itself (2026-10-28).
     assert r["starters"][0] == "Someone sent me a job" and len(r["starters"]) == 4, r["starters"]
@@ -1111,7 +1124,7 @@ def test_with_no_file_store_there_is_no_picture_button_and_no_promise_of_one(run
     r = run("chat_pics", html=pages["sample"], noAssets=True)
     _clean(r)
     assert not r["add"]
-    assert r["placeholder"] == "Ask anything, or paste a message you got"
+    assert r["placeholder"] == "Ask Claude, or paste a message"
     assert "screenshot" not in r["intro"] and r["intro"].startswith("Paste a message or a link")
 
 
@@ -1155,8 +1168,10 @@ def test_keyboard_alone_reaches_and_works_everything_and_the_shortcuts_can_be_sw
     # drafts, then the finds by fit (2026-11-05).
     # The sample's application question is about Pennick Haulage since the screen review of
     # 2026-11-11 (row 40): it asked about the Fernhill Freight application, which Applied
-    # listed as sent.
-    assert r["cardFocus"] == "c-pennick-planner-applied", r["cardFocus"]
+    # listed as sent. Since the redesign's phase 2 (2026-11-17) every "Did you apply" waits in
+    # the one fold under the list, so j reaches the first card shown, the first draft
+    # ready to send.
+    assert r["cardFocus"] == "app-copperleaf-payments", r["cardFocus"]
     assert r["moreClosed"], "Esc closes a card's More"
     assert r["typed"] == ["gj", "Chat"], "typing in a box is never a shortcut"
     assert r["offStays"] == "Settings" and r["stored"] == "off"
@@ -1373,7 +1388,9 @@ def test_every_screen_keeps_to_the_simplicity_budgets(run, pages, viewport, sche
             # his name").
             # A checklist row's own next step and Done are the row's, as an item's own card's
             # are (DESIGN.md, checklists): the card's budget is its own row of actions.
-            others = c["controls"] - c["answers"] - c.get("icons", 0) - c.get("names", 0) - c.get("rows", 0)
+            # What folds or opens a draft's own words (its heading, "Read it all") is the words'
+            # own, as a "?" is (the redesign, 2026-11-16: a long draft shows its first lines).
+            others = c["controls"] - c["answers"] - c.get("icons", 0) - c.get("names", 0) - c.get("rows", 0) - c.get("folds", 0)
             if not c["alerts"]:
                 assert others <= BUDGET["card_controls"], (sid, c)
             assert c["filled"] <= 1, (sid, c)
@@ -1447,7 +1464,7 @@ def test_a_busy_week_is_a_few_checklists_not_a_card_each(run, pages):
     assert "No reply to 2 messages" not in r["text"] and "answered two messages" not in r["text"]
     # The two "Did your note go?" are among the quick answers, one at a time (the UX review,
     # 2026-11-05), never a checklist of their own.
-    assert "grp:sent" not in r["groups"] and r["quick"]["title"].endswith("quick answers"), (r["groups"].keys(), r["quick"])
+    assert "grp:sent" not in r["groups"] and r["quick"]["title"].endswith("quick questions"), (r["groups"].keys(), r["quick"])
     # The three to check before they go are rows of the one messages card, each saying so.
     send = r["groups"]["grp:send"]
     assert not [k for k in r["groups"] if k.startswith("grp:read_first")], r["groups"]
@@ -1461,7 +1478,9 @@ def test_a_busy_week_is_a_few_checklists_not_a_card_each(run, pages):
     # The switch changes what the funnel counts; its numbers are said once, in it, and the
     # line under it says what is usual (the screen review, 2026-11-11).
     assert r["progress"]["recent"].startswith("How far applications got") and r["progress"]["recent"] != r["progress"]["all"], r["progress"]
-    assert r["progress"]["head"].startswith("This week:"), r["progress"]    # U-7, 2026-11-10
+    # What was done so far leads, this week's own work after it once there is some (U-7,
+    # 2026-11-10; the UX review of the redesign, 2026-11-17: never "This week: 0 applied.").
+    assert re.match(r"\d+ applied(, \d+ interviews?)? so far\.", r["progress"]["head"]) and "This week: 0 applied" not in r["progress"]["head"], r["progress"]
     assert "Most applications get no reply" in r["progress"]["usual"] and not re.search(r"\d+ applied", r["progress"]["usual"]), r["progress"]
     assert r["bin"]["title"] == "Not for you?" and "No more from Harbourline Bank" in r["bin"]["options"]
     assert r["gauge"] >= 1, "a cost is a gauge of bars, its words on hover"
@@ -1662,8 +1681,19 @@ def test_the_page_offers_the_pin_on_the_brief_and_while_the_first_search_runs(ru
 def test_the_numbers_on_the_brief_are_never_cut_off(run, pages):
     """At 1280 by 800 the panel's last line was half hidden, and opening it showed nothing
     more (seen on the README's own picture, 2026-10-30). Its last line is now Since your last
-    brief, and it holds at every size."""
+    brief, and it holds at every size. Where the window is too short for the panel, the Brief
+    says the numbers in one line under the greeting instead (the maintainer, 2026-11-05), and
+    since the redesign's 15px words (2026-11-16) a 1280 by 800 window is one of those: every
+    number is in that line, whole."""
+    where = ("(() => { const p = document.querySelector('.bp-numbers'); const l = document.querySelector('.bp-head-numbers');"
+             " const vis = (e) => !!e && e.getClientRects().length > 0 && e.getBoundingClientRect().height > 0;"
+             " return {panel: vis(p), line: vis(l) ? l.textContent : '', whole: vis(l) && l.scrollWidth <= l.clientWidth + 1}; })()")
     for vp in ({"width": 1280, "height": 800}, {"width": 1440, "height": 900}, {"width": 800, "height": 900}):
+        shown = run("engine", html=pages["sample"], viewport=vp, clock="2026-10-25T09:00:00Z", steps=[{"hash": "brief", "eval": where}])
+        got = shown["after"][0]["eval"]
+        if not got["panel"]:
+            assert got["whole"] and all(w in got["line"] for w in ("applied", "replied", "interview", "offer")), (vp, got)
+            continue
         r = run("inside", html=pages["sample"], viewport=vp, clock="2026-10-25T09:00:00Z",
                 inner='[data-k="bp-since"]', box=".bp-numbers", tap='[data-k="bp-since"]')
         _clean(r)
@@ -1752,11 +1782,10 @@ def test_everything_booked_is_one_tap_from_any_calendar_and_the_brief_shows_the_
     assert all(("here)" in w) == (" time (" in w) for w in r["when"][:3]), r["when"]
     assert "Time not set" not in r["when"], r["when"]
     # Each interview says whether its prep is ready, on its own row only (never on a test
-    # due in the same process): read it from there, or ask for it.
-    # Read your prep is the row's pill, in To do's words (the UX review, 2026-11-10, U-12).
-    assert r["prep"] == ["up-read:up-app-larkspur-supply-phone-screen-2026-10-28=Read your prep",
-                         "up-prep:up-app-copperleaf-payments-recruiter-call-2026-10-30=Prepare me",
-                         "up-prep:up-app-harbourline-risk-second-interview-2026-11-04=Prepare me"], r["prep"]
+    # due in the same process), as a chip; the row is its own tap to the prep, and only the
+    # next interview with none carries "Prepare me" (the redesign, phase 2, 2026-11-17).
+    assert r["prep"] == ["up-prep:up-app-copperleaf-payments-recruiter-call-2026-10-30=Prepare me"], r["prep"]
+    assert r["chips"] == ["Prep ready", "No prep yet", "No prep yet"], r["chips"]
     # One count in the nav, the screen and the Brief.
     assert r["nav"].startswith("7") and r["sum"].startswith("7 things booked or due"), (r["nav"], r["sum"])
     assert "All 7 coming up" in r["upFoot"], r["upFoot"]
@@ -1809,10 +1838,13 @@ def test_everything_booked_is_one_tap_from_any_calendar_and_the_brief_shows_the_
     p = r["panels"]
     # Said "Overdue", its one day in its facts, never "Rolled over · 2 days late" (2026-11-03).
     # Ready, never "Overdue", for a day the person set (the UX review of 2026-11-10, U-6).
-    assert ("Ready to send" in p["bp:today"] or "Ready to do" in p["bp:today"]) and "Overdue" not in p["bp:today"] and "Rolled over" not in p["bp:today"] and "Fernhill Freight" in p["bp:today"], p["bp:today"]
+    # Since the redesign (2026-11-16) Today is To do's first card (DESIGN.md, One ranked list):
+    # the thank-you two days late; the follow-up is a row of the messages to send, in Next.
+    assert ("Ready to send" in p["bp:today"] or "Ready to do" in p["bp:today"]) and "Overdue" not in p["bp:today"] and "Rolled over" not in p["bp:today"] and "Harbourline Bank" in p["bp:today"], p["bp:today"]
     shown = [k for k, t in p.items() if "Larkspur" in t and "screen" in t]
     assert len(shown) == 1 and shown != ["bp:today"], shown
-    assert "Reply to Juno" in p["bp:next"] and "Juno" not in p["bp:people"], (p["bp:next"], p["bp:people"])
+    # With nobody else waiting, Waiting on you is not drawn (the redesign's second round, 2026-11-17).
+    assert "Juno" in p["bp:next"] and "Juno" not in p.get("bp:people", ""), (p["bp:next"], p.get("bp:people"))
     # Coming up's, in its rows: Next three's "Read the prep" took it out of them while the
     # week strip marked its day (the screen review, 2026-11-11).
     assert r["cards"] and any("Larkspur" in c for c in r["cards"]), r["cards"]

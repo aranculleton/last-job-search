@@ -108,8 +108,10 @@ def _look(run, tmp_path, model, size, scheme="light", name="m"):
     return got["after"][0]["eval"], got["after"][1]["eval"]
 
 
+# A 15-inch laptop's window: since the redesign's 15px words (2026-11-16) a 1440 window says a
+# full search's numbers in one line under the greeting, and the panel is drawn from here up.
 @pytest.mark.parametrize("scheme", ["light", "dark"])
-@pytest.mark.parametrize("size", [{"width": 1440, "height": 900}, PHONE], ids=["wide", "phone"])
+@pytest.mark.parametrize("size", [{"width": 1680, "height": 1050}, PHONE], ids=["wide", "phone"])
 def test_the_panel_draws_the_engines_tiles_line_and_two_series(run, tmp_path, size, scheme):
     r, _fit = _look(run, tmp_path, _networker(), size, scheme)
     assert [t[0] for t in r["tiles"]] == ["bp-stat:applied", "bp-stat:sent", "bp-stat:replies", "bp-stat:calls"], r["tiles"]

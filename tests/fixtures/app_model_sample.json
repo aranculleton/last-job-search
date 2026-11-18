@@ -2557,7 +2557,7 @@
   },
   "tip": {
     "area": "search",
-    "text": "Tip: tap the pencil on anything Claude writes to make it shorter, warmer or reworded. Claude learns your style from your changes.",
+    "text": "Tip: use the pencil on anything Claude writes to make it shorter, warmer or reworded. Claude learns your style from your changes.",
     "rev": "tp1"
   },
   "linkedin_export": {
@@ -2825,6 +2825,10 @@
       },
       "rev": "1b117298106f"
     }
+  ],
+  "employers": [
+    {"name": "Larkspur Retail", "facts": [{"text": "Opened a second distribution centre, in Wakefield, in March.", "source": "larkspur.example", "url": "https://larkspur.example/news/wakefield", "on": "2026-10-21", "checked": true}, {"text": "Its planners moved weekly forecasting from spreadsheets to Python last year.", "source": "larkspur.example", "url": "https://larkspur.example/careers/planning", "on": "2026-10-14", "checked": true}, {"text": "Runs 140 stores across the north of England, with its head office in Leeds.", "source": "northern-retail.example", "url": "https://northern-retail.example/larkspur-retail", "on": "2026-09-30", "checked": false}], "more": 2, "bar": "prestige", "said": "A major brand with a strong pay band."},
+    {"name": "Copperleaf Pay", "bar": "signal", "said": "Backed by a top investor."}
   ],
   "refusal_asks": {"outcome.interview": {"key": "on", "label": "Which day is it?", "kind": "date", "type": "date", "time": "time"}, "person.call_booked": {"key": "on", "label": "Which day is the call?", "kind": "date", "type": "date", "time": "time"}, "job.applied": {"key": "on", "label": "When did you apply?", "kind": "date", "type": "date"}, "ready.applied": {"key": "on", "label": "When did you apply?", "kind": "date", "type": "date"}, "due.snooze": {"key": "until", "label": "Until which day?", "kind": "date", "type": "date"}, "brief.pause": {"key": "until", "label": "Until which day?", "kind": "date", "type": "date"}}
 }

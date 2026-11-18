@@ -99,9 +99,10 @@ def test_the_card_and_contacts_say_the_engines_one_count_and_a_message_sent_leav
     m = _sample()
     n = m["to_send"]["n"]
     assert _n(got["after"][0]["eval"]) == n, got["after"][0]["eval"]
-    assert got["after"][1]["eval"].startswith(f"{n} to send"), got["after"][1]["eval"]
+    # Contacts' one count, said as what it counts (the redesign's second round, 2026-11-17).
+    assert got["after"][1]["eval"].startswith(f"{n} messages to send"), got["after"][1]["eval"]
     # Sent: it leaves the card at once, and both screens count one fewer.
-    assert got["after"][3]["eval"].startswith(f"{n - 1} to send"), got["after"][3]["eval"]
+    assert got["after"][3]["eval"].startswith(f"{n - 1} messages to send"), got["after"][3]["eval"]
     title, done = got["after"][4]["eval"]
     assert got["after"][4]["count"] == 0, "the row sent leaves at once"
     assert _n(title) == n - 1 and done == f"1 of {n} done", (title, done)

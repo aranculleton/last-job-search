@@ -87,32 +87,30 @@ def test_a_drafts_words_take_the_whole_bubble_and_on_a_phone_the_whole_card(run,
 
 ROWS = r"""(() => [...document.querySelectorAll('#main [data-k="up-days"] .up-row')].map((r) => {
   const box = (sel) => { const e = r.querySelector(sel); return e && e.getClientRects().length ? e.getBoundingClientRect() : null; };
-  const note = box('.up-note'), prep = box('.up-prep'), main = box('.up-main'), cal = box('.up-acts [data-k^="cal:"]');
+  const note = box('.up-sub > .up-note'), chip = box('.up-sub > .state-word'), sub = box('.up-sub'), more = box('.up-end .menu-btn');
   const link = r.querySelector('.up-link');
   // A title's box against its words' own: a 44px line of air around one line of words.
   const words = link ? (() => { const g = document.createRange(); g.selectNodeContents(link); return g.getBoundingClientRect().height; })() : 0;
-  const fits = note && prep && main ? note.width + prep.width + 8 <= main.width : false;
-  // Where the prep wraps to a line of its own, that line never starts with the dot.
-  const lead = r.querySelector('.up-prep') ? getComputedStyle(r.querySelector('.up-prep'), '::before').content : 'none';
-  return {id: r.dataset.item, lead, oneLine: fits ? Math.abs((note.top + note.bottom) / 2 - (prep.top + prep.bottom) / 2) < 4 : null,
-          air: link ? Math.round(link.getBoundingClientRect().height - words) : null, cal: cal ? Math.round(cal.left) : null};
+  const fits = note && chip && sub ? note.width + chip.width + 8 <= sub.width : false;
+  return {id: r.dataset.item, oneLine: fits ? Math.abs((note.top + note.bottom) / 2 - (chip.top + chip.bottom) / 2) < 4 : null,
+          air: link ? Math.round(link.getBoundingClientRect().height - words) : null, more: more ? Math.round(more.right) : null,
+          tools: r.querySelectorAll(':scope > :not(.up-end) .btn.icon-only').length};
 }))()"""
 
 
-def test_a_coming_up_row_says_what_it_is_on_one_line_and_its_icons_line_up(run, tmp_path, vp):
+def test_a_coming_up_row_says_what_it_is_on_one_line_and_its_more_lines_up(run, tmp_path, vp):
     rows = _eval(run, tmp_path, "interviews", ROWS, vp)
     assert len(rows) >= 5, rows
-    # What it is and whether its prep is ready share the line under the title where they fit.
-    # On a phone the prep's pill (Read your prep, Prepare me: the UX review's U-12) is too wide
-    # to sit beside what the row is, so there it takes the line under it.
+    # What it is and whether its prep is ready (its chip) share the line under the title where
+    # they fit (the maintainer, 2026-11-10: "inline and things are good").
     assert [r for r in rows if r["oneLine"] is False] == [], rows
     if vp is WIDE:
         assert any(r["oneLine"] for r in rows), rows
-    # The dot between them leads the prep only where the two share a line (2026-11-11: as the
-    # first's end, it ended its line over the pill on a tablet).
-    assert all(r["lead"] in ("none", "normal") or r["oneLine"] for r in rows), rows
-    # The calendar is in the same place on every row, a trash beside it or not.
-    assert len({r["cal"] for r in rows if r["cal"] is not None}) == 1, rows
+    # One More a row, at the same place on every row, and no tool of its own beside it: icons
+    # floated mid-card where a missing trash left its slot empty (the redesign, phase 2,
+    # 2026-11-17).
+    assert len({r["more"] for r in rows if r["more"] is not None}) == 1, rows
+    assert all(r["tools"] == 0 for r in rows), rows
     # A title is drawn its own height, never a 44px line of air round its words on a phone. A
     # line is taller than its letters by the font's own measure: 5px in Windows' type (Liberation
     # Sans, Everywhere 4.15.0), where the air this is about was 20px and more.
@@ -171,16 +169,28 @@ def _checklists():
 
 
 GROWS = r"""(() => [...document.querySelectorAll('#main .g-row')].filter((r) => r.getClientRects().length && r.querySelector('.g-name + p.small')).map((r) => {
-  const mid = (e) => { const b = e.getBoundingClientRect(); return (b.top + b.bottom) / 2; };
   const name = r.querySelector('.g-name'), sub = r.querySelector('.g-name + p.small');
-  return {row: r.dataset.item, oneLine: Math.abs(mid(name) - mid(sub)) < 4};
+  // Its lines are where its words' letters sit (a link's own box can be taller than its line,
+  // a finger's height on a phone): centres more than half a line apart are lines apart.
+  const lines = (e) => { const mids = []; const w = document.createTreeWalker(e, NodeFilter.SHOW_TEXT);
+    for (let t = w.nextNode(); t; t = w.nextNode()) { const g = document.createRange(); g.selectNodeContents(t); for (const x of g.getClientRects()) if (x.width > 0.5) mids.push((x.top + x.bottom) / 2); }
+    return mids.sort((a, b) => a - b).filter((m, i, all) => !i || m - all[i - 1] > 8).length; };
+  const n = name.getBoundingClientRect(), b = sub.getBoundingClientRect(), row = r.getBoundingClientRect();
+  return {row: r.dataset.item, nameLines: lines(name), cut: name.scrollWidth > name.clientWidth + 1 ? getComputedStyle(name).textOverflow : 'whole',
+    under: b.top >= n.bottom - 1 && Math.abs(b.left - n.left) <= 1, tall: Math.round(row.height)};
 }))()"""
 
 
-def test_a_checklist_rows_name_and_state_share_a_line_on_a_wide_screen(run, tmp_path):
-    rows = _eval(run, tmp_path, "todo", GROWS, WIDE)
+@pytest.mark.parametrize("size", [WIDE, PHONE], ids=["wide", "phone"])
+def test_a_checklist_row_is_two_lines_its_name_on_one_and_how_it_stands_under_it(run, tmp_path, size):
+    """The redesign's second round, 2026-11-17: "Noor / at Brackenridge / Advisory / First note"
+    ran four lines beside its button on a phone. On every screen a row is two lines: who, with
+    where they work, on one line cut short with "..." rather than wrapped, and how it stands
+    under it, at the same edge; at least 48px tall."""
+    rows = _eval(run, tmp_path, "todo", GROWS, size)
     assert len(rows) >= 5, rows
-    assert all(r["oneLine"] for r in rows), rows
+    assert all(r["nameLines"] == 1 and r["cut"] in ("whole", "ellipsis") for r in rows), rows
+    assert all(r["under"] and r["tall"] >= 48 for r in rows), rows
 
 
 # Each checklist's rows: where their buttons start and end, their trash, and the row's own end.
@@ -213,8 +223,10 @@ def test_a_checklist_rows_buttons_sit_together_at_its_end_one_column_down_the_ca
             # On the name's line, never under it, on a wide screen.
             assert r["top"] < r["nameTop"] + 24, (c["card"], r)
             if r["bin"] is not None:
-                # Just before the trash: a gap between pills, and what a shorter button leaves.
-                assert 0 < r["bin"] - r["right"] <= 16, (c["card"], r)
+                # Just before the trash, and 16px from it so a tap meant for the button never
+                # puts someone away (the accessibility review, 2026-11-16: 8px was one slip),
+                # with what a shorter button leaves.
+                assert 16 <= r["bin"] - r["right"] <= 24, (c["card"], r)
             else:
                 # No trash: the buttons end where the row does.
                 assert r["end"] - r["right"] <= 16, (c["card"], r)
@@ -305,7 +317,8 @@ JOBS = r"""(() => {
     const end = last ? [...last.getClientRects()].pop() : null;
     return why && end ? Math.round(Math.abs(mid(why) - (end.top + end.bottom) / 2)) : null;
   }).filter((x) => x !== null);
-  return {pens, whys, draftGap: gap('#main .card.app .app-main'), cardGap: gap('#main .card.app'), apart};
+  return {pens, whys, draftGap: gap('#main .card.app .app-main'), cardGap: gap('#main .card.app'), apart,
+    penRows: document.querySelectorAll('#main .card.job .info-panel .m-pen [data-k^="jobpen:"]').length};
 })()"""
 
 
@@ -313,8 +326,11 @@ JOBS = r"""(() => {
 def test_a_jobs_lines_keep_together_and_a_draft_is_as_tight_as_a_find(run, tmp_path, width):
     # 390 wide, where "Why" ended one line and its pencil started the next (2026-11-10).
     got = _eval(run, tmp_path, "jobs", JOBS, {"width": width, "height": 844 if width < 760 else 900})
-    # The pencil at the end of a job's facts stays beside "Why", never alone on a line.
-    assert got["pens"] and all(d <= 4 for d in got["pens"]), got
+    # What corrects a job's title, pay or place is the last line of its details, in words, on
+    # every screen: on a phone a pencil at the end of the facts pushed them to three lines (the
+    # redesign, phase 2, 2026-11-17), and the pencil is for asking Claude to rewrite what it
+    # wrote (the redesign's second round, 2026-11-17).
+    assert got["pens"] == [] and got["penRows"] >= 1, got
     assert got["whys"] and all(d <= 4 for d in got["whys"]), got
     # A draft's lines are a card's step apart, not half again more.
     assert got["draftGap"] == got["cardGap"] == "8px", got
@@ -325,21 +341,22 @@ def test_a_jobs_lines_keep_together_and_a_draft_is_as_tight_as_a_find(run, tmp_p
 
 # ------------------------------------------------------------------ a control on its own is a pill
 
-PILLS = r"""(() => [...document.querySelectorAll('[data-k="bp-tip"], [data-k="tip-seen"], [data-k="cal-all"], [data-k^="up-time:"], [data-k="work-hide"], [data-k="work-close"], [data-k^="you-edit:"], [data-k="you-edu"], [data-k="you-certs"]')]
+PILLS = r"""(() => [...document.querySelectorAll('[data-k="bp-tip"], [data-k="tip-seen"], [data-k="cal-all"], [data-k^="up-time:"], [data-k="work-hide"], [data-k="work-close"], [data-k="you-add-job"], [data-k="you-skills"], [data-k="you-edu"], [data-k="you-certs"]')]
   .filter((b) => b.getClientRects().length).map((b) => { const s = getComputedStyle(b);
     return {k: b.dataset.k.split(':')[0], pill: s.textDecorationLine === 'none' && parseFloat(s.borderTopLeftRadius) >= 12 && !/rgba\(0, 0, 0, 0\)|transparent/.test(s.backgroundColor)}; }))()"""
 
 
 def test_a_control_standing_on_its_own_is_a_pill_never_underlined_words(run, tmp_path):
     # Got it, Add all to your calendar, Add the time, the work panel's Hide, the sheet's Close
-    # and Your profile's Change: underlined words as controls, against the page's own rule
-    # (the review, 2026-11-10).
+    # and Your profile's Add a past job, Change skills and Change: underlined words as controls,
+    # against the page's own rule (the review, 2026-11-10). A past job is a row that opens its
+    # sheet since 2026-11-17 (the name cards test).
     seen = []
     for vp, hashes, opener in ((WIDE, ["brief", "interviews", "todo", "profile"], None), (PHONE, ["todo"], "pill")):
         steps = [dict({"hash": h_, "eval": PILLS}, **({"open": opener} if opener else {})) for h_ in hashes]
         got = _go(run, tmp_path, steps, vp, clock=T, seed=WORK)
         seen += [x for a in got["after"] for x in a["eval"]]
-    assert {x["k"] for x in seen} >= {"bp-tip", "cal-all", "up-time", "work-hide", "work-close", "you-edit", "you-edu", "you-certs"}, seen
+    assert {x["k"] for x in seen} >= {"bp-tip", "cal-all", "up-time", "work-hide", "work-close", "you-add-job", "you-skills", "you-edu", "you-certs"}, seen
     assert [x for x in seen if not x["pill"]] == [], seen
 
 
@@ -348,7 +365,7 @@ def test_a_control_standing_on_its_own_is_a_pill_never_underlined_words(run, tmp
 WEEKS = r"""(() => { const c = document.querySelector('#main details.chart'); if (!c) return null;
   const svg = c.querySelector('svg.weeks-svg');
   return {open: c.open, chart: svg && svg.getClientRects().length ? Math.round(svg.getBoundingClientRect().height) : 0,
-          chevrons: [...c.querySelectorAll('summary')].map((s) => getComputedStyle(s, '::after').content !== 'none' && getComputedStyle(s, '::after').borderRightStyle === 'solid')}; })()"""
+          chevrons: [...c.querySelectorAll('summary')].map((s) => getComputedStyle(s, '::after').content !== 'none' && getComputedStyle(s, '::after').clipPath.startsWith('polygon'))}; })()"""
 
 
 def test_the_weeks_card_on_progress_shows_its_chart_and_says_it_folds(run, tmp_path, vp):
@@ -424,14 +441,20 @@ def test_a_phone_draws_the_page_at_its_own_size_by_default(run, tmp_path):
 
 
 PROFILE = r"""(() => { const card = document.querySelector('#main .prof-missing'), row = card && card.querySelector('li');
-  if (!row) return null; const t = card.querySelector('.prof-h').getBoundingClientRect(), r = row.firstElementChild.getBoundingClientRect();
-  return {inset: Math.round(r.left - t.left)}; })()"""
+  if (!row) return null;
+  const label = card.closest('.prof-sec').querySelector('h3.group').getBoundingClientRect(), c = card.getBoundingClientRect();
+  const r = row.firstElementChild.getBoundingClientRect();
+  const job = document.querySelector('#main .prof-job-main'), j = job.getBoundingClientRect(), jc = job.closest('.set-rows').getBoundingClientRect();
+  return {label: Math.round(label.left - c.left), inset: Math.round(r.left - c.left), jobInset: Math.round(j.left - jc.left)}; })()"""
 
 
-def test_what_is_still_to_fill_in_reads_at_the_cards_own_edge(run, tmp_path, vp):
+def test_what_is_still_to_fill_in_reads_as_the_profiles_other_rows(run, tmp_path, vp):
     # A Settings row's 16px inset put each line a step in from the card's title (2026-11-10).
+    # Since the redesign's second round (2026-11-17) Your profile is Settings' grouped rows: each
+    # part's label over its card at the card's own edge, and every row's words one inset in,
+    # what is still to fill in as a past job's.
     got = _eval(run, tmp_path, "profile", PROFILE, vp)
-    assert got is not None and abs(got["inset"]) <= 1, got
+    assert got is not None and abs(got["label"]) <= 1 and got["inset"] == got["jobInset"] and got["inset"] in (13, 17), got  # the row's 12 or 16 and the hairline
 
 
 HEAD = r"""(() => { const s = document.querySelector('#main .summary.with-tool'); if (!s) return null;
@@ -560,7 +583,7 @@ def test_messages_to_send_rows_span_the_card_with_their_trash_at_its_edge(run, t
     # column in mid-card; on a phone a name wrapped to three underlined lines beside its pill
     # ("Noor at / Brackenridge / Advisory") (the screen review, 2026-11-11). The row spans the
     # card, its trash at the card's edge, its pills one column just before it (2026-11-12); a
-    # phone puts the name on its line and where they work under it.
+    # name and where they work keep one line, cut short rather than wrapped (2026-11-17).
     rows = _eval(run, tmp_path, "todo", SENDROWS, vp)
     assert rows and len(rows) >= 5, rows
     assert all(r["bin"] is not None and r["bin"] <= 8 for r in rows), rows
@@ -571,7 +594,7 @@ def test_messages_to_send_rows_span_the_card_with_their_trash_at_its_edge(run, t
         assert len({r["pill"] for r in rows}) <= 2 and max(r["pill"] for r in rows) - min(r["pill"] for r in rows) <= 2, rows
     else:
         assert all(r["nameLines"] == 1 for r in rows if r["nameLines"] is not None), rows
-        assert [r for r in rows if r["atBelow"] is not None] and all(r["atBelow"] for r in rows if r["atBelow"] is not None), rows
+        assert [r for r in rows if r["atBelow"] is not None] and not any(r["atBelow"] for r in rows if r["atBelow"] is not None), rows
 
 
 # Every "·" in a line of facts, and whether it sits on the line of what follows it.
@@ -607,11 +630,11 @@ def test_a_facts_separator_never_ends_a_line(run, tmp_path, screen, sel):
     assert dots, dots
     assert [d for d in dots if d["alone"]] == [], dots
     if screen == "interviews":
-        # The dot between what a row is and its prep is drawn, not written: on a phone, where
-        # the prep's pill takes the next line, there is none to end the line before.
-        left = _eval(run, tmp_path, screen, "[...document.querySelectorAll('#main .up-row .up-note')].filter((n) => n.nextElementSibling && n.nextElementSibling.matches('.up-prep'))"
-                     ".map((n) => [getComputedStyle(n, '::after').content, getComputedStyle(n.nextElementSibling, '::before').content])", PHONE)
-        assert left and all(a in ("none", "normal") and b in ("none", "normal") for a, b in left), left
+        # Whether the prep is ready is a chip of its own after what a row is, never a dot
+        # written or drawn between them to end a line on a phone (the redesign, phase 2).
+        left = _eval(run, tmp_path, screen, "[...document.querySelectorAll('#main .up-row .up-note')].filter((n) => n.nextElementSibling && n.nextElementSibling.matches('.state-word'))"
+                     ".map((n) => [n.textContent.trim().slice(-1), getComputedStyle(n, '::after').content, getComputedStyle(n.nextElementSibling, '::before').content])", PHONE)
+        assert left and all(t != "\u00b7" and a in ("none", "normal") and b in ("none", "normal") for t, a, b in left), left
 
 
 IVTOP = r"""(() => [...document.querySelectorAll('#main .card.interview')].filter((c) => c.getClientRects().length).map((c) => {
@@ -631,17 +654,27 @@ def test_an_interviews_card_on_a_phone_keeps_its_pill_on_the_when_line_and_its_t
 
 
 SUBJECT = ("[...document.querySelectorAll('#main .pdraft > .subject')].filter((p) => p.getClientRects().length).map((p) => {"
-           " const g = document.createRange(); g.selectNodeContents(p.children[1]); const line = g.getClientRects()[0];"
+           " const g = document.createRange(); g.selectNodeContents(p.children[1]); const lines = [...g.getClientRects()], line = lines[lines.length - 1];"
+           " const k = document.createRange(); k.selectNodeContents(p.children[0]); const label = k.getClientRects()[0];"
            " const b = p.querySelector('.btn').getBoundingClientRect();"
-           " return {words: p.children[1].textContent, off: Math.round(((b.top + b.bottom) / 2 - (line.top + line.bottom) / 2) * 10) / 10}; })")
+           " return {words: p.children[1].textContent, off: Math.round(((b.top + b.bottom) / 2 - (line.top + line.bottom) / 2) * 10) / 10,"
+           " after: Math.round(b.left - line.right), lines: new Set(lines.map((r) => Math.round(r.top))).size,"
+           " hang: lines.length ? Math.round(Math.min(...lines.map((r) => r.left)) - label.left) : null,"
+           " gap: lines.length > 1 ? Math.round(lines[1].top - lines[0].bottom) : 0}; })")
 
 
 def test_an_email_subjects_copy_sits_on_its_line(run, tmp_path, vp):
     # The README picture of 4.15.0: the subject's Copy sat 7px below "Subject: Thank you for
-    # Thursday", its top lined up with the words' top and its height hanging under them.
+    # Thursday", its top lined up with the words' top and its height hanging under them. And the
+    # subject is one run of words (the redesign's second round, 2026-11-17): in a column of its
+    # own a wrapped subject hung under its first word with 30px between its lines, so its Copy
+    # is at the run's end, in the middle of its last line, and a wrapped line starts under
+    # "Subject:".
     got = _eval(run, tmp_path, "contacts", SUBJECT, vp)
     assert got, "an email draft with a subject on Contacts"
     assert all(abs(s["off"]) <= 2 for s in got), got
+    assert all(0 <= s["after"] <= 12 for s in got), got
+    assert all(s["hang"] <= 0 and s["gap"] <= 8 for s in got if s["lines"] > 1), got
 
 
 NARROW_WHY = r"""(() => Array.from({length: 161}, (_, i) => 140 + i).flatMap((w) => [...document.querySelectorAll('#main .card.job .facts')].map((f) => {

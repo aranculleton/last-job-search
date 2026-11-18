@@ -487,11 +487,13 @@ def test_contacts_shows_each_person_as_the_engine_says(run, page, model, vp):
     top, all_ = got["after"][0]["text"], got["after"][1]["text"]
     pc = model["people_count"]
     head = "\n".join(top.split("\n")[:6])
-    # One short line: what is written to send, and who needs you (2026-11-04); the follow-ups
-    # and replies among them are on their cards.
+    # One short line, one count: what is written to send (the redesign's second round,
+    # 2026-11-17: "7 to send · 4 need you" was not the same 4 as To do's); the follow-ups and
+    # replies among them are on their cards.
     # "To send" is the engine's one count (to_send), To do's the same: a note waiting for their
     # profile is drafted but not ready, so not counted (2026-11-07).
-    assert f"{model['to_send']['n']} to send · {pc['need']} need you" in head, head
+    n = model['to_send']['n']
+    assert f"{n} {'message' if n == 1 else 'messages'} to send" in head and "need you" not in head, head
     held = [x for x in model["messages"] if x.get("hold")]
     assert held and model["to_send"]["n"] == pc["drafted"] - len(held), (model["to_send"], pc, held)
     assert "waiting to hear back" not in top
@@ -511,7 +513,7 @@ def test_contacts_shows_each_person_as_the_engine_says(run, page, model, vp):
     assert "Your connection request has not been accepted yet." in rhian and "Draft" not in rhian, rhian
     # A booked call stays booked; one gone by asks how it went.
     riley = _row(top, "Riley at Vale Health")
-    assert "Call booked" in riley and "Prepare for the call" in riley and "Replied" not in riley, riley
+    assert "Call booked" in riley and "Prepare me" in riley and "Replied" not in riley, riley
     robin = _row(top, "Robin at Wren Logistics")
     assert "How did it go?" in robin and "Draft the thank-you" in robin, robin
     # The step the person set is the button's own; no note to Claude, id or "None".
@@ -577,13 +579,16 @@ def test_their_reply_logged_turns_the_row_at_once_and_let_it_go_is_in_the_bin(ru
 def test_a_persons_page_has_their_link_and_a_late_step_reads_late(run, page):
     """contacts 18, 24, 42 and 44, contacts_chat_2 9."""
     got = run("engine", html=page, viewport=PHONE, clock=CLOCK, steps=[
-        {"hash": "contacts", "open": "pname:row:kestrel_bank_lowther", "read": "dialog"},
+        # Their rarer updates are under the card's one Update menu (the redesign's second round,
+        # 2026-11-17), the way to stop last in it.
+        {"hash": "contacts", "open": "pname:row:kestrel_bank_lowther"},
+        {"open": "menu:dupd:kestrel_bank_lowther", "read": "dialog"},
         {"hash": "contacts", "more": "kestrel_bank_lowther", "read": "#main [data-item=\"kestrel_bank_lowther\"]"}])
     assert not got["errors"], got["errors"]
-    page_text = got["after"][0]["dialog"]
+    page_text = got["after"][1]["dialog"]
     assert "Open the link" in page_text and "4481616253" not in page_text and "http" not in page_text
     assert "Don't contact again" in page_text
-    more = got["after"][1]["text"]
+    more = got["after"][2]["text"]
     assert "conversation" not in more.split("More", 1)[-1].lower(), "the name opens their page"
 
 
@@ -632,6 +637,7 @@ def test_small_things_each_say_what_they_are(run, page, model):
         "idris_page": {"hash": "contacts", "open": "pname:row:moss_energy_orme", "read": "dialog"},
         "close1": {"eval": close},
         "shirin_page": {"hash": "contacts", "open": "pname:row:kestrel_bank_lowther", "read": "dialog"},
+        "update": {"open": "menu:dupd:kestrel_bank_lowther"},
         "stop": {"click": "Don't contact again", "eval": "[...document.querySelectorAll('dialog[open]')].map((d) => d.textContent).join(' | ')"},
         "close2": {"eval": close},
         # Each message is on its person's card in Contacts (2026-11-04); the buttons counted are
@@ -744,14 +750,14 @@ def test_chat_opens_on_its_newest_answers_unanswered_ones_and_dots_a_new_one(run
     msgs["talk/cloud-1/messages/m21"] = {"from": "you", "text": "Can you tidy the old drafts please?", "at": "2026-10-24T09:00:00Z", "_v": 1}
     msgs["talk/cloud-1/messages/m22"] = {"from": "claude", "text": "Done: the old drafts are set aside.", "at": "2026-10-25T18:10:00Z", "_v": 1}
     got = run("engine", html=page, viewport=PHONE, clock=CLOCK, seed=msgs, steps=[
-        {"hash": "contacts", "eval": "!!document.querySelector('.tab .navdot')"},
+        {"hash": "contacts", "eval": "!!document.querySelector('#chat-fab .fab-new:not([hidden])')"},
         # Waited for, with a time limit, never read after a set time.
         {"hash": "chat", "ready": PLACED, "eval": PLACED},
         {"hash": "chat", "read": "#main .talk-list"},
-        {"hash": "contacts", "eval": "!!document.querySelector('.tab .navdot')"}])
+        {"hash": "contacts", "eval": "!!document.querySelector('#chat-fab .fab-new:not([hidden])')"}])
     assert not got["errors"], got["errors"]
     a = got["after"]
-    assert a[0]["eval"] is True, "a new answer not seen yet dots the Chat tab"
+    assert a[0]["eval"] is True, "a new answer not seen yet dots the Chat button"
     assert a[1]["eval"] is True, "Chat opens on its newest message and the box"
     assert a[2]["text"].count("No answer to this one") == 1, a[2]["text"]
     assert a[3]["eval"] is False, "seen, the dot goes"
@@ -818,7 +824,8 @@ def test_at_scale_the_counts_are_the_engines_and_a_message_past_five_opens(run, 
          "eval": "!!document.querySelector('[data-item=\"%s\"] details.pdraft[open]')" % whose}])
     assert not got["errors"], got["errors"]
     head = "\n".join(got["after"][0]["text"].split("\n")[:6])
-    assert f"{pc['need']} need you" in head, head
+    # Its one count is the engine's (to_send), however many need you.
+    assert f"{m['to_send']['n']} messages to send" in head, head
     assert got["after"][1]["eval"] is True, "a draft past the first five is shown when opened"
     light = [x for x in _whole(crowd, m) if x["id"] not in {p["id"] for p in m["people"]}]
     assert light, "the crowd reaches past the page's own list"

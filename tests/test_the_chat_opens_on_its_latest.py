@@ -46,7 +46,7 @@ def test_chat_opens_at_its_newest_shows_the_last_day_and_has_a_way_down(run, tmp
         {"hash": "chat", "wait": 300, "eval": probe},
         {"eval": "(window.scrollTo(0, 0), window.dispatchEvent(new Event('scroll')), 1)"},
         {"wait": 300, "eval": probe},
-        {"click": "Go to the latest message", "wait": 300, "eval": probe},
+        {"click": "Latest: go to the latest message", "wait": 300, "eval": probe},
     ])
     assert not got["errors"], got["errors"]
     first = got["after"][0]["eval"]
@@ -78,7 +78,7 @@ def test_latest_on_a_phone_stops_with_the_field_at_the_foot_of_the_screen(run, t
     got = run("engine", html=html, viewport={"width": 390, "height": 760}, clock=CLOCK, seed=_talk(), steps=[
         {"hash": "chat", "wait": 300},
         {"eval": "(window.scrollTo(0, 0), window.dispatchEvent(new Event('scroll')), 1)"},
-        {"click": "Go to the latest message", "wait": 300, "eval": gap},
+        {"click": "Latest: go to the latest message", "wait": 300, "eval": gap},
     ])
     assert not got["errors"], got["errors"]
     left = got["after"][2]["eval"]

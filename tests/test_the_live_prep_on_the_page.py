@@ -119,7 +119,8 @@ def _go(run, tmp_path, model, steps, vp, scheme=None, touch=False):
     return got
 
 
-OPEN = {"hash": "interviews", "click": "Read your prep", "read": "dialog.detail"}
+# Coming up's row is its own tap to the prep (the redesign, phase 2, 2026-11-17).
+OPEN = {"hash": "interviews", "open": "up-go:up-app-larkspur-supply-phone-screen-2026-10-28", "read": "dialog.detail"}
 VISIBLE = "(el) => !!el && el.checkVisibility() && el.getClientRects().length > 0"
 Q1 = '[data-lpq="q1"]'
 # Where a tap went, once its smooth scroll has brought it to the top of the screen.
@@ -517,10 +518,13 @@ def test_in_the_days_before_practice_is_on_the_interviews_card(run, tmp_path, vp
     # The UX review of 2026-11-10 (U-4): Practise with Claude was under More, and nothing said
     # to practise. Two days before and the day before, the card says to practise three
     # questions today and its first pill opens the prep with the answers hidden, at the first
-    # question likely to come up; three days before and on the day itself, reading leads and
-    # the calendar is beside it.
+    # question likely to come up; three days before and on the day itself, reading leads, the
+    # calendar first under its More (the redesign's second round, 2026-11-17: a To do card's
+    # face is its next step and one more, and "Read your prep | Add to calendar | More" was a
+    # wall of grey).
     card = ("(() => { const c = [...document.querySelectorAll('#main [data-item]')].find((x) => x.dataset.item === 'soon:%s');"
             " return c ? {pills: [...c.querySelectorAll(':scope > .card-actions > .btn')].map((b) => b.textContent.trim()),"
+            " more: [...c.querySelectorAll('.more-panel .btn')].map((b) => b.textContent.trim()),"
             " text: c.textContent} : null; })()" % IV)
     opened = _ev("const d = document.querySelector('dialog.detail'); const a = document.activeElement;"
                  " return {simple: [...d.querySelectorAll('.lp-simple')].filter(vis).length, shown: [...d.querySelectorAll('.lp-reveal')].filter(vis).length,"
@@ -538,7 +542,7 @@ def test_in_the_days_before_practice_is_on_the_interviews_card(run, tmp_path, vp
         at = seen[days][0]
         assert at["pills"] == ["Practise 3 questions", "Read your prep"], (days, at["pills"])
         assert "Today: practise 3 questions, about 10 minutes." in at["text"], at["text"]
-    assert seen[3][0]["pills"] == ["Read your prep", "Add to calendar"], seen[3][0]["pills"]
+    assert seen[3][0]["pills"] == ["Read your prep"] and seen[3][0]["more"][:1] == ["Add to calendar"], seen[3][0]
     assert "practise 3 questions" not in seen[3][0]["text"]
     drill = seen[1][1]
     assert drill["simple"] == 0 and drill["shown"] > 0 and drill["at"], drill
@@ -783,10 +787,13 @@ def test_on_a_practice_day_coming_up_and_to_do_lead_with_the_same_step(run, tmp_
     # questions while Coming up's row led with Read your prep.
     todo = ("(() => { const c = [...document.querySelectorAll('#main [data-item]')].find((x) => x.dataset.item === 'soon:%s');"
             " return c ? c.querySelector('.card-actions > .btn').textContent.trim() : null; })()" % IV)
-    row = "(() => { const b = document.querySelector('#main .up-prep .btn'); return b ? b.textContent.trim() : null; })()"
-    for days, lead in ((1, "Practise 3 questions"), (3, "Read your prep")):
+    # Coming up's row for that interview: its step, else (since the redesign's phase 2,
+    # 2026-11-17) the row is its own tap to read the prep, with its "Prep ready" chip.
+    row = ("(() => { const r = [...document.querySelectorAll('#main .up-row')].find((x) => (x.querySelector('.up-link') || {getAttribute: () => ''}).getAttribute('href') === '#interviews/%s');"
+           " if (!r) return null; const b = r.querySelector('.up-prep .btn'); return b ? b.textContent.trim() : r.classList.contains('opens') ? 'Read your prep: ' + r.querySelector('.up-sub .state-word').textContent : null; })()" % IV)
+    for days, lead, step in ((1, "Practise 3 questions", "Practise 3 questions"), (3, "Read your prep", "Read your prep: Prep ready")):
         got = _go(run, tmp_path, _soon(days), [{"hash": "todo", "eval": todo}, {"hash": "interviews", "eval": row}], vp)
-        assert [a["eval"] for a in got["after"]] == [lead, lead], (days, [a["eval"] for a in got["after"]])
+        assert [a["eval"] for a in got["after"]] == [lead, step], (days, [a["eval"] for a in got["after"]])
 
 
 def test_a_term_is_a_quiet_dotted_word_that_wraps_with_its_sentence(run, tmp_path, vp):
@@ -1097,7 +1104,11 @@ def test_the_prep_uses_the_width_and_sets_what_to_say_first_beside_the_questions
     held = _ev("const p = document.querySelector('[data-lpp=p2]'); const n = p.querySelector('.lp-narr'); const r = n.__drawnRect();"
                " const bar = document.querySelector('.lp-bar').__drawnRect(); const life = document.querySelector('.lp-life').__drawnRect();"
                " return {pinned: n.classList.contains('lp-pin'), top: Math.round(r.top - bar.bottom), inView: r.top >= bar.bottom - 1 && r.bottom <= life.top + 1};")
-    got = _go(run, tmp_path, _listed(_model(_ctx())), [dict(OPEN, eval=look), {"eval": down}, {"wait": 300, "eval": held}], vp)
+    # A 15-inch laptop's window for the wide look: at the redesign's 15px (2026-11-16) this
+    # sample's Say first is taller than a 1440 by 900 window leaves it, and scrolls with the
+    # questions there as a tall one always has; here it stays beside them.
+    size = {"width": 1680, "height": 1050} if vp is WIDE else vp
+    got = _go(run, tmp_path, _listed(_model(_ctx())), [dict(OPEN, eval=look), {"eval": down}, {"wait": 300, "eval": held}], size)
     at, kept = got["after"][0]["eval"], got["after"][2]["eval"]
     assert at["n"] > 10 and at["most"] <= 95, ("no line read aloud past about 95 characters", at["most"])
     if vp is WIDE:

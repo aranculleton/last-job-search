@@ -126,3 +126,53 @@ def test_a_reply_never_offers_to_set_it_aside_which_the_engine_would_refuse(run,
     ], PHONE, clock=T)
     sheet = got["after"][0]["text"]
     assert "Not Juno?" in sheet and "set this note aside" not in sheet
+
+
+# ------------------------------------------------------------------ a name starts with what it shows
+
+# WCAG 2.5.3, Label in Name: a speech user says the words they see. Every control's accessible
+# name starts with its visible words, on every screen and in every card's sheet, with each fold
+# and menu open (the accessibility review of the redesign's second round, 2026-11-17: "Take it
+# off" was named "Take off: ...", a "More" "Show all of the ...", "They sent me a job" "<name>
+# sent me a job", "Latest" "Go to the latest message"). The name is worked out as a screen
+# reader does: aria-label, else the words inside, leaving out what is hidden from it, with a
+# picture's own name; the visible words leave out what is only for a screen reader.
+LABEL_IN_NAME = r"""(() => {
+  const root = document.querySelector('dialog[open]') || document.querySelector('#main');
+  const vis = (e) => e.getClientRects().length > 0 && e.checkVisibility({visibilityProperty: true});
+  const norm = (t) => t.toLowerCase().replace(/’/g, "'").replace(/[^a-z0-9'£%]+/g, '');
+  const shown = (el) => { let t = ''; for (const c of el.childNodes) { if (c.nodeType === 3) t += ' ' + c.textContent;
+    else if (c.nodeType === 1 && !c.matches('.sr-only, [aria-hidden="true"], svg, [hidden], [role="tooltip"]') && getComputedStyle(c).display !== 'none') t += ' ' + shown(c); } return t; };
+  const named = (el) => { let t = ''; for (const c of el.childNodes) { if (c.nodeType === 3) t += ' ' + c.textContent;
+    else if (c.nodeType === 1 && c.getAttribute('aria-hidden') !== 'true' && !c.matches('svg, [hidden], [role="tooltip"]')) t += ' ' + (c.getAttribute('role') === 'img' ? c.getAttribute('aria-label') || '' : named(c)); } return t; };
+  const bad = [];
+  for (const el of root.querySelectorAll('button, a[href], summary, [role="button"], [role="link"], [role="radio"], [role="tab"]')) {
+    if (!vis(el) || el.getAttribute('aria-labelledby')) continue;
+    const v = norm(shown(el));
+    const n = norm(el.getAttribute('aria-label') || named(el));
+    if (v && n && !n.startsWith(v)) bad.push(shown(el).replace(/\s+/g, ' ').trim() + ' => ' + (el.getAttribute('aria-label') || named(el).replace(/\s+/g, ' ').trim()));
+  }
+  return [...new Set(bad)];
+})()"""
+OPEN_ALL = ("(() => { const ds = [...(document.querySelector('dialog[open]') || document.querySelector('#main')).querySelectorAll('details')];"
+            " ds.forEach((d) => { d.open = true; }); return ds.length; })()")
+SCREENS = ["brief", "todo", "jobs", "applied", "contacts", "interviews", "progress", "chat", "settings", "profile"]
+SHEETS = ["contacts/copperleaf_pay_tamsin/open", "contacts/fernhill_freight_halloway/open", "interviews/int-copperleaf-payments/open",
+          "interviews/int-larkspur-supply/open", "jobs/app-fernhill-ops/open", "jobs/emp~larkspur-retail/open", "interviews/emp~copperleaf-pay/open",
+          "past job"]
+PAST_JOB = "you-job:you-job-Brindle---Hart-Logistics-Senior-Operations-Analyst"
+
+
+@pytest.mark.parametrize("vp", [PHONE, SIZES["wide"]], ids=["phone", "wide"])
+def test_every_controls_name_starts_with_the_words_it_shows(run, tmp_path, vp):
+    bad, opened = {}, 0
+    for where in SCREENS + SHEETS:
+        # Every fold and menu open first: a row's More draws its items once it is opened.
+        step = {"hash": "jobs", "open": "jobsw:applied", "eval": OPEN_ALL} if where == "applied" else \
+            {"hash": "profile", "open": PAST_JOB, "eval": OPEN_ALL} if where == "past job" else {"hash": where, "eval": OPEN_ALL}
+        got = _go(run, tmp_path, [step, {"wait": 300, "eval": LABEL_IN_NAME}], vp, clock=T)
+        opened += got["after"][0]["eval"] or 0
+        if got["after"][1]["eval"]:
+            bad[where] = got["after"][1]["eval"]
+    assert opened > 10, "the folds and menus were opened"
+    assert not bad, bad

@@ -110,7 +110,7 @@ RULES = (
     {"id": "duplicates", "area": "jobs", "name": "The same job posted again",
      "where": ("tools/throttle.py:RELIST_WINDOW",),
      "ends": "after {relist} days the same title at the employer counts as a new opening",
-     "why": "", "override": "add it yourself with Add a job",
+     "why": "", "override": "add it yourself with Add a job you found",
      "missing": "a job with no title or employer is never taken for another",
      "shown": "Jobs"},
     {"id": "no_team", "area": "jobs", "name": "Employers with no team for you where you look",

@@ -76,6 +76,12 @@ def test_an_opened_fold_puts_its_buttons_beside_its_words_on_a_wide_screen_and_a
         assert abs(f["right"] - last) <= 4, ("its buttons stand at the right edge of a wide fold, never bunched on the left", f)
         if f["words"]:
             first = min(f["buttons"], key=lambda b: b["t"])
+            if f["fold"] == "det:info:device-link":
+                # The page's own address is the one row whose words take the whole width, its
+                # Copy link under it at the right edge (DESIGN.md, "An opened setting"): beside
+                # the button its 36-letter id did not fit a two-column Settings (2026-11-17).
+                assert first["name"] == "Copy link" and first["t"] >= f["words"]["b"] - 1, ("the address over its Copy link", f)
+                continue
             assert first["t"] < f["words"]["b"], ("beside the words they belong to, not under them", f)
     # The waiting download's line: its Undo at the right, under where its button stood.
     waited = _go(run, tmp_path, [{"hash": "settings", "eval": FOLDS}], WIDE, model=m, seed=seed, clock=T)["after"][0]["eval"]
@@ -211,9 +217,11 @@ def _long_brief(tmp_path):
     path = os.path.join(str(tmp_path), "long.html")
     with open(path, "w", encoding="utf-8") as fh:
         fh.write(app_page.standalone(app_page.render(m)))
+    # The live change lands in News: Next is To do's own list since the redesign (2026-11-16,
+    # DESIGN.md, One ranked list), so a brief's own steps changing no longer redraws it.
     view = copy.deepcopy(m["brief"])
-    nxt = next(s for s in view["sections"] if s["kind"] == "next")
-    nxt["items"][0] = dict(nxt["items"][0], text="Reply to Juno at Larkspur Retail today.")
+    nws = next(s for s in view["sections"] if s["kind"] == "news")
+    nws["items"][0] = dict(nws["items"][0], text="Item 0: the central bank held its rate this week, and planning teams expect steadier demand, again today.")
     return path, view
 
 
@@ -232,12 +240,12 @@ def test_a_long_brief_scrolled_fast_on_a_phone_keeps_every_panel_drawn_through_l
     for i, s in enumerate(steps):
         for k, tag, chars in s["panels"]:
             assert chars > 0, ("a panel lost its words", s["what"], k)
-            changed = i >= upd and k == "bp:next"
+            changed = i >= upd and k == "bp:news"
             assert changed or tag == first[k], ("a panel was torn down and built again", s["what"], k)
         if 0 < i <= upd and steps[i - 1]["what"] != "opened":
             assert s["y"] >= steps[i - 1]["y"], ("scrolling down never jumps back up", steps[i - 1], s)
     assert steps[upd]["y"] == steps[upd - 1]["y"] == steps[upd - 1]["max"], ("the page stays where it was", steps[upd - 1], steps[upd])
-    assert "Reply to Juno at Larkspur Retail today." in r["text"], "the panel that changed shows the change"
+    assert "planning teams expect steadier demand, again today." in r["text"], "the panel that changed shows the change"
 
 
 # ------------------------------------------------------------------ Claude's work, 4 November
@@ -397,3 +405,19 @@ def test_a_refused_tap_with_nothing_asked_still_has_a_way_out(run, tmp_path):
     kind, text, one_bin, has_date = card
     assert kind != "Setup" and "2026-10-28" not in text and "28 Oct" in text, card
     assert one_bin and has_date and "in Chat" not in text, card
+
+
+WIDTHS = r"""(() => { const s = document.querySelector('#main > .sec'); const kids = [...document.querySelectorAll('#main .sec.settings-page > .set-group, #main .prof-grid > *')].filter((e) => e.getClientRects().length);
+  return {sec: Math.round(s.getBoundingClientRect().width), main: Math.round(document.getElementById('main').getBoundingClientRect().width),
+    lefts: [...new Set(kids.map((e) => Math.round(e.getBoundingClientRect().left)))], widest: Math.max(...kids.map((e) => Math.round(e.getBoundingClientRect().width)))}; })()"""
+
+
+def test_settings_and_your_profile_are_the_whole_width_their_groups_in_two_columns(run, tmp_path):
+    # Every screen is the whole width (DESIGN.md): Settings and Your profile were the only 720px
+    # columns (the redesign's second round, 2026-11-17). On a wide screen they take the column
+    # every screen takes, their groups in two columns of a reading measure.
+    got = _go(run, tmp_path, [{"hash": "jobs", "eval": WIDTHS}, {"hash": "settings", "eval": WIDTHS}, {"hash": "profile", "eval": WIDTHS}], WIDE, clock=T)
+    jobs, settings, profile = (a["eval"] for a in got["after"])
+    for name, r in (("settings", settings), ("profile", profile)):
+        assert abs(r["sec"] - jobs["sec"]) <= 1, (name, r, jobs)
+        assert len(r["lefts"]) == 2 and r["widest"] <= r["sec"] // 2, (name, r)

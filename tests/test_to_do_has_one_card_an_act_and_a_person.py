@@ -5,7 +5,7 @@ The review, read as a tired person on a phone with dozens of things owed:
 - Someone was on three cards at once: their follow-up, what they asked for and a job's "do not
   apply cold". One card for them, the referral its grey box; a referral with no row about
   them, and a closed posting, are notes on their own cards, never To do cards.
-- Four small yes-or-no questions were four cards. One card, "4 quick answers", among the
+- Four small yes-or-no questions were four cards. One card, "Answer 4 quick questions", among the
   first five, one question at a time with "1 of 4", each answered with its own control, the
   next there at once.
 - A checklist row had one button: a follow-up done some other way could only be put off. Each
@@ -58,11 +58,11 @@ def test_the_small_questions_are_one_card_among_the_first_five_one_at_a_time(run
     ], vp, clock=T)
     first, q1 = got["after"][0]["eval"]
     assert "quick" in first and len(first) <= 5, first
-    assert q1["title"] == "4 quick answers" and q1["at"] == "1 of 4", q1
+    assert q1["title"] == "Answer 4 quick questions" and q1["at"] == "1 of 4", q1
     assert q1["q"] == "Have you used Looker?" and q1["buttons"] == ["Yes, I have", "No"], q1
     # No card of its own for any of them, nor the checklist "Did these notes go?".
     text = got["after"][0]["text"]
-    for gone in ("Did these notes go?", "Two answers about Quayside Foods"):
+    for gone in ("Did these notes go?", "Did you apply to Quayside Foods?"):
         assert text.count(gone) <= (1 if gone in q1["q"] else 0), (gone, text)
     a = [x for x in got["actions"] if x["item"] == "q-larkspur-data-looker"]
     assert a and a[-1]["action"] == "consent.yes", got["actions"]
@@ -74,13 +74,16 @@ def test_a_person_is_one_card_with_the_referral_in_its_grey_box(run, tmp_path, v
     tamsin = '[data-item="due-tamsin-resume"]'
     got = _go(run, tmp_path, [
         {"hash": "todo", "read": tamsin, "eval": "[...document.querySelectorAll('#main [data-card]')].filter((c) => /Tamsin/.test(c.textContent) && !c.parentElement.closest('[data-card]')).length"},
-        {"click": "Done: Send your CV to Tamsin", "exact": True, "count": tamsin},
+        # What she asked for is one task in one wording, its Done "I sent it" once the CV can be
+        # got (the redesign's second round, 2026-11-17).
+        {"click": "I sent it: Send Tamsin your CV", "exact": True},
+        {"submit": True, "count": tamsin},
     ], vp, clock=T)
     card = got["after"][0]["text"]
     assert got["after"][0]["eval"] == 1, "one card for Tamsin"
-    assert "Send your CV to Tamsin" in card and "Tamsin has put your name forward at Copperleaf Pay" in card, card
+    assert "Send Tamsin your CV" in card and "Tamsin has put your name forward at Copperleaf Pay" in card, card
     assert "do not apply cold" not in got["after"][0]["text"].replace(card, ""), "never a card of its own"
-    assert "This posting has closed" not in got["after"][1]["text"], "a closed posting is set aside, never a To do"
+    assert "This posting has closed" not in got["after"][2]["text"], "a closed posting is set aside, never a To do"
     assert [x for x in got["actions"] if x["item"] == "due-tamsin-resume" and x["action"] == "due.done"]
 
 
@@ -107,13 +110,17 @@ def test_a_checklist_row_has_its_next_step_and_done_and_its_bin_they_replied(run
 def test_to_do_never_offers_a_fix_and_the_draft_says_what_claude_will_fix(run, tmp_path):
     # Claude makes the draft again by itself (tools/app.py self_fixes queues it); a closed
     # posting is set aside by itself; a referral is a note on the job.
-    got = _go(run, tmp_path, [{"hash": "todo"}, {"hash": "drafts", "read": '[data-item="app-quayside-demand"]'}], WIDE, clock=T)
+    # Its "Did you apply?" question comes first, on the one card every such question has (the
+    # redesign's second round, 2026-11-17); answered "Not yet", the draft is its own card again.
+    got = _go(run, tmp_path, [{"hash": "todo"}, {"hash": "drafts", "read": '[data-item="app-quayside-demand"]'},
+                              {"click": "Not yet", "within": '#main [data-item="app-quayside-demand"]', "read": '#main .card.app[data-item="app-quayside-demand"]'}], WIDE, clock=T)
     todo = got["after"][0]["text"]
     for b in ("Make it again", "Shorten it", "Set it aside", "the CV runs to a second page"):
         assert b not in todo, (b, todo)
+    assert "Did you apply to Quayside Foods?" in got["after"][1]["text"], got["after"][1]["text"]
     # The check's own finding leads the line since the UX review of 2026-11-10 (U-19), so it
     # starts with a capital: "The CV runs to ...: Claude makes it again next."
-    assert "The CV runs to a second page by two lines" in got["after"][1]["text"] and "Make it again" not in got["after"][1]["text"], got["after"][1]["text"]
+    assert "The CV runs to a second page by two lines" in got["after"][2]["text"] and "Make it again" not in got["after"][2]["text"], got["after"][2]["text"]
 
 
 def test_a_fix_claude_could_not_make_is_said_on_to_do_with_no_button(run, tmp_path):

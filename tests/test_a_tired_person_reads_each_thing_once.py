@@ -37,7 +37,9 @@ def test_the_side_menu_has_coming_up_with_the_places_and_settings_alone_at_its_f
     wide = _go(run, tmp_path, [{"hash": "todo", "eval": side}], WIDE, clock=T)["after"][0]["eval"]
     assert wide == {"main": ["Brief", "To do", "Jobs", "Contacts", "Coming up", "Chat"], "foot": ["Settings"]}, wide
     phone = _go(run, tmp_path, [{"hash": "todo", "eval": tabs}], PHONE, clock=T)["after"][0]["eval"]
-    assert phone == ["Brief", "To do", "Jobs", "Contacts", "Chat"], ("five places at most on a phone", phone)
+    # Coming up is a tab and Chat the header's button, as on a computer (the redesign's second
+    # round, 2026-11-17: on a phone Coming up opened only through the Brief).
+    assert phone == ["Brief", "To do", "Jobs", "Contacts", "Coming up"], ("five places at most on a phone", phone)
 
 
 def test_a_message_marked_sent_leaves_its_card_with_its_one_undo_in_the_toast(run, tmp_path):

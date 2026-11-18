@@ -48,15 +48,24 @@ def test_a_job_card_says_when_it_was_posted_and_why_it_scored_what_it_did(run, t
     m = _sample()
     _row(m, "r12-1")["reasons"] = {"good": "Matches your skills: SQL, Python.", "watch": "Asks for 5+ years in banking."}
     card = '[data-item="r12-1"]'
-    got = _go(run, tmp_path, [
+    steps = [
         {"hash": "jobs", "read": card + " .facts"},
         # Its details are a fold of their own, from "Why" on its line of facts (2026-11-05).
         {"click": "Why it scored 84: Harbourline Bank, Pricing Analyst", "eval": ROWS.replace("ID", "r12-1")},
-    ], PHONE, model=m, clock=T)
+    ]
+    got = _go(run, tmp_path, steps, WIDE, model=m, clock=T)
     assert "Posted 5 days ago" in got["after"][0]["text"], got["after"][0]["text"]
     rows = got["after"][1]["eval"]
     assert rows[0] == ["Why it scored 84", "Matches your skills: SQL, Python."], rows
     assert rows[1] == ["Watch out", "Asks for 5+ years in banking."], rows
+    # On a phone its line of facts is two lines at most, the pay and the closing day under
+    # where it is, and when it was posted is its details' "When" row (the redesign, phase 2,
+    # 2026-11-17): every card still says when it was posted.
+    got = _go(run, tmp_path, steps, PHONE, model=m, clock=T)
+    assert "Posted 5 days ago" not in got["after"][0]["text"] and "Closes 31 Oct" in got["after"][0]["text"], got["after"][0]["text"]
+    rows = got["after"][1]["eval"]
+    assert rows[:3] == [["Why it scored 84", "Matches your skills: SQL, Python."], ["Watch out", "Asks for 5+ years in banking."],
+                        ["When", "Posted 5 days ago"]], rows
 
 
 def test_a_jobs_line_of_facts_says_where_when_posted_and_when_found(run, tmp_path):
@@ -82,7 +91,9 @@ def test_a_jobs_line_of_facts_says_where_when_posted_and_when_found(run, tmp_pat
 def test_each_pencil_stands_beside_its_own_documents_words(run, tmp_path):
     """The CV's pencil beside "CV 1 page" and the letter's beside "letter 1 page", from the
     engine's own words for each: two pencils side by side at the end of the line, one wrapped
-    onto a line of its own, said nothing of which was which (the screenshots, 2026-11-05)."""
+    onto a line of its own, said nothing of which was which (the screenshots, 2026-11-05).
+    Since the redesign's phase 2 (2026-11-17) each document is a row of its own, its pencil at
+    the row's end on its line: grey capsules "CV ✎ letter ✎" read as tags."""
     sys.path.insert(0, os.path.join(ROOT, "tools"))
     import app_model
     m = _sample()
@@ -90,46 +101,14 @@ def test_each_pencil_stands_beside_its_own_documents_words(run, tmp_path):
     a["checks"] = app_model._checks([{"kind": "resume", "made": True, "pages": 1},
                                      {"kind": "letter", "made": True, "pages": 1}], 1, "CV")
     got = _go(run, tmp_path, [{"hash": "jobs", "eval": """[...document.querySelectorAll(
-      '[data-item="app-ellerwick-insight"] .checks button')].map((b) => { const w = b.previousElementSibling;
+      '[data-item="app-ellerwick-insight"] .doc-row')].map((r) => { const b = r.querySelector('.doc-acts .btn.icon-only'), w = r.querySelector('.doc-name');
         const mid = (e) => { const r = e.getBoundingClientRect(); return (r.top + r.bottom) / 2; };
-        return [b.textContent.trim(), w ? w.textContent : "", !!w && Math.abs(mid(w) - mid(b)) < 6
-          && getComputedStyle(b.parentElement).whiteSpace === "nowrap"]; })"""}],
+        return [b ? b.textContent.trim() : "", r.querySelector('.doc-words').textContent, !!b && Math.abs(mid(w) - mid(b)) < 12]; })"""}],
         PHONE, model=m, clock=T)
     pens = got["after"][0]["eval"]
-    assert [w for _, w, _ in pens] == ["CV 1 page", "letter 1 page"], pens
+    assert [w for _, w, _ in pens] == ["CV 1 page \u00b7 checked", "Cover letter 1 page \u00b7 checked"], pens
     assert pens[0][0].startswith("Edit the CV") and pens[1][0].startswith("Edit the letter"), pens
-    # Each pencil on the line of the words it edits, the two kept from breaking apart: on a phone
-    # the letter's pencil wrapped onto a line of its own (the screenshots, 2026-11-05).
-    assert all(same for _, _, same in pens), pens
-
-
-MORE_PLACE = """(() => { const c = document.querySelector('[data-item="ID"]'); const s = c.querySelector('summary.more-btn');
-  const row = s.closest('.card-actions'); const first = row.querySelector('.btn, a'); const p = c.querySelector('.more-panel:not(.info-panel)');
-  const mid = (e) => { const b = e.getBoundingClientRect(); return (b.top + b.bottom) / 2; };
-  return {sameLine: Math.abs(mid(s) - mid(first)) < 4, below: p.getBoundingClientRect().top >= row.getBoundingClientRect().bottom - 1,
-    shown: p.getClientRects().length > 0}; })()"""
-ONE_SIZE = """(() => { const sizes = new Set(); const p = document.querySelector('[data-item="ID"] .info-panel');
-  for (const el of p.querySelectorAll('*')) { if (!el.getClientRects().length || el.closest('.sr-only')) continue;
-    if ([...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())) sizes.add(getComputedStyle(el).fontSize); }
-  return [...sizes]; })()"""
-
-
-# Each card's details fold, opened from its line of facts.
-FOLD = {"r12-1": "Why it scored 84: Harbourline Bank, Pricing Analyst", "app-ellerwick-insight": "Why it scored 66: Ellerwick Trust, Research Analyst",
-        "app-harbourline-risk": "Details: Harbourline Bank, Credit Risk Analyst"}
-
-
-@pytest.mark.parametrize("where,item", [("jobs", "r12-1"), ("drafts", "app-ellerwick-insight"), ("applied", "app-harbourline-risk")])
-def test_more_stays_in_the_actions_row_and_its_panel_is_one_size(run, tmp_path, where, item):
-    """Opened, More left its row and stood alone on a line of its own over a panel of mixed
-    sizes, a bullet list larger than the lines around it (the maintainer, 2026-11-04)."""
-    seed = {"pref:jobs:tab": "applied"} if where == "applied" else {}
-    got = _go(run, tmp_path, ([{"hash": "jobs", "click": "Applied"}] if where == "applied" else [{"hash": where}])
-              + [{"more": item, "eval": MORE_PLACE.replace("ID", item)},
-                 {"click": FOLD[item], "eval": ONE_SIZE.replace("ID", item)}], WIDE, clock=T, seed=seed)
-    place = got["after"][-2]["eval"]
-    assert place == {"sameLine": True, "below": True, "shown": True}, place
-    assert len(got["after"][-1]["eval"]) == 1, ("one type size in More", got["after"][-1]["eval"])
+    assert all(beside for _, _, beside in pens), pens
 
 
 def test_also_at_is_grouped_by_kind_and_each_link_names_what_it_opens(run, tmp_path):
@@ -292,7 +271,7 @@ def test_the_resume_that_breaks_the_persons_rules_offers_only_a_fresh_one(run, t
     got = _go(run, tmp_path, [{"hash": "drafts", "read": card}], PHONE, model=m, clock=T)
     text = got["after"][0]["text"]
     assert "Not to send" in text and "Make a fresh one" in text and "dashes your documents never use" in text
-    assert "Get it" not in text and "Get this one anyway" not in text
+    assert "Download" not in text and "Download this one anyway" not in text
 
 
 def test_applied_says_what_it_counts_and_flags_a_late_follow_up(run, tmp_path):
@@ -309,9 +288,29 @@ def test_applied_says_what_it_counts_and_flags_a_late_follow_up(run, tmp_path):
     text = got["after"][0]["text"]
     assert " still open" in text and " applied," not in text.split("\n")[0], text[:300]
     assert "1 interview with no day yet" in text, text[:300]
-    # A follow-up the person set is ready, never late (the UX review of 2026-11-10, U-6, and the
-    # review of 2026-11-11): it said "Follow-up due" and "Next: follow up, 2 days late".
-    assert "Next: follow up, ready now" in text and "Follow-up ready" in text and "days late" not in text
+    # A follow-up the person set is due now, never late (the UX review of 2026-11-10, U-6, and the
+    # review of 2026-11-11): it said "Follow-up due" and "Next: follow up, 2 days late". Its pill
+    # is the person's move in clay, and "ready" only once one is written (the redesign's second
+    # round, 2026-11-17): "Follow-up ready" stood beside "Draft the follow-up".
+    assert "Next: follow up now" in text and "Follow up now" in text and "days late" not in text
+    assert "Follow up by Wed 28 Oct" in text and "Follow-up ready" not in text and "ready now" not in text, text
+
+
+def test_an_applications_follow_up_is_ready_only_once_it_is_written(run, tmp_path):
+    """"Follow-up ready" in blue stood beside "Draft the follow-up · 2 min of Claude": nothing was
+    ready. Until a follow-up is written the card says whose move it is and by when, in clay; once
+    one is written, it is ready (the UX review of the redesign's second round, 2026-11-17)."""
+    m = _sample()
+    look = ("(() => { const c = document.querySelector('#main [data-item=\"app-quayside-ops\"]');"
+            " const w = c && c.querySelector('.state-word'); return w ? [w.textContent.trim(), w.className] : null; })()")
+    got = _go(run, tmp_path, [{"hash": "jobs", "click": "Applied", "eval": look}], PHONE, model=m, clock=T, seed={"pref:jobs:tab": "applied"})
+    word, cls = got["after"][0]["eval"]
+    assert word == "Follow up by Wed 28 Oct" and "tone-you" in cls, (word, cls)
+    msg = dict(m["messages"][0], id="msg-quayside-follow", contact="", first_name="", employer="Quayside Foods", kind="follow_up",
+               application="app-quayside-ops", text="Hello, I wanted to follow up on my application for the Operations Analyst role.", rev="mq1")
+    m["messages"].append(msg)
+    got = _go(run, tmp_path, [{"hash": "jobs", "click": "Applied", "eval": look}], PHONE, model=m, clock=T, seed={"pref:jobs:tab": "applied"})
+    assert got["after"][0]["eval"][0] == "Follow-up ready", got["after"][0]["eval"]
 
 
 def test_the_weeks_say_their_average_and_progress_says_applied_once(run, tmp_path):
@@ -348,15 +347,16 @@ def test_news_from_an_earlier_brief_says_todays_search_found_nothing_newer(run, 
 
 def test_a_job_put_in_the_bin_leaves_and_set_aside_counts_it(run, tmp_path):
     """After "Not this one" the card stayed in place, Found dropped and "set aside" did not
-    rise (audit 20)."""
+    rise (audit 20). Since the redesign's phase 2 (2026-11-17) the fold says "1 you hid", the
+    person's own words for it."""
     got = _go(run, tmp_path, [
         {"hash": "jobs", "read": "#main"},
         {"click": "Not for me: Harbourline Bank, Pricing Analyst"},
         {"click": "Not this one", "within": "dialog", "read": "#main", "count": '#main [data-item="r12-1"]'},
     ], PHONE, clock=T)
     before, after = got["after"][0]["text"], got["after"][2]
-    assert "1 set aside" in before and after["count"] == 0
-    assert "2 set aside" in after["text"], after["text"][:400]
+    assert "1 you hid: Show" in before and after["count"] == 0
+    assert "2 you hid: Show" in after["text"], after["text"][:400]
 
 
 def test_one_way_to_each_thing_on_jobs_and_the_brief(run, tmp_path):
@@ -400,12 +400,16 @@ def test_the_briefs_jobs_tile_leads_with_the_drafts_ready_to_apply(run, tmp_path
                               {"hash": "drafts", "read": "#main .summary"}], WIDE, model=m, clock=T)
     tile, drafts = got["after"][0]["text"], got["after"][1]["text"]
     # Counted as Jobs counts them: the draft with a question waits on you (the screen
-    # review, 2026-11-11).
-    assert "2 drafts ready to apply, 1 waiting on you" in tile and "Nothing new to look at." not in tile, tile
+    # review, 2026-11-11), in the person's words: applications ready to send (the UX review of
+    # the redesign, 2026-11-17).
+    # Since the redesign's second round (2026-11-17), in the words Jobs' headings use: the draft
+    # asking whether it went is "to confirm", the fold's own word.
+    assert "2 applications ready to send, 1 to confirm" in tile and "Nothing new to look at." not in tile, tile
+    assert "drafts ready to apply" not in tile, tile
     # One sentence whose total is the tab's since the UX review of 2026-11-10 (U-9).
     # The tab's total first (U-9); what makes it up is test_the_jobs_line_adds_up_to_its_tab's.
-    assert drafts.startswith("3 to apply to: "), ("the same count as Jobs' one list", drafts[:120])
-    got = _go(run, tmp_path, [{"hash": "brief", "click": "2 drafts ready to apply, 1 waiting on you", "role": "link",
+    assert drafts.startswith("3 to apply for: "), ("the same count as Jobs' one list", drafts[:120])
+    got = _go(run, tmp_path, [{"hash": "brief", "click": "2 applications ready to send, 1 to confirm", "role": "link",
                                "until": "location.hash.startsWith('#drafts')"}], WIDE, model=m, clock=T)
     assert got["after"][0]["hash"].startswith("#drafts"), got["after"][0]["hash"]
     m["ready"] = []
@@ -415,8 +419,9 @@ def test_the_briefs_jobs_tile_leads_with_the_drafts_ready_to_apply(run, tmp_path
 
 def test_a_draft_made_for_someone_links_their_name_and_has_no_pill_to_see_them(run, tmp_path):
     # "See Tamsin" stood as a pill row of its own between two lines that named her (the screen
-    # review, 2026-11-11). Her name in "Made for Tamsin" opens her card.
-    look = """(() => { const c = [...document.querySelectorAll('#main .card.app')].find((x) => /Made for Tamsin/.test(x.textContent)); if (!c) return null;
+    # review, 2026-11-11). Her name in "Send Tamsin your CV" (one task in one wording since
+    # 2026-11-17) opens her card.
+    look = """(() => { const c = [...document.querySelectorAll('#main .card.app')].find((x) => /Send Tamsin your CV/.test(x.textContent)); if (!c) return null;
       return {pill: [...c.querySelectorAll('button, a.btn')].filter((b) => /^See /.test(b.textContent.trim())).length,
               link: (c.querySelector('.meta a') || {}).textContent || null}; })()"""
     got = _go(run, tmp_path, [{"hash": "jobs", "eval": look}], PHONE, clock=T)

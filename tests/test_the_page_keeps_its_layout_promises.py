@@ -38,8 +38,8 @@ FIRST_LIMIT = {"phone": 270, "wide": 300}
 # in both themes.
 BOTH = {"phone", "wide"}
 KNOWN = {
-    # 9: two applications at one employer, each row named by the employer alone.
-    (9, "progress", "Ellerwick Trust"): {"wide"},
+    # 9: two applications at one employer, each row named by the employer alone, was met once
+    # Progress left out the draft not sent yet (the redesign's second round, 2026-11-17).
 }
 
 
@@ -143,7 +143,9 @@ def test_5_the_top_bar_is_small_and_the_pill_opens_and_closes_the_rail(layouts, 
     # panel"), where before it gave way to the rail and the rail could not be put away.
     bad = []
     for m, s, _, f in _sections(layouts):
-        if vp == "phone" and (f["topH"] > 56 or set(f["topKids"]) - {"brand", "screen", "conn", "conn-btn", "pill", "gear"}):
+        # The Chat button is the header's on a phone too (the redesign's second round,
+        # 2026-11-17), carrying Claude's light.
+        if vp == "phone" and (f["topH"] > 56 or set(f["topKids"]) - {"brand", "screen", "conn", "conn-btn", "pill", "gear", "chat-fab"}):
             bad.append((m, s, f["topH"], f["topKids"]))
         if vp == "wide" and f["rail"] and not f["pill"]:
             bad.append((m, s, "an open rail with no pill to close it"))
@@ -286,12 +288,18 @@ def test_14_at_double_text_nothing_scrolls_sideways_or_is_cut(layouts):
 def test_16_a_jobs_cards_facts_are_one_line_on_a_wide_screen(layouts, vp):
     """The employer and place on one line and when it was posted on the next read as two
     things (the maintainer, 2026-11-04): a Found, Drafts or Applied card says its facts on one
-    line wide. A phone wraps them as words do."""
+    line wide. A phone wraps them as words do.
+
+    The redesign of 2026-11-16 draws a laptop's words at 15px, where they were 11px: seven facts
+    no longer fit beside Claude's work in a 1440px window, so a card narrower than 840px may
+    take two lines, broken between facts, never three (the overlap test holds where it breaks).
+    A card as wide as a laptop's column without the work beside it still takes one."""
     if vp != "wide":
         pytest.skip("a phone wraps the line as words do")
     cards = [(m, s, c) for m, s, v, _ in _sections(layouts) for c in v["cards"] if c["own"]]
     assert {s for _, s, _ in cards} >= {"jobs", "drafts"}, "Found and Drafts were measured"
-    two = [(m, s, c["item"], c["factLines"]) for m, s, c in cards if c["factLines"] > 1]
+    two = [(m, s, c["item"], c["factLines"], c["w"]) for m, s, c in cards
+           if c["factLines"] > (1 if c["w"] >= 840 else 2)]
     assert not two, two
 
 

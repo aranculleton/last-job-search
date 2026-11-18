@@ -139,13 +139,15 @@ def test_a_draft_is_downloaded_marked_applied_and_its_follow_up_is_done_from_to_
         {"hash": "drafts", "more": "app-ellerwick-insight", "click": "Get both files: Morgan_Ellis_CV_Ellerwick.pdf and Morgan_Ellis_Cover_Letter_Ellerwick.pdf", "calls": "downloads"},
         {"click": "I have applied: Ellerwick Trust, Research Analyst", "receipts": True, "view": {"ready": nxt["ready"], "due": nxt["due"]}},
         {"hash": "todo", "read": '[data-item="due-ellerwick-follow"]'},
-        {"click": "Done: Follow up with Ellerwick Trust"},
+        # On a phone its Done waits under More, where beside "Draft the follow-up" and its gauge
+        # it would stand alone on a line (the redesign's second round, 2026-11-17).
+        {"click": "Done: Follow up with Ellerwick Trust", **({"more": "due-ellerwick-follow"} if vp is PHONE else {})},
     ], vp)
     assert [c["filename"] for c in got["after"][0]["calls"]] == ["Morgan_Ellis_Ellerwick_Trust_CV.pdf", "Morgan_Ellis_Ellerwick_Trust_Cover_Letter.pdf"]  # named for the reader since 2026-11-05; the employer before the document since 2026-11-06
     a = _one(got, "ready.applied")
     assert a["value"]["on"] and a["rev_seen"] == "a1"
     row = got["after"][2]["text"]
-    assert "Draft the follow-up" in row and "Done" in row, row
+    assert "Draft the follow-up" in row and ("More" in row if vp is PHONE else "Done" in row), row
     d = _one(got, "due.done")
     assert d["item"] == "due-ellerwick-follow" and d["rev_seen"] == "d9"
 
@@ -227,7 +229,8 @@ def test_the_prep_is_read_on_the_page_and_practice_uses_its_questions(run, tmp_p
     # 2026-11-03: the prep opens on what to say and ask, and its likely questions are one tap
     # below, folded: the questions are read once that fold is open.
     got = _go(run, tmp_path, [
-        {"hash": "interviews", "click": "Read your prep"},
+        # The row is its own tap to the prep (the redesign, phase 2, 2026-11-17).
+        {"hash": "interviews", "open": "up-go:up-app-larkspur-supply-phone-screen-2026-10-28"},
         {"open": "prep-fold:int-larkspur-supply:q", "read": "dialog.detail"},
         {"click": "Practise with Claude", "within": "dialog.detail", "read": "#main", "wait": 300, "calls": "sample"},
         {"eval": "(() => { const t = document.querySelector('#talk-text'); t.value = 'I have three years of store and supplier data behind me, turned into weekly plans.'; t.dispatchEvent(new Event('input', {bubbles: true})); return 1; })()"},
@@ -272,7 +275,10 @@ def test_a_first_note_is_copied_exactly_opened_and_logged_with_the_words_that_we
     ], vp)
     note = _item(m, "msg-ash-1")
     assert got["after"][0]["clip"] == note["text"], "exactly the words, no label, no count"
-    assert "Copied" in got["after"][0]["text"] and "of 300 characters" in got["after"][0]["text"]
+    # Copied, it says where to paste it; a note far inside its limit (205 of 300) shows no count
+    # (the redesign's second round, 2026-11-17: a count only within 30 letters of the limit).
+    assert "Copied. Paste it in LinkedIn." in got["after"][0]["text"] and "characters" not in got["after"][0]["text"] \
+        and "to spare" not in got["after"][0]["text"], got["after"][0]["text"]
     a = _one(got, "msg.sent")
     assert a["item"] == "msg-ash-1" and a["value"]["text"] == note["text"] and a["value"]["on"]
     _rev_is_the_items(m, a)
@@ -315,8 +321,9 @@ def test_an_email_opens_in_the_mail_app_with_subject_and_body_filled(run, tmp_pa
 
 def test_a_wave_of_first_notes_is_on_each_persons_card_with_the_week_s_budget(run, tmp_path, vp):
     """Each first note on its person's card (one page since 2026-11-04), and the week's count
-    against the limit once, on To do's one card of messages to send (the UX review,
-    2026-11-05: the wave is rows of it, never a card of its own)."""
+    once, on To do's one card of messages to send (the UX review, 2026-11-05: the wave is rows
+    of it, never a card of its own). The card says what went this week in one short line, never
+    a sum against the week's figure (the redesign's second round, 2026-11-17)."""
     notes = ("copperleaf_pay_ash", "larkspur_retail_ltd_kit", "quayside_foods_rafe")
     got = _go(run, tmp_path, [
         {"hash": "contacts", "read": "#main .sec-head",
@@ -325,7 +332,7 @@ def test_a_wave_of_first_notes_is_on_each_persons_card_with_the_week_s_budget(ru
         {"click": "Open Contacts at the people with a message to send", "until": "location.hash.startsWith('#contacts')"},
     ], vp)
     assert "sent this week" not in got["after"][0]["text"], got["after"][0]["text"]
-    assert "3 sent this week of about 20." in got["after"][1]["text"], got["after"][1]["text"]
+    assert "3 sent this week." in got["after"][1]["text"] and "of about 20" not in got["after"][1]["text"], got["after"][1]["text"]
     assert got["after"][0]["eval"] == [True, True, True], got["after"][0]["eval"]
     assert got["after"][1]["count"] == 0, "the wave is rows of the messages card, never a card of its own"
     assert got["after"][2]["hash"].startswith("#contacts/"), got["after"][2]["hash"]
@@ -352,9 +359,9 @@ def test_a_reply_owed_says_so_and_drafts_from_their_words_already_kept(run, tmp_
 def test_a_call_is_booked_prepared_for_and_followed_by_a_thank_you(run, tmp_path, vp):
     m = _sample()
     got = _go(run, tmp_path, [
-        {"hash": "contacts", "more": "ellerwick_trust_priya", "click": "A call booked with Marisol"},
+        {"hash": "contacts", "more": "ellerwick_trust_priya", "click": "Call booked: a call with Marisol"},
         {"fill": {"The day": "2026-10-28"}, "submit": True},
-        {"hash": "contacts", "click": "Prepare for the call with Bea"},
+        {"hash": "contacts", "click": "Prepare me for the call with Bea"},
         {"submit": True},
     ], vp)
     a = _one(got, "person.call_booked")
@@ -375,10 +382,10 @@ def test_a_hiring_call_becomes_an_interview_not_a_call_prep(run, tmp_path, vp):
     _item(m, "harbourline_bank_bea")["is_process_stage"] = True
     got = _go(run, tmp_path, [
         {"hash": "contacts", "read": '[data-item="harbourline_bank_bea"]'},
-        {"click": "Make the call with Bea an interview"},
+        {"click": "Make it an interview: the call with Bea"},
     ], vp, model=m)
     assert "This call is an interview stage" in got["after"][0]["text"]
-    assert "Prepare for the call" not in got["after"][0]["text"]
+    assert "Prepare me" not in got["after"][0]["text"]
     a = _one(got, "process.register")
     assert a["item"] == "harbourline_bank_bea"
 
@@ -413,10 +420,13 @@ def test_a_resume_asked_for_is_made_for_that_person_and_logged_with_its_file(run
     got = _go(run, tmp_path, [
         # The choices read from the options themselves: Firefox and Safari leave a select's
         # options out of the dialog's text (the Everywhere check, 2026-10-29).
-        {"hash": "todo", "click": "Choose the role", "read": "dialog",
+        # Its card's button gets the CV made for her (one task, one wording, the redesign's second
+        # round, 2026-11-17); choosing another role is the lesser choice under its More.
+        {"hash": "todo", "more": "due-tamsin-resume", "click": "Choose the role", "read": "dialog",
          "eval": "[...document.querySelectorAll('dialog option')].map((o) => o.textContent).join('\\n')"},
         {"click": "Cancel", "exact": True},
-        {"hash": "drafts", "click": "I sent it to Tamsin"},
+        # The CV made for her is one task in one wording on every screen: I sent it (2026-11-17).
+        {"hash": "drafts", "click": "I sent it: send Tamsin your CV"},
         {"submit": True},
     ], vp)
     sheet = got["after"][0]["dialog"]
@@ -465,7 +475,7 @@ def test_changing_your_mind_keeps_the_reason_and_brings_things_back(run, tmp_pat
         # Why is asked once, in the bin's own sheet (2026-10-29: never a second "Why?"), and the
         # reason is the tap that does it (2026-11-03).
         {"click": "The pay", "exact": True, "within": "dialog"},
-        {"click": "41 left out by the search", "exact": False},
+        {"click": "Show the 41 that did not fit", "exact": False},
         # Left out by rule (2026-11-05): the rule's own rows open with See them.
         {"click": "See the jobs left out as", "exact": False,
          "within": ".f-rule:has-text('Needs a driving licence')"},
@@ -543,17 +553,18 @@ def test_the_brief_opens_its_items(run, tmp_path, vp):
     # The Brief is a page of its own (4.3): each line opens the thing it is about.
     got = _go(run, tmp_path, [
         {"hash": "brief", "eval": "(() => !!document.querySelector('#main .brief-page .bp-next'))()"},
-        {"click": "Reply to Juno at Larkspur Retail.", "role": "link"},
-        # The late follow-up leads Today, and its button opens its draft (4.8: Today's one thing
-        # comes again in Next three only where there is room).
-        {"hash": "brief", "click": "See the draft"},
+        # Next is To do's own list since the redesign (2026-11-16, DESIGN.md, One ranked list):
+        # the messages to send, Juno's reply among them, open their card in To do; Today is To
+        # do's first card, the thank-you two days late, with its own button.
+        {"eval": "(document.querySelector('#main [data-k=\"bp-next:send\"]').click(), 1)", "until": "location.hash.startsWith('#todo')"},
+        {"hash": "brief", "eval": "document.querySelector('#main .bp-today .bp-iv .btn.primary').textContent"},
         # The interview this week, its prep ready, is Coming up's row, its prep one tap away
         # (the screen review, 2026-11-11: a step for its prep took it out of Coming up); Today
         # is what has rolled over (2026-11-02: "the most pressing task").
         {"hash": "brief", "click": "Read your prep for Larkspur Retail"},
     ], vp, clock="2026-10-25T07:30:00Z")
     assert got["after"][0]["eval"], "the Brief has its own page, with the next three"
-    assert got["after"][1]["hash"] == "#contacts/larkspur_retail_castellan"
-    assert got["after"][2]["hash"] == "#contacts/fernhill_freight_halloway", got["after"][2]["hash"]   # Wren's card, her draft on it
+    assert got["after"][1]["hash"] == "#todo/grp:send", got["after"][1]["hash"]
+    assert got["after"][2]["eval"] == "Draft the thank-you", got["after"][2]["eval"]
     assert got["after"][3]["hash"].endswith("int-larkspur-supply/open"), got["after"][3]["hash"]
     assert "Larkspur Retail" in got["after"][3]["dialog"]

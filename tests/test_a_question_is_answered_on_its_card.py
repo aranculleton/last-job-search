@@ -238,7 +238,8 @@ def test_a_booked_interview_is_moved_from_its_coming_up_row_with_its_pencil(run,
     row = "up-app-larkspur-supply-phone-screen-2026-10-28"
     within = '[data-item="' + row + '"]'
     got = _go(run, tmp_path, [
-        {"hash": "interviews", "click": "Change the day: Phone screen: Larkspur Retail", "exact": True,
+        # Under the row's one More (the redesign, phase 2, 2026-11-17).
+        {"hash": "interviews", "open": "up-more:" + row, "click": "Change the day: Phone screen: Larkspur Retail", "exact": True,
          "eval": "!!document.querySelector('" + within + " input[type=date]')"},
         {"eval": "(() => { const c = document.querySelector('" + within + "'); const set = (el, v) => { el.value = v; el.dispatchEvent(new Event('input', {bubbles: true})); };"
                  " set(c.querySelector('input[type=date]'), '2026-10-30'); set(c.querySelector('input[type=time]'), '15:00'); return true; })()"},

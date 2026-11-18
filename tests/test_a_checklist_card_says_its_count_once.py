@@ -4,7 +4,7 @@ The screen review of 2026-11-11 (row 28): the pill "7 to send" stood over the ti
 to send (7)", the same number twice in two lines. The title keeps its count (Contacts says
 "N to send" the same way, DESIGN.md); the pill says only what the title cannot: how many are
 overdue, where any are, and once one is done, how far the card has gone ("1 of 7 done"). The
-quick answers' "1 of 4" over "4 quick answers" stays: it says which question you are on.
+quick answers' "1 of 4" over "Answer 4 quick questions" stays: it says which question you are on.
 Every person and employer is the sample's, invented.
 """
 from __future__ import annotations

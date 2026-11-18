@@ -45,7 +45,8 @@ CARD = r"""(() => {
   }
   const r = d.getBoundingClientRect();
   return {title: d.querySelector('.detail-title').textContent.trim(), parts,
-    said: (d.querySelector('.d-employer > p') || {textContent: ''}).textContent.trim(),
+    fit: [...d.querySelectorAll('.d-row .fit-ring.sm')].map((x) => x.getAttribute('aria-label')),
+    said: (d.querySelector('.d-employer > p .d-sum-words') || {textContent: ''}).textContent.trim(),
     fits: r.width <= window.innerWidth + 1, address: location.hash};
 })()"""
 TAP = "(() => { const b = document.querySelector('[data-k=\"%s\"]'); if (b) b.click(); return !!b; })()"
@@ -68,8 +69,11 @@ def test_an_employer_on_a_job_card_opens_its_card_with_its_roles_and_people(run,
     assert _names(card["parts"]["Roles"]) == ["Senior Supply Chain Analyst", "Stock Analyst",
                                               "Supply Chain Data Analyst"], card
     assert card["parts"]["Roles"][0] == "Senior Supply Chain Analyst · Interview Wed 28 Oct · Applied Fri 2 Oct", card
-    # A job found there and not applied to says so, with its fit.
-    assert card["parts"]["Roles"][2].startswith("Supply Chain Data Analyst · Not applied · Scored "), card
+    # A job found there says its stage in Jobs' own word, here being written (the redesign's
+    # second round, 2026-11-17: it said "Not applied" while Jobs said "Being written"), with its
+    # fit as the ring every job wears, never "Scored 79" in words.
+    assert card["parts"]["Roles"][2].startswith("Supply Chain Data Analyst · Being written · "), card
+    assert "Scored" not in card["parts"]["Roles"][2] and [f.split(",")[0] for f in card["fit"]] == ["Fit 79 out of 100"], card
     # The same employer however it is written: Kit is at "Larkspur Retail Ltd".
     assert _names(card["parts"]["People"]) == ["Juno", "Kit"], card
     assert len(card["parts"]["Interviews"]) == 1, card

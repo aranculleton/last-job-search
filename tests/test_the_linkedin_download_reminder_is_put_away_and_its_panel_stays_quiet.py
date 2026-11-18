@@ -135,3 +135,22 @@ def test_stopped_from_settings_it_is_not_asked_for_on_to_do_nor_at_the_foot_of_c
     got = _go(run, tmp_path, [{"hash": "todo", "count": CARD}, {"hash": "contacts", "count": '[data-k="export-foot"]'}],
               WIDE, model=m, seed=HEARD, clock=T)
     assert got["after"][0]["count"] == 0 and got["after"][1]["count"] == 0, [a["count"] for a in got["after"]]
+
+
+SAID = r"""(() => { const t = (s) => { const e = document.querySelector(s); return e ? e.textContent.replace(/\s+/g, ' ').trim() : null; };
+  return {card: t('#main [data-item="linkedin-export"] .card-title'), help: [...document.querySelectorAll('#main .btn')].map((b) => b.textContent.trim()).filter((x) => /LinkedIn/.test(x)),
+    row: t('#main [data-k="info-sum:linkedin-download"]'), foot: t('#main [data-k="export-foot"]')}; })()"""
+
+
+def test_the_linkedin_task_is_said_one_way_wherever_it_is_offered(run, tmp_path):
+    """To do said "Bring in your LinkedIn messages", Contacts "Add your LinkedIn download" and
+    Settings "Your LinkedIn download", and "download" said neither of what nor to where (the UX
+    review of the redesign's second round, 2026-11-17): "Add your LinkedIn messages" on each."""
+    got = _go(run, tmp_path, [{"hash": h_, "eval": SAID, "read": "#main"} for h_ in ("todo", "contacts", "settings")],
+              WIDE, model=_model(), clock=T)
+    todo, contacts, settings = (a["eval"] for a in got["after"])
+    assert todo["card"] == "Add your LinkedIn messages" or "Add your LinkedIn messages" in todo["help"], todo
+    assert contacts["foot"] == "Add your LinkedIn messages", contacts
+    assert settings["row"] and settings["row"].startswith("Your LinkedIn messages"), settings
+    said = " ".join(a["text"] for a in got["after"])
+    assert "LinkedIn messages" in said and "LinkedIn download" not in said and "Bring in your LinkedIn" not in said, said[:400]

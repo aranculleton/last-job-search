@@ -128,6 +128,38 @@ def _waiting(model, n=10):
     return out[:n]
 
 
+def test_a_reply_asked_while_others_wait_says_it_waits_its_turn(run, page, model):
+    """A reply asked for while other replies already wait in line joins the end of that line,
+    so its card says "Waiting its turn", never "Next", from the tap to its work item: the tenth
+    of ten read "Next" until its work item reached the page, then "Waiting its turn" (Firefox,
+    the everywhere check, 2026-11-17)."""
+    running, waiting, mine = _waiting(model)[:3]
+    first = mine["first_name"]
+    states = ("(() => { const out = {}; for (const c of document.querySelectorAll('#main ul.people > li[data-item]')) {"
+              " const g = c.querySelector('.going'); if (g) out[c.dataset.item] = g.querySelector('.going-word').textContent; } return out; })()")
+    work = {}
+    for i, (p, st) in enumerate(((running, "running"), (waiting, "queued"))):
+        work["work/reply~" + p["id"]] = {
+            "kind": "reply", "title": "Reply to " + p["first_name"], "to": "either", "args": {"contact": p["id"]},
+            "asked_at": "2026-10-25T18:29:%02dZ" % i, "status": st,
+            "stages": [{"name": "Reading what they said", "est_s": 30}, {"name": "Drafting your reply", "est_s": 60}],
+            "stage": 1 if st == "running" else 0, "stage_at": "2026-10-25T18:29:30Z",
+            **({"claimed_by": "cloud-1", "claimed_at": "2026-10-25T18:29:30Z", "lease_until": "2026-10-25T20:00:00Z"} if st == "running" else {})}
+    got = run("engine", html=page, viewport=WIDE, clock=CLOCK, steps=[
+        {"hash": "contacts", "write": work, "quick": [
+            {"within": _card(mine["id"]), "click": "They replied: paste what %s sent" % first},
+            {"within": _card(mine["id"]), "fill": {"Paste what %s sent" % first: "Thanks %s here, happy to talk." % first}},
+            {"within": _card(mine["id"]), "click": "Draft my reply to %s" % first}], "eval": states},
+        # Its tap taken and its work not on the page yet: still behind the one waiting.
+        {"receipts": True, "eval": states},
+    ])
+    assert not got["errors"], got["errors"]
+    saved, taken = got["after"][0]["eval"], got["after"][1]["eval"]
+    assert saved[waiting["id"]] == "Next", saved
+    assert saved[mine["id"]] == "Waiting its turn", saved
+    assert taken[mine["id"]] == "Waiting its turn", taken
+
+
 def test_ten_replies_pasted_in_a_row_each_show_on_their_own_card(run, page, model):
     """Ten pastes in quick succession: none waits for the one before, each card says where its
     own reply stands (from the tap, then its work item, the same after a reload), and each
@@ -162,12 +194,22 @@ def test_ten_replies_pasted_in_a_row_each_show_on_their_own_card(run, page, mode
         "count": {}, "rev": "r-" + p["id"]} for p in written]
     finished = {k: dict(v, status="done", finished_at="2026-10-25T18:31:00Z") for k, v in work.items()
                 if any(k.endswith(p["id"]) for p in written)}
+    # A step after a write waits for the page to draw what it took, never a set number of turns:
+    # a big list drawn a moment ago holds its next drawing for a frame (liveRender), and on a
+    # busy machine the cards were read in between, the drafts taken and not drawn yet (CI,
+    # 2026-11-18). The wait has a time limit, so a card that never changes still fails.
+    def card_is(cid, sel, there=True):
+        return ("(() => { const c = document.querySelector('#main ul.people > li[data-item=\"%s\"]');"
+                " return !!c && %s!!c.querySelector('%s'); })()" % (cid, "" if there else "!", sel))
+    running = card_is(ten[0]["id"], ".going .spin")
+    drawn = " && ".join(card_is(p["id"], ".going", there=False) for p in written)
     got = run("engine", html=page, viewport=WIDE, clock=CLOCK, shots="contacts-ten" if SHOTS else None, steps=[
         {"hash": "contacts", "quick": quick, "eval": states},
         {"eval": boxes},
-        {"receipts": True, "write": work, "eval": states, "shot": "working", "full": True},
-        {"reload": True, "hash": "contacts", "eval": states},
-        {"write": dict(finished, **{"view/messages": {"made_at": "2026-10-25T18:31:00Z", "data": msgs}}), "eval": states, "shot": "written", "full": True},
+        {"receipts": True, "write": work, "ready": running, "eval": states, "shot": "working", "full": True},
+        {"reload": True, "hash": "contacts", "ready": running, "eval": states},
+        {"write": dict(finished, **{"view/messages": {"made_at": "2026-10-25T18:31:00Z", "data": msgs}}), "ready": drawn,
+         "eval": states, "shot": "written", "full": True},
         {"hash": "contacts", "read": _card(written[0]["id"])},
         {"hash": "contacts", "read": _card(ten[5]["id"])},
     ])
@@ -335,7 +377,7 @@ def test_the_reply_line_says_each_state_and_can_be_called_off(run, page, model):
     failed = _reply_work("failed", error="Claude could not read their message.", finished_at="2026-10-25T18:30:00Z")
     got = run("engine", html=page, viewport=PHONE, clock=CLOCK, seed={"work/reply~" + CORWIN: failed}, steps=[
         {"hash": "contacts", "eval": LINE},
-        {"click": "Try the reply to Corwin again", "eval": LINE},
+        {"click": "Try again: the reply to Corwin", "eval": LINE},
     ])
     assert not got["errors"], got["errors"]
     assert got["after"][0]["eval"] == "Did not finish · Claude could not read their message. Try again", got["after"][0]["eval"]
@@ -462,6 +504,7 @@ MORE = r"""(() => {
   const panel = sum && document.getElementById(sum.getAttribute('aria-controls'));
   const top = (e) => Math.round(e.getBoundingClientRect().top);
   return {sum: !!sum, sameLine: !!(sum && first) && Math.abs(top(sum) - top(first)) <= 2, first: first ? first.textContent.trim() : '',
+    face: [...row.querySelectorAll(':scope > .btn, :scope > a')].map((b) => b.textContent.trim()),
     after: !!panel && row.nextElementSibling === panel, shown: !!panel && !panel.hidden && panel.getClientRects().length > 0,
     rows: panel ? [...panel.querySelectorAll(':scope > .more-acts')].map((r) => [...r.children].filter((b) => b.matches('button, .btn, a')).map((b) => [b.textContent.trim(), top(b)])) : []};
 })()"""
@@ -481,7 +524,9 @@ def test_more_opens_under_its_row_and_its_buttons_are_one_row(run, page, model, 
     assert not got["errors"], got["errors"]
     shut, opened = got["after"][0]["eval"], got["after"][1]["eval"]
     assert shut["sum"] and shut["sameLine"] and not shut["shown"], shut
-    assert opened["first"] == "I sent it" and opened["sameLine"], opened
+    # Copy and I sent it side by side under the draft, the two steps of one task (the
+    # redesign's second round, 2026-11-17).
+    assert opened["face"][:2] == ["Copy", "I sent it"] and opened["sameLine"], opened
     assert opened["after"] and opened["shown"], opened
     assert len(opened["rows"]) == 1, opened["rows"]
     labels = [b[0] for b in opened["rows"][0]]
@@ -654,7 +699,12 @@ def test_a_message_waiting_on_its_resume_is_not_ready_to_send(run, model, tmp_pa
                 result={"summary": "Made the resume for Rafe.", "links": []}, _v=3)
     got = run("engine", html=html, viewport=WIDE, clock=CLOCK, seed=seed, steps=[
         {"hash": "contacts", "eval": look},
-        {"write": {"work/" + wid: done}, "eval": look},
+        # Waited for, never read after a set number of turns: the drawing after a write can
+        # wait a frame on a big list (liveRender), and the time limit still fails a card that
+        # never offers I sent it.
+        {"write": {"work/" + wid: done}, "ready": "(() => { const c = document.querySelector('%s');"
+         " const b = c && c.querySelector('[data-k=\"sent:%s\"]'); return !!b && b.getClientRects().length > 0; })()"
+         % (_card(rafe), msg["id"]), "eval": look},
     ])
     assert not got["errors"], got["errors"]
     making, ready = got["after"][0]["eval"], got["after"][1]["eval"]

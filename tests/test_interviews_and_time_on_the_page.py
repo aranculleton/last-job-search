@@ -214,7 +214,7 @@ def test_settings_says_your_time_zone_apart_from_the_brief(run, tmp_path):
 
 def test_something_added_stays_in_coming_up_once_claude_has_saved_it(run, tmp_path):
     got = _go(run, tmp_path, [
-        {"hash": "interviews", "click": "Add something", "exact": True},
+        {"hash": "interviews", "click": "Add a date", "exact": True},
         {"click": "Something else: a call, a test, a careers fair", "exact": True},
         {"fill": {"What it is": "Coffee with Ivo", "The time": "14:00"}, "submit": True, "read": "#main"},
         {"receipts": True, "read": "#main"},
@@ -227,7 +227,7 @@ def test_something_added_stays_in_coming_up_once_claude_has_saved_it(run, tmp_pa
 
 def test_an_interview_booked_here_is_in_coming_up_at_once(run, tmp_path):
     got = _go(run, tmp_path, [
-        {"hash": "interviews", "click": "Add something", "exact": True},
+        {"hash": "interviews", "click": "Add a date", "exact": True},
         {"click": "An interview", "exact": True},
         # A few applications: a button each, the one tapped going straight on (DESIGN.md).
         {"click": "Senior Supply Chain Analyst at Larkspur Retail", "within": "dialog", "exact": True},
@@ -307,7 +307,7 @@ def test_i_have_an_interview_lists_those_interviewing_first_in_one_list(run, tmp
                  status="applied", rev="m%d" % n) for n in range(60)]
     model["applications"] = model["applications"] + apps
     got = _go(run, tmp_path, [
-        {"hash": "interviews", "click": "Add something", "exact": True},
+        {"hash": "interviews", "click": "Add a date", "exact": True},
         {"click": "An interview", "exact": True, "read": "dialog",
          "eval": "(() => { const s = document.querySelector('dialog select'); return s ? [s.querySelectorAll('option').length, s.querySelector('optgroup').label, document.querySelectorAll('dialog input[type=radio]').length] : null; })()"},
     ], model=model)
@@ -318,7 +318,9 @@ def test_i_have_an_interview_lists_those_interviewing_first_in_one_list(run, tmp
 def test_the_calendar_sheet_says_a_phone_gets_a_zip_and_what_is_quicker(run, tmp_path):
     # Interviews 27: a page may save a zip, never an .ics, and a phone shows it as a zip.
     got = _go(run, tmp_path, [
-        {"hash": "interviews", "click": "Add to your calendar: Phone screen: Larkspur Retail", "exact": True, "read": "dialog"},
+        # Under the row's one More (the redesign, phase 2, 2026-11-17).
+        {"hash": "interviews", "open": "up-more:up-app-larkspur-supply-phone-screen-2026-10-28",
+         "click": "Add to your calendar: Phone screen: Larkspur Retail", "exact": True, "read": "dialog"},
     ])
     assert "On a phone it arrives as a zip, so Google Calendar or Copy the details is quicker there." in got["after"][0]["dialog"]
 
@@ -336,12 +338,15 @@ def test_what_was_sent_is_said_even_with_no_file_name(run, tmp_path):
 @pytest.mark.parametrize("vp", [PHONE, WIDE], ids=["phone", "wide"])
 def test_coming_up_reads_your_prep_with_the_pill_to_do_has(run, tmp_path, vp):
     # The UX review of 2026-11-10 (U-12): the night before, the key action in Coming up was a
-    # small underlined "Prep ready" while To do called it "Read your prep". It is the row's pill,
-    # in the same words, and Prepare me is a pill too.
-    look = ("[...document.querySelectorAll('#main .up-prep .btn')].map((b) => [b.textContent.trim(), b.classList.contains('link')])")
+    # small underlined "Prep ready" while To do called it "Read your prep". Since the redesign's
+    # phase 2 (2026-11-17) the row is its own tap to read it, with a "Prep ready" chip, never an
+    # underlined link; Prepare me is a pill, on the next interview with none.
+    look = ("(() => ({pills: [...document.querySelectorAll('#main .up-prep .btn')].map((b) => [b.textContent.trim(), b.classList.contains('link')]),"
+            " ready: [...document.querySelectorAll('#main .up-row.opens .up-sub .state-word')].map((c) => [c.textContent, c.tagName, c.closest('a') === null]),"
+            " links: document.querySelectorAll('#main .up-row .btn.link').length}))()")
     got = _go(run, tmp_path, [{"hash": "interviews", "eval": look}, {"hash": "todo", "eval": (
         "[...document.querySelectorAll('#main [data-item=\"soon:int-larkspur-supply\"] .card-actions .btn')].map((b) => b.textContent.trim())")}], vp=vp)
     rows, todo = got["after"][0]["eval"], got["after"][1]["eval"]
-    assert ["Read your prep", False] in rows and ["Prepare me", False] in rows, rows
-    assert "Prep ready" not in [r[0] for r in rows] and not any(link for _t, link in rows), rows
+    assert rows["pills"] == [["Prepare me", False]], rows
+    assert ["Prep ready", "SPAN", True] in rows["ready"] and rows["links"] == 0, rows
     assert "Read your prep" in todo, todo

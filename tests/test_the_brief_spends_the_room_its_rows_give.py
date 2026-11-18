@@ -157,7 +157,9 @@ def test_jobs_says_what_its_list_is_under_the_drafts_line(run, tmp_path):
     r = got["after"][0]["eval"]
     # The drafts' line and the new jobs under it each say what they are, and the two add up to
     # the menu's count: "18 drafts ready to apply" over the list of new jobs read as its heading.
-    assert r["lead"] == "18 drafts ready to apply" and r["sub"] == "New, best fit first", r
+    # In the person's words since the redesign's phase 2 (2026-11-17): applications ready to
+    # send, then the best match.
+    assert r["lead"] == "18 applications ready to send" and r["sub"] == "Best match", r
     assert "All 8 new" in r["all"] and r["nav"] == 18 + 8, r
 
 
@@ -234,6 +236,8 @@ NAMES = r"""(() => [...document.querySelectorAll('#main .bp-people .bp-who stron
 def test_waiting_on_you_says_each_name_whole(run, tmp_path, size):
     # At 960 wide "Mari..." and "Ellerw..." stood beside "Thank-you note": the step kept its
     # width and the name gave way. In a narrow panel the step goes under the name.
+    # The full Brief's two people waiting whom no other panel names: the panel is drawn only for
+    # them (the redesign's second round, 2026-11-17).
     html = _write(tmp_path, "sample", MODELS["sample"]())
     got = run("engine", html=html, viewport=size, clock=T, timezoneId=PERSON_ZONE, fake={"canSend": "available"},
               steps=[{"hash": "brief", "ready": READY, "eval": NAMES}])

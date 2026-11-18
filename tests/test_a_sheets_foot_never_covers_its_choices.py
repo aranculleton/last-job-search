@@ -85,4 +85,6 @@ def test_a_bins_choices_are_whole_above_its_foot_or_scroll_clear_of_it_with_a_fa
     else:
         assert s["fadeAtTop"] and not s["fadeAtEnd"], ("a fade says there is more, and goes at the end", s)
     assert s["lastBottom"] <= s["footTop"] + 0.5, ("scrolled to its end, the last choice stands whole above the foot", s)
-    assert s["cancel"]["line"] == "none" and s["cancel"]["radius"] >= 12 and s["cancel"]["bg"] not in ("rgba(0, 0, 0, 0)", "transparent"), s
+    # Safari reads a 12px radius as 11.999999 on a zoomed page: a hundredth of a pixel is
+    # rounding, never a smaller corner (the everywhere check, 2026-11-17).
+    assert s["cancel"]["line"] == "none" and round(s["cancel"]["radius"], 2) >= 12 and s["cancel"]["bg"] not in ("rgba(0, 0, 0, 0)", "transparent"), s

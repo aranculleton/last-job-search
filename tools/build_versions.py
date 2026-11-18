@@ -432,8 +432,9 @@ METHODS: dict[str, dict] = {
             (116, "2026-11-17", False, "RUNBOOK says a round's employers nobody has judged are judged inside it by the employer-judge agent, on the small model, and the round is cut again with --judged, which waits for the answer three minutes at most; nothing made changes"),
             (117, "2026-11-17", False, "RUNBOOK says where the person searches and their pay floor and cut line change through tools/wants.py set, the words for a work-life sign or a kind of role through wants.py words, and a no that only ranks down is written with --soft only where they say so; nothing made changes"),
             (118, "2026-11-17", False, "a page build looks for each application's folder once, where Applications, its stages and the campaign chats each looked again (issue 336); the same folder is found, so nothing made changes"),
+            (119, "2026-11-17", False, "the page's colours are redone in templates/app/palettes.py, which this method's templates pattern also reads; nothing a draft prints changes"),
         ),
-        "fingerprint": "840e145eda91da44",
+        "fingerprint": "43f2e50edbbb6715",
     },
     "interview": {
         # Only a process with a round still to come is prepared again: a prep for a round
@@ -1232,8 +1233,9 @@ METHODS: dict[str, dict] = {
             (209, "2026-11-16", True, "an employer's name on a job, an application, a person's card or an interview opens its own card: its roles with where each stands, its people and its interviews, each opening its own card; every card that opens from a name draws its lists as Settings' rows (a pill for where each stands, a › that says it opens) and its stages on a timeline, is as tall as what it holds on a laptop, and has no box round its title"),
             (210, "2026-11-16", True, "a LinkedIn sign-in in a chat on the person's computer is one To do card that names that chat and gives the steps to open it from the Claude app's list of chats there and sign in, keeping the sign-in among them, with no link to the chat, which opened it without its browser; its I've signed in sends back every read waiting on that sign-in"),
             (211, "2026-11-16", True, "the one card for a sign-in in a chat on the person's computer covers only reads waiting on that chat's sign-in: a sign-in in the page's own browser keeps its own card, and the computer's I've signed in no longer sends it back"),
+            (212, "2026-11-17", True, "the page is redesigned: warm paper and charcoal with a clay mark, one type scale, one family of buttons, tabs and folds; Coming up joins the phone's tabs and Chat is a header button; To do and the Brief give one ranked answer with a call booked today leading; Jobs by stage and best match, Coming up a card a day, Contacts sending from under each draft; the four cards share rows, an Update menu and a stepper, and an employer's card says what Claude found and whether it clears the person's bar"),
         ),
-        "fingerprint": "2b919f6bb6e803bf",
+        "fingerprint": "c3b8e76b1885151e",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

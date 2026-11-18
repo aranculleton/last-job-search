@@ -166,25 +166,25 @@ PAGE_TOUR = (
     {"key": "brief", "tab": "brief", "title": "Brief",
      "text": "Your day at a glance: what is booked, the next three things to do, who is "
              "waiting on you, the best new jobs, news that matters to your search and your "
-             "numbers. Tap any line to go to it."},
+             "numbers. Each line opens what it names."},
     {"key": "todo", "tab": "todo", "title": "To do",
      "text": "What needs you, five at a time, most urgent first: a question, a follow-up "
              "that is due, an interview coming up. A card's filled button is its next step; "
              "the trash puts it away."},
     {"key": "jobs", "tab": "jobs", "title": "Jobs",
      "text": "Every role from found to applied. Found: scored out of 100 for how well it "
-             "fits you; tap Draft this on one you like. Drafts: your resume and letter, "
-             "checked; get the files, apply on the employer's site, tap I have applied. "
+             "fits you; choose Draft this on one you like. Drafts: your resume and letter, "
+             "checked; get the files, apply on the employer's site, then I have applied. "
              "Applied: each one tracked, its follow-ups back in To do."},
     {"key": "contacts", "tab": "contacts", "title": "Contacts",
      "text": "Why people: someone inside who puts your name forward gets you far more "
              "interviews than applying cold. Claude finds who to write to and drafts a short "
              "note; you send it on LinkedIn yourself. Messages holds the notes ready to send. "
-             "Tap a name to see everything about that person."},
+             "A name opens everything about that person."},
     {"key": "interviews", "tab": "interviews", "title": "Coming up",
      "text": "Everything booked or due, by day: interviews, calls, tests and closing days. "
-             "Add any of it to your calendar in a tap, and add anything else with Add "
-             "something. Interviews shows each one's prep: what they will ask, your answers, "
+             "Add any of it to your calendar, and add anything else with Add a date. "
+             "Interviews shows each one's prep: what they will ask, your answers, "
              "your questions."},
     {"key": "settings", "tab": "settings", "title": "Settings",
      "text": "Your profile is the first thing here: your jobs, skills, education and "
@@ -200,31 +200,31 @@ PAGE_TOUR = (
 PAGE_FIRST = {
     # Plain sentences a first-time reader gets at once: "a job that's off ... the next search
     # learns" read as shorthand nobody could parse (the maintainer, 2026-10-30).
-    "search": "These are your first results, so the order may be a bit off. Tap the trash on any "
+    "search": "These are your first results, so the order may be a bit off. Use the trash on any "
               "job that's wrong for you and say why, and the next search will do better.",
-    "apply": "Your first application. Tap the pencil beside the resume or the letter to change "
+    "apply": "Your first application. Use the pencil beside the resume or the letter to change "
              "the wording, and the next one will use your changes.",
-    "networking": "Your first messages, so some may be a bit off. Tap the pencil to change how "
+    "networking": "Your first messages, so some may be a bit off. Use the pencil to change how "
                   "one reads, or trash someone you wouldn't contact. Claude remembers both.",
     "reply": "If a reply doesn't sound like you, change it with the pencil before you send it: "
              "Claude learns how you write from what you change.",
-    "interview": "Your first interview prep. Tap the pencil to change what it covers, and the "
+    "interview": "Your first interview prep. Use the pencil to change what it covers, and the "
                  "next one will fit you better.",
     "prep": "Your first call prep. After the call, tell Claude in Chat how it went.",
-    "brief": "Your first brief. Tap Edit the brief to get more or less of anything.",
-    "general": "You can change anything Claude makes: tap the pencil on it, and Claude "
+    "brief": "Your first brief. Use Edit the brief to get more or less of anything.",
+    "general": "You can change anything Claude makes: use the pencil on it, and Claude "
                "remembers for next time.",
 }
 PAGE_TIPS = {
-    "rephrase": "Tap the pencil on anything Claude writes to make it shorter, warmer or "
+    "rephrase": "Use the pencil on anything Claude writes to make it shorter, warmer or "
                 "reworded. Claude learns your style from your changes.",
     "tour": "For a short tour of the page, go to Settings, then Help, then Show me around.",
     "reaction-sticks": "When you trash a job, Claude asks why. Your answer applies to every "
                        "future search until you change your mind.",
-    "tell-me": "When you hear back, tap I heard back on the application, or tap They replied on the "
-               "person in Contacts and paste what they sent. Claude updates your records and "
+    "tell-me": "When you hear back, choose I heard back on the application, or They replied on the person "
+               "in Contacts and paste what they sent. Claude updates your records and "
                "reminds you to follow up.",
-    "paste-link": "Paste any job link into Add a job on Jobs. Claude scores it and can write "
+    "paste-link": "Paste any job link into Add a job you found, on Jobs. Claude scores it and can write "
                   "the application.",
     "sent-words": "If you change a message before you send it, paste what you sent in Chat so "
                   "Claude learns how you write.",

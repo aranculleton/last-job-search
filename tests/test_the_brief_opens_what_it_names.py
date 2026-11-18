@@ -31,6 +31,9 @@ def _brief(m, items):
 
 
 def test_a_step_about_an_application_opens_it_and_one_put_away_is_gone(run, tmp_path):
+    # Since the redesign (2026-11-16) Next is To do's own list after Today (DESIGN.md, One ranked
+    # list), not the brief's written steps: each step opens its own card in To do, where its
+    # button is, and someone put away with Don't contact is on neither Today nor Next.
     m = copy.deepcopy(_sample())
     app = m["applications"][0]
     who = m["people"][1]
@@ -39,12 +42,12 @@ def test_a_step_about_an_application_opens_it_and_one_put_away_is_gone(run, tmp_
     html = _write(tmp_path, "brief_steps", m)
     stop = {"actions/act~" + who["id"] + "~person.stop~x": {"item": who["id"], "action": "person.stop", "value": {}, "at": "2026-10-25T09:00:00Z", "_v": 1}}
     got = run("engine", html=html, viewport=WIDE, seed=stop, steps=[
-        {"hash": "brief", "eval": "[...document.querySelectorAll('.bp-next .bp-steps li')].map((li) => { const a = li.querySelector('a'); return [li.textContent.trim(), a ? a.getAttribute('href') : null]; })"}])
+        {"hash": "brief", "eval": "[...document.querySelectorAll('.bp-next .bp-steps li')].map((li) => { const a = li.querySelector('a'); return [li.textContent.trim(), a ? a.getAttribute('href') : null]; })"},
+        {"eval": "document.querySelector('#main .bp-today').textContent"}])
     assert not got["errors"], got["errors"]
-    rows = got["after"][0]["eval"]
-    first = next(r for r in rows if "thank-you" in r[0])
-    assert first[1] == "#jobs/" + app["id"], rows
-    assert not any(who["first_name"] + ":" in r[0] for r in rows), rows
+    rows, today = got["after"][0]["eval"], got["after"][1]["eval"]
+    assert rows and all(r[1] and r[1].startswith("#todo/") for r in rows), rows
+    assert not any(who["first_name"] in r[0] for r in rows) and who["first_name"] not in today, (rows, today)
 
 
 def test_with_nothing_new_found_the_jobs_panel_lists_the_drafts_ready(run, tmp_path):

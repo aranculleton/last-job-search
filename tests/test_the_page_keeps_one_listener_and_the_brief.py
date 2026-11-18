@@ -19,6 +19,7 @@ import pytest  # noqa: E402
 
 import test_the_page_journeys as journeys  # noqa: E402
 from test_the_page_journeys import PHONE, WIDE, _go, _one, _sample  # noqa: E402
+from test_the_brief_fits_a_laptop_and_its_foot_reads_as_one_line import _two_waiting  # noqa: E402
 from test_the_page_works_in_a_browser import EMPTY  # noqa: E402
 
 
@@ -318,6 +319,8 @@ def test_today_leads_with_what_is_on_today_and_the_strip_marks_today_and_tomorro
 # 2026-11-02): with no booked thing today and an interview whose prep is ready, what has rolled
 # over leads, with who it is and how late; Today's right half is never left empty, Coming up is
 # never a strip over nothing, and Today's thing is never in Next three as well (2026-11-03).
+# Since the redesign (2026-11-16) the most pressing thing is To do's first card: a follow-up
+# whose message is drafted is a row of To do's "Messages to send", so here Wren's has none.
 TODAY = ("(() => { const t = document.querySelector('#main .bp-today'); const u = document.querySelector('#main .bp-upcoming'); "
          "const side = t.querySelector('.bp-today-side'); "
          "return {when: t.querySelector('.bp-iv-when').textContent, what: t.querySelector('.bp-iv-what').textContent, "
@@ -338,7 +341,11 @@ def test_today_is_the_most_pressing_thing_with_what_matters_beside_it(run, tmp_p
     late = min((d for d in model["due"] if d.get("due", "9999") < "2026-10-25" and d.get("kind") not in ("request_pending", "withdraw", "hidden")),
                key=lambda d: ((d.get("kind") != "reply"), d["due"]))
     late["context"] = "Operations lead at Fernhill Freight \u00b7 met at a meetup"
-    got = _go(run, tmp_path, [{"hash": "brief", "eval": TODAY}], vp, model=model, clock=T)
+    alone = copy.deepcopy(model)
+    alone["due"] = [d for d in alone["due"] if d["id"] == late["id"] or d.get("due", "9999") >= "2026-10-25"]
+    alone["messages"] = [x for x in alone["messages"] if x["id"] != late.get("item")]
+    alone["to_send"] = {"n": len(alone["messages"]), "ids": [x["id"] for x in alone["messages"]]}
+    got = _go(run, tmp_path, [{"hash": "brief", "eval": TODAY}], vp, model=alone, clock=T)
     r = got["after"][0]["eval"]
     # One date a card, said one way (the walk-through, 2026-11-03): about someone, the corner
     # says it is ready and the facts lead with the day it is about; never "Rolled over · 2 days
@@ -426,15 +433,19 @@ def test_a_test_due_today_leads_as_itself_and_its_interview_stays_coming_up(run,
     assert "Second interview" in coming, coming
 
 
-# A late reply or follow-up with a draft ready leads to the draft, not to the person's page,
-# which has no draft on it.
+# A late reply or follow-up with a draft ready leads to the drafts, not to a person's page,
+# which has no draft on it. Since the redesign (2026-11-16) Today is To do's first card with its
+# own button: with the thank-you done, the messages to send lead, Wren's two days late among
+# them, and Open Contacts opens them there, where each is.
 def test_todays_late_follow_up_opens_its_draft(run, tmp_path, vp):
-    got = _go(run, tmp_path, [{"hash": "brief", "eval": "document.querySelector('#main .bp-today .bp-iv .btn').textContent"},
-                              {"eval": "(() => { document.querySelector('#main .bp-today .bp-iv .btn').click(); return 1; })()"},
-                              {"eval": "location.hash"}], vp, clock=T)
-    assert got["after"][0]["eval"] == "See the draft", got["after"][0]["eval"]
-    # On the draft itself: Wren's card in Contacts, where it is (one page since 2026-11-04).
-    assert got["after"][2]["eval"] == "#contacts/fernhill_freight_halloway", got["after"][2]["eval"]
+    model = copy.deepcopy(_sample())
+    model["due"] = [d for d in model["due"] if d["id"] != "due-harbourline-thanks"]
+    got = _go(run, tmp_path, [{"hash": "brief", "eval": "[document.querySelector('#main .bp-today .bp-iv-what').textContent, document.querySelector('#main .bp-today .bp-iv .btn').textContent]"},
+                              {"eval": "(() => { document.querySelector('#main .bp-today .bp-iv .btn').click(); return 1; })()", "until": "location.hash.startsWith('#contacts')"},
+                              {"eval": "location.hash"}], vp, model=model, clock=T)
+    what, button = got["after"][0]["eval"]
+    assert what.startswith("Messages to send") and button == "Open Contacts", (what, button)
+    assert got["after"][2]["eval"].startswith("#contacts"), got["after"][2]["eval"]
 
 
 # Refresh with yesterday's data and the Claude allowance used up says so, never "Up to date".
@@ -476,19 +487,20 @@ def test_every_count_of_jobs_to_look_at_agrees_and_leaves_out_a_closed_one(run, 
     # drafts ready apart. Every number agrees with the Jobs summary.
     import re
     # One sentence whose total is the tab's since the UX review of 2026-11-10 (U-9).
-    total = int((re.search(r"(\d+) to apply to", jobs_line) or [0, 0])[1])
-    look = int((re.search(r"(\d+) to look at", jobs_line) or [0, 0])[1])
+    total = int((re.search(r"(\d+) to apply for", jobs_line) or [0, 0])[1])
+    look = int((re.search(r"(\d+) new", jobs_line) or [0, 0])[1])
     send = total - look
-    assert a["nav"] == total and a["brief"] == look, (a, jobs_line)
-    # The drafts ready, waiting on you, being made and still to make, said apart as Jobs says
-    # them, add up to the summary's drafts (the review, 2026-11-05: "2 drafts ready to apply"
-    # beside "2 to send, 1 still to make"; the screen review, 2026-11-11: a draft with a
-    # question "ready" on the Brief and "waiting on you" on Jobs).
-    # What Claude is making is its own work, said in the work pill: the Brief's line leaves it out
-    # when anything else is owed, so a small laptop's panel holds the line whole (4.15.0).
-    making = int((re.search(r"(\d+) being made", jobs_line) or [0, 0])[1])
-    parts = [int((re.search(r"(\d+) (?:drafts? )?" + w, panel) or [0, 0])[1]) for w in ("ready to apply", "waiting on you", "being made", "still to make")]
-    assert (not send) or sum(parts) == send or (sum(parts) == send - making and not parts[2]), (panel, jobs_line)
+    assert total and a["nav"] == total and a["brief"] == look, (a, jobs_line)
+    # The drafts ready to send, needing your answer, to confirm and being written, said apart in
+    # the words of Jobs' headings, add up to the summary's drafts (the review, 2026-11-05: "2
+    # drafts ready to apply" beside "2 to send, 1 still to make"; the screen review, 2026-11-11:
+    # a draft with a question "ready" on the Brief and "waiting on you" on Jobs; the redesign's
+    # second round, 2026-11-17: one name for each stage).
+    # What Claude is writing is its own work, said in the work pill: the Brief's line leaves it
+    # out when anything else is owed, so a small laptop's panel holds the line whole (4.15.0).
+    writing = int((re.search(r"(\d+) being written", jobs_line) or [0, 0])[1])
+    parts = [int((re.search(r"(\d+) (?:applications? )?" + w, panel) or [0, 0])[1]) for w in ("ready to send", "needs? your answer", "to confirm", "being written")]
+    assert (not send) or sum(parts) == send or (sum(parts) == send - writing and not parts[3]), (panel, jobs_line)
     assert (not todo_line) or todo_line.startswith("%d new" % look), todo_line
     assert "Analytics Consultant" not in panel, panel      # its posting has closed
 
@@ -505,15 +517,17 @@ def test_next_three_keeps_room_for_others_and_a_booked_interview_stays_in_coming
     assert not any(today.strip() in s for s in steps), (today, steps)
     assert any("Phone screen: Larkspur" in c and "28 Oct" in c and "13:00" in c for c in coming), coming
     assert not any("phone screen" in s for s in steps), steps
-    # A thank-you owed after a round is its own step, and is not given the next round's day.
-    assert any("Thank-you" in s for s in steps) and len(steps) == 3, steps
-    assert not any("Thank-you" in s and "4 Nov" in s for s in steps), steps
+    # A thank-you owed after a round is its own thing, and is not given the next round's day:
+    # To do's first since the redesign (2026-11-16), so Today's, and three steps after it.
+    assert "Thank-you" in today and "4 Nov" not in today and len(steps) == 3, (today, steps)
 
 
 # Set up with nothing found yet: Today's one thing is the first search, with a filled button.
 def test_a_person_with_nothing_yet_is_shown_the_first_search(run, tmp_path, vp):
     model = copy.deepcopy(_sample())
-    for k in ("due", "messages", "ready", "upcoming", "interviews", "people"):
+    # Nothing found yet asks nothing about a posting either: Today is To do's first card since the
+    # redesign (2026-11-16), and the sample's questions are about its postings.
+    for k in ("due", "messages", "ready", "upcoming", "interviews", "people", "needs_you"):
         if isinstance(model.get(k), list):
             model[k] = []
     model["jobs"]["rows"] = []
@@ -551,7 +565,7 @@ FITS = ("[...document.querySelectorAll('#main [data-fit]')].map((l) => [l.classN
 @pytest.mark.parametrize("size", [{"width": 1440, "height": 1400}, {"width": 1280, "height": 700},
                                   {"width": 1100, "height": 620}])
 def test_fitting_the_brief_takes_what_saves_most_and_keeps_today_useful(run, tmp_path, size):
-    got = _go(run, tmp_path, [{"hash": "brief", "eval": FITS}], size, clock=T)
+    got = _go(run, tmp_path, [{"hash": "brief", "eval": FITS}], size, model=_two_waiting(copy.deepcopy(_sample())), clock=T)
     lists = {c: (f, hidden, shown) for c, f, hidden, shown in got["after"][0]["eval"]}
     q = next((v for c, v in lists.items() if "bp-qs" in c), None)
     people, jobs = lists["plain bp-list bp-people"], lists["plain bp-list"]
@@ -569,12 +583,10 @@ def test_fitting_the_brief_takes_what_saves_most_and_keeps_today_useful(run, tmp
 # Each person's next step sits in one column: every step, and the day under it, starts at the
 # same edge, so steps of different lengths never jut out (the maintainer, 2026-11-02).
 def test_every_persons_step_and_day_start_at_one_edge(run, tmp_path, vp):
-    # A second person waiting on a move of a different length: Tamsin, the sample's other, is
-    # a step in Next three since the phone screen's prep stays with its row in Coming up.
-    model = copy.deepcopy(_sample())
-    one = next(p for p in model["people"] if p["id"] == "ellerwick_trust_priya")
-    model["people"].append(dict(one, id="quayside_foods_odette", first_name="Odette", employer="Quayside Foods", rev="p-odette",
-                                next_action="Ask about the demand planning team", owed={"kind": "reply", "label": "Draft a reply", "reply": True}, related={}))
+    # Two people waiting on moves of different lengths: Tamsin, the sample's other, is a step in
+    # Next three since the phone screen's prep stays with its row in Coming up, and Marisol a row
+    # of the messages card there.
+    model = _two_waiting(copy.deepcopy(_sample()))
     got = _go(run, tmp_path, [{"hash": "brief", "eval": "[...document.querySelectorAll('#main .bp-people .bp-state')].map((s) => { "
                                                        "const w = s.querySelector('.bp-when'); const r = document.createRange(); r.selectNodeContents(s.firstChild); "
                                                        "return [Math.round(r.getBoundingClientRect().left), w ? Math.round(w.getBoundingClientRect().left) : null]; })"}], vp, model=model, clock=T)
@@ -584,18 +596,20 @@ def test_every_persons_step_and_day_start_at_one_edge(run, tmp_path, vp):
     assert max(lefts) - min(lefts) <= 1, rows
 
 
-# Coming up's own day headings mark today and tomorrow in the strip's calm colours.
+# Coming up's own day headings mark today and tomorrow in the strip's calm colours: a "Today"
+# or "Tomorrow" capsule beside the day, its dot in the day's colour (the redesign, phase 2).
 def test_coming_up_marks_today_and_tomorrow_calmly(run, tmp_path, vp):
     model = copy.deepcopy(_sample())
     for n, day in enumerate(("2026-10-25", "2026-10-26")):
         call = copy.deepcopy(next(u for u in model["upcoming"] if u["kind"] == "call"))
         call.update(id="up-call-%d" % n, day=day, start=day + "T15:00:00Z", end=day + "T15:30:00Z")
         model["upcoming"].insert(n, call)
-    got = _go(run, tmp_path, [{"hash": "interviews", "eval": "[...document.querySelectorAll('#main .up-day')].slice(0, 3).map((d) => [d.className, "
-                                                            "getComputedStyle(d.querySelector('.group'), '::before').backgroundColor])"}],
+    got = _go(run, tmp_path, [{"hash": "interviews", "eval": "[...document.querySelectorAll('#main .up-day')].slice(0, 3).map((d) => { const c = d.querySelector('.day-cap');"
+                                                            " return [d.className, c ? getComputedStyle(c, '::before').backgroundColor : '', c ? c.textContent : '']; })"}],
               vp, model=model, clock=T)
-    (c0, today), (c1, tomorrow), (c2, later) = got["after"][0]["eval"]
+    (c0, today, w0), (c1, tomorrow, w1), (c2, later, w2) = got["after"][0]["eval"]
     assert "is-today" in c0 and "is-tomorrow" in c1 and "is-to" not in c2, got["after"][0]["eval"]
+    assert (w0, w1, w2) == ("Today", "Tomorrow", ""), got["after"][0]["eval"]
     assert today != tomorrow and today not in ("rgba(0, 0, 0, 0)", "") and tomorrow not in ("rgba(0, 0, 0, 0)", "")
 
 
@@ -662,7 +676,9 @@ def test_i_sent_it_is_done_in_contacts_to_do_and_the_brief_at_once(run, tmp_path
         {"hash": "brief", "read": "#main .bp-next", "eval": "(document.querySelector('#main .bp-people') || {}).textContent || ''"},
     ], vp, clock=T)
     assert _one(got, "msg.sent")["item"] == "msg-juno-1"
-    assert "Reply to Juno" in got["after"][1]["text"], "the Brief asked for the reply before it went"
+    # Juno's reply is among the messages to send, named first (To do's own card, since the
+    # redesign of 2026-11-16).
+    assert "Juno" in got["after"][1]["text"], "the Brief asked for the reply before it went"
     assert "one of them a reply" not in got["after"][4]["text"], got["after"][4]["text"]
     row = got["after"][5]["text"]
     assert "Message sent" in row and "Replied: your turn" not in row and "Draft a reply" not in row, row
@@ -674,12 +690,19 @@ def test_i_sent_it_is_done_in_contacts_to_do_and_the_brief_at_once(run, tmp_path
     assert "Juno" not in got["after"][7]["text"] and "Juno" not in got["after"][7]["eval"], got["after"][7]
 
 
-# A person's page: where it stands is a line of words with ticks, never outlined pills that
-# look like the buttons under them; its blocks stand apart; and Back names where the person came
-# from (Contacts, where each message is on its person's card since 2026-11-04).
-STEPS = ("(() => { const p = document.querySelector('dialog.detail .d-steps'); if (!p) return null; const c = p.cloneNode(true); "
-         "c.querySelectorAll('.sr-only').forEach((s) => s.remove()); "
-         "return [c.textContent, [...p.querySelectorAll('*')].some((e) => parseFloat(getComputedStyle(e).borderTopWidth) > 0)]; })()")
+# A person's page: where it stands is four steps on one thread (the redesign's second round,
+# 2026-11-17), each a dot with its name under it, done ones green and the next one ringed,
+# never outlined pills that look like the buttons under them; its blocks stand apart; and Back
+# names where the person came from (Contacts, where each message is on its person's card since
+# 2026-11-04).
+STEPS = ("(() => { const p = document.querySelector('dialog.detail .d-steps'); if (!p) return null; "
+         "const steps = [...p.querySelectorAll(':scope > li')].map((li) => { const dot = getComputedStyle(li.querySelector('.d-step-dot')); "
+         "return [li.querySelector('.d-step-l').textContent.trim(), li.querySelector('.sr-only').textContent.trim(), "
+         "dot.backgroundColor, dot.boxShadow === 'none' ? 'none' : /inset/.test(dot.boxShadow) ? 'hollow' : 'ringed', Math.round(li.querySelector('.d-step-dot').getBoundingClientRect().width), getComputedStyle(li).fontWeight]; }); "
+         "const done = getComputedStyle(document.documentElement).getPropertyValue('--st-done').trim(); "
+         "const probe = document.createElement('span'); probe.style.color = done; document.body.appendChild(probe); const green = getComputedStyle(probe).color; probe.remove(); "
+         "return [steps, green, p.tagName, p.getAttribute('aria-label'), "
+         "[...p.querySelectorAll('.d-step-l, li')].some((e) => parseFloat(getComputedStyle(e).borderTopWidth) > 0), !!p.querySelector('button')]; })()")
 GAPS = ("(() => { const kids = [...document.querySelector('dialog.detail .detail-body > div').children].filter((e) => e.getBoundingClientRect().height > 0); "
         "return Math.min(...kids.slice(1).map((e, i) => Math.round(e.getBoundingClientRect().top - kids[i].getBoundingClientRect().bottom))); })()")
 
@@ -691,10 +714,20 @@ def test_a_persons_page_says_where_it_stands_in_words_and_back_names_where_it_ca
         {"eval": "document.querySelectorAll('dialog.detail .stepper').length"},
     ], vp, clock=T)
     assert got["after"][0]["text"].replace("‹", "").strip() == "Contacts", got["after"][0]["text"]
-    assert got["after"][0]["eval"], "the stages are a line of words"
-    words, bordered = got["after"][0]["eval"]
-    assert " ".join(words.split()) == "Written to ✓ · Replied ✓ · Talked · Referral", words
-    assert not bordered, "no stage is drawn as a pill"
+    assert got["after"][0]["eval"], "the stages are a list of steps"
+    steps, green, tag, label, bordered, buttons = got["after"][0]["eval"]
+    assert tag == "OL" and label == "Where it stands", (tag, label)
+    assert [x[0] for x in steps] == ["Written to", "Replied", "Talked", "Referral"], steps
+    # Said in words, never by colour alone: done, the next one, and the rest.
+    assert [x[1] for x in steps] == ["(done)", "(done)", "(next)", "(not yet)"], steps
+    # 8px dots: the done ones filled green, the next one ringed, the rest a hollow ring with a
+    # lighter word, so done and not yet differ by more than colour (the accessibility review,
+    # 2026-11-17).
+    assert all(x[4] == 8 for x in steps), steps
+    assert [x[2] == green for x in steps] == [True, True, False, False], (steps, green)
+    assert [x[3] for x in steps] == ["none", "none", "ringed", "hollow"], steps
+    assert [x[5] for x in steps] == ["600", "600", "600", "400"], steps
+    assert not bordered and not buttons, "no stage is drawn as a pill or is a button"
     assert got["after"][1]["eval"] >= 12, "the page's blocks stand apart: %r" % got["after"][1]["eval"]
     assert got["after"][2]["eval"] == 0
 

@@ -96,5 +96,6 @@ def test_with_everything_done_to_do_says_so_and_what_is_next(run, tmp_path):
     m["needs_you"], m["interviews"], m["upcoming"] = [], [], []
     for x in m["jobs"]["rows"] + m["ready"] + m["messages"]:
         x["alerts"] = []
-    got = _go(run, tmp_path, [{"hash": "todo", "click": "Done: Send your CV to Tamsin", "exact": True, "eval": COUNT}], WIDE, model=m, clock=T)
-    assert "All done for today: 1 thing done." in got["after"][0]["eval"]["sum"], got["after"][0]["eval"]
+    # Her I sent it logs the CV with its file and finishes the row, as on her card (2026-11-17).
+    got = _go(run, tmp_path, [{"hash": "todo", "click": "I sent it: Send Tamsin your CV", "exact": True}, {"submit": True, "eval": COUNT}], WIDE, model=m, clock=T)
+    assert "All done for today: 1 thing done." in got["after"][1]["eval"]["sum"], got["after"][1]["eval"]

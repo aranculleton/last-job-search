@@ -35,11 +35,12 @@ CARD = ("(() => { const c = document.querySelector('[data-item=\"%s\"]'); if (!c
         " const w = document.querySelector('[data-work=\"%s\"]');"
         " return {done: (c.querySelector('.tweak-done') || {}).textContent || '',"
         " body: d ? d.textContent : '',"
-        " copy: vis(d && d.querySelector('[data-k^=\"copy:msgt-\"]')),"
+        # Copy is in the card's row under the draft, beside I sent it, since 2026-11-17.
+        " copy: vis(c.querySelector('[data-k=\"copy:msgt-msg-juno-1\"]')),"
         " sent: vis(c.querySelector('[data-k=\"sent:msg-juno-1\"]')),"
         " work: w ? w.textContent.replace(/\\s+/g, ' ').trim() : null}; })()" % (JUNO, WID))
 COPY = ("(() => { const c = document.querySelector('[data-item=\"%s\"]');"
-        " const b = c && c.querySelector('.pdraft[data-msg=\"msg-juno-1\"] [data-k^=\"copy:msgt-\"]');"
+        " const b = c && c.querySelector('[data-k=\"copy:msgt-msg-juno-1\"]');"
         " if (b) b.click(); return !!b; })()" % JUNO)
 
 

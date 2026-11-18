@@ -153,7 +153,10 @@ def test_jobs_header_says_nothing_of_claudes_work_and_its_tools_are_pills(run, t
     lines, tools, links = got["after"][0]["eval"]
     head = got["after"][0]["text"]
     assert lines == 0 and "Claude is on it" not in head and "See how it is going" not in head, head
-    assert [t for t, _ in tools][-2:] == ["Add a job", "Your CV"] and not any(link for _, link in tools), tools
+    assert [t for t, _ in tools][-2:] == ["Add a job you found", "Your CV"] and not any(link for _, link in tools), tools
+    # Applied has no Find jobs: a search does nothing for applications already sent (the
+    # redesign's second round, 2026-11-17).
+    assert any(t.startswith("Find jobs") for t, _ in tools) == (tab == "To apply"), tools
     assert links == 0, ("no small underlined line under the summary", head)
 
 
@@ -241,7 +244,7 @@ def test_the_bin_for_one_person_leaves_the_rest_of_their_employer(run, tmp_path)
     assert a["value"]["scope"] == "person", a["value"]
     # The application question about the same employer is not the person's, so it stays: three
     # quick answers left of four ("Did you apply to Fernhill Freight?" among them).
-    assert got["after"][3]["eval"] == "3 quick answers", got["after"][3]["eval"]
+    assert got["after"][3]["eval"] == "Answer 3 quick questions", got["after"][3]["eval"]
 
 
 def test_contacts_counts_only_who_needs_the_person_and_the_follow_ups_apart(run, tmp_path):
