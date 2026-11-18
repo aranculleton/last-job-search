@@ -2640,8 +2640,11 @@ ul.bp-news { gap: 12px; }
 .prof-job-t { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .prof-job-t > .muted { font-weight: 400; }
 /* The line under a past job wraps, never cut short: "4 poi..." on a phone cut what the row is for
-   (the screen review, 2026-11-18). Only its title line is cut with "...". */
-.prof-job-sub { font-size: var(--t-sm); color: var(--muted); }
+   (the screen review, 2026-11-18). Only its title line is cut with "...". Wrapped, its leading is
+   a little closer and a phone's row 4px from its hairlines, so a row of three lines stays within
+   72px, a row and not a block. */
+.prof-job-sub { font-size: var(--t-sm); line-height: 1.3; color: var(--muted); }
+@media (max-width: 759px) { .prof-job > .act-row { padding-block: 4px; } }
 .sheet-also { margin: 0; }
 .prof-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; }
 .prof-chip { padding: 4px 12px; border-radius: 999px; background: var(--sunk); font-size: var(--t-sm); }

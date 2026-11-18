@@ -1241,7 +1241,7 @@ METHODS: dict[str, dict] = {
             (213, "2026-11-18", True, "text a step smaller (a computer's Standard 14px, Larger 107%, a phone's Larger 108%); each document downloads from its own icon on its row, with no Get both files and no Open that saved the file; I have applied stays on a card whose box asks a question; Coming up on the Brief lists everything booked, the one Today leads with included; a form answer's and a note's Copy, a prep's code's Copy, Edit the brief, a resume made for a contact's Download and a picture's Remove are their icons"),
             (214, "2026-11-18", True, "on a wide card a document's download and pencil and a work line's Stop Claude stay within a reading measure of their words; a past job's line under its title wraps on a phone; Your profile in two columns reads what to fill in, then Experience, then the rest; Contacts in the side menu counts its messages to send; Settings says Only in the Claude app as a value; End of day keeps one line in Coming up; a To do row's name gets the room its buttons leave; and I heard back wrapped under a pill and its gauge starts under the card's words; Coming up's titles keep a 24px target"),
         ),
-        "fingerprint": "df6df0d41b61a5c0",
+        "fingerprint": "9fa57ba315cb1eee",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",
