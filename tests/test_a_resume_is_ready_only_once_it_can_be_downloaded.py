@@ -95,7 +95,7 @@ LOOK = r"""(() => {
   const juno = document.querySelector('#main [data-resume-for="%s"]');
   return {cards, one: one ? one.textContent.replace(/\s+/g, ' ').trim() : null,
     juno: juno ? juno.textContent.replace(/\s+/g, ' ').trim() : null,
-    getIt: juno ? [...juno.querySelectorAll('button')].map((b) => b.textContent) : []};
+    getIt: juno ? [...juno.querySelectorAll('button')].map((b) => b.getAttribute('aria-label') || b.textContent) : []};
 })()""" % (RESUME, JUNO)
 
 
@@ -114,7 +114,7 @@ def test_while_its_file_is_put_on_the_page_the_resume_is_one_card_on_its_way(run
     assert not any("Putting on page" in c or "Finished" in c for c in r["cards"] if "Juno" in c), r["cards"]
     # Her own card says it is on its way, with nothing to get yet.
     assert r["juno"] and "on its way" in r["juno"], r
-    assert "Download" not in r["getIt"], r
+    assert not any(g.startswith("Download") for g in r["getIt"]), r
 
 
 def test_a_files_part_still_waiting_says_so_on_the_one_card(run, tmp_path):
@@ -135,4 +135,4 @@ def test_once_the_file_is_on_the_page_the_resume_is_done_and_can_be_had(run, tmp
     r = got["after"][0]["eval"]
     assert r["one"] is None, r
     assert not any("Make the files downloadable" in c for c in r["cards"]), r["cards"]
-    assert "Download" in r["getIt"], r
+    assert any(g.startswith("Download") for g in r["getIt"]), r

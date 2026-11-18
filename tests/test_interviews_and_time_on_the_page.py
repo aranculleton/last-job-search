@@ -255,7 +255,9 @@ def test_the_briefs_coming_up_never_lists_a_late_follow_up(run, tmp_path):
                                                        "(document.querySelector('[data-k=\"bp:upcoming\"] .bp-body') || {}).innerText || '']"}],
               model=model, clock="2026-10-28T09:00:00Z")
     count, text = got["after"][0]["eval"]
-    assert count == 0 and "Nothing else booked." in text and "Nothing booked in the next two weeks" not in text
+    # The one booked thing is listed, the one Today leads with included (DESIGN.md, Brief: a
+    # week with two interviews showed one, 2026-11-18); the late follow-ups never are.
+    assert count == 0 and "Phone screen: Larkspur Retail" in text and "Nothing booked in the next two weeks" not in text
 
 
 # ------------------------------------------------------------------ the interview card (interviews 7, 14, 17, 22, 26)

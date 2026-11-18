@@ -136,7 +136,7 @@ DOCS = r"""(() => { const c = document.querySelector('[data-item="app-ellerwick-
   return {well: w ? getComputedStyle(w).backgroundColor : null, sunk: (() => { const p = document.createElement('div'); p.style.background = 'var(--sunk)'; document.body.append(p);
     const v = getComputedStyle(p).backgroundColor; p.remove(); return v; })(), chips: c.querySelectorAll('.doc-part').length,
     rows: [...c.querySelectorAll('.doc-row')].map((r) => ({name: r.querySelector('.doc-name').textContent, meta: r.querySelector('.doc-meta').textContent,
-      open: (r.querySelector('.doc-acts [data-k^="doc-dl:"].icon-only') || {getAttribute: () => ''}).getAttribute('aria-label'), pen: (r.querySelector('.doc-acts .btn.icon-only') || {textContent: ''}).textContent.trim(),
+      open: (r.querySelector('.doc-acts [data-k^="doc-dl:"].icon-only') || {getAttribute: () => ''}).getAttribute('aria-label'), pen: (r.querySelector('.doc-acts .btn.icon-only:not([data-k^="doc-dl:"])') || {textContent: ''}).textContent.trim(),
       h: Math.round(r.getBoundingClientRect().height)}))}; })()"""
 
 
