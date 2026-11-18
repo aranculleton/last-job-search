@@ -45,7 +45,9 @@ def _ctx(rec):
 
 def test_the_replaced_starter_is_named_once_until_they_say_they_archived_it(where):
     rec = {"chat": NEW, "gone": {"chat": OLD, "at": "2026-11-12T15:50:17Z", "why": "silent"}}
-    assert computer.old_starter(rec) == {"chat": OLD, "at": "2026-11-12T15:50:17Z"}
+    # Named as it is called: made before the app's chats were renamed, never renamed.
+    assert computer.old_starter(rec) == {"chat": OLD, "at": "2026-11-12T15:50:17Z",
+                                         "title": computer.OLD_STARTER_TITLE}
     targets: dict = {}
     (card,) = app_model._old_starter_card(_ctx(rec), targets)
     assert card["id"] == "q-old-starter" and card["kind"] == "setup"

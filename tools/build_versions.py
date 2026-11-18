@@ -992,8 +992,9 @@ METHODS: dict[str, dict] = {
             (91, "2026-11-16", False, "a chat whose work is on GitHub but never reached master is kept a week of quiet at most, so the first tidy-up after an update clears an install's whole backlog and nothing stays for good; nothing made before needs making again"),
             (92, "2026-11-17", False, "the app's chats are named \"Last Job Search \u00b7 <what each is for>\" (Brief, Page, Your computer, a one-off job with its day); the daily tidy-up renames the brief's chat, the computer's own chat and the scheduled runs' chat an install already has, once each, and the page's chat renames itself at its next check-in; every older name is still known; nothing made before needs making again"),
             (93, "2026-11-17", False, "putting away the page chat taken over from takes its busy line off the page, and the daily tidy-up takes off the line of every chat put away, so the page never shows work no chat is doing; a chat with the app attached beside the copy (the app maker's own) is judged by the copy; nothing made before needs making again"),
+            (94, "2026-11-18", False, "the chat that starts chats on your computer is named \"Last Job Search \u00b7 Starts chats on your computer\" like the app's other chats; the daily tidy-up renames one made under its old name, once, a refusal named back with done --refused, and the page names it as it is called; nothing made before needs making again"),
         ),
-        "fingerprint": "4d28d2b80c635d96",
+        "fingerprint": "dd32f376475ada31",
     },
     "expand": {
         "by": "upgrade", "priority": 4, "time": "~15 min",

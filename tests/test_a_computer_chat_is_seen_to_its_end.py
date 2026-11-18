@@ -190,10 +190,11 @@ def test_a_starter_that_never_answers_is_looked_at_and_the_person_asked(tmp_path
                                                            checked_at=app_model.stamp(t)),
                                               "version": 3}})
     assert computer.state(old, t, envs=BRIDGE)["state"] != "starter_silent"
-    # Waiting on their approval, the card links the chat by its own address and name.
+    # Waiting on their approval, the card links the chat by its own address and name: the
+    # name it has, the old one for a starter made before the app's chats were renamed.
     card = computer.card(st)
     assert card["open"] == {"label": "Open it", "url": "https://claude.ai/code/session_starter"}
-    assert computer.STARTER_TITLE in card["body"]
+    assert computer.OLD_STARTER_TITLE in card["body"]
     # A starter that answers each ring is never looked at.
     answered = dict(_db(work), **_starter(woke_at=app_model.stamp(T + timedelta(minutes=1))))
     answered = _apply(answered, computer.rung(answered, T, str(tmp_path / "w1")))
