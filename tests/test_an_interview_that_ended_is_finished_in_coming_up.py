@@ -21,8 +21,6 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "tools"))
 sys.path.insert(0, os.path.join(ROOT, "tests"))
 
-import pytest  # noqa: E402
-
 import app_model  # noqa: E402
 import throttle  # noqa: E402
 from test_a_tick_on_the_page_is_applied_once import Search  # noqa: E402
