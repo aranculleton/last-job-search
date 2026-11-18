@@ -95,8 +95,12 @@ reply in one line; then they can switch the chat back to Auto.
    labelled `release` (so Everywhere and Platforms run on it), its description a line for each
    issue the batch fixed or handled, "Closes #N: what was wrong, what happens now", so its
    merge, the release, closes them. Never write "Closes" on an issue it did not fix.
-4. While the checks run: `python3 tools/rehearse_sync.py <the maintainer's copy>` and `python3
-   tools/try_personal_tests.py <the maintainer's copy>`.
+4. While the checks run, the three rehearsals: `python3 tools/rehearse_sync.py <the
+   maintainer's copy>`, `python3 tools/try_personal_tests.py <the maintainer's copy>`, and
+   `python3 tools/rehearse_sync.py --fresh <the last release's tag>`, a new person's copy made
+   from the last release taking this one, as a stranger's chats will (the maintainer,
+   2026-11-18: "have u made sure everything will work on a strangers copy not just mine"). Its
+   tag is the newest `git tag --sort=-v:refname`.
 5. Subscribe to its activity (subscribe_pr_activity) and wait: GitHub wakes you; never poll.
    GitHub's wake can be lost (2026-11-12: both runs finished and nothing woke the builder for
    a quarter of an hour), so also start one background wait, Bash `run_in_background` with
@@ -105,7 +109,7 @@ reply in one line; then they can switch the chat back to Auto.
    Red: read only the failing lines, fix at the cause, and push with the gate again, as many
    rounds as it takes: the release waits, and nothing is taken out of the batch to ship the
    rest.
-6. **Merge only when Fast checks, Everywhere, Platforms and both rehearsals are green**, and
+6. **Merge only when Fast checks, Everywhere, Platforms and all three rehearsals are green**, and
    before 07:30 UK time, so the maintainer's brief takes it (`python3 tools/app_bug.py window
    <the maintainer's copy>` says how long to wait where a merge would fall in the window of
    their own scheduled tasks: wait that long with a background run, Bash `run_in_background`).

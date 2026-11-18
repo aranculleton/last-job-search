@@ -369,7 +369,9 @@ def test_the_builders_prompt_says_what_it_must():
             "tools/push_gate.sh", "python3 tools/release.py cut",
             "Closes #N", "Never write \"Closes\" on an issue it did not fix",
             "rehearse_sync.py", "try_personal_tests.py",
-            "Merge only when Fast checks, Everywhere, Platforms and both rehearsals are green",
+            "Merge only when Fast checks, Everywhere, Platforms and all three rehearsals are green",
+            # The maintainer, 2026-11-18: a stranger's copy, not only theirs.
+            "rehearse_sync.py --fresh <the last release's tag>",
             "before 07:30 UK time", "python3 tools/app_bug.py window",
             "needs-maintainer", "fixed-unreleased", "builder-report",
             # The maintainer, 2026-11-17: "THE RELEASE ALWAYS WAITS FOR EVERYTHING TO BE FIXED".
