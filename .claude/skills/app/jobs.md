@@ -51,7 +51,8 @@ page waited on every tap (2026-10-29). `next` never hands one to this chat to ru
   with its lines, exactly as printed, and its listener makes them (SKILL.md, step 0). `paste`
   needs nothing more, the page already says it. **This
   chat never approves computer access** (`confirm_repository_trust`): one small chat of its
-  own, "Job search: starts chats on your computer", holds that approval and starts and puts
+  own, "Last Job Search · Starts chats on your computer" ("Job search: starts chats on your
+  computer" where one made before was not renamed), holds that approval and starts and puts
   away the chats there; `route` makes it once and wakes it by republishing its bell page.
   An approved chat could never be archived, itself included, so every hand-over left an old
   helper in the sidebar (2026-11-10). Never `send_message` a chat on the computer: it reports
@@ -123,7 +124,8 @@ first that fails), or one line recording the chat made for it, the daily upkeep'
 and the chats to archive with `archive_session`. It never names this chat, a chat the person
 named, one a scheduled task that is on still uses, a live campaign's chat, one used lately
 (an old helper excepted: there is only ever the live one), or one whose work is not on
-master. Then `tidy.py done <each archived>` (it keeps their titles itself), and commit. Where
+master. Then `tidy.py done <each archived>` (it keeps their titles itself; `--refused <id>`
+for each `rename` refused, so the page names that chat as it is still called), and commit. Where
 the brief runs is what the task listing says (`brief:` names it), never the registry: report
 the brief moved only once a new `list_triggers`, run through the plan again, shows its task
 firing in its own new chat (a helper said it had checked the move when the task still fired in

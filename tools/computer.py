@@ -23,8 +23,9 @@ there is, tried in this order (`route`), and the page says which in one line:
      (claude_surfaces: remote-control-settings, computer-bridge); create_session there, in
      Auto, named "Job search · <job> · <computer>", with a prompt complete from the start.
      Its results come back through the page's database and the person's copy, never a
-     message between chats (claude_surfaces: session-approvals), and the starter chat, "Job
-     search: starts chats on your computer", archives it once its work is finished
+     message between chats (claude_surfaces: session-approvals), and the starter chat, "Last
+     Job Search · Starts chats on your computer" (STARTER_TITLE; "Job search: starts chats on
+     your computer" before), archives it once its work is finished
      (`finished`), whichever chat answers the page by then;
   3. the scheduled task on the computer (claude_surfaces: routines-local) takes it on its
      next run, while the desktop app is open there (`computer task`); with nothing waiting it
@@ -163,7 +164,13 @@ READS = ("ok", "stopped", "none")
 
 # The one chat that starts Claude on the person's computer (`starter`, below), by its name in
 # their list of chats: the page names it wherever the person has to do something in it.
-STARTER_TITLE = "Job search: starts chats on your computer"
+# "Last Job Search · <what it is for>" like the app's other chats (issue #289); it was missed
+# then, and kept its old name beside the renamed ones in the person's list. One made under the
+# old name keeps it until the daily tidy-up renames it (tidy.new_name), or for good where that
+# rename was refused, so the page names each by the name it has (starter_title), never by one
+# it may not have.
+STARTER_TITLE = "Last Job Search \u00b7 Starts chats on your computer"
+OLD_STARTER_TITLE = "Job search: starts chats on your computer"
 
 # What the person sees: one line a state, and at most one action (templates/app/DESIGN.md).
 # The steps of an action come from tools/claude_surfaces.json, never written here.
@@ -205,12 +212,13 @@ SAY = {
     # computer was off (the maintainer's Mac, 2026-11-12).
     # The Allow first, then the mode: Claude clears the chat's Auto when Allow is tapped, so
     # both are asked at once, and only the mode once the Allow is given.
-    "starter_allow": ("Claude needs your OK once: open the chat “" + STARTER_TITLE + "”, tap "
-                      "Allow, then switch it to Accept edits and back to Auto."),
+    # `{title}`: the chat's name as it is in the person's list (starter_title).
+    "starter_allow": ("Claude needs your OK once: open the chat “{title}”, tap Allow, then "
+                      "switch it to Accept edits and back to Auto."),
     # Its mode is a setting, never a question: "Claude needs your OK" sent the person looking
     # through their chats for a question that was never there, for two days (issue #275).
-    "starter_mode": ("Waiting for you to switch the chat “" + STARTER_TITLE + "” back to Auto: "
-                     "a setting in that chat, so nothing pops up there."),
+    "starter_mode": ("Waiting for you to switch the chat “{title}” back to Auto: a setting in "
+                     "that chat, so nothing pops up there."),
     # A starter being made, or rung for work and not yet back (starter_starting): the computer
     # is never said to be off meanwhile (the maintainer's Mac, 2026-11-12). `{where}`: "your
     # Mac", by the computer's own name.
@@ -445,7 +453,9 @@ CHAT_URL = "https://claude.ai/code/"
 # that needs nobody's approval: it publishes a tiny page of its own (the bell) and watches
 # it, and any chat that has computer work for it republishes the bell ("this session is
 # woken with a new turn when the watched artifact is republished elsewhere": the Artifact
-# watch). Its record is the page's `meta/computer_starter`: {chat, bell, made_at, rung_at}.
+# watch). Its record is the page's `meta/computer_starter`: {chat, bell, made_at, rung_at,
+# title}; `title`, the name it was made with, is kept since the name changed, so a record
+# without one is a starter made under OLD_STARTER_TITLE.
 STARTER_DOC = ("meta", "computer_starter")
 # STARTER_TITLE: the chat's name, above with what the person is told (SAY).
 # A starter asked for and not ready (no bell yet) this long: made again.
@@ -473,17 +483,39 @@ def starter(db: dict) -> dict:
     return dict(doc.get("data") or {}) if isinstance(doc, dict) else {}
 
 
-def old_starter(rec: dict) -> dict | None:
-    """The starter a newer one replaced ({"chat", "at"}), from the starter's own record, or
-    None. It holds the person's OK to use their computer, so no chat may archive it
-    (archive_session: "only accepts requests made from one of its owner's trusted devices",
-    tried on the maintainer's, 2026-11-16): it stayed in their chat list for good, and their
-    page asks them once instead (app_model, the old-chat card)."""
+def chat_names() -> dict:
+    """{chat id: name} the daily tidy-up renamed the app's chats to, a rename that was refused
+    left out (tidy.renamed): read from the person's own record, so {} where there is none."""
+    try:
+        import tidy
+        return tidy.renamed(made=True)
+    except Exception:  # noqa: BLE001  no record of the tidy-up here: nothing renamed
+        return {}
+
+
+def starter_title(rec: dict, names: dict | None = None) -> str:
+    """The name the starter `rec` ({chat, title}) has in the person's list of chats: the one
+    the tidy-up renamed it to (`names`, else chat_names()), else the one it was made with,
+    else OLD_STARTER_TITLE for one made before the name changed. Told to open "Job search:
+    starts chats on your computer" while it was still called that, the person found it; told
+    a name it did not have yet, they would not."""
+    chat = str((rec or {}).get("chat") or "")
+    names = chat_names() if names is None else names
+    return str((names or {}).get(chat) or (rec or {}).get("title") or OLD_STARTER_TITLE)
+
+
+def old_starter(rec: dict, names: dict | None = None) -> dict | None:
+    """The starter a newer one replaced ({"chat", "at", "title"}: `title`, its name in the
+    person's list, starter_title), from the starter's own record, or None. It holds the
+    person's OK to use their computer, so no chat may archive it (archive_session: "only
+    accepts requests made from one of its owner's trusted devices", tried on the maintainer's,
+    2026-11-16): it stayed in their chat list for good, and their page asks them once instead
+    (app_model, the old-chat card)."""
     gone = (rec or {}).get("gone") or {}
     chat = str(gone.get("chat") or "")
     if not chat or chat == str((rec or {}).get("chat") or ""):
         return None
-    return {"chat": chat, "at": str(gone.get("at") or "")}
+    return {"chat": chat, "at": str(gone.get("at") or ""), "title": starter_title(gone, names)}
 
 
 OLD_STARTER_SAID = "old-chat:"     # said_once key, with the chat's id: archived, by their word
@@ -618,9 +650,10 @@ def _starter_set(db: dict, fields: dict, out_dir: str, dump_dir: str = "",
 
 def starter_made(db: dict, session: str, now: dt.datetime, out_dir: str,
                  dump_dir: str = "") -> list[str]:
-    """A new computer starter was asked for: kept, with no bell yet."""
+    """A new computer starter was asked for (starter_call, under STARTER_TITLE): kept, with no
+    bell yet, and the name it was made with, which the page calls it by (starter_title)."""
     return _starter_set(db, {"chat": session, "bell": "", "made_at": _stamp(now),
-                             "rung_at": None}, out_dir, dump_dir)
+                             "rung_at": None, "title": STARTER_TITLE}, out_dir, dump_dir)
 
 
 def starter_ready(db: dict, chat: str, bell: str, now: dt.datetime, out_dir: str,
@@ -841,10 +874,13 @@ def starter_seen(db: dict, status: str, now: dt.datetime, out_dir: str,
     rec = starter(db)
     said = " ".join(str(status or "").lower().replace("-", "_").split())
     at = _stamp(now)
+    # The name it was made with goes with it, for the card that names it (old_starter); one
+    # made before the name changed has none, which means the old name.
+    named = {"title": rec["title"]} if rec.get("title") else {}
     if said in STARTER_GONE or any(w in said for w in ("archiv", "not found", "deleted")):
         fields = {"chat": "", "bell": "", "made_at": None, "rung_at": None, "rings": 0,
                   "silent": 0, "waits_on_person": None, "checked_at": at, "checked": said,
-                  "gone": {"chat": rec.get("chat") or "", "at": at}}
+                  "title": None, "gone": {"chat": rec.get("chat") or "", "at": at, **named}}
     elif said in STARTER_BLOCKED:
         fields = {"checked_at": at, "checked": said, "waits_on_person": at}
     elif int(rec.get("silent") or 0) + 1 >= STARTER_SILENT_CHECKS:
@@ -853,7 +889,8 @@ def starter_seen(db: dict, status: str, now: dt.datetime, out_dir: str,
         # could see (the local review, 2026-11-11, 7).
         fields = {"chat": "", "bell": "", "made_at": None, "rung_at": None, "rings": 0,
                   "silent": 0, "waits_on_person": None, "checked_at": at, "checked": said,
-                  "gone": {"chat": rec.get("chat") or "", "at": at, "why": "silent"}}
+                  "title": None, "gone": {"chat": rec.get("chat") or "", "at": at,
+                                          "why": "silent", **named}}
     else:
         fields = {"checked_at": at, "checked": said or "unknown", "rings": 0,
                   "waits_on_person": None, "silent": int(rec.get("silent") or 0) + 1}
@@ -2526,7 +2563,7 @@ def held_there(db: dict, now: dt.datetime, w: dict | None = None) -> tuple[list,
 
 def state(db: dict, now: dt.datetime, envs=None, version: str = "",
           works_on: str = "", page_signin: str = "", folders=None,
-          keep_said: str = "") -> dict:
+          keep_said: str = "", names: dict | None = None) -> dict:
     """The computer as the page shows it: {state, line, action, card, computer, seen_at,
     waiting}. `action` is {label, steps} or None; `card` is True only while computer work
     waits past CARD_AFTER_S (nobody started it, or a chat there holds it) and only the person
@@ -2534,7 +2571,8 @@ def state(db: dict, now: dt.datetime, envs=None, version: str = "",
     `works_on`: profile/place.json's answer. `folders`: list_computer_folders' answer, where
     the chat asked. The action's steps are for the computer's own system (system_seen), or say
     all three where it is not known. `keep_said`: when the person said they set the browser to
-    keep sign-ins (KEEP_SAID): asked only once."""
+    keep sign-ins (KEEP_SAID): asked only once. `names`: {chat id: name} the tidy-up renamed the
+    app's chats to (chat_names, read where not given), so the starter is named as it is called."""
     beat_ = heartbeat(db)
     w = waiting(db, now)
     seen = _time(beat_.get("seen_at"))
@@ -2678,9 +2716,13 @@ def state(db: dict, now: dt.datetime, envs=None, version: str = "",
     needs_them = key in ("off", "gone", "signed_out", "forgets", "no_bridge", "not_set_up",
                          "starter_waits", "starter_silent", "no_folder")
     rec = starter(db)
+    names = chat_names() if names is None else names
+    # The starter by the name it has in the person's list, never one it may not have yet.
+    title = starter_title(rec, names)
     where = beat_.get("computer") or next((b["computer"] for b in bridges(kept)), "") \
         if kept is not None else beat_.get("computer") or ""
     line = SAY[say].format(where=_yours(where, start=False)) if say == "starting_chat" \
+        else SAY[say].format(title=title) if say in ("starter_allow", "starter_mode") \
         else SAY[say]
     # Work only queued behind a chat at work there: its turn, never a computer or sign-in
     # problem (the maintainer's Mac, 2026-11-12). Said on the queued work's line alone.
@@ -2706,10 +2748,10 @@ def state(db: dict, now: dt.datetime, envs=None, version: str = "",
                          (say == "keep_signin" and bool(w["queued"] or held or on_signin))),
             # The chat the person approves in, linked from the card (card): "open that chat"
             # named no chat and gave no way there (the local review, 2026-11-11, 7).
-            "starter": ({"chat": str(rec.get("chat") or ""), "title": STARTER_TITLE}
+            "starter": ({"chat": str(rec.get("chat") or ""), "title": title}
                         if key == "starter_waits" and rec.get("chat") else None),
             # A starter replaced by a newer one: only the person can archive it (old_starter).
-            "old_starter": old_starter(rec),
+            "old_starter": old_starter(rec, names),
             "computer": beat_.get("computer") or "", "seen_at": beat_.get("seen_at"),
             # The computer's system, as it reported it (system_seen): "" where not known.
             "system": system,
@@ -2986,8 +3028,12 @@ def session_prompt(wid: str, title: str, url: str, copy: str) -> str:
 # person pasted into it ("Open my job search on this computer...", place.computer_paste). The
 # one on a Mac on 2026-11-10 found none: the person had deleted the earlier chat by hand, and
 # that one, the setup chat, did not carry the app's name either.
+# The chats the app keeps for good are never among them, the starter included under its name
+# since issue #289 (STARTER_TITLE): it holds the person's OK to use their computer, and one put
+# away is made again, asking for that OK again.
 APP_CHAT = re.compile(r"^\s*(?:Job search\s+\u00b7\s+\S.*\s+\u00b7\s+\S.*|Last Job Search\s+\u00b7\s+"
-                      r"(?!(?:Your computer|Brief|Page|Scheduled runs)\s*$)\S.*)$", re.I)
+                      r"(?!(?:Your computer|Brief|Page|Scheduled runs|Starts chats on your "
+                      r"computer)\s*$)\S.*)$", re.I)
 _RUNNING = ("running", "working", "busy", "active", "progress", "streaming", "waiting",
             "requires", "blocked", "paused", "input", "permission")
 # The states that say a chat has finished, as whole words ("incomplete" is not "complete").

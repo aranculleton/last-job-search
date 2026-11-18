@@ -45,6 +45,7 @@ remembered (profile/tidy.json `runs`) until it is old enough to tidy.
     python3 tools/tidy.py plan --dump <dir> --sessions <file>... --triggers <file>...
                                [--details <file>...] [--chat <id>] [--today YYYY-MM-DD]
     python3 tools/tidy.py done [<session id>...] [--titles <json>] [--dump <dir>]
+                               [--refused <session id>]...   a rename refused
     python3 tools/tidy.py close <session id> --work <id> --dump <dir> --details <file>
                                [--now <time>]
     python3 tools/tidy.py closed <session id>...     once archive_session has taken it
@@ -94,8 +95,10 @@ APP_TITLE = re.compile(r"^(?:[^\w\s]{1,3}\s*)?(?:Job search(?::\s*\S.{0,60}|\s+(
 # meta/listen names, is kept: the rest are put away as soon as their work is on master, never
 # kept for being used lately (the maintainer, 2026-11-04: at most two such chats, the person's
 # own and the live page helper; a heavy user's renewals had stacked up several).
-# The computer starter (tools/computer.py STARTER_TITLE), kept for good.
-STARTER_NAME = re.compile(r"^(?:[^\w\s]{1,3}\s*)?Job search:\s+starts chats on your computer\b", re.I)
+# The computer starter (tools/computer.py STARTER_TITLE), kept for good, by its name since
+# issue #289 or the one before (OLD_STARTER_TITLE), which one made earlier keeps until renamed.
+STARTER_NAME = re.compile(r"^(?:[^\w\s]{1,3}\s*)?(?:Job search:\s+starts chats on your computer\b"
+                          r"|Last Job Search\s+\u00b7\s+Starts chats on your computer\s*$)", re.I)
 # The computer's own chat (tools/computer.py LISTENER_TITLE), kept open for the next job there,
 # by its name or by the page's record of it (meta/computer_listener), whatever it is called.
 LISTENER_NAME = re.compile(r"^(?:[^\w\s]{1,3}\s*)?(?:Job search:\s+on your computer\b|Last Job "
@@ -1323,8 +1326,10 @@ RUNS_NAME = APP_NAME + " \u00b7 Scheduled runs"     # tools/computer.py, trust: 
 def new_name(sid: str, title: str, brief_chat: str = "", computer_chat: str = "") -> str:
     """The name one of the app's chats kept for good should have now (issue #289), or "": the
     brief's own chat under an older brief name, the computer's own chat under any of the
-    app's names, and the chat the scheduled runs moved into. Never a chat of the person's
-    own: each only under a name the app gave it."""
+    app's names, the chat the scheduled runs moved into, and the computer starter under its
+    exact old name (missed at first: it stayed "Job search: starts chats on your computer"
+    beside the renamed ones). Never a chat of the person's own: each only under a name the
+    app gave it."""
     import routines
     if sid and sid == brief_chat and routines._BRIEF_TITLE.match(title):
         return routines.BRIEF_CHAT_TITLE
@@ -1333,15 +1338,28 @@ def new_name(sid: str, title: str, brief_chat: str = "", computer_chat: str = ""
         return computer.LISTENER_TITLE
     if title.lower() == OLD_RUNS_NAME.lower():
         return RUNS_NAME
+    import computer
+    if title.lower() == computer.OLD_STARTER_TITLE.lower():
+        return computer.STARTER_TITLE
     return ""
 
 
-def renamed() -> dict:
-    """{chat id: name}: the renames asked for so far (profile/tidy.json `renamed`)."""
+def renamed(made: bool = False) -> dict:
+    """{chat id: name}: the renames asked for so far (profile/tidy.json `renamed`), each never
+    asked for again. `made`: only those not refused (`rename_refused`, from `done --refused`),
+    so the name each of those chats has now: the computer starter holds the person's OK to use
+    their computer and may be refused a rename from another chat, keeping its old name, and
+    the page names it as it is called (computer.starter_title)."""
     try:
         with open(_record_path(), encoding="utf-8") as fh:
-            got = json.load(fh).get("renamed") or {}
-        return {str(k): str(v) for k, v in got.items()} if isinstance(got, dict) else {}
+            rec = json.load(fh)
+        got = rec.get("renamed") or {}
+        out = {str(k): str(v) for k, v in got.items()} if isinstance(got, dict) else {}
+        if made:
+            no = rec.get("rename_refused") or []
+            no = {str(x) for x in no} if isinstance(no, list) else set()
+            out = {k: v for k, v in out.items() if k not in no}
+        return out
     except (OSError, ValueError, AttributeError):
         return {}
 
@@ -1378,7 +1396,10 @@ def _take_renames() -> dict:
     return {str(k): str(v) for k, v in got.items()} if isinstance(got, dict) else {}
 
 
-def _note_renamed(names: dict) -> None:
+def _note_renamed(names: dict, refused=()) -> None:
+    """Record the renames asked for (`names`, made or refused: never asked for again), and of
+    them the ones refused (`refused`, ids): those chats keep the name they had."""
+    refused = [str(x) for x in refused or () if str(x) in names]
     if not names:
         return
     path = _record_path()
@@ -1390,6 +1411,10 @@ def _note_renamed(names: dict) -> None:
     rows = got.get("renamed") if isinstance(got.get("renamed"), dict) else {}
     rows.update(names)
     got["renamed"] = rows
+    no = got.get("rename_refused") if isinstance(got.get("rename_refused"), list) else []
+    no = [x for x in no if x not in names] + refused
+    if no or "rename_refused" in got:
+        got["rename_refused"] = no
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(got, fh, indent=2, ensure_ascii=False)
@@ -1717,8 +1742,11 @@ def run_plan(a) -> int:
         print(f"rename {c['id']}: set_session_title {call} ({c['title'] or 'a chat'}: the app's "
               "chats have short new names; say nothing about it)")
     if got.get("rename"):
+        # A refused one is named back, so the page calls that chat by the name it kept: the
+        # computer starter, which holds the person's OK to use their computer, may be refused.
         print("rename: make these, asking nobody and saying nothing about it; one refused is "
-              "left as it is and never asked for again")
+              "left as it is and never asked for again: add --refused <its id> to the "
+              "python3 tools/tidy.py done below for each one refused")
         _stash_renames({c["id"]: c["to"] for c in got["rename"]})
     for c in got["archive"]:
         print(f"archive {c['id']}: {c['title']} ({c['why']})")
@@ -1815,11 +1843,11 @@ def _record(ids: list[str], titles: dict, today: str, gone: bool = False) -> Non
     _plan_titles({}, drop=ids)
 
 
-def run_done(ids: list[str], titles: dict, today: str) -> str:
+def run_done(ids: list[str], titles: dict, today: str, refused=()) -> str:
     """Record what was archived (profile/tidy.json), the renames the plan asked for (once
-    each, made or refused) and that today's tidy-up ran."""
+    each, made or refused; `refused`, the ids of those refused) and that today's tidy-up ran."""
     _mark_checked(today)
-    _note_renamed(_take_renames())
+    _note_renamed(_take_renames(), refused)
     if not ids:
         return "tidy: done for today"
     _record(ids, titles, today)
@@ -2101,6 +2129,8 @@ def main(argv: list[str]) -> int:
     o.add_argument("--today", default="")
     o.add_argument("--dump", default="", help="the folder the plan read: the day's mark goes "
                                               "onto the page too")
+    o.add_argument("--refused", action="append", default=[],
+                   help="a chat whose rename the plan asked for was refused: it keeps its name")
     r = sub.add_parser("retire", help="the helper this chat took the page over from, judged "
                                       "from one get_session of it")
     r.add_argument("--dump", default="")
@@ -2145,7 +2175,7 @@ def main(argv: list[str]) -> int:
         except ValueError:
             titles = {}
         day = a.today or dt.date.today().isoformat()
-        print(run_done(a.ids, titles if isinstance(titles, dict) else {}, day))
+        print(run_done(a.ids, titles if isinstance(titles, dict) else {}, day, a.refused))
         if a.dump:
             paths = page_mark_batch(a.dump, day)
             if paths:
