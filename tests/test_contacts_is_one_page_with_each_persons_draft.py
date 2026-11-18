@@ -194,12 +194,22 @@ def test_ten_replies_pasted_in_a_row_each_show_on_their_own_card(run, page, mode
         "count": {}, "rev": "r-" + p["id"]} for p in written]
     finished = {k: dict(v, status="done", finished_at="2026-10-25T18:31:00Z") for k, v in work.items()
                 if any(k.endswith(p["id"]) for p in written)}
+    # A step after a write waits for the page to draw what it took, never a set number of turns:
+    # a big list drawn a moment ago holds its next drawing for a frame (liveRender), and on a
+    # busy machine the cards were read in between, the drafts taken and not drawn yet (CI,
+    # 2026-11-18). The wait has a time limit, so a card that never changes still fails.
+    def card_is(cid, sel, there=True):
+        return ("(() => { const c = document.querySelector('#main ul.people > li[data-item=\"%s\"]');"
+                " return !!c && %s!!c.querySelector('%s'); })()" % (cid, "" if there else "!", sel))
+    running = card_is(ten[0]["id"], ".going .spin")
+    drawn = " && ".join(card_is(p["id"], ".going", there=False) for p in written)
     got = run("engine", html=page, viewport=WIDE, clock=CLOCK, shots="contacts-ten" if SHOTS else None, steps=[
         {"hash": "contacts", "quick": quick, "eval": states},
         {"eval": boxes},
-        {"receipts": True, "write": work, "eval": states, "shot": "working", "full": True},
-        {"reload": True, "hash": "contacts", "eval": states},
-        {"write": dict(finished, **{"view/messages": {"made_at": "2026-10-25T18:31:00Z", "data": msgs}}), "eval": states, "shot": "written", "full": True},
+        {"receipts": True, "write": work, "ready": running, "eval": states, "shot": "working", "full": True},
+        {"reload": True, "hash": "contacts", "ready": running, "eval": states},
+        {"write": dict(finished, **{"view/messages": {"made_at": "2026-10-25T18:31:00Z", "data": msgs}}), "ready": drawn,
+         "eval": states, "shot": "written", "full": True},
         {"hash": "contacts", "read": _card(written[0]["id"])},
         {"hash": "contacts", "read": _card(ten[5]["id"])},
     ])
@@ -689,7 +699,12 @@ def test_a_message_waiting_on_its_resume_is_not_ready_to_send(run, model, tmp_pa
                 result={"summary": "Made the resume for Rafe.", "links": []}, _v=3)
     got = run("engine", html=html, viewport=WIDE, clock=CLOCK, seed=seed, steps=[
         {"hash": "contacts", "eval": look},
-        {"write": {"work/" + wid: done}, "eval": look},
+        # Waited for, never read after a set number of turns: the drawing after a write can
+        # wait a frame on a big list (liveRender), and the time limit still fails a card that
+        # never offers I sent it.
+        {"write": {"work/" + wid: done}, "ready": "(() => { const c = document.querySelector('%s');"
+         " const b = c && c.querySelector('[data-k=\"sent:%s\"]'); return !!b && b.getClientRects().length > 0; })()"
+         % (_card(rafe), msg["id"]), "eval": look},
     ])
     assert not got["errors"], got["errors"]
     making, ready = got["after"][0]["eval"], got["after"][1]["eval"]
