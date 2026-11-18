@@ -1730,23 +1730,28 @@ def _answers_the_page() -> bool:
 
 
 def _tidy_due() -> str:
-    """The day's tidy of the app's own old chats, done in the brief's run when the brief runs
-    in the chat that answers the page and nothing has done it yet today: one daily pass, not
-    two (tools/tidy.py)."""
+    """The day's tidy-up of the app's own old chats, done in the brief's run whenever the brief
+    runs in a cloud chat and nothing has done it yet today, whichever chat answers the page or
+    none: a page left quiet, or answered by a chat on the person's computer, was never tidied,
+    since only a cloud chat that answers the page was ever told to (tools/tidy.py). Judged here
+    from this checkout's own mark, then by `tidy.py due` from a fresh read of the page, so the
+    page's own day mark counts (another chat may have run it today)."""
     try:
         import app_listen
         import tidy
         here = app_listen.this_chat()
         if app_listen.chat_kind() != "cloud" or not here.startswith("session_"):
             return ""
-        if (app_listen.seen().get("listener") or {}).get("chat") != here or not tidy.due():
+        url = page_url()
+        if not url or not tidy.due(listener=app_listen.seen().get("listener")):
             return ""
     except Exception:  # noqa: BLE001  no git folder, no record: nothing to tidy from here
         return ""
-    return ("tidy, before the final reply (the message is the last thing this run says): "
-            "list_sessions (mine: true) and list_triggers, "
-            "every page, each saved to a file; python3 tools/tidy.py plan --sessions <each> "
-            "--triggers <each>; do what it prints (the app skill, \"Once a day\")")
+    return ("tidy, once the page's steps are done and before the landing and the final reply "
+            "(the message is the last thing this run says), asking nobody and saying nothing "
+            "about it: ArtifactData query, url %s, collections meta, work and beats, out_dir a "
+            "new folder $D, limit 1000; then python3 tools/tidy.py due --dump \"$D\" and do what "
+            "it prints" % url)
 
 
 PUSH_MAX = 199          # PushNotification: "Keep it under 200 characters; mobile OSes truncate"
@@ -1982,9 +1987,6 @@ def claude_lines(b: dict) -> list[str]:
                        " (the first %d; the rest wait in the pack)" % most if n > most else ""))
     if b["profile_line"]:
         out.append("own profile question: a yes runs python3 tools/network/own_profile.py check")
-    tidy_line = _tidy_due()
-    if tidy_line:
-        out.append(tidy_line)
     out += _computer_lines(b)
     n = setting("news")
     if b.get("watch_due") and n:
@@ -2057,6 +2059,10 @@ def claude_lines(b: dict) -> list[str]:
             out.append("last of the page's steps: ArtifactComments, action watch, url %s, on: "
                        "false (a publish starts a watch): this chat never answers the page, and "
                        "a ring from it here gets no reply" % b["page"])
+    # After the page's steps: its own fresh read, and its batches after theirs.
+    tidy_line = _tidy_due()
+    if tidy_line:
+        out.append(tidy_line)
     try:
         import routines
         owed = routines.calls(today=b.get("date") or "")
