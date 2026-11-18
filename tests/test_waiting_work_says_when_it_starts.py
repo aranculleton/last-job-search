@@ -2,8 +2,9 @@
 
 The UX review of 2026-11-10 (U-15): a card said "Claude starts it when it next looks at this
 page" and the pill "1 waiting", and neither said when that would be or what the person could
-do. The card now says Claude's helper for the page starts it when it next answers, or the next
-brief starts one, and the one thing that starts it now; on a wide screen the pill says what it waits for. Every
+do. The card now says Claude starts it next, or the next brief starts it, and the one thing that
+starts it now (in plain words since 2026-11-18: "Claude's helper for this page" asked what a
+helper was); on a wide screen the pill says what it waits for. Every
 person and employer here is the sample's, invented.
 """
 from __future__ import annotations
@@ -39,7 +40,7 @@ def test_a_waiting_card_says_when_it_starts_and_how_to_start_it_now(run, tmp_pat
     seen = got["after"][0]["eval"]
     # What really starts it (the review of 2026-11-11): the chat that answers this page, or the
     # next brief; any other chat open takes no queued work.
-    assert "helper for this page starts it when it next answers" in seen["card"], seen
+    assert "Claude starts this next" in seen["card"] and "helper" not in seen["card"], seen
     assert "next time one of your Claude chats is open" not in seen["card"], seen
     assert "when it next looks at this page" not in seen["card"], seen
     # Asked two minutes ago, Claude not yet past its quiet time: nothing on the page starts it
@@ -69,7 +70,7 @@ def test_work_waiting_while_claude_is_at_work_names_no_button_that_is_not_there(
     # answering" beside a running search (the screen review, 2026-11-11).
     got = _go(run, tmp_path, [{"hash": "todo", "open": "pill", "wait": 200, "eval": DRAFT}], vp, seed=BUSY, clock=T)
     seen = got["after"][0]["eval"]
-    assert "helper for this page starts it when it next answers" in seen["card"], seen
+    assert "Claude starts this next" in seen["card"] and "helper" not in seen["card"], seen
     assert "if none is answering" not in seen["card"] and "Claude to start it now" not in seen["card"], seen
     assert seen["wake"] == 0, seen
 
@@ -101,10 +102,10 @@ def test_beside_claudes_work_a_cards_line_says_its_state_and_the_panel_the_rest(
     seen = got["after"][0]["eval"]
     assert seen["card"], seen
     if vp == WIDE:
-        assert "helper for this page" in seen["rail"] and "helper for this page" not in seen["card"], seen
+        assert "Claude starts this next" in seen["rail"] and "Claude starts this next" not in seen["card"], seen
         assert "Waiting for Claude" in seen["card"] or "waiting for Claude" in seen["card"], seen
     else:
-        assert "helper for this page" in seen["card"], seen
+        assert "Claude starts this next" in seen["card"], seen
 
 
 PILL = ("(() => { const p = document.querySelector('#pill'); const r = p.getBoundingClientRect();"

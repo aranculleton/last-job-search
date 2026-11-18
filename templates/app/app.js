@@ -14066,9 +14066,11 @@
   // What really starts it: the chat that answers this page (any other chat open takes no queued
   // work), and with none answering, the next brief, which starts one (the review, 2026-11-11).
   // While Claude is plainly at work the second half is not said: beside a running search it
-  // read as Claude perhaps not answering (the screen review, 2026-11-11).
-  const WAIT_WHEN = "Claude's helper for this page starts it when it next answers; if none is answering, your next brief starts one.";
-  const WAIT_ANSWERING = "Claude's helper for this page starts it when it next answers.";
+  // read as Claude perhaps not answering (the screen review, 2026-11-11). In plain words: "Claude's
+  // helper for this page starts it when it next answers" asked what a helper was (the screen
+  // review, 2026-11-18).
+  const WAIT_WHEN = "Claude starts this next; if no chat is answering, your next brief starts it.";
+  const WAIT_ANSWERING = "Claude starts this next.";
   function waitWhen() { return freshHeartbeat() || workAlive() ? WAIT_ANSWERING : WAIT_WHEN; }
   // What starts waiting work now, in the words for where the page is open, naming only a
   // control that is there: To do's Wake Claude (or its Open Claude, where nothing can hear a
@@ -16497,15 +16499,19 @@
     const stepClock = (picked || waking || ((st === "running" || st === "claimed") && !slow)) && !p.stopping && !(Number(obj(w.count).total) > 0);
     if (now1) put(cardEl, h("p", {class: "wc-now" + (st === "failed" ? " tone-bad" : st === "needs_you" ? " tone-warn" : "")}, now1,
       stepClock ? h("span", {class: "wc-clock muted", "data-step": "1"}, clockText(stepSeconds(ws.v, st === "queued", undefined, p.sentAt))) : null));
-    // Past its estimate, no bar: its clock and "so far" say how long it has run (#238).
-    if (ACTIVE.has(st) && !((st === "running" || st === "claimed") && p.past)) {
+    // Past its estimate, no bar: its clock and "so far" say how long it has run (#238). Nor one
+    // while it waits: an empty 0% bar stood under "Waiting for Claude" (the screen review,
+    // 2026-11-18); it has one once Claude picks it up.
+    if (ACTIVE.has(st) && (st !== "queued" || picked) && !((st === "running" || st === "claimed") && p.past)) {
       put(cardEl, h("div", {class: "bar" + (spinning ? " is-running" : ""), role: "progressbar", "aria-labelledby": titleId, "aria-valuemin": "0", "aria-valuemax": "100",
         "aria-valuenow": String(p.pct), "aria-valuetext": barText(p)}, h("span", {class: "fill", style: "width:" + p.pct + "%"})));
     }
     // A big job says it runs in a chat of its own and waits for no light work, unless it is in
     // line behind other big jobs, which its own line names (issue #238). Above the time line,
-    // so Stop Claude keeps its place at the end of the clock's line.
-    if (ACTIVE.has(st) && st !== "needs_you" && !ws.inLine && !toComputer && !obj(w.computer_session).id && ownChatWords(w, st === "queued"))
+    // so Stop Claude keeps its place at the end of the clock's line. Said once it has started:
+    // "Starts in a chat of its own, so it does not wait for other work" under "Waiting" said
+    // two things at once (the screen review, 2026-11-18).
+    if (ACTIVE.has(st) && st !== "needs_you" && (st !== "queued" || picked) && !ws.inLine && !toComputer && !obj(w.computer_session).id && ownChatWords(w, st === "queued"))
       put(cardEl, h("p", {class: "wc-where small muted", "data-where": "own-chat"}, cap1(ownChatWords(w, st === "queued").replace(/^,\s*/, "")) + ", so it does not wait for other work."));
     put(cardEl, h("p", {class: "wc-time", "data-time": "1"}, ACTIVE.has(st) || TERMINAL.has(st) ? timeText(w, p, stepClock && !!now1 && sameSpan(ws.v, p)) : ""));
     // Started in a chat on their computer (tools/computer.py started): said while it runs, in
@@ -16611,8 +16617,12 @@
     const left = leftWords(p);
     // The step's own clock counts the same time while its step is the whole run: "Getting
     // started · 1m 59s" over "2 min so far" said it twice (the maintainer, 2026-11-04).
-    if (p.lapsed || p.over || p.stageOver || p.past) return same ? "" : so;
-    return same ? left : so + " · " + left;
+    // A line's first word capitalised and its time left one piece: "under a minute so far ·
+    // about 7 min left" began in lower case, its "left" wrapping beside Stop Claude (the screen
+    // review, 2026-11-18).
+    if (p.lapsed || p.over || p.stageOver || p.past) return same ? "" : cap1(so);
+    const held = left.replace(/ /g, "\u00a0");
+    return cap1(same ? held : so + " · " + held);
   }
   // Does the step's clock on this card count the same span as its "so far"? Then one says it.
   function sameSpan(w, p, t) { return Math.abs(stepSeconds(w, p.status === "queued", t, p.sentAt) - p.elapsedS) <= 5; }
@@ -16729,10 +16739,14 @@
     const name = (w) => clipWords(workName(w) || "Work", 60).replace(/[.\s]+$/, "");
     // A resume's files part is said as the resume, making it downloadable, never by its own
     // name (#237).
-    const said = (w, waiting) => { const par = filesParent(w); return par ? name(workDoc(par)) + ", making it downloadable" : name(w) + ownChatWords(w, waiting); };
+    // What waits is never said as in a chat of its own: under "Waiting" it read as two things
+    // at once (the screen review, 2026-11-18).
+    const said = (w, waiting) => { const par = filesParent(w); return par ? name(workDoc(par)) + ", making it downloadable" : name(w) + (waiting ? "" : ownChatWords(w, false)); };
     return h("div", {class: "work-queue small", "data-k": "work-queue", role: "status"},
       run.length ? h("p", {"data-queue": "now"}, h("strong", {}, "Running now: "), run.map(([, w]) => said(w, false)).join("; ") + ".") : null,
-      wait.length ? h("p", {"data-queue": "next"}, h("strong", {}, "Waiting, in this order: "), wait.map(([, w], i) => (wait.length > 1 ? (i + 1) + ". " : "") + said(w, true) + ".").join(" ")) : null);
+      // "In this order" only where there is an order: it headed one item (the screen review,
+      // 2026-11-18).
+      wait.length ? h("p", {"data-queue": "next"}, h("strong", {}, wait.length > 1 ? "Waiting, in this order: " : "Waiting: "), wait.map(([, w], i) => (wait.length > 1 ? (i + 1) + ". " : "") + said(w, true) + ".").join(" ")) : null);
   }
   function workPanel(where) {
     // A resume's files part is a stage of the resume's own card, never a card of its own; one

@@ -162,10 +162,16 @@ next?" in its first lines, and nothing asks for a decision a default could make.
 - In Claude's work, four or more of one kind waiting, or finished, are one card with their
   count and the first few names; Show lists them. Nobody scrolls past fifty cards. (run test)
 - Over Claude's work, with two or more things going, one short strip says what runs now and
-  what waits, in the order Claude takes it, a big job said as running in a chat of its own, and
-  a big job's card says it does not wait for other work. Why: with several things asked for in
-  a row nobody could tell what was queued, in what order, or why a resume seemed to sit behind
-  small changes (issue #238). Making a resume downloadable is a stage of the resume's own card,
+  what waits, in the order Claude takes it ("Waiting:" for one, "Waiting, in this order:" for
+  more), a big job running said as in a chat of its own, and a big job's card, once Claude picks
+  it up, says it does not wait for other work. Work still waiting has no bar and no own-chat
+  line, its title beside its dot and its state under the title where they do not fit on one
+  line; its time line starts with a capital, its time left one piece ("About 7 min left"). Why:
+  with several things asked for in a row nobody could tell what was queued, in what order, or
+  why a resume seemed to sit behind small changes (issue #238); "Starts in a chat of its own,
+  so it does not wait for other work" under "Waiting, in this order:", over one item and an
+  empty 0% bar, said two things at once (the screen review, 2026-11-18). Waiting work says
+  "Claude starts this next" in plain words, never "Claude's helper". Making a resume downloadable is a stage of the resume's own card,
   "On its way", never a card of its own (#237). (queue test)
 - Claude's work says its count once, in the header's pill: no line under its title repeats
   it, and "Nothing is sent." is not said over the cards. Each running or waiting card has its

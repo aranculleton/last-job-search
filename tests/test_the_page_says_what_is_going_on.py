@@ -95,7 +95,7 @@ GOING = {"work/search~1": _work("search", "Finding jobs", asked_at="2026-10-25T0
                                    asked_at="2026-10-25T08:59:20Z")}
 LEFT = """(() => { const b = document.querySelector('#main .sec-head [data-k="head-find-jobs:going"]');
   const card = document.querySelector('[data-work="search~1"]'), rail = document.querySelector('#rail .workp, dialog[open] .workp');
-  const left = (t) => ((t || '').match(/(under a minute|about [0-9]+ min) left/i) || [null, null])[1];
+  const left = (t) => ((t || '').replace(/\s+/g, ' ').match(/(under a minute|about [0-9]+ min) left/i) || [null, null])[1];
   return {btn: b ? b.textContent.replace(/\\s+/g, ' ').trim() : null, soft: !!b && b.classList.contains('secondary') && !b.classList.contains('link'),
           gauge: !!b && !!b.nextElementSibling && b.nextElementSibling.classList.contains('cost'),
           gap: b && b.querySelector('.run-left') ? (() => { const t = [...b.querySelectorAll('*')].flatMap((e) => [...e.childNodes]).concat([...b.childNodes]).find((n) => n.nodeType === 3 && /Finding jobs/.test(n.textContent));

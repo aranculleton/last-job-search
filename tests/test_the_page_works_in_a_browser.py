@@ -857,7 +857,8 @@ def test_a_search_is_timed_by_the_time_left_its_job_sites_gave(run, pages):
     b = r["bar"]
     assert b["status"] == "", "on time: no state word"
     assert b["sentence"] == "Searching 4 job sites, 99 of 162 done"
-    assert "about 12 min left" in b["time"], b["time"]
+    # Its time left kept in one piece, a no-break space between its words (2026-11-18).
+    assert "about 12 min left" in b["time"].replace("\u00a0", " ").lower(), b["time"]
     assert "longer" not in b["time"] and b["warn"] == [] and "Try again" not in b["buttons"]
 
 
