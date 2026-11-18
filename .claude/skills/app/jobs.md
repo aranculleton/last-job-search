@@ -111,10 +111,11 @@ an answer given in the chat itself, never for work: the page shows "Claude is bu
 chat: <those words>"; `busy "$D" --done` when it is given.
 
 **Once a day, the app's own old chats are tidied** (`listen` prints `tidy:` when it is due).
-Right after this chat took the page over from an older helper, `tidy: now` asks for one
-`get_session` of that helper and `tidy.py retire`, which puts it away as soon as its work is
-saved, and nothing else. The daily one is the way out for a job's chat that never reported, and
-for every old helper. `list_sessions` (`mine: true`) and `list_triggers` (with `include_completed: true` only where the line says so, once a week), every page, then
+The day's one comes first, on a day this chat took the page over too, and judges the helper
+it took over from as well. Once it has run that day, `tidy: now` asks for one `get_session` of
+that helper and `tidy.py retire`, which puts it away as soon as its work is saved, and nothing
+else. The daily one is the way out for a job's chat that never reported, and for every old
+helper. `list_sessions` (`mine: true`) and `list_triggers` (with `include_completed: true` only where the line says so, once a week), every page, then
 `python3 tools/tidy.py plan --dump "$D" --stdin` with `{"sessions": ..., "triggers": ...}`
 on standard input in a quoted heredoc, each as the tool returned it, never typed into files.
 It asks for `get_session` on the chats it must check first (their results go under

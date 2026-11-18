@@ -2590,11 +2590,20 @@ def check_in(dump: str, chat: str, now, out: str, listen: bool = False, helper: 
     tidy_due = retire = False
     if got["role"] == "listener" and app_listen.chat_kind() == "cloud":
         import tidy
-        tidy_due = bool(tidy.due(db=move["db"], skip=chat, listener=got.get("record"), now=now))
-        # The helper this chat took the page over from is put away now, not at tomorrow's
-        # tidy-up (the maintainer, 2026-11-04: at most two such chats, ever).
-        # Asked about once each RETIRE_AGAIN_S (tidy.retire_due): in between, the day's sweep.
-        retire = tidy.retiring(got.get("record"), now) if tidy_due and tidy.retire_due(now) else ""
+        # The check-in's own day, as `tidy.py done` marks it (the machine's), so a check-in is
+        # judged on its clock, never on another's.
+        day = now.astimezone().date().isoformat()
+        mine = got.get("record")
+        tidy_due = bool(tidy.due(day, db=move["db"], skip=chat, listener=mine, now=now))
+        # The day's tidy-up first, whatever hand-over there was: it judges the helper this chat
+        # took the page over from too (tidy.plan, `retiring`). The page's chat is renewed every
+        # morning, and the hand-over's step, asked again each half hour, stood in for the day's
+        # tidy-up all day, so it never ran and old chats piled up (issue #347). Once it has run
+        # today, the helper taken over from is put away from one get_session of it, not at
+        # tomorrow's (the maintainer, 2026-11-04: at most two such chats, ever), asked about
+        # once each RETIRE_AGAIN_S (tidy.retire_due).
+        retire = tidy.retiring(mine, now) if tidy_due and tidy.swept(day, move["db"], mine) \
+            and tidy.retire_due(now) else ""
     return {"read": [], "move": move["batches"], "got": got, "upkeep": upkeep, "prune": old,
             "tidy": tidy_due, "retire": retire, "stranded": ended["batches"]}
 
