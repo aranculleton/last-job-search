@@ -26,6 +26,13 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **On a wide screen a document's download and pencil, and Stop Claude on a card, sit near their words.** On a very wide screen they stood across the card, about 1,000px from what they act on.
+- **On a phone the line under each past job in Your profile is shown in full.** It was cut short ("4 poi..."), though it is what the row is for.
+- **Your profile on a wide screen reads what to fill in, then your experience, then the rest.** Education stood beside "Still to fill in", so it read before your jobs.
+- **Contacts in the side menu shows how many messages you have to send**, as Jobs and Coming up show theirs.
+- **Settings says "Only in the Claude app" beside reading LinkedIn profiles**, where "Open in the Claude app" read as something to do.
+- **On a phone "End of day" stays on one line in Coming up, and a name on a To do list gets all the room its buttons leave.**
+- **On a phone "I heard back" lines up with the card's words when it sits under "Prepare me" and its time**, where it stood further in than under a lone button.
 - **A change made by hand to one of the app's own files on your computer no longer stops every update.** Only a chat in the cloud could get past an unsaved change like that, so a copy on your computer with one never updated again. The update puts the app's own files back in any case, so your change is now kept in a folder called .set-aside, where nothing of it is lost, the app's file is put back and the update comes in, saying so once. Unsaved changes to your own files still wait for you, as before.
 - **A file of your own with the same name as one an update brings no longer stops every update.** On your computer nothing ever moved such a file out of the way, so the update stopped on it every day. It is now kept in the .set-aside folder, nothing of it lost, the app's own file takes its name and the update comes in, saying so once.
 - **The chat that looks after your page follows the newest instructions as soon as an update brings them.** The update's note to read them again reached only the helper doing the work for it, so a chat kept open for days went on following the instructions it started with. That note now comes back to the chat itself.
