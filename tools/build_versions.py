@@ -994,8 +994,9 @@ METHODS: dict[str, dict] = {
             (93, "2026-11-17", False, "putting away the page chat taken over from takes its busy line off the page, and the daily tidy-up takes off the line of every chat put away, so the page never shows work no chat is doing; a chat with the app attached beside the copy (the app maker's own) is judged by the copy; nothing made before needs making again"),
             (94, "2026-11-18", False, "the chat that starts chats on your computer is named \"Last Job Search \u00b7 Starts chats on your computer\" like the app's other chats; the daily tidy-up renames one made under its old name, once, a refusal named back with done --refused, and the page names it as it is called; nothing made before needs making again"),
             (95, "2026-11-18", False, "the day's tidy-up runs first on a day the page's chat took the page over, judging the chat it took over from too, and the hand-over's own step only once it has run that day, so the chats left over since are put away and renamed at the page's next check-in; nothing made before needs making again"),
+            (96, "2026-11-18", False, "the chat that starts chats on your computer is named \"Last Job Search \u00b7 Computer link\", short enough to read whole in the list of chats; the daily tidy-up renames one under either older name, and the computer side never puts it away under any of them; nothing made before needs making again"),
         ),
-        "fingerprint": "2f03511762ca1bb3",
+        "fingerprint": "50b0642c85c15df8",
     },
     "expand": {
         "by": "upgrade", "priority": 4, "time": "~15 min",

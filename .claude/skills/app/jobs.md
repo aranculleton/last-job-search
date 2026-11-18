@@ -51,8 +51,8 @@ page waited on every tap (2026-10-29). `next` never hands one to this chat to ru
   with its lines, exactly as printed, and its listener makes them (SKILL.md, step 0). `paste`
   needs nothing more, the page already says it. **This
   chat never approves computer access** (`confirm_repository_trust`): one small chat of its
-  own, "Last Job Search · Starts chats on your computer" ("Job search: starts chats on your
-  computer" where one made before was not renamed), holds that approval and starts and puts
+  own, "Last Job Search · Computer link" (an older name where one made before was not
+  renamed), holds that approval and starts and puts
   away the chats there; `route` makes it once and wakes it by republishing its bell page.
   An approved chat could never be archived, itself included, so every hand-over left an old
   helper in the sidebar (2026-11-10). Never `send_message` a chat on the computer: it reports

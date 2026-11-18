@@ -96,9 +96,10 @@ APP_TITLE = re.compile(r"^(?:[^\w\s]{1,3}\s*)?(?:Job search(?::\s*\S.{0,60}|\s+(
 # kept for being used lately (the maintainer, 2026-11-04: at most two such chats, the person's
 # own and the live page helper; a heavy user's renewals had stacked up several).
 # The computer starter (tools/computer.py STARTER_TITLE), kept for good, by its name since
-# issue #289 or the one before (OLD_STARTER_TITLE), which one made earlier keeps until renamed.
+# issue #289 or either before it (OLD_STARTER_TITLES), which one made earlier keeps until renamed.
 STARTER_NAME = re.compile(r"^(?:[^\w\s]{1,3}\s*)?(?:Job search:\s+starts chats on your computer\b"
-                          r"|Last Job Search\s+\u00b7\s+Starts chats on your computer\s*$)", re.I)
+                          r"|Last Job Search\s+\u00b7\s+(?:Starts chats on your computer|Computer "
+                          r"link)\s*$)", re.I)
 # The computer's own chat (tools/computer.py LISTENER_TITLE), kept open for the next job there,
 # by its name or by the page's record of it (meta/computer_listener), whatever it is called.
 LISTENER_NAME = re.compile(r"^(?:[^\w\s]{1,3}\s*)?(?:Job search:\s+on your computer\b|Last Job "
@@ -1342,7 +1343,7 @@ def new_name(sid: str, title: str, brief_chat: str = "", computer_chat: str = ""
     if title.lower() == OLD_RUNS_NAME.lower():
         return RUNS_NAME
     import computer
-    if title.lower() == computer.OLD_STARTER_TITLE.lower():
+    if title.lower() in {t.lower() for t in computer.OLD_STARTER_TITLES}:
         return computer.STARTER_TITLE
     return ""
 
