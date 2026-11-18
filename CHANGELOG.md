@@ -26,6 +26,7 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **An interview you withdrew from, or one that has otherwise ended, is now with your finished interviews in Coming up.** It sat among the ones still to come, still offering "I heard back" and your prep; now it waits under "earlier, finished" with the others, and its card offers nothing more to do.
 - **Contacts uses the whole width of a wide screen.** On a big window each person's card ran the whole width with its message kept to a comfortable line length, so the right half of every card was empty. Where there is room, the cards now stand side by side, in the same order, and a phone or a smaller window keeps one under the other.
 - **A change made by hand to one of the app's own files on your computer no longer stops every update.** Only a chat in the cloud could get past an unsaved change like that, so a copy on your computer with one never updated again. The update puts the app's own files back in any case, so your change is now kept in a folder called .set-aside, where nothing of it is lost, the app's file is put back and the update comes in, saying so once. Unsaved changes to your own files still wait for you, as before.
 - **A file of your own with the same name as one an update brings no longer stops every update.** On your computer nothing ever moved such a file out of the way, so the update stopped on it every day. It is now kept in the .set-aside folder, nothing of it lost, the app's own file takes its name and the update comes in, saying so once.
