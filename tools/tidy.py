@@ -272,24 +272,12 @@ def retiring(listener: dict | None, now: dt.datetime | None = None) -> str:
     return old
 
 
-def due(today: str = "", db: dict | None = None, skip: str = "",
-        listener: dict | None = None, now: dt.datetime | None = None) -> bool:
-    """Is a tidy-up still to do? Once a day; once more after the update that put away the
-    helpers left over from before (SWEEP); at once after a hand-over, and again every
-    RETIRE_AGAIN_S for a day while the helper it replaced is still there (given `now`); and
-    when another chat's job has ended since the last one (`db`: the page's records), so its
-    chat is put away soon after, not at tomorrow's. Never where it cannot be kept."""
+def swept(today: str = "", db: dict | None = None, listener: dict | None = None) -> dict:
+    """The day's tidy-up mark when it has run `today` (this git folder's, the page's record of
+    who answers it, or meta/tidy on the page), else {}. Only the whole tidy-up writes it
+    (`done`): the hand-over's step (`retire`) never does, so it never stands in for it."""
     today = today or dt.date.today().isoformat()
-    path = _checked_path()
-    if not path:
-        return False
-    try:
-        with open(path, encoding="utf-8") as fh:
-            got = json.load(fh) or {}
-    except (OSError, ValueError, AttributeError):
-        got = {}
-    if not isinstance(got, dict):
-        got = {}
+    got = _checked()
     # The day's tidy as the page says it (page_mark, kept on its record of who answers it):
     # a fresh container's own git folder holds no mark, and ran the whole tidy again though
     # another chat had tidied that day (the second audit, 2026-11-10, D5).
@@ -298,14 +286,29 @@ def due(today: str = "", db: dict | None = None, skip: str = "",
             on_page.get("sweep") == SWEEP and (got.get("checked") != today
                                                 or str(on_page.get("at") or "") > str(got.get("at") or "")):
         got = {"checked": today, "at": on_page.get("at"), "sweep": SWEEP}
-    if got.get("checked") != today or got.get("sweep") != SWEEP:
-        # The day's mark on the page (meta/tidy): another chat, in another container, may have
-        # run it today; kept only in this git folder, every fresh container ran it again
-        # (second audit D5, E4).
-        mark = meta_mark(db)
-        if mark.get("checked") != today or mark.get("sweep") != SWEEP:
-            return True
-        got = mark
+    if got.get("checked") == today and got.get("sweep") == SWEEP:
+        return got
+    # The day's mark on the page (meta/tidy): another chat, in another container, may have
+    # run it today; kept only in this git folder, every fresh container ran it again
+    # (second audit D5, E4).
+    mark = meta_mark(db)
+    if mark.get("checked") == today and mark.get("sweep") == SWEEP:
+        return mark
+    return {}
+
+
+def due(today: str = "", db: dict | None = None, skip: str = "",
+        listener: dict | None = None, now: dt.datetime | None = None) -> bool:
+    """Is a tidy-up still to do? Once a day (`swept`); once more after the update that put
+    away the helpers left over from before (SWEEP); at once after a hand-over, and again every
+    RETIRE_AGAIN_S for a day while the helper it replaced is still there (given `now`); and
+    when another chat's job has ended since the last one (`db`: the page's records), so its
+    chat is put away soon after, not at tomorrow's. Never where it cannot be kept."""
+    if not _checked_path():
+        return False
+    got = swept(today, db, listener)
+    if not got:
+        return True
     if db is None:
         return False
     import app_model
