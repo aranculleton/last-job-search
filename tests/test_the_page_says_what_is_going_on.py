@@ -95,7 +95,7 @@ GOING = {"work/search~1": _work("search", "Finding jobs", asked_at="2026-10-25T0
                                    asked_at="2026-10-25T08:59:20Z")}
 LEFT = """(() => { const b = document.querySelector('#main .sec-head [data-k="head-find-jobs:going"]');
   const card = document.querySelector('[data-work="search~1"]'), rail = document.querySelector('#rail .workp, dialog[open] .workp');
-  const left = (t) => ((t || '').replace(/\s+/g, ' ').match(/(under a minute|about [0-9]+ min) left/i) || [null, null])[1];
+  const left = (t) => ((t || '').replace(/\\s+/g, ' ').match(/(under a minute|about [0-9]+ min) left/i) || [null, null])[1];
   return {btn: b ? b.textContent.replace(/\\s+/g, ' ').trim() : null, soft: !!b && b.classList.contains('secondary') && !b.classList.contains('link'),
           gauge: !!b && !!b.nextElementSibling && b.nextElementSibling.classList.contains('cost'),
           gap: b && b.querySelector('.run-left') ? (() => { const t = [...b.querySelectorAll('*')].flatMap((e) => [...e.childNodes]).concat([...b.childNodes]).find((n) => n.nodeType === 3 && /Finding jobs/.test(n.textContent));
@@ -195,12 +195,13 @@ def test_two_things_running_on_one_screen_are_counted_and_finished_work_is_not(r
 def test_the_bin_on_a_to_do_row_takes_the_row_away_as_it_is_chosen(run, tmp_path, vp):
     # The bin on "Did your note to ... go?" said the employer was not wanted and the row stayed
     # until a chat applied it (the maintainer, 2026-10-29): it goes, with the person's other rows.
-    # Asked first of the quick answers here, so its card's bin is hers (2026-11-05).
+    # Asked first of the quick answers here, so its card's bin is hers (2026-11-05); under its
+    # More since 2026-11-18, the card's corner saying Later as every To do card's does.
     row = "document.querySelector('#main [data-q=\"q-sent-fernhill_freight_halloway\"]')"
     due = "document.querySelector('#main [data-item=\"due-fernhill-nudge\"]')"
     got = _go(run, tmp_path, [
         {"hash": "todo", "eval": "[!!" + row + ", !!" + due + "]"},
-        {"click": "Not Wren?", "within": "#main [data-q=\"q-sent-fernhill_freight_halloway\"]"},
+        {"click": "Not Wren?", "more": "quick", "within": "#main [data-q=\"q-sent-fernhill_freight_halloway\"]"},
         # The choice is the tap that does it (2026-11-03); the next step only reads.
         {"click": "Not interested in Fernhill Freight any more", "within": "dialog"},
         {"ready": "!" + row + " && !" + due, "eval": "[!!" + row + ", !!" + due + "]"},
@@ -235,7 +236,7 @@ def test_the_bin_for_one_person_leaves_the_rest_of_their_employer(run, tmp_path)
     title = "(document.querySelector('#main [data-item=\"quick\"] .card-title') || {}).textContent || ''"
     got = _go(run, tmp_path, [
         {"hash": "todo"},
-        {"click": "Not Wren?", "within": "#main [data-q=\"q-sent-fernhill_freight_halloway\"]"},
+        {"click": "Not Wren?", "more": "quick", "within": "#main [data-q=\"q-sent-fernhill_freight_halloway\"]"},
         # The choice is the tap that does it (2026-11-03); the next step only reads.
         {"click": "Don't contact Wren", "within": "dialog"},
         {"ready": "!" + row, "eval": title},
@@ -299,7 +300,7 @@ def _bin(choice):
     rows = "[" + ", ".join(_q(i) for i in ["q-sent-fernhill_freight_halloway", "due-fernhill-nudge", "due-fernhill-tamsin",
                                            "due-fernhill-odile", "due-fernhill-reply"]) + "]"
     return [{"hash": "todo", "eval": rows},
-            {"click": "Not Wren?", "within": "#main [data-q=\"q-sent-fernhill_freight_halloway\"]"},
+            {"click": "Not Wren?", "more": "quick", "within": "#main [data-q=\"q-sent-fernhill_freight_halloway\"]"},
             # The choice is the tap that does it (2026-11-03); the next step only reads.
             {"click": choice, "within": "dialog"},
             {"ready": _q("q-sent-fernhill_freight_halloway")[1:], "eval": rows}]
