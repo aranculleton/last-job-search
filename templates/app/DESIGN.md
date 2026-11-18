@@ -474,6 +474,16 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   its day, never through its clock or out of the column. Why: 13:00 London time on Wed 28 Oct is
   3:00 on Thursday in Kiritimati, and under "Wed 28 Oct" a bare "(3:00 here)" read as Wednesday
   there; in 6rem the day ran 25px into the title (issue 334). (here-day test)
+- Coming up's Interviews list is what is still going, by its day: what is ahead, then a round
+  had and waiting to hear back. An interview that has ended (they said no, you withdrew, no
+  reply, hired, an offer turned down, closed) is finished at once, however recent its day: it
+  waits in the fold under the list with the rounds had more than two weeks ago, "2 earlier,
+  finished: Show", sorted as they are, the newest first, and it is never a row in By day. Its
+  card says how it ended in its pill and offers nothing more to do: no "I heard back", as there
+  is nothing to hear, no trash and no Read your prep, the round it was for being over. Why: an
+  interview the person withdrew from sat among the live ones, above "1 earlier, finished:
+  Hide", its card still offering "I heard back" and "Read your prep" (the maintainer,
+  2026-11-18: "surely me withdrawing should be under me finishing"). (finished interviews test)
 - Every message drafted and waiting is one card, "Messages to send (N)": the drafted
   replies and follow-ups, the week's first notes and the ones to check first together, a row a
   person, each opening their draft in Contacts, and one button opening Contacts. A row Claude

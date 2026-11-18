@@ -3019,6 +3019,10 @@ S.prep_reader = async (a) => {
 S.iv_cards = async (a) => {
   const o = await open({html: a.html, viewport: a.viewport, hash: "interviews", clock: a.clock});
   await interviewCards(o.page);
+  // Every card, the finished ones too: an interview that has ended waits under the fold
+  // (DESIGN.md, Coming up's Interviews list), so the fold is opened before they are read.
+  const fold = o.page.locator('#main [data-k="fold:interviews"]');
+  if (await fold.count()) { await fold.first().click(); await turn(o.page, 4); }
   const r = {errors: o.errors};
   r.cards = await o.page.$$eval("#main article.card.interview", (cs) => cs.map((c) => ({
     // Its pill at the top, or leading its line of when on a phone (the screen review, 2026-11-11).

@@ -3880,7 +3880,7 @@
   // The upcoming interview at a job's employer, by the engine's links.
   function relatedInterview(r) {
     const ids = arr(obj(r.related).interviews);
-    return interviewItems().find((i) => ids.includes(i.id) && !isPast(i.when)) || null;
+    return interviewItems().find((i) => ids.includes(i.id) && !isPast(i.when) && !ivOver(i)) || null;
   }
   // `quiet`: the line under More, where the card's face says it no other way.
   function warmNote(r, quiet) {
@@ -4075,7 +4075,7 @@
     const each = !!(o && o.each);
     const out = [];
     const stopped = stoppedPeople();
-    const ivs = interviewItems().filter((i) => !isPast(i.when) && !ivHad(i) && dayDiff(i.when) !== null && dayDiff(i.when) <= 14)
+    const ivs = interviewItems().filter((i) => !isPast(i.when) && !ivHad(i) && !ivOver(i) && dayDiff(i.when) !== null && dayDiff(i.when) <= 14)
       .sort((a, b) => txt(a.when).localeCompare(txt(b.when)));
     const ivCompanies = new Set(ivs.map((i) => txt(i.company)));
     // The small yes-or-no and choice questions: one card, one question at a time ("1 of 4"),
@@ -4846,6 +4846,8 @@
   // `bin`: they said no, I withdrew, it was moved.
   function ivActs(iv, k, o) {
     o = o || {};
+    // Ended: nothing to hear back about, nothing to end and no round to prepare for.
+    if (ivOver(iv)) return {main: [], more: [], bin: null, pen: null, tweak: null};
     const prep = obj(iv.prep);
     const w = workDoc("prep~" + seg(iv.id));
     const busy = w && ACTIVE.has(w.status);
@@ -9831,7 +9833,7 @@
     }))) {
       const day = dayOf(iv.when);
       const n = day ? dayDiff(day) : null;
-      if (n === null || n < 0 || have.has(txt(iv.id) + "|" + day) || txt(iv.status) === "done") continue;
+      if (n === null || n < 0 || have.has(txt(iv.id) + "|" + day) || txt(iv.status) === "done" || ivOver(iv)) continue;
       have.add(txt(iv.id) + "|" + day);
       const timed = !isDateOnly(iv.when) && tms(iv.when) !== null;
       // Over an hour after it began: it has been, whichever list it came from.
@@ -10290,7 +10292,8 @@
     // Ended here: off the list at once, one line each while the page still holds it, so its
     // Undo stays in reach.
     const ended = allInterviews().filter(ivEnd).map((i) => endedInterview(i, ivEnd(i)));
-    const past = (i) => i.past === true || ivHad(i);
+    // Over: its day gone, or ended (they said no, you withdrew), sorted with the rest that are.
+    const past = (i) => i.past === true || ivHad(i) || ivOver(i);
     // Counted by the engine (app_model.coming_up): a round already had and waiting to hear is
     // never "coming up" (the maintainer, 2026-11-07: "1 interview coming up" over a recruiter
     // screen had on Mon 2 Nov, which read as still ahead).
@@ -10351,7 +10354,8 @@
         btn("See your interviews", () => pick("interviews"), {kind: "link", key: "up-to-iv"})));
     } else {
       put(wrap, listView("interviews", {items, name: "interviews", live: (i) => !past(i), remote: "interviews", box: (kids) => h("div", {class: "stack list-panel"}, kids),
-        fold: (i) => past(i) && daysSince(i.when) !== null && daysSince(i.when) > 14,
+        // Finished: ended, whenever its day was, or had more than two weeks ago.
+        fold: (i) => ivOver(i) || (past(i) && daysSince(i.when) !== null && daysSince(i.when) > 14),
         sort: (a, b) => (past(a) ? 1 : 0) - (past(b) ? 1 : 0) || (past(a) ? txt(b.when).localeCompare(txt(a.when)) : txt(a.when || "9999").localeCompare(txt(b.when || "9999"))),
         render: interviewCard}));
     }
@@ -10369,6 +10373,7 @@
   // it is read from the interviews themselves.
   function comingUpCounts(items) {
     const cu = M().coming_up;
+    items = arr(items).filter((i) => !ivOver(i));
     const live = new Set(items.map((i) => txt(i.id)));
     if (cu && typeof cu === "object") {
       const of = (k) => arr(cu[k]).filter((id) => live.has(txt(id)));
@@ -10379,7 +10384,13 @@
       unprepped: ahead.filter((i) => !obj(i.prep).updated || obj(i.prep).stale).map((i) => i.id),
       waiting: items.filter((i) => i.past !== true && ivHad(i)).map((i) => i.id)};
   }
-  const IV_OVER = {rejected: "They said no", withdrawn: "You withdrew", no_response: "No reply", "no response": "No reply", hired: "Hired", offer_declined: "Offer declined"};
+  // Every status that ends a process (throttle.FINAL): `declined` is an older tracker's word,
+  // closed and over, never "Waiting to hear".
+  const IV_OVER = {rejected: "They said no", withdrawn: "You withdrew", no_response: "No reply", "no response": "No reply", hired: "Hired", offer_declined: "Offer declined", "offer declined": "Offer declined", declined: "Closed"};
+  // Ended: finished, whatever its day, with nothing left to hear or to prepare (DESIGN.md,
+  // Coming up's Interviews list). A withdrawal sat among the live interviews offering "I heard
+  // back" (the maintainer, 2026-11-18: "surely me withdrawing should be under me finishing").
+  function ivOver(iv) { return !!IV_OVER[txt(obj(iv).status)]; }
   function ivPill(iv) {
     if (ivOffer(iv)) return stateWord("Offer", "ok");
     const over = IV_OVER[txt(iv.status)];
@@ -10403,10 +10414,14 @@
     const has = !!prep.updated;
     const stale = has && !!prep.stale;
     const gone = isPast(iv.when) || ivHad(iv);
-    const list = gone ? [] : alertsOf(iv);
+    // Ended (they said no, you withdrew): finished, whatever its day, and nothing left to do on
+    // it, its pill saying how it ended (DESIGN.md, Coming up's Interviews list).
+    const over = ivOver(iv);
+    const done = gone || over;
+    const list = done ? [] : alertsOf(iv);
     const ref = obj(iv.referrer);
     const offer = ivOffer(iv);
-    const offered = !gone && !offer ? arr(iv.offered) : [];
+    const offered = !done && !offer ? arr(iv.offered) : [];
     const acts = ivActs(iv, iv.id);
     // A day gone by is said without its weekday (DESIGN.md, Words: dates), and one had and
     // waiting to hear says so: "You had it 2 Nov" (the maintainer, 2026-11-07).
@@ -10426,13 +10441,13 @@
       // a line under More (DESIGN.md, "Buttons, links and taps": never the card's facts).
       ((prepWords) => h("p", {class: "meta"}, withPen([txt(iv.role), prepWords].filter(Boolean).join(" · "), prepWords ? acts.pen : null),
         ref.id || ref.contact ? [" · Referred by ", itemLink("contacts", txt(ref.contact || ref.id), txt(ref.first_name), "ivref:" + iv.id)] : null))(
-        gone || iv.past ? "" : stale ? "Prep is for an earlier plan of rounds" : has ? "Prep ready, updated " + ago(prep.updated) : "No prep yet"),
-      gone ? null : acts.tweak,
-      ivDrillLine(iv),
+        done || iv.past ? "" : stale ? "Prep is for an earlier plan of rounds" : has ? "Prep ready, updated " + ago(prep.updated) : "No prep yet"),
+      done ? null : acts.tweak,
+      over ? null : ivDrillLine(iv),
       list.length ? alertLine(list[0], {where: "interviews", section: "interviews", item: iv.id, bare: true}) : null,
-      gone ? h("div", {class: "card-actions"}, acts.main) : h("div", {class: "card-actions"}, acts.main,
+      done ? (acts.main.length ? h("div", {class: "card-actions"}, acts.main) : null) : h("div", {class: "card-actions"}, acts.main,
         more("iv:" + iv.id, txt(iv.company), [h("div", {class: "more-acts"}, acts.more)])),
-      gone ? null : cardTalk("interview", iv.id, "the interview with " + txt(iv.company)),
+      done ? null : cardTalk("interview", iv.id, "the interview with " + txt(iv.company)),
       stateLine(iv.id, "iv:" + iv.id));
   }
 
@@ -12179,7 +12194,7 @@
   const sameId = (x, y) => !!txt(x) && txt(x) === txt(y);
   function appInterview(a) {
     const ids = arr(obj(a.related).interviews);
-    return interviewItems().find((i) => (sameId(i.application, a.id) || ids.includes(i.id)) && !isPast(i.when)) || null;
+    return interviewItems().find((i) => (sameId(i.application, a.id) || ids.includes(i.id)) && !isPast(i.when) && !ivOver(i)) || null;
   }
   function appNudge(a) { return dueItems().find((d) => sameId(d.application, a.id) || (sameId(d.item, a.id) && txt(d.kind) !== "hidden")) || null; }
   // The follow-up the engine dated on the application itself, its day come or gone.
@@ -17129,7 +17144,7 @@
     const unwritten = (p) => !draftReady(personMessage(p.id));
     const owed = ppl.find((p) => txt(p.status) === "replied_needs_response" && unwritten(p)) || ppl.find((p) => txt(p.status) === "in_conversation" && unwritten(p));
     const call = ppl.find((p) => txt(p.status) === "call_booked" && !callPast(p));
-    const iv = interviewItems().find((i) => !isPast(i.when));
+    const iv = interviewItems().find((i) => !isPast(i.when) && !ivOver(i));
     const owedName = owed ? txt(owed.first_name) : "";
     // Each opens the form that does it where there is one, and only otherwise starts the
     // words in the chat box (the maintainer, 2026-10-28: chat starters open forms).
@@ -18818,7 +18833,7 @@
     else if (id === "drafts") n = readyItems().filter(readyLive).length + messageItems().filter((m) => !settledAction(m.id, ["msg.sent", "msg.skip"]) && msgStatus(m) === "to_send").length;
     // Coming up: the one number its screen and the Brief also say (2026-10-29: a count that
     // differs between two places reads as a bug).
-    else if (id === "interviews") n = Array.isArray(M().upcoming) ? upcomingItems().length : interviewItems().filter((i) => !isPast(i.when) && txt(i.status) !== "done").length;
+    else if (id === "interviews") n = Array.isArray(M().upcoming) ? upcomingItems().length : interviewItems().filter((i) => !isPast(i.when) && txt(i.status) !== "done" && !ivOver(i)).length;
     return n ? h("span", {class: "navcount"}, String(n), h("span", {class: "sr-only"}, NAV_COUNT_WORDS[id])) : null;
   }
   // The menu folded to its icons, for more room on a laptop (the maintainer, 2026-11-02:
