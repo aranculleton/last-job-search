@@ -2903,6 +2903,9 @@ def cmd_wake(a) -> int:
     sends: list[tuple[str, str, bool]] = []
     after: list[str] = list(st.get("after") or [])
     tidy_due = bool(st.get("tidy"))
+    # The chat taken over from, where only it is asked about (check_in's `retire`): dropped, every
+    # ring after the day's tidy-up listed every chat and task again.
+    retire = str(st.get("retire") or "")
     applied_any = False
     copy_now = False             # this run applies taps that change the copy, claimed before
     fetch_then = ""              # a tap's files to take before anything else (FETCH_FIRST)
@@ -3009,6 +3012,7 @@ def cmd_wake(a) -> int:
         if reads:
             notes.append(page_reads.summary(page_db.load(a.dump), chat, reads))
         after, tidy_due = list(got["prune"]), bool(got["tidy"])
+        retire = str(got.get("retire") or "")
         todo = app_actions.pending(page_db.load(a.dump), chat, now)
         phase = "next"
         if todo:
@@ -3028,7 +3032,7 @@ def cmd_wake(a) -> int:
                 # A tap that changes the copy waits for its claim: if another chat holds it,
                 # nothing here may have changed.
                 _save_wake_state(a.dump, {"phase": "claimed", "runs": run, "after": after,
-                                          "tidy": tidy_due})
+                                          "tidy": tidy_due, "retire": retire})
                 _print_wake(head, notes, _send_as(sends, rd, a.dump), url, then=[
                     "then: send these, and once every one is accepted, run this again with the "
                     "same folder: it applies what the person did (it changes your copy, so "
@@ -3213,7 +3217,7 @@ def cmd_wake(a) -> int:
         if after:
             last += [PRUNE_SAID] + after
         if tidy_due:
-            last.append(TIDY_SAID)
+            last.append(TIDY_NOW.format(old=retire) if retire else TIDY_SAID)
     _print_wake(head, notes, _send_as(sends, rd, a.dump), url, then=then + last)
     return 0
 
