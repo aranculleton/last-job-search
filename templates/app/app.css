@@ -3096,12 +3096,13 @@ ul.bp-news { max-width: 80ch; }
    (the redesign's second round, 2026-11-17). */
 .bpanel:not(.bp-today) > .bp-title .bp-ic { color: var(--muted); background: var(--sunk); }
 .bp-today > .bp-title .bp-count { color: var(--mark-ink); }
-/* A laptop's row gives Today more height than its one thing needs: the thing's white card takes
-   it, never a block of clay tint under them, its words and button from its top as every card's
-   are: at its middle they left 60px of nothing over "Ready to do" (the redesign's second round,
-   2026-11-17). */
+/* A laptop's row gives Today more height than its one thing needs: the thing's white card keeps
+   to what it holds, its words and button from its top as every card's are. Stretched to the
+   row, an interview's box was twice its words' height, an empty half under its button (the
+   screen review, 2026-11-18); at its middle they left 60px of nothing over "Ready to do" (the
+   redesign's second round, 2026-11-17). */
 @media (min-width: 960px) {
-  .brief-grid.is-filled .bp-today > .bp-body > .bp-iv { flex: 1 1 auto; align-content: flex-start; }
+  .brief-grid.is-filled .bp-today > .bp-body > .bp-iv { flex: none; align-content: flex-start; }
 }
 .cal-file { display: grid; gap: 4px; }
 .cal-file .hint { margin: 0; }
