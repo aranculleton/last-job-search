@@ -356,8 +356,11 @@ def due_steps(dump: str, today: str = "", now: dt.datetime | None = None) -> str
                now=now or dt.datetime.now(dt.timezone.utc)):
         return NOT_DUE
     import app
+    weekly = completed_due(day)
+    if weekly:
+        ask_completed(day)
     return ("tidy: once today, asking nobody: the app's own old chats (tools/tidy.py). "
-            + app.TIDY_GIVE)
+            + app.TIDY_GIVE + (app.TIDY_COMPLETED if weekly else ""))
 
 
 PAGE_MARK = "tidy"          # meta/tidy on the page: the day the tidy-up last ran, any chat
@@ -389,7 +392,8 @@ def _mark_checked(today: str, now: str = "") -> None:
     if not path:
         return
     at = now or dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    keep = {k: v for k, v in _checked().items() if k in ("recheck", "completed", "retire_at")}
+    keep = {k: v for k, v in _checked().items()
+            if k in ("recheck", "completed", "completed_asked", "retire_at")}
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
         json.dump({"checked": today, "at": at, "sweep": SWEEP, **keep}, fh)
         fh.write("\n")
@@ -428,12 +432,27 @@ def completed_due(today: str, last: str | None = None) -> bool:
         return True
 
 
+def ask_completed(today: str) -> None:
+    """The week's sweep was asked for today (its line printed): only `done` after it marks it
+    done (mark_completed). Marked as it was printed, a chat that never finished the tidy-up
+    skipped that week's."""
+    path = _checked_path()
+    if not path:
+        return
+    got = _checked()
+    got["completed_asked"] = today
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
+        json.dump(got, fh)
+        fh.write("\n")
+
+
 def mark_completed(today: str) -> None:
     path = _checked_path()
     if not path:
         return
     got = _checked()
     got["completed"] = today
+    got.pop("completed_asked", None)
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(got, fh)
         fh.write("\n")
@@ -1875,6 +1894,8 @@ def run_done(ids: list[str], titles: dict, today: str, refused=()) -> str:
     """Record what was archived (profile/tidy.json), the renames the plan asked for (once
     each, made or refused; `refused`, the ids of those refused) and that today's tidy-up ran."""
     _mark_checked(today)
+    if _checked().get("completed_asked"):
+        mark_completed(today)         # the week's sweep was asked for, and this tidy-up did it
     _note_renamed(_take_renames(), refused)
     if not ids:
         return "tidy: done for today"

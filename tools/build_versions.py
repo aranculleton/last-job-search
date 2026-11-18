@@ -996,8 +996,9 @@ METHODS: dict[str, dict] = {
             (95, "2026-11-18", False, "the day's tidy-up runs first on a day the page's chat took the page over, judging the chat it took over from too, and the hand-over's own step only once it has run that day, so the chats left over since are put away and renamed at the page's next check-in; nothing made before needs making again"),
             (96, "2026-11-18", False, "the chat that starts chats on your computer is named \"Last Job Search \u00b7 Computer link\", short enough to read whole in the list of chats; the daily tidy-up renames one under either older name, and the computer side never puts it away under any of them; nothing made before needs making again"),
             (97, "2026-11-18", False, "the brief, in a cloud chat, runs the day's tidy-up of the app's own old chats whenever nothing has run it today, whichever chat answers the page or none, judged from a fresh read of the page so the page's own day mark counts; it never puts away the page's chat or its own; nothing made before needs making again"),
+            (98, "2026-11-18", False, "the week's sweep of one-off tasks that have fired is marked done only by the tidy-up that did it, never when it is asked for, and a ring asks for it as a check-in does; nothing made before needs making again"),
         ),
-        "fingerprint": "f95cdd2ad3a3d998",
+        "fingerprint": "c5c0921dc1237409",
     },
     "expand": {
         "by": "upgrade", "priority": 4, "time": "~15 min",

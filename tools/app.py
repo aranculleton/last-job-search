@@ -2650,6 +2650,19 @@ TIDY_NOW = ("tidy: now, once the batches above are sent, asking nobody: the app'
             "heredoc; do what it prints, and archive nothing by hand.")
 
 
+def tidy_said(now) -> str:
+    """The day's tidy-up as a check-in or a ring asks for it: once a week it also asks for the
+    tasks that have fired, so the app's one-off check-ins are cleaned away (every day, it
+    swelled the listing typed back). Noted as asked here; only `tidy.py done` after it marks
+    the week's sweep done."""
+    import tidy
+    day = now.date().isoformat()
+    weekly = tidy.completed_due(day)
+    if weekly:
+        tidy.ask_completed(day)
+    return TIDY_SAID + (TIDY_COMPLETED if weekly else "")
+
+
 def cmd_listen(a) -> int:
     import app_listen
     import app_model
@@ -2686,14 +2699,7 @@ def cmd_listen(a) -> int:
         if got.get("retire"):
             print(TIDY_NOW.format(old=got["retire"]))
         else:
-            # Once a week the sweep also asks for the tasks that have fired, so the app's
-            # one-off check-ins are cleaned away; every day it swelled the listing typed back.
-            import tidy
-            day = now.date().isoformat()
-            weekly = tidy.completed_due(day)
-            print(TIDY_SAID + (TIDY_COMPLETED if weekly else ""))
-            if weekly:
-                tidy.mark_completed(day)
+            print(tidy_said(now))
     return 0
 
 
@@ -3229,7 +3235,7 @@ def cmd_wake(a) -> int:
         if after:
             last += [PRUNE_SAID] + after
         if tidy_due:
-            last.append(TIDY_NOW.format(old=retire) if retire else TIDY_SAID)
+            last.append(TIDY_NOW.format(old=retire) if retire else tidy_said(now))
     _print_wake(head, notes, _send_as(sends, rd, a.dump), url, then=then + last)
     return 0
 
