@@ -2,7 +2,7 @@
   "_about": "Every statement the app makes about the Claude app, Claude Code and where a chat runs: what each surface can do, how to reach it, and how a cloud task is made from a computer. Messages read their words from here (tools/claude_surfaces.py say), docs carry them in marked blocks (sync-docs), and tests/test_claude_surfaces.py fails on a statement outside it. Each entry is dated and sourced; `watch` (the maintainer's, run by .github/workflows/claude-surfaces-watch.yml in the app only) checks each quote is still on its page and flags entries after a new Claude Code release. A path a person follows is written as a destination or as numbered steps and never tells them to press, click, tap or find anything; the day it was checked and its official page are for Claude (`source`), never the person.",
   "stale_after_days": 60,
   "hand_check_days": 30,
-  "checked_version": "2.1.322",
+  "checked_version": "2.1.327",
   "release_notes": "https://code.claude.com/docs/en/changelog",
   "vocabulary": [
     "Code tab", "Routines screen", "New routine", "New task", "claude --cloud",
@@ -142,8 +142,8 @@
         }
       ],
       "status": "documented",
-      "verified_on": "2026-11-11",
-      "verified_against": "code.claude.com/docs/en/discover-plugins read 2026-10-28 and again 2026-11-11 (Install a plugin, Add and install in a session: the confirmation of a new source and the scope's own label, Install for you (user scope)); the one-line install and its version from the same page; the plugin and marketplace checked with claude plugin validate 2.1.312",
+      "verified_on": "2026-11-18",
+      "verified_against": "code.claude.com/docs/en/discover-plugins read 2026-10-28, 2026-11-11 and again 2026-11-18, unchanged after the /plugin screens were reworded in Claude Code 2.1.325 and 2.1.326 (Install a plugin, Add and install in a session: the confirmation of a new source and the scope's own label, Install for you (user scope); the Marketplaces tab, the marketplace, then Enable auto-update); the one-line install and its version from the same page; the plugin and marketplace checked with claude plugin validate 2.1.312",
       "ui_sensitive": true
     },
     {
@@ -231,8 +231,8 @@
         {"url": "https://code.claude.com/docs/en/remote-control", "quote": "Turn Chrome integration on or off in the sessions the server creates"}
       ],
       "status": "documented",
-      "verified_on": "2026-11-11",
-      "verified_against": "code.claude.com/docs/en/remote-control read 2026-10-25 and again 2026-11-11, unchanged; claude remote-control --chrome is in Claude Code 2.1.322",
+      "verified_on": "2026-11-18",
+      "verified_against": "code.claude.com/docs/en/remote-control read 2026-10-25 and again 2026-11-11, unchanged, and on 2026-11-18 its quotes and /remote-control still on it after the terminal's Remote Control wording changed in Claude Code 2.1.326; claude remote-control --chrome is in Claude Code 2.1.327 (its --help, 2026-11-18)",
       "ui_sensitive": true
     },
     {
@@ -1427,7 +1427,7 @@
     },
     {
       "id": "session-usage",
-      "claim": "A chat can measure itself from its own transcript, the JSON lines file under ~/.claude/projects that the status line names as transcript_path: every tool call with its name and time, and each reply's token counts. The session's own cost is shown in /usage and in the status line's cost.total_cost_usd, an estimate at list price; neither is readable by a tool call, so the app adds up the transcript (tools/computer.py usage) and prices it the way tools/helper_usage.py does, as an estimate. A finished cloud chat's usage fields read 0 on 2026-11-09.",
+      "claim": "A chat can measure itself from its own transcript, the JSON lines file under ~/.claude/projects that the status line names as transcript_path: every tool call with its name and time, and each reply's token counts. The session's own cost is shown under the Session heading of /usage and in the status line's cost.total_cost_usd, an estimate at list price (or at an organization's own rates where an administrator sets modelPricing); neither is readable by a tool call, so the app adds up the transcript (tools/computer.py usage) and prices it the way tools/helper_usage.py does, as an estimate. A finished cloud chat's usage fields read 0 on 2026-11-09.",
       "sources": [
         {
           "url": "https://code.claude.com/docs/en/statusline",
@@ -1439,13 +1439,17 @@
         },
         {
           "url": "https://code.claude.com/docs/en/costs",
-          "quote": "shows detailed token usage statistics for your current session"
+          "quote": "Run /usage at the Claude Code prompt and look under the Session heading for your current session's token usage"
+        },
+        {
+          "url": "https://code.claude.com/docs/en/costs",
+          "quote": "Claude Code computes the dollar figure locally from token counts at list price"
         }
       ],
       "status": "documented",
-      "verified_against": "code.claude.com/docs/en/statusline and /costs read 2026-11-09; the zero usage fields observed that day",
+      "verified_against": "code.claude.com/docs/en/statusline read 2026-11-09; /costs read 2026-11-18 (Using the /usage command: the Session heading, the figure at list price unless a modelPricing table is in effect); the zero usage fields observed 2026-11-09",
       "ui_sensitive": false,
-      "verified_on": "2026-11-09"
+      "verified_on": "2026-11-18"
     },
     {
       "id": "deep-links",
