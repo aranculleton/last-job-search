@@ -2938,7 +2938,7 @@ S.chat_pics = async (a) => {
   await page.waitForFunction(() => [...document.querySelectorAll(".talk-attach img.pic-thumb")].every((i) => i.complete && i.naturalWidth > 0), null, {timeout: 5000}).catch(() => {});
   r.tray = await page.evaluate(() => [...document.querySelectorAll(".talk-attach .pic-chip")].map((c) => {
     const img = c.querySelector("img.pic-thumb");
-    return {img: !!img, loaded: !!img && img.complete && img.naturalWidth > 0, state: c.querySelector(".pic-state").textContent, remove: (c.querySelector("button") || {}).textContent};
+    return {img: !!img, loaded: !!img && img.complete && img.naturalWidth > 0, state: c.querySelector(".pic-state").textContent, remove: (c.querySelector("button") || {}).textContent, removeName: (c.querySelector("button") || {getAttribute: () => null}).getAttribute("aria-label")};
   }));
   r.uploaded = await page.evaluate(() => (window.__ljsAssets || []).slice());
   r.typed = await page.inputValue("#talk-text");

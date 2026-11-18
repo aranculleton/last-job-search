@@ -132,7 +132,7 @@ def test_a_download_takes_the_name_the_engine_gives_it(run, tmp_path):
         f["send"] = f"Morgan_Ellis_Ellerwick_Trust_{kind}.pdf"
     html = _write(tmp_path, "send", m)
     got = run("engine", html=html, viewport=WIDE, clock=CLOCK, steps=[
-        {"hash": "jobs", "eval": "(document.querySelector('[data-k=\"dl:app-ellerwick-insight\"]').click(), 1)"},
+        {"hash": "jobs", "eval": "(document.querySelectorAll('[data-item=\"app-ellerwick-insight\"] [data-k^=\"doc-dl:\"]').forEach((b) => b.click()), 1)"},
         {"wait": 800, "calls": "downloads"}])
     assert not got["errors"], got["errors"]
     names = [c["filename"] for c in got["after"][1]["calls"]]

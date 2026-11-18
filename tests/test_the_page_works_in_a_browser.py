@@ -1101,7 +1101,7 @@ def test_a_pasted_screenshot_goes_with_the_message_as_its_id(run, pages):
     assert r["starters"][0] == "Someone sent me a job" and len(r["starters"]) == 4, r["starters"]
     assert r["starters"][3] == "How does this page work?"
     assert [t["img"] for t in r["tray"]] == [True] and r["tray"][0]["loaded"], "the screenshot shows in the box"
-    assert r["tray"][0]["state"].endswith("Ready to send") and r["tray"][0]["remove"] == "Remove"
+    assert r["tray"][0]["state"].endswith("Ready to send") and r["tray"][0]["removeName"].startswith("Remove picture")
     assert [(u["name"], u["type"]) for u in r["uploaded"]] == [("screenshot.png", "image/png")]
     assert r["typed"] == "", "a pasted picture is not pasted as words"
     assert r["note"] == "That kind of picture cannot be added. A PNG or JPEG screenshot works." and r["trayCount"] == 1

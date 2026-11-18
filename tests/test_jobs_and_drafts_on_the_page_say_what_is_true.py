@@ -101,7 +101,7 @@ def test_each_pencil_stands_beside_its_own_documents_words(run, tmp_path):
     a["checks"] = app_model._checks([{"kind": "resume", "made": True, "pages": 1},
                                      {"kind": "letter", "made": True, "pages": 1}], 1, "CV")
     got = _go(run, tmp_path, [{"hash": "jobs", "eval": """[...document.querySelectorAll(
-      '[data-item="app-ellerwick-insight"] .doc-row')].map((r) => { const b = r.querySelector('.doc-acts .btn.icon-only'), w = r.querySelector('.doc-name');
+      '[data-item="app-ellerwick-insight"] .doc-row')].map((r) => { const b = r.querySelector('.doc-acts .btn.icon-only:not([data-k^="doc-dl:"])'), w = r.querySelector('.doc-name');
         const mid = (e) => { const r = e.getBoundingClientRect(); return (r.top + r.bottom) / 2; };
         return [b ? b.textContent.trim() : "", r.querySelector('.doc-words').textContent, !!b && Math.abs(mid(w) - mid(b)) < 12]; })"""}],
         PHONE, model=m, clock=T)
