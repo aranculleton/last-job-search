@@ -2005,8 +2005,10 @@ dialog.work-sheet :is(select, input, textarea) { width: 100%; max-width: 100%; m
 /* A computer that reports no pointer at all (a keyboard alone, a remote desktop, Firefox with
    no mouse it can see) is a computer, not a phone: drawn at 16px its Brief scrolled and its
    job cards' facts took two lines (4.12's Firefox run). Touch screens alone keep the full size. */
+/* 14px, the size Claude's own app uses: at 15px everything read a step too big on a computer
+   (the maintainer, 2026-11-18). */
 @media (pointer: fine) and (min-width: 760px), (pointer: none) and (min-width: 760px) {
-  html { font-size: 93.75%; }
+  html { font-size: 87.5%; }
   :root { --target: 36px; --top-h: 52px; }
   .card { padding: 12px 16px; }
   .sec-head .screen-title { font-size: 1.375rem; }
@@ -2351,6 +2353,10 @@ html.tips-off .has-tip::after { content: none; }
 /* Under 1280px wide the compact head keeps its two tools to their icons, their names on hover
    and to a screen reader; from 1280 they say their names (the redesign, 2026-11-16: an
    unlabelled bell was found by nobody), the greeting's line wrapping under them if it must. */
+/* Edit the brief is its pencil at every size, its words its name (the maintainer, 2026-11-18:
+   "a simple symbol"); the bell keeps its words where they fit (found by nobody without them). */
+.brief-head .head-tools [data-k^="tweak:brief"] { padding-inline: 8px; }
+.brief-head .head-tools [data-k^="tweak:brief"] > span:not(.sr-only) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 @media (min-width: 960px) and (max-width: 1279px) {
   html.brief-short .brief-head .head-tools .btn { padding-inline: 8px; }
   html.brief-short .brief-head .head-tools .btn > span:not(.sr-only) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

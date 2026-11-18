@@ -50,7 +50,9 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   most important one like an interview or a call"); it has no count over it, being none of To
   do's cards, and Next is then To do's first three, an interview today that
   is To do's first card said once. With nothing on To do or booked today, Today is the first
-  search; what else is booked stays in Coming up. Why: the Brief's Today picked one thing, its
+  search. Coming up lists everything booked, the one Today leads with included: a week with
+  two interviews showed one, and read as the other missing (the maintainer, 2026-11-18: "i defo
+  have multiple things coming up but only one is showing in brief"). Why: the Brief's Today picked one thing, its
   Next three another and To do a third, and their counts read 4, 1 and 3 over seven messages
   (the redesign's reviews, 2026-11-16). (one-answer test; Today tests)
 - What helps Claude do more (your profile, reading profiles, your LinkedIn messages) is never
@@ -832,9 +834,16 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   the app do it by itself (then it does, and says so)? Can it merge with another (one
   control)? Only then, where it lives: the card (the next step and at most two others), the
   pencil, the trash's choices, or More (rare). A card's budget is one filled pill, two soft
-  pills, the pencil, the trash, and the gauge where Claude wakes, its grey box's pills counted
-  among them: past it, the row's others go under More; more means a step above was
-  skipped. Settings gets no new option for it: a default that suits nearly everyone is the
+  pills, the pencil, the trash, and the gauge where Claude wakes, in its own row: a grey box's
+  answers (a question's Yes and No, a suggestion's two) answer the box and are not counted, so
+  the card's next step and "I have applied" stay on its face (the maintainer, 2026-11-18: "why
+  is i have applied hidden?"). Past it, the row's others go under More; more means a step above
+  was skipped. A draft's documents are each a row with its own download icon ("Download CV:
+  <file>") beside its pencil: no "Get both files" on the card, and no "Open", which saved the
+  file and opened nothing (the maintainer, 2026-11-18: "a simple symbol for each"). A copy,
+  a download, an edit or a removal that only does that is its icon, its words its name: a
+  form answer's and a note's Copy, a prep's code's Copy, Edit the brief's pencil, the Download
+  of a resume made for a contact, a picture's Remove (the trash) in Chat's box. Settings gets no new option for it: a default that suits nearly everyone is the
   setting. (the maintainer, 2026-11-05: "we also don't want to clutter the page with buttons
   and options and configurations by doing this, so be very smart about it"; action-row test)
 - **Stop Claude** is the one control that calls off Claude's work, wherever it shows: a card in
@@ -991,9 +1000,12 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   it. Why: the "?" was 20px, a tip's Got it 19px, a pencil 22px, "Show all" 13px and a
   setting's words 18px of its 36px pill (the screen review, 2026-11-11). (overlap test: small)
 - Three sizes: Smaller, Standard (the default), Larger, Smaller and Larger each drawn in the
-  size it sets, the control keeping its height and targets. On a phone Standard is 100%,
-  Smaller the old 85% and Larger 115%. (the maintainer, 4.12; settings
-  fold test)
+  size it sets, the control keeping its height and targets. On a computer Standard is 14px,
+  the size Claude's own app uses, Smaller 92% and Larger 107%; on a phone Standard is 15px,
+  Smaller the old 85% and Larger 108%. Each step is small: the redesign drew a computer at
+  15px and Larger at 16.5px, a fifth bigger than before it (the maintainer, 2026-11-18:
+  "standard is defo too big, and large is just fucking huge"). (the maintainer, 4.12;
+  settings fold test, size test)
 - A control's name starts with the words it shows (WCAG 2.5.3, Label in Name), whatever it
   adds after them: "Take it off: Careers fair", "They sent me a job: Juno", "Show all: the paid
   LinkedIn message to Bea", "Latest: go to the latest message"; a row that shows its name says

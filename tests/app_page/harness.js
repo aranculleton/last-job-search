@@ -2443,12 +2443,11 @@ S.downloads = async (a) => {
   const o = await open({html: a.html, hash: "drafts", fake: a.fake});
   const {page, store} = o;
   const r = {};
-  // Its suggestion is decided first: while it stands, the files wait under its More, the card
-  // keeping to one filled pill and two soft ones (the review, 2026-11-05).
-  const both = page.getByRole("button", {name: "Get both files: Morgan_Ellis_CV_Ellerwick.pdf and Morgan_Ellis_Cover_Letter_Ellerwick.pdf"});
-  if (!(await both.isVisible().catch(() => false))) await openMore(page, "app-ellerwick-insight");
-  await both.click();
-  await page.waitForTimeout(200);
+  // Each document from its own download icon on its row (the maintainer, 2026-11-18).
+  for (const name of ["Download CV: Morgan_Ellis_CV_Ellerwick.pdf", "Download cover letter: Morgan_Ellis_Cover_Letter_Ellerwick.pdf"]) {
+    await page.getByRole("button", {name}).click();
+    await page.waitForTimeout(200);
+  }
   await turn(page, 8);
   r.saves = (await calls(page)).filter((c) => c.cap === "downloads");
   r.note = await T(page, '#main [data-item="app-ellerwick-insight"] .note');

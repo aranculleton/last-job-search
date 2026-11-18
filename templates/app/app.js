@@ -559,15 +559,18 @@
   // Standard, and Smaller is one step smaller again; the old Larger ("comically large") is
   // gone. Kept under a new key, so every choice made before starts on the new Standard.
   const SIZE_KEY = "ljs:size2";
-  // On a computer Standard is the page's own size, 15px: drawn at 0.9 of 14px its words were
-  // 12.6px, hard to read for long (the redesign's review, 2026-11-16).
-  const SIZES = {smaller: 0.9, standard: 1, larger: 1.1};
+  // On a computer Standard is the page's own size, 14px, the size Claude's own app uses: drawn
+  // at 0.9 of 14px its words were 12.6px, hard to read for long (the redesign's review,
+  // 2026-11-16), and at the redesign's 15px, with Larger at 16.5px, everything read a step too
+  // big (the maintainer, 2026-11-18: "standard is defo too big, and large is just fucking
+  // huge"). Each step is small now.
+  const SIZES = {smaller: 0.92, standard: 1, larger: 1.07};
   // A phone's Standard is the page's own size: drawn at 85% its body was 13.6px and its small
   // words 11.9px in muted grey, under the 16px body a phone needs (the review, 2026-11-10,
   // GOV.UK's smallest). "1 job posting per screen" (the maintainer, 2026-10-29) is answered by
   // trimming padding, never by shrinking type; Smaller is the old 85% for whoever wants it.
   // Every tap target is drawn by the same factor (--tz), so a finger keeps its 44px.
-  const PHONE_SIZES = {smaller: 0.85, standard: 1, larger: 1.15};
+  const PHONE_SIZES = {smaller: 0.85, standard: 1, larger: 1.08};
   // A measured box in the page's own px. Chrome and Firefox measure what is drawn, after the
   // zoom above; Safari measures before it. The body's own two widths give the ratio in every
   // engine, so a panel placed from a measurement lands where it was measured (probed in all
@@ -3104,11 +3107,17 @@
       p.then(ok, byHand);
     } catch (e) { byHand(); }
   }
-  function copyButton(text, label, key, sourceId) {
+  // `o.icon`: the copy icon at the end of its line, its words its name, as a subject's Copy is
+  // (a form answer's, a note's: the maintainer, 2026-11-18, "a simple symbol").
+  function copyButton(text, label, key, sourceId, o) {
     const n = S.notes.get(key);
     const copied = n && n.text === "Copied." && n.until > now();
-    return h("button", {type: "button", class: "btn secondary small copy", "data-k": key, "aria-describedby": n ? key + "-n" : null,
-      onclick: () => copyText(text, label.replace(/^Copy /, ""), key, sourceId)}, copied ? "Copied" : label);
+    const onclick = () => copyText(text, label.replace(/^Copy /, ""), key, sourceId);
+    if (o && o.icon) {
+      return h("button", {type: "button", class: "btn quiet small icon-only copy", "data-k": key, "aria-label": copied ? "Copied: " + label.replace(/^Copy /, "") : label,
+        title: label, "aria-describedby": n ? key + "-n" : null, onclick}, icon(copied ? "check" : "copy"));
+    }
+    return h("button", {type: "button", class: "btn secondary small copy", "data-k": key, "aria-describedby": n ? key + "-n" : null, onclick}, copied ? "Copied" : label);
   }
   function noteFor(key) {
     const n = S.notes.get(key);
@@ -6728,7 +6737,9 @@
     });
     take(heroKeys);
     // Coming up: the next things booked that no panel above shows.
-    const upCards = allUp.filter((u) => isFree(upKeys(u))).slice(0, 4);
+    // Everything booked, the one Today leads with included: two interviews in a week showed
+    // one (the maintainer, 2026-11-18). Coming up is the calendar; Today is what to do first.
+    const upCards = allUp.slice(0, 4);
     upCards.forEach((u) => take(upKeys(u)));
     // People: whose move it is, and what the move is, leaving out who a step above names.
     const ppl = peopleItems().filter((p) => personRank(p) === 0 && !["not_contacted", "closed"].includes(txt(p.status)) && isFree(["p:" + p.id]) && !stoppedNow(p.id, txt(p.employer)))
@@ -8164,7 +8175,7 @@
     const fetchIt = getMadeFor(p, key);
     // "Download", the word for what it does: "Get it" was vague (the UX review of the redesign's
     // second round, 2026-11-17).
-    const get = fetchIt ? btn("Download", fetchIt, {kind: "link", small: true, key}) : null;
+    const get = fetchIt ? btn("", fetchIt, {kind: "quiet icon-only", small: true, icon: "download", key, aria: "Download the " + noun() + " made for " + txt(p.first_name)}) : null;
     return h("p", {class: "small", "data-resume-for": txt(p.id)}, cap1(noun()) + " made for " + txt(p.first_name) + (txt(r.made_on) ? ", " + fmtDay(r.made_on) : ""), get ? [" · ", get] : null);
   }
   // Getting the resume made for them: saved at once from the page's own store, where its
@@ -8197,10 +8208,10 @@
       const f = files.find((x) => x.kind === k && fileMade(x)) || null;
       const name = k === "letter" ? "Cover letter" : Noun();
       const n = pagesOf(k);
-      const key = "doc-open:" + a.id + ":" + k;
+      const key = "doc-dl:" + a.id + ":" + k;
       return h("li", {class: "doc-row", "data-doc": k}, icon("k-application"),
         h("span", {class: "doc-words"}, h("span", {class: "doc-name"}, name), " ", h("span", {class: "doc-meta"}, (n ? [plural(n, "page", "pages"), "checked"] : ["checked", "page count not read here"]).join(" \u00b7 "))),
-        h("span", {class: "doc-acts"}, f && f.asset ? btn("Open", () => download(f, key), {kind: "quiet", small: true, key, aria: "Open " + lc1(name) + ": " + txt(f.name)}) : null,
+        h("span", {class: "doc-acts"}, f && f.asset ? btn("", () => download(f, key), {kind: "quiet icon-only", small: true, icon: "download", key, aria: "Download " + lc1(name) + ": " + txt(f.name)}) : null,
           docPencil(a, k)), noteFor(key));
     }));
   }
@@ -8315,11 +8326,17 @@
     const applyPill = live && !forWho && safeUrl(obj(a.apply).url) && !draftUnmade(a) && !filesWork && !(asks.length && applyAsk(asks[0])) ? applyLink(a.apply, "rapply:" + a.id, applyWhere(a.apply), true, !checkAlert && !asks.length && !tweakPending(a)) : null;
     const appliedPill = live && !checkAlert && !asks.length ? (askedHere ? btn("I sent it", () => askSent(askedHere[0], askedHere[1]), {kind: getBtn ? "secondary" : "primary", small: true, key: "sentto:" + a.id, aria: "I sent it: " + lc1(askWords(askedHere[0], askedHere[1]))})
       : forWho ? sentToBtn(a, forWho, getBtn) : j && referredProcess(j) ? null : btn("I have applied", markApplied, {kind: safeUrl(obj(a.apply).url) ? "secondary" : "primary", small: true, key: "rapplied:" + a.id, aria: "I have applied: " + about})) : null;
-    const filesPill = forWho && !askedHere ? null : getBtn;
+    // Each document downloads from its own row (docRows): the card's row carries files only
+    // where getting them for the person who asked is the step itself (the maintainer,
+    // 2026-11-18: "a simple symbol for each instead of get both files").
+    const filesPill = askedHere ? getBtn : null;
     // Asked for: getting the CV made for them is the step, then I sent it, as on their card.
     if (askedHere && getBtn) { getBtn.classList.replace("secondary", "primary"); getBtn.setAttribute("data-primary", "1"); }
     const row = (askedHere ? [primary, filesPill, appliedPill, applyPill] : [primary, applyPill, appliedPill, filesPill]).filter(Boolean);
-    let room = FACE_PILLS - facePills([faceBox, fixOutLine]);
+    // A box's own answers answer the box: never counted against the row, so the next step and
+    // I have applied stay on the face (the maintainer, 2026-11-18: "why is i have applied
+    // hidden?").
+    let room = FACE_PILLS;
     const kept = [];
     const moved = [];
     for (const b of row) { if (room > 0 || b === row[0]) { kept.push(b); room--; } else moved.push(b); }
@@ -11384,12 +11401,12 @@
     const fresh = !!run && txt(run[1].status) === "done" && now() - finishedAt(run[1]) <= DAY && formShown(a, run[1]);
     return mRow("To copy", det("copy:" + a.id, fresh, {class: "send"}, h("summary", {}, toCopy ? (toCopy === 1 ? "Show it" : "Show all " + toCopy) + (toFill ? ", and " + nWord(toFill, "question", "questions") + " yours to answer" : "") : "Show " + nWord(toFill, "question", "questions") + " yours to answer"),
       out.text ? h("div", {class: "copy-one"}, h("p", {class: "card-title"}, "Note to " + (txt(out.to) || "the hiring manager")),
-        h("p", {class: "sendtext", id: outId}, txt(out.text)), copyButton(txt(out.text), "Copy note to " + (txt(out.to) || "the hiring manager"), "copy:" + outId, outId), noteFor("copy:" + outId)) : null,
+        h("p", {class: "sendtext", id: outId}, txt(out.text)), copyButton(txt(out.text), "Copy note to " + (txt(out.to) || "the hiring manager"), "copy:" + outId, outId, {icon: true}), noteFor("copy:" + outId)) : null,
       screen.length ? h("dl", {class: "qa"}, screen.map((qa, i) => {
         const qid = "qa-" + seg(a.id) + "-" + i;
         if (qa.fill || !txt(qa.a)) return h("div", {}, h("dt", {}, txt(qa.q)), h("dd", {class: "muted"}, "Yours to answer: Claude did not know this one."));
         return h("div", {}, h("dt", {}, txt(qa.q)), h("dd", {}, h("span", {id: qid, class: "sendtext"}, txt(qa.a)), " ",
-          copyButton(txt(qa.a), "Copy answer: " + clip(txt(qa.q), 40), "copy:" + qid, qid), noteFor("copy:" + qid),
+          copyButton(txt(qa.a), "Copy answer: " + clip(txt(qa.q), 40), "copy:" + qid, qid, {icon: true}), noteFor("copy:" + qid),
           txt(qa.why) ? h("p", {class: "small muted"}, txt(qa.why)) : null));
       })) : null));
   }
@@ -13242,11 +13259,11 @@
     const more = arr(p.more).map(txt).filter(Boolean);
     const copy = (c) => {
       const said = h("span", {class: "lp-ck-copied", "aria-live": "polite"});
-      const b = h("button", {type: "button", class: "btn secondary small", "data-k": "lp-ck-copy",
+      const b = h("button", {type: "button", class: "btn quiet small icon-only", "data-k": "lp-ck-copy", "aria-label": "Copy this code", title: "Copy this code",
         onclick: () => {
           const done = () => { said.textContent = "Copied"; clearTimeout(said._t); said._t = setTimeout(() => { said.textContent = ""; }, 2000); };
           try { navigator.clipboard.writeText(c).then(done, () => { said.textContent = "Select the line to copy it"; }); } catch (e) { said.textContent = "Select the line to copy it"; }
-        }}, "Copy");
+        }}, icon("copy"));
       return [b, said];
     };
     return h("div", {class: "lp-box lp-cockpit"},
@@ -17820,7 +17837,7 @@
       const state = p.status === "adding" ? "Adding…" : p.status === "failed" ? p.error : "Ready to send";
       return h("div", {class: "pic-chip" + (p.status === "failed" ? " is-bad" : "")}, p.img,
         h("span", {class: "pic-state small" + (p.status === "failed" ? " tone-bad" : "")}, h("span", {class: "sr-only"}, "Picture" + n + ": "), state),
-        h("button", {type: "button", class: "btn link small", "data-k": "pic-rm:" + p.key, "aria-label": "Remove picture" + n, onclick: () => removePic(p.key)}, "Remove"));
+        h("button", {type: "button", class: "btn quiet small icon-only", "data-k": "pic-rm:" + p.key, "data-bin": "1", "aria-label": "Remove picture" + n, title: "Remove picture" + n, onclick: () => removePic(p.key)}, icon("bin")));
     }), picNote ? h("p", {class: "note tone-bad"}, picNote) : null);
   }
   // A picture in the thread: the one on this device while it is here, else the store's copy.
@@ -18745,6 +18762,7 @@
   }
 
   const ICON = {
+    download: "M12 4v11M7 10l5 5 5-5M5 20h14",
     "side-hide": "M5 4h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z M9 4v16 M16 9l-3 3 3 3",
     "side-show": "M5 4h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z M9 4v16 M13 9l3 3-3 3",
     todo: "M12 3a9 9 0 1 0 0 18a9 9 0 0 0 0-18zM8 12l3 3l5-6",

@@ -97,8 +97,8 @@ def test_the_pencil_puts_the_cursor_in_its_box(run, page):
 
 def test_a_downloaded_resume_is_named_for_its_reader(run, page):
     got = run("engine", html=page, viewport=WIDE, clock=CLOCK, steps=[
-        # Get both files waits under its card's More: clicked as it is, wherever it sits.
-        {"hash": "jobs", "eval": "(document.querySelector('[data-k=\"dl:app-ellerwick-insight\"]').click(), 1)"},
+        # Each document from its own download icon on its row (2026-11-18).
+        {"hash": "jobs", "eval": "(document.querySelectorAll('[data-item=\"app-ellerwick-insight\"] [data-k^=\"doc-dl:\"]').forEach((b) => b.click()), 1)"},
         {"wait": 800, "calls": "downloads"}])
     assert not got["errors"], got["errors"]
     names = [c["filename"] for c in got["after"][1]["calls"]]

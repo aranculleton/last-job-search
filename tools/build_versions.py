@@ -1238,8 +1238,9 @@ METHODS: dict[str, dict] = {
             (210, "2026-11-16", True, "a LinkedIn sign-in in a chat on the person's computer is one To do card that names that chat and gives the steps to open it from the Claude app's list of chats there and sign in, keeping the sign-in among them, with no link to the chat, which opened it without its browser; its I've signed in sends back every read waiting on that sign-in"),
             (211, "2026-11-16", True, "the one card for a sign-in in a chat on the person's computer covers only reads waiting on that chat's sign-in: a sign-in in the page's own browser keeps its own card, and the computer's I've signed in no longer sends it back"),
             (212, "2026-11-17", True, "the page is redesigned: warm paper and charcoal with a clay mark, one type scale, one family of buttons, tabs and folds; Coming up joins the phone's tabs and Chat is a header button; To do and the Brief give one ranked answer with a call booked today leading; Jobs by stage and best match, Coming up a card a day, Contacts sending from under each draft; the four cards share rows, an Update menu and a stepper, and an employer's card says what Claude found and whether it clears the person's bar"),
+            (213, "2026-11-18", True, "text a step smaller (a computer's Standard 14px, Larger 107%, a phone's Larger 108%); each document downloads from its own icon on its row, with no Get both files and no Open that saved the file; I have applied stays on a card whose box asks a question; Coming up on the Brief lists everything booked, the one Today leads with included; a form answer's and a note's Copy, a prep's code's Copy, Edit the brief, a resume made for a contact's Download and a picture's Remove are their icons"),
         ),
-        "fingerprint": "c3b8e76b1885151e",
+        "fingerprint": "8b47d70ef3316b03",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

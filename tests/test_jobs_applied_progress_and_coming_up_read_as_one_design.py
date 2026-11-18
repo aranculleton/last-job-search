@@ -136,7 +136,7 @@ DOCS = r"""(() => { const c = document.querySelector('[data-item="app-ellerwick-
   return {well: w ? getComputedStyle(w).backgroundColor : null, sunk: (() => { const p = document.createElement('div'); p.style.background = 'var(--sunk)'; document.body.append(p);
     const v = getComputedStyle(p).backgroundColor; p.remove(); return v; })(), chips: c.querySelectorAll('.doc-part').length,
     rows: [...c.querySelectorAll('.doc-row')].map((r) => ({name: r.querySelector('.doc-name').textContent, meta: r.querySelector('.doc-meta').textContent,
-      open: !!r.querySelector('.doc-acts [data-k^="doc-open:"]'), pen: (r.querySelector('.doc-acts .btn.icon-only') || {textContent: ''}).textContent.trim(),
+      open: (r.querySelector('.doc-acts [data-k^="doc-dl:"].icon-only') || {getAttribute: () => ''}).getAttribute('aria-label'), pen: (r.querySelector('.doc-acts .btn.icon-only') || {textContent: ''}).textContent.trim(),
       h: Math.round(r.getBoundingClientRect().height)}))}; })()"""
 
 
@@ -146,7 +146,9 @@ def test_a_drafts_documents_are_rows_in_a_soft_well(run, tmp_path, vp):
     assert seen["chips"] == 0 and seen["well"] == seen["sunk"], seen
     assert [r["name"] for r in seen["rows"]] == ["CV", "Cover letter"], seen
     for r in seen["rows"]:
-        assert r["meta"] == "1 page · checked" and r["open"] and r["h"] >= 44, r
+        assert r["meta"] == "1 page · checked" and r["h"] >= 44, r
+        # Each saved from its own download icon, named for the document and its file (2026-11-18).
+        assert r["open"].startswith("Download " + ("CV" if r["name"] == "CV" else "cover letter") + ": "), r
     assert seen["rows"][0]["pen"].startswith("Edit the CV") and seen["rows"][1]["pen"].startswith("Edit the letter"), seen
 
 
